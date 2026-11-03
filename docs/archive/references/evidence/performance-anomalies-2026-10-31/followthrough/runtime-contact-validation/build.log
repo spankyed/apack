@@ -1,0 +1,11 @@
+
+> apack@0.3.14 chain
+> tsx scripts/chain.ts --only packages:ensure,build:default-setup,build:runtime --no-native --cores 2
+
+test:native not run: --no-native
+     ok     packages:ensure                  0.4s  never cached — scripts/lib/chain-steps.ts:856
+ cached     build:default-setup
+     ok     build:runtime                   54.9s  its inputs changed since the last successful run
+
+chain passed in 55.8s (1 of 3 cached) (test:native not run: --no-native) on a 2-core budget
+evidence from this run in node_modules/.cache/apack-chain/runs/2026-11-01T05-16-35Z-576 (2 steps)

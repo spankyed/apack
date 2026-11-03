@@ -54,7 +54,8 @@ order. `init`, `add` and the release version editor share this writer.
 | `extensions` | `object` | no | What the pack contributes to the app; see [Extensions](#extensions) |
 | `migrations` | `{ app?, pack? }` | no | Data migrations, by version line; see [Migrations](#migrations) |
 | `data.entities` | `Record<string, { shape?, shortCode?, indexes?, search?, embed?, substrings? }>` | no | Entities without a feature owner, each declared as a feature's are; see [Entities and relations](#entities-and-relations) |
-| `data.relations` | `Record<string, { acyclic?, unique? }>` | no | Pack-level snake_case relation wire names, each mapped to its rules; see [Entities and relations](#entities-and-relations) |
+| `data.relations` | `Record<string, { acyclic?, key?, weighted? }>` | no | Pack-level snake_case relation wire names, each mapped to its rules; see [Entities and relations](#entities-and-relations) |
+| `data.ranks` | `Record<string, { types, relations, direction?, weights?, damping?, tolerance? }>` | no | Rank indexes by lowerCamelCase name, unique across every pack; see [Entities and relations](#entities-and-relations) |
 | `data.roles` | `string[]` | no | Pack-level snake_case role names; see [Entities and relations](#entities-and-relations) |
 | `dependencies` | `Record<string, string>` | no | Pack IDs mapped to a nonempty npm semver range, `github:owner/repo [range]`, or `file:path` |
 | `checks` | `{ allow?: string[] }` | no | Development conventions this pack allows; schema completion lists supported rule names. See [source checks](cli.md#apack-pack-validate---json). |
@@ -717,11 +718,32 @@ Keys become TypeScript constants in generated `ears.ts`. Entity constants equal 
 wire is declared once in `data.relations`, shared across the pack's features. Its constant name is
 uppercase (`tagged_with` → `TAGGED_WITH`). Each maps to the rules its edges are held to, `{}` for none:
 `"acyclic": true` refuses a link that would close a cycle through the kind (`CYCLE`), as a tree or a folder
-hierarchy wants, and `"unique": true` keeps at most one edge of the kind from an entity to another, so linking the
-pair again replaces the edge's info. The SDK's `parent_of` is acyclic. SDK-owned relation wires are refused. Every kind
+hierarchy wants. An edge is identified by its two ends and, when the kind declares a `"key"`, the values of those
+fields in its info, a field the info doesn't hold being null: without one, two entities are joined by one edge of the
+kind at most; with `"key": ["sourceHandle", "targetHandle"]`, as the SDK's `transitions_to` declares, by one per pair of
+handles. Linking to an identity an edge holds updates that edge, replacing its info and weight with any the link gives.
+`"weighted": true` gives each edge a weight, from 0 to 2^960 and 1 unless a link gives another, which `rank` and
+`communities` read: a confidence, a strength, how often one thing calls another. A keyed kind's edges of one pair add
+their weights in a rank. `#generated/ears` types
+the kinds a weight is accepted on (`EARS.WeightedKind`), so a weight on any other kind doesn't compile. The SDK's `parent_of` is acyclic. SDK-owned relation wires are refused. Every kind
 the pack links with is declared: the generated `EARS.RelKind` is closed over the pack's, its dependencies' and
 the SDK's, and the engine refuses any other at runtime. Roles work the same way: `data.roles` lists every role the
 pack grants (`entry_event` → `ENTRY_EVENT`), `EARS.RoleKind` is closed over them, and an undeclared role is refused.
+
+`data.ranks` declares rank indexes, PageRank over a graph kept current by every commit, which `query(type).ranked(name)`
+reads without walking the graph:
+
+```json
+"data": { "ranks": { "noteRank": { "types": ["Note"], "relations": ["references"], "direction": "both" } } }
+```
+
+`types` and `relations` name what the pack, its dependencies or the SDK declare, which `apack pack build` checks.
+`direction` is `out` unless given. An edge of a kind declared `weighted` counts by its weight unless `weights` is `false`.
+`damping` is 0.85 and `tolerance` 1e-5 unless given: `tolerance` bounds the L1 distance between the scores and PageRank
+once a change's pushes are done, so tighten it where close scores must come in their true order, and loosen it where a
+change should cost less. A name is lowerCamelCase, unique across every pack, and no index of the pack's own entities.
+`EARS.RankIndex` is closed over the pack's and its dependencies'.
+
 Shapes type attributes without changing stored identities.
 
 No two packs may use the same name: a key or a value another installed pack declares fails `apack pack build` (for a dependency) and the app's registration of the pack.

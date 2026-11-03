@@ -65,7 +65,7 @@ const BASE_PACK = {
   'tsconfig.json': tsconfig,
   'apack.json': JSON.stringify({
     id: 'base-pack', name: 'Base', version: '1.0.0',
-    data: { entities: { Tag: { shape: "src/types.ts#TagEntity" }, Item: { shape: "src/types.ts#ItemEntity" } }, relations: { tagged: {} }, roles: ['featured'] },
+    data: { entities: { Tag: { shape: "src/types.ts#TagEntity" }, Item: { shape: "src/types.ts#ItemEntity" } }, relations: { tagged: { weighted: true } }, roles: ['featured'], ranks: { itemRank: { types: ['Item'], relations: ['tagged'] } } },
 
     features: {
       calendar: { description: 'Feature declaration fixture.',
@@ -152,7 +152,7 @@ const APP_PACK = {
 };
 
 const CONSUMER = `
-import { query, create, upsert, write, newId, type EntityShape, type EntityName } from '#generated/ears.ts';
+import { query, create, upsert, write, newId, type EntityShape, type EntityName, type EARS as PackEARS } from '#generated/ears.ts';
 import { broadcastToSurface, sendToSystem } from '#generated/events.ts';
 import { services } from '#generated/services.ts';
 import { repository } from '#generated/repository.ts';
@@ -244,6 +244,25 @@ query('Nope');
 query(['Memo', 'Nope']);
 // @ts-expect-error undeclared relation target
 query('Memo').out('contains', 'Nope');
+// A link takes a weight only of a kind declared weighted, its dependency's included
+declare const someMemo: EARS.EntityId<'Memo'>;
+write(someMemo).link('tagged', someMemo, { weight: 2, info: 'x' });
+export type WeightedKinds = Expect<Equal<PackEARS.WeightedKind, 'tagged'>>;
+// @ts-expect-error related isn't weighted
+write(someMemo).link('related', someMemo, { weight: 2 });
+// @ts-expect-error a kind that may be either takes no weight
+write(someMemo).link('related' as 'related' | 'tagged', someMemo, { weight: 2 });
+query('Memo').rank('tagged', { seeds: [someMemo, { id: someMemo, weight: 3 }], weights: false });
+// A rank index is one a pack or its dependencies declare
+export type RankIndexes = Expect<Equal<PackEARS.RankIndex, 'itemRank'>>;
+export const rankedIds = query('Item').ranked('itemRank').limit(5).ids();
+// @ts-expect-error a misspelled rank index
+query('Item').ranked('itemRnak');
+query('Item').ranked('itemRank', { whileBuilding: 'refuse' });
+// @ts-expect-error not something a ranked read does while building
+query('Item').ranked('itemRank', { whileBuilding: 'empty' });
+// @ts-expect-error a seed's weight is a number
+query('Memo').rank('tagged', { seeds: [{ id: someMemo, weight: 'heavy' }] });
 // @ts-expect-error undeclared entity name
 newId('Nope');
 
@@ -412,7 +431,19 @@ query.ids(memoId).descendants('|descendantsKind|');
 query.ids(memoId).both('|bothKind|');
 query.ids(memoId).pathTo(memoId, '|pathToKind|');
 query.ids(memoId).degrees('|degreesKind|');
+query('Memo').rank('|rankKind|');
+query('Memo').weakComponents('|weakComponentsKind|');
+query('Memo').strongComponents('|strongComponentsKind|');
+query('Memo').communities('|communitiesKind|');
+query('Memo').topological('|topologicalKind|');
+query('Memo').similar(memoId, '|similarKind|');
+query('Memo').similar(memoId, 'related', { measure: '|similarMeasure|' });
+query('Memo').topological('related', { direction: '|topologicalDirection|' });
 write(memoId).link('|linkKind|', memoId);
+write(memoId).link('tagged', memoId, { |weightedLinkOption| });
+write(memoId).link('related', memoId, { |linkOption| });
+query('Memo').rank('related', { |rankOption| });
+query('Item').ranked('|rankedIndex|');
 query('Memo').linkedTo('|linkedToKind|', memoId);
 write(memoId).link('relatd', memoId);
 write(memoId).grant('|grantRole|');
@@ -424,7 +455,7 @@ const FIELD_POSITIONS = ['pick', 'pickOne', 'outPick', 'where', 'has', 'lacks', 
 /** The fields a write may name: the declared ones, without the engine's own (`createdAt`, `updatedAt`, …) */
 const WRITE_POSITIONS = ['set', 'append', 'removeAt'];
 /** Relation kinds: the pack's own, its dependency's and the SDK's */
-const KIND_POSITIONS = ['outKind', 'linkKind', 'linkedToKind', 'ancestorsKind', 'descendantsKind', 'bothKind', 'pathToKind', 'degreesKind'];
+const KIND_POSITIONS = ['outKind', 'linkKind', 'linkedToKind', 'ancestorsKind', 'descendantsKind', 'bothKind', 'pathToKind', 'degreesKind', 'rankKind', 'weakComponentsKind', 'strongComponentsKind', 'communitiesKind', 'topologicalKind', 'similarKind'];
 /** Roles: the pack's own, its dependency's and the SDK's */
 const ROLE_POSITIONS = ['grantRole', 'withRole'];
 const NAME_POSITIONS = ['query', 'newId', 'out', 'in', 'ancestors', 'descendants', 'both', 'ofType'];
@@ -569,9 +600,18 @@ afterEach(() => new Promise<void>((resolve) => { setImmediate(resolve); }));
     expect(diagnostics.find((message) => message.includes('"relatd"'))).toMatch(/"related"/);
     expect(missing(ROLE_POSITIONS, ['pinned', 'featured', 'root_flow']), 'positions without role completions').toEqual([]);
     expect(diagnostics.find((message) => message.includes('"pinnned"'))).toMatch(/"pinned"/);
+    // An option naming one of a few modes offers those and no other: a topological order follows each edge one way
+    expect([...at.similarMeasure!].sort(), 'similar measure completions').toEqual(['adamicAdar', 'jaccard']);
+    expect([...at.topologicalDirection!].sort(), 'topological direction completions').toEqual(['in', 'out']);
     // A created row offers the shape's fields and the identity it may bring, and never the engine's other fields
     expect(at.createRow, 'created-row completions').toEqual(expect.arrayContaining(['text', 'pinned', 'note', 'id', 'createdAt']));
     expect(at.createRow, 'created-row completions').not.toContain('entityType');
+    // A link offers a weight for a weighted kind alone, and a rank its walk's options
+    expect(at.weightedLinkOption, 'weighted link options').toEqual(expect.arrayContaining(['info', 'weight']));
+    expect(at.rankedIndex, 'rank indexes').toEqual(['itemRank']);
+    expect(at.linkOption, 'link options').toContain('info');
+    expect(at.linkOption, 'link options').not.toContain('weight');
+    expect(at.rankOption, 'rank options').toEqual(expect.arrayContaining(['direction', 'seeds', 'weights']));
   });
 
   it.each(['bundler', 'node16'] as const)('offers system-id and event-type completions for sendToSystem under moduleResolution %s', (moduleResolution) => {

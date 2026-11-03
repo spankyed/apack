@@ -16,24 +16,19 @@
     <editor-content v-else :editor="editor" :class="editorClass" />
     <template v-if="editor">
       <CommandSuggestionPopup v-if="cfg.commandSuggestion" :editor="editor" :variant="variant" />
-      <component
-        v-for="popup in textEditorPopups"
-        :key="`${generation}/${popup.id}`"
-        :is="popup.component"
-        :editor="editor"
-        :variant="variant"
-      />
+      <ContributedEditorPopups :editor="editor" :groups="groups" :generation="generation" :variant="variant" />
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { EditorContent } from '@tiptap/vue-3'
 import { Selection } from '@tiptap/pm/state'
 import { createExtensions, type TiptapMode, type TiptapVariant } from './extensions.ts'
 import { getEditorConfig } from './editor-config.ts'
 import { useContributedEditor } from './internal/use-contributed-editor.ts'
+import ContributedEditorPopups from './internal/ContributedEditorPopups.vue'
 import TiptapBlockMenu from './TiptapBlockMenu.vue'
 import CommandSuggestionPopup from './CommandSuggestionPopup.vue'
 import { commandSuggestionKey } from './extensions/command-suggestion.ts'
@@ -205,9 +200,6 @@ const { editor, groups, generation, problem, resetDocument } = useContributedEdi
   },
   ...(cfg.subDocumentTracking && { onTransaction: subDocOnTransaction }),
 }))
-
-const textEditorPopups = computed(() => groups.value.flatMap(group => Object.entries(group.binding.popups ?? {})
-  .map(([id, component]) => ({ id: `${group.packId}/${group.groupId}/${id}`, component }))))
 
 // Sync modelValue changes from parent into the editor.
 // In viewer mode the editor is read-only — skip the getMarkdown() round-trip

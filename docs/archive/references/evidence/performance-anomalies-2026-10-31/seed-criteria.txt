@@ -1,0 +1,1 @@
+Seed acceptance: independent files/handles, unchanged seed/schema, >=50% median setup reduction; full 120/40 workloads under unchanged 30s deadlines; shared-state counterfactual must fail assertions.

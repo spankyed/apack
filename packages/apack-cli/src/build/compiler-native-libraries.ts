@@ -236,6 +236,14 @@ export function assertCapturedMachOLibraries(entry: string, packageRoot: string,
     }
     return false;
   };
+  // dyld expands @loader_path from where an image really is: a framework's top-level binary is a symlink into
+  // Versions/<v>, and the framework's rpaths are written from there (Electron's reach its sibling frameworks
+  // through @loader_path/../../..). Rebased onto the package as the caller spells it, so the checks below
+  // compare paths in one namespace; an image whose real home is outside keeps that outside directory
+  const loaderDirectory = (file: string) => {
+    const real = path.dirname(input.realpath(file)), realRoot = input.realpath(packageRoot);
+    return within(real, realRoot) ? path.resolve(packageRoot, path.relative(realRoot, real)) : real;
+  };
   const visited = new Set<string>();
   function inspect(file: string, inherited: readonly { reference: string; expanded: string }[]) {
     if (visited.has(file)) return true;
@@ -249,7 +257,7 @@ export function assertCapturedMachOLibraries(entry: string, packageRoot: string,
       throw new Error(`Native compiler image "${file}" references "${reference}" outside its captured package. Use package-relative native libraries or operating-system libraries.`);
     };
     const expand = (reference: string): string | undefined => {
-      if (reference.startsWith('@loader_path/')) return path.resolve(path.dirname(file), reference.slice(13));
+      if (reference.startsWith('@loader_path/')) return path.resolve(loaderDirectory(file), reference.slice(13));
       if (reference.startsWith('@executable_path/')) return path.resolve(path.dirname(executable), reference.slice(17));
       if (path.isAbsolute(reference)) return path.resolve(reference);
     };

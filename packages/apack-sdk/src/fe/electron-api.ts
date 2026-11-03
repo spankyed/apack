@@ -1,6 +1,7 @@
 // The preload IPC surface the host exposes to renderer and pack FE code alike.
 // Lives in the SDK because packs consume it; fe/index.ts re-exports this module's type surface so anything
 // importing '@apackdev/sdk/fe' sees the global in source and in declarations.
+import type { _RendererPerformanceResources } from '../runtime/performance.ts';
 import type { SpeechEvent } from './speech-event.ts';
 
 /**
@@ -11,7 +12,7 @@ import type { SpeechEvent } from './speech-event.ts';
  * excess property, and one declared and not exposed is a missing one. Without it the two drift, and what
  * pack code then reaches for is `(window as any)`.
  *
- * **`Window.electronAPI` is a view of this, not this**: `PackFacingBridge` below drops the two members a
+ * **`Window.electronAPI` is a view of this, not this**: `PackFacingBridge` below drops host-only members a
  * window has and pack authors are not pointed at. Host code that needs one of those takes this type.
  *
  * **Host-only, and the underscore is what makes that checkable.** Publishing the whole bridge under a
@@ -22,6 +23,10 @@ import type { SpeechEvent } from './speech-event.ts';
  * @internal
  */
 export interface _HostBridge {
+  performance: {
+    start(mode: 'lightweight' | 'detailed'): Promise<{ id: string }>;
+    stop(id: string): Promise<_RendererPerformanceResources>;
+  };
   windowControls: {
     minimize: () => void;
     maximize: () => void;
@@ -153,9 +158,9 @@ export interface _HostBridge {
  * read every member of `window.electronAPI` at runtime whatever this says. What the omission does is stop
  * advertising them. Closing it for real means isolating pack frontends from the window
  * (`docs/goals/goal-pack-frontend-isolation.md`), and until that exists this is a signpost — which
- * is why it drops only the two members no pack has a reason to want.
+ * is why it drops members no pack has a reason to want.
  */
-type PackFacingBridge = Omit<_HostBridge, 'apiToken'> & {
+type PackFacingBridge = Omit<_HostBridge, 'apiToken' | 'performance'> & {
   apiStatus: Omit<_HostBridge['apiStatus'], 'openLogFile'>;
 };
 

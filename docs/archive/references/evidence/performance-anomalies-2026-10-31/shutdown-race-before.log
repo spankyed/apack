@@ -1,0 +1,37 @@
+
+ RUN  v3.2.7 /private/tmp/apack-performance-anomalies.noindex
+
+ ❯ .apack/process-stop-before.spec.ts (8 tests | 1 failed) 2212ms
+   ✓ stopping the API process > resolves only once the child has actually gone 2ms
+   × stopping the API process > observes exit after an overdue escalation, then reports that nothing is running 1144ms
+     → promise rejected "Error: API process did not exit after shu…" instead of resolving
+   ✓ stopping the API process > escalates to SIGKILL for a child that will not take the signal  1051ms
+   ✓ stopping the API process > does not escalate a child that exited on the first signal 3ms
+   ✓ stopping the API process > resolves at once when there is no process 0ms
+   ✓ stopping the API process > joins concurrent stops without removing the first exit waiter 0ms
+   ✓ stopping the API process > recognizes an exit that happened after the previous wait timed out 2ms
+   ✓ stopping the API process > does not tell the exit handler, so a reload is never counted as a crash 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  .apack/process-stop-before.spec.ts > stopping the API process > observes exit after an overdue escalation, then reports that nothing is running
+AssertionError: promise rejected "Error: API process did not exit after shu…" instead of resolving
+ ❯ .apack/process-stop-before.spec.ts:69:27
+     67|       // Both old deadlines become overdue; exit is delivered on a lat…
+     68|       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 110…
+     69|       await expect(stopped).resolves.toBeUndefined();
+       |                           ^
+     70|       expect(manager.isRunning()).toBe(false);
+     71|     } finally {
+
+Caused by: Error: API process did not exit after shutdown signals
+ ❯ Timeout._onTimeout packages/main/src/modules/api-server/process-manager.ts:177:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 7 passed (8)
+   Start at  23:40:06
+   Duration  2.94s (transform 78ms, setup 0ms, collect 211ms, tests 2.21s, environment 0ms, prepare 142ms)
+

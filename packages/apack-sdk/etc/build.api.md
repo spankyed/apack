@@ -8,6 +8,7 @@ import type { AnyActorRef } from 'xstate';
 import { Ears } from '@apackdev/ears';
 import { EARS as EARS_2 } from '@apackdev/ears';
 import type { EmbedDeclaration } from '@apackdev/ears';
+import type { RankDeclaration } from '@apackdev/ears';
 import type { RelationRules } from '@apackdev/ears';
 import type { RowRules } from '@apackdev/ears';
 import type { SearchDeclaration } from '@apackdev/ears';
@@ -670,18 +671,51 @@ export const ManifestSchema: z.ZodObject<{
         }>>>>;
         relations: z.ZodOptional<z.ZodType<Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
+            weighted?: boolean | undefined;
         }>, Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
+            weighted?: boolean | undefined;
         }>, z.core.$ZodTypeInternals<Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
+            weighted?: boolean | undefined;
         }>, Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
+            weighted?: boolean | undefined;
         }>>>>;
         roles: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        ranks: z.ZodOptional<z.ZodType<Record<string, {
+            types: readonly string[];
+            relations: readonly string[];
+            direction?: "in" | "out" | "both" | undefined;
+            weights?: boolean | undefined;
+            damping?: number | undefined;
+            tolerance?: number | undefined;
+        }>, Record<string, {
+            types: readonly string[];
+            relations: readonly string[];
+            direction?: "in" | "out" | "both" | undefined;
+            weights?: boolean | undefined;
+            damping?: number | undefined;
+            tolerance?: number | undefined;
+        }>, z.core.$ZodTypeInternals<Record<string, {
+            types: readonly string[];
+            relations: readonly string[];
+            direction?: "in" | "out" | "both" | undefined;
+            weights?: boolean | undefined;
+            damping?: number | undefined;
+            tolerance?: number | undefined;
+        }>, Record<string, {
+            types: readonly string[];
+            relations: readonly string[];
+            direction?: "in" | "out" | "both" | undefined;
+            weights?: boolean | undefined;
+            damping?: number | undefined;
+            tolerance?: number | undefined;
+        }>>>>;
     }, z.core.$strict>>;
     features: z.ZodOptional<z.ZodType<Record<string, {
         description: string;
@@ -1301,6 +1335,8 @@ export function mergeRegistries(ownId: string, manifest: PackManifest, depManife
 depProvenance?: Map<string, PackProvenance>): {
     entities: Map<string, RegistryEntry>;
     relKinds: Map<string, RegistryEntry>;
+    weightedKinds: Set<string>;
+    rankIndexes: Set<string>;
     roles: Map<string, RegistryEntry>;
 };
 
@@ -1467,18 +1503,51 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
         }>>>>;
         relations: z.ZodOptional<z.ZodType<Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
+            weighted?: boolean | undefined;
         }>, Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
+            weighted?: boolean | undefined;
         }>, z.core.$ZodTypeInternals<Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
+            weighted?: boolean | undefined;
         }>, Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
+            weighted?: boolean | undefined;
         }>>>>;
         roles: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        ranks: z.ZodOptional<z.ZodType<Record<string, {
+            types: readonly string[];
+            relations: readonly string[];
+            direction?: "in" | "out" | "both" | undefined;
+            weights?: boolean | undefined;
+            damping?: number | undefined;
+            tolerance?: number | undefined;
+        }>, Record<string, {
+            types: readonly string[];
+            relations: readonly string[];
+            direction?: "in" | "out" | "both" | undefined;
+            weights?: boolean | undefined;
+            damping?: number | undefined;
+            tolerance?: number | undefined;
+        }>, z.core.$ZodTypeInternals<Record<string, {
+            types: readonly string[];
+            relations: readonly string[];
+            direction?: "in" | "out" | "both" | undefined;
+            weights?: boolean | undefined;
+            damping?: number | undefined;
+            tolerance?: number | undefined;
+        }>, Record<string, {
+            types: readonly string[];
+            relations: readonly string[];
+            direction?: "in" | "out" | "both" | undefined;
+            weights?: boolean | undefined;
+            damping?: number | undefined;
+            tolerance?: number | undefined;
+        }>>>>;
     }, z.core.$strict>>;
     lifecycle: z.ZodOptional<z.ZodLazy<z.ZodObject<{
         onInit: z.ZodOptional<z.ZodString>;
@@ -1780,7 +1849,6 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
     features: z.ZodOptional<z.ZodType<Record<string, {
         description: string;
         references?: ReferenceDeclarations | undefined;
-        surface?: SurfaceDeclaration | undefined;
         services?: Record<string, string> | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -1807,11 +1875,11 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
             form?: string | undefined;
             access?: "owner" | "shared" | undefined;
         } | undefined;
+        surface?: SurfaceDeclaration | undefined;
         repositories?: Record<string, string> | undefined;
     }>, Record<string, {
         description: string;
         references?: unknown;
-        surface?: unknown;
         services?: Record<string, string> | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -1831,11 +1899,11 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
+        surface?: unknown;
         repositories?: Record<string, string> | undefined;
     }>, z.core.$ZodTypeInternals<Record<string, {
         description: string;
         references?: ReferenceDeclarations | undefined;
-        surface?: SurfaceDeclaration | undefined;
         services?: Record<string, string> | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -1862,11 +1930,11 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
             form?: string | undefined;
             access?: "owner" | "shared" | undefined;
         } | undefined;
+        surface?: SurfaceDeclaration | undefined;
         repositories?: Record<string, string> | undefined;
     }>, Record<string, {
         description: string;
         references?: unknown;
-        surface?: unknown;
         services?: Record<string, string> | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -1886,6 +1954,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
+        surface?: unknown;
         repositories?: Record<string, string> | undefined;
     }>>>>;
 }, z.core.$strict>;
@@ -1952,6 +2021,7 @@ export interface PackDataDeclarations {
         entities?: Readonly<Record<string, PackEntityDeclaration>>;
         relations?: Readonly<Record<string, PackRelationDeclaration>>;
         roles?: readonly string[];
+        ranks?: Readonly<Record<string, RankDeclaration>>;
     };
     // (undocumented)
     features?: Readonly<Record<string, object>>;
@@ -2072,7 +2142,8 @@ export type PackProvenance = Partial<Record<ProvenanceKind, Record<string, strin
 // @public
 export interface PackRelationDeclaration {
     readonly acyclic?: boolean;
-    readonly unique?: boolean;
+    readonly key?: readonly string[];
+    readonly weighted?: boolean;
 }
 
 // @internal
@@ -2188,7 +2259,9 @@ export const promptsCompiler: SpecialtyCompiler<DslCompiled>;
 export const PROVENANCE_KINDS: {
     readonly entities: (m: ProvenanceManifest) => string[];
     readonly relKinds: (m: ProvenanceManifest) => string[];
+    readonly weightedKinds: (m: ProvenanceManifest) => string[];
     readonly roles: (m: ProvenanceManifest) => string[];
+    readonly rankIndexes: (m: ProvenanceManifest) => string[];
     readonly referenceTypes: (m: ProvenanceManifest) => string[];
     readonly referenceCategories: (m: ProvenanceManifest) => string[];
     readonly tiptapExtensions: (m: ProvenanceManifest) => string[];

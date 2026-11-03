@@ -168,7 +168,7 @@ async function main(): Promise<void> {
   const prepared = await boundedSpawn('npm', ['run', preparation.name], timeoutMsFor(preparation.timeout), { stream: true });
   if (prepared.code !== 0) {
     throw new Error(prepared.timedOut
-      ? timedOutBecause({ what: preparation.name, timeout: preparation.timeout })
+      ? timedOutBecause({ what: preparation.name, timeout: preparation.timeout, stalled: prepared.stalled })
       : `${preparation.name} failed (exit ${prepared.code})`);
   }
   // One run of this pool at a time, from here on: everything below stamps the projects it runs, and two runs
@@ -225,12 +225,12 @@ async function main(): Promise<void> {
       covered.map((suite) => ({ label: `${suite.dir} (${half}, ${provenance})`, unit: poolUnitFor(suite, kind, provenance, workers), stamp: poolStampFor(suite, half, provenance) })),
       async () => {
         const reportFile = path.join(reports, `${covered.map((suite) => suite.dir).join('+')}.json`);
-        const { code, timedOut } = await boundedSpawn(command, [...args], timeoutMsFor(step.timeout),
+        const { code, timedOut, stalled } = await boundedSpawn(command, [...args], timeoutMsFor(step.timeout),
           { stream: true, env: { ...process.env, [SPEC_DURATIONS_FILE]: reportFile } });
         if (code !== 0) {
           // No recorded cost: the chain reports one for the whole step, and this run may cover only part of it
           throw new Error(timedOut
-            ? timedOutBecause({ what: poolStepName(kind), timeout: step.timeout })
+            ? timedOutBecause({ what: poolStepName(kind), timeout: step.timeout, stalled })
             : `${kind} pool failed (exit ${code})`);
         }
         // Only what the run reported may be stamped: a `--project` filter matching nothing is dropped

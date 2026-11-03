@@ -164,6 +164,7 @@ export class ProcessManager {
 
     const signalling = new Promise<void>((resolve, reject) => {
       let forceKill: ReturnType<typeof setTimeout> | undefined;
+      let giveUp: ReturnType<typeof setTimeout> | undefined;
       const done = (): void => {
         // `cleanup()` took the handler that normally sets this, and `isRunning()` reads it
         this.exited = true;
@@ -171,13 +172,18 @@ export class ProcessManager {
         clearTimeout(forceKill);
         resolve();
       };
-      const giveUp = setTimeout(() => {
+      const refuse = () => {
         child.removeListener('exit', done);
         clearTimeout(forceKill);
         reject(new Error('API process did not exit after shutdown signals'));
-      }, forceKillDelay + 1000);
+      };
       child.once('exit', done);
-      if (forceKillDelay > 0) forceKill = setTimeout(() => this.signal(child, 'SIGKILL'), forceKillDelay);
+      if (forceKillDelay > 0) forceKill = setTimeout(() => {
+        // Start the exit grace when escalation actually runs; overdue timers must leave an I/O turn for exit.
+        giveUp = setTimeout(refuse, 1000);
+        this.signal(child, 'SIGKILL');
+      }, forceKillDelay);
+      else giveUp = setTimeout(refuse, forceKillDelay + 1000);
       this.signal(child, signal);
     });
     this.stopping = signalling.finally(() => { this.stopping = undefined; });

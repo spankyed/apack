@@ -1,5 +1,5 @@
 import { hasOwn } from '../utils/shared.ts';
-import type { EmbedDeclaration, RelationRules, RowRules, SearchDeclaration } from '@apackdev/ears';
+import type { EmbedDeclaration, RankDeclaration, RelationRules, RowRules, SearchDeclaration } from '@apackdev/ears';
 import type { EmbeddingModelId } from '../services/models.ts';
 
 /** One entity type's declaration: everything the manifest says about it, in its own entry */
@@ -40,8 +40,14 @@ export interface PackSearchDeclaration extends SearchDeclaration {
 export interface PackRelationDeclaration {
   /** A link that would close a cycle through this kind is refused (`CYCLE`): a tree, a folder hierarchy */
   readonly acyclic?: boolean;
-  /** At most one edge of this kind from an entity to another; linking the pair again replaces the edge's info */
-  readonly unique?: boolean;
+  /**
+   * The info fields that, with its two ends, identify an edge, a field the info doesn't hold being null. Without one,
+   * two entities are joined by one edge of the kind at most; with one, by one for each value of its fields, whose
+   * weights a `rank` adds. A link to an identity an edge holds updates that edge's info and weight
+   */
+  readonly key?: readonly string[];
+  /** Each edge carries a weight, 1 unless a link gives another, which `rank` and `communities` read */
+  readonly weighted?: boolean;
 }
 
 /** Declarative entity ownership/shapes and the pack-level relation wire vocabulary. */
@@ -50,6 +56,7 @@ export interface PackDataDeclarations {
     entities?: Readonly<Record<string, PackEntityDeclaration>>;
     relations?: Readonly<Record<string, PackRelationDeclaration>>;
     roles?: readonly string[];
+    ranks?: Readonly<Record<string, RankDeclaration>>;
   };
   features?: Readonly<Record<string, object>>;
 }
@@ -166,13 +173,26 @@ export function _packRelationTypes(declaration: PackDataDeclarations): Record<st
   return wireConstants(Object.keys(declaration.data?.relations ?? {}), 'Relation', 'relations');
 }
 
+/** @internal The pack's relation kinds declared `weighted`, as EARS constants, a subset of `_packRelationTypes` */
+export function _packWeightedKinds(declaration: PackDataDeclarations): Record<string, string> {
+  const relations = declaration.data?.relations ?? {};
+  return wireConstants(Object.keys(relations).filter((wire) => relations[wire]?.weighted), 'Relation', 'relations');
+}
+
 /** @internal What each of the pack's relation kinds that declares a rule holds its edges to, by wire name */
 export function _packRelationRules(declaration: PackDataDeclarations): Record<string, RelationRules> {
   const rules: Record<string, RelationRules> = {};
-  for (const [wire, { acyclic, unique }] of Object.entries(declaration.data?.relations ?? {})) {
-    if (acyclic || unique) rules[wire] = { ...(acyclic && { acyclic }), ...(unique && { unique }) };
+  for (const [wire, { acyclic, key, weighted }] of Object.entries(declaration.data?.relations ?? {})) {
+    if (acyclic || key?.length || weighted) {
+      rules[wire] = { ...(acyclic && { acyclic }), ...(key?.length && { key }), ...(weighted && { weighted }) };
+    }
   }
   return rules;
+}
+
+/** @internal The rank indexes the pack declares, by name */
+export function _packRanks(declaration: PackDataDeclarations): Record<string, RankDeclaration> {
+  return { ...declaration.data?.ranks };
 }
 
 /** @internal The pack's roles as EARS constants (`entry_event` → `ENTRY_EVENT`) */

@@ -11,7 +11,7 @@
   >
     <!-- Measure against the transcript width; native expansion can change the drawn bubble's width. -->
     <div v-if="hasNativeUserFrame" ref="originalUserBody" inert aria-hidden="true" class="pointer-events-none invisible absolute left-4 right-4 top-3 leading-relaxed text-[15px]">
-      <TiptapEditor mode="viewer" variant="chat" :model-value="message.text" />
+      <slot />
     </div>
     <!-- Marker message: compact divider with toggle -->
     <div v-if="isMarker" class="flex items-center gap-3 w-full px-4 py-1">
@@ -27,7 +27,7 @@
       <div class="flex-1 h-px bg-neutral-700/50"></div>
     </div>
 
-    <div v-else class="group max-w-full min-w-0" :class="{ 'w-full': hasNativeToolFrame }">
+    <div v-show="!isMarker" class="group max-w-full min-w-0" :class="{ 'w-full': hasNativeToolFrame }">
       <!-- Aside: collapsed interactive message (click to expand) -->
       <div v-if="message.autoHide && message.asideText && !expanded"
            class="text-xs italic py-1 px-2 cursor-pointer hover:bg-neutral-800/50 rounded transition-colors"
@@ -42,8 +42,7 @@
       </div>
 
       <!-- Normal message rendering -->
-      <template v-else-if="!message.autoHide || !message.asideText || expanded">
-      <div class="relative">
+      <div v-show="!isSystem && (!message.autoHide || !message.asideText || expanded)" class="relative">
       <!-- Floating hover UI -->
       <div
         class="absolute transition-opacity duration-200 opacity-0 pointer-events-none -bottom-3 -right-4 z-10 group-hover:opacity-100 group-hover:pointer-events-auto"
@@ -136,9 +135,8 @@
 
       <!-- Bubble (visual styling + overflow constraint) -->
       <div
-        ref="bubbleRef"
         :class="[
-          'rounded-xl px-4 py-3 transition-all duration-200 overflow-hidden relative',
+          'rounded-xl transition-all duration-200 overflow-hidden relative',
           isUser
             ? 'bg-neutral-800/80 text-neutral-100 border border-neutral-700/50'
             : ' text-neutral-100 border border-neutral-700/60',
@@ -148,7 +146,7 @@
         ]"
         @click="isUser && isTruncated && !userExpanded && (userExpanded = true)"
       >
-
+        <div ref="bubbleContentRef" class="px-4 py-3">
         <!-- Attachments: files then images, horizontal scroll -->
         <div v-if="message.references?.files?.length || message.references?.images?.length" ref="attachmentStrip"
           class="flex items-end gap-2 mb-2 overflow-x-auto scrollbar-thin">
@@ -184,7 +182,9 @@
 
         <!-- Message content -->
         <div data-chat-message-content class="leading-relaxed text-[15px]">
-          <template v-for="part in nativeParts" :key="part.kind === 'native' ? part.frame.uuid : `host-${part.start}`">
+          <slot v-if="!hasNativeTranscript" />
+          <div v-else-if="!hasNativeUserFrame" hidden inert aria-hidden="true"><slot /></div>
+          <template v-for="part in hasNativeTranscript ? nativeParts : []" :key="part.kind === 'native' ? part.frame.uuid : `host-${part.start}`">
             <NativeTranscriptMessage v-if="part.kind === 'native'" :frame="part.frame"
               @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />
             <TiptapEditor v-else mode="viewer" variant="chat" :model-value="part.text" />
@@ -210,6 +210,7 @@
           <span class="w-1.5 h-1.5 bg-neutral-500 rounded-full animate-pulse" style="animation-delay: 400ms"></span>
         </div>
 
+        </div>
         <!-- Truncation overlay for long user messages -->
         <div v-if="isUser && isTruncated && !userExpanded"
           class="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-neutral-800 via-neutral-800/90 to-transparent flex items-end justify-center pb-2 pointer-events-none">
@@ -218,7 +219,6 @@
         </div>
       </div>
       </div>
-      </template>
 
       <!-- Status indicator (queued / cancelled) -->
       <div v-if="statusIndicator" :class="['flex items-center justify-end gap-1.5 mt-1 px-1 text-xs', statusIndicator.textClass]">
@@ -238,7 +238,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onUpdated, watch, provide, h } from 'vue'
+import { computed, ref, watch, provide, h } from 'vue'
 import type { MessageEntity } from '#generated/types.ts'
 import { Undo2, GitFork, Copy, FileCode2, ChevronsUpDown, ChevronDown, ChevronUp, X, RotateCcw } from 'lucide-vue-next'
 import NativeToolDrawing from './NativeToolDrawing.vue'
@@ -252,7 +252,6 @@ import type { ClaudeUiTranscriptFrame, ClaudeUiFieldEvent } from '#features/code
 import InteractionContainer from './interactions/InteractionContainer.vue'
 import FileBlock from './FileBlock.vue'
 import ImageThumbnail from './ImageThumbnail.vue'
-import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ContextMenuPopup from '@apackdev/ui/design/ContextMenuPopup'
 import { useContextMenu } from '@apackdev/ui/composables/useContextMenu'
 
@@ -305,6 +304,7 @@ const groupedSuppressed = computed(() => {
   const groups=(props.nativeFrames??[]).filter(frame=>frame.component==='ToolGroup'&&frame.body.status==='live')
   return props.message.blocks.every(block=>block.props.entries?.length&&block.props.entries.every((entry:{id:string})=>groups.some(group=>group.component==='ToolGroup'&&group.tools[0]?.id!==entry.id&&group.tools.some(tool=>tool.id===entry.id))))
 })
+const hasNativeTranscript = computed(() => nativeParts.value.some(part => part.kind === 'native'))
 const nativeParts = computed(() => claudeNativeMessageParts(props.message.id, props.message.text || '', props.message.sender === 'assistant' || props.message.sender === 'user' ? props.nativeFrames : []))
 
 const blockExpansion = new Map<number, boolean>()
@@ -347,7 +347,7 @@ const canFork = computed(() => {
 })
 
 // Long user message truncation
-const bubbleRef = ref<HTMLElement | null>(null)
+const bubbleContentRef = ref<HTMLElement | null>(null)
 const userExpanded = ref(false)
 const isTruncated = ref(false)
 const MAX_USER_MSG_HEIGHT = 200
@@ -358,32 +358,18 @@ watch([() => props.message.id, () => props.isClaudeCodeThread, () => isUser.valu
   if (isUser.value && props.isClaudeCodeThread) emit('native-ui-message-view', { messageId: props.message.id, isExpanded: !isTruncated.value || userExpanded.value })
 }, { immediate: true })
 
-function checkTruncation() {
-  if (bubbleRef.value && isUser.value) {
-    if (hasNativeUserFrame.value && !originalUserBody.value?.scrollHeight) return
-    const height = hasNativeUserFrame.value && originalUserBody.value
-      ? originalUserBody.value.scrollHeight + (attachmentStrip.value ? attachmentStrip.value.offsetHeight + 8 : 0) + 26
-      : bubbleRef.value.scrollHeight
-    isTruncated.value = height > MAX_USER_MSG_HEIGHT
-  }
-}
-
-// Use ResizeObserver so truncation is detected even when TiptapEditor renders async (e.g. on refresh)
-watch(bubbleRef, (el, _prev, onCleanup) => {
-  if (!el || !isUser.value) return
-  const observer = new ResizeObserver(checkTruncation)
-  observer.observe(el)
-  checkTruncation()
+// Observe natural content rather than the bubble whose height truncation changes.
+// Measurement runs after layout, including rich-text transactions outside Vue's render cycle.
+watch([bubbleContentRef, originalUserBody, isUser, hasNativeUserFrame], ([bubble, original, user, native], _prev, onCleanup) => {
+  const content = native ? original : bubble
+  if (!content || !user) return
+  const observer = new ResizeObserver(([entry]) => {
+    const height = entry.borderBoxSize[0].blockSize + (native ? (attachmentStrip.value?.offsetHeight ?? 0) + 26 : 0)
+    isTruncated.value = Math.round(height) > MAX_USER_MSG_HEIGHT
+  })
+  observer.observe(content, { box: 'border-box' })
   onCleanup(() => observer.disconnect())
-}, { immediate: true })
-
-watch(originalUserBody, (element, _prior, onCleanup) => {
-  if (!element) return
-  const observer = new ResizeObserver(checkTruncation); observer.observe(element); checkTruncation()
-  onCleanup(() => observer.disconnect())
-})
-
-onUpdated(checkTruncation)
+}, { flush: 'post' })
 
 const revertMenuItems = [
   {

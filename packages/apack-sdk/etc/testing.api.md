@@ -25,6 +25,7 @@ import type { InferSchema } from 'ai';
 import type { JSONSchema7 } from 'ai';
 import type { Output } from 'ai';
 import type { OutputInterface } from 'ai';
+import { RankDeclaration } from '@apackdev/ears';
 import type { Ref } from 'vue';
 import { RelationRules } from '@apackdev/ears';
 import type { rerank } from 'ai';
@@ -241,6 +242,7 @@ export interface TestRuntimeStartOptions {
     entityTypes?: readonly string[];
     onboarding?: OnboardingService;
     packs?: PackRegistryView;
+    ranks?: Readonly<Record<string, RankDeclaration>>;
     relationKinds?: readonly string[];
     relationRules?: Readonly<Record<string, RelationRules>>;
     roles?: readonly string[];
@@ -248,6 +250,9 @@ export interface TestRuntimeStartOptions {
     serviceOverrides?: ReadonlyMap<string, unknown>;
     settings?: SettingsAdmin;
 }
+
+// @public
+export function waitForIndexBuilds(): void;
 
 // (No @packageDocumentation comment for this package)
 

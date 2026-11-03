@@ -12,6 +12,7 @@ import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import {getMediaBasePath} from '../media-protocol/paths.ts';
 import {logRenderer, logRendererFatal} from '../api-server/logger.ts';
+import {performanceStartupQuery} from '../performance/startup.ts';
 import {splitRef} from '@apackdev/sdk/ids';
 import {openExternalUrl, openFilePath} from '../shell-access.ts';
 
@@ -444,10 +445,13 @@ class WindowManager implements AppModule {
     this.attachRendererDiagnostics(browserWindow);
 
     try {
+      const query = performanceStartupQuery();
       if (this.#renderer instanceof URL) {
-        await browserWindow.loadURL(this.#renderer.href);
+        const url = new URL(this.#renderer.href);
+        for (const [key, value] of Object.entries(query ?? {})) url.searchParams.set(key, value);
+        await browserWindow.loadURL(url.href);
       } else {
-        await browserWindow.loadFile(this.#renderer.path);
+        await browserWindow.loadFile(this.#renderer.path, { query });
       }
     } catch (error) {
       console.error('[MAIN] Failed to load renderer:', error);

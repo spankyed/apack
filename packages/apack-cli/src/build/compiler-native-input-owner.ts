@@ -28,7 +28,13 @@ export function createCompilerNativeInputs(original: ReturnType<typeof createCom
     && !isCompilerLocationPath(file, compiler.directory, packRoot);
   let tree: CompilerReadTree | undefined;
   const sourcePath = (file: string) => tree?.sourcePath(file) ?? compilerSourcePath(file, paths);
+  const executable = nativeEnvironment.elf?.executable;
+  const ownedExecutable = executable && isOwnedCompilerPath(executable, compiler.directory) ? executable : undefined;
+  const ownExecutableAlias = `/proc/${process.pid}/exe`;
   const readDataPath = (file: string) => withoutCompilerFileReads(() => {
+    // libc detection reads its own ELF header through procfs. Those bytes already belong to
+    // the captured runtime; recording the resolved PID would make its receipt expire on exit.
+    if (ownedExecutable && (file === '/proc/self/exe' || file === ownExecutableAlias)) return ownedExecutable;
     if (!includes(file)) return file;
     file = sourcePath(file);
     // Node's package metadata reader bypasses fs wrappers. Observe enclosing declarations,

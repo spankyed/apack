@@ -1,0 +1,19 @@
+import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
+const [log, done, output] = process.argv.slice(2);
+const records=[]; let bytes=0, truncated=false;
+const read=file=>{try{return fs.readFileSync(file,'utf8').trim();}catch{return undefined;}};
+const timer=setInterval(()=>{
+ if(fs.existsSync(done)){clearInterval(timer);fs.writeFileSync(output,JSON.stringify({intervalMs:500,truncated,records}));return;}
+ if(truncated)return;
+ const match=(read(log)??'').match(/\[e2e\.launch\]\s+(\{"phase":"process-attached"[^\n]+\})/);
+ if(!match)return;
+ const main=JSON.parse(match[1]).pid;
+ const rows=execFileSync('ps',['-eo','pid=,ppid=,stat=,pcpu=,comm='],{encoding:'utf8'}).trim().split('\n').map(line=>{
+  const [pid,ppid,state,cpu,...command]=line.trim().split(/\s+/);return {pid:Number(pid),ppid:Number(ppid),state,cpu:Number(cpu),command:command.join(' ')};
+ });
+ const owned=new Set([main]);let changed=true;
+ while(changed){changed=false;for(const row of rows)if(owned.has(row.ppid)&&!owned.has(row.pid)){owned.add(row.pid);changed=true;}}
+ const record={at:Date.now(),main,processes:rows.filter(row=>owned.has(row.pid)).map(row=>({...row,wait:read(`/proc/${row.pid}/wchan`),io:read(`/proc/${row.pid}/io`),cwd:(()=>{try{return fs.readlinkSync(`/proc/${row.pid}/cwd`);}catch{return undefined;}})()}))};
+ bytes+=Buffer.byteLength(JSON.stringify(record));if(bytes>8*1024*1024){truncated=true;return;}records.push(record);
+},500);

@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { boundedSpawn } from '../../../scripts/lib/bounded-spawn.ts';
-import { readReportedRun, SPEC_DURATIONS_FILE } from '../../../scripts/lib/spec-durations-reporter.ts';
+import { readReportedRun, SPEC_DURATIONS_FILE, SPEC_DURATIONS_PROGRESS_FILE } from '../../../scripts/lib/spec-durations-reporter.ts';
 import { durationsOf } from '../../../scripts/lib/spec-durations.ts';
 import { DEADLINE_FACTOR, SIZE_MS } from '../../../scripts/lib/unit-suites.ts';
 import { CONFIG_BY_HALF } from '../../../scripts/lib/spec-halves.ts';
@@ -44,6 +44,7 @@ const CONSOLE_LINE = /^\s*[✓×❯]\s+(?:(?:\|[^|]*\||\S+)\s+)?(\S+\.(?:spec|te
 interface Run {
   readonly printed: Map<string, number>;
   readonly reported: ReturnType<typeof readReportedRun>;
+  readonly progressFiles: readonly string[];
 }
 
 /**
@@ -122,8 +123,8 @@ async function runShape(shape: Shape): Promise<Run & { workspace: string; files:
   const out = path.join(cwd, 'durations.json');
   const reporter = path.join(REPO_ROOT, 'scripts/lib/spec-durations-reporter.ts');
   const { half, command, args } = SHAPES[shape]();
-  const child = boundedSpawn(command, [...args(workspace, reporter), '--maxWorkers=1', '--minWorkers=1'], SIZE_MS.small,
-    { cwd, env: { ...process.env, [SPEC_DURATIONS_FILE]: out }, signal: lifetime.signal });
+  const child = boundedSpawn(command, [...args(workspace, reporter), '--maxWorkers=1'], SIZE_MS.small,
+    { cwd, env: { ...process.env, [SPEC_DURATIONS_FILE]: out, [SPEC_DURATIONS_PROGRESS_FILE]: path.join(cwd, 'progress') }, signal: lifetime.signal });
   children.push(child);
   const result = await child;
   expect(result.code, `${shape} fixture failed: ${result.output}`).toBe(0);
@@ -134,6 +135,7 @@ async function runShape(shape: Shape): Promise<Run & { workspace: string; files:
   }
   const suffix = half === 'fast' ? '.spec.ts' : '.integration.spec.ts';
   return { printed, reported: readReportedRun(out), workspace,
+    progressFiles: fs.readdirSync(cwd).filter(file => /^progress\.\d+\.jsonl$/.test(file)).map(file => path.join(cwd, file)),
     files: ['first', 'second'].map(name => `tests/${name}${suffix}`) };
 }
 
@@ -204,6 +206,20 @@ describe('the durations reporter agrees with the console it replaced', () => {
     expect([...new Set(reported!.modules.map((module) => module.project))]).toEqual([expected]);
   });
 
+  it.each(Object.keys(SHAPES) as Shape[])('retains per-file progress separately from completed evidence in a %s run', async (shape) => {
+    const { progressFiles, reported } = await bothReporters(shape);
+    expect(progressFiles).toHaveLength(1);
+    const progress = fs.readFileSync(progressFiles[0]!, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+    for (const module of reported!.modules) {
+      const events = progress.filter(event => event.file === module.file);
+      expect(events.map(event => event.event)).toEqual(['queued', 'ended']);
+      expect(events[1]).toMatchObject({ project: module.project, duration: module.ms });
+      expect(events[1].collectDuration + events[1].setupDuration
+        + events[1].environmentSetupDuration + events[1].prepareDuration).toBe(module.overheadMs);
+    }
+    expect(readReportedRun(progressFiles[0]!), 'partial diagnostics must never be accepted as a completed run').toBeUndefined();
+  });
+
   // The population, so neither case above can pass over a shape nobody runs
   it('covers every shape a pool invokes vitest in', () => {
     const invoked = (Object.keys(POOLS) as Pool[]).map((pool) =>
@@ -229,7 +245,7 @@ it('attributes qualified subprojects to their confirmed workspace without hiding
   const out = path.join(root, 'durations.json');
   const child = boundedSpawn(process.execPath, [path.join(REPO_ROOT, 'node_modules/vitest/vitest.mjs'), 'run',
     '--config', path.join(root, 'vitest.config.ts'),
-    `--reporter=${path.join(REPO_ROOT, 'scripts/lib/spec-durations-reporter.ts')}`, '--maxWorkers=1', '--minWorkers=1'], SIZE_MS.small,
+    `--reporter=${path.join(REPO_ROOT, 'scripts/lib/spec-durations-reporter.ts')}`, '--maxWorkers=1'], SIZE_MS.small,
     { cwd: root, env: { ...process.env, [SPEC_DURATIONS_FILE]: out }, signal: lifetime.signal });
   children.push(child);
   const result = await child;
@@ -255,7 +271,7 @@ it('records a test that passed past its budget, and only that one, against the b
   const out = path.join(root, 'durations.json');
   const child = boundedSpawn(process.execPath, [path.join(REPO_ROOT, 'node_modules/vitest/vitest.mjs'), 'run',
     '--config', path.join(root, 'vitest.config.ts'),
-    `--reporter=${path.join(REPO_ROOT, 'scripts/lib/spec-durations-reporter.ts')}`, '--maxWorkers=1', '--minWorkers=1'], SIZE_MS.small,
+    `--reporter=${path.join(REPO_ROOT, 'scripts/lib/spec-durations-reporter.ts')}`, '--maxWorkers=1'], SIZE_MS.small,
     { cwd: root, env: { ...process.env, [SPEC_DURATIONS_FILE]: out }, signal: lifetime.signal });
   children.push(child);
   const result = await child;

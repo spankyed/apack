@@ -56,16 +56,13 @@ describe('the chain budget bounds actual Vitest pools', () => {
     expect(() => poolWorkers('integration', { [CHAIN_CORES_ENV]: value })).toThrow(CHAIN_CORES_ENV);
   });
 
-  it('gives Vitest explicit pool overrides, including a minimum that permits a one-worker run', () => {
+  it('gives Vitest the worker cap as an option it reads, down to a one-worker run', () => {
     for (const pool of pools) {
       const workers = poolWorkers(pool, { [CHAIN_CORES_ENV]: '1' });
       for (const run of POOLS[pool].run(POOLS[pool].suites(), workers)) {
-        const args = run.args.filter(arg => arg.startsWith('--poolOptions.'));
+        const args = run.args.filter(arg => arg.startsWith('--maxWorkers'));
         const { options } = parseCLI(['vitest', 'run', ...args]);
-        expect(Number(options.poolOptions?.threads?.maxThreads), pool).toBe(1);
-        expect(Number(options.poolOptions?.threads?.minThreads), pool).toBe(1);
-        expect(Number(options.poolOptions?.forks?.maxForks), pool).toBe(1);
-        expect(Number(options.poolOptions?.forks?.minForks), pool).toBe(1);
+        expect(Number(options.maxWorkers), pool).toBe(1);
       }
     }
   });
@@ -79,7 +76,7 @@ describe('the chain budget bounds actual Vitest pools', () => {
       expect(unitFor(step, 1000).command, pool).toBe(unitFor(step).command);
       expect(poolUnitFor(suite, pool, 'chain', 1).command, pool)
         .not.toBe(poolUnitFor(suite, pool, 'chain', 5).command);
-      expect(measureCommandFor(step.name, 1), pool).toContain('maxForks=1');
+      expect(measureCommandFor(step.name, 1), pool).toContain('--maxWorkers=1');
     }
     const build = CHAIN_STEPS.find(step => step.name === 'build:runtime')!;
     expect(unitFor(build, 2).command).toBe(unitFor(build, 10).command);

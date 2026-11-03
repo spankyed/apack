@@ -1,40 +1,40 @@
 /* Tiptap ProseMirror content styles — dark theme */
 
-.tiptap-wrapper .ProseMirror {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) {
   outline: none;
   color: rgb(245 245 245); /* text-neutral-100 */
   font-size: 0.9375rem; /* 15px */
   line-height: 1.5;
 }
 
-.tiptap-wrapper .ProseMirror p {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) p {
   margin: 0.25em 0;
 }
 
-.tiptap-wrapper .ProseMirror > *:first-child {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) > *:first-child {
   margin-top: 0;
 }
 
-.tiptap-wrapper .ProseMirror > *:last-child {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) > *:last-child {
   margin-bottom: 0;
 }
 
 /* Headings */
-.tiptap-wrapper .ProseMirror h1 {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) h1 {
   font-size: 1.35em;
   font-weight: 700;
   margin: 0.5em 0 0.15em;
   line-height: 1.3;
 }
 
-.tiptap-wrapper .ProseMirror h2 {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) h2 {
   font-size: 1.15em;
   font-weight: 600;
   margin: 0.4em 0 0.1em;
   line-height: 1.3;
 }
 
-.tiptap-wrapper .ProseMirror h3 {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) h3 {
   font-size: 1.05em;
   font-weight: 600;
   margin: 0.35em 0 0.1em;
@@ -42,7 +42,7 @@
 }
 
 /* Inline code */
-.tiptap-wrapper .ProseMirror code {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) code {
   background: rgb(45 42 40);
   border: 1px solid rgb(80 80 80);
   border-radius: 0.25rem;
@@ -53,7 +53,7 @@
 }
 
 /* Code blocks */
-.tiptap-wrapper .ProseMirror pre {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) pre {
   background: rgb(30 30 30);
   border: 1px solid rgb(55 55 55);
   border-radius: 0.375rem;
@@ -62,7 +62,7 @@
   overflow-x: auto;
 }
 
-.tiptap-wrapper .ProseMirror pre code {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) pre code {
   background: none;
   padding: 0;
   border-radius: 0;
@@ -72,16 +72,16 @@
 }
 
 /* Code block copy button (wrapper rendered via node view) */
-.tiptap-wrapper .ProseMirror .code-block-wrapper {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .code-block-wrapper {
   position: relative;
   margin: 0.5em 0;
 }
 
-.tiptap-wrapper .ProseMirror .code-block-wrapper > pre {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .code-block-wrapper > pre {
   margin: 0;
 }
 
-.tiptap-wrapper .ProseMirror .code-block-copy-btn {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .code-block-copy-btn {
   position: absolute;
   top: 0.4rem;
   right: 0.4rem;
@@ -101,23 +101,23 @@
   z-index: 2;
 }
 
-.tiptap-wrapper .ProseMirror .code-block-wrapper:hover .code-block-copy-btn,
-.tiptap-wrapper .ProseMirror .code-block-copy-btn:focus-visible,
-.tiptap-wrapper .ProseMirror .code-block-copy-btn.is-copied {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .code-block-wrapper:hover .code-block-copy-btn,
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .code-block-copy-btn:focus-visible,
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .code-block-copy-btn.is-copied {
   opacity: 1;
 }
 
-.tiptap-wrapper .ProseMirror .code-block-copy-btn:hover {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .code-block-copy-btn:hover {
   background: rgb(60 60 60);
   color: rgb(235 235 235);
 }
 
-.tiptap-wrapper .ProseMirror .code-block-copy-btn.is-copied {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .code-block-copy-btn.is-copied {
   color: rgb(134 239 172);
 }
 
 /* Blockquote */
-.tiptap-wrapper .ProseMirror blockquote {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) blockquote {
   border-left: 3px solid rgb(64 64 64); /* border-neutral-700 */
   padding-left: 1rem;
   margin: 0.5em 0;
@@ -125,53 +125,53 @@
 }
 
 /* Horizontal rule */
-.tiptap-wrapper .ProseMirror hr {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) hr {
   border: none;
   border-top: 1px solid rgb(64 64 64);
   margin: 0.75em 0;
 }
 
 /* Lists */
-.tiptap-wrapper .ProseMirror ul {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) ul {
   list-style-type: disc;
   padding-left: 1.2em;
   margin: 0.25em 0;
 }
 
-.tiptap-wrapper .ProseMirror ol {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) ol {
   list-style-type: decimal;
   padding-left: 1.2em;
   margin: 0.25em 0;
 }
 
-.tiptap-wrapper .ProseMirror li + li {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) li + li {
   margin-top: 0.15em;
 }
 
-.tiptap-wrapper .ProseMirror li p {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) li p {
   margin: 0;
 }
 
 /* Task list */
-.tiptap-wrapper .ProseMirror ul[data-type="taskList"] {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) ul[data-type="taskList"] {
   list-style: none;
   padding-left: 0;
 }
 
-.tiptap-wrapper .ProseMirror ul[data-type="taskList"] li {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) ul[data-type="taskList"] li {
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
 }
 
-.tiptap-wrapper .ProseMirror ul[data-type="taskList"] li label {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) ul[data-type="taskList"] li label {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   height: 1.5em;
 }
 
-.tiptap-wrapper .ProseMirror ul[data-type="taskList"] li label input[type="checkbox"] {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) ul[data-type="taskList"] li label input[type="checkbox"] {
   appearance: none;
   width: 0.9em;
   height: 0.9em;
@@ -185,7 +185,7 @@
   transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
-.tiptap-wrapper .ProseMirror ul[data-type="taskList"] li label input[type="checkbox"]::before {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) ul[data-type="taskList"] li label input[type="checkbox"]::before {
   content: '';
   width: 0.55em;
   height: 0.55em;
@@ -195,57 +195,57 @@
   background: white;
 }
 
-.tiptap-wrapper .ProseMirror ul[data-type="taskList"] li label input[type="checkbox"]:checked {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) ul[data-type="taskList"] li label input[type="checkbox"]:checked {
   background: rgb(96 165 250);
   border-color: rgb(96 165 250);
 }
 
-.tiptap-wrapper .ProseMirror ul[data-type="taskList"] li label input[type="checkbox"]:checked::before {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) ul[data-type="taskList"] li label input[type="checkbox"]:checked::before {
   transform: scale(1);
 }
 
-.tiptap-wrapper .ProseMirror ul[data-type="taskList"] li > div {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) ul[data-type="taskList"] li > div {
   padding-left: 1px;
   flex: 1;
 }
 
-.tiptap-wrapper .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) ul[data-type="taskList"] li[data-checked="true"] > div {
   text-decoration: line-through;
   color: rgb(115 115 115);
 }
 
 /* Table */
-.tiptap-wrapper .ProseMirror table {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) table {
   border-collapse: collapse;
   width: 100%;
   margin: 0.5em 0;
 }
 
-.tiptap-wrapper .ProseMirror th,
-.tiptap-wrapper .ProseMirror td {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) th,
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) td {
   border: 1px solid rgb(64 64 64);
   padding: 0.4rem 0.6rem;
   text-align: left;
 }
 
-.tiptap-wrapper .ProseMirror th {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) th {
   background: rgb(38 38 38);
   font-weight: 600;
 }
 
 /* Links */
-.tiptap-wrapper .ProseMirror a {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) a {
   color: rgb(96 165 250); /* blue-400 */
   text-decoration: underline;
   text-underline-offset: 2px;
   position: relative;
 }
 
-.tiptap-wrapper .ProseMirror a:hover {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) a:hover {
   color: rgb(147 197 253); /* blue-300 */
 }
 
-.tiptap-wrapper .ProseMirror a:hover::after {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) a:hover::after {
   content: attr(href);
   position: absolute;
   left: 0;
@@ -264,7 +264,7 @@
 }
 
 /* Sub-page link (block atom) */
-.tiptap-wrapper .ProseMirror .sub-document-link {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .sub-document-link {
   display: flex;
   align-items: center;
   gap: 0.35rem;
@@ -273,11 +273,11 @@
   user-select: none;
 }
 
-.tiptap-wrapper .ProseMirror .sub-document-link:hover .sub-document-link-title {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .sub-document-link:hover .sub-document-link-title {
   text-decoration: underline;
 }
 
-.tiptap-wrapper .ProseMirror .sub-document-link.ProseMirror-selectednode {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .sub-document-link.ProseMirror-selectednode {
   outline: none;
   background-color: rgb(64 64 64);
   border-radius: 3px;
@@ -285,7 +285,7 @@
   padding-left: 0.6rem;
 }
 
-.tiptap-wrapper .ProseMirror .sub-document-link-icon {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .sub-document-link-icon {
   flex-shrink: 0;
   color: rgb(163 163 163);
   display: flex;
@@ -293,18 +293,18 @@
   align-items: center;
 }
 
-.tiptap-wrapper .ProseMirror .sub-document-link-title {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .sub-document-link-title {
   color: rgb(212 212 212);
   font-weight: 600;
 }
 
 /* Strong / em */
-.tiptap-wrapper .ProseMirror strong {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) strong {
   font-weight: 600;
 }
 
 /* Placeholder — generic for all empty block types */
-.tiptap-wrapper .ProseMirror .is-empty::before {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .is-empty::before {
   content: attr(data-placeholder);
   float: left;
   color: rgb(115 115 115); /* neutral-500 */
@@ -313,13 +313,13 @@
 }
 
 /* Hide selection highlight on empty editor paragraph */
-.tiptap-wrapper .ProseMirror p.is-editor-empty:first-child::selection,
-.tiptap-wrapper .ProseMirror p.is-editor-empty:first-child *::selection {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) p.is-editor-empty:first-child::selection,
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) p.is-editor-empty:first-child *::selection {
   background: transparent;
 }
 
 /* Command segment styling (the /commandName text when a command is selected) */
-.tiptap-wrapper .ProseMirror .command-segment {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .command-segment {
   background: rgba(255, 255, 255, 0.08);
   color: rgb(180, 180, 255);
   border-radius: 3px;
@@ -328,14 +328,14 @@
 }
 
 /* Command placeholder (shown after /commandName when no body text typed) */
-.tiptap-wrapper .ProseMirror p.has-command-placeholder::after {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) p.has-command-placeholder::after {
   content: attr(data-command-placeholder);
   color: rgb(115 115 115); /* neutral-500 — matches existing placeholder */
   pointer-events: none;
 }
 
 /* Images */
-.tiptap-wrapper .ProseMirror img {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) img {
   max-width: 100%;
   height: auto;
   border-radius: 0.5rem;
@@ -348,27 +348,27 @@
   filter: brightness(0.9);
 }
 
-.tiptap-wrapper .ProseMirror img.ProseMirror-selectednode,
-.tiptap-wrapper .ProseMirror img.image-in-selection {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) img.ProseMirror-selectednode,
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) img.image-in-selection {
   outline: none;
   box-shadow: 0 0 0 2px rgb(96 165 250);
   transition: box-shadow 0.15s ease;
 }
 
-.tiptap-wrapper .ProseMirror[contenteditable="false"] img.ProseMirror-selectednode,
-.tiptap-wrapper .ProseMirror[contenteditable="false"] img.image-in-selection {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body)[contenteditable="false"] img.ProseMirror-selectednode,
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body)[contenteditable="false"] img.image-in-selection {
   box-shadow: none;
 }
 
 /* Block-level node selection (drag handle click) */
-.tiptap-wrapper .ProseMirror p.ProseMirror-selectednode,
-.tiptap-wrapper .ProseMirror h1.ProseMirror-selectednode,
-.tiptap-wrapper .ProseMirror h2.ProseMirror-selectednode,
-.tiptap-wrapper .ProseMirror h3.ProseMirror-selectednode,
-.tiptap-wrapper .ProseMirror blockquote.ProseMirror-selectednode,
-.tiptap-wrapper .ProseMirror [data-type="details"].ProseMirror-selectednode,
-.tiptap-wrapper .ProseMirror ul.ProseMirror-selectednode,
-.tiptap-wrapper .ProseMirror ol.ProseMirror-selectednode {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) p.ProseMirror-selectednode,
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) h1.ProseMirror-selectednode,
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) h2.ProseMirror-selectednode,
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) h3.ProseMirror-selectednode,
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) blockquote.ProseMirror-selectednode,
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) [data-type="details"].ProseMirror-selectednode,
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) ul.ProseMirror-selectednode,
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) ol.ProseMirror-selectednode {
   outline: none;
   background-color: rgb(64 64 64 / 0.5);
   border-radius: 3px;
@@ -377,14 +377,14 @@
 }
 
 /* Details (collapsible) */
-.tiptap-wrapper .ProseMirror [data-type="details"] {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) [data-type="details"] {
   list-style: none;
   display: flex;
   align-items: flex-start;
   gap: 0.6rem;
 }
 
-.tiptap-wrapper .ProseMirror [data-type="details"] > button {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) [data-type="details"] > button {
   background: none;
   border: none;
   cursor: pointer;
@@ -397,33 +397,33 @@
 }
 
 /* Triangle arrow for toggle */
-.tiptap-wrapper .ProseMirror [data-type="details"] > button::before {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) [data-type="details"] > button::before {
   content: '▶';
   display: inline-block;
   transition: transform 0.2s ease;
 }
 
-.tiptap-wrapper .ProseMirror [data-type="details"].is-open > button::before {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) [data-type="details"].is-open > button::before {
   transform: rotate(90deg);
 }
 
-.tiptap-wrapper .ProseMirror [data-type="details"] > div {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) [data-type="details"] > div {
   flex: 1;
   min-width: 0;
 }
 
-.tiptap-wrapper .ProseMirror [data-type="details"]:not(.is-open) [data-type="detailsContent"] {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) [data-type="details"]:not(.is-open) [data-type="detailsContent"] {
   display: none;
 }
 
-.tiptap-wrapper .ProseMirror [data-type="details"] summary {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) [data-type="details"] summary {
   cursor: pointer;
   font-weight: 600;
   color: rgb(212 212 212);
   user-select: none;
 }
 
-.tiptap-wrapper .ProseMirror [data-type="details"].is-open summary {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) [data-type="details"].is-open summary {
   margin-bottom: 0.5rem;
 }
 
@@ -486,17 +486,17 @@
 }
 
 /* Viewer mode */
-.tiptap-viewer .ProseMirror {
+.tiptap-viewer :is(.ProseMirror, .tiptap-body) {
   min-height: auto;
 }
 
 /* Hide trailing empty paragraph in viewer mode */
-.tiptap-viewer .ProseMirror p:last-child:has(> br.ProseMirror-trailingBreak:only-child) {
+.tiptap-viewer :is(.ProseMirror, .tiptap-body) p:last-child:has(> br.ProseMirror-trailingBreak:only-child) {
   display: none;
 }
 
 /* Reference pill (inline atom) */
-.tiptap-wrapper .ProseMirror .reference-pill {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .reference-pill {
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -511,34 +511,34 @@
   white-space: nowrap;
 }
 
-.tiptap-wrapper .ProseMirror .reference-pill:hover {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .reference-pill:hover {
   text-decoration: none;
   filter: brightness(1.2);
 }
 
 /* Hide link hover tooltip for reference pills */
-.tiptap-wrapper .ProseMirror .reference-pill:hover::after {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .reference-pill:hover::after {
   display: none;
 }
 
-.tiptap-wrapper .ProseMirror .reference-pill[data-ref-type="thread"] {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .reference-pill[data-ref-type="thread"] {
   background: rgb(96 165 250 / 0.15);
   color: rgb(147 197 253);
 }
 
-.tiptap-wrapper .ProseMirror .reference-pill[data-ref-type="document"] {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .reference-pill[data-ref-type="document"] {
   background: rgb(168 85 247 / 0.15);
   color: rgb(196 148 255);
 }
 
-.tiptap-wrapper .ProseMirror .reference-pill[data-ref-type="folder"] {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .reference-pill[data-ref-type="folder"] {
   background: rgb(96 165 250 / 0.15);
   color: rgb(147 197 253);
 }
 
-.tiptap-wrapper .ProseMirror .reference-pill[data-ref-type="note"],
-.tiptap-wrapper .ProseMirror .reference-pill[data-ref-type="task"],
-.tiptap-wrapper .ProseMirror .reference-pill[data-ref-type="tasklist"] {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .reference-pill[data-ref-type="note"],
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .reference-pill[data-ref-type="task"],
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .reference-pill[data-ref-type="tasklist"] {
   background: rgb(34 197 94 / 0.15);
   color: rgb(134 239 172);
 }
@@ -548,18 +548,18 @@
   box-shadow: 0 0 0 2px rgb(96 165 250);
 }
 
-.tiptap-wrapper .ProseMirror[contenteditable="false"] .reference-pill.ProseMirror-selectednode {
+.tiptap-wrapper :is(.ProseMirror[contenteditable="false"], .tiptap-body) .reference-pill.ProseMirror-selectednode {
   outline: none;
   box-shadow: none;
 }
 
-.tiptap-wrapper .ProseMirror .reference-pill-icon {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .reference-pill-icon {
   flex-shrink: 0;
   display: flex;
   align-items: center;
 }
 
-.tiptap-wrapper .ProseMirror .reference-pill-label {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .reference-pill-label {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 180px;
@@ -610,7 +610,7 @@
 }
 
 /* ─── Chat viewer — breathing room for streamed prose ─────────────────────
- * The base `.tiptap-wrapper .ProseMirror` rules earlier in this file were
+ * The base `.tiptap-wrapper :is(.ProseMirror, .tiptap-body)` rules earlier in this file were
  * calibrated for the note editor (wide pane, generous side padding, users
  * tolerating density). Chat bubbles need more visual separation between
  * blocks — frontier chat apps (ChatGPT / Claude.ai / Cursor) give
@@ -619,41 +619,41 @@
  * unaffected. The existing `> *:first-child` / `> *:last-child` collapse
  * rules continue to keep the bubble edges flush.
  */
-.tiptap-viewer-chat .ProseMirror p {
+.tiptap-viewer-chat :is(.ProseMirror, .tiptap-body) p {
   margin: 0.75em 0;
 }
 
-.tiptap-viewer-chat .ProseMirror h1 {
+.tiptap-viewer-chat :is(.ProseMirror, .tiptap-body) h1 {
   margin: 1em 0 0.25em;
 }
-.tiptap-viewer-chat .ProseMirror h2 {
+.tiptap-viewer-chat :is(.ProseMirror, .tiptap-body) h2 {
   margin: 0.9em 0 0.25em;
 }
-.tiptap-viewer-chat .ProseMirror h3 {
+.tiptap-viewer-chat :is(.ProseMirror, .tiptap-body) h3 {
   margin: 0.75em 0 0.2em;
 }
 
-.tiptap-viewer-chat .ProseMirror ul,
-.tiptap-viewer-chat .ProseMirror ol {
+.tiptap-viewer-chat :is(.ProseMirror, .tiptap-body) ul,
+.tiptap-viewer-chat :is(.ProseMirror, .tiptap-body) ol {
   margin: 0.75em 0;
 }
 
-.tiptap-viewer-chat .ProseMirror pre,
-.tiptap-viewer-chat .ProseMirror blockquote {
+.tiptap-viewer-chat :is(.ProseMirror, .tiptap-body) pre,
+.tiptap-viewer-chat :is(.ProseMirror, .tiptap-body) blockquote {
   margin: 0.85em 0;
 }
 
-.tiptap-viewer-chat .ProseMirror hr {
+.tiptap-viewer-chat :is(.ProseMirror, .tiptap-body) hr {
   margin: 1.25em 0;
 }
 
 /* Search highlights */
-.tiptap-wrapper .ProseMirror .search-highlight {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .search-highlight {
   background: rgba(250, 204, 21, 0.25);
   border-radius: 2px;
 }
 
-.tiptap-wrapper .ProseMirror .search-highlight-current {
+.tiptap-wrapper :is(.ProseMirror, .tiptap-body) .search-highlight-current {
   background: rgba(250, 204, 21, 0.6);
   border-radius: 2px;
 }

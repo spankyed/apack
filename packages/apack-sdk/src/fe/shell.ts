@@ -1,3 +1,4 @@
+import type { PerformanceCarrier } from '../runtime/performance.ts';
 // The app shell as frontend code reaches it: what it may read and what it may ask. The shell is the host
 // `application` feature's surface, which lists the surfaces, holds which is open and lays out the panels. Pack code
 // uses `useShell()`; nothing outside the host holds the shell's actor.
@@ -66,7 +67,7 @@ export type HostShellEvent =
    * what decides how the shell reports a surface that isn't there — a toast tells a user their command failed,
    * and there is no user behind an answer. Only `reply` sets it.
    */
-  | { type: 'SEND_TO_SURFACE'; surface: string; events: SurfaceEvent[]; from?: string; via?: string; asker?: _Asker; answering?: string; call?: string }
+  | { type: 'SEND_TO_SURFACE'; diagnostics?: PerformanceCarrier; surface: string; events: SurfaceEvent[]; from?: string; via?: string; asker?: _Asker; answering?: string; call?: string }
   | { type: 'RESIZE_PANEL'; panel: 'canvas' | 'inspection'; size: number }
   | { type: 'RESTORE_CHAT' }
   | { type: 'SET_SURFACE_VISIBILITY'; surface: string; visible: boolean }

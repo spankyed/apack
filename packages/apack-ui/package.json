@@ -104,15 +104,10 @@
       "types": "./dist/components/node-styles.d.ts",
       "default": "./dist/components/node-styles.js"
     },
-    "./components/tiptap/CommandSuggestionPopup": {
-      "@apackdev/source": "./src/components/tiptap/CommandSuggestionPopup.ts",
-      "types": "./dist/components/tiptap/CommandSuggestionPopup.d.ts",
-      "default": "./dist/components/tiptap/CommandSuggestionPopup.js"
-    },
-    "./components/tiptap/CompletionRows": {
-      "@apackdev/source": "./src/components/tiptap/CompletionRows.ts",
-      "types": "./dist/components/tiptap/CompletionRows.d.ts",
-      "default": "./dist/components/tiptap/CompletionRows.js"
+    "./components/tiptap/ConversationViewer": {
+      "@apackdev/source": "./src/components/tiptap/ConversationViewer.ts",
+      "types": "./dist/components/tiptap/ConversationViewer.d.ts",
+      "default": "./dist/components/tiptap/ConversationViewer.js"
     },
     "./components/tiptap/TiptapEditor": {
       "@apackdev/source": "./src/components/tiptap/TiptapEditor.ts",
@@ -383,6 +378,16 @@
       "@apackdev/source": "./src/utils/path-truncation.ts",
       "types": "./dist/utils/path-truncation.d.ts",
       "default": "./dist/utils/path-truncation.js"
+    },
+    "./components/tiptap/CommandSuggestionPopup": {
+      "@apackdev/source": "./src/components/tiptap/CommandSuggestionPopup.ts",
+      "types": "./dist/components/tiptap/CommandSuggestionPopup.d.ts",
+      "default": "./dist/components/tiptap/CommandSuggestionPopup.js"
+    },
+    "./components/tiptap/CompletionRows": {
+      "@apackdev/source": "./src/components/tiptap/CompletionRows.ts",
+      "types": "./dist/components/tiptap/CompletionRows.d.ts",
+      "default": "./dist/components/tiptap/CompletionRows.js"
     }
   },
   "peerDependencies": {
@@ -441,6 +446,7 @@
     "provenance": true
   },
   "devDependencies": {
-    "vitest": "^3.2.7"
+    "@types/markdown-it": "^14.1.2",
+    "vitest": "^4.1.12"
   }
 }

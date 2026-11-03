@@ -1,0 +1,47 @@
+from pathlib import Path
+p=Path('packages/apack-ears/tests/engine/model-based.spec.ts')
+s=p.read_text().replace("import { afterAll, expect, it }", "import { afterAll, afterEach, beforeEach, expect, it }")
+helpers='''
+let phases: Record<string, { calls: number; ms: number }> = {};
+let profileStart = performance.now();
+let profileCpu = process.cpuUsage();
+function measured<T>(name: string, fn: () => T): T {
+  const start = performance.now();
+  try { return fn(); } finally {
+    const phase = phases[name] ??= { calls: 0, ms: 0 };
+    phase.calls++; phase.ms += performance.now() - start;
+  }
+}
+async function measuredAsync<T>(name: string, fn: () => Promise<T>): Promise<T> {
+  const start = performance.now();
+  try { return await fn(); } finally {
+    const phase = phases[name] ??= { calls: 0, ms: 0 };
+    phase.calls++; phase.ms += performance.now() - start;
+  }
+}
+function observed<T extends object>(port: T, prefix: string): T {
+  return new Proxy(port, { get(target, key) {
+    const value = Reflect.get(target, key, target);
+    return typeof value !== 'function' ? value : (...args: unknown[]) => measured(
+      `${prefix}.${String(key)}${key === 'commit' || key === 'write' ? ':' + String(args.at(-1)) .slice(0, 8) : ''}`,
+      () => { const answer = Reflect.apply(value, target, args); return key === 'begin' ? observed(answer, 'unit') : answer; });
+  } });
+}
+beforeEach(() => { phases = {}; profileStart = performance.now(); profileCpu = process.cpuUsage(); });
+afterEach(context => console.log('APACK_MODEL_PHASES=' + JSON.stringify({ test: context.task.name,
+  elapsedMs: performance.now() - profileStart, cpu: process.cpuUsage(profileCpu), phases })));
+'''
+# Only scalar boolean durable arguments label native writes; never stringify encoded requests.
+helpers=helpers.replace("String(args.at(-1)) .slice(0, 8)", "String(typeof args.at(-1) === 'boolean' ? args.at(-1) : false)")
+s=s.replace('const databases = createTemporaryDatabases();',helpers+'\nconst databases = createTemporaryDatabases();')
+s=s.replace('const { database, dispose } = databases.open({','const { database, dispose } = measured(\'database.open\', () => databases.open({')
+s=s.replace('    roles: [...ROLES],\n  });','    roles: [...ROLES],\n  }));')
+s=s.replace('return { engine: createEarsEngine({ database }), dispose };',"return { engine: measured('engine.create', () => createEarsEngine({ database: observed(database, 'database') })), dispose: () => measured('database.dispose', dispose) };")
+s=s.replace('expect(applyTo(engine, op), where).toBe(model.apply(op) !== undefined);',"measured('apply/assert', () => expect(applyTo(engine, op), where).toBe(model.apply(op) !== undefined));")
+s=s.replace('expect(stateOf(engine), where).toEqual(model.state());',"measured('state/assert', () => expect(stateOf(engine), where).toEqual(model.state()));")
+s=s.replace('expect(derivedOf(engine, model), where).toEqual(model.derived());',"measured('derived/assert', () => expect(derivedOf(engine, model), where).toEqual(model.derived()));")
+s=s.replace('        applyTo(engine, op);',"        measured('watch.apply', () => applyTo(engine, op));")
+s=s.replace('await engine.admin.watchesSettled();',"await measuredAsync('watch.settle', () => engine.admin.watchesSettled());")
+s=s.replace('try { fresh = read(); }',"try { fresh = measured('watch.read', read); }")
+s=s.replace('numRuns: 120','numRuns: 120, seed: 20261031').replace('numRuns: 40','numRuns: 40, seed: 20261031')
+p.write_text(s)

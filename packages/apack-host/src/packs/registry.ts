@@ -5,7 +5,7 @@ import type { DeclarationData } from '@apackdev/sdk/framework';
 import type { StepEntry } from '@apackdev/sdk/build';
 import { captureStepBinding, captureStepDeclaration } from './step-bindings.ts';
 import { lifecycleBindingProblem } from './lifecycle-binding.ts';
-import { _packEntityTypes, _packRelationTypes, _packRoles, _shortCodeTypes } from '@apackdev/sdk/framework';
+import { _packEntityTypes, _packRanks, _packRelationTypes, _packRoles, _shortCodeTypes } from '@apackdev/sdk/framework';
 import { apiBindingProblem, backendBindingProblem, backendContentBindingProblem, backendViewerBindingProblem, backendStepBindingProblem, contentBindingProblem, migrationBindingProblem } from './declaration-binding.ts';
 import { eventBindingProblem } from './event-binding.ts';
 import { SYSTEM_EVENT_TYPES, type PackEventContracts } from '@apackdev/sdk/framework';
@@ -20,7 +20,7 @@ import { SYSTEM_EVENT_TYPES, type PackEventContracts } from '@apackdev/sdk/frame
 import { isDeepStrictEqual } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import type { AnyStateMachine } from 'xstate';
-import type { RelationRules, RowRules } from '@apackdev/ears';
+import type { RankDeclaration, RelationRules, RowRules } from '@apackdev/ears';
 import type { PackRegistration, PackLifecycleHooks, PackEARS, PackMigration, PackFeature, PackFeatureSystem } from '@apackdev/sdk/framework';
 import { _packDeclarationProblem, type ContentRuntime } from '@apackdev/sdk/framework';
 import type { MigrationLine, PackManifest } from '@apackdev/sdk/build';
@@ -265,6 +265,8 @@ export interface PackRegistry extends PackRegistryView {
   getRowRules(type: string): RowRules | undefined;
   /** What a relation kind's edges are held to, as the SDK or the registered pack declaring it says; none when it declares no rule */
   getRelationRules(kind: string): RelationRules | undefined;
+  /** The rank indexes the registered packs declare, by name */
+  getRankIndexes(): Readonly<Record<string, RankDeclaration>>;
   /** Lifecycle hooks of the currently registered packs, in registration order. */
   getLifecycleHooks(): PackLifecycleHooks[];
   /** A registered pack's registration, as it was registered */
@@ -477,6 +479,7 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
       ['entity type', (ears: PackEARS) => ears.entities],
       ['relation kind', (ears: PackEARS) => ears.relKinds],
       ['role', (ears: PackEARS) => ears.roles],
+      ['rank index', (ears: PackEARS) => Object.fromEntries(Object.keys(ears.ranks ?? {}).map((name) => [name, name]))],
     ] as const;
     for (const [kind, namesOf] of kinds) {
       const declared = namesOf(registration.ears);
@@ -542,7 +545,7 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
       settings: manifest.extensions?.settings,
       features: Object.fromEntries(Object.entries(manifest.features ?? {})
         .filter(([, feature]) => feature.settings !== undefined).map(([id, feature]) => [id, { settings: feature.settings }])),
-      ears: { entities: runtime.entities, relKinds: runtime.relKinds, roles: runtime.roles, ...(runtime.rowRules && { rowRules: runtime.rowRules }), ...(runtime.relationRules && { relationRules: runtime.relationRules }) },
+      ears: { entities: runtime.entities, relKinds: runtime.relKinds, roles: runtime.roles, ...(runtime.rowRules && { rowRules: runtime.rowRules }), ...(runtime.relationRules && { relationRules: runtime.relationRules }), ...(runtime.ranks && { ranks: runtime.ranks }) },
       repositories: runtime.repositories, contentWriters: runtime.contentWriters, appliers,
     }, origin, manifest => contentBindingProblem(manifest, runtime, appliers)));
   }
@@ -584,6 +587,9 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
       if (apiProblem) throw new Error(`Native pack "${registration.id}" runtime ${apiProblem} does not match its admitted declarations`);
       if (!isDeepStrictEqual(registration.ears?.relKinds ?? {}, _packRelationTypes(declaration))) {
         throw new Error(`Native pack "${registration.id}" runtime ears.relKinds does not match its admitted declarations`);
+      }
+      if (!isDeepStrictEqual(registration.ears?.ranks ?? {}, _packRanks(declaration))) {
+        throw new Error(`Native pack "${registration.id}" runtime ears.ranks does not match its admitted declarations`);
       }
       if (!isDeepStrictEqual(registration.ears?.roles ?? {}, _packRoles(declaration))) {
         throw new Error(`Native pack "${registration.id}" runtime ears.roles does not match its admitted declarations`);
@@ -796,6 +802,8 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     ...Object.entries(SDK_RELATION_RULES),
     ...[...registrations.values()].flatMap((reg) => Object.entries(reg.ears?.relationRules ?? {})),
   ]));
+  const rankIndexes = derived((): Readonly<Record<string, RankDeclaration>> => Object.assign({},
+    ...[...registrations.values()].map((reg) => reg.ears?.ranks ?? {})));
   // Each prefix's entity type, from those same rules, so a pack's codes come and go with it
   const shortCodeTypes = derived(() => _shortCodeTypes([...rowRules()]));
   const services = derived((): Record<string, unknown> =>
@@ -877,6 +885,7 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     getRegisteredRoles: roles,
     getRowRules: (type) => rowRules().get(type),
     getRelationRules: (kind) => relationRules().get(kind),
+    getRankIndexes: () => rankIndexes(),
     entityTypeOfShortCode: (code) => shortCodeTypes()(code),
     getRegisteredServices: services,
 

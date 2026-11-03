@@ -14,7 +14,8 @@
     "packages/*"
   ],
   "engines": {
-    "node": ">=23.5.0"
+    "node": ">=23.5.0",
+    "npm": ">=11"
   },
   "scripts": {
     "preinstall": "[ \"$NODE_ENV\" = 'production' ] && echo '\u26a0\ufe0f  NODE_ENV=production \u2014 devDependencies will be skipped. Run: unset NODE_ENV' >&2 || true",
@@ -75,13 +76,13 @@
     "test:smoke": "npm run packages:ensure && node scripts/with-source.mjs playwright test tests/e2e/smoke",
     "test:headed": "npm run packages:ensure && PLAYWRIGHT_VISIBLE=1 node scripts/with-source.mjs playwright test",
     "test:explorer": "npm run packages:ensure && node scripts/with-source.mjs playwright test --ui",
-    "test:external-pack": "npm run packages:ensure && tsx scripts/bounded.ts scenario bash tests/scripts/test-external-pack.sh",
-    "test:external-pack:contract": "npm run packages:ensure && tsx scripts/bounded.ts suite bash tests/scripts/test-external-pack-contract.sh",
-    "test:external-pack:fork": "npm run packages:ensure && tsx scripts/bounded.ts scenario tsx tests/scripts/prepare-default-pack-fork.ts",
-    "test:external-pack:app": "tsx scripts/bounded.ts scenario bash tests/scripts/test-external-pack-app.sh",
-    "test:packaged-authoring": "tsx scripts/bounded.ts scenario bash tests/scripts/test-packaged-authoring.sh",
-    "test:packaged-authoring:author": "tsx scripts/bounded.ts scenario bash tests/scripts/test-packaged-authoring-author.sh",
-    "test:packaged-authoring:app": "tsx scripts/bounded.ts suite bash tests/scripts/test-packaged-authoring-app.sh",
+    "test:external-pack": "npm run packages:ensure && tsx scripts/bounded.ts scenario bash tests/acceptance/external-pack/test-external-pack.sh",
+    "test:external-pack:contract": "npm run packages:ensure && tsx scripts/bounded.ts suite bash tests/acceptance/external-pack/test-external-pack-contract.sh",
+    "test:external-pack:fork": "npm run packages:ensure && tsx scripts/bounded.ts scenario tsx tests/acceptance/external-pack/prepare-default-pack-fork.ts",
+    "test:external-pack:app": "tsx scripts/bounded.ts scenario bash tests/acceptance/external-pack/test-external-pack-app.sh",
+    "test:packaged-authoring": "tsx scripts/bounded.ts scenario bash tests/acceptance/packaged-authoring/test-packaged-authoring.sh",
+    "test:packaged-authoring:author": "tsx scripts/bounded.ts scenario bash tests/acceptance/packaged-authoring/test-packaged-authoring-author.sh",
+    "test:packaged-authoring:app": "tsx scripts/bounded.ts suite bash tests/acceptance/packaged-authoring/test-packaged-authoring-app.sh",
     "spec": "tsx scripts/spec.ts",
     "spec:full": "tsx scripts/spec.ts --full",
     "spec:dry": "tsx scripts/spec.ts --dry",
@@ -106,6 +107,8 @@
     "db:clear-settings": "node scripts/db-dev.mjs clear-settings",
     "check:idle": "tsx scripts/check-idle.ts",
     "measure": "tsx scripts/measure.ts",
+    "janitor": "node --disable-warning=ExperimentalWarning scripts/janitor.ts",
+    "janitor:install": "node --disable-warning=ExperimentalWarning scripts/janitor.ts --install",
     "test:linux": "tsx scripts/linux-runner.ts",
     "measure:loop": "tsx scripts/measure-loop.ts"
   },
@@ -121,7 +124,7 @@
     "@types/node": "24.1.0",
     "@types/ws": "^8.18.1",
     "create-vite": "7.0.3",
-    "electron": "37.2.4",
+    "electron": "44.9.3",
     "electron-builder": "26.15.3",
     "glob": "11.1.0",
     "playwright": "1.55.1",

@@ -32,6 +32,9 @@ jobs:
         with:
           node-version: 23.11.1
           cache: npm
+      # npm 10 crashes resolving vitest 4.1's peer dependencies, which a new pack's first install does
+      - name: npm 11
+        run: npm install -g npm@11.21.0
       - name: Record source and platform
         run: |
           git rev-parse HEAD
@@ -93,6 +96,9 @@ jobs:
         with:
           node-version: 23.11.1
           cache: npm
+      # npm 10 crashes resolving vitest 4.1's peer dependencies, which a new pack's first install does
+      - name: npm 11
+        run: npm install -g npm@11.21.0
       - name: Record source
         run: git rev-parse HEAD
       - uses: ./.github/actions/elmdb
@@ -111,6 +117,7 @@ jobs:
         env:
           APACK_STRICT_JOB: ${{ matrix.job }}
           APACK_STRICT_SHARD: ${{ matrix.shard }}
+          SPEC_DURATIONS_PROGRESS_FILE: ${{ runner.temp }}/strict-spec-progress
         run: |
           args=(--strict --all --cores 2 --job "$APACK_STRICT_JOB")
           if [[ -n "$APACK_STRICT_SHARD" ]]; then args+=(--shard "$APACK_STRICT_SHARD"); fi
@@ -123,4 +130,5 @@ jobs:
           include-hidden-files: true
           path: |
             ${{ runner.temp }}/strict-chain.log
+            ${{ runner.temp }}/strict-spec-progress.*.jsonl
             node_modules/.cache/apack-chain/runs/

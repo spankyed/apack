@@ -1,7 +1,7 @@
 // The schema an engine's database holds, as apack's packs declare it, and the elmdb schema it becomes
 // (`elmdb/docs/architecture/schema.md`). Whoever creates the engine builds it from what is registered — the app from its packs, a
 // test from its own names — and changes it with `admin.setSchema` when that changes.
-import type { FieldRule, FieldType, RowRules } from './runtime.ts';
+import type { EdgeDirection, FieldRule, FieldType, RowRules } from './runtime.ts';
 import { RESERVED_ATTRIBUTES } from './errors.ts';
 import { setField } from './ids.ts';
 
@@ -9,17 +9,40 @@ import { setField } from './ids.ts';
 export interface RelationRules {
   /** A link that would close a cycle through this kind is refused (`CYCLE`) */
   acyclic?: boolean;
-  /** At most one edge of this kind from an entity to another; linking the pair again replaces the edge's info */
-  unique?: boolean;
+  /**
+   * The info fields that, with its two ends, identify an edge; none, the ends alone, so two entities are joined by one
+   * edge of the kind at most. A link to an identity an edge holds updates that edge's info and weight
+   */
+  key?: readonly string[];
+  /** Each edge carries a weight, 1 unless a link gives another, which `rank` and `communities` read */
+  weighted?: boolean;
 }
 
-/** What an engine's database knows: its entity types, relation kinds and roles, each with its rules */
+/** A rank index: PageRank over a graph of entity types and relation kinds, kept current by every commit, which `ranked` reads */
+export interface RankDeclaration {
+  /** The types whose live entities are the graph's nodes; their order is the order ties keep */
+  types: readonly string[];
+  /** The relation kinds whose edges between two nodes are the graph's edges */
+  relations: readonly string[];
+  /** Which way each edge is followed; `out` unless given */
+  direction?: EdgeDirection;
+  /** Whether an edge of a kind declared `weighted` counts by its weight; it does unless `false` */
+  weights?: boolean;
+  /** The probability a walker follows an edge rather than jumping to a node at random, in (0, 1); elmdb's default unless given */
+  damping?: number;
+  /** The bound on the L1 distance between the index's scores and PageRank once its pushes are done; elmdb's default unless given */
+  tolerance?: number;
+}
+
+/** What an engine's database knows: its entity types, relation kinds, roles and rank indexes, each with its rules */
 export interface EngineSchema {
   /** Each entity type, with what its rows are held to (`RowRules`) */
   types: Readonly<Record<string, RowRules>>;
   /** Each relation kind, with what its edges are held to */
   relations: Readonly<Record<string, RelationRules>>;
   roles: readonly string[];
+  /** Each rank index, by name; none when absent */
+  ranks?: Readonly<Record<string, RankDeclaration>>;
 }
 
 /** elmdb's schema language, which a schema names */
@@ -117,18 +140,20 @@ export function toElmdbSchema(schema: EngineSchema): object {
   const relations = Object.fromEntries(Object.entries(schema.relations).map(([kind, rules]) => [kind, {
     cardinality: 'many-to-many',
     ...(rules.acyclic && { acyclic: true }),
-    ...(rules.unique && { unique: true }),
+    ...(rules.key?.length && { key: [...rules.key] }),
+    ...(rules.weighted && { weighted: true }),
   }]));
   const roles = Object.fromEntries(schema.roles.map((role) => [role, {}]));
-  return { $schema: ELMDB_SCHEMA_LANGUAGE, roles, relations, types };
+  const ranks = Object.keys(schema.ranks ?? {}).length ? { ranks: schema.ranks } : {};
+  return { $schema: ELMDB_SCHEMA_LANGUAGE, roles, relations, types, ...ranks };
 }
 
 /**
- * `held` (a database's elmdb schema, or `null`) with `declared`'s types, relation kinds and roles in place of its own of
+ * `held` (a database's elmdb schema, or `null`) with `declared`'s types, relation kinds, roles and ranks in place of its own of
  * the same names, and its others kept
  */
 export function withDeclarations(held: unknown, declared: object): object {
-  type Sections = { types?: object; relations?: object; roles?: object };
+  type Sections = { types?: object; relations?: object; roles?: object; ranks?: object };
   const before = (held ?? {}) as Sections & Record<string, unknown>;
   const after = declared as Sections & Record<string, unknown>;
   return {
@@ -137,6 +162,7 @@ export function withDeclarations(held: unknown, declared: object): object {
     types: { ...before.types, ...after.types },
     relations: { ...before.relations, ...after.relations },
     roles: { ...before.roles, ...after.roles },
+    ...((before.ranks ?? after.ranks) && { ranks: { ...before.ranks, ...after.ranks } }),
   };
 }
 

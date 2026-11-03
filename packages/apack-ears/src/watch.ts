@@ -1,3 +1,4 @@
+import { WatchCauses } from './observation.ts';
 // Live reads: `watch` runs a read with every database read it makes tracked under a token of its own, which elmdb files
 // in its interval index (`elmdb/docs/architecture/engine.md`, Change sets and watch), and runs it again after each
 // commit that names the token, handing the listener the result when it changed. A result equal to the last delivered is
@@ -22,8 +23,17 @@ export interface WatchObserver<T> {
   error?(error: unknown, commit: number): void;
 }
 
+/** Diagnostic causes of a scheduled read, bounded independently of the number of coalesced commits. */
+export interface WatchReadContext {
+  readonly sequences: readonly number[];
+  /** Commit causes omitted because the bound or the diagnostic policy failed. */
+  readonly dropped: number;
+}
+
 /** How a watch is named where its cost is reported */
 export interface WatchOptions {
+  /** Opt-in diagnostic metadata only; never changes when a watch runs. Evaluated at invalidation. */
+  recordCauses?: () => boolean;
   /** What the watch is, in the call count and in a warning about its cost; where it was opened when not given */
   label?: string;
 }
@@ -62,7 +72,8 @@ const OVER_BUDGET_WARNING = 3;
 interface Watch {
   token: number;
   label: string;
-  read: () => unknown;
+  read: (context: WatchReadContext | undefined) => unknown;
+  causes?: WatchCauses;
   observer: WatchObserver<unknown>;
   /** What was last delivered: a value, an error, or nothing yet */
   last: { ok: true; value: unknown } | { ok: false; error: unknown } | undefined;
@@ -76,7 +87,7 @@ interface Watch {
 }
 
 export interface Watches {
-  watch<T>(read: () => T, observer: WatchObserver<T> | ((value: T, commit: number) => void), options?: WatchOptions): Watching;
+  watch<T>(read: (context: WatchReadContext | undefined) => T, observer: WatchObserver<T> | ((value: T, commit: number) => void), options?: WatchOptions): Watching;
   /** Resolves once no watch is waiting to run again: every commit before the call has been delivered */
   settled(): Promise<void>;
   /** How many watches are open, and what their read sets file */
@@ -158,6 +169,7 @@ export function createWatches(connection: Connection, { clock = PROCESS_CLOCK, s
     const marked = commit.touched === 'all' ? [...open.values()]
       : [...commit.touched].flatMap((token) => open.get(token) ?? []);
     for (const watch of marked) {
+      watch.causes?.add(commit.sequence);
       // A commit landing on a watch already waiting is one whose state the coming run skips
       if (dirty.has(watch)) connection.tally()?.watchSkipped(watch.label);
       else dirty.add(watch);
@@ -171,9 +183,10 @@ export function createWatches(connection: Connection, { clock = PROCESS_CLOCK, s
     // What the token held was the last run's: this run's reads replace it
     connection.untrack(watch.token);
     const started = clock.now();
+    const context = watch.causes?.take();
     let outcome: { ok: true; value: unknown } | { ok: false; error: unknown };
     try {
-      outcome = { ok: true, value: connection.track(watch.token, watch.read) };
+      outcome = { ok: true, value: connection.track(watch.token, () => watch.read(context)) };
     } catch (error) {
       outcome = { ok: false, error };
     }
@@ -286,6 +299,7 @@ export function createWatches(connection: Connection, { clock = PROCESS_CLOCK, s
         token: nextToken++,
         label: options?.label ?? callSite(),
         read,
+        causes: options?.recordCauses && new WatchCauses(options.recordCauses),
         observer: (typeof observer === 'function' ? { next: observer } : observer) as WatchObserver<unknown>,
         last: undefined,
         stopped: false,

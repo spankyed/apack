@@ -10,6 +10,7 @@ import {allowExternalUrls} from './modules/ExternalUrls.ts';
 import {createApiServer} from './modules/api-server/ApiServer.ts';
 import {createDevApiReloader} from './modules/api-server/dev-reloader.ts';
 import {createSplashScreen} from './modules/splash-screen/index.ts';
+import {createPrivilegedSchemes} from './modules/privileged-schemes/index.ts';
 import {createMediaProtocol} from './modules/media-protocol/index.ts';
 import {createPackProtocol} from './modules/pack-protocol/index.ts';
 import {createSpeechRecognition} from './modules/speech-recognition/index.ts';
@@ -17,6 +18,7 @@ import {createMacOSAppMenu} from './modules/MacOSAppMenu.ts';
 import {createBrowserModule} from './modules/browser/index.ts';
 import {createProtocolHandler} from './modules/ProtocolHandler.ts';
 import {app} from 'electron';
+import {createPerformanceModule} from './modules/performance/index.ts';
 import {initializeMainLogCapture} from './modules/api-server/logger.ts';
 import {initAppEnvironment} from './app-environment.ts';
 
@@ -36,13 +38,15 @@ export async function initApp(initConfig: AppInitConfig) {
     .init(disallowMultipleAppInstance())
     .init(createProtocolHandler())
     .init(hardwareAccelerationMode({enable: true}))
-    .init(createMediaProtocol())  // Must register protocol schemes before app ready
+    .init(createPrivilegedSchemes())  // Before app ready, which Electron requires
+    .init(createMediaProtocol())
     .init(createPackProtocol())   // pack:// protocol for external pack assets
     .init(splashScreen)  // Show splash screen early
     .init(apiServer)
     // After the API it reloads, and a no-op unless `npm run dev` armed it in a development build
     .init(createDevApiReloader(apiServer))
     .init(createSpeechRecognition())
+    .init(createPerformanceModule())
     // .init(createWindowManagerModule({initConfig, openDevTools: import.meta.env.DEV}))
     .init(createWindowManagerModule({initConfig, openDevTools: false, apiServer, splashScreen}))
     .init(terminateAppOnLastWindowClose())

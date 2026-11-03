@@ -1,3 +1,5 @@
+import { _withPerformanceCarrier } from '@apackdev/sdk/runtime';
+import { createViewTransportObservation } from '@/runtime/performance-transport';
 // The window's client to the API: the SDK's sends and the shell's subscription, over tRPC and the Electron main
 // process's report of the API's status. Nothing else in the renderer calls the bus or reads the loaded packs.
 import type { ShellClient, ShellFailure } from '@apackdev/host/fe';
@@ -79,7 +81,10 @@ export const feClient: ShellClient = {
           connection.onDisconnected();
           connection.onFailed(String(error));
         },
-        onData: (message) => { if (current() && !windowSettings.receive(message)) connection.onMessage(message); },
+        onData: (message) => {
+          if (!current()) return;
+          _withPerformanceCarrier(message.diagnostics, () => { if (!windowSettings.receive(message)) connection.onMessage(message); });
+        },
       });
     };
     let subscription = subscribeToBus();
@@ -123,19 +128,31 @@ export const feClient: ShellClient = {
   },
 
   watchView: (request, observer) => {
+    const observation = createViewTransportObservation(request);
+    let active = true;
+    let generation = 0;
     let subscription: { unsubscribe(): void } | undefined;
     const view = {
       subscribe: () => {
+        if (!active) return;
+        const epoch = ++generation;
+        const delivery = observation.subscribe(epoch);
         subscription?.unsubscribe();
-        subscription = trpc.views.watch.subscribe(request, {
+        subscription = trpc.views.watch.subscribe(delivery.request, {
           // tRPC types a frame as JSON delivers it, where a member typed `unknown` may be absent; the API sends
           // `ViewUpdate`s, so what arrives is one, a result of `undefined` being one JSON can't carry anyway
-          onData: (update) => observer(update as ViewUpdate),
+          onData: (update) => {
+            if (!active || generation !== epoch) return;
+            delivery.receive(update as ViewUpdate, observer);
+          },
           // The subscription failed rather than the view: a request the API refused, or the socket gone for good
-          onError: (error: unknown) => observer({ ok: false, error: errorMessage(error), commit: 0 }),
+          onError: (error: unknown) => {
+            if (!active || generation !== epoch) return;
+            delivery.error(() => observer({ ok: false, error: errorMessage(error), commit: 0 }));
+          },
         });
       },
-      unsubscribe: () => subscription?.unsubscribe(),
+      unsubscribe: () => { active = false; generation++; subscription?.unsubscribe(); },
     };
     views.add(view);
     view.subscribe();

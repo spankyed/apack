@@ -1,5 +1,5 @@
 // What the threads and notes views cost, at two sizes of one fixture: work that stays the same as the data grows, held by
-// crossings to elmdb (`testCalls`) and by what a view re-runs on. docs/references/evidence/ears-query-efficiency.md has
+// crossings to elmdb (`testCalls`) and by what a view re-runs on. docs/archive/references/evidence/ears-query-efficiency.md has
 // the readings before and after.
 import { describe, expect, it } from 'vitest'
 import { startApp } from '@apackdev/testing/harness'

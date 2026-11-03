@@ -2,7 +2,7 @@
 // simulated children expose signal escalation and refusal without runner cleanup masking a defect.
 import { describe, expect, it, vi } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { EventEmitter } from 'node:events';
+import { EventEmitter, once } from 'node:events';
 import { ProcessManager } from '../src/modules/api-server/process-manager.ts';
 
 /** A child that goes on the first signal, which is what the API does. */
@@ -56,14 +56,25 @@ describe('stopping the API process', () => {
     expect(alive(pid), 'and gone by the time stop resolves').toBe(false);
   });
 
-  /** And `isRunning()` agrees afterwards — `cleanup()` took the handler that normally records it. */
-  it('leaves the manager reporting that nothing is running', async () => {
-    const manager = new ProcessManager({});
-    manager.setProcess(obedient());
-
-    expect(manager.isRunning()).toBe(true);
-    await manager.stop('SIGTERM', 2000);
-    expect(manager.isRunning()).toBe(false);
+  it('observes exit after an overdue escalation, then reports that nothing is running', async () => {
+    const child = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000); process.send('ready');"],
+      { stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
+    try {
+      await once(child, 'message');
+      const manager = new ProcessManager({});
+      manager.setProcess(child);
+      const stopped = manager.stop('SIGTERM', 5);
+      // Both old deadlines become overdue; exit is delivered on a later I/O turn. This is no speed assertion.
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1100);
+      await expect(stopped).resolves.toBeUndefined();
+      expect(manager.isRunning()).toBe(false);
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) {
+        const exited = once(child, 'exit');
+        child.kill('SIGKILL');
+        await exited;
+      }
+    }
   });
 
   /**

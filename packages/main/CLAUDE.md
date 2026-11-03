@@ -26,10 +26,12 @@ Modules, in order (`src/modules/`):
 | `disallowMultipleAppInstance` | `SingleInstanceApp.ts` | `requestSingleInstanceLock()`, **scoped by the data dir**, so dev, beta, test and production run side by side — they have different ones — and two apps on one dir cannot; exits if the lock is taken |
 | `createProtocolHandler` | `ProtocolHandler.ts` | Registers the app as handler for `urlScheme` (`apack`, or `apack-beta`); `open-url` / `second-instance` URLs go to the first window as `protocol-action` `{ action: hostname, params }` |
 | `hardwareAccelerationMode` | `HardwareAccelerationModule.ts` | Currently `{ enable: true }`, so a no-op |
+| `createPrivilegedSchemes` | `privileged-schemes/` | The one list of custom schemes' privileges; Electron keeps only the last registration, so nothing else registers |
 | `createMediaProtocol` | `media-protocol/` | `media://` and `local-file://` (see Protocols) |
 | `createPackProtocol` | `pack-protocol/` | `pack://` (see Protocols) |
 | `splashScreen` | `splash-screen/` | Frameless 400×400 splash, shown on `ready-to-show` with the version; fades out on `close()` |
 | `apiServer` | `api-server/` | Spawns and supervises the API (see API server) |
+| `createPerformanceModule` | `performance/` | Dev/test renderer metrics and profiles; calling-window leases, debugger ownership, navigation/destruction cleanup |
 | `createSpeechRecognition` | `speech-recognition/` | `speech:*` IPC; spawns the native helper (`native/speech/…`) on first `speech:start` |
 | `createWindowManagerModule` | `window-manager/` | Main and popout windows, most IPC handlers (see Windows) |
 | `terminateAppOnLastWindowClose` | `ApplicationTerminatorOnLastWindowClose.ts` | Quits on `window-all-closed` except on macOS |
@@ -100,12 +102,12 @@ is untrusted whoever asked, and the two rules live in one module rather than at 
 
 ## Protocols
 
-- **`pack://<packId>/builds/<revision>/<path>`** (`pack-protocol/PackProtocol.ts`), privileged `secure` + `supportFetchAPI`:
+- **`pack://<packId>/builds/<revision>/<path>`** (`pack-protocol/PackProtocol.ts`), privileged `standard`, `secure`, `supportFetchAPI` and `corsEnabled`:
   - The owner is a pack ID and the revision is the accepted receipt identity. Relative module imports, styles and fonts retain that revision in their URL base.
   - Serves only the installed copy. The receipt must still match the requested revision, and the exact returned bytes must match its listed checksum. Missing/changed files and symlinks fail; there is no shipped or development fallback.
   - Development is separate: the API advertises a live local Vite base URL only in the development environment. The renderer imports that source graph directly; monorepo source frontends use the renderer's Vite graph. Neither is an installed asset request.
-- **`media://<entityId>/<file>`** (`media-protocol/`) serves `getMediaBasePath()/<entityId>/<file>`, which `media:upload` writes to (PNG/JPEG/GIF/WebP, 10 MB max). That is the folder the SDK's `_getMediaPath()` gives the API (`media-protocol/paths.ts`): `<data dir>/apack/media`. Branching on `app.isPackaged` here would put the layout rule in both main and the API, where a mismatch serves every image a 404.
-- **`local-file://?path=<abs>`** serves any existing local file for video playback. It uses the deprecated `registerFileProtocol` and no `stream` privilege on purpose: `stream: true` breaks seeking (Electron #38749).
+- **`media://<entityId>/<file>`** (`media-protocol/`) serves `getMediaBasePath()/<entityId>/<file>`, which `media:upload` writes to (PNG/JPEG/GIF/WebP, 10 MB max). That is the folder the SDK's `_getMediaPath()` gives the API (`media-protocol/paths.ts`): `<data dir>/apack/media`. Branching on `app.isPackaged` here would put the layout rule in both main and the API, where a mismatch serves every image a 404. Privileged `supportFetchAPI` and `corsEnabled`, for copying an image.
+- **`local-file://?path=<abs>`** serves any existing local file for video playback. It uses the deprecated `registerFileProtocol`, and has no privileges: a video element needs none, and seeks.
 
 ## Build and dev
 

@@ -22,7 +22,7 @@ The developer's daily-use Mac also suffered a system-wide launch incident during
 compiler testing. Unrelated apps stopped launching; restarting recovered the machine. The cause is
 **not established**. Repeated executable/native-library assessments were observed, but correlation
 does not prove that our tests caused the incident or explain its mechanism. Preserve that distinction;
-see the [incident evidence](../evidence/build-input-snapshot-proof.md#macos-launch-policy-investigation-2026-10-17).
+see the [incident evidence](../../archive/references/evidence/build-input-snapshot-proof.md#macos-launch-policy-investigation-2026-10-17).
 
 Keep real Windows compiler/native execution here. macOS-specific execution still needs a disposable
 macOS runner, and Linux-specific execution needs Linux. A Windows VM cannot establish either platform's
@@ -344,7 +344,7 @@ $report = Join-Path $runRoot 'native-result.json'
 node node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts `
   --project @apackdev/cli packages/apack-cli/tests/build/compiler-pe-libraries.native.spec.ts `
   --testNamePattern "$case" --bail=1 `
-  --poolOptions.threads.maxThreads=1 --poolOptions.threads.minThreads=1 --no-file-parallelism `
+  --maxWorkers=1 --no-file-parallelism `
   --reporter=default --reporter=json --outputFile="$report"
 if ($LASTEXITCODE -ne 0) { throw 'Focused native case failed' }
 ```
@@ -357,7 +357,7 @@ pointing at a diagnostic preload for later tests.
 Launch Electron compiler probes through the existing Node process harness with explicit pipes and
 an awaited exit code. Shell success alone does not establish that the probe ran; retain its actual
 stdout/stderr, owned PID or launch receipt and runtime versions. See the
-[CommonJS control evidence](../evidence/build-input-snapshot-proof.md#commonjs-native-lookup-observation-checkpoint--2026-10-18).
+[CommonJS control evidence](../../archive/references/evidence/build-input-snapshot-proof.md#commonjs-native-lookup-observation-checkpoint--2026-10-18).
 
 Windows module inspection can help attribute DLL loading:
 

@@ -1,0 +1,12 @@
+{
+  "code": 0,
+  "durationMs": 401646,
+  "timedOut": false,
+  "aborted": false,
+  "command": [
+    "/usr/local/bin/node",
+    "scripts/with-source.mjs",
+    "tsx",
+    "tests/performance/startup-run.ts"
+  ]
+}

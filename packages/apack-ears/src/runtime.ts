@@ -16,13 +16,15 @@ import type { EarsDatabase } from './database.ts';
  */
 export type WriteTarget<E extends string = string> = EARS.EntityId<E> & { readonly __relation?: never };
 
-/** A relation row — its id, kind, ends and info, as `findRelations` returns one — with its ends typed */
+/** A relation row — its id, kind, ends, info and weight, as `findRelations` returns one — with its ends typed */
 export interface RelationEdge<K extends string = string, Source extends string = string, Target extends string = string> {
   id: EARS.RelationId;
   kind: K;
   source: EARS.EntityId<Source>;
   target: EARS.EntityId<Target>;
   info?: EARS.AttributeValue;
+  /** The edge's weight, for a kind declared `weighted` (1 unless a link gave another); absent for any other kind */
+  weight?: number;
 }
 
 /** What an engine is created with (`createEarsEngine`) */
@@ -161,8 +163,38 @@ export interface SearchHit<E extends string = string> {
   highlights?: SearchHighlights;
 }
 
-/** Which of an entity's edges a walk follows (`pathTo`, `degrees`): those out of it, those into it, or both */
+/** Which of an entity's edges a walk follows (`pathTo`, `degrees`, `rank`): those out of it, those into it, or both */
 export type EdgeDirection = 'out' | 'in' | 'both';
+
+/**
+ * How `similar` scores two entities' neighbours: `jaccard`, the neighbours both have over those either has, or
+ * `adamicAdar`, each neighbour both have counting 1 / ln of how many entities link with it, so a rarely linked one
+ * counts for more than a hub
+ */
+export type SimilarityMeasure = 'jaccard' | 'adamicAdar';
+
+/** A `rank` seed: an entity, of weight 1, or an entity and its weight */
+export type RankSeed = EARS.EntityId | { id: EARS.EntityId; weight: number };
+
+/** What `ranked` does while its index isn't built yet */
+export interface RankedOptions {
+  /**
+   * `compute`, the default, answers the same as the index will, costing what a `rank` does on every read until the build
+   * ends. `refuse` throws `INDEX_BUILDING` instead, for a read too large or too frequent to pay that: a caller wanting
+   * nothing yet catches it, which keeps "still building" apart from a graph with nothing in it
+   */
+  whileBuilding?: 'compute' | 'refuse';
+}
+
+/** How `rank` walks: the way it follows edges, where its walkers start, and whether it reads edges' weights */
+export interface RankOptions {
+  /** `out` unless `in` or `both` */
+  direction?: EdgeDirection;
+  /** Where walkers start and jump back to; every entity of the query when none are given */
+  seeds?: readonly RankSeed[];
+  /** Whether an edge of a kind declared `weighted` counts by its weight; true unless false */
+  weights?: boolean;
+}
 
 /** One stage of a query's plan as the database ran it: its start, a step or its terminal (`explain()`) */
 export interface QueryStage {
@@ -176,6 +208,26 @@ export interface QueryStage {
   kept: number;
   /** Milliseconds spent in the stage's own work */
   ms: number;
+  /** For a stage that built a graph, which `explain()` reaches only through a `rank`: its entities */
+  nodes?: number;
+  /** For a stage that built a graph: the edges between its entities; for a `similar`, the edges it read */
+  edges?: number;
+  /** For a stage that built a graph and read weights (a `rank` or `communities` over a weighted kind): its edges' weights added up */
+  weight?: number;
+  /** For a `ranked`: the bound on the scores it read, the distance their share of all the scores may be from PageRank's */
+  error?: number;
+  /** For a `ranked` whose index isn't built yet: it computed the scores, costing what a `rank` does */
+  building?: boolean;
+  /** For a `rank`: the rounds it ran */
+  iterations?: number;
+  /** For a `rank`: whether its scores settled within the rounds it ran */
+  converged?: boolean;
+  /** For a `topological`: the cycles whose members it kept together */
+  cycles?: number;
+  /** For a `similar`: the neighbours of the entity it compared with */
+  neighbours?: number;
+  /** For a `similar`: the entities it scored, each sharing a neighbour with it */
+  candidates?: number;
 }
 
 /** A query's ids, and how the database found them: every stage of its plan, the entities it read, and its time */
@@ -211,8 +263,12 @@ export interface EarsSchema {
   names: string;
   /** The relation kinds links, walks and edge reads take */
   relKinds: string;
+  /** The relation kinds whose links take a weight: those declared `weighted`, `never` when none is */
+  weightedKinds: string;
   /** The roles grants and `withRole` take */
   roles: string;
+  /** The rank indexes `ranked` reads: those declared, `never` when none is */
+  rankIndexes: string;
 }
 
 /** No shapes and any name, kind or role: the untyped operations (`@apackdev/ears`'s own, and the SDK's `untyped*`) */
@@ -220,7 +276,9 @@ export interface UntypedSchema extends EarsSchema {
   shapes: {};
   names: string;
   relKinds: string;
+  weightedKinds: string;
   roles: string;
+  rankIndexes: string;
 }
 
 /**
@@ -325,6 +383,72 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
     type?: EntityNameArg<D['names'], T> | readonly EntityNameArg<D['names'], T>[],
     options?: { direction?: EdgeDirection },
   ): Map<EARS.EntityId<E>, number>;
+  /**
+   * The query's entities by how much they matter from `seeds`, highest first, ties in query order: personalized
+   * PageRank over the edges of the kinds between two of them, followed `out` unless `direction` says `in` or `both`. A
+   * walker follows one of an entity's edges, or jumps back to a seed; an entity's score is the share of its time spent
+   * there. With no `seeds` every entity is one, which ranks what is central overall. A seed is an id, or `{ id, weight }`
+   * to have walkers jump back to it in proportion to its weight (an id is weight 1, one named twice adds its weights, a
+   * weight above 0 and at most 2^960). Over a kind declared `weighted` a walker follows an edge in proportion to its
+   * weight among its entity's edges, an edge of any other kind weighing 1; `weights: false` weighs every edge 1. A seed
+   * the query doesn't reach is ignored, and none it reaches answers nothing. `hits()` answers each score, and `limit(n)`
+   * keeps the `n` highest.
+   */
+  rank(kinds: D['relKinds'] | readonly D['relKinds'][], options?: RankOptions): QueryBuilder<E, D>;
+  /**
+   * The query's entities by the scores a rank index holds, highest first, ties in query order: PageRank declared ahead
+   * of time and kept current by every commit, so reading it needs no walk. A query that starts from the index's types
+   * and keeps the first `n` with `limit(n)` costs `n`, not the graph. `hits()` answers each score, and `explain()` the
+   * bound on them. Every entity the query reaches must be one of the index's nodes, else `BATCH_INVALID`; an index no
+   * schema declares is `UNKNOWN_INDEX`. A newly declared index answers the same while its first build runs, costing what
+   * a `rank` does until it ends, which `explain()` reports as `building`; `whileBuilding: 'refuse'` throws `INDEX_BUILDING`
+   * instead
+   */
+  ranked(index: D['rankIndexes'], options?: RankedOptions): QueryBuilder<E, D>;
+  /**
+   * The query's entities in an order where each edge of the kinds between two of them, followed `out` unless
+   * `direction` says `in`, leads from an entity to a later one: with `blocks`, what blocks comes before what it blocks.
+   * The members of a cycle can't be ordered so, and stay together in query order where the cycle falls
+   * (`strongComponents` answers which they are). What the edges leave free keeps query order.
+   */
+  topological(kinds: D['relKinds'] | readonly D['relKinds'][], options?: { direction?: 'out' | 'in' }): QueryBuilder<E, D>;
+  /**
+   * The query's entities that share a neighbour with `to`, most alike first, ties in query order: an entity's
+   * neighbours are the far ends of its edges of the kinds, followed `out` unless `direction` says `in` or `both`,
+   * whether the query holds them or not. `measure` is `jaccard` unless it says `adamicAdar`. `to` itself, and an entity
+   * sharing nothing with it, aren't answered. `hits()` answers each score, and `limit(n)` keeps the `n` most alike.
+   * Unlike `like`, which ranks by embedding, this ranks by links.
+   */
+  similar(
+    to: EARS.EntityId,
+    kinds: D['relKinds'] | readonly D['relKinds'][],
+    options?: { direction?: EdgeDirection; measure?: SimilarityMeasure },
+  ): QueryBuilder<E, D>;
+  /**
+   * The query's weak components: its entities in groups joined by edges of the kinds between two of them, whichever way
+   * each points: each group's ids in query order, the largest group first, of two as large the one whose first entity
+   * comes first
+   */
+  weakComponents(kinds: D['relKinds'] | readonly D['relKinds'][]): EARS.EntityId<E>[][];
+  /**
+   * The query's strong components: its entities in groups whose members each reach every other following the edges of
+   * the kinds between two of them in their direction, so an entity on no cycle is a group of its own and a larger group
+   * is a cycle. Each group's ids in query order, the largest group first, of two as large the one whose first entity
+   * comes first
+   */
+  strongComponents(kinds: D['relKinds'] | readonly D['relKinds'][]): EARS.EntityId<E>[][];
+  /**
+   * The query's entities in Leiden communities by modularity over the edges of the kinds between two of them, whichever
+   * way each points: groups more densely linked inside than out, each connected, the largest first. A higher
+   * `resolution` (1 when not given) finds smaller communities, and 0 keeps each connected group whole. Leiden's order
+   * comes from `seed` (0), so the same data answers the same communities every time. A seed is a whole number from 0
+   * to 4294967295, and a resolution below 0 is refused. An edge of a kind declared `weighted` counts by its weight
+   * unless `weights` is false
+   */
+  communities(
+    kinds: D['relKinds'] | readonly D['relKinds'][],
+    options?: { resolution?: number; seed?: number; weights?: boolean },
+  ): EARS.EntityId<E>[][];
   pick<A extends readonly (keyof ShapeOf<D['shapes'], E> & string)[]>(
     fields: A,
   ): ({ id: EARS.EntityId<E> } & Pick<ShapeOf<D['shapes'], E>, A[number]>)[];
@@ -375,7 +499,7 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
   /** The entities after `id` in the order so far: the page after one that ended at `id` */
   after(id: EARS.EntityId): QueryBuilder<E, D>;
   /**
-   * What the query's `search` (or `near`, `like` or `hybrid`, whose hits hold no words) found in each entity it reaches: its score and matched words, with `highlights` where
+   * What the query's `search` (or `near`, `like`, `hybrid`, `rank` or `ranked`, whose hits hold no words) found in each entity it reaches: its score and matched words, with `highlights` where
    * they are, and with `fields` its row's fields picked (`pick`'s)
    */
   hits<A extends readonly (keyof ShapeOf<D['shapes'], E> & string)[]>(
@@ -407,8 +531,33 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
  * entities — is the kind's declaration (`apack.json` `data.relations`), not a link's
  */
 export interface LinkOptions {
-  /** Stored on the edge, and part of what makes it the same edge as one already there */
+  /**
+   * Stored on the edge, replacing what an edge with the same identity held: the values of the kind's `key` fields are
+   * part of that identity, and the rest of the info is what the edge holds
+   */
   info?: unknown;
+}
+
+/**
+ * How `link` makes an edge of a kind declared `weighted`: its info, and its weight, from 0 to 2^960, 1 when none is
+ * given. A weight is what the edge holds, never what identifies it: linking the same identity again with another
+ * weight replaces it. A keyed kind's edges of one pair, one per key value, add their weights in a `rank`
+ */
+export interface WeightedLinkOptions extends LinkOptions {
+  /** The edge's weight, from 0 to 2^960; 1 when none is given */
+  weight?: number;
+}
+
+/** What `updateRelation` changes of a relation: its ends, its info, its weight (a kind declared `weighted`'s) */
+export interface RelationPatch {
+  /** The end the relation moves from; it must exist when the unit commits */
+  source?: EARS.EntityId;
+  /** The end the relation moves to; it must exist when the unit commits */
+  target?: EARS.EntityId;
+  /** The edge's info, in place of what it holds */
+  info?: unknown;
+  /** The edge's weight, for a kind declared `weighted`: from 0 to 2^960 */
+  weight?: number;
 }
 
 /** What `create` is given besides the type */
@@ -525,12 +674,19 @@ export interface WriteBuilder<E extends string = string, D extends EarsSchema = 
   /** Removes the list's first element equal to `v` (for an object, the first holding each of `v`'s fields) */
   removeValue<K extends WritableField<D['shapes'], E>>(k: K, v: ListElement<FieldValue<D['shapes'], E, K>>): WriteBuilder<E, D>;
   /**
-   * Links this entity to `target`. An edge of the kind to the target with the same `info` (or any, when
-   * none is given) is the same edge, and linking it again changes nothing; of a kind declared `unique`, any edge to
-   * the target is, and linking it again with `info` replaces the edge's. A kind declared `acyclic` refuses an edge
-   * that would close a cycle through it (`CYCLE`).
+   * Links this entity to `target`. An edge is identified by its ends and the values of its kind's `key` fields in its
+   * `info` (none: the ends alone, one edge a pair), so linking to an identity an edge holds updates that edge, keeping
+   * its id and its place: a given `info` replaces its info and a given `weight` its weight. A kind declared `weighted` takes a `weight`
+   * too (`WeightedLinkOptions`), which the compiler refuses for any other kind and the engine at runtime
+   * (`VALUE_INVALID`). A kind declared `acyclic` refuses an edge that would close a cycle through it (`CYCLE`).
    */
-  link(kind: D['relKinds'], target: EARS.EntityId, options?: LinkOptions): WriteBuilder<E, D>;
+  link<K extends D['relKinds']>(
+    kind: K,
+    target: EARS.EntityId,
+    // Not distributed over K: a kind typed as a union of weighted and other kinds takes no weight, and one cast to
+    // `never` takes the options any kind could
+    options?: [K] extends [D['weightedKinds']] ? WeightedLinkOptions : LinkOptions,
+  ): WriteBuilder<E, D>;
   /** Removes this entity's edges of the kind, to `target` only when given */
   unlink(kind: D['relKinds'], target?: EARS.EntityId): WriteBuilder<E, D>;
   /** Removes every edge from this entity */

@@ -35,6 +35,11 @@ export type EarsErrorCode =
   | 'SELF_LINK'
   /** `link` would close a cycle through a relation kind its declaration makes acyclic */
   | 'CYCLE'
+  /**
+   * `updateRelation` would move an edge, or change its kind's key fields in its info, onto the identity of another
+   * edge: the same ends and key values
+   */
+  | 'DUPLICATE_EDGE'
   /** A write's value is one the database doesn't store: a function, a symbol, `undefined` in a list, or a number that isn't finite */
   | 'VALUE_INVALID'
   /**
@@ -43,6 +48,7 @@ export type EarsErrorCode =
    * index (no `substrings`)
    */
   | 'UNKNOWN_INDEX'
+  | 'INDEX_BUILDING'
   /** `hits()` was asked of a query with no `search`, `near`, `like` or `hybrid`, or with a `where` given a function after it */
   | 'NO_SEARCH'
   /** `explain()` was asked of a query with a `where` given a function, which runs outside the plan the database explains */

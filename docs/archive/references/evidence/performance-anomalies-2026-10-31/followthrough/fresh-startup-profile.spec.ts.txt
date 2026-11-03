@@ -1,0 +1,39 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { test as base, expect, applicationLaunchStartedAt } from '@apackdev/testing';
+import { createNodePerformanceController } from '@apackdev/host/diagnostics/node';
+import { processReportSchema } from '../packages/apack-testing/src/performance/report.ts';
+import type { PerformanceWindow } from '../tests/performance/window.ts';
+let parent: ReturnType<typeof createNodePerformanceController>;
+let action: NonNullable<ReturnType<typeof parent.begin>>;
+const test=base.extend<{}, { startupProfile: void }>({
+ startupProfile:[async ({},use)=>{
+  if(process.env.E2E_DATA_DIR)throw Error('This diagnostic requires a fresh owned profile');
+  parent=createNodePerformanceController();parent.start('detailed');await parent.ready();
+  action=parent.begin('app.startup',{'app.process':'driver','app.scenario':'fresh-profile-diagnostic'})!;
+  const previous=process.env.APACK_PERFORMANCE_STARTUP;
+  process.env.APACK_PERFORMANCE_STARTUP=JSON.stringify({mode:'detailed',carrier:action.carrier()});
+  try{await use();}finally{
+   if(parent.snapshot()){action.end('cancelled');await parent.stop();}
+   if(previous===undefined)delete process.env.APACK_PERFORMANCE_STARTUP;else process.env.APACK_PERFORMANCE_STARTUP=previous;
+  }
+ },{scope:'worker',auto:true}],
+});
+test('profile a fresh owned launch through connected shell and UI flush',async({app,appPage,electronApp})=>{
+ await app.waitForSurface('default-setup/threads');
+ await appPage.evaluate(()=> (window as unknown as PerformanceWindow).__performance.flushView());
+ const elapsedMs=performance.now()-applicationLaunchStartedAt(electronApp);
+ const context=await app.getContext();
+ action.end('ok');
+ const reports=await appPage.evaluate(()=> (window as unknown as PerformanceWindow).__performance.stop());
+ const driver=await parent.stop();
+ const processes={driver,renderer:reports.renderer,backend:reports.backend};
+ const output=process.env.APACK_FRESH_PROFILE_OUTPUT!;mkdirSync(output,{recursive:true});
+ writeFileSync(path.join(output,'startup.json'),JSON.stringify({purpose:'diagnostic, not latency qualification or cold-filesystem evidence',readiness:'connected shell, registered thread surface and Vue flush',elapsedMs,context,processes}));
+ for(const [role,report] of Object.entries(processes)){
+  const parsed=processReportSchema.parse(report);expect(parsed.complete,role).toBe(true);
+  expect(parsed.profiles?.complete,role).toBe(true);
+  for(const kind of ['cpu','allocation'] as const)if(parsed.profiles?.[kind])writeFileSync(path.join(output,`${role}.${kind==='cpu'?'cpuprofile':'heapprofile'}`),parsed.profiles[kind]);
+ }
+ expect(reports.complete).toBe(true);
+});

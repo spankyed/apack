@@ -1,0 +1,15 @@
+import fs from 'node:fs';
+import { readPerformanceRun } from '/work/packages/apack-testing/src/performance/run.ts';
+import { comparisonOrder } from '/work/packages/apack-testing/src/performance/report.ts';
+const root='/work/.apack/performance/anomalies-657177c14a';
+const median=a=>{const s=a.toSorted((a,b)=>a-b);const m=s.length/2;return s.length%2?s[Math.floor(m)]:(s[m-1]+s[m])/2;};
+const controls={};
+for(const name of ['search-aa','startup-aa']){
+ const r=readPerformanceRun(`${root}/${name}`,45);
+ const order=comparisonOrder(20);const groups={A:[],B:[]};
+ for(let i=0;i<40;i++)groups[order[i]].push(r.samples[i+10].durationMs);
+ controls[name]={manifest:r.manifest,admittedSummary:r.summary,groups,medianA:median(groups.A),medianB:median(groups.B),changePercent:100*(median(groups.B)/median(groups.A)-1)};
+}
+const fresh=Array.from({length:5},(_,i)=>({index:i+1,phases:[...fs.readFileSync(`${root}/fresh-${i+1}.log`,'utf8').matchAll(/\[e2e\.launch\]\s+(\{[^\n]+\})/g)].map(m=>JSON.parse(m[1]))}));
+const model=[...fs.readFileSync(`${root}/model/model.log`,'utf8').matchAll(/APACK_MODEL_PHASES=(\{[^\n]+\})/g)].map(m=>JSON.parse(m[1]));
+console.log(JSON.stringify({root,controls,fresh,model},null,2));

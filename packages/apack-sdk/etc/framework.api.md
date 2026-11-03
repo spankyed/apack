@@ -13,6 +13,7 @@ import type { EventObject } from 'xstate';
 import type { MachineContext } from 'xstate';
 import type { Mapper } from 'xstate';
 import type { ParameterizedObject } from 'xstate';
+import type { RankDeclaration } from '@apackdev/ears';
 import type { RelationRules } from '@apackdev/ears';
 import type { RowRules } from '@apackdev/ears';
 import type { SearchDeclaration } from '@apackdev/ears';
@@ -84,6 +85,7 @@ export interface ContentRuntime {
     entities: Record<string, string>;
     // (undocumented)
     id: string;
+    ranks?: Record<string, RankDeclaration>;
     relationRules?: Record<string, RelationRules>;
     // (undocumented)
     relKinds: Record<string, string>;
@@ -397,6 +399,7 @@ export interface PackDataDeclarations {
         entities?: Readonly<Record<string, PackEntityDeclaration>>;
         relations?: Readonly<Record<string, PackRelationDeclaration>>;
         roles?: readonly string[];
+        ranks?: Readonly<Record<string, RankDeclaration>>;
     };
     // (undocumented)
     features?: Readonly<Record<string, object>>;
@@ -412,6 +415,7 @@ export function _packDeclarationProblem(expected: {
 export interface PackEARS {
     // (undocumented)
     entities: Record<string, string>;
+    ranks?: Record<string, RankDeclaration>;
     relationRules?: Record<string, RelationRules>;
     // (undocumented)
     relKinds: Record<string, string>;
@@ -505,6 +509,9 @@ export interface PackMigration {
     up: () => void;
 }
 
+// @internal
+export function _packRanks(declaration: PackDataDeclarations): Record<string, RankDeclaration>;
+
 // @public (undocumented)
 export interface PackRegistration {
     appliers?: ContentApplier[];
@@ -536,7 +543,8 @@ export interface PackRegistration {
 // @public
 export interface PackRelationDeclaration {
     readonly acyclic?: boolean;
-    readonly unique?: boolean;
+    readonly key?: readonly string[];
+    readonly weighted?: boolean;
 }
 
 // @internal
@@ -602,6 +610,9 @@ export function _packShortCodes(declaration: PackDataDeclarations): Record<strin
 export function packSystem(entry: SystemEntry, options: {
     incoming: readonly string[];
 }): PackFeatureSystem;
+
+// @internal
+export function _packWeightedKinds(declaration: PackDataDeclarations): Record<string, string>;
 
 // @internal
 export function _parseEventContracts(data: unknown, features: Parameters<typeof _eventContractsProblem>[1], native?: boolean): PackEventContracts;
@@ -995,6 +1006,16 @@ export type ViewArgs<Read> = Read extends () => unknown ? undefined : Read exten
 export type ViewDefinitions = Readonly<Record<string, ViewRead>>;
 
 // @public
+export interface ViewDiagnostics {
+    // (undocumented)
+    carrier: PerformanceCarrier;
+    // (undocumented)
+    delivery: number;
+    // (undocumented)
+    subscription: string;
+}
+
+// @public
 export function viewKey(request: ViewRequest): string;
 
 // @public
@@ -1003,6 +1024,7 @@ export type ViewRead = (args: never) => unknown;
 // @public
 export interface ViewRequest {
     args?: unknown;
+    diagnostics?: PerformanceCarrier;
     ref: string;
     view: string;
 }
@@ -1015,10 +1037,12 @@ export type ViewUpdate<Result = unknown> = {
     ok: true;
     value: Result;
     commit: number;
+    diagnostics?: ViewDiagnostics;
 } | {
     ok: false;
     error: string;
     commit: number;
+    diagnostics?: ViewDiagnostics;
 };
 
 // (No @packageDocumentation comment for this package)

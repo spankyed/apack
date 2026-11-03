@@ -20,6 +20,7 @@ import type { ClaudeUiViewRequest, OutgoingThreadsEvents } from '#features/threa
 import { sendToSystem } from '#generated/events.ts';
 import { readClaudeComposerPhase, stageClaudeComposerPhase, commitClaudeComposerPhase } from './chat/native-composer-phase.ts';
 import { takeClaudeUiRetirements, rememberClaudeUiLease, forgetClaudeUiLease } from './chat/native-ui-retirement.ts';
+import { answersCall } from '@apackdev/sdk/events';
 import { Archive, Copy, Pin, Trash2 } from 'lucide-vue-next';
 import { contextMenuFn } from '@apackdev/sdk/fe';
 import { untypedOpenSurface } from '@apackdev/sdk/fe'
@@ -501,6 +502,9 @@ const threadsState = setup({
     settleWrite: enqueueActions(({ context, event, enqueue }) => {
       const writes = writeAnswered(context.writes, event as unknown as Record<string, unknown>, event.type === 'THREAD_WRITE_FAILED');
       enqueue.assign({ writes });
+      if (answersCall(event as unknown as Record<string, unknown>, context.linkSave)) {
+        enqueue.assign({ linkSave: null, linkRefusal: event.type === 'THREAD_WRITE_FAILED' ? event.error : null });
+      }
       if (writes.refreshes !== context.writes.refreshes) enqueue('refollowThreadViews');
     }),
 
@@ -723,6 +727,8 @@ const threadsState = setup({
         // Reset view to defaults with the target id, for its detail view to fill.
         return {
           selectedThreadCode: undefined,
+          linkSave: null,
+          linkRefusal: null,
           view: {
             ...defaultThread,
             id: typedEvent.id as ThreadEntity['id'],
@@ -737,6 +743,8 @@ const threadsState = setup({
 
       return {
         selectedThreadCode: shortCode,
+        linkSave: null,
+        linkRefusal: null,
         view: {
           ...defaultThread,
           id, shortCode, status, timestamp, topic, instructions,
@@ -797,7 +805,10 @@ const threadsState = setup({
         key,
         value,
       });
-      return { writes: writeSent(context.writes, call) };
+      return {
+        writes: writeSent(context.writes, call),
+        ...(key === 'linkedThreads' && { linkSave: call, linkRefusal: null }),
+      };
     }),
     renameThread: assign(({ event, context }) => {
       const { threadId, topic } = typeOf('RENAME_THREAD', event);
@@ -1508,6 +1519,8 @@ const threadsState = setup({
     openedThreadId: null,
     freshThreadIds: [],
     writes: viewWrites(),
+    linkSave: null,
+    linkRefusal: null,
   }),
   on: {
     SET_CLAUDE_PERMISSION_MODE: { actions: enqueueActions(({ context, event, enqueue }) => {

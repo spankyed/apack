@@ -1,3 +1,4 @@
+import type { PerformanceExecution } from './performance.ts';
 // The one port between the SDK and the app it runs in: the resources a running app owns, bound once per
 // process. Behaviour over them (sends, logging, error reports, `services`) is SDK code.
 import type { CallReport, Ears } from '@apackdev/ears';
@@ -61,6 +62,8 @@ export interface HostCallCounting {
 
 /** What a development app offers for measuring its own work; no other runtime has it */
 export interface HostDiagnostics {
+  /** Opt-in execution context; recording policy belongs to the application composition root. */
+  performance?: PerformanceExecution;
   calls: HostCallCounting;
 }
 

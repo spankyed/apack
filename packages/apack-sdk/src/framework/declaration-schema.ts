@@ -146,7 +146,9 @@ const EntitiesSchema = declarationRecord(z.string().regex(_ENTITY_NAME_PATTERN, 
   .describe('Entity wire names, each mapped to its declaration: { shape?, shortCode? }, or {} for an untyped, unnumbered entity.');
 const RelationDeclarationSchema = z.object({
   acyclic: z.boolean().describe('Refuses a link that would close a cycle through this kind (CYCLE): a tree, a folder hierarchy.').optional(),
-  unique: z.boolean().describe('At most one edge of this kind from an entity to another: linking the pair again replaces the edge\'s info.').optional(),
+  key: z.array(z.string().regex(_FIELD_NAME_PATTERN, 'Must be a lowerCamelCase field name')).refine((fields) => new Set(fields).size === fields.length, 'Must not repeat a field').readonly()
+    .describe('The info fields that, with its two ends, identify an edge, a field the info doesn\'t hold being null: two entities are joined by one edge of the kind for each value of them, and by one at most when the kind has none. A link to an identity an edge holds updates that edge\'s info and weight.').optional(),
+  weighted: z.boolean().describe('Each edge carries a weight, from 0 to 2^960 and 1 unless a link gives another, which rank and communities read. A link to an edge replaces its weight.').optional(),
 }).strict().describe('One relation kind: the rules its edges are held to, each off unless declared ({} for a kind with none).');
 const RelationsSchema = declarationRecord(z.string().regex(_WIRE_NAME_PATTERN, 'Must be a snake_case relation wire name'), RelationDeclarationSchema)
   .superRefine((relations, ctx) => {
@@ -158,7 +160,28 @@ const RolesSchema = z.array(z.string().regex(_WIRE_NAME_PATTERN, 'Must be a snak
     try { notSdkOwned(SDK_ROLES)(_packRoles({ data: { roles } }), ctx); }
     catch (error) { ctx.addIssue({ code: 'custom', message: error instanceof Error ? error.message : String(error) }); }
   }).describe('Pack-level role names; generated EARS constants are their uppercase names. Do not repeat or redeclare SDK-owned roles.');
-const DataSchema = z.object({ entities: EntitiesSchema.optional(), relations: RelationsSchema.optional(), roles: RolesSchema.optional() }).strict()
+const RankDeclarationSchema = z.object({
+  types: z.array(z.string().regex(_ENTITY_NAME_PATTERN, 'Must be a PascalCase entity wire name')).min(1).readonly()
+    .describe('The entity types whose live entities are the graph\'s nodes: this pack\'s, a dependency\'s or the SDK\'s. Their order is the order ties keep.'),
+  relations: z.array(z.string().regex(_WIRE_NAME_PATTERN, 'Must be a snake_case relation wire name')).min(1).readonly()
+    .describe('The relation kinds whose edges between two nodes are the graph\'s edges: this pack\'s, a dependency\'s or the SDK\'s.'),
+  direction: z.enum(['out', 'in', 'both']).describe('Which way each edge is followed; out unless given.').optional(),
+  weights: z.boolean().describe('Whether an edge of a kind declared weighted counts by its weight; it does unless false.').optional(),
+  damping: z.number().gt(0).lt(1).describe('The probability a walker follows an edge rather than jumping to a node at random, above 0 and below 1; 0.85 unless given.').optional(),
+  tolerance: z.number().positive().finite().describe('The bound on the L1 distance between the index\'s scores and PageRank once its pushes are done, above 0; 1e-5 unless given. Tighter holds scores close together in their true order, looser costs a change less.').optional(),
+}).strict().describe('One rank index: PageRank over a graph, kept current by every commit, which query(type).ranked(name) reads.');
+const RanksSchema = declarationRecord(z.string().regex(_FIELD_NAME_PATTERN, 'Must be a lowerCamelCase rank index name'), RankDeclarationSchema)
+  .describe('Pack-level rank indexes by name, unique across every pack.');
+const DataSchema = z.object({ entities: EntitiesSchema.optional(), relations: RelationsSchema.optional(), roles: RolesSchema.optional(), ranks: RanksSchema.optional() }).strict()
+  .superRefine((data, ctx) => {
+    // The engine holds one namespace of index names per type, and a rank index spans types
+    for (const [entity, { indexes, search, embed, substrings }] of Object.entries(data.entities ?? {})) {
+      const names = [...(indexes ?? []), ...(search ? ['search'] : []), ...(embed ? ['embedding'] : []), ...(substrings ? ['substrings'] : [])];
+      for (const name of names) {
+        if (hasOwn(data.ranks ?? {}, name)) ctx.addIssue({ code: 'custom', path: ['ranks', name], message: `"${name}" is an index of ${entity}: name the rank index otherwise` });
+      }
+    }
+  })
   .describe('Pack-level data declarations without a feature owner.');
 
 const FeatureDescriptionSchema = z.string().regex(/\S/, 'Feature description must not be blank')

@@ -3,15 +3,16 @@
 // contract, not a security boundary (packs run in-process). Everything the engine holds is in the database; the
 // engine holds its connection, and the names its schema declares, read again when `admin.setSchema` changes them.
 import type { EARS } from './entities.ts';
-import type { EARSRuntimeDeps, Embedding, PendingEmbeddings, RelationEdge } from './runtime.ts';
+import type { EARSRuntimeDeps, Embedding, PendingEmbeddings, RelationEdge, RelationPatch } from './runtime.ts';
 import type { CallCounting } from './calls.ts';
+import type { EarsOperationObserver } from './observation.ts';
 import { createConnection, runCommitted, type Answer, type SchemaChange, type UnitOptions } from './database.ts';
 import { createQuery, relationRow, type Query } from './query.ts';
 import { createWrites, type Create, type Upsert, type Write } from './write.ts';
 import { createNameChecks } from './names.ts';
 import { declaredNames, toElmdbSchema, withDeclarations, type EngineSchema } from './schema.ts';
 import { idSuffix } from './utils.ts';
-import { createWatches, type WatchObserver, type WatchOptions, type Watching } from './watch.ts';
+import { createWatches, type WatchObserver, type WatchOptions, type WatchReadContext, type Watching } from './watch.ts';
 import { RESERVED_ENTITY_TYPES } from './errors.ts';
 
 /** An entity as a read gives it: its id and type, and every attribute it holds */
@@ -85,8 +86,8 @@ export interface Ears {
   getRelation(relId: EARS.RelationId): RelationRow | undefined;
   /** The rows of the relations matching every end and kind named; with none named, every relation */
   findRelations(match?: RelationMatch): RelationRow[];
-  /** Moves a relation to new ends, or replaces its info, keeping its id; refuses an id no relation has */
-  updateRelation(relId: EARS.RelationId, patch: { source?: EARS.EntityId; target?: EARS.EntityId; info?: unknown }): void;
+  /** Moves a relation to new ends, or replaces its info or its weight, keeping its id; refuses an id no relation has */
+  updateRelation(relId: EARS.RelationId, patch: RelationPatch): void;
   /** Removes the relation with the id, refusing an id no relation has */
   removeRelation(relId: EARS.RelationId): void;
   /** Whether linking `source` to `target` would close a cycle through `kinds` */
@@ -110,7 +111,7 @@ export interface Ears {
    * engine; what it reads anywhere else isn't tracked, and its result goes stale when that changes. `label` names it
    * where its cost is reported
    */
-  watch<T>(read: () => T, observer: WatchObserver<T> | ((value: T, commit: number) => void), options?: WatchOptions): Watching;
+  watch<T>(read: (context: WatchReadContext | undefined) => T, observer: WatchObserver<T> | ((value: T, commit: number) => void), options?: WatchOptions): Watching;
   /** The number of the last commit the engine's database made, or 0: what a watch's delivery is compared against */
   lastCommit(): number;
 }
@@ -137,11 +138,11 @@ export interface EarsAdmin {
   /** Removes an attribute, any kind the engine owns included */
   deleteAttr(id: EARS.EntityId, kind: EARS.AttrKind): void;
   /** Links any kind between any ids, either end missing included: unchecked, as loaded data is */
-  addRelation(source: EARS.EntityId, kind: string, target: EARS.EntityId, info?: unknown): EARS.RelationId;
-  /** `updateRelation` without its checks: any relation, to any ends */
-  updateRelation(relId: EARS.RelationId, patch: { source?: EARS.EntityId; target?: EARS.EntityId; info?: unknown }): void;
+  addRelation(source: EARS.EntityId, kind: string, target: EARS.EntityId, info?: unknown, weight?: number): EARS.RelationId;
+  /** `updateRelation` without its checks: any relation, to any ends; one given no weight keeps the weight it holds */
+  updateRelation(relId: EARS.RelationId, patch: RelationPatch): void;
   /** Loads a stored relation under its own id, unchecked */
-  bulkLoadRelation(relId: EARS.RelationId, kind: string, source: EARS.EntityId, target: EARS.EntityId, info?: unknown): void;
+  bulkLoadRelation(relId: EARS.RelationId, kind: string, source: EARS.EntityId, target: EARS.EntityId, info?: unknown, weight?: number): void;
   /** Runs `fn`, whose loads are applied together as one unit when it returns */
   bulkLoad<T>(fn: () => T): T;
   /**
@@ -151,11 +152,13 @@ export interface EarsAdmin {
    */
   setSchema(schema: EngineSchema): SchemaChange[];
   /**
-   * Declares what `schema` declares — each of its types, relation kinds and roles, with their rules — keeping every other
+   * Declares what `schema` declares — each of its types, relation kinds, roles and rank indexes, with their rules — keeping every other
    * declaration the database holds: what an app whose packs register one at a time applies as each does, so a pack's
    * registration changes nothing another pack declared. Answers the changes as `setSchema` does
    */
   declare(schema: EngineSchema): SchemaChange[];
+  /** Blocks until every index waiting to be built is built or has failed, and every rank index's pushes are done */
+  waitForIndexBuilds(): void;
   /** Resolves once no watch is waiting to run again: every commit before the call has been delivered */
   watchesSettled(): Promise<void>;
   /** How many watches are open, and how many keys and ranges their read sets hold */
@@ -165,6 +168,8 @@ export interface EarsAdmin {
    * code that made each, off until started: what a measurement of the app's work reads
    */
   readonly calls: CallCounting;
+  /** Observe operation boundaries without stack capture; unregister to restore the disabled path. */
+  observe(observer: EarsOperationObserver): () => void;
 }
 
 /** An EARS engine as its creator holds it: its operations, and the creator's privileges in `admin` */
@@ -195,6 +200,8 @@ export function createEarsEngine({ database, warn, freeze }: EARSRuntimeDeps): E
     const answer = one({ read: 'field', id, field });
     return answer.present ? answer.value as EARS.AttributeValue : undefined;
   };
+  // A weight of 1 is no weight on a relation's row, as a link stores it, so a loaded edge is the bytes a linked one is
+  const storedWeight = (weight: number | undefined) => (weight === 1 ? undefined : weight);
   const getRelation = (relId: EARS.RelationId) => {
     const row = one({ read: 'relation', id: relId }).relation as Record<string, unknown> | null;
     return row ? relationRow(row) : undefined;
@@ -322,21 +329,23 @@ export function createEarsEngine({ database, warn, freeze }: EARSRuntimeDeps): E
     bulkLoadAttr: entityLoad,
     putAttr: entityLoad,
     deleteAttr: (id, kind) => load({ load: 'unset', id, field: kind }),
-    addRelation(source, kind, target, info) {
+    addRelation(source, kind, target, info, weight) {
       const id = newRelationId();
-      load({ load: 'relation', id, kind, source, target, info });
+      load({ load: 'relation', id, kind, source, target, info, weight: storedWeight(weight) });
       return id;
     },
-    updateRelation(relId, { source, target, info }) {
+    updateRelation(relId, { source, target, info, weight }) {
       const held = getRelation(relId);
       if (!held) return;
       load({
         load: 'relation', id: relId, kind: held.kind,
         source: source || held.source, target: target || held.target,
         info: info !== undefined ? info : held.info,
+        weight: storedWeight(weight ?? held.weight),
       });
     },
-    bulkLoadRelation: (relId, kind, source, target, info) => load({ load: 'relation', id: relId, kind, source, target, info }),
+    bulkLoadRelation: (relId, kind, source, target, info, weight) =>
+      load({ load: 'relation', id: relId, kind, source, target, info, weight: storedWeight(weight) }),
     bulkLoad<T>(fn: () => T): T {
       if (loading) return fn();
       outsideUnit('bulkLoad()');
@@ -363,9 +372,14 @@ export function createEarsEngine({ database, warn, freeze }: EARSRuntimeDeps): E
         connection.committedEverything();
       });
     },
+    waitForIndexBuilds() {
+      outsideUnit('waitForIndexBuilds()');
+      database.waitForIndexBuilds();
+    },
     watchesSettled: watches.settled,
     watchStats: watches.stats,
     calls: connection.calls,
+    observe: connection.observe,
   };
 
   return { ...operations, admin };

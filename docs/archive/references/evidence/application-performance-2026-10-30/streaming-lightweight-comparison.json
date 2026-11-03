@@ -1,0 +1,649 @@
+{
+  "status": "qualified",
+  "scenario": "streaming",
+  "baseline": {
+    "manifest": {
+      "format": 1,
+      "source": {
+        "revision": "d391acfaef656427fe4920f928f5bd4116070926",
+        "dirty": false,
+        "excludedUntracked": [
+          ".apack-checkout",
+          ".apack-run.lock"
+        ],
+        "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "builds": [
+        {
+          "path": "packages/api/dist",
+          "sha256": "7ba0102529adaa23578d8c1115c6cd846bcc3e89b9b937b7f5fae36cb9fa9423"
+        },
+        {
+          "path": "packages/main/dist",
+          "sha256": "f87aec72aeb708070bc8dbfdaef7b5ebfeee6ef6b76c773e17d0140b897c8544"
+        },
+        {
+          "path": "packages/preload/dist",
+          "sha256": "a2bae9f4f8715defb9bf042116b4b15c86366fbbbcab13906eddf45e9d7e6b9f"
+        },
+        {
+          "path": "packages/renderer/dist",
+          "sha256": "10130033a6ac73a445f7054cc69df9c105d808ffb189049d18c70884e908e8bd"
+        },
+        {
+          "path": "packages/default-setup/dist",
+          "sha256": "2d6c4a7f07b066683d861f7d57bdf2c1f0add7cf8efa3bbbcf603c8ba449f6df"
+        },
+        {
+          "path": "vendor/elmdb/crates/elmdb-node/elmdb.linux-arm64-gnu.node",
+          "sha256": "f09eb6c681f57c696491e3dc53d2ce6bf86b9e0a9907a905c39215e0d9a786e3"
+        }
+      ],
+      "fixture": {
+        "generator": "streaming-conversations-v1",
+        "seed": 0,
+        "sha256": "004ce1fd2908fa0e82b86d55311a5db995c1d9f4a7e61b73bac40d7b8e3d1e57",
+        "distribution": {
+          "threads": 50,
+          "historyMessagesPerThread": 20,
+          "scriptedChunks": 24,
+          "intervalMs": 25,
+          "bodyRepetitions": 50
+        }
+      },
+      "native": {
+        "pin": "95615ed8d493f9a7c2789eaf1f4c847ae375eb32",
+        "checkoutRevision": "95615ed8d493f9a7c2789eaf1f4c847ae375eb32",
+        "dirty": false,
+        "excludedUntracked": [
+          ".apack-elmdb-built",
+          ".apack-elmdb-checkout",
+          ".apack-elmdb.lock"
+        ]
+      },
+      "runtime": {
+        "node": "23.11.1",
+        "v8": "12.9.202.28-node.14",
+        "osRelease": "6.17.8-orbstack-00308-g8f9c941121b1",
+        "electron": "37.2.4",
+        "chromium": "138.0.7204.157",
+        "appNode": "22.17.1",
+        "appV8": "13.8.258.26-electron.0",
+        "performancePolicy": "alternating-modes-v1"
+      },
+      "machine": {
+        "platform": "linux",
+        "arch": "arm64",
+        "cpus": 2,
+        "memoryBytes": 6442450944,
+        "identity": "a98798ec9e771fb53f32e7481074de8a920fc40c095b52153d986b4c19f82a3d"
+      },
+      "mode": "disabled",
+      "cache": "warm-process",
+      "warmups": 5,
+      "clock": "Local monotonic durations; cross-process epoch alignment is approximate"
+    },
+    "scenario": "streaming",
+    "samples": [
+      {
+        "scenario": "streaming",
+        "index": 0,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 751,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 1,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 767.3999999985099,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 2,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 754.8999999985099,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 3,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 760.5,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 4,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 754.8000000007451,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 5,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 769.9000000022352,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 6,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 741,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 7,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 769.5999999977648,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 8,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 758.1999999992549,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 9,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 773.0999999977648,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 10,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 762.9000000022352,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 11,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 769.1000000014901,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 12,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 750.1999999992549,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 13,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 744,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 14,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 754.8000000007451,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 15,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 736,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 16,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 722.3000000007451,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 17,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 757.0999999977648,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 18,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 765.6999999992549,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 19,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 781.3000000007451,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 20,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 748.1000000014901,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 21,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 732.4000000022352,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 22,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 745.6000000014901,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 23,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 760.4000000022352,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 24,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 746,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    ],
+    "summary": {
+      "measured": 20,
+      "passed": 20,
+      "unsuccessful": 0,
+      "medianMs": 755.9499999992549,
+      "minMs": 722.3000000007451,
+      "maxMs": 781.3000000007451
+    }
+  },
+  "candidate": {
+    "manifest": {
+      "format": 1,
+      "source": {
+        "revision": "d391acfaef656427fe4920f928f5bd4116070926",
+        "dirty": false,
+        "excludedUntracked": [
+          ".apack-checkout",
+          ".apack-run.lock"
+        ],
+        "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "builds": [
+        {
+          "path": "packages/api/dist",
+          "sha256": "7ba0102529adaa23578d8c1115c6cd846bcc3e89b9b937b7f5fae36cb9fa9423"
+        },
+        {
+          "path": "packages/main/dist",
+          "sha256": "f87aec72aeb708070bc8dbfdaef7b5ebfeee6ef6b76c773e17d0140b897c8544"
+        },
+        {
+          "path": "packages/preload/dist",
+          "sha256": "a2bae9f4f8715defb9bf042116b4b15c86366fbbbcab13906eddf45e9d7e6b9f"
+        },
+        {
+          "path": "packages/renderer/dist",
+          "sha256": "10130033a6ac73a445f7054cc69df9c105d808ffb189049d18c70884e908e8bd"
+        },
+        {
+          "path": "packages/default-setup/dist",
+          "sha256": "2d6c4a7f07b066683d861f7d57bdf2c1f0add7cf8efa3bbbcf603c8ba449f6df"
+        },
+        {
+          "path": "vendor/elmdb/crates/elmdb-node/elmdb.linux-arm64-gnu.node",
+          "sha256": "f09eb6c681f57c696491e3dc53d2ce6bf86b9e0a9907a905c39215e0d9a786e3"
+        }
+      ],
+      "fixture": {
+        "generator": "streaming-conversations-v1",
+        "seed": 0,
+        "sha256": "004ce1fd2908fa0e82b86d55311a5db995c1d9f4a7e61b73bac40d7b8e3d1e57",
+        "distribution": {
+          "threads": 50,
+          "historyMessagesPerThread": 20,
+          "scriptedChunks": 24,
+          "intervalMs": 25,
+          "bodyRepetitions": 50
+        }
+      },
+      "native": {
+        "pin": "95615ed8d493f9a7c2789eaf1f4c847ae375eb32",
+        "checkoutRevision": "95615ed8d493f9a7c2789eaf1f4c847ae375eb32",
+        "dirty": false,
+        "excludedUntracked": [
+          ".apack-elmdb-built",
+          ".apack-elmdb-checkout",
+          ".apack-elmdb.lock"
+        ]
+      },
+      "runtime": {
+        "node": "23.11.1",
+        "v8": "12.9.202.28-node.14",
+        "osRelease": "6.17.8-orbstack-00308-g8f9c941121b1",
+        "electron": "37.2.4",
+        "chromium": "138.0.7204.157",
+        "appNode": "22.17.1",
+        "appV8": "13.8.258.26-electron.0",
+        "performancePolicy": "alternating-modes-v1"
+      },
+      "machine": {
+        "platform": "linux",
+        "arch": "arm64",
+        "cpus": 2,
+        "memoryBytes": 6442450944,
+        "identity": "a98798ec9e771fb53f32e7481074de8a920fc40c095b52153d986b4c19f82a3d"
+      },
+      "mode": "lightweight",
+      "cache": "warm-process",
+      "warmups": 5,
+      "clock": "Local monotonic durations; cross-process epoch alignment is approximate"
+    },
+    "scenario": "streaming",
+    "samples": [
+      {
+        "scenario": "streaming",
+        "index": 0,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 774.7000000029802,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 1,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 740.1999999992549,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 2,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 744.6999999992549,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 3,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 724.5999999977648,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 4,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 753.8999999985099,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 5,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 740,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 6,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 751.7999999970198,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 7,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 750.1999999992549,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 8,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 745.6999999992549,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 9,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 738.6000000014901,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 10,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 752.8000000007451,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 11,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 765.5,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 12,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 813.3000000007451,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 13,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 746.5,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 14,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 734.6000000014901,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 15,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 739.8000000007451,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 16,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 725.4000000022352,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 17,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 720.3999999985099,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 18,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 730.8000000007451,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 19,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 722.1000000014901,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 20,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 742.7999999970198,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 21,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 722.9000000022352,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 22,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 745.3999999985099,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 23,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 737.5,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 24,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 721.6000000014901,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    ],
+    "summary": {
+      "measured": 20,
+      "passed": 20,
+      "unsuccessful": 0,
+      "medianMs": 739.9000000003725,
+      "minMs": 720.3999999985099,
+      "maxMs": 813.3000000007451
+    }
+  },
+  "medianDifferenceMs": -16.049999998882413,
+  "medianChangePercent": -2.1231562932599024,
+  "budget": {
+    "medianPercent": 5,
+    "assessment": "within-budget"
+  },
+  "policy": "Five warmups per mode, then individually balanced ABBA actions; no tail-percentile claim"
+}

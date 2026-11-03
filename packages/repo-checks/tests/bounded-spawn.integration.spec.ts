@@ -91,3 +91,55 @@ while [ ! -s ${JSON.stringify(pidFile)} ]; do sleep 0.05; done`],
     await expectGone(grandchild);
   });
 });
+
+/**
+ * The watchdog over real processes. What it decides is `createStallTracker`'s, tested without a clock in
+ * `process-tree-cpu.spec.ts`; these are what only a real tree shows: reading it, its output reaching the
+ * tracker, a descendant outside the group, the flag, and a spinning tree reaching its budget.
+ */
+describe('a bounded spawn that stops making progress', () => {
+  const node = (code: string) => [process.execPath, ['-e', code]] as const;
+  const burn = (ms: number) => `const end = Date.now() + ${ms}; while (Date.now() < end) {}`;
+  // For the cases that need CPU: wide enough that a tree starved to an eighth of a core still clears a second
+  // of CPU in it, since these run beside the rest of the integration pool
+  const CPU_IDLE = 8_000;
+
+  it('ends a silent tree that only ticks a timer as stalled, long before its budget', async () => {
+    const [command, args] = node('setInterval(() => {}, 5)');
+    const result = await boundedSpawn(command, args, 30_000, { idleMs: 2_000 });
+    expect(result).toMatchObject({ code: 124, timedOut: true, stalled: true });
+    expect(result.ms).toBeLessThan(15_000);
+  });
+
+  it('counts output as progress for a tree that is only waiting', async () => {
+    const [command, args] = node('let n = 0; const t = setInterval(() => { console.log(n); if (++n === 8) clearInterval(t); }, 500)');
+    const result = await boundedSpawn(command, args, 30_000, { idleMs: 1_500 });
+    expect(result).toMatchObject({ code: 0 });
+  });
+
+  it('leaves an idle tree alone under APACK_WATCHDOG=off', async () => {
+    const [command, args] = node('setTimeout(() => {}, 3_000)');
+    process.env.APACK_WATCHDOG = 'off';
+    try {
+      const result = await boundedSpawn(command, args, 30_000, { idleMs: 1_000 });
+      expect(result).toMatchObject({ code: 0 });
+    } finally {
+      delete process.env.APACK_WATCHDOG;
+    }
+  });
+
+  it('counts the CPU of a descendant in a process group of its own', async () => {
+    // Playwright's shape: the runner waits while Electron, started in its own group, does the work
+    const [command, args] = node(`const { spawn } = require('child_process');
+spawn(process.execPath, ['-e', ${JSON.stringify(burn(CPU_IDLE + 2_000))}], { detached: true, stdio: 'ignore' }).on('exit', () => process.exit(0));`);
+    const result = await boundedSpawn(command, args, 60_000, { idleMs: CPU_IDLE });
+    expect(result).toMatchObject({ code: 0 });
+  });
+
+  it('leaves a tree that spins to its budget, which reports a timeout and not a stall', async () => {
+    const [command, args] = node(burn(60_000));
+    const result = await boundedSpawn(command, args, CPU_IDLE + 2_000, { idleMs: CPU_IDLE });
+    expect(result).toMatchObject({ code: 124, timedOut: true });
+    expect(result.stalled).toBeUndefined();
+  });
+});

@@ -94,6 +94,9 @@ jobs:
         with:
           node-version: 23
           cache: npm
+      # npm 10 crashes resolving vitest 4.1's peer dependencies, which a new pack's first install does
+      - name: npm 11
+        run: npm install -g npm@11.21.0
 
       - uses: ./.github/actions/elmdb
 
@@ -107,7 +110,7 @@ jobs:
         run: npm run typecheck
 
       - name: Release beta-before-production rule
-        run: tests/scripts/release-beta-rule.test.sh
+        run: packages/repo-checks/tests/release-beta-rule.test.sh
 
       - name: Schema drift check
         run: npm run schema:check --workspace @apackdev/sdk
@@ -190,6 +193,9 @@ jobs:
         with:
           node-version: 23
           cache: npm
+      # npm 10 crashes resolving vitest 4.1's peer dependencies, which a new pack's first install does
+      - name: npm 11
+        run: npm install -g npm@11.21.0
 
       - uses: ./.github/actions/elmdb
 

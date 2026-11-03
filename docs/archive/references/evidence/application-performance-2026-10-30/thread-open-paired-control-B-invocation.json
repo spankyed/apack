@@ -1,0 +1,16 @@
+{
+  "code": 0,
+  "durationMs": 42894,
+  "timedOut": false,
+  "aborted": false,
+  "root": "/work",
+  "command": [
+    "scripts/with-source.mjs",
+    "playwright",
+    "test",
+    "--config",
+    "tests/performance/playwright.config.ts",
+    "--output",
+    "/work/.apack/performance/revisions-lightweight-1793408884962/thread-open/B/playwright"
+  ]
+}

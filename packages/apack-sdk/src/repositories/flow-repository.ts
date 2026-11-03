@@ -33,9 +33,11 @@ export interface FlowEdge {
 /** The relation kinds a flow's interior is made of: the flow holding its nodes, their edges, a node's related entity */
 const INTERIOR_KINDS: readonly string[] = [EARS.RelKind.CONTAINS, EARS.RelKind.TRANSITIONS_TO, EARS.RelKind.INSTANCE_OF];
 
-/** One relation, as the import compares it: its ends, kind and info */
-const relationKey = (source: string, kind: string, target: string, info: unknown) =>
-  JSON.stringify([source, kind, target, info ?? null]);
+/** One relation, as the import compares it: its ends, kind and info, an empty info being none */
+const relationKey = (source: string, kind: string, target: string, info: unknown) => {
+  const held = info && typeof info === 'object' && Object.keys(info).length === 0 ? null : info;
+  return JSON.stringify([source, kind, target, held ?? null]);
+};
 
 /** The fields only the engine writes, which an import neither rewrites nor removes */
 const ENGINE_FIELDS: ReadonlySet<string> = new Set(RESERVED_ATTRIBUTES);
@@ -76,9 +78,14 @@ function handlesMatch(info: unknown, options?: Handles): boolean {
     && (handles?.targetHandle || undefined) === (options?.targetHandle || undefined);
 }
 
-/** An edge's stored info: its handles, kept for steps with several outputs (switch) */
+/**
+ * An edge's stored info: its handles, kept for steps with several outputs (switch), each only when it names one. They
+ * are `transitions_to`'s key, so a handle left out is null, the same identity as an edge with no info
+ */
 const handleInfo = (handles?: Handles): Handles | undefined =>
-  handles?.sourceHandle || handles?.targetHandle ? { sourceHandle: handles.sourceHandle, targetHandle: handles.targetHandle } : undefined;
+  handles?.sourceHandle || handles?.targetHandle
+    ? { ...(handles.sourceHandle && { sourceHandle: handles.sourceHandle }), ...(handles.targetHandle && { targetHandle: handles.targetHandle }) }
+    : undefined;
 
 /**
  * Throws unless an edge from `sourceId` to `targetId` with these handles may exist: a trigger receives none, the
@@ -414,12 +421,16 @@ export const flowRepository = {
   reindexHandles: (nodeId: EARS.EntityId, prefix: string, pivotIndex: number, direction: 1 | -1): void => {
     const pattern = new RegExp(`^${prefix}-(\\d+)$`);
     const threshold = direction === 1 ? pivotIndex : pivotIndex + 1;
-    for (const rel of findRelations({ source: nodeId, kind: EARS.RelKind.TRANSITIONS_TO })) {
+    const shifted = findRelations({ source: nodeId, kind: EARS.RelKind.TRANSITIONS_TO }).flatMap((rel) => {
       const info = rel.info as { sourceHandle?: string } | undefined;
       const match = info?.sourceHandle?.match(pattern);
-      if (!match) continue;
-      const index = parseInt(match[1], 10);
-      if (index < threshold) continue;
+      const index = match ? parseInt(match[1], 10) : -1;
+      return index >= threshold ? [{ rel, info, index }] : [];
+    });
+    // Handles are the edges' identity, so each moves onto one already moved off: the highest first going up, the
+    // lowest first going down
+    shifted.sort((a, b) => (b.index - a.index) * direction);
+    for (const { rel, info, index } of shifted) {
       updateRelation(rel.id, { info: { ...info, sourceHandle: `${prefix}-${index + direction}` } });
     }
   },
