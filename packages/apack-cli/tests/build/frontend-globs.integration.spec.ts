@@ -1,64 +1,42 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, it, vi } from 'vitest';
-import { createFrontendResourceFixture, readFrontendOutput } from '../_support/frontend-resources.ts';
+import { expect, it } from 'vitest';
+import { createFrontendResourceFixture, externalGlobConsumer, readFrontendOutput } from '../_support/frontend-resources.ts';
 import { bundlePackFE } from '../../src/build/fe-bundler.ts';
-import { createFrontendWatcher } from '../../src/build/frontend-watch.ts';
-
-const DELIVERY_CEILING_MS = 30_000;
 
 const fixture = createFrontendResourceFixture();
 const { consumer } = fixture;
 
+// What the compiler reports and builds. Delivering a change to a watcher is `frontend-globs.native.spec.ts`.
 it.each([
-  ['import.meta.glob("../../pages/**/*.js", { eager: true })', 'pages'],
-  ['import.meta.glob([`../../pages/**/*.js`, "!../../pages/excluded/**"], { eager: true })', 'pages'],
-  ['import.meta.glob("./**/*.js", { eager: true, base: "../../pages" })', 'pages'],
-  ['import.meta.glob("#pages/**/*.js", { eager: true })', 'pages'],
-  ['name => import(`../../pages/nested/${name}.js`)', 'pages'],
-  ['name => import(`../../pages/nested/new${name}.js`)', 'pages'],
-])('watches an initially empty external glob: %s', async (expression, location) => {
-  const { pack } = consumer();
-  const packageFile = path.join(pack, 'package.json');
-  const manifest = JSON.parse(fs.readFileSync(packageFile, 'utf8'));
-  manifest.imports = { ...manifest.imports, '#pages/*': './pages/*' };
-  fs.writeFileSync(packageFile, JSON.stringify(manifest));
-  const directory = path.join(fixture.root, location);
-  fs.mkdirSync(directory);
-  fs.symlinkSync(directory, path.join(pack, 'pages'), 'dir');
-  const entryPoint = path.join(pack, expression.includes('#pages') ? 'canvas.vue' : 'src/canvas.vue');
-  fs.writeFileSync(entryPoint, `<script setup>const pages = ${expression};</script><template><div>{{ pages }}</div></template>`);
-  const changed = vi.fn();
-  const failures: Error[] = [];
-  const watcher = createFrontendWatcher(pack, undefined, changed, error => { failures.push(error); });
+  'import.meta.glob("../../pages/**/*.js", { eager: true })',
+  'import.meta.glob([`../../pages/**/*.js`, "!../../pages/excluded/**"], { eager: true })',
+  'import.meta.glob("./**/*.js", { eager: true, base: "../../pages" })',
+  'import.meta.glob("#pages/**/*.js", { eager: true })',
+  'name => import(`../../pages/nested/${name}.js`)',
+  'name => import(`../../pages/nested/new${name}.js`)',
+])('reports an initially empty external glob as an input, and builds what appears in it: %s', async expression => {
+  const { pack, entryPoint, page } = externalGlobConsumer(fixture, expression);
   let reported: readonly string[] = [];
   const compile = () => {
     const outputDir = path.join(pack, 'dist/runtime');
     fs.rmSync(outputDir, { recursive: true, force: true });
-    return bundlePackFE({ packDir: pack, entryPoint, outputDir,
-      onInputs: inputs => { reported = inputs.directories; return watcher.observe(inputs).then(() => {}); } });
+    return bundlePackFE({ packDir: pack, entryPoint, outputDir, onInputs: async inputs => { reported = inputs.directories; } });
   };
-  try {
-    const first = await compile();
-    expect(first.success, first.error).toBe(true);
-    const before = watcher.snapshot();
-    const nested = path.join(directory, 'nested');
-    fs.mkdirSync(nested);
-    const page = path.join(nested, 'new.js');
-    fs.writeFileSync(page, 'export const marker = "NEW_GLOB_PAGE";');
-    // A ceiling for an event that never comes: on a loaded Mac one has taken over 1.7 s, and the wait ends when it arrives
-    await vi.waitFor(() => expect(changed, JSON.stringify(reported)).toHaveBeenCalled(), { timeout: DELIVERY_CEILING_MS });
-    expect(before.current()).toBe(false);
-    const second = await compile();
-    expect(second.success, second.error).toBe(true);
-    expect(readFrontendOutput(pack, '.js')).toContain('NEW_GLOB_PAGE');
-    changed.mockClear();
-    fs.unlinkSync(page);
-    await vi.waitFor(() => expect(changed).toHaveBeenCalled(), { timeout: DELIVERY_CEILING_MS });
-    const third = await compile();
-    expect(third.success, third.error).toBe(true);
-    expect(readFrontendOutput(pack, '.js')).not.toContain('NEW_GLOB_PAGE');
-  } finally { await watcher.close(); expect(failures).toEqual([]); }
+  const first = await compile();
+  expect(first.success, first.error).toBe(true);
+  const watched = reported;
+  fs.mkdirSync(path.dirname(page));
+  fs.writeFileSync(page, 'export const marker = "NEW_GLOB_PAGE";');
+  const holdsPage = (directory: string) => !path.relative(fs.realpathSync(directory), fs.realpathSync(page)).startsWith('..');
+  expect(watched.some(holdsPage), JSON.stringify(watched)).toBe(true);
+  const second = await compile();
+  expect(second.success, second.error).toBe(true);
+  expect(readFrontendOutput(pack, '.js')).toContain('NEW_GLOB_PAGE');
+  fs.unlinkSync(page);
+  const third = await compile();
+  expect(third.success, third.error).toBe(true);
+  expect(readFrontendOutput(pack, '.js')).not.toContain('NEW_GLOB_PAGE');
 });
 
 it('leaves explicitly ignored variable imports outside compiler subscriptions', async () => {
