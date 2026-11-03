@@ -22,6 +22,7 @@ import {
   DECLARES_SOURCE_BY_DESIGN, findMissingSourceConditions, RESOLVES_DIST_BY_DESIGN, sourceConditionPackages,
 } from './lib/import-source-conditions.ts';
 import { backed, type ImportRule, type PackParity, packRule } from './lib/import-rules.ts';
+import { importedCallsIn } from './lib/imported-calls.ts';
 import { loadedByThePools, syncSpawnImportsIn } from './lib/process-spawns.ts';
 import { listLines, ruleRows as rowsOf, type RuleRow, ruleTable } from './lib/import-list.ts';
 
@@ -569,6 +570,29 @@ export function findSyncSpawnsInSlowSpecs(files: readonly string[] = loadedByThe
   return problems.sort();
 }
 
+const NODE_FS = new Set(['node:fs', 'fs']);
+const CHOKIDAR = new Set(['chokidar']);
+const WATCHER_FACTORIES = new Set(['createFrontendWatcher', 'startTestPackBuildWatcher']);
+
+/**
+ * `file: fs.watch` for each `*.integration.spec.ts` the pools load that starts a live filesystem watcher: `watch` from
+ * `fs`, any call of `chokidar`, or a factory in `WATCHER_FACTORIES`.
+ *
+ * Those cases belong in `*.native.spec.ts`, in the Linux container. On a Mac an event's delay is set by a machine-wide
+ * service, so a case in the integration pool waiting on one measures the load on the machine. It does not see a
+ * watcher a spec reaches through a fixture's method or a Vite server's `server.watcher`.
+ */
+export function findLiveWatchersInIntegrationSpecs(files: readonly string[] = loadedByThePools(repoRoot), root = repoRoot): string[] {
+  return files.filter((file) => file.endsWith('.integration.spec.ts')).flatMap((file) => {
+    const found = [
+      ...importedCallsIn(file, { fromModules: NODE_FS }).filter((call) => /(^|\.)watch$/.test(call)),
+      ...importedCallsIn(file, { fromModules: CHOKIDAR }),
+      ...importedCallsIn(file, { names: WATCHER_FACTORIES }),
+    ];
+    return found.length === 0 ? [] : [`${repoRelative(root, file)}: ${[...new Set(found)].join(', ')}`];
+  }).sort();
+}
+
 /** The consumers of SHARED_INSTANCE_PACKAGES (@apackdev/host/build/shared-deps), which must not list the packages themselves */
 export const SHARED_LIST_CONSUMERS = [
   'packages/apack-cli/src/build/be-bundler.ts',
@@ -805,6 +829,12 @@ const RULE_LIST = [
     repoOnly: { kind: 'inapplicable', note: "Its subject is this repo's integration and native test pools, which no pack has" },
     find: findSyncSpawnsInSlowSpecs,
     rule: 'Start a process asynchronously in the integration and native halves — promisify(execFile) with a timeout, or runCommand (apack-cli tests/_support/run-command.ts) for a CLI or vitest process tree: a synchronous one blocks the worker, so no timeout fires and the RPC window expires',
+  },
+  {
+    id: 'findLiveWatchersInIntegrationSpecs',
+    repoOnly: { kind: 'inapplicable', note: "Its subject is this repo's integration test pool, which no pack has" },
+    find: findLiveWatchersInIntegrationSpecs,
+    rule: 'Hold a live filesystem watcher in a *.native.spec.ts, which runs in the Linux container: on a Mac how long an event takes depends on the load on the machine',
   },
   {
     id: 'findSharedPackageLists',
