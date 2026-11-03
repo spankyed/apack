@@ -262,3 +262,72 @@ describe('schedule', () => {
     expect(r.order).toEqual(['c']);
   });
 });
+
+describe('a step that has to wait for something outside the graph', () => {
+  const never = () => false;
+  const gate = (open: () => boolean, pauses: { n: number } = { n: 0 }, left: string[] = []) => ({
+    admit: () => open(),
+    leave: (s: SchedulableStep) => { left.push(s.name); },
+    pause: async () => { pauses.n++; await new Promise((resolve) => setImmediate(resolve)); },
+  });
+
+  it('holds no budget while it waits, so the steps it would have blocked run past it', async () => {
+    const order: string[] = [];
+    let open = false;
+    const admission = { ...gate(() => open), admit: (s: SchedulableStep) => s.name !== 'wide' || open };
+    const result = await schedule({
+      steps: [step('wide', [], { cores: 5 }), step('cheap', [], { cores: 5 })], budget: 5, skip: never, admission,
+      run: async (s) => { order.push(s.name); if (s.name === 'cheap') open = true; return true; },
+    });
+    expect(order).toEqual(['cheap', 'wide']);
+    expect(result.failed).toBeUndefined();
+  });
+
+  it('never starts it once something has failed, and doesn\'t wait for it', async () => {
+    const admission = { ...gate(() => false), admit: (s: SchedulableStep) => s.name !== 'wide' };
+    const ran: string[] = [];
+    const result = await schedule({
+      steps: [step('wide'), step('fails')], budget: 2, skip: never, admission,
+      run: async (s) => { ran.push(s.name); return false; },
+    });
+    expect(ran).toEqual(['fails']);
+    expect(result.failed).toBe('fails');
+    expect(result.started).toEqual(['fails']);
+  });
+
+  it('keeps asking while nothing else runs, and asks whether to skip it once', async () => {
+    let asked = 0, skips = 0;
+    const pauses = { n: 0 };
+    const result = await schedule({
+      steps: [step('wide')], budget: 1, admission: gate(() => ++asked === 4, pauses),
+      skip: () => { skips++; return false; }, run: async () => true,
+    });
+    expect(result.started).toEqual(['wide']);
+    expect(pauses.n).toBe(3);
+    expect(skips).toBe(1);
+  });
+
+  it('tells of each step that ended, passing, failing or throwing', async () => {
+    const ended: string[] = [];
+    await schedule({
+      steps: [step('passes'), step('fails'), step('throws')], budget: 3, skip: never,
+      admission: gate(() => true, { n: 0 }, ended),
+      run: async (s) => { if (s.name === 'throws') throw new Error('no'); return s.name === 'passes'; },
+    });
+    expect(ended.sort()).toEqual(['fails', 'passes', 'throws']);
+  });
+
+  it('fails a step whose admission throws, and leaves what is running to finish', async () => {
+    const refused = new Error('a lock it will not wait for');
+    let finished = false;
+    const result = await schedule({
+      steps: [step('running'), step('refused')], budget: 2, skip: never,
+      admission: { ...gate(() => true), admit: (s: SchedulableStep) => { if (s.name === 'refused') throw refused; return true; } },
+      run: async () => { await new Promise((resolve) => setImmediate(resolve)); finished = true; return true; },
+    });
+    expect(finished).toBe(true);
+    expect(result.failed).toBe('refused');
+    expect(result.threw).toEqual([{ step: 'refused', error: refused }]);
+  });
+});
+

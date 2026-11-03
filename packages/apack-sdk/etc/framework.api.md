@@ -123,6 +123,9 @@ export function defineHandlers<TContext extends MachineContext, TEvent extends E
 }>(): Handlers<TContext, TEvent, TOut>;
 
 // @public
+export function defineProjections<const T extends ProjectionDefinitions>(projections: T): T;
+
+// @public
 export function defineSystem<C extends SystemContract>(): SystemSpec<C>;
 
 // @public
@@ -434,6 +437,7 @@ export function _packEntities(declaration: PackDataDeclarations): _PackEntityDec
 
 // @public
 export interface PackEntityDeclaration {
+    readonly changeOrder?: boolean;
     readonly embed?: PackEmbedDeclaration;
     readonly indexes?: readonly string[];
     readonly search?: PackSearchDeclaration;
@@ -444,6 +448,7 @@ export interface PackEntityDeclaration {
 
 // @internal
 export interface _PackEntityDeclaration {
+    changeOrder?: true;
     embed?: EmbedDeclaration;
     indexes?: readonly string[];
     // (undocumented)
@@ -467,6 +472,7 @@ export type PackEventContracts = Record<string, FeatureEventContract>;
 export interface PackFeature {
     // (undocumented)
     designation?: string;
+    projections?: ProjectionDefinitions;
     services?: readonly string[];
     settings?: SettingsDefinition;
     // (undocumented)
@@ -625,6 +631,17 @@ export function _parseServiceReference(ref: string): {
     packId: string;
     name: string;
 };
+
+// @public
+export interface ProjectionDefinition {
+    apply(ids: readonly string[]): void;
+    readonly from: readonly string[];
+    reset?(): void;
+    readonly version?: number;
+}
+
+// @public
+export type ProjectionDefinitions = Readonly<Record<string, ProjectionDefinition>>;
 
 // @public (undocumented)
 export interface ReferenceCatalogEntry {
@@ -886,7 +903,7 @@ export interface SurfaceDeclaration {
 export function _surfaceTargets(surface: SurfaceDeclaration): [string, string][];
 
 // @public
-export const SYSTEM_EVENT_TYPES: readonly ["SEND_STATE", "CLIENT_CONNECTED", "PACK_CHANGED", "FEATURE_SETTINGS_UPDATED", "DATA_REPLACED"];
+export const SYSTEM_EVENT_TYPES: readonly ["SEND_STATE", "CLIENT_CONNECTED", "PACK_CHANGED", "FEATURE_SETTINGS_UPDATED", "DATA_REPLACED", "DATA_CHANGED_ELSEWHERE"];
 
 // @public
 export interface SystemContract {
@@ -958,6 +975,17 @@ export type SystemEvents =
 */
 | {
     type: 'DATA_REPLACED';
+}
+/**
+* Another process committed to the database, a local tool such as `apack db exec`, and rows may have changed in any
+* way, though most are as they were. Unlike `DATA_REPLACED` it doesn't mean work held over rows has lost them.
+*
+* Handling it is optional, as there: the bus also asks every system for its startup data. Declare it only for what
+* re-reading cannot fix. Rows derived from others are for a projection (`defineProjections`), which is caught up before
+* this arrives.
+*/
+| {
+    type: 'DATA_CHANGED_ELSEWHERE';
 };
 
 // @public

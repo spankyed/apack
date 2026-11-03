@@ -259,6 +259,7 @@ export const rankedIds = query('Item').ranked('itemRank').limit(5).ids();
 // @ts-expect-error a misspelled rank index
 query('Item').ranked('itemRnak');
 query('Item').ranked('itemRank', { whileBuilding: 'refuse' });
+export const rankedHitBound = query('Item').ranked('itemRank').limit(5).rankedHits().bound;
 // @ts-expect-error not something a ranked read does while building
 query('Item').ranked('itemRank', { whileBuilding: 'empty' });
 // @ts-expect-error a seed's weight is a number

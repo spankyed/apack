@@ -3,7 +3,8 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { startApp, type TestApp } from '@apackdev/testing/harness';
 import { resetTestData } from '@apackdev/sdk/testing';
-import { query, EARS } from '#generated/ears.ts';
+import { query, transact, write, EARS } from '#generated/ears.ts';
+import { formatReferenceHref } from '@apackdev/sdk/framework';
 import { repository } from '#generated/repository.ts';
 
 let app: TestApp;
@@ -38,6 +39,29 @@ it.each([
   await app.send('notes', drop(middle, other));
   await app.settle();
   expect(parentOf(middle)).toBe(other);
+});
+
+it('keeps a note\'s references in step with its text, however the text was written', () => {
+  const target = note('target');
+  const source = note('source');
+  // Past the repository, which has no part in it
+  write(source).set('content', `[target](${formatReferenceHref({ type: 'note', id: target })})`);
+  expect(query.ids(source).out(EARS.RelKind.REFERENCES, EARS.Entity.Note).ids()).toEqual([target]);
+
+  write(source).set('content', 'no links');
+  expect(query.ids(source).out(EARS.RelKind.REFERENCES, EARS.Entity.Note).ids()).toEqual([]);
+});
+
+it('commits a note and its references together', () => {
+  const target = note('target');
+  const source = note('source');
+  const before = query.ids(source).out(EARS.RelKind.REFERENCES, EARS.Entity.Note).ids();
+  expect(() => transact(() => {
+    write(source).set('content', `[target](${formatReferenceHref({ type: 'note', id: target })})`);
+    throw new Error('undone');
+  })).toThrow('undone');
+  expect(query.ids(source).pickOne(['content'])?.content).not.toContain('target');
+  expect(query.ids(source).out(EARS.RelKind.REFERENCES, EARS.Entity.Note).ids()).toEqual(before);
 });
 
 it('ancestorChain is the notes above one, its root first', () => {

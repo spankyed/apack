@@ -471,7 +471,7 @@ graph first — a type, a search, a walk:
 | Call | Returns |
 |---|---|
 | `query(type).rank(kind, { direction?, seeds?, weights? })` | The query's entities by how much they matter from `seeds`, highest first: personalized PageRank, a walker following edges (`out` unless `direction` is `in` or `both`) and jumping back to a seed. With no `seeds`, every entity is one, which ranks what is central overall. A seed is an id, or `{ id, weight }` to start walkers there in proportion to its weight. Over a weighted kind a walker follows an edge in proportion to its weight; `weights: false` weighs every edge 1. End with `hits()` for each score, and `limit(n)` keeps the `n` highest |
-| `query(type).ranked(index, { whileBuilding? })` | The query's entities by the scores a rank index holds (`data.ranks` in [the manifest](manifest.md#entities-and-relations)), highest first: PageRank kept current by every commit, within a bound `explain()` reports, so `limit(n)` from the index's types costs `n` and not the graph. `hits()` answers the scores. Every entity reached must be one of the index's nodes (`BATCH_INVALID`). A newly declared index answers the same while its first build runs, as slowly as `rank`, which `explain()` reports as `building`; `whileBuilding: 'refuse'` throws `INDEX_BUILDING` instead, for a read too large or too frequent to pay that, and catching it keeps "still building" apart from a graph with nothing in it. In a pack's tests, `waitForIndexBuilds()` (`@apackdev/sdk/testing`) settles the scores after a write. |
+| `query(type).ranked(index, { whileBuilding? })` | The query's entities by the scores a rank index holds (`data.ranks` in [the manifest](manifest.md#entities-and-relations)), highest first: PageRank kept current by every commit, within a bound `explain()` reports, so `limit(n)` from the index's types costs `n` and not the graph. `hits()` answers the scores, and `rankedHits()` the scores with `bound`, the index and how far its scores may be from PageRank's. Every entity reached must be one of the index's nodes (`BATCH_INVALID`). A newly declared index answers the same while its first build runs, as slowly as `rank`, which `explain()` reports as `building`; `whileBuilding: 'refuse'` throws `INDEX_BUILDING` instead, for a read too large or too frequent to pay that (at 100,000 documents a computed read holds its thread for over a second), and catching it keeps "still building" apart from a graph with nothing in it. In a pack's tests, `waitForIndexBuilds()` (`@apackdev/sdk/testing`) settles the scores after a write. |
 | `query(type).weakComponents(kind)` | The groups the edges join, whichever way each points: each group's ids, the largest first |
 | `query(type).strongComponents(kind)` | The groups whose entities each reach every other following the edges' direction: a group of more than one is a cycle, and an entity on no cycle is a group of its own. Each group's ids, the largest first |
 | `query(type).topological(kind, { direction? })` | The query's entities in an order where each edge (`out` unless `direction` is `in`) leads forward: with `blocks`, what blocks comes before what it blocks. The members of a cycle stay together; what the edges leave free keeps query order |
@@ -591,6 +591,55 @@ whole store are not views: the first two are outside the engine, and the third w
 makes. A surface asks for them and its system answers it with `reply`. A surface asks for what it starts from when the
 shell hands it `SURFACE_STARTED` (`SurfaceLifecycleEvent`, `@apackdev/sdk/fe`), which arrives in a delivery naming the
 surface; a send from the machine's own entry is in none, carries no sender, and so cannot be answered.
+
+### Projections
+
+A projection is rows a feature derives from other rows, kept in step however those rows were written: by the app, by a
+tool such as `apack db exec`, or by another process while the app was closed. A write in the app runs it in the write's
+own unit, so a row and what's derived from it commit together, the way a database keeps an index. A commit from another
+process, which can't run your pack's code, is caught up on when the app hears of it, and at the app's next start: the
+database keeps the types a projection derives from in the order of the commits that last wrote them, so catching up
+reads only what changed since the projection last read, a chunk at a time, however long ago that was.
+
+```typescript
+// src/features/notes/be/projections.ts
+import { defineProjections } from '@apackdev/sdk/framework';
+import { EARS } from '#generated/ears.ts';
+
+export const noteProjections = defineProjections({
+  references: {
+    from: [EARS.Entity.Note],
+    apply(ids) { for (const id of ids) syncReferences(id); },
+  },
+});
+```
+
+Name the export in the feature's `projections` (`"projections": "src/features/notes/be/projections.ts#noteProjections"`),
+and keep each type it derives from in change order, in the `apack.json` of the pack that declares the type:
+
+```json
+"Note": { "shape": "src/features/notes/be/types.ts#NoteEntity", "changeOrder": true }
+```
+
+- **`from` is the entity types it derives from.** A write to none of them doesn't run it, and costs a write nothing more.
+- **`apply(ids)` brings what's derived from those entities up to date.** Each is read as it is now, and may have been
+  trashed or destroyed. It is run again with ids it has seen, so it rewrites rather than adds.
+- **Deriving everything again is `apply` over every entity of `from`**, a chunk per unit like any backlog, so it never
+  holds the write lock longer than a chunk: the first time it runs, after `version` changes, and in the rare case what
+  changed can't all be known. What it derived is part-built until that pass is through, and what changed while it ran
+  is applied after it.
+- **`reset()`** (optional) clears everything it derived, before such a pass. Only a projection whose rows can outlive
+  what they derive from needs one: a row derived from an entity destroyed before the pass would otherwise stay.
+- **`version`** (1 unless given) says which derivation `apply` makes. Raise it when that changes, so what was derived
+  before is derived again.
+- **A write to a type kept in change order costs about a fifth more**, for keeping that order, and writes to other types
+  nothing. A projection over a type that keeps none is refused when its pack registers, and so is a new version of a
+  pack that stops keeping an order another pack's projection reads.
+- **`apply` and `reset` hold the write lock**, so keep them quick, and a throw undoes the write that ran them. A catch-up that throws is
+  logged and tried again next time, from where it last read.
+- **An entity counts as changed when a field, its trash state or a relation at either end changed.** A projection that
+  writes the types it derives from, as notes write a note's link targets, isn't given back what it wrote: a catch-up
+  passes over what its own units changed last, and another projection still sees it.
 
 ### Trash
 

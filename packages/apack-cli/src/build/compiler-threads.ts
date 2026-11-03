@@ -2,9 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { syncBuiltinESMExports } from 'node:module';
-import threads, { BroadcastChannel, getEnvironmentData, setEnvironmentData, type WorkerOptions } from 'node:worker_threads';
+import threads, { SHARE_ENV, BroadcastChannel, getEnvironmentData, setEnvironmentData, type WorkerOptions } from 'node:worker_threads';
 import { withoutCompilerFileReads, type CompilerInputObservations } from '@apackdev/host/build/compiler-inputs';
-import { compilerStartupArguments } from './compiler-startup-options.ts';
+import { formatNodeOptions, parseNodeOptions } from '@apackdev/host/build/source-resolution';
+import { COMPILER_NODE_OPTIONS_ENV, compilerStartupArguments } from './compiler-startup-options.ts';
 
 const HANDOFF = 'apack.compiler.worker';
 interface ThreadHandoff { pid: number; channel: string; report: string; environment: Record<string, string> }
@@ -25,15 +26,29 @@ export function ownCompilerThreads(bootstrap: string, workspace: string, environ
     construct(target, args, newTarget) {
       const [filename, options = {}] = args as [string | URL, WorkerOptions?];
       if (closing) throw new Error('Compiler cannot start worker threads after input collection');
-      const handoff: ThreadHandoff = { pid: process.pid, channel: randomUUID(), report: path.join(workspace, `thread-${randomUUID()}.json`), environment };
+      let workerOptions = options;
+      let startupEnvironment = environment;
+      if (options.execArgv !== undefined) {
+        const source = options.env === SHARE_ENV ? process.env : options.env ?? process.env;
+        const userOptions = source.NODE_OPTIONS === undefined ? '' : String(source.NODE_OPTIONS);
+        const flags = parseNodeOptions(userOptions);
+        // NODE_OPTIONS requires run before execArgv requires, so ownership must start in both places.
+        if (options.env === SHARE_ENV && flags.some(flag => /^--(?:require|import|(?:experimental-)?loader)(?:=|$)|^-r/.test(flag))) {
+          throw new Error('Compiler workers with SHARE_ENV and explicit execArgv cannot run NODE_OPTIONS preloads; inherit execArgv or use a private environment');
+        }
+        workerOptions = { ...options, execArgv: compilerStartupArguments(bootstrap, options.execArgv),
+          ...(options.env === SHARE_ENV ? {} : { env: { ...source,
+            NODE_OPTIONS: formatNodeOptions(compilerStartupArguments(bootstrap, flags)) } }) };
+        startupEnvironment = { ...environment, [COMPILER_NODE_OPTIONS_ENV]: userOptions };
+      }
+      const handoff: ThreadHandoff = { pid: process.pid, channel: randomUUID(), report: path.join(workspace, `thread-${randomUUID()}.json`), environment: startupEnvironment };
       const channel = new BroadcastChannel(handoff.channel);
       channel.unref();
       const previous = getEnvironmentData(HANDOFF);
       setEnvironmentData(HANDOFF, handoff);
       let worker: InstanceType<typeof NativeWorker>;
       try {
-        // Explicit execArgv replaces inherited preloads; keep capture ahead of those user flags.
-        worker = Reflect.construct(target, [filename, { ...options, ...(options.execArgv === undefined ? {} : { execArgv: compilerStartupArguments(bootstrap, options.execArgv) }) }], newTarget);
+        worker = Reflect.construct(target, [filename, workerOptions], newTarget);
       } catch (error) { channel.close(); throw error; }
       finally { setEnvironmentData(HANDOFF, previous); }
       const terminate = worker.terminate.bind(worker);

@@ -33,6 +33,11 @@ import { bareWaitKey, bareWaits, specFilesUnder, type BareWait } from '../../../
  * allowed to pass; a poll of something with no event to offer; and a race whose timer *is* the answer.
  */
 const BARE_WAIT_BY_DESIGN: Record<string, string> = {
+  'packages/apack-cli/tests/build/frontend-watch.native.spec.ts > fileEventsDelivered':
+    'what the cases assert is that an event changes nothing, and an event that has no effect has nothing to await',
+  'packages/apack-cli/tests/build/watch-package-edit.native.spec.ts > publishes one build when a refresh rewrites what the pack builds against':
+    'the subject is a second build that must not start, so there is no event to await; load can only cause a false '
+    + 'pass here, never a false failure',
   'packages/apack-host/tests/bus/reply.spec.ts > after':
     "a delay inside the handler under test — a backend system's work is I/O, so it awaits before it answers, "
     + 'which is what makes the delivery scope load-bearing. The cases await the answer',

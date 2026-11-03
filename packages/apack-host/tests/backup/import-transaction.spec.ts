@@ -8,7 +8,7 @@ import { importDatabase, type BackupStore } from '../../src/backup/index.ts';
 // store's files are text. import.spec covers real databases.
 vi.mock('@apackdev/ears/lmdb', async importOriginal => ({
   ...await importOriginal<typeof import('@apackdev/ears/lmdb')>(),
-  openDatabase: () => ({ path: '', readOnly: true, isOpen: true, schema: null, stats: () => ({ types: {}, relations: {}, fileBytes: 0 }), close: () => {} }),
+  openDatabase: () => ({ hearBuilderCommits: () => {}, path: '', readOnly: true, isOpen: true, schema: null, stats: () => ({ types: {}, relations: {}, fileBytes: 0 }), close: () => {} }),
 }));
 
 const roots: string[] = [];

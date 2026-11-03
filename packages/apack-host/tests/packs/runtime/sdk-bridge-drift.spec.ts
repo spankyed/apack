@@ -48,6 +48,7 @@ const UNBRIDGED_BY_POLICY = new Map<string, string>([
   // Build-time only: consumed by vite configs and the apack CLI, never by a
   // loaded pack's runtime code.
   ['@apackdev/host/build/shared-deps', 'build-time only'],
+  ['@apackdev/host/build/process-progress', 'test and tooling only: whether a process tree is still working, read by the chain and specs'],
   ['@apackdev/host/build/discover', 'build-time only'],
   ['@apackdev/host/build/compiler-test-host', 'test configuration only: whether this machine runs the compiler suites, read by vitest configs'],
   ['@apackdev/host/build/compiler-inputs', 'source-build tooling: captured pack input facts and native replay, never a pack runtime API'],

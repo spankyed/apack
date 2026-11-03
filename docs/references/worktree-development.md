@@ -43,7 +43,7 @@ npm run session:check -- session/settings-help session/lifecycle
 ```
 
 This pins the current HEAD and each named branch to exact commits, creates a detached integration
-worktree, merges them and installs and builds its own dependencies and app. It runs `npm run chain -- --strict --all
+worktree, merges them and installs and builds its own dependencies and app. Its expensive steps queue behind any other chain on this machine (`scripts/lib/machine-lock.ts`). It runs `npm run chain -- --strict --all
 --cores 2`. Your source branches, files and staging index remain unchanged.
 
 A merge conflict or failed check leaves the candidate available for inspection. A successful check

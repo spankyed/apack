@@ -4,9 +4,12 @@ import { createPackBuilder, type PackBuilder } from './build-process.ts';
 import { withBuildSignals } from './build-signals.ts';
 import { readValidManifest } from '../utils.ts';
 import { isPackInputPath, packInputWatchTargets, packInputsHash } from '@apackdev/host/build/pack-inputs';
-import { reloadPack, type AppPlace, type DevDelivery } from './dev-reload.ts';
-import { compilerWatchPaths, createCompilerWatchTools, compilerWatchTargets, createCompilerWatchMatcher, mergeCompilerWatchPaths, additionalCompilerObservations, type CompilerWatchPaths } from './compiler-watch.ts';
+import { reloadPack, type AppPlace, type DevDelivery } from '../app/app-api.ts';
+import { compilerWatchPaths, createCompilerWatchTools, compilerWatchTargets, createCompilerWatchMatcher, mergeCompilerWatchPaths, additionalCompilerObservations, packageInputWatchPaths, type CompilerWatchPaths } from './compiler-watch.ts';
+import { checkoutBuildUnits } from './checkout-packages.ts';
+import { cliPackageDirectory } from './tool-identity.ts';
 import { createFrontendWatcher, type FrontendInputSnapshot } from './frontend-watch.ts';
+import { createInputSubscriptions, type InputSubscription } from './input-subscriptions.ts';
 import type { BuildWatchInputs } from './build-watch-inputs.ts';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { readPackBuildInputs } from '@apackdev/host/build/pack-build-inputs';
@@ -25,18 +28,8 @@ export interface WatchOptions {
    */
   readonly onBuilt?: () => Promise<DevDelivery | void>;
   /** A dev session owns its shared compiler; standalone watchers own their builder. */
-  readonly builder?: Pick<PackBuilder, 'build' | 'subscribeFrontendInputs' | 'isFrontendCurrent'>;
+  readonly builder?: Pick<PackBuilder, 'build' | 'ensurePackages' | 'subscribeFrontendInputs' | 'isFrontendCurrent'>;
   readonly buildArgs?: readonly string[];
-}
-
-/**
- * Whether a watcher's error is only a directory below `directory` going away while Node's recursive watch scanned it, as
- * a build's temporary output does. Node reports that and goes on watching, and the removal is an event of its own, so it
- * is no reason to stop. The watched directory itself going away is.
- */
-export function isVanishedSubdirectory(error: unknown, directory: string): boolean {
-  const { code, path: scanned } = error as NodeJS.ErrnoException;
-  return code === 'ENOENT' && typeof scanned === 'string' && scanned !== directory && fs.existsSync(directory);
 }
 
 /**
@@ -85,7 +78,11 @@ export function coalescingRunner(run: () => Promise<void>, delayMs: number = DEB
   };
 }
 
-/** Every edit publishes a complete build. done reports terminal failure after cleanup; close drains disposal. */
+/**
+ * An edit that moves what the pack builds against publishes one complete build; an edit that moves only a package
+ * the pack doesn't build against refreshes that package's `dist` and publishes nothing. done reports terminal failure
+ * after cleanup; close drains disposal.
+ */
 export async function startPackBuildWatcher(root: string, options: WatchOptions = {}): Promise<{ close: () => Promise<void>; readonly done: Promise<void> }> {
   const controller = new AbortController();
   const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
@@ -126,8 +123,11 @@ export async function startPackBuildWatcher(root: string, options: WatchOptions 
   };
   const dataDirectory = options.place?.userDataDir ?? (options.place ? resolveAppEnvironment(options.place).userDataDir : undefined);
   const frontend = createFrontendWatcher(root, dataDirectory,
-    file => request(path.relative(root, file)), fail);
+    file => request(path.relative(root, file)), fail, checkoutBuildUnits([root, cliPackageDirectory()]).flatMap(unit => unit.outputs), recheck);
   const publish = async (): Promise<boolean> => {
+    // First, so the signature below already includes what this rewrites and the build isn't followed by a second
+    await builder.ensurePackages();
+    signal.throwIfAborted();
     const compiler = refreshInputs();
     const authored = packInputsHash(root) + JSON.stringify(compiler.authored);
     const beforeFrontend = frontend.snapshot();
@@ -141,7 +141,7 @@ export async function startPackBuildWatcher(root: string, options: WatchOptions 
     let observed: CompilerWatchPaths = new Map();
     let nativeReported = false;
     try {
-      await builder.build({ args: options.buildArgs, signal, onInputs: async inputs => {
+      await builder.build({ args: options.buildArgs, signal, packagesEnsured: true, onInputs: async inputs => {
         if (inputs.probes) { nativeReported = true; observed = mergeCompilerWatchPaths(observed, new Map(inputs.probes)); return; }
         reported = { inputs, snapshot: await frontend.observe(inputs) };
       } });
@@ -199,57 +199,56 @@ export async function startPackBuildWatcher(root: string, options: WatchOptions 
     if (ready) runs.request();
     else pending = true;
   };
-  type InputWatcher = Pick<fs.FSWatcher, 'close'>;
-  const subscriptions = new Set<InputWatcher>();
-  let links: InputWatcher[] = [];
-  function watchDirectory(directory: string, recursive: boolean, receive: fs.WatchListener<string>): InputWatcher {
-    const refused = (error: unknown) => new Error(`Cannot watch pack input "${directory}": ${String(error)}`, { cause: error });
-    try {
-      let subscription: InputWatcher;
-      const native = fs.watch(directory, { recursive }, (event, file) => {
-        if (!closed && subscriptions.has(subscription)) receive(event, file);
-      });
-      subscription = { close() { if (subscriptions.delete(subscription)) native.close(); } };
-      subscriptions.add(subscription);
-      native.on('error', error => {
-        if (closed || !subscriptions.has(subscription) || isVanishedSubdirectory(error, directory)) return;
-        fail(refused(error));
-      });
-      return subscription;
-    } catch (error) {
-      const failure = refused(error);
-      fail(failure);
-      throw failure;
-    }
+  // A change to what is held may have lost events on every watch, so one more pass compares the inputs themselves.
+  // That pass holds the same set and so ends here, whatever it finds.
+  function recheck() {
+    if (closed) return;
+    if (ready) runs.request();
+    else pending = true;
   }
+  const inputs = createInputSubscriptions((directory, error) => {
+    const refused = new Error(`Cannot watch pack input "${directory}": ${String(error)}`, { cause: error });
+    fail(refused);
+    return refused;
+  });
+  const rootSubscription: InputSubscription = {
+    key: 'root', directory: root, recursive: true,
+    // The authored root stays subscribed across replacement of linked/compiler inputs.
+    receive(event, filename) {
+      if (closed) return;
+      tools.changed(filename ? path.resolve(root, filename) : undefined, event);
+      if (!filename || isPackInputPath(filename)) request(filename ?? 'authored inputs');
+      else if (matchesCompilerInput(path.resolve(root, filename), event)) request(filename);
+    },
+  };
   function refreshInputs(replace = false) {
-    const next: InputWatcher[] = [];
-    const compiler = compilerWatchPaths(root, tools, mergeCompilerWatchPaths(observedPaths, frontendPaths));
+    const compiler = compilerWatchPaths(root, tools, mergeCompilerWatchPaths(mergeCompilerWatchPaths(observedPaths, frontendPaths),
+      packageInputWatchPaths(checkoutBuildUnits([root, cliPackageDirectory()]))));
     const paths = replace && compiler.complete ? compiler.paths : mergeCompilerWatchPaths(compilerPaths, compiler.paths);
     const authored = packInputWatchTargets(root);
-    try {
-      for (const target of authored.slice(1)) {
-        next.push(watchDirectory(target.directory, true, (_event, filename) => {
-          if (target.child && filename && filename !== target.child) return;
+    const wanted: InputSubscription[] = [rootSubscription];
+    for (const target of authored.slice(1)) {
+      wanted.push({
+        key: `authored:${target.directory}:${target.child ?? ''}`, directory: target.directory, recursive: true,
+        receive(_event, filename) {
+          if (closed || (target.child && filename && filename !== target.child)) return;
           const relative = target.child ? target.relative : path.join(target.relative, filename ?? '');
           if (isPackInputPath(relative)) request(relative);
-        }));
-      }
-      for (const [directory, target] of compilerWatchTargets(paths, root)) {
-        const matches = createCompilerWatchMatcher(target.paths);
-        next.push(watchDirectory(directory, target.recursive, (event, filename) => {
-          if (!filename || matches(path.resolve(directory, filename), event)) {
-            tools.changed(filename ? path.resolve(directory, filename) : undefined, event);
-            request(path.relative(root, path.resolve(directory, filename ?? '')));
-          }
-        }));
-      }
-    } catch (error) {
-      for (const watch of next) watch.close();
-      throw error;
+        },
+      });
     }
-    for (const watch of links) watch.close();
-    links = next;
+    for (const [directory, target] of compilerWatchTargets(paths, root)) {
+      const matches = createCompilerWatchMatcher(target.paths);
+      wanted.push({
+        key: `compiler:${directory}:${target.recursive}`, directory, recursive: target.recursive,
+        receive(event, filename) {
+          if (closed || (filename && !matches(path.resolve(directory, filename), event))) return;
+          tools.changed(filename ? path.resolve(directory, filename) : undefined, event);
+          request(path.relative(root, path.resolve(directory, filename ?? '')));
+        },
+      });
+    }
+    if (inputs.hold(wanted)) recheck();
     compilerPaths = paths;
     matchesCompilerInput = createCompilerWatchMatcher(paths);
     return { ...compiler, authored };
@@ -259,7 +258,7 @@ export async function startPackBuildWatcher(root: string, options: WatchOptions 
       signal.removeEventListener('abort', abort);
       closed = true;
       const cleanup: Array<() => unknown> = [
-        ...[...subscriptions].map(watcher => () => watcher.close()),
+        () => inputs.close(),
         () => unsubscribe?.(), () => frontend.close(), () => runs.close(), () => ownedBuilder?.close(),
       ];
       stopping = Promise.allSettled(cleanup.map(stop => Promise.resolve().then(stop))).then(results => {
@@ -282,12 +281,7 @@ export async function startPackBuildWatcher(root: string, options: WatchOptions 
   signal.addEventListener('abort', abort, { once: true });
   try {
     signal.throwIfAborted();
-    // The authored root stays subscribed across replacement of linked/compiler inputs.
-    watchDirectory(root, true, (event, filename) => {
-      tools.changed(filename ? path.resolve(root, filename) : undefined, event);
-      if (!filename || isPackInputPath(filename)) request(filename ?? 'authored inputs');
-      else if (matchesCompilerInput(path.resolve(root, filename), event)) request(filename);
-    });
+    inputs.hold([rootSubscription]);
     unsubscribe = builder.subscribeFrontendInputs(({ paths, changed }) => {
       if (closed) return;
       if (paths.size !== frontendPaths.size || [...paths].some(([file, kind]) => frontendPaths.get(file) !== kind)) {

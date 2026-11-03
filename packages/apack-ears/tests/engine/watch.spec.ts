@@ -2,8 +2,12 @@
 // changed, after the writing code has returned, never inside a write. The guarantee that matters most — a watch never
 // misses a change, whatever writes it — is the model-based harness's (model-based.spec.ts); these cases are the
 // contract's edges, each with a reading of how many times a read ran where that is the point.
+import { execFile } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { promisify } from 'node:util';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { engine, type Id } from './helpers.ts';
+import { engine, NAMES, type Id } from './helpers.ts';
+import { freshEngine } from './engine-under-test.ts';
 import type { EngineUnderTest } from './engine-under-test.ts';
 import { createConnection, runCommitted, type Commit, type EarsDatabase } from '../../src/database.ts';
 
@@ -25,6 +29,179 @@ function watched<T>(read: () => T) {
 const settled = () => e.admin.watchesSettled();
 /** Every task's title, in creation order */
 const titles = () => e.query('Task').ids().map((id) => e.getAttr(id, 'title'));
+
+/** Commits to the database from a process of its own, as a tool killed before telling anyone leaves it */
+const commitElsewhere = async (database: EarsDatabase, create?: string) => {
+  const requireFromEars = createRequire(createRequire(import.meta.url).resolve('@apackdev/ears/package.json'));
+  const elmdb = requireFromEars.resolve('elmdb');
+  const msgpackr = requireFromEars.resolve('msgpackr');
+  const [, type, id] = create?.match(/create\('(\w+)', '([\w-]+)'\)/) ?? [];
+  await promisify(execFile)(process.execPath, ['-e', [
+    `const { Database } = require(${JSON.stringify(elmdb)});`,
+    `const { Packr } = require(${JSON.stringify(msgpackr)});`,
+    'const database = Database.open(process.argv[1]);',
+    type
+      ? `database.write(new Packr({ useRecords: false }).pack({ ops: [{ op: 'create', type: ${JSON.stringify(type)}, id: ${JSON.stringify(id)}, fields: {} }], now: 1 }));`
+      : 'database.begin().commit(false);',
+    'database.close();',
+  ].join('\n'), database.path]);
+};
+
+it('runs again when told another process committed, which it cannot hear for itself', async () => {
+  let database: EarsDatabase | undefined;
+  const told = freshEngine({ ...NAMES, wrap: (held) => (database = held) });
+  const seen: string[][] = [];
+  const watching = told.watch(() => told.query('Task').ids().map(String), { next: (value) => { seen.push(value); } });
+  await told.admin.watchesSettled();
+  expect(seen).toEqual([[]]);
+
+  // Nothing here dispatches it
+  await commitElsewhere(database!, "create('Task', 'Task-elsewhere')");
+  await told.admin.watchesSettled();
+  expect(seen, 'nobody has said so yet').toEqual([[]]);
+
+  told.admin.changedElsewhere();
+  await told.admin.watchesSettled();
+  expect(seen).toEqual([[], ['Task-elsewhere']]);
+  watching.stop();
+});
+
+describe('a commit from another process', () => {
+  it('wakes a listener with nothing committed here, and the watches run when it asks', async () => {
+    let database: EarsDatabase | undefined;
+    const found = freshEngine({ ...NAMES, wrap: (held) => (database = held) });
+    let runs = 0;
+    let told = () => {};
+    const woken = new Promise<void>((resolve) => { told = resolve; });
+    found.admin.onFoundElsewhere(() => told());
+    const watching = found.watch(() => { runs++; return found.query('Project').count(); }, { next: () => {} });
+    await found.admin.watchesSettled();
+    expect(runs).toBe(1);
+
+    await commitElsewhere(database!);
+    await woken;
+    expect(found.admin.changedElsewhere()).toBe(true);
+    await found.admin.watchesSettled();
+    expect(runs).toBe(2);
+    watching.stop();
+  });
+
+  it('is found at the next commit here when the wake never came', async () => {
+    let database: EarsDatabase | undefined;
+    const found = freshEngine({ ...NAMES, wrap: (held) => (database = held) });
+    await commitElsewhere(database!);
+    // Listening only now, so the other process's wake went to nobody
+    const told = new Promise<void>((resolve) => { found.admin.onFoundElsewhere(resolve); });
+    found.create('Task', { title: 'mine' });
+    await told;
+    expect(found.admin.changedElsewhere()).toBe(true);
+  });
+
+  it('is not found in a sequence this process skipped itself, as its index builder does', async () => {
+    let database: EarsDatabase | undefined;
+    const found = freshEngine({ ...NAMES, wrap: (held) => (database = held) });
+    let told = 0;
+    found.admin.onFoundElsewhere(() => { told++; });
+    // Another handle on the same database commits as this process does: under its origin, unheard here
+    createConnection(database!).write([{ op: 'create', type: 'Task', id: 'Task-mine-too', fields: { title: 'here' } }]);
+    found.create('Task', { title: 'mine' });
+    await Promise.resolve();
+    expect(told).toBe(0);
+  });
+
+  it('keeps the listener for the next commit here when the database cannot hear', async () => {
+    let database: EarsDatabase | undefined;
+    const found = freshEngine({ ...NAMES, wrap: (held) => (database = new Proxy(held, {
+      get(target, key) {
+        if (key === 'hearCommitsElsewhere') return () => { throw new Error('nothing may listen here'); };
+        const value = Reflect.get(target, key);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    })) });
+    let told = 0;
+    expect(() => found.admin.onFoundElsewhere(() => { told++; })).toThrow('nothing may listen here');
+    await commitElsewhere(database!);
+    found.create('Task', { title: 'mine' });
+    await Promise.resolve();
+    expect(told).toBe(1);
+    found.create('Task', { title: 'mine too' });
+    await Promise.resolve();
+    expect(told, 'said once').toBe(1);
+    expect(found.admin.changedElsewhere(), 'and answered when asked').toBe(true);
+    expect(found.admin.changedElsewhere()).toBe(false);
+  });
+
+  it('reads whether another process committed, skipping its own, and runs nothing if none did', async () => {
+    let database: EarsDatabase | undefined;
+    const reader = freshEngine({ ...NAMES, wrap: (held) => (database = held) });
+    let runs = 0;
+    const watching = reader.watch(() => { runs++; return reader.query('Project').count(); }, { next: () => {} });
+    await reader.admin.watchesSettled();
+
+    reader.create('Task', { title: 'mine' });
+    await reader.admin.watchesSettled();
+    expect(reader.admin.changedElsewhere(), 'its own commits are not news').toBe(false);
+    await reader.admin.watchesSettled();
+    expect(runs, 'and nothing ran').toBe(1);
+
+    await commitElsewhere(database!, "create('Task', 'Task-elsewhere')");
+    expect(reader.admin.changedElsewhere()).toBe(true);
+    await reader.admin.watchesSettled();
+    expect(runs).toBe(2);
+    expect(reader.admin.changedElsewhere(), 'read once').toBe(false);
+    watching.stop();
+  });
+
+});
+
+describe('another process replacing every row', () => {
+  const resetElsewhere = async (database: EarsDatabase) => {
+    const elmdb = createRequire(createRequire(import.meta.url).resolve('@apackdev/ears/package.json')).resolve('elmdb');
+    await promisify(execFile)(process.execPath, ['-e', [
+      `const { Database } = require(${JSON.stringify(elmdb)});`,
+      'const database = Database.open(process.argv[1]);',
+      'database.reset();',
+      'database.close();',
+    ].join('\n'), database.path]);
+  };
+
+  it('refuses writes until adopted, saying so even without a wake, and runs every watch when it is', async () => {
+    let database: EarsDatabase | undefined;
+    const held = freshEngine({ ...NAMES, wrap: (given) => (database = new Proxy(given, {
+      get(target, key) {
+        if (key === 'hearCommitsElsewhere') return () => {};
+        const value = Reflect.get(target, key);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    })) });
+    let told = 0;
+    held.admin.onFoundElsewhere(() => { told++; });
+    held.create('Task', { title: 'before' });
+    let runs = 0;
+    const watching = held.watch(() => { runs++; return held.query('Task').count(); }, { next: () => {} });
+    await held.admin.watchesSettled();
+    expect(runs).toBe(1);
+
+    await resetElsewhere(database!);
+    const epoch = held.admin.replacedElsewhere();
+    expect(epoch).toBeTypeOf('number');
+    expect(held.query('Task').count(), 'reads read what is there now').toBe(0);
+    expect(() => held.create('Task', { title: 'plain' })).toThrow(expect.objectContaining({ code: 'DATA_REPLACED' }));
+    expect(() => held.transact(() => { held.create('Task', { title: 'in a unit' }); })).toThrow(expect.objectContaining({ code: 'DATA_REPLACED' }));
+    await Promise.resolve();
+    expect(told).toBe(2);
+
+    expect(held.admin.adoptReplacement(epoch! + 1), 'not the replacement that landed').toBe(false);
+    expect(held.admin.adoptReplacement(epoch!)).toBe(true);
+    await held.admin.watchesSettled();
+    expect(runs).toBe(2);
+    expect(held.admin.replacedElsewhere()).toBeUndefined();
+    expect(held.admin.changedElsewhere(), 'adopting moved past it').toBe(false);
+    held.create('Task', { title: 'after' });
+    expect(held.query('Task').count()).toBe(1);
+    watching.stop();
+  });
+});
 
 describe('watch', () => {
   it('delivers the first result after the call returns, not during it', async () => {

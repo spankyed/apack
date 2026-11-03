@@ -24,7 +24,7 @@ import { replaceDir } from '../replace-dir.ts';
 import { parseSnapshot, parseContentIndex, contentFile, CONTENT_INDEX_FILE, _snapshotFormatMismatch, PACK_SNAPSHOT_FORMAT, type ContentIndex, type PackManifest, type PackSnapshot, type SnapshotFormatMismatch } from '@apackdev/sdk/build';
 import type { PackRegistry } from './registry.ts';
 import { PACK_LAYOUT, PACK_LAYOUT_VERSION, type PackIntegrity } from './layout-paths.ts';
-import { readPackIntegrity, packBuildRevision, verifyPack, sha256File, packFileHashes, listPackFiles } from './assets.ts';
+import { readPackIntegrity, packBuildRevision, verifyPack, readVerifiedPackFiles, sha256File, packFileHashes, listPackFiles } from './assets.ts';
 
 export { PACK_LAYOUT, PACK_LAYOUT_VERSION, type PackIntegrity } from './layout-paths.ts';
 export { readPackIntegrity, packBuildRevision, readPackAsset, verifyPack, sha256File, packFileHashes } from './assets.ts';
@@ -139,12 +139,13 @@ export function stagedFileHashes(integrity: PackIntegrity): Record<string, strin
 
 /** Capture a verified source declaration and its published files without executing or staging it. */
 export function readBuiltPackSource(packRoot: string): { snapshot: PackSnapshot; files: Record<string, string>; sourceRevision: string } {
-  const built = readBuiltPackIntegrity(packRoot, PACK_SNAPSHOT_FORMAT);
-  const build = readPackBuild(path.join(packRoot, 'dist'));
-  if (!isDeepStrictEqual(built, build.integrity)) {
-    throw new Error('Built build changed while reading its source declarations; retry with the complete build');
+  const dist = builtPackDirectory(packRoot);
+  const manifest = JSON.parse(fs.readFileSync(path.join(packRoot, PACK_LAYOUT.manifest), 'utf8'));
+  const build = readPackBuild(dist);
+  if (sha256(JSON.stringify(manifest, null, 2) + '\n') !== build.integrity.files[PACK_LAYOUT.manifest]) {
+    throw new Error('Source declarations do not match the sealed build; rebuild the complete pack');
   }
-  const files = stagedFileHashes(built);
+  const files = stagedFileHashes(build.integrity);
   return { snapshot: build.snapshot, files, sourceRevision: shippedPackRevision(files) };
 }
 
@@ -155,12 +156,16 @@ export function shippedPackRevision(files: Readonly<Record<string, string>>): st
   })).digest('hex');
 }
 
-function readBuiltPackIntegrity(packRoot: string, packFormat?: number): PackIntegrity {
+function builtPackDirectory(packRoot: string): string {
   if (!hasBuiltPackSections(packRoot)) {
     throw new Error(`Pack at ${packRoot} is not built (missing dist/${PACK_LAYOUT.runtimeEntry} or dist/${PACK_LAYOUT.snapshot}). Run "apack pack build" first.`);
   }
+  return path.join(packRoot, 'dist');
+}
+
+function readBuiltPackIntegrity(packRoot: string, packFormat?: number): PackIntegrity {
+  const dist = builtPackDirectory(packRoot);
   const manifest: PackManifest = JSON.parse(fs.readFileSync(path.join(packRoot, PACK_LAYOUT.manifest), 'utf8'));
-  const dist = path.join(packRoot, 'dist');
   const { bytes, data } = readSnapshotFile(dist);
   // A foreign format remains opaque: its matching host owns the grammar.
   if (packFormat !== undefined) {
@@ -212,21 +217,19 @@ export function stagePack(
 
 /** Read installed declarations without loading code; refuse changed, missing or additional files. */
 export function readPackBuild(dir: string): PackBuild {
-  const { bytes: snapshotBytes, data } = readSnapshotFile(dir);
-  const manifestBytes = fs.readFileSync(path.join(dir, PACK_LAYOUT.manifest));
-  const snapshot = checkedSnapshot(data, JSON.parse(manifestBytes.toString('utf8')));
-  const integrity = verifyPack(dir);
+  const indexFile = `${PACK_LAYOUT.contentDir}/${CONTENT_INDEX_FILE}`;
+  const { integrity, files } = readVerifiedPackFiles(dir, [PACK_LAYOUT.snapshot, PACK_LAYOUT.manifest, indexFile]);
+  const snapshotBytes = files.get(PACK_LAYOUT.snapshot);
+  if (!snapshotBytes) throw new Error(`Pack is missing verified ${PACK_LAYOUT.snapshot}`);
+  const snapshot = checkedSnapshot(JSON.parse(snapshotBytes.toString('utf8')), JSON.parse(files.get(PACK_LAYOUT.manifest)!.toString('utf8')));
   assertRequiredEntries(snapshot.manifest, integrity);
-  const content = readCompiledContent(dir, snapshot.manifest, integrity);
-  for (const [file, bytes] of [[PACK_LAYOUT.snapshot, snapshotBytes], [PACK_LAYOUT.manifest, manifestBytes]] as const) {
-    if (sha256(bytes) !== integrity.files[file]) throw new Error('Captured declarations do not match the verified build; retry with the complete pack');
-  }
+  const content = readCompiledContent(dir, snapshot.manifest, integrity, files.get(indexFile));
   const revision = packBuildRevision(integrity);
   return { snapshot, integrity, revision, ...(content && { content }) };
 }
 
 /** Capture indexed data against the same receipt as its owning declarations, without loading compilers. */
-function readCompiledContent(dir: string, manifest: PackManifest, integrity: PackIntegrity): ContentIndex | undefined {
+function readCompiledContent(dir: string, manifest: PackManifest, integrity: PackIntegrity, verifiedBytes?: Buffer): ContentIndex | undefined {
   const sources = manifest.content?.sources ?? {};
   const datasets = manifest.content?.datasets ?? {};
   const indexFile = `${PACK_LAYOUT.contentDir}/${CONTENT_INDEX_FILE}`;
@@ -236,8 +239,8 @@ function readCompiledContent(dir: string, manifest: PackManifest, integrity: Pac
     }
     return;
   }
-  const bytes = fs.readFileSync(path.join(dir, indexFile));
-  if (sha256(bytes) !== integrity.files[indexFile]) throw new Error(`Captured content index does not match the verified build for "${manifest.id}"`);
+  const bytes = verifiedBytes ?? fs.readFileSync(path.join(dir, indexFile));
+  if (!verifiedBytes && sha256(bytes) !== integrity.files[indexFile]) throw new Error(`Captured content index does not match the verified build for "${manifest.id}"`);
   const index = parseContentIndex(JSON.parse(bytes.toString('utf8')));
   if (index.packId !== manifest.id) throw new Error(`Content index belongs to "${index.packId}", not "${manifest.id}"`);
   const expected = new Map<string, boolean>();

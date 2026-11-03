@@ -122,6 +122,8 @@ const EntityDeclarationSchema = z.object({
   substrings: z.array(z.string().regex(_FIELD_NAME_PATTERN, 'Must be a lowerCamelCase field name')).min(1)
     .refine((fields) => new Set(fields).size === fields.length, 'Must not repeat a field').readonly()
     .describe('A trigram index over these fields: what query(type).containing(...) and matching(...) find, as text is written (error messages, ids, paths, code), unranked. A shaped entity\'s fields must be ones its shape declares, holding a string or a list of strings.').optional(),
+  changeOrder: z.boolean()
+    .describe('Keep this entity\'s rows in the order of the commits that last wrote them, which a projection deriving from it reads (changedSince). A write to it costs about a fifth more, so set it only for an entity a projection derives from; a projection over an entity without it is refused when its pack registers.').optional(),
 }).strict().superRefine((entity, ctx) => {
   // Text is read from a row's own fields, never the engine's
   const reserved: readonly string[] = RESERVED_ATTRIBUTES;
@@ -775,6 +777,8 @@ export const FeatureEntrySchema = z.object({
     .describe('Repository objects. Keys are repository names on `repository` (from #generated/repository), values are "path#exportName" of the object in a source file.').optional(),
   views: ExportTargetSchema
     .describe('The feature\'s views: "path#exportName" of the object `defineViews` returns, from @apackdev/sdk/framework. A window subscribes to one with `useView` from #generated/fe; each is a pure read of the engine, run again after every commit that could change its result.').optional(),
+  projections: ExportTargetSchema
+    .describe('The feature\'s projections: "path#exportName" of the object `defineProjections` returns, from @apackdev/sdk/framework.').optional(),
   references: ReferencesSchema.describe('Reference identities and presentation, with reactive item-provider exports. Entity opening is declared separately by the destination surface contract.').optional(),
 }).strict();
 

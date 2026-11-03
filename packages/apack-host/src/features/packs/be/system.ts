@@ -116,16 +116,27 @@ function toInstalledPackSummaries(registry: PackRegistry): InstalledPackSummary[
   return packs;
 }
 
-/** A list refresh cannot undo a completed operation; report refusal and retain accepted declarations. */
-function emitPacksList(registry: PackRegistry) {
-  try { registry.refreshCatalog(resolveAppEnvironment().packsDir); }
-  catch (error) { reportError({ source: 'packs', operation: 'refreshPacksList', severity: 'error', error: new Error(errorMessage(error)) }); }
+/**
+ * Sends the Packs surface the list as the catalog holds it. What publishing uses: it runs after every fact that could
+ * change a system's data, and none but a pack changing can change this, which keeps the catalog current itself.
+ */
+function publishPacksList(registry: PackRegistry) {
   const catalog = registry.catalog.getSnapshot();
   broadcastToSurface('packs', { type: 'PACKS_LIST' as const, packs: toInstalledPackSummaries(registry),
     appPackSources: catalog.appPackSources.map(source => ({ id: source.id, name: source.snapshot.manifest.name,
       version: source.snapshot.manifest.version, sourceRevision: source.sourceRevision })),
     appPackSourceProblems: catalog.appPackSourceProblems.map(({ id, message }) => ({ id, message })),
   });
+}
+
+/**
+ * Reads the packs directory again, then sends the list: for someone asking, and after this system changes a pack. A
+ * refresh that fails can't undo an operation that completed, so it is reported and the accepted declarations kept
+ */
+function emitPacksList(registry: PackRegistry) {
+  try { registry.refreshCatalog(resolveAppEnvironment().packsDir); }
+  catch (error) { reportError({ source: 'packs', operation: 'refreshPacksList', severity: 'error', error: new Error(errorMessage(error)) }); }
+  publishPacksList(registry);
 }
 
 /** The host `packs` system, installing, updating and toggling the packs in `registry` */
@@ -186,6 +197,9 @@ export function createPacksSystem(registry: PackRegistry) {
 
       sendPacksList: () => {
         emitPacksList(registry);
+      },
+      publishPacksList: () => {
+        publishPacksList(registry);
       },
 
       /**
@@ -667,7 +681,7 @@ export function createPacksSystem(registry: PackRegistry) {
       idle: {
         on: {
           SEND_STATE: {
-            actions: 'sendPacksList',
+            actions: 'publishPacksList',
           },
           GET_INSTALLED_PACKS: {
             actions: 'sendPacksList',

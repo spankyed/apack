@@ -7,6 +7,7 @@ import { _RUN_HISTORY_SCHEMA } from '@apackdev/sdk/services';
 import { resolveAppEnvironment, type AppEnv } from '@apackdev/sdk/env';
 import type { _AppDataPaths } from '@apackdev/sdk/utils';
 import { findAppDataPaths } from './layout.ts';
+import { refuseInvalidSettings } from './settings-rule.ts';
 import { engineSchemaOf, readInstalledSchema, type DatabaseSchema, type InstalledSchema } from './schema.ts';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { createLogger } from '@apackdev/sdk/logger';
@@ -77,6 +78,15 @@ export function openRunHistory(dir: string, { readOnly }: { readOnly?: boolean }
   }
 }
 
+/**
+ * Empties the run history at `dir` where it is, beside an app that may hold it open: opened as it stands, declaring no
+ * schema and moving nothing aside, since either would change it under that app
+ */
+export function resetRunHistoryInPlace(dir: string): void {
+  const database = openDatabase({ path: dir });
+  try { database.reset(); } finally { database.close(); }
+}
+
 /** An app's database opened outside the app */
 export interface AppDatabase {
   userDataDir: string;
@@ -121,6 +131,7 @@ export async function openAppDatabase({ env, userDataDir, readOnly = false, sche
     throw new Error(`The database in ${userDataDir} holds no schema yet: start apack on it once, which declares its packs', then run this again.`);
   }
   const engine = createEarsEngine({ database });
+  if (!readOnly) engine.admin.beforeCommit(refuseInvalidSettings(engine, context));
   // Bound so the SDK's engine operations (`@apackdev/sdk/ears`) read this database until `close()`, which
   // puts back whatever was bound before rather than leaving none. `apack db`, the one caller today, has no
   // engine of its own, so it gets none back; what this is for is a caller that does — a test file, or a command

@@ -12,6 +12,7 @@ import type { Component } from 'vue';
 import type { DeepPartial } from 'ai';
 import { Ears } from '@apackdev/ears';
 import { EARS as EARS_2 } from '@apackdev/ears';
+import type { EarsEngine } from '@apackdev/ears';
 import type { EditorState } from '@tiptap/pm/state';
 import type { embed } from 'ai';
 import type { embedMany } from 'ai';
@@ -131,6 +132,9 @@ export interface HostRuntimeServices {
 }
 
 // @internal
+export function _installProjections(engine: EarsEngine): ProjectionRunner;
+
+// @internal
 export function _isFeHostBound(): boolean;
 
 // @internal
@@ -159,6 +163,10 @@ export interface PackRegistryView extends PackExtensionsView {
     help(): HelpCatalog;
     // (undocumented)
     onCatalogChanged(listener: () => void): () => void;
+    projections(): ReadonlyArray<{
+        name: string;
+        projection: ProjectionDefinition;
+    }>;
     repository(name: string): unknown;
     // (undocumented)
     settingsCatalog(): SettingsCatalog;
@@ -242,6 +250,11 @@ export interface _PerformanceProfiles {
     stoppedBy: 'owner' | 'limit';
     // (undocumented)
     windowLimitMs: number;
+}
+
+// @public
+export interface ProjectionRunner {
+    catchUp(): Promise<void>;
 }
 
 // @internal

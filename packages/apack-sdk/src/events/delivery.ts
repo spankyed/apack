@@ -44,7 +44,7 @@
  *    behaviour, and it is a decision rather than a limitation: see that file and `@apackdev/host/bus`'s
  *    `delivery.ts` for what the store cost and what dropping it bought.
  * 2. **A lifecycle or publish path, which opens no delivery at all** — no `await` need be involved. The bus
- *    pushes `CLIENT_CONNECTED`, `SEND_STATE`, `PACK_CHANGED` and `DATA_REPLACED` with a bare `actor.send`
+ *    pushes `CLIENT_CONNECTED`, `SEND_STATE`, `PACK_CHANGED`, `DATA_REPLACED` and `DATA_CHANGED_ELSEWHERE` with a bare `actor.send`
  *    (`sendToRunning` and `askToPublish`, `@apackdev/host/bus`'s `machine.ts`), as the host does for an early
  *    system's pair. That is right rather than missed: those are facts with nobody waiting on them, and
  *    `SEND_STATE` wants a broadcast and not an answer. A handler of one is handed no `reply`, which is what

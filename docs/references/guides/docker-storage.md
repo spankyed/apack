@@ -21,6 +21,16 @@ explicit `APACK_COMPILER_STORE` overrides remain supported. While holding the wo
 the runner clears that default store's old lock/user records because container hostnames and PIDs
 change between runs. Capture contents, byte verification and normal pruning remain unchanged.
 
+On slow storage, `npm run test:linux -- --compiler-scratch <command> [args...]` puts compiler
+captures in a separate, executable 2 GiB tmpfs for that container. This avoids small-file reads from
+the external disk when verifying the captured compiler. Every byte is still verified; captures are
+discarded when the container exits. The flag explicitly overrides `APACK_COMPILER_STORE` for that run.
+Its memory counts against the existing 6 GiB limit. App profiles and `/tmp` remain disk-backed unless
+`--native-scratch` is also selected. Do not use native scratch for storage performance measurements.
+The [external-drive diagnosis](../../archive/references/evidence/linux-compiler-cache-2026-11-04.json)
+records the timed-out disk-cache run and successful build with compiler scratch; those diagnostic
+timings are not application-performance measurements.
+
 ## Native test scratch
 
 The maintained `npm run test:linux -- npm run test:native` invocation mounts executable `/tmp` as

@@ -16,6 +16,8 @@ export interface PackEntityDeclaration {
   readonly embed?: PackEmbedDeclaration;
   /** Its trigram index: the fields `containing` and `matching` read */
   readonly substrings?: readonly string[];
+  /** Whether the database keeps its rows in the order of the commits that last wrote them, which a projection reads */
+  readonly changeOrder?: boolean;
 }
 
 /** A vector index as a manifest declares it: the engine's `EmbedDeclaration`, its model one `services.inference` runs */
@@ -76,6 +78,8 @@ export interface _PackEntityDeclaration {
   embed?: EmbedDeclaration;
   /** The fields its trigram index reads, when its entry declares one */
   substrings?: readonly string[];
+  /** Kept in change order, when its entry says so */
+  changeOrder?: true;
 }
 
 /**
@@ -99,7 +103,7 @@ export function _packEntities(declaration: PackDataDeclarations): _PackEntityDec
     for (const [name, entry] of Object.entries(block?.entities ?? {})) {
       const previous = result.get(name);
       if (previous) throw new Error(`Entity "${name}" is declared by both "${previous.owner}" and "${owner}"`);
-      const { shape, shortCode, indexes, search, embed, substrings } = entry ?? {};
+      const { shape, shortCode, indexes, search, embed, substrings, changeOrder } = entry ?? {};
       if (shortCode !== undefined) {
         if (!_SHORT_CODE_PATTERN.test(shortCode)) throw new Error(`The short code prefix of "${name}" is "${shortCode}": a prefix is three uppercase letters`);
         const taken = prefixOwners.get(shortCode);
@@ -109,7 +113,7 @@ export function _packEntities(declaration: PackDataDeclarations): _PackEntityDec
       result.set(name, {
         name, owner, shape: shape ?? null,
         ...(shortCode !== undefined && { shortCode }), ...(indexes?.length && { indexes }), ...(search && { search }), ...(embed && { embed }),
-        ...(substrings?.length && { substrings }),
+        ...(substrings?.length && { substrings }), ...(changeOrder === true && { changeOrder: true as const }),
       });
     }
   }

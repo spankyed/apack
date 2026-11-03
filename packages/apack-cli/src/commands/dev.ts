@@ -10,7 +10,7 @@ import {
   debugPortArgsFor, lastAttachedAt, publishSession, readDevToolsPort, readSession, startedByFromEnv,
   type DevSession,
 } from '@apackdev/host/dev-session';
-import { installPackInApp, type AppPlace, type DevDelivery } from '../build/dev-reload.ts';
+import { installPackInApp, type AppPlace, type DevDelivery } from '../app/app-api.ts';
 import { startPackBuildWatcher } from '../build/watch.ts';
 import { cliDirs, parseHostFlags, resolvePackHost, resolveRepositoryHost, packagedHostChannel, hostLabel, setHostHandoff, type PackHost } from '../app/pack-host';
 import { endAppHolding, profileFor, parseProfileFlags, removeProfile, PROFILE_USAGE } from '../app/profiles';

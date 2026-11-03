@@ -6,7 +6,7 @@ import type { EARS } from './entities.ts';
 import type { EARSRuntimeDeps, Embedding, PendingEmbeddings, RelationEdge, RelationPatch } from './runtime.ts';
 import type { CallCounting } from './calls.ts';
 import type { EarsOperationObserver } from './observation.ts';
-import { createConnection, runCommitted, type Answer, type SchemaChange, type UnitOptions } from './database.ts';
+import { createConnection, runCommitted, type Answer, type BeforeCommit, type ChangedEntities, type ChangedPosition, type PendingChanges, type SchemaChange, type UnitOptions } from './database.ts';
 import { createQuery, relationRow, type Query } from './query.ts';
 import { createWrites, type Create, type Upsert, type Write } from './write.ts';
 import { createNameChecks } from './names.ts';
@@ -53,6 +53,16 @@ export interface SchemaStats {
   roles: Record<string, number>;
 }
 
+/** What an engine holds, from what its database keeps as it writes: reads one key per name, so a watch can follow it */
+export interface DatabaseCatalog {
+  /** Each entity type with its live entities and the fields its entities have held. A field stays when its last value goes */
+  types: Array<{ name: string; count: number; fields: string[] }>;
+  /** Each relation kind with its relations */
+  relations: Array<{ kind: string; count: number }>;
+  /** The roles */
+  roles: string[];
+}
+
 /** An engine's operations — its queries, writes and transactions: what a program is handed */
 export interface Ears {
   /** Queries the engine, untyped (a pack's `#generated/ears` types it) */
@@ -80,7 +90,12 @@ export interface Ears {
   /** One field of the entity's row, read as `getRow` reads it (the trash included), or undefined when it holds none */
   getAttr(id: EARS.EntityId, field: EARS.AttrKind): EARS.AttributeValue | undefined;
   getRoles(id: EARS.EntityId): string[];
-  /** What the engine holds, keyed by the names its data holds: entities per type, attribute, relation and role use */
+  /** What the engine holds, cheaply and exactly: what a view or anything frequent reads */
+  catalog(): DatabaseCatalog;
+  /**
+   * What only a walk answers: values per field, entities per role, a kind's distinct ends, keyed by the names its data
+   * holds, the trash included. It reads every row and relation, so it is for a person asking, never a view or a hot path
+   */
   getSchemaStats(): SchemaStats;
   /** The relation's row — its id, kind, ends and info — or undefined when no relation has the id */
   getRelation(relId: EARS.RelationId): RelationRow | undefined;
@@ -125,6 +140,52 @@ export interface EarsAdmin {
    * the database staying open (elmdb's `replaceWith`); refused while a unit is open
    */
   replaceWith(source: string): void;
+  /**
+   * Another process committed to this database, and said so. Commits this engine didn't make dispatch no watch of its
+   * own (elmdb's tracked reads belong to one process), and what they wrote isn't known key by key, so every watch runs
+   * again, as after `clear` or `replaceWith`. If nothing else committed, as the database answers, nothing runs. Answers
+   * whether something did.
+   */
+  changedElsewhere(): boolean;
+  /** What the open unit has changed so far, which code running before it commits may need to act on; none outside a unit */
+  pendingChanges(): PendingChanges | undefined;
+  /**
+   * What of `types` changed after `from`, in the order of the commits that changed them, at most `limit`, with the
+   * entities destroyed since: read in the open unit, whose own writes are stamped only as it commits. A type answers
+   * only when its row rules have it keep a change order (`RowRules.changeOrder`); otherwise, or when what changed can't
+   * all be known, `complete` is false
+   */
+  changedSince(types: readonly string[], from: ChangedPosition, limit: number): ChangedEntities;
+  /** The sequence the open unit commits as, which what it writes is stamped with; none outside a unit */
+  nextSequence(): number | undefined;
+  /**
+   * The checkpoint `name`: a reader's place in what it has read, read in the open unit when there is one. A backup keeps
+   * it with the rows it describes; a dump leaves it out, and `clear` and `replaceWith` drop it
+   */
+  checkpoint(name: string): unknown;
+  /** Records `value` as the checkpoint `name` in the open unit, so it commits with the work it records or not at all */
+  setCheckpoint(name: string, value: unknown): void;
+  /** The epoch another process's replacement of every row moved the database to, when this engine hasn't adopted it. Until it does its writes are refused (`DATA_REPLACED`) and its reads read what's there now */
+  replacedElsewhere(): number | undefined;
+  /**
+   * Takes the replacement `replacedElsewhere` named as seen, so writes are taken again and every watch runs. False,
+   * adopting nothing, when another has landed since: the caller starts over from what is there now
+   */
+  adoptReplacement(epoch: number): boolean;
+  /**
+   * Sets what runs in every unit before it commits, so what it writes commits with what caused it. A write outside a unit
+   * that `hook.wants` runs in one of its own.
+   */
+  beforeCommit(hook: BeforeCommit): void;
+  /** Runs `fn` in a unit that what's set to run before a commit stays out of: for that code's own catching up */
+  transactWithoutHook<T>(fn: () => T): T;
+  /**
+   * Calls `listener` soon after another process commits, which `changedElsewhere` then answers. The database hears of
+   * one whose wake was lost at its own next commit, and of one that may not be news, so the answer can be false. Throws
+   * when this database can't hear of commits, keeping the listener: a commit here then asks, and calls it when one did.
+   * Returns the unregistration.
+   */
+  onFoundElsewhere(listener: () => void): () => void;
   /** Every entity's id, those in the trash included: a raw listing */
   getAllEntities(): EARS.EntityId[];
   /** Every id of a type, those in the trash included, whether or not the schema declares the type: a raw listing */
@@ -187,6 +248,9 @@ const newRelationId = () => `${RESERVED_ENTITY_TYPES.relation}-${idSuffix()}` as
  */
 export function createEarsEngine({ database, warn, freeze }: EARSRuntimeDeps): EarsEngine {
   const connection = createConnection(database, { freeze });
+  // A write's result names what it touched. An index's own commits have no result to read, so a watch over a `ranked`
+  // would otherwise hold its answer until something writes. One engine to a database: elmdb refuses a second listener
+  database.hearBuilderCommits(connection.heard);
   let declared = declaredNames(database.schema);
   const isEntityType = (name: string) => declared.types.has(name);
   const isRelationKind = (name: string) => declared.relationKinds.has(name);
@@ -288,6 +352,10 @@ export function createEarsEngine({ database, warn, freeze }: EARSRuntimeDeps): E
     getRow,
     getAttr,
     getRoles: (id) => (getAttr(id, 'role' as EARS.AttrKind) as string[] | undefined) ?? [],
+    catalog: () => {
+      const { types, relations, roles } = one({ read: 'catalog' }) as unknown as DatabaseCatalog;
+      return { types: types.filter((type) => isEntityType(type.name)), relations, roles };
+    },
     getSchemaStats,
     getRelation,
     findRelations,
@@ -319,6 +387,17 @@ export function createEarsEngine({ database, warn, freeze }: EARSRuntimeDeps): E
       outsideUnit('replaceWith()');
       runCommitted(() => database.replaceWith(source), () => connection.committedEverything());
     },
+    changedElsewhere: () => connection.changedElsewhere(),
+    pendingChanges: () => connection.pendingChanges(),
+    changedSince: (types, from, limit) => connection.changedSince(types, from, limit),
+    nextSequence: () => connection.nextSequence(),
+    checkpoint: (name) => connection.checkpoint(name),
+    setCheckpoint: (name, value) => connection.setCheckpoint(name, value),
+    replacedElsewhere: () => connection.replacedElsewhere(),
+    adoptReplacement: (epoch) => connection.adoptReplacement(epoch),
+    beforeCommit: (hook) => connection.beforeCommit(hook),
+    transactWithoutHook: (fn) => connection.transactWithoutHook(fn),
+    onFoundElsewhere: (listener) => connection.onFoundElsewhere(listener),
     getAllEntities: () => query.withTrashed.all().ids(),
     // From every entity, so a type the schema no longer declares is listed too
     getEntitiesOfType: (type) => {

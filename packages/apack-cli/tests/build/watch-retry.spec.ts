@@ -2,7 +2,7 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import type { EventEmitter } from 'node:events';
 import type { PackBuilder } from '../../src/build/build-process.ts';
 import * as packInputs from '@apackdev/host/build/pack-inputs';
-import type { DevDelivery } from '../../src/build/dev-reload.ts';
+import type { DevDelivery } from '../../src/app/app-api.ts';
 import { startPackBuildWatcher, watchPackBuild } from '../../src/build/watch.ts';
 import * as fs from 'node:fs';
 import * as compilerWatch from '../../src/build/compiler-watch.ts';
@@ -12,6 +12,8 @@ const fixture = vi.hoisted(() => ({
   changed: undefined as undefined | ((event: string, file: string) => void),
   watches: [] as Array<{ directory: string; watcher: EventEmitter & { close: ReturnType<typeof vi.fn> } }>,
   build: vi.fn<PackBuilder['build']>(async () => {}),
+  ensurePackages: vi.fn<PackBuilder['ensurePackages']>(async () => {}),
+  compilerSignature: 'compiler',
   frontendClose: vi.fn(async () => {}),
   frontendFailed: undefined as undefined | ((error: Error) => void),
   frontendInputs: undefined as undefined | Parameters<PackBuilder['subscribeFrontendInputs']>[0],
@@ -32,7 +34,7 @@ vi.mock('node:fs', async importOriginal => {
   };
 });
 vi.mock('../../src/build/build-process.ts', () => ({
-  createPackBuilder: () => ({ build: fixture.build, close: fixture.close,
+  createPackBuilder: () => ({ build: fixture.build, ensurePackages: fixture.ensurePackages, close: fixture.close,
     subscribeFrontendInputs: (receive: Parameters<PackBuilder['subscribeFrontendInputs']>[0]) => { fixture.frontendInputs = receive; return fixture.unsubscribe; }, isFrontendCurrent: async () => true }),
 }));
 vi.mock('../../src/utils.ts', () => ({ readValidManifest: () => ({ id: 'fixture' }) }));
@@ -43,13 +45,14 @@ vi.mock('@apackdev/host/build/pack-inputs', () => ({
 }));
 vi.mock('../../src/build/compiler-watch.ts', () => ({
   createCompilerWatchTools: () => ({ read: vi.fn(), changed: vi.fn() }),
-  compilerWatchPaths: () => ({ paths: new Map(), staticPaths: new Map(), complete: true, signature: 'compiler' }),
+  compilerWatchPaths: () => ({ paths: new Map(), staticPaths: new Map(), complete: true, signature: fixture.compilerSignature }),
+  packageInputWatchPaths: () => new Map(),
   additionalCompilerObservations: (observations: unknown) => observations,
   mergeCompilerWatchPaths: () => new Map(),
   compilerWatchTargets: () => new Map(),
   createCompilerWatchMatcher: () => () => false,
 }));
-vi.mock('../../src/build/dev-reload.ts', () => ({ reloadPack: fixture.reload }));
+vi.mock('../../src/app/app-api.ts', () => ({ reloadPack: fixture.reload }));
 vi.mock('../../src/build/frontend-watch.ts', () => ({
   createFrontendWatcher: (_root: string, _data: unknown, _changed: unknown, failed: (error: Error) => void) => {
     fixture.frontendFailed = failed;
@@ -65,6 +68,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
   fixture.authored = 'first';
+  fixture.compilerSignature = 'compiler';
   fixture.watches = [];
   fixture.frontendFailed = undefined;
   vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -118,6 +122,43 @@ it('asks for no reload when onBuilt delivered the build itself', async () => {
   } finally { await watcher.close(); }
 });
 
+it('publishes one build for a package edit whose refresh rewrites what the pack builds against', async () => {
+  const watcher = await startPackBuildWatcher('/fixture');
+  try {
+    fixture.ensurePackages.mockImplementationOnce(async () => { fixture.compilerSignature = 'refreshed'; });
+    fixture.changed!('change', '../apack-sdk/src/index.ts');
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(fixture.build).toHaveBeenCalledTimes(2);
+  } finally { await watcher.close(); }
+});
+
+it('refreshes a package the pack does not build against and publishes nothing', async () => {
+  const watcher = await startPackBuildWatcher('/fixture');
+  try {
+    fixture.ensurePackages.mockClear();
+    fixture.changed!('change', '../apack-testing/src/index.ts');
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(fixture.ensurePackages).toHaveBeenCalledTimes(1);
+    expect(fixture.build).toHaveBeenCalledTimes(1);
+  } finally { await watcher.close(); }
+});
+
+it('keeps the accepted build when a package refresh fails, and takes the next edit', async () => {
+  const watcher = await startPackBuildWatcher('/fixture');
+  try {
+    fixture.ensurePackages.mockRejectedValueOnce(new Error('fixture package refused'));
+    fixture.compilerSignature = 'broken source';
+    fixture.changed!('change', '../apack-sdk/src/index.ts');
+    await vi.advanceTimersByTimeAsync(300);
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('fixture package refused'));
+    expect(fixture.build).toHaveBeenCalledTimes(1);
+    fixture.compilerSignature = 'repaired source';
+    fixture.changed!('change', '../apack-sdk/src/index.ts');
+    await vi.advanceTimersByTimeAsync(300);
+    expect(fixture.build).toHaveBeenCalledTimes(2);
+  } finally { await watcher.close(); }
+});
+
 it('keeps duplicate-save suppression when building without a running app', async () => {
   const watcher = await startPackBuildWatcher('/fixture');
   try {
@@ -152,9 +193,6 @@ it('does not recreate input subscriptions when an active build fails during clos
 
 it('cancels pending startup and drains its owner before rejecting without a watcher handle', async () => {
   const controller = new AbortController();
-  fixture.build.mockImplementationOnce(options => new Promise<void>((_resolve, reject) => {
-    options!.signal!.addEventListener('abort', () => reject(options!.signal!.reason), { once: true });
-  }));
   let finish!: () => void;
   fixture.close.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
   let settled = false;
@@ -164,6 +202,7 @@ it('cancels pending startup and drains its owner before rejecting without a watc
   );
   controller.abort();
   await vi.advanceTimersByTimeAsync(0);
+  expect(fixture.build).not.toHaveBeenCalled();
   expect(fixture.close).toHaveBeenCalledTimes(1);
   expect(settled).toBe(false);
   finish();
@@ -197,7 +236,7 @@ it.each(['root', 'dependency', 'authored'] as const)('drains and attributes an a
 });
 
 it('ignores errors from retired subscriptions and resolves done after normal close', async () => {
-  vi.spyOn(compilerWatch, 'compilerWatchTargets').mockReturnValue(new Map([
+  vi.spyOn(compilerWatch, 'compilerWatchTargets').mockReturnValueOnce(new Map([
     ['/outside', { paths: new Map([['/outside/value', 'file']]), recursive: false }],
   ]));
   const watcher = await startPackBuildWatcher('/fixture');
@@ -211,6 +250,44 @@ it('ignores errors from retired subscriptions and resolves done after normal clo
     expect(fixture.close).not.toHaveBeenCalled();
   } finally { await watcher.close(); }
   await expect(watcher.done).resolves.toBeUndefined();
+});
+
+it('opens and closes no watch on a pass that holds the same set', async () => {
+  const targets = new Map([['/outside', { paths: new Map([['/outside/value', 'file' as const]]), recursive: false }]]);
+  vi.spyOn(compilerWatch, 'compilerWatchTargets').mockImplementation(() => targets);
+  const watcher = await startPackBuildWatcher('/fixture');
+  try {
+    await vi.advanceTimersByTimeAsync(300);
+    const opened = fixture.watches.length;
+    fixture.authored = 'second';
+    fixture.changed!('change', 'apack.json');
+    await vi.advanceTimersByTimeAsync(300);
+    expect(fixture.build).toHaveBeenCalledTimes(2);
+    expect(fixture.watches).toHaveLength(opened);
+    for (const { watcher: held } of fixture.watches) expect(held.close).not.toHaveBeenCalled();
+  } finally { await watcher.close(); }
+});
+
+it('compares its inputs again after the set it holds moves, and stops when that pass moves nothing', async () => {
+  const targets = new Map([['/outside', { paths: new Map([['/outside/value', 'file' as const]]), recursive: false }]]);
+  const read = vi.spyOn(compilerWatch, 'compilerWatchTargets').mockImplementation(() => targets);
+  const watcher = await startPackBuildWatcher('/fixture');
+  try {
+    await vi.advanceTimersByTimeAsync(300);
+    const settled = fixture.ensurePackages.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(fixture.ensurePackages).toHaveBeenCalledTimes(settled);
+
+    read.mockImplementation(() => new Map([...targets, ['/added', { paths: new Map([['/added/value', 'file' as const]]), recursive: false }]]));
+    // What the set was read for is a save, and only the pass after it re-reads what that save's move may have lost
+    fixture.authored = 'second';
+    fixture.changed!('change', 'apack.json');
+    await vi.advanceTimersByTimeAsync(600);
+    expect(fixture.ensurePackages).toHaveBeenCalledTimes(settled + 2);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(fixture.ensurePackages).toHaveBeenCalledTimes(settled + 2);
+    expect(fixture.build).toHaveBeenCalledTimes(2);
+  } finally { await watcher.close(); }
 });
 
 it('cancels and drains an active build before reporting subscription failure', async () => {
@@ -286,7 +363,7 @@ it('returns fatal subscription failure from the public watch command', async () 
 });
 
 it('leaves a caller-owned builder for that caller to close', async () => {
-  const builder = { build: fixture.build, close: fixture.close,
+  const builder = { build: fixture.build, ensurePackages: fixture.ensurePackages, close: fixture.close,
     subscribeFrontendInputs: () => fixture.unsubscribe, isFrontendCurrent: async () => true };
   const watcher = await startPackBuildWatcher('/fixture', { builder });
   const failure = new Error('watch limit');

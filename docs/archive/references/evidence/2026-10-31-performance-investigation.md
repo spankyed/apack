@@ -2,7 +2,7 @@
 
 Archived evidence. Status and measurements below describe their recorded checkpoints.
 
-Execution follows the [approved plan](../../../plans/application-performance-optimization.md).
+Execution follows the [approved plan](../../plans/application-performance-optimization.md).
 Initial application source: `54007b7094`; native: `dde229d90c60`. Detailed captures use
 512 KiB allocation sampling. Sample-attributed bytes describe JavaScript allocation, not live heap,
 native allocation or exact allocation totals. CPU-profile elapsed samples include idle time and

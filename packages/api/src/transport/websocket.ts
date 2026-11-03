@@ -100,11 +100,11 @@ function handleHttpRequest(req: http.IncomingMessage, res: http.ServerResponse) 
 }
 
 /**
- * Tells local tools where this API is. Every run publishes its port, so a tool finds it and can tell that an app is
- * running on the data dir, whatever the platform (`apack db` refuses to change a database an app holds); the port
- * alone opens nothing, since a call needs the token. The token itself goes to a file only where a local tool may use
- * it: a development app (`apack pack dev`, the built-in pack's watcher), and an API started by hand, which made up its
- * own. That file is readable only by the user. Both are removed when the process exits.
+ * Tells local tools where this API is. Every run publishes its port, so a tool can tell that an app is running on the
+ * data dir, whatever the platform, with the token that lets one say it committed there (`apack db`), which opens nothing
+ * else. The API token goes to a file only where a local tool may use it: a development app (`apack pack dev`, the
+ * built-in pack's watcher), and an API started by hand, which made up its own. Both files are readable only by the user,
+ * and removed when the process exits.
  */
 export function publishApiFiles(port: number, token: string): void {
   const { apiPortFile, apiTokenFile } = resolveAppEnvironment();

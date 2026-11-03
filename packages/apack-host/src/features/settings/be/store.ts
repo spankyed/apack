@@ -35,6 +35,8 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
   let revision = 0;
   let atRevision = -1;
   let validation: ReturnType<typeof compileSettingsCatalog>;
+  /** The row as whoever follows settings last knew it, from the first read on: `adoptStored` tells of a change and only of one */
+  let adopted: unknown;
 
   function declarations(): SettingsCatalog {
     const definitions = catalog();
@@ -56,11 +58,21 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
     if (!isPlainObject(value)) throw new SettingsRefusedError(['Stored settings must be a JSON object']);
     return value as SettingsOverrides;
   }
+  /** What readers are shown while the data is replaced: the effective settings, or the defaults over a row they refuse */
+  function publishable(): SettingsDocument {
+    try {
+      return effective();
+    } catch (error) {
+      if (!(error instanceof SettingsRefusedError)) throw error;
+      return structuredClone(defaults());
+    }
+  }
   function effective(): SettingsDocument {
     if (recovering) throw new SettingsRefusedError(['Settings require recovery. Reset the invalid values and restart.']);
     const base = defaults();
     const overrides = stored();
     validation.validate(overrides);
+    adopted ??= structuredClone(overrides);
     return structuredClone(deepMerge(base, overrides)) as SettingsDocument;
   }
   /** In recovery the stored row is invalid, and only `recover()` may change it. */
@@ -101,6 +113,7 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
     validation.validate(next, rawStored());
     const database = ears();
     database.upsert(SETTINGS_ENTITY, { id: SETTINGS_ID, data: structuredClone(next) });
+    adopted = structuredClone(next);
     revision++;
     tell('written');
   }
@@ -114,6 +127,26 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
   return {
     getAll: effective,
     enterRecovery: () => { recovering = true; },
+    /**
+     * Takes a stored row another process wrote, telling subscribers as for any write if it changed anything. What a tool
+     * writes is checked as it commits (`refuseInvalidSettings`), so a row that fails here came past every writer this
+     * repo has: it is reported, reads refuse it, and the next boot offers recovery.
+     */
+    adoptStored(): void {
+      if (recovering || replacingData) return;
+      declarations();
+      const raw = rawStored();
+      const problems = validation.inspect(raw);
+      if (problems.length > 0) {
+        // Nothing to tell anyone: reads refuse it, so what they were shown stands until a restart offers recovery
+        logger.error(`The stored settings are invalid, and the next start offers to recover them: ${problems.map(problem => problem.message).join('; ')}`);
+        return;
+      }
+      if (adopted === undefined || isEqual(raw, adopted)) { adopted = raw; return; }
+      adopted = raw;
+      revision++;
+      tell('written');
+    },
     getRecovery,
     recover(request: SettingsRecoveryRequest): void {
       if (replacingData) throw new SettingsRefusedError(['Data is being replaced. Wait before repairing settings.']);
@@ -179,7 +212,7 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
     },
     async whileReplacingData<T>(replace: () => Promise<T>): Promise<T> {
       // Database hydration bypasses the writer. Readers retain the published view until replacement settles.
-      if (replacingData === 0) replacementSnapshot = { values: effective(), catalog: declarations() };
+      if (replacingData === 0) replacementSnapshot = { values: publishable(), catalog: declarations() };
       if (replacingData++ === 0) { revision++; tell('replacing'); }
       // Host-owned initialization/migrations may write; unrelated async callers still wait.
       const scope = { active: true };

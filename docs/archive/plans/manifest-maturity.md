@@ -34,7 +34,7 @@ remaining compiler work. Preserve each consumer’s actual prerequisites.
 4. Complete [discovery without activation](discovery-without-activation.md) and delete superseded glue.
    Extend the foundation’s descriptor/codegen freshness and checked binding to every supported kind.
 5. Deliver [entity navigation](open-entity.md) and frontend error boundaries from
-   [fault isolation](../../plans/pack-fault-isolation.md), using catalog destinations and explicit readiness.
+   [fault isolation](pack-fault-isolation.md), using catalog destinations and explicit readiness.
 6. Finish consumed-API contracts, dependency provenance and
    [shipped-pack replacement](replaceable-shipped-packs.md) as separate workstreams. Replacement depends
    on validated build publication and committed catalog updates; consumed APIs need not wait for replacement.
@@ -105,7 +105,7 @@ this ledger is not permission to downgrade an outcome to a survey.
 
 - [Lazy activation](../../plans/deferred/lazy-activation.md) is deferred by request, outside the active sequence.
   Revisit only when boot attribution justifies it; discovery completion does not trigger this work.
-- [Dev-loop freshness](../../goals/goal-dev-loop-freshness.md) remains a scoped follow-up; descriptor freshness
+- [Dev-loop freshness](../goals/goal-dev-loop-freshness.md) remains a scoped follow-up; descriptor freshness
   needed by discovery belongs in discovery's checkpoints, not in an unrelated package watcher redesign.
 - [Pack security isolation](../../goals/goal-pack-security-isolation.md) remains a separate design-first goal.
   Reconcile its frontend isolation input there; security confinement is not required to discover data.
@@ -292,7 +292,7 @@ that replacement drops stale contributions, and that disposal removes listeners/
 
 Add frontend error boundaries around pack panes and forms with the pack named in the failure, a useful
 recovery path and error reporting. The shell should remain usable when a contributed component throws.
-Follow the frontend workstream of [pack fault isolation](../../plans/pack-fault-isolation.md), checking what already landed.
+Follow the frontend workstream of [pack fault isolation](pack-fault-isolation.md), checking what already landed.
 
 Lazy activation is deferred, outside the active sequence: attribute boot cost before changing when
 packs run. Derive activation from existing contributions where possible instead of making authors repeat

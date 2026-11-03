@@ -348,8 +348,8 @@ The three drains are POSTs because each one *clears* what it returns: draining i
 for an hour, but a GET that answers differently on a retry is a trap.
 
 **A write does not update the UI; `/reload` is how you see it.** A surface's state is what its system
-sent it, so a write made outside that system — `/transact`, the database console, `apack db exec` — changes
-the database and reaches no view. That is the console being a console rather than a fault, and it is not
+sent it, so a write made outside that system — `/transact`, the database console — changes
+the database and reaches no view. (A commit from `apack db exec` wakes the app, which then does what `/reload` does here.) That is the console being a console rather than a fault, and it is not
 staleness that time fixes: navigating between surfaces does not refresh one, because the surface's actor
 survives. `/reload` does, because a new connection makes every system send its startup data again.
 
@@ -366,8 +366,8 @@ concurrent `/query` calls would otherwise be indistinguishable, each reply still
 may run together and one you stopped waiting for is ignored.
 
 **`/query` and `/transact` reach the live database**, not the files on disk — they go to the running app, so a
-write is visible to the next read in the same session. `apack db exec` cannot do that: it refuses while
-the app holds the write lock.
+write is visible to the next read in the same session. `apack db exec` writes from its own process, and each
+commit wakes the app.
 
 **A failed verb answers `200` with `{ "ok": false, "error": ... }`** — the request was fine and the
 operation was not, which is the common case while driving. A malformed request, a missing token or an
@@ -712,28 +712,15 @@ receipt and directory owner. `--schema-from` accepts a complete snapshot in the 
 matching declaration revision; a bare manifest or partial fragment is refused. These reads never load
 pack runtimes.
 
-**While the app runs.** The commands open the database files themselves (offline); the app is the database's only writer while it runs. So a change (`exec`, `repl --write`, and `import`, `reset` or `clear-settings` with `--force`) refuses while an apack app runs on the data dir: the API it published is running, or (on macOS and Linux) its single-instance lock is held by a live process. Files left behind by a crash name processes that have exited, so they don't stand in the way. Quit the app first. Reading commands work, with a warning that they miss what the app hasn't written yet, and so do the dry runs: they open the database without writing to it, so they also work against a copy you have no permission to change.
+**While the app runs.** The commands open the database files themselves (offline). An app counts as running on the data dir when the API it published is running or (on macOS and Linux) its single-instance lock is held by a live process; files left behind by a crash name processes that have exited, so they don't stand in the way. `exec`, `script` and `repl --write` work beside it, as below. `reset` works beside it too. `import` and `clear-settings` with `--force` refuse, so quit the app first. Reading commands work, with a warning that they miss what the app hasn't written yet, and so do the dry runs: they open the database without writing to it, so they also work against a copy you have no permission to change.
 
-While a command changes the database it holds a lock on the data dir (`db-write.lock`), so a second `apack db` is refused and an apack started meanwhile refuses to open that database instead of overwriting the change. A lock left behind by a command that was killed is ignored once its process is gone.
+`reset`, `import`, `clear-settings` and `script --admin` replace what others are using, so while one runs it holds a lock on the data dir (`db-write.lock`): a second one and any command changing rows are refused, and an apack started meanwhile refuses to open that database. A lock left behind by a command that was killed is ignored once its process is gone.
 
-**The run history.** What each flow run did is not in the database: it is the run history, a store of its own beside it (`run-history`), which `apack db runs` reads. Backups, `import` and `reset` cover it with the database, and the app keeps 30 days of it.
-
-**Writing.** There is no apply command: apack content each pack's data when it starts (and `apack pack dev` re-applies a pack it rebuilds), so start the app rather than content a data dir by hand.
-
-**Installed packs.** Entity types, relation kinds and where each type is stored come from the packs installed in the data dir — every enabled pack in `packs/`, the ones the app ships included, read from its own `apack.json`; no pack code runs. A data dir with no packs installed knows only the names the app itself declares, which is the truth about it rather than a degraded reading of it.
-
-#### `apack db query <code> | --file <path> [-o pretty|json|csv] [--out <file>]`
-
-Run query code with the Database console's read helpers: `query` (with `query.withTrashed` and `query.trashed`), `EARS`, `getRow`, `getAttr`, `getRoles`, `findRelations`, `getSchemaStats`. The code is a function body, as in the console: `return` the result. `EARS.Entity` holds the installed packs' entity types. It runs as a plain function, so it can't use top-level `await`, `import` or `require` — a script (`apack db script`) can.
-
-```bash
-apack db query "return query(EARS.Entity.Settings).pickAll()" -o json --out settings.json
-apack db query --file ./report.js -o csv
-```
+**Beside a running app.** `exec`, `script` and `repl --write` work with the app open. Each writes from its own process, and every commit wakes the app. It runs every view again and has every system publish its state, once per burst of commits, and resumes any index work a tool left unfinished; a flow that is running keeps running, on the definition it started with, as it does after an edit in the app. What's derived from the rows follows, such as a note's links to other notes, with the app open or when it next starts. An invalid settings row is refused as it commits, so the command fails and nothing it wrote is kept, with the app open or closed. A wake that doesn't arrive is made good by the app's next commit. These commands hold no lock, so the app can start or restart while one runs, and two can run at once; a write holds up the app's own writes only for as long as it takes, so a script that keeps one transaction open makes the app wait. A script gets `db.ears` and not `db.admin` or `db.database` unless it asks with `--admin`, which needs the app closed. `reset` works with the app open: the app's writes are refused until it has heard, and it then starts over on its default data, as it does after Reset Database in its settings. `import` and `clear-settings` still ask you to quit the app first.
 
 #### `apack db exec <code> | --file <path> [-o pretty|json|csv] [--out <file>]` (names its data dir)
 
-Run transaction code with the console's read and write helpers (`create`, `upsert`, `write` and `removeRelation`; `write(id)` sets, links, grants, trashes and destroys an entity, and `removeRelation(relationId)` removes one relation). The code runs as one transaction: if it throws part way, none of its writes are kept, and the failure says so. It is synchronous — `await` doesn't parse, and code returning a promise is refused — since an await would split the transaction. A write that fails to reach the files fails the command.
+Run transaction code with the console's read and write helpers (`create`, `upsert`, `write` and `removeRelation`; `write(id)` sets, links, grants, trashes and destroys an entity, and `removeRelation(relationId)` removes one relation). The code runs as one transaction: if it throws part way, none of its writes are kept, and the failure says so. It is synchronous — `await` doesn't parse, and code returning a promise is refused — since an await would split the transaction. Code still running after the transaction ends, such as a timer, writes nothing and logs an error. A write that fails to reach the files fails the command.
 
 ```bash
 apack db exec "write('Note-123').set('title', 'Renamed')"
@@ -741,7 +728,7 @@ apack db exec "write('Note-123').set('title', 'Renamed')"
 
 #### `apack db repl [--write]` (`--write` names its data dir)
 
-Run console code a line at a time and print each result: query code, or with `--write` transaction code, whose changes are written on exit. `.exit` or Ctrl+D quits.
+Run console code a line at a time and print each result: query code, or with `--write` transaction code, whose changes are saved line by line. `.exit` or Ctrl+D quits.
 
 #### `apack db script <file> [--read-only] [-o pretty|json|csv] [--out <file>] [-- <script arguments>]` (names its data dir)
 
@@ -788,7 +775,7 @@ Replace the database and the run history the backup holds, and the media folder 
 
 #### `apack db reset [--force] [--keep-keys]` (names its data dir)
 
-Delete all of the app's data, as Reset Database in the Database settings does: the database, the run history and the stored secrets. The app creates its default data (settings, written flows, the packs' content) on its next start and shows onboarding. Without `--force` it lists the entities per type and each stored secret it would delete.
+Delete all of the app's data, as Reset Database in the Database settings does: the database, the run history and the stored secrets. The app creates its default data (settings, written flows, the packs' content) on its next start and shows onboarding; a running app does so as soon as it hears. Without `--force` it lists the entities per type and each stored secret it would delete.
 
 No backup holds the secrets — `export` and the Database settings' backups copy the databases and the media folder, never the secrets or the data key that encrypts them — so a deleted secret is entered again in Settings → Secrets. That's why the listing names each one by provider and label (never its value), and why `--keep-keys` leaves them where they are and deletes only the data.
 

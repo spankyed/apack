@@ -3,7 +3,7 @@ import { createStartupPerformance, observeIndexAdmission } from './startup-perfo
 import { createNodePerformanceController } from '@apackdev/host/diagnostics/node';
 import { createActor } from 'xstate';
 import { createLogger, reportError } from '@apackdev/sdk/logger';
-import { bindHost, type HostRuntime } from '@apackdev/sdk/runtime';
+import { bindHost } from '@apackdev/sdk/runtime';
 import { _getLmdbPath, _getRunHistoryPath } from '@apackdev/sdk/utils';
 import type { EarsDatabase, EarsEngine } from '@apackdev/ears';
 import { assertNoDatabaseWriter, openDatabaseStore, openRunHistory, storedSettings, type RunsDatabase } from '@apackdev/host/database';
@@ -55,6 +55,8 @@ export interface AppStore {
   runHistory: RunsDatabase;
   engine: EarsEngine;
   packs: PackRegistry;
+  /** Brings the engine's projections up to what changed since each last read */
+  catchUpProjections(): Promise<void>;
 }
 
 /** The app's registered packs, which openAppStore creates: the transport's procedures and dev reload work on them */
@@ -96,7 +98,7 @@ function bootReading(): string {
 
 export function openAppStore(performance?: ReturnType<typeof createNodePerformanceController>): AppStore {
   // Installed packs that aren't running keep their settings: the settings take writes for their features too
-  let runtime: HostRuntime;
+  let runtime: ReturnType<typeof createHostRuntime>;
   const packs = createPackRegistry({
     nativeDeclarations: [hostDeclaration],
     installedPacksDir: () => resolveAppEnvironment().packsDir,
@@ -127,7 +129,7 @@ export function openAppStore(performance?: ReturnType<typeof createNodePerforman
   appViews = createViewHost({ ears: () => engine, packs, observe: recording ? () => createViewObservation(recording) : undefined });
   appDatabase = database;
   appRunHistory = runHistory;
-  return { database, runHistory, engine, packs };
+  return { database, runHistory, engine, packs, catchUpProjections: () => runtime.catchUpProjections() };
 }
 
 /**
@@ -158,13 +160,13 @@ export async function setupBackend(): Promise<void> {
 
 async function initializeBackend(performance?: ReturnType<typeof createNodePerformanceController>): Promise<void> {
 
-  // Before anything opens the database: a tool changing it (`apack db`) holds a lock until it's done, and opening
-  // now would overwrite its change from this process's memory
+  // Before anything opens the database: a tool replacing it (`apack db reset`, `import`) holds a lock until it's done,
+  // and boot's own writes (content applied, migrations) would land in the middle of that
   const appContext = resolveAppEnvironment();
   assertNoDatabaseWriter(appContext.userDataDir);
 
   // The app's data: the engine reads and writes it from here on
-  const { engine, packs } = openAppStore(performance);
+  const { engine, packs, catchUpProjections } = openAppStore(performance);
 
   // Packs require workspace @apackdev/* packages at runtime: from a checkout they must get source,
   // not a stale dist (main starts the API with the condition; manual boots must pass it). The
@@ -231,7 +233,10 @@ async function initializeBackend(performance?: ReturnType<typeof createNodePerfo
   logger.info(bootReading());
 
   // ── Start the packs: each one's onInit, the migrations (the app's, then external packs'), the content
-  if (!recoveringSettings) startPacks(packs);
+  if (!recoveringSettings) {
+    startPacks(packs);
+    await catchUpProjections();
+  }
 
   // ── Start backend actor ──────────────────────────────────────────────
   backendActor = createActor(createAppBus(packs, appClaims), {

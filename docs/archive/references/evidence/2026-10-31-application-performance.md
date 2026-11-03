@@ -2,7 +2,7 @@
 
 Archived evidence. Status and measurements below describe their recorded checkpoints.
 
-Execution: [approved optimization plan](../../../plans/application-performance-optimization.md).
+Execution: [approved optimization plan](../../plans/application-performance-optimization.md).
 Status: all eight baseline comparisons admitted. Two lightweight budgets fail; final implementation
 acceptance remains open. Unsuccessful antecedents remain preserved.
 

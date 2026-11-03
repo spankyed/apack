@@ -44,6 +44,8 @@ export interface SecretsStore {
    * encrypts the keys added next; a file that can't be read is deleted.
    */
   clearAll(): void;
+  /** Tells listeners the stored keys may have changed, as when another process wrote them: what `list` reads is the file */
+  changedElsewhere(): void;
   /**
    * Calls `listener` after every change to what `list` or `status` return: each change to the stored keys, and the OS
    * credential store failing (status `unavailable`) or working again. Returns a function that stops the calls.
@@ -289,6 +291,8 @@ export function createSecretsStore(options: SecretsStoreOptions): SecretsStore {
         remove("couldn't be emptied", error);
       }
     },
+
+    changedElsewhere: notify,
 
     onChange(listener) {
       listeners.add(listener);

@@ -5,7 +5,7 @@ import { secretRedaction } from '../../src/secrets/redaction.ts';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EARS, EarsDatabase } from '@apackdev/ears';
 import { _bindEars } from '@apackdev/sdk/ears';
 import { _createTestEngine, _openTestRunHistory, _openTestDatabase, testRootEvents } from '@apackdev/sdk/testing';
@@ -55,6 +55,137 @@ const externalOrigin = (id: string, name: string) => ({ declarationRevision: 'fi
 });
 
 describe('createHostRuntime', () => {
+  describe('hearing another process committed', () => {
+    const SETTINGS_ROW = 'Settings-app' as EARS.EntityId;
+    function running() {
+      const engine = newEngine();
+      const told: string[] = [];
+      const stopWatching = vi.spyOn(engine.admin, 'changedElsewhere').mockImplementation(() => { told.push('watches'); return true; });
+      let found = () => {};
+      vi.spyOn(engine.admin, 'onFoundElsewhere').mockImplementation((listener) => { found = listener; return () => {}; });
+      const stopHearing = testRootEvents.onIncoming((message) => { told.push(`${message.to} ${message.event.type}`); });
+      const { runHistory } = blockedHistory();
+      vi.spyOn(runHistory.engine.admin, 'onFoundElsewhere').mockImplementation(() => () => {});
+      vi.spyOn(runHistory.engine.admin, 'changedElsewhere').mockImplementation(() => { told.push('run history watches'); return true; });
+      const runtime = createHostRuntime({ runHistory, database: {} as EarsDatabase, engine, transport: { rootEvents: testRootEvents },
+        appVersion: '1.2.3', packs: createNativePackTestRegistry() });
+      return { engine, runHistoryEngine: runHistory.engine, runtime, found: () => found(), told, stop: () => { stopHearing(); stopWatching.mockRestore(); } };
+    }
+
+    beforeEach(() => { vi.useFakeTimers(); });
+    afterEach(() => { vi.useRealTimers(); });
+    const refreshed = ['watches', 'run history watches', 'host/bus DATA_CHANGED_ELSEWHERE'];
+
+    it('reruns every watch and then tells the bus, once for a burst', () => {
+      const { found, told, stop } = running();
+      found();
+      found();
+      expect(told, 'not until the burst has passed').toEqual([]);
+      vi.advanceTimersByTime(250);
+      expect(told).toEqual(refreshed);
+      found();
+      vi.advanceTimersByTime(250);
+      expect(told, 'a later one refreshes again').toEqual([...refreshed, ...refreshed]);
+      stop();
+    });
+
+    it('tells the bus nothing when no other process committed', () => {
+      const { engine, found, told, stop } = running();
+      vi.mocked(engine.admin.changedElsewhere).mockImplementation(() => false);
+      found();
+      vi.advanceTimersByTime(250);
+      expect(told, 'the run history is still asked, its watches its own').toEqual(['run history watches']);
+      stop();
+    });
+
+    it('tells the bus and does not throw when the refresh fails, as it does on a database closed meanwhile', () => {
+      const { engine, found, told, stop } = running();
+      vi.mocked(engine.admin.changedElsewhere).mockImplementation(() => { throw new Error('The database is closed'); });
+      found();
+      expect(() => vi.advanceTimersByTime(250), 'a throw in this timer would end the process').not.toThrow();
+      expect(told).toEqual(['run history watches', 'host/bus DATA_CHANGED_ELSEWHERE']);
+      stop();
+    });
+
+    it('refreshes the rest when the run history fails to answer', () => {
+      const { runHistoryEngine, found, told, stop } = running();
+      vi.mocked(runHistoryEngine.admin.changedElsewhere).mockImplementation(() => { throw new Error('The database is closed'); });
+      found();
+      expect(() => vi.advanceTimersByTime(250), 'a throw in this timer would end the process').not.toThrow();
+      expect(told).toEqual(['watches', 'host/bus DATA_CHANGED_ELSEWHERE']);
+      stop();
+    });
+
+    it('takes a settings row another process wrote, and tells who follows settings', () => {
+      const { engine, runtime, found, stop } = running();
+      runtime.services.settings.getAll();
+      const changes: string[] = [];
+      const stopFollowing = runtime.services.settings.onChange((change) => changes.push(change));
+      engine.upsert('Settings', { id: SETTINGS_ROW, data: { app: { personal: {} } } });
+      found();
+      vi.advanceTimersByTime(250);
+      expect(changes).toEqual(['written']);
+      stopFollowing();
+      stop();
+    });
+
+    it('still refreshes when reading the settings fails', () => {
+      const { engine, found, told, stop } = running();
+      const failing = vi.spyOn(engine.query, 'ids').mockImplementation(() => { throw new Error('the disk is full'); });
+      found();
+      expect(() => vi.advanceTimersByTime(250), 'a throw in this timer would end the process').not.toThrow();
+      expect(told).toEqual(refreshed);
+      failing.mockRestore();
+      stop();
+    });
+
+    it('starts over when another process replaced the data, instead of refreshing', async () => {
+      const { engine, found, told, stop } = running();
+      vi.spyOn(engine.admin, 'replacedElsewhere').mockImplementation(() => 1);
+      const adopted = vi.spyOn(engine.admin, 'adoptReplacement').mockImplementation(() => true);
+      found();
+      await vi.advanceTimersByTimeAsync(250);
+      expect(adopted).toHaveBeenCalledWith(1);
+      expect(told).toContain('host/bus DATA_REPLACED');
+      expect(told).not.toContain('host/bus DATA_CHANGED_ELSEWHERE');
+      vi.restoreAllMocks();
+      stop();
+    });
+
+    it('starts over when only the run history was replaced, as a reset stopped part way leaves it', async () => {
+      const { runHistoryEngine, found, told, stop } = running();
+      vi.spyOn(runHistoryEngine.admin, 'replacedElsewhere').mockImplementation(() => 1);
+      const adopted = vi.spyOn(runHistoryEngine.admin, 'adoptReplacement').mockImplementation(() => true);
+      found();
+      await vi.advanceTimersByTimeAsync(250);
+      expect(adopted).toHaveBeenCalledWith(1);
+      expect(told).toContain('host/bus DATA_REPLACED');
+      vi.restoreAllMocks();
+      stop();
+    });
+
+    it('leaves the writes refused when another replacement lands while it starts over, for the next to try again', async () => {
+      const { engine, found, stop } = running();
+      vi.spyOn(engine.admin, 'replacedElsewhere').mockImplementation(() => 1);
+      vi.spyOn(engine.admin, 'adoptReplacement').mockImplementation(() => false);
+      const started = vi.spyOn(engine.admin, 'changedElsewhere');
+      found();
+      await vi.advanceTimersByTimeAsync(250);
+      expect(started, 'no refresh over data it never adopted').not.toHaveBeenCalled();
+      vi.restoreAllMocks();
+      stop();
+    });
+
+    it('still runs when the database cannot hear of other processes', () => {
+      const engine = newEngine();
+      vi.spyOn(engine.admin, 'onFoundElsewhere').mockImplementation(() => { throw new Error('no loopback here'); });
+      const { runHistory } = blockedHistory();
+      expect(() => createHostRuntime({ runHistory, database: {} as EarsDatabase, engine, transport: { rootEvents: testRootEvents },
+        appVersion: '1.2.3', packs: createNativePackTestRegistry() })).not.toThrow();
+      vi.restoreAllMocks();
+    });
+  });
+
   it('refuses overlapping resets and imports before either can touch the store', async () => {
     const { runHistory, reset, finish } = blockedHistory();
     const store = { reset: vi.fn() } as unknown as EarsDatabase;

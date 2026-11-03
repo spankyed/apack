@@ -1,4 +1,6 @@
 // Runs below tsx in Node's loader thread: tsx sees logical source URLs, native reads see owned bytes.
+import fs from 'node:fs';
+import { findPackageJSON } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -35,5 +37,13 @@ export async function load(url, context, next) {
   const owned = pathToFileURL(compilerReadMapping(directory, file).readPath);
   owned.search = logical.search;
   owned.hash = logical.hash;
-  return next(owned.href, context);
+  return next(owned.href, { ...context, format: capturedFormat(owned, context.format) });
+}
+
+/** Node derives a module's format from the live `package.json` beside its logical URL, so a captured scope overrides it. */
+function capturedFormat(owned, format) {
+  if (!/\.[jt]sx?$/.test(owned.pathname)) return format;
+  const scope = findPackageJSON(owned);
+  if (!scope || path.relative(directory, scope).startsWith('..')) return format;
+  return JSON.parse(fs.readFileSync(scope, 'utf8')).type === 'module' ? 'module' : 'commonjs';
 }

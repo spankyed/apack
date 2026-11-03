@@ -2,7 +2,6 @@ import { create, write, query } from '#generated/ears.ts';
 import { EARS } from '#generated/ears.ts';
 import { RepositoryError, RepositoryErrorCode } from '@apackdev/sdk/repositories';
 
-import { resolveReferencesTo, syncReferences } from './link-utils.ts';
 import type { NoteEntity } from '#features/notes/be/types.ts';
 
 /** Strips the sub-document link to a note from its parent's content */
@@ -101,12 +100,6 @@ export const noteCommands = {
       write(input.parentId as EARS.EntityId).link(EARS.RelKind.CONTAINS, note.id);
     }
 
-    // Index the links this note's text makes, and the links other notes already made to it
-    if (input.content) {
-      syncReferences(note.id, input.content);
-    }
-    resolveReferencesTo(note.id);
-
     return note;
   },
 
@@ -145,11 +138,6 @@ export const noteCommands = {
     }
     if (updates.savedDisplayOrder === null && existing.savedDisplayOrder !== undefined) {
       write(id, { touch: !skipTimestamp }).delete('savedDisplayOrder');
-    }
-
-    // Sync REFERENCES relations when content changes
-    if (updates.content !== undefined) {
-      syncReferences(id, updates.content);
     }
 
     // A task has no sub-document link in its parent's content; a note that stops being one gets it

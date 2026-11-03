@@ -35,12 +35,21 @@ export type SystemEvents =
    * are now gone.
    */
   | { type: 'DATA_REPLACED' }
+  /**
+   * Another process committed to the database, a local tool such as `apack db exec`, and rows may have changed in any
+   * way, though most are as they were. Unlike `DATA_REPLACED` it doesn't mean work held over rows has lost them.
+   *
+   * Handling it is optional, as there: the bus also asks every system for its startup data. Declare it only for what
+   * re-reading cannot fix. Rows derived from others are for a projection (`defineProjections`), which is caught up before
+   * this arrives.
+   */
+  | { type: 'DATA_CHANGED_ELSEWHERE' }
 
 /**
  * The event types every system accepts, as a value: a send of one to a feature that runs no system is nobody's, and
  * dropped without a warning.
  */
-export const SYSTEM_EVENT_TYPES = eventTypes<SystemEvents>()('SEND_STATE', 'CLIENT_CONNECTED', 'PACK_CHANGED', 'FEATURE_SETTINGS_UPDATED', 'DATA_REPLACED');
+export const SYSTEM_EVENT_TYPES = eventTypes<SystemEvents>()('SEND_STATE', 'CLIENT_CONNECTED', 'PACK_CHANGED', 'FEATURE_SETTINGS_UPDATED', 'DATA_REPLACED', 'DATA_CHANGED_ELSEWHERE');
 
 /**
  * What a system's contract declares. A feature exports one as `Contract` from its `be/contract.ts`, and `apack.json`

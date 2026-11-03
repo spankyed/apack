@@ -14,7 +14,7 @@
     "packages/*"
   ],
   "engines": {
-    "node": ">=23.5.0",
+    "node": "^24.11.0",
     "npm": ">=11"
   },
   "scripts": {
@@ -110,7 +110,8 @@
     "janitor": "node --disable-warning=ExperimentalWarning scripts/janitor.ts",
     "janitor:install": "node --disable-warning=ExperimentalWarning scripts/janitor.ts --install",
     "test:linux": "tsx scripts/linux-runner.ts",
-    "measure:loop": "tsx scripts/measure-loop.ts"
+    "measure:loop": "tsx scripts/measure-loop.ts",
+    "soak:watch": "node scripts/with-source.mjs tsx packages/apack-cli/scripts/soak-watch.ts"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",

@@ -30,8 +30,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 23.11.1
+          node-version: 24.22.2
           cache: npm
+      - name: Install pinned npm
+        run: npm install -g npm@11.21.1
       - name: Record platform and compiler
         run: |
           git rev-parse HEAD
@@ -64,8 +66,8 @@ jobs:
       - name: Compiler cancellation and descendant ownership
         if: ${{ !inputs.test_name }}
         run: >-
-          node node_modules/vitest/vitest.mjs run --project @apackdev/cli
-          packages/apack-cli/tests/build/pack-builder.spec.ts
+          node node_modules/vitest/vitest.mjs run --config vitest.native.config.ts --project @apackdev/cli
+          packages/apack-cli/tests/build/pack-builder.native.spec.ts
           --testNamePattern='drains an interrupted frontend startup|cancels a frontend input check|stops its worker before removing|stops remaining compiler descendants|force-stops a compiler'
           --reporter=default --reporter=json --outputFile="$RUNNER_TEMP/compiler-cancellation.json"
           --bail=1 --maxWorkers=1
@@ -78,6 +80,8 @@ jobs:
           packages/apack-cli/tests/build/compiler-native-vite.native.spec.ts
           packages/apack-cli/tests/build/compiler-native-libraries.native.spec.ts
           packages/apack-cli/tests/build/compiler-native-launch.native.spec.ts
+          packages/apack-cli/tests/build/build-worker.native.spec.ts
+          packages/apack-cli/tests/build/watch-module-freshness.native.spec.ts
           --testNamePattern "$APACK_TEST_NAME"
           --reporter=default --reporter=json --outputFile="$RUNNER_TEMP/compiler-native-publication.json"
           --bail=1 --maxWorkers=1 --no-file-parallelism

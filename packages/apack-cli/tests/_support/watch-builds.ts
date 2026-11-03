@@ -14,8 +14,8 @@ export type TestPackBuildWatcher = Awaited<ReturnType<typeof startPackBuildWatch
 
 /** Separate a missing watch request from compilation; callers retain their notification/output checks. */
 export async function startTestPackBuildWatcher(root: string,
-  { captureCompiler, ...options }: Omit<WatchOptions, 'builder'> & PackBuilderOptions = {}): Promise<TestPackBuildWatcher> {
-  const builder = createPackBuilder(root, { captureCompiler });
+  { captureCompiler, refreshPackages, packagesState, ...options }: Omit<WatchOptions, 'builder'> & PackBuilderOptions = {}): Promise<TestPackBuildWatcher> {
+  const builder = createPackBuilder(root, { captureCompiler, refreshPackages, packagesState });
   const build = builder.build.bind(builder);
   const builds: Promise<{ interrupted: boolean; error?: unknown }>[] = [];
   builder.build = input => {

@@ -4,7 +4,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { Readable } from 'node:stream';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { promisify } from 'node:util';
 import { createRequire } from 'node:module';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEarsEngine, type EARS } from '@apackdev/ears';
@@ -127,7 +128,7 @@ function writeUnreadableFiles(databaseDir: string): void {
 }
 
 /** Runs `apack db <args>` and returns its stdout and stderr lines, and its error */
-async function run(args: string[]): Promise<{ out: string; err: string; error?: Error }> {
+async function run(args: string[]): Promise<{ out: string; err: string; error?: Error; exitCode?: number | string | null }> {
   const out: string[] = [];
   const err: string[] = [];
   let error: Error | undefined;
@@ -136,7 +137,9 @@ async function run(args: string[]): Promise<{ out: string; err: string; error?: 
   } catch (caught) {
     error = caught as Error;
   }
-  return { out: out.join('\n'), err: err.join('\n'), error };
+  const { exitCode } = process;
+  process.exitCode = undefined;
+  return { out: out.join('\n'), err: err.join('\n'), error, exitCode };
 }
 
 async function ok(args: string[]) {
@@ -145,7 +148,7 @@ async function ok(args: string[]) {
   return result;
 }
 
-/** What a running app publishes in its data dir, which `apack db` refuses to write under */
+/** What a running app publishes in its data dir, which `apack db` finds */
 const holdLock = (dir: string) =>
   fs.writeFileSync(path.join(_appDirOf(dir), 'app.lock'), JSON.stringify({ pid: process.pid, machine: os.hostname(), since: new Date().toISOString() }));
 
@@ -405,13 +408,32 @@ describe('the lock a change holds', () => {
 
   const slowCode = 'return new Promise((resolve) => setTimeout(() => resolve(1), 60))';
 
-  it('is held while a change runs and released after, so an app that starts meanwhile refuses to open the database', async () => {
+  it('is held by a script with --admin and released after, so an app that starts meanwhile refuses to open the database', async () => {
     const dir = await appDataDir();
-    // A script, since exec's transaction code is synchronous and so cannot keep the command running
     const script = path.join(dir, 'slow.mjs');
     fs.writeFileSync(script, `export default () => new Promise((resolve) => setTimeout(() => resolve(1), 60));`);
-    expect(await writerDuring(['script', script, '--data-dir', dir], dir))
+    expect(await writerDuring(['script', script, '--admin', '--data-dir', dir], dir))
       .toEqual({ during: `apack db script (pid ${process.pid})`, after: null });
+  });
+
+  it('is not held by a command changing rows, so an app can start beside it', async () => {
+    const dir = await appDataDir();
+    const script = path.join(dir, 'slow.mjs');
+    fs.writeFileSync(script, `export default () => new Promise((resolve) => setTimeout(() => resolve(1), 60));`);
+    expect(await writerDuring(['script', script, '--data-dir', dir], dir)).toEqual({ during: null, after: null });
+  });
+
+  it('refuses a command changing rows while another tool is replacing the database', async () => {
+    const dir = await appDataDir();
+    const held = holdDatabaseWriteLock(dir, 'apack db import');
+    try {
+      const { error } = await run(['exec', "write('Note-a').set('title', 'Changed')", '--data-dir', dir]);
+      expect(error?.message).toContain(`being changed by apack db import (pid ${process.pid})`);
+      expect(error?.message).toContain('then try again');
+    } finally {
+      held.release();
+    }
+    expect((await ok(['query', "return getRow('Note-a')?.title", '--data-dir', dir])).out).toBe('Alpha');
   });
 
   it('is not taken by a command that only reads', async () => {
@@ -436,7 +458,7 @@ describe('the lock a change holds', () => {
     expect(findDatabaseWriter(dir)).toBeNull();
     // So does one refused because an app is running
     holdLock(dir);
-    expect((await run(['exec', 'return 1', '--data-dir', dir])).error?.message).toMatch(/quit it first/);
+    expect((await run(['clear-settings', '--force', '--data-dir', dir])).error?.message).toMatch(/quit it first/);
     expect(findDatabaseWriter(dir)).toBeNull();
   });
 });
@@ -472,21 +494,130 @@ describe('apack db exec', () => {
     expect(JSON.parse(titles.out)).toEqual(['Beta, "quoted"', 'Changed', 'New']);
   });
 
-  it('refuses while an app holds the data dir or its API answers, changing nothing', async () => {
-    const locked = await appDataDir();
-    holdLock(locked);
-    const byLock = await run(['exec', "write('Note-a').set('title', 'Changed')", '--data-dir', locked]);
-    expect(byLock.error?.message).toMatch(/^apack is running on [\s\S]*quit it first/);
-    // The marker outlives a crash and its pid can be one the OS has since reused, so the refusal has to
-    // name the file: without it the data dir is one no tool could ever write to again
-    expect(byLock.error?.message, 'the refusal gave no way out').toContain(`delete ${path.join(_appDirOf(locked), 'app.lock')}`);
+  describe('beside a running app', () => {
+    const titleIn = async (dir: string) => (await ok(['query', "return getRow('Note-a')?.title", '--data-dir', dir])).out;
 
-    const served = await appDataDir();
-    publishApi(served);
-    const byPort = await run(['exec', "write('Note-a').set('title', 'Changed')", '--data-dir', served]);
-    expect(byPort.error?.message).toMatch(new RegExp(`its API is running on port 3001 \\(pid ${process.pid}\\)`));
-    const { out } = await ok(['query', "return getRow('Note-a')?.title", '--data-dir', served]);
-    expect(out).toBe('Alpha');
+    /** An app on the data dir, as a tool finds one: what its API publishes */
+    const runningApp = (dir: string) => {
+      fs.writeFileSync(path.join(_appDirOf(dir), 'api-port'), JSON.stringify({ port: 4321, pid: process.pid }));
+    };
+
+    it('refuses an invalid settings row as it commits, keeping what was there', async () => {
+      const dir = await appDataDir();
+      const row = async () => (await ok(['query', "return typeof getRow('Settings-app')?.data", '--data-dir', dir])).out;
+      const before = await row();
+      const bad = "upsert(EARS.Entity.Settings, { id: 'Settings-app', data: 'not settings' })";
+      for (const code of [bad, `${bad}; ${bad}`]) {
+        const { error } = await run(['exec', code, '--data-dir', dir]);
+        expect(error?.message).toMatch(/Nothing it wrote was kept/);
+      }
+      expect(await row()).toBe(before);
+
+      const script = path.join(dir, 'settings.mjs');
+      fs.writeFileSync(script, `export default ({ db }) => db.ears.upsert('Settings', { id: 'Settings-app', data: 'not settings' });`);
+      expect((await run(['script', script, '--data-dir', dir])).error?.message).toMatch(/JSON object|must be/);
+      expect(await row()).toBe(before);
+
+      await ok(['exec', "upsert(EARS.Entity.Settings, { id: 'Settings-app', data: {} })", '--data-dir', dir]);
+      expect(await row()).toBe('object');
+    });
+
+    it('checks a settings write against the packs installed now, not those it first read', async () => {
+      const dir = await appDataDir();
+      const invalid = "upsert(EARS.Entity.Settings, { id: 'Settings-app', data: { features: { 'default-setup/threads': { chat: { defaultMode: 5 } } } } })";
+      const packDir = path.join(_appDirOf(dir), 'packs', 'default-setup');
+      const err: string[] = [];
+      const refused = () => err.filter((line) => line.startsWith('Error:'));
+      async function* lines() {
+        yield `${invalid}\n`;
+        // A stream reads ahead, so the first line's answer is what says it ran
+        await vi.waitFor(() => expect(refused()).toHaveLength(1), { timeout: 30_000 });
+        // Uninstalled while the session is open: the threads feature's settings are no longer declared
+        fs.rmSync(packDir, { recursive: true });
+        yield `${invalid}\n`;
+        yield '.exit\n';
+      }
+      await dbRepl(['--write', '--data-dir', dir], { out: () => {}, err: (line) => err.push(line) }, Readable.from(lines()));
+      expect(refused(), 'the first refused, as must be a string; the second taken').toHaveLength(1);
+      expect(refused()[0]).toMatch(/must be string/);
+    });
+
+    it('gives a script rows and not the admin, whether or not an app is running', async () => {
+      const closed = await appDataDir();
+      const open = await appDataDir();
+      runningApp(open);
+      for (const dir of [closed, open]) {
+        for (const reach of ['db.admin', 'db.database', 'db.ears.admin']) {
+          const script = path.join(dir, `reach-${reach}.mjs`);
+          fs.writeFileSync(script, `export default ({ db }) => ${reach};`);
+          const { error } = await run(['script', script, '--data-dir', dir]);
+          expect(error?.message).toContain(`uses ${reach} only with --admin`);
+        }
+        const reads = path.join(dir, 'reads.mjs');
+        fs.writeFileSync(reads, "export default ({ db }) => db.ears.getRow('Note-a')?.title;");
+        expect((await ok(['script', reads, '--data-dir', dir])).out).toBe('Alpha');
+      }
+    });
+
+    it('gives a script the admin with --admin, which an app running there refuses', async () => {
+      const closed = await appDataDir();
+      const script = path.join(closed, 'admin.mjs');
+      fs.writeFileSync(script, 'export default ({ db }) => typeof db.admin.getAllEntities;');
+      expect((await ok(['script', script, '--admin', '--data-dir', closed])).out).toBe('function');
+
+      const open = await appDataDir();
+      runningApp(open);
+      const { error } = await run(['script', script, '--admin', '--data-dir', open]);
+      expect(error?.message).toMatch(/quit it first/);
+    });
+
+    it('reopens a write repl when an app has declared a schema since it opened', async () => {
+      const dir = await appDataDir();
+      const elmdb = createRequire(createRequire(import.meta.url).resolve('@apackdev/ears/package.json')).resolve('elmdb');
+      async function* lines() {
+        yield "write('Note-a').set('title', 'Before')\n";
+        await promisify(execFile)(process.execPath, ['-e', [
+          `const { Database } = require(${JSON.stringify(elmdb)});`,
+          'const database = Database.open(process.argv[1]);',
+          "database.setSchema({ ...database.schema, roles: { ...database.schema.roles, declared_since: {} } });",
+          'database.close();',
+        ].join('\n'), _appDataPaths(dir).lmdb]);
+        yield "write('Note-a').set('title', 'After')\n";
+        yield '.exit\n';
+      }
+      const err: string[] = [];
+      await dbRepl(['--write', '--data-dir', dir], { out: () => {}, err: (line) => err.push(line) }, Readable.from(lines()));
+      expect(err.filter((line) => line.startsWith('Error:'))).toEqual([]);
+      expect(await titleIn(dir)).toBe('After');
+    });
+
+    it('reopens a write repl when another process has replaced the data since it opened', async () => {
+      const dir = await appDataDir();
+      const elmdb = createRequire(createRequire(import.meta.url).resolve('@apackdev/ears/package.json')).resolve('elmdb');
+      async function* lines() {
+        yield "write('Note-a').set('title', 'Before')\n";
+        await promisify(execFile)(process.execPath, ['-e', [
+          `const { Database } = require(${JSON.stringify(elmdb)});`,
+          'const database = Database.open(process.argv[1]);',
+          'database.reset();',
+          'database.close();',
+        ].join('\n'), _appDataPaths(dir).lmdb]);
+        yield "create(EARS.Entity.Note, { title: 'After', content: '', completed: false, displayOrder: 0, hideCompletedChildren: false, icon: '', lastSeen: 0, noteType: 'document' })\n";
+        yield '.exit\n';
+      }
+      const err: string[] = [];
+      await dbRepl(['--write', '--data-dir', dir], { out: () => {}, err: (line) => err.push(line) }, Readable.from(lines()));
+      expect(err.filter((line) => line.startsWith('Error:'))).toEqual([]);
+      expect((await ok(['query', "return query(EARS.Entity.Note).where('title', 'After').count()", '--data-dir', dir])).out).toBe('1');
+    });
+
+    it('still refuses to clear the settings under it, changing nothing', async () => {
+      const dir = await appDataDir();
+      runningApp(dir);
+      const clearing = await run(['clear-settings', '--force', '--data-dir', dir]);
+      expect(clearing.error?.message).toMatch(/quit it first/);
+      expect(await titleIn(dir)).toBe('Alpha');
+    });
   });
 
   it('keeps none of what the code wrote when it throws part way', async () => {
@@ -507,17 +638,6 @@ describe('apack db repl', () => {
     await dbRepl(['--data-dir', dir], { out: (l) => out.push(l), err: (l) => err.push(l) }, input);
     expect(out).toEqual(['Alpha', '2']);
     expect(err).toContain('Error: write is not defined');
-  });
-
-  it('refuses a --write session while an app runs on the data dir, changing nothing', async () => {
-    const dir = await appDataDir();
-    holdLock(dir);
-    const io = { out: () => {}, err: () => {} };
-    const input = Readable.from(["write('Note-a').set('title', 'From the repl')\n"]);
-    await expect(dbRepl(['--data-dir', dir, '--write'], io, input)).rejects
-      .toThrow(/^apack is running on .* \(its process is running \(pid \d+\)\): quit it first/);
-    const { out } = await ok(['query', "return getRow('Note-a')?.title", '--data-dir', dir]);
-    expect(out).toBe('Alpha');
   });
 
   it('reads while an app runs, warning as the other commands do', async () => {
@@ -763,7 +883,6 @@ describe('apack db script', () => {
     const dir = await appDataDir();
     const write = writeScript(dir, 'write.ts', "export default ({ db }: any) => db.ears.write('Note-a').set('title', 'Changed');");
     publishApi(dir);
-    expect((await run(['script', write, '--data-dir', dir])).error?.message).toMatch(/quit it first/);
 
     const read = writeScript(dir, 'read.ts', "export default ({ db }: any) => db.ears.getRow('Note-a')?.title;");
     const { out, err } = await ok(['script', read, '--data-dir', dir, '--read-only']);
@@ -910,7 +1029,7 @@ describe('a dry run of a command that changes data', () => {
     expect(listed.out).toContain('Would delete the database');
     expect(listed.err).toMatch(/Warning: apack is running on it/);
     // Only the change itself is refused
-    expect((await run(['reset', '--force', '--data-dir', running])).error?.message).toMatch(/quit it first/);
+    expect((await run(['clear-settings', '--force', '--data-dir', running])).error?.message).toMatch(/quit it first/);
 
     const copy = await appDataDir();
     const { lmdb } = _appDataPaths(copy);
@@ -958,7 +1077,7 @@ describe('apack db reset', () => {
     const forced = await ok(['reset', '--force', '--data-dir', dir]);
     expect(forced.out).toContain('Reset.');
     expect(JSON.parse(fs.readFileSync(secretsFile, 'utf-8')).secrets).toEqual([]);
-    expect(fs.existsSync(_appDataPaths(dir).runHistory)).toBe(false);
+    expect((await ok(['runs', '--data-dir', dir])).out, 'emptied in place, since a running app holds it open').not.toContain('flow');
     const after = await ok(['query', 'return query.withTrashed.all().ids()', '--data-dir', dir, '-o', 'json']);
     expect(JSON.parse(after.out)).toEqual([]);
     expect((await ok(['reset', '--data-dir', dir])).out).toContain('Would delete 0 stored API key(s)');
@@ -978,11 +1097,11 @@ describe('apack db reset', () => {
     expect(JSON.parse((await ok(['query', 'return query.withTrashed.all().ids()', '--data-dir', dir, '-o', 'json'])).out)).toEqual([]);
   });
 
-  it('refuses while an app runs on the data dir', async () => {
+  it('goes ahead beside a running app, saying that it starts over', async () => {
     const dir = await appDataDir();
     publishApi(dir);
-    expect((await run(['reset', '--force', '--data-dir', dir])).error?.message).toMatch(/quit it first/);
-    expect((await ok(['query', 'return query.withTrashed("Note").count()', '--data-dir', dir])).out).toBe('2');
+    expect((await ok(['reset', '--force', '--data-dir', dir])).out).toContain('running apack starts over');
+    expect((await ok(['query', 'return query.withTrashed("Note").count()', '--data-dir', dir])).out).toBe('0');
   });
 });
 

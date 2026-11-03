@@ -22,6 +22,7 @@ import {
   DECLARES_SOURCE_BY_DESIGN, findMissingSourceConditions, RESOLVES_DIST_BY_DESIGN, sourceConditionPackages,
 } from './lib/import-source-conditions.ts';
 import { backed, type ImportRule, type PackParity, packRule } from './lib/import-rules.ts';
+import { importedCallsIn } from './lib/imported-calls.ts';
 import { loadedByThePools, syncSpawnImportsIn } from './lib/process-spawns.ts';
 import { listLines, ruleRows as rowsOf, type RuleRow, ruleTable } from './lib/import-list.ts';
 
@@ -569,6 +570,75 @@ export function findSyncSpawnsInSlowSpecs(files: readonly string[] = loadedByThe
   return problems.sort();
 }
 
+const COMPILER_RUNNERS = new Set(['captureCompilerInstallation', 'createPackBuilder']);
+const COMPILER_RUN_ALLOWED: Record<string, string> = {
+  'packages/apack-cli/tests/build/compiler-runtime-copy.spec.ts': 'captures an inert file as its runtime and never runs it',
+};
+
+/**
+ * `file: captureCompilerInstallation` for each spec in the CLI's fast half that captures a compiler or builds through a
+ * real pack builder, and each `COMPILER_RUN_ALLOWED` entry that no longer does.
+ *
+ * Those cases belong in `*.native.spec.ts`, in the Linux container: a captured runtime is a fresh native copy, which
+ * macOS assesses on first launch, so a case running one on a Mac in the fast half measures the machine.
+ */
+export function findCompilerRunsInFastSpecs(files: readonly string[] = filesUnder(['packages/apack-cli/tests'], repoRoot),
+  root = repoRoot, allowed = COMPILER_RUN_ALLOWED): string[] {
+  const applied = new Set<string>();
+  const fast = files.filter((file) => file.endsWith('.spec.ts') && !/\.(integration|native)\.spec\.ts$/.test(file));
+  const problems = fast.flatMap((file) => {
+    const found = importedCallsIn(file, { names: COMPILER_RUNNERS });
+    if (found.length === 0) return [];
+    const relative = repoRelative(root, file);
+    if (allowed[relative] !== undefined) { applied.add(relative); return []; }
+    return [`${relative}: ${[...new Set(found)].join(', ')}`];
+  });
+  for (const [relative, reason] of Object.entries(allowed)) {
+    if (!applied.has(relative)) problems.push(`${relative}: listed in COMPILER_RUN_ALLOWED (${reason}) but it no longer captures a compiler`);
+  }
+  return problems.sort();
+}
+
+const NODE_FS = new Set(['node:fs', 'fs']);
+const CHOKIDAR = new Set(['chokidar']);
+const WATCHER_FACTORIES = new Set(['createFrontendWatcher', 'startTestPackBuildWatcher']);
+
+/**
+ * `file: fs.watch` for each `*.integration.spec.ts` the pools load that starts a live filesystem watcher: `watch` from
+ * `fs`, any call of `chokidar`, or a factory in `WATCHER_FACTORIES`.
+ *
+ * Those cases belong in `*.native.spec.ts`, in the Linux container. On a Mac an event's delay is set by a machine-wide
+ * service, so a case in the integration pool waiting on one measures the load on the machine. It does not see a
+ * watcher a spec reaches through a fixture's method or a Vite server's `server.watcher`.
+ */
+export function findLiveWatchersInIntegrationSpecs(files: readonly string[] = loadedByThePools(repoRoot), root = repoRoot): string[] {
+  return files.filter((file) => file.endsWith('.integration.spec.ts')).flatMap((file) => {
+    const found = [
+      ...importedCallsIn(file, { fromModules: NODE_FS }).filter((call) => /(^|\.)watch$/.test(call)),
+      ...importedCallsIn(file, { fromModules: CHOKIDAR }),
+      ...importedCallsIn(file, { names: WATCHER_FACTORIES }),
+    ];
+    return found.length === 0 ? [] : [`${repoRelative(root, file)}: ${[...new Set(found)].join(', ')}`];
+  }).sort();
+}
+
+/** The compiler's own report directory, watched for one frontend process's life: no build input is read through it. */
+const WATCHES_OUTSIDE_INPUT_SUBSCRIPTIONS = ['packages/apack-cli/src/build/frontend-process.ts'];
+const INPUT_SUBSCRIPTIONS = 'packages/apack-cli/src/build/input-subscriptions.ts';
+
+/**
+ * `file: fs.watch` for each module of the pack watcher that opens a watch itself. On macOS every `fs.watch` on a directory
+ * in a process shares one event stream, and opening or closing any of them discards what that stream had not delivered.
+ * `createInputSubscriptions` is what keeps a wanted watch open and tells its caller to look again when the set moves.
+ */
+export function findRawWatchesInBuild(files: readonly string[] = filesUnder(['packages/apack-cli/src/build'], repoRoot), root = repoRoot): string[] {
+  const allowed = new Set([INPUT_SUBSCRIPTIONS, ...WATCHES_OUTSIDE_INPUT_SUBSCRIPTIONS]);
+  return files.filter((file) => file.endsWith('.ts') && !allowed.has(repoRelative(root, file))).flatMap((file) => {
+    const found = importedCallsIn(file, { fromModules: NODE_FS }).filter((call) => /(^|\.)watch$/.test(call));
+    return found.length === 0 ? [] : [`${repoRelative(root, file)}: ${[...new Set(found)].join(', ')}`];
+  }).sort();
+}
+
 /** The consumers of SHARED_INSTANCE_PACKAGES (@apackdev/host/build/shared-deps), which must not list the packages themselves */
 export const SHARED_LIST_CONSUMERS = [
   'packages/apack-cli/src/build/be-bundler.ts',
@@ -805,6 +875,24 @@ const RULE_LIST = [
     repoOnly: { kind: 'inapplicable', note: "Its subject is this repo's integration and native test pools, which no pack has" },
     find: findSyncSpawnsInSlowSpecs,
     rule: 'Start a process asynchronously in the integration and native halves — promisify(execFile) with a timeout, or runCommand (apack-cli tests/_support/run-command.ts) for a CLI or vitest process tree: a synchronous one blocks the worker, so no timeout fires and the RPC window expires',
+  },
+  {
+    id: 'findCompilerRunsInFastSpecs',
+    repoOnly: { kind: 'inapplicable', note: "Its subject is the CLI's own test tiers, which no pack has" },
+    find: findCompilerRunsInFastSpecs,
+    rule: 'Run a captured compiler in a *.native.spec.ts, which runs in the Linux container: on a Mac each fresh copy is assessed on first launch',
+  },
+  {
+    id: 'findLiveWatchersInIntegrationSpecs',
+    repoOnly: { kind: 'inapplicable', note: "Its subject is this repo's integration test pool, which no pack has" },
+    find: findLiveWatchersInIntegrationSpecs,
+    rule: 'Hold a live filesystem watcher in a *.native.spec.ts, which runs in the Linux container: on a Mac how long an event takes depends on the load on the machine',
+  },
+  {
+    id: 'findRawWatchesInBuild',
+    repoOnly: { kind: 'inapplicable', note: "Its subject is the CLI's own pack watcher, which no pack has" },
+    find: findRawWatchesInBuild,
+    rule: 'Open a pack watcher\'s file watches through createInputSubscriptions (apack-cli build/input-subscriptions.ts): opening or closing one directly can lose events on every other watch in the process',
   },
   {
     id: 'findSharedPackageLists',

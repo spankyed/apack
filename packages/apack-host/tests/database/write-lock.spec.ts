@@ -158,8 +158,8 @@ describe('the database write lock', () => {
     expect(findDatabaseWriter(dir)).toBe(`apack db reset (pid ${process.pid})`);
     // A lock a killed tool left, whose pid something else now has, would otherwise leave no way forward
     expect(() => assertNoDatabaseWriter(dir)).toThrow(
-      `The database in ${dir} is being changed by apack db reset (pid ${process.pid}). Wait for it to finish, then start ` +
-      `apack again. If no tool is running, delete ${lockFile(dir)} and try again.`,
+      `The database in ${dir} is being changed by apack db reset (pid ${process.pid}). Wait for it to finish, then try again. `+
+      `If no tool is running, delete ${lockFile(dir)} and try again.`,
     );
     lock.release();
     expect(findDatabaseWriter(dir)).toBeNull();

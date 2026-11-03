@@ -10,7 +10,6 @@ import { UnknownBackupDatabasesError } from '@apackdev/sdk/services';
 import type { Contract } from './contract.ts';
 import { executeQuery } from './execute/query.ts';
 import { executeTransaction } from './execute/transaction.ts';
-import { generateSchemaInfo } from './repository/schema.ts';
 import type { RunNodeId } from '@apackdev/sdk/steps';
 import { createLogger } from '@apackdev/sdk/logger';
 import { services } from '#generated/services.ts';
@@ -71,9 +70,6 @@ const replaced = () => broadcastToSurface('database', { type: 'DATABASE_REPLACED
 export const databaseSystem = setup({
   types: databaseSpec.types,
   actions: databaseSpec.actions({
-    getSchema: ({ reply }) => {
-      reply?.({ type: 'SCHEMA_READ', schema: generateSchemaInfo() });
-    },
     /**
      * **Nothing here names the request, and nothing has to.** `reply` is bound to the delivery this handler
      * was entered in, which carries the call the request was sent under, so the answer names it whether it
@@ -293,9 +289,6 @@ export const databaseSystem = setup({
         },
         GENERATE_AI_QUERY: {
           actions: 'handleAiQuery',
-        },
-        GET_SCHEMA: {
-          actions: 'getSchema',
         },
         GET_FLOW_RUNS: {
           actions: 'getFlowRuns',

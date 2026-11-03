@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 import { parseArgs, type ParseArgsConfig } from 'node:util';
 import { resolveAppEnvironment, APP_ENVS, type AppEnvironment, type AppEnv } from '@apackdev/sdk/env';
-import { findRunningApp, holdDatabaseWriteLock, openAppDatabase, type AppDatabase } from '@apackdev/host/database';
+import { assertNoDatabaseWriter, findRunningApp, holdDatabaseWriteLock, openAppDatabase, type AppDatabase } from '@apackdev/host/database';
 import { consoleEars, type ConsoleScope } from '@apackdev/sdk/database-console';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { cliDirs } from '../../app/pack-host';
@@ -72,34 +72,40 @@ export function parseDbArgs<O extends NonNullable<ParseArgsConfig['options']>>(a
 }
 
 export interface OpenOptions {
-  /** The command changes the database: refused while an app runs on the data dir */
-  write: boolean;
+  /**
+   * What the command changes. `rows` go a unit at a time, which LMDB orders with anything else writing, an app included,
+   * so they hold no lock. `everything` replaces what others are using: it holds the data dir's write lock, and is refused
+   * while an app runs there. `all-rows` holds the lock so that no app starts under it, and goes ahead beside a running one,
+   * whose writes elmdb refuses until it has started over on what's there.
+   */
+  changes: 'nothing' | 'rows' | 'all-rows' | 'everything';
   /** The command's name, for the lock a change holds */
   command: string;
 }
 
 /**
  * Opens the target's database offline, after printing which data dir it is. A command that changes the database says
- * which data dir it means, so the production app's data is never the one a forgotten flag hits, and is refused while
- * an app runs on that data dir, which holds the database in memory and would overwrite the change or lose it; a read
- * warns that it may miss what the app hasn't written yet.
+ * which data dir it means, so the production app's data is never the one a forgotten flag hits. A read sees what an app
+ * running there has committed, and says so.
  */
-export async function openTarget(target: DbTarget, { write, command }: OpenOptions, io: DbIo): Promise<AppDatabase> {
+export async function openTarget(target: DbTarget, { changes, command }: OpenOptions, io: DbIo): Promise<AppDatabase> {
+  const write = changes !== 'nothing';
   if (write && !target.named) {
     throw new Error('Name the data dir to change: --profile <name> or --data-dir <path>');
   }
   io.err(`Database: ${target.userDataDir} (offline)`);
+  if (changes === 'rows') assertNoDatabaseWriter(target.userDataDir);
   // Taken before the check, so an app that starts from here on finds it and refuses to open the database
-  const lock = write ? holdDatabaseWriteLock(target.userDataDir, `apack db ${command}`) : null;
+  const lock = changes === 'everything' || changes === 'all-rows' ? holdDatabaseWriteLock(target.userDataDir, `apack db ${command}`) : null;
   try {
     const running = findRunningApp(target);
-    if (running && write) {
+    if (running && changes === 'everything') {
       // Named only here: a refusal has to say how to get out of it, and the file is the way out when the app
       // that wrote it is gone. The warning below must not say it — there the app really is running.
       const clear = running.marker ? ` If it isn't running, delete ${running.marker} and try again.` : '';
       throw new Error(`apack is running on ${target.userDataDir} (${running.why}): quit it first, this command changes its database.${clear}`);
     }
-    if (running) io.err(`Warning: apack is running on it (${running.why}); this reads what it has committed, as of each query`);
+    if (running && !write) io.err(`Warning: apack is running on it (${running.why}); this reads what it has committed, as of each query`);
     const db = await openAppDatabase({
       env: target.env,
       userDataDir: target.userDataDir,
@@ -120,19 +126,37 @@ export async function openTarget(target: DbTarget, { write, command }: OpenOptio
       io.err('  A query may name them here, and so may a write — but no installed pack checks what it writes, '
         + 'so name their pack with --schema-from before changing them.');
     }
-    return lock ? { ...db, close: () => { try { db.close(); } finally { lock.release(); } } } : db;
+    if (lock) return { ...db, close: () => { try { db.close(); } finally { lock.release(); } } };
+    return db;
   } catch (error) {
     lock?.release();
     throw error;
   }
 }
 
+/**
+ * What a script gets unless it asks for `--admin`: rows, and not the engine's or the database's admin, whose schema
+ * changes, loads and replacements an app running on the data dir can't take. The same whether one is running, since one can start
+ * while the script does. A guard against reaching for them, since a script runs as any code does.
+ */
+export function withoutAdmin(db: AppDatabase): AppDatabase {
+  const refuse = (what: string): never => {
+    throw new Error(`A script uses ${what} only with --admin, which needs apack closed on the data dir`);
+  };
+  return {
+    ...db,
+    ears: new Proxy(db.ears, { get: (engine, key) => (key === 'admin' ? refuse('db.ears.admin') : Reflect.get(engine, key)) }),
+    get admin() { return refuse('db.admin'); },
+    get database() { return refuse('db.database'); },
+  };
+}
+
 /** The message of whatever a command threw */
 const reason = (error: unknown) => (errorMessage(error));
 
 /**
- * Runs `use` with the database and closes it after, whatever happens. Closing syncs what the command committed to
- * disk, so a failure there is reported — but never in place of what the command hit first.
+ * Runs `use` with the database and closes it after whatever happens. Closing syncs what the command committed to disk,
+ * so a failure there is reported — but never in place of what the command hit first.
  */
 export async function withDatabase<T>(db: AppDatabase, use: () => Promise<T> | T): Promise<T> {
   let result: T;
@@ -145,8 +169,8 @@ export async function withDatabase<T>(db: AppDatabase, use: () => Promise<T> | T
   try {
     db.close();
   } catch (closeFailure) {
-    if (failure === undefined) throw closeFailure;
-    throw new Error(`${reason(failure)}\n  The database also failed to close: ${reason(closeFailure)}`, { cause: failure });
+    failure = failure === undefined ? closeFailure
+      : new Error(`${reason(failure)}\n  The database also failed to close: ${reason(closeFailure)}`, { cause: failure });
   }
   if (failure !== undefined) throw failure;
   return result!;

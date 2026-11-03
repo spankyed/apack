@@ -851,7 +851,7 @@
     "notes": {
       "description": "Write, organize and export notes.",
       "entities": {
-        "Note": { "shape": "src/features/notes/be/types.ts#NoteEntity", "indexes": ["title", "linkTargets"], "search": { "fields": { "title": 3, "content": 1 } } }
+        "Note": { "shape": "src/features/notes/be/types.ts#NoteEntity", "indexes": ["title", "linkTargets"], "search": { "fields": { "title": 3, "content": 1 } }, "changeOrder": true }
       },
       "settings": {
         "schema": {
@@ -902,6 +902,7 @@
         "noteCommands": "src/features/notes/be/repository/index.ts#noteCommands"
       },
       "views": "src/features/notes/be/views.ts#noteViews",
+      "projections": "src/features/notes/be/projections.ts#noteProjections",
       "references": {
         "types": {
           "note": {
@@ -1572,7 +1573,8 @@
       },
       "services": {
         "database": "src/features/database/be/services/database.ts#databaseService"
-      }
+      },
+      "views": "src/features/database/be/views.ts#databaseViews"
     },
     "logs": {
       "description": "Inspect app logs and diagnostic events.",
@@ -2369,6 +2371,7 @@
         "prefix": "database:",
         "globals": {
           "EARS": "typeof _dsl.EARS",
+          "catalog": "typeof _dsl.catalog",
           "query": "typeof _dsl.query",
           "getRow": "typeof _dsl.getRow",
           "getAttr": "typeof _dsl.getAttr",

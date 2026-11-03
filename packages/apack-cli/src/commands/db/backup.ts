@@ -34,7 +34,7 @@ export async function dbBackup(args: string[], io: DbIo): Promise<void> {
   let reserved = false;
   try {
     if (findRunningApp(target)) throw new Error('Quit the app before taking a full offline backup.');
-    const db = await openTarget(target, { write: false, command: 'backup' }, io);
+    const db = await openTarget(target, { changes: 'nothing', command: 'backup' }, io);
     await withDatabase(db, async () => {
       fs.mkdirSync(path.dirname(destination), { recursive: true });
       stage = fs.mkdtempSync(path.join(path.dirname(destination), '.apack-backup-'));

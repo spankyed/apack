@@ -1,6 +1,7 @@
-// The lock a tool holds while it changes a data dir's database (`apack db`), so an app that starts meanwhile
-// refuses to open the same database instead of overwriting the change from its own memory. A check alone can't do
-// that: the app could start in the moment between the check and the write.
+// The lock a tool holds while it replaces what others are using in a data dir: its whole database (`apack db reset`,
+// `import`), its stored settings or its packs. An app that starts meanwhile refuses to open the database rather than
+// run on what is being replaced, and a check alone can't do that: the app could start in the moment between the check
+// and the write. A tool changing rows holds none, since LMDB orders its commits with everything else writing.
 //
 // The mechanism is `../exclusive-lock.ts`, shared with the CLI's code generation. What is this module's own is the
 // policy: where the file lives, what the refusal says, and that the app asserts on it before opening a store.
@@ -42,14 +43,14 @@ export function holdDatabaseWriteLock(userDataDir: string, what: string): Databa
 }
 
 /**
- * Throws when a tool holds the lock for `userDataDir`: the app refuses to open a database another process is in the
- * middle of changing, rather than starting on data that is about to change under it.
+ * Throws when a tool holds the lock for `userDataDir`: neither an app nor a tool changing rows opens a database another
+ * process is in the middle of replacing.
  */
 export function assertNoDatabaseWriter(userDataDir: string): void {
   const held = findDatabaseWriter(userDataDir);
   if (held) {
     throw new Error(
-      `The database in ${userDataDir} is being changed by ${held}. Wait for it to finish, then start apack again. `
+      `The database in ${userDataDir} is being changed by ${held}. Wait for it to finish, then try again. `
       + clearHint(userDataDir),
     );
   }

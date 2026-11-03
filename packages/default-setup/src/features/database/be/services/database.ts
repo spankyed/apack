@@ -5,7 +5,7 @@
  * entities through `services.repository`; pack code imports `query`/`create`/`write` from `#generated/ears`.
  */
 
-import { getRow, getSchemaStats, isEntityType, untypedQuery } from '@apackdev/sdk/ears';
+import { catalog, getRow, untypedQuery } from '@apackdev/sdk/ears';
 import { findRelations } from '@apackdev/sdk/ears';
 
 /**
@@ -16,9 +16,7 @@ import { findRelations } from '@apackdev/sdk/ears';
 export function buildQueryContext(): { schema: string; topology: string } {
   // Sample entities
   const schemaLines: string[] = [];
-  for (const type of Object.keys(getSchemaStats().entities)) {
-    // The engine's own numbering rows are no type a query can name
-    if (!isEntityType(type)) continue;
+  for (const { name: type } of catalog().types) {
     const first = untypedQuery.withTrashed(type).first();
     if (!first) continue;
 

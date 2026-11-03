@@ -40,7 +40,7 @@ const loadedByThePool = (): string[] => loadedByThePools(REPO_ROOT);
  * exists to catch, and a file-level list would wave it through.
  */
 const INVENTORY: Record<string, { calls: number; why: string }> = {
-  'packages/apack-cli/tests/build/fe-bundler-dev-server.integration.spec.ts': { calls: 1,
+  'packages/apack-cli/tests/build/fe-bundler-dev-server.native.spec.ts': { calls: 1,
     why: 'Separate Vite processes scan a live pack while its output is published. The Windows directory-sharing failure does not reproduce in a same-process server; each child owns a private cache and closes with the test' },
   'packages/apack-cli/tests/build/compiler-pe-libraries.native.spec.ts': { calls: 20,
     why: 'MSVC and ordinary loader fixtures prove actual DLL selection, copied-runtime SxS, pre-initialization refusal, OS assemblies and publisher-policy invalidation. Real Node/compiler processes retain their separate runtime proofs; these loader boundaries cannot be proved in-process' },
@@ -52,6 +52,8 @@ const INVENTORY: Record<string, { calls: number; why: string }> = {
     why: 'clang/cc compile the native fixtures, and an ordinary Node load is the control for which libraries the OS actually selects; in-process checks cannot establish OS loading or pre-initialization refusal' },
   'packages/apack-cli/tests/build/compiler-native-runtime.native.spec.ts': { calls: 5,
     why: 'the Electron driver must run under Electron to capture and launch its real framework distribution, which Node cannot emulate, and `codesign` verifies a signed copy; the Mach-O cases compile and launch real images, and an ordinary Node load is the default-fallback control, because only the OS loader shows what it selects' },
+  'packages/apack-cli/tests/build/compiler-installation.native.spec.ts': { calls: 2,
+    why: 'runs each captured installation as the process it is, and a real worker through fork, since what is captured is the subject' },
   'packages/apack-cli/tests/build/compiler-native-launch.native.spec.ts': { calls: 3,
     why: 'outside launch overrides (DYLD_* variables, an image suffix) are honoured by the OS loader alone, so their controls are real processes started with them set; in-process checks cannot establish what the loader selects' },
   'packages/apack-cli/tests/build/build-worker.native.spec.ts': { calls: 7,
@@ -66,6 +68,8 @@ const INVENTORY: Record<string, { calls: number; why: string }> = {
     why: '`pack info --json` and `pack doctor --json` through argv dispatch, whose printed JSON and exit codes are what the spec reads' },
   'packages/apack-cli/tests/build/dependency-graph.integration.spec.ts': { calls: 1,
     why: 'a build refused for a dependency clash, checked through the real process\'s exit code and output' },
+  'packages/apack-cli/tests/build/pack-builder.native.spec.ts': { calls: 2,
+    why: 'launches a captured runtime once before the shutdown cases start their readiness waits, and asks ps whether a descendant still runs' },
   'packages/apack-cli/tests/build/tool-identity.integration.spec.ts': { calls: 2,
     why: 'a copied packaged CLI is the subject: its helper chunk is edited between runs, which only separate processes loading that copy can observe' },
   'packages/apack-cli/tests/commands/scaffold.integration.spec.ts': { calls: 1,
@@ -76,9 +80,11 @@ const INVENTORY: Record<string, { calls: number; why: string }> = {
     why: 'vue-tsc, which needs the Vue language service that ts.createProgram is not; its two plain tsc spawns became the in-process typecheckPack' },
   'packages/apack-cli/tests/commands/app-install.integration.spec.ts': { calls: 1,
     why: 'macOS ditto creates real release-style ZIPs so installation verifies native extraction, executable permissions and bundle symlinks' },
-  'packages/apack-cli/tests/commands/db.integration.spec.ts': { calls: 3,
+  'packages/apack-cli/tests/commands/db.integration.spec.ts': { calls: 5,
     why: 'the CLI\'s db command against a data dir: it opens LMDB and exits, and neither survives being run in the worker; '
-      + 'and a process holding the database open to write, as a running app does, which one process can\'t be to itself' },
+      + 'a process holding the database open to write, as a running app does, which one process can\'t be to itself; '
+      + 'and one declaring a schema, and one resetting the data, after a repl opened, which a handle in this process would '
+      + 'not read as another\'s' },
   'packages/apack-cli/tests/commands/release.integration.spec.ts': { calls: 1,
     why: 'git, in a throwaway repository' },
   'packages/apack-cli/tests/_support/run-command.ts': { calls: 1,

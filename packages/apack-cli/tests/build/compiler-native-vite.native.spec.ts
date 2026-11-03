@@ -14,6 +14,9 @@ import { createCompilerWatchMatcher, mergeCompilerWatchPaths, type CompilerWatch
 import { nativeFixture, nativeLoad } from '../_support/native-libraries.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
 
+/** A ceiling for what's on its way on a machine with two cores and a build running: a wait ends as soon as it's met, and a dev server transforms a view in its own time */
+const SETTLES_MS = 60_000;
+
 // The native-library proofs are split by subject so the native half's shards can spread them; this one is
 // retained Vite's native inputs and process ownership.
 
@@ -159,7 +162,7 @@ it('tracks retained Vite ESM preload and loader inputs without freezing Vue sour
     const view = `http://localhost:${frontend.address.port}/src/View.vue`;
     expect(await (await fetch(view)).text()).toContain('VITE_ESM_BEFORE');
     fs.writeFileSync(path.join(pack, 'src/View.vue'), '<template>VITE_ESM_AFTER</template>');
-    await vi.waitFor(async () => expect(await (await fetch(view)).text()).toContain('VITE_ESM_AFTER'), { timeout: 2_000 });
+    await vi.waitFor(async () => expect(await (await fetch(view)).text()).toContain('VITE_ESM_AFTER'), { timeout: SETTLES_MS });
     expect(await frontend.isCurrent(signal)).toBe(true);
   } finally {
     if (previous === undefined) delete process.env.NODE_OPTIONS;
@@ -193,13 +196,13 @@ it('retains independent captured Vite owners through replacement and close', asy
     const children = fs.readFileSync(proof, 'utf8').trim().split('\n').map(line => JSON.parse(line)) as { root: number; child: number }[];
     expect(children.map(child => child.root)).toEqual(frontends.map(frontend => frontend.address.pid));
     await frontends[0]!.close();
-    await vi.waitFor(() => expect(() => process.kill(children[0]!.child, 0)).toThrow(), { timeout: 2_000 });
+    await vi.waitFor(() => expect(() => process.kill(children[0]!.child, 0)).toThrow(), { timeout: SETTLES_MS });
     expect(frontends[1]!.alive()).toBe(true);
     expect(() => process.kill(children[1]!.child, 0)).not.toThrow();
     expect(await frontends[1]!.isCurrent(signal)).toBe(true);
     expect(await (await fetch(`http://localhost:${frontends[1]!.address.port}/src/View.vue`)).text()).toContain('VITE_OWNED');
     await frontends[1]!.close();
-    await vi.waitFor(() => expect(() => process.kill(children[1]!.child, 0)).toThrow(), { timeout: 2_000 });
+    await vi.waitFor(() => expect(() => process.kill(children[1]!.child, 0)).toThrow(), { timeout: SETTLES_MS });
   } finally {
     if (previous === undefined) delete process.env.NODE_OPTIONS;
     else process.env.NODE_OPTIONS = previous;
@@ -251,13 +254,13 @@ it.runIf(process.platform === 'darwin')('watches external Vite native changes an
     await builder.serveFrontend(address => { if (address) addresses.push(address); });
     checkpoint('frontend ready');
     const view = `http://localhost:${addresses[0]!.port}/src/View.vue`;
-    expect(await (await fetch(view, { signal: AbortSignal.timeout(2_000) })).text()).toContain('NATIVE_WATCH');
-    await vi.waitFor(() => expect(current).toHaveBeenCalled(), { timeout: 2_000 });
+    expect(await (await fetch(view)).text()).toContain('NATIVE_WATCH');
+    await vi.waitFor(() => expect(current).toHaveBeenCalled(), { timeout: SETTLES_MS });
     await current.mock.results.at(-1)!.value;
     current.mockClear();
     const touched = new Date(Date.now() + 2_000);
     fs.utimesSync(fixture.library, touched, touched);
-    await vi.waitFor(() => expect(current).toHaveBeenCalled(), { timeout: 2_000 });
+    await vi.waitFor(() => expect(current).toHaveBeenCalled(), { timeout: SETTLES_MS });
     expect(await current.mock.results.at(-1)!.value).toBe(true);
     expect(publications).not.toHaveBeenCalled();
     checkpoint('unchanged touch checked');
@@ -271,14 +274,14 @@ it.runIf(process.platform === 'darwin')('watches external Vite native changes an
     builds.mockClear();
     fs.rmSync(fixture.marker);
     fs.renameSync(replacement, fixture.library);
-    await vi.waitFor(() => expect(builds).toHaveBeenCalled(), { timeout: 20_000 });
+    await vi.waitFor(() => expect(builds).toHaveBeenCalled(), { timeout: SETTLES_MS });
     // Wait for the detected rebuild itself, rather than timing compilation through a console spy.
     await expect(builds.mock.results[0]!.value).rejects.toThrow('Pack frontend exited before readiness');
     expect(errors).toHaveBeenCalledWith(expect.stringContaining('Build/reload failed'));
     checkpoint('missing dependency refused');
     expect(fs.existsSync(fixture.marker)).toBe(false);
     expect(addresses).toHaveLength(1);
-    expect(await (await fetch(view, { signal: AbortSignal.timeout(2_000) })).text()).toContain('NATIVE_WATCH');
+    expect(await (await fetch(view)).text()).toContain('NATIVE_WATCH');
 
     // Repair only the new dependency, outside the authored pack and the incumbent's inputs.
     const repaired = path.join(fixture.native, 'lib/new/libhelper.dylib');
@@ -286,11 +289,11 @@ it.runIf(process.platform === 'darwin')('watches external Vite native changes an
     builds.mockClear();
     fs.copyFileSync(helper, repaired);
     checkpoint('new dependency repaired');
-    await vi.waitFor(() => expect(builds).toHaveBeenCalled(), { timeout: 20_000 });
+    await vi.waitFor(() => expect(builds).toHaveBeenCalled(), { timeout: SETTLES_MS });
     checkpoint('repair rebuild started');
     await expect(builds.mock.results[0]!.value).resolves.toBeUndefined();
     checkpoint('repair rebuild completed');
-    await vi.waitFor(() => expect(publications).toHaveBeenCalledTimes(1), { timeout: 2_000 });
+    await vi.waitFor(() => expect(publications).toHaveBeenCalledTimes(1), { timeout: SETTLES_MS });
     checkpoint('repair published');
     expect(addresses).toHaveLength(2);
     expect(() => process.kill(addresses[0]!.pid, 0)).toThrow();
@@ -329,7 +332,7 @@ it.runIf(process.platform === 'darwin').each(['preload', 'thread'] as const)(
       compiler = await sharedCompiler.installation({ cwd: fixture.pack });
       process.env.NODE_OPTIONS = formatNodeOptions([...parseNodeOptions(previous), '--require', preload]);
       frontend = await startPackFrontend(fixture.pack, compiler, signal);
-      await vi.waitFor(() => expect(fs.existsSync(proof)).toBe(true), { timeout: 2_000 });
+      await vi.waitFor(() => expect(fs.existsSync(proof)).toBe(true), { timeout: SETTLES_MS });
       const loaded = JSON.parse(fs.readFileSync(proof, 'utf8').trim()) as { value: number; thread: number; libraries: string[] };
       expect(loaded.value).toBe(11);
       expect(loaded.thread > 0).toBe(site === 'thread');
@@ -344,7 +347,7 @@ it.runIf(process.platform === 'darwin').each(['preload', 'thread'] as const)(
       const view = `http://localhost:${frontend.address.port}/src/View.vue`;
       expect(await (await fetch(view)).text()).toContain('VITE_NATIVE_BEFORE');
       fs.writeFileSync(path.join(fixture.pack, 'src/View.vue'), '<template>VITE_NATIVE_AFTER</template>');
-      await vi.waitFor(async () => expect(await (await fetch(view)).text()).toContain('VITE_NATIVE_AFTER'), { timeout: 2_000 });
+      await vi.waitFor(async () => expect(await (await fetch(view)).text()).toContain('VITE_NATIVE_AFTER'), { timeout: SETTLES_MS });
       expect(await frontend.isCurrent(signal)).toBe(true);
       fs.writeFileSync(native.library, 'CHANGED');
       expect(await frontend.isCurrent(signal)).toBe(false);

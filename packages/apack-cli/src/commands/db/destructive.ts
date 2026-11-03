@@ -7,7 +7,7 @@ import { readInstalledContributionCatalog, disabledPackIds } from '@apackdev/hos
 import { createSettingsBackupValidator } from '@apackdev/host/settings';
 import type { EARS } from '@apackdev/ears';
 import { databaseBackupStore, importDatabase, readBackup, type BackupLog } from '@apackdev/host/backup';
-import { openRunHistory, type AppDatabase } from '@apackdev/host/database';
+import { findRunningApp, openRunHistory, resetRunHistoryInPlace, type AppDatabase } from '@apackdev/host/database';
 import { createSecretsStore } from '@apackdev/host/secrets';
 import { _secretProviderLabel } from '@apackdev/sdk/services';
 import { openTarget, parseDbArgs, TARGET_USAGE, withDatabase, type DbIo } from './target';
@@ -60,7 +60,7 @@ export const RESET_USAGE = [
   '',
   'Deletes all of the app\'s data, as Reset Database in the Database settings does: both database partitions and the',
   'stored API keys, which no backup holds: each is entered again in Settings → Secrets.',
-  'apack creates its default data again on its next start, and shows onboarding.',
+  'apack creates its default data again on its next start, and shows onboarding. A running apack does that as soon as it hears.',
   '',
   'Options:',
   FORCE_USAGE,
@@ -76,7 +76,7 @@ export async function dbReset(args: string[], io: DbIo): Promise<void> {
 
   // Without --force the database opens read-only. data.mdb may be read-only, but lock.mdb still needs
   // writable reader registration.
-  const db = await openTarget(target, { write: force, command: 'reset' }, io);
+  const db = await openTarget(target, { changes: force ? 'all-rows' : 'nothing', command: 'reset' }, io);
   const done = await withDatabase(db, async () => {
     const secrets = secretsStoreAt(db);
     const keys = fs.existsSync(db.paths.secretsFile) ? keyLines(secrets) : [];
@@ -95,12 +95,14 @@ export async function dbReset(args: string[], io: DbIo): Promise<void> {
       io.out(`\n${DRY_RUN}`);
       return null;
     }
+    // In place, since a running app holds it open. Its own database goes last: emptying that is what an app hears
+    if (hasHistory) resetRunHistoryInPlace(db.paths.runHistory);
+    if (!keepKeys) secrets.clearAll();
     // Every entry but the database's format and schema
     db.admin.clear();
-    // The write lock is held and no app runs on the data dir, so nothing has the run history open
-    if (hasHistory) fs.rmSync(db.paths.runHistory, { recursive: true, force: true });
-    if (!keepKeys) secrets.clearAll();
-    return '\nReset. apack creates its default data on its next start.';
+    return findRunningApp(target)
+      ? '\nReset. The running apack starts over with its default data.'
+      : '\nReset. apack creates its default data on its next start.';
   });
   if (done) io.out(done);
 }
@@ -143,7 +145,7 @@ export async function dbClearSettings(args: string[], io: DbIo): Promise<void> {
   const force = values.force as boolean;
 
   // Without --force nothing is destroyed, so the database opens read-only
-  const db = await openTarget(target, { write: force, command: 'clear-settings' }, io);
+  const db = await openTarget(target, { changes: force ? 'everything' : 'nothing', command: 'clear-settings' }, io);
   const done = await withDatabase(db, () => {
     const rows = db.admin.getEntitiesOfType(SETTINGS_ENTITY as EARS.Entity).map((id) => describeSettingsRow(db, id));
     if (rows.length === 0) {
@@ -186,7 +188,7 @@ export async function dbImport(args: string[], io: DbIo): Promise<void> {
   const force = values.force as boolean;
 
   // Without --force nothing is replaced, so the database opens read-only
-  const db = await openTarget(target, { write: force, command: 'import' }, io);
+  const db = await openTarget(target, { changes: force ? 'everything' : 'nothing', command: 'import' }, io);
   const done = await withDatabase(db, async () => {
     // The backup is checked before anything changes
     const environment = resolveAppEnvironment({ env: target.env, userDataDir: db.userDataDir });

@@ -126,7 +126,7 @@ export const sameWriter = (a: WriterRecord | null, b: WriterRecord | null): bool
 export function readApiEndpoint(apiPortFile: string): ApiEndpoint | null {
   let published: { port?: unknown; pid?: unknown };
   try {
-    published = JSON.parse(fs.readFileSync(apiPortFile, 'utf-8')) as { port?: unknown; pid?: unknown };
+    published = JSON.parse(fs.readFileSync(apiPortFile, 'utf-8')) as typeof published;
   } catch {
     return null;
   }

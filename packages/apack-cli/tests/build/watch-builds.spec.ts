@@ -23,7 +23,7 @@ beforeEach(() => {
     return controller.signal;
   });
   fixture.builder = {
-    build: fixture.build, close: fixture.close, serveFrontend: async () => undefined,
+    build: fixture.build, ensurePackages: async () => {}, close: fixture.close, serveFrontend: async () => undefined,
     isFrontendCurrent: async () => true, subscribeFrontendInputs: () => () => {},
   };
   const done = new Promise<void>(resolve => { fixture.finish = resolve; });

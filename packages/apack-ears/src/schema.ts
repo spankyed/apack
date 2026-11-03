@@ -135,6 +135,7 @@ export function toElmdbSchema(schema: EngineSchema): object {
       fields,
       additionalFields: 'allow',
       indexes,
+      ...(rules.changeOrder && { changeOrder: true }),
     });
   }
   const relations = Object.fromEntries(Object.entries(schema.relations).map(([kind, rules]) => [kind, {

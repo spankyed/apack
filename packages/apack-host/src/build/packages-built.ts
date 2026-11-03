@@ -55,6 +55,16 @@ export const REPO_ROOT = findCheckoutRoot();
 const repoFile = (...parts: string[]): string => path.join(REPO_ROOT, ...parts);
 const pkgFile = (pkg: string, ...parts: string[]): string => repoFile('packages', pkg, ...parts);
 
+interface CheckoutPaths {
+  repoFile(...parts: string[]): string;
+  pkgFile(pkg: string, ...parts: string[]): string;
+}
+
+const checkoutPaths = (root: string): CheckoutPaths => ({
+  repoFile: (...parts) => path.join(root, ...parts),
+  pkgFile: (pkg, ...parts) => path.join(root, 'packages', pkg, ...parts),
+});
+
 /**
  * Read by every build: the scripts that run it and the toolchain it runs with. This module is not among
  * them — it decides *whether* to build and cannot change what a build emits, so it is the cache's
@@ -63,7 +73,7 @@ const pkgFile = (pkg: string, ...parts: string[]): string => repoFile('packages'
  * inline it, and each unit's declared paths are part of its own fingerprint, so editing one unit's input set
  * invalidates that unit alone.
  */
-const SHARED_INPUTS = [repoFile('package.json'), repoFile('package-lock.json')];
+const sharedInputs = ({ repoFile }: CheckoutPaths): string[] => [repoFile('package.json'), repoFile('package-lock.json')];
 
 export interface BuildUnit {
   /** Files and directories the build reads, absolute; a directory is walked */
@@ -115,7 +125,8 @@ export interface BuildUnit {
 }
 
 /** A package compiled to its own `dist/` by `scripts/build-package.ts` (or, for @apackdev/ui, build-ui-package.ts) */
-function compiled(pkg: string, ...extraInputs: string[]): BuildUnit {
+function compiled(at: CheckoutPaths, pkg: string, ...extraInputs: string[]): BuildUnit {
+  const { repoFile, pkgFile } = at;
   return {
     // The build scripts live in the repo's scripts/, not the package's: a package's own scripts are its
     // other tooling (the SDK's schema generator) and no input of this build, bar @apackdev/ui's exports
@@ -127,7 +138,7 @@ function compiled(pkg: string, ...extraInputs: string[]): BuildUnit {
     // and it rebuilds three packages when `discover.ts` changes, which none of them reads.
     // `chain-inputs.spec.ts` walks the build script's imports and names anything undeclared — apart from
     // `NOT_A_BUILD_INPUT` below — so the guard is the maintenance a directory was standing in for.
-    inputs: [...SHARED_INPUTS, repoFile('scripts', 'lib', 'published-imports.ts'), repoFile('scripts', 'build-package.ts'),
+    inputs: [...sharedInputs(at), repoFile('scripts', 'lib', 'published-imports.ts'), repoFile('scripts', 'build-package.ts'),
       pkgFile('apack-host', 'src', 'build', 'published-manifest.ts'),
       pkgFile('apack-host', 'src', 'build', 'specifiers.ts'),
       pkgFile('apack-host', 'src', 'build', 'source-resolution.ts'),
@@ -166,9 +177,10 @@ const INLINED_SOURCE_DIRS = SHARED_INSTANCE_PACKAGES.map((name) => name.replace(
  * that emitted it. `chain-inputs.spec.ts` walks a build script's own imports, which these are not: the
  * bundler reaches them through the package being bundled.
  */
-function bundled(pkg: string, ...copiedPaths: string[]): BuildUnit {
+function bundled(at: CheckoutPaths, pkg: string, ...copiedPaths: string[]): BuildUnit {
+  const { repoFile, pkgFile } = at;
   return {
-    inputs: [...SHARED_INPUTS, repoFile('scripts', 'bundle-package.ts'),
+    inputs: [...sharedInputs(at), repoFile('scripts', 'bundle-package.ts'),
       repoFile('scripts', 'lib', 'published-imports.ts'), ...copiedPaths.map(file => pkgFile(pkg, file)),
       pkgFile(pkg, 'src'), pkgFile(pkg, 'package.json'), pkgFile(pkg, 'tsconfig.json'),
       pkgFile('apack-host', 'src'), pkgFile('apack-host', 'package.json'),
@@ -178,15 +190,21 @@ function bundled(pkg: string, ...copiedPaths: string[]): BuildUnit {
   };
 }
 
+/** What `npm run packages:build` builds in the checkout at `root`, which need not be the one this module runs from. */
+export function buildUnitsIn(root: string): Record<string, BuildUnit> {
+  const at = checkoutPaths(root);
+  return {
+    '@apackdev/ears': compiled(at, 'apack-ears'),
+    '@apackdev/sdk': compiled(at, 'apack-sdk'),
+    '@apackdev/ui': compiled(at, 'apack-ui', at.pkgFile('apack-ui', 'tsdown.config.ts'), at.repoFile('scripts', 'build-ui-package.ts'),
+      at.pkgFile('apack-ui', 'scripts', 'exports.ts')),
+    '@apackdev/testing': bundled(at, 'apack-testing'),
+    '@apackdev/cli': bundled(at, 'apack-cli', 'bin', 'templates'),
+  };
+}
+
 /** The workspaces `npm run packages:build` builds. `tests/build/package-freshness.spec.ts` pins this list against it. */
-export const BUILD_UNITS: Record<string, BuildUnit> = {
-  '@apackdev/ears': compiled('apack-ears'),
-  '@apackdev/sdk': compiled('apack-sdk'),
-  '@apackdev/ui': compiled('apack-ui', pkgFile('apack-ui', 'tsdown.config.ts'), repoFile('scripts', 'build-ui-package.ts'),
-    pkgFile('apack-ui', 'scripts', 'exports.ts')),
-  '@apackdev/testing': bundled('apack-testing'),
-  '@apackdev/cli': bundled('apack-cli', 'bin', 'templates'),
-};
+export const BUILD_UNITS: Record<string, BuildUnit> = buildUnitsIn(REPO_ROOT);
 
 /**
  * The script a workspace's `build:package` runs, repo-relative — read from that workspace's own manifest.
@@ -929,6 +947,22 @@ export function freshnessSweep(): {
       }
     },
   };
+}
+
+/**
+ * What a package build of these units would start from: the bytes under their inputs and their outputs. Equal
+ * before two builds means the second cannot answer differently, unless the failure came from outside the tree.
+ * A build holding the lock counts, by writing the outputs this covers. Scratch output does not: `.temp` is outside it.
+ */
+export function packageBuildState(units: readonly BuildUnit[]): string {
+  const files = new Set<string>();
+  for (const unit of units) {
+    for (const input of unit.inputs) for (const file of readTree.listInputs(input)) if (!skipsFingerprint(file)) files.add(file);
+    for (const output of unit.outputs) if (fs.existsSync(output)) for (const file of readTree.listOutputs(output)) files.add(file);
+  }
+  const hash = createHash('sha256');
+  for (const file of [...files].sort()) hash.update(`${file}\0${readTree.digest(file)}\0`);
+  return hash.digest('hex');
 }
 
 /** Every workspace of `packages:build` that needs building — empty when all of them are up to date */

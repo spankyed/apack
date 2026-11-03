@@ -34,6 +34,8 @@ const TIMEOUT_EXCEPTIONS: Record<string, string> = {
     'Explicit opt-in native probe: waits for a one-shot cron scheduled 95 seconds ahead, then verifies autonomous completion and a second host input. The private driver bounds the owned process; ordinary suites skip this case.',
   'packages/default-setup/tests/content/actions/claude-code/reset-chat-native.spec.ts > persists costs and session identity across native clear through compiled Chat':
     'Explicit opt-in native probe: starts the pinned process and verifies three compiled app turns across session reset. Its 20-second abort bounds the native process; ordinary suites skip this case.',
+  'packages/apack-cli/tests/build/watch-package-edit.native.spec.ts > publishes one build when a refresh rewrites what the pack builds against':
+    'One bounded cold watcher build (120s), one watched rebuild and the wait for a second build that must not start are sequential.',
   'packages/apack-cli/tests/commands/default-pack-archive.integration.spec.ts > beforeAll':
     'The real shipped-pack archive replays all captured inputs twice, stages and compresses output; its former combined case exceeded 60s in 39468282848 (67.9s). Give preparation the existing fork producer archive-operation allowance (180s); extraction/integrity assertions and cleanup retain their separate ordinary deadlines.',
   'packages/apack-cli/tests/commands/scaffold.integration.spec.ts > beforeAll':
@@ -55,10 +57,6 @@ const TIMEOUT_EXCEPTIONS: Record<string, string> = {
     "Three sequential real builds, including refusal and recovery, followed by integrity verification and disposal.",
   'packages/apack-cli/tests/build/watch-external-types.native.spec.ts > rebuilds external contracts and recovers a retargeted missing input without an authored edit':
     "Initial capture precedes replacement, refusal and recovery builds; watch-builds bounds each request/compiler operation before the unchanged notification checks.",
-  'packages/apack-cli/tests/build/pack-builder.spec.ts > cancels a frontend input check before retiring its compiler and workspace':
-    'An initial build and frontend start (the fast half\'s 15s), then up to 15s for the cancelled build to reach its frontend input check through a fresh worker, which the two-core Windows runner did not do within the 1s default wait (39655076999). Every retirement and cleanup assertion remains.',
-  'packages/apack-cli/tests/build/compiler-installation.spec.ts > owns a relative external esbuild executable and detects changed selection and bytes':
-    'Two full compiler captures (the selected override, then its changed bytes), each copying the runtime: about 7s apiece on the two-core Windows runner, 17.5s for the case in 39650866318. Each capture gets the fast half\'s 15s and the captured esbuild run 5s; every selection, byte and isolation assertion remains.',
   'packages/apack-cli/tests/build/compiler-pe-libraries.native.spec.ts > repairs a failed Vite assembly context through newly discovered watch inputs':
     'The cold initial build (120s; 118.6s on the two-core Windows runner in 39635524957) precedes four watch phases of up to 60s each: the initial frontend, the refused build, draining a refused build its own edits queued, and the repair build. Cleanup has 20s. Every refusal, subscription, publication and loaded-value assertion remains.',
   'packages/apack-cli/tests/build/build-worker.native.spec.ts > uses the captured compiler and retains unchanged build/cache identity on repeat builds':

@@ -31,6 +31,9 @@ Gatekeeper settings, or resume captured-runtime/native batches on the daily-use 
 
 ## Environment and ownership
 
+Current work requires Node `24.22.2` and npm `11.21.1`, matching CI. Verify or upgrade the VM before
+execution; the table below records its initial provisioning, not a completed toolchain upgrade.
+
 | Item | Initial configuration |
 |---|---|
 | Azure subscription | `Azure subscription 1`, Free Trial; spending limit verified **On** |

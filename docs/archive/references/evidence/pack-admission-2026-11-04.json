@@ -1,0 +1,463 @@
+{
+  "date": "2026-11-04",
+  "status": "warm-qualification-passed",
+  "applicationPullRequest": "https://github.com/spankyed/apack/pull/329",
+  "controlPullRequest": "https://github.com/spankyed/apack/pull/330",
+  "source": {
+    "baseline": "841f0548410f963e3626de6f8f580c480af2d754",
+    "candidate": "45f4b727e5ef28b738fdb9552536903aec996e68",
+    "merged": "4f3727764b22e62d640e3080c37c40ad5de35aff",
+    "applicationCI": "https://github.com/spankyed/apack/actions/runs/41757569997"
+  },
+  "environment": {
+    "runtime": {
+      "node": "24.22.2",
+      "v8": "13.6.233.17-node.63",
+      "osRelease": "6.17.8-orbstack-00308-g8f9c941121b1",
+      "electron": "44.9.3",
+      "chromium": "152.0.7977.167",
+      "appNode": "24.22.0",
+      "appV8": "15.2.124.43-electron.0",
+      "performancePolicy": "paired-focused-revisions-v1"
+    },
+    "native": {
+      "pin": "bc450ee1746adfee5294ba19acb96b44d1271f19",
+      "checkoutRevision": "bc450ee1746adfee5294ba19acb96b44d1271f19",
+      "dirty": false,
+      "excludedUntracked": [
+        ".apack-elmdb-built",
+        ".apack-elmdb-checkout",
+        ".apack-elmdb.lock"
+      ]
+    },
+    "machine": {
+      "platform": "linux",
+      "arch": "arm64",
+      "cpus": 2,
+      "memoryBytes": 6442450944,
+      "identity": "c63dead15017e44b8643dabc3bb20ebe79f9eedc9ded9d420e2f9f781ced2abb"
+    },
+    "assertedMachineId": "seagate-orbstack-arm64-node24-bc450-compiler-scratch-warm",
+    "recordingMode": "disabled",
+    "appData": "Disk-backed /tmp on OrbStack storage on APFS Seagate Portable Media",
+    "compilerCache": "Separate executable 2 GiB tmpfs, charged inside the unchanged 6 GiB container limit",
+    "sharedMemoryMiB": 256
+  },
+  "actions": {
+    "populated-startup": {
+      "cache": "fresh-process-warm-filesystem",
+      "fixture": {
+        "generator": "message-search-v1",
+        "seed": 0,
+        "sha256": "fdc894145a73053b09dc61228eeb3ff8a73f77dfb7363a7fcbbc6bb65b28baf7",
+        "distribution": {
+          "threads": 12,
+          "messagesPerThread": 100,
+          "matchingQueries": 2,
+          "matchesPerQuery": 20,
+          "resultLimit": 20,
+          "bodyRepetitions": 50
+        }
+      },
+      "baseline": {
+        "summary": {
+          "measured": 20,
+          "passed": 20,
+          "unsuccessful": 0,
+          "medianMs": 5737.092129500001,
+          "minMs": 4280.6145719999995,
+          "maxMs": 10051.010138
+        },
+        "warmupMs": [
+          4882.855552000001,
+          6370.133643,
+          6427.268273,
+          5612.077823,
+          5677.7911030000005
+        ],
+        "measuredMs": [
+          4425.351965,
+          7161.301227999999,
+          6975.789838000001,
+          5144.856252,
+          6489.374584,
+          4904.299863,
+          4280.6145719999995,
+          5214.4614679999995,
+          4562.914801000001,
+          4861.308156,
+          6284.339059,
+          5856.339481,
+          5293.497498000001,
+          5625.6259979999995,
+          10051.010138,
+          7358.168282,
+          5670.927569,
+          8019.8189139999995,
+          5863.1887320000005,
+          5803.25669
+        ]
+      },
+      "candidate": {
+        "summary": {
+          "measured": 20,
+          "passed": 20,
+          "unsuccessful": 0,
+          "medianMs": 4598.2518915,
+          "minMs": 3666.899686,
+          "maxMs": 8214.787704999999
+        },
+        "warmupMs": [
+          3986.502896,
+          4551.789095,
+          5149.67435,
+          4432.545612,
+          4723.0988179999995
+        ],
+        "measuredMs": [
+          3666.899686,
+          3700.927163,
+          4131.140331,
+          3707.812809,
+          4052.717387,
+          4466.169879,
+          4393.630787,
+          4217.532385,
+          4422.553629,
+          4472.766946000001,
+          5230.429058,
+          4783.647422999999,
+          5062.810762,
+          4723.7368369999995,
+          8214.787704999999,
+          6661.895056000001,
+          6317.81107,
+          4757.4784230000005,
+          5722.450476999999,
+          5354.408458
+        ]
+      },
+      "medianDifferenceMs": -1138.8402380000007,
+      "medianChangePercent": -19.85047847051487,
+      "policy": "Two isolated workers, five warmups per revision, then individually balanced ABBA actions; no tail-percentile claim",
+      "executionSha256": "60e6e93866ed5f23499ea8e4e041a38c241184ca6e026b5d4b256e59826b5a53"
+    },
+    "thread-open": {
+      "cache": "warm-process",
+      "fixture": {
+        "generator": "populated-threads-v1",
+        "seed": 0,
+        "sha256": "09c3c0ac20e9d01a7481b7bd139ba4fc403d569c836f0e42af51de82107f73d9",
+        "distribution": {
+          "threads": 2,
+          "messagesPerThread": 100,
+          "requestedPage": 50,
+          "bodyRepetitions": 50
+        }
+      },
+      "baseline": {
+        "summary": {
+          "measured": 20,
+          "passed": 20,
+          "unsuccessful": 0,
+          "medianMs": 735.2500000298023,
+          "minMs": 436.0999999642372,
+          "maxMs": 1701.5999999642372
+        },
+        "warmupMs": [
+          595.3000000119209,
+          777.1000000238419,
+          555.2000000476837,
+          743.4000000357628,
+          511.69999998807907
+        ],
+        "measuredMs": [
+          959.8000000119209,
+          752.9000000357628,
+          1427,
+          537.7000000476837,
+          731.4000000357628,
+          810.3999999761581,
+          526.5,
+          819.1999999880791,
+          482.19999998807907,
+          1701.5999999642372,
+          593.6999999880791,
+          832.3000000119209,
+          739.1000000238419,
+          530.4000000357628,
+          647.6999999880791,
+          436.0999999642372,
+          592.0999999642372,
+          1470,
+          544.6000000238419,
+          829.8999999761581
+        ]
+      },
+      "candidate": {
+        "summary": {
+          "measured": 20,
+          "passed": 20,
+          "unsuccessful": 0,
+          "medianMs": 502.2000000178814,
+          "minMs": 355.7999999523163,
+          "maxMs": 1187.800000011921
+        },
+        "warmupMs": [
+          746,
+          673.2999999523163,
+          733.8000000119209,
+          776.8999999761581,
+          698.5
+        ],
+        "measuredMs": [
+          1187.800000011921,
+          876.0999999642372,
+          667.5999999642372,
+          355.7999999523163,
+          645.5,
+          493,
+          876.3999999761581,
+          477.2000000476837,
+          991.1000000238419,
+          447.39999997615814,
+          510.7000000476837,
+          500.60000002384186,
+          433.5999999642372,
+          503.80000001192093,
+          455.69999998807907,
+          374.5,
+          723.1999999880791,
+          381.39999997615814,
+          609.1000000238419,
+          392.80000001192093
+        ]
+      },
+      "medianDifferenceMs": -233.05000001192093,
+      "medianChangePercent": -31.69670180244469,
+      "policy": "Two isolated workers, five warmups per revision, then individually balanced ABBA actions; no tail-percentile claim",
+      "executionSha256": "aefa2c7d0a9472ae57efb8cf62134d2e51398715ba7d1ee01d92d84f49d3de53"
+    }
+  },
+  "readerWork": {
+    "sameSealedPack": true,
+    "returnedAnswersDeepEqual": true,
+    "accounting": "Observed readFileSync calls under the sealed pack plus its root manifest; bytes returned, not physical device I/O",
+    "results": [
+      {
+        "variant": "baseline",
+        "operation": "readPackBuild",
+        "reads": 120,
+        "bytes": 35849826,
+        "receipt": {
+          "reads": 1,
+          "bytes": 12639
+        },
+        "snapshot": {
+          "reads": 2,
+          "bytes": 2237046
+        },
+        "contentIndex": {
+          "reads": 2,
+          "bytes": 62584
+        },
+        "manifest": {
+          "reads": 2,
+          "bytes": 145880
+        }
+      },
+      {
+        "variant": "admission",
+        "operation": "readPackBuild",
+        "reads": 117,
+        "bytes": 34627071,
+        "receipt": {
+          "reads": 1,
+          "bytes": 12639
+        },
+        "snapshot": {
+          "reads": 1,
+          "bytes": 1118523
+        },
+        "contentIndex": {
+          "reads": 1,
+          "bytes": 31292
+        },
+        "manifest": {
+          "reads": 1,
+          "bytes": 72940
+        }
+      },
+      {
+        "variant": "baseline",
+        "operation": "readBuiltPackSource",
+        "reads": 240,
+        "bytes": 71699074,
+        "receipt": {
+          "reads": 2,
+          "bytes": 25278
+        },
+        "snapshot": {
+          "reads": 4,
+          "bytes": 4474092
+        },
+        "contentIndex": {
+          "reads": 4,
+          "bytes": 125168
+        },
+        "manifest": {
+          "reads": 3,
+          "bytes": 218820
+        }
+      },
+      {
+        "variant": "admission",
+        "operation": "readBuiltPackSource",
+        "reads": 118,
+        "bytes": 34699433,
+        "receipt": {
+          "reads": 1,
+          "bytes": 12639
+        },
+        "snapshot": {
+          "reads": 1,
+          "bytes": 1118523
+        },
+        "contentIndex": {
+          "reads": 1,
+          "bytes": 31292
+        },
+        "manifest": {
+          "reads": 1,
+          "bytes": 72940
+        }
+      }
+    ]
+  },
+  "formatter": {
+    "cases": [
+      {
+        "locale": "en-US",
+        "timezoneId": "America/New_York",
+        "matches": true,
+        "creations": 1,
+        "invalidMatches": true
+      },
+      {
+        "locale": "en-GB",
+        "timezoneId": "Europe/London",
+        "matches": true,
+        "creations": 1,
+        "invalidMatches": true
+      },
+      {
+        "locale": "ar-EG",
+        "timezoneId": "Asia/Kathmandu",
+        "matches": true,
+        "creations": 1,
+        "invalidMatches": true
+      },
+      {
+        "locale": "ja-JP",
+        "timezoneId": "Australia/Lord_Howe",
+        "matches": true,
+        "creations": 1,
+        "invalidMatches": true
+      }
+    ],
+    "valuesPerCase": 50,
+    "distinctDateInstants": 6
+  },
+  "nativeStartup": {
+    "passed": 1,
+    "failed": 0,
+    "deadlineMs": 2000,
+    "name": "captures native launch identity and authored bytes before user preload changes, and dependency bytes at first read",
+    "durationMs": 503.17688700000053
+  },
+  "preparation": {
+    "candidate": {
+      "packSeconds": 444.5,
+      "runtimeSeconds": 213.5
+    },
+    "control": {
+      "packSeconds": 249.4,
+      "runtimeSeconds": 260.7
+    },
+    "coldRendererCheck": {
+      "outcome": "failed",
+      "reason": "Application state did not appear within the unchanged 45-second discovery deadline after Electron attached",
+      "electronAttachMs": 28760.123744000004
+    },
+    "diagnosticApplicationStateMs": {
+      "candidate": 10998.610759,
+      "control": 12657.147994
+    },
+    "warmFormatterCheck": "passed on unchanged source and deadlines"
+  },
+  "limitations": [
+    "Warm filesystem/process policies only; the retained cold renderer failure is not certified as fixed.",
+    "Single ARM64 Linux host with variable timing ranges and background workloads; no tail-latency or cross-machine claim.",
+    "Admission and formatter changes are compared together; timings do not isolate their individual contribution.",
+    "Preparation timings have different cache states and are not a paired performance comparison."
+  ],
+  "rawEvidence": {
+    "repositoryPath": ".apack/evidence/pack-admission-2026-11-04-45f4",
+    "manifestSha256": "4624fc2536a698bb29e266bca8fafcfe4d818fa6e5157e84f641f746519bcb55",
+    "files": 726
+  },
+  "builds": {
+    "baseline": [
+      {
+        "path": "packages/api/dist",
+        "sha256": "8e95c807df9b05b018be99496a273f1c2eb0cbf036982c8513be9e78ffc94b3a"
+      },
+      {
+        "path": "packages/main/dist",
+        "sha256": "c2563fba09c0e8a46774ff8735fd3bb049bdf32657d17431040201de62002d45"
+      },
+      {
+        "path": "packages/preload/dist",
+        "sha256": "a2bae9f4f8715defb9bf042116b4b15c86366fbbbcab13906eddf45e9d7e6b9f"
+      },
+      {
+        "path": "packages/renderer/dist",
+        "sha256": "c4cfd0028a443782759795427f86a469eefee68a6457fd79dcc8154ab9222544"
+      },
+      {
+        "path": "packages/default-setup/dist",
+        "sha256": "bceceae23136c41126fd0c0aaa954e107c728027ecf03e51847ad8272eac6064"
+      },
+      {
+        "path": "vendor/elmdb/crates/elmdb-node/elmdb.linux-arm64-gnu.node",
+        "sha256": "6bc8cf3c910064535a5c5400e6929f269cbc034748891e2745da0e9d5dbda08e"
+      }
+    ],
+    "candidate": [
+      {
+        "path": "packages/api/dist",
+        "sha256": "9fa92229635c6d39442f52cb4b57498a8d0f324f948623b1063e7d9459659761"
+      },
+      {
+        "path": "packages/main/dist",
+        "sha256": "c2563fba09c0e8a46774ff8735fd3bb049bdf32657d17431040201de62002d45"
+      },
+      {
+        "path": "packages/preload/dist",
+        "sha256": "a2bae9f4f8715defb9bf042116b4b15c86366fbbbcab13906eddf45e9d7e6b9f"
+      },
+      {
+        "path": "packages/renderer/dist",
+        "sha256": "c4cfd0028a443782759795427f86a469eefee68a6457fd79dcc8154ab9222544"
+      },
+      {
+        "path": "packages/default-setup/dist",
+        "sha256": "09c5787d9f12561450cc93ef95a4ea50543438029c8669c035446ced0996d077"
+      },
+      {
+        "path": "vendor/elmdb/crates/elmdb-node/elmdb.linux-arm64-gnu.node",
+        "sha256": "6bc8cf3c910064535a5c5400e6929f269cbc034748891e2745da0e9d5dbda08e"
+      }
+    ]
+  }
+}

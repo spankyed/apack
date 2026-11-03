@@ -314,6 +314,17 @@ export type SystemEvents =
 */
 | {
     type: 'DATA_REPLACED';
+}
+/**
+* Another process committed to the database, a local tool such as `apack db exec`, and rows may have changed in any
+* way, though most are as they were. Unlike `DATA_REPLACED` it doesn't mean work held over rows has lost them.
+*
+* Handling it is optional, as there: the bus also asks every system for its startup data. Declare it only for what
+* re-reading cannot fix. Rows derived from others are for a projection (`defineProjections`), which is caught up before
+* this arrives.
+*/
+| {
+    type: 'DATA_CHANGED_ELSEWHERE';
 };
 
 // @public

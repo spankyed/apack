@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { startPackBuildWatcher } from '../../src/build/watch.ts';
-import * as reload from '../../src/build/dev-reload.ts';
+import * as reload from '../../src/app/app-api.ts';
 import { compilerWatchFixture } from '../_support/compiler-watch-fixture.ts';
 
 const roots: string[] = [];
@@ -19,7 +19,7 @@ it('rebuilds an idle session on actual tooling filesystem events', async () => {
   vi.spyOn(reload, 'reloadPack').mockResolvedValue({ status: 'not-running', detail: 'fixture has no app' });
   let builds = 0;
   const watcher = await startPackBuildWatcher(pack, { builder: {
-    build: async () => { builds++; }, subscribeFrontendInputs: () => () => {}, isFrontendCurrent: async () => true,
+    build: async () => { builds++; }, ensurePackages: async () => {}, subscribeFrontendInputs: () => () => {}, isFrontendCurrent: async () => true,
   } });
   try {
     expect(builds).toBe(1);

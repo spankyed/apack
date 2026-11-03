@@ -34,14 +34,14 @@ beforeEach(() => {
 });
 afterEach(() => { fs.rmSync(temporary, { recursive: true, force: true }); });
 
-function fixture() {
+function fixture(resubscribed?: () => void) {
   const root = path.join(temporary, 'pack');
   fs.mkdirSync(root);
   const file = path.join(temporary, 'style.css');
   fs.writeFileSync(file, 'STYLE');
   const failed = vi.fn();
   const changed = vi.fn();
-  const watcher = createFrontendWatcher(root, undefined, changed, failed);
+  const watcher = createFrontendWatcher(root, undefined, changed, failed, [], resubscribed);
   return { watcher, failed, changed, inputs: { files: [file], directories: [], successful: true } };
 }
 
@@ -79,7 +79,7 @@ it('ignores errors from replaced subscriptions', async () => {
   try {
     await watcher.observe(inputs);
     const retired = state.resources[0]!;
-    await watcher.accept(inputs);
+    await watcher.accept({ ...inputs, files: [] });
     expect(retired.close).toHaveBeenCalledTimes(1);
     expect(() => retired.emit('error', new Error('retired'))).not.toThrow();
     expect(failed).not.toHaveBeenCalled();
@@ -93,7 +93,7 @@ it('waits for disposal already in progress during subscription replacement', asy
   const retiring = new Promise<void>(resolve => { begin = resolve; });
   const retired = new Promise<void>(resolve => { finish = resolve; });
   state.resources[0]!.close.mockImplementationOnce(() => { begin(); return retired; });
-  const replacing = watcher.accept(inputs);
+  const replacing = watcher.accept({ ...inputs, files: [] });
   await retiring;
   let closed = false;
   const closing = watcher.close().then(() => { closed = true; });
@@ -102,4 +102,30 @@ it('waits for disposal already in progress during subscription replacement', asy
   finish();
   await Promise.all([replacing, closing]);
   for (const entry of [...state.resources, ...state.guards.map(guard => guard.watcher)]) expect(entry.close).toHaveBeenCalledTimes(1);
+});
+
+it('holds its watches open and reports nothing when the inputs did not move', async () => {
+  const resubscribed = vi.fn();
+  const { watcher, inputs } = fixture(resubscribed);
+  try {
+    await watcher.observe(inputs);
+    expect(resubscribed).toHaveBeenCalledTimes(1);
+    const watches = [...state.resources, ...state.guards.map(guard => guard.watcher)];
+    expect(state.guards.length).toBeGreaterThan(0);
+    await watcher.accept(inputs);
+    await watcher.observe(inputs);
+    expect([...state.resources, ...state.guards.map(guard => guard.watcher)]).toEqual(watches);
+    for (const entry of watches) expect(entry.close).not.toHaveBeenCalled();
+    expect(resubscribed).toHaveBeenCalledTimes(1);
+  } finally { await watcher.close(); }
+});
+
+it('reports a change to the watches it holds', async () => {
+  const resubscribed = vi.fn();
+  const { watcher, inputs } = fixture(resubscribed);
+  try {
+    await watcher.observe(inputs);
+    await watcher.accept({ ...inputs, files: [] });
+    expect(resubscribed).toHaveBeenCalledTimes(2);
+  } finally { await watcher.close(); }
 });

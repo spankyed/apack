@@ -438,6 +438,7 @@ export const FeatureEntrySchema: z.ZodObject<{
             chunk?: "whole" | "paragraph" | "heading" | undefined;
         } | undefined;
         substrings?: readonly string[] | undefined;
+        changeOrder?: boolean | undefined;
     }>, Record<string, {
         shape?: string | undefined;
         shortCode?: string | undefined;
@@ -453,6 +454,7 @@ export const FeatureEntrySchema: z.ZodObject<{
             chunk?: "whole" | "paragraph" | "heading" | undefined;
         } | undefined;
         substrings?: readonly string[] | undefined;
+        changeOrder?: boolean | undefined;
     }>, z.core.$ZodTypeInternals<Record<string, {
         shape?: string | undefined;
         shortCode?: string | undefined;
@@ -468,6 +470,7 @@ export const FeatureEntrySchema: z.ZodObject<{
             chunk?: "whole" | "paragraph" | "heading" | undefined;
         } | undefined;
         substrings?: readonly string[] | undefined;
+        changeOrder?: boolean | undefined;
     }>, Record<string, {
         shape?: string | undefined;
         shortCode?: string | undefined;
@@ -483,6 +486,7 @@ export const FeatureEntrySchema: z.ZodObject<{
             chunk?: "whole" | "paragraph" | "heading" | undefined;
         } | undefined;
         substrings?: readonly string[] | undefined;
+        changeOrder?: boolean | undefined;
     }>>>>;
     designation: z.ZodOptional<z.ZodString>;
     settings: z.ZodOptional<z.ZodPreprocess<z.ZodObject<{
@@ -508,6 +512,7 @@ export const FeatureEntrySchema: z.ZodObject<{
     services: z.ZodOptional<z.ZodType<Record<string, string>, Record<string, string>, z.core.$ZodTypeInternals<Record<string, string>, Record<string, string>>>>;
     repositories: z.ZodOptional<z.ZodType<Record<string, string>, Record<string, string>, z.core.$ZodTypeInternals<Record<string, string>, Record<string, string>>>>;
     views: z.ZodOptional<z.ZodString>;
+    projections: z.ZodOptional<z.ZodString>;
     references: z.ZodOptional<z.ZodType<ReferenceDeclarations, unknown, z.core.$ZodTypeInternals<ReferenceDeclarations, unknown>>>;
 }, z.core.$strict>;
 
@@ -623,6 +628,7 @@ export const ManifestSchema: z.ZodObject<{
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
             substrings?: readonly string[] | undefined;
+            changeOrder?: boolean | undefined;
         }>, Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -638,6 +644,7 @@ export const ManifestSchema: z.ZodObject<{
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
             substrings?: readonly string[] | undefined;
+            changeOrder?: boolean | undefined;
         }>, z.core.$ZodTypeInternals<Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -653,6 +660,7 @@ export const ManifestSchema: z.ZodObject<{
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
             substrings?: readonly string[] | undefined;
+            changeOrder?: boolean | undefined;
         }>, Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -668,6 +676,7 @@ export const ManifestSchema: z.ZodObject<{
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
             substrings?: readonly string[] | undefined;
+            changeOrder?: boolean | undefined;
         }>>>>;
         relations: z.ZodOptional<z.ZodType<Record<string, {
             acyclic?: boolean | undefined;
@@ -734,6 +743,7 @@ export const ManifestSchema: z.ZodObject<{
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
             substrings?: readonly string[] | undefined;
+            changeOrder?: boolean | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -756,6 +766,7 @@ export const ManifestSchema: z.ZodObject<{
         services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
         views?: string | undefined;
+        projections?: string | undefined;
         references?: ReferenceDeclarations | undefined;
     }>, Record<string, {
         description: string;
@@ -774,6 +785,7 @@ export const ManifestSchema: z.ZodObject<{
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
             substrings?: readonly string[] | undefined;
+            changeOrder?: boolean | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
@@ -789,6 +801,7 @@ export const ManifestSchema: z.ZodObject<{
         services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
         views?: string | undefined;
+        projections?: string | undefined;
         references?: unknown;
     }>, z.core.$ZodTypeInternals<Record<string, {
         description: string;
@@ -807,6 +820,7 @@ export const ManifestSchema: z.ZodObject<{
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
             substrings?: readonly string[] | undefined;
+            changeOrder?: boolean | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -829,6 +843,7 @@ export const ManifestSchema: z.ZodObject<{
         services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
         views?: string | undefined;
+        projections?: string | undefined;
         references?: ReferenceDeclarations | undefined;
     }>, Record<string, {
         description: string;
@@ -847,6 +862,7 @@ export const ManifestSchema: z.ZodObject<{
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
             substrings?: readonly string[] | undefined;
+            changeOrder?: boolean | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
@@ -862,6 +878,7 @@ export const ManifestSchema: z.ZodObject<{
         services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
         views?: string | undefined;
+        projections?: string | undefined;
         references?: unknown;
     }>>>>;
     extensions: z.ZodOptional<z.ZodObject<{
@@ -1455,6 +1472,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
             substrings?: readonly string[] | undefined;
+            changeOrder?: boolean | undefined;
         }>, Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -1470,6 +1488,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
             substrings?: readonly string[] | undefined;
+            changeOrder?: boolean | undefined;
         }>, z.core.$ZodTypeInternals<Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -1485,6 +1504,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
             substrings?: readonly string[] | undefined;
+            changeOrder?: boolean | undefined;
         }>, Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -1500,6 +1520,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
             substrings?: readonly string[] | undefined;
+            changeOrder?: boolean | undefined;
         }>>>>;
         relations: z.ZodOptional<z.ZodType<Record<string, {
             acyclic?: boolean | undefined;
@@ -1865,6 +1886,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
             substrings?: readonly string[] | undefined;
+            changeOrder?: boolean | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -1896,6 +1918,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
             substrings?: readonly string[] | undefined;
+            changeOrder?: boolean | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
@@ -1920,6 +1943,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
             substrings?: readonly string[] | undefined;
+            changeOrder?: boolean | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -1951,6 +1975,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
             substrings?: readonly string[] | undefined;
+            changeOrder?: boolean | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
@@ -2066,6 +2091,7 @@ export function _packEntities(declaration: PackDataDeclarations): _PackEntityDec
 
 // @public
 export interface PackEntityDeclaration {
+    readonly changeOrder?: boolean;
     readonly embed?: PackEmbedDeclaration;
     readonly indexes?: readonly string[];
     readonly search?: PackSearchDeclaration;
@@ -2076,6 +2102,7 @@ export interface PackEntityDeclaration {
 
 // @internal
 export interface _PackEntityDeclaration {
+    changeOrder?: true;
     embed?: EmbedDeclaration;
     indexes?: readonly string[];
     // (undocumented)

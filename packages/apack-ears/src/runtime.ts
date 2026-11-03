@@ -72,6 +72,12 @@ export interface RowRules {
   /** The fields its trigram index reads, strings or lists of strings: what `containing` and `matching` find */
   substrings?: readonly string[];
   /**
+   * Whether the database keeps the type's entities in the order of the commits that last wrote them, which
+   * `changedSince` reads and a projection derives from. A write to one costs about a fifth more, so only a type
+   * something reads that from keeps one
+   */
+  changeOrder?: boolean;
+  /**
    * The type of each field the shape declares, as its TypeScript type maps to one of elmdb's (`FieldRule`): what the
    * database holds every write to, from every writer. A field the shape doesn't declare is still taken
    */
@@ -163,6 +169,13 @@ export interface SearchHit<E extends string = string> {
   highlights?: SearchHighlights;
 }
 
+/** What a `ranked` or a `rank` says of the scores its hits hold */
+export type RankBound =
+  /** A `ranked`: its index, and how far its scores may be from PageRank's, as an L1 distance */
+  | { index: string; error: number }
+  /** A `rank`: the rounds it ran, and whether its scores settled within them */
+  | { converged: boolean; iterations: number };
+
 /** Which of an entity's edges a walk follows (`pathTo`, `degrees`, `rank`): those out of it, those into it, or both */
 export type EdgeDirection = 'out' | 'in' | 'both';
 
@@ -181,7 +194,8 @@ export interface RankedOptions {
   /**
    * `compute`, the default, answers the same as the index will, costing what a `rank` does on every read until the build
    * ends. `refuse` throws `INDEX_BUILDING` instead, for a read too large or too frequent to pay that: a caller wanting
-   * nothing yet catches it, which keeps "still building" apart from a graph with nothing in it
+   * nothing yet catches it, which keeps "still building" apart from a graph with nothing in it. A `watch` that refused
+   * runs again as the index's build commits, and answers once it ends
    */
   whileBuilding?: 'compute' | 'refuse';
 }
@@ -506,6 +520,14 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
     options: { fields: A; highlights?: boolean },
   ): Array<SearchHit<E> & { row: { id: EARS.EntityId<E> } & Pick<ShapeOf<D['shapes'], E>, A[number]> }>;
   hits(options?: { highlights?: boolean }): SearchHit<E>[];
+  /**
+   * `hits`, with what the query's `ranked` or `rank` says of their scores: a `ranked`'s `error`, the one number that tells
+   * a reader the index has fallen behind, without an `explain()` to ask. Refused (`NO_SEARCH`) for a query with neither
+   */
+  rankedHits<A extends readonly (keyof ShapeOf<D['shapes'], E> & string)[]>(
+    options: { fields: A },
+  ): { hits: Array<SearchHit<E> & { row: { id: EARS.EntityId<E> } & Pick<ShapeOf<D['shapes'], E>, A[number]> }>; bound: RankBound };
+  rankedHits(): { hits: SearchHit<E>[]; bound: RankBound };
   ids(): EARS.EntityId<E>[];
   /**
    * The query's ids, with how the database found them: each stage of its plan — the index it read, the entities it

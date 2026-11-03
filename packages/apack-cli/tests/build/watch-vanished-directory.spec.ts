@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import { isVanishedSubdirectory } from '../../src/build/watch.ts';
+import { isVanishedSubdirectory } from '../../src/build/input-subscriptions.ts';
 
 let directory: string;
 const failure = (code: string, scanned?: string) => Object.assign(new Error(code), { code, path: scanned });

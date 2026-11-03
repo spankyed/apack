@@ -27,8 +27,10 @@ const COMMANDS: Record<string, { run: (args: string[], io: DbIo) => Promise<void
 export const DB_USAGE = `
 Usage: apack db <command> [options]
 
-The app's database, read and changed while apack is closed. Commands that change it refuse while apack runs
-on the data dir; reads warn that it is running, and read what it has committed.
+The app's database, opened from this process. exec, script and repl --write work while apack runs on the data dir,
+which hears each commit, and a settings row that fails its checks is refused as it commits. reset works beside it too,
+and the app starts over on its default data. import and clear-settings refuse while it runs. Reads warn that it is
+running, and read what it has committed.
 
 Commands:
   query <code>          Run read-only query code (the Database console's)

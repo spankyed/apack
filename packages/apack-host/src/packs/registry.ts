@@ -35,7 +35,7 @@ import { SDK_ENTITIES, SDK_REL_KINDS, SDK_RELATION_RULES, SDK_ROW_RULES, SDK_ROL
 import { HOST_SYSTEM_EVENT_TYPES, SURFACE_EVENT_TYPES } from '@apackdev/sdk/events';
 import { HOST_PACK_ID, resolveName, type FeatureRef } from '@apackdev/sdk/ids';
 import { HOST_ENTITY_TYPES } from '../app-state/index.ts';
-import { readInstalledPackBuilds, packContentOrder } from './discovery.ts';
+import { readInstalledPackBuilds, packContentOrder, type InstalledPackBuild } from './discovery.ts';
 import type { PackContentTarget } from './runtime/apply.ts';
 import { createOwnedStepStore, createDesignationStore } from './extensions.ts';
 import { createContentWriterStore, createApplierStore, createShutdownHooks } from './backend-extensions.ts';
@@ -204,7 +204,7 @@ export interface PackReplacementOptions {
 
 export interface PackRegistry extends PackRegistryView {
   readonly catalog: ContributionCatalog;
-  refreshCatalog(packsDir?: string, disabled?: ReadonlySet<string>): void;
+  refreshCatalog(packsDir?: string, disabled?: ReadonlySet<string>): InstalledPackBuild[];
   /** Registers a pack; throws on a collision, registering none of it */
   registerPack(pack: PackRegistration, origin?: PackOrigin): void;
   /** Replace an accepted runtime atomically; returns retirement errors after a successful commit. */
@@ -424,16 +424,17 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
 
   let catalogDir: string | undefined;
 
-  function refreshCatalog(packsDir = installedPacksDir?.() ?? catalogDir, disabled?: ReadonlySet<string>): void {
+  function refreshCatalog(packsDir = installedPacksDir?.() ?? catalogDir, disabled?: ReadonlySet<string>): InstalledPackBuild[] {
     const appSources = appPackSourcesDir?.();
     if (appPackSourcesDir) catalog.setAppPackSources(appSources === undefined
       ? { sources: [], problems: [] } : readAppPackSources(appSources));
-    if (!packsDir) return;
+    if (!packsDir) return [];
     disabled ??= disabledPackIds();
     const sources: PackCatalogSource[] = [];
     const problems: PackCatalogProblem[] = [];
     const previousByDir = new Map(catalog.getSnapshot().packs.map(entry => [entry.dir, entry]));
-    for (const entry of readInstalledPackBuilds(packsDir)) {
+    const discovered = readInstalledPackBuilds(packsDir);
+    for (const entry of discovered) {
       const { id, dir } = entry;
       if (entry.build) {
         const { snapshot, integrity } = entry.build;
@@ -447,6 +448,7 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     // The first discovery is boot's, which takes what is installed (`admitSettings`)
     catalog.replace(sources, problems, { reportConflicts: true, admitSettings: catalogDir !== undefined });
     catalogDir = packsDir;
+    return discovered;
   }
 
 
@@ -648,6 +650,7 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     }
 
     checkEARS(registration, replacing ? registration.id : undefined);
+    checkProjections(registration);
 
     const providedServices = Object.keys(registration.services ?? {});
     const hostService = providedServices.find((key) => (_HOST_SERVICE_NAMES as readonly string[]).includes(key));
@@ -798,6 +801,34 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     ...Object.entries(SDK_ROW_RULES),
     ...[...registrations.values()].flatMap((reg) => Object.entries(reg.ears?.rowRules ?? {})),
   ]));
+  /**
+   * A projection reads what changed in each type it derives from, which the database keeps only for a type whose owner
+   * declares `changeOrder`: one without it would derive everything again on every catch-up. The owner may be the pack
+   * itself, a dependency or the SDK. Another pack's projections are checked over the types this one declares, now or
+   * in the version it replaces, so a new version that stops keeping an order another's projection reads is refused, and
+   * nothing this pack doesn't declare can refuse it
+   */
+  function checkProjections(registration: PackRegistration): void {
+    const staying = [...registrations.values()].filter((reg) => reg.id !== registration.id);
+    const ordered = new Map<string, RowRules>([
+      ...Object.entries(SDK_ROW_RULES),
+      ...[...staying, registration].flatMap((reg) => Object.entries(reg.ears?.rowRules ?? {})),
+    ]);
+    const declares = new Set([registration, registrations.get(registration.id)].flatMap((reg) => Object.keys(reg?.ears?.rowRules ?? {})));
+    for (const reg of [registration, ...staying]) {
+      for (const [featureId, feature] of Object.entries(reg.features ?? {})) {
+        for (const [name, projection] of Object.entries(feature.projections ?? {})) {
+          const unordered = projection.from.find((type) =>
+            (reg === registration || declares.has(type)) && ordered.get(type)?.changeOrder !== true);
+          if (unordered === undefined) continue;
+          const whose = reg === registration ? '' : `, which "${registration.id}" would stop keeping`;
+          throw new Error(`Pack "${registration.id}" can't register: projection "${reg.id}/${featureId}/${name}" derives from `
+            + `"${unordered}", which keeps no change order${whose}: give "${unordered}" "changeOrder": true in the apack.json `
+            + 'of the pack that declares it');
+        }
+      }
+    }
+  }
   const relationRules = derived((): ReadonlyMap<string, RelationRules> => new Map<string, RelationRules>([
     ...Object.entries(SDK_RELATION_RULES),
     ...[...registrations.values()].flatMap((reg) => Object.entries(reg.ears?.relationRules ?? {})),
@@ -891,6 +922,9 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
 
     getLifecycleHooks: () => [...registrations.values()].flatMap((reg) => (reg.lifecycle ? [reg.lifecycle] : [])),
     getPackRegistration: (packId) => registrations.get(packId) ?? null,
+    projections: () => [...registrations.entries()].flatMap(([packId, pack]) =>
+      Object.entries(pack.features ?? {}).flatMap(([featureId, feature]) =>
+        Object.entries(feature.projections ?? {}).map(([name, projection]) => ({ name: `${packId}/${featureId}/${name}`, projection })))),
 
     packContentTargets(packIds) {
       const wanted = packIds && new Set(packIds);

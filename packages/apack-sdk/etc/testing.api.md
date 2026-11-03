@@ -47,6 +47,9 @@ export function answerTo<E extends {
     type: string;
 }>(call: string, event: E): E;
 
+// @public
+export function catchUpTestProjections(): Promise<void>;
+
 // @internal
 export const _createTestEngine: (options?: Parameters<typeof _openTestDatabase>[0]) => EarsEngine;
 
@@ -211,6 +214,10 @@ export interface TestPacks {
     readonly earsRoles: Map<string, string>;
     // (undocumented)
     readonly help: Map<string, HelpArticle[]>;
+    readonly projections: Array<{
+        name: string;
+        projection: ProjectionDefinition;
+    }>;
     readonly repositories: Map<string, unknown>;
     readonly services: Map<string, unknown>;
     readonly stepDeclarations: Map<string, StepCatalogEntry>;

@@ -1892,7 +1892,7 @@ guards and the plan's focused/E2E checks pass.
 
 ### Phase 5 — Frontend failure boundaries
 
-Implement the frontend workstream of [fault isolation](../../plans/pack-fault-isolation.md). Scope contributed
+Implement the frontend workstream of [fault isolation](../plans/pack-fault-isolation.md). Scope contributed
 canvas, panel and custom-form failures to their pane, with the catalog owner named and a safe recovery
 path. Keep the shell and settings runtime outside those boundaries.
 

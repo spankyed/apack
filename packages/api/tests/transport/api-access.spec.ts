@@ -104,12 +104,13 @@ describe('the files the API publishes', () => {
     process.env.APACK_API_TOKEN = TOKEN;
     publishApiFiles(4321, TOKEN);
 
-    expect(JSON.parse(fs.readFileSync(apiPortFile, 'utf-8'))).toEqual({ port: 4321, pid: process.pid });
+    const published = { port: 4321, pid: process.pid };
+    expect(JSON.parse(fs.readFileSync(apiPortFile, 'utf-8'))).toEqual(published);
     // A tool reads it back as this running API
-    expect(readApiEndpoint(apiPortFile)).toEqual({ port: 4321, pid: process.pid });
+    expect(readApiEndpoint(apiPortFile)).toEqual(published);
     // Only the user reads it, whatever the data dir's own permissions are
     expect(fs.statSync(apiPortFile).mode & 0o777).toBe(0o600);
-    // The token stays out of the data dir: no local tool needs it there
+    // The API token stays out of the data dir: no local tool needs it there
     expect(fs.existsSync(apiTokenFile)).toBe(false);
   });
 

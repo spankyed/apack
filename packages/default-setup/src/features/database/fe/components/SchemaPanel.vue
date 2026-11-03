@@ -20,20 +20,6 @@
             <X class="w-3 h-3 text-neutral-500" />
           </button>
         </div>
-        <!-- Refresh Button -->
-        <button
-          @click="refreshSchema"
-          :disabled="isRefreshing"
-          class="p-2 transition-colors rounded-lg hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Refresh schema"
-        >
-          <RefreshCw 
-            :class="[
-              'w-4 h-4 text-neutral-400',
-              isRefreshing && 'animate-spin'
-            ]" 
-          />
-        </button>
       </div>
     </div>
     
@@ -159,15 +145,12 @@ import {
   Network, 
   Search, 
   X,
-  FoldVertical,
-  RefreshCw 
-} from 'lucide-vue-next';
+  FoldVertical,} from 'lucide-vue-next';
 import { useSelector } from '@xstate/vue';
 import { type DatabaseState } from '../state.ts';
 
 const actor: DatabaseState = useSurface()
 const schema = useSelector(actor, (state) => state.context.schema);
-const isRefreshing = useSelector(actor, (state) => state.context.isRefreshing || false);
 
 const searchQuery = ref('');
 const expandedItems = ref<string[]>([]);
@@ -297,9 +280,4 @@ function selectItem(item: TreeItem) {
   });
 }
 
-function refreshSchema() {
-  actor.send({
-    type: 'DATABASE.REFRESH_SCHEMA'
-  });
-}
 </script> 

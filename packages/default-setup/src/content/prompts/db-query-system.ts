@@ -32,7 +32,8 @@ EARS.RoleKind.*       role constants (e.g. EARS.RoleKind.ROOT_FLOW = 'root_flow'
 getRow(id)            { id, entityType, ...attributes } for a single entity, or undefined
 getAttr(id, 'field')  one field of that row, or undefined when the entity holds none
 getRoles(id)          string[] — roles on an entity
-getSchemaStats()      { entities, attributes, relations, roles }: each keyed by a name the data holds, with its counts
+catalog()             { types: [{ name, count, fields }], relations: [{ kind, count }], roles }: the cheap read of what is here
+getSchemaStats()      { entities, attributes, relations, roles }: the full pass, reading every row, for values per field, entities per role and a kind's distinct ends
 
 API — chain order matters. Use filters/shaping FIRST, then a terminal to get results.
 

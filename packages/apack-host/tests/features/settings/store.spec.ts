@@ -34,6 +34,52 @@ beforeEach(() => {
 });
 const rowData = () => untypedQuery.ids(SETTINGS_ID).pickOne(['data'])?.data;
 
+describe('a row another process wrote', () => {
+  const written = (limit: unknown) => untypedUpsert(SETTINGS_ENTITY, { id: SETTINGS_ID, data: { features: { [THREADS]: { limit } } } });
+
+  it('is read as soon as it is there', () => {
+    written(7);
+    expect(store.get(feature)).toEqual({ limit: 7, sort: 'newest' });
+  });
+
+  it('tells subscribers when it changed the settings, and not when it changed nothing', () => {
+    store.getAll();
+    const changes: string[] = [];
+    store.onChange((change) => changes.push(change));
+    store.adoptStored();
+    expect(changes, 'nothing moved').toEqual([]);
+    written(7);
+    store.adoptStored();
+    expect(changes).toEqual(['written']);
+    store.adoptStored();
+    expect(changes, 'told once').toEqual(['written']);
+  });
+
+  it('tells nobody of an invalid one, whose reads refuse it', () => {
+    store.getAll();
+    const changes: string[] = [];
+    store.onChange((change) => changes.push(change));
+    written('many');
+    store.adoptStored();
+    expect(changes).toEqual([]);
+  });
+
+  it('is not news when this store wrote it', () => {
+    store.set(feature, ['limit'], 5);
+    const changes: string[] = [];
+    store.onChange((change) => changes.push(change));
+    store.adoptStored();
+    expect(changes).toEqual([]);
+  });
+
+  it('refuses a read and a write over an invalid one, which is for boot to recover from', () => {
+    written('many');
+    expect(() => store.get(feature)).toThrow(SettingsRefusedError);
+    expect(() => store.set(feature, ['sort'], 'oldest')).toThrow(SettingsRefusedError);
+    expect(store.getRecovery()).toBeUndefined();
+  });
+});
+
 describe('definitions and explicit choices', () => {
   it('reads all three owners without creating a row', () => {
     expect(store.getOverrides()).toEqual({});

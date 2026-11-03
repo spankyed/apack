@@ -258,6 +258,19 @@ describe('app-default installation intent and lifecycle', () => {
     } finally { system.stop(); }
   });
 
+  it('publishes the list without reading the packs directory, and reads it when asked', async () => {
+    const system = runPacksSystem();
+    try {
+      const refresh = vi.spyOn(registry, 'refreshCatalog');
+      system.send({ type: 'SEND_STATE' });
+      await vi.waitFor(() => expect(emitted(system.sent).map(e => e.type)).toContain('PACKS_LIST'));
+      expect(refresh, 'no row change can alter this list').not.toHaveBeenCalled();
+      system.send({ type: 'GET_INSTALLED_PACKS' });
+      expect(refresh).toHaveBeenCalledOnce();
+      refresh.mockRestore();
+    } finally { system.stop(); }
+  });
+
   it('restores a missing default, replaces it with a user fork, then restores the selected app revision', async () => {
     const appDefault = path.join(tmpDir, 'app-default');
     fs.renameSync(packSource('1.0.0'), appDefault);
@@ -446,6 +459,7 @@ describe('an installed pack the app could not load', () => {
     await installPackFromLocal(packSource('1.0.0'));
     // A build another apack made: what an app update leaves an installed pack as
     fs.writeFileSync(snapshotFile(), JSON.stringify({ format: PACK_SNAPSHOT_FORMAT + 1 }));
+    sealPack(path.join(resolveAppEnvironment().packsDir, PACK_ID));
     loadAppPacks(registry);
     expect(registry.getPackRegistration(PACK_ID)).toBeNull();
 
@@ -457,6 +471,7 @@ describe('an installed pack the app could not load', () => {
       });
 
       fs.writeFileSync(snapshotFile(), JSON.stringify({ declarationRevision: _declarationRevision(JSON.parse(fs.readFileSync(path.join(resolveAppEnvironment().packsDir, PACK_ID, 'apack.json'), 'utf-8'))), format: PACK_SNAPSHOT_FORMAT, manifest: JSON.parse(fs.readFileSync(path.join(resolveAppEnvironment().packsDir, PACK_ID, 'apack.json'), 'utf-8')), eventContracts: eventContractsFixture(JSON.parse(fs.readFileSync(path.join(resolveAppEnvironment().packsDir, PACK_ID, 'apack.json'), 'utf-8'))), types: { entities: {}, relKinds: {}, roles: {} }, entityDestinations: {}, facades: {} }));
+      sealPack(path.join(resolveAppEnvironment().packsDir, PACK_ID));
       await reloadPackById(registry, PACK_ID, { send: () => {} } as never);
 
       expect(registry.getPackRegistration(PACK_ID)).not.toBeNull();
@@ -469,6 +484,7 @@ describe('an installed pack the app could not load', () => {
   it('keeps a declaration failure visible after the pack is disabled', async () => {
     await installPackFromLocal(packSource('1.0.0'));
     fs.writeFileSync(snapshotFile(), JSON.stringify({}));
+    sealPack(path.join(resolveAppEnvironment().packsDir, PACK_ID));
     expect(activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(false);
 
     const system = runPacksSystem();

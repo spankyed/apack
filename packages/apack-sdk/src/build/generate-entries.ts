@@ -1029,6 +1029,20 @@ ${items.join('\n')}
     });
   }
 
+  /** The local name a feature's projections are imported as, in the pack entry */
+  const projectionsBinding = (featureId: string) => `__projections_${featureId}`;
+
+  /** Each feature's projections (`features.<id>.projections`): the object `defineProjections` returned, checked to be one */
+  function projectionEntries(): Array<{ featureId: string; source: string; exportName: string }> {
+    return packFeatures(manifest).flatMap((f) => {
+      if (!f.projections) return [];
+      const label = `Feature "${f.id}": projections`;
+      const { source, exportName, value } = valueExport(label, f.projections);
+      if (value !== 'object') throw new Error(`${label}: "${exportName}" in ${source} must export the object defineProjections returns`);
+      return [{ featureId: f.id, source, exportName }];
+    });
+  }
+
   // ── Backend entry ──────────────────────────────────────────────
 
   function generateBackendEntry(): string {
@@ -1059,6 +1073,8 @@ ${items.join('\n')}
     const views = viewEntries();
     const viewsImport = views.map(({ featureId, source, exportName }) =>
       `import { ${exportName} as ${viewsBinding(featureId)} } from '${toImportPath(root, source)}';`).join('\n');
+    const projectionsImport = projectionEntries().map(({ featureId, source, exportName }) =>
+      `import { ${exportName} as ${projectionsBinding(featureId)} } from '${toImportPath(root, source)}';`).join('\n');
 
     const featuresLiteral = features.map(f => {
       const parts: string[] = [];
@@ -1069,6 +1085,7 @@ ${items.join('\n')}
       // JSON.parse preserves own __proto__ keys, which an object literal would treat as a prototype setter.
       if (f.settings) parts.push(`      settings: JSON.parse(${dataLiteral(JSON.stringify(f.settings))})`);
       if (f.views) parts.push(`      views: ${viewsBinding(f.id)}`);
+      if (f.projections) parts.push(`      projections: ${projectionsBinding(f.id)}`);
       return `    '${f.id}': {\n${parts.join(',\n')},\n    }`;
     }).join(',\n');
     const blocks = blockDefinitions();
@@ -1099,6 +1116,7 @@ ${systemImports}
 import { featureServices, bindServices } from './services.ts';
 ${hooksImport}
 ${viewsImport}
+${projectionsImport}
 ${writerEntries.map(([, path, exportName], i) => `import { ${exportName} as __contentWriter_${i} } from '${path}';`).join('\n')}
 ${migrations.imports.join('\n')}
 ${steps.imports.join('\n')}
@@ -2174,6 +2192,7 @@ export type { ImportMode } from '@apackdev/sdk/utils';
     const searched = new Map(entities.flatMap(({ name, search }) => (search ? [[name, search] as const] : [])));
     const embedded = new Map(entities.flatMap(({ name, embed }) => (embed ? [[name, embed] as const] : [])));
     const substringed = new Map(entities.flatMap(({ name, substrings }) => (substrings ? [[name, substrings] as const] : [])));
+    const ordered = new Set(entities.flatMap(({ name, changeOrder }) => (changeOrder ? [name] : [])));
     // A prefix numbers one type across the app, so a dependency's are taken as the SDK's are: a collision fails the
     // build here, rather than the install at the host registry. A dependency's snapshot carries its manifest whole
     const taken = new Map<string, string>();
@@ -2222,14 +2241,14 @@ export type { ImportMode } from '@apackdev/sdk/utils';
       }
       rules[entity] = {
         required, ...(declared !== undefined && { shortCode: declared }), ...(indexes && { indexes }), ...(search && { search }), ...(embed && { embed }),
-        ...(substrings && { substrings }), ...(Object.keys(types).length > 0 && { fields: types }),
+        ...(substrings && { substrings }), ...(ordered.has(entity) && { changeOrder: true }), ...(Object.keys(types).length > 0 && { fields: types }),
       };
     }
-    for (const { name: entity, shortCode, indexes, search, embed, substrings } of entities) {
-      if (shaped.has(entity) || (shortCode === undefined && indexes === undefined && search === undefined && embed === undefined && substrings === undefined)) continue;
+    for (const { name: entity, shortCode, indexes, search, embed, substrings, changeOrder } of entities) {
+      if (shaped.has(entity) || (shortCode === undefined && indexes === undefined && search === undefined && embed === undefined && substrings === undefined && !changeOrder)) continue;
       rules[entity] = {
         required: [], ...(shortCode !== undefined && { shortCode }), ...(indexes && { indexes }), ...(search && { search }), ...(embed && { embed }),
-        ...(substrings && { substrings }),
+        ...(substrings && { substrings }), ...(changeOrder && { changeOrder: true }),
       };
     }
     return dataLiteral(rules);

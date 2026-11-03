@@ -50,7 +50,7 @@
         <div class="flex items-center overflow-hidden border rounded-lg shadow-lg bg-neutral-800 border-neutral-700">
           <!-- Timestamp -->
           <span v-if="message.createdAt" class="text-xs text-neutral-400 px-3 py-1.5 border-r border-neutral-700 whitespace-nowrap">
-            {{ formatTime(new Date(message.createdAt)) }}
+            {{ formatMessageTime(new Date(message.createdAt)) }}
           </span>
 
           <!-- Revert — shared across all user message states (hidden on stale cancelled) -->
@@ -239,6 +239,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, provide, h } from 'vue'
+import { formatMessageTime } from './message-time.ts'
 import type { MessageEntity } from '#generated/types.ts'
 import { Undo2, GitFork, Copy, FileCode2, ChevronsUpDown, ChevronDown, ChevronUp, X, RotateCcw } from 'lucide-vue-next'
 import NativeToolDrawing from './NativeToolDrawing.vue'
@@ -419,8 +420,6 @@ const copyMessageText = async () => {
   }
 }
 
-const formatTime = (date: Date) =>
-  date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 </script>
 
 <style lang="scss" scoped>

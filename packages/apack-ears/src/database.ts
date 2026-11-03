@@ -24,6 +24,16 @@ export interface EarsUnit {
   rollbackTo(depth: number): void;
   release(depth: number): void;
   commit(durable?: boolean | null): Uint8Array;
+  /** What the unit has changed so far: msgpack of elmdb's `ChangeSet` */
+  pendingChanges(): Uint8Array;
+  /** `EarsDatabase.changedSince` read in the unit, before its own writes are stamped */
+  changedSince(types: string[], from: Uint8Array, limit: number): Uint8Array;
+  /** The sequence the unit commits as, which what it writes is stamped with */
+  nextSequence(): number;
+  /** Records `value` as the checkpoint `name`, committing with the unit or not at all */
+  setCheckpoint(name: string, value: Uint8Array): void;
+  /** The checkpoint `name` as the unit sees it */
+  checkpoint(name: string): Uint8Array | null;
   abort(): void;
   readonly isOpen: boolean;
 }
@@ -52,12 +62,26 @@ export interface EarsDatabase {
   reset(): void;
   /** A compacted copy of one moment of the database into `target`, which opens as a database of its own */
   backup(target: string): void;
+  /** Tells `listener` of each commit another process makes, having queued any index work it left owed. One listener; a second is refused */
+  hearCommitsElsewhere(listener: () => void): void;
+  /** The checkpoint `name` as the latest commit left it: a reader's place, kept with the rows it describes */
+  checkpoint(name: string): Uint8Array | null;
+  /** The epoch another process's replacement of every row moved the database to, when this handle hasn't adopted it. Until it does, commits here are refused (`DATA_REPLACED`) */
+  replacedElsewhere(): number | null;
+  /** Takes the replacement that moved the database to `epoch` as seen, so commits here are taken again; false, adopting nothing, when another has landed since */
+  adoptReplacement(epoch: number): boolean;
+  /** Whether another handle has committed since this one last asked, or since it opened; never for this handle's own */
+  committedElsewhere(): boolean;
+  /** The entities of types keeping a change order that changed after `from` (msgpack of a `ChangedPosition`): msgpack of elmdb's `Changed` */
+  changedSince(types: string[], from: Uint8Array, limit: number): Uint8Array;
   /** Every entry replaced by another database's primary data, the derived data rebuilt under this one's schema */
   replaceWith(source: string): void;
   stats(): { types: Record<string, { live: number; trashed: number }>; relations: Record<string, number>; fileBytes: number };
   bulkLoad(loads: Uint8Array): void;
   /** The last commit's sequence, or 0: a number that only increases for as long as the database exists */
   readonly sequence: number;
+  /** Tells `listener` of each commit the index builder makes that wrote into a tracked read; closing the database stops it */
+  hearBuilderCommits(listener: (commit: { sequence: number; touched: number[] }) => void): void;
   /** Drops what the reads tracked under `token` touched (`{ reads, track: token }`) */
   untrack(token: number): void;
   /** How many tokens have tracked reads filed, and how many keys and ranges they hold */
@@ -211,6 +235,43 @@ export interface Commit {
   readonly touched: ReadonlySet<number> | 'all';
 }
 
+/** What an open unit has changed so far (elmdb's `ChangeSet`): the entities it wrote, by id */
+export interface PendingChanges {
+  entities: Record<string, unknown>;
+}
+
+/** Where a reader of what changed has read to: everything at or before `sequence`, and within it up to `after` */
+export interface ChangedPosition {
+  /** The last commit read in full */
+  sequence: number;
+  /** The last entity read within the next commit, when a page ended inside it */
+  after?: { type: string; place: number };
+}
+
+/** What changed of some types after a position (`changedSince`) */
+export interface ChangedEntities {
+  /** The entities that changed and are still there, in the order of the commits that changed them */
+  ids: string[];
+  /** The sequence of the commit that last changed each of `ids`, in the same order */
+  sequences: number[];
+  /** The entities destroyed since */
+  destroyed: string[];
+  /** Where to read from next */
+  next: ChangedPosition;
+  /** Whether this is all there is: when it is, `next` is the last commit's sequence */
+  done: boolean;
+  /** False when what changed can't all be known: the reader starts again from everything */
+  complete: boolean;
+}
+
+/** What runs in a unit before it commits */
+export interface BeforeCommit {
+  /** Whether a write to an entity of this type has to run in a unit, so that `run` sees it */
+  wants(type: string): boolean;
+  /** Runs inside the unit: what it writes commits with it, and what it throws undoes it */
+  run(): void;
+}
+
 /** The engine's crossing to its database: reads and writes, in the unit `transact` holds open or each its own */
 export interface Connection {
   read(reads: ReadonlyArray<Record<string, unknown>>): Answer[];
@@ -230,8 +291,35 @@ export interface Connection {
    * unregistration
    */
   onCommit(listener: (commit: Commit) => void): () => void;
+  /** Tells the commit listeners of a commit no write of this connection made */
+  heard(changes: { sequence: number; touched: number[] }): void;
   /** Tells the commit listeners of a commit made past the connection, whose writes aren't known key by key */
   committedEverything(): void;
+  /**
+   * Told that another process may have committed: asks the database, and if one did, the commit listeners hear
+   * everything, since which keys isn't known. Answers whether one did.
+   */
+  changedElsewhere(): boolean;
+  /** What the open unit has changed so far; none outside a unit */
+  pendingChanges(): PendingChanges | undefined;
+  /** What of `types` changed after `from`, read in the unit when one is open */
+  changedSince(types: readonly string[], from: ChangedPosition, limit: number): ChangedEntities;
+  /** The sequence the open unit commits as; none outside a unit */
+  nextSequence(): number | undefined;
+  /** The checkpoint `name`, read in the unit when one is open */
+  checkpoint(name: string): unknown;
+  /** Records `value` as the checkpoint `name` in the open unit, opening its write transaction as a write would */
+  setCheckpoint(name: string, value: unknown): void;
+  /** The epoch another process's replacement of every row moved the database to, when this connection hasn't adopted it */
+  replacedElsewhere(): number | undefined;
+  /** Takes that epoch as seen, its commits taken as news already acted on, and runs every watch again; false when another replacement has landed since */
+  adoptReplacement(epoch: number): boolean;
+  /** Sets what runs in a unit before it commits */
+  beforeCommit(hook: BeforeCommit): void;
+  /** Runs `fn` in a unit that what's set to run before a commit stays out of */
+  transactWithoutHook<T>(fn: () => T): T;
+  /** Calls `listener` soon after another process commits, starting this database hearing of that. Returns the unregistration */
+  onFoundElsewhere(listener: () => void): () => void;
   /** The last commit's sequence, or 0 */
   lastCommit(): number;
   /** Counting the calls this connection makes, off until started */
@@ -254,7 +342,7 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
   let tracking: number | undefined;
   const listeners = new Set<(commit: Commit) => void>();
   /** Calls every commit listener; a listener's throw is reported, not handed to the writer */
-  const committed = (commit: Commit) => {
+  const tellListeners = (commit: Commit) => {
     for (const listener of listeners) {
       try {
         listener(commit);
@@ -263,8 +351,45 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
       }
     }
   };
+  const everyWatch = () => tellListeners({ sequence: database.sequence, touched: 'all' });
+  /** A commit this connection made whose writes aren't known key by key */
+  const committedEverything = everyWatch;
   const heard = (changes: { sequence: number; touched: number[] }) => {
-    if (listeners.size > 0) committed({ sequence: changes.sequence, touched: new Set(changes.touched) });
+    if (listeners.size > 0) tellListeners({ sequence: changes.sequence, touched: new Set(changes.touched) });
+  };
+  const foundElsewhere = new Set<() => void>();
+  let hearing = false;
+  const readChangedSince = (types: readonly string[], from: ChangedPosition, limit: number): ChangedEntities => {
+    const position = pack(from);
+    return unpackr.unpack(unit ? crossing(() => unit!.changedSince([...types], position, limit)) : database.changedSince([...types], position, limit)) as ChangedEntities;
+  };
+  let hook: BeforeCommit | undefined;
+  let hookPaused = false;
+  const typeOfOp = (op: Op): string | undefined => {
+    const named = op as { type?: unknown; id?: unknown; source?: unknown };
+    if (typeof named.type === 'string') return named.type;
+    const id = named.id ?? named.source;
+    return typeof id === 'string' ? id.slice(0, id.indexOf('-')) : undefined;
+  };
+  /** A write refused because another process replaced every row says the same as a wake, and a wake can be lost */
+  const noticing = <T>(write: () => T): T => {
+    try {
+      return write();
+    } catch (error) {
+      if ((error as { code?: unknown })?.code === 'DATA_REPLACED') for (const listener of foundElsewhere) queueMicrotask(listener);
+      throw error;
+    }
+  };
+  /** Another process's commit found at a commit here, not yet answered by `changedElsewhere` */
+  let foundUnasked = false;
+  const made = (changes: { sequence: number; touched: number[] }) => {
+    heard(changes);
+    // A database that hears other processes wakes its listener itself when a commit here skips one of theirs. One that
+    // can't hear them, as where nothing may listen, finds them at its own commits instead
+    if (!hearing && foundElsewhere.size > 0 && database.committedElsewhere()) {
+      foundUnasked = true;
+      for (const listener of foundElsewhere) queueMicrotask(listener);
+    }
   };
 
   const observation = createOperationObservation(
@@ -322,6 +447,7 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
         (value as unknown as PromiseLike<unknown>).then(undefined, () => {});
         throw new Error('transact() takes a synchronous function: an await inside it would split the unit');
       }
+      if (outermost && unit && hook && !hookPaused) hook.run();
     } catch (error) {
       levels.pop();
       const held = unit;
@@ -355,15 +481,15 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
     }
     try {
       // The unit's deferred checks run as it commits; one that fails aborts it
-      const changes = timedInUnit(() => unpackr.unpack(crossing(() => held.commit(options?.durable ?? false))));
+      const changes = timedInUnit(() => unpackr.unpack(noticing(() => crossing(() => held.commit(options?.durable ?? false)))));
       unitEnded();
-      heard(changes as { sequence: number; touched: number[] });
+      made(changes as { sequence: number; touched: number[] });
     } catch (error) {
       const open = held.isOpen;
       if (open) held.abort();
       unitEnded();
       // A durable commit whose sync failed was made all the same, and its change set didn't cross with the error
-      if (!open && (error as { code?: unknown })?.code === 'NOT_DURABLE') committed({ sequence: database.sequence, touched: 'all' });
+      if (!open && (error as { code?: unknown })?.code === 'NOT_DURABLE') committedEverything();
       throw error;
     }
     return value;
@@ -412,7 +538,7 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
     },
   };
 
-  return {
+  const connection: Connection = {
     read(reads) {
       return counting('read', reads.length, () => {
         const bytes = observation.request(pack(tracking === undefined ? { reads } : { reads, track: tracking }));
@@ -422,20 +548,24 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
       });
     },
     write(ops, now = Date.now()) {
+      // A write the hook has to see runs in a unit of its own. One it doesn't pays for this check and nothing else
+      if (hook && levels.length === 0 && ops.some((op) => { const type = typeOfOp(op); return type !== undefined && hook!.wants(type); })) {
+        return transact(() => connection.write(ops, now));
+      }
       const written = counting('write', ops.length, () => {
         const bytes = observation.request(pack({ ops, now }));
         const target = levels.length ? writable() : undefined;
-        const answer = observation.response(crossing(() => (target ? target.write(bytes) : database.write(bytes, false))));
+        const answer = observation.response(noticing(() => crossing(() => (target ? target.write(bytes) : database.write(bytes, false)))));
         if (target) levels.at(-1)!.kept = true;
         return unpackr.unpack(answer) as { results: OpResult[]; changes?: { sequence: number; touched: number[] } };
       });
-      if (written.changes) heard(written.changes);
+      if (written.changes) made(written.changes);
       return written.results;
     },
     load(loads) {
       runCommitted(
         () => observation.run('load', loads.length, () => crossing(() => database.bulkLoad(observation.request(pack(loads))))),
-        () => committed({ sequence: database.sequence, touched: 'all' }),
+        committedEverything,
       );
     },
     transact,
@@ -455,14 +585,57 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
       const { keys, ranges } = database.trackStats();
       return { keys, ranges };
     },
+    heard,
     onCommit(listener) {
       listeners.add(listener);
       return () => { listeners.delete(listener); };
     },
-    committedEverything: () => committed({ sequence: database.sequence, touched: 'all' }),
+    committedEverything,
+    changedElsewhere() {
+      const changed = database.committedElsewhere() || foundUnasked;
+      foundUnasked = false;
+      if (changed) everyWatch();
+      return changed;
+    },
+    pendingChanges: () => (unit ? (unpackr.unpack(crossing(() => unit!.pendingChanges())) as PendingChanges) : undefined),
+    changedSince: readChangedSince,
+    // A unit opens its write transaction at its first write; asked first, it opens it now, as that write would
+    nextSequence: () => (levels.length ? crossing(() => writable().nextSequence()) : undefined),
+    checkpoint(name) {
+      const bytes = unit ? crossing(() => unit!.checkpoint(name)) : database.checkpoint(name);
+      return bytes ? unpackr.unpack(bytes) : undefined;
+    },
+    setCheckpoint(name, value) {
+      if (!levels.length) throw new Error('A checkpoint is set inside a unit, with the work it records');
+      const bytes = pack(value);
+      crossing(() => writable().setCheckpoint(name, bytes));
+      levels.at(-1)!.kept = true;
+    },
+    replacedElsewhere: () => database.replacedElsewhere() ?? undefined,
+    adoptReplacement(epoch) {
+      if (!database.adoptReplacement(epoch)) return false;
+      // The replacement is news already acted on
+      database.committedElsewhere();
+      everyWatch();
+      return true;
+    },
+    beforeCommit(given) { hook = given; },
+    transactWithoutHook(fn) {
+      hookPaused = true;
+      try { return transact(fn); } finally { hookPaused = false; }
+    },
+    onFoundElsewhere(listener) {
+      foundElsewhere.add(listener);
+      if (!hearing) {
+        database.hearCommitsElsewhere(() => { for (const each of foundElsewhere) each(); });
+        hearing = true;
+      }
+      return () => { foundElsewhere.delete(listener); };
+    },
     lastCommit: () => database.sequence,
     calls,
     tally: () => tally,
     observe: observation.observe,
   };
+  return connection;
 }

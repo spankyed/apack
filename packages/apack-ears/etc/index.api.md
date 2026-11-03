@@ -24,6 +24,12 @@ export interface BaseEntity {
 }
 
 // @public
+export interface BeforeCommit {
+    run(): void;
+    wants(type: string): boolean;
+}
+
+// @public
 export interface CallCounting {
     report(): CallReport;
     start(): void;
@@ -63,6 +69,25 @@ export interface CallSite {
 }
 
 // @public
+export interface ChangedEntities {
+    complete: boolean;
+    destroyed: string[];
+    done: boolean;
+    ids: string[];
+    next: ChangedPosition;
+    sequences: number[];
+}
+
+// @public
+export interface ChangedPosition {
+    after?: {
+        type: string;
+        place: number;
+    };
+    sequence: number;
+}
+
+// @public
 export interface Create {
     // (undocumented)
     <E extends string>(type: TypeName<E>, row?: Record<string, unknown> & RowIdentity): WriteBuilder<E>;
@@ -79,6 +104,20 @@ E
 } & {
     [K in keyof ShapeOf<S, E> as K extends OptionalField<S, E> ? K : never]?: ShapeOf<S, E>[K];
 } : Record<string, unknown>;
+
+// @public
+export interface DatabaseCatalog {
+    relations: Array<{
+        kind: string;
+        count: number;
+    }>;
+    roles: string[];
+    types: Array<{
+        name: string;
+        count: number;
+        fields: string[];
+    }>;
+}
 
 // @public
 export function defineEars<D extends EarsSchema>(engine: () => Ears): TypedEars<D>;
@@ -135,6 +174,7 @@ export namespace EARS {
 
 // @public
 export interface Ears {
+    catalog(): DatabaseCatalog;
     create: Create;
     embed(embeddings: readonly Embedding[]): {
         stored: number;
@@ -169,20 +209,31 @@ export interface Ears {
 // @public
 export interface EarsAdmin {
     addRelation(source: EARS.EntityId, kind: string, target: EARS.EntityId, info?: unknown, weight?: number): EARS.RelationId;
+    adoptReplacement(epoch: number): boolean;
+    beforeCommit(hook: BeforeCommit): void;
     bulkLoad<T>(fn: () => T): T;
     bulkLoadAttr(id: EARS.EntityId, kind: EARS.AttrKind, value: unknown): void;
     bulkLoadRelation(relId: EARS.RelationId, kind: string, source: EARS.EntityId, target: EARS.EntityId, info?: unknown, weight?: number): void;
     readonly calls: CallCounting;
+    changedElsewhere(): boolean;
+    changedSince(types: readonly string[], from: ChangedPosition, limit: number): ChangedEntities;
+    checkpoint(name: string): unknown;
     clear(): void;
     countEntities(): Record<string, number>;
     declare(schema: EngineSchema): SchemaChange[];
     deleteAttr(id: EARS.EntityId, kind: EARS.AttrKind): void;
     getAllEntities(): EARS.EntityId[];
     getEntitiesOfType(type: EARS.Entity): EARS.EntityId[];
+    nextSequence(): number | undefined;
     observe(observer: EarsOperationObserver): () => void;
+    onFoundElsewhere(listener: () => void): () => void;
+    pendingChanges(): PendingChanges | undefined;
     putAttr(id: EARS.EntityId, kind: EARS.AttrKind, value: unknown): void;
+    replacedElsewhere(): number | undefined;
     replaceWith(source: string): void;
+    setCheckpoint(name: string, value: unknown): void;
     setSchema(schema: EngineSchema): SchemaChange[];
+    transactWithoutHook<T>(fn: () => T): T;
     updateRelation(relId: EARS.RelationId, patch: RelationPatch): void;
     waitForIndexBuilds(): void;
     watchesSettled(): Promise<void>;
@@ -195,15 +246,24 @@ export interface EarsAdmin {
 
 // @public
 export interface EarsDatabase {
+    adoptReplacement(epoch: number): boolean;
     backup(target: string): void;
     // (undocumented)
     begin(): EarsUnit;
     // (undocumented)
     bulkLoad(loads: Uint8Array): void;
+    changedSince(types: string[], from: Uint8Array, limit: number): Uint8Array;
+    checkpoint(name: string): Uint8Array | null;
     // (undocumented)
     close(): void;
+    committedElsewhere(): boolean;
     // (undocumented)
     durable(): Promise<void>;
+    hearBuilderCommits(listener: (commit: {
+        sequence: number;
+        touched: number[];
+    }) => void): void;
+    hearCommitsElsewhere(listener: () => void): void;
     // (undocumented)
     readonly isOpen: boolean;
     // (undocumented)
@@ -212,6 +272,7 @@ export interface EarsDatabase {
     readonly readOnly: boolean;
     // (undocumented)
     readSync(reads: Uint8Array): Uint8Array;
+    replacedElsewhere(): number | null;
     replaceWith(source: string): void;
     reset(): void;
     readonly schema: unknown;
@@ -363,10 +424,14 @@ export interface EarsSchema {
 export interface EarsUnit {
     // (undocumented)
     abort(): void;
+    changedSince(types: string[], from: Uint8Array, limit: number): Uint8Array;
+    checkpoint(name: string): Uint8Array | null;
     // (undocumented)
     commit(durable?: boolean | null): Uint8Array;
     // (undocumented)
     readonly isOpen: boolean;
+    nextSequence(): number;
+    pendingChanges(): Uint8Array;
     // (undocumented)
     read(reads: Uint8Array): Uint8Array;
     // (undocumented)
@@ -375,6 +440,7 @@ export interface EarsUnit {
     rollbackTo(depth: number): void;
     // (undocumented)
     savepoint(): number;
+    setCheckpoint(name: string, value: Uint8Array): void;
     // (undocumented)
     write(batch: Uint8Array): Uint8Array;
 }
@@ -479,6 +545,12 @@ E
 ] extends [keyof S] ? Extract<{
     [K in keyof ShapeOf<S, E>]-?: {} extends Pick<ShapeOf<S, E>, K> ? K : never;
 }[keyof ShapeOf<S, E>], WritableField<S, E>> : string;
+
+// @public
+export interface PendingChanges {
+    // (undocumented)
+    entities: Record<string, unknown>;
+}
 
 // @public
 export interface PendingEmbeddings {
@@ -607,6 +679,21 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
     pickOne(): ShapeOf<D['shapes'], E> | undefined;
     rank(kinds: D['relKinds'] | readonly D['relKinds'][], options?: RankOptions): QueryBuilder<E, D>;
     ranked(index: D['rankIndexes'], options?: RankedOptions): QueryBuilder<E, D>;
+    rankedHits<A extends readonly (keyof ShapeOf<D['shapes'], E> & string)[]>(options: {
+        fields: A;
+    }): {
+        hits: Array<SearchHit<E> & {
+            row: {
+                id: EARS.EntityId<E>;
+            } & Pick<ShapeOf<D['shapes'], E>, A[number]>;
+        }>;
+        bound: RankBound;
+    };
+    // (undocumented)
+    rankedHits(): {
+        hits: SearchHit<E>[];
+        bound: RankBound;
+    };
     // (undocumented)
     reduce<T>(fn: (acc: T, id: EARS.EntityId<E>) => T, init: T): T;
     // (undocumented)
@@ -657,6 +744,19 @@ export interface QueryStage {
     visited: number;
     weight?: number;
 }
+
+// @public
+export type RankBound =
+/** A `ranked`: its index, and how far its scores may be from PageRank's, as an L1 distance */
+    {
+    index: string;
+    error: number;
+}
+/** A `rank`: the rounds it ran, and whether its scores settled within them */
+| {
+    converged: boolean;
+    iterations: number;
+};
 
 // @public
 export interface RankDeclaration {
@@ -758,6 +858,7 @@ export interface RowIdentity {
 
 // @public
 export interface RowRules {
+    changeOrder?: boolean;
     embed?: EmbedDeclaration;
     fields?: Readonly<Record<string, FieldRule>>;
     indexes?: readonly string[];
