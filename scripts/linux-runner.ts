@@ -109,8 +109,9 @@ const FILTERS = [
  * Re-derive it from the code that writes them, which is two spellings: a `'.cache', '<name>'` path join, and a
  * `node_modules/.cache/<name>` literal. Deriving from one alone misses the other — the first pass here did.
  */
+const COMPILER_CACHE = 'apack-compilers';
 const CONTAINER_CACHES = [
-  'apack-chain', 'apack-fixtures', 'apack-packages-build',
+  'apack-chain', COMPILER_CACHE, 'apack-fixtures', 'apack-packages-build',
   'apack-spec-durations', 'apack-step-durations', 'apack-unit-pool', 'tsbuildinfo',
 ];
 
@@ -295,6 +296,10 @@ const run = [
   'fi',
   // Orphans of a container that was killed: this run holds the only slot, so none of them is live
   'rm -f /work/node_modules/.cache/apack-unit-pool/*.lock',
+  // Keep immutable compiler captures with this checkout's volume instead of discarding them at container exit.
+  // The volume lease excludes live users; stale container hostnames/PIDs cannot hold these records forever.
+  `rm -f /work/node_modules/.cache/${COMPILER_CACHE}/*.lock /work/node_modules/.cache/${COMPILER_CACHE}/*.users/*`,
+  `export APACK_COMPILER_STORE="\${APACK_COMPILER_STORE:-/work/node_modules/.cache/${COMPILER_CACHE}}"`,
   `bash -ec ${quote(sync)}`,
   // `exec` keeps fd 9, so the lock is held for as long as the command runs
   `export APACK_EXECUTION_RECORDS=${quote(JSON.stringify({ source: [RUN_LOCK, CHECKOUT_FILE], native: [ELMDB_LOCK, ELMDB_BUILT, ELMDB_CHECKOUT_FILE] }))}`,

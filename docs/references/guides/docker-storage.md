@@ -13,6 +13,14 @@ other sessions' containers and volumes; an unused volume is not evidence that it
 See [worktree development](../worktree-development.md) and the root
 [validation rules](../../../CLAUDE.md#keep-validation-bounded).
 
+## Compiler captures
+
+The Linux runner keeps immutable compiler captures in its checkout-owned work volume at
+`node_modules/.cache/apack-compilers`. They survive container exit and source synchronization;
+explicit `APACK_COMPILER_STORE` overrides remain supported. While holding the work-volume lease,
+the runner clears that default store's old lock/user records because container hostnames and PIDs
+change between runs. Capture contents, byte verification and normal pruning remain unchanged.
+
 ## Native test scratch
 
 The maintained `npm run test:linux -- npm run test:native` invocation mounts executable `/tmp` as
