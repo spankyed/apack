@@ -1,5 +1,5 @@
 <template>
-  <div ref="strip" v-if="nativeStatus || statusLine || nativeUi || hasContent" :style="{ minHeight: stripMinimumHeight }"
+  <div ref="strip" v-if="nativeStatus || statusLine || nativeUi?.status === 'error' || hasContent" :style="{ minHeight: stripMinimumHeight }"
     class="flex min-h-0 min-w-0 flex-col overflow-hidden px-5 py-3 text-xs text-neutral-400" :class="{ 'shrink-0': !toolsOpen, 'native-strip--open': toolsOpen, 'border-b border-white/[0.06]': toolsOpen || nativeUi?.status === 'error' }" data-testid="composer-session-strip" @keydown="handleStripKey" @keydown.esc="returnToComposer">
     <div class="flex shrink-0 min-w-0 items-center gap-3">
       <button v-if="statusLine" type="button" class="inline-flex min-w-0 flex-1 items-center gap-2 rounded-md py-0.5 text-[11px] text-neutral-400 transition-colors hover:bg-white/[0.04] hover:text-neutral-300 focus-visible:outline focus-visible:outline-blue-400"
@@ -170,7 +170,8 @@ function focusNativeUi(event: FocusEvent) {
   try { site.querySelector<HTMLElement>('[data-native-autofocus="true"]')?.focus() } finally { autoEntering = false }
 }
 function visible(node: ClaudeUiNode): boolean {
-  if (node.kind === 'box' || node.kind === 'link' || node.kind === 'client') return node.children.some(visible)
+  if (node.kind === 'client') return true
+  if (node.kind === 'box' || node.kind === 'link') return node.children.some(visible)
   if (node.kind === 'text') return !!node.text.trim() || !!node.children?.some(visible)
   return node.kind !== 'unsupported' || node.component !== 'engine'
 }

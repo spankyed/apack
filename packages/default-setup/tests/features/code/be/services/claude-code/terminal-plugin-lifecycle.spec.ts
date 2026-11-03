@@ -1,18 +1,20 @@
 import { createClaudeTerminalPlugin } from '#features/code/be/services/claude-code/terminal-plugin.ts'
 function fixture(){
  const child='05ff1d31-597d-4537-8737-4407191add6e',hooks=new Map<string,(...args:any[])=>Promise<any>>()
- const requests:{path:string;body:any}[]=[],cancel=vi.fn();let tick!:()=>void,lost=false,refused=false
+ const requests:{path:string;body:any}[]=[],cancel=vi.fn();let tick!:()=>void,lost=false,refused=false,now=Date.now()
  const api={session:{id:async()=>child,cwd:async()=>'/owned',model:async()=>'sonnet',turns:async()=>2,usage:async()=>({startedAt:1,cost:{usd:0.001}})},agent:{list:async()=>[]},settings:{read:async()=>({})},env:{get:async():Promise<string|undefined>=>undefined},clock:{every:vi.fn((_ms:number,callback:()=>void)=>{tick=callback;return{cancel}})},process:{run:vi.fn(async()=>({exitCode:0,stdout:'119',stderr:''}))},http:{fetch:vi.fn(async(url:string,init:any)=>{const path=new URL(url).pathname;requests.push({path,body:JSON.parse(init.body)});if(lost)throw Error('Owned socket disappeared');return{ok:!['/transcript','/ui-ready'].includes(path)&&!(refused&&path==='/background-register'),text:JSON.stringify(path==='/poll'?{background:true}:path==='/background-register'?{token:'child-lease'}:{})}})}}
- const register=new Function(createClaudeTerminalPlugin('/owned.sock','private-token',{parentSessionId:'11111111-1111-4111-8111-111111111111',socketPath:'/child.sock',token:'child-token'}).replace('export function register','function register')+';return register')()
+ const register=new Function('Date',createClaudeTerminalPlugin('/owned.sock','private-token',{parentSessionId:'11111111-1111-4111-8111-111111111111',socketPath:'/child.sock',token:'child-token'}).replace('export function register','function register')+';return register')({now:()=>now})
  register((event:string,...args:any[])=>hooks.set(event,args.at(-1)))
  const next=async(value:any)=>value
- return{api,hooks,requests,cancel,lose:()=>{lost=true},refuse:()=>{refused=true},tick:()=>tick(),async start(){await hooks.get('classic.*')!(api,{session_id:child,transcript_path:'/owned/'+child+'.jsonl'},next);await hooks.get('session.start')!(api,{},next)},render:()=>hooks.get('ui.render')!(api,{},next)}
+ return{api,hooks,requests,cancel,lose:()=>{lost=true},restore:()=>{lost=false},advance:(ms:number)=>{now+=ms},refuse:()=>{refused=true},tick:()=>tick(),async start(){await hooks.get('classic.*')!(api,{session_id:child,transcript_path:'/owned/'+child+'.jsonl'},next);await hooks.get('session.start')!(api,{},next)},render:()=>hooks.get('ui.render')!(api,{},next)}
 }
-it('cancels child polling after broker loss and refuses already-queued ticks or render restarts',async()=>{
+it('reconnects a child after broker loss while fencing queued ticks during backoff',async()=>{
  const f=fixture();await f.start();f.tick();await vi.waitFor(()=>expect(f.requests.map(x=>x.path)).toContain('/background-register'));await new Promise(resolve=>setTimeout(resolve,0))
- f.lose();f.tick();await vi.waitFor(()=>expect(f.cancel).toHaveBeenCalledOnce())
- const requests=f.requests.length;f.tick();await f.render();await new Promise(resolve=>setTimeout(resolve,0));expect(f.requests).toHaveLength(requests);expect(f.api.clock.every).toHaveBeenCalledOnce();expect(f.api.process.run).toHaveBeenCalledOnce()
+ f.lose();f.tick();await vi.waitFor(()=>expect(f.requests.map(x=>x.path)).toContain('/background-status'));await new Promise(resolve=>setTimeout(resolve,0))
+ const requests=f.requests.length;f.tick();await f.render();await new Promise(resolve=>setTimeout(resolve,0));expect(f.requests).toHaveLength(requests);expect(f.api.clock.every).toHaveBeenCalledOnce();expect(f.cancel).not.toHaveBeenCalled()
+ f.restore();f.advance(1000);f.tick();await vi.waitFor(()=>expect(f.requests.filter(row=>row.path==='/background-register')).toHaveLength(2));expect(f.api.process.run).toHaveBeenCalledOnce()
 })
+
 it('retires a refused original helper registration without retrying it',async()=>{
  const f=fixture();f.refuse();await f.start();f.tick();await vi.waitFor(()=>expect(f.cancel).toHaveBeenCalledOnce())
  const requests=f.requests.length;f.tick();await f.render();await new Promise(resolve=>setTimeout(resolve,0));expect(f.requests).toHaveLength(requests);expect(f.api.process.run).toHaveBeenCalledOnce()
@@ -46,5 +48,5 @@ it('installs a child formatter with its existing prefix and restores only its ow
  expect(f.requests.find(row=>row.path==='/background-status')!.body.formatter.shellPrefix).toBe('user -flag')
  f.api.http.fetch.mockRejectedValue(Error('child broker lost'))
  for(let i=0;i<4;i++){f.tick();await new Promise(resolve=>setTimeout(resolve,0))}
- await vi.waitFor(()=>expect(set).toHaveBeenLastCalledWith('CLAUDE_CODE_SHELL_PREFIX','user -flag'));expect(f.cancel).toHaveBeenCalledOnce()
+ await vi.waitFor(()=>expect(set).toHaveBeenLastCalledWith('CLAUDE_CODE_SHELL_PREFIX','user -flag'));expect(f.cancel).not.toHaveBeenCalled()
 })

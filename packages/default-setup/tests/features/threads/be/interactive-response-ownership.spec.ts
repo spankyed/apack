@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { startApp } from '@apackdev/testing/harness';
 import { repository } from '#generated/repository.ts';
+import type { MessageEntity } from '#generated/types.ts';
 
 async function fixture(kind: 'question' | 'approval' | 'native-question' = 'question') {
   const app = await startApp({ systems: ['threads'] });
@@ -34,10 +35,13 @@ describe('interactive question delivery ownership', () => {
 
   it('accepts the first response from the owning thread', async () => {
     const { app, owner, message } = await fixture();
+    const view = app.watchView<MessageEntity | null>('threads', 'message', { id: message.id });
+    await view.next();
     await app.send('threads', { type: 'INTERACTIVE_MSG_RESPONSE', threadId: owner.id, messageId: message.id, response: 'Alpha' });
     await app.settle();
     expect(repository.chatQueries.messageById(message.id)?.blockResponse).toBe('Alpha');
-    expect(app.emitted('threads').filter(event => event.type === 'UPDATE_MESSAGE_STATE' && event.messageId === message.id)).toHaveLength(1);
+    const delivered = await view.next();
+    expect(delivered.ok && delivered.value?.blockResponse).toEqual('Alpha');
   });
 });
 
@@ -54,10 +58,13 @@ describe('one-shot approval response ownership', () => {
   });
   it('accepts the first approval from its owning thread', async () => {
     const { app, owner, message } = await fixture('approval');
+    const view = app.watchView<MessageEntity | null>('threads', 'message', { id: message.id });
+    await view.next();
     await app.send('threads', { type: 'INTERACTIVE_MSG_RESPONSE', threadId: owner.id, messageId: message.id, response: { approved: true } });
     await app.settle();
     expect(repository.chatQueries.messageById(message.id)?.blockResponse).toEqual({ approved: true });
-    expect(app.emitted('threads').filter(event => event.type === 'UPDATE_MESSAGE_STATE' && event.messageId === message.id)).toHaveLength(1);
+    const delivered = await view.next();
+    expect(delivered.ok && delivered.value?.blockResponse).toEqual({ approved: true });
   });
 });
 

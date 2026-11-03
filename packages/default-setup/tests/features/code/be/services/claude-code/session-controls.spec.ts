@@ -1,6 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as queries from '../../../../../../src/features/code/be/services/claude-code/query.ts'
 import { renameSession } from '../../../../../../src/features/code/be/services/claude-code/session-controls.ts'
+
+afterEach(() => vi.restoreAllMocks())
 
 describe('native persisted session rename', () => {
   it('resumes without a prompt and always closes after a rejected rename', async () => {

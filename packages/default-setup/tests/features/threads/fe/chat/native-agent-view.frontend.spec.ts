@@ -30,7 +30,7 @@ it('stops only the selected worker, rejects unrelated acknowledgments and retain
   const request = send.mock.calls.map(([value]) => value).find(value => value.type === 'CLAUDE_TERMINAL_TASK')
   expect(request).toMatchObject({ ownerId: 'owner', taskId: 'agent', operation: 'stop', revision: 1, mountId: f.terminal })
   expect(f.button('Stopping…').disabled).toBe(true); expect(f.button('Back to conversation').disabled).toBe(true)
-  expect(f.root.querySelector<HTMLInputElement>('input')!.disabled).toBe(true)
+  expect(f.root.querySelector<HTMLInputElement>('[aria-label="Agent draft"]')!.disabled).toBe(true)
   context.nativeTerminalViews[f.terminal] = { ...context.nativeTerminalViews[f.terminal], task: { ...request, status: 'done', taskId: 'foreign' } }; await nextTick()
   expect(f.button('Stopping…')).toBeTruthy(); expect(f.pending).toHaveBeenLastCalledWith(true)
   context.nativeTerminalViews[f.terminal].state!.tasks[0].status = 'killed'
@@ -59,14 +59,14 @@ it('owns Escape for native confirmation and restores the Agent editor after canc
   const f = await mount(), commandId = '12345678-1234-1234-1234-123456789abc'
   context.nativeUiViews[f.ui].state.agentInput = { revision: 7, status: 'confirmation', command: { id: commandId, title: 'Original parent confirmation', confirmLabel: 'Run on parent' } }; await nextTick()
   const cancel = f.button('Cancel'); cancel.focus()
-  expect(f.root.querySelector<HTMLInputElement>('input')!.disabled).toBe(true)
+  expect(f.root.querySelector<HTMLInputElement>('[aria-label="Agent draft"]')!.disabled).toBe(true)
   expect(f.button('Back to conversation').disabled).toBe(true)
   cancel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await nextTick()
   expect(send).toHaveBeenCalledWith(expect.objectContaining({ type: 'CLAUDE_UI_COMMAND_DECISION', revision: 7, commandId, decision: 'cancel' }))
   expect(send.mock.calls.some(([value]) => value.type === 'CLAUDE_TERMINAL_TASK')).toBe(false)
   context.nativeUiViews[f.ui].state.agentInput = { revision: 7, status: 'command_done', decision: 'cancel' }; await nextTick(); await nextTick()
-  expect(f.root.querySelector<HTMLInputElement>('input')!.disabled).toBe(false)
-  expect(document.activeElement).toBe(f.root.querySelector('input'))
+  expect(f.root.querySelector<HTMLInputElement>('[aria-label="Agent draft"]')!.disabled).toBe(false)
+  expect(document.activeElement).toBe(f.root.querySelector('[aria-label="Agent draft"]'))
 })
 
 it('renders native command output as bounded plain text outside the worker transcript', async () => {
@@ -80,20 +80,20 @@ it('renders native command output as bounded plain text outside the worker trans
   expect(document.activeElement).toBe(f.root.querySelector('[aria-label="Agent transcript"]'))
   expect(f.root.querySelector('[aria-label="Agent transcript"]')!.textContent).not.toContain('Original second line')
   expect(f.button('Back to conversation').disabled).toBe(false)
-  expect(f.root.querySelector<HTMLInputElement>('input')!.disabled).toBe(false)
+  expect(f.root.querySelector<HTMLInputElement>('[aria-label="Agent draft"]')!.disabled).toBe(false)
 })
 
 it('gives the original panel ownership and restores the editor after native closure', async () => {
   const f = await mount(), panelId = '12345678-1234-1234-1234-123456789abc'
   context.nativeUiViews[f.ui].state.agentInput = { revision: 9, status: 'panel', panel: { id: panelId, commandName: 'usage' } }; await nextTick(); await nextTick()
-  expect(f.root.querySelector('[role="dialog"]')?.getAttribute('aria-label')).toBe('Native /usage panel')
+  expect(f.root.querySelector('[role="dialog"]')?.getAttribute('aria-label')).toBe('Claude Code settings')
   expect(f.button('Back to conversation').disabled).toBe(true)
-  expect(f.root.querySelector<HTMLInputElement>('input')!.disabled).toBe(true)
-  f.button('Close panel').click()
+  expect(f.root.querySelector<HTMLInputElement>('[aria-label="Agent draft"]')!.disabled).toBe(true)
+  f.button('Close settings').click()
   expect(send).toHaveBeenCalledWith(expect.objectContaining({ type: 'CLAUDE_UI_COMMAND_PANEL', revision: 9, panelId }))
   context.nativeUiViews[f.ui].state.agentInput = { revision: 9, status: 'panel_done' }; await nextTick(); await nextTick()
   expect(f.root.querySelector('[role="dialog"]')).toBeNull()
-  expect(document.activeElement).toBe(f.root.querySelector('input'))
+  expect(document.activeElement).toBe(f.root.querySelector('[aria-label="Agent draft"]'))
 })
 
 it('keeps the complete attributed report in the transcript outside collapsed metadata', async () => {

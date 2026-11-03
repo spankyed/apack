@@ -28,7 +28,7 @@ function fixture() {
   const start = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
   const end = claudeTerminalUiRuntime.indexOf('const server=http.createServer')
   const control = vm.runInNewContext(`${claudeTerminalFileRuntime};${claudeTerminalUiRuntime.slice(start, end)};control`, {
-    process: { stdout: fileStdout }, createHash, composerFunctionHashes: fileHashes, runToolGroupAction: () => undefined, runToolBackgroundAction: () => undefined, nativeBashChoices: () => undefined,
+    nativeFunctionHash: (hash: string) => hash, nativeFunctionName: (name: string) => name, process: { stdout: fileStdout }, createHash, composerFunctionHashes: fileHashes, runToolGroupAction: () => undefined, runToolBackgroundAction: () => undefined, nativeBashChoices: () => undefined,
     originalContext: binding, initialize: async () => native, AbortController, randomUUID, setTimeout,
     readFileSync: () => JSON.stringify({ sessionId }), configUrl: 'fixture',
   }) as (request: Record<string, unknown>, abort: AbortController) => Promise<any>

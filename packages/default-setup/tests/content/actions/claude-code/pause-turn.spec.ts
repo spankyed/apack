@@ -34,7 +34,8 @@ it.each(['native', 'print'] as const)('stops the owning %s process for pending-d
   await expect(action({ threadId: f.id }, services)).resolves.toEqual({ success: true });
   expect(f.events.filter(row => row[0] === kind + '.kill')).toHaveLength(1);
   expect(f.events).toContainEqual(['clearHandle', f.id]);
-  expect(repository.threadQueries.byId(f.id)?.context?.claudeCode).toMatchObject({ isRunning: false, pendingControlRequest: undefined });
+  expect(repository.threadQueries.byId(f.id)?.context?.claudeCode).toMatchObject({ isRunning: false });
+  expect(repository.threadQueries.byId(f.id)?.context?.claudeCode?.pendingControlRequest).toBeUndefined();
   expect(f.events).toContainEqual(['message', 'approval', expect.objectContaining({ blockResponse: { cancelled: true } })]);
   expect(f.requests).toEqual([]);
 });

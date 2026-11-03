@@ -9,8 +9,12 @@ function fixture() {
   const store = { getState: () => ({ open }), answer, subscribe: () => () => {}, onClosed: () => () => {} }, binding = { surface: 'terminal', toolContext: () => ({ dialogStore: store }) }
   const n = { runtime: { ey: () => binding }, questionOptions: { q: () => sessionId } }
   const helper = claudeTerminalUiRuntime.slice(claudeTerminalUiRuntime.indexOf('function nativeBillingNotice('), claudeTerminalUiRuntime.indexOf('function nativeDialog('))
+  const snapshotStart=claudeTerminalUiRuntime.indexOf('async function readNativeNoticeSnapshot(')
+  const snapshotEnd=claudeTerminalUiRuntime.indexOf('\n }\n',snapshotStart)+4
+  expect(snapshotStart).toBeGreaterThanOrEqual(0);expect(snapshotEnd).toBeGreaterThan(snapshotStart)
+  const snapshot=claudeTerminalUiRuntime.slice(snapshotStart,snapshotEnd)
   const handlers = claudeTerminalUiRuntime.slice(claudeTerminalUiRuntime.indexOf(" if(request.subtype==='apack_native_notice')"), claudeTerminalUiRuntime.indexOf(" if(request.subtype==='apack_workflow_dialogs')"))
-  const run = vm.runInNewContext(claudeTerminalRefusalRuntime + helper + ';(async request=>{' + handlers + '})', { nativePluginHint: () => ({}), nativeLspRecommendation: () => ({}), answerNativeLspRecommendation: () => { throw Error('Wrong notice kind') }, AbortController, n, originalContext: binding, configUrl: 'private', readFileSync: () => JSON.stringify({ sessionId }), randomUUID, dialogRevisions: new Map(), abort: { signal: new AbortController().signal } })
+  const run = vm.runInNewContext(claudeTerminalRefusalRuntime + helper + snapshot + ';(async request=>{' + handlers + '})', { nativeManagedSecurity: () => ({}), nativeSandboxNetwork: () => ({}), nativeAutocompactOffer: () => ({}), nativeGoalProposal: () => ({}), nativeLeftArrowReview: () => ({}), nativeAgentsParkState: () => undefined, nativePluginHint: () => ({}), nativeLspRecommendation: () => ({}), answerNativeLspRecommendation: () => { throw Error('Wrong notice kind') }, AbortController, n, originalContext: binding, configUrl: 'private', readFileSync: () => JSON.stringify({ sessionId }), randomUUID, dialogRevisions: new Map(), abort: { signal: new AbortController().signal } })
   return { run, open, item, payload, answer, sessionId }
 }
 it('preserves the original notice and exact continue/interrupt results without a tool permission envelope', async () => {

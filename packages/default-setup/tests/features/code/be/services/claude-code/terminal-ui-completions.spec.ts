@@ -3,7 +3,7 @@ import { claudeTerminalUiRuntime } from '#features/code/be/services/claude-code/
 
 it('keeps only the latest native completion and cancels detached drafts', async () => {
   const start = claudeTerminalUiRuntime.indexOf('const completions=new Map();')
-  const end = claudeTerminalUiRuntime.indexOf('const schemaNames=')
+  const end = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
   const api = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)};({autocomplete,clearCompletion})`, { AbortController, Promise, Map }) as {
     autocomplete(native: unknown, client: string, box: { text: string }): Promise<{ suggestions: string[]; start?: number; superseded?: boolean }>
     clearCompletion(client: string): void

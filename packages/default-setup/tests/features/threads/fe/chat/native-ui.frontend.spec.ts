@@ -948,3 +948,14 @@ it('releases a captured Client pointer on collapse and discards its queued move'
  f.clientInput.mockClear();pointer('pointermove');pointer('pointerup')
  expect(f.clientInput).not.toHaveBeenCalled()
 })
+
+
+it('keeps an empty keyboard Client reachable and retires its region when its native frame disappears', async () => {
+  const id='9b08a63e-78f6-46c5-9134-c6c64de30937'
+  const f=await mount({nativeUi:{status:'live',tree:{kind:'client',id,keys:true,pointer:false,children:[]}}})
+  expect(f.root.querySelector('button[aria-label="Session tools"]')).not.toBeNull()
+  expect(f.root.querySelector('[data-native-client="'+id+'"]')).not.toBeNull()
+  f.state.nativeUi={status:'live',tree:{kind:'box',children:[]}};await nextTick()
+  expect(f.root.querySelector('[data-testid="composer-session-strip"]')).toBeNull()
+  expect(f.root.querySelector('[data-native-client]')).toBeNull()
+})

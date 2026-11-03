@@ -89,7 +89,16 @@ export async function createClaudeTerminalBridge(options: {
       if (closed || request.method !== 'POST' || request.headers['x-apack-native-token'] !== token) return reply(403, {})
       let bytes = 0
       const chunks: Buffer[] = []
-      for await (const chunk of request) { bytes += chunk.length; if (bytes > (request.url === '/append' ? 8 * 1024 * 1024 + 65536 : request.url === '/ui-host' ? CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES : request.url === '/native-status' || request.url === '/native-focus' || request.url === '/native-preview' || request.url === '/native-activity' ? 1048576 + 65536 : 65536)) return reply(413, {}); chunks.push(chunk) }
+      const limit = request.url === '/append' ? 8 * 1024 * 1024 + 65536 : request.url === '/ui-host' ? CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES : request.url === '/native-status' || request.url === '/native-focus' || request.url === '/native-preview' || request.url === '/native-activity' ? 1048576 + 65536 : 65536
+      let oversized = false
+      // Drain rejected bodies without retaining them so the client receives the complete refusal.
+      for await (const chunk of request) {
+        if (oversized) continue
+        bytes += chunk.length
+        if (bytes > limit) { oversized = true; chunks.length = 0; continue }
+        chunks.push(chunk)
+      }
+      if (oversized) return reply(413, {})
       const value = object(JSON.parse(Buffer.concat(chunks).toString()))
       if (!value || typeof value.sessionId !== 'string' || !/^[a-f0-9-]{36}$/i.test(value.sessionId)) return reply(400, {})
       if (request.url === '/observer-ready') {

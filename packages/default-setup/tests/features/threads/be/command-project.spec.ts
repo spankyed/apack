@@ -11,8 +11,9 @@ it('persists a new Claude command thread project before another window opens it'
   expect(thread?.context?.claudeCode).toEqual({ cwd: '/selected-project' });
   expect(repository.chatQueries.threadData(thread!.id)?.messages).toEqual(expect.arrayContaining([expect.objectContaining({ isCommand: true })]));
   await app.send('threads', { type: 'OPEN_THREAD_CHAT', threadId: thread!.id }, { sender: 'default-setup/threads', client: 'other-window' });
-  const loaded = await app.nextEmit('threads', 'LOAD_CHAT_THREAD');
-  expect(loaded).toMatchObject({ data: { context: { claudeCode: { cwd: '/selected-project' } } } });
+  const loaded = await app.nextEmit('threads', 'SHOW_THREAD');
+  expect(loaded).toMatchObject({ threadId: thread!.id });
+  expect(repository.threadQueries.byId(thread!.id)?.context?.claudeCode?.cwd).toBe('/selected-project');
 });
 
 it('does not overwrite an existing native session directory with a command draft override', async () => {

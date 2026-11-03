@@ -24,7 +24,8 @@ input.on('line',line=>{
     {subtype:'success',request_id:value.request_id,response:payload};
   console.log(JSON.stringify({type:'control_response',response}));
 });
-input.on('close',()=>writeFileSync('capture.json',JSON.stringify({argv:process.argv.slice(2),requests,closed:true})));
+const finish=()=>{writeFileSync('capture.json',JSON.stringify({argv:process.argv.slice(2),requests,closed:true}));process.exit(0)};
+input.on('close',finish);process.on('SIGTERM',finish);
 `, { mode: 0o755 });
   return { cwd, cliPath, env: { PATH: process.env.PATH, HOME: cwd } };
 }

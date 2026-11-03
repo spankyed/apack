@@ -188,7 +188,8 @@ it.each([['Plan','acceptEdits',undefined,'plan','acceptEdits'],['Edit','plan','a
  expect(await chat({threadId:id,text:'Phase review',messageId:user.id,phase},services,{} as never,'')).toMatchObject({streaming:true})
  expect(opened.mock.calls[0]![2].permissionMode).toBe('acceptEdits')
  if(target==='plan')expect(native.setPermissionMode).toHaveBeenCalledWith('plan')
- expect(repository.threadQueries.byId(id)?.context?.claudeCode).toMatchObject({permissionMode:target,prePlanMode:expectedPrePlan})
+ expect(repository.threadQueries.byId(id)?.context?.claudeCode).toMatchObject({permissionMode:target})
+ expect(repository.threadQueries.byId(id)?.context?.claudeCode?.prePlanMode).toBe(expectedPrePlan)
  expect(native.send).toHaveBeenCalledOnce()
 })
 
