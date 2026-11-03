@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { REPO_ROOT, stampedRun, unitStaleReason } from '@apackdev/host/build/packages-built';
-import { AUTHORING_HANDOFF_DIRECTORY, CHAIN_STEPS, dependsOn } from '../../../scripts/lib/chain-steps.ts';
+import { CHAIN_STEPS, dependsOn } from '../../../scripts/lib/chain-steps.ts';
 
 const helper = path.join(REPO_ROOT, 'tests/acceptance/packaged-authoring/support.sh');
 const roots: string[] = [];
@@ -137,7 +137,7 @@ describe('external authoring output ownership', () => {
       const archive = path.join(work, 'fixture.tgz');
       fs.writeFileSync(archive, 'fixture');
       run(root, dir, 'WORK="$2"; ARCHIVE="$3"; PACK="$2/pack"; writeAuthoringHandoff', [work, archive]);
-      const handoff = path.join(root, AUTHORING_HANDOFF_DIRECTORY);
+      const handoff = path.join(root, '.apack/tests/authoring-handoff');
       const unit = { inputs: [], outputs: author.outputs!.map(output => path.join(root, output)) };
       const stamp = path.join(dir, 'successful-stamp.json');
       await stampedRun('author output', unit, stamp, () => {});

@@ -10,11 +10,6 @@ import { dependencySource, PACKAGE_DIRS, workspaceDeps } from './workspace-deps.
 import { LEG_TIMEOUT, scopeOf, TYPECHECK_LEGS, type Leg } from './typecheck-legs.ts';
 import { API_CHECK_TIMEOUT } from './api-report-packages.ts';
 
-/** Shared with the shell producer/consumer; the chain names generated output relative to the checkout. */
-export const AUTHORING_HANDOFF_DIRECTORY: string = JSON.parse(fs.readFileSync(
-  new URL('../../tests/acceptance/packaged-authoring/handoff.json', import.meta.url), 'utf8',
-)).directory;
-
 /**
  * The pre-merge chain's steps and what each is allowed to read. Separate from `scripts/chain.ts` because
  * that module runs the chain when imported, and `check-test-tiers.ts` needs the table without running it.
@@ -1068,11 +1063,11 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
    * reads as never-built. The author half clears the previous run's at its start.
    */
   { name: 'test:packaged-authoring:author', timeout: 'scenario',
-    outputs: [AUTHORING_HANDOFF_DIRECTORY, `${AUTHORING_HANDOFF_DIRECTORY}/work-ready`, `${AUTHORING_HANDOFF_DIRECTORY}/archive`],
+    outputs: ['.apack/tests/authoring-handoff', '.apack/tests/authoring-handoff/work-ready', '.apack/tests/authoring-handoff/archive'],
     // APACK_HOST selects default-setup's built snapshot for the external pack's dependency.
     inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/acceptance/packaged-authoring/test-packaged-authoring-author.sh',
-      'tests/acceptance/packaged-authoring/support.sh', 'tests/acceptance/packaged-authoring/handoff.json', ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS] },
+      'tests/acceptance/packaged-authoring/support.sh', ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS] },
   { name: 'test:packaged-authoring:app', timeout: 'suite',
     inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/acceptance/packaged-authoring/test-packaged-authoring-app.sh',
-      'tests/acceptance/packaged-authoring/support.sh', 'tests/acceptance/packaged-authoring/handoff.json', AUTHORING_HANDOFF_DIRECTORY, ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
+      'tests/acceptance/packaged-authoring/support.sh', '.apack/tests/authoring-handoff', ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
 ];
