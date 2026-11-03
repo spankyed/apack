@@ -6,6 +6,7 @@ A **pack** is a self-contained extension for apack. It can contribute backend sy
 
 - A compatible apack host and CLI. The standalone CLI supports Node 22.15+ on the 22.x line,
   or Node 23.5+; the app-bundled CLI uses its included runtime.
+- npm 11 or later, to install a new pack's dependencies: npm 10 crashes on them.
 - When using a packaged macOS app: **apack → Install 'apack' command in PATH** installs the bundled
   command (apack Beta installs `apack-beta`). This requires an actual available app build.
 
