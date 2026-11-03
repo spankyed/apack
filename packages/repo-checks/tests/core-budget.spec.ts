@@ -71,7 +71,7 @@ const configs = (): string[] => [
  * Text rather than the resolved config, and that is the honest mechanism for this question: what is being
  * asked is whether the file *declares* a cap, and a declaration is what `check:specifiers` reads these
  * files for too. A property form with a value, so the prose in `vitest.integration.config.ts` — which
- * names `maxThreads ?? maxWorkers ?? (cpus - 1)` and tabulates `maxThreads 50%` — is not a hit.
+ * names `maxWorkers` replacing vitest's default of `cpus - 1` — is not a hit.
  */
 const CAP = /\bmax(?:Threads|Forks|Workers)\s*:\s*'?([^,}'\s]+)'?/g;
 const capsInText = (text: string): string[] => [...text.matchAll(CAP)].map((hit) => hit[1]!);
@@ -106,15 +106,14 @@ describe('a config that caps its workers has told the budget', () => {
   it('finds a cap added where none was, which is what the case above rests on', () => {
     // The mutation, over text rather than the tree: the subject is the scan, and a scan that missed a
     // declaration would let a new pool take the box while the chain went on weighing it at one core
-    expect(capsInText("poolOptions: { threads: { maxThreads: '75%' } },")).toEqual(['75%']);
+    expect(capsInText("maxWorkers: '75%',")).toEqual(['75%']);
     expect(declared(), '75% is no declared share, so the case above fails on a config carrying it')
       .not.toContain('75%');
   });
 
   it('reads a declaration and not the prose about one', () => {
-    // Both of these sit in `vitest.integration.config.ts`'s doc block, and either read as a cap would make
-    // that file claim widths it does not set
-    expect(capsInText('vitest reads this as `poolOptions.maxThreads ?? maxWorkers ?? (cpus - 1)`')).toEqual([]);
-    expect(capsInText('*     maxThreads 50%   44.97 48.05 48.22')).toEqual([]);
+    // This sits in `vitest.integration.config.ts`'s doc block, and read as a cap would make that file claim
+    // a width it does not set
+    expect(capsInText('A percentage, because `maxWorkers` replaces vitest\'s default of `cpus - 1`')).toEqual([]);
   });
 });

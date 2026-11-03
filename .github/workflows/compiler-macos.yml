@@ -77,7 +77,7 @@ jobs:
           packages/apack-cli/tests/commands/dev-cancellation.spec.ts
           --testNamePattern "$APACK_TEST_NAME"
           --reporter=default --reporter=json --outputFile="$RUNNER_TEMP/apack-compiler-input-tests.json"
-          --bail=1 --poolOptions.threads.maxThreads=1 --poolOptions.threads.minThreads=1 --no-file-parallelism
+          --bail=1 --maxWorkers=1 --no-file-parallelism
       - name: Prepare strictly signed Electron fixture
         if: ${{ inputs.sign_runtime }}
         env:
@@ -143,7 +143,7 @@ jobs:
           packages/apack-cli/tests/build/compiler-read-tree.spec.ts
           packages/apack-cli/tests/build/compiler-watch.spec.ts
           packages/apack-cli/tests/build/pack-builder.spec.ts
-          --bail=1 --poolOptions.threads.maxThreads=2 --poolOptions.threads.minThreads=1 --no-file-parallelism
+          --bail=1 --maxWorkers=2 --no-file-parallelism
       - name: Native admission, preloads and watch recovery
         env:
           APACK_TEST_NAME: ${{ inputs.test_name || (inputs.sign_runtime && 'uses the strictly signed captured Electron runtime') || '.' }}
@@ -155,7 +155,7 @@ jobs:
           packages/apack-cli/tests/build/compiler-native-launch.native.spec.ts
           --testNamePattern "$APACK_TEST_NAME"
           --reporter=default --reporter=json --outputFile="$RUNNER_TEMP/apack-native-tests.json"
-          --bail=1 --poolOptions.threads.maxThreads=1 --poolOptions.threads.minThreads=1 --no-file-parallelism
+          --bail=1 --maxWorkers=1 --no-file-parallelism
       - name: Verify selected compiler cases executed
         run: >-
           node .github/scripts/verify-filtered-tests.cjs
