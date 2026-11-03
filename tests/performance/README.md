@@ -1,6 +1,9 @@
 # Application performance qualification
 
-This is a manual suite against built application output, separate from the ordinary E2E gate. It
+This is a manual suite against built application output, separate from the ordinary E2E gate.
+`scenarios/` owns measured actions and seed creation; `checks/` owns recorder correctness, fault
+injection and query diagnostics. `_support/` owns scenario machinery and browser completion helpers.
+The scenario environment names and commands below are unchanged. It
 owns a disposable test profile. [Recording contracts](../../docs/references/application-performance.md)
 describe instrumentation ownership, attribution and limits. Never set `E2E_DATA_DIR` to a developer's profile for qualification.
 All four actions have completed controlled mode comparisons. Source-qualified measurements, retained
@@ -88,11 +91,11 @@ Controlled manual counterfactuals: `APACK_PERFORMANCE_SCENARIO=search-supersessi
 results directly to the actor after supersession/cancellation (transport guards are separately tested).
 `APACK_PERFORMANCE_SCENARIO=backend-block` runs a bounded CPU workload through the actual database
 console and requires its returned CPU charge in backend process totals. These are correctness proofs,
-not latency samples. Inside the runner-owned `/work` copy only, `bash tests/performance/counterfactuals/thread-open.sh full-read`
+not latency samples. Inside the runner-owned `/work` copy only, `bash tests/performance/checks/thread-open.sh full-read`
 injects an actual full-dataset query, requires a newly written failed work-budget report, and restores
 its source on exit. Deliberate defects never enter the authored checkout.
 
-`bash tests/performance/counterfactuals/thread-open.sh missing-completion` executes a dedicated test that withholds the correlated
+`bash tests/performance/checks/thread-open.sh missing-completion` executes a dedicated test that withholds the correlated
 completion signal while the actual fifty-message view arrives. It requires an incomplete trial with
 no duration/success marker and complete process captures; source is restored on exit.
 
@@ -143,7 +146,7 @@ provenance cannot qualify. The disabled-to-lightweight median budget is 5%; a fu
 above that budget exits unsuccessfully while preserving evidence and finishing other selected actions.
 Ordinary CI never runs or enforces the clock budget. Detailed overhead has no assumed low-cost claim.
 
-For capture-refusal proof, run `bash tests/performance/counterfactuals/search-resource-refusal.sh`.
+For capture-refusal proof, run `bash tests/performance/checks/search-resource-refusal.sh`.
 It executes a dedicated scenario with explicit test-owned fault injection; no source or assertions are rewritten.
 The historical CPU-only investigation is recorded in the investigation archive and is not a maintained runner.
 

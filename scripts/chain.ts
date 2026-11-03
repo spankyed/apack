@@ -16,7 +16,7 @@
 // `build`, nothing writes what another step reads, each app launch takes its own port (`getPort` in main's
 // `ApiServer`) and its own data dir (`mkdtemp` in `@apackdev/testing`), and `ensurePackagesBuilt` returns
 // before taking the build lock when nothing is stale. One step did not admit to its shared state —
-// `test:packaged-authoring` runs `npm run packages:build` first (`tests/scripts/test-packaged-authoring.sh`)
+// `test:packaged-authoring` runs `npm run packages:build` first (`tests/acceptance/packaged-authoring/test-packaged-authoring.sh`)
 // and so rewrites the `dist/` every other step reads — and `APACK_PACKAGES_PREBUILT=1` reports that now
 // rather than racing it.
 //

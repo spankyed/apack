@@ -58,7 +58,7 @@ export function fixtureEnv(
   delete env.E2E_REPORT_DIR;
   // Cleared when there is none, as APACK_PACK_RELEASE below is: `apack pack test` runs the pack it is in,
   // so an exported PACK_DIR in a directory that holds no manifest would have it build and install a
-  // pack the caller never named. `tests/scripts/test-packaged-authoring.sh` used to `unset` it by hand
+  // pack the caller never named. `tests/acceptance/packaged-authoring/test-packaged-authoring.sh` used to `unset` it by hand
   if (packDir) env.PACK_DIR = packDir;
   else delete env.PACK_DIR;
   if (options.release) env.APACK_PACK_RELEASE = '1';
@@ -99,7 +99,7 @@ export async function contractTest(cwd: string, args: string[], run: ContractRun
   // A pack resolves the packages' published dist, whoever runs it — the same rule the Playwright half
   // follows, and the reason a checkout's own condition must not reach this run
   // **This inherits the environment where `fixtureEnv` scrubs it, and that is deliberate.** No app starts
-  // here, so there is no app to pin — and `tests/scripts/test-external-pack-contract.sh` exports
+  // here, so there is no app to pin — and `tests/acceptance/external-pack/test-external-pack-contract.sh` exports
   // `APACK_HOST_ROOT` precisely so the pack's build resolves this checkout. Scrubbing it the way the fixture
   // path does would break that step. Nothing on this path reads `E2E_DATA_DIR`, `E2E_SCREENSHOT_DIR` or
   // `PACK_DIR`, which is why the hermeticity those get in `fixtureEnv` is not needed here.

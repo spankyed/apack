@@ -11,11 +11,11 @@
 # the fixture refuses a stale build under --prebuilt, and the installer names a missing one.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 APACK="$ROOT/node_modules/.bin/apack"
 export APACK_HOST="$ROOT"
-source "$ROOT/tests/scripts/lib/fixture-packs.sh"
-"$ROOT/node_modules/.bin/tsx" "$ROOT/tests/scripts/prepare-default-pack-fork.ts" --check
+source "$ROOT/tests/acceptance/external-pack/support.sh"
+"$ROOT/node_modules/.bin/tsx" "$ROOT/tests/acceptance/external-pack/prepare-default-pack-fork.ts" --check
 
 for PACK in "${FIXTURE_PACKS[@]}"; do
   if [ ! -d "$PACK/dist" ]; then
@@ -38,7 +38,7 @@ if [ "$#" -eq 0 ]; then
   exclude=(--grep-invert 'externally built default fork')
   if [ "$(node -p 'require("node:os").availableParallelism()')" -ge 6 ]; then
     fork_log="$(mktemp)"
-    "$ROOT/node_modules/.bin/tsx" "$ROOT/tests/scripts/test-default-pack-fork.ts" >"$fork_log" 2>&1 &
+    "$ROOT/node_modules/.bin/tsx" "$ROOT/tests/acceptance/external-pack/test-default-pack-fork.ts" >"$fork_log" 2>&1 &
     fork_pid=$!
   else
     fork_after=1
@@ -52,7 +52,7 @@ for PACK in "${FIXTURE_PACKS[@]}"; do
 done
 
 if [ "$fork_after" -eq 1 ] && [ "$status" -eq 0 ]; then
-  "$ROOT/node_modules/.bin/tsx" "$ROOT/tests/scripts/test-default-pack-fork.ts" || status=$?
+  "$ROOT/node_modules/.bin/tsx" "$ROOT/tests/acceptance/external-pack/test-default-pack-fork.ts" || status=$?
 fi
 if [ -n "$fork_pid" ]; then
   fork_status=0

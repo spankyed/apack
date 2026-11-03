@@ -1,6 +1,7 @@
 # Test inventory
 
-What tests this repo has, where they live, and how to tell where a test *belongs*.
+Historical inventory and package-level placement rules. The current repository layout and commands
+are in the [test placement guide](../../tests/README.md).
 
 > **Not kept current — revisit it before you rely on it, and before starting work from it.** It said it was,
 > and the counts below drifted anyway: on 2026-10-02 this page read 369 specs over twelve suites where the

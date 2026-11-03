@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test, expect } from '@apackdev/testing';
 import { chromeTrace } from '@apackdev/testing/performance';
-import type { PerformanceWindow } from './window.ts';
+import type { PerformanceWindow } from '../_support/window.ts';
 
 // Deliberate manual counterfactual, never an ordinary CI latency threshold. The console executes this
 // bounded CPU workload in the actual backend; its returned CPU charge must appear in that process's totals.

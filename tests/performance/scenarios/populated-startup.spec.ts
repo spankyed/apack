@@ -4,8 +4,8 @@ import { test as base, expect, applicationLaunchStartedAt } from '@apackdev/test
 import { createNodePerformanceController } from '@apackdev/host/diagnostics/node';
 import type { RecordingMode } from '@apackdev/host/diagnostics';
 import { manifestSchema, performanceIdentity, attachRendererProcessIdentity, trialSchema } from '@apackdev/testing/performance';
-import { searchFixture } from '../fixtures/conversations.ts';
-import type { PerformanceWindow } from './window.ts';
+import { searchFixture } from '../../_support/conversations.ts';
+import type { PerformanceWindow } from '../_support/window.ts';
 
 const mode = (process.env.APACK_PERFORMANCE_MODE ?? 'lightweight') as RecordingMode;
 if (!['disabled', 'lightweight', 'detailed'].includes(mode)) throw Error('Invalid recording mode');

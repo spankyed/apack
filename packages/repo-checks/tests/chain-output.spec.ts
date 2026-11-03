@@ -198,7 +198,7 @@ describe('firstChange', () => {
 
   /** A unit that gained a watched path is stale before a byte moved, so naming a file would name a non-cause */
   it('names a declared path over any file', () => {
-    expect(firstChange({ ...nothing, gained: ['tests/scripts'], changed: ['a.ts'] })).toBe('gained tests/scripts');
+    expect(firstChange({ ...nothing, gained: ['tests/acceptance'], changed: ['a.ts'] })).toBe('gained tests/acceptance');
     expect(firstChange({ ...nothing, lost: ['tests/old'] })).toBe('lost tests/old');
   });
 
@@ -266,8 +266,8 @@ describe('staleLines', () => {
    * printing both would read as a contradiction, and printing only the files would read as a bug.
    */
   it('reports a declared-set change instead of files, because no file moved', () => {
-    expect(under({ gained: ['tests/scripts'], lost: ['tests/old'] }))
-      .toEqual(['  typecheck  its declared inputs moved: +tests/scripts, -tests/old']);
+    expect(under({ gained: ['tests/acceptance'], lost: ['tests/old'] }))
+      .toEqual(['  typecheck  its declared inputs moved: +tests/acceptance, -tests/old']);
   });
 
   it('counts the rest past the cap rather than filling the screen', () => {

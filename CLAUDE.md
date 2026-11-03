@@ -234,7 +234,7 @@ Things that waste the most time, in order:
 - **Re-running the full chain after a fix to a thing the chain already covered.** The suite that caught it
   proves the fix.
 - **Reading the source twice to explain a bug the running app would show you.** One instrumented E2E run is
-  decisive; the run you already did wrote the app's output to `tests/results/app-<workerIndex>.log`
+  decisive; the run you already did wrote the app's output to `.apack/tests/results/app-<workerIndex>.log`
   (`tests/e2e/CLAUDE.md`).
 - **Reading a chain step's `cached` as "the thing it guarantees is true".** It means only that its declared
   inputs have not moved ([cache layers](docs/references/cache-layers.md)).
@@ -294,7 +294,7 @@ reordered; a check that genuinely needs the app declares it, and the fix is neve
 (`build:runtime`) writes the app and does not count as reading it.
 
 Split a check at that boundary: `test:external-pack` is `:contract` and `:fork` (no app) and `:app`;
-`test:packaged-authoring` is `:author` and `:app`, handing over a work dir through `tests/authoring-handoff`,
+`test:packaged-authoring` is `:author` and `:app`, handing over a work dir through `.apack/tests/authoring-handoff`,
 which stays **outside** the checkout so the pack cannot resolve `@apackdev/*` from the workspace
 `node_modules`. History: [pipeline-lessons.md](docs/archive/references/pipeline-lessons.md#what-a-test-may-read).
 
