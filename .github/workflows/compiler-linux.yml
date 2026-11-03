@@ -80,6 +80,8 @@ jobs:
           packages/apack-cli/tests/build/compiler-native-vite.native.spec.ts
           packages/apack-cli/tests/build/compiler-native-libraries.native.spec.ts
           packages/apack-cli/tests/build/compiler-native-launch.native.spec.ts
+          packages/apack-cli/tests/build/build-worker.native.spec.ts
+          packages/apack-cli/tests/build/watch-module-freshness.native.spec.ts
           --testNamePattern "$APACK_TEST_NAME"
           --reporter=default --reporter=json --outputFile="$RUNNER_TEMP/compiler-native-publication.json"
           --bail=1 --maxWorkers=1 --no-file-parallelism
