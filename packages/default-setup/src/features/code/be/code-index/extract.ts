@@ -25,10 +25,13 @@ export interface Definition {
   line: number;
   column: number;
   endLine: number;
+  /** Where it is in the file's text */
+  start: number;
+  end: number;
 }
 
 /** A file's definitions, or why it has none */
-export type Extraction = { ok: true; definitions: Definition[] } | { ok: false; error: string };
+export type Extraction = { ok: true; definitions: Definition[]; defaultLocal: string | null } | { ok: false; error: string };
 
 const SIGNATURE_LIMIT = 240;
 
@@ -47,7 +50,7 @@ export function languageOf(path: string): CodeLanguage | null {
 }
 
 // A syntax tree node: the fields read here are named, and the walk reaches the rest by key
-interface AstNode {
+export interface AstNode {
   type: string;
   start: number;
   end: number;
@@ -107,8 +110,10 @@ function unwrap(node: AstNode | null | undefined): AstNode | null {
   return current;
 }
 
-class FileWalk {
+export class FileWalk {
   readonly definitions: Omit<Definition, 'ordinal'>[] = [];
+  /** The local name of what `export default` holds, when it has one */
+  defaultLocal: string | null = null;
   private readonly exportedNames = new Set<string>();
 
   constructor(private readonly source: string) {}
@@ -128,6 +133,7 @@ class FileWalk {
       signature: this.header(node.start, signatureEnd),
       signatureHash, bodyHash,
       line: node.loc.start.line, column: node.loc.start.column, endLine: node.loc.end.line,
+      start: node.start, end: node.end,
     });
   }
 
@@ -186,6 +192,8 @@ class FileWalk {
   private walkDefault(statement: AstNode, scope: string): void {
     const declaration = statement.declaration as AstNode;
     const value = unwrap(declaration);
+    this.defaultLocal = `${scope}${declaration.id?.name ?? (declaration.type === 'Identifier' ? declaration.name : 'default')}`;
+    if (declaration.type === 'Identifier') { this.exportedNames.add(declaration.name); return; }
     if (declaration.type === 'FunctionDeclaration' || declaration.type === 'TSDeclareFunction') this.addFunction(declaration, declaration.id?.name ?? 'default', scope, true);
     else if (declaration.type === 'ClassDeclaration') this.addClass(declaration, declaration.id?.name ?? 'default', scope, true);
     else if (value) this.addValue(statement, value, [], 'default', scope, true);
@@ -348,13 +356,14 @@ function boundNames(pattern: AstNode): AstNode[] {
   }
 }
 
-function pluginsFor(language: CodeLanguage, scriptLang: string | undefined): ParserPlugin[] {
+export function pluginsFor(language: CodeLanguage, scriptLang: string | undefined): ParserPlugin[] {
   const jsx = language === 'tsx' || language === 'javascript' || scriptLang === 'tsx' || scriptLang === 'jsx';
   return ['typescript', 'decorators', ...(jsx ? ['jsx' as const] : [])];
 }
 
-function walkScript(walk: FileWalk, code: string, plugins: ParserPlugin[], position?: { line: number; column: number; index: number }): void {
-  const file = parse(code, {
+/** A script's syntax tree, with its positions counted from `position` when it starts part way through a file */
+export function parseScript(code: string, plugins: ParserPlugin[], position?: { line: number; column: number; index: number }): AstNode {
+  return parse(code, {
     sourceType: 'unambiguous',
     errorRecovery: true,
     allowReturnOutsideFunction: true,
@@ -364,8 +373,11 @@ function walkScript(walk: FileWalk, code: string, plugins: ParserPlugin[], posit
     allowSuperOutsideMethod: true,
     plugins,
     ...(position && { startLine: position.line, startColumn: position.column, startIndex: position.index }),
-  });
-  walk.walkProgram(file.program.body as unknown as AstNode[]);
+  }).program as unknown as AstNode;
+}
+
+function walkScript(walk: FileWalk, code: string, plugins: ParserPlugin[], position?: { line: number; column: number; index: number }): void {
+  walk.walkProgram(parseScript(code, plugins, position).body as AstNode[]);
 }
 
 /** A single-file component's definitions: the component itself, whose body is its template, and its script blocks' */
@@ -387,9 +399,11 @@ function walkVue(walk: FileWalk, source: string, path: string): void {
   walk.definitions.push({
     kind: 'component', name, local: `<${name}>`, exported: true, signature: `<${name}>`,
     signatureHash: '', bodyHash: template ? digest(template) : '',
-    line: 1, column: 0, endLine: source.split('\n').length,
+    line: 1, column: 0, endLine: source.split('\n').length, start: 0, end: source.length,
   });
   for (const script of scripts) walkScript(walk, script.code, pluginsFor('vue', script.lang), script.position);
+  // A component is what importing the file gives, however its script is written
+  walk.defaultLocal = `<${name}>`;
 }
 
 /** Every definition in a file's text, in file order */
@@ -409,7 +423,7 @@ export function extractFile(path: string, source: string): Extraction {
     seen.set(definition.local, ordinal + 1);
     return { ...definition, ordinal };
   });
-  return { ok: true, definitions };
+  return { ok: true, definitions, defaultLocal: walk.defaultLocal };
 }
 
 // One of every form the extractor reads. Its result is the stamp, so any change to what the extractor answers changes
