@@ -31,8 +31,8 @@ itself; external packs have a separate workflow described below.
 
 Requirements:
 
-- Node.js **23.5.0 or newer**, as declared in the root `package.json`.
-- npm and Git.
+- Node.js **24 LTS (24.11.0 or newer)**; the root `package.json` declares the supported majors.
+- **npm 11 or newer** and Git.
 - Native build tools required by Electron dependencies; see [CLAUDE.md](CLAUDE.md) for repository
   setup and validation guidance, and the [Windows VM guide](docs/references/guides/windows-development-vm.md)
   for the shared Windows development environment.

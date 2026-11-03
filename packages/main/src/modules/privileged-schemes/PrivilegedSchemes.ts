@@ -30,7 +30,7 @@ const PRIVILEGED_SCHEMES: CustomScheme[] = [
       //
       // The origin is latent today: only modules are loaded at `pack://`, never a document, so nothing
       // partitions storage or consults it. It becomes load-bearing the day a pack's UI runs in its own
-      // document (`docs/plans/pack-fault-isolation.md`).
+      // document (`docs/archive/plans/pack-fault-isolation.md`).
       //
       // **The one behaviour it does change is the host's case**: a standard scheme lowercases it, so
       // `pack://My-Pack/x` reaches the `my-pack` pack rather than being refused. That is what http does
