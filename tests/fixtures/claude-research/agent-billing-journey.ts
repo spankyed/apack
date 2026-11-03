@@ -43,7 +43,13 @@ export async function verifyAgentBilling(
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, phase: state.phase, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, nativeUi: Object.values(state.nativeUiViews).filter((view:any)=>view.threadId===state.currentThread?.id), native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
   try {
-    await expect.poll(async () => (await context()).turns, {timeout:25000,message:'Original cold seed turn completes before billing verification'}).toBe(1)
+    // The app owns its 30s native initialization clock; first-turn latency starts after init.
+    await appPage.waitForFunction(() => {
+      const claude=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.currentThread?.context?.claudeCode
+      return !!claude?.sessionId || claude?.chatState==='error'
+    },null,{timeout:0})
+    expect((await context()).claude.chatState).not.toBe('error')
+    await expect.poll(async () => (await context()).turns, {timeout:25000,message:'Original initialized seed turn completes before billing verification'}).toBe(1)
   } catch (error) {
     // Keep the original failure while recording what the person could see at the startup boundary.
     await writeFile(testInfo.outputPath('native-agent-billing-startup-failure.json'), JSON.stringify(await context(), null, 2)).catch(() => undefined)
