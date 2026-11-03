@@ -5,6 +5,8 @@ import { createFrontendResourceFixture, readFrontendOutput } from '../_support/f
 import { bundlePackFE } from '../../src/build/fe-bundler.ts';
 import { createFrontendWatcher } from '../../src/build/frontend-watch.ts';
 
+const DELIVERY_CEILING_MS = 30_000;
+
 const fixture = createFrontendResourceFixture();
 const { consumer } = fixture;
 
@@ -44,14 +46,15 @@ it.each([
     fs.mkdirSync(nested);
     const page = path.join(nested, 'new.js');
     fs.writeFileSync(page, 'export const marker = "NEW_GLOB_PAGE";');
-    await vi.waitFor(() => expect(changed, JSON.stringify(reported)).toHaveBeenCalled(), { timeout: 2_000 });
+    // A ceiling for an event that never comes: on a loaded Mac one has taken over 1.7 s, and the wait ends when it arrives
+    await vi.waitFor(() => expect(changed, JSON.stringify(reported)).toHaveBeenCalled(), { timeout: DELIVERY_CEILING_MS });
     expect(before.current()).toBe(false);
     const second = await compile();
     expect(second.success, second.error).toBe(true);
     expect(readFrontendOutput(pack, '.js')).toContain('NEW_GLOB_PAGE');
     changed.mockClear();
     fs.unlinkSync(page);
-    await vi.waitFor(() => expect(changed).toHaveBeenCalled(), { timeout: 2_000 });
+    await vi.waitFor(() => expect(changed).toHaveBeenCalled(), { timeout: DELIVERY_CEILING_MS });
     const third = await compile();
     expect(third.success, third.error).toBe(true);
     expect(readFrontendOutput(pack, '.js')).not.toContain('NEW_GLOB_PAGE');
