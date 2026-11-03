@@ -177,7 +177,7 @@ framework copy, signed Mach-O) with `gh workflow run ci.yml --ref <branch> -f co
 Windows verification with `compiler_windows=true`. Stop local testing immediately if unrelated apps stop
 launching; preserve evidence without changing macOS security settings. Cause remains unproven in the
 [launch incident](docs/archive/references/evidence/build-input-snapshot-proof.md#macos-launch-policy-investigation-2026-10-17). The integration half runs directly: its builds reuse the shared compiler store, so
-macOS assesses each runtime once. Live watcher cases belong in `*.native.spec.ts`; pure unit checks stay in the
+macOS assesses each runtime once. Live watcher cases belong in `*.native.spec.ts` (`findLiveWatchersInIntegrationSpecs`); pure unit checks stay in the
 fast half.
 For this host's shared external Docker storage and relocation checks, see the
 [Docker storage guide](docs/references/guides/docker-storage.md).
