@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { CHECKS, findAppImportsInPackTests, findContractLeafImports, findCrossCheckoutResolution, findCrossFeatureImports, findExtensionlessOwnModules, findHostImports, findJsSpecifiers, findMissingSourceConditions, findPackageScriptImports, findPackBackendConsole, findPackWindowStorage, findComponentSends, findPackOwnAliases, findRawGitListings, findRawPackHelpers, findRawTransport, findReservedEventKeys, findInternalPackageImports, findElmdbImports, findRepositoryCasts, findSharedPackageLists, findSyncSpawnsInSlowSpecs, findUpwardImports, jsSpecifierFixes, LAYERS, UNLAYERED_BY_DESIGN, repoRootDir, findUnimportedDependencies, ELMDB_RULES, MANIFEST_FIELDS, packOwnModuleFixes, packageSourceDirs, CHECK_IDS, type CoveredRuleId, DECLARES_SOURCE_BY_DESIGN, type ImportRuleId, SHARED_LIST_CONSUMERS, sourceConditionPackages, SOURCE_CONDITION, checkedDirs, type ImportRule, packCodeDirs, packDirs, packRule, packRuleProblems, ruleRows, ruleTable } from '../../../scripts/check-import-specifiers.ts';
+import { CHECKS, findAppImportsInPackTests, findContractLeafImports, findCrossCheckoutResolution, findCrossFeatureImports, findExtensionlessOwnModules, findHostImports, findJsSpecifiers, findMissingSourceConditions, findPackageScriptImports, findPackBackendConsole, findPackWindowStorage, findComponentSends, findPackOwnAliases, findRawGitListings, findRawPackHelpers, findRawTransport, findReservedEventKeys, findInternalPackageImports, findElmdbImports, findRepositoryCasts, findSchemeRegistrations, findSharedPackageLists, findSyncSpawnsInSlowSpecs, findUpwardImports, jsSpecifierFixes, LAYERS, UNLAYERED_BY_DESIGN, repoRootDir, findUnimportedDependencies, ELMDB_RULES, MANIFEST_FIELDS, packOwnModuleFixes, packageSourceDirs, CHECK_IDS, type CoveredRuleId, DECLARES_SOURCE_BY_DESIGN, type ImportRuleId, SHARED_LIST_CONSUMERS, sourceConditionPackages, SOURCE_CONDITION, checkedDirs, type ImportRule, packCodeDirs, packDirs, packRule, packRuleProblems, ruleRows, ruleTable } from '../../../scripts/check-import-specifiers.ts';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { packFixture as buildPackFixture } from '@apackdev/sdk/testing/pack-fixture';
 import { population } from '@apackdev/sdk/testing';
@@ -689,6 +689,10 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
     }));
     write('packages/apack-host/src/services/run-history.ts', "import { Database } from 'elmdb';");
     return findElmdbImports(rules, root);
+  },
+  findSchemeRegistrations: () => {
+    write('schemes.ts', "protocol.registerSchemesAsPrivileged([]);");
+    return findSchemeRegistrations(['src'], root);
   },
   findRawGitListings: () => {
     write('caller.ts', "execFileSync('git', ['ls-files']);");
@@ -1867,6 +1871,24 @@ describe('findCrossFeatureImports', () => {
   it('excepts nothing when the package publishes nothing', () => {
     writeAt(`${src}/fe/index.ts`, "export { memosMachine } from '../features/memos/fe/state';");
     expect(findCrossFeatureImports([src], root)).toEqual([`${src}/fe/index.ts:1: ../features/memos/fe/state`]);
+  });
+});
+
+describe('findSchemeRegistrations', () => {
+  const REGISTRAR = 'packages/main/src/modules/privileged-schemes/PrivilegedSchemes.ts';
+  const CALL = "import { protocol } from 'electron';\nprotocol.registerSchemesAsPrivileged([]);";
+
+  it('flags a registration in any other module', () => {
+    write('packages/main/src/modules/media-protocol/MediaProtocol.ts', CALL);
+    expect(findSchemeRegistrations(['src'], root)).toEqual([
+      expect.stringMatching(/^src\/packages\/main\/src\/modules\/media-protocol\/MediaProtocol\.ts:2: registerSchemesAsPrivileged/),
+    ]);
+  });
+
+  it('allows the registrar, and a mention in a comment', () => {
+    writeAt(REGISTRAR, CALL);
+    write('packages/main/src/modules/pack-protocol/PackProtocol.ts', '// never protocol.registerSchemesAsPrivileged here');
+    expect(findSchemeRegistrations(['packages/main/src', 'src'], root)).toEqual([]);
   });
 });
 

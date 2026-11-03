@@ -518,6 +518,22 @@ export function findRawGitListings(dirs: readonly string[] = CHECKED_DIRS, root 
   return problems.sort();
 }
 
+/** The one module that hands Electron its custom schemes' privileges */
+const SCHEME_REGISTRAR = 'packages/main/src/modules/privileged-schemes/PrivilegedSchemes.ts';
+
+/**
+ * `file:line: registerSchemesAsPrivileged` for each call outside `SCHEME_REGISTRAR`. Electron keeps only the last call, so
+ * a second one takes every other scheme's privileges away, in silence: images still load, and `fetch` is refused.
+ */
+export function findSchemeRegistrations(dirs: readonly string[] = CHECKED_DIRS, root = repoRoot): string[] {
+  const rule: Rule = (node) => (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+    && node.expression.name.text === 'registerSchemesAsPrivileged' ? ['registerSchemesAsPrivileged'] : undefined);
+  return filesUnder(dirs, root)
+    .filter((file) => repoRelative(root, file) !== SCHEME_REGISTRAR)
+    .flatMap((file) => findInFiles([file], root, rule))
+    .sort();
+}
+
 /**
  * Modules the integration and native pools load that start a synchronous process on purpose, with why.
  *
@@ -769,6 +785,13 @@ const RULE_LIST = [
     repoOnly: { kind: 'covered', by: 'elmdb-imports', note: "What is left here is the API, the host and the engine's own root" },
     find: findElmdbImports,
     rule: "Only @apackdev/ears/lmdb loads elmdb: the host and the API open the database through it, the engine's root and packs never load it",
+  },
+  {
+    id: 'findSchemeRegistrations',
+    over: CHECKED_DIRS,
+    repoOnly: { kind: 'inapplicable', note: "Its subject is the app's Electron main process, which no pack runs in." },
+    find: findSchemeRegistrations,
+    rule: "Only privileged-schemes/PrivilegedSchemes.ts calls registerSchemesAsPrivileged: Electron keeps only the last call, so a second one takes every other scheme's privileges away.",
   },
   {
     id: 'findRawGitListings',
