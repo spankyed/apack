@@ -6,7 +6,7 @@ import { setup } from 'xstate';
 import { answer } from './answer.ts';
 import { defineSystem } from '@apackdev/sdk/framework';
 
-import { write, type EARS } from '#generated/ears.ts';
+import { write, transact, type EARS } from '#generated/ears.ts';
 import { repository } from '#generated/repository.ts';
 import type { Contract } from './contract.ts';
 import type { OutgoingThreadsEvents, ThreadLinkItem } from './types.ts';
@@ -17,6 +17,7 @@ import { importThreads } from './import-threads.ts';
 import { runThreadTeardown } from './thread-teardown.ts';
 import { generateAsideText } from './services/chat.ts';
 import { createLogger, reportError } from '@apackdev/sdk/logger';
+import { RepositoryError, RepositoryErrorCode } from '@apackdev/sdk/repositories';
 
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 
@@ -78,7 +79,8 @@ export const threadsSystem = setup({
     // ---- Thread management actions ----
     createThread: ({ event, reply }) => {
       const thread = threadsSpec.typeOf('CREATE_THREAD', event);
-      answerWrite(reply, (error) => reportThreadOperationError('create', error), () => {
+      // The thread and its parent's link are one unit, so a refused link leaves no thread behind
+      answerWrite(reply, (error) => reportThreadOperationError('create', error), () => transact(() => {
         const { id: newThreadId } = repository.threadCommands.create({
           topic: thread.topic,
           instructions: thread.instructions,
@@ -87,18 +89,10 @@ export const threadsSystem = setup({
         });
 
         if (thread.parentThreadId) {
-          repository.threadCommands.update(
-            thread.parentThreadId as EARS.EntityId,
-            {
-              linkedThreads: [{
-                id: newThreadId,
-                relation: 'parent_of' as const
-              }]
-            }
-          );
+          repository.threadCommands.addLinks(thread.parentThreadId as EARS.EntityId, [{ id: newThreadId, relation: 'parent_of' }]);
         }
         return { type: 'THREAD_CREATED' as const, id: newThreadId };
-      });
+      }));
     },
     visitThread: ({ event }) => {
       repository.threadCommands.markAsVisited(threadsSpec.typeOf('VIEW_THREAD', event).threadId as EARS.EntityId);
@@ -111,6 +105,8 @@ export const threadsSystem = setup({
         'update';
       answerWrite(reply, (error) => {
         logger.warn('Failed to update thread field', { threadId, key, error });
+        // A link closing a loop is the form's to show, answered to it with the reason
+        if (key === 'linkedThreads' && error instanceof RepositoryError && error.code === RepositoryErrorCode.VALIDATION_ERROR) return;
         reportThreadOperationError(operation, error, threadId);
       }, () => { repository.threadCommands.update(threadId as EARS.EntityId, { [key]: value }); });
     },

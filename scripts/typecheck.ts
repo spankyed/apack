@@ -93,7 +93,7 @@ const JOBS: readonly Job[] = [
 
 const secs = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
 
-interface Outcome { readonly ms: number; readonly code: number; readonly output: string; readonly timedOut?: true }
+interface Outcome { readonly ms: number; readonly code: number; readonly output: string; readonly timedOut?: true; readonly stalled?: true }
 
 const done = new Map<string, Outcome>();
 
@@ -129,7 +129,7 @@ for (const leg of failed) {
   // `LEG_TIMEOUT`, never the literal: this named `'quick'` while the kill above read `TIMEOUT_MS[LEG_TIMEOUT]`,
   // so changing the legs' class would have had the message report a deadline other than the one that fired
   const why = outcome.timedOut === true
-    ? timedOutBecause({ what: leg.name, timeout: leg.timeout })
+    ? timedOutBecause({ what: leg.name, timeout: leg.timeout, stalled: outcome.stalled })
     : `${leg.name} failed (exit ${outcome.code})`;
   process.stderr.write(`\n${'─'.repeat(72)}\n${why}\n${'─'.repeat(72)}\n${outcome.output}\n`);
 }

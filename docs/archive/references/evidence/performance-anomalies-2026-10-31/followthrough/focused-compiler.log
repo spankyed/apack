@@ -1,0 +1,57 @@
+
+ RUN  v3.2.7 /private/tmp/apack-performance-anomalies.noindex/packages/apack-cli
+
+--- /private/var/folders/4p/krfrhcfn4497f_6_ks06f9dr0000gn/T/facade-report-cmd-THv4kR/report-pack/etc/pack-types.api.md	2026-11-01 01:20:10
++++ /var/folders/4p/krfrhcfn4497f_6_ks06f9dr0000gn/T/facade-report-UIdGRP/pack-types.api.md	2026-11-01 01:20:46
+@@ -22,6 +22,8 @@
+ type OutgoingNotifierEvents = {
+     type: 'NOTIFIED';
+     text: string;
++} | {
++    type: 'ALSO_NOTIFIED';
+ };
+ 
+ /** Entity shapes this pack declares */
+--- /private/var/folders/4p/krfrhcfn4497f_6_ks06f9dr0000gn/T/facade-report-cmd-THv4kR/report-pack/etc/pack-types.api.md	2026-11-01 01:20:48
++++ /var/folders/4p/krfrhcfn4497f_6_ks06f9dr0000gn/T/facade-report-PErLW7/pack-types.api.md	2026-11-01 01:20:53
+@@ -29,6 +29,7 @@
+ /** Entity shapes this pack declares */
+ type OwnEntityShapes = {
+     'Memo': MemoEntity;
++    'Reminder': ReminderEntity;
+ };
+ 
+ /** The repositories this pack declares (apack.json features[].repositories) */
+@@ -95,6 +96,10 @@
+ /** Every system this pack's code can send to, by ref: its own, its dependencies' and the host's. */
+ type QualifiedSystemEvents = Qualified<'report-pack', PackSystemEvents> & HostSystemEvents;
+ 
++interface ReminderEntity {
++    at: string;
++}
++
+ /** Every repository this pack can use: its own and its dependencies' */
+ type Repositories = OwnRepositories;
+ 
+ ✓ tests/commands/facade-report.integration.spec.ts (11 tests) 79710ms
+   ✓ apack pack facade-report > reports a missing report as missing rather than as a difference  2497ms
+   ✓ apack pack facade-report > records the facade dependents compile against, and then reports it up to date  7127ms
+   ✓ apack pack facade-report > checks the verified current build without changing generated files  15304ms
+   ✓ apack pack facade-report > refuses edited generated files on the skip path without updating the report  4227ms
+   ✓ apack pack facade-report > leaves the report alone when it is current, --update included  2316ms
+   ✓ apack pack facade-report > is not told anything by the built bundle: junk in dist does not move the verdict  2491ms
+   ✓ apack pack facade-report > needs no build at all: the check runs with no dist  2503ms
+   ✓ apack pack facade-report > follows an edit to the pack's own sources, with nothing rebuilt  6510ms
+   ✓ apack pack facade-report > follows the manifest, regenerating the barrel the facade is bundled from  6378ms
+   ✓ apack pack build > warns about a report that has gone stale, and still succeeds  12727ms
+stdout | tests/build/dependency-graph.integration.spec.ts > a collision that is real > still fails when two independent packs declare the same entity
+[run] /Users/spankyed/.nvm/versions/node/v23.11.1/bin/node /private/tmp/apack-performance-anomalies.noindex/packages/apack-cli/bin/apack.mjs pack build: 9474ms
+
+ ✓ tests/build/dependency-graph.integration.spec.ts (5 tests) 74657ms
+   ✓ a collision that is real > still fails when two independent packs declare the same entity  22100ms
+
+ Test Files  2 passed (2)
+      Tests  16 passed (16)
+   Start at  01:19:46
+   Duration  157.46s (transform 880ms, setup 23ms, collect 2.51s, tests 154.37s, environment 0ms, prepare 84ms)
+

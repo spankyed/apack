@@ -1,0 +1,1 @@
+{"status":"cancelled","reason":"Confirmed window-discovery readiness race adds up to five seconds to startup observations; completed warm scenario comparisons retained. Startup must be rerun after fixture correction."}

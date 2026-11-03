@@ -17,7 +17,7 @@ The repo's own E2E imports it the same way a pack does:
 import { test, expect } from '@apackdev/testing';
 ```
 
-Every spec (`tests/e2e/{smoke,app-integration,ui}/*.spec.ts`) imports `@apackdev/testing` directly. `@apackdev/testing` is the `packages/apack-testing` workspace package, and its four entries resolve its built bundle under every condition — so the repo's own E2E runs the same fixture a pack does, and `npm test` runs `packages:ensure` first to build it from the checkout's current sources.
+Every spec (`tests/e2e/{smoke,app-integration,ui}/*.spec.ts`) imports `@apackdev/testing` directly. `@apackdev/testing` is the `packages/apack-testing` workspace package, and its entries resolve its built bundle under every condition — so the repo's own E2E runs the same fixture a pack does, and `npm test` runs `packages:ensure` first to build it from the checkout's current sources.
 
 ### How external packs use it
 
@@ -39,21 +39,22 @@ own temporary data dir, and the app's single-instance lock is scoped by data dir
 A run that pins one data dir (`E2E_DATA_DIR`) gets one worker. Tests in one file stay on one worker and share its
 app; tests in different files may run at once, so a file must not depend on state another file left.
 
-One helper per kind of run, and there are two kinds:
+One helper per kind of run:
 
 | Helper | For | Overrides |
 |---|---|---|
 | `definePackE2EConfig` | a pack's suite, run by `apack pack test` | anything Playwright takes; the pack's word is last |
 | `defineDriveConfig` | driving scripts, run by `npm run dev:drive -- <script>` | the same |
+| `definePerformanceConfig` | manual application qualification under `tests/performance`, one owned app and explicit trials | the same; ordinary runs add no retries, trace or screenshot overhead |
 
-Two, and no more: a question needs no runner at all — it attaches to an app something else is holding —
-so there is no third kind of run for a helper to own.
+A question attaches to an existing app and needs no runner. Performance qualification launches an owned
+app under a separate manual config so ordinary E2E collection does not turn measurements into clock gates.
 
 - **`timeout` in `definePackE2EConfig` has to stay a literal.** `suite-timeouts.spec.ts` reads a config's
   timeouts as text rather than importing one (importing creates a temp data dir), follows the delegation to
   this module and holds the value to the large size budget. It reads **one helper's body**, not the file,
   because a neighbour declaring `timeout: 0` made reading the file whole report the root suite's as 0ms.
-- **Both take the pack's word last**, because nothing reads their settings back. The rule for which
+- **The helpers take the caller's word last**, because nothing reads their settings back. The rule for which
   settings a helper may lock is **the ones the tool or its own docs read back**, and neither helper has
   any such setting.
 
@@ -388,11 +389,11 @@ The fixture honors the CLI's resolved `APACK_HOST_EXECUTABLE` or `APACK_HOST_ROO
 
 ### Worker setup (`electronApp` fixture, shared across tests)
 
-0. **Isolated data dir** — every worker creates a fresh temp dir (`$TMPDIR/apack-e2e-*`) and launches the app with `APACK_USER_DATA_DIR` pointing at it. Nothing leaks between runs, other installed packs never load, and the developer's `apack-test` dir is untouched. The dir is removed after the worker finishes (`E2E_KEEP_DATA=1` keeps it and logs its path). Boot time is unchanged (~1.4–1.9s launch → connected, logged as `[e2e] app connected …`).
+0. **Isolated data dir** — every worker creates a fresh temp dir (`$TMPDIR/apack-e2e-*`) and launches the app with `APACK_USER_DATA_DIR` pointing at it. Nothing leaks between runs, other installed packs never load, and the developer's `apack-test` dir is untouched. The dir is removed after the worker finishes (`E2E_KEEP_DATA=1` keeps it and logs its path). Launch phases are logged as `[e2e.launch]` records with monotonic elapsed time and wall time for log correlation; fresh-profile and returning-profile timings are different conditions.
 
 1. **Pack build/install** (if `PACK_DIR` is set):
    - Parse `apack.json` from `PACK_DIR` → extract pack `id` and `surfaceIds`
-   - Always rebuild the pack with `apack pack build` (a stale `dist/` would otherwise be tested silently), including while `apack pack dev` runs for that pack: its marker means a dev server is up, not that `dist/` is current (N4 in `docs/archive/issues/postmortem-external-pack-calendar-extraction.md`). `PACK_ARCHIVE` skips the build and installs that packed `.tgz` as it is, so a run can exercise the build a release ships (`tests/scripts/test-packaged-authoring.sh` step 8), and is compared against the local build's verified published-file hashes when `dist/` exists; that build's recorded inputs must remain current through installation. Without local `dist/`, the explicitly selected archive is verified and installed without source freshness comparison; `--release` requires a local release build for comparison. Everything else still comes from `PACK_DIR`
+   - Always rebuild the pack with `apack pack build` (a stale `dist/` would otherwise be tested silently), including while `apack pack dev` runs for that pack: its marker means a dev server is up, not that `dist/` is current (N4 in `docs/archive/issues/postmortem-external-pack-calendar-extraction.md`). `PACK_ARCHIVE` skips the build and installs that packed `.tgz` as it is, so a run can exercise the build a release ships (`tests/acceptance/packaged-authoring/test-packaged-authoring.sh` step 8), and is compared against the local build's verified published-file hashes when `dist/` exists; that build's recorded inputs must remain current through installation. Without local `dist/`, the explicitly selected archive is verified and installed without source freshness comparison; `--release` requires a local release build for comparison. Everything else still comes from `PACK_DIR`
    - Install it into the worker's data dir with `installPackFromLocal()` — the same stage → verify → place bundle path users get — passing `hostVersion`: the launched app's version (`src/app-version.ts`: the checkout's `package.json`, or the packaged app's `Resources/app/package.json` / `resources/app/package.json`), so a pack whose manifest `hostVersion` excludes it fails to install
    - `--prebuilt` (`APACK_PACK_PREBUILT`) skips compilation, verifies the sealed output and replays its completed source/dependency observations through `src/prebuilt-pack.ts`. The recorded compiler/execution context belongs to that build, not the Playwright process. `APACK_PACK_RELEASE` additionally requires the recorded `--release` option. Missing output, modified bytes and changed inputs refuse before app startup; timestamps do not establish freshness. `tests/prebuilt-pack.spec.ts` covers these boundaries.
    - It passes no `packFormat`. Whether the app can read a pack's build is the app's to decide, and it decides at boot, naming which side is older; the fixture reports that verdict (step 6) instead of forming its own. It has no way to form one: the app's `host.json` is written at its first boot, after this install, the CLI running the fixture needn't be the app's, and inferring the app's format from a build it ships (a built-in pack's snapshot) refuses good packs whenever that build is the stale one. `packs/runtime/load-messages.spec.ts` pins that a refusal reaches the fixture as a line it matches
@@ -430,6 +431,11 @@ The fixture honors the CLI's resolved `APACK_HOST_EXECUTABLE` or `APACK_HOST_ROO
   ([reconnect without remount](../../docs/archive/plans/reconnect-without-remount.md)). A test that passed through one is
   left alone
 - Per-worker: `electronApp.close()` shuts down Electron. The fixture captures the API pid before close and fails if that child is still alive afterwards; Electron quit must finish API shutdown before fixture-owned data can be cleaned up.
+  For a data dir the fixture made, it waits for Electron's `will-quit` (emitted once the API server's
+  `before-quit` handler has stopped the API) and then kills Electron rather than waiting for Chromium to write
+  a profile it is about to delete: under load those writes held exit past Playwright's 60s worker teardown
+  ([the evidence](../../docs/archive/references/evidence/build-input-snapshot-proof.md#electron-exit-hang-in-linked-worktrees-2026-10-25)).
+  A dir the caller gave (`E2E_DATA_DIR`) is relaunched on, so its close still waits for the profile.
 
 ## API reference
 
@@ -530,3 +536,11 @@ native sample if the fixture's own Electron process still has not exited five se
 The sample is written beside its `app-<worker>.log`. It changes no close timeout or test assertion;
 normal test runs do not invoke the sampler. This distinguishes a live native shutdown stall from an
 application that exited while its driver is waiting for another resource.
+
+
+## Performance reports (`@apackdev/testing/performance`)
+
+Node-only tooling for owned application qualification: bounded recording schemas, completion integrity,
+raw-sample summaries, balanced comparison order, manifest compatibility, source/build/native identity
+and Chrome Trace conversion. The manual scenarios live in the application's `tests/performance/` suite;
+ordinary unit tests enforce these reporting contracts without launching an app or gating on timings.

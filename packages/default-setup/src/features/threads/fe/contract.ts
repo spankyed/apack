@@ -92,6 +92,9 @@ export interface ThreadsContext {
   freshThreadIds: string[];
   /** This window's thread writes, which hold the views back until they are answered */
   writes: ViewWrites;
+  /** The call the link form's last save went under, until it is answered, and why that save was refused, if it was */
+  linkSave: string | null;
+  linkRefusal: string | null;
 }
 
 /** What the artifact viewers, the dashboard and the tiptap command items ask of the threads surface */

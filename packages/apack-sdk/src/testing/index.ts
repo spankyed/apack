@@ -2,7 +2,7 @@ import type { SettingsAdmin } from '../services/settings.ts';
 // The runtime a pack's unit tests run against: the EARS engine on a database in a temporary directory, without the app.
 // @apackdev/testing's harness drives it; it lives in the SDK so tests share the pack's SDK instance
 // (its query, repository and content-writer registries) instead of a copy.
-import { createEarsEngine, type EarsDatabase, type EarsEngine, type EngineSchema, type RelationRules, type RowRules } from '@apackdev/ears';
+import { createEarsEngine, type CallCounting, type EarsDatabase, type EarsEngine, type EngineSchema, type RelationRules, type RowRules } from '@apackdev/ears';
 import { createTemporaryDatabases } from '@apackdev/ears/lmdb';
 import { _bindEars } from '../ears/index.ts';
 import type { ContentRuntime } from '../framework/content-runtime.ts';
@@ -163,6 +163,14 @@ export function resetTestData(): void {
 /** Every entity id in the test database, those in the trash included */
 export function entityIds(): EARS.EntityId[] {
   return testEngine().admin.getAllEntities();
+}
+
+/**
+ * Counting the test engine's calls to its database, as a development app counts its own (`EarsAdmin.calls`): what a
+ * spec asserts a read costs in crossings. The engine `resetTestData` installs counts from nothing
+ */
+export function testCalls(): CallCounting {
+  return testEngine().admin.calls;
 }
 
 /** Removes an attribute from a row, as data written before the attribute existed would lack it */

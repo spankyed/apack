@@ -1,3 +1,4 @@
+import { waitForApplicationWindow } from './application-window.ts';
 import { test as base, _electron, type ElectronApplication, type Page } from '@playwright/test';
 export { expect } from '@playwright/test';
 import * as path from 'path';
@@ -101,7 +102,17 @@ function readPackLastError(packId: string, userDataDir: string): string | undefi
 // cause (loader errors, crashes) without re-running under DEBUG_E2E.
 const OUTPUT_TAIL_LINES = 200;
 // Launch time per app, to report how long boot to a connected renderer took (once per worker)
-const launchStartedAt = new WeakMap<ElectronApplication, number>();
+const launches = new WeakMap<ElectronApplication, { started: number; connected: boolean }>();
+function reportLaunchPhase(phase: string, started: number, pid?: number): void {
+  console.log('[e2e.launch]', JSON.stringify({ phase, elapsedMs: performance.now() - started, at: Date.now(), pid }));
+}
+/** Parent-process monotonic time immediately before launching this owned application's process. */
+export function applicationLaunchStartedAt(app: ElectronApplication): number {
+  const started = launches.get(app)?.started;
+  if (started === undefined) throw new Error('The application was not launched by this fixture');
+  return started;
+}
+
 const userDataDirs = new WeakMap<ElectronApplication, string>();
 const outputTails = new WeakMap<ElectronApplication, string[]>();
 /** Where this app's output is being written, so a failure can name it instead of asking for a re-run */
@@ -158,6 +169,28 @@ function captureOutput(app: ElectronApplication, logFile?: string): void {
   };
   app.process().stdout?.on('data', onData);
   app.process().stderr?.on('data', onData);
+}
+
+const WILL_QUIT_MARKER = '[e2e] will-quit';
+
+/**
+ * Settles once the app's own quit sequence has finished: Electron emits `will-quit` only after
+ * `before-quit` has let it through, which the API server's handler does once the API child has exited.
+ * What Electron does after that is Chromium's shutdown, flushing the profile — slow under load, and the
+ * fixture's to skip for a profile it deletes (the teardown below).
+ */
+async function watchQuitSequence(app: ElectronApplication): Promise<{ done: Promise<void> }> {
+  const child = app.process();
+  const done = new Promise<void>(resolve => {
+    const onData = (data: Buffer) => { if (data.toString().includes(WILL_QUIT_MARKER)) resolve(); };
+    child.stdout?.on('data', onData);
+    child.once('exit', () => resolve());
+  });
+  await app.evaluate(({ app }, marker) => {
+    app.once('will-quit', () => { process.stdout.write(`${marker}\n`); });
+  }, WILL_QUIT_MARKER);
+  // Wrapped, since an async function returning a promise would hand back its settlement instead
+  return { done };
 }
 
 /**
@@ -221,33 +254,8 @@ function describeFailure(message: string, app: ElectronApplication, rendererErro
 }
 
 async function findMainWindow(electronApp: ElectronApplication): Promise<Page> {
-  const deadline = Date.now() + 45_000;
-
-  for (const w of electronApp.windows()) {
-    const has = await w.evaluate(() => !!(window as any).applicationState).catch(() => false);
-    if (has) return w;
-  }
-
-  while (Date.now() < deadline) {
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) break;
-
-    try {
-      const newPage = await electronApp.waitForEvent('window', { timeout: Math.min(remaining, 5000) });
-      await (newPage as Page).waitForLoadState('domcontentloaded').catch(() => {});
-      const has = await (newPage as Page).evaluate(() => !!(window as any).applicationState).catch(() => false);
-      if (has) return newPage as Page;
-    } catch {
-      // Timeout on waitForEvent — check all existing windows again
-    }
-
-    for (const w of electronApp.windows()) {
-      const has = await w.evaluate(() => !!(window as any).applicationState).catch(() => false);
-      if (has) return w;
-    }
-  }
-
-  throw describeFailure('Main window with applicationState did not appear within timeout', electronApp);
+  try { return await waitForApplicationWindow(electronApp, 45_000); }
+  catch { throw describeFailure('Main window with applicationState did not appear within timeout', electronApp); }
 }
 
 /** What `awaitShell` waits for. A descriptor rather than a predicate, because a function cannot cross into the page. */
@@ -492,15 +500,18 @@ export function createTest(options: CreateTestOptions = {}) {
           }
           : { executablePath: appLaunch.executable, args: [] };
 
-        const launchStart = Date.now();
+        const monotonicStart = performance.now();
+        reportLaunchPhase('requested', monotonicStart);
         const app = await _electron.launch({
           ...launch,
           env: appLaunchEnv(process.env, userDataDir),
         });
 
-        launchStartedAt.set(app, launchStart);
+        launches.set(app, { started: monotonicStart, connected: false });
+        reportLaunchPhase('process-attached', monotonicStart, app.process().pid);
         userDataDirs.set(app, userDataDir);
         captureOutput(app, appLogPath(workerInfo));
+        const quitSequence = await watchQuitSequence(app);
         if (process.env.DEBUG_E2E) {
           app.process().once('exit', (code, signal) => console.log('[e2e shutdown] process exited', { code, signal }));
           app.once('close', () => console.log('[e2e shutdown] Playwright application closed'));
@@ -546,8 +557,20 @@ export function createTest(options: CreateTestOptions = {}) {
             });
           }
         }, 5000) : undefined;
-        try { await app.close(); }
-        finally { clearTimeout(inspectShutdown); }
+        try {
+          const closing = app.close();
+          // A data dir this fixture made is deleted below, so Chromium writing its profile is work nobody reads;
+          // a dir the caller gave is relaunched on, so its profile is waited for. A quit sequence that never
+          // finishes still hangs here, into the worker's teardown timeout, without the line below.
+          if (givenDataDir === undefined) {
+            await quitSequence.done;
+            if (app.process().exitCode === null && app.process().signalCode === null) {
+              console.log('[e2e] quit sequence finished; ending Electron without its profile writes');
+              app.process().kill('SIGKILL');
+            }
+          }
+          await closing;
+        } finally { clearTimeout(inspectShutdown); }
         // Electron close must include its API child; otherwise deleting storage races the final writes.
         if (apiPid !== undefined) {
           let alive = true;
@@ -574,9 +597,12 @@ export function createTest(options: CreateTestOptions = {}) {
 
     appPage: async ({ electronApp }, use, testInfo) => {
       const page = await findMainWindow(electronApp);
+      const launch = launches.get(electronApp)!;
+      if (!launch.connected) reportLaunchPhase('application-state-present', launch.started, electronApp.process().pid);
       // Deterministic for a suite, and the window's own size for a run someone is watching — see `pinsViewport`
       if (pinsViewport(process.env)) await page.setViewportSize(E2E_VIEWPORT);
 
+      if (!launch.connected) reportLaunchPhase('viewport-ready', launch.started, electronApp.process().pid);
       const rendererErrors: string[] = [];
       let rejectPackFeFailed: (err: Error) => void = () => {};
       const packFeFailed = new Promise<never>((_, reject) => { rejectPackFeFailed = reject; });
@@ -610,10 +636,9 @@ export function createTest(options: CreateTestOptions = {}) {
 
       await waitOrDescribe('App did not reach connected state', waitForAppReady(page));
 
-      const startedAt = launchStartedAt.get(electronApp);
-      if (startedAt !== undefined) {
-        launchStartedAt.delete(electronApp);
-        console.log(`[e2e] app connected ${Date.now() - startedAt}ms after launch`);
+      if (!launch.connected) {
+        reportLaunchPhase('connected', launch.started, electronApp.process().pid);
+        launch.connected = true;
       }
 
       /**

@@ -1,6 +1,6 @@
 // The lock a tool holds while it changes a data dir's database, which an app checks before it opens the same one
 //
-// Nine of its processes are real ones, each compiling this package's source through tsx, so what the cases
+// Its subprocesses are real ones, each compiling this package's source through tsx, so what the cases
 // below wait for is a file appearing or going. Every wait is driven by that file and bounded by the suite's
 // own `testTimeout` — see `waitFor`, which is where the bound being the suite's is load-bearing.
 import * as fs from 'node:fs';
@@ -14,12 +14,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { assertNoDatabaseWriter, findDatabaseWriter, holdDatabaseWriteLock } from '../../src/database/write-lock.ts';
 import { INTERRUPTS } from '../../src/exclusive-lock.ts';
 
-/**
- * The interrupts this platform can actually send. `SIGBREAK` is Windows' Ctrl-Break: the lock listens for
- * it there, and `process.kill` refuses the name everywhere else, so it is covered by the code and not by
- * this suite on a POSIX machine.
- */
-const DELIVERABLE_INTERRUPTS = INTERRUPTS.filter((signal) => signal in os.constants.signals);
+// Windows child.kill()/process.kill() force termination rather than delivering catchable POSIX events.
+// Console Ctrl-C/Break delivery needs a real console harness; it is not qualified by these process kills.
+const POSIX_INTERRUPTS = INTERRUPTS.filter(signal => signal !== 'SIGBREAK' && signal in os.constants.signals);
+const FORCED_INTERRUPTS: readonly NodeJS.Signals[] = process.platform === 'win32'
+  ? ['SIGINT', 'SIGTERM', 'SIGQUIT', 'SIGKILL'] : ['SIGKILL'];
 import { removeTempDirs, tempDir } from './fixtures.ts';
 import { _appDirOf } from '@apackdev/sdk/env';
 
@@ -46,7 +45,7 @@ const hold = (dir: string, what = 'apack db reset') => {
 const lockFile = (dir: string) => path.join(_appDirOf(dir), 'db-write.lock');
 
 /** The module under test, loaded by a child process that holds a real lock and waits to be signalled */
-const SRC = path.resolve(import.meta.dirname, '../../src/database/write-lock.ts');
+const SRC = new URL('../../src/database/write-lock.ts', import.meta.url).href;
 /** The child is plain node, so it needs the TypeScript loader this suite already runs under */
 const TSX = createRequire(import.meta.url).resolve('tsx/esm');
 
@@ -67,7 +66,7 @@ const EXITS_WHEN_ORPHANED =
 const HOLD_UNTIL_SIGNALLED = EXITS_WHEN_ORPHANED +
   "const [, dir, src] = process.argv;" +
   "import(src).then(({ holdDatabaseWriteLock }) => { holdDatabaseWriteLock(dir, 'apack db import');" +
-  "  setInterval(() => { if (orphaned()) process.exit(0); }, 250); });";
+  "  setInterval(() => { if (orphaned()) process.exit(0); }, 250); process.stderr.write('HOLDER_READY'); });";
 
 /**
  * Takes the lock as soon as `<dir>/GO` appears, and says whether it got it. Spinning on the file is what
@@ -112,6 +111,27 @@ async function waitFor(what: string, done: () => boolean, timeoutMs = 5_000): Pr
     await new Promise((r) => setTimeout(r, 25));
   }
 }
+
+async function startHolder(dir: string): Promise<ChildProcess> {
+  const holder = spawnChild(HOLD_UNTIL_SIGNALLED, [dir, SRC], ['ignore', 'ignore', 'pipe']);
+  // A holder that dies on boot would otherwise be indistinguishable from a slow one until the timeout,
+  // and its reason — an import this checkout's dist can't resolve, say — would be thrown away with it
+  let stderr = '', ready = false;
+  holder.stderr!.setEncoding('utf-8');
+  holder.stderr!.on('data', (chunk: string) => { stderr += chunk; ready = stderr.includes('HOLDER_READY'); });
+  let died: string | null = null;
+  holder.on('exit', (code) => { died = `the holder exited with code ${code}${stderr && `:\n${stderr}`}`; });
+  // The holder compiles this package's source through tsx, which takes seconds when the whole unit suite
+  // is running beside it. The release it is asked for afterwards is immediate, and is the thing under
+  // test, so only the boot gets the long budget. The claim file is visible before holdDatabaseWriteLock
+  // returns: wait for the explicit ready witness after handler installation before sending a signal.
+  await waitFor('the holder to take the lock', () => {
+    if (died) throw new Error(died);
+    return ready && fs.existsSync(lockFile(dir));
+  }, 9_000);
+  return holder;
+}
+
 /** A pid no process has any more */
 const exitedPid = () => spawnSync(process.execPath, ['-e', '']).pid!;
 
@@ -167,6 +187,29 @@ describe('the database write lock', () => {
     );
   });
 
+  it('preserves an incumbent after repeated refused acquisitions in the same process', () => {
+    const dir = tempDir('write-lock-');
+    const first = hold(dir, 'incumbent');
+    const before = fs.readFileSync(lockFile(dir), 'utf8');
+    for (let i = 0; i < 3; i++) {
+      expect(() => holdDatabaseWriteLock(dir, 'refused contender')).toThrow('incumbent');
+      expect(fs.readFileSync(lockFile(dir), 'utf8')).toBe(before);
+      expect(findDatabaseWriter(dir)).toBe(`incumbent (pid ${process.pid})`);
+    }
+    first.release(); expect(findDatabaseWriter(dir)).toBeNull();
+  });
+
+  it('does not release a later acquisition in the same PID even with an identical timestamp', () => {
+    const dir = tempDir('write-lock-'), first = hold(dir, 'first');
+    const before = JSON.parse(fs.readFileSync(lockFile(dir), 'utf8'));
+    fs.rmSync(lockFile(dir));
+    const second = hold(dir, 'second');
+    const current = JSON.parse(fs.readFileSync(lockFile(dir), 'utf8')); current.since = before.since;
+    fs.writeFileSync(lockFile(dir), JSON.stringify(current));
+    first.release(); expect(findDatabaseWriter(dir)).toBe(`second (pid ${process.pid})`);
+    second.release(); expect(findDatabaseWriter(dir)).toBeNull();
+  });
+
   it('takes over a lock whose process has exited', () => {
     const dir = tempDir('write-lock-');
     fs.writeFileSync(lockFile(dir), JSON.stringify({ pid: exitedPid(), machine: os.hostname(), what: 'a tool that died' }));
@@ -189,26 +232,26 @@ describe('the database write lock', () => {
   // Node runs no `exit` handler for a signal, so without the interrupt handlers Ctrl-C on any `apack db`
   // command left the lock behind and the next reader had to work out that its holder was gone. Only SIGKILL
   // can still do that, and nothing can catch it.
-  it.each(DELIVERABLE_INTERRUPTS)('releases the lock when the tool is interrupted with %s', async (signal) => {
+  it.skipIf(process.platform === 'win32').each(POSIX_INTERRUPTS)('releases the lock when the tool is interrupted with POSIX %s', async (signal) => {
     const dir = tempDir('write-lock-');
-    const holder = spawnChild(HOLD_UNTIL_SIGNALLED, [dir, SRC], ['ignore', 'ignore', 'pipe']);
-    // A holder that dies on boot would otherwise be indistinguishable from a slow one until the timeout,
-    // and its reason — an import this checkout's dist can't resolve, say — would be thrown away with it
-    let stderr = '';
-    holder.stderr!.setEncoding('utf-8');
-    holder.stderr!.on('data', (chunk: string) => { stderr += chunk; });
-    let died: string | null = null;
-    holder.on('exit', (code) => { died = `the holder exited with code ${code}${stderr && `:\n${stderr}`}`; });
-    // The holder compiles this package's source through tsx, which takes seconds when the whole unit suite
-    // is running beside it. The release it is asked for afterwards is immediate, and is the thing under
-    // test, so only the boot gets the long budget.
-    await waitFor('the holder to take the lock', () => {
-      if (died) throw new Error(died);
-      return fs.existsSync(lockFile(dir));
-    }, 9_000);
+    const holder = await startHolder(dir);
     process.kill(holder.pid!, signal);
     await waitFor(`the ${signal} handler to release the lock`, () => !fs.existsSync(lockFile(dir)), 3_000);
     expect(fs.existsSync(lockFile(dir))).toBe(false);
+  });
+
+  it.each(FORCED_INTERRUPTS)('reclaims the lock after forced %s termination', async signal => {
+    const dir = tempDir('write-lock-'), holder = await startHolder(dir);
+    const exited = once(holder, 'exit');
+    expect(holder.kill(signal)).toBe(true);
+    await waitFor(`forced ${signal} exit (pid ${holder.pid}, killed=${holder.killed})`,
+      () => holder.exitCode !== null || holder.signalCode !== null, 3_000);
+    await exited;
+    // No handler ran: preserve the witness, then prove the next holder can reclaim the dead process's lock.
+    expect(fs.existsSync(lockFile(dir))).toBe(true);
+    expect(findDatabaseWriter(dir)).toBeNull();
+    hold(dir, 'after forced termination');
+    expect(findDatabaseWriter(dir)).toBe(`after forced termination (pid ${process.pid})`);
   });
 
   // The lock existed to keep two tools off one database and did not: it read "nothing holds it", then

@@ -1,10 +1,12 @@
 import { defineConfig } from 'vitest/config';
 import { defaultServerConditions } from 'vite';
+import vue from 'unplugin-vue/vite';
 
 // Vitest's own defaults: Vite's server conditions without 'module'
 const conditions = ['@apackdev/source', ...defaultServerConditions.filter((c) => c !== 'module')];
 
 export default defineConfig({
+  plugins: [vue()],
   // Workspace @apackdev/* packages resolve to source (see their package.json exports)
   resolve: { conditions },
   ssr: { resolve: { conditions } },

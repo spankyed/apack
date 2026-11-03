@@ -10,7 +10,7 @@ import { createLogger } from '@apackdev/sdk/logger';
 import { SERVER_CONFIG, apiToken, apiTokenIsOwn, isApiToken } from '../boot/config.ts';
 import { appDatabase, appPacks, appRunHistory, backendActor } from '../runtime/index.ts';
 import { installDevPack, reloadPackById } from '@apackdev/host/packs/runtime';
-import { writePrivateFile } from '@apackdev/host/private-file';
+import { writePrivateRuntimeFile } from '@apackdev/host/private-file';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import type { ApiEndpoint } from '@apackdev/host/process-liveness';
 import { API_HOST, API_TOKEN_HEADER } from '@apackdev/sdk/utils/pure';
@@ -111,12 +111,12 @@ export function publishApiFiles(port: number, token: string): void {
   try {
     fs.mkdirSync(path.dirname(apiPortFile), { recursive: true });
     // With the process id, so a tool can tell a running API from a file a crashed run left behind
-    writePrivateFile(apiPortFile, JSON.stringify({ port, pid: process.pid } satisfies ApiEndpoint));
+    writePrivateRuntimeFile(apiPortFile, JSON.stringify({ port, pid: process.pid } satisfies ApiEndpoint));
   } catch {}
 
   if (process.env.NODE_ENV !== 'development' && !apiTokenIsOwn()) return;
   try {
-    writePrivateFile(apiTokenFile, token);
+    writePrivateRuntimeFile(apiTokenFile, token);
     if (apiTokenIsOwn()) logger.info(`No APACK_API_TOKEN given: clients send the token in ${apiTokenFile}`);
   } catch {}
 }

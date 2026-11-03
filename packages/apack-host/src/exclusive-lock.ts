@@ -8,6 +8,7 @@
 // A check followed by a write cannot do this: every racer reads "nothing holds it" and then writes in turn. The
 // create *is* the acquisition (`wx`, `O_EXCL`), and a lock whose holder has exited is taken over.
 import * as fs from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { lockIsHeld, sameWriter } from './process-liveness.ts';
@@ -23,6 +24,8 @@ export interface LockFile {
   /** What the holder is doing, for the message the next arrival sees */
   what: string;
   since: string;
+  /** New claims identify this acquisition, independently of PID reuse or timestamp granularity. */
+  token?: string;
 }
 
 /**
@@ -39,7 +42,8 @@ export function readLock(file: string): LockFile | null {
   try {
     const held = JSON.parse(fs.readFileSync(file, 'utf-8')) as Partial<LockFile>;
     if (typeof held.pid !== 'number' || typeof held.machine !== 'string') return null;
-    return { pid: held.pid, machine: held.machine, what: String(held.what ?? 'a tool'), since: String(held.since ?? '') };
+    return { pid: held.pid, machine: held.machine, what: String(held.what ?? 'a tool'), since: String(held.since ?? ''),
+      ...(typeof held.token === 'string' ? { token: held.token } : {}) };
   } catch {
     return null;
   }
@@ -102,15 +106,16 @@ export function holdExclusiveLock(options: {
 }): ExclusiveLock {
   const { file, what, refuse } = options;
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  let released = false;
+  let released = false, acquired = false;
+  const mine: LockFile = { pid: process.pid, machine: os.hostname(), what, since: new Date().toISOString(), token: randomBytes(16).toString('hex') };
   const release = () => {
     if (released) return;
     released = true;
     // Nothing left to do on the way out; without this a process taking many locks in turn piles up listeners
     process.off('exit', release);
     for (const signal of INTERRUPTS) process.off(signal, onInterrupt);
-    // Only this process's lock: a stale one another holder took over stays with it
-    if (readLock(file)?.pid === process.pid) fs.rmSync(file, { force: true });
+    // A refused acquisition owns no file. A later acquisition in this PID may also have replaced ours.
+    if (acquired && readLock(file)?.token === mine.token) fs.rmSync(file, { force: true });
   };
   /**
    * Node runs no `exit` handler for a signal, so without this Ctrl-C leaves the lock behind and the next reader has
@@ -125,14 +130,14 @@ export function holdExclusiveLock(options: {
   process.once('exit', release);
   for (const signal of INTERRUPTS) process.once(signal, onInterrupt);
 
-  const mine: LockFile = { pid: process.pid, machine: os.hostname(), what, since: new Date().toISOString() };
   const fail = (holder: string): never => {
     release();
     throw refuse(holder);
   };
 
   try {
-    if (!takeLock(file, mine)) {
+    acquired = takeLock(file, mine);
+    if (!acquired) {
       const leftover = readLock(file);
       const holder = findLockHolder(file);
       if (holder) fail(holder);
@@ -140,7 +145,8 @@ export function holdExclusiveLock(options: {
       // judged it stale can take it between them — narrow, and the one window `wx` cannot close, because a file's
       // existence carries no liveness. Re-read first, so this removes the leftover it judged.
       if (sameWriter(readLock(file), leftover)) fs.rmSync(file, { force: true });
-      if (!takeLock(file, mine)) fail(findLockHolder(file) ?? 'another tool that took it first');
+      acquired = takeLock(file, mine);
+      if (!acquired) fail(findLockHolder(file) ?? 'another tool that took it first');
     }
   } catch (err) {
     if (!released) release();
@@ -169,9 +175,8 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => { setTimeo
  *
  * **A lock this process already holds is refused *before* the take is attempted**, which is load-bearing twice
  * over. It keeps the no-re-entrancy rule above a refusal rather than a wedge, since waiting for yourself cannot
- * succeed. And it leaves the file alone: `holdExclusiveLock` releases on its way to throwing, and a release
- * removes a lock whose pid is this process — so a second take *inside* the loop deletes the first take's lock
- * and the retry then wins, which is re-entrancy by accident and the holder's lock gone with it.
+ * succeed. The synchronous take also preserves an incumbent after refusal; this precheck prevents a
+ * waiting request from sleeping until its own timeout when that incumbent belongs to this process.
  *
  * Separate from `holdExclusiveLock` rather than an option on it, because that one is synchronous and its three
  * callers take it inline; an `await` there would reach every one of them for a wait none of them wants.

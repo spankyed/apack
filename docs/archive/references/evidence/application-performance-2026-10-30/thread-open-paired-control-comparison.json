@@ -1,0 +1,643 @@
+{
+  "status": "compared",
+  "scenario": "thread-open",
+  "baseline": {
+    "manifest": {
+      "format": 1,
+      "source": {
+        "revision": "e0d1a0e3a47ead6b45ebd57b0f2b794191f0d101",
+        "dirty": false,
+        "excludedUntracked": [
+          ".apack-checkout",
+          ".apack-run.lock"
+        ],
+        "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "builds": [
+        {
+          "path": "packages/api/dist",
+          "sha256": "7ba0102529adaa23578d8c1115c6cd846bcc3e89b9b937b7f5fae36cb9fa9423"
+        },
+        {
+          "path": "packages/main/dist",
+          "sha256": "f87aec72aeb708070bc8dbfdaef7b5ebfeee6ef6b76c773e17d0140b897c8544"
+        },
+        {
+          "path": "packages/preload/dist",
+          "sha256": "a2bae9f4f8715defb9bf042116b4b15c86366fbbbcab13906eddf45e9d7e6b9f"
+        },
+        {
+          "path": "packages/renderer/dist",
+          "sha256": "10130033a6ac73a445f7054cc69df9c105d808ffb189049d18c70884e908e8bd"
+        },
+        {
+          "path": "packages/default-setup/dist",
+          "sha256": "316021d2e4111234972c98dae1f663e81c7f49083c625ad48fb33c3b071655b2"
+        },
+        {
+          "path": "vendor/elmdb/crates/elmdb-node/elmdb.linux-arm64-gnu.node",
+          "sha256": "f09eb6c681f57c696491e3dc53d2ce6bf86b9e0a9907a905c39215e0d9a786e3"
+        }
+      ],
+      "fixture": {
+        "generator": "populated-threads-v1",
+        "seed": 0,
+        "sha256": "09c3c0ac20e9d01a7481b7bd139ba4fc403d569c836f0e42af51de82107f73d9",
+        "distribution": {
+          "threads": 2,
+          "messagesPerThread": 100,
+          "requestedPage": 50,
+          "bodyRepetitions": 50
+        }
+      },
+      "native": {
+        "pin": "95615ed8d493f9a7c2789eaf1f4c847ae375eb32",
+        "checkoutRevision": "95615ed8d493f9a7c2789eaf1f4c847ae375eb32",
+        "dirty": false,
+        "excludedUntracked": [
+          ".apack-elmdb-built",
+          ".apack-elmdb-checkout",
+          ".apack-elmdb.lock"
+        ]
+      },
+      "runtime": {
+        "node": "23.11.1",
+        "v8": "12.9.202.28-node.14",
+        "osRelease": "6.17.8-orbstack-00308-g8f9c941121b1",
+        "electron": "37.2.4",
+        "chromium": "138.0.7204.157",
+        "appNode": "22.17.1",
+        "appV8": "13.8.258.26-electron.0",
+        "performancePolicy": "paired-focused-revisions-v1"
+      },
+      "machine": {
+        "platform": "linux",
+        "arch": "arm64",
+        "cpus": 2,
+        "memoryBytes": 6442450944,
+        "identity": "a98798ec9e771fb53f32e7481074de8a920fc40c095b52153d986b4c19f82a3d"
+      },
+      "mode": "lightweight",
+      "cache": "warm-process",
+      "warmups": 5,
+      "clock": "Local monotonic durations; cross-process epoch alignment is approximate"
+    },
+    "scenario": "thread-open",
+    "samples": [
+      {
+        "scenario": "thread-open",
+        "index": 0,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 1087.199999999255,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 1,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 980,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 2,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 760.3999999985099,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 3,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 800.1999999992549,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 4,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 688.3000000007451,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 5,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 673.0999999977648,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 6,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 425.4000000022352,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 7,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 447.30000000074506,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 8,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 465.8999999985099,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 9,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 504.3999999985099,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 10,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 452.5,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 11,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 441.30000000074506,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 12,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 546,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 13,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 439.0999999977648,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 14,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 527.7000000029802,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 15,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 467.80000000074506,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 16,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 488.9000000022352,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 17,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 503.69999999925494,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 18,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 440.9000000022352,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 19,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 427.69999999925494,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 20,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 481.1000000014901,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 21,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 437.1000000014901,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 22,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 469,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 23,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 447.5999999977648,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 24,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 430.80000000074506,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    ],
+    "summary": {
+      "measured": 20,
+      "passed": 20,
+      "unsuccessful": 0,
+      "medianMs": 459.19999999925494,
+      "minMs": 425.4000000022352,
+      "maxMs": 673.0999999977648
+    }
+  },
+  "candidate": {
+    "manifest": {
+      "format": 1,
+      "source": {
+        "revision": "e0d1a0e3a47ead6b45ebd57b0f2b794191f0d101",
+        "dirty": false,
+        "excludedUntracked": [
+          ".apack-checkout",
+          ".apack-run.lock"
+        ],
+        "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "builds": [
+        {
+          "path": "packages/api/dist",
+          "sha256": "7ba0102529adaa23578d8c1115c6cd846bcc3e89b9b937b7f5fae36cb9fa9423"
+        },
+        {
+          "path": "packages/main/dist",
+          "sha256": "f87aec72aeb708070bc8dbfdaef7b5ebfeee6ef6b76c773e17d0140b897c8544"
+        },
+        {
+          "path": "packages/preload/dist",
+          "sha256": "a2bae9f4f8715defb9bf042116b4b15c86366fbbbcab13906eddf45e9d7e6b9f"
+        },
+        {
+          "path": "packages/renderer/dist",
+          "sha256": "10130033a6ac73a445f7054cc69df9c105d808ffb189049d18c70884e908e8bd"
+        },
+        {
+          "path": "packages/default-setup/dist",
+          "sha256": "316021d2e4111234972c98dae1f663e81c7f49083c625ad48fb33c3b071655b2"
+        },
+        {
+          "path": "vendor/elmdb/crates/elmdb-node/elmdb.linux-arm64-gnu.node",
+          "sha256": "f09eb6c681f57c696491e3dc53d2ce6bf86b9e0a9907a905c39215e0d9a786e3"
+        }
+      ],
+      "fixture": {
+        "generator": "populated-threads-v1",
+        "seed": 0,
+        "sha256": "09c3c0ac20e9d01a7481b7bd139ba4fc403d569c836f0e42af51de82107f73d9",
+        "distribution": {
+          "threads": 2,
+          "messagesPerThread": 100,
+          "requestedPage": 50,
+          "bodyRepetitions": 50
+        }
+      },
+      "native": {
+        "pin": "95615ed8d493f9a7c2789eaf1f4c847ae375eb32",
+        "checkoutRevision": "95615ed8d493f9a7c2789eaf1f4c847ae375eb32",
+        "dirty": false,
+        "excludedUntracked": [
+          ".apack-elmdb-built",
+          ".apack-elmdb-checkout",
+          ".apack-elmdb.lock"
+        ]
+      },
+      "runtime": {
+        "node": "23.11.1",
+        "v8": "12.9.202.28-node.14",
+        "osRelease": "6.17.8-orbstack-00308-g8f9c941121b1",
+        "electron": "37.2.4",
+        "chromium": "138.0.7204.157",
+        "appNode": "22.17.1",
+        "appV8": "13.8.258.26-electron.0",
+        "performancePolicy": "paired-focused-revisions-v1"
+      },
+      "machine": {
+        "platform": "linux",
+        "arch": "arm64",
+        "cpus": 2,
+        "memoryBytes": 6442450944,
+        "identity": "a98798ec9e771fb53f32e7481074de8a920fc40c095b52153d986b4c19f82a3d"
+      },
+      "mode": "lightweight",
+      "cache": "warm-process",
+      "warmups": 5,
+      "clock": "Local monotonic durations; cross-process epoch alignment is approximate"
+    },
+    "scenario": "thread-open",
+    "samples": [
+      {
+        "scenario": "thread-open",
+        "index": 0,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 642.8000000007451,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 1,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 494.30000000074506,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 2,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 502.5,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 3,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 473.3999999985099,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 4,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 467.30000000074506,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 5,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 458.29999999701977,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 6,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 449.4000000022352,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 7,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 450.3999999985099,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 8,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 427.8999999985099,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 9,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 526.8999999985099,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 10,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 491.69999999925494,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 11,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 454.3999999985099,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 12,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 449.4000000022352,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 13,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 482.5999999977648,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 14,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 462.6000000014901,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 15,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 511.3999999985099,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 16,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 535.3000000007451,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 17,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 465.8999999985099,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 18,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 421.9000000022352,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 19,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 487.9000000022352,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 20,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 488.5,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 21,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 435.5,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 22,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 417.69999999925494,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 23,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 476.9000000022352,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 24,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 432.8999999985099,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    ],
+    "summary": {
+      "measured": 20,
+      "passed": 20,
+      "unsuccessful": 0,
+      "medianMs": 460.44999999925494,
+      "minMs": 417.69999999925494,
+      "maxMs": 535.3000000007451
+    }
+  },
+  "medianDifferenceMs": 1.25,
+  "medianChangePercent": 0.2722125435544486,
+  "policy": "Two isolated workers, five warmups per revision, then individually balanced ABBA actions; no tail-percentile claim"
+}

@@ -51,7 +51,7 @@ const PLACEHOLDER = /__([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*)__/g;
  * `bin/` and `package.json`.
  *
  * **This module has to stay directly under `src/`.** One directory deeper, the source layout's `..` would be
- * `src/` while the bundle's stayed at the package root, and only `tests/scripts/test-packaged-authoring.sh`
+ * `src/` while the bundle's stayed at the package root, and only `tests/acceptance/packaged-authoring/test-packaged-authoring.sh`
  * runs the published layout — so tidying this into a subdirectory would break the CLI a pack author installs
  * and nothing else.
  */

@@ -1,0 +1,21 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import { performance } from 'node:perf_hooks';
+import { writePrivateFile, writePrivateRuntimeFile } from '../packages/apack-host/src/private-file.ts';
+const root=fs.mkdtempSync('/work/.apack/contact-bench-');
+const rows: {mode:string,ms:number}[]=[];
+try {
+  for(let block=0;block<10;block++) for(const mode of ['durable','runtime','runtime','durable']) {
+    const dir=fs.mkdtempSync(path.join(root,'trial-'));
+    const write=mode==='durable'?writePrivateFile:writePrivateRuntimeFile;
+    const start=performance.now();
+    write(path.join(dir,'api-port'),JSON.stringify({port:12345,pid:process.pid}));
+    write(path.join(dir,'api-token'),'x'.repeat(64));
+    rows.push({mode,ms:performance.now()-start});
+    assert.equal(fs.readFileSync(path.join(dir,'api-token'),'utf8'),'x'.repeat(64));
+    assert.equal(fs.statSync(path.join(dir,'api-token')).mode & 0o777,0o600);
+    assert.equal(fs.readdirSync(dir).length,2);
+  }
+  console.log(JSON.stringify({method:'10 balanced ABBA blocks, two private contact files per trial, disk-backed /work; no application latency claim',rows},null,2));
+} finally { fs.rmSync(root,{recursive:true,force:true}); }

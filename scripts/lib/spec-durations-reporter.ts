@@ -33,6 +33,9 @@ import { DEADLINE_FACTOR } from './unit-suites.ts';
 /** The environment variable the pool puts the destination in */
 export const SPEC_DURATIONS_FILE = 'SPEC_DURATIONS_FILE';
 
+/** Optional append-only diagnostics, separate from the completed run used for verdicts. */
+export const SPEC_DURATIONS_PROGRESS_FILE = 'SPEC_DURATIONS_PROGRESS_FILE';
+
 /**
  * The hooks, named once and checked against vitest's own interface.
  *
@@ -44,6 +47,8 @@ export const SPEC_DURATIONS_FILE = 'SPEC_DURATIONS_FILE';
  */
 const STARTED = 'onTestRunStart' satisfies keyof Reporter;
 const ENDED = 'onTestRunEnd' satisfies keyof Reporter;
+const QUEUED = 'onTestModuleQueued' satisfies keyof Reporter;
+const MODULE_ENDED = 'onTestModuleEnd' satisfies keyof Reporter;
 
 /**
  * The hooks' parameter types, taken from `Reporter` rather than imported by name.
@@ -152,6 +157,32 @@ function overBudget(module: ReportedModuleTask): ReportedModule['overBudget'] {
 
 export default class SpecDurationsReporter implements Reporter {
   readonly #started = new Set<string>();
+
+  #progress(event: 'queued' | 'ended', module: ReportedModuleTask): void {
+    const base = process.env[SPEC_DURATIONS_PROGRESS_FILE];
+    if (base === undefined) return;
+    const diagnostic = event === 'ended' ? module.diagnostic() : undefined;
+    const out = `${base}.${process.pid}.jsonl`;
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.appendFileSync(out, `${JSON.stringify({
+      event, at: new Date().toISOString(),
+      project: workspaceName(module.project.name, module.project.config.root),
+      file: path.relative(module.project.config.root, module.moduleId),
+      ...(diagnostic === undefined ? {} : {
+        state: module.state(), duration: diagnostic.duration,
+        collectDuration: diagnostic.collectDuration, setupDuration: diagnostic.setupDuration,
+        environmentSetupDuration: diagnostic.environmentSetupDuration, prepareDuration: diagnostic.prepareDuration,
+      }),
+    })}\n`);
+  }
+
+  [QUEUED](module: Parameters<NonNullable<Reporter[typeof QUEUED]>>[0]): void {
+    this.#progress('queued', module);
+  }
+
+  [MODULE_ENDED](module: Parameters<NonNullable<Reporter[typeof MODULE_ENDED]>>[0]): void {
+    this.#progress('ended', module);
+  }
 
   [STARTED](specifications: Specifications): void {
     for (const specification of specifications) {

@@ -1,0 +1,24 @@
+
+Running 1 test using 1 worker
+
+[e2e.launch] {"phase":"requested","elapsedMs":0.0385839999999007,"at":1793506950218}
+[e2e.launch] {"phase":"process-attached","elapsedMs":411.222306,"at":1793506950629,"pid":1104}
+[e2e.launch] {"phase":"application-state-present","elapsedMs":10683.396367000001,"at":1793506960901,"pid":1104}
+[e2e.launch] {"phase":"viewport-ready","elapsedMs":10688.794937,"at":1793506960906,"pid":1104}
+[e2e.launch] {"phase":"connected","elapsedMs":20319.406417000002,"at":1793506970537,"pid":1104}
+  ✓  1 .apack/shutdown-stall.spec.ts:2:1 › finishes real application shutdown after its main event loop stalls (20.5s)
+[e2e shutdown] calling close
+[e2e shutdown] still waiting {
+  pid: [33m1104[39m,
+  exitCode: [1mnull[22m,
+  signalCode: [1mnull[22m,
+  stdoutEnded: [33mfalse[39m,
+  stderrEnded: [33mfalse[39m,
+  windows: [ { closed: [33mfalse[39m }, { closed: [33mfalse[39m } ]
+}
+[e2e] quit sequence finished; ending Electron without its profile writes
+[e2e shutdown] process exited { code: [1mnull[22m, signal: [32m'SIGKILL'[39m }
+[e2e shutdown] Playwright application closed
+[e2e shutdown] close resolved
+
+  1 passed (30.6s)

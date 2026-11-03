@@ -454,7 +454,7 @@ run; the bench's graph (50k entities, 200k attributes, 100k relations) on an LMD
   since LMDB keeps the pages the old tables freed. With `COMPACT_COPIES` on, the script compacts the converted file
   (`compactEnvironment`), which takes it to 271 MB; the flag is off, because a compacted copy of this data aborts the
   process when a reset empties it, an lmdb-js bug fixed by kriszyp/lmdb-js#381
-  ([the evidence and repro](../../references/evidence/lmdb-compacted-copy-crash.md)). Read with the store open
+  ([the evidence and repro](../references/evidence/lmdb-compacted-copy-crash.md)). Read with the store open
   read-only, two runs each, both warm:
 
   | Reading | Production copy |

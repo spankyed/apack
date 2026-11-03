@@ -6,7 +6,7 @@
  *
  * @packageDocumentation
  */
-import { boundHost } from '../runtime/host-runtime.ts';
+import { boundHost, type HostCallReports, type HostDiagnostics } from '../runtime/host-runtime.ts';
 import type { EarsNames } from '../runtime/packs-view.ts';
 import { EARS as EARS_NAMES } from '../types/index.ts';
 import { boundEars, transact, untypedQuery, untypedCreate, untypedUpsert, untypedWrite, getRow, getRoles, getRelation, findRelations, removeRelation, getSchemaStats } from '../ears/index.ts';
@@ -14,6 +14,24 @@ import { defineEars } from '@apackdev/ears';
 import { errorMessage } from '../utils/shared.ts';
 
 const { getAttr } = /*#__PURE__*/ defineEars(boundEars);
+
+/** The running app's diagnostics, refusing in an app without them */
+function diagnostics(): HostDiagnostics {
+  const held = boundHost().diagnostics;
+  if (!held) throw new Error('engineCalls counts a development app\'s calls to its databases, and this app is not one');
+  return held;
+}
+
+/**
+ * Counting the running app's calls to its databases — reads, writes outside a unit and units, with their time and
+ * the code that made each — to measure what a stretch of its work costs: `start()`, then `report()` or `stop()`,
+ * each answering the app's database and the run history's. A development app's only; nothing it does writes data
+ */
+export const engineCalls = {
+  start: (): void => diagnostics().calls.start(),
+  report: (): HostCallReports => diagnostics().calls.report(),
+  stop: (): HostCallReports => diagnostics().calls.stop(),
+};
 
 const readHelpers = {
   query: untypedQuery,
@@ -23,6 +41,7 @@ const readHelpers = {
   getRelation,
   findRelations,
   getSchemaStats,
+  engineCalls,
 };
 
 const writeHelpers = {

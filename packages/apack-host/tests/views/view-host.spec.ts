@@ -1,9 +1,11 @@
+import { createViewObservation } from '../../src/diagnostics/views.ts';
+import { createNodePerformanceController } from '../../src/diagnostics/node.ts';
 // The view host: each request runs the feature's view in the registered pack on the engine, subscribers asking for
 // the same view and arguments share one engine watch, the last to leave stops it, and the registry changing is what
 // a view's code changing is.
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { EarsEngine } from '@apackdev/ears';
-import { defineViews, type PackRegistration, type ViewUpdate } from '@apackdev/sdk/framework';
+import { defineViews, type PackRegistration, type ViewUpdate, type ViewRequest } from '@apackdev/sdk/framework';
 import { _createTestEngine } from '@apackdev/sdk/testing';
 import { createNativePackTestRegistry } from '../../src/testing/pack-registry.ts';
 import { createViewHost, type ViewHost } from '../../src/views/index.ts';
@@ -34,9 +36,9 @@ const notesPack = (prefix = ''): PackRegistration => ({
 });
 
 /** A window's subscription: what it heard, and how to leave */
-function subscribe(view: string, args?: unknown) {
+function subscribe(view: string, args?: unknown, diagnostics?: ViewRequest['diagnostics']) {
   const heard: ViewUpdate[] = [];
-  const stop = views.watch({ ref: 'notes/notes', view, ...(args === undefined ? {} : { args }) }, (update) => heard.push(update));
+  const stop = views.watch({ ref: 'notes/notes', view, diagnostics, ...(args === undefined ? {} : { args }) }, (update) => heard.push(update));
   return { heard, last: () => heard.at(-1), stop };
 }
 
@@ -65,8 +67,8 @@ describe('views', () => {
   it('shares one engine watch between subscribers asking for the same view and arguments, whatever their key order', async () => {
     packs.registerPack(notesPack());
     const note = engine.create('Note', { title: 'one' }).id();
-    const first = subscribe('byId', { id: note, extra: 1 });
-    const second = subscribe('byId', { extra: 1, id: note });
+    const first = subscribe('byId', { id: note, extra: 1 }, { traceparent: 'first-action' });
+    const second = subscribe('byId', { extra: 1, id: note }, { traceparent: 'second-action' });
     await settled();
     expect(views.stats()).toEqual({ views: 1, subscriptions: 2 });
     expect(engine.admin.watchStats().watches).toBe(1);
@@ -128,4 +130,39 @@ describe('views', () => {
     expect(views.stats().views).toBe(3);
     unaddressed();
   });
+});
+
+
+it('attributes initial reads to their subscriber and links coalesced reads to both writes without an invented parent', async () => {
+  views.close();
+  const recording = createNodePerformanceController();
+  recording.attach(engine, 'app');
+  views = createViewHost({ ears: () => engine, packs, observe: () => createViewObservation(recording) });
+  packs.registerPack(notesPack());
+  const note = engine.create('Note', { title: 'initial' }).id();
+  recording.start('lightweight');
+  const opening = recording.begin('app.thread.open')!;
+  const openingTrace = opening.carrier().traceparent!.split('-')[1];
+  const subscription = opening.within(() => subscribe('titles'));
+  await settled();
+  opening.end();
+  const first = recording.begin('app.search')!;
+  const second = recording.begin('app.search')!;
+  const writeTraces = [first, second].map(action => action.carrier().traceparent!.split('-')[1]);
+  first.within(() => engine.write(note).set('title', 'first'));
+  second.within(() => engine.write(note).set('title', 'second'));
+  first.end(); second.end();
+  await settled();
+  expect(subscription.last()).toMatchObject({ value: ['second'] });
+  const report = await recording.stop();
+  expect(report.complete).toBe(true);
+  const spans = report.observations.map(value => JSON.parse(value));
+  const reads = spans.filter(span => span.name === 'app.view.read');
+  expect(reads).toHaveLength(2);
+  expect(reads[0].traceId).toBe(openingTrace);
+  expect(writeTraces).not.toContain(reads[1].traceId);
+  expect(reads[1].parentSpanId).toBeUndefined();
+  expect(reads[1].links.map((link: { traceId: string }) => link.traceId)).toEqual(writeTraces);
+  expect(reads[1].attributes).toMatchObject({ 'app.coalesced_commits': 2, 'app.unattributed_commits': 0 });
+  expect(spans.some(span => span.name === 'ears.read' && span.parentSpanId === reads[0].spanId)).toBe(true);
 });

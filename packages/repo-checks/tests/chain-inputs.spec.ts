@@ -460,7 +460,7 @@ describe('a step declares the modules its script imports', () => {
  */
 describe('a step that drives the app fixture declares the bundle it drives', () => {
   // How a script reaches the fixture: Playwright directly, the CLI's own `test`, or the CLI held in a
-  // variable (`"$APACK" pack test`, which `tests/scripts/test-external-pack-app.sh` uses). The third is not
+  // variable (`"$APACK" pack test`, which `tests/acceptance/external-pack/test-external-pack-app.sh` uses). The third is not
   // optional — without it this watched two steps and not the one it was written for.
   //
   // The same three shapes `check:tiers` looks for (`APP_MARKERS`), and deliberately **not** the same
@@ -784,6 +784,10 @@ describe('a step keys on the command it runs', () => {
    * and the renderer config checked by typecheck:renderer;
    * source-wide checks and suites cover those readers through EVERY_SOURCE.
    *
+   * A step that runs `apack pack build` declares it through `PACK_BUILD_MANIFEST`: the pack compiler's own record
+   * is the evidence, each build's `build-inputs.json` holding `["file", "<root>/package.json"]` with its hash, and a
+   * build kept across an edit to it is refused when replayed.
+   *
    * `packages:ensure` declares it too, through `SHARED_INPUTS` in `BUILD_UNITS`, and is filtered out
    * rather than listed: it is never cached, so it has no key to invalidate.
    */
@@ -793,6 +797,7 @@ describe('a step keys on the command it runs', () => {
     expect(cached.filter((step) => step.inputs.includes('package.json')).map((step) => step.name),
       'a step keying on the whole manifest re-runs when any unrelated script is edited; add one here only '
       + 'with the dep-file evidence that it reads the manifest').toEqual([
+        'build:default-setup', 'facade:check', 'test:external-pack:contract', 'test:external-pack:fork',
         'typecheck:renderer', 'typecheck:api', 'check:specifiers', 'typecheck:scripts', 'check:tiers',
         'lint:check', 'test:unit:host', 'test:integration', 'build:runtime',
       ]);
@@ -800,12 +805,16 @@ describe('a step keys on the command it runs', () => {
 });
 
 
-describe('app checks observe separately loaded shipped-pack bytes', () => {
-  it.each(['test:external-pack:app', 'test:smoke', 'test:e2e', 'test:packaged-authoring:app'])(
-    '%s invalidates when a shipped frontend changes without an app-bundle change', name => {
+describe('consumer fingerprints observe runtime and shared test inputs', () => {
+  it.each([
+    ...['test:external-pack:app', 'test:smoke', 'test:e2e', 'test:packaged-authoring:app']
+      .map(name => [name, 'packages/default-setup/dist/runtime/fe.js']),
+    ...['typecheck:scripts', 'lint:check', 'test:unit:host', 'test:e2e']
+      .map(name => [name, 'tests/_support/conversations.ts']),
+  ])(
+    '%s invalidates when %s changes', (name, file) => {
       const step = CHAIN_STEPS.find(step => step.name === name)!;
-      const file = 'packages/default-setup/dist/runtime/fe.js';
-      let bytes = 'old frontend';
+      let bytes = 'original input';
       const tree: TreeReader = {
         listInputs: target => covers(repoRelative(path.resolve(REPO_ROOT, target)), file) ? [file] : [],
         listOutputs: () => [],
@@ -814,7 +823,7 @@ describe('app checks observe separately loaded shipped-pack bytes', () => {
       };
       const unit = { ...step, outputs: step.outputs ?? [] };
       const before = fingerprintUnit(unit, undefined, tree);
-      bytes = 'frontend with corrected node-view cleanup';
+      bytes = 'changed input';
       expect(fingerprintUnit(unit, undefined, tree)).not.toBe(before);
     },
   );

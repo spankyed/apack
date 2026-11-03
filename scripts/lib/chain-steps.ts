@@ -457,7 +457,7 @@ const EVERY_WORKSPACE = PACKAGES.flatMap(workspace);
  *
  * Build output is not in here, because a guard's subject is source. `typecheck` adds its own.
  */
-const EVERY_SOURCE = [...ROOT, ...Object.values(CONFIG_BY_HALF), ...EVERY_WORKSPACE, 'scripts', '.github/scripts', 'tests/e2e', 'tests/packs', 'tests/scripts',
+const EVERY_SOURCE = [...ROOT, ...Object.values(CONFIG_BY_HALF), ...EVERY_WORKSPACE, 'scripts', '.github/scripts', 'tests/e2e', 'tests/performance', 'tests/packs', 'tests/acceptance', 'tests/_support',
   'tests/tsconfig.json', 'playwright.config.ts', 'types', 'electron-builder.mjs', 'build/build-metadata.ts', 'package.json',
   // The drive layer's one tracked file. The driving scripts beside it are gitignored and ad-hoc, so naming
   // the directory would re-run a typecheck every time someone poked at the app
@@ -580,7 +580,17 @@ const PACK_SOURCES = ['packages/default-setup/src', 'packages/default-setup/apac
  * `packages:ensure`' inputs are derived to avoid, a few hundred lines up. The two steps differ in what they
  * *write*, not in what they read: `build:default-setup` declares `PACK_OUTPUTS`, and the check declares nothing.
  */
-const PACK_DERIVED_READS = [...ROOT, ...PACK_SOURCES, 'packages/default-setup/tsconfig.json',
+/**
+ * The root manifest, for a step that runs `apack pack build`: the exception to `ROOT`'s leaving it out.
+ *
+ * The pack compiler records every file it reads, and Node's package-scope lookup reads this one whole, so a
+ * pack build's recorded inputs carry its hash and the build is stale after any edit to it — a new script
+ * included. Leaving it out made the chain keep a build that the compiler then refused to replay ("Compiler
+ * startup input changed"), failing the step that consumed it rather than rebuilding the one that made it.
+ */
+const PACK_BUILD_MANIFEST = ['package.json'];
+
+const PACK_DERIVED_READS = [...ROOT, ...PACK_BUILD_MANIFEST, ...PACK_SOURCES, 'packages/default-setup/tsconfig.json',
   'packages/default-setup/etc', ...PACKAGE_BUILD_READS];
 
 /**
@@ -633,6 +643,8 @@ export const SUITE_READS: Record<string, { packages?: true; pack?: true; repo?: 
   // `pretest: ensure-packages-built`; it packs and installs the published packages, and `dependency-runtime`
   // builds a fixture pack against default-setup's `dist`
   'apack-cli': { packages: true, pack: true },
+  // Resolves the published testing bundle.
+  'apack-testing': { packages: true },
   // `@apackdev/testing`'s bundle; and `sdk-bridge-drift.spec.ts` reads `dist/runtime/index.cjs` when it is
   // there and skips when it is not, so the tree decides whether that check checks anything
   'apack-host': { packages: true, pack: true },
@@ -697,6 +709,8 @@ export function suiteInputs(suite: UnitSuite, half: Half): string[] {
     ...ROOT,
     // A suite's half runs under one root config, so which projects that config pools is an input to it
     ...rootConfigFor(suite, half),
+    // The native pool's Docker scratch policy is part of both the outer and per-project verdict.
+    ...(half === 'native' ? ['scripts/linux-runner.ts', 'scripts/lib/linux-native-scratch.ts', 'scripts/linux/Dockerfile'] : []),
     ...SUITE_RUNNER,
     ...suiteWorkspace(suite.dir),
     ...workspaceDeps(suite.dir).flatMap(dependencySource),
@@ -945,13 +959,12 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // It declares `tests/packs` for the pack sources; the Playwright output under each pack is written
     // by `:app`, changes every run, and is read by nothing
     excludes: FIXTURE_TEST_OUTPUT,
-    inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/packs', 'tests/scripts/test-external-pack-contract.sh',
-      'tests/scripts/lib', ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS] },
-  // A full shipped-pack fork is a separate producer, not work charged to the fixture contract suite.
-  // Its 120s is the shipped build's measured 60s with as much again for the archive phase, which is not measured separately.
-  // A 600s build, 180s archive and 120s housekeeping compose the existing 900s scenario bound.
+    inputs: [...ROOT, ...PACK_BUILD_MANIFEST, ...BOUNDED_RUNNER, 'tests/packs', 'tests/acceptance/external-pack/test-external-pack-contract.sh',
+      'tests/acceptance/external-pack/support.sh', ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS] },
+  // A full shipped-pack fork is a separate producer, not work charged to the fixture contract suite. Its build,
+  // archive and housekeeping phases take shares of this step's bound (`DEFAULT_FORK_BUDGET_MS`).
   { name: 'test:external-pack:fork', timeout: 'scenario', outputs: [DEFAULT_FORK_OUTPUT],
-    inputs: [...PACK_DERIVED_READS, ...BOUNDED_RUNNER, 'tests/scripts/prepare-default-pack-fork.ts',
+    inputs: [...PACK_DERIVED_READS, ...BOUNDED_RUNNER, 'tests/acceptance/external-pack/prepare-default-pack-fork.ts',
       ...['apack-host', ...workspaceDeps('apack-host')].flatMap(dependencySource), ...PACK_OUTPUTS] },
   // The widest inputs in the table, and honestly so: it compiles every workspace, the scripts and the
   // tests, and lints them. A change anywhere in the repo's TypeScript is a change to what it checks.
@@ -991,8 +1004,8 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // built bundle, which launches Electron, finds the window and bypasses onboarding. Reached by package
     // name rather than by path, so nothing that reads a step's text can see the edge
     keepsOnFailure: FIXTURE_TEST_OUTPUT,
-    inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/packs', 'tests/scripts/test-external-pack-app.sh',
-      'tests/scripts/test-default-pack-fork.ts', 'tests/scripts/prepare-default-pack-fork.ts', DEFAULT_FORK_OUTPUT, 'tests/scripts/lib', 'playwright.config.ts', ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
+    inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/packs', 'tests/acceptance/external-pack/test-external-pack-app.sh',
+      'tests/acceptance/external-pack/test-default-pack-fork.ts', 'tests/acceptance/external-pack/prepare-default-pack-fork.ts', DEFAULT_FORK_OUTPUT, 'tests/acceptance/external-pack/support.sh', 'playwright.config.ts', ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
   // Never cached: it drives real Electron with real timing and is the likeliest step to be flaky, and a
   // flaky pass cached green hides an intermittent failure indefinitely. 28s is cheap enough to always pay.
   // It declares what it writes although it is never cached and so never reads a stamp: the guard that a
@@ -1036,12 +1049,12 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // from one of them — and `packages:check` packs a tarball inside those trees and recreates them, which a
     // reader must not observe. Declaring them is what makes that a mutex instead of a scheduling accident;
     // the step is never cached, so it buys the ordering and costs no precision
-    inputs: [...ROOT, 'tests/e2e', 'playwright.config.ts', ...SOURCE_RUNNER, ...APP_ENTRY,
+    inputs: [...ROOT, 'tests/e2e', 'tests/_support', 'playwright.config.ts', ...SOURCE_RUNNER, ...APP_ENTRY,
       ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
   /**
    * Two steps, split at the app boundary: only the last of the check's nine phases launches one.
    *
-   * The author half hands over through `tests/authoring-handoff`, its output and the app half's input, so
+   * The author half hands over through `.apack/tests/authoring-handoff`, its output and the app half's input, so
    * the edge derives like any other. The work dir that names is **outside** the checkout deliberately — a
    * pack built inside it would resolve `@apackdev/*` by walking up to the workspace `node_modules`, which is
    * what the check exists to disprove — so the handoff carries a path and the archive's digest instead.
@@ -1050,11 +1063,11 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
    * reads as never-built. The author half clears the previous run's at its start.
    */
   { name: 'test:packaged-authoring:author', timeout: 'scenario',
-    outputs: ['tests/authoring-handoff', 'tests/authoring-handoff/work-ready', 'tests/authoring-handoff/archive'],
+    outputs: ['.apack/tests/authoring-handoff', '.apack/tests/authoring-handoff/work-ready', '.apack/tests/authoring-handoff/archive'],
     // APACK_HOST selects default-setup's built snapshot for the external pack's dependency.
-    inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/scripts/test-packaged-authoring-author.sh',
-      'tests/scripts/lib', ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS] },
+    inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/acceptance/packaged-authoring/test-packaged-authoring-author.sh',
+      'tests/acceptance/packaged-authoring/support.sh', ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS] },
   { name: 'test:packaged-authoring:app', timeout: 'suite',
-    inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/scripts/test-packaged-authoring-app.sh',
-      'tests/scripts/lib', 'tests/authoring-handoff', ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
+    inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/acceptance/packaged-authoring/test-packaged-authoring-app.sh',
+      'tests/acceptance/packaged-authoring/support.sh', '.apack/tests/authoring-handoff', ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
 ];

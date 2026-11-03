@@ -1,0 +1,4 @@
+import { test } from '@apackdev/testing';
+test('fresh profile reaches its connected thread surface', async ({ app }) => {
+  await app.waitForSurface('default-setup/threads');
+});

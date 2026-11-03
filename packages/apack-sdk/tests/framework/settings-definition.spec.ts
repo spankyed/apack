@@ -86,6 +86,27 @@ describe('settings data contract', () => {
     expect(_compileSettingsDefinition({ schema, defaults: { name: 'C' } }).validate({ name: 'D' })).toEqual([]);
   });
 
+  it('keeps different local references isolated when owners reuse a schema identifier', () => {
+    const schemaFor = (type: string) => ({
+      type: 'object', $id: 'https://apack.dev/reused-settings',
+      properties: { value: { $ref: '#/definitions/value' } }, definitions: { value: { type } },
+    });
+    const text = _compileSettingsDefinition({ schema: schemaFor('string'), defaults: { value: 'text' } });
+    const number = _compileSettingsDefinition({ schema: schemaFor('number'), defaults: { value: 1 } });
+    expect(text.validate({ value: 'text' })).toEqual([]);
+    expect(text.validate({ value: 1 }).length).toBeGreaterThan(0);
+    expect(number.validate({ value: 1 })).toEqual([]);
+    expect(number.validate({ value: 'text' }).length).toBeGreaterThan(0);
+  });
+
+  it('rechecks schema metadata after a previously accepted definition changes', () => {
+    const changing: SettingsDefinition = { schema: { type: 'object', title: 'Valid title' }, defaults: {} };
+    const accepted = _compileSettingsDefinition(changing);
+    changing.schema.title = 17;
+    expect(() => _compileSettingsDefinition(changing)).toThrow('schema is invalid');
+    expect(accepted.validate({})).toEqual([]);
+  });
+
   it('rejects asynchronous schemas instead of mistaking a promise for valid defaults', () => {
     expect(() => _compileSettingsDefinition({ defaults: {}, schema: { type: 'object', $async: true } })).toThrow('$async is unsupported');
   });

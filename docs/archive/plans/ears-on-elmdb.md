@@ -13,7 +13,7 @@ the typed facades don't change. apack drops lmdb-js.
 
 - **lmdb-js is a fork of LMDB, not a binding to it.** Its vendored `mdb.c` carries about 3,000 lines stock LMDB
   doesn't, and a crash in them is why compaction is off (`COMPACT_COPIES`,
-  `docs/references/evidence/lmdb-compacted-copy-crash.md`). elmdb runs on heed's LMDB: upstream plus one reported
+  `docs/archive/references/evidence/lmdb-compacted-copy-crash.md`). elmdb runs on heed's LMDB: upstream plus one reported
   patch.
 - **Search needs indexes that commit with the data.** apack's draft message search (#148, MiniSearch) rebuilds in
   memory on every boot, and the dormant library index (usearch) keeps files beside the database that backups copy on

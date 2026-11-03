@@ -167,6 +167,7 @@ export interface Message {
     answering?: string;
     call?: string;
     client?: string;
+    diagnostics?: PerformanceCarrier;
     // (undocumented)
     event: {
         type: string;

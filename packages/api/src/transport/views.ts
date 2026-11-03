@@ -1,3 +1,4 @@
+import { createViewSubscriptionDiagnostics, diagnosticCarrier } from './diagnostics.ts';
 // Lets declaration emit name tRPC's router types through a public entry (TS2742 under bundler resolution)
 import type {} from '@trpc/server/unstable-core-do-not-import';
 import { observable } from '@trpc/server/observable';
@@ -13,6 +14,10 @@ export const viewsRouter = router({
    * nothing has to notice a window going away.
    */
   watch: procedure
-    .input(z.object({ ref: z.string().min(1), view: z.string().min(1), args: z.unknown().optional() }))
-    .subscription(({ input }) => observable<ViewUpdate>((emit) => appViews.watch(input, (update) => emit.next(update)))),
+    .input(z.object({ ref: z.string().min(1), view: z.string().min(1), args: z.unknown().optional(), diagnostics: diagnosticCarrier }))
+    .subscription(({ input }) => observable<ViewUpdate>((emit) => {
+      const { diagnostics, ...request } = input;
+      const observation = createViewSubscriptionDiagnostics(diagnostics);
+      return observation.within(() => appViews.watch(request, update => emit.next(observation.update(update))));
+    })),
 });

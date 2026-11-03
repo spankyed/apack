@@ -703,7 +703,7 @@ reproduction; it does not explain the output-change warning. The discovery plan 
 audit and acceptance for the next implementation. The probe changes no repository source or output.
 
 The user's snapshot-led suggestion is now tested against actual compiler paths, with positive and
-negative results recorded in [the proof evaluation](../../../references/evidence/build-input-snapshot-proof.md).
+negative results recorded in [the proof evaluation](build-input-snapshot-proof.md).
 Two independent owned-source/dependency builds preserve emitted bytes and revision after live inputs
 change; only private phase metadata differs from the live baseline. Absolute aliases and direct content
 file reads can still escape the copy, and a dev server on an immutable copy loses original-source
@@ -6564,7 +6564,7 @@ acceptance are next; B1–B6, Phase 6 and final committed-source strict `--all` 
 
 `9ecf788fb` captures declared npm bytes, package membership and missing lookups before preloads through
 the existing input owner. Focused cases, native startup, unchanged real repeat builds, CLI/host types,
-lint and CLI package refresh pass. See [dependency-input evidence](../../../references/evidence/build-input-snapshot-proof.md#early-declared-dependency-capture-checkpoint-2026-10-17).
+lint and CLI package refresh pass. See [dependency-input evidence](build-input-snapshot-proof.md#early-declared-dependency-capture-checkpoint-2026-10-17).
 Remaining native/runtime and transient resolution acceptance, B2–B6 and all other goal phases remain open.
 
 ### External compiler executable selection (2026-10-17)
@@ -6572,7 +6572,7 @@ Remaining native/runtime and transient resolution acceptance, B2–B6 and all ot
 `5c5f733fb` owns configured external esbuild executable bytes/selection through the captured installation,
 its reuse checks and worker environment. Native installation, actual repeat-build and cancellation
 checks, CLI types/lint and package refresh pass; the stale cancellation mock was corrected without
-changing production behavior. See [executable evidence](../../../references/evidence/build-input-snapshot-proof.md#captured-external-esbuild-executable-checkpoint-2026-10-17).
+changing production behavior. See [executable evidence](build-input-snapshot-proof.md#captured-external-esbuild-executable-checkpoint-2026-10-17).
 Continue B2's retained frontend generation audit; other B1/B3 and all subsequent goal requirements
 remain open. No passing broad gate is claimed.
 
@@ -6582,7 +6582,7 @@ remain open. No passing broad gate is claimed.
 with private server caches and awaited retirement. Actual backend/Vite A/B handoff, source watching,
 failed replacement retention, watcher/session ownership and process/copy/cache cleanup pass; focused
 startup cancellation, affected lifecycle cases, CLI/scripts types, lint and package builds pass. See
-[generation evidence](../../../references/evidence/build-input-snapshot-proof.md#retained-frontend-compiler-ownership-checkpoint-2026-10-17).
+[generation evidence](build-input-snapshot-proof.md#retained-frontend-compiler-ownership-checkpoint-2026-10-17).
 Close B2's configuration invalidation and browser HMR acceptance next. Remaining B1/B3, B4–B6 and all
 other active goal requirements remain open; no new broad gate is claimed.
 
@@ -6592,7 +6592,7 @@ other active goal requirements remain open; no new broad gate is claimed.
 resolution through the common package lookup. All 39 focused builder/package/shared cases, CLI/host
 types, lint and package refresh pass. A real browser loads generated external-pack registration and
 preserves component state/document during Vite HMR, with no page errors. See
-[configuration/browser evidence](../../../references/evidence/build-input-snapshot-proof.md#frontend-configuration-and-browser-hmr-checkpoint-2026-10-17).
+[configuration/browser evidence](build-input-snapshot-proof.md#frontend-configuration-and-browser-hmr-checkpoint-2026-10-17).
 B2 now has implementation and local acceptance; preserve final whole-goal validation. Remaining B1/B3,
 B4–B6 and every other active phase remain required. No broad or cross-platform gate is claimed.
 
@@ -6602,7 +6602,7 @@ B4–B6 and every other active phase remain required. No broad or cross-platform
 `a67edefc1` simplifies generation operation sequencing and frontend readiness; all 29 affected lifecycle
 cases, CLI types and focused lint pass. Disposable Node/Electron runtime copies demonstrate local
 owned execution; Electron requires its framework neighbors. See
-[runtime feasibility evidence](../../../references/evidence/build-input-snapshot-proof.md#generation-cleanup-and-runtime-copy-feasibility-2026-10-17).
+[runtime feasibility evidence](build-input-snapshot-proof.md#generation-cleanup-and-runtime-copy-feasibility-2026-10-17).
 Runtime integration and cross-platform acceptance remain required under B1/B3. No broad gate is claimed.
 
 
@@ -6612,7 +6612,7 @@ Runtime integration and cross-platform acceptance remain required under B1/B3. N
 through it. Runtime identity and copied-byte checks participate in admission/reuse; existing generation
 shutdown owns cleanup. Twenty-three focused cases across the recorded runs, three real integration
 cases, CLI types/lint/package refresh and integrated owned Electron execution pass. See
-[runtime ownership evidence](../../../references/evidence/build-input-snapshot-proof.md#selected-runtime-ownership-checkpoint-2026-10-17).
+[runtime ownership evidence](build-input-snapshot-proof.md#selected-runtime-ownership-checkpoint-2026-10-17).
 External linked native libraries, platform acceptance and remaining namespace/subscription cases stay
 under B1/B3; B4–B6 and every other active goal phase remain required.
 
@@ -6622,7 +6622,7 @@ under B1/B3; B4–B6 and every other active goal phase remain required.
 `0bb9e64ec` subscribes/fingerprints selected compiler, runtime and configured esbuild inputs through the
 existing watcher. Twenty-five focused cases pass, including real idle filesystem event delivery and
 broken-configuration repair subscriptions; CLI types/lint/package refresh and real distribution
-inventory checks pass. See [subscription evidence](../../../references/evidence/build-input-snapshot-proof.md#idle-tooling-subscription-checkpoint).
+inventory checks pass. See [subscription evidence](build-input-snapshot-proof.md#idle-tooling-subscription-checkpoint).
 Remaining B1/B3 native/platform/namespace/thread cases, B4–B6 and every other goal phase stay open.
 
 
@@ -6631,7 +6631,7 @@ Remaining B1/B3 native/platform/namespace/thread cases, B4–B6 and every other 
 `701928e9f` proves an outside native compiler addon executes from owned bytes and rejects later source
 changes, using the existing implementation. Thirty-three namespace/view/observation cases, actual
 native startup, CLI types and focused lint pass. See
-[native and namespace evidence](../../../references/evidence/build-input-snapshot-proof.md#native-module-and-namespacethread-acceptance-2026-10-17).
+[native and namespace evidence](build-input-snapshot-proof.md#native-module-and-namespacethread-acceptance-2026-10-17).
 Effective environment, linked native libraries and platform/thread lifetimes remain B1/B3 acceptance;
 all subsequent goal work remains required. No new runtime machinery or broad gate is claimed.
 
@@ -6643,7 +6643,7 @@ private paths and excluding explicit infrastructure controls. Actual Vite output
 changed identity; 25 focused cases, real pre-preload capture, CLI types/lint/package refresh pass.
 The repeat-build assertions pass in a 64.02s diagnostic run; its default 60s aggregate-budget failure
 remains explicitly unresolved for B6/final validation. See
-[environment evidence](../../../references/evidence/build-input-snapshot-proof.md#initial-environment-identity-checkpoint).
+[environment evidence](build-input-snapshot-proof.md#initial-environment-identity-checkpoint).
 Native/platform/lifetime acceptance, B4–B6 and all other active phases remain required.
 
 ### Onboarding API separation (2026-10-17)
@@ -7564,7 +7564,7 @@ a bounded refusal. The real recovery case and four backend/Vite native regressio
 focused checks, CLI/scripts types and lint. The required strict checkpoint stopped at three repository
 input/inventory omissions; those are corrected and the complete affected 951-check repository suite
 passes. External authoring and external-pack contract checks passed before the stop. No complete strict
-or final acceptance is claimed. [Detailed evidence and remaining scope](../../../references/evidence/build-input-snapshot-proof.md#live-frontend-native-watch-and-shared-copies-2026-10-17).
+or final acceptance is claimed. [Detailed evidence and remaining scope](build-input-snapshot-proof.md#live-frontend-native-watch-and-shared-copies-2026-10-17).
 
 
 ## Current-source manifest audit, first pass (2026-10-18)
@@ -7647,9 +7647,9 @@ owner; it adds no service restriction, new public surface or native execution.
 Source `11cb737e2` replaces unsafe Windows diagnostic-report queries while retaining native PATH,
 actual loaded-DLL ownership and bounded helper lifetime. Short concurrency/native-environment regressions,
 57 Windows models and actual Node/Electron application startup controls pass; see the
-[reader evidence](../../../references/evidence/build-input-snapshot-proof.md#windows-process-metadata-reader-without-diagnostic-reports--2026-10-18).
+[reader evidence](build-input-snapshot-proof.md#windows-process-metadata-reader-without-diagnostic-reports--2026-10-18).
 Follow-up `9adb9073f` owns both fresh builders in test teardown and records the measured Windows
-two-capture budget. The [complete repeated-build case](../../../references/evidence/build-input-snapshot-proof.md#windows-repeated-build-identity-and-owned-teardown--2026-10-18)
+two-capture budget. The [complete repeated-build case](build-input-snapshot-proof.md#windows-repeated-build-identity-and-owned-teardown--2026-10-18)
 passes in 224.648s, retaining cache/output identity, source paths, archive and disposal assertions.
 CLI types, focused lint and all 42 timeout-policy checks pass. Evidence is exported off the VM;
 no native fixture ran on the daily-use Mac. Remaining policy/platform obligations, B6 and final
@@ -7770,7 +7770,7 @@ identity and the successful facade/author evidence instead of scheduling those a
 The preserved strict run `39167659691` charged two fixture builds, their contract checks, and a full
 default-pack fork build/archive to one 600s suite step. It timed out during the fork, with no assertion
 failure identifying a compiler bug. The incomplete Windows profiles do not establish a hotspot; see
-[diagnostic cleanup](../../../references/evidence/build-input-snapshot-proof.md#short-windows-diagnostic-cleanup--2026-10-18).
+[diagnostic cleanup](build-input-snapshot-proof.md#short-windows-diagnostic-cleanup--2026-10-18).
 
 `test:external-pack:fork` now owns the existing preparation script and its published archive directory
 as an independent cached chain producer. Fixture contracts retain their own output; app acceptance

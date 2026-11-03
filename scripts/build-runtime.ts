@@ -63,7 +63,7 @@ const budgetFrom = (cores: string | undefined): number =>
 
 const secs = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
 
-interface Outcome { readonly ms: number; readonly code: number; readonly output: string; readonly timedOut?: true }
+interface Outcome { readonly ms: number; readonly code: number; readonly output: string; readonly timedOut?: true; readonly stalled?: true }
 
 const done = new Map<string, Outcome>();
 
@@ -80,7 +80,11 @@ const result = await schedule({
       ...process.env,
       NODE_OPTIONS: [process.env.NODE_OPTIONS, `--max-old-space-size=${leg.heapMb}`].filter(Boolean).join(' '),
     };
-    const outcome = await boundedSpawn(command!, args, TIMEOUT_MS[BUILD_TIMEOUT].ms, { env });
+    // npm.cmd is a shell wrapper on Windows; preserve arguments through npm's JS entry.
+    const npmCli = command === 'npm' ? process.env.npm_execpath : undefined;
+    if (command === 'npm' && !npmCli) throw new Error('Run runtime builds with npm run build:runtime');
+    const outcome = await boundedSpawn(npmCli ? process.execPath : command!, npmCli ? [npmCli, ...args] : args,
+      TIMEOUT_MS[BUILD_TIMEOUT].ms, { env });
     done.set(leg.name, outcome);
     // One line as each finishes, so four concurrent bundlers are not one silence. Completion order, since
     // that is what progress is; the failures below are in declared order, which is what reading wants.
@@ -93,7 +97,7 @@ const failed = RUNTIME_BUILD_LEGS.filter((leg) => (done.get(leg.name)?.code ?? 0
 for (const leg of failed) {
   const outcome = done.get(leg.name)!;
   const why = outcome.timedOut === true
-    ? timedOutBecause({ what: leg.name, timeout: BUILD_TIMEOUT })
+    ? timedOutBecause({ what: leg.name, timeout: BUILD_TIMEOUT, stalled: outcome.stalled })
     : `${leg.name} failed (exit ${outcome.code})`;
   process.stderr.write(`\n${'─'.repeat(72)}\n${why}\n${'─'.repeat(72)}\n${outcome.output}\n`);
 }

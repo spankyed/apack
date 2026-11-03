@@ -217,9 +217,14 @@ export interface ArtifactEntity extends BaseEntity {
   artifactType: ArtifactType;
 }
 
-/** The kinds a thread links to another thread with, which the link form offers */
-export const ThreadRelations = [EARS.RelKind.PARENT_OF, EARS.RelKind.BLOCKS, EARS.RelKind.BLOCKED_BY, EARS.RelKind.DUPLICATES] as const;
-export type ThreadLinkRelation = typeof ThreadRelations[number];
+/** The kinds a thread links to another thread with */
+export const ThreadRelations = [EARS.RelKind.PARENT_OF, EARS.RelKind.BLOCKS, EARS.RelKind.DUPLICATES] as const;
+export type ThreadRelation = typeof ThreadRelations[number];
+/**
+ * A link as the link form names it, from the thread it is on: a kind it links out with, or `blocked by`, the other
+ * thread's `blocks` link to it. A block is stored one way only, so a loop of blocks is one walk of one kind
+ */
+export type ThreadLinkRelation = ThreadRelation | 'blocked by';
 
 export type ThreadLinkItem = Pick<ThreadEntity, 'id' | 'status' | 'timestamp' | 'topic'> & {
   shortCode: ThreadTypeShortCode;

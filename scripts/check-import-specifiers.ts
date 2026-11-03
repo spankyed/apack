@@ -485,6 +485,9 @@ const REPO_FILES_READER = 'packages/repo-checks/tests/_support/repo-files.ts';
  * An entry that stops applying is reported, so the list cannot outlive its reasons.
  */
 const ASKS_GIT_DIRECTLY: Record<string, string> = {
+  'packages/apack-testing/src/performance/identity.ts':
+    '`--others --exclude-standard` asks only for untracked source; tracked changes come from git diff, '
+    + 'so a combined tracked/untracked enumeration would misclassify clean tracked files as dirty',
   'packages/repo-checks/tests/chain-inputs.spec.ts':
     '`--others --ignored --directory` asks which roots are gitignored — a different question, which lists '
     + 'directories and reads none of them',

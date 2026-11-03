@@ -17,7 +17,7 @@ import { population } from '@apackdev/sdk/testing';
 import { POOL_WIDTH } from '../../../scripts/lib/core-budget.ts';
 import { TYPECHECK_LEGS } from '../../../scripts/lib/typecheck-legs.ts';
 import { rungForKind, timedOutBecause, TIMEOUT_CLASSES, TIMEOUT_MS } from '../../../scripts/lib/step-timeouts.ts';
-import { DEFAULT_FORK_BUDGET_MS } from '../../../tests/scripts/prepare-default-pack-fork.ts';
+import { DEFAULT_FORK_BUDGET_MS } from '../../../tests/acceptance/external-pack/prepare-default-pack-fork.ts';
 import { timeoutMsFor } from '../../../scripts/lib/step-timeouts.ts';
 import e2eConfig from '../../../playwright.config.ts';
 
@@ -304,7 +304,7 @@ describe('every spawn an orchestrator makes is bounded', () => {
   it('every npm script that runs a shell script bounds it', () => {
     const scripts = (JSON.parse(read('package.json')) as { scripts: Record<string, string> }).scripts;
     const unbounded = Object.entries(scripts)
-      .filter(([, command]) => command.includes('tests/scripts/') && !command.includes('scripts/bounded.ts'))
+      .filter(([, command]) => command.includes('tests/acceptance/') && !command.includes('scripts/bounded.ts'))
       .map(([name]) => name);
     expect(unbounded, 'these run a shell script with no wall-clock budget').toEqual([]);
   });
@@ -439,7 +439,7 @@ describe('every spawn an orchestrator makes is bounded', () => {
     });
 
     it.each([undefined, 0])('does not invent a recorded cost for %s', seconds => {
-      const why = timedOutBecause({ what: 'bash tests/scripts/x.sh', timeout: 'scenario', seconds });
+      const why = timedOutBecause({ what: 'bash tests/acceptance/x.sh', timeout: 'scenario', seconds });
       expect(why).toContain('900s (scenario)');
       expect(why).toContain('no recorded cost');
       expect(why).not.toContain('usually takes');
@@ -465,7 +465,7 @@ describe('every spawn an orchestrator makes is bounded', () => {
   // The mutation, over data rather than the real manifest: a regex that matched nothing would satisfy every
   // assertion above, which is what the emptiness guard alone cannot tell you
   it('finds a class a script bounds at, which is what the case above rests on', () => {
-    expect(boundedIn({ 'x': 'npm run packages:ensure && tsx scripts/bounded.ts quick bash tests/scripts/x.sh' }))
+    expect(boundedIn({ 'x': 'npm run packages:ensure && tsx scripts/bounded.ts quick bash tests/acceptance/x.sh' }))
       .toEqual([{ name: 'x', className: 'quick' }]);
     expect(boundedIn({ 'y': 'tsx scripts/bounded.ts nonsense bash y.sh' })[0]!.className)
       .not.toBeOneOf([...TIMEOUT_CLASSES]);
@@ -517,7 +517,7 @@ describe('every spawn an orchestrator makes is bounded', () => {
   /** Over data, since the manifest agrees today and an assertion over agreement cannot fail on its own */
   it('would name a step whose two records disagree', () => {
     const step = CHAIN_STEPS.find((candidate) => candidate.timeout === 'suite')!;
-    const diverged = boundedIn({ [step.name]: 'tsx scripts/bounded.ts scenario bash tests/scripts/x.sh' });
+    const diverged = boundedIn({ [step.name]: 'tsx scripts/bounded.ts scenario bash tests/acceptance/x.sh' });
 
     expect(diverged.map(({ className }) => className), 'the script half of the pair').toEqual(['scenario']);
     expect(divergent(diverged)).toEqual([`${step.name} bounds at scenario and the table declares suite`]);
@@ -575,8 +575,8 @@ describe('every spawn an orchestrator makes is bounded', () => {
     expect(dependsOn(app)).toEqual(expect.arrayContaining([producer.name, 'test:external-pack:contract']));
     const scripts = rootScripts();
     expect(reachableText('test:external-pack:contract', scripts).text).not.toContain('prepare-default-pack-fork');
-    expect(scripts[producer.name]).toContain('bounded.ts scenario tsx tests/scripts/prepare-default-pack-fork.ts');
-    const combined = read('tests/scripts/test-external-pack.sh');
+    expect(scripts[producer.name]).toContain('bounded.ts scenario tsx tests/acceptance/external-pack/prepare-default-pack-fork.ts');
+    const combined = read('tests/acceptance/external-pack/test-external-pack.sh');
     expect(combined.indexOf('test-external-pack-contract.sh')).toBeLessThan(combined.indexOf('prepare-default-pack-fork.ts'));
     expect(combined.indexOf('prepare-default-pack-fork.ts')).toBeLessThan(combined.indexOf('test-external-pack-app.sh'));
   });

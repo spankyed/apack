@@ -1,4 +1,4 @@
-import type { BlockConfig, BlockResponse, MessageReferences, ArtifactType, ThreadLinkRelation } from './types.ts'
+import type { BlockConfig, BlockResponse, MessageReferences, ArtifactType, ThreadRelation } from './types.ts'
 
 export interface ExportedMessage {
   text: string
@@ -21,7 +21,7 @@ export interface ExportedMessage {
 
 export interface ExportedThreadLink {
   shortCode: string
-  relation: ThreadLinkRelation
+  relation: ThreadRelation
 }
 
 export interface ExportedArtifact {

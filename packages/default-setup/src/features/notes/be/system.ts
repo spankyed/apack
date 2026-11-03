@@ -119,7 +119,7 @@ export const notesSystem = setup({
         repository.noteCommands.update(noteId, updates);
 
         // When uncompleting: restore saved position
-        // A cleared position is stored as null
+        // A cleared position is removed, so the note holds none
         if (ev.completed === false && noteBeforeUpdate.savedDisplayOrder != null) {
           const parentIds = query.ids(noteId).in(EARS.RelKind.CONTAINS, EARS.Entity.Note).ids();
           const parentId = parentIds.length > 0 ? parentIds[0] : null;

@@ -46,7 +46,8 @@ export async function dbRuns(args: string[], io: DbIo): Promise<void> {
   const running = findRunningApp(target);
   if (running) io.err(`Warning: apack is running on it (${running.why}); this reads what it has committed`);
 
-  // Read-only: the history is read, never changed, so this works while an app runs and on files it may not write
+  // History is read, never changed, so this works while the app runs. Read-only data.mdb still requires
+  // writable reader registration in lock.mdb.
   const runs = openRunHistory(dir, { readOnly: true });
   try {
     const history = _createRunHistory(runs.engine);

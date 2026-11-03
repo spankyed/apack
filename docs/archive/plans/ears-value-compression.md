@@ -43,7 +43,7 @@ saves would take the compacted file from about 271 MB to about 157 MB.
 msgpackr encoder), so compressing there:
 
 - covers both backends, so the memory backend, and every spec on it, exercises it;
-- keeps the format ours, with nothing new depending on lmdb-js-specific behaviour (`docs/references/pr-274-review.md`
+- keeps the format ours, with nothing new depending on lmdb-js-specific behaviour (`docs/archive/references/pr-274-review.md`
   has why that matters);
 - avoids lmdb-js's compression, which its README describes as built for its asynchronous write path, which we don't
   use.
