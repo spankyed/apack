@@ -44,7 +44,7 @@ Gatekeeper settings, or resume captured-runtime/native batches on the daily-use 
 | Windows development account | `apackdev`, local administrator |
 | Source checkout | `C:\src\apack` |
 | Initial source | `session/settings-pack-contracts` at `167722d1fa227800e92a2c2fd897ee7d67b2b8fa` |
-| Node | `23.11.1`, matching the compiler workflow at provisioning |
+| Node | `24.22.2` required, matching the compiler workflow; verify older provisioning before execution |
 | Git | `2.56.0.windows.2` at provisioning |
 | C++ tools | Visual Studio Build Tools 2026, `18.11.12306.390`, installed at `C:\BuildTools` |
 | Dependencies | `npm ci` succeeded after configuring npm's script shell to Git Bash |

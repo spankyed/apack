@@ -2,7 +2,8 @@
 # the Node version CI pins, a C toolchain and Node headers for the native modules and fixtures, git for the
 # specs that ask it, rsync for the runner's copy, the shared libraries an Electron binary loads, and the Rust
 # toolchain elmdb pins (its rust-toolchain.toml, which the runner passes as RUST_TOOLCHAIN), to build its binding.
-FROM node:23.11.1-bookworm
+FROM node:24.22.2-bookworm
+RUN npm install --global npm@11.21.1
 ARG RUST_TOOLCHAIN
 ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo PATH=/usr/local/cargo/bin:$PATH
 

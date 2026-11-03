@@ -83,11 +83,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 23
+          node-version: 24.22.2
           cache: npm
-      # npm 10 crashes resolving vitest 4.1's peer dependencies, which a new pack's first install does
-      - name: npm 11
-        run: npm install -g npm@11.21.0
+      - name: Install pinned npm
+        run: npm install -g npm@11.21.1
 
       - uses: ./.github/actions/elmdb
 
@@ -182,11 +181,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 23
+          node-version: 24.22.2
           cache: npm
-      # npm 10 crashes resolving vitest 4.1's peer dependencies, which a new pack's first install does
-      - name: npm 11
-        run: npm install -g npm@11.21.0
+      - name: Install pinned npm
+        run: npm install -g npm@11.21.1
 
       - uses: ./.github/actions/elmdb
 
