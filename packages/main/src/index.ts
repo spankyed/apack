@@ -10,6 +10,7 @@ import {allowExternalUrls} from './modules/ExternalUrls.ts';
 import {createApiServer} from './modules/api-server/ApiServer.ts';
 import {createDevApiReloader} from './modules/api-server/dev-reloader.ts';
 import {createSplashScreen} from './modules/splash-screen/index.ts';
+import {createPrivilegedSchemes} from './modules/privileged-schemes/index.ts';
 import {createMediaProtocol} from './modules/media-protocol/index.ts';
 import {createPackProtocol} from './modules/pack-protocol/index.ts';
 import {createSpeechRecognition} from './modules/speech-recognition/index.ts';
@@ -37,7 +38,8 @@ export async function initApp(initConfig: AppInitConfig) {
     .init(disallowMultipleAppInstance())
     .init(createProtocolHandler())
     .init(hardwareAccelerationMode({enable: true}))
-    .init(createMediaProtocol())  // Must register protocol schemes before app ready
+    .init(createPrivilegedSchemes())  // Before app ready, which Electron requires
+    .init(createMediaProtocol())
     .init(createPackProtocol())   // pack:// protocol for external pack assets
     .init(splashScreen)  // Show splash screen early
     .init(apiServer)
