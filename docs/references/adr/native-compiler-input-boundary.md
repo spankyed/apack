@@ -12,7 +12,7 @@ it does not establish hermetic execution or security isolation of arbitrary nati
 A real addon linked to an absolute external library executes the original library outside the
 captured input tree. Replacing that library does not invalidate the recorded build. Package-relative
 native library capture (`6710e3026`) fixes a different case and does not close this defect. See the
-[reproducer and acceptance evidence](../evidence/build-input-snapshot-proof.md#package-relative-native-library-ownership).
+[reproducer and acceptance evidence](../../archive/references/evidence/build-input-snapshot-proof.md#package-relative-native-library-ownership).
 
 Platform packaging and release configuration are not proof of native compiler correctness. The
 [goal's B1/B3 closure register](../../archive/goals/goal-settings-and-pack-contracts.md#b1b3-closure-register-and-decisions)
@@ -47,14 +47,14 @@ another fixture-construction campaign. Reconsider broader support when a real re
 supplies an independently Windows-loadable reproducer.
 
 Checkpoint `12447893a` checks this encoding before dependency resolution, including OS and missing
-targets. Its [focused acceptance](../evidence/build-input-snapshot-proof.md#bound-only-refusal-before-resolution--2026-10-19)
+targets. Its [focused acceptance](../../archive/references/evidence/build-input-snapshot-proof.md#bound-only-refusal-before-resolution--2026-10-19)
 records diagnostic/native-loader checks and the unchanged incumbent-publication boundary; final
 committed-source convergence remains separately required.
 
 Preserved ordinary-loader experiments failed after import lookup information was removed, including
 from OS-bound images. They do not establish that every address-only binary is invalid or demonstrate
 a valid required dependency rejected by apack. Synthetic cases establish parsing/refusal behavior only.
-See the [decision record](../evidence/build-input-snapshot-proof.md#bound-only-pe-support-decision--2026-10-18).
+See the [decision record](../../archive/references/evidence/build-input-snapshot-proof.md#bound-only-pe-support-decision--2026-10-18).
 
 Versioned macOS override directories select original filesystem paths at launch, before JavaScript
 admission. Accept these directories only within normal OS library locations, verifying their physical
@@ -92,7 +92,7 @@ five-second query bound and descendant cleanup. Unreadable or changing process p
 than substituting JavaScript values. These internal Windows layouts need platform acceptance; this
 is not universal native-input capture or stronger isolation. The query does not initialize pack images. The exact owned-DLL, restoration,
 Vue and outside-PATH refusal control passes on `b70228539`; other required Windows lookup and platform
-checks remain open. See [Windows evidence](../evidence/build-input-snapshot-proof.md#accepted-windows-dll-ownership-and-full-path-module-metadata-2026-10-17).
+checks remain open. See [Windows evidence](../../archive/references/evidence/build-input-snapshot-proof.md#accepted-windows-dll-ownership-and-full-path-module-metadata-2026-10-17).
 
 Windows Node-API addons using node-gyp's standard `node.exe` delay-load hook bind to the running
 runtime. Verify their named Node-API imports against the runtime's concrete exports, tied to the same
@@ -106,7 +106,7 @@ reach the existing input owner on successful and refused queries, preserving new
 folders and failed-context repair subscriptions. Full listing hashes guard each inspection; runtime
 copy identity derives from named candidate state, owned directories and owned file bytes. This keeps
 selective Node copies reproducible without copying unrelated installation files. See the
-[directory-membership checkpoint](../evidence/build-input-snapshot-proof.md#private-assembly-directory-membership-and-copy-identity--2026-10-18).
+[directory-membership checkpoint](../../archive/references/evidence/build-input-snapshot-proof.md#private-assembly-directory-membership-and-copy-identity--2026-10-18).
 Resource manifests that affect DLL selection remain required inputs. General resource reads performed
 by native code remain within the already excluded native-I/O boundary; do not turn those reads into
 an implicit new capture project when classifying MUI follow-ups.
@@ -126,7 +126,7 @@ policy, even when Windows retains an older binding for the original path. Its co
 include its own effective bindings; source and captured runtime freshness retain separate baselines.
 Observe relevant OS policy/catalog files and directory membership so new candidates invalidate reuse
 even when a cached binding stays unchanged. Do not copy the OS store or erase selection metadata to
-make source/copy hashes equal. See the [policy proof and caller audit](../evidence/build-input-snapshot-proof.md#publisher-policy-freshness-and-runtime-identity-boundary--2026-10-19).
+make source/copy hashes equal. See the [policy proof and caller audit](../../archive/references/evidence/build-input-snapshot-proof.md#publisher-policy-freshness-and-runtime-identity-boundary--2026-10-19).
 
 Static inspection alone cannot establish complete capture: dynamic library loading and native file
 reads may bypass JavaScript observation. Neither an input declaration nor a scanner establishes
@@ -148,7 +148,7 @@ that execution used captured bytes. Do not claim complete capture from those mec
 A real macOS ARM64 / Node 23.11.1 prototype shows that `DYLD_LIBRARY_PATH` can redirect one absolute
 library to captured bytes, but collapses two distinct absolute libraries sharing a basename: expected
 `[11, 22]` becomes `[11, 11]`. A search-path override alone therefore fails the resolution-preservation
-criterion. See [prototype evidence](../evidence/build-input-snapshot-proof.md#external-native-library-search-path-prototype-2026-10-17).
+criterion. See [prototype evidence](../../archive/references/evidence/build-input-snapshot-proof.md#external-native-library-search-path-prototype-2026-10-17).
 This rules out that shortcut, not every possible exact-identity capture design. The separate user
 approval above selects bounded support; the prototype itself does not authorize implementation changes.
 
@@ -173,7 +173,7 @@ attempt 2, passes on `4b4d820fa`, including the shared build/frontend Job Object
 lifetime matrix, descendant cancellation/replacement and repeated-build acceptance. This establishes
 process ownership on that source, not PE library admission. macOS compiler/native batches now use a
 disposable hosted runner following the daily-use machine's launch incident; causation remains unproven.
-See the [current acceptance evidence](../evidence/build-input-snapshot-proof.md#recovery-windows-acceptance-and-isolated-macos-execution-2026-10-17).
+See the [current acceptance evidence](../../archive/references/evidence/build-input-snapshot-proof.md#recovery-windows-acceptance-and-isolated-macos-execution-2026-10-17).
 Release workflows remain prohibited. Preserve the common process owner rather than replacing it with
 PID-only termination.
 

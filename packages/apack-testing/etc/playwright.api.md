@@ -13,6 +13,9 @@ export function defineDriveConfig(options?: DriveConfigOptions): PlaywrightTestC
 export function definePackE2EConfig(options?: PlaywrightTestConfig): PlaywrightTestConfig;
 
 // @public
+export function definePerformanceConfig(options?: PlaywrightTestConfig): PlaywrightTestConfig;
+
+// @public
 export type DriveConfigOptions = Omit<PlaywrightTestConfig, 'testDir'>;
 
 // @public

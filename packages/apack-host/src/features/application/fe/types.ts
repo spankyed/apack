@@ -1,3 +1,4 @@
+import type { PerformanceCarrier } from '@apackdev/sdk/runtime';
 import type { EntityOpeningActor } from './entity-opening.ts';
 import type { OpenEntity } from '@apackdev/sdk/events';
 // The app shell's state, events and the I/O it's given. Its machine (machine.ts) reads the rest of the app only
@@ -61,6 +62,7 @@ export type MessageSender = Pick<Message, 'from' | 'via'>;
  * the only thing that can be.
  */
 export interface RequestSender extends MessageSender {
+  diagnostics?: PerformanceCarrier;
   /**
    * Where an answer goes, so the receiving surface's handler is handed a `reply` that reaches whoever asked.
    * Absent for the shell's own sends — a lifecycle event, a hotkey, a navigation — and for an `OPEN_SURFACE`,
@@ -177,7 +179,7 @@ export type ShellEvent =
   | { type: 'OPEN_SURFACE'; surface: string; events: SurfaceEvent[]; entityToken?: string }
   | ({ type: 'SEND_TO_SURFACE'; surface: string; events: SurfaceEvent[]; answering?: string; call?: string } & RequestSender)
   /** Hands an opened surface its events, once the shell has selected it */
-  | { type: 'DELIVER_SURFACE_EVENTS'; surface: string; events: SurfaceEvent[]; asker?: RequestSender['asker']; answering?: string; call?: string; entityToken?: string }
+  | { type: 'DELIVER_SURFACE_EVENTS'; diagnostics?: PerformanceCarrier; surface: string; events: SurfaceEvent[]; asker?: RequestSender['asker']; answering?: string; call?: string; entityToken?: string }
   | { type: 'DEFAULT_TOGGLE'; area: 'canvas' }
   | { type: 'TRAIL_UPDATE'; crumbs: BreadcrumbItem[]; target?: string; menuItems: ContextMenuItem[] }
   | { type: 'TRAIL_CLICK'; target: string; info?: unknown }

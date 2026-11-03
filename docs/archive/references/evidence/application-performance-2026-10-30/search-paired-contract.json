@@ -1,0 +1,323 @@
+{
+  "status": "contract-only",
+  "scenario": "search",
+  "baseline": {
+    "manifest": {
+      "format": 1,
+      "source": {
+        "revision": "d391acfaef656427fe4920f928f5bd4116070926",
+        "dirty": false,
+        "excludedUntracked": [
+          ".apack-checkout",
+          ".apack-run.lock"
+        ],
+        "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "builds": [
+        {
+          "path": "packages/api/dist",
+          "sha256": "7ba0102529adaa23578d8c1115c6cd846bcc3e89b9b937b7f5fae36cb9fa9423"
+        },
+        {
+          "path": "packages/main/dist",
+          "sha256": "f87aec72aeb708070bc8dbfdaef7b5ebfeee6ef6b76c773e17d0140b897c8544"
+        },
+        {
+          "path": "packages/preload/dist",
+          "sha256": "a2bae9f4f8715defb9bf042116b4b15c86366fbbbcab13906eddf45e9d7e6b9f"
+        },
+        {
+          "path": "packages/renderer/dist",
+          "sha256": "10130033a6ac73a445f7054cc69df9c105d808ffb189049d18c70884e908e8bd"
+        },
+        {
+          "path": "packages/default-setup/dist",
+          "sha256": "2d6c4a7f07b066683d861f7d57bdf2c1f0add7cf8efa3bbbcf603c8ba449f6df"
+        },
+        {
+          "path": "vendor/elmdb/crates/elmdb-node/elmdb.linux-arm64-gnu.node",
+          "sha256": "f09eb6c681f57c696491e3dc53d2ce6bf86b9e0a9907a905c39215e0d9a786e3"
+        }
+      ],
+      "fixture": {
+        "generator": "message-search-v1",
+        "seed": 0,
+        "sha256": "fdc894145a73053b09dc61228eeb3ff8a73f77dfb7363a7fcbbc6bb65b28baf7",
+        "distribution": {
+          "threads": 12,
+          "messagesPerThread": 100,
+          "matchingQueries": 2,
+          "matchesPerQuery": 20,
+          "resultLimit": 20,
+          "bodyRepetitions": 50
+        }
+      },
+      "native": {
+        "pin": "95615ed8d493f9a7c2789eaf1f4c847ae375eb32",
+        "checkoutRevision": "95615ed8d493f9a7c2789eaf1f4c847ae375eb32",
+        "dirty": false,
+        "excludedUntracked": [
+          ".apack-elmdb-built",
+          ".apack-elmdb-checkout",
+          ".apack-elmdb.lock"
+        ]
+      },
+      "runtime": {
+        "node": "23.11.1",
+        "v8": "12.9.202.28-node.14",
+        "osRelease": "6.17.8-orbstack-00308-g8f9c941121b1",
+        "electron": "37.2.4",
+        "chromium": "138.0.7204.157",
+        "appNode": "22.17.1",
+        "appV8": "13.8.258.26-electron.0",
+        "performancePolicy": "paired-focused-revisions-v1"
+      },
+      "machine": {
+        "platform": "linux",
+        "arch": "arm64",
+        "cpus": 2,
+        "memoryBytes": 6442450944,
+        "identity": "a98798ec9e771fb53f32e7481074de8a920fc40c095b52153d986b4c19f82a3d"
+      },
+      "mode": "lightweight",
+      "cache": "warm-process",
+      "warmups": 5,
+      "clock": "Local monotonic durations; cross-process epoch alignment is approximate"
+    },
+    "scenario": "search",
+    "samples": [
+      {
+        "scenario": "search",
+        "index": 0,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 26,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "search",
+        "index": 1,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 17.400000002235174,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "search",
+        "index": 2,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 18.200000002980232,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "search",
+        "index": 3,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 17.600000001490116,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "search",
+        "index": 4,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 18,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "search",
+        "index": 5,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 29.100000001490116,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "search",
+        "index": 6,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 25.800000000745058,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    ],
+    "summary": {
+      "measured": 2,
+      "passed": 2,
+      "unsuccessful": 0,
+      "medianMs": 27.450000001117587,
+      "minMs": 25.800000000745058,
+      "maxMs": 29.100000001490116
+    }
+  },
+  "candidate": {
+    "manifest": {
+      "format": 1,
+      "source": {
+        "revision": "d391acfaef656427fe4920f928f5bd4116070926",
+        "dirty": false,
+        "excludedUntracked": [
+          ".apack-checkout",
+          ".apack-run.lock"
+        ],
+        "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "builds": [
+        {
+          "path": "packages/api/dist",
+          "sha256": "7ba0102529adaa23578d8c1115c6cd846bcc3e89b9b937b7f5fae36cb9fa9423"
+        },
+        {
+          "path": "packages/main/dist",
+          "sha256": "f87aec72aeb708070bc8dbfdaef7b5ebfeee6ef6b76c773e17d0140b897c8544"
+        },
+        {
+          "path": "packages/preload/dist",
+          "sha256": "a2bae9f4f8715defb9bf042116b4b15c86366fbbbcab13906eddf45e9d7e6b9f"
+        },
+        {
+          "path": "packages/renderer/dist",
+          "sha256": "10130033a6ac73a445f7054cc69df9c105d808ffb189049d18c70884e908e8bd"
+        },
+        {
+          "path": "packages/default-setup/dist",
+          "sha256": "2d6c4a7f07b066683d861f7d57bdf2c1f0add7cf8efa3bbbcf603c8ba449f6df"
+        },
+        {
+          "path": "vendor/elmdb/crates/elmdb-node/elmdb.linux-arm64-gnu.node",
+          "sha256": "f09eb6c681f57c696491e3dc53d2ce6bf86b9e0a9907a905c39215e0d9a786e3"
+        }
+      ],
+      "fixture": {
+        "generator": "message-search-v1",
+        "seed": 0,
+        "sha256": "fdc894145a73053b09dc61228eeb3ff8a73f77dfb7363a7fcbbc6bb65b28baf7",
+        "distribution": {
+          "threads": 12,
+          "messagesPerThread": 100,
+          "matchingQueries": 2,
+          "matchesPerQuery": 20,
+          "resultLimit": 20,
+          "bodyRepetitions": 50
+        }
+      },
+      "native": {
+        "pin": "95615ed8d493f9a7c2789eaf1f4c847ae375eb32",
+        "checkoutRevision": "95615ed8d493f9a7c2789eaf1f4c847ae375eb32",
+        "dirty": false,
+        "excludedUntracked": [
+          ".apack-elmdb-built",
+          ".apack-elmdb-checkout",
+          ".apack-elmdb.lock"
+        ]
+      },
+      "runtime": {
+        "node": "23.11.1",
+        "v8": "12.9.202.28-node.14",
+        "osRelease": "6.17.8-orbstack-00308-g8f9c941121b1",
+        "electron": "37.2.4",
+        "chromium": "138.0.7204.157",
+        "appNode": "22.17.1",
+        "appV8": "13.8.258.26-electron.0",
+        "performancePolicy": "paired-focused-revisions-v1"
+      },
+      "machine": {
+        "platform": "linux",
+        "arch": "arm64",
+        "cpus": 2,
+        "memoryBytes": 6442450944,
+        "identity": "a98798ec9e771fb53f32e7481074de8a920fc40c095b52153d986b4c19f82a3d"
+      },
+      "mode": "lightweight",
+      "cache": "warm-process",
+      "warmups": 5,
+      "clock": "Local monotonic durations; cross-process epoch alignment is approximate"
+    },
+    "scenario": "search",
+    "samples": [
+      {
+        "scenario": "search",
+        "index": 0,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 27.5,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "search",
+        "index": 1,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 19.099999997764826,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "search",
+        "index": 2,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 28.899999998509884,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "search",
+        "index": 3,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 33.69999999925494,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "search",
+        "index": 4,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 15.5,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "search",
+        "index": 5,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 22.100000001490116,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "search",
+        "index": 6,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 17.100000001490116,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    ],
+    "summary": {
+      "measured": 2,
+      "passed": 2,
+      "unsuccessful": 0,
+      "medianMs": 19.600000001490116,
+      "minMs": 17.100000001490116,
+      "maxMs": 22.100000001490116
+    }
+  },
+  "medianDifferenceMs": -7.849999999627471,
+  "medianChangePercent": -28.5974499064039,
+  "policy": "Two isolated workers, five warmups per revision, then individually balanced ABBA actions; no tail-percentile claim"
+}

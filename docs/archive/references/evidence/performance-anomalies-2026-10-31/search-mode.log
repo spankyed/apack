@@ -1,0 +1,29 @@
+Qualifying search: disabled versus lightweight; evidence: /work/.apack/performance/anomalies-followup-657177c14a/search-mode/search
+
+Running 1 test using 1 worker
+
+[e2e.launch] {"phase":"requested","elapsedMs":0.026375000000030013,"at":1793500396506}
+[e2e.launch] {"phase":"process-attached","elapsedMs":2321.669429,"at":1793500398828,"pid":470}
+[e2e.launch] {"phase":"application-state-present","elapsedMs":26948.466772,"at":1793500423454,"pid":470}
+[e2e.launch] {"phase":"viewport-ready","elapsedMs":26959.35493,"at":1793500423465,"pid":470}
+[e2e.launch] {"phase":"connected","elapsedMs":34358.626617,"at":1793500430865,"pid":470}
+
+  ✓  1 tests/performance/search.spec.ts:4:1 › search a populated corpus and apply only the current query results (44.8s)
+[31mWorker teardown timeout of 120000ms exceeded while tearing down "electronApp".[39m
+[31mWorker teardown timeout of 120000ms exceeded.[39m
+
+[31mFailed worker ran 1 test:[39m
+tests/performance/search.spec.ts:4:1 › search a populated corpus and apply only the current query results
+
+  1 passed (2.8m)
+  2 errors were not a part of any test, see above for details
+/work/scripts/qualify-performance.ts:24
+  if (result.code !== 0) throw Error(`Qualification process failed; evidence: ${output}`);
+                               ^
+
+
+Error: Qualification process failed; evidence: /work/.apack/performance/anomalies-followup-657177c14a/search-mode/search
+    at <anonymous> (/work/scripts/qualify-performance.ts:24:32)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+
+Node.js v23.11.1

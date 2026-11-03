@@ -1,3 +1,4 @@
+import type { PerformanceCarrier } from '../runtime/performance.ts';
 // Views: a feature's named live reads. A feature declares them with `defineViews` and names the export in
 // `apack.json` (`features.<id>.views`); a window subscribes to one with arguments (`useView`, `#generated/fe`),
 // and the host runs it on the engine and runs it again after every commit that could change its result
@@ -42,6 +43,8 @@ export type ViewResult<Read> = Read extends (...args: never[]) => infer Result ?
 
 /** What a window asks for: a feature's view, by the feature's ref and the view's name, with its arguments */
 export interface ViewRequest {
+  /** Execution metadata, excluded from the view key and never passed to the query. */
+  diagnostics?: PerformanceCarrier;
   /** The feature that declares the view, `<packId>/<featureId>` */
   ref: string;
   /** The view's name, a key of the feature's `defineViews` */
@@ -56,8 +59,11 @@ export interface ViewRequest {
  * so is one whose pack isn't running, which a pack registering brings back.
  */
 export type ViewUpdate<Result = unknown> =
-  | { ok: true; value: Result; commit: number }
-  | { ok: false; error: string; commit: number };
+  | { ok: true; value: Result; commit: number; diagnostics?: ViewDiagnostics }
+  | { ok: false; error: string; commit: number; diagnostics?: ViewDiagnostics };
+
+/** A delivery ordinal belongs to one subscription generation, not to a database commit. */
+export interface ViewDiagnostics { subscription: string; carrier: PerformanceCarrier; delivery: number }
 
 /**
  * The key two requests share when they ask for the same thing: the ref, the view and the arguments with every

@@ -14,7 +14,7 @@
     "test": "vitest run",
     "generate:entries": "apack pack generate-entries",
     "build": "apack pack build",
-    "build:dev": "apack pack build --skip-fe",
+    "build:dev": "apack pack build",
     "facade:check": "apack pack facade-report",
     "facade:update": "apack pack facade-report --update",
     "flow-export:check": "npm test -- tests/extensions/steps/export-example.spec.ts",

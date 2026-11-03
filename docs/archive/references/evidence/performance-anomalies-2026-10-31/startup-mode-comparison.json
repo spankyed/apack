@@ -1,0 +1,651 @@
+{
+  "status": "qualified",
+  "scenario": "populated-startup",
+  "baseline": {
+    "manifest": {
+      "format": 1,
+      "source": {
+        "revision": "657177c14a374bfda762edf793ca1e8cca634c45",
+        "dirty": false,
+        "excludedUntracked": [
+          ".apack-checkout",
+          ".apack-run.lock"
+        ],
+        "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "builds": [
+        {
+          "path": "packages/api/dist",
+          "sha256": "655d4c0d794e1f95a7f7fcb65d0426721db3b87ea594e2694e473e4b60bb0be4"
+        },
+        {
+          "path": "packages/main/dist",
+          "sha256": "d60646d24d78305eb15be9b1c33948774d8ce304d8702967b7f0f61af7988d8b"
+        },
+        {
+          "path": "packages/preload/dist",
+          "sha256": "a2bae9f4f8715defb9bf042116b4b15c86366fbbbcab13906eddf45e9d7e6b9f"
+        },
+        {
+          "path": "packages/renderer/dist",
+          "sha256": "ecc90674329710c68a0f4754d28732c2031e595fb8d206d0c2a01ab90a286fe3"
+        },
+        {
+          "path": "packages/default-setup/dist",
+          "sha256": "c1d8330da1c7a327a5dc5f2fb8566951ae997d88d0054f8d42c15cd9a89954cc"
+        },
+        {
+          "path": "vendor/elmdb/crates/elmdb-node/elmdb.linux-arm64-gnu.node",
+          "sha256": "9c0469d914d90d0ad7763e84378f0f7149855a85420ae2965dcfb4b4eb2f1474"
+        }
+      ],
+      "fixture": {
+        "generator": "message-search-v1",
+        "seed": 0,
+        "sha256": "fdc894145a73053b09dc61228eeb3ff8a73f77dfb7363a7fcbbc6bb65b28baf7",
+        "distribution": {
+          "threads": 12,
+          "messagesPerThread": 100,
+          "matchingQueries": 2,
+          "matchesPerQuery": 20,
+          "resultLimit": 20,
+          "bodyRepetitions": 50
+        }
+      },
+      "native": {
+        "pin": "1849f6899e3d707ac8e25e7f81fa52b472b2a9a0",
+        "checkoutRevision": "1849f6899e3d707ac8e25e7f81fa52b472b2a9a0",
+        "dirty": false,
+        "excludedUntracked": [
+          ".apack-elmdb-built",
+          ".apack-elmdb-checkout",
+          ".apack-elmdb.lock"
+        ]
+      },
+      "runtime": {
+        "node": "23.11.1",
+        "v8": "12.9.202.28-node.14",
+        "osRelease": "6.17.8-orbstack-00308-g8f9c941121b1",
+        "electron": "37.2.4",
+        "chromium": "138.0.7204.157",
+        "appNode": "22.17.1",
+        "appV8": "13.8.258.26-electron.0",
+        "performancePolicy": "alternating-modes-v1"
+      },
+      "machine": {
+        "platform": "linux",
+        "arch": "arm64",
+        "cpus": 2,
+        "memoryBytes": 6442450944,
+        "identity": "b6e0fb169d11a62e78c71cc3b3399f3b28e868766d7599d3487973703a8676e7"
+      },
+      "mode": "disabled",
+      "cache": "fresh-process-warm-filesystem",
+      "warmups": 5,
+      "clock": "Local monotonic durations; cross-process epoch alignment is approximate"
+    },
+    "scenario": "populated-startup",
+    "samples": [
+      {
+        "scenario": "populated-startup",
+        "index": 0,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 7223.561058,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 1,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 6015.884402,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 2,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 5423.035513000001,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 3,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 5982.504311000001,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 4,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 5944.446244,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 5,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 5669.891208,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 6,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 6247.602159,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 7,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 5971.211775000001,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 8,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 6218.61042,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 9,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 5358.9686870000005,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 10,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 8130.148816999999,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 11,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 7393.735741,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 12,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 8210.063135999999,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 13,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 9233.125181,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 14,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 8349.034602,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 15,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 7697.7923599999995,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 16,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 5432.591605,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 17,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 7322.529869000001,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 18,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 7206.677036000001,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 19,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 6744.310541999999,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 20,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 5241.921184000001,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 21,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 7331.514707999999,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 22,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 5879.621258,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 23,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 6951.601582,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 24,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 7349.983241,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    ],
+    "summary": {
+      "measured": 20,
+      "passed": 20,
+      "unsuccessful": 0,
+      "medianMs": 7079.139309,
+      "minMs": 5241.921184000001,
+      "maxMs": 9233.125181
+    }
+  },
+  "candidate": {
+    "manifest": {
+      "format": 1,
+      "source": {
+        "revision": "657177c14a374bfda762edf793ca1e8cca634c45",
+        "dirty": false,
+        "excludedUntracked": [
+          ".apack-checkout",
+          ".apack-run.lock"
+        ],
+        "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "builds": [
+        {
+          "path": "packages/api/dist",
+          "sha256": "655d4c0d794e1f95a7f7fcb65d0426721db3b87ea594e2694e473e4b60bb0be4"
+        },
+        {
+          "path": "packages/main/dist",
+          "sha256": "d60646d24d78305eb15be9b1c33948774d8ce304d8702967b7f0f61af7988d8b"
+        },
+        {
+          "path": "packages/preload/dist",
+          "sha256": "a2bae9f4f8715defb9bf042116b4b15c86366fbbbcab13906eddf45e9d7e6b9f"
+        },
+        {
+          "path": "packages/renderer/dist",
+          "sha256": "ecc90674329710c68a0f4754d28732c2031e595fb8d206d0c2a01ab90a286fe3"
+        },
+        {
+          "path": "packages/default-setup/dist",
+          "sha256": "c1d8330da1c7a327a5dc5f2fb8566951ae997d88d0054f8d42c15cd9a89954cc"
+        },
+        {
+          "path": "vendor/elmdb/crates/elmdb-node/elmdb.linux-arm64-gnu.node",
+          "sha256": "9c0469d914d90d0ad7763e84378f0f7149855a85420ae2965dcfb4b4eb2f1474"
+        }
+      ],
+      "fixture": {
+        "generator": "message-search-v1",
+        "seed": 0,
+        "sha256": "fdc894145a73053b09dc61228eeb3ff8a73f77dfb7363a7fcbbc6bb65b28baf7",
+        "distribution": {
+          "threads": 12,
+          "messagesPerThread": 100,
+          "matchingQueries": 2,
+          "matchesPerQuery": 20,
+          "resultLimit": 20,
+          "bodyRepetitions": 50
+        }
+      },
+      "native": {
+        "pin": "1849f6899e3d707ac8e25e7f81fa52b472b2a9a0",
+        "checkoutRevision": "1849f6899e3d707ac8e25e7f81fa52b472b2a9a0",
+        "dirty": false,
+        "excludedUntracked": [
+          ".apack-elmdb-built",
+          ".apack-elmdb-checkout",
+          ".apack-elmdb.lock"
+        ]
+      },
+      "runtime": {
+        "node": "23.11.1",
+        "v8": "12.9.202.28-node.14",
+        "osRelease": "6.17.8-orbstack-00308-g8f9c941121b1",
+        "electron": "37.2.4",
+        "chromium": "138.0.7204.157",
+        "appNode": "22.17.1",
+        "appV8": "13.8.258.26-electron.0",
+        "performancePolicy": "alternating-modes-v1"
+      },
+      "machine": {
+        "platform": "linux",
+        "arch": "arm64",
+        "cpus": 2,
+        "memoryBytes": 6442450944,
+        "identity": "b6e0fb169d11a62e78c71cc3b3399f3b28e868766d7599d3487973703a8676e7"
+      },
+      "mode": "lightweight",
+      "cache": "fresh-process-warm-filesystem",
+      "warmups": 5,
+      "clock": "Local monotonic durations; cross-process epoch alignment is approximate"
+    },
+    "scenario": "populated-startup",
+    "samples": [
+      {
+        "scenario": "populated-startup",
+        "index": 0,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 4791.749096,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 1,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 4935.988501000001,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 2,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 5740.214059999999,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 3,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 7282.252915,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 4,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 5917.314728,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 5,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 6991.874019,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 6,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 6011.51856,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 7,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 6908.814482,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 8,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 4945.378136,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 9,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 8543.685986999999,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 10,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 8214.40656,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 11,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 6126.266852999999,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 12,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 8398.503673,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 13,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 6115.578310999999,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 14,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 8740.539984,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 15,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 9892.303530000001,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 16,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 11909.803674,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 17,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 6689.084656,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 18,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 5935.644218,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 19,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 7101.327910999999,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 20,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 5652.796142,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 21,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 5250.013059,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 22,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 5661.745146,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 23,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 7209.254685,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 24,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 9205.399081000001,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    ],
+    "summary": {
+      "measured": 20,
+      "passed": 20,
+      "unsuccessful": 0,
+      "medianMs": 6950.3442505,
+      "minMs": 4945.378136,
+      "maxMs": 11909.803674
+    }
+  },
+  "medianDifferenceMs": -128.79505849999987,
+  "medianChangePercent": -1.8193604176747509,
+  "budget": {
+    "medianPercent": 5,
+    "assessment": "within-budget"
+  },
+  "policy": "Five warmups per mode, then individually balanced ABBA actions; no tail-percentile claim"
+}

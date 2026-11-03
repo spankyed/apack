@@ -133,6 +133,9 @@ export function captureCompilationInputs(packRoot: string, view?: PackCompilerIn
   const canonicalRoot = fs.realpathSync.native(packRoot);
   const ownsToolPath = (file: string) => !!compiler
     && (isOwnedCompilerPath(file, compiler.directory) || isCompilerLocationPath(file, compiler.directory, canonicalRoot));
+  const executable = nativeEnvironment.elf?.executable;
+  const ownedExecutable = compiler && executable && isOwnedCompilerPath(executable, compiler.directory) ? executable : undefined;
+  const ownExecutableAlias = `/proc/${process.pid}/exe`;
   const native = createNativeInputReader(modules, packages, sourcePath, snapshot => readTree().include(snapshot), {
     environment: nativeEnvironment, admitNative: startup?.nativeModule,
   });
@@ -179,6 +182,8 @@ export function captureCompilationInputs(packRoot: string, view?: PackCompilerIn
     readDataPath(file) {
       assertOpen();
       file = path.resolve(file);
+      // libc header reads consume runtime-owned bytes, not a namespace that expires with this PID.
+      if (ownedExecutable && (file === '/proc/self/exe' || file === ownExecutableAlias)) return ownedExecutable;
       // The parent already owns and verifies these tool bytes. Do not redirect them to the checkout.
       if (ownsToolPath(file)) return file;
       file = sourcePath(file);

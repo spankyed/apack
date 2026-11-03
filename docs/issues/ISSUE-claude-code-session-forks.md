@@ -51,7 +51,7 @@ Everything keyed by the session id is shared by both processes:
   `chain.log` there overwrite each other.
 - **The job directory** (`~/.claude/jobs/1fb85317/`, `$CLAUDE_JOB_DIR`), including `tmp/`.
 - **The edit checkpoints** (`~/.claude/file-history/1fb85317-…/`), which `/rewind` restores from. A rewind in one
-  process can restore a file the other process edited. The other process's `docs/references/pr-274-review.md` is in
+  process can restore a file the other process edited. The other process's `docs/archive/references/pr-274-review.md` is in
   this one's file history.
 - **Prompt history.** Up-arrow recall in either terminal returns the other one's prompts too.
 - **The session's links.** PRs opened by either process are attributed to the one session.

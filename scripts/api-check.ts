@@ -48,7 +48,7 @@ const outcomes = await Promise.all(API_REPORT_PACKAGES.map(async (pkg) => {
 const failed = outcomes.filter(({ outcome }) => outcome.code !== 0);
 for (const { pkg, outcome } of failed) {
   const why = outcome.timedOut === true
-    ? timedOutBecause({ what: pkg, timeout: API_CHECK_TIMEOUT })
+    ? timedOutBecause({ what: pkg, timeout: API_CHECK_TIMEOUT, stalled: outcome.stalled })
     : `${pkg} failed (exit ${outcome.code})`;
   process.stderr.write(`\n${'─'.repeat(72)}\n${why}\n${'─'.repeat(72)}\n${outcome.output}\n`);
 }

@@ -4,9 +4,9 @@
 // threads, the open tab — hears nothing until the turn ends.
 import { describe, expect, it } from 'vitest'
 import { startApp, type TestApp, type TestView } from '@apackdev/testing/harness'
-import { takeSystemErrors } from '@apackdev/sdk/testing'
+import { takeSystemErrors, testCalls } from '@apackdev/sdk/testing'
 import { repository } from '#generated/repository.ts'
-import { write, type EARS } from '#generated/ears.ts'
+import { transact, write, type EARS } from '#generated/ears.ts'
 import type { ChatPage, ChatStart, MessageEntity, ThreadTabView } from '#generated/types.ts'
 import { chatService } from '#features/threads/be/services/chat.ts'
 import { artifactService } from '#features/threads/be/services/artifact.ts'
@@ -43,11 +43,14 @@ describe('a streamed reply', () => {
     for (const view of Object.values(views)) await view.next()
 
     // The writer the Claude Code chat action streams with: each flush is one write of the message's text, at most one
-    // per its 80 ms interval, so the message view's rate is the flush rate (measured: docs/archive/plans/live-queries.md, threads)
+    // per its 80 ms interval, so the message view's rate is the flush rate (measured: docs/archive/plans/live-queries.md, threads).
+    // That interval is past the watch scheduler's gap, so each flush is one re-run; flushing faster than a frame would be
+    // coalesced instead, which is why each flush here waits for its delivery as a window hears it, up to a frame late
     const writer = createStreamWriter({ chat: chatService } as never, reply)
     const FLUSHES = 16
     for (let flush = 0; flush < FLUSHES; flush++) {
       writer.pushImmediate('x')
+      await views.message.next()
       await app.settle()
     }
 
@@ -79,11 +82,16 @@ describe('the threads views', () => {
     const detail = app.watchView('threads', 'detail', { id })
     await chat.next(); await tab.next(); await detail.next()
 
+    testCalls().start()
+    thread('Unrelated')
+    transact(() => artifactService.create({ artifactType: 'todo', title: 'Tasks', content: {}, threadId: id }))
+    expect(await tab.next()).toMatchObject({ ok: true, value: { artifacts: [expect.objectContaining({ title: 'Tasks' })] } })
+    const { watches } = testCalls().stop()
+    expect(watches.length).toBeGreaterThan(0)
+    expect(watches.reduce((sum, watch) => sum + watch.skipped, 0), 'the unrelated thread does not queue these views').toBe(0)
+
     const message = say(id, 'Hello')
     expect(await chat.next()).toMatchObject({ ok: true, value: { messageIds: [message] } })
-
-    artifactService.create({ artifactType: 'todo', title: 'Tasks', content: {}, threadId: id })
-    expect(await tab.next()).toMatchObject({ ok: true, value: { artifacts: [expect.objectContaining({ title: 'Tasks' })] } })
 
     await app.send('threads', { type: 'DELETE_THREAD', threadId: id })
     for (const view of [chat, tab, detail]) await untilGone(view as TestView<unknown>)
@@ -124,5 +132,26 @@ describe('what a window asks the threads system', () => {
 
     await app.send('threads', { type: 'UPDATE_THREAD_FIELD', threadId: id, key: 'topic', value: 'Renamed by nobody' })
     expect(repository.threadQueries.byId(id)?.topic).toBe('Renamed by nobody')
+  })
+
+  it('answers a link closing a loop to the form alone, and makes no child whose links loop with its parent', async () => {
+    const app = await connected()
+    const [a, b] = [thread('A'), thread('B')]
+    repository.threadCommands.update(a, { linkedThreads: [{ relation: 'blocks', id: b }] })
+
+    const looped = await app.send('threads', {
+      type: 'UPDATE_THREAD_FIELD', threadId: b, key: 'linkedThreads', value: [{ relation: 'blocked by', id: a }, { relation: 'blocks', id: a }],
+    }, asked)
+    expect(await app.nextEmit('threads', 'THREAD_WRITE_FAILED', { answering: looped })).toMatchObject({ error: expect.stringContaining('already blocks') })
+    expect(takeSystemErrors(), 'the form shows it, so nothing reports it').toHaveLength(0)
+
+    // A child made the parent of its own parent: the thread goes with the refused link
+    const before = repository.threadQueries.listed().length
+    const child = await app.send('threads', {
+      type: 'CREATE_THREAD', topic: 'Child', instructions: '', parentThreadId: a, linkedThreads: [{ relation: 'parent_of', id: a }],
+    }, asked)
+    expect(await app.nextEmit('threads', 'THREAD_WRITE_FAILED', { answering: child })).toMatchObject({ error: expect.stringContaining('already the parent') })
+    expect(repository.threadQueries.listed()).toHaveLength(before)
+    takeSystemErrors()
   })
 })

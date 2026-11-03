@@ -6,6 +6,9 @@
 
 import type { AnyExtension } from '@tiptap/vue-3';
 
+// @public
+export const conversationMessageNodeName = "conversationMessage";
+
 // @public (undocumented)
 export function createExtensions(input: CreateExtensionsOptions): AnyExtension[];
 

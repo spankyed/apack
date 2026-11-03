@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root="$1"
+file=packages/apack-ears/tests/engine/model-based.spec.ts
+mkdir -p "$root"
+cp "$file" "$root/model-original.ts"
+trap 'cp "$root/model-original.ts" "$file"' EXIT
+python3 .apack/profile-model.py
+cp "$file" "$root/model-profiled.ts"
+git diff -- "$file" > "$root/model-instrumentation.diff"
+set +e
+npm test -w @apackdev/ears -- tests/engine/model-based.spec.ts --maxWorkers=1 > "$root/model.log" 2>&1
+status=$?
+printf '%s\n' "$status" > "$root/model.exit"
+exit "$status"

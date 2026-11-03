@@ -12,7 +12,7 @@ For repository implementation and validation rules, read [CLAUDE.md](../CLAUDE.m
 | [references/guides/](references/guides/) | Development environment guides | Agent access, practical workflows, resource ownership and operational safeguards |
 | [goals/](goals/) | Delivery scope and completion | Required outcomes, execution order, remaining checkpoints and acceptance |
 | [plans/](plans/) | Intended designs | Proposed contracts, decisions, dependencies and acceptance cases |
-| [references/evidence/](references/evidence/) | What happened | Dated investigations, experiments, source commits and validation results |
+| [references/evidence/](references/evidence/) | What happened | Evidence for active investigations; archive completed or superseded records with their attached data |
 | [issues/](issues/) | Problems awaiting resolution | Reproductions, observed impact and unresolved findings |
 | [archive/](archive/) | Historical work and decisions | Completed, superseded, absorbed, abandoned or rejected documents with explicit status |
 
@@ -32,6 +32,12 @@ this index is not a second backlog.
 For interactive Windows development and native debugging, use the
 [Windows development VM guide](references/guides/windows-development-vm.md). It covers access, source
 transfer, focused validation, costs, shutdown and recovery; it does not replace the goal's final gates.
+
+For this host's shared external OrbStack data location, safe relocation and verification, see the
+[Docker storage guide](references/guides/docker-storage.md).
+
+For recording contracts and the maintained diagnosis/comparison workflow, see
+[application performance recording](references/application-performance.md).
 
 ## Document lifecycle
 

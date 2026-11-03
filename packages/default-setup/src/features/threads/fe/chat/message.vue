@@ -20,7 +20,7 @@
       <div class="flex-1 h-px bg-neutral-700/50"></div>
     </div>
 
-    <div v-else class="group max-w-full min-w-0">
+    <div v-show="!isMarker" class="group max-w-full min-w-0">
       <!-- Aside: collapsed interactive message (click to expand) -->
       <div v-if="message.autoHide && message.asideText && !expanded"
            class="text-xs italic py-1 px-2 cursor-pointer hover:bg-neutral-800/50 rounded transition-colors"
@@ -35,8 +35,7 @@
       </div>
 
       <!-- Normal message rendering -->
-      <template v-else-if="!message.autoHide || !message.asideText || expanded">
-      <div class="relative">
+      <div v-show="!isSystem && (!message.autoHide || !message.asideText || expanded)" class="relative">
       <!-- Floating hover UI -->
       <div
         class="absolute transition-opacity duration-200 opacity-0 pointer-events-none -bottom-3 -right-4 z-10 group-hover:opacity-100 group-hover:pointer-events-auto"
@@ -129,9 +128,8 @@
 
       <!-- Bubble (visual styling + overflow constraint) -->
       <div
-        ref="bubbleRef"
         :class="[
-          'rounded-xl px-4 py-3 transition-all duration-200 overflow-hidden relative',
+          'rounded-xl transition-all duration-200 overflow-hidden relative',
           isUser
             ? 'bg-neutral-800/80 text-neutral-100 border border-neutral-700/50'
             : ' text-neutral-100 border border-neutral-700/60',
@@ -141,6 +139,7 @@
         ]"
         @click="isUser && isTruncated && !userExpanded && (userExpanded = true)"
       >
+        <div ref="bubbleContentRef" class="px-4 py-3">
         <!-- Attachments: files then images, horizontal scroll -->
         <div v-if="message.references?.files?.length || message.references?.images?.length"
           class="flex items-end gap-2 mb-2 overflow-x-auto scrollbar-thin">
@@ -163,7 +162,7 @@
 
         <!-- Message content -->
         <div class="leading-relaxed text-[15px]">
-          <TiptapEditor mode="viewer" variant="chat" :model-value="message.text" />
+          <slot />
         </div>
 
         <!-- Other block types (approval, choice, etc.) render BELOW text -->
@@ -185,6 +184,7 @@
           <span class="w-1.5 h-1.5 bg-neutral-500 rounded-full animate-pulse" style="animation-delay: 400ms"></span>
         </div>
 
+        </div>
         <!-- Truncation overlay for long user messages -->
         <div v-if="isUser && isTruncated && !userExpanded"
           class="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-neutral-800 via-neutral-800/90 to-transparent flex items-end justify-center pb-2 pointer-events-none">
@@ -194,7 +194,6 @@
         </div>
       </div>
       </div>
-      </template>
 
       <!-- Status indicator (queued / cancelled) -->
       <div v-if="statusIndicator" :class="['flex items-center justify-end gap-1.5 mt-1 px-1 text-xs', statusIndicator.textClass]">
@@ -214,13 +213,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onUpdated, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { MessageEntity } from '#generated/types.ts'
 import { Undo2, GitFork, Copy, FileCode2, ChevronsUpDown, ChevronDown, ChevronUp, X, RotateCcw } from 'lucide-vue-next'
 import InteractionContainer from './interactions/InteractionContainer.vue'
 import FileBlock from './FileBlock.vue'
 import ImageThumbnail from './ImageThumbnail.vue'
-import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ContextMenuPopup from '@apackdev/ui/design/ContextMenuPopup'
 import { useContextMenu } from '@apackdev/ui/composables/useContextMenu'
 
@@ -274,27 +272,21 @@ const canFork = computed(() => {
 })
 
 // Long user message truncation
-const bubbleRef = ref<HTMLElement | null>(null)
+const bubbleContentRef = ref<HTMLElement | null>(null)
 const userExpanded = ref(false)
 const isTruncated = ref(false)
 const MAX_USER_MSG_HEIGHT = 200
 
-function checkTruncation() {
-  if (bubbleRef.value && isUser.value) {
-    isTruncated.value = bubbleRef.value.scrollHeight > MAX_USER_MSG_HEIGHT
-  }
-}
-
-// Use ResizeObserver so truncation is detected even when TiptapEditor renders async (e.g. on refresh)
-watch(bubbleRef, (el, _prev, onCleanup) => {
-  if (!el || !isUser.value) return
-  const observer = new ResizeObserver(checkTruncation)
-  observer.observe(el)
-  checkTruncation()
+// Observe natural content rather than the bubble whose height truncation changes.
+// Measurement runs after layout, including rich-text transactions outside Vue's render cycle.
+watch([bubbleContentRef, isUser], ([content, user], _prev, onCleanup) => {
+  if (!content || !user) return
+  const observer = new ResizeObserver(([entry]) => {
+    isTruncated.value = Math.round(entry.borderBoxSize[0].blockSize) > MAX_USER_MSG_HEIGHT
+  })
+  observer.observe(content, { box: 'border-box' })
   onCleanup(() => observer.disconnect())
-}, { immediate: true })
-
-onUpdated(checkTruncation)
+}, { flush: 'post' })
 
 const revertMenuItems = [
   {

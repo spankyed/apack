@@ -1,0 +1,16 @@
+{
+  "code": 0,
+  "durationMs": 38075,
+  "timedOut": false,
+  "aborted": false,
+  "command": [
+    "/usr/local/bin/node",
+    "scripts/with-source.mjs",
+    "playwright",
+    "test",
+    "--config",
+    "tests/performance/playwright.config.ts",
+    "--output",
+    "/work/.apack/performance/anomalies-final-e602e9ad77/search-mode/search/playwright"
+  ]
+}

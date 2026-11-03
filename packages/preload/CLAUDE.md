@@ -72,6 +72,7 @@ the bridge just called — every assertion reads an empty map.
 | `browser.closeTab` / `selectTab` / `navigate` / `goBack` / `goForward` / `reload` / `stop` / `setBounds` / `show` / `hide` / `toggleDevTools` | `browser:*` | send | `browser` |
 | `browser.onTabCreated` / `onTabRemoved` / `onTabUpdated` / `onActiveTabChanged` / `onFocusAddressBar` | `browser:tab-created` / `-removed` / `-updated` / `active-tab-changed` / `focus-address-bar` | on | `BrowserTabManager` |
 | `protocolAction.onAction(cb)` | `protocol-action` | on | `ProtocolHandler` (`apack://<action>?…` deep links) |
+| `performance.start` / `stop` (host-only) | `performance:renderer:start` / `performance:renderer:stop` | invoke | `performance` (dev/test, calling window and lease only) |
 | `rendererReady()` | `renderer:ready` | send | `window-manager`: shows the main window and closes the splash (15 s fallback) |
 
 Every `on*` subscription returns an unsubscribe function. Main also broadcasts `api:starting` and `api:log` (dev stdout/stderr), which nothing here subscribes to.
@@ -89,7 +90,7 @@ The declaration marks `electronAPI` optional, because it is missing outside Elec
 
 **The surface and the declaration are one thing, and the compiler holds them to each other.** `_HostBridge` (`apack-sdk/src/fe/electron-api.ts`) is the whole bridge; `src/index.ts` asserts its exposed object `satisfies` it, so a member exposed and not declared is an excess property and one declared and not exposed is missing. **Each group asserts its own slice too** (`satisfies _HostBridge['shell']`, and so on), because the groups are consts: assigning one into the final literal is an ordinary assignment, so an excess property *inside* a group passes the outer check alone.
 
-`window.electronAPI` is declared as `PackFacingBridge`, which is `_HostBridge` minus the two members pack authors are not pointed at — `apiToken` and `apiStatus.openLogFile`. The `Omit`s are the only place that list is written; a parallel array of member names beside them would be the same declaration twice.
+`window.electronAPI` is declared as `PackFacingBridge`, which is `_HostBridge` minus the host-only members selected by its `Omit`s, including recording control. The `Omit`s are the only place that list is written; a parallel array of member names beside them would be the same declaration twice.
 
 **Why the whole-bridge type is `_`-prefixed and `@internal`.** Publishing it under a pack-facing name would point pack authors at `apiToken` through a different door than the one the pack-facing view closes. `check:specifiers` refuses pack code importing an `_`-prefixed export — *"an export named `_x` is @internal, the app's alone"* — so this is a boundary something enforces, where the old arrangement was an omission nothing did. Host code that needs those members names the type: the renderer's client casts to `_HostBridge` for `apiToken`.
 

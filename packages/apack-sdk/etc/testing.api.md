@@ -7,6 +7,7 @@
 import type { AnyActorRef } from 'xstate';
 import type { AnyExtension } from '@tiptap/vue-3';
 import type { AnyStateMachine } from 'xstate';
+import { CallCounting } from '@apackdev/ears';
 import type { Component } from 'vue';
 import type { DeepPartial } from 'ai';
 import { EARS as EARS_2 } from '@apackdev/ears';
@@ -192,6 +193,9 @@ export function stopFeTestRuntime(): void;
 
 // @public
 export function takeSystemErrors(): SystemErrorEvent[];
+
+// @public
+export function testCalls(): CallCounting;
 
 // @public
 export interface TestPacks {

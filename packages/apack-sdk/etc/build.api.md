@@ -436,6 +436,7 @@ export const FeatureEntrySchema: z.ZodObject<{
             dims: number;
             chunk?: "whole" | "paragraph" | "heading" | undefined;
         } | undefined;
+        substrings?: readonly string[] | undefined;
     }>, Record<string, {
         shape?: string | undefined;
         shortCode?: string | undefined;
@@ -450,6 +451,7 @@ export const FeatureEntrySchema: z.ZodObject<{
             dims: number;
             chunk?: "whole" | "paragraph" | "heading" | undefined;
         } | undefined;
+        substrings?: readonly string[] | undefined;
     }>, z.core.$ZodTypeInternals<Record<string, {
         shape?: string | undefined;
         shortCode?: string | undefined;
@@ -464,6 +466,7 @@ export const FeatureEntrySchema: z.ZodObject<{
             dims: number;
             chunk?: "whole" | "paragraph" | "heading" | undefined;
         } | undefined;
+        substrings?: readonly string[] | undefined;
     }>, Record<string, {
         shape?: string | undefined;
         shortCode?: string | undefined;
@@ -478,6 +481,7 @@ export const FeatureEntrySchema: z.ZodObject<{
             dims: number;
             chunk?: "whole" | "paragraph" | "heading" | undefined;
         } | undefined;
+        substrings?: readonly string[] | undefined;
     }>>>>;
     designation: z.ZodOptional<z.ZodString>;
     settings: z.ZodOptional<z.ZodPreprocess<z.ZodObject<{
@@ -617,6 +621,7 @@ export const ManifestSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }>, Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -631,6 +636,7 @@ export const ManifestSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }>, z.core.$ZodTypeInternals<Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -645,6 +651,7 @@ export const ManifestSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }>, Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -659,19 +666,24 @@ export const ManifestSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }>>>>;
         relations: z.ZodOptional<z.ZodType<Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
+            weighted?: boolean | undefined;
         }>, Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
+            weighted?: boolean | undefined;
         }>, z.core.$ZodTypeInternals<Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
+            weighted?: boolean | undefined;
         }>, Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
+            weighted?: boolean | undefined;
         }>>>>;
         roles: z.ZodOptional<z.ZodArray<z.ZodString>>;
     }, z.core.$strict>>;
@@ -691,6 +703,7 @@ export const ManifestSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -730,6 +743,7 @@ export const ManifestSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
@@ -762,6 +776,7 @@ export const ManifestSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -801,6 +816,7 @@ export const ManifestSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
@@ -1289,6 +1305,7 @@ export function mergeRegistries(ownId: string, manifest: PackManifest, depManife
 depProvenance?: Map<string, PackProvenance>): {
     entities: Map<string, RegistryEntry>;
     relKinds: Map<string, RegistryEntry>;
+    weightedKinds: Set<string>;
     roles: Map<string, RegistryEntry>;
 };
 
@@ -1406,6 +1423,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }>, Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -1420,6 +1438,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }>, z.core.$ZodTypeInternals<Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -1434,6 +1453,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }>, Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -1448,19 +1468,24 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }>>>>;
         relations: z.ZodOptional<z.ZodType<Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
+            weighted?: boolean | undefined;
         }>, Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
+            weighted?: boolean | undefined;
         }>, z.core.$ZodTypeInternals<Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
+            weighted?: boolean | undefined;
         }>, Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
+            weighted?: boolean | undefined;
         }>>>>;
         roles: z.ZodOptional<z.ZodArray<z.ZodString>>;
     }, z.core.$strict>>;
@@ -1764,7 +1789,6 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
     features: z.ZodOptional<z.ZodType<Record<string, {
         description: string;
         references?: ReferenceDeclarations | undefined;
-        surface?: SurfaceDeclaration | undefined;
         services?: Record<string, string> | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -1780,6 +1804,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -1790,11 +1815,11 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
             form?: string | undefined;
             access?: "owner" | "shared" | undefined;
         } | undefined;
+        surface?: SurfaceDeclaration | undefined;
         repositories?: Record<string, string> | undefined;
     }>, Record<string, {
         description: string;
         references?: unknown;
-        surface?: unknown;
         services?: Record<string, string> | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -1810,14 +1835,15 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
+        surface?: unknown;
         repositories?: Record<string, string> | undefined;
     }>, z.core.$ZodTypeInternals<Record<string, {
         description: string;
         references?: ReferenceDeclarations | undefined;
-        surface?: SurfaceDeclaration | undefined;
         services?: Record<string, string> | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -1833,6 +1859,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -1843,11 +1870,11 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
             form?: string | undefined;
             access?: "owner" | "shared" | undefined;
         } | undefined;
+        surface?: SurfaceDeclaration | undefined;
         repositories?: Record<string, string> | undefined;
     }>, Record<string, {
         description: string;
         references?: unknown;
-        surface?: unknown;
         services?: Record<string, string> | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -1863,9 +1890,11 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
+        surface?: unknown;
         repositories?: Record<string, string> | undefined;
     }>>>>;
 }, z.core.$strict>;
@@ -1981,6 +2010,7 @@ export interface PackEntityDeclaration {
     readonly search?: PackSearchDeclaration;
     readonly shape?: string;
     readonly shortCode?: string;
+    readonly substrings?: readonly string[];
 }
 
 // @internal
@@ -1995,6 +2025,7 @@ export interface _PackEntityDeclaration {
     // (undocumented)
     shape: string | null;
     shortCode?: string;
+    substrings?: readonly string[];
 }
 
 // @internal
@@ -2050,7 +2081,8 @@ export type PackProvenance = Partial<Record<ProvenanceKind, Record<string, strin
 // @public
 export interface PackRelationDeclaration {
     readonly acyclic?: boolean;
-    readonly unique?: boolean;
+    readonly key?: readonly string[];
+    readonly weighted?: boolean;
 }
 
 // @internal
@@ -2166,6 +2198,7 @@ export const promptsCompiler: SpecialtyCompiler<DslCompiled>;
 export const PROVENANCE_KINDS: {
     readonly entities: (m: ProvenanceManifest) => string[];
     readonly relKinds: (m: ProvenanceManifest) => string[];
+    readonly weightedKinds: (m: ProvenanceManifest) => string[];
     readonly roles: (m: ProvenanceManifest) => string[];
     readonly referenceTypes: (m: ProvenanceManifest) => string[];
     readonly referenceCategories: (m: ProvenanceManifest) => string[];

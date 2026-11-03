@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createRequire } from 'node:module';
 import type * as TS from 'typescript';
-import { RESERVED_ATTRIBUTES } from '@apackdev/ears';
+import { RESERVED_ATTRIBUTES, type FieldRule, type FieldType } from '@apackdev/ears';
 import type { SurfaceInboxAudiences } from '../fe/surface.ts';
 
 /** What a module exports under a name, as the TypeScript compiler resolves it */
@@ -20,9 +20,11 @@ export interface ModuleExports {
    * What an entity shape (the type `name` that `file` declares) holds a created row to: the fields it requires — its
    * non-optional properties but the engine's own — which the engine refuses a created row without, as `create`'s
    * type does; whether it declares `shortCode`, which is the engine's to write and `#generated/ears` to type; and
-   * every field it declares, which an index may name
+   * every field it declares, which an index may name, with the database's type of each but the engine's own
+   * (`types`): its TypeScript type mapped to one of elmdb's, and `any` where it maps to none, so a field is never held
+   * more narrowly than its shape says
    */
-  rowRulesOf(file: string, name: string): { required: string[]; declaresShortCode: boolean; fields: string[] };
+  rowRulesOf(file: string, name: string): { required: string[]; declaresShortCode: boolean; fields: string[]; types: Record<string, FieldRule> };
   /** The export `name` of `file` (an absolute path the reader was created with); undefined when it has none */
   exportOf(file: string, name: string): ModuleExport | undefined;
   /**
@@ -180,6 +182,64 @@ export function createModuleExports(packRoot: string, files: string[], sources: 
     return declared;
   }
 
+  const ANY: FieldType = { type: 'any' };
+  // Without strict null checks `null` is assignable to every type, so a shape's `| null` is erased and its fields say
+  // nothing about `null`: each is held as nullable rather than refusing a write its own types allow
+  const nullsChecked = program.getCompilerOptions().strictNullChecks ?? program.getCompilerOptions().strict ?? false;
+
+  /**
+   * The database's type of a value of `type`, and whether it may be `null`: `string`, `number` and `boolean` as
+   * themselves (a string's template or literal, a number's literal and `true` or `false` widened to them), a union of
+   * string literals as `enum`, an id tagged with its entity types (`EARS.EntityId<'T'>`) as `ref` to them, an array of
+   * one of these as `list`, and anything else — an object, a record, `unknown`, `Date`, a mixed union, a type that
+   * didn't resolve — as `any`. `undefined` is the optional property's, and `null` is `nullable`, as every field is in a
+   * pack that doesn't check nulls
+   */
+  function fieldTypeOf(type: TS.Type): { field: FieldType; nullable: boolean } {
+    const members = type.isUnion() ? type.types : [type];
+    const nullable = !nullsChecked || members.some((member) => member.flags & ts.TypeFlags.Null);
+    const values = members.filter((member) => !(member.flags & (ts.TypeFlags.Null | ts.TypeFlags.Undefined | ts.TypeFlags.Void)));
+    return { field: valuesType(values), nullable };
+  }
+
+  function valuesType(members: readonly TS.Type[]): FieldType {
+    if (members.length === 0) return ANY;
+    if (members.every((member) => member.flags & ts.TypeFlags.BooleanLiteral)) return { type: 'boolean' };
+    if (members.length > 1 && members.every((member) => member.isStringLiteral())) {
+      return { type: 'enum', values: [...new Set(members.map((member) => (member as TS.StringLiteralType).value))].sort() };
+    }
+    const refs = members.map(taggedIdTypes);
+    if (refs.every((to) => to !== undefined)) return { type: 'ref', to: [...new Set(refs.flat())].sort() };
+    if (members.length > 1) return ANY;
+    const [member] = members as [TS.Type];
+    if (member.flags & (ts.TypeFlags.String | ts.TypeFlags.TemplateLiteral)) return { type: 'string' };
+    if (member.isStringLiteral()) return { type: 'enum', values: [member.value] };
+    if (member.flags & (ts.TypeFlags.Number | ts.TypeFlags.NumberLiteral)) return { type: 'number' };
+    if (member.flags & (ts.TypeFlags.Boolean | ts.TypeFlags.BooleanLiteral)) return { type: 'boolean' };
+    if (checker.isArrayType(member)) {
+      const [element] = checker.getTypeArguments(member as TS.TypeReference);
+      if (!element) return { type: 'list', of: ANY };
+      const { field, nullable } = fieldTypeOf(element);
+      // A list's element is a value the list holds: one that may be null or absent is held as anything
+      const optionalElement = element.isUnion() && element.types.some((t) => t.flags & ts.TypeFlags.Undefined);
+      return { type: 'list', of: nullable || optionalElement ? ANY : field };
+    }
+    return ANY;
+  }
+
+  /**
+   * The entity types an id is tagged with (`EARS.EntityId<'T'>`: a string's template beside an optional `__entity`
+   * of those names), or undefined for any other type, an untagged id included
+   */
+  function taggedIdTypes(type: TS.Type): string[] | undefined {
+    if (!type.isIntersection() || !type.types.some((part) => part.flags & ts.TypeFlags.TemplateLiteral)) return undefined;
+    const tag = propertyType(type, '__entity');
+    if (!tag) return undefined;
+    const names = (tag.isUnion() ? tag.types : [tag]).filter((t) => !(t.flags & ts.TypeFlags.Undefined));
+    if (names.length === 0 || !names.every((t) => t.isStringLiteral())) return undefined;
+    return names.map((t) => (t as TS.StringLiteralType).value);
+  }
+
   /** The type of property `name` of `type`, or undefined when it has none */
   function propertyType(type: TS.Type, name: string): TS.Type | undefined {
     const property = type.getProperty(name);
@@ -232,11 +292,23 @@ export function createModuleExports(packRoot: string, files: string[], sources: 
       const shape = declaredTypeOf(file, name);
       if (!shape) throw new Error(`${path.basename(file)} declares no type "${name}"`);
       const properties = checker.getPropertiesOfType(shape);
-      const required = properties
-        .filter((property) => !(property.flags & ts.SymbolFlags.Optional) && !(RESERVED_ATTRIBUTES as readonly string[]).includes(property.name))
+      const own = properties.filter((property) => !(RESERVED_ATTRIBUTES as readonly string[]).includes(property.name));
+      const required = own
+        .filter((property) => !(property.flags & ts.SymbolFlags.Optional))
         .map((property) => property.name)
         .sort();
-      return { required, declaresShortCode: shape.getProperty('shortCode') !== undefined, fields: properties.map((property) => property.name) };
+      const types: Record<string, FieldRule> = {};
+      for (const property of [...own].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+        const declaration = property.valueDeclaration ?? property.declarations?.[0];
+        const type = declaration ? checker.getTypeOfSymbolAtLocation(property, declaration) : checker.getTypeOfSymbol(property);
+        const { field, nullable } = fieldTypeOf(type);
+        types[property.name] = {
+          ...field,
+          ...(property.flags & ts.SymbolFlags.Optional ? { optional: true } : {}),
+          ...(nullable ? { nullable: true } : {}),
+        };
+      }
+      return { required, declaresShortCode: shape.getProperty('shortCode') !== undefined, fields: properties.map((property) => property.name), types };
     },
     exportOf(file, name) {
       const exported = exportedSymbol(file, name);

@@ -14,6 +14,8 @@ export interface PackEntityDeclaration {
   readonly search?: PackSearchDeclaration;
   /** Its vector index: the fields whose text is embedded, and the model `services.inference` embeds it with */
   readonly embed?: PackEmbedDeclaration;
+  /** Its trigram index: the fields `containing` and `matching` read */
+  readonly substrings?: readonly string[];
 }
 
 /** A vector index as a manifest declares it: the engine's `EmbedDeclaration`, its model one `services.inference` runs */
@@ -38,8 +40,14 @@ export interface PackSearchDeclaration extends SearchDeclaration {
 export interface PackRelationDeclaration {
   /** A link that would close a cycle through this kind is refused (`CYCLE`): a tree, a folder hierarchy */
   readonly acyclic?: boolean;
-  /** At most one edge of this kind from an entity to another; linking the pair again replaces the edge's info */
-  readonly unique?: boolean;
+  /**
+   * The info fields that, with its two ends, identify an edge, a field the info doesn't hold being null. Without one,
+   * two entities are joined by one edge of the kind at most; with one, by one for each value of its fields, whose
+   * weights a `rank` adds. A link to an identity an edge holds updates that edge's info and weight
+   */
+  readonly key?: readonly string[];
+  /** Each edge carries a weight, 1 unless a link gives another, which `rank` and `communities` read */
+  readonly weighted?: boolean;
 }
 
 /** Declarative entity ownership/shapes and the pack-level relation wire vocabulary. */
@@ -65,6 +73,8 @@ export interface _PackEntityDeclaration {
   search?: SearchDeclaration;
   /** Its vector index, when its entry declares one */
   embed?: EmbedDeclaration;
+  /** The fields its trigram index reads, when its entry declares one */
+  substrings?: readonly string[];
 }
 
 /**
@@ -88,7 +98,7 @@ export function _packEntities(declaration: PackDataDeclarations): _PackEntityDec
     for (const [name, entry] of Object.entries(block?.entities ?? {})) {
       const previous = result.get(name);
       if (previous) throw new Error(`Entity "${name}" is declared by both "${previous.owner}" and "${owner}"`);
-      const { shape, shortCode, indexes, search, embed } = entry ?? {};
+      const { shape, shortCode, indexes, search, embed, substrings } = entry ?? {};
       if (shortCode !== undefined) {
         if (!_SHORT_CODE_PATTERN.test(shortCode)) throw new Error(`The short code prefix of "${name}" is "${shortCode}": a prefix is three uppercase letters`);
         const taken = prefixOwners.get(shortCode);
@@ -98,6 +108,7 @@ export function _packEntities(declaration: PackDataDeclarations): _PackEntityDec
       result.set(name, {
         name, owner, shape: shape ?? null,
         ...(shortCode !== undefined && { shortCode }), ...(indexes?.length && { indexes }), ...(search && { search }), ...(embed && { embed }),
+        ...(substrings?.length && { substrings }),
       });
     }
   }
@@ -161,11 +172,19 @@ export function _packRelationTypes(declaration: PackDataDeclarations): Record<st
   return wireConstants(Object.keys(declaration.data?.relations ?? {}), 'Relation', 'relations');
 }
 
+/** @internal The pack's relation kinds declared `weighted`, as EARS constants, a subset of `_packRelationTypes` */
+export function _packWeightedKinds(declaration: PackDataDeclarations): Record<string, string> {
+  const relations = declaration.data?.relations ?? {};
+  return wireConstants(Object.keys(relations).filter((wire) => relations[wire]?.weighted), 'Relation', 'relations');
+}
+
 /** @internal What each of the pack's relation kinds that declares a rule holds its edges to, by wire name */
 export function _packRelationRules(declaration: PackDataDeclarations): Record<string, RelationRules> {
   const rules: Record<string, RelationRules> = {};
-  for (const [wire, { acyclic, unique }] of Object.entries(declaration.data?.relations ?? {})) {
-    if (acyclic || unique) rules[wire] = { ...(acyclic && { acyclic }), ...(unique && { unique }) };
+  for (const [wire, { acyclic, key, weighted }] of Object.entries(declaration.data?.relations ?? {})) {
+    if (acyclic || key?.length || weighted) {
+      rules[wire] = { ...(acyclic && { acyclic }), ...(key?.length && { key }), ...(weighted && { weighted }) };
+    }
   }
   return rules;
 }

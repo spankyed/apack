@@ -1,0 +1,37 @@
+import assert from 'node:assert/strict';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createEarsEngine } from '../packages/apack-ears/src/index.ts';
+import { openDatabase } from '../packages/apack-ears/src/lmdb/index.ts';
+import { INDEXED, KINDS, ROLES, TYPES } from '../packages/apack-ears/tests/_harness/model.ts';
+const root=mkdtempSync(join(tmpdir(),'ears-open-probe-'));
+const schema={types:Object.fromEntries(TYPES.map(type=>[type,{required:[],indexes:[INDEXED]}])),relations:Object.fromEntries(KINDS.map(kind=>[kind,{}])),roles:[...ROLES]};
+const output=process.argv[2]!;
+const records: unknown[]=[];
+const now=()=>performance.now();
+try {
+  const start=now();
+  const seed=openDatabase({path:join(root,'source'),schema,syncs:false});
+  const expected=seed.schema;
+  try{seed.backup(join(root,'seed'));}finally{seed.close();}
+  const setupMs=now()-start;
+  const seedFile=join(root,'seed','data.mdb');
+  const hash=()=>createHash('sha256').update(readFileSync(seedFile)).digest('hex');
+  const before=hash();
+  for(const variant of Array.from({length:4},()=>['fresh','seeded','seeded','fresh']).flat()){
+    const t=now();const path=mkdtempSync(join(root,'case-'));const directoryMs=now()-t;
+    const c=now();if(variant==='seeded')copyFileSync(seedFile,join(path,'data.mdb'));const copyMs=now()-c;
+    const o=now();const db=openDatabase({path,syncs:false,...(variant==='fresh'?{schema}:{})});const openMs=now()-o;
+    assert.deepEqual(db.schema,expected);
+    assert.equal(createEarsEngine({database:db}).query.withTrashed.all().exists(),false);
+    assert.notEqual(statSync(join(path,'data.mdb')).ino,statSync(seedFile).ino);
+    const end=now();db.close();const closeMs=now()-end;
+    const remove=now();rmSync(path,{recursive:true,force:true});const removeMs=now()-remove;
+    records.push({variant,directoryMs,copyMs,openMs,closeMs,removeMs,totalMs:now()-t});
+  }
+  assert.equal(hash(),before,'closed seed remains unchanged');
+  writeFileSync(output,JSON.stringify({setupMs,seedSha256:before,records},null,2));
+  console.log(JSON.stringify({setupMs,records}));
+}finally{rmSync(root,{recursive:true,force:true});}

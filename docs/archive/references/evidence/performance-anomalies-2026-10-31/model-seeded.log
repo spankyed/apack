@@ -1,0 +1,16 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/engine/model-based.spec.ts --maxWorkers=1
+
+
+ RUN  v3.2.7 /work/packages/apack-ears
+
+ ✓ tests/engine/model-based.spec.ts (2 tests) 29364ms
+   ✓ refuses, holds and answers what the model does  10773ms
+   ✓ keeps every watch at what its read answers afresh, after every write, whatever wrote  16271ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  02:45:50
+   Duration  30.23s (transform 265ms, setup 22ms, collect 390ms, tests 29.36s, environment 0ms, prepare 105ms)
+

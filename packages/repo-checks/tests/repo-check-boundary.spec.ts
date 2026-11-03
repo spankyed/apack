@@ -20,6 +20,7 @@ import { repoFiles } from './_support/repo-files.ts';
 
 /** Where the repo's own scripts live — not a package's `scripts/`, which is that package's business */
 const REPO_SCRIPTS = path.join(REPO_ROOT, 'scripts') + path.sep;
+const PERFORMANCE_HARNESS = path.join(REPO_ROOT, 'tests/performance') + path.sep;
 
 /**
  * **Importing** a module under the repo's `scripts/`.
@@ -33,11 +34,15 @@ const REPO_SCRIPTS = path.join(REPO_ROOT, 'scripts') + path.sep;
  * thing that can create that, and it is now the only thing that can, since `check:specifiers` refuses a
  * package reaching into `scripts/` at all.
  */
-const importsARepoScript = (file: string): boolean => {
+const importsRepoTooling = (file: string): boolean => {
   const abs = path.join(REPO_ROOT, file);
   // From the tree, not a pattern over the text: a side-effect `import './x'` has no `from` for a regex to
   // find, and a specifier written inside a fixture string is not an import at all
-  return relativeSpecifiers(abs).some((specifier) => path.resolve(path.dirname(abs), specifier).startsWith(REPO_SCRIPTS));
+  return relativeSpecifiers(abs).some((specifier) => {
+    const target = path.resolve(path.dirname(abs), specifier);
+    // Manual scenarios use their own harness; unit checks of that harness belong to this workspace.
+    return target.startsWith(REPO_SCRIPTS) || target.startsWith(PERFORMANCE_HARNESS) && !abs.startsWith(PERFORMANCE_HARNESS);
+  });
 };
 
 /**
@@ -52,8 +57,8 @@ const importsARepoScript = (file: string): boolean => {
  * script path as an *expected value* — `package-freshness` asserting `BUILD_UNITS` covers the build
  * scripts — which cannot affect reachability, and would need an allowlist.
  */
-const namesARepoScript = (file: string): boolean =>
-  importsARepoScript(file) || /REPO_ROOT,\s*'scripts'/.test(fs.readFileSync(path.join(REPO_ROOT, file), 'utf-8'));
+const namesRepoTooling = (file: string): boolean =>
+  importsRepoTooling(file) || /REPO_ROOT,\s*'scripts'/.test(fs.readFileSync(path.join(REPO_ROOT, file), 'utf-8'));
 
 const IS_SPEC = /\.(spec|test)\.[cm]?[jt]sx?$/;
 const OWN_PACKAGE = 'packages/repo-checks/';
@@ -97,9 +102,9 @@ const LAYOUT_CHECKS: Record<string, string> = {
 const specs = (): string[] =>
   repoFiles().filter((file) => IS_SPEC.test(file));
 
-describe('a spec about the repo\'s tooling lives in @app/repo-checks', () => {
+describe('a package spec about the repo\'s tooling lives in @app/repo-checks', () => {
   it('has none anywhere else', () => {
-    const elsewhere = specs().filter((file) => !file.startsWith(OWN_PACKAGE)).filter(importsARepoScript);
+    const elsewhere = specs().filter((file) => !file.startsWith(OWN_PACKAGE)).filter(importsRepoTooling);
     expect(elsewhere, 'move these to packages/repo-checks/tests: npm run spec routes a change under scripts/ '
       + 'to this package alone, so a spec importing one from anywhere else will not run when what it covers '
       + 'changes').toEqual([]);
@@ -110,7 +115,7 @@ describe('a spec about the repo\'s tooling lives in @app/repo-checks', () => {
   it('holds nothing else', () => {
     const here = specs().filter((file) => file.startsWith(OWN_PACKAGE)
       && !(file.slice(OWN_PACKAGE.length) in LAYOUT_CHECKS));
-    expect(here.filter((file) => !namesARepoScript(file)),
+    expect(here.filter((file) => !namesRepoTooling(file)),
       'this package is for specs whose subject is a repo script or the repo\'s own layout; these are '
       + 'neither — move them, or add them to LAYOUT_CHECKS with what repo-wide property they check').toEqual([]);
   });
@@ -119,7 +124,7 @@ describe('a spec about the repo\'s tooling lives in @app/repo-checks', () => {
   it('lists no layout check that has stopped applying', () => {
     const stale = Object.keys(LAYOUT_CHECKS).filter((rel) => {
       const file = `${OWN_PACKAGE}${rel}`;
-      return !fs.existsSync(path.join(REPO_ROOT, file)) || namesARepoScript(file);
+      return !fs.existsSync(path.join(REPO_ROOT, file)) || namesRepoTooling(file);
     });
     expect(stale, 'these are gone, or now name a repo script and need no exemption; drop them from '
       + 'LAYOUT_CHECKS').toEqual([]);

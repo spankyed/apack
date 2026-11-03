@@ -1,0 +1,13 @@
+
+Running 2 tests using 1 worker
+
+[e2e.launch] {"phase":"requested","elapsedMs":0.03116699999998218,"at":1793506917796}
+[e2e.launch] {"phase":"process-attached","elapsedMs":16213.326830999998,"at":1793506934010,"pid":860}
+[e2e.launch] {"phase":"application-state-present","elapsedMs":20506.618995,"at":1793506938303,"pid":860}
+[e2e.launch] {"phase":"viewport-ready","elapsedMs":20511.345144,"at":1793506938308,"pid":860}
+[e2e.launch] {"phase":"connected","elapsedMs":28669.681662,"at":1793506946466,"pid":860}
+  ✓  1 tests/e2e/smoke/smoke.spec.ts:5:1 › app launches without crashing (28.8s)
+  ✓  2 tests/e2e/smoke/smoke.spec.ts:19:1 › app reaches connected state (24ms)
+[e2e] quit sequence finished; ending Electron without its profile writes
+
+  2 passed (33.1s)

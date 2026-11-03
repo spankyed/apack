@@ -156,6 +156,9 @@ goal requires them; cite actual results, not an assumption that all CI runs or n
 
 **CI may fail a check, never a clock.** Every kill deadline is a declared class rather than a multiple of a
 measurement (`scripts/lib/step-timeouts.ts`), and what a step costs is a reading of the machine it ran on.
+A deadline is a ceiling for a tree that spins; what ends a stuck one is `boundedSpawn`'s watchdog, which kills a
+process tree that has gone `IDLE_MS` without CPU or output, so a step slowed by a busy machine is never killed for it.
+`APACK_WATCHDOG=off` turns it off for a run and everything the run starts.
 **Do not gate any of this on `process.env.CI`**: a CI-gated refusal never fires. The condition is the
 machine, which is a fact a run can check.
 
@@ -173,9 +176,11 @@ variables. Dispatch CI only for what a Linux container cannot cover: the macOS-o
 framework copy, signed Mach-O) with `gh workflow run ci.yml --ref <branch> -f compiler_macos=true`, and clean
 Windows verification with `compiler_windows=true`. Stop local testing immediately if unrelated apps stop
 launching; preserve evidence without changing macOS security settings. Cause remains unproven in the
-[launch incident](docs/references/evidence/build-input-snapshot-proof.md#macos-launch-policy-investigation-2026-10-17). The integration half runs directly: its builds reuse the shared compiler store, so
+[launch incident](docs/archive/references/evidence/build-input-snapshot-proof.md#macos-launch-policy-investigation-2026-10-17). The integration half runs directly: its builds reuse the shared compiler store, so
 macOS assesses each runtime once. Live watcher cases belong in `*.native.spec.ts`; pure unit checks stay in the
 fast half.
+For this host's shared external Docker storage and relocation checks, see the
+[Docker storage guide](docs/references/guides/docker-storage.md).
 `test:linux` limits each run's entire container to 6 GiB RAM, no additional swap and two CPUs,
 including installation, builds and subprocesses. Coordinate one expensive run across worktrees;
 separate containers each receive their own allowance. These limits do not cover Docker image builds
@@ -201,7 +206,7 @@ required final gate once fixes converge, and retain any unresolved acceptance ex
 
 With Vitest projects, verify the effective deadline: project test/hook settings can override CLI
 flags. Keep diagnostic overrides scoped to the selected case and preserve their exact source. See the
-[async-loader budget evidence](docs/references/evidence/build-input-snapshot-proof.md#async-loader-namespace-observation-checkpoint-2026-10-18).
+[async-loader budget evidence](docs/archive/references/evidence/build-input-snapshot-proof.md#async-loader-namespace-observation-checkpoint-2026-10-18).
 
 Keep direct pool output live and integration fail-fast. Collect additional failures only in a deliberate
 diagnostic run; see [the early-failure checkpoint](docs/archive/references/evidence/settings-and-pack-contracts.md#bounded-compiler-cost-and-early-failure-checkpoint-2026-10-17).
@@ -229,7 +234,7 @@ Things that waste the most time, in order:
 - **Re-running the full chain after a fix to a thing the chain already covered.** The suite that caught it
   proves the fix.
 - **Reading the source twice to explain a bug the running app would show you.** One instrumented E2E run is
-  decisive; the run you already did wrote the app's output to `tests/results/app-<workerIndex>.log`
+  decisive; the run you already did wrote the app's output to `.apack/tests/results/app-<workerIndex>.log`
   (`tests/e2e/CLAUDE.md`).
 - **Reading a chain step's `cached` as "the thing it guarantees is true".** It means only that its declared
   inputs have not moved ([cache layers](docs/references/cache-layers.md)).
@@ -289,7 +294,7 @@ reordered; a check that genuinely needs the app declares it, and the fix is neve
 (`build:runtime`) writes the app and does not count as reading it.
 
 Split a check at that boundary: `test:external-pack` is `:contract` and `:fork` (no app) and `:app`;
-`test:packaged-authoring` is `:author` and `:app`, handing over a work dir through `tests/authoring-handoff`,
+`test:packaged-authoring` is `:author` and `:app`, handing over a work dir through `.apack/tests/authoring-handoff`,
 which stays **outside** the checkout so the pack cannot resolve `@apackdev/*` from the workspace
 `node_modules`. History: [pipeline-lessons.md](docs/archive/references/pipeline-lessons.md#what-a-test-may-read).
 
@@ -375,6 +380,8 @@ npm run measure -- "<cmd>"       # Time a command on a quiet machine; prints a c
                                  #   --runs N  --against "<B>"  --trials N  --busy N  --idle PERCENT  --force
 npm run measure:loop -- "<cmd>"  # How long each process went without turning its event loop, against birpc's 60s
 npm run check:idle               # Is this machine quiet enough to measure on (exit 1 below IDLE_FLOOR)
+npm run janitor                  # Hold elmdb's Rust build caches to a budget (-- --dry to preview); janitor:install
+                                 # runs it hourly under launchd, logging to ~/Library/Logs/apack-janitor.log
 
 npm run check:specifiers         # Every import rule over the repo; paths for per-file rules; --rule, --list
 npm run specifiers:fix           # Rewrite the specifiers the rules can repair; --dry prints
@@ -524,7 +531,7 @@ Custom entity-attribute-relation graph database (`@apackdev/ears`) on [elmdb](ht
 
 - `createEarsEngine()` — an engine instance (the app creates one at boot; tests and tooling create their own)
 - `query(type)`, `query.ids(ids)`, `query.all()` — queries (synchronous, do NOT await); `query` refuses a name that isn't a registered type
-- `create(type, row)`, `upsert(type, { id, ...row })`, `write(id)` — writes (synchronous); a created row is the whole row (its fields, and its `id`/`createdAt`/`updatedAt` when it brings them), and must hold every field its shape requires — at compile time for a typed one, and at runtime for every write, the engine refusing an incomplete row (`REQUIRED_FIELD`) from the row rules codegen reads off each pack's shapes; an entity type whose manifest declares a short code prefix (its entry's `shortCode`, three uppercase letters, unique across every pack) has `create` number every row `<prefix>-<n>`; its shape declares no `shortCode` (codegen refuses one), and `#generated/ears` types the field from the entry (`ShortCodeOf<'Thread'>` is `` `THR-${number}` ``); the short code is engine-owned — a row brings one only on import, as `<prefix>-<n>` held by no other entity, and nothing writes it after — so a code finds its entity with the typed query, `query(type).where('shortCode', code)`, which the value index answers, and `entityTypeOfShortCode(code)` (`@apackdev/sdk/services`, the registered packs' prefixes) names the type of a code whose type isn't known; `write` refuses an id no entity has, and every attribute write refuses the engine's own (`id`, `entityType`, `shortCode`, `createdAt`, `role`); a relation is not an entity, and its id is an `EARS.RelationId` that `write` refuses at compile time — `getRelation` and `findRelations` read relations, `updateRelation` changes one and `removeRelation` removes it
+- `create(type, row)`, `upsert(type, { id, ...row })`, `write(id)` — writes (synchronous); a created row is the whole row (its fields, and its `id`/`createdAt`/`updatedAt` when it brings them), and must hold every field its shape requires — at compile time for a typed one, and at runtime for every write, the engine refusing an incomplete row (`REQUIRED_FIELD`), and a value its field's type doesn't take (`FIELD_TYPE`), from the row rules codegen reads off each pack's shapes; an entity type whose manifest declares a short code prefix (its entry's `shortCode`, three uppercase letters, unique across every pack) has `create` number every row `<prefix>-<n>`; its shape declares no `shortCode` (codegen refuses one), and `#generated/ears` types the field from the entry (`ShortCodeOf<'Thread'>` is `` `THR-${number}` ``); the short code is engine-owned — a row brings one only on import, as `<prefix>-<n>` held by no other entity, and nothing writes it after — so a code finds its entity with the typed query, `query(type).where('shortCode', code)`, which the value index answers, and `entityTypeOfShortCode(code)` (`@apackdev/sdk/services`, the registered packs' prefixes) names the type of a code whose type isn't known; `write` refuses an id no entity has, and every attribute write refuses the engine's own (`id`, `entityType`, `shortCode`, `createdAt`, `role`); a relation is not an entity, and its id is an `EARS.RelationId` that `write` refuses at compile time — `getRelation` and `findRelations` read relations, `updateRelation` changes one and `removeRelation` removes it
 - `transact(fn)` — runs `fn` as one unit, elmdb's: undone and never committed when it throws
 - `query(type).search(text, options?)` — the type's text index (its manifest entry's `search`), most relevant first;
   `near(vector)`, `like(id)` and `hybrid(text, vector)` rank by its vector index (`embed`), whose changed chunks wait,

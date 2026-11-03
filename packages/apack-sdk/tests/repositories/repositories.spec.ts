@@ -153,6 +153,17 @@ describe('flowRepository', () => {
 
     const handleEdges = findRelations({ source: a.id, kind: EARS.RelKind.TRANSITIONS_TO }).map((rel) => rel.id);
     expect(handleEdges).toHaveLength(2);
+    // Handles are the edges' identity, so renumbering moves each onto one another edge has just left, either way
+    const handles = () => findRelations({ source: a.id, kind: EARS.RelKind.TRANSITIONS_TO })
+      .map((rel) => [rel.id, (rel.info as { sourceHandle?: string } | undefined)?.sourceHandle]);
+    flowRepository.reindexHandles(a.id, 'case', 0, 1);
+    expect(handles()).toEqual([[handleEdges[0], 'case-1'], [handleEdges[1], 'case-2']]);
+    flowRepository.reindexHandles(a.id, 'case', 0, -1);
+    expect(handles()).toEqual([[handleEdges[0], 'case-0'], [handleEdges[1], 'case-1']]);
+    // An edge with no handle is a third, beside the two on handles to the same node
+    const { relId } = flowRepository.createEdge(a.id, b.id);
+    expect(handleEdges).not.toContain(relId);
+    expect(findRelations({ source: a.id, kind: EARS.RelKind.TRANSITIONS_TO })).toHaveLength(3);
     flowRepository.deleteNode(b.id);
     expect(findRelations({ source: a.id, kind: EARS.RelKind.TRANSITIONS_TO })).toEqual([]);
     expect(flowRepository.flowEdges(flow.id)).toEqual([]);

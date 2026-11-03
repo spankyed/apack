@@ -222,10 +222,19 @@
                 ],
                 "additionalProperties": false,
                 "description": "A vector index: what query(type).near(...), like(...) and hybrid(...) rank by. A write to its fields leaves the entity's chunks pending until embedPending embeds them. A shaped entity's fields must be ones its shape declares, holding a string or a list of strings."
+              },
+              "substrings": {
+                "description": "A trigram index over these fields: what query(type).containing(...) and matching(...) find, as text is written (error messages, ids, paths, code), unranked. A shaped entity's fields must be ones its shape declares, holding a string or a list of strings.",
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][A-Za-z0-9]*$"
+                }
               }
             },
             "additionalProperties": false,
-            "description": "One entity type: its shape, its short code prefix, its indexes, its text index and its vector index, each optional ({} for an untyped, unnumbered entity)."
+            "description": "One entity type: its shape, its short code prefix, its indexes, its text index, its vector index and its trigram index, each optional ({} for an untyped, unnumbered entity)."
           },
           "description": "Entity wire names, each mapped to its declaration: { shape?, shortCode? }, or {} for an untyped, unnumbered entity."
         },
@@ -250,9 +259,17 @@
                 "type": "boolean",
                 "description": "Refuses a link that would close a cycle through this kind (CYCLE): a tree, a folder hierarchy."
               },
-              "unique": {
+              "key": {
+                "description": "The info fields that, with its two ends, identify an edge, a field the info doesn't hold being null: two entities are joined by one edge of the kind for each value of them, and by one at most when the kind has none. A link to an identity an edge holds updates that edge's info and weight.",
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][A-Za-z0-9]*$"
+                }
+              },
+              "weighted": {
                 "type": "boolean",
-                "description": "At most one edge of this kind from an entity to another: linking the pair again replaces the edge's info."
+                "description": "Each edge carries a weight, from 0 to 2^960 and 1 unless a link gives another, which rank and communities read. A link to an edge replaces its weight."
               }
             },
             "additionalProperties": false,
@@ -416,10 +433,19 @@
                   ],
                   "additionalProperties": false,
                   "description": "A vector index: what query(type).near(...), like(...) and hybrid(...) rank by. A write to its fields leaves the entity's chunks pending until embedPending embeds them. A shaped entity's fields must be ones its shape declares, holding a string or a list of strings."
+                },
+                "substrings": {
+                  "description": "A trigram index over these fields: what query(type).containing(...) and matching(...) find, as text is written (error messages, ids, paths, code), unranked. A shaped entity's fields must be ones its shape declares, holding a string or a list of strings.",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z][A-Za-z0-9]*$"
+                  }
                 }
               },
               "additionalProperties": false,
-              "description": "One entity type: its shape, its short code prefix, its indexes, its text index and its vector index, each optional ({} for an untyped, unnumbered entity)."
+              "description": "One entity type: its shape, its short code prefix, its indexes, its text index, its vector index and its trigram index, each optional ({} for an untyped, unnumbered entity)."
             },
             "description": "Entity wire names owned by this feature, each mapped to its declaration: { shape?, shortCode? }, or {} for an untyped, unnumbered entity. Placement does not change wire names."
           },

@@ -3,7 +3,7 @@
  *
  * For the npm scripts that invoke a shell script directly. The chain kills a step's process group when it
  * overruns, so a script run *through the chain* is already bounded — but the direct run is the one people
- * and agents actually use, and it had no bound at all. `tests/scripts/test-packaged-authoring.sh` is the
+ * and agents actually use, and it had no bound at all. `tests/acceptance/packaged-authoring/test-packaged-authoring.sh` is the
  * worked example: it looks bounded, with `set timeout 120` in its expect block, and is not. That timeout
  * covers a pattern match and not the `wait` that follows, which is how it once hung a machine until three
  * pids were killed by hand.
@@ -42,13 +42,14 @@ if (!command || className === undefined) {
   // Refuses an unknown class rather than defaulting to one: a budget is a ceiling, so a confident wrong
   // answer is the permissive one (`step-timeouts.ts`, after `sizeOf`)
   const budgetMs = timeoutMsFor(className);
-  const { code, timedOut } = await boundedSpawn(command, args, budgetMs, { stream: true });
+  const { code, timedOut, stalled } = await boundedSpawn(command, args, budgetMs, { stream: true });
   if (timedOut) {
     // Its own line on stderr: the command's own output ended mid-sentence, so say why. This path has a class
     // and an argv and no step record, so it reports no recorded cost.
     process.stderr.write(`\n${timedOutBecause({
       what: `${command} ${args.join(' ')}`,
       timeout: className as TimeoutClass,
+      stalled,
     })}\n`);
   }
   // Not process.exit(): it would drop whatever the child's inherited stdio has still to flush

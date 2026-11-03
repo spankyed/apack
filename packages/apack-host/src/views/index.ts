@@ -11,15 +11,23 @@
 //
 // Who subscribes is the caller's: the API holds one subscription per tRPC subscription, so a window closing its
 // socket ends its own, and the test harness one per watch a spec opens.
-import type { Ears } from '@apackdev/ears';
+import type { Ears, WatchReadContext } from '@apackdev/ears';
 import { viewKey, type PackRegistration, type ViewRead, type ViewRequest, type ViewUpdate } from '@apackdev/sdk/framework';
 import { splitRef } from '@apackdev/sdk/ids';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 type ViewObserver = (update: ViewUpdate) => void;
 
+/** Optional observation of one watch; view execution and delivery remain owned by the view host. */
+export interface ViewObservation {
+  read<T>(read: () => T, causes?: WatchReadContext): T;
+  deliver<T>(commit: number, deliver: () => T): T;
+  recordCauses(): boolean;
+}
+
 /** What the views read: the engine, and the packs that declare them */
 export interface ViewHostOptions {
+  observe?: () => ViewObservation;
   /** The engine views run on, asked for at each start, so a test's replaced engine is the one a new watch reads */
   ears: () => Ears;
   packs: {
@@ -52,7 +60,7 @@ interface SharedView {
   stop: () => void;
 }
 
-export function createViewHost({ ears, packs }: ViewHostOptions): ViewHost {
+export function createViewHost({ ears, packs, observe }: ViewHostOptions): ViewHost {
   const views = new Map<string, SharedView>();
 
   const deliver = (shared: SharedView, update: ViewUpdate) => {
@@ -84,10 +92,17 @@ export function createViewHost({ ears, packs }: ViewHostOptions): ViewHost {
       return;
     }
     const args = shared.request.args;
-    const watching = ears().watch(() => (read as (args: unknown) => unknown)(args), {
-      next: (value, commit) => deliver(shared, { ok: true, value, commit }),
-      error: (error, commit) => deliver(shared, { ok: false, error: errorMessage(error), commit }),
-    });
+    const observation = observe?.();
+    const runRead = observation
+      ? (causes?: WatchReadContext) => observation.read(() => (read as (args: unknown) => unknown)(args), causes)
+      : () => (read as (args: unknown) => unknown)(args);
+    const deliverRead = observation
+      ? (update: ViewUpdate) => observation.deliver(update.commit, () => deliver(shared, update))
+      : (update: ViewUpdate) => deliver(shared, update);
+    const watching = ears().watch(runRead, {
+      next: (value, commit) => deliverRead({ ok: true, value, commit }),
+      error: (error, commit) => deliverRead({ ok: false, error: errorMessage(error), commit }),
+    }, { label: `${shared.request.ref} · ${shared.request.view}`, recordCauses: observation?.recordCauses });
     shared.stop = () => watching.stop();
   };
 

@@ -12,7 +12,7 @@ Measured in the main checkout, 2026-10-25: a probe typed into the `bundled-ui-pa
 component's model held it, then terminated the API child by the pid in its own `api-port` file. Electron main
 restarted the API, the window reconnected, and the editor and the model both read the initial text again — the
 fixture's intermittent "lost typing" failure exactly
-([evidence](../../references/evidence/build-input-snapshot-proof.md#electron-exit-hang-in-linked-worktrees-2026-10-25)).
+([evidence](../references/evidence/build-input-snapshot-proof.md#electron-exit-hang-in-linked-worktrees-2026-10-25)).
 
 The remount is deliberate, from the 2026-10-13 lifecycle work
 ([its record](../references/evidence/discovery-without-activation.md)): a restarted API registers every pack

@@ -40,9 +40,9 @@ local build/output record; it does not require uploading a public release.
 - [Release integration tests](../../../packages/apack-cli/tests/commands/release.integration.spec.ts)
   include injected Git commands, a build stand-in, verified archives and mocked GitHub API calls.
   Their evidence must distinguish those seams from an actual compiler or remote release execution.
-- [Packaged authoring](../../../tests/scripts/test-packaged-authoring-author.sh) installs real local npm
+- [Packaged authoring](../../../tests/acceptance/packaged-authoring/test-packaged-authoring-author.sh) installs real local npm
   tarballs outside the monorepo, scaffolds a pack and exercises release dry-run/archive installation.
-  [Its app half](../../../tests/scripts/test-packaged-authoring-app.sh) runs the exact archive against an
+  [Its app half](../../../tests/acceptance/packaged-authoring/test-packaged-authoring-app.sh) runs the exact archive against an
   isolated built host and compares installed integrity metadata.
 
 These are source observations, not newly executed acceptance. Reinspect current code before each

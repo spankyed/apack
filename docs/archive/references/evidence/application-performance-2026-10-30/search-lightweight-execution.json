@@ -1,0 +1,510 @@
+{
+  "format": 1,
+  "kind": "mode-comparison",
+  "measured": 20,
+  "baseline": "disabled",
+  "comparison": "lightweight",
+  "status": "passed",
+  "executions": [
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 0,
+      "ordinal": 0,
+      "warmup": true,
+      "startedMs": 9195.09402,
+      "endedMs": 9280.694463,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 1,
+      "ordinal": 1,
+      "warmup": true,
+      "startedMs": 9282.294053,
+      "endedMs": 9307.781023,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 2,
+      "ordinal": 2,
+      "warmup": true,
+      "startedMs": 9309.630029,
+      "endedMs": 9334.360955,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 3,
+      "ordinal": 3,
+      "warmup": true,
+      "startedMs": 9336.895172,
+      "endedMs": 9362.398184,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 4,
+      "ordinal": 4,
+      "warmup": true,
+      "startedMs": 9366.143115,
+      "endedMs": 9401.466454,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 0,
+      "ordinal": 5,
+      "warmup": true,
+      "startedMs": 9403.733546,
+      "endedMs": 9445.2567,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 1,
+      "ordinal": 6,
+      "warmup": true,
+      "startedMs": 9446.645622,
+      "endedMs": 9480.290247,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 2,
+      "ordinal": 7,
+      "warmup": true,
+      "startedMs": 9482.868132,
+      "endedMs": 9515.14471,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 3,
+      "ordinal": 8,
+      "warmup": true,
+      "startedMs": 9517.240635,
+      "endedMs": 9544.741612,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 4,
+      "ordinal": 9,
+      "warmup": true,
+      "startedMs": 9546.193951,
+      "endedMs": 9574.342097,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 5,
+      "ordinal": 10,
+      "warmup": false,
+      "startedMs": 9575.727269,
+      "endedMs": 9599.639108,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 5,
+      "ordinal": 11,
+      "warmup": false,
+      "startedMs": 9600.968029,
+      "endedMs": 9626.463666,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 6,
+      "ordinal": 12,
+      "warmup": false,
+      "startedMs": 9627.98838,
+      "endedMs": 9653.668559,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 6,
+      "ordinal": 13,
+      "warmup": false,
+      "startedMs": 9655.143356,
+      "endedMs": 9735.61278,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 7,
+      "ordinal": 14,
+      "warmup": false,
+      "startedMs": 9736.754201,
+      "endedMs": 9759.142867,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 7,
+      "ordinal": 15,
+      "warmup": false,
+      "startedMs": 9761.085541,
+      "endedMs": 9786.64347,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 8,
+      "ordinal": 16,
+      "warmup": false,
+      "startedMs": 9788.038141,
+      "endedMs": 9814.232405,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 8,
+      "ordinal": 17,
+      "warmup": false,
+      "startedMs": 9815.836786,
+      "endedMs": 9836.762864,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 9,
+      "ordinal": 18,
+      "warmup": false,
+      "startedMs": 9838.84333,
+      "endedMs": 9859.931159,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 9,
+      "ordinal": 19,
+      "warmup": false,
+      "startedMs": 9861.211247,
+      "endedMs": 9891.019316,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 10,
+      "ordinal": 20,
+      "warmup": false,
+      "startedMs": 9893.070865,
+      "endedMs": 9917.761374,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 10,
+      "ordinal": 21,
+      "warmup": false,
+      "startedMs": 9919.747923,
+      "endedMs": 9939.781247,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 11,
+      "ordinal": 22,
+      "warmup": false,
+      "startedMs": 9941.584712,
+      "endedMs": 9964.033587,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 11,
+      "ordinal": 23,
+      "warmup": false,
+      "startedMs": 9966.131887,
+      "endedMs": 9990.699895,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 12,
+      "ordinal": 24,
+      "warmup": false,
+      "startedMs": 9992.726402,
+      "endedMs": 10015.830988,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 12,
+      "ordinal": 25,
+      "warmup": false,
+      "startedMs": 10017.408661,
+      "endedMs": 10039.692744,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 13,
+      "ordinal": 26,
+      "warmup": false,
+      "startedMs": 10041.468125,
+      "endedMs": 10061.352824,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 13,
+      "ordinal": 27,
+      "warmup": false,
+      "startedMs": 10063.792292,
+      "endedMs": 10093.148776,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 14,
+      "ordinal": 28,
+      "warmup": false,
+      "startedMs": 10094.644281,
+      "endedMs": 10119.573291,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 14,
+      "ordinal": 29,
+      "warmup": false,
+      "startedMs": 10120.821879,
+      "endedMs": 10140.301451,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 15,
+      "ordinal": 30,
+      "warmup": false,
+      "startedMs": 10142.053708,
+      "endedMs": 10161.064278,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 15,
+      "ordinal": 31,
+      "warmup": false,
+      "startedMs": 10162.305825,
+      "endedMs": 10186.887041,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 16,
+      "ordinal": 32,
+      "warmup": false,
+      "startedMs": 10188.405755,
+      "endedMs": 10212.440636,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 16,
+      "ordinal": 33,
+      "warmup": false,
+      "startedMs": 10213.798474,
+      "endedMs": 10235.221512,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 17,
+      "ordinal": 34,
+      "warmup": false,
+      "startedMs": 10236.311725,
+      "endedMs": 10257.416262,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 17,
+      "ordinal": 35,
+      "warmup": false,
+      "startedMs": 10258.353598,
+      "endedMs": 10282.027061,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 18,
+      "ordinal": 36,
+      "warmup": false,
+      "startedMs": 10283.208024,
+      "endedMs": 10307.308155,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 18,
+      "ordinal": 37,
+      "warmup": false,
+      "startedMs": 10308.725202,
+      "endedMs": 10331.635913,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 19,
+      "ordinal": 38,
+      "warmup": false,
+      "startedMs": 10333.231793,
+      "endedMs": 10353.69687,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 19,
+      "ordinal": 39,
+      "warmup": false,
+      "startedMs": 10354.977208,
+      "endedMs": 10379.697966,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 20,
+      "ordinal": 40,
+      "warmup": false,
+      "startedMs": 10380.941012,
+      "endedMs": 10405.913272,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 20,
+      "ordinal": 41,
+      "warmup": false,
+      "startedMs": 10407.204985,
+      "endedMs": 10427.547311,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 21,
+      "ordinal": 42,
+      "warmup": false,
+      "startedMs": 10429.042275,
+      "endedMs": 10448.08847,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 21,
+      "ordinal": 43,
+      "warmup": false,
+      "startedMs": 10449.164849,
+      "endedMs": 10473.401481,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 22,
+      "ordinal": 44,
+      "warmup": false,
+      "startedMs": 10474.727736,
+      "endedMs": 10495.327313,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 22,
+      "ordinal": 45,
+      "warmup": false,
+      "startedMs": 10496.668776,
+      "endedMs": 10516.720434,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 23,
+      "ordinal": 46,
+      "warmup": false,
+      "startedMs": 10517.874855,
+      "endedMs": 10539.00635,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 23,
+      "ordinal": 47,
+      "warmup": false,
+      "startedMs": 10540.28673,
+      "endedMs": 10575.694945,
+      "outcome": "passed"
+    },
+    {
+      "variant": "B",
+      "mode": "lightweight",
+      "index": 24,
+      "ordinal": 48,
+      "warmup": false,
+      "startedMs": 10577.801619,
+      "endedMs": 10618.505562,
+      "outcome": "passed"
+    },
+    {
+      "variant": "A",
+      "mode": "disabled",
+      "index": 24,
+      "ordinal": 49,
+      "warmup": false,
+      "startedMs": 10620.582153,
+      "endedMs": 10649.077176,
+      "outcome": "passed"
+    }
+  ]
+}

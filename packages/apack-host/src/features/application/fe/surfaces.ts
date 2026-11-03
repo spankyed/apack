@@ -1,3 +1,5 @@
+import { withActorContext } from '../../../diagnostics/actors.ts';
+import type { AnyActorLogic } from 'xstate';
 // The shell's surfaces: their order, which show, spawning each one's actor, and moving between them.
 import type { Surface } from '@apackdev/sdk/fe';
 import { HOST_PACK_ID, splitRef } from '@apackdev/sdk/ids';
@@ -28,10 +30,10 @@ export function withHostLast(surfaces: Surface[]): Surface[] {
  */
 export function spawnSurfaceActor(enqueue: unknown, surface: Surface): void {
   const spawner = enqueue as {
-    spawnChild(state: Surface['state'], options: { id: string; systemId: string }): void;
+    spawnChild(state: AnyActorLogic, options: { id: string; systemId: string }): void;
     (action: (args: { system: { get(id: string): AnyActorRef | undefined } }) => void): void;
   };
-  spawner.spawnChild(surface.state, { id: surface.id, systemId: surface.id });
+  spawner.spawnChild(withActorContext(surface.state), { id: surface.id, systemId: surface.id });
   spawner(({ system }) => {
     const actor = system.get(surface.id);
     if (!actor) return;

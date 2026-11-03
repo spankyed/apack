@@ -1,3 +1,4 @@
+import { _withPerformanceEvent } from '../runtime/performance.ts';
 import type { ActionArgs, EventObject, MachineContext, Mapper, ParameterizedObject } from 'xstate';
 import { safeEvents } from '../helpers/actor-helpers.ts';
 import { _clientOf, _currentDelivery, _replyTo, type Reply } from '../events/index.ts';
@@ -146,7 +147,9 @@ const handing = <F>(handler: F): F => {
   const run = handler as unknown as (args: object, params: unknown) => void;
   return ((args: object, params: unknown) => {
     const delivery = answerable(args);
-    return run({ ...args, reply: _replyTo(delivery), client: _clientOf(delivery) }, params);
+    const invoke = () => run({ ...args, reply: _replyTo(delivery), client: _clientOf(delivery) }, params);
+    const event = (args as { event?: unknown }).event;
+    return _withPerformanceEvent(event, invoke);
   }) as unknown as F;
 };
 

@@ -4,7 +4,7 @@ import { dataLiteral, propertyKey } from './code-literals.ts';
 import { findSourceModule, SCRIPT_MODULE_EXTENSIONS, TYPE_MODULE_EXTENSIONS } from './source-module.ts';
 import { resolveTypeModule } from './type-module.ts';
 import { _packModuleTargets, _moduleTargetSource } from './module-targets.ts';
-import { _packEntities, _packEntityTypes, _packRelationRules, _packRelationTypes, _packRoles, _packShortCodes, _FIELD_NAME_PATTERN, type PackDataDeclarations } from '../framework/data-declaration.ts';
+import { _packEntities, _packEntityTypes, _packRelationRules, _packRelationTypes, _packWeightedKinds, _packRoles, _packShortCodes, _FIELD_NAME_PATTERN, type PackDataDeclarations } from '../framework/data-declaration.ts';
 import { _parseModuleReference } from '../framework/module-reference.ts';
 import { generateSettingsTypes } from './settings-types.ts';
 import { _declarationRevision } from './declaration-revision.ts';
@@ -112,9 +112,19 @@ export function mergeRegistries(
     return map;
   }
 
+  // In declaration order, entities first, so the first conflict a pack hears of is its entities'
+  const entities = merge(_packEntityTypes(manifest), 'entity');
+  const relKinds = merge(_packRelationTypes(manifest), 'relKind');
+  // The kinds declared weighted: the pack's own, and those its dependencies' trees declare, which each snapshot's
+  // provenance names; a weighted kind is always one of the relation kinds, the SDK declaring none
+  const weightedKinds = new Set([
+    ...Object.keys(_packWeightedKinds(manifest)),
+    ...[...depProvenance.values()].flatMap((provenance) => Object.keys(provenance.weightedKinds ?? {})),
+  ].filter((kind) => relKinds.has(kind)));
   return {
-    entities: merge(_packEntityTypes(manifest), 'entity'),
-    relKinds: merge(_packRelationTypes(manifest), 'relKind'),
+    entities,
+    relKinds,
+    weightedKinds,
     roles: merge(_packRoles(manifest), 'role'),
   };
 }
@@ -172,6 +182,7 @@ export function emitEARS(ownId: string, registry: ReturnType<typeof mergeRegistr
   const entityUnion = declaresEntities ? [...registry.entities.keys()].map(k => `Entity.${k}`).join(' | ') : 'string';
   // Closed: the SDK's kinds and roles are in every pack, so neither list is ever empty
   const relKindList = [...registry.relKinds.keys()].map(k => `RelKind.${k}`).join(', ');
+  const weightedKindList = [...registry.weightedKinds].map(k => `RelKind.${k}`).join(', ');
   const roleList = [...registry.roles.keys()].map(k => `RoleKind.${k}`).join(', ');
 
   // A namespace without members has no runtime value, and EARS.Entity is read at runtime
@@ -194,6 +205,9 @@ ${relKindMembers.join('\n')}
   /** Every relation kind this pack may link with: its own, its dependencies' and the SDK's */
   export const RELATION_KINDS = [${relKindList}] as const;
   export type RelKind = (typeof RELATION_KINDS)[number];
+  /** The relation kinds declared \`weighted\`, whose links take a weight: its own and its dependencies' */
+  export const WEIGHTED_KINDS = [${weightedKindList}] as const;
+  export type WeightedKind = (typeof WEIGHTED_KINDS)[number];
   /** Whether a kind that arrived as data (an event's field, a stored row) is one of them */
   export const isRelKind = (value: unknown): value is RelKind => (RELATION_KINDS as readonly unknown[]).includes(value);
 
@@ -523,6 +537,17 @@ export async function generatePackFiles(
   let moduleExports: ModuleExports | undefined;
   function moduleReader(): ModuleExports {
     return moduleExports ??= createModuleExports(root, [...exportedFromFiles(), ...facadeSources.keys()], facadeSources);
+  }
+  /**
+   * The reader of the shapes' field types. A shape names its ids' types through this pack's #generated/ears, which this
+   * run writes only after reading the shapes and which a clean checkout doesn't have, so this reader is handed the one
+   * this run will write: a field's type reads the same whatever the directory held before
+   */
+  let shapeReader: ModuleExports | undefined;
+  function shapeTypes(): ModuleExports {
+    if (shapeReader) return shapeReader;
+    const sources = new Map([...facadeSources, [resolve(root, 'src/__generated__/ears.ts'), generateEars(false)]]);
+    return shapeReader = createModuleExports(root, [...packShapes(false).map(({ file }) => file), ...sources.keys()], sources);
   }
   function exportOf(file: string, name: string): ModuleExport | undefined {
     return moduleReader().exportOf(file, name);
@@ -1211,9 +1236,10 @@ ${regProps.join('\n')}
     return mergeRegistries(manifest.id, manifest, depTypes, depProvenance);
   }
 
-  function generateEars(): string {
+  /** This pack's `#generated/ears`; `checkShapes: false` for the copy the module reader reads, which checks them itself */
+  function generateEars(checkShapes = true): string {
     const registry = packRegistry();
-    const { imports: shapeImports, entries: shapeEntries } = entityShapeEntries();
+    const { imports: shapeImports, entries: shapeEntries } = entityShapeEntries(checkShapes);
     const depShapes = depTypeImports('PackEntityShapes');
     // The type names rows carry (the values; apack.json requires each key to equal its value)
     const entityNames = [...registry.entities.values()].map(({ value }) => `'${value}'`);
@@ -1266,11 +1292,12 @@ export type ShortCodeOf<E extends keyof PackShapes> = PackShapes[E] extends { sh
  */
 export type EntityName = ${entityNames.join(' | ')};
 
-/** What the helpers below check against: this pack's shapes, entity names, relation kinds and roles */
+/** What the helpers below check against: this pack's shapes, entity names, relation kinds (and which are weighted) and roles */
 export interface PackSchema extends EarsSchema {
   shapes: PackShapes;
   names: EntityName;
   relKinds: EARS.RelKind;
+  weightedKinds: EARS.WeightedKind;
   roles: EARS.RoleKind;
 }
 
@@ -2121,6 +2148,7 @@ export type { ImportMode } from '@apackdev/sdk/utils';
     const indexed = new Map(entities.flatMap(({ name, indexes }) => (indexes ? [[name, indexes] as const] : [])));
     const searched = new Map(entities.flatMap(({ name, search }) => (search ? [[name, search] as const] : [])));
     const embedded = new Map(entities.flatMap(({ name, embed }) => (embed ? [[name, embed] as const] : [])));
+    const substringed = new Map(entities.flatMap(({ name, substrings }) => (substrings ? [[name, substrings] as const] : [])));
     // A prefix numbers one type across the app, so a dependency's are taken as the SDK's are: a collision fails the
     // build here, rather than the install at the host registry. A dependency's snapshot carries its manifest whole
     const taken = new Map<string, string>();
@@ -2135,7 +2163,7 @@ export type { ImportMode } from '@apackdev/sdk/utils';
     const rules: Record<string, RowRules> = {};
     for (const { entity, exportName, source, file } of packShapes()) {
       shaped.add(entity);
-      const { required, declaresShortCode, fields } = moduleReader().rowRulesOf(file, exportName);
+      const { required, declaresShortCode, fields, types } = shapeTypes().rowRulesOf(file, exportName);
       const declared = prefixes.get(entity);
       // The engine writes a short code and #generated/ears types it, from the prefix the entry declares: a shape
       // declaring the field would be a second account of it, which could disagree with the first
@@ -2160,7 +2188,8 @@ export type { ImportMode } from '@apackdev/sdk/utils';
       // A text index reads fields the shape declares, as an index does
       const search = searched.get(entity);
       const embed = embedded.get(entity);
-      for (const [index, named] of [['search', Object.keys(search?.fields ?? {})], ['embed', embed?.from ?? []]] as const) {
+      const substrings = substringed.get(entity);
+      for (const [index, named] of [['search', Object.keys(search?.fields ?? {})], ['embed', embed?.from ?? []], ['substrings', substrings ?? []]] as const) {
         const unread = named.filter((field) => !fields.includes(field));
         if (unread.length > 0) {
           throw new Error(`Entity "${entity}": its ${index} names ${unread.map((field) => `"${field}"`).join(', ')}, which ${source}#${exportName} doesn't declare`);
@@ -2168,20 +2197,25 @@ export type { ImportMode } from '@apackdev/sdk/utils';
       }
       rules[entity] = {
         required, ...(declared !== undefined && { shortCode: declared }), ...(indexes && { indexes }), ...(search && { search }), ...(embed && { embed }),
+        ...(substrings && { substrings }), ...(Object.keys(types).length > 0 && { fields: types }),
       };
     }
-    for (const { name: entity, shortCode, indexes, search, embed } of entities) {
-      if (shaped.has(entity) || (shortCode === undefined && indexes === undefined && search === undefined && embed === undefined)) continue;
-      rules[entity] = { required: [], ...(shortCode !== undefined && { shortCode }), ...(indexes && { indexes }), ...(search && { search }), ...(embed && { embed }) };
+    for (const { name: entity, shortCode, indexes, search, embed, substrings } of entities) {
+      if (shaped.has(entity) || (shortCode === undefined && indexes === undefined && search === undefined && embed === undefined && substrings === undefined)) continue;
+      rules[entity] = {
+        required: [], ...(shortCode !== undefined && { shortCode }), ...(indexes && { indexes }), ...(search && { search }), ...(embed && { embed }),
+        ...(substrings && { substrings }),
+      };
     }
     return dataLiteral(rules);
   }
 
-  /** This pack's own shaped entities, each shape checked to be a type its module exports */
-  function packShapes(): Array<{ entity: string; source: string; exportName: string; file: string }> {
+  /** This pack's own shaped entities, each shape checked to be a type its module exports unless `checked` is false */
+  function packShapes(checked = true): Array<{ entity: string; source: string; exportName: string; file: string }> {
     return _packEntities(manifest).flatMap(({ name: entity, shape }) => {
       if (shape === null) return [];
       const { source, exportName, file } = exportTarget(`Entity shape "${entity}"`, shape, TYPE_MODULE_EXTENSIONS);
+      if (!checked) return [{ entity, source, exportName, file }];
       try {
         if (!moduleReader().hasTypeExport(file, exportName)) {
           throw new Error(`${source} doesn't export a type named "${exportName}"`);
@@ -2194,11 +2228,11 @@ export type { ImportMode } from '@apackdev/sdk/utils';
   }
 
   /** Imports and map entries for this pack's own entity shapes. Dependencies' come from their facade types. */
-  function entityShapeEntries(): { imports: string[]; entries: string[] } {
+  function entityShapeEntries(checkShapes = true): { imports: string[]; entries: string[] } {
     const imports: string[] = [];
     const entries: string[] = [];
     const prefixes = new Map(_packEntities(manifest).flatMap(({ name, shortCode }) => (shortCode ? [[name, shortCode] as const] : [])));
-    for (const { entity, source, exportName: typeName } of packShapes()) {
+    for (const { entity, source, exportName: typeName } of packShapes(checkShapes)) {
       if ((SDK_SHAPED_ENTITIES as readonly string[]).includes(entity)) {
         throw new Error(`Entity shape "${entity}": the SDK declares this entity's shape; remove its entity declaration`);
       }

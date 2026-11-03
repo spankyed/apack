@@ -15,15 +15,16 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PACKAGES_PREBUILT_ENV, REPO_ROOT } from '@apackdev/host/build/packages-built';
+import { linuxTestInvocation } from './lib/linux-native-scratch.ts';
 
 const DOCKERFILE = path.join(REPO_ROOT, 'scripts', 'linux', 'Dockerfile');
 const short = (text: string | Buffer): string => createHash('sha256').update(text).digest('hex').slice(0, 12);
-/** The elmdb checkout `vendor/elmdb` links to (`npm run link:elmdb`), which the container builds its own binding from */
+/** Native source for this owned run; qualification may select a frozen checkout without changing the developer link. */
 const ELMDB_CHECKOUT = (() => {
   try {
-    return fs.realpathSync(path.join(REPO_ROOT, 'vendor', 'elmdb'));
+    return fs.realpathSync(process.env.APACK_LINUX_ELMDB_ROOT ?? path.join(REPO_ROOT, 'vendor', 'elmdb'));
   } catch {
-    process.stderr.write('vendor/elmdb links to no elmdb checkout: run npm run link:elmdb first.\n');
+    process.stderr.write('Native source is unavailable: check APACK_LINUX_ELMDB_ROOT or run npm run link:elmdb.\n');
     process.exit(1);
   }
 })();
@@ -59,7 +60,8 @@ const WORK_VOLUME = `apack-linux-work-${short(REPO_ROOT)}`;
 const NPM_CACHE_VOLUME = 'apack-linux-npm-cache';
 // Bound the whole process tree, including compiler children and native allocations. Equal memory/swap
 // limits allow no additional swap; exhaustion fails the container rather than consuming host swap.
-const RESOURCE_LIMITS = ['--memory=6g', '--memory-swap=6g', '--cpus=2'];
+// Renderer module loading fails at Docker's default 64 MiB; keep shared-memory capacity explicit across hosts.
+const RESOURCE_LIMITS = ['--memory=6g', '--memory-swap=6g', '--cpus=2', '--shm-size=256m'];
 /**
  * The run lock, at the volume's root. Named once because two places must agree on it: the `flock` below and
  * the rsync filter that keeps `--delete` from removing it while this run holds it.
@@ -90,6 +92,9 @@ const FILTERS = [
   ...['apack-ears', 'apack-sdk', 'apack-ui', 'apack-testing', 'apack-cli'].flatMap((pkg) =>
     [`--exclude=/packages/${pkg}/dist`, `--exclude=/packages/${pkg}/publish`]),
   '--exclude=/packages/default-setup/dist', '--exclude=/packages/default-setup/.apack',
+  ...['api', 'main', 'preload', 'renderer'].map(pkg => `--exclude=/packages/${pkg}/dist`),
+  '--exclude=/build-manifest.json', '--exclude=/build-integrity.json',
+  '--exclude=/.apack/performance',
 ];
 
 /**
@@ -104,8 +109,9 @@ const FILTERS = [
  * Re-derive it from the code that writes them, which is two spellings: a `'.cache', '<name>'` path join, and a
  * `node_modules/.cache/<name>` literal. Deriving from one alone misses the other — the first pass here did.
  */
+const COMPILER_CACHE = 'apack-compilers';
 const CONTAINER_CACHES = [
-  'apack-chain', 'apack-fixtures', 'apack-packages-build',
+  'apack-chain', COMPILER_CACHE, 'apack-fixtures', 'apack-packages-build',
   'apack-spec-durations', 'apack-step-durations', 'apack-unit-pool', 'tsbuildinfo',
 ];
 
@@ -118,6 +124,13 @@ const CONTAINER_CACHES = [
  * A file is written by the run, so one sync makes any volume identifiable, however old.
  */
 const CHECKOUT_FILE = '.apack-checkout';
+/** Whose elmdb volume this is, as `CHECKOUT_FILE` says whose work volume: the elmdb checkout it copies */
+const ELMDB_CHECKOUT_FILE = '.apack-elmdb-checkout';
+/**
+ * What Docker must have free before a run starts. A run's sync, install and builds grow its volumes by several GB, and
+ * a disk that fills mid-run fails it with errors that name neither the disk nor what holds it
+ */
+const DOCKER_FREE_FLOOR_GB = 8;
 
 const docker = (args: string[], stdio: 'inherit' | 'pipe' = 'pipe') => spawnSync('docker', args, { stdio, encoding: 'utf8' });
 
@@ -126,7 +139,7 @@ function refuse(message: string): never {
   process.exit(2);
 }
 
-const command = process.argv.slice(2);
+const { command, scratchArgs } = linuxTestInvocation(process.argv.slice(2));
 if (command.length === 0) refuse('usage: npm run test:linux -- <command> [args...]');
 
 if (docker(['info']).status !== 0) {
@@ -141,7 +154,7 @@ if (docker(['image', 'inspect', IMAGE]).status !== 0) {
 }
 
 /**
- * Work volumes whose checkout is gone.
+ * Work and elmdb volumes whose checkout is gone.
  *
  * A volume is keyed by a hash of the checkout's path, so nothing could tell an abandoned volume from a live one
  * — a deleted worktree's `node_modules` and platform builds simply stayed for ever, and one of them reached
@@ -157,15 +170,32 @@ if (docker(['image', 'inspect', IMAGE]).status !== 0) {
 function pruneAbandonedVolumes(): void {
   const listed = docker(['volume', 'ls', '--format', '{{.Name}}']);
   if (listed.status !== 0) return;
-  const mine = WORK_VOLUME;
+  const kinds = [
+    { prefix: 'apack-linux-work-', mine: WORK_VOLUME, file: CHECKOUT_FILE, what: 'work' },
+    { prefix: 'apack-linux-elmdb-', mine: ELMDB_VOLUME, file: ELMDB_CHECKOUT_FILE, what: 'elmdb' },
+  ];
   for (const name of listed.stdout.split('\n').map((line) => line.trim())) {
-    if (!name.startsWith('apack-linux-work-') || name === mine) continue;
-    const read = docker(['run', '--rm', ...RESOURCE_LIMITS, '-v', `${name}:/work:ro`, IMAGE, 'cat', `/work/${CHECKOUT_FILE}`]);
+    const kind = kinds.find(({ prefix }) => name.startsWith(prefix));
+    if (kind === undefined || name === kind.mine) continue;
+    const read = docker(['run', '--rm', ...RESOURCE_LIMITS, '-v', `${name}:/volume:ro`, IMAGE, 'cat', `/volume/${kind.file}`]);
     const checkout = read.status === 0 ? read.stdout.trim() : '';
     if (!checkout || fs.existsSync(checkout)) continue;
     if (docker(['volume', 'rm', name]).status === 0) {
-      process.stderr.write(`Removed the container work volume of ${checkout}, which no longer exists.\n`);
+      process.stderr.write(`Removed the container ${kind.what} volume of ${checkout}, which no longer exists.\n`);
     }
+  }
+}
+
+/** Refuses a run Docker hasn't the space for, saying where to see what holds it */
+function refuseWithoutSpace(): void {
+  const read = docker(['run', '--rm', ...RESOURCE_LIMITS, IMAGE, 'df', '-Pk', '/']);
+  const free = Number(read.stdout.trim().split('\n').at(-1)?.split(/\s+/)[3]) / 1024 ** 2;
+  if (read.status !== 0 || !Number.isFinite(free)) refuse(`Could not read Docker's free space: ${read.stderr.trim()}`);
+  if (free < DOCKER_FREE_FLOOR_GB) {
+    refuse([
+      `Docker has ${free.toFixed(1)} GB free, and a run needs ${DOCKER_FREE_FLOOR_GB}.`,
+      'What holds it, volumes by size: docker system df -v. A volume no container uses (LINKS 0) can go: docker volume rm <name>.',
+    ].join('\n'));
   }
 }
 
@@ -183,6 +213,7 @@ function gitDirMount(): string[] {
 }
 
 pruneAbandonedVolumes();
+refuseWithoutSpace();
 
 /**
  * What the chain and its pools tell a step about the run it is part of.
@@ -212,7 +243,7 @@ const sync = [
   '  echo "Waiting for another checkout\'s test:linux run to finish syncing the shared elmdb volume…" >&2',
   '  flock 8',
   'fi',
-  `elmdbChanged=$(rsync -aiO --delete --exclude=/${ELMDB_LOCK} --exclude=/${ELMDB_BUILT} --exclude=/target/ --exclude=node_modules --exclude='*.node' /elmdb-src/ /elmdb/)`,
+  `elmdbChanged=$(rsync -aiO --delete --exclude=/${ELMDB_LOCK} --exclude=/${ELMDB_BUILT} --exclude=/${ELMDB_CHECKOUT_FILE} --exclude=/target/ --exclude=node_modules --exclude='*.node' /elmdb-src/ /elmdb/)`,
   'ln -sfn /elmdb /work/vendor/elmdb',
   'elmdbLock=$(sha256sum /elmdb/package-lock.json | cut -d" " -f1)',
   'if [ "$(cat /elmdb/node_modules/.apack-installed-lock 2>/dev/null)" != "$elmdbLock" ]; then',
@@ -225,6 +256,8 @@ const sync = [
   '  (cd /elmdb && npm run -s build >/dev/null)',
   `  touch /elmdb/${ELMDB_BUILT}`,
   'fi',
+  // Whose volume this is: see ELMDB_CHECKOUT_FILE
+  `printf '%s' ${quote(ELMDB_CHECKOUT)} > /elmdb/${ELMDB_CHECKOUT_FILE}`,
   'exec 8>&-',
   // Whose volume this is, for the prune that cannot otherwise tell: see CHECKOUT_FILE
   `printf '%s' ${quote(REPO_ROOT)} > /work/${CHECKOUT_FILE}`,
@@ -236,8 +269,7 @@ const sync = [
   '  echo "$lock" > node_modules/.apack-installed-lock',
   'fi',
   // The platform's own builds, reused when their inputs have not moved
-  'npm run -s packages:ensure',
-  'npm run -s build:default-setup >/dev/null',
+  'npm run -s chain -- --only packages:ensure,build:default-setup --no-native --cores 2',
 ].join('\n');
 /**
  * One container at a time per volume, for the whole run rather than the sync alone.
@@ -264,8 +296,13 @@ const run = [
   'fi',
   // Orphans of a container that was killed: this run holds the only slot, so none of them is live
   'rm -f /work/node_modules/.cache/apack-unit-pool/*.lock',
+  // Keep immutable compiler captures with this checkout's volume instead of discarding them at container exit.
+  // The volume lease excludes live users; stale container hostnames/PIDs cannot hold these records forever.
+  `rm -f /work/node_modules/.cache/${COMPILER_CACHE}/*.lock /work/node_modules/.cache/${COMPILER_CACHE}/*.users/*`,
+  `export APACK_COMPILER_STORE="\${APACK_COMPILER_STORE:-/work/node_modules/.cache/${COMPILER_CACHE}}"`,
   `bash -ec ${quote(sync)}`,
   // `exec` keeps fd 9, so the lock is held for as long as the command runs
+  `export APACK_EXECUTION_RECORDS=${quote(JSON.stringify({ source: [RUN_LOCK, CHECKOUT_FILE], native: [ELMDB_LOCK, ELMDB_BUILT, ELMDB_CHECKOUT_FILE] }))}`,
   `exec ${command.map(quote).join(' ')}`,
 ].join('\n');
 const script = ['set -e', run].join('\n');
@@ -273,7 +310,7 @@ const script = ['set -e', run].join('\n');
 const child = spawn('docker', [
   // IPv4 loopback only, as on CI's Linux runners: with IPv6 up, `localhost` resolves to ::1 first here, so a
   // dev server binds where a client dialling 127.0.0.1 cannot reach it
-  'run', '--rm', '--init', ...RESOURCE_LIMITS, '--sysctl', 'net.ipv6.conf.all.disable_ipv6=1',
+  'run', '--rm', '--init', ...RESOURCE_LIMITS, ...scratchArgs, '--sysctl', 'net.ipv6.conf.all.disable_ipv6=1',
   '-v', `${REPO_ROOT}:/src:ro`, '-v', `${WORK_VOLUME}:/work`, '-v', `${NPM_CACHE_VOLUME}:/root/.npm`,
   '-v', `${ELMDB_CHECKOUT}:/elmdb-src:ro`, '-v', `${ELMDB_VOLUME}:/elmdb`, '-v', `${CARGO_REGISTRY_VOLUME}:/usr/local/cargo/registry`,
   ...gitDirMount(),
