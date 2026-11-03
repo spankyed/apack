@@ -143,6 +143,20 @@ it.each([
   expect(check(new Map([[entry, image([[0xc, dependency]])]]))).toThrow('outside its captured package');
 });
 
+it('expands a framework binary\'s @loader_path from its versioned directory, as dyld does', () => {
+  // Electron's framework reaches its sibling frameworks through @loader_path/../../.., written from Versions/A
+  const frameworks = '/captured/App.app/Contents/Frameworks';
+  const framework = frameworks + '/Value.framework/Value';
+  const versioned = frameworks + '/Value.framework/Versions/A/Value';
+  const helper = frameworks + '/Helper.framework/Helper';
+  const files = new Map([[framework, image([[0x8000001c, '@loader_path/../../..'], [0xc, '@rpath/Helper.framework/Helper']])],
+    [versioned, image([])], [helper, image([])]]);
+  const reads: string[] = [];
+  expect(() => assertCapturedMachOLibraries(framework, frameworks, { arch: 'arm64', environment: captureMachOLibraryEnvironment({}),
+    realpath: file => file === framework ? versioned : file, read(file) { reads.push(file); return files.get(file); } })).not.toThrow();
+  expect(reads).toContain(helper);
+});
+
 it('checks package rpaths and refuses external search roots', () => {
   const library = path.join(root, 'lib/value.dylib');
   expect(check(new Map([[entry, image([[0x8000001c, '@loader_path/../lib'], [0xc, '@rpath/value.dylib']])], [library, image([])]]))).not.toThrow();

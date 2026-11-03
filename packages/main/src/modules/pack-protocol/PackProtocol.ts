@@ -60,6 +60,9 @@ class PackProtocol implements AppModule {
           standard: true,
           secure: true,
           supportFetchAPI: true,
+          // Chromium checks CORS on a fetch-API scheme, and a pack's frontend is a module script the window
+          // imports from another origin, so the response below says that window may read it
+          corsEnabled: true,
         },
       },
     ]);
@@ -71,7 +74,12 @@ class PackProtocol implements AppModule {
         try {
           const bytes = readPackFile({ packsDir: getAppEnvironment().packsDir, ...target });
           const contentType = MIME_TYPES[path.extname(target.filePath)] || 'application/octet-stream';
-          return new Response(new Uint8Array(bytes), { headers: { 'Content-Type': contentType } });
+          // Granted to whichever origin asked: only the app's windows reach this handler, its default session's
+          // (`file://`, which a request names "null", or the dev server's). The in-app browser has its own session
+          const origin = request.headers.get('Origin');
+          return new Response(new Uint8Array(bytes), {
+            headers: { 'Content-Type': contentType, ...(origin ? { 'Access-Control-Allow-Origin': origin } : {}) },
+          });
         } catch (error) {
           return new Response(error instanceof Error ? error.message : String(error), { status: 409 });
         }
