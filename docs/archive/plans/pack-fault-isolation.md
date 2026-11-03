@@ -2,10 +2,10 @@
 
 Status: frontend pane/form containment is implemented in `713a6c1fd`, including focused lifecycle
 checks and a real external-pack Electron acceptance case. Frontend delivery is complete in the
-[closed settings/pack goal](../archive/goals/goal-settings-and-pack-contracts.md#outcome-2026-10-19), whose user-approved
+[closed settings/pack goal](../goals/goal-settings-and-pack-contracts.md#outcome-2026-10-19), whose user-approved
 final acceptance uses the passing normal integration gate and preserved source-specific evidence.
 Out-of-process execution remains deferred to the design-first
-[security isolation goal](../goals/goal-pack-security-isolation.md).
+[security isolation goal](../../goals/goal-pack-security-isolation.md).
 
 The host scopes Vue component errors in canvas, panel, chat and custom settings forms to the affected
 pane, with owner-attributed nonfatal diagnostics. Settings data and host controls remain outside the
@@ -99,5 +99,5 @@ out-of-process" as a goal with EARS at its centre, not as a hardening task.
 
 - Not a security boundary against hostile packs. In-process JavaScript with access to the bound runtime is
   not contained by an error boundary, and saying otherwise would be worse than saying nothing.
-- Not a replacement for [API consumption](../archive/plans/declared-capabilities.md). That plan describes supported API
+- Not a replacement for [API consumption](declared-capabilities.md). That plan describes supported API
   dependencies; these boundaries contain component failures. Neither confines arbitrary pack code.

@@ -47,7 +47,7 @@ Existing inputs must be reconciled rather than implemented independently:
 - [Archived frontend isolation](../archive/goals/goal-pack-frontend-isolation.md): historical mechanism
   options and survey. Its unfinished requirements are owned by this goal below, not completed or waived.
   Its embedded commands, trust assumptions and execution instructions are not current instructions.
-- [Fault isolation](../plans/pack-fault-isolation.md): crash containment and the synchronous EARS seam.
+- [Fault isolation](../archive/plans/pack-fault-isolation.md): crash containment and the synchronous EARS seam.
   A separate Node process alone is not filesystem/network confinement.
 
 Chrome requires permissions for many extension APIs and distinguishes API permissions from host
@@ -63,7 +63,7 @@ authority audit. Re-audit the implementation before choosing a mechanism.
 |---|---|
 | Common declaration catalog and checked bindings | [Catalog](../../packages/apack-host/src/packs/catalog.ts) and [event admission](../../packages/apack-host/src/packs/event-binding.ts) expose contributions without activation and check runtime membership. Event names and accepted exports do not authenticate a sender or grant resource access. |
 | Caller-bound settings and runtime retirement | [`_createPackServices`](../../packages/apack-sdk/src/services/index.ts) binds/revokes settings access. Other service members still delegate to the ambient services proxy; do not claim all APIs have the same lifetime or consumption enforcement. |
-| Frontend fault containment | [Fault-isolation plan](../plans/pack-fault-isolation.md) records implemented pane/form boundaries and retired-instance checks. These contain failures, not hostile JavaScript or renderer access. |
+| Frontend fault containment | [Fault-isolation plan](../archive/plans/pack-fault-isolation.md) records implemented pane/form boundaries and retired-instance checks. These contain failures, not hostile JavaScript or renderer access. |
 | Pack replacement and provenance | [Installer](../../packages/apack-host/src/packs/installer.ts) supports a user replacement at an app-default pack ID. Install ownership, verified bytes and build/runtime identity are inputs to policy, not security grants or proof of a trusted publisher. |
 | Shared execution and preload | [Backend bridge](../../packages/apack-host/src/packs/runtime/bridge.ts) shares host modules; frontend pack code shares the renderer realm. [Preload](../../packages/preload/src/index.ts) still exposes the API token at runtime; omitting it from [pack-facing types](../../packages/apack-sdk/src/fe/electron-api.ts) does not hide it. |
 | Bus addressing | [Client transport](../../packages/api/src/transport/bus.ts) binds the connection identity and checks sender addressability. It does not prove that the caller owns a named pack/surface. `resolveName` resolves names; event membership checks describe supported messages. Neither is authorization. |
