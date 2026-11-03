@@ -262,7 +262,19 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
         let hintAncestor=hint?.parentElement
         while(hintAncestor){const style=getComputedStyle(hintAncestor);if([style.overflowX,style.overflowY].some(value=>['hidden','auto','scroll','clip'].includes(value)))hintClippingRects.push(box(hintAncestor));hintAncestor=hintAncestor.parentElement}
         if(hint){const range=document.createRange();range.selectNodeContents(hint);for(const r of range.getClientRects())if(r.width>0&&r.height>0)hintTextRects.push({left:r.left,top:r.top,right:r.right,bottom:r.bottom,hit:hint.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))})}
-        return {text:element.textContent,textRects,clippingRects,hintText:hint?.textContent,hintTextRects,hintClippingRects,editor:box(element.closest('[data-testid="composer-editor-area"]')!),viewport:{width:innerWidth,height:innerHeight}}
+        const noteCard=element.closest('[data-onboarding-id="agent-chat-input"]') as HTMLElement
+        const transcript=element.closest('[data-testid="chat-composer-area"]')?.querySelector('[data-testid="chat-transcript"]')?.firstElementChild as HTMLElement
+        const latest=[...transcript.querySelectorAll<HTMLElement>('[data-chat-message]')].filter(node=>node.getClientRects().length>0).at(-1)
+        const latestTextRects:any[]=[]
+        if(latest){const reader=document.createTreeWalker(latest,NodeFilter.SHOW_TEXT);while(reader.nextNode()){
+          const node=reader.currentNode,parent=node.parentElement;if(!node.textContent?.trim()||!parent||parent.closest('[aria-hidden="true"],[inert]')||getComputedStyle(parent).visibility==='hidden')continue
+          let visible=true
+          for(let ancestor:HTMLElement|null=parent;ancestor;ancestor=ancestor.parentElement){const style=getComputedStyle(ancestor);if(style.display==='none'||style.visibility==='hidden'||style.opacity==='0'||ancestor.classList.contains('sr-only')){visible=false;break}if(ancestor===latest)break}
+          if(!visible)continue
+          const range=document.createRange();range.selectNodeContents(node)
+          for(const r of range.getClientRects())if(r.width>0&&r.height>0)latestTextRects.push({left:r.left,top:r.top,right:r.right,bottom:r.bottom,hit:parent.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))})
+        }}
+        return {text:element.textContent,textRects,clippingRects,hintText:hint?.textContent,hintTextRects,hintClippingRects,editor:box(element.closest('[data-testid="composer-editor-area"]')!),noteCard:{...box(noteCard),clientHeight:noteCard.clientHeight,scrollHeight:noteCard.scrollHeight,scrollTop:noteCard.scrollTop},transcript:{...box(transcript),clientHeight:transcript.clientHeight,scrollHeight:transcript.scrollHeight,scrollTop:transcript.scrollTop,latestTextRects},viewport:{width:innerWidth,height:innerHeight}}
       })
       const background=await widget.evaluate(element=>{
         const box=(node:Element)=>{const r=node.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height}}
@@ -274,6 +286,19 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       await writeFile(join(workspace!,'native-background-app-observation.json'),JSON.stringify(observations,null,2))
       expect(background.scrollHeight).toBeLessThanOrEqual(background.clientHeight+1)
       expect(background.scrollTop).toBe(0);expect(background.titleHint).toBe(background.title)
+      expect(metric.noteCard.scrollHeight).toBeLessThanOrEqual(metric.noteCard.clientHeight+1)
+      expect(metric.noteCard.scrollTop).toBe(0)
+      expect(metric.editor.bottom).toBeLessThanOrEqual(Math.min(...metric.hintTextRects.map(r=>r.top))+1)
+      expect(metric.transcript.top).toBeGreaterThanOrEqual(background.panel.bottom-1)
+      expect(metric.transcript.bottom).toBeLessThanOrEqual(metric.noteCard.top+1)
+      expect(metric.transcript.latestTextRects.length).toBeGreaterThan(0)
+      for(const rect of metric.transcript.latestTextRects){
+        expect(rect.hit,'Latest reply text must be reachable').toBe(true)
+        expect(rect.top).toBeGreaterThanOrEqual(metric.transcript.top-1)
+        expect(rect.bottom).toBeLessThanOrEqual(metric.transcript.bottom+1)
+        expect(rect.left).toBeGreaterThanOrEqual(metric.transcript.left-1)
+        expect(rect.right).toBeLessThanOrEqual(metric.transcript.right+1)
+      }
       for(const control of background.controls){
         expect(control.hit,control.name??'Background control').toBe(true)
         for(const clip of [{left:0,top:0,right:metric.viewport.width,bottom:metric.viewport.height},background.panel]){expect(control.left).toBeGreaterThanOrEqual(clip.left-1);expect(control.right).toBeLessThanOrEqual(clip.right+1);expect(control.top).toBeGreaterThanOrEqual(clip.top-1);expect(control.bottom).toBeLessThanOrEqual(clip.bottom+1)}

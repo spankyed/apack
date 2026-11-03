@@ -11,7 +11,7 @@
         ref="inputCardRef"
         class="relative flex min-h-0 flex-col overflow-x-hidden overflow-y-auto rounded-2xl border bg-[#202022]"
         :style="{ '--composer-history-reserve': nativeHistoryReserve, maxHeight: 'calc(var(--composer-available-height) - max(var(--composer-notice-history-reserve, 0px), var(--composer-history-reserve, var(--composer-default-history-reserve))))' }"
-        :class="[$style.input, { 'opacity-50': disabled, [$style.inputCommandActive]: commandHighlight, [$style.inputDropActive]: isDraggingFile, [$style.inputRecording]: isListening }]"
+        :class="[$style.input, { 'opacity-50': disabled, [$style.inputBackgroundNotes]: nativeBackgrounded, [$style.inputCommandActive]: commandHighlight, [$style.inputDropActive]: isDraggingFile, [$style.inputRecording]: isListening }]"
         data-onboarding-id="agent-chat-input"
         @focusin="nativeFieldFocused = isNativeField($event.target)"
         @focusout="nativeFieldFocused = isNativeField($event.relatedTarget)"
@@ -83,7 +83,7 @@
           <NativeComposerPlacements class="ml-auto min-w-0" :frames="nativeUi.composer" location="mode" @height="nativeModeHeight = $event" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />
         </div>
 
-        <!-- Keep the background explanation and actions together above the scrolling draft. -->
+        <!-- Keep the background explanation and actions visible while the draft scrolls. -->
         <div class="sticky bottom-0 z-10 shrink-0 bg-[#202022]">
           <p v-if="nativeBackgrounded" role="status" data-background-note-hint class="px-4 pt-2 text-xs leading-relaxed text-neutral-400">This conversation moved to the background. Your notes stay here.</p>
           <div data-composer-toolbar class="flex shrink-0 items-center justify-between gap-3 px-3 pb-3 pt-2 text-neutral-500">
@@ -975,10 +975,22 @@ const handleSubmit = async () => {
   &:focus-within { border-color: rgba(147, 180, 240, 0.32); }
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
+/* Background notes share the pane with the live session card and its transcript. */
+.inputBackgroundNotes {
+  --composer-default-history-reserve: min(4rem, calc(var(--composer-available-height) * 0.4));
+}
+.inputBackgroundNotes :global([data-testid="composer-session-strip"]) { padding-block: 4px; }
+.inputBackgroundNotes :global([data-testid="composer-editor-area"]),
+.inputBackgroundNotes :global(.composer-document) { min-height: 40px; }
+.inputBackgroundNotes :global(.composer-document) { padding-block: 8px; }
+.inputBackgroundNotes :global(.ProseMirror) { min-height: 24px; }
+.inputBackgroundNotes :global([data-background-note-hint]) { padding-top: 4px; }
+.inputBackgroundNotes :global([data-composer-toolbar]) { padding-block: 4px; }
 @media (max-height: 700px) {
   :global([data-composer-form]) { padding-top: 4px; padding-bottom: 4px; }
   .input :global([data-composer-toolbar]) { padding-top: 4px; padding-bottom: 4px; }
   .input { --composer-default-history-reserve: 2rem; --composer-field-history-reserve: 2rem; }
+  .inputBackgroundNotes { --composer-default-history-reserve: min(4rem, calc(var(--composer-available-height) * 0.4)); }
   /* A rich draft must leave the conversation's task controls reachable. */
   .input:has(:global(.composer-document) :is(h1, h2, h3, pre, ul, ol, blockquote)):not(:has(:global(.native-strip--open))) {
     --composer-default-history-reserve: 6rem;
