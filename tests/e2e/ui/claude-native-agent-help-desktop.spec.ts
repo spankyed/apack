@@ -1,4 +1,4 @@
-import { readFile, readdir, writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
@@ -97,7 +97,7 @@ test('reads original Help for the selected Agent and preserves both drafts', asy
 
   const parent='Keep the parent release review draft unchanged.'
   await expect.poll(async()=>(await context()).messages.some((message:any)=>message.text?.includes('ParentSubagentFixtureComplete'))).toBe(true)
-  await composer.fill(parent);const before=await context()
+  await composer.fill(parent);const _before=await context()
   await row.getByRole('button',{name:'Open Agent',exact:true}).click()
   const focused=appPage.getByRole('region',{name:'Focused Agent conversation',exact:true}),form=focused.getByRole('form',{name:'Agent message',exact:true}),field=form.locator('[contenteditable="true"]')
   const nativeWindow=await electronApp.browserWindow(appPage),captures:string[]=[],samples:any[]=[],readings:any[]=[]

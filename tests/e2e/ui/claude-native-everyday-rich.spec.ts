@@ -1,5 +1,5 @@
 import { readClipboardSnapshot, restoreClipboardSnapshot } from '../../_support/electron-clipboard.ts'
-import { readFile, readdir, writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'

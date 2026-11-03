@@ -24,6 +24,7 @@ test('recovers a linked live child after complete Electron shutdown and relaunch
   await writeFile(testInfo.outputPath(name),Buffer.from(png,'base64'))
  }
  const pictures=async(stage:string)=>{for(const[name,size]of[['normal',{width:1100,height:900}],['compact',{width:680,height:600}]]as const){await appPage.setViewportSize(size);await widget.scrollIntoViewIfNeeded();await capture('apack-native-background-app-'+stage+'-'+name+'.png')}}
+ let cleanupError: unknown, cleanupFailed=false
  try{
   expect(report.mainPid).not.toBe(saved.mainPid);expect(api.pid).not.toBe(saved.apiPid)
   report.oldMain=await processState(saved.mainPid);report.oldApi=await processState(saved.apiPid)
@@ -67,7 +68,8 @@ test('recovers a linked live child after complete Electron shutdown and relaunch
    if(report.authority){await expect.poll(async()=>{const state=await processState(report.authority.pid);return state.state==='gone'||state.state==='Z'||state.start!==report.authority.process.start},{timeout:10000}).toBe(true);report.authorityAfterStop=await processState(report.authority.pid)}
    if(report.phase==='reply-verified'){await expect(widget.getByLabel('Background session usage',{exact:true})).toHaveCount(0);await expect(composer).toHaveText(saved.retainedDraft);report.phase='verified';await save();await pictures('stopped')}
   }
-  }catch(error){report.phase='failed-'+report.phase;report.cleanupProblem=String(error);throw error}finally{await save()}
+  }catch(error){report.phase='failed-'+report.phase;report.cleanupProblem=String(error);cleanupError=error;cleanupFailed=true}finally{await save()}
  }
+ if(cleanupFailed)throw cleanupError
  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({nativeBackgroundAppRestart:true,nativeBackgroundDraftsRestored:true,nativeBackgroundFreshStatus:true,nativeBackgroundWorkerContinuity:true,nativeBackgroundUiStop:true,nativeBackgroundAppProcessesReplaced:true,nativeBackgroundParentPreserved:true,sessionId:saved.before.sessionId,backgroundSessionId:saved.job.sessionId,jobId:saved.job.id,actualAppGui:true}))
 })

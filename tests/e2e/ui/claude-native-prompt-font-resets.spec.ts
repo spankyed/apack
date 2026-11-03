@@ -78,7 +78,7 @@ test('preserves rich drafts while original native prompt decorations reset fonts
   await expect(paint).toHaveCSS('font-weight','400');await expect(paint).toHaveCSS('font-style','normal');await expect(paint).toHaveCSS('opacity','1')
   const controls=async()=>(await readFile(join(workspace!,'native-font-reset-controls.jsonl'),'utf8').catch(()=>'')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line))
   await expect.poll(async()=>(await controls()).some((row:any)=>row.reply?.result?.text===canonical&&row.reply.result.decorations?.some((run:any)=>run.bold===false&&run.italic===false&&run.dimColor===false))).toBe(true)
-  const selection=()=>composer.evaluate(el=>{const selected=document.getSelection();return {anchor:selected?.anchorNode?.textContent,anchorOffset:selected?.anchorOffset,focus:selected?.focusNode?.textContent,focusOffset:selected?.focusOffset,collapsed:selected?.isCollapsed}})
+  const selection=()=>composer.evaluate(()=>{const selected=document.getSelection();return {anchor:selected?.anchorNode?.textContent,anchorOffset:selected?.anchorOffset,focus:selected?.focusNode?.textContent,focusOffset:selected?.focusOffset,collapsed:selected?.isCollapsed}})
   const beforeSelection=await selection();expect(beforeSelection.collapsed).toBe(true)
   const status=card.getByTestId('composer-native-status');await expect(status).toBeVisible()
   const win=await electronApp.browserWindow(appPage),captures:any[]=[]
@@ -87,7 +87,7 @@ test('preserves rich drafts while original native prompt decorations reset fonts
     for(const control of [paint,composer,status,card.getByRole('button',{name:'Send',exact:true})])await expect(control).toBeInViewport({ratio:1})
     await expect(composer).toHaveText(visible);await expect(paint).toHaveText('Review notes')
     const style=await paint.evaluate(el=>{const s=getComputedStyle(el);return {fontWeight:s.fontWeight,fontStyle:s.fontStyle,opacity:s.opacity}})
-    const sibling=await composer.evaluate(el=>{const walk=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);let node;while(node=walk.nextNode()){if(node.textContent?.includes(' and rollout')){const s=getComputedStyle(node.parentElement!);return {fontWeight:s.fontWeight,fontStyle:s.fontStyle}}}throw Error('Missing adjacent rich text')})
+    const sibling=await composer.evaluate(el=>{const walk=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);let node;while((node=walk.nextNode())){if(node.textContent?.includes(' and rollout')){const s=getComputedStyle(node.parentElement!);return {fontWeight:s.fontWeight,fontStyle:s.fontStyle}}}throw Error('Missing adjacent rich text')})
     expect(style).toEqual({fontWeight:'400',fontStyle:'normal',opacity:'1'});expect(sibling.fontStyle).toBe('italic');expect(Number(sibling.fontWeight)).toBeGreaterThanOrEqual(600)
     expect(await selection()).toEqual(beforeSelection)
     await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))

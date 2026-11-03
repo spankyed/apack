@@ -11,7 +11,7 @@ test('task-backed confirmation: hands an original native conversation to a separ
   test.setTimeout(120000)
   expect(process.env.HOME).toBe(workspace)
   const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
-  const restriction = planScenario === 'managed-clear'
+  const _restriction = planScenario === 'managed-clear'
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
   await app.waitForSurface('default-setup/threads'); await app.navigate('default-setup/threads')

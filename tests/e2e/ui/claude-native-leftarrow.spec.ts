@@ -18,7 +18,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
   test.setTimeout(120000)
   expect(process.env.HOME).toBe(workspace)
   const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
-  const restriction = planScenario === 'managed-clear'
+  const _restriction = planScenario === 'managed-clear'
   const parentOwnerLoss = process.env.CLAUDE_RESEARCH_BACKGROUND_OWNER_LOSS_APP === '1'
   let transferredForAppRestart = false
   const childAppRestart = process.env.CLAUDE_RESEARCH_BACKGROUND_APP_RESTART === '1'

@@ -76,7 +76,7 @@ test('preserves underline, wrapping and input through original native line reset
   await expect(underlineButton).toBeVisible();await underlineButton.click();await expect(composer.locator('u')).toHaveText(base)
   await composer.press('ArrowRight')
   const controls=async()=>(await readFile(join(workspace!,'native-font-reset-controls.jsonl'),'utf8').catch(()=>'')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line))
-  const selected=()=>composer.evaluate(el=>{const selection=document.getSelection();return {anchor:selection?.anchorNode?.textContent,anchorOffset:selection?.anchorOffset,focus:selection?.focusNode?.textContent,focusOffset:selection?.focusOffset,collapsed:selection?.isCollapsed}})
+  const selected=()=>composer.evaluate(()=>{const selection=document.getSelection();return {anchor:selection?.anchorNode?.textContent,anchorOffset:selection?.anchorOffset,focus:selection?.focusNode?.textContent,focusOffset:selection?.focusOffset,collapsed:selection?.isCollapsed}})
   const status=card.getByTestId('composer-native-status');await expect(status).toBeVisible()
   const win=await electronApp.browserWindow(appPage),captures:any[]=[],stages:any[]=[]
   for(let index=0;index<names.length;index++){
