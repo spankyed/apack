@@ -8,6 +8,8 @@ it('renders billing without helper output and clears it when its owner disappear
  const app=createApp({render:()=>h(StatusLine,state)}); app.mount(root)
  try {
   await nextTick(); expect(root.textContent).toContain('Usage credits charged')
+  state.nativeUi={status:'live',tree:{kind:'box',children:[]},billing:state.nativeUi!.billing}; await nextTick()
+  expect(root.textContent).toContain('Usage credits charged')
   state.nativeUi={status:'connecting'}; await nextTick()
   expect(root.textContent).toContain('Billing status unknown')
   state.nativeUi=undefined; await nextTick()
