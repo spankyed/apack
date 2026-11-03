@@ -5,7 +5,7 @@ import { createLogger } from '@apackdev/sdk/logger';
 import { resolveAppEnvironment, getAppVersion } from '@apackdev/sdk/env';
 import { _packDeclarationProblem, type PackRegistration } from '@apackdev/sdk/framework';
 import { packSystemIds, type PackRegistry, type PackOrigin } from '../registry.ts';
-import { readInstalledPackBuild, readInstalledPackBuilds, type PackManifest } from '../discovery.ts';
+import { readInstalledPackBuild, type PackManifest } from '../discovery.ts';
 import { disabledPackIds, forgetPacksExcept } from '../installed.ts';
 import { PACK_LAYOUT } from '../layout.ts';
 import { isHostCompatible } from '../installer.ts';
@@ -143,8 +143,7 @@ export function clearPackRequireCache(packDir: string): void {
  */
 export function loadExternalPacks(registry: LoadProblemSink & Pick<PackRegistry, 'catalog' | 'refreshCatalog'>): LoadedPack[] {
   const { packsDir } = resolveAppEnvironment();
-  registry.refreshCatalog(packsDir);
-  const discovered = readInstalledPackBuilds(packsDir);
+  const discovered = registry.refreshCatalog(packsDir);
   // Boot is where what is installed is settled, so it is where rows for packs that are gone are dropped
   forgetPacksExcept(new Set(discovered.map(entry => entry.id)));
   const disabled = disabledPackIds();

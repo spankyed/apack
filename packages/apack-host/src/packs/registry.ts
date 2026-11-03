@@ -35,7 +35,7 @@ import { SDK_ENTITIES, SDK_REL_KINDS, SDK_RELATION_RULES, SDK_ROW_RULES, SDK_ROL
 import { HOST_SYSTEM_EVENT_TYPES, SURFACE_EVENT_TYPES } from '@apackdev/sdk/events';
 import { HOST_PACK_ID, resolveName, type FeatureRef } from '@apackdev/sdk/ids';
 import { HOST_ENTITY_TYPES } from '../app-state/index.ts';
-import { readInstalledPackBuilds, packContentOrder } from './discovery.ts';
+import { readInstalledPackBuilds, packContentOrder, type InstalledPackBuild } from './discovery.ts';
 import type { PackContentTarget } from './runtime/apply.ts';
 import { createOwnedStepStore, createDesignationStore } from './extensions.ts';
 import { createContentWriterStore, createApplierStore, createShutdownHooks } from './backend-extensions.ts';
@@ -204,7 +204,7 @@ export interface PackReplacementOptions {
 
 export interface PackRegistry extends PackRegistryView {
   readonly catalog: ContributionCatalog;
-  refreshCatalog(packsDir?: string, disabled?: ReadonlySet<string>): void;
+  refreshCatalog(packsDir?: string, disabled?: ReadonlySet<string>): InstalledPackBuild[];
   /** Registers a pack; throws on a collision, registering none of it */
   registerPack(pack: PackRegistration, origin?: PackOrigin): void;
   /** Replace an accepted runtime atomically; returns retirement errors after a successful commit. */
@@ -424,16 +424,17 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
 
   let catalogDir: string | undefined;
 
-  function refreshCatalog(packsDir = installedPacksDir?.() ?? catalogDir, disabled?: ReadonlySet<string>): void {
+  function refreshCatalog(packsDir = installedPacksDir?.() ?? catalogDir, disabled?: ReadonlySet<string>): InstalledPackBuild[] {
     const appSources = appPackSourcesDir?.();
     if (appPackSourcesDir) catalog.setAppPackSources(appSources === undefined
       ? { sources: [], problems: [] } : readAppPackSources(appSources));
-    if (!packsDir) return;
+    if (!packsDir) return [];
     disabled ??= disabledPackIds();
     const sources: PackCatalogSource[] = [];
     const problems: PackCatalogProblem[] = [];
     const previousByDir = new Map(catalog.getSnapshot().packs.map(entry => [entry.dir, entry]));
-    for (const entry of readInstalledPackBuilds(packsDir)) {
+    const discovered = readInstalledPackBuilds(packsDir);
+    for (const entry of discovered) {
       const { id, dir } = entry;
       if (entry.build) {
         const { snapshot, integrity } = entry.build;
@@ -447,6 +448,7 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     // The first discovery is boot's, which takes what is installed (`admitSettings`)
     catalog.replace(sources, problems, { reportConflicts: true, admitSettings: catalogDir !== undefined });
     catalogDir = packsDir;
+    return discovered;
   }
 
 

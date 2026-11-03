@@ -83,6 +83,7 @@ describe('pack-loader', () => {
       const marker = path.join(tmpDir, 'runtime-executed');
       fs.writeFileSync(path.join(dir, 'runtime', 'index.cjs'), `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'executed');`);
       fs.writeFileSync(path.join(dir, PACK_LAYOUT.snapshot), JSON.stringify({ format: PACK_SNAPSHOT_FORMAT, manifest: { id: 'broken-data' } }));
+      sealPack(dir);
       const warnings: string[] = [];
       const unsubscribe = rootEvents.onLog(event => {
         if (event.level === 'warn' && event.source === 'pack-loader') warnings.push(event.message);
@@ -432,6 +433,14 @@ describe('pack-loader: bundled runtime (runtime/index.cjs)', () => {
     }
   });
 
+  it('reverifies a later pack after an earlier runtime changes its bytes', () => {
+    const target = makeBundledPack('z-target', registration('z-target'));
+    makeBundledPack('a-mutator', `require('node:fs').appendFileSync(${JSON.stringify(path.join(target, PACK_LAYOUT.runtimeEntry))}, '\\n// changed');\n${registration('a-mutator')}`);
+    const problems = new Map<string, string>();
+    expect(loadExternalPacks({ ...registry, recordLoadProblem: (id, problem) => problems.set(id, problem) }).map(pack => pack.origin.id)).toEqual(['a-mutator']);
+    expect(problems.get('z-target')).toContain('checksum mismatch runtime/index.cjs');
+  });
+
   it('refuses a runtime whose registration id does not match the manifest', () => {
     makeBundledPack('real-id', registration('other-id'));
     expect(loadExternalPacks(registry)).toEqual([]);
@@ -463,6 +472,7 @@ describe('pack-loader: bundled runtime (runtime/index.cjs)', () => {
   it('refuses a changed manifest before executing runtime code', () => {
     const dir = makeBundledPack('changed-pack', 'throw new Error("runtime must not execute")');
     fs.writeFileSync(path.join(dir, 'apack.json'), JSON.stringify({ id: 'changed-pack', name: 'Changed', version: '1.0.0' }));
+    sealPack(dir);
     const problems = new Map<string, string>();
     expect(loadExternalPacks({ ...registry, recordLoadProblem: (id, problem) => problems.set(id, problem) })).toEqual([]);
     expect(problems.get('changed-pack')).toContain('manifest does not match');
@@ -495,6 +505,7 @@ describe('pack-loader: bundled runtime (runtime/index.cjs)', () => {
   ])('skips a pack %s apack CLI built, before loading its runtime, saying which side to move', (_side, format, reason) => {
     const dir = makeBundledPack('other-build', 'throw new Error("its runtime was loaded")');
     fs.writeFileSync(path.join(dir, PACK_LAYOUT.snapshot), JSON.stringify({ format, sdkVersion: '0.1.0' }));
+    sealPack(dir);
     const warnings: string[] = [];
     const unsubscribe = rootEvents.onLog((event) => { if (event.level === 'warn') warnings.push(event.message); });
     try {
