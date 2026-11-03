@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 export function pasteIntoElement(el: HTMLElement, text: string): void {
   const event = new CustomEvent('apack:paste', { detail: { text }, bubbles: true, cancelable: true });
   const handled = !el.dispatchEvent(event);

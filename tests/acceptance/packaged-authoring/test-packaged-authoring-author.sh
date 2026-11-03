@@ -55,7 +55,7 @@ step "1. Install @apackdev/cli + @apackdev/sdk from the tarballs"
 # without an error (rollup's), so the build fails later for want of it
 mkdir "$WORK/tools"
 # The SDK's @apackdev/ears comes from its tarball too
-(cd "$WORK/tools" && npm init -y >/dev/null && npm pkg set "overrides.elmdb=file:$ELMDB_TGZ" && npm install --silent --no-audit --no-fund "$EARS_TGZ" "$SDK_TGZ" "$CLI_TGZ")
+(cd "$WORK/tools" && npm init -y >/dev/null && npm pkg set "overrides.elmdb=file:$ELMDB_TGZ" && npm install --loglevel=error --no-audit --no-fund "$EARS_TGZ" "$SDK_TGZ" "$CLI_TGZ")
 APACK="$WORK/tools/node_modules/.bin/apack"
 "$APACK" --version
 
@@ -66,7 +66,7 @@ PACK="$WORK/demo-pack"
 cd "$PACK"
 # The tarballs stand in for the npm registry
 npm pkg set "dependencies.@apackdev/ears=file:$EARS_TGZ" "dependencies.@apackdev/sdk=file:$SDK_TGZ" "devDependencies.@apackdev/cli=file:$CLI_TGZ" "devDependencies.@apackdev/testing=file:$TESTING_TGZ" "overrides.elmdb=file:$ELMDB_TGZ"
-npm install --silent --no-audit --no-fund
+npm install --loglevel=error --no-audit --no-fund
 # @apackdev/sdk carries the platform API only; the component library and its editors come with @apackdev/ui
 for lib in @tiptap highlight.js lowlight @guolao/vue-monaco-editor; do
   [ ! -e "node_modules/$lib" ] || fail "a backend-only pack installed $lib"
@@ -76,7 +76,7 @@ APACK="$PACK/node_modules/.bin/apack"
 "$APACK" pack add feature notes --description "Manage notes." --label Notes >/dev/null
 # @apackdev/ui's heavier components must build in a pack, not only in the monorepo
 npm pkg set "dependencies.@apackdev/ui=file:$UI_TGZ"
-npm install --silent --no-audit --no-fund
+npm install --loglevel=error --no-audit --no-fund
 cat > src/features/notes/fe/editors.ts <<'TS'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor';
 import SimpleMonacoEditor from '@apackdev/ui/components/SimpleMonacoEditor';
@@ -90,7 +90,7 @@ node -e '
 '
 "$APACK" pack init-tests
 npm pkg set "devDependencies.@apackdev/testing=file:$TESTING_TGZ"
-npm install --silent --no-audit --no-fund
+npm install --loglevel=error --no-audit --no-fund
 
 step "Name the checkout the build resolves a shipped pack through"
 # `apack pack build` reads a dependency on a shipped pack out of an app's `packages/` (fetch-deps'
@@ -207,7 +207,7 @@ node -e '
   fs.writeFileSync("apack.json", JSON.stringify(m, null, 2) + "\n");
 '
 # The digest service imports the AI SDK's pure pieces (Output); mockInference runs the AI SDK in tests
-npm install --silent --no-audit --no-fund --save ai@^7.0.100
+npm install --loglevel=error --no-audit --no-fund --save ai@^7.0.100
 
 step "3. apack pack build"
 "${BUILD_ENV[@]}" "$APACK" pack build | tee "$WORK/build.log"

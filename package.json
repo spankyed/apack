@@ -14,7 +14,8 @@
     "packages/*"
   ],
   "engines": {
-    "node": ">=23.5.0"
+    "node": ">=23.5.0",
+    "npm": ">=11"
   },
   "scripts": {
     "preinstall": "[ \"$NODE_ENV\" = 'production' ] && echo '\u26a0\ufe0f  NODE_ENV=production \u2014 devDependencies will be skipped. Run: unset NODE_ENV' >&2 || true",

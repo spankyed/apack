@@ -54,13 +54,13 @@ jobs:
           packages/apack-cli/tests/build/compiler-elf-cache.spec.ts
           packages/apack-cli/tests/build/compiler-elf-environment.spec.ts
           packages/apack-cli/tests/build/compiler-native-libraries.spec.ts
-          --bail=1 --poolOptions.threads.maxThreads=1 --poolOptions.threads.minThreads=1
+          --bail=1 --maxWorkers=1
       - name: Native ownership and outside-library admission
         if: ${{ !inputs.test_name }}
         run: >-
           node node_modules/vitest/vitest.mjs run --config vitest.native.config.ts --project @apackdev/cli
           packages/apack-cli/tests/build/compiler-elf-libraries.native.spec.ts
-          --bail=1 --poolOptions.threads.maxThreads=1 --poolOptions.threads.minThreads=1 --no-file-parallelism
+          --bail=1 --maxWorkers=1 --no-file-parallelism
       - name: Compiler cancellation and descendant ownership
         if: ${{ !inputs.test_name }}
         run: >-
@@ -68,7 +68,7 @@ jobs:
           packages/apack-cli/tests/build/pack-builder.spec.ts
           --testNamePattern='drains an interrupted frontend startup|cancels a frontend input check|stops its worker before removing|stops remaining compiler descendants|force-stops a compiler'
           --reporter=default --reporter=json --outputFile="$RUNNER_TEMP/compiler-cancellation.json"
-          --bail=1 --poolOptions.threads.maxThreads=1 --poolOptions.threads.minThreads=1
+          --bail=1 --maxWorkers=1
       - name: Native backend publication, compiler threads and launch search paths
         env:
           APACK_TEST_NAME: ${{ inputs.test_name || 'captures native .* libraries and retains the incumbent|retains launch-time native search paths' }}
@@ -80,7 +80,7 @@ jobs:
           packages/apack-cli/tests/build/compiler-native-launch.native.spec.ts
           --testNamePattern "$APACK_TEST_NAME"
           --reporter=default --reporter=json --outputFile="$RUNNER_TEMP/compiler-native-publication.json"
-          --bail=1 --poolOptions.threads.maxThreads=1 --poolOptions.threads.minThreads=1 --no-file-parallelism
+          --bail=1 --maxWorkers=1 --no-file-parallelism
       - name: Retained Vite process ownership
         if: ${{ !inputs.test_name }}
         run: >-
@@ -88,7 +88,7 @@ jobs:
           packages/apack-cli/tests/build/compiler-native-vite.native.spec.ts
           --testNamePattern='retains independent captured Vite owners'
           --reporter=default --reporter=json --outputFile="$RUNNER_TEMP/compiler-vite-ownership.json"
-          --bail=1 --poolOptions.threads.maxThreads=1 --poolOptions.threads.minThreads=1 --no-file-parallelism
+          --bail=1 --maxWorkers=1 --no-file-parallelism
       - name: Build worker platform baseline
         if: ${{ !inputs.test_name }}
         run: >-
@@ -96,7 +96,7 @@ jobs:
           packages/apack-cli/tests/build/build-worker.native.spec.ts
           --testNamePattern='captures native launch identity|uses the captured compiler'
           --reporter=default --reporter=json --outputFile="$RUNNER_TEMP/compiler-worker-baseline.json"
-          --bail=1 --poolOptions.threads.maxThreads=1 --poolOptions.threads.minThreads=1 --no-file-parallelism
+          --bail=1 --maxWorkers=1 --no-file-parallelism
       - name: Verify selected compiler cases executed
         run: >-
           node .github/scripts/verify-filtered-tests.cjs

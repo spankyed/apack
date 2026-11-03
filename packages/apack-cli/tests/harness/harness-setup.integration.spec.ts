@@ -163,7 +163,8 @@ describe('apack pack add feature in a pack without the unit test setup', () => {
     expect(JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).devDependencies['@apackdev/testing']).toMatch(/^\^/);
     // The kept config is the scaffold's, which loads tests/setup.ts
     // inherent: runs a pack's own vitest suite — the nested runner is the thing under test
-    const unit = await run(process.execPath, [VITEST, 'run'], pack);
+    // Verbose, because which file ran is the question and the default reporter names none of them off a terminal
+    const unit = await run(process.execPath, [VITEST, 'run', '--reporter=verbose'], pack);
     expect(unit.output).toMatch(/tests\/features\/memos\/be\/system\.spec\.ts/);
     expect(unit.output).toMatch(/Tests\s+1 passed/);
   });
