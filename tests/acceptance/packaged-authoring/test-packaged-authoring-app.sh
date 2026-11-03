@@ -2,7 +2,7 @@
 # The half of the packaged-authoring check that needs the built app: run the pack's own E2E suite against
 # it, then read back the data the app written with the packed CLI.
 #
-# It picks up where the author half left off, through `tests/authoring-handoff/work.json` — a path and a
+# It picks up where the author half left off, through `.apack/tests/authoring-handoff/work.json` — a path and a
 # digest, because the work dir is outside the checkout on purpose and the chain can only derive an edge from
 # a repo-relative path.
 #
@@ -12,8 +12,8 @@
 # KEEP_WORK=1 keeps the work dir and the app data dir.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-. "$ROOT/tests/scripts/lib/authoring.sh"
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+. "$ROOT/tests/acceptance/packaged-authoring/support.sh"
 
 [ -f "$HANDOFF/work.json" ] || fail "no $HANDOFF/work.json — run npm run test:packaged-authoring:author first"
 eval "$(node -e '

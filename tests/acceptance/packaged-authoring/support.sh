@@ -7,14 +7,14 @@
 # mentions the app either.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 
 # Where the author half tells the app half what it built. Repo-relative because that is the only thing the
 # chain can derive an edge from (`dependsOn` reads one step's `outputs` against another's `inputs`), and
 # **the work dir itself stays outside the checkout**: a pack built inside it would resolve `@apackdev/*` by
 # walking up to the workspace `node_modules`, which is the one thing this check exists to prove does not
 # happen. So the handoff is a path and a digest in the tree, and the tree the pack lives in is not.
-HANDOFF="$ROOT/tests/authoring-handoff"
+HANDOFF="$ROOT/.apack/tests/authoring-handoff"
 
 # Every phase goes through here, so this is the one place that can say where the time went. This script
 # is the tail of the chain's critical path (`packages:ensure -> compile -> build:runtime -> this`), and it

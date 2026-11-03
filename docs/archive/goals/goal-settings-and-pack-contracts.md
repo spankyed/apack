@@ -1658,8 +1658,8 @@ historical strict-gate references in this register retain their original evidenc
 
 ### External authoring and release evidence
 
-Use the existing [packaged-authoring author half](../../../tests/scripts/test-packaged-authoring-author.sh)
-and [app half](../../../tests/scripts/test-packaged-authoring-app.sh), not a second acceptance harness.
+Use the existing [packaged-authoring author half](../../../tests/acceptance/packaged-authoring/test-packaged-authoring-author.sh)
+and [app half](../../../tests/acceptance/packaged-authoring/test-packaged-authoring-app.sh), not a second acceptance harness.
 They pack the actual CLI/SDK/UI/EARS/testing distribution trees into local npm tarballs, install them
 in a temporary project outside the monorepo, scaffold/build/test a pack and prepare a verified archive.
 The app half runs that exact archive against the explicitly selected built host with disposable

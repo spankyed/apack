@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Page, TestInfo } from '@playwright/test';
 import { test, expect, type AppDriver } from '@apackdev/testing';
-import { richThreadFixture } from '../../fixtures/conversations.ts';
+import { richThreadFixture } from '../../_support/conversations.ts';
 interface PagingWindow {
   __sendToSystem(system: string, event: Record<string, unknown>): void;
   applicationState: {

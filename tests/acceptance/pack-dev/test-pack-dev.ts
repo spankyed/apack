@@ -7,10 +7,10 @@ import { once } from 'node:events';
 import { chromium, expect, type Browser } from '@playwright/test';
 import { sessionFile } from '@apackdev/host/dev-session';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
-import { assertCompilerTestRunner } from '../../packages/apack-cli/tests/_support/compiler-test-runner.ts';
+import { assertCompilerTestRunner } from '../../../packages/apack-cli/tests/_support/compiler-test-runner.ts';
 
 assertCompilerTestRunner();
-const root = path.resolve(import.meta.dirname, '../..');
+const root = path.resolve(import.meta.dirname, '../../..');
 const pack = path.join(root, 'tests/packs/external-pack');
 const manifestFile = path.join(pack, 'apack.json');
 const original = fs.readFileSync(manifestFile, 'utf8');

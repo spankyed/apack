@@ -141,7 +141,7 @@ jobs:
         run: node scripts/with-source.mjs node node_modules/vitest/vitest.mjs run --project @apackdev/cli packages/apack-cli/tests/build/pack-builder.spec.ts --maxWorkers 2
       - name: Source pack dev install and rebuild
         if: ${{ !cancelled() && (inputs.suite == 'all' || inputs.suite == 'cli') && steps.preparation.outcome == 'success' }}
-        run: node scripts/with-source.mjs tsx tests/scripts/test-pack-dev.ts
+        run: node scripts/with-source.mjs tsx tests/acceptance/pack-dev/test-pack-dev.ts
       - name: Real LMDB import and rollback
         if: ${{ !cancelled() && inputs.suite == 'all' && steps.preparation.outcome == 'success' }}
         working-directory: packages/apack-host

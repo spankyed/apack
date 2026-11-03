@@ -7,5 +7,5 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 bash "$HERE/test-external-pack-contract.sh"
-"$HERE/../../node_modules/.bin/tsx" "$HERE/prepare-default-pack-fork.ts"
+"$HERE/../../../node_modules/.bin/tsx" "$HERE/prepare-default-pack-fork.ts"
 bash "$HERE/test-external-pack-app.sh" "$@"

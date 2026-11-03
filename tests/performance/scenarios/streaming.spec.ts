@@ -4,11 +4,11 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '@apackdev/testing';
 import { performanceSchedule, streamingBacklog } from '@apackdev/testing/performance';
-import { streamingFixture } from '../fixtures/conversations.ts';
-import { createWarmScenario } from './scenario.ts';
-import type { PerformanceWindow } from './window.ts';
+import { streamingFixture } from '../../_support/conversations.ts';
+import { createWarmScenario } from '../_support/scenario.ts';
+import type { PerformanceWindow } from '../_support/window.ts';
 
-const source = fileURLToPath(new URL('./fixtures/claude-stream.mjs', import.meta.url));
+const source = fileURLToPath(new URL('../fixtures/claude-stream.mjs', import.meta.url));
 const schedule = performanceSchedule(process.env.APACK_PERFORMANCE_MODE ?? 'lightweight',
   Number(process.env.APACK_PERFORMANCE_TRIALS ?? 20), process.env.APACK_PERFORMANCE_COMPARE_MODE);
 function createStreamingRun(target: Parameters<typeof createWarmScenario>[2]) {

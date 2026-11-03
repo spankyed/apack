@@ -13,15 +13,12 @@ packages/*/publish/
 # Stale tsc output in source dirs (preload has no outDir)
 packages/preload/src/**/*.js
 
-# Test output
+# Legacy output from older runners; current reports live under .apack/
 tests/results/
 
 # Build output
 native/speech/macos/SpeechHelper
 build/prod/logs/
-
-# The packaged-authoring check hands its work dir from the author half to the app half through here
-tests/authoring-handoff/
 
 # API Extractor's working directory: the regenerated reports `api:check` compares against, and the
 # declarations it builds them from. Each package ignores its own, which `git` reads — but the root

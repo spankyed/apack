@@ -1,79 +1,18 @@
-# E2E Tests
+# Application E2E tests
 
-Playwright tests that launch the full Electron app and interact with the XState application state machine. Looking at the app is `drive/`'s job, not this suite's.
+Read [the test placement guide](../README.md) for ownership and commands. This suite contains real
+Electron checks: `smoke/` is the app gate, `ui/` checks rendered behavior, and `app-integration/` checks
+real process boundaries. The latter two are opt-in, not ordinary chain gates. One-off driving belongs
+in `drive/`.
 
-## When a test belongs here
+Run the affected spec with `npm run test:e2e -- ui/<spec>` or
+`npm run test:e2e -- app-integration/<spec>`. Tests use the built app; rebuild the affected output first.
 
-**This is not a gate.** It is off `npm run chain`; `npm run chain -- --e2e` includes it when you want it,
-and nothing requires it before a merge. It was built to *drive* the app — to look at what you changed, and
-to let an agent see what it built — and it spent a while as a chain step without anyone deciding it should
-be one. Everything below follows from that.
-
-**Three kinds of test live here, and the directory a spec goes in is the question it answers.** A new one
-that fits none of them probably belongs somewhere else.
-
-- **`smoke/` — is it an app at all?** The gate: it launches, connects, has its surfaces, and keeps to its
-  own data dir. Its own chain step, and the only part of this suite anything gates on.
-- **`ui/` — something you need to see.** Rendered behaviour, which is the founding purpose of the suite.
-- **`app-integration/` — something that needs the real process boundary.** A live port, the websocket,
-  the CLI against a real data dir, the packaged pack loader. These never assert on the UI at all; they are
-  here because an in-memory harness has no port to bind.
-
-A spec that needs a path in the repo resolves it three levels up now (`../../..`), not two — moving these
-into folders broke three of them at once, and the suite is what said so.
-
-**Audited against those two halves on 2026-10-08: twelve of the thirteen specs here meet both.** Each
-`app-integration/` spec rests on something no harness has — a token-bearing WebSocket, an API process
-crashed and restarted, `apack db` against a live data dir, `POST /dev/reload`, `media://`, the bus
-dropping sends until a client connects, key strings absent from logs and files — and each `ui/` spec
-asserts rendered output, which is the other half: a component reaching for a surface it is not rendered in
-(`navigation`), main accepting a ref as a window id (`popout`), a pack's compiled entries reaching the
-Settings Help reader (`settings-help`), a panel a surface lends another actually drawing (`fallback-panel`).
-
-**The shape that fails the second half is worth recognising, because it reads like a UI test.** A spec
-that sends a surface an event and then asserts *shell state* — which surface is open, what the context holds
-— needs no window: the shell's side of that is covered on fakes (`@apackdev/host`'s
-`tests/features/application/fe/`) and the pack's side is `setupPackTests` with `startFeTestRuntime`, in
-milliseconds. `packages/default-setup/tests/features/browser/fe/open-link.spec.ts` is one written that
-way, and being cheap is what lets it assert both branches of the setting it reads rather than the default
-alone.
-
-**If it needs neither, it is a harness test.** `setupPackTests` (`@apackdev/testing`) runs a pack's code in
-memory in milliseconds; an assertion about state or data that never renders and never crosses a process
-boundary pays a full Electron launch for nothing.
-
-**Driving does not belong here at all — it belongs in `drive/`, and it is mainly for you.** Driving is how
-an agent debugs and develops against the app: open what you just built, click through it, read the state
-back, screenshot it, and find out whether the change worked instead of reasoning about it. A driving
-script asserts nothing and nothing gates on it, so `npm run dev:drive` collects it and no test runner does.
-A scratch file kept inside `testDir` does not work for this, however it is named and even gitignored: the
-suite picks it up anyway. A script graduates into a spec here only when it asserts something a
-future change could break **and** it needs the real app. Most driving is neither.
-
-**While working, run the affected spec, not the suite** — `npm run test:e2e -- <spec>`. That was the guidance
-before the chain swallowed it, and it is still right: the suite is 21 tests over 14 files on a single
-worker, and the one you changed is the one that tells you anything.
-
-## Quick start
-
-```bash
-npm run test:e2e                              # All tests
-npm run test:e2e -- smoke                    # One directory: smoke, ui, app-integration
-npm run test:e2e -- ui/popout                # One file
-npm run test:e2e -- -g "renderer error"      # By test name grep
-DEBUG_E2E=1 npm run test:e2e                  # Electron process output to terminal
-```
-
-
-## Rules for agents
-
-- **Never kill processes by broad pattern** (`pkill -f Electron`, `pkill -f node`, `killall Electron`, …). The user runs dev and prod apack alongside tests, and a broad kill takes those down. If a test run hangs, stop only the process you started (its PID).
-- **E2E runs alongside dev and prod apps.** Tests use the `apack-test` app name and a fresh temp data dir per worker (`$TMPDIR/apack-e2e-*`, via `APACK_USER_DATA_DIR`), so no running app needs to be closed first. Don't claim otherwise — just run the tests.
-- **Investigate a failing assertion before changing it.** Find out why it fails (`DEBUG_E2E=1`, `app.getContext()`, probing actor state with `appPage.evaluate`) and fix the cause. Loosening one to go green once removed the only backend check and hid the real cause (docs/archive/issues/postmortem-external-pack-calendar-extraction.md, item 1).
-- **The app under test is built, not source.** `npm run test:e2e` does not rebuild it, so a backend edit is not in
-  the run until `npm run build:api`. See [Debugging the running app](#debugging-the-running-app), which also
-  covers instrumenting a path and getting the output back.
-- **Each worker starts from an empty data dir, but tests in a worker share it.** Anything a test creates is visible to later tests in the same run; assert on unique values and clean up what you create. `E2E_KEEP_DATA=1` keeps the dir for inspection.
+- Never kill processes by broad pattern; stop only a process owned by the current run.
+- Tests use isolated profiles and run alongside developer apps. Do not close those apps.
+- Investigate failed assertions before changing them; retain logs and failure artifacts.
+- Tests in a worker share data. Use unique values and clean up created records.
+- Import the fixture directly from `@apackdev/testing`, without a local re-export.
 
 ## How the fixture works
 
@@ -330,42 +269,3 @@ The renderer exposes on `window`:
 { type: 'MAXIMIZE_CHAT' }                     // Maximize chat panel
 { type: 'RESTORE_CHAT' }                      // Restore chat panel size
 ```
-
-## File map
-
-| File | Purpose |
-|------|---------|
-
-**`smoke/` — the gate.** Its own chain step (`test:smoke`); the four cases every other check assumes.
-
-| File | Purpose |
-|------|---------|
-| `smoke/smoke.spec.ts` | The app launches without crashing, reaches `connected`, has its surfaces, and runs in its own per-worker data dir |
-
-**`app-integration/` — the real process boundary.** A live port, the websocket, the CLI against a real
-data dir, the pack loader: things no harness test can reach.
-
-| File | Purpose |
-|------|---------|
-| `app-integration/api-access.spec.ts` | The API refuses WebSocket connections and `POST /dev/reload` without the run's token (the socket offers it as a subprotocol, not in the URL), takes them with it, and survives a malformed upgrade request |
-| `app-integration/api-reconnect.spec.ts` | The window keeps working across an API crash: main restarts it and the client re-establishes its bus subscription, on the same port or the one main reports |
-| `app-integration/db-cli.spec.ts` | `apack db` on the running app's data dir (`electronApp`'s `userData`): a query reads it with a stale-data warning, `exec` and `reset` are refused |
-| `app-integration/dev-reload.spec.ts` | `POST /dev/reload` of the pack the app ships refreshes the installed copy from what was rebuilt, re-applies the changed content data and resends startup data. The one spec in this suite that has caught a regression: a pack is loaded from the data dir, so without that refresh a rebuild reached the app only by accident, which no harness can see |
-| `app-integration/feature-addressing.spec.ts` | A name becoming an address: every path where a feature ref had to resolve and, when it didn't, the app ran on with the click or the setting silently lost |
-| `app-integration/import-pack-content.spec.ts` | Settings → Import Pack Content: compiles default-setup's notes and library entries into a compiled content directory, previews it, imports a selection, re-imports in keep-existing mode |
-| `app-integration/surface-sends.spec.ts` | Backend sends to surfaces through the bus: the code system's file watcher and terminal output, and the browser system's startup data after a pack reload, reach their surfaces (recorded with `applicationState.system.inspect`) |
-| `app-integration/secrets.spec.ts` | Settings → Secrets: adds and selects API keys, and checks the key strings reach no log, stored file or renderer state |
-
-**`ui/` — rendered behaviour.** What a person would see, and what only a real renderer shows.
-
-| File | Purpose |
-|------|---------|
-| `ui/fallback-panel.spec.ts` | A surface offering its panel for surfaces without one (`fallbackPanel`), and saying itself when it shows: the brain's inspect mode |
-| `ui/navigation.spec.ts` | Opens every surface and every surface's settings without a renderer error — a component reaching for a surface it isn't rendered in fails here |
-| `ui/entity-reference.spec.ts` | Imports a saved thread message, reloads it, and clicks its rendered reference to open the correct note and content in another feature |
-| `ui/popout.spec.ts` | A surface popped out into its own window: main accepts the surface's ref as its id and the popout renders its canvas as part of that surface |
-| `ui/settings-help.spec.ts` | Settings Help: bundled pack articles, search, contextual settings navigation and unavailable targets |
-
-| Elsewhere | |
-|------|---------|
-| `packages/apack-testing/src/index.ts` | The actual fixture source (shared between monorepo and external packs) |

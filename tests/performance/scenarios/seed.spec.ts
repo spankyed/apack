@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test, expect } from '@apackdev/testing';
 import { performanceIdentity, manifestSchema } from '@apackdev/testing/performance';
-import { searchFixture } from '../fixtures/conversations.ts';
-import type { PerformanceWindow } from './window.ts';
+import { searchFixture } from '../../_support/conversations.ts';
+import type { PerformanceWindow } from '../_support/window.ts';
 
 // Preparation only. The controller owns E2E_DATA_DIR and waits for this process to close before copying it.
 test('prepare a populated startup profile outside measurement', async ({ app, appPage, electronApp }) => {

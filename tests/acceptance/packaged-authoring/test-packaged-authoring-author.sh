@@ -21,8 +21,8 @@
 # KEEP_WORK=1 is the app half's flag; this half always leaves its work dir, which is its declared output.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-. "$ROOT/tests/scripts/lib/authoring.sh"
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+. "$ROOT/tests/acceptance/packaged-authoring/support.sh"
 # This run's work dir survives it: the chain caches a step on its declared `outputs` existing, and the app
 # half reads the archive out of here. newWorkDir replaces this checkout's one work dir, refusing while
 # another live run owns it; the chain serializes this producer with its app consumer.

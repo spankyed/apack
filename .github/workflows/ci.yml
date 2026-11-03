@@ -98,7 +98,7 @@ jobs:
         run: npm run typecheck
 
       - name: Release beta-before-production rule
-        run: tests/scripts/release-beta-rule.test.sh
+        run: packages/repo-checks/tests/release-beta-rule.test.sh
 
       - name: Schema drift check
         run: npm run schema:check --workspace @apackdev/sdk

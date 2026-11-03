@@ -2,7 +2,7 @@
 # Tests the beta-before-production rule (build/release/beta-tag.sh) in a scratch git repo.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 source "$ROOT/build/release/beta-tag.sh"
 
 REPO="$(mktemp -d)"

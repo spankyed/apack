@@ -1,8 +1,8 @@
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { installViewCompletion } from '../../../tests/performance/view-completion.ts';
-import type { PerformanceViewCompletion, PerformanceViewDelivery, PerformanceWindow } from '../../../tests/performance/window.ts';
+import { installViewCompletion } from '../../../tests/performance/_support/view-completion.ts';
+import type { PerformanceViewCompletion, PerformanceViewDelivery, PerformanceWindow } from '../../../tests/performance/_support/window.ts';
 
 const delivery: PerformanceViewDelivery = { request: { ref: 'test/feature', view: 'chat' }, update: { ok: true, value: {}, commit: 1 }, generation: 1, delivery: 1 };
 let receive: (value: PerformanceViewDelivery) => void;
@@ -93,7 +93,7 @@ it('preserves a dispatch rejection even when its thrown value is undefined', asy
 it('serializes the helper under the tsx loader without capturing transpiler globals', () => {
   const script = `
     import { runInNewContext } from 'node:vm';
-    import { installViewCompletion } from './tests/performance/view-completion.ts';
+    import { installViewCompletion } from './tests/performance/_support/view-completion.ts';
     let receive, cleaned = 0;
     const window = { __performance: {
       flushView: async () => {}, onView(listener) { receive = listener; return () => { cleaned++; }; },

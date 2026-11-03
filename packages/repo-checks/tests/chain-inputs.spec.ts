@@ -460,7 +460,7 @@ describe('a step declares the modules its script imports', () => {
  */
 describe('a step that drives the app fixture declares the bundle it drives', () => {
   // How a script reaches the fixture: Playwright directly, the CLI's own `test`, or the CLI held in a
-  // variable (`"$APACK" pack test`, which `tests/scripts/test-external-pack-app.sh` uses). The third is not
+  // variable (`"$APACK" pack test`, which `tests/acceptance/external-pack/test-external-pack-app.sh` uses). The third is not
   // optional — without it this watched two steps and not the one it was written for.
   //
   // The same three shapes `check:tiers` looks for (`APP_MARKERS`), and deliberately **not** the same
@@ -805,12 +805,16 @@ describe('a step keys on the command it runs', () => {
 });
 
 
-describe('app checks observe separately loaded shipped-pack bytes', () => {
-  it.each(['test:external-pack:app', 'test:smoke', 'test:e2e', 'test:packaged-authoring:app'])(
-    '%s invalidates when a shipped frontend changes without an app-bundle change', name => {
+describe('consumer fingerprints observe runtime and shared test inputs', () => {
+  it.each([
+    ...['test:external-pack:app', 'test:smoke', 'test:e2e', 'test:packaged-authoring:app']
+      .map(name => [name, 'packages/default-setup/dist/runtime/fe.js']),
+    ...['typecheck:scripts', 'lint:check', 'test:unit:host', 'test:e2e']
+      .map(name => [name, 'tests/_support/conversations.ts']),
+  ])(
+    '%s invalidates when %s changes', (name, file) => {
       const step = CHAIN_STEPS.find(step => step.name === name)!;
-      const file = 'packages/default-setup/dist/runtime/fe.js';
-      let bytes = 'old frontend';
+      let bytes = 'original input';
       const tree: TreeReader = {
         listInputs: target => covers(repoRelative(path.resolve(REPO_ROOT, target)), file) ? [file] : [],
         listOutputs: () => [],
@@ -819,7 +823,7 @@ describe('app checks observe separately loaded shipped-pack bytes', () => {
       };
       const unit = { ...step, outputs: step.outputs ?? [] };
       const before = fingerprintUnit(unit, undefined, tree);
-      bytes = 'frontend with corrected node-view cleanup';
+      bytes = 'changed input';
       expect(fingerprintUnit(unit, undefined, tree)).not.toBe(before);
     },
   );

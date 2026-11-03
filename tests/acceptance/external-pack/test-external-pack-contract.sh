@@ -10,11 +10,11 @@
 # Proved by running this with packages/renderer/dist moved aside: 32 tests, exit 0, no app.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 APACK="$ROOT/node_modules/.bin/apack"
 # Packs depending on a built-in pack (the fixture on default-setup) resolve it from this checkout
 export APACK_HOST="$ROOT"
-source "$ROOT/tests/scripts/lib/fixture-packs.sh"
+source "$ROOT/tests/acceptance/external-pack/support.sh"
 
 for PACK in "${FIXTURE_PACKS[@]}"; do
   cd "$PACK"

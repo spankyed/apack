@@ -5,10 +5,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readPackBuild } from '@apackdev/host/packs';
 import { sha256File } from '@apackdev/host/packs/assets';
 import { readPackBuildInputs, assertPackBuildInputsCurrent } from '@apackdev/host/build/pack-build-inputs';
-import { boundedSpawn } from '../../scripts/lib/bounded-spawn.ts';
-import { timeoutMsFor } from '../../scripts/lib/step-timeouts.ts';
+import { boundedSpawn } from '../../../scripts/lib/bounded-spawn.ts';
+import { timeoutMsFor } from '../../../scripts/lib/step-timeouts.ts';
 
-const root = fs.realpathSync.native(fileURLToPath(new URL('../../', import.meta.url)));
+const root = fs.realpathSync.native(fileURLToPath(new URL('../../..', import.meta.url)));
 const source = path.join(root, 'packages/default-setup');
 const output = path.join(root, 'node_modules/.cache/apack-fixtures/default-fork');
 const remedy = 'Run npm run test:external-pack:fork to prepare the default fork.';
@@ -66,7 +66,7 @@ async function prepare(): Promise<void> {
     fs.writeFileSync(canvas, original.replace('<template>', '<template>\n  <div data-testid="fork-component">Fork component</div>'));
     const config = path.join(fork, 'tsconfig.json');
     fs.writeFileSync(config, fs.readFileSync(config, 'utf8').replace(
-      '../../node_modules/.cache/tsbuildinfo/default-setup.tsbuildinfo', '.apack/typecheck.tsbuildinfo'));
+      '../../../node_modules/.cache/tsbuildinfo/default-setup.tsbuildinfo', '.apack/typecheck.tsbuildinfo'));
     for (const [phase, args] of [['build', ['build']], ['archive', ['archive', '--out', staged]]] as const) {
       console.log(`Default fork ${phase}: starting (${DEFAULT_FORK_BUDGET_MS[phase] / 1000}s limit)`);
       const result = await boundedSpawn(process.execPath, [path.join(root, 'node_modules/.bin/apack'), 'pack', ...args], DEFAULT_FORK_BUDGET_MS[phase],
@@ -91,5 +91,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   const args = process.argv.slice(2);
   if (args.length === 0) await prepare();
   else if (args.length === 1 && args[0] === '--check') verifyDefaultPackFork();
-  else throw new Error('Usage: tsx tests/scripts/prepare-default-pack-fork.ts [--check]');
+  else throw new Error('Usage: tsx tests/acceptance/external-pack/prepare-default-pack-fork.ts [--check]');
 }

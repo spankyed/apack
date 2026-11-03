@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test, expect } from '@apackdev/testing';
-import type { PerformanceWindow } from './window.ts';
+import type { PerformanceWindow } from '../_support/window.ts';
 
 // Manual counterfactual: a deliberately blocked renderer must appear in that renderer's observations.
 test('observes an injected renderer block as a long task and renderer task time', async ({ appPage }) => {

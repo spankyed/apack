@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { REPO_ROOT, stampedRun, unitStaleReason } from '@apackdev/host/build/packages-built';
 import { CHAIN_STEPS, dependsOn } from '../../../scripts/lib/chain-steps.ts';
 
-const helper = path.join(REPO_ROOT, 'tests/scripts/lib/authoring.sh');
+const helper = path.join(REPO_ROOT, 'tests/acceptance/packaged-authoring/support.sh');
 const roots: string[] = [];
 afterEach(() => roots.splice(0).forEach(root => fs.rmSync(root, { recursive: true, force: true })));
 
@@ -17,7 +17,7 @@ function fixture() {
 }
 
 function run(root: string, temporary: string, command: string, args: string[] = []): string {
-  const caller = path.join(root, 'tests/scripts/caller.sh');
+  const caller = path.join(root, 'tests/acceptance/packaged-authoring/caller.sh');
   fs.mkdirSync(path.dirname(caller), { recursive: true });
   return execFileSync('bash', ['-c', `source "$1"; ${command}`, caller, helper, ...args], {
     env: { ...process.env, TMPDIR: temporary }, encoding: 'utf8',
@@ -77,7 +77,7 @@ describe('external authoring output ownership', () => {
     const work = run(root, temporary, 'newWorkDir');
     fs.writeFileSync(path.join(work, 'owner'), String(process.pid));
     fs.writeFileSync(path.join(work, 'in-use'), 'yes');
-    const refused = spawnSync('bash', ['-c', 'source "$1"; newWorkDir', path.join(root, 'tests/scripts/caller.sh'), helper], {
+    const refused = spawnSync('bash', ['-c', 'source "$1"; newWorkDir', path.join(root, 'tests/acceptance/packaged-authoring/caller.sh'), helper], {
       env: { ...process.env, TMPDIR: temporary }, encoding: 'utf8',
     });
     expect(refused.status).not.toBe(0);
@@ -95,7 +95,7 @@ describe('external authoring output ownership', () => {
     fs.writeFileSync(locked, 'immutable');
     execFileSync('chflags', ['uchg', locked]);
     try {
-      const refused = spawnSync('bash', ['-c', 'source "$1"; newWorkDir', path.join(root, 'tests/scripts/caller.sh'), helper], {
+      const refused = spawnSync('bash', ['-c', 'source "$1"; newWorkDir', path.join(root, 'tests/acceptance/packaged-authoring/caller.sh'), helper], {
         env: { ...process.env, TMPDIR: temporary }, encoding: 'utf8',
       });
       expect(refused.status).not.toBe(0);
@@ -110,7 +110,7 @@ describe('external authoring output ownership', () => {
     fs.mkdirSync(home);
     fs.mkdirSync(work);
     const root = path.join(dir, 'checkout');
-    const caller = path.join(root, 'tests/scripts/caller.sh');
+    const caller = path.join(root, 'tests/acceptance/packaged-authoring/caller.sh');
     fs.mkdirSync(path.dirname(caller), { recursive: true });
     // The helper resolves the store with the CLI's own env-paths, from the checkout's CLI package
     fs.symlinkSync(path.join(REPO_ROOT, 'packages'), path.join(root, 'packages'), 'dir');
@@ -137,7 +137,7 @@ describe('external authoring output ownership', () => {
       const archive = path.join(work, 'fixture.tgz');
       fs.writeFileSync(archive, 'fixture');
       run(root, dir, 'WORK="$2"; ARCHIVE="$3"; PACK="$2/pack"; writeAuthoringHandoff', [work, archive]);
-      const handoff = path.join(root, 'tests/authoring-handoff');
+      const handoff = path.join(root, '.apack/tests/authoring-handoff');
       const unit = { inputs: [], outputs: author.outputs!.map(output => path.join(root, output)) };
       const stamp = path.join(dir, 'successful-stamp.json');
       await stampedRun('author output', unit, stamp, () => {});

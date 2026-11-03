@@ -5,11 +5,11 @@ import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { verifyDefaultPackFork } from './prepare-default-pack-fork.ts';
-import { fixtureEnv } from '../../packages/apack-cli/src/commands/test.ts';
-import { resolvePlaywrightCli } from '../../packages/apack-cli/src/app/playwright.ts';
+import { fixtureEnv } from '../../../packages/apack-cli/src/commands/test.ts';
+import { resolvePlaywrightCli } from '../../../packages/apack-cli/src/app/playwright.ts';
 
 // Native realpath restores on-disk casing; JS realpath preserves case aliases on macOS.
-const root = fs.realpathSync.native(fileURLToPath(new URL('../../', import.meta.url)));
+const root = fs.realpathSync.native(fileURLToPath(new URL('../../..', import.meta.url)));
 const pack = path.join(root, 'tests', 'packs', 'external-pack');
 verifyDefaultPackFork();
 const data = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-fork-restart-'));
