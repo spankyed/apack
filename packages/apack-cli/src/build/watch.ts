@@ -30,6 +30,16 @@ export interface WatchOptions {
 }
 
 /**
+ * Whether a watcher's error is only a directory below `directory` going away while Node's recursive watch scanned it, as
+ * a build's temporary output does. Node reports that and goes on watching, and the removal is an event of its own, so it
+ * is no reason to stop. The watched directory itself going away is.
+ */
+export function isVanishedSubdirectory(error: unknown, directory: string): boolean {
+  const { code, path: scanned } = error as NodeJS.ErrnoException;
+  return code === 'ENOENT' && typeof scanned === 'string' && scanned !== directory && fs.existsSync(directory);
+}
+
+/**
  * One run at a time, and never a lost request.
  *
  * Two things a watcher has to get right, and they pull in opposite directions. Edits arrive in bursts — a
@@ -201,7 +211,10 @@ export async function startPackBuildWatcher(root: string, options: WatchOptions 
       });
       subscription = { close() { if (subscriptions.delete(subscription)) native.close(); } };
       subscriptions.add(subscription);
-      native.on('error', error => { if (!closed && subscriptions.has(subscription)) fail(refused(error)); });
+      native.on('error', error => {
+        if (closed || !subscriptions.has(subscription) || isVanishedSubdirectory(error, directory)) return;
+        fail(refused(error));
+      });
       return subscription;
     } catch (error) {
       const failure = refused(error);
