@@ -22,7 +22,7 @@ describe('the helpers console code sees', () => {
   // `apack db query`/`exec` all rest on what a query can and cannot reach
   it('gives a query these, and nothing that writes', async () => {
     expect([...READ_HELPER_NAMES].sort()).toEqual([
-      'engineCalls', 'findRelations', 'getAttr', 'getRelation', 'getRoles', 'getRow', 'getSchemaStats', 'query',
+      'catalog', 'engineCalls', 'findRelations', 'getAttr', 'getRelation', 'getRoles', 'getRow', 'getSchemaStats', 'query',
     ]);
     for (const name of READ_HELPER_NAMES) {
       await expect(runQueryCode(`return typeof ${name}`, scope), name).resolves.toBe(typeOf(name));

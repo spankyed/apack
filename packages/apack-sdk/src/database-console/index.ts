@@ -9,7 +9,7 @@
 import { boundHost, type HostCallReports, type HostDiagnostics } from '../runtime/host-runtime.ts';
 import type { EarsNames } from '../runtime/packs-view.ts';
 import { EARS as EARS_NAMES } from '../types/index.ts';
-import { boundEars, transact, untypedQuery, untypedCreate, untypedUpsert, untypedWrite, getRow, getRoles, getRelation, findRelations, removeRelation, getSchemaStats } from '../ears/index.ts';
+import { boundEars, catalog, transact, untypedQuery, untypedCreate, untypedUpsert, untypedWrite, getRow, getRoles, getRelation, findRelations, removeRelation, getSchemaStats } from '../ears/index.ts';
 import { defineEars } from '@apackdev/ears';
 import { errorMessage } from '../utils/shared.ts';
 
@@ -40,6 +40,7 @@ const readHelpers = {
   getRoles,
   getRelation,
   findRelations,
+  catalog,
   getSchemaStats,
   engineCalls,
 };

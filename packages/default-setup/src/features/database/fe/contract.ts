@@ -32,7 +32,6 @@ export interface DatabaseContext {
   } | null;
   mode: 'query' | 'transaction';
   isAiQueryLoading: boolean;
-  isRefreshing: boolean;
   settings: DatabaseSettings | null;
   // Run history viewer fields
   viewMode: 'database' | 'runs';

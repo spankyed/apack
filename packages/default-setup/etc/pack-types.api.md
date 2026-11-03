@@ -1013,7 +1013,6 @@ interface DatabaseContext {
     } | null;
     mode: 'query' | 'transaction';
     isAiQueryLoading: boolean;
-    isRefreshing: boolean;
     settings: DatabaseSettings | null;
     viewMode: 'database' | 'runs';
     flowRuns: RunNode[];
@@ -1885,10 +1884,6 @@ type IncomingDatabaseEvents = {
     type: 'GENERATE_AI_QUERY';
     prompt: string;
     mode?: 'query' | 'transaction';
-}
-/** The schema as the data is now: answered with `SCHEMA_READ` */
- | {
-    type: 'GET_SCHEMA';
 } | {
     type: 'GET_FLOW_RUNS';
 } | {
@@ -3125,21 +3120,14 @@ type OutgoingCommitEvents = {
 /**
  * What the database system sends. Every one answers whoever asked, by `reply`, but two: `DATABASE_REPLACED`, which is
  * news for every window, and the generated query, which a flow sends to the asking window by its connection.
- *
- * **The schema is fetched, not a view.** It is a walk over the whole store (`getSchemaStats`), so a view of it would
- * re-run that walk after every commit anyone makes; a window asks for it when it opens, when the user refreshes, and
- * after its own transaction or a replacement.
  */
-type OutgoingDatabaseEvents = {
-    type: 'SCHEMA_READ';
-    schema: DatabaseSchemaInfo;
-}
+type OutgoingDatabaseEvents = 
 /**
  * The data was replaced — imported or reset — by any window: every window drops the results it shows and the run
- * history it holds, which name rows that may be gone, and asks for the schema again. A notification; the window that
+ * history it holds, which name rows that may be gone. A notification; the window that
  * asked has its own outcome too.
  */
- | {
+{
     type: 'DATABASE_REPLACED';
 }
 /**
