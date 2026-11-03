@@ -1,8 +1,11 @@
 // What git says a checkout's files are, by blob id: tracked files at the id git holds, modified and untracked ones at
 // the id their bytes on disk would have. Ignored files, symlinks and submodules aren't in it.
 import { execFile, spawn } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { languageOf } from './extract.ts';
+import type { PackageInfo } from './resolve.ts';
 
 const execFileAsync = promisify(execFile);
 
@@ -74,6 +77,19 @@ export async function readGitView(root: string): Promise<Map<string, string> | n
   const oids = await hashObjects(root, readable);
   readable.forEach((path, index) => { const oid = oids[index]; if (oid) view.set(path, oid); });
   return view;
+}
+
+/** Every package manifest git tracks in a checkout, parsed: what a module specifier resolves through */
+export async function readPackages(root: string): Promise<PackageInfo[]> {
+  const manifests = nulSeparated(await git(root, ['ls-files', '-z', '--', 'package.json', '**/package.json']));
+  const read = await Promise.all(manifests.map(async (file) => {
+    try {
+      const { name, imports, exports } = JSON.parse(await readFile(join(root, file), 'utf8')) as PackageInfo;
+      const directory = file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : '.';
+      return { directory, ...(name && { name }), ...(imports && { imports }), ...(exports !== undefined && { exports }) };
+    } catch { return null; }
+  }));
+  return read.filter(info => info !== null);
 }
 
 /** Which files a staged change or a range touches, each with its status letter */

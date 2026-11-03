@@ -2,12 +2,15 @@
 // slices that yield: no parse here has come near what the loop can spare, and yielding between files bounds the rest.
 // A file's blob id and its symbols are written in one unit, so an interrupted sync leaves only finished files, and the
 // next one starts from what they say.
+import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import * as path from 'node:path';
 import { createLogger } from '@apackdev/sdk/logger';
-import { extractFile, extractorStamp, languageOf, type Definition } from './extract.ts';
-import { readGitView } from './git-view.ts';
+import { extractorStamp, languageOf, type Definition } from './extract.ts';
+import { readGitView, readPackages } from './git-view.ts';
+import { drainDirtyFiles } from './graph.ts';
+import { extractGraph, wantedNamesOf, type FileGraph, type Reexport } from './sites.ts';
 import { codeIndexCommands, codeIndexQueries, projectIdOf, type CodeIndexProgress, type SkipReason } from './repository.ts';
 
 const logger = createLogger('code-index');
@@ -67,7 +70,10 @@ async function syncChanges(root: string, signal: AbortSignal): Promise<number> {
   const project = projectIdOf(root);
   const view = await readGitView(root);
   signal.throwIfAborted();
-  const stamp = extractorStamp();
+  const packages = await readPackages(root).catch(() => []);
+  signal.throwIfAborted();
+  // What a specifier means is in the manifests, so a changed one is a changed extractor as far as any file's edges go
+  const stamp = createHash('sha1').update(extractorStamp()).update(JSON.stringify(packages)).digest('base64url').slice(0, 16);
   const row = codeIndexQueries.project(root);
   if (!row) return 0;
   if (!view) {
@@ -88,12 +94,14 @@ async function syncChanges(root: string, signal: AbortSignal): Promise<number> {
     for (const reason of skippedFiles.values()) skipped[reason] = (skipped[reason] ?? 0) + 1;
     return { state, files: view.size, symbols: state === 'idle' ? codeIndexQueries.symbolCount(project) : row.progress.symbols, pending, skipped };
   };
-  if (pending === 0) {
+  const waiting = codeIndexQueries.dirtyCount(project);
+  if (pending === 0 && waiting === 0) {
     if (extractorMoved) codeIndexCommands.setStamp(root, stamp);
     if (row.progress.state !== 'idle') codeIndexCommands.setProgress(root, progress('idle'));
     return 0;
   }
   const changedFiles = pending;
+  const parsedFiles = new Map<string, FileGraph>();
   codeIndexCommands.setProgress(root, progress('syncing'));
   let lastProgress = performance.now();
   const step = () => {
@@ -113,6 +121,8 @@ async function syncChanges(root: string, signal: AbortSignal): Promise<number> {
     const language = languageOf(file);
     if (language) {
       let definitions: readonly Definition[] = [];
+      let reexports: readonly Reexport[] = [];
+      let parsed: FileGraph | undefined;
       let skipped: SkipReason | undefined;
       let source: Awaited<ReturnType<typeof readSource>> | undefined;
       // A file can go between git's listing and this read; the next view says so
@@ -121,21 +131,29 @@ async function syncChanges(root: string, signal: AbortSignal): Promise<number> {
       if (source) {
         if ('skipped' in source) skipped = source.skipped;
         else {
-          const extraction = extractFile(file, source.text);
-          if (extraction.ok) definitions = extraction.definitions;
+          const graph = extractGraph(file, source.text);
+          if (graph.ok) { parsed = graph; ({ definitions, reexports } = graph); parsedFiles.set(file, graph); }
           else skipped = 'parse-error';
         }
-        codeIndexCommands.applyFile(project, { path: file, oid, language, skipped }, definitions);
+        codeIndexCommands.applyFile(project, {
+          path: file, oid, language, skipped, reexports, defaultLocal: parsed?.defaultLocal ?? null, wantedNames: parsed ? wantedNamesOf(parsed) : [],
+        }, definitions, held.size === 0);
         if (skipped) skippedFiles.set(file, skipped); else skippedFiles.delete(file);
       }
     }
     step();
     await pause();
   }
+  await drainDirtyFiles(root, packages, parsedFiles, signal, pause, (left) => {
+    pending = left;
+    if (performance.now() - lastProgress < PROGRESS_EVERY_MS) return;
+    codeIndexCommands.setProgress(root, progress('syncing'));
+    lastProgress = performance.now();
+  });
   codeIndexCommands.setStamp(root, stamp);
   pending = 0;
   codeIndexCommands.setProgress(root, progress('idle'));
-  return changedFiles;
+  return changedFiles + waiting;
 }
 
 /** Takes every row of a project that was turned off, in slices, then the project */

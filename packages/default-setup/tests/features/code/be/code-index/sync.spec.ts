@@ -4,8 +4,9 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { startApp } from '@apackdev/testing/harness'
+import { findRelations } from '@apackdev/sdk/ears'
 import { query, EARS } from '#generated/ears.ts'
-import { codeIndexCommands, codeIndexQueries, projectIdOf, symbolIdOf } from '#features/code/be/code-index/repository.ts'
+import { codeIndexAnswers, codeIndexCommands, codeIndexQueries, fileIdOf, projectIdOf, symbolIdOf } from '#features/code/be/code-index/repository.ts'
 import { createSyncRunner, removeProject, syncProject, MAX_FILE_BYTES } from '#features/code/be/code-index/sync.ts'
 import { semanticDiff } from '#features/code/be/code-index/semantic-diff.ts'
 
@@ -21,9 +22,14 @@ const commit = (message = 'c') => { git('add', '-A'); git('commit', '-qm', messa
 
 const symbols = () => query(EARS.Entity.CodeSymbol).where('project', projectIdOf(root)).pickAll()
 /** Everything the index holds of the project, without the times, ordered: what two indexes are compared by */
+const edgeKinds = new Set(['code_calls', 'code_references', 'code_inherits', 'code_imports'])
+const edges = () => findRelations({}).filter(edge => edgeKinds.has(edge.kind))
+  .map(({ kind, source, target, info, weight }) => ({ kind, source, target, info, weight: weight === undefined ? undefined : Math.round(weight * 1000) }))
+  .sort((a, b) => `${a.kind}${a.source}${a.target}`.localeCompare(`${b.kind}${b.source}${b.target}`))
 const held = () => ({
+  edges: edges(),
   files: query(EARS.Entity.CodeFile).where('project', projectIdOf(root)).pickAll()
-    .map(({ id, path: file, oid, language, test, skipped }) => ({ id, file, oid, language, test, skipped })).sort((a, b) => a.file.localeCompare(b.file)),
+    .map(({ id, path: file, oid, language, test, skipped, dirty, importsMissing, unresolvedSites, unresolvedNames, reexports, defaultExport, wantedNames }) => ({ id, file, oid, language, test, skipped, dirty, importsMissing: importsMissing ?? false, unresolvedSites, unresolvedNames, reexports, defaultExport, wantedNames })).sort((a, b) => a.file.localeCompare(b.file)),
   symbols: symbols()
     .map(({ id, file, kind, name, qualifiedName, exported, signature, signatureHash, bodyHash }) => ({ id, file, kind, name, qualifiedName, exported, signature, signatureHash, bodyHash }))
     .sort((a, b) => String(a.id).localeCompare(String(b.id))),
@@ -121,7 +127,8 @@ describe('what a sync writes', () => {
     const read = vi.spyOn(fs.promises, 'readFile')
     put('b.ts', 'export function b2() {}')
     await sync()
-    expect(read.mock.calls.map(([file]) => path.basename(String(file)))).toEqual(['b.ts'])
+    // Twice: once for its definitions, and again for its edges once every file's are stored
+    expect(new Set(read.mock.calls.map(([file]) => path.basename(String(file))))).toEqual(new Set(['b.ts']))
     read.mockRestore()
   })
 
@@ -135,7 +142,7 @@ describe('what a sync writes', () => {
     codeIndexCommands.setStamp(root, 'another')
     const read = vi.spyOn(fs.promises, 'readFile')
     await sync()
-    expect(read.mock.calls.map(([file]) => path.basename(String(file)))).toEqual(['a.ts'])
+    expect(new Set(read.mock.calls.map(([file]) => path.basename(String(file))))).toEqual(new Set(['a.ts']))
     read.mockRestore()
     expect(codeIndexQueries.project(root)!.extractorStamp).toBe(stored)
   })
@@ -255,11 +262,24 @@ function randomizer(seed: number) {
 }
 
 describe('incremental equals full', () => {
-  const FILES = ['a.ts', 'dir/b.ts', 'dir/c.tsx', 'd.vue', 'e.cjs', 'dir/f.spec.ts']
+  const FILES = ['a.ts', 'dir/b.ts', 'dir/c.tsx', 'd.vue', 'barrel.ts', 'dir/f.spec.ts']
+  const fromHere = (file: string, target: string) => { const relative = path.posix.relative(path.posix.dirname(file), target); return relative.startsWith('.') ? relative : `./${relative}` }
+  // Names are few on purpose, so that a file's definitions come and go under what other files import
   const bodyOf = (random: ReturnType<typeof randomizer>, file: string) => {
-    const n = random.int(4)
-    const fns = Array.from({ length: n }, (_, i) => `export function fn${random.int(3)}${i}(a${random.int(2)}: string) { return ${random.int(3)} }`).join('\n')
-    return file.endsWith('.vue') ? `<template><a${random.int(2)} /></template>\n<script lang="ts">\n${fns}\n</script>` : fns
+    const others = FILES.filter(other => other !== file && !other.endsWith('.vue'))
+    const lines: string[] = []
+    if (file === 'barrel.ts') {
+      lines.push(`export * from ${JSON.stringify(fromHere(file, random.pick(others)))}`)
+      lines.push(`export { fn0 as renamed } from ${JSON.stringify(fromHere(file, random.pick(others)))}`)
+    } else {
+      const imported = random.pick(others)
+      const namespace = random.pick(others)
+      lines.push(`import { fn${random.int(3)} as one, renamed } from ${JSON.stringify(fromHere(file, imported))}`)
+      lines.push(`import * as space from ${JSON.stringify(fromHere(file, namespace))}`)
+      for (let i = random.int(4); i >= 0; i--) lines.push(`export function fn${random.int(3)}(a${random.int(2)}: string) { one(); space.fn${random.int(3)}(); unknown.thing(); fn${random.int(3)}(); return renamed }`)
+    }
+    const code = lines.join('\n')
+    return file.endsWith('.vue') ? `<template><One${random.int(2)} @click="fn${random.int(3)}" /></template>\n<script lang="ts">\n${code}\n</script>` : code
   }
 
   it.each([1, 2, 3, 4, 5, 6])('over a random history, seed %i', async (seed) => {
@@ -291,6 +311,241 @@ describe('incremental equals full', () => {
     enable()
     await sync()
     expect(incremental).toEqual(held())
+  })
+})
+
+describe('the graph', () => {
+  const symbolNamed = (name: string) => symbols().find(s => s.name === name)!
+  const callers = (name: string) => codeIndexAnswers.callers(symbolNamed(name).id)!
+
+  it('joins a call through an import and within a file, once a pair, weighted by its sites', async () => {
+    put('lib.ts', 'export function target() {}\nexport function other() { helper(); helper() }\nfunction helper() {}')
+    put('use.ts', "import { target } from './lib.ts'\nexport function caller() { target(); target(); target() }")
+    commit()
+    enable()
+    await sync()
+    expect(callers('target').results).toMatchObject([{ name: 'caller', path: 'use.ts', edge: 'code_calls', sites: 3, layer: 'inferred' }])
+    expect(callers('helper').results).toMatchObject([{ name: 'other', edge: 'code_calls', sites: 2, layer: 'extracted' }])
+    expect(findRelations({ target: symbolNamed('target').id })[0]!.weight).toBeCloseTo(2.97)
+    expect(codeIndexAnswers.callees(symbolNamed('caller').id)!.results.map(r => r.name)).toEqual(['target'])
+  })
+
+  it('tells two functions of one name apart by the import, and makes no edge from a member call it cannot type', async () => {
+    put('a.ts', 'export function map() {}')
+    put('b.ts', 'export function map() {}')
+    put('use.ts', "import { map } from './b.ts'\nexport function go(array: number[]) { map(); array.map(x => x) }")
+    commit()
+    enable()
+    await sync()
+    const maps = symbols().filter(s => s.name === 'map')
+    const byFile = (file: string) => maps.find(s => s.qualifiedName.startsWith(file))!
+    expect(codeIndexAnswers.callers(byFile('b.ts').id)!.results.map(r => r.name)).toEqual(['go'])
+    expect(codeIndexAnswers.callers(byFile('a.ts').id)!.results).toEqual([])
+  })
+
+  it('makes no edge from a bare name it does not hold, and follows no local that shadows an import', async () => {
+    put('lib.ts', 'export function Error() {}\nexport function shadowed() {}')
+    put('use.ts', "import { shadowed } from './lib.ts'\nexport function go() { new Error(); const inner = (shadowed: () => void) => shadowed(); return inner }")
+    commit()
+    enable()
+    await sync()
+    expect(callers('Error').results).toEqual([])
+    expect(callers('shadowed').results).toEqual([])
+  })
+
+  it('counts what a member call could have meant against "no callers"', async () => {
+    put('lib.ts', 'export class Thing { run() {} }')
+    put('use.ts', "import { Thing } from './lib.ts'\nexport function go(thing: Thing) { thing.run() }")
+    commit()
+    enable()
+    await sync()
+    const run = callers('run')
+    expect(run.results).toEqual([])
+    expect(run.coverage).toEqual({ pendingFiles: 0, unresolvedFiles: 1 })
+  })
+
+  it('follows a method on this, a namespace, a re-export, a class it extends and a package import', async () => {
+    put('package.json', JSON.stringify({ name: 'app', imports: { '#lib/*': './src/*' } }))
+    put('src/deep.ts', 'export function deep() {}\nexport class Base {}')
+    put('src/barrel.ts', "export * from './deep.ts'\nexport { deep as shallow } from './deep.ts'")
+    put('src/use.ts', [
+      "import * as all from './deep.ts'", "import { deep, shallow as named } from './barrel.ts'", "import { Base } from '#lib/deep.ts'",
+      'export class Sub extends Base { a() { this.b() } b() {} }',
+      'export function viaNamespace() { all.deep() }', 'export function viaBarrel() { deep() }', 'export function viaRename() { named() }',
+    ].join('\n'))
+    commit()
+    enable()
+    await sync()
+    expect(callers('deep').results.map(r => r.name).sort()).toEqual(['viaBarrel', 'viaNamespace', 'viaRename'])
+    expect(callers('b').results.map(r => r.name)).toEqual(['a'])
+    expect(callers('Base').results).toMatchObject([{ name: 'Sub', edge: 'code_inherits' }])
+  })
+
+  it('reads a component tag and a template handler as uses', async () => {
+    put('Child.vue', '<template><div /></template>')
+    put('Parent.vue', `<template><Child @click="go" /></template>\n<script setup lang="ts">\nimport Child from './Child.vue'\nconst go = () => {}\n</script>`)
+    put('default.ts', "export { default } from './Child.vue'")
+    commit()
+    enable()
+    await sync()
+    expect(callers('go').results.map(r => r.name)).toEqual(['Parent'])
+    expect(callers('Child').results.map(r => r.name)).toEqual(['Parent'])
+  })
+
+  it('a default export follows what it holds, through a rename of it', async () => {
+    put('lib.ts', 'export default function named() {}')
+    put('use.ts', "import thing from './lib.ts'\nexport function go() { thing() }")
+    commit()
+    enable()
+    await sync()
+    expect(callers('named').results.map(r => r.name)).toEqual(['go'])
+    put('lib.ts', 'export default function renamed() {}')
+    await sync()
+    expect(callers('renamed').results.map(r => r.name)).toEqual(['go'])
+  })
+
+  it('gaining a name dirties only the files that ask for it', async () => {
+    put('lib.ts', 'export function a() {}')
+    put('wantsA.ts', "import { a } from './lib.ts'\nexport function useA() { a() }")
+    put('wantsB.ts', "import { b } from './lib.ts'\nexport function useB() { b() }")
+    commit()
+    enable()
+    await sync()
+    const read = vi.spyOn(fs.promises, 'readFile')
+    put('lib.ts', 'export function a() {}\nexport function b() {}')
+    await sync()
+    expect(new Set(read.mock.calls.map(([file]) => path.basename(String(file))))).toEqual(new Set(['lib.ts', 'wantsB.ts']))
+    read.mockRestore()
+    expect(callers('b').results.map(r => r.name)).toEqual(['useB'])
+  })
+
+  it('a save keeps other files\' edges into a symbol that stays', async () => {
+    put('lib.ts', 'export function target() { return 1 }')
+    put('use.ts', "import { target } from './lib.ts'\nexport function caller() { target() }")
+    commit()
+    enable()
+    await sync()
+    const before = findRelations({ target: symbolNamed('target').id })
+    put('lib.ts', '\n\nexport function target() { return 2 }')
+    await sync()
+    expect(findRelations({ target: symbolNamed('target').id }).map(r => r.id)).toEqual(before.map(r => r.id))
+  })
+
+  it('updates a dependent when what it imports appears or goes, through a re-export too', async () => {
+    put('deep.ts', 'export function deep() {}')
+    put('barrel.ts', "export * from './deep.ts'")
+    put('use.ts', "import { deep } from './barrel.ts'\nimport { later } from './later.ts'\nexport function caller() { deep(); later() }")
+    commit()
+    enable()
+    await sync()
+    expect(callers('deep').results.map(r => r.name)).toEqual(['caller'])
+    put('deep.ts', 'export function renamed() {}')
+    await sync()
+    expect(symbols().map(s => s.name)).not.toContain('deep')
+    expect(codeIndexQueries.dirtyCount(projectIdOf(root))).toBe(0)
+    put('deep.ts', 'export function deep() {}')
+    await sync()
+    expect(callers('deep').results.map(r => r.name)).toEqual(['caller'])
+    put('later.ts', 'export function later() {}')
+    await sync()
+    expect(callers('later').results.map(r => r.name)).toEqual(['caller'])
+  })
+
+  it('a changed manifest re-reads every edge', async () => {
+    put('package.json', JSON.stringify({ imports: { '#a': './a.ts' } }))
+    put('a.ts', 'export function a() {}')
+    put('b.ts', 'export function a() {}')
+    put('use.ts', "import { a } from '#a'\nexport function go() { a() }")
+    commit()
+    enable()
+    await sync()
+    put('package.json', JSON.stringify({ imports: { '#a': './b.ts' } }))
+    await sync()
+    const [b] = symbols().filter(s => s.qualifiedName === 'b.ts#a')
+    expect(codeIndexAnswers.callers(b!.id)!.results.map(r => r.name)).toEqual(['go'])
+  })
+
+  it('follows a change through a re-export that renames it', async () => {
+    put('deep.ts', 'export function deep() {}')
+    put('barrel.ts', "export { deep as shallow } from './deep.ts'")
+    put('use.ts', "import { shallow } from './barrel.ts'\nexport function go() { shallow() }")
+    commit()
+    enable()
+    await sync()
+    expect(callers('deep').results.map(r => r.name)).toEqual(['go'])
+    const before = held()
+    put('deep.ts', 'export function other() {}')
+    await sync()
+    expect(codeIndexQueries.fileSymbols(fileIdOf(projectIdOf(root), 'use.ts'))[0]).toBeDefined()
+    expect(query.ids(fileIdOf(projectIdOf(root), 'use.ts')).pickOne()).toMatchObject({ unresolvedSites: 1 })
+    put('deep.ts', 'export function deep() {}')
+    await sync()
+    expect(held().edges.map(({ kind, source, target }) => [kind, source, target])).toEqual(before.edges.map(({ kind, source, target }) => [kind, source, target]))
+  })
+
+  it('updates whoever asks for a name a re-export starts or stops giving', async () => {
+    put('deep.ts', 'export function deep() {}')
+    put('barrel.ts', 'export const nothing = 1')
+    put('use.ts', "import { shallow } from './barrel.ts'\nexport function go() { shallow() }")
+    commit()
+    enable()
+    await sync()
+    expect(callers('deep').results).toEqual([])
+    put('barrel.ts', "export const nothing = 1\nexport { deep as shallow } from './deep.ts'")
+    await sync()
+    expect(callers('deep').results.map(r => r.name)).toEqual(['go'])
+  })
+
+  it('an import that asks for no name finds a file that appears', async () => {
+    put('use.ts', "import './later.ts'\nexport function go() {}")
+    commit()
+    enable()
+    await sync()
+    expect(query.ids(fileIdOf(projectIdOf(root), 'use.ts')).pickOne()).toMatchObject({ importsMissing: true })
+    put('later.ts', 'export const later = 1')
+    await sync()
+    expect(findRelations({ source: fileIdOf(projectIdOf(root), 'use.ts'), kind: EARS.RelKind.CODE_IMPORTS }).map(r => r.target)).toEqual([fileIdOf(projectIdOf(root), 'later.ts')])
+    expect(query.ids(fileIdOf(projectIdOf(root), 'use.ts')).pickOne()).toMatchObject({ importsMissing: false })
+  })
+
+  it('a file losing a default export and its imports holds what a fresh index would', async () => {
+    put('lib.ts', 'export function x() {}')
+    put('a.ts', "import { x } from './lib.ts'\nexport default function run() { x() }")
+    commit()
+    enable()
+    await sync()
+    put('a.ts', 'export function run() {}')
+    await sync()
+    const incremental = held()
+    await clearProject()
+    enable()
+    await sync()
+    expect(incremental).toEqual(held())
+  })
+
+  it('counts a member of a local as unfollowed, and a local alone as nothing', async () => {
+    put('a.ts', 'export function go(items: number[], fn: () => void) { fn(); items.map(fn) }')
+    commit()
+    enable()
+    await sync()
+    expect(query.ids(fileIdOf(projectIdOf(root), 'a.ts')).pickOne()).toMatchObject({ unresolvedSites: 1, unresolvedNames: ['map'] })
+  })
+
+  it('lists what is around a file, without the file or tests', async () => {
+    put('hub.ts', 'export function hub() {}')
+    put('open.ts', "import { hub } from './hub.ts'\nexport function opened() { hub() }")
+    put('other.ts', "import { hub } from './hub.ts'\nexport function near() { hub() }")
+    put('far.ts', 'export function far() {}')
+    put('hub.spec.ts', "import { hub } from './hub.ts'\nexport function aTest() { hub() }")
+    commit()
+    enable()
+    await sync()
+    const names = codeIndexAnswers.codeMap(root, 'open.ts', 5).map(r => r.name)
+    expect(names[0]).toBe('hub')
+    expect(names).toContain('near')
+    expect(names).not.toContain('opened')
+    expect(names).not.toContain('aTest')
+    expect(codeIndexAnswers.codeMap(root, 'absent.ts', 5)).toEqual([])
   })
 })
 

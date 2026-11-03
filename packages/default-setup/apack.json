@@ -24,7 +24,11 @@
       "forked_from": {},
       "compacts": {},
       "blocks": {},
-      "duplicates": {}
+      "duplicates": {},
+      "code_calls": { "weighted": true },
+      "code_references": { "weighted": true },
+      "code_inherits": {},
+      "code_imports": {}
     },
     "roles": [
       "assistant_birth"
@@ -567,7 +571,7 @@
       "entities": {
         "Terminal": { "shape": "src/features/code/be/repository/index.ts#TerminalEntity" },
         "CodeProject": { "shape": "src/features/code/be/code-index/repository.ts#CodeProjectEntity" },
-        "CodeFile": { "shape": "src/features/code/be/code-index/repository.ts#CodeFileEntity", "indexes": ["project"] },
+        "CodeFile": { "shape": "src/features/code/be/code-index/repository.ts#CodeFileEntity", "indexes": ["project", "dirty", "importsMissing", "unresolvedNames", "wantedNames"] },
         "CodeSymbol": {
           "shape": "src/features/code/be/code-index/repository.ts#CodeSymbolEntity",
           "indexes": ["project", "file"],
@@ -854,7 +858,8 @@
         "terminalQueries": "src/features/code/be/repository/index.ts#terminalQueries",
         "terminalCommands": "src/features/code/be/repository/index.ts#terminalCommands",
         "codeIndexQueries": "src/features/code/be/code-index/repository.ts#codeIndexQueries",
-        "codeIndexCommands": "src/features/code/be/code-index/repository.ts#codeIndexCommands"
+        "codeIndexCommands": "src/features/code/be/code-index/repository.ts#codeIndexCommands",
+        "codeIndexAnswers": "src/features/code/be/code-index/repository.ts#codeIndexAnswers"
       },
       "views": "src/features/code/be/code-index/views.ts#codeIndexViews"
     },

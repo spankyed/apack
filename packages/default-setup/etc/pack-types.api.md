@@ -639,6 +639,12 @@ type CodeContext = {
     panelNavHistory: NavHistory<PanelType>;
 };
 
+/** What an edge says about itself: how it was found, and how many sites it stands for */
+interface CodeEdgeInfo {
+    layer: 'extracted' | 'inferred';
+    sites: number;
+}
+
 interface CodeFileEntity {
     id: EARS.EntityId;
     entityType: EARS.Entity.CodeFile;
@@ -648,6 +654,20 @@ interface CodeFileEntity {
     language: CodeLanguage;
     test: boolean;
     skipped?: SkipReason;
+    /** What it re-exports, which a resolver follows without parsing it */
+    reexports?: Reexport[];
+    /** The local name of what its default export is */
+    defaultExport?: string;
+    /** The names it asks other files for: a change to one is what makes this file's edges out of date */
+    wantedNames?: string[];
+    /** Its edges may be out of date: the work queue, written in the unit that makes it so, so a crash loses nothing */
+    dirty?: boolean;
+    /** Whether an import of a file in the project found none, so that a new file may be what it wants */
+    importsMissing?: boolean;
+    /** How many of its sites syntax can't take further */
+    unresolvedSites?: number;
+    /** The last name of each of those, once: `f` for `x.f()`, what any definition named `f` must count against "no callers" */
+    unresolvedNames?: string[];
     createdAt: number;
     updatedAt: number;
 }
@@ -675,6 +695,14 @@ type CodeInboxEvent = {
     type: 'codePrompts.OPEN_PROMPT';
     promptId: EARS.EntityId;
 };
+
+/** What an answer couldn't see, which "no callers" is only ever said beside */
+interface CodeIndexCoverage {
+    /** Files whose edges may be out of date right now */
+    pendingFiles: number;
+    /** Files holding a call or reference to this name on something syntax can't type, any of which may be this */
+    unresolvedFiles: number;
+}
 
 /** Where a project's index stands: what the status line shows, written while a sync runs */
 interface CodeIndexProgress {
@@ -1142,6 +1170,9 @@ interface Definition {
     line: number;
     column: number;
     endLine: number;
+    /** Where it is in the file's text */
+    start: number;
+    end: number;
 }
 
 type DefinitionChange = 'added' | 'body' | 'removed' | 'signature';
@@ -1249,6 +1280,14 @@ declare namespace EARS {
         type BLOCKS = typeof BLOCKS;
         const DUPLICATES = "duplicates";
         type DUPLICATES = typeof DUPLICATES;
+        const CODE_CALLS = "code_calls";
+        type CODE_CALLS = typeof CODE_CALLS;
+        const CODE_REFERENCES = "code_references";
+        type CODE_REFERENCES = typeof CODE_REFERENCES;
+        const CODE_INHERITS = "code_inherits";
+        type CODE_INHERITS = typeof CODE_INHERITS;
+        const CODE_IMPORTS = "code_imports";
+        type CODE_IMPORTS = typeof CODE_IMPORTS;
         const CONTAINS = "contains";
         type CONTAINS = typeof CONTAINS;
         const TRANSITIONS_TO = "transitions_to";
@@ -1259,10 +1298,10 @@ declare namespace EARS {
         type PARENT_OF = typeof PARENT_OF;
     }
     /** Every relation kind this pack may link with: its own, its dependencies' and the SDK's */
-    const RELATION_KINDS: readonly ["has", "relates_to", "references", "forked_from", "compacts", "blocks", "duplicates", "contains", "transitions_to", "instance_of", "parent_of"];
+    const RELATION_KINDS: readonly ["has", "relates_to", "references", "forked_from", "compacts", "blocks", "duplicates", "code_calls", "code_references", "code_inherits", "code_imports", "contains", "transitions_to", "instance_of", "parent_of"];
     type RelKind = (typeof RELATION_KINDS)[number];
     /** The relation kinds declared `weighted`, whose links take a weight: its own and its dependencies' */
-    const WEIGHTED_KINDS: readonly [];
+    const WEIGHTED_KINDS: readonly ["code_calls", "code_references"];
     type WeightedKind = (typeof WEIGHTED_KINDS)[number];
     /** The rank indexes `ranked` reads: its own and its dependencies' */
     const RANK_INDEXES: readonly [];
@@ -3955,6 +3994,7 @@ type OwnRepositories = {
     terminalCommands: typeof terminalCommands;
     codeIndexQueries: typeof codeIndexQueries;
     codeIndexCommands: typeof codeIndexCommands;
+    codeIndexAnswers: typeof codeIndexAnswers;
     noteQueries: typeof noteQueries;
     noteCommands: typeof noteCommands;
     browserQueries: typeof browserQueries;
@@ -4471,6 +4511,13 @@ type RecentNote = Pick<NoteDTO, 'icon' | 'id' | 'noteType' | 'title' | 'updatedA
 /** How the chat's settings order recent and archived threads */
 type RecentThreadsSortOrder = 'created' | 'message' | 'visited';
 
+interface Reexport {
+    /** The name it has here, or `*` for `export * from` */
+    exported: string;
+    source: string;
+    imported: string;
+}
+
 /** Every repository this pack can use: its own and its dependencies' */
 type Repositories = OwnRepositories;
 
@@ -4713,6 +4760,18 @@ interface SwitchNode extends NodeBase {
     nodeType: 'switch';
     conditions: Array<Condition>;
     elseLabel?: string;
+}
+
+/** One end of an edge, as a list shows it */
+interface SymbolEdgeResult extends SymbolResult {
+    edge: string;
+    sites: number;
+    layer: CodeEdgeInfo['layer'];
+}
+
+interface SymbolEdges {
+    results: SymbolEdgeResult[];
+    coverage: CodeIndexCoverage;
 }
 
 type SymbolKind = 'class' | 'component' | 'enum' | 'function' | 'interface' | 'method' | 'namespace' | 'property' | 'type' | 'variable';
@@ -5215,6 +5274,15 @@ declare const UserStreamLineSchema: z.ZodObject<{
     isSynthetic: z.ZodOptional<z.ZodBoolean>;
 }, z.core.$loose>;
 
+/** An edge that should exist from a file's definitions */
+interface WantedEdge {
+    kind: 'code_calls' | 'code_inherits' | 'code_references';
+    source: EARS.EntityId<'CodeSymbol'>;
+    target: EARS.EntityId<'CodeSymbol'>;
+    info: CodeEdgeInfo;
+    weight: number;
+}
+
 interface WorktreeEntry {
     path: string;
     head: string;
@@ -5708,6 +5776,21 @@ declare function clearAllSchedules(): void;
 
 declare function clearHandle(key: string): void;
 
+/** Queries an answer reads, beside the ones the sync does */
+declare const codeIndexAnswers: {
+    /** What calls, refers to or extends a symbol, tests after the rest, beside what that can't see */
+    callers: (id: EARS.EntityId) => SymbolEdges | null;
+    /** What a symbol calls, refers to or extends, beside how much of its own file syntax couldn't follow */
+    callees: (id: EARS.EntityId) => SymbolEdges | null;
+    /**
+     * The definitions most relevant to a file: what its own touch, weighted by how much, and then, more faintly, what
+     * those touch, each share divided among its edges so that a hub doesn't pull in everything it knows. A walk rather
+     * than a seeded `rank`, which read 110 ms over this repository's whole graph on the event loop and again after every
+     * commit to any edge, where this reads only the edges near the file.
+     */
+    codeMap: (root: string, path: string, limit: number) => SymbolResult[];
+};
+
 declare const codeIndexCommands: {
     /** Turns a project on, or marks it for removal; the sync does the rest */
     setEnabled: (root: string, enabled: boolean) => void;
@@ -5723,7 +5806,10 @@ declare const codeIndexCommands: {
         oid: string;
         language: CodeLanguage;
         skipped?: SkipReason;
-    }, definitions: readonly Definition[]) => {
+        reexports: readonly Reexport[];
+        defaultLocal: string | null;
+        wantedNames: readonly string[];
+    }, definitions: readonly Definition[], firstIndex?: boolean) => {
         written: number;
         removed: number;
         added: number;
@@ -5731,6 +5817,17 @@ declare const codeIndexCommands: {
     /** A file that is gone, and its symbols. Answers how many symbols went */
     removeFile: (project: string, path: string) => number;
     removeProject: (root: string) => void;
+    /**
+     * A file's edges as they should now be, in one unit that clears `dirty`. An edge that hasn't moved writes nothing, so
+     * a save that changes nothing another file can see writes only its own row.
+     */
+    applyEdges: (fileId: EARS.EntityId<"CodeFile">, wanted: {
+        edges: readonly WantedEdge[];
+        imports: readonly EARS.EntityId<"CodeFile">[];
+        importsMissing: boolean;
+        unresolvedSites: number;
+        unresolvedNames: readonly string[];
+    }) => void;
 };
 
 declare const codeIndexQueries: {
@@ -5748,6 +5845,22 @@ declare const codeIndexQueries: {
         };
     }, "oid" | "path" | "skipped">)[];
     fileSymbols: (file: string) => CodeSymbolEntity[];
+    /** The next files whose edges are out of date */
+    dirtyFiles: (project: string, limit: number) => ({
+        id: `${string}-${string}` & {
+            readonly __entity?: "CodeFile" | undefined;
+        };
+    } & Pick<CodeFileEntity & _apackdev_ears.BaseEntity & {
+        id: `${string}-${string}` & {
+            readonly __entity?: "CodeFile" | undefined;
+        };
+    }, "path" | "skipped">)[];
+    dirtyCount: (project: string) => number;
+    /** What a file re-exports */
+    reexportsOf: (file: EARS.EntityId<"CodeFile">) => readonly Reexport[];
+    /** The local name of what a file's default export is */
+    defaultOf: (file: EARS.EntityId<"CodeFile">) => string | null;
+    exists: (id: EARS.EntityId) => boolean;
     symbolCount: (project: string) => number;
     symbol: (id: EARS.EntityId) => CodeSymbolEntity | undefined;
     file: (id: string) => CodeFileEntity | undefined;
