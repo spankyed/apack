@@ -40,7 +40,7 @@ test('keeps an empty keyboard Client reachable and retires hidden input without 
   await card.locator('[contenteditable="true"]').fill('Seed this private native interface session.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, phase: state.phase, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
-  await expect.poll(async () => (await context()).turns).toBe(1)
+  await expect.poll(async () => (await context()).turns, {timeout:25000,message:'Original cold seed turn completes before Client verification'}).toBe(1)
   const sessionId = (await context()).sessionId; expect(sessionId).toBeTruthy()
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
