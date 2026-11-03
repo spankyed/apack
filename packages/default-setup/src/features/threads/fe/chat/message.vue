@@ -1,6 +1,6 @@
 <template>
   <div
-    v-if="!groupedSuppressed"
+    v-show="!groupedSuppressed"
     :data-chat-message="message.id"
     :data-native-selection-row="selectionRowId"
     :data-message-id="message.id"

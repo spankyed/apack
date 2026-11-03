@@ -10,8 +10,8 @@ import {action} from '../../../../src/content/actions/claude-code/cc-dir-ops.ts'
 
 let root:string;
 let threadId:ReturnType<typeof repository.threadCommands.create>['id'];
-let readSettings:ReturnType<typeof vi.fn>;
-let writeSettings:ReturnType<typeof vi.fn>;
+let readSettings:ReturnType<typeof vi.fn<typeof cliService.claudeCode.readSettings>>;
+let writeSettings:ReturnType<typeof vi.fn<typeof cliService.claudeCode.writeSettings>>;
 beforeEach(async()=>{
   root=await mkdtemp(join(tmpdir(),'claude-directory-remember-'));
   vi.stubEnv('CLAUDE_CONFIG_DIR',root);

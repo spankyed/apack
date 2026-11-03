@@ -1,3 +1,4 @@
+import { readClipboardSnapshot, restoreClipboardSnapshot } from '../../_support/electron-clipboard.ts'
 import { readFile, readdir as _readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
@@ -107,13 +108,13 @@ test('reads native Agent selections and copies excerpts without crossing parent 
   await selectText(agentComposer,selectedDraft);await agentReview.click();await expect.poll(async()=>(await reads()).length).toBe(2)
   expect((await reads())[1]).toMatchObject({before:{text:workerDraft},selected:true,value:{text:selectedDraft}})
   expect((await reads())[1].value.requestId).toBeUndefined()
-  const saved=await electronApp.evaluate(({clipboard})=>({text:clipboard.readText(),html:clipboard.readHTML(),rtf:clipboard.readRTF(),image:clipboard.readImage().toDataURL(),bookmark:clipboard.readBookmark().title}))
+  const saved=await readClipboardSnapshot(electronApp)
   try{
     await form.getByRole('button',{name:'Copy reviewed excerpt',exact:true}).click();await expect.poll(async()=>(await copies()).length).toBe(1)
     expect((await copies())[0]).toMatchObject({text:selectedDraft,result:{isCopied:true}})
     expect(await electronApp.evaluate(({clipboard})=>clipboard.readText())).toBe(selectedDraft)
   }finally{
-    await electronApp.evaluate(({clipboard,nativeImage},{saved,expected})=>{if(clipboard.readText()!==expected)return;const image=nativeImage.createFromDataURL(saved.image);clipboard.write({text:saved.text,html:saved.html,rtf:saved.rtf,...(saved.bookmark?{bookmark:saved.bookmark}:{}),...(!image.isEmpty()?{image}:{})})},{saved,expected:selectedDraft})
+    await restoreClipboardSnapshot(electronApp,saved,selectedDraft)
   }
   for(const width of [1100,680]){await appPage.setViewportSize({width,height:width===680?600:900});await writeFile(join(workspace!,'agent-layout-'+width+'.json'),JSON.stringify(await focused.evaluate(root=>{const nodes=[root,root.parentElement!,root.parentElement!.parentElement!,root.parentElement!.parentElement!.parentElement!,...root.children,...root.querySelectorAll('form > *')];return nodes.map(el=>{const b=el.getBoundingClientRect(),s=getComputedStyle(el);return {tag:el.tagName,class:el.className,top:b.top,bottom:b.bottom,height:b.height,minHeight:s.minHeight,maxHeight:s.maxHeight,flex:s.flex,overflow:s.overflow}})}),null,2));await agentComposer.scrollIntoViewIfNeeded();await expect(agentComposer).toBeInViewport();await expect(agentComposer).toHaveText(workerDraft);await expect(form.getByRole('button',{name:'Send to Agent',exact:true})).toBeInViewport();const pane=await focused.boundingBox(),box=await form.boundingBox(),transcript=await focused.getByRole('region',{name:'Agent transcript',exact:true}).boundingBox();expect(box!.y+box!.height).toBeLessThanOrEqual(pane!.y+pane!.height+1);expect(transcript!.height).toBeGreaterThanOrEqual(64);await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-agent-selection-'+width+'.png')});await form.getByRole('button',{name:'Session tools',exact:true}).click();await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-agent-everyday-'+width+'.png')});await review(form)}
   const longDraft=Array.from({length:12},(_,index)=>`Release review item ${index+1}: verify behavior and document the result.`).join('\n\n')

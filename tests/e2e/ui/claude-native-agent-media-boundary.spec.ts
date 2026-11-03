@@ -114,7 +114,7 @@ test('observes original selected-Agent terminal image delivery without app media
   expect(attachment).toBeTruthy()
   await input.pressSequentially('NativeAgentMediaBoundary review this image ')
   await expect.poll(async()=>(await observed())?.draft.text).toContain('NativeAgentMediaBoundary')
-  await electronApp.evaluate(({clipboard,nativeImage},path)=>{const image=nativeImage.createFromPath(path);if(image.isEmpty())throw Error('Owned native image fixture could not be decoded');clipboard.writeImage(image)},join(workspace!,'native-app-image.png'))
+  await electronApp.evaluate(async ({clipboard,nativeImage,ClipboardItem},path)=>{const image=nativeImage.createFromPath(path);if(image.isEmpty())throw Error('Owned native image fixture could not be decoded');await clipboard.write([new ClipboardItem({'image/png':new Blob([Uint8Array.from(image.toPNG())],{type:'image/png'})})])},join(workspace!,'native-app-image.png'))
   await input.press('Control+v')
   await expect.poll(async()=>(await observed())?.draft.text,{timeout:15000}).toMatch(/NativeAgentMediaBoundary[\s\S]*\[Image\s*#\d+\]/i)
   const prepared=await observed();expect(prepared.selected).toBe(taskId)

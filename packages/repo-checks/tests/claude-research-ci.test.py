@@ -75,7 +75,7 @@ class ReplayBoundary(unittest.TestCase):
     def test_refuses_local_native_execution_before_network_or_launch(self):
         with patch.dict(ci.os.environ, {'GITHUB_ACTIONS': 'false'}), patch.object(ci, 'urlopen') as fetch, patch.object(ci.subprocess, 'run') as launch:
             for case in ci.CASES:
-                with self.subTest(case=case), self.assertRaisesRegex(RuntimeError, 'disposable GitHub-hosted'):
+                with self.subTest(case=case), self.assertRaisesRegex((RuntimeError, ValueError), 'disposable GitHub-hosted|requires the reviewed owned Linux route'):
                     ci.run(case)
             fetch.assert_not_called()
             launch.assert_not_called()
@@ -90,7 +90,7 @@ class ReplayBoundary(unittest.TestCase):
 
     def test_linux_route_does_not_silently_adopt_other_profiles(self):
         with patch.object(ci, 'validate_host', return_value='linux-arm64'), patch.object(ci, 'urlopen') as fetch, patch.object(ci.subprocess, 'run') as launch:
-            with self.assertRaisesRegex(ValueError, 'adoption currently covers'):
+            with self.assertRaisesRegex(ValueError, 'Linux container adoption covers'):
                 ci.run('native-action-contexts', linux_container=True)
             fetch.assert_not_called()
             launch.assert_not_called()

@@ -1,3 +1,4 @@
+import { readClipboardSnapshot, restoreClipboardSnapshot } from '../../_support/electron-clipboard.ts'
 import { createHash } from 'node:crypto'
 import { readFile, readdir as _readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -143,7 +144,7 @@ test('round-trips decorated structured replace append and cursor insertion throu
   }
   if(uiCopy){
     const copyBefore=await context();
-    const original=await electronApp.evaluate(({clipboard})=>({text:clipboard.readText(),html:clipboard.readHTML(),rtf:clipboard.readRTF(),image:clipboard.readImage().toDataURL(),bookmark:clipboard.readBookmark().title}));
+    const original=await readClipboardSnapshot(electronApp);
     const copies=async()=>JSON.parse(await readFile(join(workspace!,'native-copy-receipts.json'),'utf8').catch(()=>'[]'));
     const button=card.getByRole('button',{name:'Copy release checklist',exact:true});
     try{
@@ -177,7 +178,7 @@ test('round-trips decorated structured replace append and cursor insertion throu
       await expect(composer).toHaveText('Review the pending release notes.');
     }finally{
       await appPage.evaluate(()=>{if((window as any).__nativeCopyWrite){navigator.clipboard.writeText=(window as any).__nativeCopyWrite;delete (window as any).__nativeCopyWrite}});
-      await electronApp.evaluate(({clipboard,nativeImage},saved)=>{const image=nativeImage.createFromDataURL(saved.image);clipboard.write({text:saved.text,html:saved.html,rtf:saved.rtf,...(saved.bookmark?{bookmark:saved.bookmark}:{}),...(!image.isEmpty()?{image}:{})})},original);
+      await restoreClipboardSnapshot(electronApp,original);
     }
     const copyAfter=await context(),submitted='Review the pending release notes.',recovery='Continue reviewing the release after the clipboard check.';
     expect(copyAfter.messages).toEqual(copyBefore.messages);expect(copyAfter.turns).toBe(copyBefore.turns);expect(copyAfter.claude.totalCostUsd).toBe(copyBefore.claude.totalCostUsd);expect(copyAfter.native.state.nativePid).toBe(boundNativePid);

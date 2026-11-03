@@ -20,7 +20,6 @@ import type { ClaudeUiViewRequest, OutgoingThreadsEvents } from '#features/threa
 import { sendToSystem } from '#generated/events.ts';
 import { readClaudeComposerPhase, stageClaudeComposerPhase, commitClaudeComposerPhase } from './chat/native-composer-phase.ts';
 import { takeClaudeUiRetirements, rememberClaudeUiLease, forgetClaudeUiLease } from './chat/native-ui-retirement.ts';
-import { answersCall } from '@apackdev/sdk/events';
 import { Archive, Copy, Pin, Trash2 } from 'lucide-vue-next';
 import { contextMenuFn } from '@apackdev/sdk/fe';
 import { untypedOpenSurface } from '@apackdev/sdk/fe'

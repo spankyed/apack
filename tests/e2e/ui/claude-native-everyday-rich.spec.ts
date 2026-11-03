@@ -1,3 +1,4 @@
+import { readClipboardSnapshot, restoreClipboardSnapshot } from '../../_support/electron-clipboard.ts'
 import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -94,7 +95,7 @@ test('reads and submits everyday rich parent and Agent drafts across compact ret
 
   const observations:any[]=[];
   const snapshot=(editor:typeof composer)=>editor.evaluate((element:any)=>{const e=element.editor;return {doc:e.state.doc.toJSON(),selection:e.state.selection.toJSON(),canonical:e.storage.markdown.getMarkdown()}});
-  const saved=await _electronApp.evaluate(({clipboard})=>({text:clipboard.readText(),html:clipboard.readHTML(),rtf:clipboard.readRTF(),image:clipboard.readImage().toDataURL()}));
+  const saved=await readClipboardSnapshot(_electronApp);
   const source=(owner:string)=>'# '+owner+" release review\n\nReview behavior changes.\n\n```ts\nconst ready = true\n```\n\n- Confirm installation\n- Document migration\n\nKeep the compatibility notes.";
   const pasteDraft=async(editor:typeof composer,owner:string)=>{
     await _electronApp.evaluate(({clipboard},text)=>clipboard.writeText(text),source(owner));
@@ -160,6 +161,6 @@ test('reads and submits everyday rich parent and Agent drafts across compact ret
     await writeFile(join(workspace!,'native-rich-everyday-proof.json'),JSON.stringify({sessionId,taskId,boundNativePid,parentDraft,parentBefore,agentDraft,agentBefore,agentReplyUuid,observations,final,recovery},null,2));
     await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeEverydayRich:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));
   }finally{
-    await _electronApp.evaluate(({clipboard,nativeImage},saved)=>{const image=nativeImage.createFromDataURL(saved.image);clipboard.write({text:saved.text,html:saved.html,rtf:saved.rtf,...(!image.isEmpty()?{image}:{})})},saved);
+    await restoreClipboardSnapshot(_electronApp,saved);
   }
 });

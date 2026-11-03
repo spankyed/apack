@@ -142,7 +142,7 @@ test('preserves rich parent and Agent drafts and selection through actual Agent 
   if(roundTripJourney){
     expect(process.platform).toBe('linux')
     const png=await appPage.evaluate(()=>{const c=document.createElement('canvas');c.width=160;c.height=96;const x=c.getContext('2d')!;x.fillStyle='#e5efff';x.fillRect(0,0,160,96);x.fillStyle='#224477';x.fillRect(10,12,140,22);x.fillStyle='#ffffff';x.font='bold 12px sans-serif';x.fillText('Release review',16,27);x.fillStyle='#335577';x.fillText('Ready for review',14,57);x.fillStyle='#28734a';x.fillRect(14,70,110,10);return c.toDataURL('image/png').split(',')[1]})
-    await _electronApp.evaluate(({clipboard,nativeImage},png)=>clipboard.writeImage(nativeImage.createFromBuffer(Buffer.from(png,'base64'))),png)
+    await _electronApp.evaluate(async ({clipboard,nativeImage,ClipboardItem},png)=>clipboard.write([new ClipboardItem({'image/png':new Blob([Uint8Array.from(nativeImage.createFromBuffer(Buffer.from(png,'base64')).toPNG())],{type:'image/png'})})]),png)
     await composer.focus();await composer.press('Control+v')
     const image=card.locator('img[src^="data:image/"]');await expect(image).toHaveCount(1);await expect.poll(async()=>image.evaluate((element:HTMLImageElement)=>element.naturalWidth)).toBe(160);parentImage=(await image.getAttribute('src'))!
     await composer.locator('p').last().click();await composer.press('End');await composer.pressSequentially(' #')

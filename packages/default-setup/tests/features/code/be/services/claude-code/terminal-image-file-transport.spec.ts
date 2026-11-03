@@ -1,6 +1,6 @@
 import { createClaudeTerminalImageFileTransport } from '#features/code/be/services/claude-code/terminal-image-file-transport.ts'
 const frame = (header: string, path = '/private/frame.rgba') => `\x1b_G${header};${Buffer.from(path).toString('base64')}\x1b\\`
-function fixture(read = vi.fn(async () => Buffer.from([1, 2, 3, 255])), readShared = vi.fn(async (_name: string, _image: unknown, _signal?: AbortSignal): Promise<Buffer> => { throw new Error('shared source unavailable') })) {
+function fixture(read = vi.fn(async (): Promise<Buffer> => Buffer.from([1, 2, 3, 255])), readShared = vi.fn(async (_name: string, _image: unknown, _signal?: AbortSignal): Promise<Buffer> => { throw new Error('shared source unavailable') })) {
   const emit = vi.fn(), reply = vi.fn(), transport = createClaudeTerminalImageFileTransport({ emit, reply, read, readShared })
   return { emit, reply, read, readShared, ...transport, output: () => emit.mock.calls.map(call => call[0]).join('') }
 }

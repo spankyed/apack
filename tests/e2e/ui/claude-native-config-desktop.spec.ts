@@ -1,3 +1,4 @@
+import { readClipboardPng } from '../../_support/electron-clipboard.ts'
 import { readFile, readdir as _readdir, writeFile, utimes, rename } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { randomUUID, createHash } from 'node:crypto'
@@ -548,8 +549,8 @@ test('edits original Settings through desktop controls and retains composing', a
         await electronApp.evaluate(({clipboard})=>clipboard.clear())
         await statistics.getByRole('button',{name:'Copy stats',exact:true}).click()
         await expect(statistics.getByText('Copied by Claude Code',{exact:true})).toBeVisible({timeout:15000})
-        await expect.poll(()=>electronApp.evaluate(({clipboard})=>!clipboard.readImage().isEmpty()),{timeout:15000}).toBe(true)
-        const exported=await electronApp.evaluate(({clipboard})=>{const image=clipboard.readImage();return {formats:clipboard.availableFormats(),size:image.getSize(),png:image.toPNG().toString('base64')}})
+        await expect.poll(()=>electronApp.evaluate(({clipboard})=>clipboard.has('image/png')),{timeout:15000}).toBe(true)
+        const exported=await readClipboardPng(electronApp)
         expect(exported.formats).toContain('image/png');expect(exported.size.width).toBeGreaterThan(0);expect(exported.size.height).toBeGreaterThan(0)
         const bytes=Buffer.from(exported.png,'base64'),file='native-rich-stats-'+(view==='Models'?'models-':'')+'export-'+width+'.png';await writeFile(testInfo.outputPath(file),bytes)
         statsCompleteness.exports.push({file,width,view,formats:exported.formats,size:exported.size,sha256:createHash('sha256').update(bytes).digest('hex')})

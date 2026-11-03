@@ -6,8 +6,8 @@ import { action } from '../../../../src/content/actions/claude-code/update-permi
 
 let getHandle: ReturnType<typeof vi.fn>;
 let getNativeTerminal: ReturnType<typeof vi.fn>;
-let updateMessageState: ReturnType<typeof vi.fn>;
-let updateChatState: ReturnType<typeof vi.fn>;
+let updateMessageState: ReturnType<typeof vi.fn<NonNullable<Services['chat']['updateMessageState']>>>;
+let updateChatState: ReturnType<typeof vi.fn<NonNullable<Services['threads']['updateChatState']>>>;
 
 function setup(handle?: { setPermissionMode: ReturnType<typeof vi.fn>; respond?: ReturnType<typeof vi.fn> }, pending = false) {
   const { id } = repository.threadCommands.create({ topic: 'Permission mode', instructions: '', tags: [] });
@@ -17,8 +17,8 @@ function setup(handle?: { setPermissionMode: ReturnType<typeof vi.fn>; respond?:
   } } });
   getHandle = vi.fn(() => handle);
   getNativeTerminal = vi.fn();
-  updateMessageState = vi.fn();
-  updateChatState = vi.fn();
+  updateMessageState = vi.fn<NonNullable<Services['chat']['updateMessageState']>>();
+  updateChatState = vi.fn<NonNullable<Services['threads']['updateChatState']>>();
   mockService<Services, 'cli'>('cli', { claudeCode: { getHandle, getNativeTerminal } as never });
   mockService<Services, 'chat'>('chat', { updateMessageState });
   mockService<Services, 'threads'>('threads', { updateChatState });

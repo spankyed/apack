@@ -139,7 +139,7 @@ test('preserves populated history and retires a held upload when resume imports 
   const heldDraft='Keep this image draft until I explicitly send it after resume.'
   await nativeWindow.evaluate(window=>{window.show();window.focus()});await appPage.bringToFront()
   await composer.fill(heldDraft);await composer.focus()
-  await electronApp.evaluate(({clipboard,nativeImage},file)=>{const image=nativeImage.createFromPath(file);if(image.isEmpty())throw Error('Owned PNG failed to decode');clipboard.writeImage(image)},join(workspace!,'native-app-image.png'))
+  await electronApp.evaluate(async ({clipboard,nativeImage,ClipboardItem},file)=>{const image=nativeImage.createFromPath(file);if(image.isEmpty())throw Error('Owned PNG failed to decode');await clipboard.write([new ClipboardItem({'image/png':new Blob([Uint8Array.from(image.toPNG())],{type:'image/png'})})])},join(workspace!,'native-app-image.png'))
   await composer.press('Control+v')
   const thumbnail=card.locator('img[src^="data:image/"]')
   await expect(thumbnail).toHaveCount(1)

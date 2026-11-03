@@ -1,3 +1,4 @@
+import { readClipboardPng } from '../../_support/electron-clipboard.ts'
 import { createHash } from 'node:crypto'
 import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -221,10 +222,10 @@ test('preserves Agent drafts through command scrolling, Stats dates and original
     const selected=await selectedRange();dateSelections.push({width,label,selected})
     await expect.poll(screen).toMatch(new RegExp('In:\\s+'+expectedStatsInputTokens+'\\s*· Out:\\s+'+expectedStatsOutputTokens))
     await electronApp.evaluate(({clipboard})=>clipboard.clear())
-    expect(await electronApp.evaluate(({clipboard})=>clipboard.readImage().isEmpty())).toBe(true)
+    expect(await electronApp.evaluate(async ({clipboard})=>!await clipboard.has('image/png'))).toBe(true)
     await keyboard.press('Control+s');await expect.poll(screen).toContain('copied!')
-    await expect.poll(()=>electronApp.evaluate(({clipboard})=>!clipboard.readImage().isEmpty())).toBe(true)
-    const exported=await electronApp.evaluate(({clipboard})=>{const image=clipboard.readImage();return {formats:clipboard.availableFormats(),size:image.getSize(),png:image.toPNG().toString('base64')}})
+    await expect.poll(()=>electronApp.evaluate(({clipboard})=>clipboard.has('image/png'))).toBe(true)
+    const exported=await readClipboardPng(electronApp)
     expect(exported.formats).toContain('image/png');expect(exported.size.width).toBeGreaterThan(0);expect(exported.size.height).toBeGreaterThan(0)
     const png=Buffer.from(exported.png,'base64'),file='native-stats-export-'+width+'.png'
     expect(png.subarray(0,8).toString('hex')).toBe('89504e470d0a1a0a')

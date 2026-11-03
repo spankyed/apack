@@ -72,11 +72,11 @@
                   <!-- Markdown, rendered without raw HTML -->
                   <TiptapEditor class="text-neutral-300 text-sm leading-relaxed" mode="viewer" variant="chat" :model-value="currentThread.instructions" />
                 </div>
-                <ConversationViewer v-if="visibleMessages.length" :key="currentThread?.id" :messages="visibleMessages"
+                <ConversationViewer v-if="visibleMessages.length" :key="currentThread?.id" :messages="conversationMessages"
                   @rendered="onMessagesRendered" @image-click="openLightbox">
                   <template #default="{ id, content }">
                     <ChatMessage
-                      v-if="messagesById.has(id) && id !== pendingNativeApproval?.messageId"
+                      v-if="messagesById.has(id)"
                       :message="messagesById.get(id)!"
                       :native-frames="nativeUiDrawing?.transcriptMessages" :native-view-id="nativeUiMount?.mountId"
                       @native-ui-press="pressNativeUi" @native-ui-field="editNativeUi"
@@ -346,6 +346,7 @@ const pageSelection = provideClaudeUiSelection(() => composerAreaRef.value)
 watch(() => JSON.stringify([currentThread.value?.id, nativeUiMount.value?.mountId, allMessages.value.filter(message => message.sender === 'user').at(-1)?.id]), pageSelection.clear)
 
 const messagesById = computed(() => new Map<string, MessageEntity>(visibleMessages.value.map(message => [message.id, message])));
+const conversationMessages = computed(() => visibleMessages.value.filter(message => message.id !== pendingNativeApproval.value?.messageId));
 const chatMessageCount = useSelector(actor, state => state.context.chatMessageIds.length);
 const messagePagination = useSelector(actor, (state) => state.context.messagePagination);
 const messagesReady = computed(() => !messagePagination.value.isLoading && allMessages.value.length >= chatMessageCount.value);

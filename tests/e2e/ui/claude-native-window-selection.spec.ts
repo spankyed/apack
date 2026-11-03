@@ -1,3 +1,4 @@
+import { readClipboardSnapshot, restoreClipboardSnapshot } from '../../_support/electron-clipboard.ts'
 import { readFile, readdir as _readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
@@ -117,14 +118,14 @@ test('routes original selection and clipboard across independent app windows', a
   await expect.poll(async()=>(await reads()).length).toBe(2)
   expect((await reads())[1]).toEqual({selected:true,value:{text:'release draft 👋'}})
   await expect(composer).toHaveText('Main window release draft.');await expect(secondComposer).toHaveText('Popout release draft 👋')
-  const saved=await electronApp.evaluate(({clipboard})=>({text:clipboard.readText(),html:clipboard.readHTML(),rtf:clipboard.readRTF(),image:clipboard.readImage().toDataURL(),bookmark:clipboard.readBookmark().title}))
+  const saved=await readClipboardSnapshot(electronApp)
   try{
     await second.getByRole('button',{name:'Copy window selection',exact:true}).click()
     await expect.poll(async()=>(await copies()).length).toBe(1)
     expect((await copies())[0]).toEqual({text:'release draft 👋',result:{isCopied:true}})
     expect(await electronApp.evaluate(({clipboard})=>clipboard.readText())).toBe('release draft 👋')
   }finally{
-    await electronApp.evaluate(({clipboard,nativeImage},saved)=>{if(clipboard.readText()!=='release draft 👋')return;const image=nativeImage.createFromDataURL(saved.image);clipboard.write({text:saved.text,html:saved.html,rtf:saved.rtf,...(saved.bookmark?{bookmark:saved.bookmark}:{}),...(!image.isEmpty()?{image}:{})})},saved)
+    await restoreClipboardSnapshot(electronApp,saved,'release draft 👋')
   }
   const prompts=async()=>JSON.parse(await readFile(join(workspace!,'native-window-focused-prompt-receipts.json'),'utf8').catch(()=>'[]'))
   await second.getByRole('button',{name:'Read focused draft',exact:true}).click()
