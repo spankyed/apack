@@ -38,7 +38,7 @@ test('keeps original billing visible in an otherwise empty selected-Agent status
   await command('cc-set-dir', workspace!)
   await card.locator('[contenteditable="true"]').fill('Seed this private native interface session.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
-  const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, phase: state.phase, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
+  const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, phase: state.phase, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, nativeUi: Object.values(state.nativeUiViews).filter((view:any)=>view.threadId===state.currentThread?.id), native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
   try {
     await expect.poll(async () => (await context()).turns, {timeout:25000,message:'Original cold seed turn completes before billing verification'}).toBe(1)
   } catch (error) {
@@ -86,6 +86,9 @@ test('keeps original billing visible in an otherwise empty selected-Agent status
   const form=focused.getByRole('form',{name:'Agent message',exact:true})
   const draft=form.locator('[contenteditable="true"]')
   const billing=form.getByTestId('claude-billing-status')
+  const agentUi=async()=>(await context()).nativeUi.find((view:any)=>view.mountRequest?.nativeView?.taskId===taskId)
+  await expect.poll(async()=>(await agentUi())?.state.status,{timeout:15000}).toBe('live')
+  await expect(focused.getByText('Loading Agent conversation…',{exact:true})).toHaveCount(0)
   await expect(billing).toContainText('Usage allowed · No usage-credit charge reported · Resets')
   await expect(form.getByTestId('composer-native-status')).toHaveCount(0)
   await expect(form.getByRole('button',{name:'Session tools',exact:true})).toHaveCount(0)
@@ -98,7 +101,8 @@ test('keeps original billing visible in an otherwise empty selected-Agent status
     const geometry=await billing.evaluate(el=>{const rect=el.getBoundingClientRect();return{x:rect.x,y:rect.y,width:rect.width,height:rect.height,clientWidth:el.clientWidth,scrollWidth:el.scrollWidth,text:el.textContent,title:el.getAttribute('title')}})
     expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth)
     expect(geometry.x).toBeGreaterThanOrEqual(0);expect(geometry.x+geometry.width).toBeLessThanOrEqual(size.width)
-    readings.push({...size,...geometry})
+    const ui=await agentUi();expect(ui.state.status).toBe('live');expect(ui.mountRequest.nativeView.kind).toBe('agent')
+    readings.push({...size,...geometry,uiStatus:ui.state.status,uiBilling:ui.state.billing,target:ui.mountRequest.nativeView})
     await capture('native-agent-billing-'+size.width+'.png')
   }
   const observation=(await context()).native.state.billing
@@ -113,7 +117,7 @@ test('keeps original billing visible in an otherwise empty selected-Agent status
   await section.getByRole('button',{name:'Stop session',exact:true}).click()
   await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
-  await expect(focused).toHaveCount(0)
+  await expect(focused).toBeHidden()
   await composer.click();await composer.press(process.platform==='darwin'?'Meta+A':'Control+A');await composer.press('Backspace')
   const recovery='Continue the same session after reviewing native usage.'
   await composer.pressSequentially(recovery);await expect(composer).toHaveText(recovery)
