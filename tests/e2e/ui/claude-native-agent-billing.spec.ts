@@ -4,8 +4,9 @@ import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
 const workspace=process.env.CLAUDE_RESEARCH_WORKSPACE,launcher=process.env.CLAUDE_RESEARCH_LAUNCHER,onboarding=process.env.CLAUDE_RESEARCH_ONBOARDING
 test.skip(!workspace||!launcher||!onboarding||process.env.CLAUDE_RESEARCH_AGENT_BILLING!=='1','Explicit owned Agent billing fixture required')
+// Apply the journey budget before fixture setup; the test body runs only after appPage is ready.
+test.describe.configure({timeout:120000})
 test('keeps original billing visible in an otherwise empty selected-Agent status strip',async({app,appPage,electronApp},testInfo)=>{
-  test.setTimeout(120000)
   const nativeWindow=await electronApp.browserWindow(appPage)
   async function capture(name:string){
     const size=appPage.viewportSize()!
