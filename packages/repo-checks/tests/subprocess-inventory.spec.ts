@@ -40,7 +40,7 @@ const loadedByThePool = (): string[] => loadedByThePools(REPO_ROOT);
  * exists to catch, and a file-level list would wave it through.
  */
 const INVENTORY: Record<string, { calls: number; why: string }> = {
-  'packages/apack-cli/tests/build/fe-bundler-dev-server.integration.spec.ts': { calls: 1,
+  'packages/apack-cli/tests/build/fe-bundler-dev-server.native.spec.ts': { calls: 1,
     why: 'Separate Vite processes scan a live pack while its output is published. The Windows directory-sharing failure does not reproduce in a same-process server; each child owns a private cache and closes with the test' },
   'packages/apack-cli/tests/build/compiler-pe-libraries.native.spec.ts': { calls: 20,
     why: 'MSVC and ordinary loader fixtures prove actual DLL selection, copied-runtime SxS, pre-initialization refusal, OS assemblies and publisher-policy invalidation. Real Node/compiler processes retain their separate runtime proofs; these loader boundaries cannot be proved in-process' },
