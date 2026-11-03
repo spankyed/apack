@@ -47,12 +47,14 @@ it('draws the original normalized text while a row render is pending or unavaila
 })
 
 
-it('keeps user control clicks local while allowing body clicks to reach the host expander', () => {
+it('keeps user control clicks local while allowing body clicks to reach the host expander', async () => {
   const value: ClaudeUiTranscriptFrame = { ...frame('user', 0, 'Typed prompt'), component: 'UserMessage', origin: { kind: 'unclassified' }, isExpanded: false }
   const clicked = vi.fn(), press = vi.fn(), root = document.createElement('div'); document.body.append(root)
   app = createApp({ render: () => h('section', { onClick: clicked }, [h(NativeTranscriptMessage, { frame: value, onPress: press })]) }); app.mount(root)
   expect(root.querySelector('[data-native-user]')?.getAttribute('data-native-user')).toBe('user')
   expect(root.querySelector('[data-native-assistant]')).toBeNull()
+  // User clicks arrive after the mounted view has rendered, outside Vue's listener-installation tick.
+  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
   root.querySelector('button')!.click(); expect(press).toHaveBeenCalledOnce(); expect(clicked).not.toHaveBeenCalled()
   root.querySelector<HTMLElement>('[data-engine-text]')!.click(); expect(clicked).toHaveBeenCalledOnce()
 })

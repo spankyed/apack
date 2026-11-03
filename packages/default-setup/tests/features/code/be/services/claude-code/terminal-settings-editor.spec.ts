@@ -327,14 +327,17 @@ it('opens cloud forwarding only through its original false Toggle and preserves 
  expect(change).toHaveBeenCalledOnce()
 })
 it('waits for the original cloud decision completion before reporting its native result',async()=>{
+ vi.useFakeTimers()
+ try {
  const f=fixture();(f.entry as any).settingsEditorKey='remoteHomeSettings';f.frame.panel.hidden=true
  let finish!:()=>void;const change=vi.fn(()=>{finish=()=>{f.frame.panel.hidden=false}}),cancel=vi.fn(()=>{f.frame.panel.hidden=false})
  const Cloud=function OriginalCloudConsent(){};f.setFunctionHash(Cloud,'98c08a861f9d6cecbda8fd2efee1bf136038c5e7fbab447e2ecd843cb6d90794')
  f.config.child={type:Cloud,memoizedProps:{origin:'config_panel',onDone:()=>{}},child:{type:f.Se,memoizedProps:{title:"Use this machine's settings in cloud sessions?",onCancel:cancel,children:{type:f.Xe,props:{options:[{value:'forward',label:'Yes'},{value:'not_now',label:'Not now'}],defaultFocusValue:'not_now',onChange:change}}}}}
  const before=await f.editor(),action=f.act({action:'select',revision:before.revision,value:'forward'})
  await vi.waitFor(()=>expect(change).toHaveBeenCalledExactlyOnceWith('forward'))
- let complete=false;void action.then(()=>{complete=true});await new Promise(resolve=>setTimeout(resolve,10));expect(complete).toBe(false)
- finish();await action;expect(complete).toBe(true);expect(cancel).not.toHaveBeenCalled()
+ let complete=false;void action.then(()=>{complete=true});await vi.advanceTimersToNextTimerAsync();expect(complete).toBe(false)
+ finish();await vi.advanceTimersToNextTimerAsync();await action;expect(complete).toBe(true);expect(cancel).not.toHaveBeenCalled()
+ }finally{vi.useRealTimers()}
 })
 
 

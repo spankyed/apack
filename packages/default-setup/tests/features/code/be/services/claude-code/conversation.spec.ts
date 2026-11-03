@@ -441,7 +441,10 @@ it('keeps billing observed between turns without creating a phantom turn and cle
  expect(observations.at(-1)).toMatchObject({sessionId:'a'})
  f.push({type:'conversation_reset',new_conversation_id:'b'})
  await vi.waitFor(() => expect(owner.billing).toBeUndefined())
- f.push({type:'rate_limit_event',session_id:'a',rate_limit_info:{status:'rejected'}})
- await new Promise(resolve => setTimeout(resolve, 10)); expect(owner.billing).toBeUndefined()
+ const stale={type:'rate_limit_event',session_id:'a',rate_limit_info:{status:'rejected'}}
+ const observed=vi.fn(), unsubscribe=owner.subscribe(observed)
+ f.push(stale)
+ await vi.waitFor(() => expect(observed).toHaveBeenCalledWith(stale))
+ expect(owner.billing).toBeUndefined(); unsubscribe()
  await owner.close()
 })
