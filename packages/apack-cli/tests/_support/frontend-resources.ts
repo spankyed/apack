@@ -42,6 +42,21 @@ export function createFrontendResourceFixture({ captureCompiler }: PackBuilderOp
   };
 }
 
+/** A pack whose `canvas.vue` imports through `expression`, from a `pages` directory outside it that is empty and linked into it */
+export function externalGlobConsumer(fixture: ReturnType<typeof createFrontendResourceFixture>, expression: string) {
+  const { pack } = fixture.consumer();
+  const packageFile = path.join(pack, 'package.json');
+  const manifest = JSON.parse(fs.readFileSync(packageFile, 'utf8'));
+  manifest.imports = { ...manifest.imports, '#pages/*': './pages/*' };
+  fs.writeFileSync(packageFile, JSON.stringify(manifest));
+  const directory = path.join(fixture.root, 'pages');
+  fs.mkdirSync(directory);
+  fs.symlinkSync(directory, path.join(pack, 'pages'), 'dir');
+  const entryPoint = path.join(pack, expression.includes('#pages') ? 'canvas.vue' : 'src/canvas.vue');
+  fs.writeFileSync(entryPoint, `<script setup>const pages = ${expression};</script><template><div>{{ pages }}</div></template>`);
+  return { pack, directory, entryPoint, page: path.join(directory, 'nested', 'new.js') };
+}
+
 export function readFrontendOutput(pack: string, extension: string): string {
   const directory = path.join(pack, 'dist/runtime');
   return filesUnder(directory).filter(file => file.endsWith(extension))
