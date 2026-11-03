@@ -20,8 +20,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 23
+          node-version: 24.22.2
           cache: npm
+      - name: Install pinned npm
+        run: npm install -g npm@11.21.1
 
       - run: npm ci
 
