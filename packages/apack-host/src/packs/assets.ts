@@ -76,6 +76,12 @@ export function packFileHashes(layoutDir: string): Record<string, string> {
 
 /** Check format version and that the files on disk are exactly the ones recorded. */
 export function verifyPack(dir: string): PackIntegrity {
+  return readVerifiedPackFiles(dir, []).integrity;
+}
+
+/** Retain requested bytes from the verification pass so their consumers never reread mutable paths. */
+export function readVerifiedPackFiles(dir: string, capture: readonly string[]): { integrity: PackIntegrity; files: ReadonlyMap<string, Buffer> } {
+  const files = new Map<string, Buffer>();
   const receipt = fs.lstatSync(path.join(dir, PACK_LAYOUT.integrity), { throwIfNoEntry: false });
   if (!receipt) throw new Error(`Not a pack layout: no ${PACK_LAYOUT.integrity} in ${dir}; rebuild the complete pack`);
   if (receipt.isSymbolicLink()) throw new Error('integrity.json must be a file, not a symbolic link');
@@ -105,6 +111,7 @@ export function verifyPack(dir: string): PackIntegrity {
       const bytes = fs.readFileSync(path.join(dir, rel));
       if (sha256(bytes) !== expected) problems.push(`checksum mismatch ${rel}`);
       if (rel === PACK_LAYOUT.manifest) manifestBytes = bytes;
+      if (capture.includes(rel)) files.set(rel, bytes);
     }
     onDisk.delete(rel);
   }
@@ -117,5 +124,5 @@ export function verifyPack(dir: string): PackIntegrity {
   if (integrity.id !== manifest?.id || integrity.version !== manifest?.version) {
     throw new Error('integrity.json identity does not match its manifest; rebuild and install the complete pack');
   }
-  return integrity;
+  return { integrity, files };
 }
