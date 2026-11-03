@@ -65,7 +65,7 @@ const BASE_PACK = {
   'tsconfig.json': tsconfig,
   'apack.json': JSON.stringify({
     id: 'base-pack', name: 'Base', version: '1.0.0',
-    data: { entities: { Tag: { shape: "src/types.ts#TagEntity" }, Item: { shape: "src/types.ts#ItemEntity" } }, relations: { tagged: { weighted: true } }, roles: ['featured'] },
+    data: { entities: { Tag: { shape: "src/types.ts#TagEntity" }, Item: { shape: "src/types.ts#ItemEntity" } }, relations: { tagged: { weighted: true } }, roles: ['featured'], ranks: { itemRank: { types: ['Item'], relations: ['tagged'] } } },
 
     features: {
       calendar: { description: 'Feature declaration fixture.',
@@ -253,6 +253,11 @@ write(someMemo).link('related', someMemo, { weight: 2 });
 // @ts-expect-error a kind that may be either takes no weight
 write(someMemo).link('related' as 'related' | 'tagged', someMemo, { weight: 2 });
 query('Memo').rank('tagged', { seeds: [someMemo, { id: someMemo, weight: 3 }], weights: false });
+// A rank index is one a pack or its dependencies declare
+export type RankIndexes = Expect<Equal<PackEARS.RankIndex, 'itemRank'>>;
+export const rankedIds = query('Item').ranked('itemRank').limit(5).ids();
+// @ts-expect-error a misspelled rank index
+query('Item').ranked('itemRnak');
 // @ts-expect-error a seed's weight is a number
 query('Memo').rank('tagged', { seeds: [{ id: someMemo, weight: 'heavy' }] });
 // @ts-expect-error undeclared entity name
@@ -435,6 +440,7 @@ write(memoId).link('|linkKind|', memoId);
 write(memoId).link('tagged', memoId, { |weightedLinkOption| });
 write(memoId).link('related', memoId, { |linkOption| });
 query('Memo').rank('related', { |rankOption| });
+query('Item').ranked('|rankedIndex|');
 query('Memo').linkedTo('|linkedToKind|', memoId);
 write(memoId).link('relatd', memoId);
 write(memoId).grant('|grantRole|');
@@ -599,6 +605,7 @@ afterEach(() => new Promise<void>((resolve) => { setImmediate(resolve); }));
     expect(at.createRow, 'created-row completions').not.toContain('entityType');
     // A link offers a weight for a weighted kind alone, and a rank its walk's options
     expect(at.weightedLinkOption, 'weighted link options').toEqual(expect.arrayContaining(['info', 'weight']));
+    expect(at.rankedIndex, 'rank indexes').toEqual(['itemRank']);
     expect(at.linkOption, 'link options').toContain('info');
     expect(at.linkOption, 'link options').not.toContain('weight');
     expect(at.rankOption, 'rank options').toEqual(expect.arrayContaining(['direction', 'seeds', 'weights']));

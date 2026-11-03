@@ -10,6 +10,7 @@ import { artifactRegistry } from '@apackdev/sdk/artifacts';
 import { _contentWriterRegistry } from '@apackdev/sdk/content';
 import { SDK_ENTITIES } from '@apackdev/sdk/types';
 import { HOST_ENTITY_TYPES } from '../../src/app-state/index.ts';
+import { engineSchemaOf } from '../../src/database/schema.ts';
 import { getDesignated, hasDesignation } from '@apackdev/sdk/designations';
 import { startTestRuntime } from '@apackdev/sdk/testing';
 import { hostRegistration } from '../../src/features/registration.ts';
@@ -177,6 +178,18 @@ describe('registerPack entities', () => {
   it('rejects an entity type another pack registered', () => {
     registerEntities('first-pack', { Memo: 'Memo' });
     expect(() => registerEntities('second-pack', { Memo: 'Memo' })).toThrow('EARS collision: entity type "Memo" — pack "second-pack" vs "first-pack"');
+  });
+
+  it('holds the rank indexes packs declare, as the engine\'s schema, and rejects one another pack registered', () => {
+    const declaring = (id: string, ranks: Record<string, { types: string[]; relations: string[] }>) => {
+      registerPack({ id, ears: { entities: {}, relKinds: {}, roles: {}, ranks } } as unknown as PackRegistration);
+      registered.push(id);
+    };
+    const memoRank = { types: ['Memo'], relations: ['cites'] };
+    declaring('first-pack', { memoRank });
+    declaring('second-pack', { otherRank: memoRank });
+    expect(engineSchemaOf(registry).ranks).toEqual({ memoRank, otherRank: memoRank });
+    expect(() => declaring('third-pack', { memoRank })).toThrow('EARS collision: rank index "memoRank" — pack "third-pack" vs "first-pack"');
   });
 
   it('rejects a role another pack registered, and refuses one the SDK declares', () => {

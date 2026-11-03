@@ -299,6 +299,34 @@ describe("the SDK's entities and relation kinds", () => {
     expect(none).toContain('export const WEIGHTED_KINDS = [] as const;');
   });
 
+  describe('rank indexes', () => {
+    const base = (rankIndexes: Record<string, string>) => ({
+      ...dependency({}), types: { entities: { Item: 'Item' }, relKinds: { TAGGED: 'tagged' }, roles: {} },
+      provenance: { entities: { Item: 'base-pack' }, relKinds: { TAGGED: 'base-pack' }, rankIndexes },
+    });
+
+    it('types its own and those its dependencies\' trees declare, and none when none is', async () => {
+      const data = { entities: { Note: {} }, relations: { cites: {} }, ranks: { noteRank: { types: ['Note'], relations: ['cites'] } } };
+      const ears = (await generate({ data, dependencies: { 'base-pack': '*' } }, { 'base-pack': base({ coreRank: 'core-pack' }) }))['src/__generated__/ears.ts'];
+      expect(ears).toContain('export const RANK_INDEXES = ["noteRank", "coreRank"] as const;');
+      expect(ears).toContain('rankIndexes: EARS.RankIndex;');
+      const none = (await generate({ data: { relations: { pinned: {} } } }))['src/__generated__/ears.ts'];
+      expect(none).toContain('export const RANK_INDEXES = [] as const;');
+    });
+
+    it('may name what a dependency and the SDK declare', async () => {
+      const data = { ranks: { mixed: { types: ['Item', 'Document'], relations: ['tagged', 'parent_of'] } } };
+      await expect(generate({ data, dependencies: { 'base-pack': '*' } }, { 'base-pack': base({}) })).resolves.toBeDefined();
+    });
+
+    it('refuses a type or a kind nothing declares, and a name a dependency\'s tree holds', async () => {
+      await expect(generate({ data: { ranks: { lost: { types: ['Nowhere'], relations: ['parent_of'] } } } })).rejects.toThrow('data.ranks.lost names Nowhere');
+      await expect(generate({ data: { ranks: { lost: { types: ['Document'], relations: ['nowhere'] } } } })).rejects.toThrow('data.ranks.lost names nowhere');
+      const taken = { entities: { Note: {} }, relations: { cites: {} }, ranks: { coreRank: { types: ['Note'], relations: ['cites'] } } };
+      await expect(generate({ data: taken, dependencies: { 'base-pack': '*' } }, { 'base-pack': base({ coreRank: 'core-pack' }) })).rejects.toThrow('rank index "coreRank" declared by both');
+    });
+  });
+
   it('uses entity keys as unchanged wire names in EntityName', async () => {
     const base = { ...dependency({}), types: { entities: { Tag: 'Tag' }, relKinds: {}, roles: {} } };
     const ears = (await generate({ data: { entities: { Memo: {} } }, dependencies: { 'base-pack': '*' } }, { 'base-pack': base }))['src/__generated__/ears.ts'];
@@ -570,7 +598,7 @@ describe('the snapshot format', () => {
         system: ['machine', 'receives'],
         surface: ['receives'],
       },
-      provenanceKinds: ['entities', 'referenceCategories', 'referenceTypes', 'relKinds', 'roles', 'surfaces', 'tiptapExtensions', 'weightedKinds'],
+      provenanceKinds: ['entities', 'rankIndexes', 'referenceCategories', 'referenceTypes', 'relKinds', 'roles', 'surfaces', 'tiptapExtensions', 'weightedKinds'],
       facadeImports: ['PackEntityShapes', 'PackFeatureSettings', 'PackGroupSettings', 'PackStepNodes', 'PackSurfaceEvents', 'PackSurfaceState', 'PackSystemEvents', 'Repositories', 'Services'],
     });
   });
