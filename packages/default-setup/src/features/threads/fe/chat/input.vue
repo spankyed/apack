@@ -984,7 +984,7 @@ const handleSubmit = async () => {
 .inputBackgroundNotes :global(.composer-document) { min-height: 40px; }
 .inputBackgroundNotes :global(.composer-document) { padding-block: 8px; }
 .inputBackgroundNotes :global(.ProseMirror) { min-height: 24px; }
-.inputBackgroundNotes :global([data-background-note-hint]) { padding-top: 4px; }
+.inputBackgroundNotes :global([data-background-note-hint]) { padding-top: 4px; line-height: 1rem; }
 .inputBackgroundNotes :global([data-composer-toolbar]) { padding-block: 4px; }
 @media (max-height: 700px) {
   :global([data-composer-form]) { padding-top: 4px; padding-bottom: 4px; }

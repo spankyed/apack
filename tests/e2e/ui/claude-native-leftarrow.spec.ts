@@ -286,7 +286,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       await writeFile(join(workspace!,'native-background-app-observation.json'),JSON.stringify(observations,null,2))
       expect(background.scrollHeight).toBeLessThanOrEqual(background.clientHeight+1)
       expect(background.scrollTop).toBe(0);expect(background.titleHint).toBe(background.title)
-      expect(metric.noteCard.scrollHeight).toBeLessThanOrEqual(metric.noteCard.clientHeight+1)
+      expect(metric.noteCard.scrollHeight).toBeLessThanOrEqual(metric.noteCard.clientHeight)
       expect(metric.noteCard.scrollTop).toBe(0)
       expect(metric.editor.bottom).toBeLessThanOrEqual(Math.min(...metric.hintTextRects.map(r=>r.top))+1)
       expect(metric.transcript.top).toBeGreaterThanOrEqual(background.panel.bottom-1)
