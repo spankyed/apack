@@ -6,8 +6,9 @@ import { targetIs, TRAIL_CLICK, type TrailClickEvent } from '@apackdev/sdk/fe'
 import { answersCall, newCall } from '@apackdev/sdk/events'
 import type { DatabaseSettings } from '#generated/types.ts'
 import type { DatabaseContext, DatabaseInboxEvent } from './contract.ts'
-import type { OutgoingDatabaseEvents } from '#features/database/be/types.ts'
+import type { DatabaseSchemaInfo, OutgoingDatabaseEvents } from '#features/database/be/types.ts'
 import { sendToSystem } from '#generated/events.ts'
+import { fromView } from '#generated/fe.ts'
 import { attributeQueryTemplate, entityQueryTemplate, exampleQuery, relationQueryTemplate } from './constants.ts'
 import { History, HardDriveDownload } from 'lucide-vue-next'
 
@@ -22,7 +23,7 @@ function emptyDatabaseResults() {
   return {
     queryResult: null, isLoading: false, error: null, executionTime: null,
     pendingQueryCall: null, pendingTransactionCall: null, selectedSchemaItem: null,
-    isAiQueryLoading: false, isRefreshing: false,
+    isAiQueryLoading: false,
     flowRuns: [], currentFlowId: null, flowEvents: [], expandedNodes: new Set<string>(),
     nodeDetails: new Map<string, import('@apackdev/sdk/steps').RunNode>(), isLoadingRuns: false,
     runPagination: { offset: 0, limit: 50, hasMore: false },
@@ -45,7 +46,8 @@ type UIEvent =
   | { type: 'TRANSACTION.EXECUTE'; code: string }
   | { type: 'SCHEMA.SELECT'; itemType: 'entity' | 'attribute' | 'relation'; value: string }
   | { type: 'QUERY.UPDATE'; code: string }
-  |{ type: 'DATABASE.REFRESH_SCHEMA' }
+  | { type: 'SCHEMA.READ'; schema: DatabaseSchemaInfo }
+  | { type: 'SCHEMA.FAILED'; error: string }
   | { type: 'DATABASE.RESET' }
   | { type: 'MODE.TOGGLE' }
   | { type: 'AI_QUERY.GENERATE'; prompt: string; mode: 'query' | 'transaction' }
@@ -76,7 +78,13 @@ const generateQueryForSchemaItem = (type: 'entity' | 'attribute' | 'relation', v
   }
 }
 
+const SCHEMA_VIEW = 'schemaView'
+
 const databaseState = setup({
+  actors: {
+    schemaView: fromView('database', 'schema', (update) =>
+      (update.ok ? { type: 'SCHEMA.READ' as const, schema: update.value } : { type: 'SCHEMA.FAILED' as const, error: update.error })),
+  },
   types: {
     context: {} as DatabaseContext,
     events: {} as DatabaseEvents,
@@ -110,11 +118,13 @@ const databaseState = setup({
     },
   },
   actions: {
-    /* ── the schema, fetched: a walk over the whole store, which no view should re-run on every commit ── */
-    requestSchema: () => {
-      sendToSystem(id, { type: 'GET_SCHEMA' });
-    },
-    setSchema: assign(({ event }) => ({ schema: typeOf('SCHEMA_READ', event).schema, isRefreshing: false })),
+    /* ── the schema, followed from the shell's start, in a delivery naming the surface ── */
+    followSchema: enqueueActions(({ enqueue }) => {
+      enqueue.stopChild(SCHEMA_VIEW);
+      enqueue.spawnChild('schemaView', { id: SCHEMA_VIEW });
+    }),
+    setSchema: assign(({ event }) => ({ schema: typeOf('SCHEMA.READ', event).schema })),
+    setSchemaError: assign(({ event }) => ({ error: typeOf('SCHEMA.FAILED', event).error })),
     /** Any window replaced the data: what this one shows names rows that may be gone */
     dropReplacedResults: assign(emptyDatabaseResults),
 
@@ -209,8 +219,6 @@ const databaseState = setup({
         pendingTransactionCall: null,
       } as const;
 
-      // A transaction can add an entity type or a relation kind, so the schema is asked for again
-      enqueue('requestSchema');
       // Check if this was a delete operation
       if (ev.result && ev.result.deleted) {
         // After successful deletion, refresh the current query
@@ -297,13 +305,10 @@ const databaseState = setup({
       };
     }),
 
-    setRefreshing: assign({
-      isRefreshing: true,
-    }),
 
     /* ── run history viewer actions ──────────────────────── */
     toggleViewMode: assign(({ context }) => {
-      const newMode = context.viewMode === 'database' ? 'runs' : 'database';
+      const newMode: DatabaseContext['viewMode'] = context.viewMode === 'database' ? 'runs' : 'database';
       if (newMode === 'runs' && context.flowRuns.length === 0) {
         // Ask for the flow runs when switching to the run history the first time
         sendToSystem(id, {
@@ -525,9 +530,10 @@ const databaseState = setup({
       ['.explorer', 'explorer'],
     ]),
     // Where a surface asks for what it starts from: the shell hands it this in a delivery naming the surface
-    SURFACE_STARTED: { actions: 'requestSchema' },
-    SCHEMA_READ: { actions: 'setSchema' },
-    DATABASE_REPLACED: { actions: ['dropReplacedResults', 'requestSchema'] },
+    SURFACE_STARTED: { actions: 'followSchema' },
+    'SCHEMA.READ': { actions: 'setSchema' },
+    'SCHEMA.FAILED': { actions: 'setSchemaError' },
+    DATABASE_REPLACED: { actions: 'dropReplacedResults' },
     QUERY_RESULT: { guard: 'answersPendingQuery', actions: 'setQueryResult' },
     QUERY_ERROR: { guard: 'answersPendingQuery', actions: 'setQueryError' },
     TRANSACTION_RESULT: { guard: 'answersPendingTransaction', actions: 'setTransactionResult' },
@@ -582,9 +588,6 @@ AI_QUERY_LOADING: { actions: 'setAiQueryLoading' },
         },
 'AI_QUERY.GENERATE': {
           actions: ['generateAiQuery'],
-        },
-        'DATABASE.REFRESH_SCHEMA': {
-          actions: ['setRefreshing', 'requestSchema'],
         },
         'VIEW_MODE.TOGGLE': {
           actions: ['toggleViewMode', 'requestFlowRuns'],

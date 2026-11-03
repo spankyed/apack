@@ -5,6 +5,7 @@
 ```ts
 
 import type { Create } from '@apackdev/ears';
+import { DatabaseCatalog } from '@apackdev/ears';
 import { EARS } from '@apackdev/ears';
 import type { Ears } from '@apackdev/ears';
 import { EntityRow } from '@apackdev/ears';
@@ -22,6 +23,9 @@ export function _bindEars(engine: Ears | undefined): Ears | undefined;
 
 // @public
 export function boundEars(): Ears;
+
+// @public (undocumented)
+export const catalog: () => DatabaseCatalog;
 
 // @public (undocumented)
 export const findRelations: (match?: RelationMatch) => RelationRow[];

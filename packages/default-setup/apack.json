@@ -1572,7 +1572,8 @@
       },
       "services": {
         "database": "src/features/database/be/services/database.ts#databaseService"
-      }
+      },
+      "views": "src/features/database/be/views.ts#databaseViews"
     },
     "logs": {
       "description": "Inspect app logs and diagnostic events.",

@@ -14,7 +14,6 @@
 // have nowhere to go. The one case that deliberately does not is the last.
 import { describe, expect, it } from 'vitest'
 import { startApp } from '@apackdev/testing/harness'
-import { repository } from '#generated/repository.ts'
 
 const DATABASE = 'default-setup/database'
 /**
@@ -109,9 +108,5 @@ describe('a query run by a surface', () => {
     await app.settle()
     expect(app.emitted('database').map((event) => event.type), 'nothing broadcast beside the answer').toEqual(['TRANSACTION_RESULT'])
 
-    repository.noteCommands.create({ title: 'Fresh', content: '' })
-    const asked = await app.send('database', { type: 'GET_SCHEMA' }, { sender: DATABASE, client: WINDOW })
-    const read = await app.nextEmit('database', 'SCHEMA_READ', { answering: asked }) as unknown as { schema: { entities: Array<{ type: string }> } }
-    expect(read.schema.entities.map((entity) => entity.type)).toContain('Note')
   })
 })

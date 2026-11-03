@@ -80,6 +80,7 @@ export const updateRelation = onBound('updateRelation');
 export const removeRelation = onBound('removeRelation');
 export const getRow = onBound('getRow');
 export const getRoles = onBound('getRoles');
+export const catalog = onBound('catalog');
 export const getSchemaStats = onBound('getSchemaStats');
 export const nextLabel = onBound('nextLabel');
 export const wouldCreateCycle = onBound('wouldCreateCycle');
