@@ -139,12 +139,13 @@ export function stagedFileHashes(integrity: PackIntegrity): Record<string, strin
 
 /** Capture a verified source declaration and its published files without executing or staging it. */
 export function readBuiltPackSource(packRoot: string): { snapshot: PackSnapshot; files: Record<string, string>; sourceRevision: string } {
-  const built = readBuiltPackIntegrity(packRoot, PACK_SNAPSHOT_FORMAT);
-  const build = readPackBuild(path.join(packRoot, 'dist'));
-  if (!isDeepStrictEqual(built, build.integrity)) {
-    throw new Error('Built build changed while reading its source declarations; retry with the complete build');
+  const dist = builtPackDirectory(packRoot);
+  const manifest = JSON.parse(fs.readFileSync(path.join(packRoot, PACK_LAYOUT.manifest), 'utf8'));
+  const build = readPackBuild(dist);
+  if (sha256(JSON.stringify(manifest, null, 2) + '\n') !== build.integrity.files[PACK_LAYOUT.manifest]) {
+    throw new Error('Source declarations do not match the sealed build; rebuild the complete pack');
   }
-  const files = stagedFileHashes(built);
+  const files = stagedFileHashes(build.integrity);
   return { snapshot: build.snapshot, files, sourceRevision: shippedPackRevision(files) };
 }
 
@@ -155,12 +156,16 @@ export function shippedPackRevision(files: Readonly<Record<string, string>>): st
   })).digest('hex');
 }
 
-function readBuiltPackIntegrity(packRoot: string, packFormat?: number): PackIntegrity {
+function builtPackDirectory(packRoot: string): string {
   if (!hasBuiltPackSections(packRoot)) {
     throw new Error(`Pack at ${packRoot} is not built (missing dist/${PACK_LAYOUT.runtimeEntry} or dist/${PACK_LAYOUT.snapshot}). Run "apack pack build" first.`);
   }
+  return path.join(packRoot, 'dist');
+}
+
+function readBuiltPackIntegrity(packRoot: string, packFormat?: number): PackIntegrity {
+  const dist = builtPackDirectory(packRoot);
   const manifest: PackManifest = JSON.parse(fs.readFileSync(path.join(packRoot, PACK_LAYOUT.manifest), 'utf8'));
-  const dist = path.join(packRoot, 'dist');
   const { bytes, data } = readSnapshotFile(dist);
   // A foreign format remains opaque: its matching host owns the grammar.
   if (packFormat !== undefined) {
