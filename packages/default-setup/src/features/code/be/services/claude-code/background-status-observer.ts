@@ -1,3 +1,4 @@
+import { createClaudeBackgroundQuestions } from './background-questions.ts'
 import { prepareClaudeOwnedChildUi } from './owned-profile.ts'
 import { createClaudeTerminalUiTransport, type ClaudeTerminalUiTransport } from './terminal-ui.ts'
 import { CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES } from './ui-text-limits.ts'
@@ -18,6 +19,7 @@ export interface ClaudeBackgroundDesktopOwner {
   readonly identity: Readonly<ClaudeBackgroundStatusIdentity>
   readonly registration: number
   readonly transport: ClaudeTerminalUiTransport
+  readonly questions: ReturnType<typeof createClaudeBackgroundQuestions>
   readonly done: Promise<void>
 }
 
@@ -66,7 +68,7 @@ export async function createClaudeBackgroundStatusObserver(options: {
   let launcher: Promise<string> | undefined
   let formatterRegistration = -1, formatterSequence = -1
   let childUi: {registration: number; identity: string; token: string; transport: ClaudeTerminalUiTransport; bridge: ReturnType<typeof createClaudeTerminalUiTransport>; owner: ClaudeBackgroundDesktopOwner; finish(): void} | undefined
-  const retireChildUi = () => { const held = childUi; childUi = undefined; held?.bridge.close(); held?.finish() }
+  const retireChildUi = () => { const held = childUi; childUi = undefined; held?.owner.questions.close(); held?.bridge.close(); held?.finish() }
   async function childUiCurrent() {
     const held = childUi, identity = status.identity
     if (!held || !identity || closed || held.registration !== status.registration || held.identity !== JSON.stringify(identity)) return
@@ -204,8 +206,9 @@ export async function createClaudeBackgroundStatusObserver(options: {
       } }
       let finish!: () => void
       const done = new Promise<void>(resolve => { finish = resolve })
-      const owner: ClaudeBackgroundDesktopOwner = {id: randomBytes(16).toString('hex'), parentSessionId, identity: Object.freeze({...identity}), registration, transport, done}
+      const owner: ClaudeBackgroundDesktopOwner = {id: randomBytes(16).toString('hex'), parentSessionId, identity: Object.freeze({...identity}), registration, transport, done, get questions() { return questions }}
       childUi = {registration, identity: scope, token: config.token, bridge, transport, owner, finish}
+      const questions = createClaudeBackgroundQuestions({sessionId: identity.sessionId, transport, changed: () => changed(true)})
       return transport
     },
     get parentSessionId() { return parentSessionId },
