@@ -132,7 +132,7 @@ export async function startPackBuildWatcher(root: string, options: WatchOptions 
   };
   const dataDirectory = options.place?.userDataDir ?? (options.place ? resolveAppEnvironment(options.place).userDataDir : undefined);
   const frontend = createFrontendWatcher(root, dataDirectory,
-    file => request(path.relative(root, file)), fail);
+    file => request(path.relative(root, file)), fail, checkoutBuildUnits([root, cliPackageDirectory()]).flatMap(unit => unit.outputs));
   const publish = async (): Promise<boolean> => {
     // First, so the signature below already includes what this rewrites and the build isn't followed by a second
     await builder.ensurePackages();

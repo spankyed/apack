@@ -42,6 +42,51 @@ it('uses file bytes for duplicate detection and watches outside resource edits',
   expect(before.current(), JSON.stringify(changed.mock.calls)).toBe(false);
 });
 
+it('ignores new bytes in a file the build never read, and takes a new file in the same directory', async () => {
+  const { watcher, changed, firstChange, write } = fixture();
+  const file = write('resources/style.css', 'read');
+  write('resources/unread.ts', 'before');
+  await watcher.observe({ files: [file], directories: [], successful: true });
+  const before = watcher.snapshot();
+  write('resources/unread.ts', 'after');
+  // Delivered after that edit's event, whose absence is what is being asserted
+  await new Promise(resolve => setTimeout(resolve, 2_000));
+  expect(before.current()).toBe(true);
+  const added = write('resources/added.ts', 'new');
+  await _byDeadline(firstChange, 'the new file');
+  expect(changed.mock.calls.map(([changedFile]) => changedFile)).toEqual([added]);
+  expect(before.current()).toBe(false);
+});
+
+it('ignores what a package build writes, while a source file beside it still counts', async () => {
+  const temporary = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-frontend-watch-')));
+  const root = path.join(temporary, 'pack');
+  const write = (file: string) => {
+    const absolute = path.join(temporary, file);
+    fs.mkdirSync(path.dirname(absolute), { recursive: true });
+    fs.writeFileSync(absolute, file);
+    return absolute;
+  };
+  fs.mkdirSync(root);
+  const read = write('package/dist/read.js');
+  let notify!: () => void;
+  const firstChange = new Promise<void>(resolve => { notify = resolve; });
+  const changed = vi.fn((_file: string) => notify());
+  const watcher = createFrontendWatcher(root, undefined, changed, error => { failures.push(error); }, [path.join(temporary, 'package', 'dist')]);
+  cleanups.push(() => fs.rmSync(temporary, { recursive: true, force: true }), () => watcher.close());
+  await watcher.observe({ files: [read, path.join(temporary, 'package', 'read.js')], directories: [], successful: true });
+  const before = watcher.snapshot();
+  write('package/dist/chunk.js');
+  write('package/.temp/build/chunk.js');
+  // Delivered after those writes' events, whose absence is what is being asserted
+  await new Promise(resolve => setTimeout(resolve, 2_000));
+  expect(before.current()).toBe(true);
+  const source = write('package/added.ts');
+  await _byDeadline(firstChange, 'the new source file');
+  expect(changed.mock.calls.map(([file]) => file)).toEqual([source]);
+  expect(before.current()).toBe(false);
+});
+
 it('keeps repair subscriptions through partial reports and observes nested missing targets', async () => {
   const { temporary, watcher, changed, write } = fixture();
   const stylesheet = write('styles/main.css', '@import "./future/theme.css";');
