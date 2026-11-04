@@ -1148,6 +1148,11 @@ useNativeTranscriptViewport({
 .native-chat-shell { min-height: var(--native-chat-min-height, auto); }
 .chat-composer-area--background { flex-basis: 0; min-height: min(14rem, 55%); }
 .native-chat-shell:has([data-native-notice="refusal_fallback_prompt"]) { --composer-notice-history-reserve: 10rem; }
+/* Keep ordinary Agent workspace reading useful before a manual split adjustment. */
+.native-chat-shell[data-native-workspace-owner="agent"]:not(:has([data-native-notice], [data-native-command-panel], [data-testid="native-mcp-form"], [data-testid="native-mcp-url"])) {
+  min-height: min(26rem, max(20.5rem, calc(100vh - 18rem)));
+  --agent-composer-history-reserve: 2rem;
+}
 /* Keep pending native decisions beside useful conversation space in short windows. */
 @media (max-height: 720px) {
   /* Share short windows with the workspace before any manual split adjustment. */
