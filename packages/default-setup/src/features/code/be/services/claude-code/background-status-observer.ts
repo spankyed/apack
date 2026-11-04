@@ -25,7 +25,7 @@ export interface ClaudeBackgroundDesktopOwner {
 export async function createClaudeBackgroundStatusObserver(options: {
   parentSessionId: string
   profile?: string
-  childUiLaunch?: {configDir?: string; secureStorageConfigDir?: string; executable: string}
+  childUiLaunch?: {configDir?: string; secureStorageConfigDir?: string; executable: string; cwd: string; searchPath: string | undefined}
   checkpoint?: ClaudeBackgroundCheckpoint
   target(): { sessionId: string; cwd: string } | undefined
   authority(parentSessionId: string): ReturnType<typeof createClaudeBackgroundStatusAuthority>

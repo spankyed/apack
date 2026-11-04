@@ -1,6 +1,7 @@
 import { claudeTerminalUiRuntime } from './terminal-ui-runtime.ts'
-import { mkdir, lstat, readFile, writeFile, rename, readdir, realpath } from 'node:fs/promises'
-import { join, isAbsolute } from 'node:path'
+import { mkdir, lstat, readFile, writeFile, rename, readdir, realpath, access, stat } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { join, isAbsolute, resolve, delimiter } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { claudeOwnedLauncherRuntime } from './owned-profile-runtime.ts'
 
@@ -73,16 +74,32 @@ async function prepare(directory: string, configDir: string, nodePath: string) {
 }
 
 
+// Match the parent's actual spawn environment; a PATH-selected CLI is not relative to this module.
+async function resolveChildExecutable(executable: string, cwd: string, searchPath: string | undefined) {
+  const candidates = executable.includes('/') ? [resolve(cwd, executable)]
+    : (searchPath ?? '/usr/bin:/bin').split(delimiter).map(directory => resolve(cwd, directory, executable))
+  for (const candidate of candidates) {
+    try {
+      if (!(await stat(candidate)).isFile()) continue
+      await access(candidate, constants.X_OK)
+      return await realpath(candidate)
+    } catch (error) {
+      if (!['ENOENT', 'ENOTDIR', 'EACCES'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error
+    }
+  }
+  throw new Error('The selected Claude executable is unavailable in the launch directory and PATH')
+}
+
 /** Install a startup descriptor only for the original worker of this app-owned profile. */
 export async function prepareClaudeOwnedChildUi(options: {
-  userDataDir: string; configDir?: string; secureStorageConfigDir?: string; executable: string; directory: string; socketPath: string; token: string
+  userDataDir: string; configDir?: string; secureStorageConfigDir?: string; executable: string; cwd: string; searchPath: string | undefined; directory: string; socketPath: string; token: string
 }) {
   if (options.configDir !== join(options.userDataDir, 'claude-code-profile', 'config')) return false
   const profile = await prepareClaudeOwnedProfile({userDataDir: options.userDataDir, env: {CLAUDE_SECURESTORAGE_CONFIG_DIR: options.secureStorageConfigDir}})
   await privateDirectory(options.directory)
   await atomicWrite(join(options.directory, 'child-ui-template.mjs'), claudeTerminalUiRuntime, 0o600)
   await atomicWrite(join(options.directory, 'child-ui-launch.json'), JSON.stringify({
-    directory: options.directory, configDir: profile.configDir, executable: await realpath(options.executable), socketPath: options.socketPath, token: options.token,
+    directory: options.directory, configDir: profile.configDir, executable: await resolveChildExecutable(options.executable, options.cwd, options.searchPath), socketPath: options.socketPath, token: options.token,
   }), 0o600)
   return true
 }

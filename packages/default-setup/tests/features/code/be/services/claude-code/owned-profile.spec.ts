@@ -1,7 +1,7 @@
-import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, realpath } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, realpath, symlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { prepareClaudeOwnedProfile, prepareClaudeOwnedProfileSetup } from '#features/code/be/services/claude-code/owned-profile.ts'
+import { prepareClaudeOwnedChildUi, prepareClaudeOwnedProfile, prepareClaudeOwnedProfileSetup } from '#features/code/be/services/claude-code/owned-profile.ts'
 
 const test = it.skipIf(process.platform === 'win32')
 const roots: string[] = []
@@ -90,4 +90,23 @@ test('preserves malformed private settings and does not expose their contents in
  expect(error.message).toContain('not valid JSON')
  expect(error.message).not.toContain('privateFixtureSecret')
  expect(await readFile(join(profile.configDir,'settings.json'),'utf8')).toBe(raw)
+})
+
+
+test('resolves the owned worker executable using the launch PATH and cwd without executing it', async () => {
+ const root=await directory('cc-owned-path-'), profile=await prepareClaudeOwnedProfile({userDataDir:root})
+ const cwd=join(root,'project'), bin=join(cwd,'bin'), blocked=join(root,'blocked'), ambient=join(root,'ambient')
+ await Promise.all([mkdir(bin,{recursive:true}),mkdir(blocked),mkdir(ambient)])
+ await writeFile(join(bin,'native'),'never execute this fixture',{mode:0o700})
+ await symlink('native',join(bin,'claude'))
+ await writeFile(join(blocked,'claude'),'not executable',{mode:0o600})
+ await writeFile(join(ambient,'claude'),'wrong CLI',{mode:0o700})
+ vi.stubEnv('PATH',ambient)
+ const options={userDataDir:root,configDir:profile.configDir,executable:'claude',cwd,searchPath:blocked+':bin',directory:join(root,'observer'),socketPath:join(root,'status.sock'),token:'a'.repeat(64)}
+ expect(await prepareClaudeOwnedChildUi(options)).toBe(true)
+ const descriptor=()=>readFile(join(options.directory,'child-ui-launch.json'),'utf8').then(JSON.parse)
+ expect((await descriptor()).executable).toBe(await realpath(join(bin,'native')))
+ await prepareClaudeOwnedChildUi({...options,executable:'./bin/claude',searchPath:''})
+ expect((await descriptor()).executable).toBe(await realpath(join(bin,'native')))
+ await expect(prepareClaudeOwnedChildUi({...options,searchPath:blocked})).rejects.toThrow('selected Claude executable is unavailable')
 })

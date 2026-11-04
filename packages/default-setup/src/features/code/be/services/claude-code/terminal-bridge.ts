@@ -30,7 +30,7 @@ export async function createClaudeTerminalBridge(options: {
   sessionId: string
   backgroundTarget?(): { parentSessionId: string; sessionId: string; cwd: string } | undefined
   backgroundProfile?: string
-  backgroundChildUiLaunch?: {configDir?: string; secureStorageConfigDir?: string; executable: string}
+  backgroundChildUiLaunch?: {configDir?: string; secureStorageConfigDir?: string; executable: string; cwd: string; searchPath: string | undefined}
   backgroundObserver?: ClaudeBackgroundStatusObserver
   backgroundAuthority(parentSessionId: string): ReturnType<typeof createClaudeBackgroundStatusAuthority>
   restorePlan?: { sessionId: string; mode: import('./types.ts').PermissionMode }

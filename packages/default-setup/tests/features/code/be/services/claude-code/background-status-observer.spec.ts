@@ -179,7 +179,7 @@ it('binds child drawing and reverse prompts to the original worker and retires t
  const {mkdtemp,mkdir,readFile}=await import('node:fs/promises'),{createServer}=await import('node:http')
  const profile=await mkdtemp(join(process.platform==='darwin'?'/private/tmp':tmpdir(),'cc-ui-profile-'))
  let identity={...original}
- const observer=await createClaudeBackgroundStatusObserver({profile,parentSessionId:parent,childUiLaunch:{configDir:join(profile,'claude-code-profile','config'),executable:process.execPath},target:()=>({sessionId:child,cwd:'/owned'}),changed(){},authority:()=>({identify:async()=>({...identity}),close:async()=>{}})})
+ const observer=await createClaudeBackgroundStatusObserver({profile,parentSessionId:parent,childUiLaunch:{configDir:join(profile,'claude-code-profile','config'),executable:process.execPath,cwd:'/owned',searchPath:process.env.PATH},target:()=>({sessionId:child,cwd:'/owned'}),changed(){},authority:()=>({identify:async()=>({...identity}),close:async()=>{}})})
  const token='b'.repeat(64),worker=join(observer.directory,'workers','w-119-abcdef'),socketPath=join(worker,'ui.sock')
  const post=(path:string,value:unknown,auth=observer.token)=>new Promise<{code:number;value:any}>((resolve,reject)=>{
   const req=request({socketPath:observer.socketPath,path,method:'POST',headers:{'x-apack-native-token':auth}},res=>{let text='';res.on('data',chunk=>text+=chunk);res.on('end',()=>resolve({code:res.statusCode!,value:JSON.parse(text)}))});req.on('error',reject);req.end(JSON.stringify(value))

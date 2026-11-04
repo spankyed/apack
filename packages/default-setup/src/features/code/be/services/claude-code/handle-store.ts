@@ -73,7 +73,7 @@ export function restoreNativeBackgroundStatus(key: string, continuation: ClaudeN
     const checkpoint = await claimClaudeBackgroundCheckpoint({profile, parentSessionId:continuation.sessionId})
     if (!checkpoint) return
     const observer = await createClaudeBackgroundStatusObserver({
-      parentSessionId:continuation.sessionId, profile, checkpoint, childUiLaunch:{configDir:env.CLAUDE_CONFIG_DIR,secureStorageConfigDir:env.CLAUDE_SECURESTORAGE_CONFIG_DIR,executable},
+      parentSessionId:continuation.sessionId, profile, checkpoint, childUiLaunch:{configDir:env.CLAUDE_CONFIG_DIR,secureStorageConfigDir:env.CLAUDE_SECURESTORAGE_CONFIG_DIR,executable,cwd:cwd,searchPath:env.PATH},
       target:()=>({sessionId:continuation.continuedInSessionId,cwd}),
       authority:parent => createClaudeBackgroundStatusAuthority(parent,{cliPath:executable,cwd,env}), changed:()=>backgroundChanged(key),
     })
