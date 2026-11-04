@@ -468,6 +468,7 @@ const EVERY_SOURCE = [...ROOT, ...Object.values(CONFIG_BY_HALF), ...EVERY_WORKSP
   'tests/fixtures/claude-research/agent-billing-journey.ts',
   'tests/fixtures/claude-research/selection-limit-journey.ts',
   'tests/fixtures/claude-research/workspace-layout-measurement.ts',
+  'tests/fixtures/claude-research/artifact-wheel-journey.ts',
   'tests/fixtures/claude-research/install-system-policy.mjs',
   'tests/fixtures/claude-research/background-api-restart.mjs',
   'tests/fixtures/claude-research/background-formatter-lifecycle.mjs',
