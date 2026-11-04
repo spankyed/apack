@@ -241,5 +241,6 @@
       "typecheck-host.log",
       "typecheck-pack.log"
     ]
-  }
+  },
+  "supersededBy": "pack-admission-2026-11-04.json"
 }

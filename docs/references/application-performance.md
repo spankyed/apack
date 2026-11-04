@@ -82,3 +82,5 @@ coordination refuses observed worker exits before final release. A new process d
 Storage changes require a distinct asserted machine identity; see the
 [Docker storage guide](guides/docker-storage.md#performance-evidence). Keep historic measurements
 source-qualified rather than repeating them for unrelated documentation or runner changes.
+See the [admission and formatter comparison](../archive/references/evidence/pack-admission-2026-11-04.json)
+for a source-qualified run with both successful warm trials and a retained cold-start failure.

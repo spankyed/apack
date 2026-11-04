@@ -139,7 +139,7 @@ function refuse(message: string): never {
   process.exit(2);
 }
 
-const { command, scratchArgs } = linuxTestInvocation(process.argv.slice(2));
+const { command, scratchArgs, compilerStore } = linuxTestInvocation(process.argv.slice(2));
 if (command.length === 0) refuse('usage: npm run test:linux -- <command> [args...]');
 
 if (docker(['info']).status !== 0) {
@@ -315,6 +315,7 @@ const child = spawn('docker', [
   '-v', `${ELMDB_CHECKOUT}:/elmdb-src:ro`, '-v', `${ELMDB_VOLUME}:/elmdb`, '-v', `${CARGO_REGISTRY_VOLUME}:/usr/local/cargo/registry`,
   ...gitDirMount(),
   ...forwarded.flatMap((key) => ['-e', key]),
+  ...(compilerStore ? ['-e', `APACK_COMPILER_STORE=${compilerStore}`] : []),
   IMAGE, 'bash', '-c', script,
 ], { stdio: 'inherit' });
 
