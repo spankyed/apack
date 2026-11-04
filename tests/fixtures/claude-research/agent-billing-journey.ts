@@ -126,6 +126,12 @@ export async function verifyAgentBilling(
   await row.getByRole('button',{name:'Open Agent',exact:true}).click()
   await expect(draft).toHaveText('Keep this worker draft while reviewing usage.')
   await expect(billing).toBeInViewport()
+  // Preserve completed interaction evidence even when later recovery fails.
+  await writeFile(join(workspace,'native-agent-billing-interaction.json'),JSON.stringify({
+    project,sessionId,taskId,boundNativePid,observation,readings,
+    parentDraftRetained:true,agentDraftRetained:true,
+    recoveryVerified:false,context:await context(),
+  },null,2))
   await focused.getByRole('button',{name:'Back to conversation',exact:true}).click()
   await section.getByRole('button',{name:'Use native interface',exact:true}).click()
   await section.getByRole('button',{name:'Stop session',exact:true}).click()
@@ -135,8 +141,12 @@ export async function verifyAgentBilling(
   await composer.click();await composer.press(process.platform==='darwin'?'Meta+A':'Control+A');await composer.press('Backspace')
   const recovery='Continue the same session after reviewing native usage.'
   await composer.pressSequentially(recovery);await expect(composer).toHaveText(recovery)
+  const turnsBeforeRecovery=(await context()).turns
   await card.getByRole('button',{name:'Send',exact:true}).click()
-  await expect.poll(async()=>(await context()).claude.chatState,{timeout:25000}).toBe('success')
+  await expect.poll(async()=>{
+    const state=await context()
+    return state.claude.chatState==='success'&&state.turns>turnsBeforeRecovery
+  },{timeout:25000,message:'Same-session recovery completes a new original turn'}).toBe(true)
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
   await writeFile(join(workspace!,'native-agent-billing-proof.json'),JSON.stringify({project,sessionId,taskId,boundNativePid,observation,readings,recovery,final:await context()},null,2))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:planScenario,nativeAgentBilling:true,nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
