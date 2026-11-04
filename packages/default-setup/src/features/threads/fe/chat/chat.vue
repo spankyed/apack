@@ -787,7 +787,7 @@ const nativeChatMinHeight = computed(() => {
   if (nativeWorkspaceReading.value) {
     // Keep the composer and owner controls visible when the workspace takes priority.
     return focusedAgent.value
-      ? 'min(26rem, max(20rem, calc(100vh - 18rem)))'
+      ? 'min(26rem, max(20.5rem, calc(100vh - 18rem)))'
       : 'min(25rem, max(20rem, calc(100vh - 18rem)))'
   }
   return nativeToolsExpanded.value || focusedAgent.value

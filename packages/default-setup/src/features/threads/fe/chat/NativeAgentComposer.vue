@@ -188,8 +188,9 @@ onBeforeUnmount(() => {
 /* The draft viewport owns scrolling; inherited input-theme overflow must not add another. */
 .native-agent-composer :deep(.native-agent-editor .ProseMirror) { min-height: 24px; max-height: none; overflow: visible; padding: 0; }
 .native-agent-composer :deep(.native-strip--open) { min-height: 0; }
-@media (max-height: 700px) {
-  .native-agent-composer { margin-bottom: .75rem; }
+@container claude-agent-pane (max-height: 24rem) {
+  .native-agent-composer { margin-bottom: .25rem; }
+  .native-agent-actions { padding-block: .25rem; }
   /* Rich drafts need reading space without hiding native status or the transcript. */
   .native-agent-composer:has(.native-agent-editor :is(h1, h2, h3, pre, ul, ol, blockquote)):not(.native-agent-composer--tools) {
     max-height: max(7rem, calc(var(--agent-available-height, 32rem) - var(--agent-composer-history-reserve, 8.5rem)));

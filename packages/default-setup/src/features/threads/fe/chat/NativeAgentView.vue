@@ -12,7 +12,7 @@
     <NativeHelpPanel v-if="panelActive && state?.agentInput?.panel?.commandName === 'help'" :key="state.agentInput.panel.id" :state="state.agentInput.settings" :owner-label="`Agent · ${name}`" @operate="settings" @close="panelInput()" />
     <NativeSettingsPanel v-else-if="panelActive && state?.agentInput?.panel && ['config','model','status','usage','theme'].includes(state.agentInput.panel.commandName)" :key="state.agentInput.panel.id" :subject="state.agentInput.panel.commandName === 'model' ? 'model' : state.agentInput.panel.commandName === 'theme' ? 'theme' : 'settings'" :owner-label="`Agent · ${name}`" :state="state.agentInput.settings" @operate="settings" @close="panelInput()" />
     <NativeCommandPanel v-else-if="panelActive && state?.agentInput?.panel && selectedOwner" :key="state.agentInput.panel.id" :name="state.agentInput.panel.commandName" :owner-label="`Agent · ${name}`" :owner-id="selectedOwner.ownerId" :output="terminal?.output ?? []" @input="panelInput" @close="panelInput()" @resize="panelResize" />
-    <div v-show="!panelActive && !outputActive" class="relative min-h-20 flex-1">
+    <div v-show="!panelActive && !outputActive" class="native-agent-messages relative min-h-20 flex-1">
     <div ref="transcriptViewport" style="overflow-anchor: none" class="h-full overflow-y-auto overscroll-contain px-4 py-3" role="region" tabindex="0" aria-label="Agent transcript">
       <div ref="transcriptContent">
       <p v-if="!state?.agent && state?.status !== 'error'" class="text-sm text-neutral-500">Loading Agent conversation…</p>
@@ -224,11 +224,16 @@ onBeforeUnmount(() => { window.removeEventListener('blur', nativeActionKey.cance
 </script>
 
 <style scoped>
-@media (max-height: 700px) {
+.native-agent-view { container-type: size; container-name: claude-agent-pane; }
+/* Compact the assigned pane, including a short split inside a tall window. */
+@container claude-agent-pane (max-height: 24rem) {
   .native-agent-view > header { padding-top: .25rem; padding-bottom: .5rem; margin-bottom: .25rem; }
   .native-agent-eyebrow { display: none; }
   .native-agent-view > header > div:first-child { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
   .native-agent-view > header > div:first-child > p { margin-top: 0; }
   .native-agent-view > details { margin-bottom: 0; }
+}
+@container claude-agent-pane (max-height: 18rem) {
+  .native-agent-messages { min-height: 3rem; }
 }
 </style>
