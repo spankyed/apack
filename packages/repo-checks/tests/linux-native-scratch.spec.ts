@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { expect, it } from 'vitest';
-import { linuxTestInvocation, NATIVE_SCRATCH_MIB } from '../../../scripts/lib/linux-native-scratch.ts';
+import { COMPILER_SCRATCH_MIB, linuxTestInvocation, NATIVE_SCRATCH_MIB } from '../../../scripts/lib/linux-native-scratch.ts';
 import { CHAIN_STEPS, NATIVE_SUITES, suiteInputs } from '../../../scripts/lib/chain-steps.ts';
 import { poolUnitFor } from '../../../scripts/lib/unit-pool.ts';
 
@@ -35,6 +35,23 @@ it('lets focused native cases select scratch without forwarding the runner flag'
     command, scratchArgs: linuxTestInvocation(['npm', 'run', 'test:native']).scratchArgs,
   });
   expect(linuxTestInvocation(['--native-scratch']).command).toEqual([]);
+});
+
+it('can put compiler copies in RAM while keeping benchmark profiles on disk', () => {
+  const command = ['npm', 'run', 'test:performance'];
+  const result = linuxTestInvocation(['--compiler-scratch', ...command]);
+  expect(result.command).toEqual(command);
+  expect(result.compilerStore).toBe('/compiler-cache');
+  expect(result.scratchArgs).toEqual(['--tmpfs', `/compiler-cache:rw,exec,nosuid,nodev,size=${COMPILER_SCRATCH_MIB}m`]);
+  expect(COMPILER_SCRATCH_MIB).toBeLessThanOrEqual(6144 / 3);
+});
+
+it('combines native and compiler scratch in either option order', () => {
+  const command = ['npm', 'run', 'test:native'];
+  const first = linuxTestInvocation(['--compiler-scratch', '--native-scratch', ...command]);
+  expect(first).toEqual(linuxTestInvocation(['--native-scratch', '--compiler-scratch', ...command]));
+  expect(first.command).toEqual(command);
+  expect(first.scratchArgs.filter(arg => arg === '--tmpfs')).toHaveLength(2);
 });
 
 it('includes the resource policy in outer and per-project native cache inputs', () => {

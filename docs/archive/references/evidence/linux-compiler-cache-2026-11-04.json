@@ -1,0 +1,57 @@
+{
+  "source": "45f4b727e5ef28b738fdb9552536903aec996e68",
+  "native": "bc450ee1746adfee5294ba19acb96b44d1271f19",
+  "failure": {
+    "step": "build:default-setup",
+    "budgetSeconds": 600,
+    "originalElapsedSeconds": 603.9,
+    "profiledReproductionExit": 124
+  },
+  "observations": {
+    "liveInventoryReadSample": {
+      "reads": 179,
+      "intervalMilliseconds": 5000,
+      "awaitedReadMilliseconds": 4750.018894000386
+    },
+    "coldCapturedFiles": [
+      {
+        "method": "sync",
+        "files": 100,
+        "bytes": 44708,
+        "milliseconds": 3405.9278059999997
+      },
+      {
+        "method": "async",
+        "files": 100,
+        "bytes": 45403,
+        "milliseconds": 4467.241798
+      }
+    ],
+    "diskAvailableGiB": 675,
+    "workerReachedAfterApproximateSeconds": 500,
+    "warmCapturedFileSample": [
+      {
+        "method": "sync",
+        "files": 5,
+        "bytes": 1046819,
+        "milliseconds": 0.4795430000000067
+      },
+      {
+        "method": "async",
+        "files": 5,
+        "bytes": 1046819,
+        "milliseconds": 1.457172
+      }
+    ]
+  },
+  "intervention": {
+    "status": "candidate pack build passed unchanged 600-second budget",
+    "buildCompilerStore": "2 GiB tmpfs at /compiler-cache",
+    "appProfiles": "disk backed",
+    "resourceLimits": "2 CPU, 6 GiB memory, no additional swap, 256 MiB shared memory",
+    "deadlines": "unchanged",
+    "buildSeconds": 444.5
+  },
+  "caveat": "Diagnostic instrumentation and concurrent workloads make these diagnostic timings unsuitable for app-performance claims. Cold and warm microbenchmarks used different file sets; they are diagnostic observations, not a paired speedup comparison.",
+  "profileSha256": "43ab6baa2c60dd8fc608938e3a0925167ce88e468838023351c615d5e4e7a12e"
+}
