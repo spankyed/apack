@@ -19,8 +19,8 @@ import { PermissionModeSchema } from './types.ts'
 import { createClaudeNativeJournalReader, type ClaudeNativeJournalBatch } from './terminal-journal.ts'
 import { parseClaudeNativeContinuation, type ClaudeNativeContinuation } from './terminal-session.ts'
 import type { ClaudeNativeTerminalRecord, ClaudeNativeSubmissionReceipt, ClaudeNativeImage } from './terminal-session.ts'
-import { access, stat } from 'node:fs/promises'
-import { constants } from 'node:fs'
+import { stat } from 'node:fs/promises'
+import { resolveClaudeExecutable } from './native-executable.ts'
 import type * as pty from 'node-pty'
 import { createClaudeTerminalImageFileTransport } from './terminal-image-file-transport.ts'
 import { createClaudeTerminalImageCache } from './terminal-image-cache.ts'
@@ -113,13 +113,12 @@ export interface ClaudeNativeTerminalOptions {
 export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalOptions, backgroundObserver?: import('./background-status-observer.ts').ClaudeBackgroundStatusObserver): Promise<ClaudePreparedNativeTerminal> {
   if (process.platform === 'win32') throw new Error('Native terminal status handoff currently requires a POSIX host')
   if (!/^[a-f0-9-]{36}$/i.test(options.sessionId)) throw new Error('Native terminal needs an existing session identity')
-  const executable = options.cliPath ?? await resolveForService('claude-code')
+  const env = buildChildEnv(options.env)
+  const executable = await resolveClaudeExecutable(options.cliPath ?? await resolveForService('claude-code'), options.cwd, env.PATH)
   if (options.signal?.aborted) throw new Error('Native terminal startup was cancelled')
-  await access(executable, constants.X_OK)
   if (!(await stat(options.cwd)).isDirectory()) throw new Error('Native terminal working directory is unavailable')
   // Content repositories load outside Electron; load the native driver only for a terminal handoff.
   const pty = await import('node-pty')
-  const env = buildChildEnv(options.env)
   const terminalEnv: Record<string, string> = {}
   for (const [name, value] of Object.entries(env)) if (typeof value === 'string') terminalEnv[name] = value
   // Advertise app rendering capabilities only when the caller has not chosen an override.

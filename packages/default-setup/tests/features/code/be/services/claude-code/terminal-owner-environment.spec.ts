@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, writeFile, rm, realpath } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { prepareClaudeNativeTerminal } from '#features/code/be/services/claude-code/terminal-owner.ts'
@@ -101,4 +101,16 @@ it('reads file pixels in the live terminal owner and projects them without givin
     data('\x1b_Ga=d,d=I,i=7,q=2;\x1b\\')
     expect(await owner.uiTransport.request({subtype:'ui_render'})).toMatchObject({tree:{type:'Text'}})
   }finally{detach();await prepared.dispose();await rm(directory,{recursive:true,force:true})}
+})
+
+
+it('launches a PATH-selected native CLI from the captured environment', async () => {
+ const root=await mkdtemp(join(tmpdir(),'cc-native-path-')),executable=join(root,'claude')
+ await writeFile(executable,'authored executable fixture',{mode:0o700})
+ let exited:((event:{exitCode:number})=>void)|undefined
+ native.spawn.mockImplementation(()=>({pid:0,onData(){},onExit(callback:typeof exited){exited=callback},kill(){exited?.({exitCode:0})}}))
+ try {
+  const prepared=await prepareClaudeNativeTerminal({sessionId:'11111111-1111-1111-1111-111111111111',cwd:root,cliPath:'claude',permissionMode:'default',settings:{effective:{},sources:[]},env:{PATH:root}})
+  try {await prepared.start();expect(native.spawn.mock.calls[0][0]).toBe(await realpath(executable));expect(native.spawn.mock.calls[0][2].env.PATH).toBe(root)} finally {await prepared.dispose()}
+ } finally {await rm(root,{recursive:true,force:true})}
 })
