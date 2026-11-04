@@ -81,7 +81,7 @@ export interface CliServiceType {
     authStatus(): Promise<AuthStatus>
     listSessions(opts?: SessionListOptions): Promise<SessionInfo[]>
     /** List sessions across ALL project directories (not just the configured cwd). */
-    listAllSessions(opts?: { limit?: number }): Promise<SessionInfo[]>
+    listAllSessions(opts?: { limit?: number; env?: NodeJS.ProcessEnv }): Promise<SessionInfo[]>
     /**
      * Parse a session's JSONL transcript into an in-memory array of entries.
      * Used by `CC: Handle Rewind` to retroactively backfill `context.cliUuid`
@@ -119,9 +119,9 @@ export interface CliServiceType {
     /** List memory/CLAUDE.md files from known locations. */
     listMemoryFiles(): Promise<Array<{ name: string; scope: string; path: string }>>
     /** Rename a Claude Code session through the native process. */
-    renameSession(id: string, title: string, opts?: { cwd?: string }): Promise<void>
+    renameSession(id: string, title: string, opts?: { cwd?: string; env?: NodeJS.ProcessEnv }): Promise<void>
     /** Check whether a session JSONL file exists under the given (or default) project directory. */
-    sessionExists(id: string, opts?: { cwd?: string }): Promise<boolean>
+    sessionExists(id: string, opts?: { cwd?: string; env?: NodeJS.ProcessEnv }): Promise<boolean>
   }
   /** Codex CLI wrapper for one-shot tasks. */
   codex: {
@@ -373,11 +373,11 @@ function createCliService(): CliServiceType {
       },
       async renameSession(id, title, opts) {
         const cwd = opts?.cwd ?? resolveCwd()
-        await renameSession({ sessionId: id, title, cwd })
+        await renameSession({ sessionId: id, title, cwd, env: opts?.env })
       },
       async sessionExists(id, opts) {
         const cwd = opts?.cwd ?? resolveCwd()
-        const info = await claudeCode.sessions.find(id, { cwd })
+        const info = await claudeCode.sessions.find(id, { cwd, env: opts?.env })
         return info !== null
       },
     },

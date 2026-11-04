@@ -19,8 +19,9 @@ import * as readline from 'readline'
 // ─── Directory discovery ─────────────────────────────────────────────────────
 
 /** Root of the CLI's config, honouring $CLAUDE_CONFIG_DIR. */
-export function configDir(): string {
-  return process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude')
+export function configDir(env?: NodeJS.ProcessEnv): string {
+  const childEnv = { ...process.env, ...env }
+  return childEnv.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude')
 }
 
 /**
@@ -29,8 +30,8 @@ export function configDir(): string {
  * The CLI stores each project's sessions under
  * `$CLAUDE_CONFIG_DIR/projects/<encoded-cwd>/<session-id>.jsonl`.
  */
-function projectBucket(cwd: string): string {
-  return path.join(configDir(), 'projects', encodeProjectPath(cwd))
+function projectBucket(cwd: string, env?: NodeJS.ProcessEnv): string {
+  return path.join(configDir(env), 'projects', encodeProjectPath(cwd))
 }
 
 /**
@@ -81,6 +82,8 @@ export interface SessionTranscriptEntry {
 }
 
 export interface SessionListOptions {
+  /** Same environment as the native process that owns these journals. */
+  env?: NodeJS.ProcessEnv
   /** Working directory whose sessions to list. Defaults to `process.cwd()`. */
   cwd?: string
   limit?: number
@@ -88,6 +91,7 @@ export interface SessionListOptions {
 }
 
 export interface SessionViewOptions {
+  env?: NodeJS.ProcessEnv
   cwd?: string
   limit?: number
   offset?: number
@@ -159,7 +163,7 @@ async function listBucket(bucketPath: string, cwd?: string): Promise<SessionInfo
 /** List sessions saved for the given working directory. */
 export async function list(opts: SessionListOptions = {}): Promise<SessionInfo[]> {
   const cwd = opts.cwd ?? process.cwd()
-  const infos = await listBucket(projectBucket(cwd), cwd)
+  const infos = await listBucket(projectBucket(cwd, opts.env), cwd)
 
   infos.sort((a, b) => b.modifiedAt.getTime() - a.modifiedAt.getTime())
   const offset = opts.offset ?? 0
@@ -168,8 +172,8 @@ export async function list(opts: SessionListOptions = {}): Promise<SessionInfo[]
 }
 
 /** List sessions across ALL project directories. */
-export async function listAll(opts: { limit?: number } = {}): Promise<SessionInfo[]> {
-  const projectsDir = path.join(configDir(), 'projects')
+export async function listAll(opts: { limit?: number; env?: NodeJS.ProcessEnv } = {}): Promise<SessionInfo[]> {
+  const projectsDir = path.join(configDir(opts.env), 'projects')
   let dirents: fs.Dirent[]
   try {
     dirents = await fs.promises.readdir(projectsDir, { withFileTypes: true })
@@ -222,11 +226,11 @@ export async function viewByFile(
 /** Load basic metadata about a single session. */
 export async function find(
   id: string,
-  opts: { cwd?: string } = {},
+  opts: { cwd?: string; env?: NodeJS.ProcessEnv } = {},
 ): Promise<SessionInfo | null> {
   assertSafeId(id)
   const cwd = opts.cwd ?? process.cwd()
-  const file = path.join(projectBucket(cwd), `${id}.jsonl`)
+  const file = path.join(projectBucket(cwd, opts.env), `${id}.jsonl`)
   const stat = await fs.promises.stat(file).catch(() => null)
   if (!stat) return null
   return { id, file, cwd, modifiedAt: stat.mtime, size: stat.size }
@@ -239,7 +243,7 @@ export async function view(
 ): Promise<SessionTranscriptEntry[]> {
   assertSafeId(id)
   const cwd = opts.cwd ?? process.cwd()
-  const file = path.join(projectBucket(cwd), `${id}.jsonl`)
+  const file = path.join(projectBucket(cwd, opts.env), `${id}.jsonl`)
   const raw = await fs.promises.readFile(file, 'utf8')
   const lines = raw.split('\n').filter(l => l.length > 0)
   const offset = opts.offset ?? 0
@@ -260,11 +264,11 @@ export async function view(
 /** Delete a session's JSONL + any associated subdir. Idempotent. */
 export async function remove(
   id: string,
-  opts: { cwd?: string } = {},
+  opts: { cwd?: string; env?: NodeJS.ProcessEnv } = {},
 ): Promise<void> {
   assertSafeId(id)
   const cwd = opts.cwd ?? process.cwd()
-  const bucket = projectBucket(cwd)
+  const bucket = projectBucket(cwd, opts.env)
   const file = path.join(bucket, `${id}.jsonl`)
   const subdir = path.join(bucket, id)
 

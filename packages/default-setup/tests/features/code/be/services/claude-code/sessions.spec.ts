@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { list, listAll } from '#features/code/be/services/claude-code/sessions.ts'
+import { list, listAll, find, view, remove } from '#features/code/be/services/claude-code/sessions.ts'
 /**
  * Tests for `encodeProjectPath` — the cwd-to-bucket encoder used by
  * `claudeCode.sessions.list()`.
@@ -110,4 +110,32 @@ it('uses only matching native title records, supports JSON whitespace, and falls
   await writeFile(join(bucket,id+'.jsonl'),lines.join('\n')+'\n')
   expect((await list({cwd}))[0]?.title).toBe('New AI')
  } finally {vi.unstubAllEnvs();await rm(directory,{recursive:true,force:true})}
+})
+
+
+it('keeps identical session IDs isolated across native process profiles', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'native-session-profiles-'))
+  const cwd = '/projects/profile-test', id = 'same-session'
+  const shared = join(directory, 'shared'), owned = join(directory, 'app owned')
+  vi.stubEnv('CLAUDE_CONFIG_DIR', shared)
+  try {
+    for (const [root, text] of [[shared, 'Shared journal'], [owned, 'Owned journal']]) {
+      const bucket = join(root, 'projects', encodeProjectPath(cwd))
+      await mkdir(bucket, { recursive: true })
+      await writeFile(join(bucket, `${id}.jsonl`), JSON.stringify({type: 'user', cwd, message: {role: 'user', content: text}}) + '\n')
+    }
+    const env = {CLAUDE_CONFIG_DIR: owned}
+    const [sharedRows, ownedRows] = await Promise.all([view(id, {cwd}), view(id, {cwd, env})])
+    expect(sharedRows[0]?.message).toEqual({role: 'user', content: 'Shared journal'})
+    expect(ownedRows[0]?.message).toEqual({role: 'user', content: 'Owned journal'})
+    expect((await list({cwd, env})).map(row => row.file)).toEqual([join(owned, 'projects', encodeProjectPath(cwd), `${id}.jsonl`)])
+    expect((await listAll({env})).map(row => row.file)).toEqual([join(owned, 'projects', encodeProjectPath(cwd), `${id}.jsonl`)])
+    await remove(id, {cwd, env})
+    expect(await find(id, {cwd, env})).toBeNull()
+    expect(await find(id, {cwd})).not.toBeNull()
+    expect(process.env.CLAUDE_CONFIG_DIR).toBe(shared)
+  } finally {
+    vi.unstubAllEnvs()
+    await rm(directory, {recursive: true, force: true})
+  }
 })

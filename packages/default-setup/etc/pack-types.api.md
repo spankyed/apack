@@ -1350,10 +1350,10 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
             label: z.ZodString;
             mode: z.ZodEnum<{
                 default: "default";
-                auto: "auto";
                 acceptEdits: "acceptEdits";
                 plan: "plan";
                 bypassPermissions: "bypassPermissions";
+                auto: "auto";
             }>;
             clearContext: z.ZodBoolean;
         }, z.core.$strip>>;
@@ -3022,6 +3022,7 @@ interface CliServiceType {
         /** List sessions across ALL project directories (not just the configured cwd). */
         listAllSessions(opts?: {
             limit?: number;
+            env?: NodeJS.ProcessEnv;
         }): Promise<SessionInfo[]>;
         /**
          * Parse a session's JSONL transcript into an in-memory array of entries.
@@ -3080,10 +3081,12 @@ interface CliServiceType {
         /** Rename a Claude Code session through the native process. */
         renameSession(id: string, title: string, opts?: {
             cwd?: string;
+            env?: NodeJS.ProcessEnv;
         }): Promise<void>;
         /** Check whether a session JSONL file exists under the given (or default) project directory. */
         sessionExists(id: string, opts?: {
             cwd?: string;
+            env?: NodeJS.ProcessEnv;
         }): Promise<boolean>;
     };
     /** Codex CLI wrapper for one-shot tasks. */
@@ -3249,9 +3252,9 @@ declare const CommandLifecycleLineSchema: z.ZodObject<{
     command_uuid: z.ZodString;
     state: z.ZodEnum<{
         completed: "completed";
-        cancelled: "cancelled";
         queued: "queued";
         started: "started";
+        cancelled: "cancelled";
         discarded: "discarded";
         refused: "refused";
     }>;
@@ -6599,11 +6602,11 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  */
 declare const PermissionModeSchema: z.ZodEnum<{
     default: "default";
-    auto: "auto";
     acceptEdits: "acceptEdits";
     plan: "plan";
     bypassPermissions: "bypassPermissions";
     dontAsk: "dontAsk";
+    auto: "auto";
 }>;
 
 type Predicate = {
@@ -7079,6 +7082,8 @@ interface SessionInfo {
 }
 
 interface SessionListOptions {
+    /** Same environment as the native process that owns these journals. */
+    env?: NodeJS.ProcessEnv;
     /** Working directory whose sessions to list. Defaults to `process.cwd()`. */
     cwd?: string;
     limit?: number;
@@ -7091,6 +7096,7 @@ interface SessionTranscriptEntry {
 }
 
 interface SessionViewOptions {
+    env?: NodeJS.ProcessEnv;
     cwd?: string;
     limit?: number;
     offset?: number;
@@ -9384,8 +9390,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        insert: "insert";
         append: "append";
+        insert: "insert";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;
