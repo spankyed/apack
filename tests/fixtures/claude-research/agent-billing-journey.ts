@@ -88,6 +88,47 @@ export async function verifyAgentBilling(
   const boundNativePid=(await context()).native.state.nativePid
   await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
   const composer=card.locator('[contenteditable="true"]')
+  let clientTheme:unknown
+  if(process.env.CLAUDE_RESEARCH_CLIENT_THEME==='1'){
+    const inputs=JSON.parse(await readFile(join(workspace,'native-client-theme-inputs.json'),'utf8'))
+    await card.getByRole('button',{name:'Session tools',exact:true}).click()
+    const region=card.locator('[data-native-client]').filter({hasText:'Workspace connected'})
+    await expect(region).toHaveCount(1)
+    const token=await region.getAttribute('data-native-client'),before=await context(),themeReadings=[]
+    const themeDraft='Keep this release-review draft during theme changes.'
+    await composer.click();await composer.press(process.platform==='darwin'?'Meta+A':'Control+A');await composer.press('Backspace');await composer.pressSequentially(themeDraft)
+    for(const [name,colors] of [['dark',{text:'rgb(226, 232, 240)',success:'rgb(134, 239, 172)',warning:'rgb(251, 191, 36)',background:'rgb(38, 50, 65)'}],['light',{text:'rgb(15, 23, 42)',success:'rgb(22, 101, 52)',warning:'rgb(146, 64, 14)',background:'rgb(243, 244, 246)'}]] as const){
+      if(name==='light')await writeFile(inputs.themePath,JSON.stringify(inputs.palettes.light))
+      await expect(region.getByText('Workspace connected',{exact:true})).toHaveCSS('color',colors.success,{timeout:15000})
+      await expect(region.getByText('Release review ready',{exact:true})).toHaveCSS('color',colors.text)
+      await expect(region.getByText('Updates 0',{exact:true})).toHaveCSS('color',colors.warning)
+      await expect(region.locator('.native-box').first()).toHaveCSS('background-color',colors.background)
+      for(const viewport of [{width:1100,height:900},{width:680,height:600}]){
+        await appPage.setViewportSize(viewport)
+        await expect(region).toBeInViewport();await expect(composer).toBeInViewport();await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
+        await expect(composer).toHaveText(themeDraft);expect(await region.getAttribute('data-native-client')).toBe(token)
+        const geometry=await region.evaluate(el=>{const r=el.getBoundingClientRect();return{left:r.left,right:r.right,top:r.top,bottom:r.bottom,scrollWidth:el.scrollWidth,clientWidth:el.clientWidth,scrollHeight:el.scrollHeight,clientHeight:el.clientHeight}})
+        expect(geometry.left).toBeGreaterThanOrEqual(0);expect(geometry.right).toBeLessThanOrEqual(viewport.width);expect(geometry.top).toBeGreaterThanOrEqual(0);expect(geometry.bottom).toBeLessThanOrEqual(viewport.height);expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth)
+        expect(geometry.scrollHeight).toBeLessThanOrEqual(geometry.clientHeight)
+        const paint={success:await region.getByText('Workspace connected',{exact:true}).evaluate(el=>getComputedStyle(el).color),text:await region.getByText('Release review ready',{exact:true}).evaluate(el=>getComputedStyle(el).color),warning:await region.getByText('Updates 0',{exact:true}).evaluate(el=>getComputedStyle(el).color),background:await region.locator('.native-box').first().evaluate(el=>getComputedStyle(el).backgroundColor)}
+        expect(paint).toEqual(colors)
+        themeReadings.push({name,viewport,colors,paint,geometry,token,draft:await composer.textContent(),nativePid:(await context()).native.state.nativePid})
+        await capture('native-terminal-client-theme-'+name+'-'+viewport.width+'.png')
+      }
+    }
+    await card.getByRole('button',{name:'Session tools',exact:true}).click();await expect(region).toBeHidden()
+    await card.getByRole('button',{name:'Session tools',exact:true}).click();await expect(region).toBeVisible();expect(await region.getAttribute('data-native-client')).toBe(token)
+    await expect(region.getByText('Workspace connected',{exact:true})).toHaveCSS('color','rgb(22, 101, 52)')
+    await region.focus();await region.press('u');await expect(region.getByText('Updates 1',{exact:true})).toBeVisible()
+    await expect(composer).toHaveText(themeDraft)
+    await region.press('r');await expect(region).toHaveCount(0)
+    const receipts=JSON.parse(await readFile(join(workspace,'native-client-theme-events.json'),'utf8'))
+    expect(receipts.map((r:any)=>r.key)).toEqual(['u','r']);expect(receipts.map((r:any)=>r.count)).toEqual([1,1]);expect(receipts[1].retired).toBe(true)
+    const after=await context();expect(after.native.state.nativePid).toBe(boundNativePid);expect(after.turns).toBe(before.turns);expect(after.claude.totalCostUsd).toBe(before.claude.totalCostUsd);expect(after.messages).toEqual(before.messages)
+    clientTheme={sessionId,boundNativePid,token,readings:themeReadings,receipts,before,after,retainedDraft:await composer.textContent()}
+    await writeFile(join(workspace,'native-terminal-client-theme-proof.json'),JSON.stringify(clientTheme,null,2))
+    await composer.click();await composer.press(process.platform==='darwin'?'Meta+A':'Control+A');await composer.press('Backspace');await expect(composer).toHaveText('')
+  }
   await composer.fill('Review the release notes with a worker.')
   await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).native.state.tasks.some((task:any)=>task.status==='completed'),{timeout:25000}).toBe(true)
@@ -193,5 +234,5 @@ export async function verifyAgentBilling(
   },{timeout:25000,message:'Same-session recovery completes a new original turn'}).toBe(true)
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
   await writeFile(join(workspace!,'native-agent-billing-proof.json'),JSON.stringify({project,sessionId,taskId,boundNativePid,observation,readings,recovery,final:await context()},null,2))
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:planScenario,nativeAgentBilling:true,nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,...(panelOwnership?{nativeAgentPanelOwnership:true}:{}),sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:planScenario,nativeAgentBilling:true,nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,...(panelOwnership?{nativeAgentPanelOwnership:true}:{}),...(clientTheme?{nativeClientTheme:true}:{}),sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
 }
