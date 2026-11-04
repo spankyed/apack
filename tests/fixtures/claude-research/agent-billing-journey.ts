@@ -146,7 +146,15 @@ export async function verifyAgentBilling(
   if(process.env.CLAUDE_RESEARCH_SELECTION_LIMIT==='1')await verifySelectionLimit({appPage,card,composer,project,context,capture})
   await composer.fill('Review the release notes with a worker.')
   await card.getByRole('button',{name:'Send',exact:true}).click()
-  await expect.poll(async()=>(await context()).native.state.tasks.some((task:any)=>task.status==='completed'),{timeout:25000}).toBe(true)
+  // Native zln displays completed named/retained Agents as idle.
+  try {
+    await expect.poll(async()=>(await context()).native.state.tasks.some((task:any)=>!task.kind&&['completed','idle'].includes(task.status)),{timeout:25000}).toBe(true)
+  } catch(error) {
+    await writeFile(testInfo.outputPath('native-agent-billing-task-state-failure.json'),JSON.stringify(await context(),null,2)).catch(()=>undefined)
+    throw error
+  }
+  const taskAdmission=await context()
+  await writeFile(join(workspace,'native-agent-billing-task-admission.json'),JSON.stringify({sessionId,boundNativePid,tasks:taskAdmission.native.state.tasks,turns:taskAdmission.turns},null,2))
   await appPage.getByRole('button',{name:/^Native tools/}).first().click()
   const row=appPage.locator('[data-native-agent-id]').first()
   const taskId=await row.getAttribute('data-native-agent-id');expect(taskId).toBeTruthy()
