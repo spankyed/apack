@@ -84,3 +84,7 @@ Storage changes require a distinct asserted machine identity; see the
 source-qualified rather than repeating them for unrelated documentation or runner changes.
 See the [admission and formatter comparison](../archive/references/evidence/pack-admission-2026-11-04.json)
 for a source-qualified run with both successful warm trials and a retained cold-start failure.
+
+The [fresh-profile startup diagnosis](../archive/references/evidence/cold-start-2026-11-04.md)
+localizes the retained discovery failure and documents why its incomplete cache experiment
+does not qualify cold-start performance.
