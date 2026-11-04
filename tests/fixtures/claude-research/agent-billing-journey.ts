@@ -17,6 +17,9 @@ export async function verifyAgentBilling(
  {workspace,launcher,onboarding,project}:{workspace:string;launcher:string;onboarding:string;project:string},
 ){
   const nativeWindow=await electronApp.browserWindow(appPage)
+  const presentation=await nativeWindow.evaluate(window=>({visible:window.isVisible(),minimized:window.isMinimized(),focused:window.isFocused()}))
+  await writeFile(testInfo.outputPath('native-window-presentation.json'),JSON.stringify(presentation))
+  if(process.env.PLAYWRIGHT_VISIBLE==='1')expect(presentation.visible,'Everyday app verification uses a shown window inside the virtual display').toBe(true)
   async function capture(name:string){
     const size=appPage.viewportSize()!
     await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
