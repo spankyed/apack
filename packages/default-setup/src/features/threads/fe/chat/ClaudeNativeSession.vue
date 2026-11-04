@@ -1,7 +1,7 @@
 <template>
-  <section :class="[displayActive ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded, 'native-session--child': !!view?.attachment, 'native-launch--background': !!continuation && !active && !view?.attachment }]" aria-label="Claude native interface">
+  <section :class="[displayActive ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded, 'native-session--child': !!view?.attachment, 'native-launch--background-composing': backgroundComposing, 'native-launch--background': !!continuation && !active && !view?.attachment }]" aria-label="Claude native interface">
     <NativeBackgroundReview v-for="panel in leftArrowPanel ? [leftArrowPanel] : []" :key="JSON.stringify([panel.ownerId, panel.sessionId, panel.id])" :panel-id="panel.id" :state="panel.state" @answer="answerLeftArrow(panel, $event)" />
-    <NativeBackgroundSession v-if="continuation" :continuation="continuation" :state="view?.background" :attached="!!view?.attachment" :info="view?.backgroundInfo" :can-reply="view?.canReplyBackground === true" @operate="operateBackground" @open="openBackground">
+    <NativeBackgroundSession v-if="continuation" :continuation="continuation" :state="view?.background" :attached="!!view?.attachment" :info="view?.backgroundInfo" :can-reply="view?.canReplyBackground === true" @operate="operateBackground" @open="openBackground" @composing="backgroundComposing = $event">
       <template #composer="composer">
         <NativeBackgroundComposer :key="composer.target.ownerId" @leave="composer.close" :thread-id="threadId" :target="composer.target" :draft="composer.draft" :draft-snapshot="composer.draftSnapshot" :disabled="composer.pending" :send="composer.send" @draft="composer.updateDraft" @draft-snapshot="composer.saveSnapshot" />
       </template>
@@ -130,7 +130,9 @@ import NativeSandboxNetworkReview from './NativeSandboxNetworkReview.vue'
 import { parseClaudeDocument } from '#extensions/blocks/display/native-status-text.ts'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 const props = defineProps<{ threadId: string; continuation?: ClaudeNativeContinuation; busy: boolean; inputPending?: boolean }>()
-const emit = defineEmits<{ active: [value: boolean] }>()
+const emit = defineEmits<{ active: [value: boolean]; 'background-composing': [value: boolean] }>()
+const backgroundComposing = ref(false)
+watch(backgroundComposing, value => emit('background-composing', value), {immediate:true})
 const actor: ThreadsState = useSurface()
 const mountId = crypto.randomUUID()
 const views = useSelector(actor, state => state.context.nativeTerminalViews)
@@ -267,13 +269,14 @@ watch(() => JSON.stringify([props.continuation?.sessionId, props.continuation?.c
   if (props.continuation) operateBackground({ ...props.continuation }, { operation: 'refresh' })
 }, { immediate: true, flush: 'post' })
 const heartbeat = setInterval(renew, 10000)
-onBeforeUnmount(() => { clearInterval(heartbeat); detach(); actor.send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...identity() }); emit('active', false) })
+onBeforeUnmount(() => { clearInterval(heartbeat); detach(); actor.send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...identity() }); emit('active', false); emit('background-composing', false) })
 </script>
 
 <style scoped>
 .native-button.native-parent-interface { min-height: 30px; width: 32px; padding-inline: 5px; border: 1px solid #ffffff1a; }
 .native-launch { display: flex; flex-direction: column; flex-shrink: 0; justify-content: flex-end; padding: 6px 20px; }
 .native-launch--background { flex-shrink: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; justify-content: flex-start; }
+.native-launch--background-composing { flex: 1; overflow: hidden; }
 .native-launch__actions { justify-content: flex-end; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
 .native-launch__actions .native-problem { flex: 1 1 16rem; min-width: 0; overflow-wrap: anywhere; }
 .native-launch__actions .native-button { flex-shrink: 0; }

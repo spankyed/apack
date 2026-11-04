@@ -11,7 +11,8 @@
     <div class="native-agent-actions flex shrink-0 items-center justify-between gap-3 px-4 pb-3 pt-2">
       <div class="flex min-w-0 items-center gap-2">
         <button v-if="openSettings" type="button" aria-label="Claude settings" title="Claude settings" :disabled="disabled || submitting" class="shrink-0 rounded-lg p-1.5 text-neutral-400 hover:bg-white/5 hover:text-neutral-200 disabled:opacity-40" @click="openNativeSettings"><Settings2 :size="16" /></button>
-        <span class="truncate text-[11px] text-neutral-500">{{ disabled ? (audience === 'background' ? 'Background input unavailable' : 'Agent input unavailable') : 'Enter to send · Shift+Enter for a new line' }}</span>
+        <button v-if="audience === 'background'" type="button" :disabled="submitting" class="rounded py-1 text-xs text-neutral-400 hover:text-neutral-200 focus-visible:outline focus-visible:outline-blue-400" @click="emit('leave')">Back to parent notes</button>
+        <span v-else class="truncate text-[11px] text-neutral-500">{{ disabled ? (audience === 'background' ? 'Background input unavailable' : 'Agent input unavailable') : 'Enter to send · Shift+Enter for a new line' }}</span>
       </div>
       <button type="submit" class="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-40" :disabled="disabled || submitting || !draft.trim()">{{ submitting ? 'Sending…' : audience === 'background' ? 'Send message' : 'Send to Agent' }}</button>
     </div>

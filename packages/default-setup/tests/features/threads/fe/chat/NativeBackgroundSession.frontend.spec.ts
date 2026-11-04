@@ -100,3 +100,23 @@ it('retains rich drafts until native acknowledgment and refuses callbacks from a
   app.unmount();await refused
  }finally{app.unmount();root.remove()}
 })
+
+
+it('reports active rich replying through collapse and worker stop',async()=>{
+ const currentLink={...link,sessionId:'24be904a-3c35-4981-9793-cbe7a6c19d47'}
+ const state=reactive<ClaudeBackgroundSessionState>({...currentLink,operation:'refresh',status:'done',revision:1,
+  session:{id:'05ff1d31',sessionId:currentLink.continuedInSessionId,cwd:'/owned',pid:119,state:'working'},
+  desktop:{ownerId:'child-owner',parentSessionId:currentLink.sessionId,sessionId:currentLink.continuedInSessionId,jobId:'05ff1d31',pid:119,processStart:'start'}})
+ const composing=vi.fn(),root=document.createElement('div');document.body.append(root)
+ const app=createApp({render:()=>h(NativeBackgroundSession,{continuation:currentLink,state,canReply:true,onComposing:composing},{composer:()=>h('div','Rich reply')})});app.mount(root)
+ try{
+  expect(composing).toHaveBeenLastCalledWith(false)
+  const reply=()=>root.querySelector<HTMLButtonElement>('[aria-label="Reply"]')!
+  reply().click();await nextTick();expect(composing).toHaveBeenLastCalledWith(true)
+  reply().click();await nextTick();expect(composing).toHaveBeenLastCalledWith(false)
+  reply().click();await nextTick();expect(composing).toHaveBeenLastCalledWith(true)
+  state.continuedInSessionId='stale-child';await nextTick();expect(composing).toHaveBeenLastCalledWith(false)
+  state.continuedInSessionId=currentLink.continuedInSessionId;await nextTick();expect(composing).toHaveBeenLastCalledWith(true)
+  state.session!.state='stopped';await nextTick();expect(composing).toHaveBeenLastCalledWith(false)
+ }finally{app.unmount();root.remove()}
+})

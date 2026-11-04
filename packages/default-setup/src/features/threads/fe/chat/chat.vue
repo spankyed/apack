@@ -35,7 +35,7 @@
       <div class="flex flex-col flex-1 min-w-0 overflow-hidden" :class="{ 'pt-2': !showInlineTabs }" style="background-color: rgb(28 28 28)">
         <!-- Inline Tab Bar -->
         <InlineTabBar :visible="showInlineTabs && !isOnboarding" @close="showInlineTabs = false" />
-        <ClaudeNativeSession ref="nativeSession" v-if="currentThread?.context?.claudeCode && currentThread.id" :key="currentThread.id" :thread-id="currentThread.id" :continuation="currentThread.context.claudeCode.nativeContinuation?.sessionId === currentThread.context.claudeCode.sessionId ? currentThread.context.claudeCode.nativeContinuation : undefined" :busy="isBusy" :input-pending="!!pendingNativeSend || agentPending || !!agentSelection || mcpFormPending || nativeComposerView?.mcpOperation?.status === 'pending'" @active="nativeTerminalActive = $event" />
+        <ClaudeNativeSession ref="nativeSession" v-if="currentThread?.context?.claudeCode && currentThread.id" :key="currentThread.id" :thread-id="currentThread.id" :continuation="currentThread.context.claudeCode.nativeContinuation?.sessionId === currentThread.context.claudeCode.sessionId ? currentThread.context.claudeCode.nativeContinuation : undefined" :busy="isBusy" :input-pending="!!pendingNativeSend || agentPending || !!agentSelection || mcpFormPending || nativeComposerView?.mcpOperation?.status === 'pending'" @active="nativeTerminalActive = $event" @background-composing="nativeBackgroundComposing = $event" />
         <NativeManagedSettingsNotice v-if="!nativeTerminalActive && nativeUiDrawing?.managedSettingsDiagnostics?.length" :diagnostics="nativeUiDrawing.managedSettingsDiagnostics" />
         <section v-if="!nativeTerminalActive && workflowTasks.length" aria-label="Native Claude workflows" class="mx-4 mt-2 max-h-48 shrink-0 overflow-y-auto rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs">
           <div v-for="task in workflowTasks" :key="task.id" :data-native-workflow-id="task.id" class="py-1">
@@ -46,7 +46,7 @@
         <p v-if="agentSelection" role="status" class="px-4 py-3 text-sm text-neutral-400">Opening Agent conversation…</p>
         <NativeAgentView v-if="focusedAgent && currentThread?.id" :key="JSON.stringify(focusedAgent.target)" :thread-id="currentThread.id" :target="focusedAgent.target" :name="focusedAgent.name" :status-text="focusedAgent.statusText" :active="!nativeTerminalActive" :draft="agentDrafts[agentDraftKey(focusedAgent.target)]?.text ?? ''" :draft-snapshot="agentDrafts[agentDraftKey(focusedAgent.target)]?.snapshot" :scroll-position="agentScrollPositions[agentDraftKey(focusedAgent.target)]" @scroll-position="saveAgentScrollPosition" @draft="saveAgentDraft" @draft-snapshot="saveAgentDraftSnapshot" @pending="agentPending = $event" @returning="agentReturning = $event" @returned="returnFromAgent" />
         <!-- Shrinkable content area -->
-        <div v-show="!nativeTerminalActive && !focusedAgent && !agentSelection" class="flex flex-col flex-grow overflow-hidden min-h-0" :class="{ 'chat-composer-area--background': nativeSessionBackgrounded }" ref="composerAreaRef" data-testid="chat-composer-area" @keydown.capture="nativeActionKey($event, composerAreaRef)" @focusout="nativeActionKey.leave($event, composerAreaRef)">
+        <div v-show="!nativeTerminalActive && !focusedAgent && !agentSelection" class="flex flex-col flex-grow overflow-hidden min-h-0" :class="{ 'chat-composer-area--background': nativeSessionBackgrounded, 'chat-composer-area--background-reply': nativeBackgroundReplyActive }" ref="composerAreaRef" data-testid="chat-composer-area" @keydown.capture="nativeActionKey($event, composerAreaRef)" @focusout="nativeActionKey.leave($event, composerAreaRef)">
           <p v-if="nativeUiDrawing?.gestureProblem" role="alert" class="px-4 py-2 text-sm text-amber-200">{{ nativeUiDrawing.gestureProblem }}</p>
           <NativeMainCommand v-if="nativeComposerOwner" :state="mainCommand" :frame="nativeUiDrawing?.transcriptMessages?.find(frame => frame.component === 'CommandOutput' && frame.uuid === mainCommand?.output?.messageId)" @press="pressNativeUi" @field="editNativeUi" :owner-id="nativeComposerOwner.ownerId" :output="nativeComposerView?.output ?? []" :dismissed="mainOutputDismissed" :expanded="mainOutputExpanded" @panel="mainPanel" @settings="mainSettings" @background="mainBackgroundReview" @resize="mainPanelResize" @decide="mainCommandDecision" @dismiss="dismissMainOutput" @expand="mainOutputExpanded = $event" />
           <p v-if="nativeComposerView?.submission?.status === 'accepted' && nativeComposerView.submission.command?.kind === 'command_complete'" role="status" class="mx-4 mb-2 shrink-0 text-xs text-neutral-400">/{{ nativeComposerView.submission.command.commandName }} completed<span v-if="nativeComposerView.submission.command.sessionId"> · New conversation ready</span></p>
@@ -143,7 +143,7 @@
           </div>
           <!-- Keep the draft/editor mounted while the native process needs a decision. -->
           <!-- Input -->
-          <div v-show="!mainPanelActive && !mainOutputExpanded && !pendingNativeApproval && !pendingNativeQuestion && !pendingNativePlan" class="flex-shrink-0 w-full" :class="$style.inputContainer">
+          <div v-show="!nativeBackgroundReplyActive && !mainPanelActive && !mainOutputExpanded && !pendingNativeApproval && !pendingNativeQuestion && !pendingNativePlan" class="flex-shrink-0 w-full" :class="$style.inputContainer">
             <ChatInput ref="mainComposer" @native-tools-expanded="nativeToolsExpanded = $event"
               :disabled="!nativeSessionBackgrounded && (nativeAgentsDecisionPending || mainCommandActive || !!taskView?.[1].state && taskView[1].state.view?.kind !== 'main')"
               :disabled-reason="!nativeSessionBackgrounded && taskView?.[1].state ? taskView[1].state.view?.kind === 'agent' ? 'Return to the main conversation in the native interface' : taskView[1].state.view ? undefined : 'Connecting to Claude input' : undefined"
@@ -316,6 +316,7 @@ const threadsSettings = useSettings('threads')
 const shell = useShell()
 const agentSelection = ref<{ threadId: string; mountId: string; ownerId: string; sessionId: string; taskId: string; revision: number }>()
 const nativeSession = ref<InstanceType<typeof ClaudeNativeSession>>()
+const nativeBackgroundComposing = ref(false)
 const nativeTerminalActive = ref(false)
 const mcpFormPending = ref(false)
 const nativeToolsExpanded = ref(false)
@@ -337,6 +338,7 @@ const currentMode = useSelector(actor, (state) => state.context.mode)
 const currentThread = useSelector(actor, (state) => state.context.currentThread)
 const nativeAgentsDecisionPending = computed(() => !nativeSessionBackgrounded.value && Object.values(nativeTerminalViews.value).some(view => view.threadId === currentThread.value?.id && (view.state?.notice?.kind === 'left_arrow_confirm' || view.state?.handoffPending === true)))
 const nativeSessionBackgrounded = computed(() => { const native = currentThread.value?.context?.claudeCode; return currentMode.value === 'Claude Code' && !!native?.nativeContinuation && native.nativeContinuation.sessionId === native.sessionId })
+const nativeBackgroundReplyActive = computed(() => nativeSessionBackgrounded.value && nativeBackgroundComposing.value && !nativeTerminalActive.value)
 const allMessages = useSelector(actor, (state) => (state.context.currentThread?.messages || []) as MessageEntity[]);
 const nativeTerminalViews = useSelector(actor, state => state.context.nativeTerminalViews)
 const nativeUiMount = ref<{ threadId: string; mountId: string }>()
@@ -613,6 +615,11 @@ provide(claudeTaskControls, {
   },
 })
 const mainComposer = ref<InstanceType<typeof ChatInput>>()
+watch(nativeBackgroundReplyActive, (active, previous) => {
+  if (active || !previous) return
+  const editor = mainComposer.value, threadId = currentThread.value?.id
+  void nextTick(() => { if (!nativeBackgroundReplyActive.value && !nativeTerminalActive.value && !focusedAgent.value && currentThread.value?.id === threadId && mainComposer.value === editor) editor?.focus() })
+})
 function returnFromAgent() {
   focusedAgent.value = undefined
   void nextTick(() => { if (document.activeElement === document.body) mainComposer.value?.focus() })
@@ -783,10 +790,11 @@ function handleDashboardResize(delta: number) {
 const canvasHeight = computed(() => shell.panelSizes.value.canvasHeight)
 const nativeWorkspaceReading = computed(() => canvasHeight.value > 50 && (currentMode.value === 'Claude Code' || !!currentThread.value?.context?.claudeCode))
 const compactWorkspaceOwner = computed(() => {
-  if (canvasHeight.value <= 0 || nativeToolsExpanded.value || !nativeChatMinHeight.value) return undefined
+  if (nativeBackgroundReplyActive.value || canvasHeight.value <= 0 || nativeToolsExpanded.value || !nativeChatMinHeight.value) return undefined
   return focusedAgent.value ? 'agent' : 'parent'
 })
 const nativeChatMinHeight = computed(() => {
+  if (nativeBackgroundReplyActive.value) return 'min(32rem, max(22rem, calc(100vh - 10rem)))'
   if (currentMode.value !== 'Claude Code' && !currentThread.value?.context?.claudeCode) return undefined
   if (nativeWorkspaceReading.value) {
     // Keep the composer and owner controls visible when the workspace takes priority.
@@ -1147,6 +1155,8 @@ useNativeTranscriptViewport({
 <style scoped>
 .native-chat-shell { min-height: var(--native-chat-min-height, auto); }
 .chat-composer-area--background { flex-basis: 0; min-height: min(14rem, 55%); }
+/* The child owns input while replying; parent notes stay mounted for an exact return. */
+.chat-composer-area--background.chat-composer-area--background-reply { flex: 0 1 5rem; min-height: 0; max-height: 20%; }
 .native-chat-shell:has([data-native-notice="refusal_fallback_prompt"]) { --composer-notice-history-reserve: 10rem; }
 /* Keep ordinary Agent workspace reading useful before a manual split adjustment. */
 .native-chat-shell[data-native-workspace-owner="agent"]:not(:has([data-native-notice], [data-native-command-panel], [data-testid="native-mcp-form"], [data-testid="native-mcp-url"])) {

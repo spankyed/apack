@@ -22,11 +22,11 @@ vi.mock('@apackdev/ui/components/tiptap/TiptapEditor', async () => {
 vi.mock('#features/threads/fe/chat/StatusLine.vue', () => ({ default: { render: () => null } }))
 beforeEach(() => { resetSelectionOnCreate = false; preserveEmptyMarker = false; startFeTestRuntime() })
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime() })
-async function mount(send: (text: string) => Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void> = async () => {}, connected = false, draftSnapshot?: ClaudeAgentDraftSnapshot, openSettings?: () => Promise<void>) {
+async function mount(send: (text: string) => Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void> = async () => {}, connected = false, draftSnapshot?: ClaudeAgentDraftSnapshot, openSettings?: () => Promise<void>, audience?: 'background') {
   const leave = vi.fn(), draft = vi.fn(), saved = vi.fn(), root = document.createElement('div'); document.body.append(root)
   const state = reactive({ draft: 'Unsent Agent draft', attachmentId: 'native-one', promptRevision: 0, prompt: undefined as ClaudePromptReply | undefined })
   const edit = vi.fn((value: ClaudePromptEdit) => { state.promptRevision = value.revision; state.prompt = { revision: value.revision, status: 'applied', frame: { text: value.text, cursor: value.cursor } } })
-  app = createApp({ render: () => h(NativeAgentComposer, { draft: state.draft, draftSnapshot, 'onDraft-snapshot': saved, disabled: false, send, openSettings, mountId: connected ? 'agent-ui' : undefined, attachmentId: state.attachmentId, promptRevision: state.promptRevision, prompt: state.prompt, onEdit: edit, onLeave: leave, onDraft: (text: string) => { draft(text); state.draft = text } }) }); app.mount(root); await nextTick(); await nextTick()
+  app = createApp({ render: () => h(NativeAgentComposer, { audience, draft: state.draft, draftSnapshot, 'onDraft-snapshot': saved, disabled: false, send, openSettings, mountId: connected ? 'agent-ui' : undefined, attachmentId: state.attachmentId, promptRevision: state.promptRevision, prompt: state.prompt, onEdit: edit, onLeave: leave, onDraft: (text: string) => { draft(text); state.draft = text } }) }); app.mount(root); await nextTick(); await nextTick()
   return { leave, draft, saved, root, state, edit }
 }
 it('owns Escape before the generic editor keymap and preserves the unsent draft', async () => {
@@ -196,4 +196,12 @@ it('keeps the Agent draft on Settings refusal and retires an invocation across n
  f.root.querySelector<HTMLButtonElement>('[aria-label="Claude settings"]')!.click();f.state.attachmentId='replacement'
  await nextTick();await nextTick()
  expect(settings).not.toHaveBeenCalled();expect(editor.state.doc.textContent).toContain('newer')
+})
+
+
+it('returns from the background composer without sending or clearing its draft',async()=>{
+ const send=vi.fn(),f=await mount(send,false,undefined,undefined,'background')
+ const back=[...f.root.querySelectorAll('button')].find(button=>button.textContent==='Back to parent notes')!
+ back.click();expect(f.leave).toHaveBeenCalledOnce();expect(send).not.toHaveBeenCalled()
+ expect(editor.state.doc.textContent).toBe('Unsent Agent draft')
 })

@@ -1,5 +1,5 @@
 <template>
-  <section v-for="panel in panels" :key="panel.key" aria-label="Background Claude session" :aria-busy="panel.pending" class="background-session">
+  <section v-for="panel in panels" :key="panel.key" aria-label="Background Claude session" :aria-busy="panel.pending" class="background-session" :class="{ 'background-session--composing': richReplyActive }">
     <header class="background-session__heading">
       <div class="background-session__body">
         <h3 :title="panel.session?.name || 'Background session'">{{ panel.session?.name || 'Background session' }}</h3>
@@ -31,7 +31,7 @@
   </section>
 </template>
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, useId, useSlots, watch } from 'vue'
 import { MessageSquare, Terminal, RefreshCw, Square } from 'lucide-vue-next'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 import { surfaceStorage } from '@apackdev/sdk/fe'
@@ -42,15 +42,21 @@ import type { ClaudeBackgroundStatus, ClaudeBackgroundSessionRequest, ClaudeBack
 import type { ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'
 import type { ClaudeBackgroundSessionState } from '#features/threads/be/claude-terminal-views.ts'
 const props = defineProps<{ continuation: ClaudeNativeContinuation; state?: ClaudeBackgroundSessionState; info?: ClaudeBackgroundStatus; attached?: boolean; canReply?: boolean }>()
-const emit = defineEmits<{ open: [target: ClaudeNativeContinuation, jobId: string]; operate: [target: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest] }>()
+const emit = defineEmits<{ open: [target: ClaudeNativeContinuation, jobId: string]; operate: [target: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest]; composing: [value: boolean] }>()
 const draftSnapshot = ref<ClaudeAgentDraftSnapshot>()
 const draft = ref(''), replyOpen = ref(false), replyInputId = useId()
+const slots = useSlots()
+const richReplyActive = computed(() => !!(props.canReply && replyOpen.value && props.state?.desktop && slots.composer
+  && props.state.sessionId === props.continuation.sessionId && props.state.continuedInSessionId === props.continuation.continuedInSessionId
+  && props.state.desktop.parentSessionId === props.continuation.sessionId && props.state.desktop.sessionId === props.continuation.continuedInSessionId
+  && props.state.session?.pid && ['working','blocked'].includes(props.state.session.state)))
+watch(richReplyActive, value => emit('composing', value), {immediate:true,flush:'sync'})
 let submitted: {text: string; revision: number; rich: boolean; resolve(): void; reject(error: Error): void} | undefined
 function retireSubmission() { submitted?.reject(Error('Background session changed before acknowledgment')); submitted = undefined }
 function draftCurrent(target: ClaudeNativeContinuation) { return props.continuation.sessionId === target.sessionId && props.continuation.continuedInSessionId === target.continuedInSessionId }
 function updateDraft(target: ClaudeNativeContinuation, text: string) { if (draftCurrent(target)) draft.value = text }
 function saveSnapshot(target: ClaudeNativeContinuation, snapshot: ClaudeAgentDraftSnapshot) { if (draftCurrent(target) && snapshot.text === draft.value) draftSnapshot.value = snapshot }
-onBeforeUnmount(retireSubmission)
+onBeforeUnmount(() => { retireSubmission(); emit('composing', false) })
 const draftKey = () => claudeWindowStorageKey('background-reply', JSON.stringify([props.continuation.sessionId, props.continuation.continuedInSessionId]))
 watch([() => props.continuation.sessionId, () => props.continuation.continuedInSessionId], () => {
   retireSubmission(); draftSnapshot.value = undefined; let text = ''
@@ -108,6 +114,8 @@ const panels = computed(() => {
 </script>
 <style scoped>
 .background-session { display: grid; flex-shrink: 0; gap: 5px; min-width: 0; margin-bottom: 0; padding: 8px 12px; border: 1px solid #ffffff14; border-radius: 10px; background: #ffffff03; }
+.background-session--composing { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; }
+.background-session--composing > :not(.background-native-composer) { flex-shrink: 0; }
 .background-session__heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
 .background-session__body { flex: 1; min-width: 0; }
 h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; color: #dcd8d2; font-size: 12px; line-height: 16px; font-weight: 500; }

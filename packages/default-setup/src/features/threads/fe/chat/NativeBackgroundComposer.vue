@@ -62,6 +62,6 @@ onMounted(() => { window.addEventListener('focus', renew); window.addEventListen
 onBeforeUnmount(() => { window.removeEventListener('focus', renew); window.removeEventListener('blur', renew); detach() })
 </script>
 <style scoped>
-.background-native-composer {min-width:0;--agent-available-height:24rem;--agent-composer-history-reserve:0px}
-.background-native-composer :deep(.native-agent-composer) {margin:0;max-height: min(24rem, 60vh)}
+.background-native-composer {display:flex;flex:1;min-height:0;min-width:0;--agent-available-height:100%;--agent-composer-history-reserve:0px}
+.background-native-composer :deep(.native-agent-composer) {flex:1;min-height:7rem;margin:0;max-height:min(24rem,100%)}
 </style>
