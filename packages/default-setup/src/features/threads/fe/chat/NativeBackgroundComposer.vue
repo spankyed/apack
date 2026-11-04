@@ -77,5 +77,6 @@ onBeforeUnmount(() => { window.removeEventListener('focus', renew); window.remov
 </script>
 <style scoped>
 .background-native-composer {display:flex;flex:1;min-height:0;min-width:0;--agent-available-height:100%;--agent-composer-history-reserve:0px}
+.background-native-composer > :deep(.question-drawing) {flex:1;min-width:0;width:100%}
 .background-native-composer :deep(.native-agent-composer) {flex:1;min-height:7rem;margin:0;max-height:min(24rem,100%)}
 </style>
