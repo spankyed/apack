@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-3xl">
+  <div class="w-full min-w-0 max-w-3xl">
     <!-- Default Base Directory Section -->
     <CollapsibleSection label="Default Base Directory" :default-open="true" class="mb-8">
       <p class="text-sm text-neutral-500 mb-4">
@@ -33,15 +33,18 @@
     </CollapsibleSection>
 
     <CollapsibleSection label="Claude Code profile" :default-open="true" class="mb-8">
-      <div class="space-y-3">
+      <div class="space-y-2">
         <label for="claude-profile" class="block text-sm font-medium text-neutral-200">Default for new chats</label>
-        <select id="claude-profile" v-model="claudeProfile" class="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-200" @change="saveClaudeProfile">
+        <select id="claude-profile" v-model="claudeProfile" aria-describedby="claude-profile-help" class="w-full min-w-0 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-200" @change="saveClaudeProfile">
           <option value="shared">Shared native profile</option>
           <option value="app">App profile</option>
         </select>
-        <p class="text-sm text-neutral-400">The shared profile uses the Claude sign-in and settings available to this app. Existing chats keep their current profile.</p>
-        <p class="text-sm text-neutral-400">Set up the separate app profile in your project’s terminal. Complete Claude’s onboarding, sign-in and project trust, then exit Claude to return to chat.</p>
         <button type="button" class="rounded-lg border border-neutral-600 px-3 py-2 text-sm text-neutral-200 hover:bg-neutral-800" @click="openSurface('code', {type: 'OPEN_CLAUDE_PROFILE_SETUP'})">Set up app profile…</button>
+        <p id="claude-profile-help" class="text-xs text-neutral-400">
+          {{ claudeProfile === 'app'
+            ? 'Separate sign-in and settings. Complete setup in your project terminal, then exit Claude. Existing chats keep their profile.'
+            : 'Uses your native Claude sign-in and settings. Set up an app profile for a separate sign-in. Existing chats keep their profile.' }}
+        </p>
       </div>
     </CollapsibleSection>
 
