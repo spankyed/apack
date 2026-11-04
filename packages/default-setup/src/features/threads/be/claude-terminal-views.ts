@@ -112,6 +112,8 @@ interface View {
   problem?: string
   queued?: boolean
   background?: ClaudeBackgroundSessionState
+  desktopPreparation?: object
+  desktopRetry?: boolean
   mcpOperation?: ClaudeTerminalViewSnapshot['mcpOperation']
   noticeAnswer?: ClaudeTerminalViewSnapshot['noticeAnswer']
   task?: ClaudeTerminalTaskState
@@ -167,6 +169,25 @@ export function createClaudeTerminalViews(dependencies: {
       if (output.length) view.sequence = output.at(-1)!.sequence
     } catch { drop(key) }
   }
+  function prepareDesktop(key: string, view: View) {
+    const operation = view.background, session = operation?.session
+    const continuation = dependencies.continuation?.(view.threadId)
+    if (views.get(key) !== view || !dependencies.desktop || !operation || operation.status !== 'done' || !session?.pid
+      || !['working', 'blocked'].includes(session.state) || operation.desktop
+      || continuation?.sessionId !== operation.sessionId || continuation.continuedInSessionId !== operation.continuedInSessionId) return
+    if (view.desktopPreparation) { view.desktopRetry = true; return }
+    const pending = {}; view.desktopPreparation = pending
+    const current = () => views.get(key) === view && view.background === operation
+      && dependencies.continuation?.(view.threadId)?.sessionId === continuation.sessionId
+      && dependencies.continuation?.(view.threadId)?.continuedInSessionId === continuation.continuedInSessionId
+    void Promise.resolve().then(() => current() ? dependencies.desktop!(continuation, session.id, session.pid!, view.threadId) : undefined).then(desktop => {
+      if (current() && desktop) { operation.desktop = desktop; publish(key, view) }
+    }).catch(() => { /* A later native registration can make this worker available. */ }).finally(() => {
+      if (view.desktopPreparation !== pending) return
+      view.desktopPreparation = undefined
+      if (view.desktopRetry) { view.desktopRetry = false; prepareDesktop(key, view) }
+    })
+  }
   function attach(key: string, view: View, owner: ClaudeNativeTerminalOwner) {
     if (view.owner === owner) return
     view.unsubscribe?.(); view.owner = owner; view.sequence = 0; view.submission = undefined; view.submissionRevision = 0; view.task = undefined; view.noticeAnswer = undefined; view.mcpOperation = undefined
@@ -190,7 +211,11 @@ export function createClaudeTerminalViews(dependencies: {
           view = { client, threadId: event.threadId, mountId: event.mountId, expires: 0, send, sequence: 0, opening: false }
           views.set(key, view)
           const mounted = view
-          view.backgroundUnsubscribe = dependencies.subscribeBackground?.(event.threadId, () => publish(key, mounted))
+          view.backgroundUnsubscribe = dependencies.subscribeBackground?.(event.threadId, () => {
+            publish(key, mounted)
+            const info = dependencies.backgroundInfo?.(event.threadId), session = mounted.background?.session
+            if (info && info.sessionId === mounted.background?.continuedInSessionId && info.jobId === session?.id && info.pid === session?.pid) prepareDesktop(key, mounted)
+          })
           void dependencies.restoreBackground?.(event.threadId).then(()=>publish(key,mounted),error=>{if(views.get(key)===mounted){mounted.problem=error instanceof Error?error.message:'Background status recovery failed';publish(key,mounted)}})
         }
         view.send = send; view.expires = Date.now() + 30000
@@ -269,12 +294,7 @@ export function createClaudeTerminalViews(dependencies: {
           operation.session = session; operation.status = 'done'
           if (!session?.pid || !['working', 'blocked'].includes(session.state) || session.id !== operation.desktop?.jobId || session.pid !== operation.desktop?.pid) operation.desktop = undefined
           publish(key, target)
-          if (session?.pid && ['working', 'blocked'].includes(session.state) && dependencies.desktop) {
-            void dependencies.desktop(continuation, session.id, session.pid, event.threadId).then(desktop => {
-              if (!current() || !desktop) return
-              operation.desktop = desktop; publish(key, target)
-            }).catch(() => { /* Status/reply stays usable when this native worker has no desktop host. */ })
-          }
+          prepareDesktop(key, target)
         }, error => { if (current()) { operation.status = 'error'; operation.problem = error instanceof Error ? error.message : 'Background session operation failed'; publish(key, target) } })
         return
       }

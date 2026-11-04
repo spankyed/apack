@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import type { ClaudeBackgroundStatus } from '#features/code/common/native-background.ts'
 import { createClaudeTerminalViews, type ClaudeTerminalViewReply } from '#features/threads/be/claude-terminal-views.ts'
 import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claude-code/terminal-owner.ts'
 const mount = { type: 'CLAUDE_TERMINAL_MOUNT', threadId: 'thread', mountId: randomUUID() } as const
@@ -512,4 +513,26 @@ it('publishes desktop controls only for the refreshed original child, and retire
   views.handle({...mount,type:'CLAUDE_TERMINAL_UNMOUNT'},'window-one',send)
   send.mockClear();finish(desktop);await new Promise(resolve=>setTimeout(resolve,0));expect(send).not.toHaveBeenCalled()
  }finally{views.clear()}
+})
+
+
+it('attaches the child desktop when native registration arrives after the initial status refresh', async () => {
+ const link={sessionId:'parent',continuedInSessionId:'child',timestamp:'2026-11-04T00:00:00Z'}
+ const job={id:'11111111',sessionId:'child',cwd:'/owned',pid:119,state:'working' as const}
+ const desktop={ownerId:'desktop',parentSessionId:'parent',sessionId:'child',jobId:job.id,pid:119,processStart:'native-start'}
+ let info: ClaudeBackgroundStatus|undefined,notify!:()=>void
+ const prepare=vi.fn().mockRejectedValueOnce(Error('Background desktop worker changed; refresh its status')).mockResolvedValue(desktop)
+ const send=vi.fn(),views=createClaudeTerminalViews({get:()=>undefined,open:vi.fn(),continuation:()=>link,background:async()=>job,
+  backgroundInfo:()=>info,desktop:prepare,desktopCurrent:()=>true,subscribeBackground:(_key,changed)=>{notify=changed;return()=>{}}})
+ try {
+  views.handle(mount,'window-one',send)
+  views.handle({...mount,type:'CLAUDE_TERMINAL_BACKGROUND',...link,revision:1,operation:'refresh'},'window-one',send)
+  await vi.waitFor(()=>expect(prepare).toHaveBeenCalledOnce());await new Promise(resolve=>setTimeout(resolve,0))
+  expect(send.mock.calls.at(-1)![0].background.desktop).toBeUndefined()
+  info={sessionId:'other-child',jobId:job.id,pid:119,observedAt:1,model:'fixture',turns:1,startedAt:1};notify();expect(prepare).toHaveBeenCalledOnce()
+  info={sessionId:'child',jobId:job.id,pid:119,observedAt:2,model:'fixture',turns:1,startedAt:1};notify();notify()
+  await vi.waitFor(()=>expect(send.mock.calls.at(-1)![0].background.desktop).toEqual(desktop))
+  expect(prepare).toHaveBeenCalledTimes(2)
+  notify();expect(prepare).toHaveBeenCalledTimes(2)
+ } finally {views.clear()}
 })
