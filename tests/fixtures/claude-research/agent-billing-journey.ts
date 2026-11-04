@@ -131,7 +131,7 @@ export async function verifyAgentBilling(
     await region.focus();await region.press('u');await expect(region.getByText('Updates 1',{exact:true})).toBeVisible()
     await expect(composer).toHaveText(themeDraft)
     await region.press('r');await expect(region).toHaveCount(0)
-    const receipts=JSON.parse(await readFile(join(workspace,'native-client-theme-events.json'),'utf8'))
+    const receipts=JSON.parse(await readFile(join(project,'native-client-theme-events.json'),'utf8'))
     expect(receipts.map((r:any)=>r.key)).toEqual(['u','r']);expect(receipts.map((r:any)=>r.count)).toEqual([1,1]);expect(receipts[1].retired).toBe(true)
     const after=await context();expect(after.native.state.nativePid).toBe(boundNativePid);expect(after.turns).toBe(before.turns);expect(after.claude.totalCostUsd).toBe(before.claude.totalCostUsd);expect(after.messages).toEqual(before.messages)
     clientTheme={sessionId,boundNativePid,token,readings:themeReadings,receipts,before,after,retainedDraft:await composer.textContent()}
