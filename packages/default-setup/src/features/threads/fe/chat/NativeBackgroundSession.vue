@@ -13,10 +13,10 @@
         <slot name="parent-interface" />
       </div>
     </header>
-    <p v-if="panel.info" aria-label="Background session usage" class="background-session__detail">{{ panel.info.model }} · {{ panel.info.turns }} {{ panel.info.turns === 1 ? 'turn' : 'turns' }}<template v-if="panel.info.context"> · {{ panel.info.context.percent }}% context</template><template v-if="panel.info.totalCostUsd !== undefined"> · Session total ${{ panel.info.totalCostUsd.toFixed(6) }}</template></p>
+    <p v-if="panel.info && !(replyOpen && state?.question)" aria-label="Background session usage" class="background-session__detail">{{ panel.info.model }} · {{ panel.info.turns }} {{ panel.info.turns === 1 ? 'turn' : 'turns' }}<template v-if="panel.info.context"> · {{ panel.info.context.percent }}% context</template><template v-if="panel.info.totalCostUsd !== undefined"> · Session total ${{ panel.info.totalCostUsd.toFixed(6) }}</template></p>
     <div v-if="panel.info?.statusLine" aria-label="Background Claude configured status" class="background-session__detail background-session__formatter" tabindex="0"><NativeStatusText :text="panel.info.statusLine" /></div>
-    <p v-if="state?.question" role="status" class="background-session__detail">{{ replyOpen ? 'Claude is waiting for your answer.' : 'Claude has a question. Open Answer question to continue.' }}</p>
-    <p v-if="panel.session?.waitingFor" class="background-session__detail">{{ panel.session.waitingFor }}</p>
+    <p v-if="state?.question && !replyOpen" role="status" class="background-session__detail">Claude has a question. Open Answer question to continue.</p>
+    <p v-if="panel.session?.waitingFor && !state?.question" class="background-session__detail">{{ panel.session.waitingFor }}</p>
     <p v-if="panel.problem" role="alert" class="background-session__problem">{{ panel.problem }}</p>
     <div v-if="canReply && (replyOpen || state?.question && questionOpened) && panel.session?.pid && ['working','blocked'].includes(panel.session.state) && state?.desktop && $slots.composer" class="background-session__composer" v-show="replyOpen">
       <slot name="composer" :active="replyOpen"

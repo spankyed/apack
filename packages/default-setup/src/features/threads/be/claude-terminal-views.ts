@@ -163,7 +163,11 @@ export function createClaudeTerminalViews(dependencies: {
   function publish(key: string, view: View) {
     if (views.get(key) !== view) return
     if (view.background?.desktop && !dependencies.desktopCurrent?.(view.threadId, view.background.desktop)) view.background.desktop = undefined
-    if (view.background) view.background.question = view.background.desktop ? dependencies.backgroundQuestion?.(view.threadId, view.background.desktop) : undefined
+    if (view.background) {
+      const priorQuestion = view.background.question
+      view.background.question = view.background.desktop ? dependencies.backgroundQuestion?.(view.threadId, view.background.desktop) : undefined
+      if (priorQuestion && !view.background.question) refreshSettledQuestion(key, view)
+    }
     if (view.attachment && !attachmentCurrent(view)) retireAttachment(view)
     if (view.attachment && view.attachmentOwner) view.attachment.state = view.attachmentOwner.snapshot
     const output = view.owner?.output.filter(chunk => chunk.sequence > view.sequence) ?? []
@@ -172,6 +176,20 @@ export function createClaudeTerminalViews(dependencies: {
         state: view.owner?.state, attachment: view.attachment ? {...view.attachment} : undefined, background: view.background, mcpOperation: view.mcpOperation, noticeAnswer: view.noticeAnswer, task: view.task, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
       if (output.length) view.sequence = output.at(-1)!.sequence
     } catch { drop(key) }
+  }
+  function refreshSettledQuestion(key: string, view: View) {
+    const operation = view.background, desktop = operation?.desktop, session = operation?.session
+    const continuation = dependencies.continuation?.(view.threadId)
+    if (!operation || operation.status !== 'done' || !desktop || !session || !dependencies.background || !continuation
+      || continuation.sessionId !== operation.sessionId || continuation.continuedInSessionId !== operation.continuedInSessionId) return
+    void dependencies.background(continuation, {operation: 'refresh'}, view.threadId).then(fresh => {
+      if (views.get(key) !== view || view.background !== operation || operation.desktop !== desktop || !dependencies.desktopCurrent?.(view.threadId, desktop)
+        || !fresh || fresh.id !== session.id || fresh.sessionId !== desktop.sessionId || fresh.cwd !== session.cwd
+        || fresh.pid !== desktop.pid && !['done', 'failed', 'stopped'].includes(fresh.state)) return
+      operation.session = fresh
+      if (!fresh.pid || !['working', 'blocked'].includes(fresh.state)) operation.desktop = undefined
+      publish(key, view)
+    }).catch(() => { /* Keep the last reported job; explicit Refresh remains available. */ })
   }
   function refreshRegisteredWorker(key: string, view: View) {
     const operation = view.background, session = operation?.session

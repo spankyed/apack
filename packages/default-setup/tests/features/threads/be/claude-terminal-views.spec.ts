@@ -560,3 +560,21 @@ it('refreshes a PID-less job once when its verified worker registers and ignores
   expect(send.mock.calls.at(-1)![0].background.session.pid).toBe(119)
  } finally { views.clear() }
 })
+
+it('refreshes the original job when its question disappears and does not keep a settled waiting label', async () => {
+ const link={sessionId:'parent',continuedInSessionId:'child',timestamp:'now'}
+ const job={id:'11111111',sessionId:'child',cwd:'/owned',state:'blocked' as const,status:'waiting' as const,waitingFor:'input needed',pid:119}
+ const desktop={ownerId:'desktop',parentSessionId:'parent',sessionId:'child',jobId:job.id,pid:119,processStart:'start'}
+ let question:{id:string;revision:string}|undefined={id:'question',revision:'revision'}, notify!:()=>void
+ const background=vi.fn().mockResolvedValueOnce(job).mockResolvedValue({...job,state:'working',status:'idle',waitingFor:undefined})
+ const send=vi.fn(),views=createClaudeTerminalViews({get:()=>undefined,open:vi.fn(),continuation:()=>link,background,desktop:async()=>desktop,desktopCurrent:()=>true,backgroundQuestion:()=>question,subscribeBackground:(_key,changed)=>{notify=changed;return()=>{}}})
+ try {
+  views.handle(mount,'window',send)
+  views.handle({...mount,type:'CLAUDE_TERMINAL_BACKGROUND',...link,revision:1,operation:'refresh'},'window',send)
+  await vi.waitFor(()=>expect(send.mock.calls.at(-1)![0].background?.question).toEqual(question))
+  question=undefined;notify();notify()
+  await vi.waitFor(()=>expect(send.mock.calls.at(-1)![0].background?.session.status).toBe('idle'))
+  expect(send.mock.calls.at(-1)![0].background.session.waitingFor).toBeUndefined()
+  expect(background).toHaveBeenCalledTimes(2)
+ } finally {views.clear()}
+})
