@@ -25,11 +25,14 @@ export async function verifyArtifactWheel({app,appPage,testInfo}:{app:AppDriver;
       shortCode: '', timestamp: Date.now(), linkedThreads: [], artifacts, messages: [],
     }] }))
     await send({ type: 'IMPORT_THREADS', directory }); imported = true
+    await expect.poll(() => appPage.evaluate(threadId => (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.threadMap[threadId]?.topic, threadId)).toBe('Release review notes')
     await appPage.evaluate(threadId => {
       (window as any).applicationState.system.get('default-setup/threads').send({ type: 'OPEN_THREAD_CHAT', threadId })
     }, threadId)
     const viewer = appPage.locator('[data-onboarding-id="canvas-area"] [data-onboarding-id="agent-artifacts"]')
     await expect(viewer).toBeVisible()
+    await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.activeTabId)).toBe(threadId)
+    await expect(viewer.locator('[title^="Review note "]')).toHaveCount(30)
     const sidebar = viewer.locator(':scope > div').first()
     const last = sidebar.locator('[title="Review note 01"]')
     const readings = []
