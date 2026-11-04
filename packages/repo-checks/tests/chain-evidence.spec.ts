@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { STAMP_DIR } from '../../../scripts/lib/chain-stamps.ts';
 import {
-  KEEP_RUNS, RUNS_DIR, evidenceFile, evidenceHeader, evidenceLine, openRunEvidence, runId, runsToPrune,
+  KEEP_RUNS, RUNS_DIR, deadlinesHit, evidenceFile, evidenceHeader, evidenceLine, openRunEvidence, runId, runsToPrune,
 } from '../../../scripts/lib/chain-evidence.ts';
 
 const temps: string[] = [];
@@ -157,5 +157,29 @@ describe('where a chain run keeps its evidence', () => {
       expect(line).toContain('1 step');
       expect(evidenceLine(run.dir, 2)).toContain('2 steps');
     });
+  });
+});
+
+describe('a failure on a deadline', () => {
+  const failed = (output: string) => ({ code: 1, ms: 1_000, output });
+
+  it.each([
+    ['vitest', 'Error: Test timed out in 200000ms.'],
+    ['a vitest hook', 'Error: Hook timed out in 240000ms.'],
+    ['Playwright', 'Test timeout of 60000ms exceeded.'],
+    ['runCommand', 'node apack.mjs: running past the 900000ms ceiling'],
+  ])('is told apart from an assertion: %s', (_who, line) => {
+    expect(deadlinesHit(line)).toBe(1);
+    expect(evidenceHeader('test:integration', failed(`${line}\nmore\n`))).toContain("1 of its tests' deadlines hit");
+  });
+
+  it('leaves an assertion and a pass as they read', () => {
+    expect(evidenceHeader('test:integration', failed('AssertionError: expected 1 to be 2'))).not.toContain('deadlines');
+    // A pass that mentions one, a spec of the words themselves, isn't a failure on it
+    expect(evidenceHeader('test:integration', { code: 0, ms: 1_000, output: 'Test timed out in 100ms' })).not.toContain('deadlines');
+  });
+
+  it('counts each one', () => {
+    expect(deadlinesHit('Test timed out in 1ms\nTest timed out in 2ms\nHook timed out in 3ms')).toBe(3);
   });
 });

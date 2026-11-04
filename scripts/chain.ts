@@ -44,6 +44,8 @@ import { stampFor, STAMP_DIR, unitFor } from './lib/chain-stamps.ts';
 import { evidenceLine, openRunEvidence, pruneRunEvidence, type RunEvidence } from './lib/chain-evidence.ts';
 import { CHAIN_FLAGS, chainHelp } from './lib/chain-flags.ts';
 import { CHAIN_WAIT_MS, ChainLockHeld, chainInvocation, holdChainLock } from './lib/chain-lock.ts';
+import { expensiveSteps } from './lib/machine-lock.ts';
+import { deadlinesHit } from './lib/chain-evidence.ts';
 import type { ExclusiveLock } from '@apackdev/host/exclusive-lock';
 import { timeoutMsFor, timedOutBecause, type TimeoutClass } from './lib/step-timeouts.ts';
 import { box } from './lib/core-budget.ts';
@@ -217,14 +219,23 @@ async function run(step: string, timeout: TimeoutClass, force: readonly string[]
   const withForce = inLinuxContainer(step) ? ['run', 'test:linux', '--', 'npm', ...direct] : direct;
   // Explicit feedback limits may shorten the declared work class's ceiling. A step in the container does its
   // work in the VM, where its process tree here cannot see it, so only the ceiling bounds it.
-  const { code, output, ms, timedOut, stalled } = await boundedSpawn('npm', withForce, timeoutMsFor(timeout),
+  const spawned = () => boundedSpawn('npm', withForce, timeoutMsFor(timeout),
     { env, ...(withForce === direct ? {} : { idleMs: false as const }) });
+  // Before its clock starts, so waiting for another checkout's chain costs this step nothing against its ceiling
+  const expensive = CHAIN_STEPS.find((candidate) => candidate.name === step)?.expensive === true;
+  const { code, output, ms, timedOut, stalled } = await (expensive ? insideMachineLock(spawned) : spawned());
   const result = { step, ms, code, output, timedOut, stalled };
   // Here rather than where a step's result is read, because this is the one place a step's bytes exist and
   // every caller passes through it. Written as the step ends, so a run that is interrupted keeps what finished.
   evidence?.keep(step, result);
   return result;
 }
+
+/** This chain's way into the machine's lock on its expensive steps, however many it runs at once */
+const insideMachineLock = expensiveSteps({
+  what: chainInvocation(),
+  onWait: (holder) => console.log(`waiting for another checkout's expensive step to finish:\n  ${holder}`),
+});
 
 /** Whether this machine runs `step` in the Linux test container rather than directly (`ChainStep.linuxOnMac`) */
 const inLinuxContainer = (step: string): boolean =>
@@ -557,6 +568,9 @@ async function main(): Promise<void> {
       // that returned non-zero, and which it was is the first thing you need to know.
       const verdict = result.code === 0 ? 'ok' : result.timedOut ? 'TIMEOUT' : 'FAIL';
       console.log(`${verdict.padStart(7)} ${marker(needsApp(step))} ${step.name.padEnd(STEP_NAME_WIDTH)} ${secs(result.ms).padStart(6)}  ${wrapAt(REASON_COLUMN, briefly(reasons.get(step.name) ?? '', declaredIn(step.name)))}`.trimEnd());
+      if (result.code !== 0 && deadlinesHit(result.output) > 0) {
+        console.log(`${' '.repeat(TIME_COLUMN)}${deadlinesHit(result.output)} of its tests' deadlines hit: read that before an assertion`);
+      }
       // So whoever profiles a suite next has its slow tests without instrumenting it
       // In the step's own time column, so every time on the screen lines up and these read as its contents
       for (const slow of slowestTests(result.output)) {
