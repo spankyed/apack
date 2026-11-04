@@ -1,3 +1,4 @@
+import { claudeProfileOptions } from '../../../features/code/common/native-profile.ts';
 import { replayQueuedMessage } from './_helpers/stream-consumer.ts';
 /**
  * CC: Run Command — dispatcher for lightweight cc- commands (info, config, passthrough).
@@ -124,12 +125,12 @@ async function handleSessions(
     || codeSettings?.defaultBaseDirectory
     || codeSettings?.baseDirectory
     || undefined;
-  const cwdOpts = effectiveCwd ? { cwd: effectiveCwd } : undefined;
+  const cwdOpts = { ...(effectiveCwd ? { cwd: effectiveCwd } : {}), ...claudeProfileOptions(prior) };
 
   const [sessionId] = args;
 
   if (sessionId) {
-    const entries = await services.cli.claudeCode.viewSession(sessionId);
+    const entries = await services.cli.claudeCode.viewSession(sessionId, cwdOpts);
     const summary = entries
       .filter(e => e.type === 'user' || e.type === 'assistant')
       .slice(0, 10)
@@ -356,7 +357,7 @@ async function handleRename(
         return { text: 'The Claude conversation changed before rename could be reflected in this thread.' };
     }
     else await services.cli.claudeCode.renameSession(sessionId, newTitle, {
-      ...(ccState.cwd && { cwd: ccState.cwd }),
+      ...(ccState.cwd && { cwd: ccState.cwd }), ...claudeProfileOptions(ccState),
     });
   }
 
@@ -384,6 +385,7 @@ async function generateTitle(services: Services, threadId: string): Promise<stri
   if (!serialized) return 'Untitled';
 
   const handle = await services.cli.claudeCode.query({
+    ...claudeProfileOptions(getClaudeState(services, threadId)),
     prompt: `Generate a short, descriptive title (3-6 words, no quotes) for this conversation. Respond with ONLY the title text, nothing else.\n\n${serialized}`,
     permissionMode: 'plan',
     allowedTools: [],

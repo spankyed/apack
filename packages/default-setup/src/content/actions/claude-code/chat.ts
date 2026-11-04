@@ -1,3 +1,4 @@
+import { claudeProfileOptions } from '../../../features/code/common/native-profile.ts';
 /**
  * Claude Code Chat — the main conversational action.
  *
@@ -353,6 +354,10 @@ export async function action(
       };
     }
 
+    const configDir = prior?.configDir ?? services.cli.claudeCode.profileConfigDir();
+    const profile = claudeProfileOptions({configDir});
+    if (!prior?.configDir) persistClaudeState(services, threadId, {configDir});
+
     const addDirs = [...new Set([...(prior?.additionalDirs ?? []), ...(resolved.addDirs ?? [])])];
 
     log.debug('invoking claudeCode.query', {
@@ -387,7 +392,7 @@ export async function action(
     if (resumeSessionId && !sessionCwd) {
       const fallbackCwd = codeSettings?.defaultBaseDirectory || codeSettings?.baseDirectory || undefined;
       if (fallbackCwd) {
-        const exists = await services.cli.claudeCode.sessionExists(resumeSessionId, { cwd: fallbackCwd });
+        const exists = await services.cli.claudeCode.sessionExists(resumeSessionId, { cwd: fallbackCwd, ...profile });
         if (exists) {
           sessionCwd = fallbackCwd;
           persistClaudeState(services, threadId, { cwd: fallbackCwd });
@@ -425,7 +430,7 @@ export async function action(
     // with a clear error instead of the generic "session not found" from
     // the CLI's stderr.
     if (resumeSessionId && sessionCwd) {
-      const sessionValid = await services.cli.claudeCode.sessionExists(resumeSessionId, { cwd: sessionCwd });
+      const sessionValid = await services.cli.claudeCode.sessionExists(resumeSessionId, { cwd: sessionCwd, ...profile });
       if (!sessionValid) {
         log.warn('[pre-flight] session file missing on disk', {
           threadId, resumeSessionId, sessionCwd, isRevert: !!revertTo,
@@ -448,6 +453,7 @@ export async function action(
       ...(sessionCwd && { cwd: sessionCwd }),
       resume: resumeSessionId,
       model,
+      ...profile,
       includePartialMessages: true,
       permissionMode: startupPermissionMode,
       // Make the user's live bypass toggle available; this does not select bypass mode.
@@ -465,11 +471,12 @@ export async function action(
       ...(revertTo && { resumeSessionAt: revertTo.cliUuid }),
       ...(forkFrom?.cliUuid && { resumeSessionAt: forkFrom.cliUuid }),
     };
-    const launchKey = JSON.stringify({ cwd: sessionCwd, model, allowedTools: options.allowedTools,
+    const launchKey = JSON.stringify({ configDir, cwd: sessionCwd, model, allowedTools: options.allowedTools,
       disallowedTools, channels, appendSystemPrompt: composedSystemPrompt, worktree: useWorktree, addDir: addDirs });
     let conversation = services.cli.claudeCode.getConversation(threadId);
     const previousLaunch = conversation ? JSON.parse(conversation.launchKey) : undefined;
     const existingKey = previousLaunch ? JSON.stringify({
+      configDir: previousLaunch.configDir,
       cwd: conversation!.owner.sessionCwd ?? previousLaunch.cwd,
       model: conversation!.owner.modelSelection ?? previousLaunch.model,
       allowedTools: previousLaunch.allowedTools, disallowedTools: previousLaunch.disallowedTools, channels: previousLaunch.channels,

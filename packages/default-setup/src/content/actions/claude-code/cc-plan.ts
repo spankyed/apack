@@ -1,3 +1,4 @@
+import { claudeProfileOptions } from '../../../features/code/common/native-profile.ts';
 import type { ActionMeta } from '@apackdev/sdk/build';
 import type { Services, EntityId } from '#generated/services.ts';
 import { getClaudeState } from './_helpers/thread-context.ts';
@@ -21,7 +22,7 @@ export async function action(params: Record<string, any>, services: Services) {
       text = 'No active Claude Code session — run a Claude Code turn first.';
     } else {
       const plan = handle ? await handle.getPlan() : await services.cli.claudeCode.getPlan({
-        sessionId: session!.sessionId!, cwd: session?.cwd,
+        sessionId: session!.sessionId!, cwd: session?.cwd, ...claudeProfileOptions(session),
       });
       const current = getClaudeState(services, threadId);
       if (services.cli.claudeCode.getHandle(threadId) !== handle || current?.sessionId !== session?.sessionId || current?.cwd !== session?.cwd) {

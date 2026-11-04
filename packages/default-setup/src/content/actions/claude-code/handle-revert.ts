@@ -1,3 +1,4 @@
+import { claudeProfileOptions } from '../../../features/code/common/native-profile.ts';
 /** Prepare the next native turn at the remaining assistant boundary after a validated menu revert. */
 import type { ActionMeta } from '@apackdev/sdk/build';
 import type { Services, EntityId } from '#generated/services.ts';
@@ -33,7 +34,7 @@ export async function action(params: Record<string, any>, services: Services) {
   if (cliUuid) {
     if (!state?.sessionId || !state.cwd) return fail('The native session or project directory is unavailable.', true);
     try {
-      await services.cli.claudeCode.validateResumeTarget({sessionId: state.sessionId, messageUuid: cliUuid, cwd: state.cwd});
+      await services.cli.claudeCode.validateResumeTarget({sessionId: state.sessionId, messageUuid: cliUuid, cwd: state.cwd, ...claudeProfileOptions(state)});
     } catch (error: any) { return fail(error?.message ?? 'The native history boundary is unavailable.', true); }
   }
   if (snapshot !== readSnapshot() || services.cli.claudeCode.getHandle(threadId)) return fail('The conversation changed while validating the revert. Try again.');

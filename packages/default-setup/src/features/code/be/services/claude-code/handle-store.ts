@@ -1,3 +1,4 @@
+import { claudeProfileOptions } from '../../../common/native-profile.ts'
 import {resolveAppEnvironment} from '@apackdev/sdk/env'
 import {resolveForService} from '../../utils/resolve-cli.ts'
 import {buildChildEnv} from './runner.ts'
@@ -36,17 +37,17 @@ export function getNativeBackgroundStatus(key: string, continuation: ClaudeNativ
   return continuation && entry?.observer.parentSessionId === continuation.sessionId && info?.sessionId === continuation.continuedInSessionId ? info : undefined
 }
 /** Rebind only an abandoned endpoint of this app profile and persisted native continuation. */
-export function restoreNativeBackgroundStatus(key: string, continuation: ClaudeNativeContinuation, cwd: string): Promise<void> {
+export function restoreNativeBackgroundStatus(key: string, continuation: ClaudeNativeContinuation, cwd: string, profileEnv?: NodeJS.ProcessEnv): Promise<void> {
   const retained = backgroundObservers.get(key)?.observer
   if (retained?.available && retained.parentSessionId === continuation.sessionId) return Promise.resolve()
-  const identity = JSON.stringify([continuation.sessionId, continuation.continuedInSessionId, cwd])
+  const identity = JSON.stringify([continuation.sessionId, continuation.continuedInSessionId, cwd, profileEnv?.CLAUDE_CONFIG_DIR])
   const prior = backgroundRestores.get(key)
   if (prior?.identity === identity) return prior.promise
   const ticket = { identity, promise: Promise.resolve() }
   backgroundRestores.set(key, ticket)
   ticket.promise = (async () => {
     const profile = resolveAppEnvironment().userDataDir
-    const executable = await resolveForService('claude-code'), env = buildChildEnv()
+    const executable = await resolveForService('claude-code'), env = buildChildEnv(profileEnv)
     if (backgroundRestores.get(key) !== ticket) return
     const checkpoint = await claimClaudeBackgroundCheckpoint({profile, parentSessionId:continuation.sessionId})
     if (!checkpoint) return
@@ -214,7 +215,7 @@ export async function openNativeTerminal(key: string, options: ClaudeNativeTermi
       const prior = JSON.parse(previous.launchKey) as Omit<ClaudeNativeTerminalOptions, 'settings' | 'sessionId'>
       if (resume && (resume.sessionId !== previous.owner.sessionId || resume.cwd !== (previous.owner.sessionCwd ?? prior.cwd))) throw new Error('Staged native launch no longer matches the active session')
       // Print-only flags (notably worktree) do not belong to a resumed native launch.
-      launch = { ...overrides, cwd: previous.owner.sessionCwd ?? prior.cwd, sessionId: previous.owner.sessionId!, model: typeof settings.applied?.model === 'string' ? settings.applied.model : previous.owner.modelSelection ?? prior.model, permissionMode,
+      launch = { ...claudeProfileOptions(prior as {configDir?: string}), ...overrides, cwd: previous.owner.sessionCwd ?? prior.cwd, sessionId: previous.owner.sessionId!, model: typeof settings.applied?.model === 'string' ? settings.applied.model : previous.owner.modelSelection ?? prior.model, permissionMode,
         allowedTools: prior.allowedTools, disallowedTools: prior.disallowedTools, appendSystemPrompt: prior.appendSystemPrompt, addDir: resume?.addDir === undefined ? prior.addDir : [...new Set([...(prior.addDir ?? []), ...resume.addDir])], pluginDir: prior.pluginDir, channels: resume?.channels === undefined ? prior.channels : resume.channels }
     } else {
       const intent = { ...resume!, ...overrides }

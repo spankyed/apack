@@ -77,6 +77,8 @@ export interface CliServiceType {
     validateResumeTarget(opts: Omit<ClaudeSessionResumeTargetOptions, 'cwd'> & { cwd?: string }): Promise<void>
     getFileRewindPreview(opts: Omit<ClaudeSessionFileRewindOptions, 'cwd'> & {cwd?: string}): Promise<ClaudeFileRewind>
     rewindFiles(opts: Omit<ClaudeSessionFileRewindOptions, 'cwd'> & {cwd?: string}): Promise<ClaudeFileRewind>
+    /** Config root to pin before creating a conversation. No credentials are returned. */
+    profileConfigDir(): string
     version(): Promise<string>
     authStatus(): Promise<AuthStatus>
     listSessions(opts?: SessionListOptions): Promise<SessionInfo[]>
@@ -259,6 +261,7 @@ function createCliService(): CliServiceType {
       authStatus() {
         return claudeCode.auth.status()
       },
+      profileConfigDir: configDir,
       listSessions(opts) {
         const cwd = opts?.cwd ?? resolveCwd()
         return claudeCode.sessions.list({ ...opts, cwd })

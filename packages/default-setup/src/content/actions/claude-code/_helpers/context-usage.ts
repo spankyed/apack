@@ -1,3 +1,4 @@
+import { claudeProfileOptions } from '../../../../features/code/common/native-profile.ts';
 import type { Services, EntityId } from '#generated/services.ts';
 
 import { getClaudeState, updateClaudeState } from './thread-context.ts';
@@ -36,7 +37,7 @@ export async function readThreadContextUsage(
   if (handle) return toContextUsageData(await handle.getContextUsage());
   if (!session.sessionId) return undefined;
   return toContextUsageData(await services.cli.claudeCode.getContextUsage({
-    sessionId: session.sessionId, cwd: session.cwd,
+    sessionId: session.sessionId, cwd: session.cwd, ...claudeProfileOptions(getClaudeState(services, threadId)),
   }));
 }
 

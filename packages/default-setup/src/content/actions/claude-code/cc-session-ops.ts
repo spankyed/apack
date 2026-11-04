@@ -1,3 +1,4 @@
+import { claudeProfileOptions } from '../../../features/code/common/native-profile.ts';
 /**
  * CC: Session Ops — handles session-heavy cc- commands (resume, import).
  *
@@ -91,7 +92,8 @@ async function handleResume(
     || codeSettings?.defaultBaseDirectory
     || codeSettings?.baseDirectory
     || undefined;
-  const cwdOpts = effectiveCwd ? { cwd: effectiveCwd } : undefined;
+  const configDir = prior?.configDir ?? services.cli.claudeCode.profileConfigDir();
+  const cwdOpts = { ...(effectiveCwd ? {cwd: effectiveCwd} : {}), ...claudeProfileOptions({configDir}) };
 
   // No args: show session picker
   if (!identifier) {
@@ -124,7 +126,7 @@ async function handleResume(
 
   const represented = services.repository.threadQueries.all().filter(candidate => {
     const state = candidate.context?.claudeCode;
-    return !state?.forkFrom && !state?.revertTo && !state?.forkPending;
+    return (state?.configDir ?? services.cli.claudeCode.profileConfigDir()) === configDir && !state?.forkFrom && !state?.revertTo && !state?.forkPending;
   });
   const liveSession = (id: string) => services.cli.claudeCode.getNativeTerminal(id)?.state.sessionId
     ?? services.cli.claudeCode.getConversation(id)?.owner.sessionId;
@@ -138,7 +140,7 @@ async function handleResume(
   }
 
   // Fetch transcript for message import — use the session's own cwd bucket
-  const transcript = await services.cli.claudeCode.viewSession(sessionId, { cwd: (session as any).cwd });
+  const transcript = await services.cli.claudeCode.viewSession(sessionId, { cwd: (session as any).cwd, ...claudeProfileOptions({configDir}) });
 
   // Preserve existing conversation and staged history when importing an unrepresented session.
   const existingMessages = services.repository.threadQueries.messages(threadId as any);
@@ -166,6 +168,7 @@ async function handleResume(
   // Set up session state — persistClaudeState adds 'claude-code' tag
   persistClaudeState(services, targetThreadId, {
     sessionId,
+    configDir,
     historyError: undefined,
     ...importedSessionMetadata(transcript, sessionId, (session as any).cwd),
     cwd: (session as any).cwd || '',
@@ -210,14 +213,16 @@ async function handleImport(
   services: Services,
   threadId?: string,
 ): Promise<{ text: string; data?: any; skipMessage?: boolean }> {
+  const configDir = (threadId ? getClaudeState(services, threadId)?.configDir : undefined) ?? services.cli.claudeCode.profileConfigDir();
+  const profile = claudeProfileOptions({configDir});
   const allDirs = args.includes('all');
   const noLimit = args.includes('no-limit');
   const limit = noLimit ? undefined : DEFAULT_IMPORT_LIMIT;
 
   // List sessions — either current directory or all project directories
   const sessions = allDirs
-    ? await services.cli.claudeCode.listAllSessions(limit ? { limit } : undefined)
-    : await services.cli.claudeCode.listSessions(limit ? { limit } : undefined);
+    ? await services.cli.claudeCode.listAllSessions({ ...profile, ...(limit ? {limit} : {}) })
+    : await services.cli.claudeCode.listSessions({ ...profile, ...(limit ? {limit} : {}) });
 
   if (!sessions.length) return { text: 'No sessions found to import.' };
 
@@ -225,7 +230,8 @@ async function handleImport(
   const existingSessionIds = new Set<string>();
   for (const thread of services.repository.threadQueries.all()) {
     const sid = (thread as any)?.context?.claudeCode?.sessionId;
-    if (sid) existingSessionIds.add(sid);
+    const state = thread.context?.claudeCode;
+    if (sid && (state?.configDir ?? services.cli.claudeCode.profileConfigDir()) === configDir) existingSessionIds.add(sid);
   }
 
   const toImport = sessions.filter((s: any) => !existingSessionIds.has(s.id));
@@ -253,7 +259,7 @@ async function handleImport(
       // Use viewSessionByFile when we have a file path (works for cross-directory imports)
       const transcript = (session as any).file
         ? await services.cli.claudeCode.viewSessionByFile((session as any).file)
-        : await services.cli.claudeCode.viewSession(session.id, { cwd: (session as any).cwd });
+        : await services.cli.claudeCode.viewSession(session.id, { cwd: (session as any).cwd, ...profile });
 
       const prefix = dirPrefix((session as any).cwd);
       const sessionTitle = (session as any).title || `Session ${session.id.slice(0, 8)}`;
@@ -272,7 +278,7 @@ async function handleImport(
       // The session state with an import's defaults, written in one update
       const thread = services.repository.threadQueries.byId(newThreadId) as any;
       const ccState = {
-        sessionId: session.id, sessionWorktree: false, cwd: (session as any).cwd || undefined,
+        sessionId: session.id, configDir, sessionWorktree: false, cwd: (session as any).cwd || undefined,
         chatState: 'idle', permissionMode: 'default', ...importedSessionMetadata(transcript, session.id, (session as any).cwd),
       };
 

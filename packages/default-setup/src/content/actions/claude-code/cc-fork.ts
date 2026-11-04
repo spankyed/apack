@@ -1,3 +1,4 @@
+import { claudeProfileOptions } from '../../../features/code/common/native-profile.ts';
 /**
  * CC: Fork — forks the current thread from the last assistant message.
  */
@@ -60,7 +61,7 @@ async function handleFork(
   if (state.isRunning || services.cli.claudeCode.getHandle(threadId)) return { text: 'Pause the current turn before forking.' };
   const snapshot = JSON.stringify({ sessionId: state.sessionId, cwd: state.cwd, lastTurnAt: state.lastTurnAt,
     messages: messages.map(message => [message.id, message.context?.cliUuid]) });
-  await services.cli.claudeCode.validateResumeTarget({sessionId: state.sessionId, messageUuid: lastAssistant.context.cliUuid, cwd: state.cwd});
+  await services.cli.claudeCode.validateResumeTarget({sessionId: state.sessionId, messageUuid: lastAssistant.context.cliUuid, cwd: state.cwd, ...claudeProfileOptions(state)});
   const current = getClaudeState(services, threadId);
   const currentMessages = services.repository.chatQueries.threadData(threadId as any)?.messages ?? [];
   if (current?.isRunning || services.cli.claudeCode.getHandle(threadId)
@@ -82,7 +83,7 @@ async function handleFork(
   });
 
   persistClaudeState(services, newThreadId, {
-    sessionId: state.sessionId, cwd: state.cwd, sessionWorktree: state.sessionWorktree, lastTurnAt: state.lastTurnAt,
+    sessionId: state.sessionId, cwd: state.cwd, configDir: state.configDir, sessionWorktree: state.sessionWorktree, lastTurnAt: state.lastTurnAt,
     forkFrom: {sessionId: state.sessionId, cliUuid: lastAssistant.context.cliUuid},
   });
 

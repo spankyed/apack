@@ -5,10 +5,10 @@ import type { QueryHandle } from '#features/code/be/services/claude-code/query.t
 import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claude-code/terminal-owner.ts'
 const mocks = { prepare: vi.fn() }
 const session = '11111111-1111-4111-8111-111111111111'
-async function printOwner() {
+async function printOwner(configDir?: string) {
   const events = new PassThrough({ objectMode: true })
   const handle = { events, close: vi.fn(async () => { events.end() }), kill: vi.fn(() => events.end()), getPermissionMode: vi.fn(async () => 'plan'), getSettings: vi.fn(async () => ({ effective: {}, sources: [] })) } as unknown as QueryHandle
-  const owner = await openConversation('thread', JSON.stringify({ cwd: '/fixture', model: 'native-model', worktree: false }), async () => handle, async () => {})
+  const owner = await openConversation('thread', JSON.stringify({ configDir, cwd: '/fixture', model: 'native-model', worktree: false }), async () => handle, async () => {})
   events.write({ type: 'system', subtype: 'init', session_id: session, cwd: '/native-cwd' })
   await vi.waitFor(() => expect(owner.sessionId).toBe(session))
   return { handle, owner }
@@ -186,4 +186,15 @@ it('retains the original child observer after parent exit and reuses it on same-
  await openNativeTerminal('thread',{},mocks.prepare,async()=>({settings:{effective:{},sources:[]},permissionMode:'plan'}))
  expect(mocks.prepare.mock.calls.at(-1)?.[1]).toBe(observer);expect(observer.close).not.toHaveBeenCalled()
  runThreadTeardown('thread');expect(observer.close).toHaveBeenCalledOnce();expect(getNativeBackgroundStatus('thread',continuation)).toBeUndefined()
+})
+
+
+it('retains the print owner profile through terminal handoff without persisting its environment', async () => {
+  await printOwner('/private/app owned/claude')
+  const native = terminal()
+  mocks.prepare.mockResolvedValue({start: async () => native, dispose: async () => {}})
+  await openNativeTerminal('thread', {}, mocks.prepare)
+  expect(mocks.prepare).toHaveBeenCalledWith(expect.objectContaining({env: {CLAUDE_CONFIG_DIR: '/private/app owned/claude'}}), undefined)
+  const saved = await getNativeLaunch('thread')
+  expect(saved).not.toHaveProperty('env')
 })

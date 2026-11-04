@@ -1,3 +1,4 @@
+import { claudeProfileOptions } from '#features/code/common/native-profile.ts';
 import { registerThreadHistoryValidator } from '#features/threads/be/history-operation.ts'
 import { repository } from '#generated/repository.ts'
 import { services } from '#generated/services.ts'
@@ -24,7 +25,7 @@ registerThreadHistoryValidator(async (request, signal) => {
     if (typeof recordedId === 'string' && request.userMessageId && recordedId !== request.userMessageId) throw new Error('The file checkpoint identity changed. Retry from the current message.')
     const userMessageId = recordedId ?? request.userMessageId
     if (typeof userMessageId !== 'string' || !userMessageId.trim()) throw new Error('No native file checkpoint identity is recorded for this message.')
-    const preview = await services.cli.claudeCode.getFileRewindPreview({sessionId: state.sessionId, userMessageId, cwd: state.cwd, signal})
+    const preview = await services.cli.claudeCode.getFileRewindPreview({sessionId: state.sessionId, userMessageId, cwd: state.cwd, ...claudeProfileOptions(state), signal})
     if (!preview.canRewind) throw new Error(preview.error ?? 'The native file checkpoint is unavailable.')
   }
   const prefix = messages.slice(0, pivot + (request.kind === 'fork' ? 1 : 0))
@@ -34,5 +35,5 @@ registerThreadHistoryValidator(async (request, signal) => {
     throw new Error('No native assistant checkpoint exists before this point.')
   }
   if (!state.cwd) throw new Error('The native session project directory is unavailable.')
-  await services.cli.claudeCode.validateResumeTarget({sessionId: state.sessionId, messageUuid: assistant.context!.cliUuid as string, cwd: state.cwd, signal})
+  await services.cli.claudeCode.validateResumeTarget({sessionId: state.sessionId, messageUuid: assistant.context!.cliUuid as string, cwd: state.cwd, ...claudeProfileOptions(state), signal})
 })

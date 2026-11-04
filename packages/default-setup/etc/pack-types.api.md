@@ -1350,10 +1350,10 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
             label: z.ZodString;
             mode: z.ZodEnum<{
                 default: "default";
+                auto: "auto";
                 acceptEdits: "acceptEdits";
                 plan: "plan";
                 bypassPermissions: "bypassPermissions";
-                auto: "auto";
             }>;
             clearContext: z.ZodBoolean;
         }, z.core.$strip>>;
@@ -3016,6 +3016,8 @@ interface CliServiceType {
         rewindFiles(opts: Omit<ClaudeSessionFileRewindOptions, 'cwd'> & {
             cwd?: string;
         }): Promise<ClaudeFileRewind>;
+        /** Config root to pin before creating a conversation. No credentials are returned. */
+        profileConfigDir(): string;
         version(): Promise<string>;
         authStatus(): Promise<AuthStatus>;
         listSessions(opts?: SessionListOptions): Promise<SessionInfo[]>;
@@ -6602,11 +6604,11 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  */
 declare const PermissionModeSchema: z.ZodEnum<{
     default: "default";
+    auto: "auto";
     acceptEdits: "acceptEdits";
     plan: "plan";
     bypassPermissions: "bypassPermissions";
     dontAsk: "dontAsk";
-    auto: "auto";
 }>;
 
 type Predicate = {
@@ -7277,6 +7279,7 @@ interface ThreadContext {
         nativeContinuation?: ClaudeNativeContinuation;
         retiredNativeMessages?: ClaudeNativeMessageRetirements;
         sessionId?: string;
+        configDir?: string;
         lastTurnAt?: number;
         cwd?: string;
         model?: string;

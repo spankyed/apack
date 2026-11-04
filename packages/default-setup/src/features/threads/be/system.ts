@@ -1,3 +1,4 @@
+import { claudeProfileOptions } from '#features/code/common/native-profile.ts';
 import { getNativeBackgroundStatus, subscribeNativeBackgroundStatus, restoreNativeBackgroundStatus } from '#features/code/be/services/claude-code/handle-store.ts';
 import { parseClaudeNativeContinuation } from '#features/code/be/services/claude-code/terminal-session.ts';
 import { copyClaudeChannelSelection } from '#features/code/common/native-channels.ts';
@@ -42,7 +43,7 @@ const terminalViews = createClaudeTerminalViews({
   async restoreBackground(key) {
     const state = repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode
     const continuation = state?.sessionId ? parseClaudeNativeContinuation({...state.nativeContinuation,type:'continued-in'},state.sessionId) : undefined
-    if (continuation && typeof state?.cwd === 'string') await restoreNativeBackgroundStatus(key,continuation,state.cwd)
+    if (continuation && typeof state?.cwd === 'string') await restoreNativeBackgroundStatus(key,continuation,state.cwd,claudeProfileOptions(state).env)
   },
   async replyBackground(continuation, request, key) {
     const owner = services.cli.claudeCode.getNativeTerminal(key)
@@ -52,15 +53,15 @@ const terminalViews = createClaudeTerminalViews({
       return owner.replyBackground(request.id, request.pid, request.text)
     }
     return services.cli.claudeCode.replyBackgroundSession(continuation, request,
-      { cwd: repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode?.cwd, timeoutMs: 15000 })
+      { cwd: repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode?.cwd, ...claudeProfileOptions(repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode), timeoutMs: 15000 })
   },
-  openAttachment: (continuation,jobId,key,signal) => services.cli.claudeCode.openBackgroundAttachment(continuation,jobId,{cwd:repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode?.cwd,timeoutMs:15000,signal}),
+  openAttachment: (continuation,jobId,key,signal) => services.cli.claudeCode.openBackgroundAttachment(continuation,jobId,{cwd:repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode?.cwd,...claudeProfileOptions(repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode),timeoutMs:15000,signal}),
   continuation(key) {
     const state = repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode;
     return state?.sessionId ? parseClaudeNativeContinuation({ ...state.nativeContinuation, type: 'continued-in' }, state.sessionId) : undefined;
   },
   background: (continuation, request, key) => services.cli.claudeCode.backgroundSession(continuation, request,
-    { cwd: repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode?.cwd, timeoutMs: 15000 }),
+    { cwd: repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode?.cwd, ...claudeProfileOptions(repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode), timeoutMs: 15000 }),
   beforeViewChange: (_client, threadId) => suspendClaudeUiThreadViews(threadId),
   command: submitClaudeParentCommand,
   accepted: (owner, receipt, references) => terminalHistory.get(owner)?.acceptSubmission(receipt, references),
@@ -71,7 +72,7 @@ const terminalViews = createClaudeTerminalViews({
     if (state?.historyError || state?.forkPending || state?.forkFrom || state?.revertTo) throw new Error('Complete or reset the pending history change before opening the native interface');
     const resume = readSavedClaudeNativeLaunch(state);
     const prePlanMode = readClaudePlanRestoreMode(state);
-    const owner = await services.cli.claudeCode.openNativeTerminal(key, {...(resume ? {resume} : {}), ...(prePlanMode ? {prePlanMode} : {}), signal});
+    const owner = await services.cli.claudeCode.openNativeTerminal(key, {...claudeProfileOptions(state), ...(resume ? {resume} : {}), ...(prePlanMode ? {prePlanMode} : {}), signal});
     terminalHistory.set(owner, syncClaudeTerminalThread(key as EARS.EntityId, owner, () => {
       const current = services.cli.claudeCode.getNativeTerminal(key);
       return current === owner;

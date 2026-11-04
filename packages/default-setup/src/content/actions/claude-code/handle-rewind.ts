@@ -1,3 +1,4 @@
+import { claudeProfileOptions } from '../../../features/code/common/native-profile.ts';
 /** Restore native file checkpoints after the thread owner's dry-run preflight. */
 import type { ActionMeta } from '@apackdev/sdk/build';
 import type { Services, EntityId } from '#generated/services.ts';
@@ -27,7 +28,7 @@ export async function action(params: Record<string, any>, services: Services) {
   if (typeof recordedId === 'string' && params.userCliUuid && recordedId !== params.userCliUuid) return fail('The file checkpoint identity changed. Retry from the current message.');
   if (!state?.sessionId || !state.cwd) return fail('The native session or project directory is unavailable.');
   if (typeof userMessageId !== 'string' || !userMessageId.trim()) return fail('No native file checkpoint identity is recorded for this message.');
-  const options = {sessionId: state.sessionId, userMessageId, cwd: state.cwd};
+  const options = {sessionId: state.sessionId, userMessageId, cwd: state.cwd, ...claudeProfileOptions(state)};
   try {
     const preview = await services.cli.claudeCode.getFileRewindPreview(options);
     if (!preview.canRewind) return fail(preview.error ?? 'The native file checkpoint is unavailable.');
