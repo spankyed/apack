@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createApp, h, nextTick, type App } from 'vue';
 import { createActor, createMachine } from 'xstate';
 import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing';
@@ -10,7 +10,8 @@ import type { MessageEntity } from '#generated/types.ts';
 import ConversationViewer from '@apackdev/ui/components/tiptap/ConversationViewer';
 
 let app: App | undefined;
-afterEach(() => { app?.unmount(); app = undefined; document.body.replaceChildren(); stopFeTestRuntime(); });
+beforeEach(() => { vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }); });
+afterEach(() => { app?.unmount(); app = undefined; document.body.replaceChildren(); stopFeTestRuntime(); vi.unstubAllGlobals(); });
 
 function fixture() {
   const owner = { packId: 'external', origin: 'native' as const, enabled: true };
