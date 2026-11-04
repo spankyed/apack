@@ -12,6 +12,8 @@ export default defineConfig({
   resolve: { conditions },
   ssr: { resolve: { conditions } },
   test: {
+    // From process start, since tsx reads it as it loads: its disk cache is outside a build's captured inputs
+    env: { TSX_DISABLE_CACHE: '1' },
     // Large (`SIZE_MS` × `DEADLINE_FACTOR`). Longer multi-build scenarios declare reviewed per-test budgets.
     testTimeout: 120_000,
     hookTimeout: 120_000,

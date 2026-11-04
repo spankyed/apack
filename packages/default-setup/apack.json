@@ -2374,6 +2374,7 @@
           "getRelation": "typeof _dsl.getRelation",
           "findRelations": "typeof _dsl.findRelations",
           "getSchemaStats": "typeof _dsl.getSchemaStats",
+          "catalog": "typeof _dsl.catalog",
           "engineCalls": "typeof _dsl.engineCalls",
           "create": "typeof _dsl.create",
           "upsert": "typeof _dsl.upsert",
