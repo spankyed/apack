@@ -20,13 +20,15 @@ export function provideClaudeUiSelection(root: () => HTMLElement | null): Claude
     if (!alive || !scope || !scope.getClientRects().length || !document.hasFocus()) return undefined
     const field = document.activeElement
     if (field instanceof HTMLInputElement && field.type === 'password') { clear(); return undefined }
-    if ((field instanceof HTMLInputElement && ['text', 'search', 'url', 'tel'].includes(field.type) || field instanceof HTMLTextAreaElement) && scope.contains(field)) {
+    if ((field instanceof HTMLInputElement && ['text', 'search', 'url', 'tel'].includes(field.type) || field instanceof HTMLTextAreaElement)) {
+      if (!scope.contains(field)) { clear(); return undefined }
       const start = field.selectionStart, end = field.selectionEnd
       if (start !== null && end !== null && end > start) {
         const text = field.value.slice(start, end), instance_id = rowId(field, field)
-        if (text.length <= 1000000) saved = { text, ...(instance_id ? { instance_id } : {}) }
+        saved = text.length <= 1000000 ? { text, ...(instance_id ? { instance_id } : {}) } : undefined
         return saved
       }
+      clear(); return undefined
     }
     const selected = document.getSelection()
     if (!selected || selected.isCollapsed || !selected.anchorNode || !selected.focusNode) return saved
