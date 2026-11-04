@@ -13,6 +13,8 @@ export default defineConfig({
   resolve: { conditions },
   ssr: { resolve: { conditions } },
   test: {
+    // From process start, since tsx reads it as it loads: its disk cache is outside a build's captured inputs
+    env: { TSX_DISABLE_CACHE: '1' },
     // Enormous (`SIZE_MS` × `DEADLINE_FACTOR`): a native case composes cold compiler captures, builds and watcher cycles. A case
     // that needs longer still declares a reviewed per-test budget.
     testTimeout: 600_000,
