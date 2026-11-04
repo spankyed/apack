@@ -98,6 +98,7 @@
                 <NativeTerminalPlacements :frames="nativeUiDrawing?.transcriptMessages" component="TurnDuration" :message-id="id" @press="pressNativeUi" @field="editNativeUi" />
                   </template>
                 </ConversationViewer>
+        <NativeManagedTasks v-if="!nativeTerminalActive && managedTasks.length" :tasks="managedTasks" :disabled="nativeSessionBackgrounded || nativeAgentsDecisionPending || mainCommandActive || !!pendingNativeApproval || !!pendingNativeQuestion || !!pendingNativePlan || !nativeComposerOwner || nativeComposerOwner.view?.kind !== 'main'" @manage="mainComposer?.openTaskManager()" />
         <section v-if="!nativeTerminalActive && mcpTasks.length" aria-label="MCP tasks" class="mt-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs">
           <div v-for="task in mcpTasks" :key="task.id" :data-native-mcp-task-id="task.id" class="py-2">
             <div class="flex items-start justify-between gap-3"><span class="min-w-0 break-words font-medium text-neutral-200">{{ task.name }}</span><span class="shrink-0 text-neutral-400">{{ task.mcp?.status.replaceAll('_', ' ') ?? task.status }}</span></div>
@@ -266,6 +267,7 @@ import ClaudeNativeSession from './ClaudeNativeSession.vue'
 import { nativeTranscriptLatestTop, useNativeTranscriptViewport } from './native-transcript-viewport.ts'
 import NativeTaskControls from '#extensions/blocks/display/NativeTaskControls.vue'
 import NativeMainCommand from './NativeMainCommand.vue'
+import NativeManagedTasks from './NativeManagedTasks.vue'
 import NativeMcpForm from './NativeMcpForm.vue'
 import NativeMcpUrl from './NativeMcpUrl.vue'
 import type { ClaudeComposerSubmitResult } from './native-submit.ts'
@@ -545,6 +547,7 @@ const statusLineCwd = computed(() => {
 })
 const taskView = computed(() => Object.entries(nativeTerminalViews.value).find(([mountId, view]) => mountId !== nativeUiMount.value?.mountId && view.threadId === currentThread.value?.id && view.state?.status === 'live'))
 const workflowTasks = computed(() => { const owner = taskView.value?.[1].state; return owner?.tasks.filter(task => task.kind === 'workflow').map(task => ({ ...task, ownerId: owner.ownerId, sessionId: owner.sessionId })) ?? [] })
+const managedTasks = computed(() => nativeComposerOwner.value?.tasks.filter(task => task.kind === 'managed') ?? [])
 const mcpTasks = computed(() => { const owner = taskView.value?.[1].state; return owner?.tasks.filter(task => task.kind === 'mcp').map(task => ({ ...task, ownerId: owner.ownerId, sessionId: owner.sessionId })) ?? [] })
 const shellTasks = computed(() => { const owner = taskView.value?.[1].state; return owner?.tasks.filter(task => task.kind === 'shell').map(task => ({ ...task, ownerId: owner.ownerId, sessionId: owner.sessionId })) ?? [] })
 const agentPending = ref(false), agentReturning = ref(false)

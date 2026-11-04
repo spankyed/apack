@@ -294,3 +294,17 @@ it('does not acknowledge MCP Stop after native refusal or owner replacement', as
   let current=true;f.stop.mockImplementationOnce(async()=>{current=false})
   await expect(f.request('stop',f.task.id,()=>{if(!current)throw Error('Owner replaced')})).rejects.toThrow('Owner replaced')
 })
+
+
+it('lists all remaining original task families without foreground or retired records', () => {
+  const list = vm.runInNewContext(claudeTerminalTaskRuntime + ';nativeManagedTasks') as (registry: {all: () => Record<string, unknown>}) => any[]
+  const kinds=['remote_agent','dream','auto_mode_scan','local_memory_import','monitor_mcp','monitor_ws']
+  const tasks=Object.fromEntries(kinds.map((type,index)=>[type,{id:type,type,status:index%2?'pending':'running',title:'Remote review',description:'Review workspace'}]))
+  tasks.foreground={id:'foreground',type:'monitor_ws',status:'running',isBackgrounded:false} as any
+  tasks.retired={id:'retired',type:'dream',status:'killed'} as any
+  tasks.agent={id:'agent',type:'local_agent',status:'running'} as any
+  const result=list({all:()=>tasks})
+  expect(result.map(task=>task.nativeTaskType)).toEqual(kinds)
+  expect(result[0].name).toBe('Remote review')
+  expect(result.every(task=>!('canStop' in task)&&!('canInput' in task))).toBe(true)
+})

@@ -1,5 +1,6 @@
 import { createApp, h, ref, computed, provide, nextTick, type App } from 'vue'
 import NativeTaskControls from '#extensions/blocks/display/NativeTaskControls.vue'
+import NativeManagedTasks from '#features/threads/fe/chat/NativeManagedTasks.vue'
 import { claudeTaskControls } from '#extensions/blocks/display/native-task-controls.ts'
 import type { ClaudeTerminalTaskState } from '#features/threads/be/claude-terminal-views.ts'
 let app: App | undefined
@@ -118,4 +119,19 @@ it('shows MCP task details and native refusal without offering Agent controls', 
   expect(button('Task details').getAttribute('aria-expanded')).toBe('false')
   state.value={...state.value,status:'done'};await nextTick()
   button('Task details').click();expect(operate).toHaveBeenLastCalledWith(task,'inspect')
+})
+
+
+it('routes remote-review management to Claude without invented Agent or Stop controls', async () => {
+  const root=document.createElement('div');document.body.append(root)
+  const task={id:'remote',kind:'managed' as const,nativeTaskType:'remote_agent' as const,name:'Release <script>review</script>',status:'running'}
+  const manage=vi.fn(),disabled=ref(false)
+  app=createApp({render:()=>h(NativeManagedTasks,{tasks:[task],disabled:disabled.value,onManage:manage})});app.mount(root)
+  expect(root.textContent).toContain(task.name);expect(root.querySelector('script')).toBeNull()
+  expect(root.textContent).toContain('Remote Agent')
+  const buttons=[...root.querySelectorAll<HTMLButtonElement>('button')]
+  expect(buttons.map(button=>button.textContent)).toEqual(['Manage in Claude'])
+  buttons[0]!.click();await nextTick();expect(manage).toHaveBeenCalledOnce()
+  disabled.value=true;await nextTick();expect(buttons[0]!.disabled).toBe(true)
+  buttons[0]!.click();expect(manage).toHaveBeenCalledOnce()
 })

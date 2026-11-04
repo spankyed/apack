@@ -1,3 +1,4 @@
+import { ClaudeNativeManagedTaskTypeSchema } from '../../../common/native-managed-task.ts'
 import { ClaudeNativeMcpTaskInfoSchema } from '../../../common/native-mcp-task.ts'
 import type { ClaudeNativeTerminalTask } from '../../../common/native-terminal.ts'
 
@@ -9,19 +10,29 @@ const validId = (value: unknown): value is string => typeof value === 'string' &
 export function createClaudeTerminalStatus(sessionId: string) {
   let currentSession = sessionId
   let mainStatus: string | undefined
-  let agents: ClaudeNativeTerminalTask[] = [], workflows: ClaudeNativeTerminalTask[] = [], shells: ClaudeNativeTerminalTask[] = [], mcpTasks: ClaudeNativeTerminalTask[] = []
+  let agents: ClaudeNativeTerminalTask[] = [], workflows: ClaudeNativeTerminalTask[] = [], shells: ClaudeNativeTerminalTask[] = [], mcpTasks: ClaudeNativeTerminalTask[] = [], managedTasks: ClaudeNativeTerminalTask[] = []
   const decorations = new Map<string, { status: string; text: string }>()
   const epochs = new Map<string, bigint>()
   return {
     get sessionId() { return currentSession },
     get mainStatus() { return mainStatus },
-    get tasks(): ClaudeNativeTerminalTask[] { return [...agents, ...workflows, ...shells, ...mcpTasks].map(agent => ({ ...agent, ...(decorations.get(agent.id)?.status === agent.status ? { statusText: decorations.get(agent.id)!.text } : {}) })) },
-    updateActivityTasks(id: string, workflowValues: unknown, shellValues: unknown, mcpValues: unknown): boolean {
-      const previousWorkflows = workflows, previousShells = shells, previousMcp = mcpTasks
-      if (workflowValues !== undefined && !this.updateWorkflows(id, workflowValues) || shellValues !== undefined && !this.updateShells(id, shellValues) || mcpValues !== undefined && !this.updateMcpTasks(id, mcpValues)) {
-        workflows = previousWorkflows; shells = previousShells; mcpTasks = previousMcp; return false
+    get tasks(): ClaudeNativeTerminalTask[] { return [...agents, ...workflows, ...shells, ...mcpTasks, ...managedTasks].map(agent => ({ ...agent, ...(decorations.get(agent.id)?.status === agent.status ? { statusText: decorations.get(agent.id)!.text } : {}) })) },
+    updateActivityTasks(id: string, workflowValues: unknown, shellValues: unknown, mcpValues: unknown, managedValues: unknown): boolean {
+      const previousWorkflows = workflows, previousShells = shells, previousMcp = mcpTasks, previousManaged = managedTasks
+      if (workflowValues !== undefined && !this.updateWorkflows(id, workflowValues) || shellValues !== undefined && !this.updateShells(id, shellValues) || mcpValues !== undefined && !this.updateMcpTasks(id, mcpValues) || managedValues !== undefined && !this.updateManagedTasks(id, managedValues)) {
+        workflows = previousWorkflows; shells = previousShells; mcpTasks = previousMcp; managedTasks = previousManaged; return false
       }
       return true
+    },
+    updateManagedTasks(id: string, values: unknown): boolean {
+      if (id !== currentSession || !Array.isArray(values) || values.length > 256) return false
+      const next: ClaudeNativeTerminalTask[] = [], seen = new Set<string>()
+      for (const value of values) {
+        const task = record(value), type = ClaudeNativeManagedTaskTypeSchema.safeParse(task?.nativeTaskType)
+        if (!task || !validId(task.id) || seen.has(task.id) || !type.success || typeof task.name !== 'string' || typeof task.status !== 'string' || !['running', 'pending'].includes(task.status)) return false
+        seen.add(task.id); next.push({id:task.id,kind:'managed',nativeTaskType:type.data,name:task.name.slice(0,256),status:task.status})
+      }
+      managedTasks = next; return true
     },
     updateMcpTasks(id: string, values: unknown): boolean {
       if (id !== currentSession || !Array.isArray(values) || values.length > 256) return false
@@ -51,7 +62,7 @@ export function createClaudeTerminalStatus(sessionId: string) {
     },
     updateSession(id: string, values: unknown): boolean {
       if (!/^[0-9a-f-]{36}$/i.test(id) || !Array.isArray(values)) return false
-      if (id !== currentSession) { currentSession = id; workflows = []; shells = []; mcpTasks = []; mainStatus = undefined; decorations.clear(); epochs.clear() }
+      if (id !== currentSession) { currentSession = id; workflows = []; shells = []; mcpTasks = []; managedTasks = []; mainStatus = undefined; decorations.clear(); epochs.clear() }
       const next: ClaudeNativeTerminalTask[] = []
       const seen = new Set<string>()
       for (const value of values.slice(0, 256)) {
@@ -92,6 +103,6 @@ export function createClaudeTerminalStatus(sessionId: string) {
     clearOutput() { mainStatus = undefined; decorations.clear() },
     clearDecorations() { decorations.clear() },
     clearMain() { mainStatus = undefined },
-    clear() { mainStatus = undefined; agents = []; workflows = []; shells = []; mcpTasks = []; decorations.clear(); epochs.clear() },
+    clear() { mainStatus = undefined; agents = []; workflows = []; shells = []; mcpTasks = []; managedTasks = []; decorations.clear(); epochs.clear() },
   }
 }

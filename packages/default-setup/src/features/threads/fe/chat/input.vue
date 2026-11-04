@@ -424,7 +424,7 @@ watch(() => props.nativeUi?.agentInput, state => {
   pendingNativeCommand = undefined
   if (state.status === 'command_done' && state.decision === 'confirm') pending.accept()
 })
-defineExpose({ focus: focusComposer })
+defineExpose({ focus: focusComposer, openTaskManager: () => openNativePanel('/tasks') })
 let composerEpoch = 0
 watch([() => props.currentThread?.id, () => props.currentThread?.context?.claudeCode?.sessionId, () => props.currentMode, () => props.currentPhase], () => { composerEpoch++; submissionProblem.value = undefined }, { flush: 'sync' })
 onUnmounted(() => { composerEpoch++ })

@@ -96,7 +96,8 @@
             <li v-for="task in view.state.tasks" :key="task.id" :data-native-task-id="task.id" class="native-agent">
               <div class="native-agent__heading"><span class="native-agent__name">{{ task.kind === 'workflow' ? 'Workflow · ' : '' }}{{ task.name }}</span><span class="native-agent__state">{{ task.status }}</span></div>
               <NativeStatusText v-if="task.statusText" class="native-agent__detail" :text="task.statusText" />
-              <NativeTaskControls :task="{ ...task, ownerId: view.state.ownerId, sessionId: view.state.sessionId }" />
+              <span v-if="task.kind === 'managed'" class="native-agent__detail">Manage with /tasks</span>
+              <NativeTaskControls v-if="task.kind !== 'managed'" :task="{ ...task, ownerId: view.state.ownerId, sessionId: view.state.sessionId }" />
             </li>
           </ul>
         </div>

@@ -62,7 +62,7 @@ it('clears shell ownership at reset and rejects malformed or foreign updates wit
 it('does not partially publish valid Workflow changes from a rejected shell/activity snapshot', () => {
   const session = '11111111-1111-1111-1111-111111111111', state = createClaudeTerminalStatus(session)
   const workflow = { id:'workflow-a',name:'Review',status:'running',settled:false,canPause:true,canResume:false,canStop:true }
-  expect(state.updateActivityTasks(session,[workflow],[],[])).toBe(true)
-  expect(state.updateActivityTasks(session,[],[{id:'bad-shell'}],[])).toBe(false)
+  expect(state.updateActivityTasks(session,[workflow],[],[], [])).toBe(true)
+  expect(state.updateActivityTasks(session,[],[{id:'bad-shell'}],[], [])).toBe(false)
   expect(state.tasks).toEqual([{...workflow,kind:'workflow'}])
 })

@@ -47,11 +47,25 @@ it('projects Workflows separately and refuses Agent status decoration for them',
 it('projects MCP activity atomically and retires it on session replacement', () => {
   const session='12345678-1234-1234-1234-123456789abc',status=createClaudeTerminalStatus(session)
   const task={id:'registry-mcp',name:'Review workspace',status:'running',canStop:true,mcp:{serverTaskId:'server-task-42',status:'input_required',startTime:1000,protocol:'sep2663',truncated:false}}
-  expect(status.updateActivityTasks(session,[],[],[task])).toBe(true)
+  expect(status.updateActivityTasks(session,[],[],[task], [])).toBe(true)
   expect(status.tasks).toEqual([{...task,kind:'mcp'}])
-  expect(status.updateActivityTasks('foreign',[],[],[])).toBe(false)
-  expect(status.updateActivityTasks(session,[],[],[{...task,mcp:{...task.mcp,startTime:-1}}])).toBe(false)
+  expect(status.updateActivityTasks('foreign',[],[],[], [])).toBe(false)
+  expect(status.updateActivityTasks(session,[],[],[{...task,mcp:{...task.mcp,startTime:-1}}], [])).toBe(false)
   expect(status.tasks).toEqual([{...task,kind:'mcp'}])
   expect(status.updateSession('22345678-1234-1234-1234-123456789abc',[])).toBe(true)
   expect(status.tasks).toEqual([])
+})
+
+
+it('atomically projects manager-owned tasks and refuses unknown types and stale sessions', () => {
+  const state=createClaudeTerminalStatus(session)
+  const task={id:'remote-review',nativeTaskType:'remote_agent',name:'Release review',status:'running'}
+  expect(state.updateActivityTasks(session,[],[],[],[task])).toBe(true)
+  expect(state.tasks).toEqual([{...task,kind:'managed'}])
+  expect(state.updateActivityTasks(session,[],[],[],[{...task,nativeTaskType:'local_agent'}])).toBe(false)
+  expect(state.updateActivityTasks('foreign',[],[],[],[])).toBe(false)
+  expect(state.tasks).toHaveLength(1)
+  expect(state.updateActivityTasks(session,[],[],[],[{...task,status:'completed'}])).toBe(false)
+  state.updateSession('22222222-2222-2222-2222-222222222222',[])
+  expect(state.tasks).toEqual([])
 })

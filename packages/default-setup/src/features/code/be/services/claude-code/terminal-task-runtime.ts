@@ -1,6 +1,13 @@
+import { ClaudeNativeManagedTaskTypeSchema } from '../../../common/native-managed-task.ts'
+
 /** Authored task ownership adapter; callbacks and transcript readers remain native. */
 export const claudeTerminalTaskRuntime = String.raw`function nativeWorkflowTaskFlags(n,task){const settled=n.transcriptState.AE(task.id);return {settled,canPause:task.status==='running',canResume:task.status==='paused'&&!!task.scriptPath&&!!task.workflowRunId,canStop:task.status==='running'||['completed','failed','killed'].includes(task.status)&&!settled};}
 function nativeWorkflowTasks(n,registry){return Object.values(registry.all()).filter(task=>task.type==='local_workflow').slice(0,256).map(task=>({id:task.id,name:String(task.description??task.summary??task.workflowName??'Workflow').slice(0,256),status:task.status,...nativeWorkflowTaskFlags(n,task)}));}
+function nativeManagedTasks(registry){
+ const kinds=new Set(${JSON.stringify(ClaudeNativeManagedTaskTypeSchema.options)});
+ // The original non-V3 task manager lists these families through Oh/hgo.
+ return Object.values(registry.all()).filter(task=>kinds.has(task.type)&&['running','pending'].includes(task.status)&&!('isBackgrounded' in task&&task.isBackgrounded===false)).slice(0,256).map(task=>({id:task.id,nativeTaskType:task.type,name:String(task.type==='remote_agent'?task.title??task.description??'Remote Agent':task.description??task.type).slice(0,256),status:task.status}));
+}
 function nativeMcpTaskInfo(n,task){
  let truncated=false;const text=(value,limit)=>{if(typeof value!=='string')return;const clean=n.taskOutputText.stripVTControlCharacters(value);if(clean.length>limit)truncated=true;let shown=clean.slice(0,limit);const last=shown.charCodeAt(shown.length-1);if(last>=0xd800&&last<=0xdbff)shown=shown.slice(0,-1);return shown;};
  if(typeof task.mcpStatus!=='string'||!task.mcpStatus)throw Error('Native MCP task status is unavailable');

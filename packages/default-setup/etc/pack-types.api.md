@@ -1015,6 +1015,18 @@ interface ClaudeNativeLaunch {
     channels?: string[];
 }
 
+type ClaudeNativeManagedTaskType = z.infer<typeof ClaudeNativeManagedTaskTypeSchema>;
+
+/** Task families whose original manager owns their distinct details and confirmation flows. */
+declare const ClaudeNativeManagedTaskTypeSchema: z.ZodEnum<{
+    remote_agent: "remote_agent";
+    dream: "dream";
+    auto_mode_scan: "auto_mode_scan";
+    local_memory_import: "local_memory_import";
+    monitor_mcp: "monitor_mcp";
+    monitor_ws: "monitor_ws";
+}>;
+
 type ClaudeNativeMcpForm = z.infer<typeof ClaudeNativeMcpFormSchema>;
 
 type ClaudeNativeMcpFormOperation = z.infer<typeof ClaudeNativeMcpFormOperationSchema>;
@@ -1706,7 +1718,8 @@ interface ClaudeNativeTerminalState {
 
 /** Native task ids and terminal owners are independent of apack thread ids. */
 interface ClaudeNativeTerminalTask {
-    kind?: 'mcp' | 'shell' | 'workflow';
+    kind?: 'managed' | 'mcp' | 'shell' | 'workflow';
+    nativeTaskType?: ClaudeNativeManagedTaskType;
     mcp?: ClaudeNativeMcpTaskInfo;
     settled?: boolean;
     canPause?: boolean;
@@ -3236,9 +3249,9 @@ declare const CommandLifecycleLineSchema: z.ZodObject<{
     command_uuid: z.ZodString;
     state: z.ZodEnum<{
         completed: "completed";
+        cancelled: "cancelled";
         queued: "queued";
         started: "started";
-        cancelled: "cancelled";
         discarded: "discarded";
         refused: "refused";
     }>;
@@ -8408,8 +8421,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             loading: z.ZodBoolean;
             copyState: z.ZodOptional<z.ZodEnum<{
                 error: "error";
-                pending: "pending";
                 idle: "idle";
+                pending: "pending";
                 saved: "saved";
             }>>;
             insight: z.ZodOptional<z.ZodString>;
@@ -9371,8 +9384,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        append: "append";
         insert: "insert";
+        append: "append";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;

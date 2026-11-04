@@ -1,6 +1,7 @@
 /** Native task ids and terminal owners are independent of apack thread ids. */
 export interface ClaudeNativeTerminalTask {
-  kind?: 'workflow' | 'shell' | 'mcp'
+  kind?: 'workflow' | 'shell' | 'mcp' | 'managed'
+  nativeTaskType?: import('./native-managed-task.ts').ClaudeNativeManagedTaskType
   mcp?: import('./native-mcp-task.ts').ClaudeNativeMcpTaskInfo
   settled?: boolean
   canPause?: boolean
