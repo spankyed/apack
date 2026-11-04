@@ -15,7 +15,7 @@ import type { ClaudeUiFieldEvent, ClaudeUiFocusEvent, ClaudeUiFocusReply, Claude
 export interface ClaudeUiOwner {
   readAgent?(): Promise<import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails>
   readonly nativeView?: import('./ui-controls.ts').ClaudeUiAttach['native_view']
-  readonly question?: { ownerId: string; render: import('./terminal-owner.ts').ClaudeNativeTerminalOwner['renderQuestionDialog']; hold: import('./terminal-owner.ts').ClaudeNativeTerminalOwner['holdQuestionDialog'] }
+  readonly question?: { ownerId: string; render: import('./terminal-owner.ts').ClaudeNativeTerminalOwner['renderQuestionDialog']; hold: import('./terminal-owner.ts').ClaudeNativeTerminalOwner['holdQuestionDialog']; row?(): import('./ui-presentation.ts').ClaudeUiQuestionRow | undefined; subscribe?(listener: () => void): () => void; answer?: import('./terminal-owner.ts').ClaudeNativeTerminalOwner['answerQuestionDialog'] }
   readonly done: Promise<void>
   readonly sessionId?: string
   readonly billing?: import('../../../common/native-billing.ts').ClaudeBillingObservation
@@ -55,6 +55,7 @@ export function mountClaudeUi(options: {
   let stopPromptHost: (() => void) | undefined
   let disposal: Promise<void> | undefined
   let unsubscribe = () => {}
+  let unsubscribeQuestion = () => {}
   let promptPalette: Record<string, string> | undefined
   let actionKeyState: ClaudeUiActionKeyState | undefined
   let keyQueue: Promise<unknown> = Promise.resolve()
@@ -106,7 +107,7 @@ export function mountClaudeUi(options: {
     return rows
   }, publish: () => publish(lastState) })
 
-  const question = createClaudeQuestionHost({ source: owner.question, ui: owner.handle.ui, client, row: () => options.question?.(), current, publish: () => publish(lastState) })
+  const question = createClaudeQuestionHost({ source: owner.question, ui: owner.handle.ui, client, row: () => owner.question?.row ? owner.question.row() : options.question?.(), current, publish: () => publish(lastState) })
 
   const notices = createClaudeUiNotices({ current, sessionId: () => owner.sessionId, publish: () => publish(lastState) })
 
@@ -201,6 +202,7 @@ export function mountClaudeUi(options: {
     drawing = undefined
     if (scheduled) clearTimeout(scheduled)
     scheduled = undefined
+    unsubscribeQuestion()
     unsubscribe()
     promptPalette = undefined
     publish({ status: 'disconnected' })
@@ -216,6 +218,7 @@ export function mountClaudeUi(options: {
 
   panes = createClaudePaneHost({ ui: owner.handle.ui, client, current, publish: () => publish(lastState), actionKeys: state => { actionKeyState = state }, requestFocus: options.requestFocus })
   publish({ status: 'connecting' })
+  unsubscribeQuestion = owner.question?.subscribe?.(() => question.refresh()) ?? (() => {})
   unsubscribe = owner.subscribe(event => {
     const line = event as Record<string, unknown>
     if (current() && (line.type === 'rate_limit_event' || line.subtype === 'apack_billing_changed' || line.type === 'conversation_reset')) publish(lastState)
@@ -382,6 +385,7 @@ export function mountClaudeUi(options: {
         if (current()) { agentInput = { revision, status: 'command_done', command, decision }; publish(lastState); void refreshAgent() }
       } catch (error) { if (current()) { agentInput = { revision, status: 'error', problem: error instanceof Error ? error.message : 'Native command decision failed' }; publish(lastState) } }
     },
+    answerQuestion: question.answer,
     refreshTranscript: () => { messages.refresh(); question.refresh() },
     notice(event: import('./ui-presentation.ts').ClaudeUiNoticeEvent) { notices.operate(event) },
     transcriptLayout(event: import('./ui-presentation.ts').ClaudeUiTranscriptLayout) { messages.layout(event) },

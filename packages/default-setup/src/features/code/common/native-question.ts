@@ -12,6 +12,11 @@ export const ClaudeQuestionCardSchema = z.object({
   }).passthrough()).min(1).max(4),
 }).passthrough()
 export type ClaudeQuestionCard = z.infer<typeof ClaudeQuestionCardSchema>
+export const ClaudeQuestionAnswerSchema = z.object({
+  answers: z.record(z.string(), z.union([z.string(), z.array(z.string())])).optional(),
+  annotations: z.record(z.string(), z.object({preview: z.string().optional(), notes: z.string().optional()}).strict()).optional(),
+  response: z.string().optional(), followUp: z.boolean().optional(),
+}).strict()
 export interface ClaudeQuestionAnswer {
   answers?: Record<string, string | string[]>
   annotations?: Record<string, { preview?: string; notes?: string }>

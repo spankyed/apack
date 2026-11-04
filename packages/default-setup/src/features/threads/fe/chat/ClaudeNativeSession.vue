@@ -3,7 +3,7 @@
     <NativeBackgroundReview v-for="panel in leftArrowPanel ? [leftArrowPanel] : []" :key="JSON.stringify([panel.ownerId, panel.sessionId, panel.id])" :panel-id="panel.id" :state="panel.state" @answer="answerLeftArrow(panel, $event)" />
     <NativeBackgroundSession v-if="continuation" :continuation="continuation" :state="view?.background" :attached="!!view?.attachment" :info="view?.backgroundInfo" :can-reply="view?.canReplyBackground === true" @operate="operateBackground" @open="openBackground" @composing="backgroundComposing = $event">
       <template #composer="composer">
-        <NativeBackgroundComposer :key="composer.target.ownerId" @leave="composer.close" :thread-id="threadId" :target="composer.target" :draft="composer.draft" :draft-snapshot="composer.draftSnapshot" :disabled="composer.pending" :send="composer.send" @draft="composer.updateDraft" @draft-snapshot="composer.saveSnapshot" />
+        <NativeBackgroundComposer :key="composer.target.ownerId" @leave="composer.close" :thread-id="threadId" :target="composer.target" :active="composer.active" :draft="composer.draft" :draft-snapshot="composer.draftSnapshot" :disabled="composer.pending" :send="composer.send" @draft="composer.updateDraft" @draft-snapshot="composer.saveSnapshot" />
       </template>
       <template #parent-interface>
         <button v-if="!active && !view?.attachment && view?.state?.notice?.kind !== 'refusal_fallback_prompt'" type="button" class="native-button native-parent-interface" :disabled="(busy && (!view?.state || ended)) || view?.opening || inputPending" aria-label="Use native interface" title="Open parent native interface" @click="open"><span aria-hidden="true" class="native-command">›_</span></button>

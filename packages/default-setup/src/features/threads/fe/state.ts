@@ -1630,6 +1630,7 @@ const threadsState = setup({
     CLAUDE_UI_KEY: { actions: ({ context, event }) => {
       if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
     } },
+    CLAUDE_UI_QUESTION_ANSWER: { actions: ({context,event}) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id,event) } },
     CLAUDE_UI_PRESS: { actions: ({ context, event }) => {
       if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
     } },

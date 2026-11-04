@@ -59,7 +59,7 @@ it('does not attach conversation UI after the original owner has a durable backg
 it('keeps child desktop controls on the exact original incarnation, separate from parent and Agent UI', () => {
   const request = vi.fn(async () => ({capabilities: ['ui_surface_v1']}))
   const desktop = {id: 'child-owner', parentSessionId: 'parent', identity: {sessionId:'child',jobId:'11111111',pid:119,start:'start',hostPid:100,hostStart:'host-start',cwd:'/owned'},
-    registration:1, done:new Promise<void>(() => {}), transport:{request, subscribe:vi.fn(), promptHosts:{}}} as unknown as NonNullable<ReturnType<typeof store.getNativeBackgroundDesktopOwner>>
+    questions: {value: undefined, subscribe: vi.fn(() => () => {}), settled: vi.fn()}, registration:1, done:new Promise<void>(() => {}), transport:{request, subscribe:vi.fn(), promptHosts:{}}} as unknown as NonNullable<ReturnType<typeof store.getNativeBackgroundDesktopOwner>>
   const read = vi.spyOn(store, 'getNativeBackgroundDesktopOwner').mockReturnValue(desktop)
   const child = snapshotClaudeBackgroundUiTarget(desktop)
   const owner = getClaudeUiOwner('thread', undefined, child)

@@ -6,7 +6,7 @@
         <p role="status">{{ panel.label }}</p>
       </div>
       <div class="background-session__controls">
-        <button v-if="canReply && panel.session?.pid && ['working','blocked'].includes(panel.session.state)" type="button" aria-label="Reply" title="Reply" :aria-expanded="replyOpen" :disabled="panel.pending" @click="replyOpen = !replyOpen"><MessageSquare aria-hidden="true" /><span class="background-session__control-label">Reply</span></button>
+        <button v-if="canReply && panel.session?.pid && ['working','blocked'].includes(panel.session.state)" type="button" :aria-label="state?.question ? 'Answer question' : 'Reply'" :title="state?.question ? 'Answer question' : 'Reply'" :aria-expanded="replyOpen" :disabled="panel.pending" @click="replyOpen = !replyOpen"><MessageSquare aria-hidden="true" /><span class="background-session__control-label">{{ state?.question ? 'Answer question' : 'Reply' }}</span></button>
         <button v-if="panel.session" type="button" aria-label="Open session" title="Open session" :disabled="panel.pending || attached" @click="openSession(panel.target, panel.session.id)"><Terminal aria-hidden="true" /><span class="background-session__control-label">Open session</span></button>
         <button type="button" aria-label="Refresh status" title="Refresh status" :disabled="panel.pending" @click="operate(panel.target, { operation: 'refresh' })"><RefreshCw aria-hidden="true" /><span class="background-session__control-label">{{ panel.pending && panel.operation === 'refresh' ? 'Checking…' : 'Refresh status' }}</span></button>
         <button v-if="panel.session?.pid && ['working', 'blocked'].includes(panel.session.state)" type="button" class="background-session__stop" aria-label="Stop background session" title="Stop background session" :disabled="panel.pending" @click="operate(panel.target, { operation: 'stop', id: panel.session.id, pid: panel.session.pid })"><Square aria-hidden="true" /><span class="background-session__control-label">Stop background session</span></button>
@@ -15,11 +15,14 @@
     </header>
     <p v-if="panel.info" aria-label="Background session usage" class="background-session__detail">{{ panel.info.model }} · {{ panel.info.turns }} {{ panel.info.turns === 1 ? 'turn' : 'turns' }}<template v-if="panel.info.context"> · {{ panel.info.context.percent }}% context</template><template v-if="panel.info.totalCostUsd !== undefined"> · Session total ${{ panel.info.totalCostUsd.toFixed(6) }}</template></p>
     <div v-if="panel.info?.statusLine" aria-label="Background Claude configured status" class="background-session__detail background-session__formatter" tabindex="0"><NativeStatusText :text="panel.info.statusLine" /></div>
+    <p v-if="state?.question" role="status" class="background-session__detail">Claude has a question. Open Answer question to continue.</p>
     <p v-if="panel.session?.waitingFor" class="background-session__detail">{{ panel.session.waitingFor }}</p>
     <p v-if="panel.problem" role="alert" class="background-session__problem">{{ panel.problem }}</p>
-    <slot v-if="canReply && replyOpen && panel.session?.pid && ['working','blocked'].includes(panel.session.state) && state?.desktop && $slots.composer" name="composer"
-      :target="state.desktop" :draft="draft" :draft-snapshot="draftSnapshot" :update-draft="(text: string) => updateDraft(panel.target, text)" :save-snapshot="(snapshot: ClaudeAgentDraftSnapshot) => saveSnapshot(panel.target, snapshot)" :close="() => replyOpen = false" :pending="panel.pending"
+    <div v-if="canReply && (replyOpen || state?.question && questionOpened) && panel.session?.pid && ['working','blocked'].includes(panel.session.state) && state?.desktop && $slots.composer" class="background-session__composer" v-show="replyOpen">
+      <slot name="composer" :active="replyOpen"
+      :target="state!.desktop!" :draft="draft" :draft-snapshot="draftSnapshot" :update-draft="(text: string) => updateDraft(panel.target, text)" :save-snapshot="(snapshot: ClaudeAgentDraftSnapshot) => saveSnapshot(panel.target, snapshot)" :close="() => replyOpen = false" :pending="panel.pending"
       :send="(text: string) => sendReply(panel.target, panel.session!, text, true)" />
+    </div>
     <form v-else-if="canReply && replyOpen && panel.session?.pid && ['working','blocked'].includes(panel.session.state)" class="background-session__reply" data-native-background-reply @submit.prevent="reply(panel.target, panel.session)">
       <div class="background-session__reply-heading">
         <label :for="replyInputId">Message background session</label>
@@ -46,6 +49,8 @@ const emit = defineEmits<{ open: [target: ClaudeNativeContinuation, jobId: strin
 const draftSnapshot = ref<ClaudeAgentDraftSnapshot>()
 const draft = ref(''), replyOpen = ref(false), replyInputId = useId()
 const slots = useSlots()
+const questionOpened = ref(false)
+watch(() => [replyOpen.value, props.state?.desktop?.ownerId], ([open, owner], previous) => { if (owner !== previous?.[1]) questionOpened.value = false; if (open) questionOpened.value = true })
 const richReplyActive = computed(() => !!(props.canReply && replyOpen.value && props.state?.desktop && slots.composer
   && props.state.sessionId === props.continuation.sessionId && props.state.continuedInSessionId === props.continuation.continuedInSessionId
   && props.state.desktop.parentSessionId === props.continuation.sessionId && props.state.desktop.sessionId === props.continuation.continuedInSessionId
@@ -115,7 +120,8 @@ const panels = computed(() => {
 <style scoped>
 .background-session { display: grid; flex-shrink: 0; gap: 5px; min-width: 0; margin-bottom: 0; padding: 8px 12px; border: 1px solid #ffffff14; border-radius: 10px; background: #ffffff03; }
 .background-session--composing { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; }
-.background-session--composing > :not(.background-native-composer) { flex-shrink: 0; }
+.background-session--composing > :not(.background-session__composer) { flex-shrink: 0; }
+.background-session__composer {display:flex;flex:1;min-height:0;min-width:0}
 .background-session__heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
 .background-session__body { flex: 1; min-width: 0; }
 h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; color: #dcd8d2; font-size: 12px; line-height: 16px; font-weight: 500; }

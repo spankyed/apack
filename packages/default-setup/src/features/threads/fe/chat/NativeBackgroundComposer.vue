@@ -1,6 +1,8 @@
 <template>
   <div ref="root" class="background-native-composer" @keydown.capture="event => actionKey(event, root ?? null)" @focusout="event => actionKey.leave(event, root ?? null)">
-    <NativeAgentComposer audience="background" :draft="draft" :draft-snapshot="draftSnapshot" :disabled="disabled || !attachment?.attachmentId || !['live', 'rendering'].includes(state?.status ?? '')"
+    <NativeQuestionDrawing v-if="state?.question" :frame="state.question" :disabled="disabled || !!state.question.pending" :error="state.question.problem" cancel-label="Back to parent notes"
+      @press="press" @field="field" @started="started" @respond="answer" @pause="emit('leave')" />
+    <NativeAgentComposer v-show="!state?.question" audience="background" :draft="draft" :draft-snapshot="draftSnapshot" :disabled="disabled || !attachment?.attachmentId || !['live', 'rendering'].includes(state?.status ?? '')"
       :mount-id="mountId" :attachment-id="attachment?.attachmentId" :prompt-revision="attachment?.promptRevision" :prompt="attachment?.prompt"
       :host-request="attachment?.promptHostRequest" :completions="attachment?.completions" :completion-revision="attachment?.completionRevision" :focus="attachment?.focus" :ui="state" :send="send"
       @leave="emit('leave')" @draft="emit('draft', $event)" @draft-snapshot="emit('draft-snapshot', $event)" @edit="edit" @complete="complete" @host="host" @press="press" @field="field" @scroll="scroll" @focus-report="focus" />
@@ -11,6 +13,8 @@
 import {computed, onBeforeUnmount, onMounted, provide, ref, watch} from 'vue'
 import {useSelector} from '@xstate/vue'
 import {useSurface} from '@apackdev/sdk/fe'
+import NativeQuestionDrawing from './NativeQuestionDrawing.vue'
+import type {ClaudeQuestionAnswer} from '#features/code/common/native-question.ts'
 import NativeAgentComposer from './NativeAgentComposer.vue'
 import {provideClaudeUiSelection} from './native-ui-selection.ts'
 import {provideClaudeHoverGroups} from './native-ui-hover.ts'
@@ -21,7 +25,7 @@ import type {ClaudeAgentDraftSnapshot} from './native-agent-draft.ts'
 import type {ClaudeBackgroundUiTarget} from '#features/code/common/native-background.ts'
 import type {ClaudePromptEdit, ClaudePromptCompletionRequest, ClaudePromptHostResponse, ClaudeUiFieldEvent, ClaudeUiScrollEvent, ClaudeUiFocusEvent} from '#generated/types.ts'
 import type {ThreadsState} from '../state.ts'
-const props = defineProps<{threadId: string; target: ClaudeBackgroundUiTarget; draft: string; draftSnapshot?: ClaudeAgentDraftSnapshot; disabled: boolean; send(text: string): Promise<void>}>()
+const props = defineProps<{threadId: string; target: ClaudeBackgroundUiTarget; active?: boolean; draft: string; draftSnapshot?: ClaudeAgentDraftSnapshot; disabled: boolean; send(text: string): Promise<void>}>()
 const emit = defineEmits<{leave: []; draft: [text: string]; 'draft-snapshot': [snapshot: ClaudeAgentDraftSnapshot]}>()
 const actor: ThreadsState = useSurface(), root = ref<HTMLElement>(), mountId = ref<string>()
 const context = useSelector(actor, value => value.context)
@@ -33,7 +37,8 @@ provideClaudeHoverGroups(() => mountId.value && attachment.value?.attachmentId &
   ? JSON.stringify([props.threadId, mountId.value, attachment.value.attachmentId, props.target.ownerId]) : undefined)
 const identity = () => ({threadId: props.threadId, mountId: mountId.value!})
 let heartbeat: ReturnType<typeof setInterval> | undefined
-function renew() { if (mountId.value) actor.send({type: 'CLAUDE_UI_MOUNT', ...identity(), promptFocused: document.hasFocus(), backgroundView: {...props.target}}) }
+function renew() { if (mountId.value) actor.send({type: 'CLAUDE_UI_MOUNT', ...identity(), promptFocused: props.active !== false && !state.value?.question && document.hasFocus(), backgroundView: {...props.target}}) }
+watch(() => [props.active, !!state.value?.question], renew)
 function detach() {
   if (heartbeat) clearInterval(heartbeat); heartbeat = undefined
   if (mountId.value) {
@@ -47,9 +52,18 @@ watch(() => JSON.stringify([props.threadId, props.target]), () => {
   detach(); mountId.value = crypto.randomUUID(); renew(); heartbeat = setInterval(renew, 10000)
 }, {immediate: true})
 const actionKey = createClaudeActionKeyHandler(() => ({
-  scope: !props.disabled && attachment.value?.attachmentId ? `${mountId.value}:${attachment.value.attachmentId}` : undefined,
+  scope: props.active !== false && !props.disabled && attachment.value?.attachmentId ? `${mountId.value}:${attachment.value.attachmentId}` : undefined,
   keys: state.value?.actionKeys, result: attachment.value?.actionKeyResult,
 }), request => { if (mountId.value) actor.send({type: 'CLAUDE_UI_KEY', ...identity(), ...request}) })
+let draftRevision = 0
+function started(token?: string) {
+  const question = state.value?.question
+  if (question && token) field({actionId: question.draftActionId, kind: 'change', revision: ++draftRevision, value: token})
+}
+function answer(value: ClaudeQuestionAnswer) {
+  const question = state.value?.question
+  if (mountId.value && question?.token) actor.send({type: 'CLAUDE_UI_QUESTION_ANSWER', ...identity(), messageId: question.messageId, token: question.token, answer: value})
+}
 function press(actionId: string, href?: string) { if (mountId.value) actor.send({type: 'CLAUDE_UI_PRESS', ...identity(), actionId, ...(href ? {href} : {})}) }
 function field(value: ClaudeUiFieldEvent) { if (mountId.value) actor.send({type: 'CLAUDE_UI_FIELD', ...identity(), ...value}) }
 function scroll(value: ClaudeUiScrollEvent) { if (mountId.value) actor.send({type: 'CLAUDE_UI_SCROLL', ...identity(), ...value}) }

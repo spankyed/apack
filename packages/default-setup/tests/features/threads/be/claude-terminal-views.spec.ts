@@ -500,14 +500,16 @@ it('publishes desktop controls only for the refreshed original child, and retire
  let finish!:(target:typeof desktop)=>void, alive=true, notify!:()=>void
  const prepare=vi.fn(()=>new Promise<typeof desktop>(resolve=>{finish=resolve}))
  const send=vi.fn(), views=createClaudeTerminalViews({get:()=>undefined,open:vi.fn(),continuation:()=>link,background:async()=>job,
-  desktop:prepare,desktopCurrent:()=>alive,subscribeBackground:(_key,changed)=>{notify=changed;return()=>{}}})
+  backgroundQuestion:()=>({id:'question-1',revision:'question-revision'}),desktop:prepare,desktopCurrent:()=>alive,subscribeBackground:(_key,changed)=>{notify=changed;return()=>{}}})
  const refresh={...mount,type:'CLAUDE_TERMINAL_BACKGROUND' as const,...link,revision:1,operation:'refresh' as const}
  try {
   views.handle(mount,'window-one',send);views.handle(refresh,'window-one',send)
   await vi.waitFor(()=>expect(prepare).toHaveBeenCalledOnce())
   expect(send.mock.calls.at(-1)![0].background).toMatchObject({status:'done',session:job})
   finish(desktop);await vi.waitFor(()=>expect(send.mock.calls.at(-1)![0].background.desktop).toEqual(desktop))
+  expect(send.mock.calls.at(-1)![0].background.question).toEqual({id:'question-1',revision:'question-revision'})
   alive=false;notify();expect(send.mock.calls.at(-1)![0].background.desktop).toBeUndefined()
+  expect(send.mock.calls.at(-1)![0].background.question).toBeUndefined()
   views.handle({...refresh,revision:2},'window-one',send)
   await vi.waitFor(()=>expect(prepare).toHaveBeenCalledTimes(2))
   views.handle({...mount,type:'CLAUDE_TERMINAL_UNMOUNT'},'window-one',send)

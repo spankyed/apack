@@ -1,3 +1,4 @@
+import { ClaudeQuestionAnswerSchema } from '../../../common/native-question.ts'
 import { randomUUID } from 'node:crypto'
 import { createClaudeUiDrawing, type ClaudeUiDrawing } from './ui-tree.ts'
 import type { ClaudeUiControls } from './ui-controls.ts'
@@ -10,7 +11,7 @@ function inert(node: ClaudeUiNode): ClaudeUiNode {
   if ('children' in node && node.children) return { ...node, children: node.children.map(inert) }
   return node
 }
-type Entry = { row: ClaudeUiQuestionRow; frame: ClaudeUiQuestionFrame; epoch: number; dirty: boolean; pressing: boolean; drawing?: ClaudeUiDrawing; fields?: ClaudeUiDrawing; revisions: Map<string, number> }
+type Entry = { row: ClaudeUiQuestionRow; frame: ClaudeUiQuestionFrame; epoch: number; dirty: boolean; pressing: boolean; heldToken?: string; holding?: Promise<void>; answering?: boolean; drawing?: ClaudeUiDrawing; fields?: ClaudeUiDrawing; revisions: Map<string, number> }
 
 /** A question drawing belongs to this view and the still-pending native dialog. */
 export function createClaudeQuestionHost(options: {
@@ -76,6 +77,21 @@ export function createClaudeQuestionHost(options: {
       if (Array.isArray(event.instances) && !event.instances.some(value => value && typeof value === 'object' && (value as Record<string, unknown>).component === 'AskUserQuestion' && (value as Record<string, unknown>).instance_id === entry!.row.requestId)) return
       invalidate()
     },
+    async answer(messageId: string, token: string, answer: import('../../../common/native-question.ts').ClaudeQuestionAnswer): Promise<void> {
+      const target = entry
+      if (!target || !valid(target) || !options.source?.answer || target.answering || target.row.messageId !== messageId || !target.frame.shownInput || token !== (target.heldToken ?? target.frame.token)) return
+      const parsed = ClaudeQuestionAnswerSchema.safeParse(answer)
+      if (!parsed.success) return
+      target.answering = true; target.frame.pending = true; target.frame.problem = undefined; publish()
+      try {
+        await target.holding
+        if (!valid(target) || token !== (target.heldToken ?? target.frame.token)) return
+        await options.source.answer({...target.row, answer: {...target.frame.shownInput, ...parsed.data}, renderToken: token, draftStarted: !!target.heldToken})
+        if (valid(target)) { entry = undefined; publish() }
+      } catch (error) {
+        if (valid(target)) { target.frame.problem = error instanceof Error ? error.message : 'Native question answer failed'; publish() }
+      } finally { target.answering = false; target.frame.pending = false; if (valid(target)) publish() }
+    },
     ownsAction(id: string) { return !!entry?.drawing?.actions.has(id) },
     ownsField(id: string) { return entry?.frame.draftActionId === id || !!entry?.fields?.fields.has(id) },
     async field(event: ClaudeUiFieldEvent): Promise<{ handled: boolean }> {
@@ -84,7 +100,15 @@ export function createClaudeQuestionHost(options: {
       if (event.actionId === target.frame.draftActionId) {
         if (event.kind !== 'change') return { handled: false }
         target.revisions.set(event.actionId, event.revision)
-        try { await options.source.hold({ ...target.row, clientId: options.client.client_id, renderToken: event.value }); if (valid(target)) invalidate(); return { handled: valid(target) } } catch { return { handled: false } }
+        try {
+          target.holding = options.source.hold({ ...target.row, clientId: options.client.client_id, renderToken: event.value })
+          await target.holding
+          if (valid(target)) { target.heldToken = event.value; invalidate() }
+          return { handled: valid(target) }
+        } catch {
+          if (valid(target)) { target.frame.problem = 'Native question draft was not acknowledged'; publish() }
+          return { handled: false }
+        }
       }
       const field = target.fields?.fields.get(event.actionId)
       if (!field || (field.type === 'select' ? event.kind !== 'select' || !field.options?.includes(event.value) : event.kind !== 'change' && event.kind !== 'submit')) return { handled: false }

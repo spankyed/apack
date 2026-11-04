@@ -5,7 +5,7 @@ const row: ClaudeUiQuestionRow = { messageId: 'message', id: 'dialog', revision:
 const frame = () => ({ tree: { type: 'Box', children: [{ type: 'Button', props: { key: 'refresh', label: 'Refresh' }, press: { plugin: 'fixture', handle: 1 } }, { type: 'engine', ref: 1 }] }, question: { token: 'issued-token', dialogId: 'dialog', revision: 'revision', shownInput: { questions: [] }, presentation: { previewFormat: 'markdown' as const, extendedQuestions: false, optionalDescriptions: false, previews: [] } }, props: {}, hooked: true, rewritten: true })
 function fixture() {
   let pending: ClaudeUiQuestionRow | undefined = row
-  const source = { ownerId: 'owner', render: vi.fn(async () => frame()), hold: vi.fn(async () => {}) }
+  const source = { ownerId: 'owner', render: vi.fn(async () => frame()), hold: vi.fn(async () => {}), answer: vi.fn(async (_request: unknown) => {}) }
   const ui = { press: vi.fn(async () => ({ handled: true })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })) }
   const create = (id: string) => createClaudeQuestionHost({ source, ui, client: { client_id: id, surface: 'desktop' }, row: () => pending, current: () => true, publish: vi.fn() })
   return { source, ui, create, replace(value?: ClaudeUiQuestionRow) { pending = value } }
@@ -54,4 +54,39 @@ it('discards a delayed drawing after dialog replacement or disposal', async () =
   const id = action(host); host.dispose()
   await expect(host.press(id)).resolves.toEqual({ handled: false })
   expect(f.ui.press).not.toHaveBeenCalled()
+})
+
+it('uses the issued held frame, serializes answers and rejects foreign or injected inputs', async () => {
+  const f = fixture(), host = f.create('child')
+  host.start(); await vi.advanceTimersByTimeAsync(50)
+  await host.answer('foreign', 'issued-token', {answers: {Branch: 'Alpha'}})
+  await host.answer(row.messageId, 'foreign-token', {answers: {Branch: 'Alpha'}})
+  await host.answer(row.messageId, 'issued-token', {questions: []} as never)
+  expect(f.source.answer).not.toHaveBeenCalled()
+  let held!: () => void
+  f.source.hold.mockImplementationOnce(() => new Promise<void>(resolve => { held = resolve }))
+  const holding = host.field({actionId: host.state!.draftActionId, kind: 'change', revision: 1, value: 'issued-token'})
+  const answering = host.answer(row.messageId, 'issued-token', {answers: {Branch: 'Alpha'}})
+  await host.answer(row.messageId, 'issued-token', {answers: {Branch: 'Beta'}})
+  expect(f.source.answer).not.toHaveBeenCalled()
+  held(); await holding; await answering
+  expect(f.source.answer).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({id: row.id, revision: row.revision, sessionId: row.sessionId, renderToken: 'issued-token', draftStarted: true, answer: {questions: [], answers: {Branch: 'Alpha'}}}))
+  expect(host.state).toBeUndefined()
+  host.dispose()
+})
+it('retains the question on refusal and never submits a replaced row after a pending hold', async () => {
+  const f = fixture(), host = f.create('child')
+  host.start(); await vi.advanceTimersByTimeAsync(50)
+  f.source.answer.mockRejectedValueOnce(new Error('Original admission refused'))
+  await host.answer(row.messageId, 'issued-token', {answers: {Branch: 'Alpha'}})
+  expect(host.state?.problem).toBe('Original admission refused')
+  expect(host.state?.pending).toBe(false)
+  let held!: () => void
+  f.source.hold.mockImplementationOnce(() => new Promise<void>(resolve => { held = resolve }))
+  const holding = host.field({actionId: host.state!.draftActionId, kind: 'change', revision: 1, value: 'issued-token'})
+  const answering = host.answer(row.messageId, 'issued-token', {answers: {Branch: 'Alpha'}})
+  f.replace({...row, revision: 'replacement'}); host.refresh()
+  held(); await holding; await answering
+  expect(f.source.answer).toHaveBeenCalledTimes(1)
+  host.dispose()
 })

@@ -29,7 +29,7 @@
     </div>
     <p v-if="props.presentation?.notice" class="native-tool-notice" role="note">{{ props.presentation.notice }}</p>
     <footer>
-      <button type="button" class="quiet" :disabled="disabled" @click="$emit('pause')">Cancel</button>
+      <button type="button" class="quiet" :disabled="disabled" @click="$emit('pause')">{{ cancelLabel ?? 'Cancel' }}</button>
       <div class="navigation">
         <button v-if="step > 0" type="button" :disabled="disabled" @click="step--">Back</button>
         <button v-if="parsed && current" type="button" :disabled="disabled" @click="skip">Skip</button>
@@ -45,7 +45,7 @@ import { computed, reactive, ref, shallowRef, watch } from 'vue'
 import NativeQuestionHtmlPreview from './NativeQuestionHtmlPreview.vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import { ClaudeQuestionCardSchema, type ClaudeQuestionAnswer, type ClaudeQuestionPresentation } from '#features/code/common/native-question.ts'
-const props = defineProps<{ card: Record<string, unknown>; disabled: boolean; error?: string; presentation?: ClaudeQuestionPresentation; renderToken?: string }>()
+const props = defineProps<{ card: Record<string, unknown>; cancelLabel?: string; disabled: boolean; error?: string; presentation?: ClaudeQuestionPresentation; renderToken?: string }>()
 const emit = defineEmits<{ respond: [answer: ClaudeQuestionAnswer]; started: [token?: string]; pause: [] }>()
 const answering = ref(false), acceptedCard = shallowRef(props.card), acceptedPresentation = shallowRef(props.presentation), acceptedToken = ref(props.renderToken)
 watch(() => [JSON.stringify(props.card), props.presentation, props.renderToken], () => {

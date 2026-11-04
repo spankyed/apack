@@ -171,6 +171,7 @@ export type ClaudeUiTranscriptFrame = ClaudeUiTranscriptRow & {
 export interface ClaudeUiQuestionRow { messageId: string; id: string; revision: string; sessionId: string; requestId: string }
 export interface ClaudeUiQuestionFrame {
   messageId: string; id: string; revision: string; draftActionId: string; token?: string;
+  pending?: boolean; problem?: string;
   shownInput?: Record<string, unknown>;
   presentation?: import('../../../common/native-question.ts').ClaudeQuestionPresentation;
   body: { status: 'rendering' } | { status: 'live'; tree: ClaudeUiNode } | { status: 'error'; message: string }

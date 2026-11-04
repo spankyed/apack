@@ -534,6 +534,7 @@ interface ClaudeBackgroundDesktopOwner {
     readonly identity: Readonly<ClaudeBackgroundStatusIdentity>;
     readonly registration: number;
     readonly transport: ClaudeTerminalUiTransport;
+    readonly questions: ReturnType<typeof createClaudeBackgroundQuestions>;
     readonly done: Promise<void>;
 }
 
@@ -585,6 +586,10 @@ interface ClaudeBackgroundSessionState {
     continuedInSessionId: string;
     revision: number;
     operation: 'refresh' | 'reply' | 'stop';
+    question?: {
+        id: string;
+        revision: string;
+    };
     desktop?: ClaudeBackgroundUiTarget;
     status: 'done' | 'error' | 'pending';
     session?: ClaudeBackgroundSession;
@@ -2703,6 +2708,8 @@ interface ClaudeUiQuestionFrame {
     revision: string;
     draftActionId: string;
     token?: string;
+    pending?: boolean;
+    problem?: string;
     shownInput?: Record<string, unknown>;
     presentation?: ClaudeQuestionPresentation;
     body: {
@@ -2959,6 +2966,13 @@ type ClaudeUiViewRequest = ({
     threadId: string;
     mountId: string;
 } & ClaudeUiFieldEvent) | {
+    type: 'CLAUDE_UI_QUESTION_ANSWER';
+    threadId: string;
+    mountId: string;
+    messageId: string;
+    token: string;
+    answer: ClaudeQuestionAnswer;
+} | {
     type: 'CLAUDE_UI_PRESS';
     threadId: string;
     mountId: string;
@@ -8740,6 +8754,39 @@ declare function create(options: CreateArtifactOptions): {
     artifactId: EARS.EntityId;
 };
 
+/** Observe the verified child once, independently of desktop clients and Reply visibility. */
+declare function createClaudeBackgroundQuestions(options: {
+    sessionId: string;
+    transport: Pick<ClaudeTerminalUiTransport, 'request'>;
+    changed(): void;
+}): {
+    readonly value: {
+        id: string;
+        revision: string;
+        sessionId: string;
+        requestId: string;
+        toolName: "AskUserQuestion";
+        shownInput: Record<string, unknown>;
+        presentation: {
+            previewFormat: string | null;
+            extendedQuestions: boolean;
+            optionalDescriptions: boolean;
+            previews: {
+                question: string;
+                option: string;
+                kind: "empty" | "full" | "withheld";
+                markdown?: string | undefined;
+                html?: string | undefined;
+            }[];
+            notice?: string | undefined;
+        };
+    } | undefined;
+    refresh: () => Promise<void>;
+    subscribe(listener: () => void): () => void;
+    settled(id: string, revision: string): void;
+    close(): void;
+};
+
 /** A read-only original runtime owns identity checks independently of the parent's UI socket. */
 declare function createClaudeBackgroundStatusAuthority(parentSessionId: string, options: SpawnStreamOptions): {
     identify(sessionId: string, pid: number, cwd: string): Promise<ClaudeBackgroundStatusIdentity>;
@@ -8754,6 +8801,8 @@ declare function createClaudeBackgroundStatusObserver(options: {
         configDir?: string;
         secureStorageConfigDir?: string;
         executable: string;
+        cwd: string;
+        searchPath: string | undefined;
     };
     checkpoint?: ClaudeBackgroundCheckpoint;
     target(): {

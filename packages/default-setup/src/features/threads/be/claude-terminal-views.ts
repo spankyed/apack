@@ -57,6 +57,7 @@ export interface ClaudeBackgroundSessionState {
   continuedInSessionId: string
   revision: number
   operation: 'refresh' | 'stop' | 'reply'
+  question?: {id: string; revision: string}
   desktop?: ClaudeBackgroundUiTarget
   status: 'pending' | 'done' | 'error'
   session?: ClaudeBackgroundSession
@@ -128,6 +129,7 @@ export function createClaudeTerminalViews(dependencies: {
   continuation?(threadId: string): ClaudeNativeContinuation | undefined
   background?(continuation: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest, threadId: string): Promise<ClaudeBackgroundSession | undefined>
   desktop?(continuation: ClaudeNativeContinuation, jobId: string, pid: number, threadId: string): Promise<ClaudeBackgroundUiTarget | undefined>
+  backgroundQuestion?(threadId: string, target: ClaudeBackgroundUiTarget): {id: string; revision: string} | undefined
   desktopCurrent?(threadId: string, target: ClaudeBackgroundUiTarget): boolean
   backgroundInfo?(threadId: string): import('#features/code/common/native-background.ts').ClaudeBackgroundStatus | undefined
   subscribeBackground?(threadId: string, changed: () => void): () => void
@@ -160,6 +162,7 @@ export function createClaudeTerminalViews(dependencies: {
   function publish(key: string, view: View) {
     if (views.get(key) !== view) return
     if (view.background?.desktop && !dependencies.desktopCurrent?.(view.threadId, view.background.desktop)) view.background.desktop = undefined
+    if (view.background) view.background.question = view.background.desktop ? dependencies.backgroundQuestion?.(view.threadId, view.background.desktop) : undefined
     if (view.attachment && !attachmentCurrent(view)) retireAttachment(view)
     if (view.attachment && view.attachmentOwner) view.attachment.state = view.attachmentOwner.snapshot
     const output = view.owner?.output.filter(chunk => chunk.sequence > view.sequence) ?? []
