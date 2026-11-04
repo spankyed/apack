@@ -1153,6 +1153,8 @@ useNativeTranscriptViewport({
   /* Share short windows with the workspace before any manual split adjustment. */
   .native-chat-shell[data-native-workspace-owner] {
     min-height: min(25rem, max(20rem, calc(100vh - 18rem)));
+  }
+  .native-chat-shell[data-native-workspace-owner]:not(:has([data-native-notice], [data-native-command-panel], [data-testid="native-mcp-form"], [data-testid="native-mcp-url"])) {
     --composer-workspace-history-reserve: 2rem;
     --agent-composer-history-reserve: 2rem;
   }
