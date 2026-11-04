@@ -28,6 +28,11 @@ export async function verifySelectionLimit({appPage,card,composer,project,contex
   proof.push({name,length:text.length,sha256:createHash('sha256').update(text).digest('hex'),selected:receipt.selected})
  }
  await composer.fill('Keep this draft after reading selected release notes.')
+ await composer.evaluate(root=>{const range=document.createRange();range.selectNodeContents(root);const selected=document.getSelection()!;selected.removeAllRanges();selected.addRange(range);document.dispatchEvent(new Event('selectionchange'))})
+ await button.click();await expect.poll(async()=>(await receipts()).length).toBe(6)
+ const recovered='Keep this draft after reading selected release notes.'
+ expect((await receipts())[5]).toEqual({selected:true,value:{text:recovered}})
+ proof.push({name:'recovery',length:recovered.length,sha256:createHash('sha256').update(recovered).digest('hex'),selected:true})
  for(const width of [1100,680]){
   await appPage.setViewportSize({width,height:width===680?600:900})
   await expect(composer).toHaveText('Keep this draft after reading selected release notes.')
