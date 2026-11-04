@@ -5,7 +5,9 @@ import {expect,type Page,type Locator} from '@playwright/test'
 /** Observe the real shell before choosing a UI-12 repair; never infer acceptance from intersection. */
 export async function measureWorkspaceLayout({page,composer,workspace,phase,capture}:{page:Page;composer:Locator;workspace:string;phase:'parent'|'agent';capture:(name:string)=>Promise<void>}){
  const original=await page.evaluate(()=>(window as any).applicationState.getSnapshot().context.panelSizes)
- const draft=await composer.textContent(),readings=[]
+ const draft=await composer.textContent()
+ if(draft===null)throw Error('The active composer has no readable document')
+ const readings=[]
  const send=phase==='parent'?page.locator('[data-onboarding-id="agent-chat-input"]').getByRole('button',{name:'Send',exact:true}):page.getByRole('form',{name:'Agent message',exact:true}).getByRole('button',{name:'Send to Agent',exact:true})
  try{
   for(const viewport of [{width:1100,height:900},{width:680,height:600}]){
