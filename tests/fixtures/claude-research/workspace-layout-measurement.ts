@@ -41,9 +41,9 @@ export async function measureWorkspaceLayout({page,composer,workspace,phase,capt
      await expect(composer).toBeInViewport({ratio:1});await expect(send).toBeInViewport({ratio:1})
      if(process.env.CLAUDE_RESEARCH_AGENT_HIT_DIAGNOSTIC!=='1')expect(sendGeometry.hit,'Send is not clipped or obscured').toBe(true)
      expect(composerGeometry.clientHeight,'At least one complete draft line remains readable').toBeGreaterThanOrEqual(24)
-     if(state==='workspace'){
+     if(state==='workspace'||viewport.height===600){
       const elements=geometry.elements as Record<string,{height:number}>
-      expect(elements.artifacts.height,'Explicit workspace resize exposes actual reading space').toBeGreaterThanOrEqual(96)
+      expect(elements.artifacts.height,'Workspace reading remains usable beside composing').toBeGreaterThanOrEqual(96)
       const artifacts=page.locator('[data-onboarding-id="agent-artifacts"]')
       const details=artifacts.locator('details').first(),summary=details.locator(':scope > summary')
       const bounds=await artifacts.boundingBox();expect(bounds).toBeTruthy()

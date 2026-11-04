@@ -1,6 +1,6 @@
 <template>
   <!-- Workspace reading retains room for composing, status and native owner controls. -->
-  <div class="native-chat-shell flex flex-col h-full" :style="{
+  <div class="native-chat-shell flex flex-col h-full" :data-native-workspace-owner="compactWorkspaceOwner" :style="{
     contain: 'size',
     '--native-chat-min-height': nativeChatMinHeight,
     '--composer-workspace-history-reserve': nativeWorkspaceReading ? '2rem' : undefined,
@@ -782,6 +782,10 @@ function handleDashboardResize(delta: number) {
 
 const canvasHeight = computed(() => shell.panelSizes.value.canvasHeight)
 const nativeWorkspaceReading = computed(() => canvasHeight.value > 50 && (currentMode.value === 'Claude Code' || !!currentThread.value?.context?.claudeCode))
+const compactWorkspaceOwner = computed(() => {
+  if (canvasHeight.value <= 0 || nativeToolsExpanded.value || !nativeChatMinHeight.value) return undefined
+  return focusedAgent.value ? 'agent' : 'parent'
+})
 const nativeChatMinHeight = computed(() => {
   if (currentMode.value !== 'Claude Code' && !currentThread.value?.context?.claudeCode) return undefined
   if (nativeWorkspaceReading.value) {
@@ -1146,6 +1150,15 @@ useNativeTranscriptViewport({
 .native-chat-shell:has([data-native-notice="refusal_fallback_prompt"]) { --composer-notice-history-reserve: 10rem; }
 /* Keep pending native decisions beside useful conversation space in short windows. */
 @media (max-height: 720px) {
+  /* Share short windows with the workspace before any manual split adjustment. */
+  .native-chat-shell[data-native-workspace-owner] {
+    min-height: min(25rem, max(20rem, calc(100vh - 18rem)));
+    --composer-workspace-history-reserve: 2rem;
+    --agent-composer-history-reserve: 2rem;
+  }
+  .native-chat-shell[data-native-workspace-owner="agent"] {
+    min-height: min(26rem, max(20.5rem, calc(100vh - 18rem)));
+  }
   .chat-composer-area--background { min-height: min(12.5rem, 55%); }
   .native-chat-shell:has([data-native-notice]) { min-height: calc(100vh - 3rem); }
 }
