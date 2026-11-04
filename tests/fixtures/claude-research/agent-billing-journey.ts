@@ -4,6 +4,10 @@ import {pathToFileURL} from 'node:url'
 import {expect,type Page,type ElectronApplication,type TestInfo} from '@playwright/test'
 import type {AppDriver} from '@apackdev/testing'
 
+// Interactive billing has a120s allowance; final print recovery needs the SDK30s
+// initialization allowance and its existing25s completed-turn check as well.
+export const AGENT_BILLING_JOURNEY_TIMEOUT_MS=120000+30000+25000
+
 /** The same original-native, actual-app journey for fixture and direct Electron execution. */
 export async function verifyAgentBilling(
  {app,appPage,electronApp}:{app:Pick<AppDriver,'navigate'|'waitForSurface'>;appPage:Page;electronApp:ElectronApplication},
