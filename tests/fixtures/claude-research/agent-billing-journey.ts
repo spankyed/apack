@@ -94,7 +94,10 @@ export async function verifyAgentBilling(
   await appPage.getByRole('button',{name:/^Native tools/}).first().click()
   const row=appPage.locator('[data-native-agent-id]').first()
   const taskId=await row.getAttribute('data-native-agent-id');expect(taskId).toBeTruthy()
-  await composer.fill('Keep the parent release-review draft.')
+  // Use the editor's actual keyboard selection/replacement path before switching.
+  await composer.click();await composer.press(process.platform==='darwin'?'Meta+A':'Control+A');await composer.press('Backspace')
+  await composer.pressSequentially('Keep the parent release-review draft.')
+  await expect(composer).toHaveText('Keep the parent release-review draft.')
   await row.getByRole('button',{name:'Open Agent',exact:true}).click()
   const focused=appPage.getByRole('region',{name:'Focused Agent conversation',exact:true})
   const form=focused.getByRole('form',{name:'Agent message',exact:true})
