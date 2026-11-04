@@ -2,6 +2,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fork } from 'node:child_process';
+import threads, { SHARE_ENV } from 'node:worker_threads';
+import { syncBuiltinESMExports } from 'node:module';
+import { ownCompilerThreads } from '../../src/build/compiler-threads.ts';
 import { afterEach, expect, it, vi } from 'vitest';
 import { cliBin } from '../../src/utils.ts';
 import { COMPILER_INPUTS_ENV, readCompilerInstallationInputs } from '../../src/build/compiler-installation-inputs.ts';
@@ -44,6 +47,21 @@ it('keeps private startup options separate from child options and preserves user
       '--experimental-loader', compilerStartupLoader(path.resolve('compiler/dist/compiler-startup.cjs')),
       `${flag}=/custom loader.mjs`]);
     expect(parseNodeOptions(options.user)).toEqual([`${flag}=/custom loader.mjs`]);
+  }
+});
+
+it('refuses shared worker environments that would run preloads before capture ownership', async () => {
+  vi.stubEnv('NODE_OPTIONS', '--require=/must-not-run.cjs');
+  const NativeWorker = threads.Worker;
+  const collect = ownCompilerThreads(path.resolve('compiler-startup.cjs'), os.tmpdir(), {});
+  try {
+    expect(() => new threads.Worker('', { eval: true, execArgv: [], env: SHARE_ENV }))
+      .toThrow('inherit execArgv or use a private environment');
+    expect(process.env.NODE_OPTIONS).toBe('--require=/must-not-run.cjs');
+  } finally {
+    threads.Worker = NativeWorker;
+    syncBuiltinESMExports();
+    await collect(true);
   }
 });
 

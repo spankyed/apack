@@ -47,8 +47,10 @@ it('removes standalone trees whose process has exited and keeps a live process\'
     fs.mkdirSync(path.join(tree, 'work'), { recursive: true });
     fs.chmodSync(tree, 0o500);
   }
-  vi.stubEnv('TMPDIR', parent);
-  trees.push(createCompilerReadTree({ files: [], locations: [], links: [] }, []));
+  vi.spyOn(os, 'tmpdir').mockReturnValue(parent);
+  const tree = createCompilerReadTree({ files: [], locations: [], links: [] }, []);
+  trees.push(tree);
+  expect(path.dirname(tree.directory)).toBe(parent);
   expect(fs.existsSync(abandoned)).toBe(false);
   expect(fs.existsSync(live)).toBe(true);
   fs.chmodSync(live, 0o700);

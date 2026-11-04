@@ -44,7 +44,7 @@ export function createCompilerModuleLoader(compilation: CompilationInputs) {
     register(pathToFileURL(path.join(cliPackageDirectory(), 'bin/compiler-source-hooks.mjs')), {
       data: { directory: tree.directory, namespace, closed: closed.buffer },
     });
-    hooks = registerHooks({
+    const ownedHooks: Parameters<typeof registerHooks>[0] = {
       resolve(specifier, context, next) {
         if (isBuiltin(specifier) || (!context.parentURL?.startsWith(root) && !specifier.startsWith(root)
           && !scoped(context.parentURL) && !scoped(specifier))) return next(specifier, context);
@@ -80,7 +80,13 @@ export function createCompilerModuleLoader(compilation: CompilationInputs) {
           return { ...result, url: logical.href };
         });
       },
-    });
+      load(url, context, next) {
+        if (!url.startsWith(root) && !scoped(url)) return next(url, context);
+        if (Atomics.load(closed, 0)) throw new Error('Compiler module load outlived its build');
+        // Loading/transformation is tooling; evaluation resumes in the caller's captured read scope.
+        return withoutCompilerFileReads(() => next(url, context));
+      },
+    };
     const [esm, cjs] = await withoutCompilerFileReads(() => Promise.all([import('tsx/esm/api'), import('tsx/cjs/api')]));
     const tsconfig = writeCompilerModuleConfiguration(compilation.configuration ?? compilation.declarationConfiguration, tree);
     const importCompilerSource = createRequire(import.meta.url)(path.join(cliPackageDirectory(), 'bin/compiler-import.cjs')) as (url: string) => Promise<Record<string, unknown>>;
@@ -88,6 +94,9 @@ export function createCompilerModuleLoader(compilation: CompilationInputs) {
     const unregisterCommonJS = registerCompilerCommonJS(compilation, tree.directory, tsconfig);
     try {
       const modules = esm.register({ namespace, tsconfig });
+      // Run before tsx's synchronous hooks, while the request still carries its capture namespace.
+      try { hooks = registerHooks(ownedHooks); }
+      catch (error) { await modules.unregister(); throw error; }
       return { modules, commonjs, unregisterCommonJS, importCompilerSource };
     } catch (error) { unregisterCommonJS(); commonjs.unregister(); throw error; }
   }
@@ -120,8 +129,8 @@ export function createCompilerModuleLoader(compilation: CompilationInputs) {
     dispose(): Promise<void> {
       stopping ??= (async () => {
         Atomics.store(closed, 0, 1);
-        hooks?.deregister();
         const loaded = await pending?.catch(() => undefined);
+        hooks?.deregister();
         if (loaded) {
           try { await loaded.modules.unregister(); }
           finally { loaded.unregisterCommonJS(); loaded.commonjs.unregister(); }

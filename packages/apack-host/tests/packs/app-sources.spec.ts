@@ -1,7 +1,8 @@
-import * as fs from 'node:fs';
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PackManifest } from '@apackdev/sdk/build';
 import { readAppPackSources } from '../../src/packs/app-sources.ts';
 import { createContributionCatalog } from '../../src/packs/catalog.ts';
@@ -40,7 +41,15 @@ describe('app-shipped source declarations', () => {
     const dir = source('different-folder');
     const receipt = path.join(dir, 'dist', PACK_LAYOUT.integrity);
     const before = fs.statSync(receipt).mtimeMs;
-    const input = readAppPackSources(root);
+    const reads = vi.spyOn(fs, 'readFileSync');
+    syncBuiltinESMExports();
+    let input;
+    try {
+      input = readAppPackSources(root);
+      for (const file of [receipt, path.join(dir, 'dist', PACK_LAYOUT.snapshot)]) {
+        expect(reads.mock.calls.filter(([name]) => name === file)).toHaveLength(1);
+      }
+    } finally { reads.mockRestore(); syncBuiltinESMExports(); }
     expect(input.problems).toEqual([]);
     expect(input.sources).toMatchObject([{ id: 'default-pack', dir,
       sourceRevision: expect.stringMatching(/^[a-f0-9]{64}$/) }]);

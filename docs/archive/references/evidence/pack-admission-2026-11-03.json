@@ -1,0 +1,245 @@
+{
+  "date": "2026-11-03",
+  "pullRequest": "https://github.com/spankyed/apack/pull/322",
+  "status": "qualification-incomplete",
+  "source": {
+    "baseline": "8835a4160ca8ab146bc85d318edb2d2415479423",
+    "runtime": "279f27c3cba4f284197bdce1225a6ba4e17076ae",
+    "fixtureRepairs": "3e5200f5a92820bfcefab162d4dd51071d958aaf"
+  },
+  "environment": {
+    "node": "24.22.2",
+    "npm": "11.21.1",
+    "vitest": "4.1.12",
+    "electron": "44.9.3",
+    "platform": "linux",
+    "architecture": "arm64",
+    "cpuLimit": 2,
+    "memoryGiB": 6,
+    "storage": "OrbStack data on APFS Seagate Portable Media; disk-backed scratch",
+    "lockSha256": "86a20c4085e0d403efb198940ab85b40cfaa033222d19c0a5b6aaf27944cfb56",
+    "installedLockMatches": true
+  },
+  "readerWork": {
+    "sameSealedPack": true,
+    "returnedDataDeepEqual": true,
+    "readAccounting": "Synchronous file reads below the pack build plus the authored root manifest; bytes are bytes returned, not physical device I/O.",
+    "results": [
+      {
+        "variant": "baseline",
+        "operation": "readPackBuild",
+        "reads": 120,
+        "bytes": 35625671,
+        "receipt": {
+          "reads": 1,
+          "bytes": 12639
+        },
+        "snapshot": {
+          "reads": 2,
+          "bytes": 2235160
+        },
+        "contentIndex": {
+          "reads": 2,
+          "bytes": 62584
+        },
+        "manifest": {
+          "reads": 2,
+          "bytes": 145660
+        }
+      },
+      {
+        "variant": "admission",
+        "operation": "readPackBuild",
+        "reads": 117,
+        "bytes": 34403969,
+        "receipt": {
+          "reads": 1,
+          "bytes": 12639
+        },
+        "snapshot": {
+          "reads": 1,
+          "bytes": 1117580
+        },
+        "contentIndex": {
+          "reads": 1,
+          "bytes": 31292
+        },
+        "manifest": {
+          "reads": 1,
+          "bytes": 72830
+        }
+      },
+      {
+        "variant": "baseline",
+        "operation": "readBuiltPackSource",
+        "reads": 240,
+        "bytes": 71250764,
+        "receipt": {
+          "reads": 2,
+          "bytes": 25278
+        },
+        "snapshot": {
+          "reads": 4,
+          "bytes": 4470320
+        },
+        "contentIndex": {
+          "reads": 4,
+          "bytes": 125168
+        },
+        "manifest": {
+          "reads": 3,
+          "bytes": 218490
+        }
+      },
+      {
+        "variant": "admission",
+        "operation": "readBuiltPackSource",
+        "reads": 118,
+        "bytes": 34476221,
+        "receipt": {
+          "reads": 1,
+          "bytes": 12639
+        },
+        "snapshot": {
+          "reads": 1,
+          "bytes": 1117580
+        },
+        "contentIndex": {
+          "reads": 1,
+          "bytes": 31292
+        },
+        "manifest": {
+          "reads": 1,
+          "bytes": 72830
+        }
+      }
+    ]
+  },
+  "focusedTests": {
+    "distinctHostCasesWithPassingResults": 302,
+    "formatterCases": 2,
+    "method": "Coverage across retained invocations, not a single all-green 302-case pool. Three permission-denial cases were rechecked unchanged with DAC-bypass capabilities removed from Linux root.",
+    "invocations": [
+      {
+        "log": "admission-tests.log",
+        "passed": 223,
+        "failed": 2,
+        "failure": "Root bypassed chmod denial."
+      },
+      {
+        "log": "admission-permissions-retest.log",
+        "passed": 2,
+        "failed": 0,
+        "capabilitiesRemoved": [
+          "dac_override",
+          "dac_read_search"
+        ]
+      },
+      {
+        "log": "formatter-tests.log",
+        "passed": 2,
+        "failed": 0,
+        "resolution": "Pack frontend project, published dist."
+      },
+      {
+        "log": "fixture-repairs-current-lock.log",
+        "passed": 76,
+        "failed": 1,
+        "failure": "Root bypassed chmod denial."
+      },
+      {
+        "log": "fixture-permission-retest.log",
+        "passed": 1,
+        "failed": 0,
+        "capabilitiesRemoved": [
+          "dac_override",
+          "dac_read_search"
+        ]
+      }
+    ]
+  },
+  "producers": {
+    "log": "candidate-preparation.log",
+    "passed": [
+      "packages:ensure",
+      "build:default-setup",
+      "build:runtime"
+    ],
+    "nativeRebuilt": false
+  },
+  "browser": {
+    "status": "failed-before-formatter-assertions",
+    "unchangedDeadlineMs": 120000,
+    "attempts": [
+      {
+        "log": "formatter-browser.log",
+        "failure": "Electron fixture launch timed out."
+      },
+      {
+        "log": "formatter-browser-debug.log",
+        "failure": "Electron started, but first DBus output arrived after about two minutes; debugger attachment followed too late for the fixture deadline."
+      }
+    ],
+    "concurrentWork": "Another native container started at20:22:13Z before these launches; further containers subsequently started. Timing orchestration held; no other jobs stopped."
+  },
+  "latency": {
+    "status": "awaiting-quiet-window",
+    "measuredTrials": 0,
+    "requiredProtocol": "Recording disabled; maintained revision comparison; five warmups plus20 measured trials per revision, balanced ABBA, populated-startup and thread-open.",
+    "claim": null
+  },
+  "strictCI": {
+    "url": "https://github.com/spankyed/apack/actions/runs/41708188364",
+    "source": "279f27c3cb",
+    "attempt1": {
+      "producers": "passed",
+      "appAndRest": "Four semantic fixtures had stale receipts; repaired in3e5200f5a9 and focused-verified.",
+      "integration1": "Output-swap test observed a changed compiler namespace under the tsx cache; cause unresolved.",
+      "integration2": "Captured TypeScript module test reproduced the prior toolchain default-export/flow-validation failure.",
+      "native2": "Worker preload trace reproduced the prior toolchain extra loader/import events.",
+      "native1": "Truncated downloaded producer archive; no tests ran. Other four consumers unpacked the same artifact."
+    },
+    "retry": {
+      "job": "https://github.com/spankyed/apack/actions/runs/41708188364/job/126186414724",
+      "archiveUnpacked": true,
+      "result": "failed",
+      "case": "watch-module-freshness.native.spec.ts: refreshes flow modules loaded through ordinary imports on the next watched build",
+      "failure": "AbortError caused by timeout; no further rerun."
+    }
+  },
+  "rawEvidence": {
+    "sessionDirectory": ".apack/evidence-admission-2026-11-03",
+    "files": {
+      "admission-permissions-retest.log": "bdf2418d188d95140b998a5b47113c9067b5a1b4c1f07aee0867f12da72473bf",
+      "admission-tests.log": "1ecde5fccd81330a9dce3bc130bbf61dcb9f50888a97ff706fddd4796faa37b2",
+      "candidate-preparation.log": "b3bcc8e18e2fd17c4e5b5dce1e1a82652dd8bb0a549c408c7543969c021519de",
+      "count-final-admission-readers.ts": "9835600c4fa267d104f18ca3d377b749cb05220b16172161b329b880597a468f",
+      "fixture-permission-retest.log": "6d356589750d2620b491605ad7a09caaaf150b6e245aae01b91d751dbbe214f2",
+      "fixture-repairs-current-lock.log": "98ffe49d892c1d2fa19ba1eacc84c23f58a6d5b41f487d22f39c325cd03bdff6",
+      "formatter-browser-debug.log": "c29c7f72b75910f1b3933212ff727953fbf987fa8628addf7a8ec5d3f97a2fe3",
+      "formatter-browser.log": "4b1f7c4539031e062e9ee6c3cf7dd0d3772de53ebd2a98291197a914a507ed39",
+      "formatter-tests.log": "be3ff77dcb1b08066fc54a4bb38548d0582ce91ee2d81815b9958cb2a170dc62",
+      "lock.txt": "ffe90c4fe9cba71e011bfd70651bcf0e5cd1fe0ab9111c52ee987bb03e1e2949",
+      "message-time.spec.ts": "22918aafa34ee22e355663d57b19ff3414831e73848d0c7a292481fc38961baa",
+      "playwright.config.ts": "8800e5e6acb25cc5ec67ff625b3d5462e584c62656c86dd7d3be41af670212db",
+      "qualify-admission-browser-debug.sh": "00db857cad51bbd6cb579b8c6f0da6d3388211a872bcc075581f09f7c6fa9cf2",
+      "qualify-admission-final.sh": "315638104c7d541ce013ca8829e50a78d63be01db997380b2cb281c8573bb0ed",
+      "qualify-admission-resume.sh": "d8eb0faeaa28f0bfe4f1720c187c310539dba7a8db1a2e6cea06d3cd8ea0c939",
+      "reader-counts.json": "4734c46b91b57c56022e7e1132c5d9b8e79677e9ac9589dd84d83474a591355f",
+      "reader-counts.log": "4411bf20f7408a837df56e661ac49883d31699000a5962dc73988f74374aa0bb",
+      "toolchain.txt": "41cfcc1be6c40a832ecd7b924ae9ddb2a6c88cf544ac8e29b4c886ff5fdeb1e5",
+      "typecheck-host.log": "30875d155e1427fe0fe9db0b4dbf5d313d4b7d0153d1a59363d93d0ee9f9727c",
+      "typecheck-pack.log": "aa474859e128c5f0f2f83e461043cfdc69eaf5f1f31196d57b6776d6f716046c"
+    }
+  },
+  "typechecks": {
+    "host": "passed",
+    "pack": "passed",
+    "runtime": "Node24 current lock",
+    "runner": "scripts/bounded.ts suite; original declared deadline unchanged",
+    "logs": [
+      "typecheck-host.log",
+      "typecheck-pack.log"
+    ]
+  }
+}
