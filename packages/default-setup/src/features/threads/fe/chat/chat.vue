@@ -1,6 +1,11 @@
 <template>
   <!-- Workspace reading retains room for composing, status and native owner controls. -->
-  <div class="native-chat-shell flex flex-col h-full" :style="{ contain: 'size', '--native-chat-min-height': nativeChatMinHeight }">
+  <div class="native-chat-shell flex flex-col h-full" :style="{
+    contain: 'size',
+    '--native-chat-min-height': nativeChatMinHeight,
+    '--composer-workspace-history-reserve': nativeWorkspaceReading ? '2rem' : undefined,
+    '--agent-composer-history-reserve': nativeWorkspaceReading ? '2rem' : undefined,
+  }">
     <!-- Main content: optional inline dashboard + chat -->
     <div class="flex flex-grow overflow-hidden min-h-0" ref="chatContainerRef">
       <!-- Thread Sidebar (left, hidden during onboarding) -->
@@ -776,13 +781,14 @@ function handleDashboardResize(delta: number) {
 }
 
 const canvasHeight = computed(() => shell.panelSizes.value.canvasHeight)
+const nativeWorkspaceReading = computed(() => canvasHeight.value > 50 && (currentMode.value === 'Claude Code' || !!currentThread.value?.context?.claudeCode))
 const nativeChatMinHeight = computed(() => {
   if (currentMode.value !== 'Claude Code' && !currentThread.value?.context?.claudeCode) return undefined
-  if (canvasHeight.value > 50) {
+  if (nativeWorkspaceReading.value) {
     // Keep the composer and owner controls visible when the workspace takes priority.
     return focusedAgent.value
       ? 'min(26rem, max(20rem, calc(100vh - 18rem)))'
-      : 'min(22rem, max(20rem, calc(100vh - 18rem)))'
+      : 'min(25rem, max(20rem, calc(100vh - 18rem)))'
   }
   return nativeToolsExpanded.value || focusedAgent.value
     ? 'min(42rem, max(min(28rem, calc(100vh - 3rem)), calc(100vh - 11rem)))'

@@ -10,7 +10,7 @@
       <div
         ref="inputCardRef"
         class="relative flex min-h-0 flex-col overflow-x-hidden overflow-y-auto rounded-2xl border bg-[#202022]"
-        :style="{ '--composer-history-reserve': nativeHistoryReserve, maxHeight: 'calc(var(--composer-available-height) - max(var(--composer-notice-history-reserve, 0px), var(--composer-history-reserve, var(--composer-default-history-reserve))))' }"
+        :style="{ '--composer-history-reserve': nativeHistoryReserve, maxHeight: 'calc(var(--composer-available-height) - max(var(--composer-notice-history-reserve, 0px), var(--composer-history-reserve, var(--composer-workspace-history-reserve, var(--composer-default-history-reserve)))))' }"
         :class="[$style.input, { 'opacity-50': disabled, [$style.inputBackgroundNotes]: nativeBackgrounded, [$style.inputCommandActive]: commandHighlight, [$style.inputDropActive]: isDraggingFile, [$style.inputRecording]: isListening }]"
         data-onboarding-id="agent-chat-input"
         @focusin="nativeFieldFocused = isNativeField($event.target)"
@@ -374,13 +374,13 @@ function isNativeField(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && target.matches('textarea[data-native-focus-id], select[data-native-focus-id]') && !target.closest('[data-native-client]')
 }
 const nativeHistoryReserve = computed(() => {
-  const expanded = 'clamp(6rem, calc(var(--composer-available-height) * 0.25), 10rem)'
+  const expanded = 'var(--composer-workspace-history-reserve, clamp(6rem, calc(var(--composer-available-height) * 0.25), 10rem))'
   if (nativeToolsExpanded.value) {
     const preferred = nativeFieldFocused.value ? `var(--composer-field-history-reserve, ${expanded})` : expanded
     // Focused fields still need room for the draft, native hint and Send toolbar.
     return nativeToolsRequiredHeight.value ? `min(${preferred}, max(calc(2rem + ${inputFormPadding.value}px), calc(var(--composer-available-height) - ${nativeToolsRequiredHeight.value}px)))` : preferred
   }
-  return nativeComposerHeight.value ? `max(var(--composer-min-history-reserve, 2rem), calc(var(--composer-default-history-reserve) - ${nativeComposerHeight.value}px))` : undefined
+  return nativeComposerHeight.value ? `max(var(--composer-min-history-reserve, 2rem), calc(var(--composer-workspace-history-reserve, var(--composer-default-history-reserve)) - ${nativeComposerHeight.value}px))` : undefined
 })
 const statusLineRef = ref<InstanceType<typeof StatusLine> | null>(null)
 function handleComposerNativeHotkey(event: KeyboardEvent) {

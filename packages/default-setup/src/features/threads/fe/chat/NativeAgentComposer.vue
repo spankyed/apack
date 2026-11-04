@@ -180,8 +180,8 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.native-agent-composer { max-height: max(7rem, calc(var(--agent-available-height, 32rem) - 10rem)); }
-.native-agent-composer--tools { max-height: max(7rem, calc(var(--agent-available-height, 32rem) - 11rem)); }
+.native-agent-composer { max-height: max(7rem, calc(var(--agent-available-height, 32rem) - var(--agent-composer-history-reserve, 10rem))); }
+.native-agent-composer--tools { max-height: max(7rem, calc(var(--agent-available-height, 32rem) - var(--agent-composer-history-reserve, 11rem))); }
 .native-agent-composer :deep([data-testid="composer-session-strip"]) { padding: .5rem 1rem; }
 .native-agent-body--tools { display: block; overflow-y: auto; overscroll-behavior: contain; }
 .native-agent-body--tools .native-agent-draft-scroll { overflow: visible; }
@@ -192,7 +192,7 @@ onBeforeUnmount(() => {
   .native-agent-composer { margin-bottom: .75rem; }
   /* Rich drafts need reading space without hiding native status or the transcript. */
   .native-agent-composer:has(.native-agent-editor :is(h1, h2, h3, pre, ul, ol, blockquote)):not(.native-agent-composer--tools) {
-    max-height: max(7rem, calc(var(--agent-available-height, 32rem) - 8.5rem));
+    max-height: max(7rem, calc(var(--agent-available-height, 32rem) - var(--agent-composer-history-reserve, 8.5rem)));
     margin-bottom: 0;
   }
   .native-agent-composer:has(.native-agent-editor :is(h1, h2, h3, pre, ul, ol, blockquote)):not(.native-agent-composer--tools) :deep([data-testid="composer-session-strip"]) { padding-block: .25rem; }
