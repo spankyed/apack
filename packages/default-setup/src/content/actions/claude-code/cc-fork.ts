@@ -83,7 +83,7 @@ async function handleFork(
   });
 
   persistClaudeState(services, newThreadId, {
-    sessionId: state.sessionId, cwd: state.cwd, configDir: state.configDir, sessionWorktree: state.sessionWorktree, lastTurnAt: state.lastTurnAt,
+    sessionId: state.sessionId, cwd: state.cwd, profile: state.profile, sessionWorktree: state.sessionWorktree, lastTurnAt: state.lastTurnAt,
     forkFrom: {sessionId: state.sessionId, cliUuid: lastAssistant.context.cliUuid},
   });
 

@@ -354,9 +354,9 @@ export async function action(
       };
     }
 
-    const configDir = prior?.configDir ?? services.cli.claudeCode.profileConfigDir();
-    const profile = claudeProfileOptions({configDir});
-    if (!prior?.configDir) persistClaudeState(services, threadId, {configDir});
+    const sessionProfile = prior?.profile ?? services.cli.claudeCode.profile();
+    const profile = claudeProfileOptions({profile:sessionProfile});
+    if (!prior?.profile) persistClaudeState(services, threadId, {profile:sessionProfile});
 
     const addDirs = [...new Set([...(prior?.additionalDirs ?? []), ...(resolved.addDirs ?? [])])];
 
@@ -471,12 +471,12 @@ export async function action(
       ...(revertTo && { resumeSessionAt: revertTo.cliUuid }),
       ...(forkFrom?.cliUuid && { resumeSessionAt: forkFrom.cliUuid }),
     };
-    const launchKey = JSON.stringify({ configDir, cwd: sessionCwd, model, allowedTools: options.allowedTools,
+    const launchKey = JSON.stringify({ profile:sessionProfile, cwd: sessionCwd, model, allowedTools: options.allowedTools,
       disallowedTools, channels, appendSystemPrompt: composedSystemPrompt, worktree: useWorktree, addDir: addDirs });
     let conversation = services.cli.claudeCode.getConversation(threadId);
     const previousLaunch = conversation ? JSON.parse(conversation.launchKey) : undefined;
     const existingKey = previousLaunch ? JSON.stringify({
-      configDir: previousLaunch.configDir,
+      profile: previousLaunch.profile,
       cwd: conversation!.owner.sessionCwd ?? previousLaunch.cwd,
       model: conversation!.owner.modelSelection ?? previousLaunch.model,
       allowedTools: previousLaunch.allowedTools, disallowedTools: previousLaunch.disallowedTools, channels: previousLaunch.channels,

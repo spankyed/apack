@@ -1,4 +1,4 @@
-import { claudeProfileOptions } from '../../../features/code/common/native-profile.ts';
+import { claudeProfileOptions, sameClaudeProfile } from '../../../features/code/common/native-profile.ts';
 /**
  * CC: Session Ops — handles session-heavy cc- commands (resume, import).
  *
@@ -92,8 +92,8 @@ async function handleResume(
     || codeSettings?.defaultBaseDirectory
     || codeSettings?.baseDirectory
     || undefined;
-  const configDir = prior?.configDir ?? services.cli.claudeCode.profileConfigDir();
-  const cwdOpts = { ...(effectiveCwd ? {cwd: effectiveCwd} : {}), ...claudeProfileOptions({configDir}) };
+  const profile = prior?.profile ?? services.cli.claudeCode.profile();
+  const cwdOpts = { ...(effectiveCwd ? {cwd: effectiveCwd} : {}), ...claudeProfileOptions({profile}) };
 
   // No args: show session picker
   if (!identifier) {
@@ -126,7 +126,7 @@ async function handleResume(
 
   const represented = services.repository.threadQueries.all().filter(candidate => {
     const state = candidate.context?.claudeCode;
-    return (state?.configDir ?? services.cli.claudeCode.profileConfigDir()) === configDir && !state?.forkFrom && !state?.revertTo && !state?.forkPending;
+    return sameClaudeProfile(state?.profile ?? services.cli.claudeCode.profile(), profile) && !state?.forkFrom && !state?.revertTo && !state?.forkPending;
   });
   const liveSession = (id: string) => services.cli.claudeCode.getNativeTerminal(id)?.state.sessionId
     ?? services.cli.claudeCode.getConversation(id)?.owner.sessionId;
@@ -140,7 +140,7 @@ async function handleResume(
   }
 
   // Fetch transcript for message import — use the session's own cwd bucket
-  const transcript = await services.cli.claudeCode.viewSession(sessionId, { cwd: (session as any).cwd, ...claudeProfileOptions({configDir}) });
+  const transcript = await services.cli.claudeCode.viewSession(sessionId, { cwd: (session as any).cwd, ...claudeProfileOptions({profile}) });
 
   // Preserve existing conversation and staged history when importing an unrepresented session.
   const existingMessages = services.repository.threadQueries.messages(threadId as any);
@@ -168,7 +168,7 @@ async function handleResume(
   // Set up session state — persistClaudeState adds 'claude-code' tag
   persistClaudeState(services, targetThreadId, {
     sessionId,
-    configDir,
+    profile,
     historyError: undefined,
     ...importedSessionMetadata(transcript, sessionId, (session as any).cwd),
     cwd: (session as any).cwd || '',
@@ -213,8 +213,8 @@ async function handleImport(
   services: Services,
   threadId?: string,
 ): Promise<{ text: string; data?: any; skipMessage?: boolean }> {
-  const configDir = (threadId ? getClaudeState(services, threadId)?.configDir : undefined) ?? services.cli.claudeCode.profileConfigDir();
-  const profile = claudeProfileOptions({configDir});
+  const selectedProfile = (threadId ? getClaudeState(services, threadId)?.profile : undefined) ?? services.cli.claudeCode.profile();
+  const profile = claudeProfileOptions({profile:selectedProfile});
   const allDirs = args.includes('all');
   const noLimit = args.includes('no-limit');
   const limit = noLimit ? undefined : DEFAULT_IMPORT_LIMIT;
@@ -231,7 +231,7 @@ async function handleImport(
   for (const thread of services.repository.threadQueries.all()) {
     const sid = (thread as any)?.context?.claudeCode?.sessionId;
     const state = thread.context?.claudeCode;
-    if (sid && (state?.configDir ?? services.cli.claudeCode.profileConfigDir()) === configDir) existingSessionIds.add(sid);
+    if (sid && sameClaudeProfile(state?.profile ?? services.cli.claudeCode.profile(), selectedProfile)) existingSessionIds.add(sid);
   }
 
   const toImport = sessions.filter((s: any) => !existingSessionIds.has(s.id));
@@ -278,7 +278,7 @@ async function handleImport(
       // The session state with an import's defaults, written in one update
       const thread = services.repository.threadQueries.byId(newThreadId) as any;
       const ccState = {
-        sessionId: session.id, configDir, sessionWorktree: false, cwd: (session as any).cwd || undefined,
+        sessionId: session.id, profile:selectedProfile, sessionWorktree: false, cwd: (session as any).cwd || undefined,
         chatState: 'idle', permissionMode: 'default', ...importedSessionMetadata(transcript, session.id, (session as any).cwd),
       };
 

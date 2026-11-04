@@ -64,7 +64,7 @@ export interface ClaudeCodeThreadState {
   channelSelection?: string[];
   nativeLaunch?: import('#features/code/common/native-launch.ts').ClaudeNativeLaunch;
   sessionId?: string;
-  configDir?: string;
+  profile?: import('../../../../features/code/common/native-profile.ts').ClaudeNativeProfile;
   /** History of previous sessionIds (oldest first), populated when compaction/fork/revert replaces the active session. */
   previousSessionIds?: string[];
   lastTurnAt?: number;

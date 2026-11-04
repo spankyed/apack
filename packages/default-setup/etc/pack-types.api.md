@@ -1362,6 +1362,12 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
     input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, z.core.$strip>;
 
+/** Presence matters: an explicit default config path selects a different native Keychain namespace. */
+interface ClaudeNativeProfile {
+    configDir?: string;
+    secureStorageConfigDir?: string;
+}
+
 type ClaudeNativeQuestionDialog = z.infer<typeof ClaudeNativeQuestionDialogSchema>;
 
 interface ClaudeNativeQuestionDialogResponse {
@@ -3017,7 +3023,7 @@ interface CliServiceType {
             cwd?: string;
         }): Promise<ClaudeFileRewind>;
         /** Config root to pin before creating a conversation. No credentials are returned. */
-        profileConfigDir(): string;
+        profile(): ClaudeNativeProfile;
         version(): Promise<string>;
         authStatus(): Promise<AuthStatus>;
         listSessions(opts?: SessionListOptions): Promise<SessionInfo[]>;
@@ -7279,7 +7285,7 @@ interface ThreadContext {
         nativeContinuation?: ClaudeNativeContinuation;
         retiredNativeMessages?: ClaudeNativeMessageRetirements;
         sessionId?: string;
-        configDir?: string;
+        profile?: ClaudeNativeProfile;
         lastTurnAt?: number;
         cwd?: string;
         model?: string;
@@ -8430,8 +8436,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             loading: z.ZodBoolean;
             copyState: z.ZodOptional<z.ZodEnum<{
                 error: "error";
-                idle: "idle";
                 pending: "pending";
+                idle: "idle";
                 saved: "saved";
             }>>;
             insight: z.ZodOptional<z.ZodString>;
@@ -8693,6 +8699,11 @@ declare function createClaudeBackgroundStatusAuthority(parentSessionId: string, 
 declare function createClaudeBackgroundStatusObserver(options: {
     parentSessionId: string;
     profile?: string;
+    childUiLaunch?: {
+        configDir?: string;
+        secureStorageConfigDir?: string;
+        executable: string;
+    };
     checkpoint?: ClaudeBackgroundCheckpoint;
     target(): {
         sessionId: string;
@@ -8704,6 +8715,8 @@ declare function createClaudeBackgroundStatusObserver(options: {
     directory: string;
     socketPath: string;
     token: string;
+    /** Original identity and a fresh per-worker socket/token scope every desktop attachment. */
+    desktopTransport(): Promise<ClaudeTerminalUiTransport | undefined>;
     readonly parentSessionId: string;
     readonly value: ClaudeBackgroundStatus | undefined;
     readonly available: boolean;

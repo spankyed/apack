@@ -8,7 +8,7 @@ const session = '11111111-1111-4111-8111-111111111111'
 async function printOwner(configDir?: string) {
   const events = new PassThrough({ objectMode: true })
   const handle = { events, close: vi.fn(async () => { events.end() }), kill: vi.fn(() => events.end()), getPermissionMode: vi.fn(async () => 'plan'), getSettings: vi.fn(async () => ({ effective: {}, sources: [] })) } as unknown as QueryHandle
-  const owner = await openConversation('thread', JSON.stringify({ configDir, cwd: '/fixture', model: 'native-model', worktree: false }), async () => handle, async () => {})
+  const owner = await openConversation('thread', JSON.stringify({ profile:configDir?{configDir}:undefined, cwd: '/fixture', model: 'native-model', worktree: false }), async () => handle, async () => {})
   events.write({ type: 'system', subtype: 'init', session_id: session, cwd: '/native-cwd' })
   await vi.waitFor(() => expect(owner.sessionId).toBe(session))
   return { handle, owner }
@@ -194,7 +194,7 @@ it('retains the print owner profile through terminal handoff without persisting 
   const native = terminal()
   mocks.prepare.mockResolvedValue({start: async () => native, dispose: async () => {}})
   await openNativeTerminal('thread', {}, mocks.prepare)
-  expect(mocks.prepare).toHaveBeenCalledWith(expect.objectContaining({env: {CLAUDE_CONFIG_DIR: '/private/app owned/claude'}}), undefined)
+  expect(mocks.prepare).toHaveBeenCalledWith(expect.objectContaining({env: {CLAUDE_CONFIG_DIR: '/private/app owned/claude',CLAUDE_SECURESTORAGE_CONFIG_DIR:undefined}}), undefined)
   const saved = await getNativeLaunch('thread')
   expect(saved).not.toHaveProperty('env')
 })

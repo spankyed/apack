@@ -181,7 +181,7 @@ export interface ThreadContext {
     nativeContinuation?: import('#features/code/be/services/claude-code/terminal-session.ts').ClaudeNativeContinuation
     retiredNativeMessages?: import('#features/code/common/native-notice.ts').ClaudeNativeMessageRetirements
     sessionId?: string;
-    configDir?: string;
+    profile?: import('#features/code/common/native-profile.ts').ClaudeNativeProfile;
     lastTurnAt?: number;
     cwd?: string;
     // Persistent session data (single source of truth — artifact is derived)

@@ -56,7 +56,7 @@ export async function action(params: Record<string, any>, services: Services) {
     else await services.cli.claudeCode.getContextUsage({sessionId:source.sessionId,cwd:source.cwd,...claudeProfileOptions(source)});
   } catch (error:any) { return fail(error?.message ?? 'The native history boundary is unavailable.'); }
   if (snapshot!==readSnapshot() || services.cli.claudeCode.getHandle(sourceThreadId)) return fail('The source conversation changed during validation. Retry the fork.');
-  persistClaudeState(services,newThreadId,{sessionId:source.sessionId,cwd:source.cwd,configDir:source.configDir,sessionWorktree:source.sessionWorktree,
+  persistClaudeState(services,newThreadId,{sessionId:source.sessionId,cwd:source.cwd,profile:source.profile,sessionWorktree:source.sessionWorktree,
     lastTurnAt:source.lastTurnAt,forkFrom:{sessionId:source.sessionId,cliUuid},forkPending:undefined,historyError:undefined});
   const queued=dequeueMessage(services,newThreadId);
   if (queued) await replayQueuedMessage(services,newThreadId as EntityId,queued,services.logger);

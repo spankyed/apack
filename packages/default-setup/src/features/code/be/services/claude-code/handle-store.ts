@@ -40,7 +40,7 @@ export function getNativeBackgroundStatus(key: string, continuation: ClaudeNativ
 export function restoreNativeBackgroundStatus(key: string, continuation: ClaudeNativeContinuation, cwd: string, profileEnv?: NodeJS.ProcessEnv): Promise<void> {
   const retained = backgroundObservers.get(key)?.observer
   if (retained?.available && retained.parentSessionId === continuation.sessionId) return Promise.resolve()
-  const identity = JSON.stringify([continuation.sessionId, continuation.continuedInSessionId, cwd, profileEnv?.CLAUDE_CONFIG_DIR])
+  const identity = JSON.stringify([continuation.sessionId, continuation.continuedInSessionId, cwd, profileEnv?.CLAUDE_CONFIG_DIR, profileEnv?.CLAUDE_SECURESTORAGE_CONFIG_DIR])
   const prior = backgroundRestores.get(key)
   if (prior?.identity === identity) return prior.promise
   const ticket = { identity, promise: Promise.resolve() }
@@ -52,7 +52,7 @@ export function restoreNativeBackgroundStatus(key: string, continuation: ClaudeN
     const checkpoint = await claimClaudeBackgroundCheckpoint({profile, parentSessionId:continuation.sessionId})
     if (!checkpoint) return
     const observer = await createClaudeBackgroundStatusObserver({
-      parentSessionId:continuation.sessionId, profile, checkpoint,
+      parentSessionId:continuation.sessionId, profile, checkpoint, childUiLaunch:{configDir:env.CLAUDE_CONFIG_DIR,secureStorageConfigDir:env.CLAUDE_SECURESTORAGE_CONFIG_DIR,executable},
       target:()=>({sessionId:continuation.continuedInSessionId,cwd}),
       authority:parent => createClaudeBackgroundStatusAuthority(parent,{cliPath:executable,cwd,env}), changed:()=>backgroundChanged(key),
     })
@@ -215,7 +215,7 @@ export async function openNativeTerminal(key: string, options: ClaudeNativeTermi
       const prior = JSON.parse(previous.launchKey) as Omit<ClaudeNativeTerminalOptions, 'settings' | 'sessionId'>
       if (resume && (resume.sessionId !== previous.owner.sessionId || resume.cwd !== (previous.owner.sessionCwd ?? prior.cwd))) throw new Error('Staged native launch no longer matches the active session')
       // Print-only flags (notably worktree) do not belong to a resumed native launch.
-      launch = { ...claudeProfileOptions(prior as {configDir?: string}), ...overrides, cwd: previous.owner.sessionCwd ?? prior.cwd, sessionId: previous.owner.sessionId!, model: typeof settings.applied?.model === 'string' ? settings.applied.model : previous.owner.modelSelection ?? prior.model, permissionMode,
+      launch = { ...claudeProfileOptions(prior as {profile?: import('../../../common/native-profile.ts').ClaudeNativeProfile}), ...overrides, cwd: previous.owner.sessionCwd ?? prior.cwd, sessionId: previous.owner.sessionId!, model: typeof settings.applied?.model === 'string' ? settings.applied.model : previous.owner.modelSelection ?? prior.model, permissionMode,
         allowedTools: prior.allowedTools, disallowedTools: prior.disallowedTools, appendSystemPrompt: prior.appendSystemPrompt, addDir: resume?.addDir === undefined ? prior.addDir : [...new Set([...(prior.addDir ?? []), ...resume.addDir])], pluginDir: prior.pluginDir, channels: resume?.channels === undefined ? prior.channels : resume.channels }
     } else {
       const intent = { ...resume!, ...overrides }

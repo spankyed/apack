@@ -1,8 +1,11 @@
+import { prepareClaudeOwnedChildUi } from './owned-profile.ts'
+import { createClaudeTerminalUiTransport, type ClaudeTerminalUiTransport } from './terminal-ui.ts'
+import { CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES } from './ui-text-limits.ts'
 import {claimClaudeBackgroundCheckpoint, type ClaudeBackgroundCheckpoint} from './background-observer-checkpoint.ts'
 import {createClaudeBackgroundFormatter, installClaudeBackgroundFormatterLauncher} from './background-formatter.ts'
 import { randomBytes } from 'node:crypto'
 import { createServer } from 'node:http'
-import { mkdtemp, rm, lstat, unlink } from 'node:fs/promises'
+import { mkdtemp, rm, lstat, unlink, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createClaudeBackgroundStatus } from './terminal-background-status.ts'
@@ -12,6 +15,7 @@ import type { createClaudeBackgroundStatusAuthority } from './background-status-
 export async function createClaudeBackgroundStatusObserver(options: {
   parentSessionId: string
   profile?: string
+  childUiLaunch?: {configDir?: string; secureStorageConfigDir?: string; executable: string}
   checkpoint?: ClaudeBackgroundCheckpoint
   target(): { sessionId: string; cwd: string } | undefined
   authority(parentSessionId: string): ReturnType<typeof createClaudeBackgroundStatusAuthority>
@@ -22,6 +26,9 @@ export async function createClaudeBackgroundStatusObserver(options: {
   let checkpoint = options.checkpoint
   try { if (!checkpoint && options.profile) checkpoint = await claimClaudeBackgroundCheckpoint({profile:options.profile,parentSessionId:options.parentSessionId,endpoint:{directory,token}}) }
   catch (error) { await rm(directory,{recursive:true,force:true});throw error }
+  let childUiPrepared = false
+  try { childUiPrepared = !!(options.profile && options.childUiLaunch && await prepareClaudeOwnedChildUi({userDataDir: options.profile, ...options.childUiLaunch, directory, socketPath, token})) }
+  catch (error) { if (!options.checkpoint) { await checkpoint?.retire(); await rm(directory, {recursive: true, force: true}) }; throw error }
   const listeners = new Set<() => void>()
   let target = options.target, parentChanged = options.changed
   let parentSessionId = options.parentSessionId
@@ -43,19 +50,41 @@ export async function createClaudeBackgroundStatusObserver(options: {
   let formatter: ReturnType<typeof createClaudeBackgroundFormatter> | undefined
   let launcher: Promise<string> | undefined
   let formatterRegistration = -1, formatterSequence = -1
+  let childUi: {registration: number; identity: string; token: string; transport: ClaudeTerminalUiTransport; bridge: ReturnType<typeof createClaudeTerminalUiTransport>} | undefined
+  const retireChildUi = () => { childUi?.bridge.close(); childUi = undefined }
+  async function childUiCurrent() {
+    const held = childUi, identity = status.identity
+    if (!held || !identity || closed || held.registration !== status.registration || held.identity !== JSON.stringify(identity)) return
+    const fresh = await authority.identify(identity.sessionId, identity.pid, identity.cwd)
+    if (childUi !== held || held.registration !== status.registration || held.identity !== JSON.stringify(fresh)) return
+    return held
+  }
   const server = createServer(async (request, response) => {
     const reply = (code: number, value: unknown) => { if (!response.destroyed && !response.writableEnded) { response.writeHead(code, { 'content-type': 'application/json' }); response.end(JSON.stringify(value)) } }
     try {
-      if (closed || request.method !== 'POST' || request.headers['x-apack-native-token'] !== token) return reply(403, {})
+      const uiRoute = request.url === '/ui-host' || request.url === '/ui-event'
+      if (closed || request.method !== 'POST' || (uiRoute ? !childUi || request.headers['x-apack-native-token'] !== childUi.token : request.headers['x-apack-native-token'] !== token)) return reply(403, {})
       let bytes = 0
       const chunks: Buffer[] = []
-      for await (const chunk of request) { bytes += chunk.length; if (bytes > (request.url === '/background-formatter' ? 262144 : 65536)) return reply(413, {}); chunks.push(Buffer.from(chunk)) }
+      for await (const chunk of request) { bytes += chunk.length; if (bytes > (request.url === '/ui-host' ? CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES : request.url === '/background-formatter' ? 262144 : 65536)) return reply(413, {}); chunks.push(Buffer.from(chunk)) }
       if (closed) return reply(409, {})
       const value = JSON.parse(Buffer.concat(chunks).toString('utf8'))
       if (!value || typeof value !== 'object' || Array.isArray(value)) return reply(400, {})
+      if (uiRoute) {
+        const held = await childUiCurrent()
+        if (!held || request.headers['x-apack-native-token'] !== held.token) return reply(409, {})
+        if (request.url === '/ui-event') {
+          const event = value.event
+          if (value.pid !== status.identity?.pid || value.sessionId !== status.identity?.sessionId || !event || typeof event !== 'object' || Array.isArray(event) || event.type !== 'system') return reply(409, {})
+          held.bridge.receive(event); return reply(200, {})
+        }
+        if (!held.bridge.receiveHost(value, (result, current) => { void childUiCurrent().then(fresh => reply(current && fresh === held ? 200 : 409, {request_id: value.request_id, pid: value.pid, sessionId: value.sessionId, result})).catch(() => reply(409, {})) })) return reply(409, {})
+        response.once('close', () => held.bridge.cancelHost(String(value.request_id)))
+        return
+      }
       if (request.url === '/background-register') {
         const lease = await status.register(value.sessionId, value.pid)
-        formatter?.reset(); changed(true)
+        retireChildUi(); formatter?.reset(); changed(true)
         if (releaseTimer) clearTimeout(releaseTimer); releaseTimer = undefined
         reply(200, lease); return
       }
@@ -87,7 +116,7 @@ export async function createClaudeBackgroundStatusObserver(options: {
   })
   const close = () => closing ??= (async () => {
     closed = true; if (releaseTimer) clearTimeout(releaseTimer); if (monitor) clearInterval(monitor)
-    status.close(); formatter?.reset(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
+    retireChildUi(); status.close(); formatter?.reset(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
     await authority.close(); await checkpoint?.retire(); await rm(directory, { recursive: true, force: true }); changed(); listeners.clear()
   })()
   async function checkReleasedChild() {
@@ -101,7 +130,7 @@ export async function createClaudeBackgroundStatusObserver(options: {
     } catch {
       if (!closed && status.registration === registration && authority === current) {
         // Retire the process lease, retaining the small listener/plugin for a later original restart.
-        status.reset(); formatter?.reset(); const retiring = current.close(); authority = options.authority(parentSessionId); await retiring
+        retireChildUi(); status.reset(); formatter?.reset(); const retiring = current.close(); authority = options.authority(parentSessionId); await retiring
       }
     } finally { checking = false }
   }
@@ -115,6 +144,41 @@ export async function createClaudeBackgroundStatusObserver(options: {
   catch (error) { await close(); throw error }
   return {
     directory, socketPath, token,
+    /** Original identity and a fresh per-worker socket/token scope every desktop attachment. */
+    async desktopTransport() {
+      const identity = status.identity, registration = status.registration
+      if (!childUiPrepared || closed || !identity) return
+      const fresh = await authority.identify(identity.sessionId, identity.pid, identity.cwd)
+      if (closed || registration !== status.registration || JSON.stringify(fresh) !== JSON.stringify(identity)) throw new Error('Background UI owner changed')
+      if (childUi?.registration === registration && childUi.identity === JSON.stringify(identity)) return childUi.transport
+      const marker = join(directory, 'worker-' + identity.pid + '.json'), info = await lstat(marker)
+      if (!info.isFile() || info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0 || info.size > 65536) throw new Error('Unowned background UI startup marker')
+      const proof = JSON.parse(await readFile(marker, 'utf8'))
+      const workerName = typeof proof.configPath === 'string' ? proof.configPath.split('/').at(-2) : undefined
+      if (proof.pid !== identity.pid || proof.sessionId !== identity.sessionId || !workerName || !new RegExp('^w-' + identity.pid + '-[A-Za-z0-9]+$').test(workerName) || proof.configPath !== join(directory, 'workers', workerName, 'observer.json')) throw new Error('Background UI startup does not match its original owner')
+      for (const path of [join(directory, 'workers'), join(directory, 'workers', workerName)]) {
+        const info = await lstat(path)
+        if (!info.isDirectory() || info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0) throw new Error('Unowned background UI startup directory')
+      }
+      const configInfo = await lstat(proof.configPath)
+      if (!configInfo.isFile() || configInfo.uid !== process.getuid?.() || (configInfo.mode & 0o077) !== 0 || configInfo.size > 65536) throw new Error('Unowned background UI startup config')
+      const config = JSON.parse(await readFile(proof.configPath, 'utf8'))
+      if (config.sessionId !== identity.sessionId || config.uiSocketPath !== join(proof.configPath.slice(0, -'/observer.json'.length), 'ui.sock') || typeof config.token !== 'string' || !/^[a-f0-9]{64}$/.test(config.token)) throw new Error('Background UI scope is invalid')
+      if (closed || registration !== status.registration || JSON.stringify(status.identity) !== JSON.stringify(identity)) throw new Error('Background UI owner changed')
+      retireChildUi()
+      const scope = JSON.stringify(identity)
+      const bridge = createClaudeTerminalUiTransport({socketPath: config.uiSocketPath, token: config.token,
+        current: () => !closed && registration === status.registration && JSON.stringify(status.identity) === scope ? {pid: identity.pid, sessionId: identity.sessionId} : undefined})
+      const transport: ClaudeTerminalUiTransport = { ...bridge.transport, async request(value) {
+        const held = await childUiCurrent()
+        if (held?.bridge !== bridge) throw new Error('Background UI owner changed')
+        const result = await bridge.transport.request(value)
+        if (await childUiCurrent() !== held) throw new Error('Background UI owner changed before its reply')
+        return result
+      } }
+      childUi = {registration, identity: scope, token: config.token, bridge, transport}
+      return transport
+    },
     get parentSessionId() { return parentSessionId },
     get value() { const value = status.value; return value && formatterRegistration === status.registration && formatterSequence === status.sequence && formatter?.value !== undefined ? {...value, statusLine: formatter?.value} : value },
     get available() { return !closed },
@@ -122,7 +186,7 @@ export async function createClaudeBackgroundStatusObserver(options: {
       if (closed || sessionId === parentSessionId) return
       await checkpoint?.retire()
       checkpoint = options.profile ? await claimClaudeBackgroundCheckpoint({profile:options.profile,parentSessionId:sessionId,endpoint:{directory,token}}) : undefined
-      parentSessionId = sessionId; status.reset(); formatter?.reset()
+      retireChildUi(); parentSessionId = sessionId; status.reset(); formatter?.reset()
       const retiring = authority.close(); authority = options.authority(parentSessionId); await retiring
     },
     adoptParent(nextTarget: typeof options.target, changed: () => void) {

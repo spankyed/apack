@@ -174,3 +174,44 @@ it('does not hide status expiry while a later identity lookup is pending',async(
   release({...original});expect((await pending).code).toBe(200);expect(f.observer.value?.observedAt).toBe(Date.now())
  }finally{release({...original});await pending?.catch(()=>{});await f.observer.close();vi.useRealTimers()}
 })
+
+it('binds child drawing and reverse prompts to the original worker and retires them on replacement', async () => {
+ const {mkdtemp,mkdir,readFile}=await import('node:fs/promises'),{createServer}=await import('node:http')
+ const profile=await mkdtemp(join(process.platform==='darwin'?'/private/tmp':tmpdir(),'cc-ui-profile-'))
+ let identity={...original}
+ const observer=await createClaudeBackgroundStatusObserver({profile,parentSessionId:parent,childUiLaunch:{configDir:join(profile,'claude-code-profile','config'),executable:process.execPath},target:()=>({sessionId:child,cwd:'/owned'}),changed(){},authority:()=>({identify:async()=>({...identity}),close:async()=>{}})})
+ const token='b'.repeat(64),worker=join(observer.directory,'workers','w-119-abcdef'),socketPath=join(worker,'ui.sock')
+ const post=(path:string,value:unknown,auth=observer.token)=>new Promise<{code:number;value:any}>((resolve,reject)=>{
+  const req=request({socketPath:observer.socketPath,path,method:'POST',headers:{'x-apack-native-token':auth}},res=>{let text='';res.on('data',chunk=>text+=chunk);res.on('end',()=>resolve({code:res.statusCode!,value:JSON.parse(text)}))});req.on('error',reject);req.end(JSON.stringify(value))
+ })
+ await mkdir(worker,{recursive:true,mode:0o700})
+ // mkdir's intermediates use the process umask; the private workers parent is explicit.
+ const {chmod}=await import('node:fs/promises');await chmod(join(observer.directory,'workers'),0o700)
+ await writeFile(join(observer.directory,'worker-119.json'),JSON.stringify({pid:119,sessionId:child,configPath:join(worker,'observer.json')}),{mode:0o600})
+ await writeFile(join(worker,'observer.json'),JSON.stringify({sessionId:child,token,uiSocketPath:socketPath}),{mode:0o600})
+ const native=createServer(async(req,res)=>{let text='';for await(const chunk of req)text+=chunk;const value=JSON.parse(text);res.end(JSON.stringify({id:value.id,pid:119,sessionId:child,result:{attached:true}}))})
+ await new Promise<void>(resolve=>native.listen(socketPath,resolve))
+ try {
+  expect(JSON.parse(await readFile(join(observer.directory,'child-ui-launch.json'),'utf8')).configDir).toBe(join(profile,'claude-code-profile','config'))
+  await post('/background-register',{sessionId:child,pid:119})
+  const transport=await observer.desktopTransport();expect(transport).toBeDefined()
+  let draft='Owned child draft あ🙂'
+  transport!.promptHosts.register('child-view',{read:async()=>({text:draft,cursor:draft.length}),fill:async input=>{draft=input.text;return true}})
+  await expect(transport!.request({subtype:'ui_attach',client_id:'child-view',surface:'desktop'})).resolves.toEqual({attached:true})
+  const events=vi.fn();transport!.subscribe(events)
+  const event={type:'system',subtype:'ui_invalidate',event:'ui.render',client_id:'child-view'}
+  expect((await post('/ui-event',{pid:119,sessionId:child,event})).code).toBe(403)
+  expect((await post('/ui-event',{pid:119,sessionId:child,event},token)).code).toBe(200)
+  expect(events).toHaveBeenCalledWith(event)
+  expect((await post('/ui-event',{pid:120,sessionId:child,event},token)).code).toBe(409)
+  const reverse=await post('/ui-host',{pid:119,sessionId:child,request_id:randomUUID(),sequence:1,request:{subtype:'ui_prompt_read',client_id:'child-view',surface:'desktop'}},token)
+  expect(reverse.code).toBe(200);expect(JSON.stringify(reverse.value)).toContain('Owned child draft あ🙂')
+  const filled=await post('/ui-host',{pid:119,sessionId:child,request_id:randomUUID(),sequence:2,request:{subtype:'ui_prompt_fill',client_id:'child-view',surface:'desktop',text:'Child replacement 🙂',mode:'replace'}},token)
+  expect(filled.code).toBe(200)
+  const after=await post('/ui-host',{pid:119,sessionId:child,request_id:randomUUID(),sequence:3,request:{subtype:'ui_prompt_read',client_id:'child-view',surface:'desktop'}},token)
+  expect(after.value.result).toEqual({text:'Child replacement 🙂',cursor:'Child replacement 🙂'.length})
+  identity={...identity,start:'replacement-worker'}
+  await expect(transport!.request({subtype:'ui_render'})).rejects.toThrow('owner changed')
+  expect((await post('/ui-event',{pid:119,sessionId:child,event},token)).code).toBe(409)
+ } finally {native.closeAllConnections();await new Promise<void>(resolve=>native.close(()=>resolve()));await observer.close();await rm(profile,{recursive:true,force:true})}
+})

@@ -1,3 +1,4 @@
+import { snapshotClaudeProfile, type ClaudeNativeProfile } from '../../common/native-profile.ts'
 import { replyBackgroundSession } from './claude-code/background-reply.ts'
 import { openBackgroundAttachment } from './claude-code/background-attachment.ts'
 import { backgroundSession } from './claude-code/background-sessions.ts'
@@ -78,7 +79,7 @@ export interface CliServiceType {
     getFileRewindPreview(opts: Omit<ClaudeSessionFileRewindOptions, 'cwd'> & {cwd?: string}): Promise<ClaudeFileRewind>
     rewindFiles(opts: Omit<ClaudeSessionFileRewindOptions, 'cwd'> & {cwd?: string}): Promise<ClaudeFileRewind>
     /** Config root to pin before creating a conversation. No credentials are returned. */
-    profileConfigDir(): string
+    profile(): ClaudeNativeProfile
     version(): Promise<string>
     authStatus(): Promise<AuthStatus>
     listSessions(opts?: SessionListOptions): Promise<SessionInfo[]>
@@ -261,7 +262,7 @@ function createCliService(): CliServiceType {
       authStatus() {
         return claudeCode.auth.status()
       },
-      profileConfigDir: configDir,
+      profile: () => snapshotClaudeProfile(process.env),
       listSessions(opts) {
         const cwd = opts?.cwd ?? resolveCwd()
         return claudeCode.sessions.list({ ...opts, cwd })
