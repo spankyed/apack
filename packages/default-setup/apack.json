@@ -681,6 +681,10 @@
               "additionalProperties": {
                 "type": "string"
               }
+            },
+            "claudeProfile": {
+              "type": "string",
+              "enum": ["shared", "app"]
             }
           },
           "required": [
@@ -700,7 +704,8 @@
             "showStashes",
             "showCommits",
             "showWorktrees",
-            "cliPaths"
+            "cliPaths",
+            "claudeProfile"
           ],
           "additionalProperties": false,
           "$schema": "http://json-schema.org/draft-07/schema#"
@@ -791,7 +796,8 @@
           "showStashes": true,
           "showCommits": true,
           "showWorktrees": false,
-          "cliPaths": {}
+          "cliPaths": {},
+          "claudeProfile": "shared"
         },
         "title": "Code",
         "form": "src/features/code/fe/settings.vue"

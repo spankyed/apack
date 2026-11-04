@@ -32,6 +32,19 @@
       </div>
     </CollapsibleSection>
 
+    <CollapsibleSection label="Claude Code profile" :default-open="true" class="mb-8">
+      <div class="space-y-3">
+        <label for="claude-profile" class="block text-sm font-medium text-neutral-200">Default for new chats</label>
+        <select id="claude-profile" v-model="claudeProfile" class="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-200" @change="saveClaudeProfile">
+          <option value="shared">Shared native profile</option>
+          <option value="app">App profile</option>
+        </select>
+        <p class="text-sm text-neutral-400">The shared profile uses the Claude sign-in and settings available to this app. Existing chats keep their current profile.</p>
+        <p class="text-sm text-neutral-400">Set up the separate app profile in your project’s terminal. Complete Claude’s onboarding, sign-in and project trust, then exit Claude to return to chat.</p>
+        <button type="button" class="rounded-lg border border-neutral-600 px-3 py-2 text-sm text-neutral-200 hover:bg-neutral-800" @click="openSurface('code', {type: 'OPEN_CLAUDE_PROFILE_SETUP'})">Set up app profile…</button>
+      </div>
+    </CollapsibleSection>
+
     <!-- Editor Settings Section -->
     <div class="border-t border-neutral-800 pt-8">
       <CollapsibleSection label="Editor Settings" :default-open="true" class="mb-8">
@@ -460,6 +473,7 @@ import KeyboardShortcutInput from '@apackdev/ui/components/KeyboardShortcutInput
 import CollapsibleSection from '@apackdev/ui/design/CollapsibleSection'
 import DirectorySelect from '@apackdev/ui/design/DirectorySelect'
 
+import { openSurface } from '#generated/fe.ts'
 import { useSettingsDraft, untypedOpenSurface } from '@apackdev/sdk/fe'
 import { resolveName } from '@apackdev/sdk/ids'
 
@@ -483,6 +497,9 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   'update-setting': [SettingUpdate<'code'>]
 }>()
+
+const claudeProfile = useSettingsDraft(() => props.settings?.claudeProfile ?? 'shared')
+const saveClaudeProfile = () => emit('update-setting', {path: ['claudeProfile'], value: claudeProfile.value})
 
 const hotkeys = useSettingsDraft(() => props.settings?.hotkeys ?? {})
 

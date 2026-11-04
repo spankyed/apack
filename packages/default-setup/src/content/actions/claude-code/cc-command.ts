@@ -162,6 +162,7 @@ async function handleSessions(
 async function handleConfig(
   args: string[],
   services: Services,
+  threadId?: string,
 ): Promise<{ text: string; data?: any }> {
   const [subcommand, key, ...rest] = args;
 
@@ -169,7 +170,7 @@ async function handleConfig(
     return { text: 'Usage: /cc-config get <key> | set <key> <value>' };
   }
 
-  const settings = await services.cli.claudeCode.readSettings();
+  const settings = await services.cli.claudeCode.readSettings(claudeProfileOptions(threadId ? getClaudeState(services, threadId) : undefined));
 
   switch (subcommand) {
     case 'get': {
@@ -185,7 +186,7 @@ async function handleConfig(
       let parsed: any = raw;
       try { parsed = JSON.parse(raw); } catch { /* keep as string */ }
       settings[key] = parsed;
-      await services.cli.claudeCode.writeSettings(settings);
+      await services.cli.claudeCode.writeSettings(settings, claudeProfileOptions(threadId ? getClaudeState(services, threadId) : undefined));
       return { text: `Set ${key} = ${raw}` };
     }
     default:
@@ -204,7 +205,7 @@ async function handleModels(args: string[], services: Services, threadId?: strin
   const handle = conversation?.owner.sessionCwd === cwd ? conversation.owner.handle : undefined;
   if (!matchingNative && !handle && args[0] !== 'start') return { text: 'No matching native conversation is running. Use cc-models start to read with a temporary native process. Starting and closing it can run configured session hooks.' };
   const nativeSessionId = matchingNative?.state.sessionId;
-  const catalog = matchingNative ? await matchingNative.getModels({ includeUnsupportedModels }) : handle && !includeUnsupportedModels ? await handle.getModels() : await services.cli.claudeCode.getModels({ cwd, ...(includeUnsupportedModels ? { includeUnsupportedModels: true } : {}) });
+  const catalog = matchingNative ? await matchingNative.getModels({ includeUnsupportedModels }) : handle && !includeUnsupportedModels ? await handle.getModels() : await services.cli.claudeCode.getModels({ cwd, ...claudeProfileOptions(prior), ...(includeUnsupportedModels ? { includeUnsupportedModels: true } : {}) });
   if (matchingNative && (services.cli.claudeCode.getNativeTerminal(threadId!) !== matchingNative || matchingNative.state.sessionId !== nativeSessionId)) return { text: 'Claude conversation changed while reading its model catalog.' };
   const rows = catalog.models.map(model => {
     const capabilities = [
@@ -261,11 +262,12 @@ async function handleModel(
 async function handleMemory(
   args: string[],
   services: Services,
+  threadId?: string,
 ): Promise<{ text: string; data?: any }> {
   if (args[0] === 'add' || args[0] === 'remove') {
     return { text: `Memory add/remove is only available in the Claude Code terminal. Use /memory ${args[0]} there.` };
   }
-  const files = await services.cli.claudeCode.listMemoryFiles();
+  const files = await services.cli.claudeCode.listMemoryFiles(claudeProfileOptions(threadId ? getClaudeState(services, threadId) : undefined));
   if (!files.length) return { text: 'No memory files found.' };
   const lines = files.map((f: any) => {
     const scope = f.scope ? ` [${f.scope}]` : '';
@@ -277,8 +279,9 @@ async function handleMemory(
 async function handleSkills(
   _args: string[],
   services: Services,
+  threadId?: string,
 ): Promise<{ text: string; data?: any }> {
-  const skills = await services.cli.claudeCode.listSkills();
+  const skills = await services.cli.claudeCode.listSkills(claudeProfileOptions(threadId ? getClaudeState(services, threadId) : undefined));
   if (!skills.length) return { text: 'No skills installed.' };
   const lines = skills.map((s: any) => {
     const scope = s.scope ? ` [${s.scope}]` : '';
@@ -290,15 +293,16 @@ async function handleSkills(
 async function handleStats(
   _args: string[],
   services: Services,
+  threadId?: string,
 ): Promise<{ text: string; data?: any }> {
   const [version, auth, settings] = await Promise.all([
     services.cli.claudeCode.version(),
-    services.cli.claudeCode.authStatus(),
-    services.cli.claudeCode.readSettings(),
+    services.cli.claudeCode.authStatus(claudeProfileOptions(threadId ? getClaudeState(services, threadId) : undefined)),
+    services.cli.claudeCode.readSettings(claudeProfileOptions(threadId ? getClaudeState(services, threadId) : undefined)),
   ]);
   const lines = [
     `Version: ${version.trim()}`,
-    `Auth: ${auth.authenticated ? 'authenticated' : 'not authenticated'}`,
+    `Auth: ${(auth.authenticated ?? auth.loggedIn) ? 'authenticated' : 'not authenticated'}`,
   ];
   if (settings.model) lines.push(`Model: ${settings.model}`);
   return { text: lines.join('\n'), data: { version, auth, settings } };

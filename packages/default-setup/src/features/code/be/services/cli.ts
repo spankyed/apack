@@ -1,4 +1,7 @@
-import { snapshotClaudeProfile, type ClaudeNativeProfile } from '../../common/native-profile.ts'
+import { resolveAppEnvironment } from '@apackdev/sdk/env'
+import { prepareClaudeOwnedProfile, prepareClaudeOwnedProfileSetup } from './claude-code/owned-profile.ts'
+import { resolveForService } from '../utils/resolve-cli.ts'
+import { snapshotClaudeProfile, claudeProfileOptions, type ClaudeNativeProfile } from '../../common/native-profile.ts'
 import { replyBackgroundSession } from './claude-code/background-reply.ts'
 import { openBackgroundAttachment } from './claude-code/background-attachment.ts'
 import { backgroundSession } from './claude-code/background-sessions.ts'
@@ -80,8 +83,9 @@ export interface CliServiceType {
     rewindFiles(opts: Omit<ClaudeSessionFileRewindOptions, 'cwd'> & {cwd?: string}): Promise<ClaudeFileRewind>
     /** Config root to pin before creating a conversation. No credentials are returned. */
     profile(): ClaudeNativeProfile
+    prepareOwnedProfileSetup(): Promise<{command: string; cwd: string}>
     version(): Promise<string>
-    authStatus(): Promise<AuthStatus>
+    authStatus(opts?: {env?: NodeJS.ProcessEnv}): Promise<AuthStatus>
     listSessions(opts?: SessionListOptions): Promise<SessionInfo[]>
     /** List sessions across ALL project directories (not just the configured cwd). */
     listAllSessions(opts?: { limit?: number; env?: NodeJS.ProcessEnv }): Promise<SessionInfo[]>
@@ -112,15 +116,15 @@ export interface CliServiceType {
      */
     exec(args: readonly string[], opts?: Omit<ExecOnceOptions, 'cwd'> & { cwd?: string }): Promise<ExecOnceResult>
     /** Read the CLI's user-scope settings.json (~/.claude/settings.json). */
-    readSettings(): Promise<Record<string, any>>
+    readSettings(opts?: {env?: NodeJS.ProcessEnv}): Promise<Record<string, any>>
     /** Write the CLI's user-scope settings.json (~/.claude/settings.json). */
-    writeSettings(settings: Record<string, any>): Promise<void>
+    writeSettings(settings: Record<string, any>, opts?: {env?: NodeJS.ProcessEnv}): Promise<void>
     /** Native model discovery can run session hooks when a temporary process is explicitly requested. */
-    getModels(opts?: { cwd?: string; includeUnsupportedModels?: boolean }): Promise<ClaudeModelCatalog>
+    getModels(opts?: { cwd?: string; env?: NodeJS.ProcessEnv; includeUnsupportedModels?: boolean }): Promise<ClaudeModelCatalog>
     /** List skill files from user (~/.claude/skills/) and project (.claude/skills/) dirs. */
-    listSkills(): Promise<Array<{ name: string; scope: string; path: string }>>
+    listSkills(opts?: {env?: NodeJS.ProcessEnv}): Promise<Array<{ name: string; scope: string; path: string }>>
     /** List memory/CLAUDE.md files from known locations. */
-    listMemoryFiles(): Promise<Array<{ name: string; scope: string; path: string }>>
+    listMemoryFiles(opts?: {env?: NodeJS.ProcessEnv}): Promise<Array<{ name: string; scope: string; path: string }>>
     /** Rename a Claude Code session through the native process. */
     renameSession(id: string, title: string, opts?: { cwd?: string; env?: NodeJS.ProcessEnv }): Promise<void>
     /** Check whether a session JSONL file exists under the given (or default) project directory. */
@@ -152,6 +156,20 @@ function createCliService(): CliServiceType {
       cwd = os.homedir()
     }
     return cwd
+  }
+
+  function selectedClaudeProfile(): ClaudeNativeProfile {
+    const profile = snapshotClaudeProfile(process.env)
+    if (featureSettings.forFeature('code').get().claudeProfile === 'app') profile.configDir = path.join(resolveAppEnvironment().userDataDir, 'claude-code-profile', 'config')
+    return profile
+  }
+  function claudeEnvironment(override?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+    return {...claudeProfileOptions({profile: selectedClaudeProfile()}).env, ...override}
+  }
+  async function prepareClaudeEnvironment(override?: NodeJS.ProcessEnv) {
+    const env = claudeEnvironment(override), userDataDir = resolveAppEnvironment().userDataDir
+    if (env.CLAUDE_CONFIG_DIR === path.join(userDataDir, 'claude-code-profile', 'config')) await prepareClaudeOwnedProfile({userDataDir, env})
+    return env
   }
 
   function getGitRepo(): GitRepository {
@@ -213,7 +231,8 @@ function createCliService(): CliServiceType {
       replyBackgroundSession,
       parseMcpElicitationForm,
       validateMcpElicitationForm,
-      query(opts) {
+      async query(opts) {
+        const env = await prepareClaudeEnvironment(opts.env)
         const cwd = opts.cwd ?? resolveCwd()
         // Default replayUserMessages=true so the CLI emits post-persistence
         // user replay events (SDKUserMessageReplay) carrying the canonical
@@ -223,17 +242,17 @@ function createCliService(): CliServiceType {
         // in Claude at src/main.tsx:1944-1950 (cliArgs.replayUserMessages
         // || UDS_INBOX feature). Callers can still override by passing
         // `replayUserMessages: false` explicitly (spread order honors it).
-        return claudeCode.query({ replayUserMessages: true, ...opts, cwd })
+        return claudeCode.query({ replayUserMessages: true, ...opts, env, cwd })
       },
       openConversation(key, launchKey, opts, consumeAutonomous) {
         const { accountedCostUsd = 0, ...queryOptions } = opts
-        return openConversation(key, launchKey, () => claudeCode.query({ ...queryOptions, cwd: opts.cwd ?? resolveCwd(),
+        return openConversation(key, launchKey, async () => claudeCode.query({ ...queryOptions, env: await prepareClaudeEnvironment(queryOptions.env), cwd: opts.cwd ?? resolveCwd(),
           prompt: undefined, keepStdinOpen: true, surfaceControlRequests: true, replayUserMessages: true }), consumeAutonomous, accountedCostUsd)
       },
       getConversation,
       openNativeTerminal(key, options = {}) { return openNativeTerminal(key, options, prepareClaudeNativeTerminal, async launch => {
         const { sessionId, columns: _columns, rows: _rows, ...queryOptions } = launch
-        const handle = await claudeCode.query({ ...queryOptions, resume: sessionId, keepStdinOpen: true, noSessionPersistence: true })
+        const handle = await claudeCode.query({ ...queryOptions, env: await prepareClaudeEnvironment(queryOptions.env), resume: sessionId, keepStdinOpen: true, noSessionPersistence: true })
         try {
           const settings = await handle.getSettings(), permissionMode = await handle.getPermissionMode()
           if (!permissionMode) throw new Error('Native permission mode has not been acknowledged')
@@ -245,34 +264,38 @@ function createCliService(): CliServiceType {
       isConversationBusy,
       isCurrentTurn,
       closeIdleConversation,
-      getPlan(opts) {
-        return getSessionPlan({ ...opts, cwd: opts.cwd ?? resolveCwd() })
+      async getPlan(opts) {
+        return getSessionPlan({ ...opts, env: await prepareClaudeEnvironment(opts.env), cwd: opts.cwd ?? resolveCwd() })
       },
-      getContextUsage(opts) {
-        return getSessionContextUsage({ ...opts, cwd: opts.cwd ?? resolveCwd() })
+      async getContextUsage(opts) {
+        return getSessionContextUsage({ ...opts, env: await prepareClaudeEnvironment(opts.env), cwd: opts.cwd ?? resolveCwd() })
       },
-      validateResumeTarget(opts) {
-        return validateSessionResumeTarget({ ...opts, cwd: opts.cwd ?? resolveCwd() })
+      async validateResumeTarget(opts) {
+        return validateSessionResumeTarget({ ...opts, env: await prepareClaudeEnvironment(opts.env), cwd: opts.cwd ?? resolveCwd() })
       },
-      getFileRewindPreview(opts) { return getSessionFileRewindPreview({...opts, cwd: opts.cwd ?? resolveCwd()}) },
-      rewindFiles(opts) { return rewindSessionFiles({...opts, cwd: opts.cwd ?? resolveCwd()}) },
+      async getFileRewindPreview(opts) { return getSessionFileRewindPreview({...opts, env: await prepareClaudeEnvironment(opts.env), cwd: opts.cwd ?? resolveCwd()}) },
+      async rewindFiles(opts) { return rewindSessionFiles({...opts, env: await prepareClaudeEnvironment(opts.env), cwd: opts.cwd ?? resolveCwd()}) },
       version() {
         return claudeCode.system.version()
       },
-      authStatus() {
-        return claudeCode.auth.status()
+      async authStatus(opts) {
+        return claudeCode.auth.status({env: await prepareClaudeEnvironment(opts?.env)})
       },
-      profile: () => snapshotClaudeProfile(process.env),
+      profile: selectedClaudeProfile,
+      async prepareOwnedProfileSetup() {
+        const cwd = resolveCwd()
+        return prepareClaudeOwnedProfileSetup({cwd, userDataDir: resolveAppEnvironment().userDataDir, cliPath: await resolveForService('claude-code')})
+      },
       listSessions(opts) {
         const cwd = opts?.cwd ?? resolveCwd()
-        return claudeCode.sessions.list({ ...opts, cwd })
+        return claudeCode.sessions.list({ ...opts, env: claudeEnvironment(opts?.env), cwd })
       },
       listAllSessions(opts) {
-        return claudeCode.sessions.listAll(opts)
+        return claudeCode.sessions.listAll({...opts, env: claudeEnvironment(opts?.env)})
       },
       viewSession(id, opts) {
         const cwd = opts?.cwd ?? resolveCwd()
-        return claudeCode.sessions.view(id, { ...opts, cwd })
+        return claudeCode.sessions.view(id, { ...opts, env: claudeEnvironment(opts?.env), cwd })
       },
       viewSessionByFile(filePath, opts) {
         return claudeCode.sessions.viewByFile(filePath, opts)
@@ -283,12 +306,12 @@ function createCliService(): CliServiceType {
       storeHandle,
       getHandle,
       clearHandle,
-      exec(args, opts) {
+      async exec(args, opts) {
         const cwd = opts?.cwd ?? resolveCwd()
-        return claudeCode.exec(args, { ...opts, cwd })
+        return claudeCode.exec(args, { ...opts, env: await prepareClaudeEnvironment(opts?.env), cwd })
       },
-      async readSettings() {
-        const settingsPath = path.join(configDir(), 'settings.json')
+      async readSettings(opts) {
+        const settingsPath = path.join(configDir(await prepareClaudeEnvironment(opts?.env)), 'settings.json')
         let raw: string
         try {
           raw = await fs.promises.readFile(settingsPath, 'utf-8')
@@ -304,8 +327,8 @@ function createCliService(): CliServiceType {
         }
         return settings as Record<string, any>
       },
-      async writeSettings(settings) {
-        const settingsPath = path.join(configDir(), 'settings.json')
+      async writeSettings(settings, opts) {
+        const settingsPath = path.join(configDir(await prepareClaudeEnvironment(opts?.env)), 'settings.json')
         try {
           await fs.promises.writeFile(settingsPath, JSON.stringify(settings, null, 2))
         } catch (err: any) {
@@ -315,13 +338,13 @@ function createCliService(): CliServiceType {
           throw err
         }
       },
-      getModels(opts) {
-        return getModels({ cwd: opts?.cwd ?? resolveCwd(), ...(opts?.includeUnsupportedModels !== undefined ? { includeUnsupportedModels: opts.includeUnsupportedModels } : {}) })
+      async getModels(opts) {
+        return getModels({ env: await prepareClaudeEnvironment(opts?.env), cwd: opts?.cwd ?? resolveCwd(), ...(opts?.includeUnsupportedModels !== undefined ? { includeUnsupportedModels: opts.includeUnsupportedModels } : {}) })
       },
-      async listSkills() {
+      async listSkills(opts) {
         const results: Array<{ name: string; scope: string; path: string }> = []
         const dirs = [
-          { dir: path.join(configDir(), 'skills'), scope: 'user' },
+          { dir: path.join(configDir(claudeEnvironment(opts?.env)), 'skills'), scope: 'user' },
           { dir: path.join(resolveCwd(), '.claude', 'skills'), scope: 'project' },
         ]
         for (const { dir, scope } of dirs) {
@@ -340,11 +363,11 @@ function createCliService(): CliServiceType {
         }
         return results
       },
-      async listMemoryFiles() {
+      async listMemoryFiles(opts) {
         const cwd = resolveCwd()
         const results: Array<{ name: string; scope: string; path: string }> = []
         const candidates = [
-          { filePath: path.join(os.homedir(), '.claude', 'CLAUDE.md'), name: 'CLAUDE.md', scope: 'user' },
+          { filePath: path.join(configDir(claudeEnvironment(opts?.env)), 'CLAUDE.md'), name: 'CLAUDE.md', scope: 'user' },
           { filePath: path.join(cwd, 'CLAUDE.md'), name: 'CLAUDE.md', scope: 'project' },
           { filePath: path.join(cwd, 'CLAUDE.local.md'), name: 'CLAUDE.local.md', scope: 'local' },
         ]
@@ -356,7 +379,7 @@ function createCliService(): CliServiceType {
         }
         // Scan rules directories
         const rulesDirs = [
-          { dir: path.join(os.homedir(), '.claude', 'rules'), scope: 'user' },
+          { dir: path.join(configDir(claudeEnvironment(opts?.env)), 'rules'), scope: 'user' },
           { dir: path.join(cwd, '.claude', 'rules'), scope: 'project' },
         ]
         for (const { dir, scope } of rulesDirs) {
@@ -377,11 +400,11 @@ function createCliService(): CliServiceType {
       },
       async renameSession(id, title, opts) {
         const cwd = opts?.cwd ?? resolveCwd()
-        await renameSession({ sessionId: id, title, cwd, env: opts?.env })
+        await renameSession({ sessionId: id, title, cwd, env: await prepareClaudeEnvironment(opts?.env) })
       },
       async sessionExists(id, opts) {
         const cwd = opts?.cwd ?? resolveCwd()
-        const info = await claudeCode.sessions.find(id, { cwd, env: opts?.env })
+        const info = await claudeCode.sessions.find(id, { cwd, env: claudeEnvironment(opts?.env) })
         return info !== null
       },
     },

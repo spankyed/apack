@@ -3024,8 +3024,14 @@ interface CliServiceType {
         }): Promise<ClaudeFileRewind>;
         /** Config root to pin before creating a conversation. No credentials are returned. */
         profile(): ClaudeNativeProfile;
+        prepareOwnedProfileSetup(): Promise<{
+            command: string;
+            cwd: string;
+        }>;
         version(): Promise<string>;
-        authStatus(): Promise<AuthStatus>;
+        authStatus(opts?: {
+            env?: NodeJS.ProcessEnv;
+        }): Promise<AuthStatus>;
         listSessions(opts?: SessionListOptions): Promise<SessionInfo[]>;
         /** List sessions across ALL project directories (not just the configured cwd). */
         listAllSessions(opts?: {
@@ -3066,22 +3072,31 @@ interface CliServiceType {
             cwd?: string;
         }): Promise<ExecOnceResult>;
         /** Read the CLI's user-scope settings.json (~/.claude/settings.json). */
-        readSettings(): Promise<Record<string, any>>;
+        readSettings(opts?: {
+            env?: NodeJS.ProcessEnv;
+        }): Promise<Record<string, any>>;
         /** Write the CLI's user-scope settings.json (~/.claude/settings.json). */
-        writeSettings(settings: Record<string, any>): Promise<void>;
+        writeSettings(settings: Record<string, any>, opts?: {
+            env?: NodeJS.ProcessEnv;
+        }): Promise<void>;
         /** Native model discovery can run session hooks when a temporary process is explicitly requested. */
         getModels(opts?: {
             cwd?: string;
+            env?: NodeJS.ProcessEnv;
             includeUnsupportedModels?: boolean;
         }): Promise<ClaudeModelCatalog>;
         /** List skill files from user (~/.claude/skills/) and project (.claude/skills/) dirs. */
-        listSkills(): Promise<Array<{
+        listSkills(opts?: {
+            env?: NodeJS.ProcessEnv;
+        }): Promise<Array<{
             name: string;
             scope: string;
             path: string;
         }>>;
         /** List memory/CLAUDE.md files from known locations. */
-        listMemoryFiles(): Promise<Array<{
+        listMemoryFiles(opts?: {
+            env?: NodeJS.ProcessEnv;
+        }): Promise<Array<{
             name: string;
             scope: string;
             path: string;
@@ -3151,6 +3166,8 @@ type CodeContext = {
     searchPrefillText: string;
     panelTerminalId: string | null;
     panelTerminalExpanded: boolean;
+    pendingClaudeProfileSetup?: string;
+    claudeProfileSetupError?: string;
     pendingTerminalTabIds?: string[];
     panelNavHistory: NavHistory<PanelType>;
 };
@@ -3161,6 +3178,8 @@ type CodeContext = {
  * prefix — so they are spelled out, and each names the child that handles it.
  */
 type CodeInboxEvent = {
+    type: 'OPEN_CLAUDE_PROFILE_SETUP';
+} | {
     type: 'UPDATE_STATE';
     updates: Partial<CodeContext>;
 } | {
@@ -4321,6 +4340,8 @@ type IncomingCodeEvents = IncomingExplorerEvents | IncomingSearchEvents | Incomi
  | {
     type: 'TEST_CLI_PROVIDER';
     provider: string;
+} | {
+    type: 'PREPARE_CLAUDE_PROFILE_SETUP';
 }
 /**
  * What a window's code surface starts from, asked as the shell starts it: answered with \`CODE_STARTED\`, and by the
@@ -5517,7 +5538,15 @@ type OutgoingBrowserEvents = {
     savedBookmarks: SavedBookmark[];
 };
 
-type OutgoingCodeEvents = OutgoingExplorerEvents | OutgoingSearchEvents | OutgoingCommitEvents | OutgoingPullRequestEvents | OutgoingTerminalEvents | OutgoingActionsEvents | OutgoingPromptsEvents | {
+type OutgoingCodeEvents = {
+    type: 'CLAUDE_PROFILE_SETUP_PREPARED';
+    result: {
+        command: string;
+        cwd: string;
+    } | {
+        error: string;
+    };
+} | OutgoingExplorerEvents | OutgoingSearchEvents | OutgoingCommitEvents | OutgoingPullRequestEvents | OutgoingTerminalEvents | OutgoingActionsEvents | OutgoingPromptsEvents | {
     type: 'CODE_STARTED';
     data: CodeConnectedData;
 }
@@ -7786,6 +7815,7 @@ declare namespace __FeatureSettings_Code {
         cliPaths: {
             [k: string]: string;
         };
+        claudeProfile: "app" | "shared";
     }
 }
 
@@ -8436,8 +8466,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             loading: z.ZodBoolean;
             copyState: z.ZodOptional<z.ZodEnum<{
                 error: "error";
-                pending: "pending";
                 idle: "idle";
+                pending: "pending";
                 saved: "saved";
             }>>;
             insight: z.ZodOptional<z.ZodString>;

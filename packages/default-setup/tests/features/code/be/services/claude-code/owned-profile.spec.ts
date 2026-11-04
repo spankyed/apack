@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, realpath } from 'node:fs/promises'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { prepareClaudeOwnedProfile } from '#features/code/be/services/claude-code/owned-profile.ts'
+import { prepareClaudeOwnedProfile, prepareClaudeOwnedProfileSetup } from '#features/code/be/services/claude-code/owned-profile.ts'
 
 const test = it.skipIf(process.platform === 'win32')
 const roots: string[] = []
@@ -69,4 +69,25 @@ test('honors captured absence when the host credential selector changes later', 
  const root=await directory('cc-owned-profile-')
  vi.stubEnv('CLAUDE_SECURESTORAGE_CONFIG_DIR','/later/credentials')
  await expect(prepareClaudeOwnedProfile({userDataDir:root,env:{CLAUDE_SECURESTORAGE_CONFIG_DIR:undefined}})).resolves.toHaveProperty('configDir',join(root,'claude-code-profile','config'))
+})
+
+
+test('runs native onboarding with spaced paths and the owned credential selectors only', async () => {
+ const root=await directory('cc-owned-profile-'), executable=join(root,"native cli's setup")
+ await writeFile(executable,"#!/bin/sh\nprintf '%s\\n' \"$CLAUDE_CONFIG_DIR\" \"${CLAUDE_SECURESTORAGE_CONFIG_DIR-unset}\" \"$#\"\n",{mode:0o700})
+ const prepared=await prepareClaudeOwnedProfileSetup({userDataDir:join(root,"app's profile"),cwd:'/selected/project',cliPath:executable,env:{CLAUDE_SECURESTORAGE_CONFIG_DIR:undefined}})
+ const output=execFileSync('/bin/sh',['-c',prepared.command],{encoding:'utf8',timeout:10000,env:{...process.env,CLAUDE_CONFIG_DIR:'/wrong/profile',CLAUDE_SECURESTORAGE_CONFIG_DIR:'/wrong/credentials'}}).trim().split('\n')
+ expect(output).toEqual([join(root,"app's profile",'claude-code-profile','config'),'unset','0'])
+ expect(prepared.cwd).toBe('/selected/project')
+})
+
+
+test('preserves malformed private settings and does not expose their contents in a setup error', async () => {
+ const root=await directory('cc-owned-profile-'),profile=await prepareClaudeOwnedProfile({userDataDir:root})
+ const raw='{"privateFixtureSecret":"not-for-ui",'
+ await writeFile(join(profile.configDir,'settings.json'),raw)
+ const error=await prepareClaudeOwnedProfile({userDataDir:root}).then(()=>undefined,error=>error)
+ expect(error.message).toContain('not valid JSON')
+ expect(error.message).not.toContain('privateFixtureSecret')
+ expect(await readFile(join(profile.configDir,'settings.json'),'utf8')).toBe(raw)
 })

@@ -108,6 +108,8 @@ export type CodeContext = {
   searchPrefillText: string
   panelTerminalId: string | null
   panelTerminalExpanded: boolean
+  pendingClaudeProfileSetup?: string
+  claudeProfileSetupError?: string
   pendingTerminalTabIds?: string[]
   panelNavHistory: NavHistory<PanelType>
 }
@@ -118,6 +120,7 @@ export type CodeContext = {
  * prefix — so they are spelled out, and each names the child that handles it.
  */
 export type CodeInboxEvent =
+  | {type: 'OPEN_CLAUDE_PROFILE_SETUP'}
   | { type: 'UPDATE_STATE'; updates: Partial<CodeContext> }
   | { type: 'terminal.CREATE'; target: string; command: string; cwd?: string }
   | { type: 'explorer.SET_BASE_DIRECTORY'; path: string }

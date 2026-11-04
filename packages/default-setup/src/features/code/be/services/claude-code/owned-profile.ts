@@ -9,7 +9,7 @@ const preparing = new Map<string, Promise<{configDir: string; launcher: string}>
 
 /** Prepare an exclusively app-owned native profile before its first daemon or sign-in starts. */
 export function prepareClaudeOwnedProfile(options: {userDataDir: string; nodePath?: string; env?: NodeJS.ProcessEnv}) {
-  if (process.platform === 'win32') return Promise.reject(new Error('App-owned Claude profiles currently require a POSIX host'))
+  if (process.platform === 'win32') return Promise.reject(new Error('App profiles are currently available on macOS and Linux'))
   if (!isAbsolute(options.userDataDir)) return Promise.reject(new Error('The app profile path must be absolute'))
   const directory = join(options.userDataDir, 'claude-code-profile'), configDir = join(directory, 'config')
   const storage = {...process.env, ...options.env}.CLAUDE_SECURESTORAGE_CONFIG_DIR
@@ -45,8 +45,9 @@ async function prepare(directory: string, configDir: string, nodePath: string) {
     await writeFile(marker, JSON.stringify({owner: 'apack', configDir}), {mode: 0o600, flag: 'wx'})
   } else {
     if (!owner.isFile() || owner.uid !== process.getuid?.() || (owner.mode & 0o077) !== 0) throw new Error('Claude profile ownership marker is not private')
-    const value = JSON.parse(await readFile(marker, 'utf8'))
-    if (value.owner !== 'apack' || value.configDir !== configDir) throw new Error('Claude profile ownership does not match this app')
+    let value: {owner?: string; configDir?: string}
+    try { value = JSON.parse(await readFile(marker, 'utf8')) } catch { throw new Error('The app profile ownership record is not valid JSON') }
+    if (!value || value.owner !== 'apack' || value.configDir !== configDir) throw new Error('Claude profile ownership does not match this app')
   }
   await privateDirectory(configDir)
   const bin = join(directory, 'bin')
@@ -58,7 +59,11 @@ async function prepare(directory: string, configDir: string, nodePath: string) {
   const settingsPath = join(configDir, 'settings.json')
   const info = await lstat(settingsPath).catch(error => {if (error.code !== 'ENOENT') throw error})
   if (info && (!info.isFile() || info.uid !== process.getuid?.())) throw new Error('Claude profile settings are not private')
-  const settings = info ? JSON.parse(await readFile(settingsPath, 'utf8')) : {}
+  let settings: Record<string, unknown> = {}
+  if (info) {
+    const raw = await readFile(settingsPath, 'utf8')
+    try { settings = JSON.parse(raw) } catch { throw new Error('Claude profile settings.json is not valid JSON; repair it before setup') }
+  }
   if (!settings || typeof settings !== 'object' || Array.isArray(settings)) throw new Error('Claude profile settings must be an object')
   // Original native parser accepts JSON argv; shell quoting is not its settings grammar.
   const prefix = JSON.stringify([launcher])
@@ -80,4 +85,14 @@ export async function prepareClaudeOwnedChildUi(options: {
     directory: options.directory, configDir: profile.configDir, executable: await realpath(options.executable), socketPath: options.socketPath, token: options.token,
   }), 0o600)
   return true
+}
+
+
+/** Let the original CLI own onboarding, sign-in, project trust and its normal shutdown. */
+export async function prepareClaudeOwnedProfileSetup(options: {userDataDir: string; cwd: string; cliPath: string; env?: NodeJS.ProcessEnv}) {
+  const environment = {...process.env, ...options.env}
+  const profile = await prepareClaudeOwnedProfile({userDataDir: options.userDataDir, env: environment})
+  const assignments = ['CLAUDE_CONFIG_DIR=' + profile.configDir]
+  if (environment.CLAUDE_SECURESTORAGE_CONFIG_DIR !== undefined) assignments.push('CLAUDE_SECURESTORAGE_CONFIG_DIR=' + environment.CLAUDE_SECURESTORAGE_CONFIG_DIR)
+  return {cwd: options.cwd, command: '/usr/bin/env -u CLAUDE_CONFIG_DIR -u CLAUDE_SECURESTORAGE_CONFIG_DIR ' + assignments.map(quote).join(' ') + ' ' + quote(options.cliPath)}
 }
