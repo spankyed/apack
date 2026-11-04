@@ -34,7 +34,10 @@ export async function measureWorkspaceLayout({page,composer,workspace,phase,capt
     if(process.env.CLAUDE_RESEARCH_WORKSPACE_LAYOUT_ACCEPT==='1')await expect(send).toBeEnabled()
     const sendGeometry=await send.evaluate(element=>{const r=element.getBoundingClientRect();const points=[[r.left+r.width/4,r.top+r.height/4],[r.right-r.width/4,r.top+r.height/4],[r.left+r.width/4,r.bottom-r.height/4],[r.right-r.width/4,r.bottom-r.height/4]];return{top:r.top,bottom:r.bottom,left:r.left,right:r.right,width:r.width,height:r.height,borderRadius:getComputedStyle(element).borderRadius,hit:points.every(([x,y])=>element.contains(document.elementFromPoint(x,y))),targets:points.map(([x,y])=>({x,y,elements:document.elementsFromPoint(x,y).slice(0,6).map(node=>({tag:node.tagName,classes:node.className,role:node.getAttribute('role'),text:node.textContent?.slice(0,100)}))})),ancestors:Array.from((function*(node:HTMLElement|null){for(;node;node=node.parentElement)yield node})(element.parentElement)).slice(0,9).map(node=>{const r=node.getBoundingClientRect(),style=getComputedStyle(node);return{tag:node.tagName,classes:node.className,top:r.top,bottom:r.bottom,height:r.height,overflow:style.overflow,position:style.position,zIndex:style.zIndex,pointerEvents:style.pointerEvents}})}})
     const composerGeometry=await composer.evaluate(element=>{const r=element.getBoundingClientRect();return{top:r.top,bottom:r.bottom,height:r.height,width:r.width,clientHeight:element.clientHeight,scrollHeight:element.scrollHeight}})
-    const reading:Record<string,unknown>={viewport,state,geometry,composerGeometry,sendGeometry}
+    const events:{step:string;at:number}[]=[]
+    const mark=(step:string)=>events.push({step,at:Date.now()})
+    const reading:Record<string,unknown>={viewport,state,geometry,composerGeometry,sendGeometry,events}
+    mark('geometry-recorded')
     readings.push(reading)
     if(process.env.CLAUDE_RESEARCH_WORKSPACE_LAYOUT_ACCEPT==='1'){
      await expect(composer).toBeInViewport({ratio:1});await expect(send).toBeInViewport({ratio:1})
@@ -63,24 +66,28 @@ export async function measureWorkspaceLayout({page,composer,workspace,phase,capt
       expect(control.fullyVisible,'Complete Session Details control is readable').toBe(true)
       expect(control.hit,'Session Details control is not obscured').toBe(true)
       await expect(summary).toBeInViewport({ratio:1})
-      await summary.click();await expect(details).toHaveAttribute('open','')
+      mark('details-open-start')
+      await summary.click();mark('details-clicked');await expect(details).toHaveAttribute('open','');mark('details-open')
       const session=details.locator('span.font-mono').first()
       const sessionBounds=await session.boundingBox();expect(sessionBounds).toBeTruthy()
       await page.mouse.move(bounds!.x+bounds!.width*.85,bounds!.y+bounds!.height/2)
       await page.mouse.wheel(0,sessionBounds!.y+sessionBounds!.height/2-(bounds!.y+bounds!.height/2))
-      await expect(session).toBeInViewport({ratio:1})
+      mark('session-scroll-requested')
+      await expect(session).toBeInViewport({ratio:1});mark('session-visible')
       const sessionId=await page.evaluate(()=>(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.currentThread?.context?.claudeCode?.sessionId)
       if(typeof sessionId!=='string'||!sessionId)throw Error('Workspace session identity is missing')
       const display=await session.innerText();expect(display).toContain(sessionId.slice(0,8))
       reading.workspaceReading={sessionId,display,summary:await summary.innerText(),visible:true}
       await expect(composer).toHaveText(draft)
       await expect(send).toBeInViewport({ratio:1})
-      await capture(`native-workspace-${phase}-${state}-${viewport.width}.png`)
-      await summary.click();await expect(details).not.toHaveAttribute('open','')
+      mark('capture-start')
+      await capture(`native-workspace-${phase}-${state}-${viewport.width}.png`);mark('capture-complete')
+      mark('details-close-start')
+      await summary.click();await expect(details).not.toHaveAttribute('open','');mark('details-closed')
      }
     }
     // Reading states are captured with Details open above; keep one settled image per state.
-    if(!reading.workspaceReading)await capture(`native-workspace-${phase}-${state}-${viewport.width}.png`)
+    if(!reading.workspaceReading){mark('capture-start');await capture(`native-workspace-${phase}-${state}-${viewport.width}.png`);mark('capture-complete')}
    }
    await page.evaluate(size=>(window as any).applicationState.send({type:'RESIZE_PANEL',panel:'canvas',size}),original.canvasHeight)
   }
