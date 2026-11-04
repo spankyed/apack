@@ -465,6 +465,9 @@ const EVERY_WORKSPACE = PACKAGES.flatMap(workspace);
  */
 const EVERY_SOURCE = [...ROOT, ...Object.values(CONFIG_BY_HALF), ...EVERY_WORKSPACE, 'scripts', '.github/scripts', 'tests/e2e', 'tests/performance', 'tests/packs', 'tests/acceptance', 'tests/_support',
   'tests/fixtures/claude-research/linux-electron-launch.mjs',
+  'tests/fixtures/claude-research/agent-billing-journey.ts',
+  'tests/fixtures/claude-research/selection-limit-journey.ts',
+  'tests/fixtures/claude-research/workspace-layout-measurement.ts',
   'tests/fixtures/claude-research/install-system-policy.mjs',
   'tests/fixtures/claude-research/background-api-restart.mjs',
   'tests/fixtures/claude-research/background-formatter-lifecycle.mjs',

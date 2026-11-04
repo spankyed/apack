@@ -1,3 +1,4 @@
+import {measureWorkspaceLayout} from './workspace-layout-measurement.ts'
 import {verifySelectionLimit} from './selection-limit-journey.ts'
 import {readFile,writeFile} from 'node:fs/promises'
 import {join} from 'node:path'
@@ -144,6 +145,10 @@ export async function verifyAgentBilling(
     await composer.click();await composer.press(process.platform==='darwin'?'Meta+A':'Control+A');await composer.press('Backspace');await expect(composer).toHaveText('')
   }
   if(process.env.CLAUDE_RESEARCH_SELECTION_LIMIT==='1')await verifySelectionLimit({appPage,card,composer,project,context,capture})
+  if(process.env.CLAUDE_RESEARCH_WORKSPACE_LAYOUT==='1'){
+    await composer.fill('Review the latest release notes and suggest the next step.')
+    await measureWorkspaceLayout({page:appPage,composer,workspace,phase:'parent',capture})
+  }
   await composer.fill('Review the release notes with a worker.')
   await card.getByRole('button',{name:'Send',exact:true}).click()
   // Native zln displays completed named/retained Agents as idle.
@@ -207,6 +212,7 @@ export async function verifyAgentBilling(
   await expect(form.getByTestId('composer-native-status')).toHaveCount(0)
   await expect(form.getByRole('button',{name:'Session tools',exact:true})).toHaveCount(0)
   await draft.fill('Keep this worker draft while reviewing usage.')
+  if(process.env.CLAUDE_RESEARCH_WORKSPACE_LAYOUT==='1')await measureWorkspaceLayout({page:appPage,composer:draft,workspace,phase:'agent',capture})
   const readings=[]
   for(const size of [{width:1100,height:900},{width:680,height:600}]){
     await appPage.setViewportSize(size)
