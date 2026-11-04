@@ -2366,6 +2366,7 @@
         "prefix": "database:",
         "globals": {
           "EARS": "typeof _dsl.EARS",
+          "catalog": "typeof _dsl.catalog",
           "query": "typeof _dsl.query",
           "getRow": "typeof _dsl.getRow",
           "getAttr": "typeof _dsl.getAttr",
