@@ -3,9 +3,6 @@
 // process is slow and still working, and a budget that measures the clock kills it for the machine being busy.
 import { execFile } from 'node:child_process';
 
-/** How long a process tree may go without CPU or output before it counts as stalled */
-export const PROCESS_IDLE_MS = 120_000;
-
 /**
  * How much CPU a tree has to add to count as working. Not any increase: an idle Node process still runs its
  * timers, and macOS reports CPU to the hundredth of a second, so a tree wedged on a lock with one

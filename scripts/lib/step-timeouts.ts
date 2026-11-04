@@ -33,12 +33,11 @@
  * It is a check and not the declaration: `ChainStep.timeout` stays written down, because deriving a kill
  * deadline from what a step costs would let a cost change silently move when it is killed.
  */
-import { PROCESS_IDLE_MS } from '@apackdev/host/build/process-progress';
 export const rungForKind = (work: { installs: boolean; fansOut: boolean; builds: boolean }): TimeoutClass =>
   work.installs ? 'scenario' : (work.fansOut || work.builds) ? 'suite' : 'quick';
 
 /** How long a process tree may go without CPU or output before `boundedSpawn` ends it as stalled */
-export const IDLE_MS = PROCESS_IDLE_MS;
+export const IDLE_MS = 120_000;
 
 /**
  * `APACK_WATCHDOG=off` turns the watchdog off for a run and everything it starts, which inherit the variable,

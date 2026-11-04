@@ -1,7 +1,9 @@
 import { spawn } from 'node:child_process';
-import { createStallTracker, PROCESS_IDLE_MS, readTreeCpuMs } from '@apackdev/host/build/process-progress';
+import { createStallTracker, readTreeCpuMs } from '@apackdev/host/build/process-progress';
 import { stopCompilerProcessGroup } from '../../src/build/compiler-process-group.ts';
 
+/** How long a command's process tree may go without CPU or output before it counts as stalled */
+const IDLE_MS = 120_000;
 /** How long a command may run however busy it is: for the one hang the idle watch can't see, a loop that spins */
 const CEILING_MS = 900_000;
 /** How often a running command's process tree is read, which stops at the first reading still in flight */
@@ -12,7 +14,7 @@ const READ_EVERY_MS = 5_000;
  * stops its whole process group however it ends. A synchronous call would block the worker, so no case
  * timeout could fire and Vitest's RPC window would expire.
  *
- * A command is ended when its tree goes `PROCESS_IDLE_MS` with no CPU and no output, not after a time: a busy machine
+ * A command is ended when its tree goes `IDLE_MS` with no CPU and no output, not after a time: a busy machine
  * makes a command slow and never stalled. The case's own deadline still applies around it.
  *
  * Resolves with the exit code, the combined output and stdout alone (for a caller that parses it); rejects, naming the command, when it exceeds `timeout`,
@@ -40,7 +42,7 @@ export async function runCommand(command: string, args: string[], cwd: string,
   let abort: (() => void) | undefined;
   let forced: Promise<void> | undefined;
   // Windows has no process groups or `ps`, so there the ceiling is the only bound, as it is under `APACK_WATCHDOG=off`
-  const stall = grouped && process.env.APACK_WATCHDOG !== 'off' ? createStallTracker(PROCESS_IDLE_MS, Date.now()) : undefined;
+  const stall = grouped && process.env.APACK_WATCHDOG !== 'off' ? createStallTracker(IDLE_MS, Date.now()) : undefined;
   let watching: ReturnType<typeof setInterval> | undefined;
   child.stdout.on('data', chunk => { output += chunk.toString(); stdout += chunk.toString(); stall?.output(Date.now()); });
   child.stderr.on('data', chunk => { output += chunk.toString(); stall?.output(Date.now()); });
@@ -69,7 +71,7 @@ export async function runCommand(command: string, args: string[], cwd: string,
           void readTree(child.pid!).then((tree) => {
             reading = false;
             if (tree && stall.reading(tree, Date.now())) {
-              stop(new Error(`${label}: stalled, no CPU or output for ${PROCESS_IDLE_MS / 1000}s\n${output}`));
+              stop(new Error(`${label}: stalled, no CPU or output for ${IDLE_MS / 1000}s\n${output}`));
             }
           });
         }, READ_EVERY_MS);
