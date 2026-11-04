@@ -1,6 +1,6 @@
 import { PassThrough } from 'node:stream'
 import { runThreadTeardown } from '#features/threads/be/thread-teardown.ts'
-import { getNativeBackgroundStatus, storeHandle, clearHandle, openConversation, getNativeLaunch, openNativeTerminal, getNativeTerminal, getConversation, isConversationBusy, killAllHandles } from '#features/code/be/services/claude-code/handle-store.ts'
+import { getNativeBackgroundDesktopOwner, prepareNativeBackgroundDesktop, getNativeBackgroundStatus, storeHandle, clearHandle, openConversation, getNativeLaunch, openNativeTerminal, getNativeTerminal, getConversation, isConversationBusy, killAllHandles } from '#features/code/be/services/claude-code/handle-store.ts'
 import type { QueryHandle } from '#features/code/be/services/claude-code/query.ts'
 import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claude-code/terminal-owner.ts'
 const mocks = { prepare: vi.fn() }
@@ -176,16 +176,32 @@ it.each([{channels:['plugin:review@owned']},{channels:[]}])('uses saved channel 
 it('retains the original child observer after parent exit and reuses it on same-session reopening',async()=>{
  await printOwner()
  const child='22222222-2222-4222-8222-222222222222',continuation={sessionId:session,continuedInSessionId:child,timestamp:'2026-10-30T00:00:00Z'}
- const observer={parentSessionId:session,value:{sessionId:child,pid:119},subscribe:vi.fn(()=>()=>{}),close:vi.fn(async()=>{})} as unknown as NonNullable<ClaudeNativeTerminalOwner['backgroundObserver']>
+ const transport={} as import('#features/code/be/services/claude-code/terminal-ui.ts').ClaudeTerminalUiTransport
+ const desktop={id:'desktop-original',parentSessionId:session,identity:{jobId:'22222222',sessionId:child,pid:119,start:'worker-start',hostPid:100,hostStart:'host-start',cwd:'/native-cwd'},registration:1,transport,done:new Promise<void>(()=>{})}
+ const prepareDesktop=vi.fn(async()=>transport)
+ const observer={parentSessionId:session,value:{jobId:'22222222',sessionId:child,pid:119},desktopOwner:desktop,desktopTransport:prepareDesktop,subscribe:vi.fn(()=>()=>{}),close:vi.fn(async()=>{})} as unknown as NonNullable<ClaudeNativeTerminalOwner['backgroundObserver']>
  const first={...terminal(),backgroundObserver:observer},second={...terminal(),backgroundObserver:observer}
  mocks.prepare.mockResolvedValueOnce({start:async()=>first,dispose:async()=>{}})
  await openNativeTerminal('thread',{},mocks.prepare);await first.close();await first.done
  expect(getNativeTerminal('thread')).toBeUndefined();expect(getNativeBackgroundStatus('thread',continuation)?.pid).toBe(119)
  expect(getNativeBackgroundStatus('thread',{...continuation,sessionId:child})).toBeUndefined()
+ expect(getNativeBackgroundDesktopOwner('thread',continuation)).toBe(desktop)
+ expect(getNativeBackgroundDesktopOwner('thread',{...continuation,continuedInSessionId:session})).toBeUndefined()
+ await expect(prepareNativeBackgroundDesktop('thread',continuation,'22222222',119)).resolves.toBe(desktop)
+ for(const [target,job,pid] of [[{...continuation,sessionId:child},'22222222',119],[continuation,'foreign',119],[continuation,'22222222',120]] as const){
+  await expect(prepareNativeBackgroundDesktop('thread',target,job,pid)).rejects.toThrow('worker changed')
+ }
+ expect(prepareDesktop).toHaveBeenCalledOnce()
  mocks.prepare.mockResolvedValueOnce({start:async()=>second,dispose:async()=>{}})
  await openNativeTerminal('thread',{},mocks.prepare,async()=>({settings:{effective:{},sources:[]},permissionMode:'plan'}))
  expect(mocks.prepare.mock.calls.at(-1)?.[1]).toBe(observer);expect(observer.close).not.toHaveBeenCalled()
- runThreadTeardown('thread');expect(observer.close).toHaveBeenCalledOnce();expect(getNativeBackgroundStatus('thread',continuation)).toBeUndefined()
+ let finish!:(value:typeof transport)=>void
+ prepareDesktop.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}))
+ const pendingDesktop=prepareNativeBackgroundDesktop('thread',continuation,'22222222',119)
+ runThreadTeardown('thread');finish(transport)
+ await expect(pendingDesktop).rejects.toThrow('unavailable')
+ expect(observer.close).toHaveBeenCalledOnce();expect(getNativeBackgroundStatus('thread',continuation)).toBeUndefined()
+ expect(getNativeBackgroundDesktopOwner('thread',continuation)).toBeUndefined()
 })
 
 

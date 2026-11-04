@@ -187,7 +187,7 @@ it('binds child drawing and reverse prompts to the original worker and retires t
  await mkdir(worker,{recursive:true,mode:0o700})
  // mkdir's intermediates use the process umask; the private workers parent is explicit.
  const {chmod}=await import('node:fs/promises');await chmod(join(observer.directory,'workers'),0o700)
- await writeFile(join(observer.directory,'worker-119.json'),JSON.stringify({pid:119,sessionId:child,configPath:join(worker,'observer.json')}),{mode:0o600})
+ await writeFile(join(observer.directory,'worker-119.json'),JSON.stringify({pid:119,sessionId:child,start:identity.start,configPath:join(worker,'observer.json')}),{mode:0o600})
  await writeFile(join(worker,'observer.json'),JSON.stringify({sessionId:child,token,uiSocketPath:socketPath}),{mode:0o600})
  const native=createServer(async(req,res)=>{let text='';for await(const chunk of req)text+=chunk;const value=JSON.parse(text);res.end(JSON.stringify({id:value.id,pid:119,sessionId:child,result:{attached:true}}))})
  await new Promise<void>(resolve=>native.listen(socketPath,resolve))
@@ -195,6 +195,9 @@ it('binds child drawing and reverse prompts to the original worker and retires t
   expect(JSON.parse(await readFile(join(observer.directory,'child-ui-launch.json'),'utf8')).configDir).toBe(join(profile,'claude-code-profile','config'))
   await post('/background-register',{sessionId:child,pid:119})
   const transport=await observer.desktopTransport();expect(transport).toBeDefined()
+  const desktop=observer.desktopOwner!
+  expect(desktop).toMatchObject({parentSessionId:parent,identity:original,transport})
+  expect(await observer.desktopTransport()).toBe(transport);expect(observer.desktopOwner).toBe(desktop)
   let draft='Owned child draft あ🙂'
   transport!.promptHosts.register('child-view',{read:async()=>({text:draft,cursor:draft.length}),fill:async input=>{draft=input.text;return true}})
   await expect(transport!.request({subtype:'ui_attach',client_id:'child-view',surface:'desktop'})).resolves.toEqual({attached:true})
@@ -212,6 +215,17 @@ it('binds child drawing and reverse prompts to the original worker and retires t
   expect(after.value.result).toEqual({text:'Child replacement 🙂',cursor:'Child replacement 🙂'.length})
   identity={...identity,start:'replacement-worker'}
   await expect(transport!.request({subtype:'ui_render'})).rejects.toThrow('owner changed')
-  expect((await post('/ui-event',{pid:119,sessionId:child,event},token)).code).toBe(409)
+  expect((await post('/ui-event',{pid:119,sessionId:child,event},token)).code).toBe(403)
+  await desktop.done;expect(observer.desktopOwner).toBeUndefined()
+  await post('/background-register',{sessionId:child,pid:119})
+  await expect(observer.desktopTransport()).rejects.toThrow('startup does not match')
+  await writeFile(join(observer.directory,'worker-119.json'),JSON.stringify({pid:119,sessionId:child,start:identity.start,configPath:join(worker,'observer.json')}),{mode:0o600})
+  await observer.desktopTransport();const replacement=observer.desktopOwner!
+  expect(replacement.id).not.toBe(desktop.id)
+  expect(replacement.identity.start).toBe('replacement-worker')
+  await post('/background-register',{sessionId:child,pid:119})
+  await replacement.done;expect(observer.desktopOwner).toBeUndefined()
+  await observer.desktopTransport();const finalOwner=observer.desktopOwner!
+  await observer.close();await finalOwner.done;expect(observer.desktopOwner).toBeUndefined()
  } finally {native.closeAllConnections();await new Promise<void>(resolve=>native.close(()=>resolve()));await observer.close();await rm(profile,{recursive:true,force:true})}
 })

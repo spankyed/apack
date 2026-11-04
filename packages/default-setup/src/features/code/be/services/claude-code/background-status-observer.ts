@@ -8,8 +8,18 @@ import { createServer } from 'node:http'
 import { mkdtemp, rm, lstat, unlink, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import type { ClaudeBackgroundStatusIdentity } from './terminal-background-status.ts'
 import { createClaudeBackgroundStatus } from './terminal-background-status.ts'
 import type { createClaudeBackgroundStatusAuthority } from './background-status-authority.ts'
+
+export interface ClaudeBackgroundDesktopOwner {
+  readonly id: string
+  readonly parentSessionId: string
+  readonly identity: Readonly<ClaudeBackgroundStatusIdentity>
+  readonly registration: number
+  readonly transport: ClaudeTerminalUiTransport
+  readonly done: Promise<void>
+}
 
 /** The linked child owns this transport and plugin directory after the parent writer exits. */
 export async function createClaudeBackgroundStatusObserver(options: {
@@ -35,7 +45,12 @@ export async function createClaudeBackgroundStatusObserver(options: {
   let authority = options.authority(parentSessionId), closed = false, released = false, checking = false, releaseTimer: ReturnType<typeof setTimeout> | undefined
   let monitor: ReturnType<typeof setInterval> | undefined, closing: Promise<void> | undefined
   let statusUpdates = 0
-  const changed = (force = false): void => { if (!force && statusUpdates && status.value) return; parentChanged(); for (const listener of listeners) { try { listener() } catch { /* Isolate windows. */ } } }
+  const changed = (force = false): void => {
+    if (childUi && (childUi.registration !== status.registration || childUi.identity !== JSON.stringify(status.identity))) retireChildUi()
+    if (!force && statusUpdates && status.value) return
+    parentChanged()
+    for (const listener of listeners) { try { listener() } catch { /* Isolate windows. */ } }
+  }
   const status = createClaudeBackgroundStatus({
     async identify(sessionId, pid) {
       const currentTarget = target()
@@ -50,13 +65,21 @@ export async function createClaudeBackgroundStatusObserver(options: {
   let formatter: ReturnType<typeof createClaudeBackgroundFormatter> | undefined
   let launcher: Promise<string> | undefined
   let formatterRegistration = -1, formatterSequence = -1
-  let childUi: {registration: number; identity: string; token: string; transport: ClaudeTerminalUiTransport; bridge: ReturnType<typeof createClaudeTerminalUiTransport>} | undefined
-  const retireChildUi = () => { childUi?.bridge.close(); childUi = undefined }
+  let childUi: {registration: number; identity: string; token: string; transport: ClaudeTerminalUiTransport; bridge: ReturnType<typeof createClaudeTerminalUiTransport>; owner: ClaudeBackgroundDesktopOwner; finish(): void} | undefined
+  const retireChildUi = () => { const held = childUi; childUi = undefined; held?.bridge.close(); held?.finish() }
   async function childUiCurrent() {
     const held = childUi, identity = status.identity
     if (!held || !identity || closed || held.registration !== status.registration || held.identity !== JSON.stringify(identity)) return
-    const fresh = await authority.identify(identity.sessionId, identity.pid, identity.cwd)
-    if (childUi !== held || held.registration !== status.registration || held.identity !== JSON.stringify(fresh)) return
+    try {
+      const fresh = await authority.identify(identity.sessionId, identity.pid, identity.cwd)
+      if (childUi !== held) return
+      if (held.registration !== status.registration || held.identity !== JSON.stringify(fresh)) {
+        retireChildUi(); changed(true); return
+      }
+    } catch (error) {
+      if (childUi === held) { retireChildUi(); changed(true) }
+      throw error
+    }
     return held
   }
   const server = createServer(async (request, response) => {
@@ -144,6 +167,9 @@ export async function createClaudeBackgroundStatusObserver(options: {
   catch (error) { await close(); throw error }
   return {
     directory, socketPath, token,
+    get desktopOwner(): ClaudeBackgroundDesktopOwner | undefined {
+      return childUi && !closed && childUi.registration === status.registration && childUi.identity === JSON.stringify(status.identity) ? childUi.owner : undefined
+    },
     /** Original identity and a fresh per-worker socket/token scope every desktop attachment. */
     async desktopTransport() {
       const identity = status.identity, registration = status.registration
@@ -155,7 +181,7 @@ export async function createClaudeBackgroundStatusObserver(options: {
       if (!info.isFile() || info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0 || info.size > 65536) throw new Error('Unowned background UI startup marker')
       const proof = JSON.parse(await readFile(marker, 'utf8'))
       const workerName = typeof proof.configPath === 'string' ? proof.configPath.split('/').at(-2) : undefined
-      if (proof.pid !== identity.pid || proof.sessionId !== identity.sessionId || !workerName || !new RegExp('^w-' + identity.pid + '-[A-Za-z0-9]+$').test(workerName) || proof.configPath !== join(directory, 'workers', workerName, 'observer.json')) throw new Error('Background UI startup does not match its original owner')
+      if (proof.pid !== identity.pid || proof.start !== identity.start || proof.sessionId !== identity.sessionId || !workerName || !new RegExp('^w-' + identity.pid + '-[A-Za-z0-9]+$').test(workerName) || proof.configPath !== join(directory, 'workers', workerName, 'observer.json')) throw new Error('Background UI startup does not match its original owner')
       for (const path of [join(directory, 'workers'), join(directory, 'workers', workerName)]) {
         const info = await lstat(path)
         if (!info.isDirectory() || info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0) throw new Error('Unowned background UI startup directory')
@@ -176,7 +202,10 @@ export async function createClaudeBackgroundStatusObserver(options: {
         if (await childUiCurrent() !== held) throw new Error('Background UI owner changed before its reply')
         return result
       } }
-      childUi = {registration, identity: scope, token: config.token, bridge, transport}
+      let finish!: () => void
+      const done = new Promise<void>(resolve => { finish = resolve })
+      const owner: ClaudeBackgroundDesktopOwner = {id: randomBytes(16).toString('hex'), parentSessionId, identity: Object.freeze({...identity}), registration, transport, done}
+      childUi = {registration, identity: scope, token: config.token, bridge, transport, owner, finish}
       return transport
     },
     get parentSessionId() { return parentSessionId },

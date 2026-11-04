@@ -5,7 +5,7 @@ import {buildChildEnv} from './runner.ts'
 import {createClaudeBackgroundStatusAuthority} from './background-status-authority.ts'
 import {claimClaudeBackgroundCheckpoint} from './background-observer-checkpoint.ts'
 import {createClaudeBackgroundStatusObserver} from './background-status-observer.ts'
-import type { ClaudeBackgroundStatusObserver } from './background-status-observer.ts'
+import type { ClaudeBackgroundDesktopOwner, ClaudeBackgroundStatusObserver } from './background-status-observer.ts'
 import type { ClaudeNativeContinuation } from './terminal-session.ts'
 import type { ClaudeNativeLaunch } from '../../../common/native-launch.ts'
 import {ClaudeNativeLaunchSchema,snapshotClaudeNativeLaunch} from './native-launch.ts'
@@ -36,6 +36,27 @@ export function getNativeBackgroundStatus(key: string, continuation: ClaudeNativ
   const entry = backgroundObservers.get(key), info = entry?.observer.value
   return continuation && entry?.observer.parentSessionId === continuation.sessionId && info?.sessionId === continuation.continuedInSessionId ? info : undefined
 }
+/** A child drawing remains addressable after its parent terminal writer exits. */
+export function getNativeBackgroundDesktopOwner(key: string, continuation: ClaudeNativeContinuation): ClaudeBackgroundDesktopOwner | undefined {
+  const observer = backgroundObservers.get(key)?.observer
+  const owner = observer?.desktopOwner
+  return observer?.parentSessionId === continuation.sessionId && owner?.parentSessionId === continuation.sessionId
+    && owner.identity.sessionId === continuation.continuedInSessionId ? owner : undefined
+}
+
+/** Resolve the requested original worker; a late setup cannot bind after thread teardown. */
+export async function prepareNativeBackgroundDesktop(key: string, continuation: ClaudeNativeContinuation, jobId: string, pid: number): Promise<ClaudeBackgroundDesktopOwner> {
+  const entry = backgroundObservers.get(key)
+  const status = entry?.observer.value
+  if (!entry || entry.observer.parentSessionId !== continuation.sessionId || status?.sessionId !== continuation.continuedInSessionId
+    || status.jobId !== jobId || status.pid !== pid) throw new Error('Background desktop worker changed; refresh its status')
+  const transport = await entry.observer.desktopTransport()
+  const owner = getNativeBackgroundDesktopOwner(key, continuation)
+  if (backgroundObservers.get(key) !== entry || !transport || !owner || owner.transport !== transport
+    || owner.identity.jobId !== jobId || owner.identity.pid !== pid) throw new Error('Background desktop controls are unavailable for this worker')
+  return owner
+}
+
 /** Rebind only an abandoned endpoint of this app profile and persisted native continuation. */
 export function restoreNativeBackgroundStatus(key: string, continuation: ClaudeNativeContinuation, cwd: string, profileEnv?: NodeJS.ProcessEnv): Promise<void> {
   const retained = backgroundObservers.get(key)?.observer

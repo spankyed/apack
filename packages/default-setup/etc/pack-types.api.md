@@ -528,6 +528,15 @@ interface ClaudeBackgroundAttachmentView {
 
 type ClaudeBackgroundCheckpoint = NonNullable<Awaited<ReturnType<typeof claimClaudeBackgroundCheckpoint>>>;
 
+interface ClaudeBackgroundDesktopOwner {
+    readonly id: string;
+    readonly parentSessionId: string;
+    readonly identity: Readonly<ClaudeBackgroundStatusIdentity>;
+    readonly registration: number;
+    readonly transport: ClaudeTerminalUiTransport;
+    readonly done: Promise<void>;
+}
+
 /** Native next-turn reply; an acknowledgement means queued, not a stored transcript receipt. */
 interface ClaudeBackgroundReplyRequest {
     operation: 'reply';
@@ -8745,6 +8754,7 @@ declare function createClaudeBackgroundStatusObserver(options: {
     directory: string;
     socketPath: string;
     token: string;
+    readonly desktopOwner: ClaudeBackgroundDesktopOwner | undefined;
     /** Original identity and a fresh per-worker socket/token scope every desktop attachment. */
     desktopTransport(): Promise<ClaudeTerminalUiTransport | undefined>;
     readonly parentSessionId: string;
