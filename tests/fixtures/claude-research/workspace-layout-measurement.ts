@@ -32,7 +32,8 @@ export async function measureWorkspaceLayout({page,composer,workspace,phase,capt
     if(process.env.CLAUDE_RESEARCH_WORKSPACE_LAYOUT_ACCEPT==='1')await expect(send).toBeEnabled()
     const sendGeometry=await send.evaluate(element=>{const r=element.getBoundingClientRect();const points=[[r.left+2,r.top+2],[r.right-2,r.top+2],[r.left+2,r.bottom-2],[r.right-2,r.bottom-2]];return{top:r.top,bottom:r.bottom,left:r.left,right:r.right,width:r.width,height:r.height,hit:points.every(([x,y])=>element.contains(document.elementFromPoint(x,y)))}})
     const composerGeometry=await composer.evaluate(element=>{const r=element.getBoundingClientRect();return{top:r.top,bottom:r.bottom,height:r.height,width:r.width,clientHeight:element.clientHeight,scrollHeight:element.scrollHeight}})
-    readings.push({viewport,state,geometry,composerGeometry,sendGeometry})
+    const reading:Record<string,unknown>={viewport,state,geometry,composerGeometry,sendGeometry}
+    readings.push(reading)
     await capture(`native-workspace-${phase}-${state}-${viewport.width}.png`)
     if(process.env.CLAUDE_RESEARCH_WORKSPACE_LAYOUT_ACCEPT==='1'){
      await expect(composer).toBeInViewport({ratio:1});await expect(send).toBeInViewport({ratio:1})
@@ -41,6 +42,26 @@ export async function measureWorkspaceLayout({page,composer,workspace,phase,capt
      if(state==='workspace'){
       const elements=geometry.elements as Record<string,{height:number}>
       expect(elements.artifacts.height,'Explicit workspace resize exposes actual reading space').toBeGreaterThanOrEqual(96)
+      const artifacts=page.locator('[data-onboarding-id="agent-artifacts"]')
+      const details=artifacts.locator('details').first(),summary=details.locator(':scope > summary')
+      const bounds=await artifacts.boundingBox();expect(bounds).toBeTruthy()
+      await page.mouse.move(bounds!.x+bounds!.width*.85,bounds!.y+bounds!.height/2)
+      await page.mouse.wheel(0,480)
+      await expect(summary).toBeInViewport({ratio:1})
+      await summary.click();await expect(details).toHaveAttribute('open','')
+      const session=details.locator('span.font-mono').first()
+      const sessionBounds=await session.boundingBox();expect(sessionBounds).toBeTruthy()
+      await page.mouse.move(bounds!.x+bounds!.width*.85,bounds!.y+bounds!.height/2)
+      await page.mouse.wheel(0,sessionBounds!.y+sessionBounds!.height/2-(bounds!.y+bounds!.height/2))
+      await expect(session).toBeInViewport({ratio:1})
+      const sessionId=await page.evaluate(()=>(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.currentThread?.context?.claudeCode?.sessionId)
+      if(typeof sessionId!=='string'||!sessionId)throw Error('Workspace session identity is missing')
+      const display=await session.innerText();expect(display).toContain(sessionId.slice(0,8))
+      reading.workspaceReading={sessionId,display,summary:await summary.innerText(),visible:true}
+      await expect(composer).toHaveText(draft)
+      await expect(send).toBeInViewport({ratio:1})
+      await capture(`native-workspace-${phase}-${state}-${viewport.width}.png`)
+      await summary.click();await expect(details).not.toHaveAttribute('open','')
      }
     }
    }
