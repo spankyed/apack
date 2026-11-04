@@ -10,6 +10,11 @@ const failures: Error[] = [];
 const cleanups: Array<() => void | Promise<void>> = [];
 afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); expect(failures.splice(0)).toEqual([]); });
 
+const fileEventsDelivered = () => new Promise(resolve => setTimeout(resolve, 2_000));
+// macOS replays a just-created fixture's creation as new events for an unbounded time, so a fixture can't show the
+// absence of a change there. Nothing else checks this on macOS except a timed run of `npm run dev`.
+const whereEventsAreLive = it.skipIf(process.platform === 'darwin');
+
 function fixture() {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-frontend-watch-'));
   const root = path.join(temporary, 'pack');
@@ -42,15 +47,14 @@ it('uses file bytes for duplicate detection and watches outside resource edits',
   expect(before.current(), JSON.stringify(changed.mock.calls)).toBe(false);
 });
 
-it('ignores new bytes in a file the build never read, and takes a new file in the same directory', async () => {
+whereEventsAreLive('ignores new bytes in a file the build never read, and takes a new file in the same directory', async () => {
   const { watcher, changed, firstChange, write } = fixture();
   const file = write('resources/style.css', 'read');
   write('resources/unread.ts', 'before');
   await watcher.observe({ files: [file], directories: [], successful: true });
   const before = watcher.snapshot();
   write('resources/unread.ts', 'after');
-  // Delivered after that edit's event, whose absence is what is being asserted
-  await new Promise(resolve => setTimeout(resolve, 2_000));
+  await fileEventsDelivered();
   expect(before.current()).toBe(true);
   const added = write('resources/added.ts', 'new');
   await _byDeadline(firstChange, 'the new file');
@@ -58,7 +62,7 @@ it('ignores new bytes in a file the build never read, and takes a new file in th
   expect(before.current()).toBe(false);
 });
 
-it('ignores what a package build writes, while a source file beside it still counts', async () => {
+whereEventsAreLive('ignores what a package build writes, while a source file beside it still counts', async () => {
   const temporary = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-frontend-watch-')));
   const root = path.join(temporary, 'pack');
   const write = (file: string) => {
@@ -78,8 +82,7 @@ it('ignores what a package build writes, while a source file beside it still cou
   const before = watcher.snapshot();
   write('package/dist/chunk.js');
   write('package/.temp/build/chunk.js');
-  // Delivered after those writes' events, whose absence is what is being asserted
-  await new Promise(resolve => setTimeout(resolve, 2_000));
+  await fileEventsDelivered();
   expect(before.current()).toBe(true);
   const source = write('package/added.ts');
   await _byDeadline(firstChange, 'the new source file');
