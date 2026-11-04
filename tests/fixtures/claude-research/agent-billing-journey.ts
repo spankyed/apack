@@ -49,10 +49,14 @@ export async function verifyAgentBilling(
   try {
     // The app owns its 30s native initialization clock; first-turn latency starts after init.
     await appPage.waitForFunction(() => {
-      const claude=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.currentThread?.context?.claudeCode
-      return !!claude?.sessionId || claude?.chatState==='error'
+      const thread=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.currentThread
+      const claude=thread?.context?.claudeCode
+      // Failed admission returns to Idle and finalizes a warning; it has no sessionId.
+      return !!claude?.sessionId || claude?.chatState==='error' || thread?.messages?.some((message:any)=>typeof message.text==='string'&&message.text.startsWith('⚠️ '))
     },null,{timeout:0})
-    expect((await context()).claude.chatState).not.toBe('error')
+    const initialized=await context()
+    expect(initialized.claude.chatState).not.toBe('error')
+    expect(initialized.sessionId,'Native initialization must succeed; retain the actual app warning on failure').toBeTruthy()
     await expect.poll(async () => (await context()).turns, {timeout:25000,message:'Original initialized seed turn completes before billing verification'}).toBe(1)
   } catch (error) {
     // Keep the original failure while recording what the person could see at the startup boundary.
