@@ -1,4 +1,4 @@
-import { CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES } from './ui-text-limits.ts'
+import { CLAUDE_UI_PROMPT_RPC_SUBTYPES, CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES } from './ui-text-limits.ts'
 import { claudeTerminalBackgroundReplyRuntime } from './terminal-background-reply-runtime.ts'
 import { claudeTerminalLeftArrowRuntime } from './terminal-leftarrow-runtime.ts'
 import { claudeTerminalBackgroundRuntime } from './terminal-background-runtime.ts'
@@ -44,6 +44,7 @@ import {stripVTControlCharacters} from 'node:util';
 import {readFileSync} from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
 const nativeUiTextMessageMaxBytes=${CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES};
+const nativeUiPromptRpcSubtypes=new Set(${JSON.stringify(CLAUDE_UI_PROMPT_RPC_SUBTYPES)});
 const configUrl=new URL('./observer.json',import.meta.url),config=JSON.parse(readFileSync(configUrl,'utf8'));
 let helperPolicyReader;
 export function readNativeHelperPolicy(){return helperPolicyReader?.()}
@@ -1249,8 +1250,9 @@ const server=http.createServer(async(request,response)=>{
  if(request.method!=='POST'||request.url!=='/control'||request.headers['x-apack-native-token']!==config.token)return reply(403,{});
  let body;
  try{
-  let bytes=0;const chunks=[];for await(const chunk of request){bytes+=chunk.length;if(bytes>1048576)return reply(413,{});chunks.push(chunk);}
+  let bytes=0;const chunks=[];for await(const chunk of request){bytes+=chunk.length;if(bytes>nativeUiTextMessageMaxBytes)return reply(413,{});chunks.push(chunk);}
   body=JSON.parse(Buffer.concat(chunks).toString());
+  if(bytes>1048576&&!nativeUiPromptRpcSubtypes.has(body?.request?.subtype))return reply(413,{});
   const current=JSON.parse(readFileSync(configUrl,'utf8'));
   if(typeof body.id!=='string'||!/^[a-f0-9-]{36}$/i.test(body.id)||!Number.isSafeInteger(body.sequence)||body.sequence<1||body.ownerPid!==process.pid||body.sessionId!==current.sessionId)return reply(409,{});
   const identity={id:body.id,pid:process.pid,sessionId:body.sessionId};

@@ -1,3 +1,4 @@
+import { CLAUDE_UI_PROMPT_RPC_SUBTYPES, CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES } from './ui-text-limits.ts'
 import { createClaudePromptHosts, type ClaudePromptHost } from './ui-prompt-host.ts'
 import { request as httpRequest, type ClientRequest } from 'node:http'
 import { randomUUID } from 'node:crypto'
@@ -37,7 +38,10 @@ export function createClaudeTerminalUiTransport(options: {
       if (value.subtype === 'ui_detach' && typeof value.client_id === 'string') promptHosts.detach(value.client_id)
       if (value.subtype === 'ui_attach' && typeof value.client_id === 'string') value = { ...value, answers: promptHosts.answers(value.client_id) }
       const id = randomUUID(), body = JSON.stringify({ id, sequence: ++sequence, ownerPid: owner.pid, sessionId: owner.sessionId, request: value })
-      if (Buffer.byteLength(body) > 1048576) return Promise.reject(new Error('Native UI request exceeds its size limit'))
+      const textRpc = CLAUDE_UI_PROMPT_RPC_SUBTYPES.some(subtype => subtype === value.subtype)
+      const requestMaxBytes = textRpc ? CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES : 1048576
+      const responseMaxBytes = textRpc ? CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES : 2 * 1048576
+      if (Buffer.byteLength(body) > requestMaxBytes) return Promise.reject(new Error('Native UI request exceeds its size limit'))
       return new Promise((resolve, reject) => {
         const request = httpRequest({ socketPath: options.socketPath, path: '/control', method: 'POST',
           headers: { 'content-type': 'application/json', 'x-apack-native-token': options.token } }, response => {
@@ -45,7 +49,7 @@ export function createClaudeTerminalUiTransport(options: {
           const chunks: Buffer[] = []
           response.on('data', (chunk: Buffer) => {
             bytes += chunk.length
-            if (bytes > 2 * 1048576) response.destroy(new Error('Native UI response exceeds its size limit'))
+            if (bytes > responseMaxBytes) response.destroy(new Error('Native UI response exceeds its size limit'))
             else chunks.push(chunk)
           })
           response.on('error', reject)
