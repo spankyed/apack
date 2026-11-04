@@ -5,7 +5,7 @@
       ? 'overflow-x-auto border-b border-neutral-800 shrink-0'
       : 'w-64 h-full overflow-y-auto border-r border-neutral-800'"
       class="bg-neutral-900"
-      @wheel.prevent="compact && (($event.currentTarget as HTMLElement).scrollLeft += $event.deltaY)"
+      @wheel="scrollArtifactList"
     >
       <ArtifactList
         :artifacts="artifacts"
@@ -47,6 +47,18 @@ const props = defineProps<{
 defineEmits<{
   'select-artifact': [artifactId: string];
 }>();
+
+// Preserve native sidebar scrolling, trackpad horizontal movement and browser zoom.
+function scrollArtifactList(event: WheelEvent) {
+  if (!props.compact || event.ctrlKey || event.shiftKey || event.deltaX !== 0) return;
+  const list = event.currentTarget as HTMLElement;
+  const scale = event.deltaMode === 1 ? parseFloat(getComputedStyle(list).lineHeight) || 16
+    : event.deltaMode === 2 ? list.clientWidth : 1;
+  const next = Math.max(0, Math.min(list.scrollWidth - list.clientWidth, list.scrollLeft + event.deltaY * scale));
+  if (next === list.scrollLeft) return;
+  event.preventDefault();
+  list.scrollLeft = next;
+}
 
 const selectedArtifact = computed(() =>
   props.artifacts.find(a => a.id === props.selectedArtifactId)

@@ -95,3 +95,26 @@ it('keeps a message body mounted when its aside is expanded and collapsed', asyn
   expect(bubble.style.display).toBe('none');
   expect(f.root.querySelector('[data-body]')).toBe(body);
 });
+
+it('preserves normal sidebar wheel scrolling and consumes compact wheel only when the strip moves', () => {
+  const f = fixture();
+  app = createApp(ContentViewer, { artifacts: [], compact: false }); app.mount(f.root);
+  let list = f.root.querySelector('[data-onboarding-id="agent-artifacts"]')!.firstElementChild as HTMLElement;
+  const wheel = (target: HTMLElement, input: WheelEventInit) => {
+    const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, ...input });
+    target.dispatchEvent(event); return event.defaultPrevented;
+  };
+  expect(wheel(list, { deltaY: 80 })).toBe(false);
+  app.unmount();
+  app = createApp(ContentViewer, { artifacts: [], compact: true }); app.mount(f.root);
+  list = f.root.querySelector('[data-onboarding-id="agent-artifacts"]')!.firstElementChild as HTMLElement;
+  Object.defineProperties(list, { scrollWidth: { value: 500 }, clientWidth: { value: 200 } });
+  expect(wheel(list, { deltaY: 80 })).toBe(true); expect(list.scrollLeft).toBe(80);
+  expect(wheel(list, { deltaY: 400 })).toBe(true); expect(list.scrollLeft).toBe(300);
+  expect(wheel(list, { deltaY: 80 })).toBe(false); expect(list.scrollLeft).toBe(300);
+  expect(wheel(list, { deltaY: -60 })).toBe(true); expect(list.scrollLeft).toBe(240);
+  expect(wheel(list, { deltaX: 20, deltaY: 40 })).toBe(false);
+  expect(wheel(list, { deltaY: 40, ctrlKey: true })).toBe(false);
+  expect(wheel(list, { deltaY: 40, shiftKey: true })).toBe(false);
+  expect(list.scrollLeft).toBe(240);
+});
