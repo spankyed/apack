@@ -1,3 +1,4 @@
+import {verifySelectionLimit} from './selection-limit-journey.ts'
 import {readFile,writeFile} from 'node:fs/promises'
 import {join} from 'node:path'
 import {pathToFileURL} from 'node:url'
@@ -142,6 +143,7 @@ export async function verifyAgentBilling(
     await writeFile(join(workspace,'native-terminal-client-theme-proof.json'),JSON.stringify(clientTheme,null,2))
     await composer.click();await composer.press(process.platform==='darwin'?'Meta+A':'Control+A');await composer.press('Backspace');await expect(composer).toHaveText('')
   }
+  if(process.env.CLAUDE_RESEARCH_SELECTION_LIMIT==='1')await verifySelectionLimit({appPage,card,composer,project,context,capture})
   await composer.fill('Review the release notes with a worker.')
   await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).native.state.tasks.some((task:any)=>task.status==='completed'),{timeout:25000}).toBe(true)
@@ -280,5 +282,5 @@ export async function verifyAgentBilling(
   },{timeout:25000,message:'Same-session recovery completes a new original turn'}).toBe(true)
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
   await writeFile(join(workspace!,'native-agent-billing-proof.json'),JSON.stringify({project,sessionId,taskId,boundNativePid,observation,readings,recovery,final:await context()},null,2))
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:planScenario,nativeAgentBilling:true,nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,...(panelOwnership?{nativeAgentPanelOwnership:true}:{}),...(clientTheme?{nativeClientTheme:true}:{}),...(taskManagerProof?{nativeTaskManagerReturn:true,taskManagerReadings:taskManagerProof.readings}:{}),sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:planScenario,nativeAgentBilling:true,...(process.env.CLAUDE_RESEARCH_SELECTION_LIMIT==='1'?{nativeSelectionLimit:true}:{}),nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,...(panelOwnership?{nativeAgentPanelOwnership:true}:{}),...(clientTheme?{nativeClientTheme:true}:{}),...(taskManagerProof?{nativeTaskManagerReturn:true,taskManagerReadings:taskManagerProof.readings}:{}),sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
 }
