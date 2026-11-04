@@ -446,6 +446,7 @@ describe('an installed pack the app could not load', () => {
     await installPackFromLocal(packSource('1.0.0'));
     // A build another apack made: what an app update leaves an installed pack as
     fs.writeFileSync(snapshotFile(), JSON.stringify({ format: PACK_SNAPSHOT_FORMAT + 1 }));
+    sealPack(path.join(resolveAppEnvironment().packsDir, PACK_ID));
     loadAppPacks(registry);
     expect(registry.getPackRegistration(PACK_ID)).toBeNull();
 
@@ -457,6 +458,7 @@ describe('an installed pack the app could not load', () => {
       });
 
       fs.writeFileSync(snapshotFile(), JSON.stringify({ declarationRevision: _declarationRevision(JSON.parse(fs.readFileSync(path.join(resolveAppEnvironment().packsDir, PACK_ID, 'apack.json'), 'utf-8'))), format: PACK_SNAPSHOT_FORMAT, manifest: JSON.parse(fs.readFileSync(path.join(resolveAppEnvironment().packsDir, PACK_ID, 'apack.json'), 'utf-8')), eventContracts: eventContractsFixture(JSON.parse(fs.readFileSync(path.join(resolveAppEnvironment().packsDir, PACK_ID, 'apack.json'), 'utf-8'))), types: { entities: {}, relKinds: {}, roles: {} }, entityDestinations: {}, facades: {} }));
+      sealPack(path.join(resolveAppEnvironment().packsDir, PACK_ID));
       await reloadPackById(registry, PACK_ID, { send: () => {} } as never);
 
       expect(registry.getPackRegistration(PACK_ID)).not.toBeNull();
@@ -469,6 +471,7 @@ describe('an installed pack the app could not load', () => {
   it('keeps a declaration failure visible after the pack is disabled', async () => {
     await installPackFromLocal(packSource('1.0.0'));
     fs.writeFileSync(snapshotFile(), JSON.stringify({}));
+    sealPack(path.join(resolveAppEnvironment().packsDir, PACK_ID));
     expect(activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(false);
 
     const system = runPacksSystem();

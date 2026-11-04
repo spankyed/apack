@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  PACK_LAYOUT_VERSION,
+  PACK_LAYOUT, PACK_LAYOUT_VERSION,
   createPackArchive,
   extractPackArchive,
   readPackIntegrity,
@@ -241,7 +241,7 @@ describe('compiled content admission', () => {
     expect(readPackBuild(path.join(root, 'dist')).content).toEqual(index);
   });
 
-  it('refuses an index changed between integrity verification and metadata capture', () => {
+  it('retains verified index bytes when its path changes after capture', () => {
     const { root, dir, index } = contentBuild();
     const indexFile = path.join(dir, 'content.json');
     const read = fs.readFileSync;
@@ -253,7 +253,9 @@ describe('compiled content admission', () => {
     }) as typeof fs.readFileSync);
     syncBuiltinESMExports();
     try {
-      expect(() => readPackBuild(path.join(root, 'dist'))).toThrow('Captured content index does not match');
+      expect(readPackBuild(path.join(root, 'dist')).content).toEqual(index);
+      expect(reads).toBe(1);
+      expect(() => readPackBuild(path.join(root, 'dist'))).toThrow('checksum mismatch runtime/content/content.json');
     } finally { capture.mockRestore(); syncBuiltinESMExports(); }
   });
 
@@ -340,7 +342,15 @@ describe('installed build reader', () => {
     fs.writeFileSync(path.join(root, 'dist/runtime/index.cjs'), 'throw new Error("discovery executed the runtime");');
     sealBuild(root);
     stagePack(root, stage);
-    const build = readPackBuild(stage);
+    const reads = vi.spyOn(fs, 'readFileSync');
+    syncBuiltinESMExports();
+    let build;
+    try {
+      build = readPackBuild(stage);
+      for (const file of [PACK_LAYOUT.manifest, PACK_LAYOUT.snapshot]) {
+        expect(reads.mock.calls.filter(([name]) => name === path.join(stage, file))).toHaveLength(1);
+      }
+    } finally { reads.mockRestore(); syncBuiltinESMExports(); }
     expect(build.snapshot.manifest.id).toBe('demo-pack');
     expect(build.revision).toMatch(/^[a-f0-9]{64}$/);
     const copy = path.join(tmp, 'copy');
@@ -364,13 +374,13 @@ describe('installed build reader', () => {
     expect(after.revision).not.toBe(before.revision);
   });
 
-  it('refuses declarations captured before a different valid build replaced them', () => {
+  it('refuses a different valid build replacing files during verified capture', () => {
     const stage = path.join(tmp, 'stage');
     stagePack(builtPack(), stage);
     const read = fs.readFileSync;
     let replaced = false;
     const spy = vi.spyOn(fs, 'readFileSync').mockImplementation((file, options) => {
-      if (file === path.join(stage, 'integrity.json') && !replaced) {
+      if (file === path.join(stage, 'runtime/index.cjs') && !replaced) {
         replaced = true;
         const snapshot = JSON.parse(read(path.join(stage, 'types/snapshot.json'), 'utf8'));
         snapshot.manifest.name = 'New build';
@@ -384,7 +394,7 @@ describe('installed build reader', () => {
     });
     syncBuiltinESMExports();
     try {
-      expect(() => readPackBuild(stage)).toThrow('Captured declarations do not match');
+      expect(() => readPackBuild(stage)).toThrow('checksum mismatch types/snapshot.json');
       expect(replaced).toBe(true);
       expect(readPackBuild(stage).snapshot.manifest.name).toBe('New build');
     } finally {

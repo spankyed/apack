@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { readInstalledSchema } from '../../src/database/schema.ts';
-import { writeInstalledPackFixture } from '../packs/runtime/build-fixture.ts';
+import { writeInstalledPackFixture, sealPack } from '../packs/runtime/build-fixture.ts';
 import { dataDirWithPacks, removeTempDirs, schemaContext, tempDir } from './fixtures.ts';
 import { _appDirOf } from '@apackdev/sdk/env';
 
@@ -19,6 +19,7 @@ describe('a file readInstalledSchema cannot use', () => {
   it("names the pack's manifest, whichever pack it is", () => {
     const dir = dataDirWithPacks({ external: [{ id: 'bookmarks', entities: { Bookmark: 'Bookmark' } }] });
     write(manifestFile(dir, 'bookmarks'), { id: 'bookmarks', name: 'Bookmarks', version: '1.0.0', data: { relations: 'nonsense' } });
+    sealPack(path.dirname(manifestFile(dir, 'bookmarks')));
     expect(() => readInstalledSchema(schemaContext(dir))).toThrow(`Pack "bookmarks" declarations in ${path.dirname(manifestFile(dir, 'bookmarks'))}: its manifest does not match its built declarations`);
   });
 
@@ -26,6 +27,7 @@ describe('a file readInstalledSchema cannot use', () => {
   it("names the manifest of a pack the app ships", () => {
     const dir = dataDirWithPacks();
     write(manifestFile(dir, 'core'), { id: 'core', name: 'Core', version: '1.0.0', data: { entities: ['Note'] } });
+    sealPack(path.dirname(manifestFile(dir, 'core')));
     expect(() => readInstalledSchema(schemaContext(dir))).toThrow(`Pack "core" declarations in ${path.dirname(manifestFile(dir, 'core'))}: its manifest does not match its built declarations`);
   });
 
