@@ -98,7 +98,7 @@ carries no comments.
 |---|---|---|---|
 | 1 | `npm run packages:ensure &&` in a root script | a repo command: `test`, `test:headed`, `test:explorer`, `test:external-pack`, `typecheck`, `typecheck:pack`, `build:default-setup`, `api:update` | root `package.json` |
 | 2 | that workspace's `pretest` | `npm test -w @apackdev/cli`, `-w @app/default-setup` and `-w @app/repo-checks` run directly, which no root script wraps | each package's `package.json` |
-| 3 | `ensureCheckoutPackages(packRoot)` | `apack pack build`, `apack pack test`, `apack pack dev` — from any directory, for a pack whose packages are a checkout's | `apack-cli/src/build/checkout-packages.ts`, called from `commands/{build,test,run}.ts` |
+| 3 | `ensureCheckoutPackages(packRoot)` | `apack pack build`, `apack pack test`, `apack pack dev`, `dev:drive` — from any directory, for a pack whose packages are a checkout's — and every watched rebuild, which an edit to a unit's input triggers | `apack-cli/src/build/checkout-packages.ts`, called from `build/build-process.ts`, `commands/test.ts` and `commands/drive.ts` |
 | 4 | the `Build publishable packages` step | CI, whose typecheck step already built them through `typecheck:pack` | `.github/workflows/ci.yml` |
 
 **Checkers** run inside a process that has already started, where the modules are loaded and rebuilding
@@ -115,10 +115,11 @@ Three things follow.
 
 - **A new entry point needs a fixer in front of it, not another copy of the rule.** Every door above calls
   the same check; what differs is only when it runs and whether it can repair what it finds.
-- **A fixer belongs to the command a user runs, not to a function a watch loop calls.** `apack pack dev`
-  rebuilds the pack through `build()` on every file change, and the check reads every source of all five
-  packages, so `apack pack build` refreshes in `buildCommand` while `build()` stays clean. Both placements
-  are pinned by `apack-cli/tests/build/checkout-packages.spec.ts`.
+- **A pack builder refreshes the packages before it builds, so a watch loop is a fixer too.** The refresh
+  belongs to `createPackBuilder`, not to a command: a one-shot `build()` runs it first, and a watcher calls
+  `ensurePackages()` before it reads its inputs, so what the refresh rewrites is already in the signature and
+  costs no second build. While a failed refresh's inputs and outputs stay as they were, `ensurePackages()`
+  repeats the failure without building again, because that build's own scratch writes are watched.
 - **A checker must not try to repair, but waiting is not repairing.** Its process has already resolved and
   loaded modules; a rebuild underneath it would leave half of two builds in memory. So doors 5 and 6 both
   **wait** for a build in flight and then re-read (`waitForPackageBuild`), and neither starts one: a build
@@ -129,7 +130,7 @@ Three things follow.
   What is still named is a holder that outlasted the bound, which is a wedge rather than a queue.
 
 One path is deliberately not in the table twice. `npm run dev` reaches door 3, because its
-dev launcher builds the built-in pack with `apack pack build --skip-fe`, and that command ensures —
+dev launcher runs the built-in pack's watcher with `apack pack build --watch`, whose builds ensure —
 so the script carries no prefix of its own. For a full app build, run `npm run build:default-setup` before
 `npm run build:runtime`; `build:default-setup` ensures the package bundles before building the built-in pack.
 
@@ -138,26 +139,34 @@ delivered is what there is.
 
 ### What a running dev app does and doesn't pick up
 
-`npm run dev` leaves two halves of the built-in pack on different clocks, and knowing which is which saves
-an afternoon.
+`npm run dev` keeps three loops running, and an edit to a package reaches them at different speeds.
 
-**Follows your SDK and UI source, live.** The renderer's Vite config declares the condition
+**Follows your source within seconds.** The renderer's Vite config declares the condition
 (`resolve.conditions` and its `ssr` twin), so editing `@apackdev/sdk`, `@apackdev/ears` or `@apackdev/ui`
 source hot-reloads the browser with no build step. The API's tsup build declares it too
-(`esbuildOptions.conditions`), and built-in packs' backends are bundled into the API, so the pack's
-running code follows source as well.
+(`esbuildOptions.conditions`) and watches every workspace package it bundles, so main restarts the API on
+the new host, SDK or ears code.
 
-**Frozen at the moment the command ran.** Everything `apack pack build` produced for the pack, because a
-pack build resolves the packages' `dist`: the compiled content (`*.content.json`), the facade types
-(`dist/types/pack-types.d.ts`), the step build and the content runtime (`dist/build/`). `npm run dev` builds
-those once, through door 3, and nothing rebuilds them while the app runs.
+**Follows through the pack watcher, after a build.** The watcher (`startPackBuildWatcher`) subscribes to
+every input of every unit in `BUILD_UNITS`, so a saved package source runs door 3 and refreshes whichever
+`dist` went stale. What happens next depends on what moved:
+
+- A package in the pack's package graph (`@apackdev/ears`, `/sdk`, `/ui`, and `/testing` for a pack that develops
+  against it, as default-setup does): one complete pack build, which replaces the compiled content
+  (`*.content.json`), the facade types (`dist/types/pack-types.d.ts`), the step build, the content runtime
+  (`dist/build/`) and the pack's backend, which loads from its installed build. The running app gets the result
+  when that build publishes.
+- Only `@apackdev/cli`: its `dist` refreshes and no pack build runs. The next build uses the new compiler.
+- A package that fails to build: the error is logged, the session and the accepted build stay, and the next
+  edit retries. A lock another process holds is waited for, and that holder's writes to `dist` start the next pass.
 
 The one that bites in practice is the facade. `packages/default-setup/tsconfig.json` declares no
 condition — it is a pack config — so **your editor type-checks default-setup against the packages'
-`dist`**. Change an SDK type and the editor keeps showing the old one until something rebuilds it. Any
-command with a door does (`npm run typecheck`, `typecheck:pack`, `build:default-setup`), or `npm run packages:ensure`
-on its own. This is the cost single mode trades for: a pack, the built-in one included, compiles against
-the layout a pack author has, and in a checkout that layout is only as current as the last build.
+`dist`**. While `npm run dev` runs, an SDK type reaches the editor once the watcher has refreshed that `dist`.
+Without a watcher it stays stale until a command with a door runs (`npm run typecheck`, `typecheck:pack`,
+`build:default-setup`), or `npm run packages:ensure` on its own. This is the cost single mode trades for: a
+pack, the built-in one included, compiles against the layout a pack author has, and in a checkout that layout
+is only as current as the last build.
 
 
 

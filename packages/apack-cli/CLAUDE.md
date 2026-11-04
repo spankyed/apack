@@ -355,7 +355,12 @@ native cases (Electron's framework copy, signed Mach-O) still need `compiler_mac
 `startPackBuildWatcher().done` reports terminal subscription failures after owned cleanup; `close()`
 drains disposal. Both the public watch command and dev session await `done`. Syntax/build/reload errors
 remain recoverable on a later edit; a broken subscription cancels the operation with its input path and
-cause. Frontend replacement retains retiring subscriptions until asynchronous disposal settles.
+cause. Each pass runs `builder.ensurePackages()` before reading its inputs, so a rewritten `dist` is in the
+signature it compares and costs one build, and a pass that moves nothing the pack builds against publishes
+nothing. Every `BUILD_UNITS` input of the pack's and the CLI's checkouts is watched (`packageInputWatchPaths`),
+and a refresh with those inputs and outputs unmoved spawns nothing: it returns, or repeats its failure. The
+frontend watcher counts neither new bytes in a file the build never read nor a package build's writes as a
+change, since their events can arrive long after the signature that already includes them. Frontend replacement retains retiring subscriptions until asynchronous disposal settles.
 
 Integration and native specs start processes asynchronously: `promisify(execFile)` with a timeout for one
 short process, `runCommand` (`tests/_support/run-command.ts`) for the CLI or a nested vitest, which bounds each
