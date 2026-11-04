@@ -7,7 +7,17 @@ import {expect,type Page,type Locator} from '@playwright/test'
 export async function verifySelectionLimit({appPage,card,composer,project,context,capture}:{appPage:Page;card:Locator;composer:Locator;project:string;context:()=>Promise<any>;capture:(name:string)=>Promise<void>}){
  const before=await context(),proof:unknown[]=[]
  const selected=(text:string)=>({selected:true,length:text.length,utf8Bytes:Buffer.byteLength(text),sha256:createHash('sha256').update(text).digest('hex')})
- const receipts=async()=>JSON.parse(await readFile(join(project,'native-selection-limit-receipts.json'),'utf8').catch(()=>'[]'))
+ const receipts=async()=>{
+  const files:unknown=JSON.parse(await readFile(join(project,'native-selection-limit-receipts.json'),'utf8').catch(()=>'[]'))
+  expect(Array.isArray(files)).toBe(true);expect((files as unknown[]).length).toBeLessThanOrEqual(6)
+  return Promise.all((files as string[]).map(async(file,index)=>{
+   expect(file).toBe('native-selection-limit-receipt-'+index+'.json')
+   const receipt=JSON.parse(await readFile(join(project,file),'utf8'))
+   if(!receipt.selected){expect(receipt).toEqual({selected:false});return receipt}
+   expect(Object.keys(receipt)).toEqual(['selected','value']);expect(Object.keys(receipt.value)).toEqual(['text'])
+   return selected(receipt.value.text)
+  }))
+ }
  const button=card.getByRole('button',{name:'Read current selection',exact:true})
  const notes=card.getByRole('textbox',{name:'Selection review notes',exact:true})
  await card.getByRole('button',{name:'Session tools',exact:true}).click()
