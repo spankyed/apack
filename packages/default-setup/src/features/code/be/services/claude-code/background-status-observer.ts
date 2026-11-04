@@ -230,7 +230,9 @@ export async function createClaudeBackgroundStatusObserver(options: {
     async releaseParent() {
       if (released || closed) return
       released = true
-      if (!target()) { await close(); return }
+      // The final canonical continuation can arrive after the parent PTY exits.
+      // Keep startup files through the existing registration grace; admission still
+      // requires that continuation and the original worker identity.
       monitor = setInterval(() => { void checkReleasedChild() }, 5000); monitor.unref()
       if (!status.identity) { releaseTimer = setTimeout(() => { if (!status.identity) void close() }, 30000); releaseTimer.unref() }
     },

@@ -10,10 +10,10 @@ import { join } from 'node:path'
 import { createClaudeBackgroundStatusObserver } from '#features/code/be/services/claude-code/background-status-observer.ts'
 const parent='24be904a-3c35-4981-9793-cbe7a6c19d46',child='05ff1d31-597d-4537-8737-4407191add6e'
 const original={jobId:'05ff1d31',sessionId:child,pid:119,start:'worker-start',hostPid:100,hostStart:'host-start',cwd:'/owned'}
-async function fixture(){
+async function fixture(target:()=>{sessionId:string;cwd:string}|undefined=()=>({sessionId:child,cwd:'/owned'})){
  let identity={...original}
  const authorities:{identify:ReturnType<typeof vi.fn>;close:ReturnType<typeof vi.fn>}[]=[],changed=vi.fn()
- const observer=await createClaudeBackgroundStatusObserver({parentSessionId:parent,target:()=>({sessionId:child,cwd:'/owned'}),changed,authority:()=>{const authority={identify:vi.fn(async()=>({...identity})),close:vi.fn(async()=>{})};authorities.push(authority);return authority}})
+ const observer=await createClaudeBackgroundStatusObserver({parentSessionId:parent,target,changed,authority:()=>{const authority={identify:vi.fn(async()=>({...identity})),close:vi.fn(async()=>{})};authorities.push(authority);return authority}})
  const post=(path:string,value:unknown,token=observer.token)=>new Promise<{code:number;value:any}>((resolve,reject)=>{
   const req=request({socketPath:observer.socketPath,path,method:'POST',headers:{'x-apack-native-token':token,'content-type':'application/json'}},response=>{let text='';response.setEncoding('utf8');response.on('data',value=>text+=value);response.on('end',()=>resolve({code:response.statusCode!,value:JSON.parse(text)}))});req.on('error',reject);req.end(JSON.stringify(value))
  })
@@ -228,4 +228,35 @@ it('binds child drawing and reverse prompts to the original worker and retires t
   await observer.desktopTransport();const finalOwner=observer.desktopOwner!
   await observer.close();await finalOwner.done;expect(observer.desktopOwner).toBeUndefined()
  } finally {native.closeAllConnections();await new Promise<void>(resolve=>native.close(()=>resolve()));await observer.close();await rm(profile,{recursive:true,force:true})}
+})
+
+
+it('preserves child startup files when parent exit precedes the canonical continuation',async()=>{
+ let target:{sessionId:string;cwd:string}|undefined
+ const f=await fixture(()=>target),startup=join(f.observer.directory,'pending-child-startup')
+ await writeFile(startup,'Keep until original registration or bounded cleanup')
+ try {
+  await f.observer.releaseParent()
+  await expect(access(startup)).resolves.toBeUndefined()
+  expect((await f.post('/background-register',{sessionId:child,pid:119})).code).not.toBe(200)
+  target={sessionId:child,cwd:'/owned'}
+  const registration=await f.post('/background-register',{sessionId:child,pid:119})
+  expect(registration.code).toBe(200)
+  expect((await f.post('/background-status',f.message(registration.value.token))).code).toBe(200)
+  expect(f.observer.value).toMatchObject({sessionId:child,pid:119})
+  await expect(access(startup)).resolves.toBeUndefined()
+ } finally {await f.observer.close()}
+ await expect(access(startup)).rejects.toThrow()
+})
+
+it('still removes unclaimed startup files at the existing registration deadline',async()=>{
+ vi.useFakeTimers({toFake:['setTimeout','clearTimeout','setInterval','clearInterval']})
+ const f=await fixture(()=>undefined),startup=join(f.observer.directory,'unclaimed-startup')
+ try {
+  await writeFile(startup,'fixture')
+  await f.observer.releaseParent();expect(f.observer.available).toBe(true)
+  await vi.advanceTimersByTimeAsync(29999);expect(f.observer.available).toBe(true)
+  await vi.advanceTimersByTimeAsync(1);expect(f.observer.available).toBe(false)
+  await f.observer.close();await expect(access(startup)).rejects.toThrow()
+ } finally {await f.observer.close();vi.useRealTimers()}
 })
