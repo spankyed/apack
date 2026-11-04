@@ -49,6 +49,16 @@ export interface ScheduleOptions<S extends SchedulableStep> {
   readonly skip: (step: S) => boolean;
   /** Runs the step; `false` fails it. A failure stops new dispatches and lets running steps finish. */
   readonly run: (step: S) => Promise<boolean>;
+  /**
+   * Something outside the graph a step may have to wait for, asked as the step would start, so one that has to wait
+   * holds no budget and the rest run past it. `admit` answering false leaves it waiting, asked again after `pause` or
+   * when a step ends; a throw fails it. `leave` is told when a step `admit` let in has ended.
+   */
+  readonly admission?: {
+    readonly admit: (step: S) => boolean;
+    readonly leave: (step: S) => void;
+    readonly pause: () => Promise<void>;
+  };
 }
 
 export interface ScheduleResult {
@@ -76,7 +86,7 @@ export interface ScheduleResult {
  * with child processes alive. A throw is that step failing, so the same draining path applies to it as to
  * a step that returned false.
  */
-export async function schedule<S extends SchedulableStep>({ steps, budget, skip, run }: ScheduleOptions<S>): Promise<ScheduleResult> {
+export async function schedule<S extends SchedulableStep>({ steps, budget, skip, run, admission }: ScheduleOptions<S>): Promise<ScheduleResult> {
   const waiting = new Set(steps.map((step) => step.name));
   const done = new Set<string>();
   const running = new Map<string, Promise<string>>();
@@ -89,8 +99,11 @@ export async function schedule<S extends SchedulableStep>({ steps, budget, skip,
   let spent = 0;
   let failed: string | undefined;
   const threw: { step: string; error: unknown }[] = [];
+  /** The steps `skip` has said run, since it is asked once and a step `admit` turns away comes round again */
+  const notSkipped = new Set<string>();
 
   while (waiting.size > 0 || running.size > 0) {
+    let turnedAway = false;
     if (failed === undefined) {
       for (const step of steps) {
         if (!waiting.has(step.name)) continue;
@@ -112,12 +125,27 @@ export async function schedule<S extends SchedulableStep>({ steps, budget, skip,
         // over it. One step may always exceed the budget alone; nothing may join it.
         if (spent > 0 && spent + (step.cores ?? 1) > budget) continue;
 
-        waiting.delete(step.name);
-        if (skip(step)) {
-          skipped.push(step.name);
-          done.add(step.name);
-          continue;
+        if (!notSkipped.has(step.name)) {
+          if (skip(step)) {
+            waiting.delete(step.name);
+            skipped.push(step.name);
+            done.add(step.name);
+            continue;
+          }
+          notSkipped.add(step.name);
         }
+        try {
+          if (admission && !admission.admit(step)) {
+            turnedAway = true;
+            continue;
+          }
+        } catch (error) {
+          waiting.delete(step.name);
+          threw.push({ step: step.name, error });
+          failed ??= step.name;
+          break;
+        }
+        waiting.delete(step.name);
         started.push(step.name);
         live.add(step.name);
         spent += step.cores ?? 1;
@@ -125,6 +153,7 @@ export async function schedule<S extends SchedulableStep>({ steps, budget, skip,
           (passed) => {
             live.delete(step.name);
             spent -= step.cores ?? 1;
+            admission?.leave(step);
             if (passed) done.add(step.name);
             else failed ??= step.name;
             return step.name;
@@ -132,6 +161,7 @@ export async function schedule<S extends SchedulableStep>({ steps, budget, skip,
           (error: unknown) => {
             live.delete(step.name);
             spent -= step.cores ?? 1;
+            admission?.leave(step);
             threw.push({ step: step.name, error });
             failed ??= step.name;
             return step.name;
@@ -141,8 +171,16 @@ export async function schedule<S extends SchedulableStep>({ steps, budget, skip,
     }
     // Nothing running and nothing dispatched means the rest depends on a step that failed, or on nothing
     // this loop can satisfy. Either way there is no one left to wait for.
-    if (running.size === 0) break;
-    running.delete(await Promise.race(running.values()));
+    if (running.size === 0) {
+      if (!turnedAway || failed !== undefined) break;
+      await admission?.pause();
+      continue;
+    }
+    const ended = await Promise.race<string | undefined>([
+      ...running.values(),
+      ...(turnedAway && admission ? [admission.pause().then(() => undefined)] : []),
+    ]);
+    if (ended !== undefined) running.delete(ended);
   }
 
   return { started, skipped, threw, ...(failed === undefined ? {} : { failed }) };

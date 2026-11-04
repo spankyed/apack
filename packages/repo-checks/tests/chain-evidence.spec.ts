@@ -168,6 +168,10 @@ describe('a failure on a deadline', () => {
     ['a vitest hook', 'Error: Hook timed out in 240000ms.'],
     ['Playwright', 'Test timeout of 60000ms exceeded.'],
     ['runCommand', 'node apack.mjs: running past the 900000ms ceiling'],
+    ['a Playwright worker\'s teardown', 'Worker teardown timeout of 30000ms exceeded.'],
+    ['a Playwright fixture', 'Fixture "app" timeout of 60000ms exceeded during setup.'],
+    ['a Playwright hook', '"beforeAll" hook timeout of 60000ms exceeded.'],
+    ['a Playwright tear-down', 'Tearing down "app" exceeded the test timeout of 60000ms.'],
   ])('is told apart from an assertion: %s', (_who, line) => {
     expect(deadlinesHit(line)).toBe(1);
     expect(evidenceHeader('test:integration', failed(`${line}\nmore\n`))).toContain("1 of its tests' deadlines hit");

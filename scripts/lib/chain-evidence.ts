@@ -85,6 +85,16 @@ export interface EvidenceResult {
  * A bare log does not say how its step ended, and the summary that would have said so is the thing not in
  * scrollback tomorrow. So each file answers that for itself.
  */
+const DEADLINE_WORDS = new RegExp([
+  String.raw`(?:Test|Hook) timed out in \d+ms`,
+  String.raw`Test timeout of \d+ms exceeded`,
+  String.raw`Worker teardown timeout of \d+ms exceeded`,
+  String.raw`Fixture "[^"]+" timeout of \d+ms exceeded`,
+  String.raw`"[^"]+" hook timeout of \d+ms exceeded`,
+  String.raw`Tearing down "[^"]+" exceeded the test timeout of \d+ms`,
+  String.raw`running past the \d+ms ceiling`,
+].join('|'), 'g');
+
 export function evidenceHeader(label: string, result: EvidenceResult): string {
   const ended = result.timedOut === true ? 'timed out' : `exit ${result.code}`;
   const deadlines = deadlinesHit(result.output);
@@ -93,12 +103,12 @@ export function evidenceHeader(label: string, result: EvidenceResult): string {
 }
 
 /**
- * How many tests a step's output says ran out of time: vitest's and Playwright's words for it, and `runCommand`'s. A
+ * How many times a step's output says a test ran out of time: vitest's and Playwright's words for it, and `runCommand`'s. A
  * deadline hit is a different finding from an assertion, usually about the machine, and which one it was is the first thing
  * to know about a failure. A reading, deciding nothing
  */
 export function deadlinesHit(output: string): number {
-  return output.match(/(?:Test|Hook) timed out in \d+ms|Test timeout of \d+ms exceeded|running past the \d+ms ceiling/g)?.length ?? 0;
+  return output.match(DEADLINE_WORDS)?.length ?? 0;
 }
 
 /**

@@ -55,10 +55,13 @@ export function prepareIntegration(root, refs) {
 async function npm(dir, args) {
   const { boundedSpawn } = await tsImport('./lib/bounded-spawn.ts', import.meta.url);
   const { TIMEOUT_MS } = await tsImport('./lib/step-timeouts.ts', import.meta.url);
-  // The full strict chain contains the complete acceptance pools; it is not one install scenario.
-  const budget = args.includes('chain') ? TIMEOUT_MS.acceptance.ms : TIMEOUT_MS.suite.ms;
+  const { MACHINE_WAIT_MS } = await tsImport('./lib/machine-lock.ts', import.meta.url);
+  // The full strict chain contains the complete acceptance pools; it is not one install scenario. It may wait for another
+  // checkout's chain on the way, doing nothing for as long, so its own steps' watchdogs are what catch a hang in it
+  const chain = args.includes('chain');
+  const budget = chain ? TIMEOUT_MS.acceptance.ms + MACHINE_WAIT_MS : TIMEOUT_MS.suite.ms;
   const result = await boundedSpawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', args, budget, {
-    cwd: dir, stream: true, shell: process.platform === 'win32', env: { ...process.env, NODE_ENV: 'development' },
+    cwd: dir, stream: true, ...(chain ? { idleMs: false } : {}), shell: process.platform === 'win32', env: { ...process.env, NODE_ENV: 'development' },
   });
   if (result.code !== 0) {
     const why = result.timedOut ? 'timed out' : `failed (exit ${result.code})`;

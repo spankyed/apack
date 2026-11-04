@@ -1,54 +1,103 @@
-// One expensive step at a time across this machine's checkouts.
+// One chain at a time on the expensive steps across this machine's checkouts.
 //
 // Each chain sizes its pools as though it owned the machine, so two checkouts running integration at once oversubscribe
 // it, and cases die on their deadlines while they are working. Waiting costs the second one time and costs nobody a
 // failure. Cargo's build lock is the same bargain, and it says so the same way.
 //
-// In the system's temporary directory because no checkout owns it, under a name `pruneStamps` has no reason to see.
+// Which steps are expensive is the steps' own declaration: those wide enough to take the machine, and those that launch
+// the app. Asked at admission (`ScheduleOptions.admission`), so a step waiting for the lock holds no cores and its chain
+// runs what else it can, and a chain that has already failed never starts one.
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { holdExclusiveLockWaiting, type ExclusiveLock } from '@apackdev/host/exclusive-lock';
+import { holdExclusiveLock, readLock, type ExclusiveLock } from '@apackdev/host/exclusive-lock';
+import type { SchedulableStep } from './chain-schedule.ts';
+import { TIMEOUT_MS } from './step-timeouts.ts';
 
-export const MACHINE_LOCK = path.join(os.tmpdir(), 'apack-expensive-steps.lock');
+/** Under the home directory, since no checkout owns it and `TMPDIR` differs between two shells on one machine */
+export const MACHINE_LOCK = path.join(os.homedir(), '.cache', 'apack', 'expensive-steps.lock');
 
-export class MachineLockHeld extends Error {
-  constructor(readonly holder: string) {
-    super(`An expensive step can't wait for ${holder}`);
+/** How long a chain waits for a holder that looks alive: as long as the longest step it could be running */
+export const MACHINE_WAIT_MS = TIMEOUT_MS.acceptance.ms;
+/**
+ * How long a chain waits on a lock nothing can resolve: unreadable, naming another machine (macOS's hostname moves with the
+ * network) or naming this process, which holds none. Not at once, because `wx` makes the file before it writes it
+ */
+export const UNRESOLVED_WAIT_MS = 30_000;
+
+const POLL_MS = 2_000;
+
+/** A lock this chain won't wait any longer for, naming what to do about it: a refusal rather than a bug in the chain */
+export class MachineLockRefused extends Error {
+  constructor(holder: string, file: string) {
+    super(`The expensive steps are held by ${holder}. If that isn't running any more, delete ${file} and run this again.`);
   }
 }
 
+class Held extends Error {}
+
 /**
- * Runs expensive steps under the machine's lock, which one chain holds for as long as any of its steps is inside: its own
- * steps overlap as its budget allows, and the lock goes back between them. A wait has no bound of its own, because the
- * holder's steps each have their ceiling and a holder that dies is taken over.
+ * What a chain's scheduler asks before an expensive step starts and tells when it ends. One hold for as long as any of its
+ * steps is inside, so its own steps overlap as its budget allows, and the lock goes back between them.
  */
-export function expensiveSteps({ what, file = MACHINE_LOCK, onWait, pause }: {
+export function expensiveSteps<S extends SchedulableStep & { readonly expensive?: true }>({
+  what, file = MACHINE_LOCK, onWait, now = Date.now, pause = () => new Promise((resolve) => { setTimeout(resolve, POLL_MS); }),
+}: {
   what: string;
   /** The spec passes its own: it runs inside a chain that may hold the real one */
   file?: string;
   onWait?: (holder: string) => void;
-  pause?: (ms: number) => Promise<void>;
+  now?: () => number;
+  pause?: () => Promise<void>;
 }) {
   let inside = 0;
-  let holding: Promise<ExclusiveLock> | undefined;
-  return async <T>(work: () => Promise<T>): Promise<T> => {
-    inside++;
-    holding ??= holdExclusiveLockWaiting({
-      file, what, waitMs: Number.POSITIVE_INFINITY,
-      refuse: (holder) => new MachineLockHeld(holder),
-      ...(onWait && { onWait }),
-      ...(pause && { pause }),
-    });
-    const held = holding;
-    try {
-      await held;
-      return await work();
-    } finally {
+  let held: ExclusiveLock | undefined;
+  let waitingSince: number | undefined;
+  let unresolvedSince: number | undefined;
+
+  /** Whether anything can tell if this lock's holder is running */
+  const resolvable = (): boolean => {
+    const lock = readLock(file);
+    return lock !== null && lock.machine === os.hostname() && lock.pid !== process.pid;
+  };
+
+  return {
+    /** Takes the lock for an expensive step, answering whether it may start; only a lock actually held is waited for */
+    admit(step: S): boolean {
+      if (step.expensive !== true) return true;
+      if (held === undefined) {
+        try {
+          held = holdExclusiveLock({ file, what, refuse: () => new Held() });
+        } catch (error) {
+          if (!(error instanceof Held)) throw error;
+          const at = now();
+          const holder = () => {
+            const lock = readLock(file);
+            return lock === null ? `a tool whose lock can't be read` : `${lock.what} (pid ${lock.pid}, on ${lock.machine})`;
+          };
+          if (waitingSince === undefined) {
+            waitingSince = at;
+            onWait?.(`${holder()}\n  lock: ${file}`);
+          }
+          unresolvedSince = resolvable() ? undefined : unresolvedSince ?? at;
+          if (at - waitingSince >= MACHINE_WAIT_MS || (unresolvedSince !== undefined && at - unresolvedSince >= UNRESOLVED_WAIT_MS)) {
+            throw new MachineLockRefused(holder(), file);
+          }
+          return false;
+        }
+      }
+      waitingSince = undefined;
+      unresolvedSince = undefined;
+      inside++;
+      return true;
+    },
+    leave(step: S): void {
+      if (step.expensive !== true) return;
       inside--;
       if (inside === 0) {
-        holding = undefined;
-        void held.then((lock) => lock.release(), () => {});
+        held?.release();
+        held = undefined;
       }
-    }
+    },
+    pause,
   };
 }

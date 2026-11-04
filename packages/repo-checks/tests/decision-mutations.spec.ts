@@ -180,9 +180,9 @@ const MUTATIONS: readonly Mutation[] = [
   {
     why: 'a skipped step counts as passed, so what needed it becomes ready',
     in: 'chain-schedule',
-    from: `          skipped.push(step.name);
-          done.add(step.name);`,
-    to: '          skipped.push(step.name);',
+    from: `            skipped.push(step.name);
+            done.add(step.name);`,
+    to: '            skipped.push(step.name);',
     // Without the credit `b` is never ready, nothing is running, and the loop exits with it unstarted
     call: (lib) => scheduled(lib, [sstep('a'), sstep('b', ['a'])], 10, { skipping: ['a'] }),
   },
@@ -203,8 +203,8 @@ const MUTATIONS: readonly Mutation[] = [
      */
     why: 'the loop stops when nothing is running and nothing was dispatched',
     in: 'chain-schedule',
-    from: 'if (running.size === 0) break;',
-    to: '',
+    from: 'if (!turnedAway || failed !== undefined) break;',
+    to: 'await new Promise(() => {});',
     call: async (lib) => {
       const ran = scheduled(lib, [sstep('orphan', ['absent'])], 10).then(() => 'returned');
       return Promise.race([ran, new Promise((resolve) => setTimeout(() => resolve('hung'), 250))]);

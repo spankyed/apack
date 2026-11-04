@@ -133,8 +133,9 @@ export interface ChainStep {
    */
   readonly linuxOnMac?: true;
   /**
-   * That it takes the machine as well as its budget, so one chain at a time runs such steps across this machine's
-   * checkouts (`scripts/lib/machine-lock.ts`). The rest stay free to overlap with another chain's.
+   * That it takes the machine as well as its budget: a pool as wide as the machine, or a step that launches the app. One
+   * chain at a time runs such steps across this machine's checkouts (`scripts/lib/machine-lock.ts`), and the rest stay
+   * free to overlap with another chain's.
    */
   readonly expensive?: true;
   /**
@@ -847,6 +848,7 @@ const POOL_STEPS: readonly ChainStep[] = (['host', 'pack'] as const).map((kind) 
   const suites = UNIT_SUITES.filter((suite) => suite.kind === kind);
   return {
     name: `test:unit:${kind}`,
+    expensive: true,
     // A pool fans out across workers
     timeout: 'suite' as const,
     ...inputsForSuites(suites, 'fast'),
@@ -1033,7 +1035,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
   // declared — so an unchanged stamp means the same app, and running it again asks a question already
   // answered. Uncached it put the warm chain back to 5.6s from 0.9s, which is most of what taking the
   // suite off the gate bought.
-  { name: 'test:smoke', timeout: 'suite',
+  { name: 'test:smoke', timeout: 'suite', expensive: true,
     // The fixture writes the app's stdout and stderr here (`app-<workerIndex>.log`), which is the only
     // account of why an app did not start or did not close. Playwright clears the directory on the way in,
     // so the next run would take it
@@ -1046,7 +1048,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
   // built. It became a chain step, and then the reasoning about it became about caching a flaky pass —
   // which is a question you only ask of a regression gate. It has not caught one. Off the chain it costs
   // nothing and is still there when you want it, which is what it was for.
-  { name: 'test:e2e', timeout: 'suite',
+  { name: 'test:e2e', timeout: 'suite', expensive: true,
     optInBecause: 'it is a harness for driving the app, not a regression gate; nothing has needed it to fail',
     neverCachedBecause: 'it drives real Electron, and a flaky pass cached green hides an intermittent failure',
     evidence: ['.apack/tests/results'],
