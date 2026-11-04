@@ -88,3 +88,7 @@ for a source-qualified run with both successful warm trials and a retained cold-
 The [fresh-profile startup diagnosis](../archive/references/evidence/cold-start-2026-11-04.md)
 localizes the retained discovery failure and documents why its incomplete cache experiment
 does not qualify cold-start performance.
+
+The [populated-startup diagnostic breakdown](../archive/references/evidence/populated-startup-breakdown-2026-11-04.json)
+records phase timings, CPU captures, eager renderer imports and retained execution failures.
+It does not qualify a new baseline or an optimization.
