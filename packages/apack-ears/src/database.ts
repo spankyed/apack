@@ -58,6 +58,8 @@ export interface EarsDatabase {
   bulkLoad(loads: Uint8Array): void;
   /** The last commit's sequence, or 0: a number that only increases for as long as the database exists */
   readonly sequence: number;
+  /** Tells `listener` of each commit the index builder makes that wrote into a tracked read; closing the database stops it */
+  hearBuilderCommits(listener: (commit: { sequence: number; touched: number[] }) => void): void;
   /** Drops what the reads tracked under `token` touched (`{ reads, track: token }`) */
   untrack(token: number): void;
   /** How many tokens have tracked reads filed, and how many keys and ranges they hold */
@@ -230,6 +232,8 @@ export interface Connection {
    * unregistration
    */
   onCommit(listener: (commit: Commit) => void): () => void;
+  /** Tells the commit listeners of a commit no write of this connection made */
+  heard(changes: { sequence: number; touched: number[] }): void;
   /** Tells the commit listeners of a commit made past the connection, whose writes aren't known key by key */
   committedEverything(): void;
   /** The last commit's sequence, or 0 */
@@ -455,6 +459,7 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
       const { keys, ranges } = database.trackStats();
       return { keys, ranges };
     },
+    heard,
     onCommit(listener) {
       listeners.add(listener);
       return () => { listeners.delete(listener); };
