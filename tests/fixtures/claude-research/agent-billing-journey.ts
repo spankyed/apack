@@ -23,6 +23,7 @@ export async function verifyAgentBilling(
     const result=await nativeWindow.evaluate(async(window,size)=>{const image=await window.webContents.capturePage({x:0,y:0,...size});return{size:image.getSize(),png:image.toPNG().toString('base64')}},size)
     expect(result.size).toEqual(size);await writeFile(testInfo.outputPath(name),Buffer.from(result.png,'base64'))
   }
+  if(process.env.CLAUDE_RESEARCH_WORKSPACE_LAYOUT_ACCEPT==='1')expect(process.env.CLAUDE_RESEARCH_WORKSPACE_LAYOUT).toBe('1')
   expect(process.env.HOME).toBe(workspace);expect(project).not.toBe(workspace)
   const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
@@ -282,7 +283,13 @@ export async function verifyAgentBilling(
   await focused.getByRole('button',{name:'Back to conversation',exact:true}).click()
   await section.getByRole('button',{name:'Use native interface',exact:true}).click()
   await section.getByRole('button',{name:'Stop session',exact:true}).click()
-  await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
+  // Both callers bound this journey; a second five-second clock can expire before clean native shutdown.
+  const closingOwner=(await context()).native.state.ownerId
+  await appPage.waitForFunction((ownerId) => {
+    const state=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context
+    const owner=Object.values(state.nativeTerminalViews).find((view:any)=>view.threadId===state.currentThread?.id&&view.state?.ownerId===ownerId) as any
+    return owner && ['exited','error'].includes(owner.state.status)
+  },closingOwner,{timeout:0})
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await expect(focused).toBeHidden()
   await composer.click();await composer.press(process.platform==='darwin'?'Meta+A':'Control+A');await composer.press('Backspace')
@@ -296,5 +303,5 @@ export async function verifyAgentBilling(
   },{timeout:25000,message:'Same-session recovery completes a new original turn'}).toBe(true)
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
   await writeFile(join(workspace!,'native-agent-billing-proof.json'),JSON.stringify({project,sessionId,taskId,boundNativePid,observation,readings,recovery,final:await context()},null,2))
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:planScenario,nativeAgentBilling:true,...(process.env.CLAUDE_RESEARCH_SELECTION_LIMIT==='1'?{nativeSelectionLimit:true}:{}),nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,...(panelOwnership?{nativeAgentPanelOwnership:true}:{}),...(clientTheme?{nativeClientTheme:true}:{}),...(taskManagerProof?{nativeTaskManagerReturn:true,taskManagerReadings:taskManagerProof.readings}:{}),sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:planScenario,nativeAgentBilling:true,...(process.env.CLAUDE_RESEARCH_WORKSPACE_LAYOUT_ACCEPT==='1'?{nativeWorkspaceLayout:true}:{}),...(process.env.CLAUDE_RESEARCH_SELECTION_LIMIT==='1'?{nativeSelectionLimit:true}:{}),nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,...(panelOwnership?{nativeAgentPanelOwnership:true}:{}),...(clientTheme?{nativeClientTheme:true}:{}),...(taskManagerProof?{nativeTaskManagerReturn:true,taskManagerReadings:taskManagerProof.readings}:{}),sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
 }

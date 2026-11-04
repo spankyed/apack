@@ -6,6 +6,7 @@ import {expect,type Page,type Locator} from '@playwright/test'
 export async function measureWorkspaceLayout({page,composer,workspace,phase,capture}:{page:Page;composer:Locator;workspace:string;phase:'parent'|'agent';capture:(name:string)=>Promise<void>}){
  const original=await page.evaluate(()=>(window as any).applicationState.getSnapshot().context.panelSizes)
  const draft=await composer.textContent(),readings=[]
+ const send=phase==='parent'?page.locator('[data-onboarding-id="agent-chat-input"]').getByRole('button',{name:'Send',exact:true}):page.getByRole('form',{name:'Agent message',exact:true}).getByRole('button',{name:'Send to Agent',exact:true})
  try{
   for(const viewport of [{width:1100,height:900},{width:680,height:600}]){
    await page.setViewportSize(viewport)
@@ -28,14 +29,26 @@ export async function measureWorkspaceLayout({page,composer,workspace,phase,capt
      return{elements:result,panelSizes:(window as any).applicationState.getSnapshot().context.panelSizes}
     })
     expect(await composer.textContent()).toBe(draft)
-    readings.push({viewport,state,geometry})
+    if(process.env.CLAUDE_RESEARCH_WORKSPACE_LAYOUT_ACCEPT==='1')await expect(send).toBeEnabled()
+    const sendGeometry=await send.evaluate(element=>{const r=element.getBoundingClientRect();const points=[[r.left+2,r.top+2],[r.right-2,r.top+2],[r.left+2,r.bottom-2],[r.right-2,r.bottom-2]];return{top:r.top,bottom:r.bottom,left:r.left,right:r.right,width:r.width,height:r.height,hit:points.every(([x,y])=>element.contains(document.elementFromPoint(x,y)))}})
+    const composerGeometry=await composer.evaluate(element=>{const r=element.getBoundingClientRect();return{top:r.top,bottom:r.bottom,height:r.height,width:r.width,clientHeight:element.clientHeight,scrollHeight:element.scrollHeight}})
+    readings.push({viewport,state,geometry,composerGeometry,sendGeometry})
     await capture(`native-workspace-${phase}-${state}-${viewport.width}.png`)
+    if(process.env.CLAUDE_RESEARCH_WORKSPACE_LAYOUT_ACCEPT==='1'){
+     await expect(composer).toBeInViewport({ratio:1});await expect(send).toBeInViewport({ratio:1})
+     expect(sendGeometry.hit,'Send is not clipped or obscured').toBe(true)
+     expect(composerGeometry.clientHeight,'At least one complete draft line remains readable').toBeGreaterThanOrEqual(24)
+     if(state==='workspace'){
+      const elements=geometry.elements as Record<string,{height:number}>
+      expect(elements.artifacts.height,'Explicit workspace resize exposes actual reading space').toBeGreaterThanOrEqual(96)
+     }
+    }
    }
    await page.evaluate(size=>(window as any).applicationState.send({type:'RESIZE_PANEL',panel:'canvas',size}),original.canvasHeight)
   }
  }finally{
   await page.evaluate(size=>(window as any).applicationState.send({type:'RESIZE_PANEL',panel:'canvas',size}),original.canvasHeight)
   await page.setViewportSize({width:1100,height:900})
-  await writeFile(join(workspace,`native-workspace-${phase}-measurement.json`),JSON.stringify({status:'diagnostic-only',original,readings},null,2))
+  await writeFile(join(workspace,`native-workspace-${phase}-measurement.json`),JSON.stringify({status:process.env.CLAUDE_RESEARCH_WORKSPACE_LAYOUT_ACCEPT==='1'?'candidate-acceptance':'diagnostic-only',original,readings},null,2))
  }
 }
