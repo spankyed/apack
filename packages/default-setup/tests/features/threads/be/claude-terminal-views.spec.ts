@@ -538,3 +538,25 @@ it('attaches the child desktop when native registration arrives after the initia
   notify();expect(prepare).toHaveBeenCalledTimes(2)
  } finally {views.clear()}
 })
+
+it('refreshes a PID-less job once when its verified worker registers and ignores repeated status ticks', async () => {
+ const link={sessionId:'parent',continuedInSessionId:'child',timestamp:'now'}
+ const job={id:'11111111',sessionId:'child',cwd:'/owned',state:'working' as const}
+ const desktop={ownerId:'desktop',parentSessionId:'parent',sessionId:'child',jobId:job.id,pid:119,processStart:'start'}
+ let info:ClaudeBackgroundStatus|undefined, notify!:()=>void
+ const background=vi.fn().mockResolvedValueOnce(job).mockResolvedValue({...job,pid:119})
+ const prepare=vi.fn(async()=>desktop),send=vi.fn()
+ const views=createClaudeTerminalViews({get:()=>undefined,open:vi.fn(),continuation:()=>link,background,backgroundInfo:()=>info,desktop:prepare,desktopCurrent:()=>true,subscribeBackground:(_key,changed)=>{notify=changed;return()=>{}}})
+ try {
+  views.handle(mount,'window',send)
+  views.handle({...mount,type:'CLAUDE_TERMINAL_BACKGROUND',...link,revision:1,operation:'refresh'},'window',send)
+  await vi.waitFor(()=>expect(send.mock.calls.at(-1)![0].background?.status).toBe('done'))
+  expect(prepare).not.toHaveBeenCalled()
+  info={jobId:job.id,sessionId:'child',pid:119,observedAt:1,model:'sonnet',turns:1,startedAt:1}
+  notify();notify();notify()
+  await vi.waitFor(()=>expect(send.mock.calls.at(-1)![0].background?.desktop).toEqual(desktop))
+  expect(background).toHaveBeenCalledTimes(2)
+  expect(background).toHaveBeenLastCalledWith(link,{operation:'refresh'},'thread')
+  expect(send.mock.calls.at(-1)![0].background.session.pid).toBe(119)
+ } finally { views.clear() }
+})

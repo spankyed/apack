@@ -115,6 +115,7 @@ interface View {
   background?: ClaudeBackgroundSessionState
   desktopPreparation?: object
   desktopRetry?: boolean
+  backgroundRegistration?: string
   mcpOperation?: ClaudeTerminalViewSnapshot['mcpOperation']
   noticeAnswer?: ClaudeTerminalViewSnapshot['noticeAnswer']
   task?: ClaudeTerminalTaskState
@@ -172,6 +173,25 @@ export function createClaudeTerminalViews(dependencies: {
       if (output.length) view.sequence = output.at(-1)!.sequence
     } catch { drop(key) }
   }
+  function refreshRegisteredWorker(key: string, view: View) {
+    const operation = view.background, session = operation?.session
+    const info = dependencies.backgroundInfo?.(view.threadId)
+    if (!operation || operation.status !== 'done' || !session || session.pid || !['working', 'blocked'].includes(session.state)
+      || !info || info.sessionId !== operation.continuedInSessionId || info.jobId !== session.id || !dependencies.background) return
+    const registration = JSON.stringify([operation.sessionId, info.sessionId, info.jobId, info.pid])
+    if (view.backgroundRegistration === registration) return
+    view.backgroundRegistration = registration
+    const continuation = dependencies.continuation?.(view.threadId)
+    if (!continuation || continuation.sessionId !== operation.sessionId || continuation.continuedInSessionId !== operation.continuedInSessionId) return
+    const current = () => views.get(key) === view && view.background === operation
+      && dependencies.continuation?.(view.threadId)?.sessionId === operation.sessionId
+      && dependencies.continuation?.(view.threadId)?.continuedInSessionId === operation.continuedInSessionId
+    void dependencies.background(continuation, {operation: 'refresh'}, view.threadId).then(fresh => {
+      if (!current() || !fresh || fresh.id !== session.id || fresh.sessionId !== info.sessionId || fresh.pid !== info.pid || fresh.cwd !== session.cwd) return
+      operation.session = fresh
+      publish(key, view); prepareDesktop(key, view)
+    }).catch(() => { /* Explicit Refresh remains available; do not retry each status tick. */ })
+  }
   function prepareDesktop(key: string, view: View) {
     const operation = view.background, session = operation?.session
     const continuation = dependencies.continuation?.(view.threadId)
@@ -216,6 +236,7 @@ export function createClaudeTerminalViews(dependencies: {
           const mounted = view
           view.backgroundUnsubscribe = dependencies.subscribeBackground?.(event.threadId, () => {
             publish(key, mounted)
+            refreshRegisteredWorker(key, mounted)
             const info = dependencies.backgroundInfo?.(event.threadId), session = mounted.background?.session
             if (info && info.sessionId === mounted.background?.continuedInSessionId && info.jobId === session?.id && info.pid === session?.pid) prepareDesktop(key, mounted)
           })
@@ -297,6 +318,7 @@ export function createClaudeTerminalViews(dependencies: {
           operation.session = session; operation.status = 'done'
           if (!session?.pid || !['working', 'blocked'].includes(session.state) || session.id !== operation.desktop?.jobId || session.pid !== operation.desktop?.pid) operation.desktop = undefined
           publish(key, target)
+          refreshRegisteredWorker(key, target)
           prepareDesktop(key, target)
         }, error => { if (current()) { operation.status = 'error'; operation.problem = error instanceof Error ? error.message : 'Background session operation failed'; publish(key, target) } })
         return
