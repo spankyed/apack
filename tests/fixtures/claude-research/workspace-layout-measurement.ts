@@ -32,14 +32,14 @@ export async function measureWorkspaceLayout({page,composer,workspace,phase,capt
     })
     expect(await composer.textContent()).toBe(draft)
     if(process.env.CLAUDE_RESEARCH_WORKSPACE_LAYOUT_ACCEPT==='1')await expect(send).toBeEnabled()
-    const sendGeometry=await send.evaluate(element=>{const r=element.getBoundingClientRect();const points=[[r.left+r.width/4,r.top+r.height/4],[r.right-r.width/4,r.top+r.height/4],[r.left+r.width/4,r.bottom-r.height/4],[r.right-r.width/4,r.bottom-r.height/4]];return{top:r.top,bottom:r.bottom,left:r.left,right:r.right,width:r.width,height:r.height,borderRadius:getComputedStyle(element).borderRadius,hit:points.every(([x,y])=>element.contains(document.elementFromPoint(x,y)))}})
+    const sendGeometry=await send.evaluate(element=>{const r=element.getBoundingClientRect();const points=[[r.left+r.width/4,r.top+r.height/4],[r.right-r.width/4,r.top+r.height/4],[r.left+r.width/4,r.bottom-r.height/4],[r.right-r.width/4,r.bottom-r.height/4]];return{top:r.top,bottom:r.bottom,left:r.left,right:r.right,width:r.width,height:r.height,borderRadius:getComputedStyle(element).borderRadius,hit:points.every(([x,y])=>element.contains(document.elementFromPoint(x,y))),targets:points.map(([x,y])=>({x,y,elements:document.elementsFromPoint(x,y).slice(0,6).map(node=>({tag:node.tagName,classes:node.className,role:node.getAttribute('role'),text:node.textContent?.slice(0,100)}))})),ancestors:Array.from((function*(node:HTMLElement|null){for(;node;node=node.parentElement)yield node})(element.parentElement)).slice(0,9).map(node=>{const r=node.getBoundingClientRect(),style=getComputedStyle(node);return{tag:node.tagName,classes:node.className,top:r.top,bottom:r.bottom,height:r.height,overflow:style.overflow,position:style.position,zIndex:style.zIndex,pointerEvents:style.pointerEvents}})}})
     const composerGeometry=await composer.evaluate(element=>{const r=element.getBoundingClientRect();return{top:r.top,bottom:r.bottom,height:r.height,width:r.width,clientHeight:element.clientHeight,scrollHeight:element.scrollHeight}})
     const reading:Record<string,unknown>={viewport,state,geometry,composerGeometry,sendGeometry}
     readings.push(reading)
     await capture(`native-workspace-${phase}-${state}-${viewport.width}.png`)
     if(process.env.CLAUDE_RESEARCH_WORKSPACE_LAYOUT_ACCEPT==='1'){
      await expect(composer).toBeInViewport({ratio:1});await expect(send).toBeInViewport({ratio:1})
-     expect(sendGeometry.hit,'Send is not clipped or obscured').toBe(true)
+     if(process.env.CLAUDE_RESEARCH_AGENT_HIT_DIAGNOSTIC!=='1')expect(sendGeometry.hit,'Send is not clipped or obscured').toBe(true)
      expect(composerGeometry.clientHeight,'At least one complete draft line remains readable').toBeGreaterThanOrEqual(24)
      if(state==='workspace'){
       const elements=geometry.elements as Record<string,{height:number}>
@@ -69,6 +69,7 @@ export async function measureWorkspaceLayout({page,composer,workspace,phase,capt
    }
    await page.evaluate(size=>(window as any).applicationState.send({type:'RESIZE_PANEL',panel:'canvas',size}),original.canvasHeight)
   }
+  if(process.env.CLAUDE_RESEARCH_AGENT_HIT_DIAGNOSTIC==='1')throw Error('Agent pointer diagnostics recorded; this run cannot establish acceptance')
  }finally{
   await page.evaluate(size=>(window as any).applicationState.send({type:'RESIZE_PANEL',panel:'canvas',size}),original.canvasHeight)
   await page.setViewportSize({width:1100,height:900})

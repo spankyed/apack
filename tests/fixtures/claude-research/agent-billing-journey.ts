@@ -146,7 +146,7 @@ export async function verifyAgentBilling(
     await composer.click();await composer.press(process.platform==='darwin'?'Meta+A':'Control+A');await composer.press('Backspace');await expect(composer).toHaveText('')
   }
   if(process.env.CLAUDE_RESEARCH_SELECTION_LIMIT==='1')await verifySelectionLimit({appPage,card,composer,project,context,capture})
-  if(process.env.CLAUDE_RESEARCH_WORKSPACE_LAYOUT==='1'){
+  if(process.env.CLAUDE_RESEARCH_WORKSPACE_LAYOUT==='1'&&process.env.CLAUDE_RESEARCH_AGENT_HIT_DIAGNOSTIC!=='1'){
     await composer.fill('Review the latest release notes and suggest the next step.')
     await measureWorkspaceLayout({page:appPage,composer,workspace,phase:'parent',capture})
   }
