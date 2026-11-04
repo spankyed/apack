@@ -36,7 +36,6 @@ export async function measureWorkspaceLayout({page,composer,workspace,phase,capt
     const composerGeometry=await composer.evaluate(element=>{const r=element.getBoundingClientRect();return{top:r.top,bottom:r.bottom,height:r.height,width:r.width,clientHeight:element.clientHeight,scrollHeight:element.scrollHeight}})
     const reading:Record<string,unknown>={viewport,state,geometry,composerGeometry,sendGeometry}
     readings.push(reading)
-    await capture(`native-workspace-${phase}-${state}-${viewport.width}.png`)
     if(process.env.CLAUDE_RESEARCH_WORKSPACE_LAYOUT_ACCEPT==='1'){
      await expect(composer).toBeInViewport({ratio:1});await expect(send).toBeInViewport({ratio:1})
      if(process.env.CLAUDE_RESEARCH_AGENT_HIT_DIAGNOSTIC!=='1')expect(sendGeometry.hit,'Send is not clipped or obscured').toBe(true)
@@ -66,6 +65,8 @@ export async function measureWorkspaceLayout({page,composer,workspace,phase,capt
       await summary.click();await expect(details).not.toHaveAttribute('open','')
      }
     }
+    // Reading states are captured with Details open above; keep one settled image per state.
+    if(!reading.workspaceReading)await capture(`native-workspace-${phase}-${state}-${viewport.width}.png`)
    }
    await page.evaluate(size=>(window as any).applicationState.send({type:'RESIZE_PANEL',panel:'canvas',size}),original.canvasHeight)
   }
