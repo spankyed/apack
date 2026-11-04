@@ -133,6 +133,43 @@ export async function verifyAgentBilling(
   await row.getByRole('button',{name:'Open Agent',exact:true}).click()
   await expect(draft).toHaveText('Keep this worker draft while reviewing usage.')
   await expect(billing).toBeInViewport()
+  let panelOwnership:undefined|{readings:unknown[];before:unknown;after:unknown}
+  if(process.env.CLAUDE_RESEARCH_AGENT_PANEL_OWNERSHIP==='1'){
+    const before=await agentUi(),panelReadings=[]
+    await form.getByRole('button',{name:'Claude settings',exact:true}).click()
+    const dialog=focused.getByRole('dialog',{name:'Claude Code settings',exact:true})
+    const hiddenForm=focused.locator('form[aria-label="Agent message"]')
+    const hiddenEditor=hiddenForm.locator('.tiptap.ProseMirror')
+    await expect(dialog).toBeVisible()
+    await expect.poll(async()=>(await agentUi())?.state.agentInput?.status,{timeout:15000}).toBe('panel')
+    await expect(hiddenForm).toBeHidden();await expect(hiddenEditor).toHaveAttribute('contenteditable','false')
+    await expect.poll(()=>dialog.locator('[data-native-setting]').count()).toBeGreaterThan(0)
+    const search=dialog.getByRole('textbox',{name:'Search Claude Code settings',exact:true})
+    await search.click();await appPage.keyboard.type('theme')
+    await expect(search).toHaveValue('theme')
+    await expect(hiddenEditor).toHaveText('Keep this worker draft while reviewing usage.')
+    for(const viewport of [{width:1100,height:900},{width:680,height:600}]){
+      await appPage.setViewportSize(viewport)
+      await expect(dialog.getByRole('button',{name:'Close settings',exact:true})).toBeInViewport()
+      await expect(search).toBeInViewport()
+      const geometry=await dialog.evaluate(el=>{const r=el.getBoundingClientRect();return{left:r.left,right:r.right,top:r.top,bottom:r.bottom,scrollWidth:el.scrollWidth,clientWidth:el.clientWidth}})
+      expect(geometry.left).toBeGreaterThanOrEqual(0);expect(geometry.right).toBeLessThanOrEqual(viewport.width)
+      expect(geometry.top).toBeGreaterThanOrEqual(0);expect(geometry.bottom).toBeLessThanOrEqual(viewport.height)
+      expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth)
+      const ui=await agentUi()
+      expect(ui.mountRequest.nativeView).toEqual(before.mountRequest.nativeView)
+      panelReadings.push({viewport,geometry,search:await search.inputValue(),nativeInput:ui.state.agentInput,target:ui.mountRequest.nativeView,hiddenDraft:await hiddenEditor.textContent(),editable:await hiddenEditor.getAttribute('contenteditable')})
+      await capture('native-agent-settings-ownership-'+viewport.width+'.png')
+    }
+    await dialog.getByRole('button',{name:'Close settings',exact:true}).click()
+    await expect(dialog).toHaveCount(0);await expect(draft).toBeVisible()
+    await expect(draft).toHaveText('Keep this worker draft while reviewing usage.')
+    await expect(draft).toHaveAttribute('contenteditable','true');await expect(billing).toBeInViewport()
+    const after=await agentUi();expect(after.mountRequest.nativeView).toEqual(before.mountRequest.nativeView)
+    expect((await context()).native.state.nativePid).toBe(boundNativePid)
+    panelOwnership={readings:panelReadings,before,after}
+    await writeFile(join(workspace,'native-agent-panel-ownership-proof.json'),JSON.stringify({sessionId,taskId,boundNativePid,...panelOwnership},null,2))
+  }
   // Preserve completed interaction evidence even when later recovery fails.
   await writeFile(join(workspace,'native-agent-billing-interaction.json'),JSON.stringify({
     project,sessionId,taskId,boundNativePid,observation,readings,
@@ -156,5 +193,5 @@ export async function verifyAgentBilling(
   },{timeout:25000,message:'Same-session recovery completes a new original turn'}).toBe(true)
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
   await writeFile(join(workspace!,'native-agent-billing-proof.json'),JSON.stringify({project,sessionId,taskId,boundNativePid,observation,readings,recovery,final:await context()},null,2))
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:planScenario,nativeAgentBilling:true,nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:planScenario,nativeAgentBilling:true,nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,...(panelOwnership?{nativeAgentPanelOwnership:true}:{}),sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
 }
