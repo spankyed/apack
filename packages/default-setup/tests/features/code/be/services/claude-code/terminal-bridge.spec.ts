@@ -540,3 +540,18 @@ it('keeps the reverse text byte budget finite and unrelated broker routes unchan
   expect((await request('/ui-host', { sessionId: session, padding: '\u0000'.repeat(1020000) })).status).toBe(413)
   expect((await request('/native-focus', { sessionId: session, padding: '漢'.repeat(400000) })).status).toBe(413)
 })
+
+it('fences MCP activity by native owner and sequence without partial metadata publication', async () => {
+  await create()
+  const task={id:'native-mcp',name:'Review',status:'running',canStop:true,mcp:{status:'working',startTime:1000,serverTaskId:'remote-42',truncated:false}}
+  const body={sessionId:session,pid:process.pid,sequence:1,activity:{pendingAgents:0,pendingWorkflows:0},workflows:[],shells:[],mcpTasks:[task]}
+  expect((await request('/native-activity',{...body,pid:process.pid+1})).status).toBe(409)
+  expect((await request('/native-activity',body)).status).toBe(200)
+  expect(bridge!.projection.tasks).toEqual([{...task,kind:'mcp'}])
+  expect((await request('/native-activity',{...body,mcpTasks:[]})).status).toBe(409)
+  expect((await request('/native-activity',{...body,sequence:2,mcpTasks:[{...task,mcp:{...task.mcp,startTime:-1}}]})).status).toBe(400)
+  expect(bridge!.projection.tasks).toEqual([{...task,kind:'mcp'}])
+  expect((await request('/native-activity',{...body,sequence:2,mcpTasks:[]})).status).toBe(200)
+  expect(bridge!.projection.tasks).toEqual([])
+  expect((await request('/native-activity',body)).status).toBe(409)
+})

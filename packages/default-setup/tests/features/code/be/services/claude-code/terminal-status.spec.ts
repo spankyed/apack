@@ -43,3 +43,15 @@ it('projects Workflows separately and refuses Agent status decoration for them',
  status.updateSession(status.sessionId,[{id:'agent-a',type:'reviewer',status:'running'}]);expect(status.tasks.find(task=>task.id==='workflow-a')?.kind).toBe('workflow')
  expect(status.updateWorkflows('foreign',[])).toBe(false)
 })
+
+it('projects MCP activity atomically and retires it on session replacement', () => {
+  const session='12345678-1234-1234-1234-123456789abc',status=createClaudeTerminalStatus(session)
+  const task={id:'registry-mcp',name:'Review workspace',status:'running',canStop:true,mcp:{serverTaskId:'server-task-42',status:'input_required',startTime:1000,protocol:'sep2663',truncated:false}}
+  expect(status.updateActivityTasks(session,[],[],[task])).toBe(true)
+  expect(status.tasks).toEqual([{...task,kind:'mcp'}])
+  expect(status.updateActivityTasks('foreign',[],[],[])).toBe(false)
+  expect(status.updateActivityTasks(session,[],[],[{...task,mcp:{...task.mcp,startTime:-1}}])).toBe(false)
+  expect(status.tasks).toEqual([{...task,kind:'mcp'}])
+  expect(status.updateSession('22345678-1234-1234-1234-123456789abc',[])).toBe(true)
+  expect(status.tasks).toEqual([])
+})

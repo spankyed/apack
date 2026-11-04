@@ -262,3 +262,35 @@ it('projects the original complete report and warning only for the inspected nat
  expect(ClaudeNativeTaskResultSchema.safeParse({...result,details:{...result.details,handback:{taskId:'foreign',...report}}}).success).toBe(false)
  expect(f.stop).not.toHaveBeenCalled()
 })
+
+function mcpFixture() {
+  const task = { id: 'registry-mcp', type: 'mcp_task', description: 'Review workspace', status: 'running', serverName: 'workspace', toolName: 'review', mcpTaskId: 'server-task-42', mcpStatus: 'input_required', startTime: 1000, pollIntervalMs: 5000, protocol: 'sep2663', isBackgrounded: true }
+  const registry = { all: () => ({ [task.id]: task }) }
+  const stop = vi.fn(async () => {}), context = { taskRegistry: registry, session: {}, storageV5: {}, setAppState: vi.fn(), getAppState: vi.fn() }
+  const runtime = vm.runInNewContext(claudeTerminalTaskRuntime + ';({control:nativeTaskControl,list:nativeMcpTasks})', { Buffer }) as { control: (...args: any[]) => Promise<any>; list: (...args: any[]) => any[] }
+  const native = { runtime: { flt: () => undefined }, taskOutputText: { stripVTControlCharacters: (text: string) => text }, taskControls: { gAe: stop } }
+  const request = (operation: string, id = task.id, current: () => void = vi.fn()) => runtime.control(native, {toolContext: () => context}, {operation,task_id:id}, new AbortController(), current)
+  return { task, registry, context, stop, request, list: () => runtime.list(native,registry) }
+}
+it('keeps MCP registry/server identities and input-required details separate from Agent input', async () => {
+  const f=mcpFixture(), value=await f.request('inspect')
+  expect(ClaudeNativeTaskResultSchema.parse(value).details).toMatchObject({taskId:'registry-mcp',canInput:false,canMessage:false,messages:[],mcp:{serverName:'workspace',toolName:'review',serverTaskId:'server-task-42',status:'input_required',protocol:'sep2663'}})
+  expect(f.stop).not.toHaveBeenCalled();expect(f.list()).toHaveLength(1)
+  f.task.isBackgrounded=false;expect(f.list()).toEqual([])
+  await expect(f.request('inspect')).rejects.toThrow('no longer listed')
+})
+it('uses original MCP user-stop and rejects foreign, pending and Agent-only operations', async () => {
+  const f=mcpFixture();expect(await f.request('stop')).toEqual({stopped:true})
+  expect(f.stop).toHaveBeenCalledExactlyOnceWith(f.task.id,expect.objectContaining({taskRegistry:f.registry,session:f.context.session,storageV5:f.context.storageV5,source:'user'}))
+  f.stop.mockClear()
+  for(const operation of ['input','send','foreground'])await expect(f.request(operation)).rejects.toThrow('details and Stop only')
+  await expect(f.request('stop','foreign')).rejects.toThrow('no longer owned')
+  f.task.status='pending';expect(f.list()[0].canStop).toBe(false)
+  await expect(f.request('stop')).rejects.toThrow('no longer running');expect(f.stop).not.toHaveBeenCalled()
+})
+it('does not acknowledge MCP Stop after native refusal or owner replacement', async () => {
+  const f=mcpFixture();f.stop.mockRejectedValueOnce(Error('Native refusal'))
+  await expect(f.request('stop')).rejects.toThrow('Native refusal')
+  let current=true;f.stop.mockImplementationOnce(async()=>{current=false})
+  await expect(f.request('stop',f.task.id,()=>{if(!current)throw Error('Owner replaced')})).rejects.toThrow('Owner replaced')
+})

@@ -1,6 +1,17 @@
 /** Authored task ownership adapter; callbacks and transcript readers remain native. */
 export const claudeTerminalTaskRuntime = String.raw`function nativeWorkflowTaskFlags(n,task){const settled=n.transcriptState.AE(task.id);return {settled,canPause:task.status==='running',canResume:task.status==='paused'&&!!task.scriptPath&&!!task.workflowRunId,canStop:task.status==='running'||['completed','failed','killed'].includes(task.status)&&!settled};}
 function nativeWorkflowTasks(n,registry){return Object.values(registry.all()).filter(task=>task.type==='local_workflow').slice(0,256).map(task=>({id:task.id,name:String(task.description??task.summary??task.workflowName??'Workflow').slice(0,256),status:task.status,...nativeWorkflowTaskFlags(n,task)}));}
+function nativeMcpTaskInfo(n,task){
+ let truncated=false;const text=(value,limit)=>{if(typeof value!=='string')return;const clean=n.taskOutputText.stripVTControlCharacters(value);if(clean.length>limit)truncated=true;let shown=clean.slice(0,limit);const last=shown.charCodeAt(shown.length-1);if(last>=0xd800&&last<=0xdbff)shown=shown.slice(0,-1);return shown;};
+ if(typeof task.mcpStatus!=='string'||!task.mcpStatus)throw Error('Native MCP task status is unavailable');
+ return {serverName:text(task.serverName,512),toolName:text(task.toolName,512),serverTaskId:text(task.mcpTaskId,512),status:task.mcpStatus.slice(0,64),statusMessage:text(task.statusMessage,4096),pollIntervalMs:task.pollIntervalMs,startTime:task.startTime,endTime:task.endTime,protocol:text(task.protocol,64),truncated};
+}
+function nativeMcpTaskVisible(task){return task.type==='mcp_task'&&['running','pending'].includes(task.status)&&!('isBackgrounded' in task&&task.isBackgrounded===false);}
+function nativeMcpTasks(n,registry){
+ // Original task-manager visibility for MCP tasks: running/pending in this build's non-V3 list.
+ const tasks=Object.values(registry.all()).filter(nativeMcpTaskVisible).slice(0,256).map(task=>({id:task.id,name:String(task.description??'MCP task').slice(0,256),status:task.status,canStop:task.status==='running',mcp:nativeMcpTaskInfo(n,task)}));
+ if(Buffer.byteLength(JSON.stringify(tasks),'utf8')>524288)throw Error('Native MCP task list exceeds the activity transport limit');return tasks;
+}
 function nativeShellTasks(registry){return Object.values(registry.all()).filter(task=>task.type==='local_bash'&&!task.elsewhere&&task.isBackgrounded===true).slice(0,256).map(task=>({id:task.id,name:String(task.description??task.command??'Background command').slice(0,256),status:task.status,canStop:task.status==='running'}));}
 const workflowControllerIds=new WeakMap();
 function nativeWorkflowWorker(task,event){
@@ -66,9 +77,18 @@ async function nativeTaskControl(n,binding,request,abort,current){
   current();if(context.getAppState().viewingAgentTaskId!==undefined)throw Error('Native view moved during selection');
   return {view:{taskId:null}};
  }
- const matches=Object.values(registry.all()).filter(task=>['local_workflow','local_bash'].includes(task.type)?task.id===request.task_id:n.runtime.flt(task)?.id===request.task_id);
+ const matches=Object.values(registry.all()).filter(task=>['local_workflow','local_bash','mcp_task'].includes(task.type)?task.id===request.task_id:n.runtime.flt(task)?.id===request.task_id);
  if(matches.length!==1)throw Error('Native task is no longer owned by this session');
  const task=matches[0];
+ if(task.type==='mcp_task'){
+  if(!nativeMcpTaskVisible(task))throw Error('MCP task is no longer listed by the native task manager');
+  if(!['inspect','stop'].includes(request.operation))throw Error('MCP tasks support details and Stop only');
+  if(request.operation==='stop'){
+   if(task.status!=='running')throw Error('MCP task is no longer running');
+   await n.taskControls.gAe(task.id,{taskRegistry:registry,setAppState:context.setAppState,getAppState:context.getAppState,session:context.session,storageV5:context.storageV5,source:'user'});current();return {stopped:true};
+  }
+  return {details:{taskId:task.id,name:String(task.description??'MCP task').slice(0,256),status:task.status,canInput:false,canMessage:false,mcp:nativeMcpTaskInfo(n,task),messages:[],truncated:false}};
+ }
  if(task.type==='local_bash'){
   if(task.elsewhere||task.isBackgrounded!==true)throw Error('This shell is not a background command of this session');
   if(!['inspect','stop'].includes(request.operation))throw Error('Background commands support inspection and Stop only');

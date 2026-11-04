@@ -1070,6 +1070,22 @@ declare const ClaudeNativeMcpFormSchema: z.ZodObject<{
     textInputCursorOffset: z.ZodOptional<z.ZodNumber>;
 }, z.core.$strip>;
 
+type ClaudeNativeMcpTaskInfo = z.infer<typeof ClaudeNativeMcpTaskInfoSchema>;
+
+/** Observed original MCP task fields; server task identity is separate from the native registry id. */
+declare const ClaudeNativeMcpTaskInfoSchema: z.ZodObject<{
+    truncated: z.ZodBoolean;
+    serverName: z.ZodOptional<z.ZodString>;
+    toolName: z.ZodOptional<z.ZodString>;
+    serverTaskId: z.ZodOptional<z.ZodString>;
+    status: z.ZodString;
+    statusMessage: z.ZodOptional<z.ZodString>;
+    pollIntervalMs: z.ZodOptional<z.ZodNumber>;
+    startTime: z.ZodNumber;
+    endTime: z.ZodOptional<z.ZodNumber>;
+    protocol: z.ZodOptional<z.ZodString>;
+}, z.core.$strip>;
+
 type ClaudeNativeMcpUrl = z.infer<typeof ClaudeNativeMcpUrlSchema>;
 
 type ClaudeNativeMcpUrlOperation = z.infer<typeof ClaudeNativeMcpUrlOperationSchema>;
@@ -1442,6 +1458,7 @@ interface ClaudeNativeSubmissionReceipt {
 }
 
 interface ClaudeNativeTaskDetails {
+    mcp?: ClaudeNativeMcpTaskInfo;
     shell?: {
         command: string;
         commandTruncated: boolean;
@@ -1689,7 +1706,8 @@ interface ClaudeNativeTerminalState {
 
 /** Native task ids and terminal owners are independent of apack thread ids. */
 interface ClaudeNativeTerminalTask {
-    kind?: 'shell' | 'workflow';
+    kind?: 'mcp' | 'shell' | 'workflow';
+    mcp?: ClaudeNativeMcpTaskInfo;
     settled?: boolean;
     canPause?: boolean;
     canResume?: boolean;
@@ -3711,11 +3729,11 @@ type EdgeEntity = FlowEdge;
 type Effort = z.infer<typeof EffortSchema>;
 
 declare const EffortSchema: z.ZodEnum<{
+    max: "max";
     low: "low";
     medium: "medium";
     high: "high";
     xhigh: "xhigh";
-    max: "max";
 }>;
 
 type Endpoint = {
@@ -8390,8 +8408,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             loading: z.ZodBoolean;
             copyState: z.ZodOptional<z.ZodEnum<{
                 error: "error";
-                idle: "idle";
                 pending: "pending";
+                idle: "idle";
                 saved: "saved";
             }>>;
             insight: z.ZodOptional<z.ZodString>;

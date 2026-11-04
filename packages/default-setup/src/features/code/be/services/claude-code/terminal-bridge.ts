@@ -139,9 +139,9 @@ export async function createClaudeTerminalBridge(options: {
         const counts = object(value.activity)
         if (!counts || !['pendingAgents', 'pendingWorkflows'].every(key => Number.isSafeInteger(counts[key]) && (counts[key] as number) >= 0) || !Number.isSafeInteger(value.sequence) || (value.sequence as number) < 1) return reply(400, {})
         const next = { pendingAgents: counts.pendingAgents as number, pendingWorkflows: counts.pendingWorkflows as number }
-        const encoded = JSON.stringify([next, value.workflows ?? [], value.shells ?? []])
+        const encoded = JSON.stringify([next, value.workflows ?? [], value.shells ?? [], value.mcpTasks ?? []])
         if ((value.sequence as number) < activitySequence || value.sequence === activitySequence && activityRecord !== encoded) return reply(409, {})
-        if (!projection.updateActivityTasks(value.sessionId, value.workflows, value.shells)) return reply(400, {})
+        if (!projection.updateActivityTasks(value.sessionId, value.workflows, value.shells, value.mcpTasks)) return reply(400, {})
         const changed = activityRecord !== encoded
         activitySequence = value.sequence as number; activityRecord = encoded; activity = next
         if (changed) options.changed()

@@ -1,16 +1,17 @@
 <template>
   <div v-if="controls && controls.ownerId.value === task.ownerId" @keydown.esc="leaveConversation" class="mt-2 min-w-0">
     <div class="flex flex-wrap items-center gap-2">
-      <button v-if="!workflow && !shell && controls.foregroundAvailable.value" type="button" class="rounded border border-white/10 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-40" :disabled="pending" @click="controls.operate(task, 'foreground')">Open Agent</button>
+      <button v-if="!workflow && !shell && !mcp && controls.foregroundAvailable.value" type="button" class="rounded border border-white/10 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-40" :disabled="pending" @click="controls.operate(task, 'foreground')">Open Agent</button>
       <NativeWorkflowDetails v-if="workflow" :details="state?.details" :pending="pending" :status="task.status" :problem="state?.status === 'error' ? state.problem : undefined" @inspect="controls.operate(task, 'inspect')" @worker="(operation, target) => controls?.operate(task, operation, undefined, target)" />
-      <button v-else-if="!shell" ref="toggle" type="button" :aria-expanded="shown" class="rounded border border-white/10 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-40" :disabled="pending" @click="showConversation">{{ workflow ? shown ? 'Hide Workflow details' : 'Workflow details' : shown ? 'Hide Agent conversation' : 'View Agent conversation' }}</button>
-      <button v-if="shell" ref="toggle" type="button" :aria-expanded="shown" :disabled="pending" class="rounded border border-white/10 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-40" @click="showConversation">{{ shown ? 'Hide output' : 'View output' }}</button>
+      <button v-else-if="!shell && !mcp" ref="toggle" type="button" :aria-expanded="expanded" class="rounded border border-white/10 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-40" :disabled="pending" @click="showConversation">{{ workflow ? expanded ? 'Hide Workflow details' : 'Workflow details' : expanded ? 'Hide Agent conversation' : 'View Agent conversation' }}</button>
+      <button v-if="mcp" ref="toggle" type="button" :aria-expanded="expanded" :disabled="pending" class="rounded border border-white/10 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-40" @click="showConversation">{{ expanded ? 'Hide task details' : 'Task details' }}</button>
+      <button v-if="shell" ref="toggle" type="button" :aria-expanded="expanded" :disabled="pending" class="rounded border border-white/10 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-40" @click="showConversation">{{ expanded ? 'Hide output' : 'View output' }}</button>
       <button v-if="workflow && task.canPause" type="button" :disabled="pending" class="rounded border border-white/10 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-40" @click="controls.operate(task, 'pause_workflow')">Pause Workflow</button>
       <button v-if="workflow && task.canResume && controls.foregroundAvailable.value" type="button" :disabled="pending || !!state?.resume?.requested" class="rounded border border-white/10 px-2 py-1 text-[11px] text-blue-300 hover:bg-white/5 disabled:opacity-40" @click="controls.operate(task, 'resume_workflow')">{{ state?.resume?.requested ? 'Resume requested' : 'Resume Workflow' }}</button>
-      <button type="button" class="rounded px-2 py-1 text-[11px] text-red-300 hover:bg-red-400/10 disabled:opacity-40" :disabled="pending || (workflow || shell ? task.canStop !== true : task.status !== 'running')" @click="controls.operate(task, 'stop')">{{ pending && state?.operation === 'stop' ? 'Stopping…' : workflow ? 'Stop Workflow' : shell ? 'Stop command' : 'Stop Agent' }}</button>
+      <button type="button" class="rounded px-2 py-1 text-[11px] text-red-300 hover:bg-red-400/10 disabled:opacity-40" :disabled="pending || (workflow || shell || mcp ? task.canStop !== true : task.status !== 'running')" @click="controls.operate(task, 'stop')">{{ pending && state?.operation === 'stop' ? 'Stopping…' : workflow ? 'Stop Workflow' : shell ? 'Stop command' : mcp ? 'Stop task' : 'Stop Agent' }}</button>
     </div>
     <p v-if="state?.status === 'error'" role="alert" class="mt-2 text-xs text-red-300">{{ state.problem }}</p>
-    <section v-if="!workflow && !shell && shown && state?.details" :aria-label="workflow ? 'Workflow details' : 'Agent conversation'" tabindex="0" class="mt-2 max-h-64 overflow-y-auto overscroll-contain rounded border border-white/10 p-2 text-xs">
+    <section v-if="!workflow && !shell && !mcp && shown && state?.details" :aria-label="workflow ? 'Workflow details' : 'Agent conversation'" tabindex="0" class="mt-2 max-h-64 overflow-y-auto overscroll-contain rounded border border-white/10 p-2 text-xs">
       <button type="button" class="mb-2 text-[11px] text-neutral-400 hover:text-neutral-200 disabled:opacity-40" :disabled="pending" @click="controls.operate(task, 'inspect')">{{ workflow ? 'Refresh details' : 'Refresh conversation' }}</button>
       <NativeAgentDetails :details="state.details" />
       <p v-if="!workflow && !state.details.messages.length" class="text-neutral-500">No conversation messages are available yet.</p>
@@ -25,6 +26,10 @@
         </label>
         <button type="submit" :disabled="pending || !draft.trim()" class="mt-2 rounded bg-blue-600 px-2.5 py-1 text-[11px] text-white hover:bg-blue-500 disabled:opacity-40">{{ pending && ['send', 'input'].includes(state.operation) ? 'Sending…' : state.details.canInput ? 'Reply to Agent' : 'Send to Agent' }}</button>
       </form>
+    </section>
+    <section v-if="mcp && shown && state?.details?.mcp" aria-label="MCP task details" class="mt-2 rounded border border-white/10 p-3 text-xs">
+      <NativeMcpTaskDetails :info="task.mcp ?? state.details.mcp" :status="task.status" />
+      <button type="button" :disabled="pending" class="mt-3 text-neutral-400 hover:text-neutral-200 disabled:opacity-40" @click="controls.operate(task,'inspect')">Refresh task details</button>
     </section>
     <section v-if="shell && shown && state?.details?.shell" aria-label="Background command output" tabindex="0" class="mt-2 max-h-64 overflow-y-auto overscroll-contain rounded border border-white/10 p-3 text-xs">
       <button type="button" :disabled="pending" class="mb-2 text-neutral-400 hover:text-neutral-200 disabled:opacity-40" @click="controls.operate(task,'inspect')">Refresh output</button>
@@ -44,16 +49,19 @@
 </template>
 <script setup lang="ts">
 import NativeAgentDetails from './NativeAgentDetails.vue'
+import NativeMcpTaskDetails from './NativeMcpTaskDetails.vue'
 import NativeWorkflowDetails from './NativeWorkflowDetails.vue'
 import { computed, inject, ref, watch } from 'vue'
 import { claudeTaskControls, type ClaudeTaskIdentity } from './native-task-controls.ts'
 const props = defineProps<{ task: ClaudeTaskIdentity & { status: string } }>()
 const workflow = computed(() => props.task.kind === 'workflow')
 const shell = computed(() => props.task.kind === 'shell')
+const mcp = computed(() => props.task.kind === 'mcp')
 const controls = inject(claudeTaskControls, undefined)
 const state = computed(() => { const value = controls?.state.value; return value?.ownerId === props.task.ownerId && value.taskId === props.task.id ? value : undefined })
 watch(state, value => { if (value?.status === 'done' && (value.worker?.accepted || value.paused)) controls?.operate(props.task, 'inspect') })
 const shown = ref(false), draft = ref(''), toggle = ref<HTMLButtonElement | null>(null)
+const expanded = computed(() => shown.value && state.value !== undefined)
 let submitted: { revision: number; text: string } | undefined
 watch(state, value => { if (submitted && value?.status === 'done' && (value.operation === 'send' && value.sent || value.operation === 'input' && value.input) && value.revision === submitted.revision && draft.value === submitted.text) draft.value = '' })
 function sendMessage() {
@@ -63,8 +71,8 @@ function sendMessage() {
 }
 const pending = computed(() => controls?.state.value?.status === 'pending')
 function leaveConversation(event: KeyboardEvent) {
-  if (event.isComposing || event.defaultPrevented || !shown.value) return
+  if (event.isComposing || event.defaultPrevented || !expanded.value) return
   event.preventDefault(); event.stopPropagation(); shown.value = false; toggle.value?.focus({ preventScroll: true })
 }
-function showConversation() { shown.value = !shown.value; if (shown.value) controls?.operate(props.task, 'inspect') }
+function showConversation() { shown.value = !expanded.value; if (shown.value) controls?.operate(props.task, 'inspect') }
 </script>
