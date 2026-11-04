@@ -2,6 +2,7 @@
 import * as os from 'node:os';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { getSchemaStats, untypedCreate, untypedQuery } from '@apackdev/sdk/ears';
+import { onLog } from '../../src/logger/index.ts';
 import { consoleEars, installedEars, READ_HELPER_NAMES, runQueryCode, runTransactionCode, WRITE_HELPER_NAMES } from '../../src/database-console/index.ts';
 import { testPacks } from '../../src/testing/packs.ts';
 import { EARS } from '../../src/types/index.ts';
@@ -84,12 +85,85 @@ describe('runTransactionCode', () => {
     expect(untypedQuery('Flow').ids()).toEqual([]);
   });
 
-  it('says what a returned promise kept: the writes after its first await, outside the unit', async () => {
-    const code = "return (async () => { create(EARS.Entity.Flow, { label: 'Undone', flowType: 'workflow' }); await 0; create(EARS.Entity.Flow, { label: 'Kept', flowType: 'workflow' }); })()";
-    await expect(runTransactionCode(code, scope)).rejects
-      .toThrow(/What it wrote before its first await was undone; what it writes after that runs outside the transaction and is kept/);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(untypedQuery('Flow').pick(['label']).map((row) => row.label)).toEqual(['Kept']);
+  describe('code that runs after its unit ended', () => {
+    const FLOW = "{ label: 'Late', flowType: 'workflow' }";
+
+    /** Runs `run`, lets what it left behind run, and answers the errors logged about it: none means nothing ran late */
+    async function lateErrors(run: () => Promise<unknown>): Promise<string[]> {
+      const errors: string[] = [];
+      const stop = onLog((event) => { if (event.level === 'error' && event.source === 'database-console') errors.push(event.message); });
+      await run().catch(() => undefined);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      stop();
+      return errors;
+    }
+
+    it('writes nothing from a returned promise, and says so', async () => {
+      const code = `return (async () => { create(EARS.Entity.Flow, { label: 'Early', flowType: 'workflow' }); await 0; create(EARS.Entity.Flow, ${FLOW}); })()`;
+      const errors = await lateErrors(async () => {
+        await expect(runTransactionCode(code, scope)).rejects
+          .toThrow('this returned a promise.\n  Nothing it wrote was kept');
+      });
+      expect(errors).toEqual([expect.stringContaining('create ran after its transaction ended')]);
+      expect(untypedQuery('Flow').ids()).toEqual([]);
+    });
+
+    it('writes nothing from an async function it did not return, whose code still succeeds', async () => {
+      const errors = await lateErrors(async () => {
+        await expect(runTransactionCode(`(async () => { await 0; create(EARS.Entity.Flow, ${FLOW}); })(); return 'ok'`, scope)).resolves.toBe('ok');
+      });
+      expect(errors).toEqual([expect.stringContaining('create ran after its transaction ended')]);
+      expect(untypedQuery('Flow').ids()).toEqual([]);
+    });
+
+    it('writes nothing from a timer, so "nothing was kept" is true of code that threw', async () => {
+      const errors = await lateErrors(async () => {
+        await expect(runTransactionCode(`setTimeout(() => create(EARS.Entity.Flow, ${FLOW}), 0); throw new Error('boom')`, scope)).rejects
+          .toThrow('Nothing it wrote was kept');
+      });
+      expect(errors).toEqual([expect.stringContaining('create ran after its transaction ended')]);
+      expect(untypedQuery('Flow').ids()).toEqual([]);
+    });
+
+    it('closes a builder held past the unit, chained inside it, whose reads still answer', async () => {
+      const id = untypedCreate('Flow', { label: 'Before', flowType: 'workflow' }).id();
+      const code = `const held = write('${id}').set('label', 'Inside'); setTimeout(() => { globalThis.heldAnswers = [held.id(), held.row().label]; held.set('label', 'Late').set('label', 'Later'); held.destroy(); }, 0); return 1`;
+      const errors = await lateErrors(() => runTransactionCode(code, scope));
+      expect(errors.map((message) => message.split(' ran after')[0])).toEqual([
+        "write builder's set", "write builder's set", "write builder's destroy",
+      ]);
+      expect((globalThis as { heldAnswers?: unknown }).heldAnswers).toEqual([id, 'Inside']);
+      delete (globalThis as { heldAnswers?: unknown }).heldAnswers;
+      expect(untypedQuery('Flow').pick(['label']).map((row) => row.label)).toEqual(['Inside']);
+    });
+
+    it('hands late code a builder with no entity, that chains and can be awaited', async () => {
+      const code = `setTimeout(async () => { const late = await write('Flow-none').set('label', 'Late'); globalThis.lateAnswers = [late.id(), late.row(), late.destroy()]; }, 0); return 1`;
+      const errors = await lateErrors(async () => {
+        await runTransactionCode(code, scope);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(errors.map((message) => message.split(' ran after')[0])).toEqual(['write', "write builder's set", "write builder's destroy"]);
+      expect((globalThis as { lateAnswers?: unknown }).lateAnswers).toEqual([undefined, undefined, undefined]);
+      delete (globalThis as { lateAnswers?: unknown }).lateAnswers;
+      expect(untypedQuery('Flow').ids()).toEqual([]);
+    });
+
+    it('removes no relation', async () => {
+      const source = untypedCreate('Flow', { label: 'From', flowType: 'workflow' });
+      const target = untypedCreate('Flow', { label: 'To', flowType: 'workflow' }).id();
+      source.link('contains', target);
+      const [relation] = untypedQuery('Flow').where('label', 'From').outEdges('contains');
+      const errors = await lateErrors(() => runTransactionCode(`setTimeout(() => removeRelation('${relation!.id}'), 0); return 1`, scope));
+      expect(errors).toEqual([expect.stringContaining('removeRelation ran after its transaction ended')]);
+      expect(untypedQuery('Flow').where('label', 'From').outEdges('contains')).toHaveLength(1);
+    });
+
+    it('still writes through a builder inside the unit, chained', async () => {
+      const id = await runTransactionCode("const b = create(EARS.Entity.Flow, { label: 'New', flowType: 'workflow' }); b.set('label', 'A').set('label', 'B'); return b.id()", scope);
+      expect(untypedQuery('Flow').pick(['label']).map((row) => row.label)).toEqual(['B']);
+      expect(typeof id).toBe('string');
+    });
   });
 });
 

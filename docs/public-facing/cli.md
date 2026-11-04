@@ -733,7 +733,7 @@ apack db query --file ./report.js -o csv
 
 #### `apack db exec <code> | --file <path> [-o pretty|json|csv] [--out <file>]` (names its data dir)
 
-Run transaction code with the console's read and write helpers (`create`, `upsert`, `write` and `removeRelation`; `write(id)` sets, links, grants, trashes and destroys an entity, and `removeRelation(relationId)` removes one relation). The code runs as one transaction: if it throws part way, none of its writes are kept, and the failure says so. It is synchronous — `await` doesn't parse, and code returning a promise is refused — since an await would split the transaction. A write that fails to reach the files fails the command.
+Run transaction code with the console's read and write helpers (`create`, `upsert`, `write` and `removeRelation`; `write(id)` sets, links, grants, trashes and destroys an entity, and `removeRelation(relationId)` removes one relation). The code runs as one transaction: if it throws part way, none of its writes are kept, and the failure says so. It is synchronous — `await` doesn't parse, and code returning a promise is refused — since an await would split the transaction. Code still running after the transaction ends, such as a timer, writes nothing and logs an error. A write that fails to reach the files fails the command.
 
 ```bash
 apack db exec "write('Note-123').set('title', 'Renamed')"
