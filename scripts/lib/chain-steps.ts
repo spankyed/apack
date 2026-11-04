@@ -519,7 +519,7 @@ export const needsApp = (step: Pick<ChainStep, 'inputs'>): boolean =>
 /** The Electron entry and the dev-mode switch: not inside a package, and read by anything that starts the app */
 const APP_ENTRY = ['packages/entry-point.mjs', 'packages/dev-mode.js'];
 /** The wrapper a shell-script step runs through, and the module that bounds it */
-const BOUNDED_RUNNER = ['scripts/bounded.ts', 'scripts/lib/bounded-spawn.ts'];
+const BOUNDED_RUNNER = ['scripts/bounded.ts', 'scripts/lib/bounded-spawn.ts', 'packages/apack-host/src/build/process-progress.ts'];
 
 /**
  * What *runs* the app's builds, as against what those builds read.
@@ -537,7 +537,7 @@ const BOUNDED_RUNNER = ['scripts/bounded.ts', 'scripts/lib/bounded-spawn.ts'];
  * `scripts/bounded.ts` wrapper a shell-script step runs under, and declaring the wrapper would re-run four
  * builds for an edit that cannot reach them.
  */
-const APP_RUNNER = ['scripts/build-runtime.ts', 'scripts/lib/runtime-build-legs.ts', 'scripts/lib/bounded-spawn.ts',
+const APP_RUNNER = ['scripts/build-runtime.ts', 'scripts/lib/runtime-build-legs.ts', 'scripts/lib/bounded-spawn.ts', 'packages/apack-host/src/build/process-progress.ts',
   'scripts/lib/chain-schedule.ts', 'scripts/lib/exit-on-epipe.ts', 'scripts/lib/measure.ts'];
 
 /**
@@ -905,7 +905,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
       'packages/apack-ears/package.json', 'packages/apack-sdk/package.json', 'packages/apack-ui/package.json',
       'scripts/api-check.ts', 'scripts/lib/api-report-packages.ts', 'scripts/lib/exit-on-epipe.ts',
       // `bounded-spawn` is how this runs the three extractions
-      'scripts/lib/bounded-spawn.ts',
+      'scripts/lib/bounded-spawn.ts', 'packages/apack-host/src/build/process-progress.ts',
       'scripts/api-reports.ts', 'scripts/component-contracts.ts', 'scripts/lib/api-entries.ts',
       'packages/apack-ears/etc', 'packages/apack-sdk/etc', 'packages/apack-ui/etc',
       'packages/apack-ears/tsconfig.api-extractor.json', 'packages/apack-sdk/tsconfig.api-extractor.json',

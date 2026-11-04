@@ -84,7 +84,7 @@ export default { spec, machine };`);
 
 function vitest(root: string) {
   return runCommand(process.execPath, [path.join(REPO_ROOT, 'node_modules', 'vitest', 'vitest.mjs'), 'run'], root,
-    { env: { CI: '', NO_COLOR: '1' }, timeout: 120_000 });
+    { env: { CI: '', NO_COLOR: '1' } });
 }
 
 describe.skipIf(!built)("a dependent pack's unit tests on the harness runtime tier", () => {

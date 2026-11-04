@@ -31,7 +31,7 @@ function write(root: string, file: string, content: string): void {
 
 /** A nested vitest or CLI run, off this worker's event loop */
 const run = (command: string, args: string[], cwd: string) =>
-  runCommand(command, args, cwd, { env: { CI: '', NO_COLOR: '1' }, timeout: 180_000 });
+  runCommand(command, args, cwd, { env: { CI: '', NO_COLOR: '1' } });
 
 /** A pack with no dependencies whose unit tests run its data code on the harness */
 function dataPack(spec: string, manifest: Record<string, unknown> = {}): string {
