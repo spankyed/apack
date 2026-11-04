@@ -6,7 +6,6 @@ import * as path from 'node:path';
 import { build } from 'esbuild';
 import { describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
-import tsupConfig from '../tsup.config.ts';
 
 const API_DIR = path.join(REPO_ROOT, 'packages/api');
 
@@ -32,16 +31,13 @@ function unwatchedTrees(inputs: readonly string[], script: string): string[] {
   return workspaceSourceTrees(inputs).filter(tree => !watched.has(tree));
 }
 
+/** What the bundle reads: the `@apackdev/source` condition is what inlines a workspace package. */
 async function bundledInputs(): Promise<string[]> {
-  const config = await (tsupConfig as (options: object) => { external: string[]; esbuildOptions(options: { conditions?: string[] }): void })(
-    { env: { NODE_ENV: 'development' } });
-  const options: { conditions?: string[] } = {};
-  config.esbuildOptions(options);
   const { metafile } = await build({
     absWorkingDir: API_DIR, entryPoints: ['src/server.ts'], bundle: true, write: false, metafile: true, logLevel: 'silent',
-    format: 'esm', platform: 'node', outdir: 'unwritten', conditions: options.conditions,
+    format: 'esm', platform: 'node', outdir: 'unwritten', conditions: ['@apackdev/source', 'module'],
     // What is left outside changes nothing here: only the workspace's own sources are compared
-    external: [...config.external, '*.node', 'electron', 'vue'],
+    external: ['typescript', 'esbuild', '*.node', 'electron', 'vue'],
     plugins: [{ name: 'externalize-vue', setup(bundler) { bundler.onResolve({ filter: /\.vue$/ }, () => ({ path: '__vue_stub__', external: true })); } }],
   });
   return Object.keys(metafile.inputs);
