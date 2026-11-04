@@ -41,7 +41,7 @@ export async function verifyAgentBilling(
   await command('cc-set-dir', project)
   await card.locator('[contenteditable="true"]').fill('Seed this private native interface session.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
-  const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, phase: state.phase, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, nativeUi: Object.values(state.nativeUiViews).filter((view:any)=>view.threadId===state.currentThread?.id), native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
+  const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, phase: state.phase, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, nativeUi: Object.values(state.nativeUiViews).filter((view:any)=>view.threadId===state.currentThread?.id), nativeViews: Object.values(state.nativeTerminalViews).filter((view:any)=>view.threadId===state.currentThread?.id), native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
   try {
     // The app owns its 30s native initialization clock; first-turn latency starts after init.
     await appPage.waitForFunction(() => {
@@ -111,8 +111,12 @@ export async function verifyAgentBilling(
     const geometry=await billing.evaluate(el=>{const rect=el.getBoundingClientRect();return{x:rect.x,y:rect.y,width:rect.width,height:rect.height,clientWidth:el.clientWidth,scrollWidth:el.scrollWidth,text:el.textContent,title:el.getAttribute('title')}})
     expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth)
     expect(geometry.x).toBeGreaterThanOrEqual(0);expect(geometry.x+geometry.width).toBeLessThanOrEqual(size.width)
-    const ui=await agentUi();expect(ui.state.status).toBe('live');expect(ui.mountRequest.nativeView.kind).toBe('agent')
-    readings.push({...size,...geometry,uiStatus:ui.state.status,uiBilling:ui.state.billing,target:ui.mountRequest.nativeView})
+    const current=await context(),ui=current.nativeUi.find((view:any)=>view.mountRequest?.nativeView?.taskId===taskId)
+    expect(ui.state.status).toBe('live')
+    const selected=current.nativeViews.find((view:any)=>view.state?.ownerId===ui.mountRequest.nativeView.ownerId&&view.state?.view?.kind==='agent'&&view.state.view.taskId===taskId)
+    expect(selected).toBeTruthy();expect(selected.state.nativePid).toBe(boundNativePid)
+    expect(ui.mountRequest.nativeView).toMatchObject({ownerId:selected.state.ownerId,sessionId,taskId,revision:selected.state.view.revision})
+    readings.push({...size,...geometry,uiStatus:ui.state.status,uiBilling:ui.state.billing,target:ui.mountRequest.nativeView,terminalOwner:{ownerId:selected.state.ownerId,sessionId:selected.state.sessionId,nativePid:selected.state.nativePid,view:selected.state.view}})
     await capture('native-agent-billing-'+size.width+'.png')
   }
   const observation=(await context()).native.state.billing
