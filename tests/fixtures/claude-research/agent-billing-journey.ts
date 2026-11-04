@@ -107,13 +107,22 @@ export async function verifyAgentBilling(
         await appPage.setViewportSize(viewport)
         await expect(region).toBeInViewport();await expect(composer).toBeInViewport();await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
         await expect(composer).toHaveText(themeDraft);expect(await region.getAttribute('data-native-client')).toBe(token)
-        const geometry=await region.evaluate(el=>{const r=el.getBoundingClientRect();return{left:r.left,right:r.right,top:r.top,bottom:r.bottom,scrollWidth:el.scrollWidth,clientWidth:el.clientWidth,scrollHeight:el.scrollHeight,clientHeight:el.clientHeight}})
-        expect(geometry.left).toBeGreaterThanOrEqual(0);expect(geometry.right).toBeLessThanOrEqual(viewport.width);expect(geometry.top).toBeGreaterThanOrEqual(0);expect(geometry.bottom).toBeLessThanOrEqual(viewport.height);expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth)
-        expect(geometry.scrollHeight).toBeLessThanOrEqual(geometry.clientHeight)
+        await capture('native-terminal-client-theme-'+name+'-'+viewport.width+'.png')
+        const geometry=await region.evaluate(el=>{
+          const bounds=(node:Element)=>{const r=node.getBoundingClientRect();return{left:r.left,right:r.right,top:r.top,bottom:r.bottom,scrollWidth:node.scrollWidth,clientWidth:node.clientWidth,scrollHeight:node.scrollHeight,clientHeight:node.clientHeight}}
+          const drawing=el.querySelector('.native-box')!;return{...bounds(el),content:bounds(drawing),text:[...drawing.querySelectorAll('.native-text-run')].map(bounds)}
+        })
+        expect(geometry.left).toBeGreaterThanOrEqual(0);expect(geometry.right).toBeLessThanOrEqual(viewport.width);expect(geometry.top).toBeGreaterThanOrEqual(0);expect(geometry.bottom).toBeLessThanOrEqual(viewport.height);expect(geometry.content.scrollWidth).toBeLessThanOrEqual(geometry.content.clientWidth)
+        expect(geometry.content.scrollHeight).toBeLessThanOrEqual(geometry.content.clientHeight)
+        // The Client's invisible100ch cell probe contributes to its aggregate scrollWidth.
+        // Verify the visible drawing and every text row against the clipping region instead.
+        for(const box of [geometry.content,...geometry.text]){
+          expect(box.left).toBeGreaterThanOrEqual(geometry.left);expect(box.right).toBeLessThanOrEqual(geometry.right)
+          expect(box.top).toBeGreaterThanOrEqual(geometry.top);expect(box.bottom).toBeLessThanOrEqual(geometry.bottom)
+        }
         const paint={success:await region.getByText('Workspace connected',{exact:true}).evaluate(el=>getComputedStyle(el).color),text:await region.getByText('Release review ready',{exact:true}).evaluate(el=>getComputedStyle(el).color),warning:await region.getByText('Updates 0',{exact:true}).evaluate(el=>getComputedStyle(el).color),background:await region.locator('.native-box').first().evaluate(el=>getComputedStyle(el).backgroundColor)}
         expect(paint).toEqual(colors)
         themeReadings.push({name,viewport,colors,paint,geometry,token,draft:await composer.textContent(),nativePid:(await context()).native.state.nativePid})
-        await capture('native-terminal-client-theme-'+name+'-'+viewport.width+'.png')
       }
     }
     await card.getByRole('button',{name:'Session tools',exact:true}).click();await expect(region).toBeHidden()
