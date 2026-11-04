@@ -1,4 +1,4 @@
-import { getClaudeUiOwner } from '#features/code/be/services/claude-code/ui-owner.ts'
+import { getClaudeUiOwner, snapshotClaudeBackgroundUiTarget } from '#features/code/be/services/claude-code/ui-owner.ts'
 import * as store from '#features/code/be/services/claude-code/handle-store.ts'
 import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claude-code/terminal-owner.ts'
 import type { ClaudeNativeTerminalState } from '#features/code/common/native-terminal.ts'
@@ -54,4 +54,26 @@ it('does not attach conversation UI after the original owner has a durable backg
   state.view = { kind: 'main', revision: 3 }
   state.continuation = { sessionId: state.sessionId, continuedInSessionId: 'child', timestamp: '2026-10-30T06:23:31.038Z' }
   expect(getClaudeUiOwner('thread')).toBeUndefined(); expect(request).not.toHaveBeenCalled()
+})
+
+it('keeps child desktop controls on the exact original incarnation, separate from parent and Agent UI', () => {
+  const request = vi.fn(async () => ({capabilities: ['ui_surface_v1']}))
+  const desktop = {id: 'child-owner', parentSessionId: 'parent', identity: {sessionId:'child',jobId:'11111111',pid:119,start:'start',hostPid:100,hostStart:'host-start',cwd:'/owned'},
+    registration:1, done:new Promise<void>(() => {}), transport:{request, subscribe:vi.fn(), promptHosts:{}}} as unknown as NonNullable<ReturnType<typeof store.getNativeBackgroundDesktopOwner>>
+  const read = vi.spyOn(store, 'getNativeBackgroundDesktopOwner').mockReturnValue(desktop)
+  const child = snapshotClaudeBackgroundUiTarget(desktop)
+  const owner = getClaudeUiOwner('thread', undefined, child)
+  expect(owner?.sessionId).toBe('child');expect(owner?.done).toBe(desktop.done);expect(owner?.nativeView).toBeUndefined()
+  expect(getClaudeUiOwner('thread',undefined,{...child})).toBe(owner)
+  for (const foreign of [{ownerId:'other'},{parentSessionId:'other'},{sessionId:'other'},{jobId:'other'},{pid:120},{processStart:'reused-pid'}]) {
+    expect(getClaudeUiOwner('thread',undefined,{...child,...foreign})).toBeUndefined()
+  }
+  expect(getClaudeUiOwner('thread',target,child)).toBeUndefined()
+  expect(getClaudeUiOwner('thread')).toBeUndefined()
+  expect(request).toHaveBeenCalledOnce()
+  read.mockReturnValue({...desktop,id:'replacement'})
+  expect(getClaudeUiOwner('thread',undefined,child)).toBeUndefined()
+  const replacement = getClaudeUiOwner('thread',undefined,{...child,ownerId:'replacement'})
+  expect(replacement).toBeTruthy();expect(replacement).not.toBe(owner)
+  read.mockReturnValue(undefined);expect(getClaudeUiOwner('thread',undefined,{...child,ownerId:'replacement'})).toBeUndefined()
 })

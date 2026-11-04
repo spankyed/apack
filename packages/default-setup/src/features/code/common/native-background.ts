@@ -53,3 +53,13 @@ export interface ClaudeBackgroundAttachmentSnapshot {
   exitCode?: number
   output: { sequence: number; text: string }[]
 }
+
+/** Exact app-owned worker incarnation selected by a desktop composer. */
+export interface ClaudeBackgroundUiTarget {
+  ownerId: string
+  parentSessionId: string
+  sessionId: string
+  jobId: string
+  pid: number
+  processStart: string
+}

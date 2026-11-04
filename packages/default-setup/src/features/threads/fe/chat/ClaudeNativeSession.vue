@@ -2,6 +2,9 @@
   <section :class="[displayActive ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded, 'native-session--child': !!view?.attachment, 'native-launch--background': !!continuation && !active && !view?.attachment }]" aria-label="Claude native interface">
     <NativeBackgroundReview v-for="panel in leftArrowPanel ? [leftArrowPanel] : []" :key="JSON.stringify([panel.ownerId, panel.sessionId, panel.id])" :panel-id="panel.id" :state="panel.state" @answer="answerLeftArrow(panel, $event)" />
     <NativeBackgroundSession v-if="continuation" :continuation="continuation" :state="view?.background" :attached="!!view?.attachment" :info="view?.backgroundInfo" :can-reply="view?.canReplyBackground === true" @operate="operateBackground" @open="openBackground">
+      <template #composer="composer">
+        <NativeBackgroundComposer :key="composer.target.ownerId" @leave="composer.close" :thread-id="threadId" :target="composer.target" :draft="composer.draft" :draft-snapshot="composer.draftSnapshot" :disabled="composer.pending" :send="composer.send" @draft="composer.updateDraft" @draft-snapshot="composer.saveSnapshot" />
+      </template>
       <template #parent-interface>
         <button v-if="!active && !view?.attachment && view?.state?.notice?.kind !== 'refusal_fallback_prompt'" type="button" class="native-button native-parent-interface" :disabled="(busy && (!view?.state || ended)) || view?.opening || inputPending" aria-label="Use native interface" title="Open parent native interface" @click="open"><span aria-hidden="true" class="native-command">›_</span></button>
       </template>
@@ -109,6 +112,7 @@
 <script setup lang="ts">
 import NativeBackgroundReview from './NativeBackgroundReview.vue'
 import NativeBackgroundSession from './NativeBackgroundSession.vue'
+import NativeBackgroundComposer from './NativeBackgroundComposer.vue'
 import type { ClaudeNativeContinuation } from '#features/code/be/services/claude-code/terminal-session.ts'
 import type { ClaudeBackgroundSessionRequest, ClaudeBackgroundReplyRequest } from '#features/code/common/native-background.ts'
 import { claudeBillingText } from '#features/code/common/native-billing.ts'

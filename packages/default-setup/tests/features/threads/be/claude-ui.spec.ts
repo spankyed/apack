@@ -1,8 +1,9 @@
+import * as uiOwners from '#features/code/be/services/claude-code/ui-owner.ts'
 import type { ClaudePromptHost } from '#features/code/be/services/claude-code/ui-prompt-host.ts'
 import { PassThrough } from 'node:stream'
 import { randomUUID } from 'node:crypto'
 import { handleClaudeUiView, clearClaudeUiViews, releaseClaudeUiViews, suspendClaudeUiThreadViews } from '#features/threads/be/claude-ui.ts'
-import { openConversation, killAllHandles, closeIdleConversation } from '#features/code/be/services/claude-code/handle-store.ts'
+import { openConversation, killAllHandles, closeIdleConversation, getConversation } from '#features/code/be/services/claude-code/handle-store.ts'
 import { runThreadTeardown } from '#features/threads/be/thread-teardown.ts'
 import type { QueryHandle } from '#features/code/be/services/claude-code/query.ts'
 import type { OutgoingThreadsEvents } from '#features/threads/be/types.ts'
@@ -382,4 +383,24 @@ it('routes action keys only through the current connection and mounted thread', 
   await vi.advanceTimersByTimeAsync(0)
   expect(ui.key).toHaveBeenCalledOnce()
   expect(foreign).not.toHaveBeenCalled()
+})
+
+it('does not retarget a child desktop lease during heartbeats or connection resumption',async()=>{
+ const {ui}=await native(),owner=getConversation('thread')!.owner
+ const read=vi.spyOn(uiOwners,'getClaudeUiOwner').mockImplementation(()=>owner)
+ const backgroundView={ownerId:'child-owner',parentSessionId:'parent',sessionId:'child',jobId:'11111111',pid:119,processStart:'start'}
+ const child={...mount,backgroundView},delivery=reply(),replacement=reply()
+ try{
+  handleClaudeUiView(child,'child-window',delivery);await vi.advanceTimersByTimeAsync(100)
+  const id=action(delivery),state=delivery.mock.calls.at(-1)![0]
+  if(state.type!=='CLAUDE_UI_STATE')throw Error('Missing child lease')
+  const changed={...child,backgroundView:{...backgroundView,pid:120,processStart:'replacement'}}
+  handleClaudeUiView(changed,'child-window',replacement)
+  handleClaudeUiView({...changed,resumeKey:state.resumeKey},'new-connection',replacement)
+  expect(replacement).not.toHaveBeenCalled();expect(ui.attach).toHaveBeenCalledOnce()
+  handleClaudeUiView({...mount,type:'CLAUDE_UI_PRESS',actionId:id},'child-window',delivery)
+  await vi.advanceTimersByTimeAsync(100);expect(ui.press).toHaveBeenCalledOnce()
+  handleClaudeUiView({...child,mountId:randomUUID(),nativeView:{ownerId:'parent-owner',sessionId:'parent',taskId:'agent',revision:1}},'invalid-mixed-owner',replacement)
+  expect(ui.attach).toHaveBeenCalledOnce()
+ }finally{read.mockRestore()}
 })

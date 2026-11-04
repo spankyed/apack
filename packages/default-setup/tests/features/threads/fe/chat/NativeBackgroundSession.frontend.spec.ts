@@ -1,4 +1,4 @@
-import { createApp, nextTick, reactive } from 'vue'
+import { createApp, h, nextTick, reactive } from 'vue'
 import NativeBackgroundSession from '#features/threads/fe/chat/NativeBackgroundSession.vue'
 import type { ClaudeBackgroundSessionState } from '#features/threads/be/claude-terminal-views.ts'
 const link = { sessionId: '24be904a-3c35-4981-9793-cbe7a6c19d46', continuedInSessionId: '05ff1d31-597d-4537-8737-4407191add6e', timestamp: '2026-10-29T12:13:13.909Z' }
@@ -66,5 +66,37 @@ it('renders original configured ANSI status only for the current live child work
  try{
   const status=root.querySelector('[aria-label="Background Claude configured status"]')!;expect(status.textContent).toContain('Original helper');expect(status.textContent).toContain('Second line');expect(status.textContent).not.toContain('\u001b[')
   state.session={...state.session!,pid:120};await nextTick();expect(root.querySelector('[aria-label="Background Claude configured status"]')).toBeNull()
+ }finally{app.unmount();root.remove()}
+})
+
+it('retains rich drafts until native acknowledgment and refuses callbacks from an earlier session',async()=>{
+ const continuation=reactive({...link})
+ const state=reactive<ClaudeBackgroundSessionState>({...link,operation:'refresh',status:'done',revision:1,
+  session:{id:'05ff1d31',sessionId:link.continuedInSessionId,cwd:'/owned',pid:119,state:'working'},
+  desktop:{ownerId:'child-owner',parentSessionId:link.sessionId,sessionId:link.continuedInSessionId,jobId:'05ff1d31',pid:119,processStart:'start'}})
+ type Composer={draft:string;updateDraft(text:string):void;send(text:string):Promise<void>}
+ let composer!:Composer
+ const operate=vi.fn(),root=document.createElement('div');document.body.append(root)
+ const app=createApp({render:()=>h(NativeBackgroundSession,{continuation,state,canReply:true,onOperate:operate},{composer:(value:Composer)=>{composer=value;return h('div',{'data-rich-draft':true},value.draft)}})})
+ app.mount(root)
+ try{
+  const reply=()=>root.querySelector<HTMLButtonElement>('[aria-label="Reply"]')!
+  reply().click();await nextTick();composer.updateDraft('Rich original');await nextTick()
+  const pending=composer.send('Rich original')
+  expect(operate).toHaveBeenCalledWith(expect.objectContaining({continuedInSessionId:link.continuedInSessionId}),{operation:'reply',id:'05ff1d31',pid:119,text:'Rich original'})
+  expect(root.textContent).toContain('Rich original')
+  await expect(composer.send('Duplicate')).rejects.toThrow('input changed')
+  composer.updateDraft('Newer rich draft');state.operation='reply';state.revision=2;state.status='done';await nextTick();await pending
+  expect(root.textContent).toContain('Newer rich draft')
+  const old=composer
+  continuation.continuedInSessionId='next-child';state.continuedInSessionId='next-child'
+  state.session={id:'next-job',sessionId:'next-child',cwd:'/owned',pid:120,state:'working'}
+  state.desktop={...state.desktop!,ownerId:'next-owner',sessionId:'next-child',jobId:'next-job',pid:120}
+  await nextTick();old.updateDraft('Foreign late draft');reply().click();await nextTick()
+  expect(composer.draft).not.toBe('Foreign late draft')
+  await expect(old.send('Foreign late input')).rejects.toThrow('input changed')
+  composer.updateDraft('Keep on teardown');await nextTick();const abandoned=composer.send('Keep on teardown')
+  const refused=expect(abandoned).rejects.toThrow('changed before acknowledgment')
+  app.unmount();await refused
  }finally{app.unmount();root.remove()}
 })

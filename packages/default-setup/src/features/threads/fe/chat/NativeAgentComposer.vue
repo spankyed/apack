@@ -1,9 +1,9 @@
 <template>
-  <form :style="promptThemeStyle" :class="{ 'native-agent-composer--tools': toolsExpanded }" class="native-agent-composer mx-4 mb-4 flex min-h-28 min-w-0 shrink flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#202022]" aria-label="Agent message" @submit.prevent="submit" @keydown.capture="leaveEditor">
+  <form :style="promptThemeStyle" :class="{ 'native-agent-composer--tools': toolsExpanded }" class="native-agent-composer mx-4 mb-4 flex min-h-28 min-w-0 shrink flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#202022]" :aria-label="audience === 'background' ? 'Background session message' : 'Agent message'" @submit.prevent="submit" @keydown.capture="leaveEditor">
     <div class="native-agent-body flex min-h-0 flex-1 flex-col overflow-clip" :class="{ 'native-agent-body--tools': toolsExpanded }">
     <StatusLine class="shrink-0" @tools-expanded="toolsExpanded = $event" :native-status="statusText" :native-ui="ui" :native-focus="focus" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)" @scroll="emit('scroll', $event)" @focus-report="emit('focus-report', $event)" @return-focus="editorRef?.editor?.commands.focus()" />
     <div class="native-agent-draft-scroll min-h-10 flex-1 overflow-y-auto overscroll-contain" data-native-agent-draft-viewport>
-    <TiptapEditor class="shrink-0" ref="editorRef" mode="input" variant="chat" :disable-images="true" :model-value="draft" :disabled="disabled" placeholder="Message this Agent" editor-class="native-agent-editor min-h-20 px-4 py-3 text-sm leading-6 outline-none" @update:model-value="updateDraft" @submit="submit" />
+    <TiptapEditor class="shrink-0" ref="editorRef" mode="input" variant="chat" :disable-images="true" :model-value="draft" :disabled="disabled" :placeholder="audience === 'background' ? 'Message background session' : 'Message this Agent'" editor-class="native-agent-editor min-h-20 px-4 py-3 text-sm leading-6 outline-none" @update:model-value="updateDraft" @submit="submit" />
     <p v-if="problem || nativeProblem" role="alert" class="px-4 pb-2 text-xs text-red-300">{{ problem || nativeProblem }}</p>
     </div>
     <NativePromptCompletions :editor="editorRef?.editor" :rows="offers" :disabled="disabled || submitting" @select="(index, id) => bridge?.selectCompletion(index, id)" @dismiss="bridge?.dismissCompletions()" />
@@ -11,9 +11,9 @@
     <div class="native-agent-actions flex shrink-0 items-center justify-between gap-3 px-4 pb-3 pt-2">
       <div class="flex min-w-0 items-center gap-2">
         <button v-if="openSettings" type="button" aria-label="Claude settings" title="Claude settings" :disabled="disabled || submitting" class="shrink-0 rounded-lg p-1.5 text-neutral-400 hover:bg-white/5 hover:text-neutral-200 disabled:opacity-40" @click="openNativeSettings"><Settings2 :size="16" /></button>
-        <span class="truncate text-[11px] text-neutral-500">{{ disabled ? 'Agent input unavailable' : 'Enter to send · Shift+Enter for a new line' }}</span>
+        <span class="truncate text-[11px] text-neutral-500">{{ disabled ? (audience === 'background' ? 'Background input unavailable' : 'Agent input unavailable') : 'Enter to send · Shift+Enter for a new line' }}</span>
       </div>
-      <button type="submit" class="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-40" :disabled="disabled || submitting || !draft.trim()">{{ submitting ? 'Sending…' : 'Send to Agent' }}</button>
+      <button type="submit" class="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-40" :disabled="disabled || submitting || !draft.trim()">{{ submitting ? 'Sending…' : audience === 'background' ? 'Send message' : 'Send to Agent' }}</button>
     </div>
   </form>
 </template>
@@ -34,7 +34,7 @@ import { setEditorCompletionOffer } from '@apackdev/sdk/fe'
 import { holdEditorCommandSuggestions } from '@apackdev/sdk/fe'
 import { nativePromptEditors } from '#extensions/tiptap/native-prompt-scope.ts'
 import type { ClaudePromptHostRequest, ClaudePromptHostResponse, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply, ClaudePromptCompletionRow, ClaudeUiFieldEvent, ClaudeUiMountState, ClaudeUiFocusReply, ClaudeUiFocusEvent, ClaudeUiScrollEvent } from '#generated/types.ts'
-const props = defineProps<{ draft: string; draftSnapshot?: ClaudeAgentDraftSnapshot; disabled: boolean; mountId?: string; attachmentId?: string; promptRevision?: number; prompt?: ClaudePromptReply; hostRequest?: ClaudePromptHostRequest; completions?: ClaudePromptCompletionReply; completionRevision?: number; ui?: ClaudeUiMountState; focus?: ClaudeUiFocusReply; statusText?: string; send(text: string): Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void>; openSettings?: () => Promise<void> }>()
+const props = defineProps<{ audience?: 'background'; draft: string; draftSnapshot?: ClaudeAgentDraftSnapshot; disabled: boolean; mountId?: string; attachmentId?: string; promptRevision?: number; prompt?: ClaudePromptReply; hostRequest?: ClaudePromptHostRequest; completions?: ClaudePromptCompletionReply; completionRevision?: number; ui?: ClaudeUiMountState; focus?: ClaudeUiFocusReply; statusText?: string; send(text: string): Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void>; openSettings?: () => Promise<void> }>()
 const emit = defineEmits<{ leave: []; draft: [text: string]; 'draft-snapshot': [snapshot: ClaudeAgentDraftSnapshot]; pending: [value: boolean]; edit: [value: ClaudePromptEdit]; complete: [value: ClaudePromptCompletionRequest]; host: [value: ClaudePromptHostResponse]; press: [id: string, href?: string]; field: [value: ClaudeUiFieldEvent]; scroll: [value: ClaudeUiScrollEvent]; 'focus-report': [value: ClaudeUiFocusEvent] }>()
 const toolsExpanded = ref(false)
 const editorRef = ref<InstanceType<typeof TiptapEditor>>(), problem = ref<string>(), nativeProblem = ref<string>(), submitting = ref(false)
@@ -156,7 +156,7 @@ async function submit() {
   if (!editor) return
   submitting.value = true; emit('pending', true); problem.value = undefined
   try {
-    if (!await active.settle() || bridge !== active || props.disabled || !alive) throw Error('Agent input changed. Send again.')
+    if (!await active.settle() || bridge !== active || props.disabled || !alive) throw Error(props.audience === 'background' ? 'Background input changed. Send again.' : 'Agent input changed. Send again.')
     const text = active.readDraft()?.text ?? ''
     if (!text.trim()) return
     const doc = editor.state.doc
@@ -168,7 +168,7 @@ async function submit() {
       return
     }
     if (alive && !editor.isDestroyed && editor.state.doc === doc) { editor.chain().setMeta('claude-prompt-by', 'app').clearContent(true).run(); emit('draft', '') }
-  } catch (error) { if (alive) problem.value = error instanceof Error ? error.message : 'Agent message could not be sent' }
+  } catch (error) { if (alive) problem.value = error instanceof Error ? error.message : (props.audience === 'background' ? 'Background message could not be sent' : 'Agent message could not be sent') }
   finally { submitting.value = false; emit('pending', false) }
 }
 defineExpose({ focus: () => editorRef.value?.editor?.commands.focus() })

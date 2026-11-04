@@ -491,3 +491,25 @@ it('recovers background observation once for a mounted view and ignores completi
   const count=send.mock.calls.length;done();await Promise.resolve();expect(send).toHaveBeenCalledTimes(count)
  }finally{views.clear()}
 })
+
+it('publishes desktop controls only for the refreshed original child, and retires late or replaced results', async () => {
+ const link={sessionId:'parent',continuedInSessionId:'child',timestamp:'2026-11-04T00:00:00Z'}
+ const job={id:'11111111',sessionId:'child',cwd:'/owned',pid:119,state:'working' as const}
+ const desktop={ownerId:'desktop',parentSessionId:'parent',sessionId:'child',jobId:job.id,pid:119,processStart:'native-start'}
+ let finish!:(target:typeof desktop)=>void, alive=true, notify!:()=>void
+ const prepare=vi.fn(()=>new Promise<typeof desktop>(resolve=>{finish=resolve}))
+ const send=vi.fn(), views=createClaudeTerminalViews({get:()=>undefined,open:vi.fn(),continuation:()=>link,background:async()=>job,
+  desktop:prepare,desktopCurrent:()=>alive,subscribeBackground:(_key,changed)=>{notify=changed;return()=>{}}})
+ const refresh={...mount,type:'CLAUDE_TERMINAL_BACKGROUND' as const,...link,revision:1,operation:'refresh' as const}
+ try {
+  views.handle(mount,'window-one',send);views.handle(refresh,'window-one',send)
+  await vi.waitFor(()=>expect(prepare).toHaveBeenCalledOnce())
+  expect(send.mock.calls.at(-1)![0].background).toMatchObject({status:'done',session:job})
+  finish(desktop);await vi.waitFor(()=>expect(send.mock.calls.at(-1)![0].background.desktop).toEqual(desktop))
+  alive=false;notify();expect(send.mock.calls.at(-1)![0].background.desktop).toBeUndefined()
+  views.handle({...refresh,revision:2},'window-one',send)
+  await vi.waitFor(()=>expect(prepare).toHaveBeenCalledTimes(2))
+  views.handle({...mount,type:'CLAUDE_TERMINAL_UNMOUNT'},'window-one',send)
+  send.mockClear();finish(desktop);await new Promise(resolve=>setTimeout(resolve,0));expect(send).not.toHaveBeenCalled()
+ }finally{views.clear()}
+})

@@ -1,14 +1,45 @@
 import { z } from 'zod'
-import { getConversation, getNativeTerminal } from './handle-store.ts'
+import { getConversation, getNativeTerminal, getNativeBackgroundDesktopOwner } from './handle-store.ts'
 import type { ClaudeNativeTerminalOwner } from './terminal-owner.ts'
 import { createClaudeUiControls } from './ui-controls.ts'
 import type { ClaudeUiOwner } from './ui-mount.ts'
 import type { ClaudeNativeAgentUiTarget } from '../../../common/native-terminal.ts'
 
+import type { ClaudeBackgroundDesktopOwner } from './background-status-observer.ts'
+import type { ClaudeBackgroundUiTarget } from '../../../common/native-background.ts'
+
+const backgroundOwners = new WeakMap<ClaudeBackgroundDesktopOwner, ClaudeUiOwner>()
+
+export function snapshotClaudeBackgroundUiTarget(owner: ClaudeBackgroundDesktopOwner): ClaudeBackgroundUiTarget {
+  return {ownerId: owner.id, parentSessionId: owner.parentSessionId, sessionId: owner.identity.sessionId, jobId: owner.identity.jobId, pid: owner.identity.pid, processStart: owner.identity.start}
+}
+
+export function matchesClaudeBackgroundUiTarget(owner: ClaudeBackgroundDesktopOwner | undefined, target: ClaudeBackgroundUiTarget): boolean {
+  if (!owner) return false
+  const expected = snapshotClaudeBackgroundUiTarget(owner)
+  return Object.keys(expected).every(key => expected[key as keyof ClaudeBackgroundUiTarget] === target[key as keyof ClaudeBackgroundUiTarget])
+}
+
 const nativeOwners = new WeakMap<ClaudeNativeTerminalOwner, { key: string; owner: ClaudeUiOwner }>()
 
 /** Native UI authority belongs to one observed view; targeted mounts never follow a different selection. */
-export function getClaudeUiOwner(threadId: string, target?: ClaudeNativeAgentUiTarget): ClaudeUiOwner | undefined {
+export function getClaudeUiOwner(threadId: string, target?: ClaudeNativeAgentUiTarget, background?: ClaudeBackgroundUiTarget): ClaudeUiOwner | undefined {
+  if (background) {
+    if (target) return
+    const desktop = getNativeBackgroundDesktopOwner(threadId, {sessionId: background.parentSessionId, continuedInSessionId: background.sessionId})
+    if (!desktop) return
+    if (!matchesClaudeBackgroundUiTarget(desktop, background)) return
+    const cached = backgroundOwners.get(desktop)
+    if (cached) return cached
+    const initialized = desktop.transport.request({subtype: 'apack_ui_capabilities'}).then(value => z.object({capabilities: z.array(z.string())}).parse(value))
+    initialized.catch(() => {})
+    const owner: ClaudeUiOwner = {
+      done: desktop.done, sessionId: desktop.identity.sessionId, subscribe: listener => desktop.transport.subscribe(listener),
+      handle: {ui: createClaudeUiControls(initialized, desktop.transport, desktop.transport.promptHosts)},
+    }
+    backgroundOwners.set(desktop, owner)
+    return owner
+  }
   const native = getNativeTerminal(threadId)
   if (!native) return target ? undefined : getConversation(threadId)?.owner
   const state = native.state, view = state.view

@@ -1,7 +1,7 @@
 import type {ClaudeBackgroundAttachment} from '#features/code/be/services/claude-code/background-attachment.ts'
 import type {ClaudeBackgroundAttachmentSnapshot} from '#features/code/common/native-background.ts'
 import type { ClaudeNativeContinuation } from '#features/code/be/services/claude-code/terminal-session.ts'
-import type { ClaudeBackgroundSession, ClaudeBackgroundSessionRequest, ClaudeBackgroundReplyRequest } from '#features/code/common/native-background.ts'
+import type { ClaudeBackgroundSession, ClaudeBackgroundSessionRequest, ClaudeBackgroundReplyRequest, ClaudeBackgroundUiTarget } from '#features/code/common/native-background.ts'
 import { isClaudeNativeNoticeDecision } from '#features/code/common/native-notice.ts'
 import { randomUUID } from 'node:crypto'
 import type { MessageReferences } from './types.ts'
@@ -57,6 +57,7 @@ export interface ClaudeBackgroundSessionState {
   continuedInSessionId: string
   revision: number
   operation: 'refresh' | 'stop' | 'reply'
+  desktop?: ClaudeBackgroundUiTarget
   status: 'pending' | 'done' | 'error'
   session?: ClaudeBackgroundSession
   problem?: string
@@ -124,6 +125,8 @@ export function createClaudeTerminalViews(dependencies: {
   openAttachment?(continuation: ClaudeNativeContinuation, jobId: string, threadId: string, signal: AbortSignal): Promise<ClaudeBackgroundAttachment>
   continuation?(threadId: string): ClaudeNativeContinuation | undefined
   background?(continuation: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest, threadId: string): Promise<ClaudeBackgroundSession | undefined>
+  desktop?(continuation: ClaudeNativeContinuation, jobId: string, pid: number, threadId: string): Promise<ClaudeBackgroundUiTarget | undefined>
+  desktopCurrent?(threadId: string, target: ClaudeBackgroundUiTarget): boolean
   backgroundInfo?(threadId: string): import('#features/code/common/native-background.ts').ClaudeBackgroundStatus | undefined
   subscribeBackground?(threadId: string, changed: () => void): () => void
   restoreBackground?(threadId: string): Promise<void>
@@ -154,6 +157,7 @@ export function createClaudeTerminalViews(dependencies: {
   }
   function publish(key: string, view: View) {
     if (views.get(key) !== view) return
+    if (view.background?.desktop && !dependencies.desktopCurrent?.(view.threadId, view.background.desktop)) view.background.desktop = undefined
     if (view.attachment && !attachmentCurrent(view)) retireAttachment(view)
     if (view.attachment && view.attachmentOwner) view.attachment.state = view.attachmentOwner.snapshot
     const output = view.owner?.output.filter(chunk => chunk.sequence > view.sequence) ?? []
@@ -255,14 +259,22 @@ export function createClaudeTerminalViews(dependencies: {
           || !Number.isSafeInteger(event.revision) || event.revision <= (target.background?.revision ?? 0) || target.background?.sessionId === continuation.sessionId && target.background.continuedInSessionId === continuation.continuedInSessionId && target.background.status === 'pending') return
         const previous = target.background?.continuedInSessionId === continuation.continuedInSessionId ? target.background.session : undefined
         if (event.operation === 'reply' && (previous?.id !== event.id || previous.pid !== event.pid || !['working','blocked'].includes(previous.state))) return
-        const operation: ClaudeBackgroundSessionState = { ...continuation, revision: event.revision, operation: event.operation, status: 'pending', session: previous }
+        const operation: ClaudeBackgroundSessionState = { ...continuation, revision: event.revision, operation: event.operation, status: 'pending', session: previous, desktop: target.background?.desktop }
         target.background = operation; publish(key, target)
         const current = () => views.get(key) === target && target.background === operation
           && dependencies.continuation?.(event.threadId)?.sessionId === continuation.sessionId
           && dependencies.continuation?.(event.threadId)?.continuedInSessionId === continuation.continuedInSessionId
         void Promise.resolve().then(() => { if (current()) return event.operation === 'reply' ? dependencies.replyBackground!(continuation, event, event.threadId) : dependencies.background!(continuation, event, event.threadId) }).then(session => {
           if (!current()) return
-          operation.session = session; operation.status = 'done'; publish(key, target)
+          operation.session = session; operation.status = 'done'
+          if (!session?.pid || !['working', 'blocked'].includes(session.state) || session.id !== operation.desktop?.jobId || session.pid !== operation.desktop?.pid) operation.desktop = undefined
+          publish(key, target)
+          if (session?.pid && ['working', 'blocked'].includes(session.state) && dependencies.desktop) {
+            void dependencies.desktop(continuation, session.id, session.pid, event.threadId).then(desktop => {
+              if (!current() || !desktop) return
+              operation.desktop = desktop; publish(key, target)
+            }).catch(() => { /* Status/reply stays usable when this native worker has no desktop host. */ })
+          }
         }, error => { if (current()) { operation.status = 'error'; operation.problem = error instanceof Error ? error.message : 'Background session operation failed'; publish(key, target) } })
         return
       }

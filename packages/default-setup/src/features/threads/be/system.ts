@@ -1,5 +1,5 @@
 import { claudeProfileOptions } from '#features/code/common/native-profile.ts';
-import { getNativeBackgroundStatus, subscribeNativeBackgroundStatus, restoreNativeBackgroundStatus } from '#features/code/be/services/claude-code/handle-store.ts';
+import { getNativeBackgroundStatus, subscribeNativeBackgroundStatus, restoreNativeBackgroundStatus, prepareNativeBackgroundDesktop, getNativeBackgroundDesktopOwner } from '#features/code/be/services/claude-code/handle-store.ts';
 import { parseClaudeNativeContinuation } from '#features/code/be/services/claude-code/terminal-session.ts';
 import { copyClaudeChannelSelection } from '#features/code/common/native-channels.ts';
 import { readSavedClaudeNativeLaunch, readClaudePlanRestoreMode } from '#features/code/be/services/claude-code/native-launch.ts';
@@ -33,7 +33,15 @@ import { RepositoryError, RepositoryErrorCode } from '@apackdev/sdk/repositories
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 const terminalHistory = new WeakMap<Awaited<ReturnType<typeof services.cli.claudeCode.openNativeTerminal>>, ReturnType<typeof syncClaudeTerminalThread>>();
+import { snapshotClaudeBackgroundUiTarget, matchesClaudeBackgroundUiTarget } from '#features/code/be/services/claude-code/ui-owner.ts'
+
 const terminalViews = createClaudeTerminalViews({
+  async desktop(continuation, jobId, pid, key) {
+    return snapshotClaudeBackgroundUiTarget(await prepareNativeBackgroundDesktop(key, continuation, jobId, pid))
+  },
+  desktopCurrent(key, target) {
+    return matchesClaudeBackgroundUiTarget(getNativeBackgroundDesktopOwner(key, {sessionId:target.parentSessionId,continuedInSessionId:target.sessionId}), target)
+  },
   backgroundInfo(key) {
     const state = repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode;
     const continuation = state?.sessionId ? parseClaudeNativeContinuation({ ...state.nativeContinuation, type: 'continued-in' }, state.sessionId) : undefined;

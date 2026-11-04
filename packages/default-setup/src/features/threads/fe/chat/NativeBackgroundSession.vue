@@ -17,7 +17,10 @@
     <div v-if="panel.info?.statusLine" aria-label="Background Claude configured status" class="background-session__detail background-session__formatter" tabindex="0"><NativeStatusText :text="panel.info.statusLine" /></div>
     <p v-if="panel.session?.waitingFor" class="background-session__detail">{{ panel.session.waitingFor }}</p>
     <p v-if="panel.problem" role="alert" class="background-session__problem">{{ panel.problem }}</p>
-    <form v-if="canReply && replyOpen && panel.session?.pid && ['working','blocked'].includes(panel.session.state)" class="background-session__reply" data-native-background-reply @submit.prevent="reply(panel.target, panel.session)">
+    <slot v-if="canReply && replyOpen && panel.session?.pid && ['working','blocked'].includes(panel.session.state) && state?.desktop && $slots.composer" name="composer"
+      :target="state.desktop" :draft="draft" :draft-snapshot="draftSnapshot" :update-draft="(text: string) => updateDraft(panel.target, text)" :save-snapshot="(snapshot: ClaudeAgentDraftSnapshot) => saveSnapshot(panel.target, snapshot)" :close="() => replyOpen = false" :pending="panel.pending"
+      :send="(text: string) => sendReply(panel.target, panel.session!, text, true)" />
+    <form v-else-if="canReply && replyOpen && panel.session?.pid && ['working','blocked'].includes(panel.session.state)" class="background-session__reply" data-native-background-reply @submit.prevent="reply(panel.target, panel.session)">
       <div class="background-session__reply-heading">
         <label :for="replyInputId">Message background session</label>
         <span v-if="!draft && state?.operation === 'reply' && state.status === 'done'" role="status">Message queued</span>
@@ -28,7 +31,7 @@
   </section>
 </template>
 <script setup lang="ts">
-import { computed, ref, useId, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { MessageSquare, Terminal, RefreshCw, Square } from 'lucide-vue-next'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 import { surfaceStorage } from '@apackdev/sdk/fe'
@@ -36,14 +39,21 @@ import { ref as featureRef } from '#generated/ref.ts'
 import { claudeWindowStorageKey } from './native-window-storage.ts'
 import type { ClaudeNativeContinuation } from '#features/code/be/services/claude-code/terminal-session.ts'
 import type { ClaudeBackgroundStatus, ClaudeBackgroundSessionRequest, ClaudeBackgroundReplyRequest, ClaudeBackgroundSession } from '#features/code/common/native-background.ts'
+import type { ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'
 import type { ClaudeBackgroundSessionState } from '#features/threads/be/claude-terminal-views.ts'
 const props = defineProps<{ continuation: ClaudeNativeContinuation; state?: ClaudeBackgroundSessionState; info?: ClaudeBackgroundStatus; attached?: boolean; canReply?: boolean }>()
 const emit = defineEmits<{ open: [target: ClaudeNativeContinuation, jobId: string]; operate: [target: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest] }>()
+const draftSnapshot = ref<ClaudeAgentDraftSnapshot>()
 const draft = ref(''), replyOpen = ref(false), replyInputId = useId()
-let submitted: {text: string; revision: number} | undefined
+let submitted: {text: string; revision: number; rich: boolean; resolve(): void; reject(error: Error): void} | undefined
+function retireSubmission() { submitted?.reject(Error('Background session changed before acknowledgment')); submitted = undefined }
+function draftCurrent(target: ClaudeNativeContinuation) { return props.continuation.sessionId === target.sessionId && props.continuation.continuedInSessionId === target.continuedInSessionId }
+function updateDraft(target: ClaudeNativeContinuation, text: string) { if (draftCurrent(target)) draft.value = text }
+function saveSnapshot(target: ClaudeNativeContinuation, snapshot: ClaudeAgentDraftSnapshot) { if (draftCurrent(target) && snapshot.text === draft.value) draftSnapshot.value = snapshot }
+onBeforeUnmount(retireSubmission)
 const draftKey = () => claudeWindowStorageKey('background-reply', JSON.stringify([props.continuation.sessionId, props.continuation.continuedInSessionId]))
 watch([() => props.continuation.sessionId, () => props.continuation.continuedInSessionId], () => {
-  submitted = undefined; let text = ''
+  retireSubmission(); draftSnapshot.value = undefined; let text = ''
   try { const key = draftKey(); if (key) text = surfaceStorage(featureRef('threads')).get(key) ?? '' } catch { /* Storage cannot prevent composing. */ }
   draft.value = text.length <= 32768 ? text : ''; replyOpen.value = !!draft.value
 }, {immediate:true,flush:'sync'})
@@ -54,13 +64,23 @@ watch([() => props.state?.revision, () => props.state?.status], () => {
   const state = props.state
   if (state?.sessionId !== props.continuation.sessionId || state.continuedInSessionId !== props.continuation.continuedInSessionId) return
   if (!submitted || !state || state.operation !== 'reply' || state.revision <= submitted.revision || state.status === 'pending') return
-  if (state.status === 'done' && draft.value === submitted.text) draft.value = ''
-  submitted = undefined
+  const request = submitted; submitted = undefined
+  if (state.status === 'done') {
+    if (!request.rich && draft.value === request.text) { draft.value = ''; draftSnapshot.value = undefined }
+    request.resolve()
+  } else request.reject(Error(state.problem || 'Background message was not queued'))
 })
 function reply(target: ClaudeNativeContinuation, session: ClaudeBackgroundSession) {
-  if (!props.canReply || props.state?.status === 'pending' || !session.pid || !draft.value.trim() || draft.value.length > 32768) return
-  submitted = {text:draft.value, revision:props.state?.revision ?? 0}
-  operate(target, {operation:'reply', id:session.id, pid:session.pid, text:draft.value})
+  void sendReply(target, session, draft.value, false).catch(() => {})
+}
+function sendReply(target: ClaudeNativeContinuation, session: ClaudeBackgroundSession, text: string, rich: boolean): Promise<void> {
+  if (!props.canReply || submitted || props.state?.status === 'pending' || !session.pid || !text.trim() || text.length > 32768
+    || props.continuation.sessionId !== target.sessionId || props.continuation.continuedInSessionId !== target.continuedInSessionId
+    || props.state?.session?.id !== session.id || props.state.session.pid !== session.pid || !['working','blocked'].includes(session.state)) return Promise.reject(Error('Background input changed. Refresh and send again.'))
+  return new Promise((resolve, reject) => {
+    submitted = {text, revision:props.state?.revision ?? 0, rich, resolve, reject}
+    operate(target, {operation:'reply', id:session.id, pid:session.pid!, text})
+  })
 }
 function openSession(target: ClaudeNativeContinuation, jobId: string) {
   const current = props.state

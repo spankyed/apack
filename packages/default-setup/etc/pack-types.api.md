@@ -585,6 +585,7 @@ interface ClaudeBackgroundSessionState {
     continuedInSessionId: string;
     revision: number;
     operation: 'refresh' | 'reply' | 'stop';
+    desktop?: ClaudeBackgroundUiTarget;
     status: 'done' | 'error' | 'pending';
     session?: ClaudeBackgroundSession;
     problem?: string;
@@ -619,6 +620,16 @@ interface ClaudeBackgroundStatusIdentity {
 }
 
 type ClaudeBackgroundStatusObserver = Awaited<ReturnType<typeof createClaudeBackgroundStatusObserver>>;
+
+/** Exact app-owned worker incarnation selected by a desktop composer. */
+interface ClaudeBackgroundUiTarget {
+    ownerId: string;
+    parentSessionId: string;
+    sessionId: string;
+    jobId: string;
+    pid: number;
+    processStart: string;
+}
 
 interface ClaudeBillingObservation {
     sessionId: string;
@@ -2441,6 +2452,7 @@ type ClaudeUiMountRequest = {
     mountId: string;
     resumeKey?: string;
     nativeView?: ClaudeNativeAgentUiTarget;
+    backgroundView?: ClaudeBackgroundUiTarget;
     messageIds?: string[];
     userExpansion?: Record<string, boolean>;
     blockExpansion?: Record<string, number[]>;

@@ -37,7 +37,7 @@ export function getNativeBackgroundStatus(key: string, continuation: ClaudeNativ
   return continuation && entry?.observer.parentSessionId === continuation.sessionId && info?.sessionId === continuation.continuedInSessionId ? info : undefined
 }
 /** A child drawing remains addressable after its parent terminal writer exits. */
-export function getNativeBackgroundDesktopOwner(key: string, continuation: ClaudeNativeContinuation): ClaudeBackgroundDesktopOwner | undefined {
+export function getNativeBackgroundDesktopOwner(key: string, continuation: Pick<ClaudeNativeContinuation, 'sessionId' | 'continuedInSessionId'>): ClaudeBackgroundDesktopOwner | undefined {
   const observer = backgroundObservers.get(key)?.observer
   const owner = observer?.desktopOwner
   return observer?.parentSessionId === continuation.sessionId && owner?.parentSessionId === continuation.sessionId

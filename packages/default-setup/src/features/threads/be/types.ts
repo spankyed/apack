@@ -498,7 +498,7 @@ export type AgentSettings = ThreadsSettings['chat'];
 
 // System-private entity type
 
-export type ClaudeUiMountRequest = { type: 'CLAUDE_UI_MOUNT'; promptFocused: boolean; threadId: string; mountId: string; resumeKey?: string; nativeView?: import('#features/code/common/native-terminal.ts').ClaudeNativeAgentUiTarget; messageIds?: string[]; userExpansion?: Record<string, boolean>; blockExpansion?: Record<string, number[]> }
+export type ClaudeUiMountRequest = { type: 'CLAUDE_UI_MOUNT'; promptFocused: boolean; threadId: string; mountId: string; resumeKey?: string; nativeView?: import('#features/code/common/native-terminal.ts').ClaudeNativeAgentUiTarget; backgroundView?: import('#features/code/common/native-background.ts').ClaudeBackgroundUiTarget; messageIds?: string[]; userExpansion?: Record<string, boolean>; blockExpansion?: Record<string, number[]> }
 
 export type ClaudeUiViewRequest =
   | ({ type: 'CLAUDE_UI_KEY'; threadId: string; mountId: string; sequence: number } & import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiActionKeyRequest)
