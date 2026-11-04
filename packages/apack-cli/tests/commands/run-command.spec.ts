@@ -35,14 +35,31 @@ describe('process-tree command ownership', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('attributes an operation timeout after graceful shutdown rather than accepting its exit code', async () => {
-    const run = runCommand('node', ['apack.mjs', 'pack', 'build'], '/pack', { timeout: 100 });
-    const refused = expect(run).rejects.toThrow('node apack.mjs pack build: operation exceeded 100ms');
+  it('attributes running past the ceiling after graceful shutdown rather than accepting its exit code', async () => {
+    const run = runCommand('node', ['apack.mjs', 'pack', 'build'], '/pack', { ceiling: 100 });
+    const refused = expect(run).rejects.toThrow('node apack.mjs pack build: running past the 100ms ceiling');
     await vi.advanceTimersByTimeAsync(100);
     expect(child.kill).toHaveBeenCalledWith('SIGTERM');
     child.emit('close', 1);
     await refused;
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('ends a command whose tree stopped working, and not one still working however long it takes', async () => {
+    const quiet = runCommand('node', ['wedged'], '/pack', { readTree: async () => new Map([[12345, 1_000]]) });
+    const refused = expect(quiet).rejects.toThrow('node wedged: stalled, no CPU or output for 120s');
+    await vi.advanceTimersByTimeAsync(130_000);
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+    child.emit('close', 1);
+    await refused;
+
+    child.kill.mockClear();
+    let cpu = 0;
+    const busy = runCommand('node', ['slow'], '/pack', { readTree: async () => new Map([[12345, cpu += 5_000]]) });
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(child.kill).not.toHaveBeenCalled();
+    child.emit('close', 0);
+    await expect(busy).resolves.toMatchObject({ code: 0 });
   });
 
   it('aborts a running command but waits for closure before settling', async () => {
@@ -76,8 +93,8 @@ describe('process-tree command ownership', () => {
   });
 
   it('escalates a stuck command through the existing process owner, then awaits closure', async () => {
-    const run = runCommand('node', [], '/pack', { timeout: 100 });
-    const refused = expect(run).rejects.toThrow('operation exceeded 100ms');
+    const run = runCommand('node', [], '/pack', { ceiling: 100 });
+    const refused = expect(run).rejects.toThrow('running past the 100ms ceiling');
     await vi.advanceTimersByTimeAsync(2_100);
     if (process.platform === 'win32') expect(child.kill).toHaveBeenCalledWith('SIGKILL');
     else expect(stopGroup).toHaveBeenCalledWith(child.pid);
@@ -87,7 +104,7 @@ describe('process-tree command ownership', () => {
   });
 
   it('reports a separate bounded cleanup failure if the process never closes', async () => {
-    const run = runCommand('node', [], '/pack', { timeout: 100 });
+    const run = runCommand('node', [], '/pack', { ceiling: 100 });
     const refused = expect(run).rejects.toThrow('process did not close within the 20s cleanup limit');
     await vi.advanceTimersByTimeAsync(20_100);
     await refused;

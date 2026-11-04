@@ -32,13 +32,12 @@ beforeEach(async ({ signal }) => {
   testSignal = signal;
 });
 
-function run(cmd: string, args: string[], cwd: string, timeout = 60_000) {
-  return active = runCommand(cmd, args, cwd, { signal: testSignal, timeout });
+function run(cmd: string, args: string[], cwd: string) {
+  return active = runCommand(cmd, args, cwd, { signal: testSignal });
 }
 
 function callCli(cwd: string, command: string, args: string[] = []) {
-  // Match the existing full CLI build allowance: captured backend (180s) plus cold frontend (120s).
-  return run(process.execPath, [CLI, 'pack', command, ...args], cwd, command === 'build' ? 180_000 + 120_000 : 60_000);
+  return run(process.execPath, [CLI, 'pack', command, ...args], cwd);
 }
 
 beforeAll(async () => {

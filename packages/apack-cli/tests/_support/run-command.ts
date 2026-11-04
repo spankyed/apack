@@ -1,17 +1,28 @@
 import { spawn } from 'node:child_process';
+import { createStallTracker, PROCESS_IDLE_MS, readTreeCpuMs } from '@apackdev/host/build/process-progress';
 import { stopCompilerProcessGroup } from '../../src/build/compiler-process-group.ts';
+
+/** How long a command may run however busy it is: for the one hang the idle watch can't see, a loop that spins */
+const CEILING_MS = 900_000;
+/** How often a running command's process tree is read, which stops at the first reading still in flight */
+const READ_EVERY_MS = 5_000;
 
 /**
  * Runs a command that starts a process tree — the CLI, a nested `vitest run` — off Vitest's event loop, and
  * stops its whole process group however it ends. A synchronous call would block the worker, so no case
  * timeout could fire and Vitest's RPC window would expire.
  *
+ * A command is ended when its tree goes `PROCESS_IDLE_MS` with no CPU and no output, not after a time: a busy machine
+ * makes a command slow and never stalled. The case's own deadline still applies around it.
+ *
  * Resolves with the exit code, the combined output and stdout alone (for a caller that parses it); rejects, naming the command, when it exceeds `timeout`,
  * is cancelled through `signal`, or cannot start. A single short-lived process needs none of this:
  * `promisify(execFile)` with a `timeout` is enough.
  */
 export async function runCommand(command: string, args: string[], cwd: string,
-  { signal, timeout = 60_000, env }: { signal?: AbortSignal; timeout?: number; env?: NodeJS.ProcessEnv } = {},
+  { signal, env, ceiling = CEILING_MS, readTree = readTreeCpuMs }: {
+    signal?: AbortSignal; env?: NodeJS.ProcessEnv; ceiling?: number; readTree?: typeof readTreeCpuMs;
+  } = {},
 ): Promise<{ code: number; output: string; stdout: string }> {
   signal?.throwIfAborted();
   const started = performance.now();
@@ -28,13 +39,17 @@ export async function runCommand(command: string, args: string[], cwd: string,
   let budget: ReturnType<typeof setTimeout> | undefined;
   let abort: (() => void) | undefined;
   let forced: Promise<void> | undefined;
-  child.stdout.on('data', chunk => { output += chunk.toString(); stdout += chunk.toString(); });
-  child.stderr.on('data', chunk => { output += chunk.toString(); });
+  // Windows has no process groups or `ps`, so there the ceiling is the only bound, as it is under `APACK_WATCHDOG=off`
+  const stall = grouped && process.env.APACK_WATCHDOG !== 'off' ? createStallTracker(PROCESS_IDLE_MS, Date.now()) : undefined;
+  let watching: ReturnType<typeof setInterval> | undefined;
+  child.stdout.on('data', chunk => { output += chunk.toString(); stdout += chunk.toString(); stall?.output(Date.now()); });
+  child.stderr.on('data', chunk => { output += chunk.toString(); stall?.output(Date.now()); });
   try {
     const code = await new Promise<number>((resolve, reject) => {
       const stop = (reason: Error) => {
         if (failure) return;
         failure = reason;
+        clearInterval(watching);
         // Public builds drain their compiler owners on SIGTERM; escalate only after that grace period.
         child.kill('SIGTERM');
         escalation = setTimeout(() => {
@@ -45,11 +60,25 @@ export async function runCommand(command: string, args: string[], cwd: string,
         shutdown = setTimeout(() => reject(new Error(`${label}: process did not close within the 20s cleanup limit`, { cause: reason })), 20_000);
       };
       abort = () => stop(new Error(`${label}: cancelled`, { cause: signal?.reason }));
-      budget = setTimeout(() => stop(new Error(`${label}: operation exceeded ${timeout}ms\n${output}`)), timeout);
+      budget = setTimeout(() => stop(new Error(`${label}: running past the ${ceiling}ms ceiling\n${output}`)), ceiling);
+      if (stall && child.pid !== undefined) {
+        let reading = false;
+        watching = setInterval(() => {
+          if (reading) return;
+          reading = true;
+          void readTree(child.pid!).then((tree) => {
+            reading = false;
+            if (tree && stall.reading(tree, Date.now())) {
+              stop(new Error(`${label}: stalled, no CPU or output for ${PROCESS_IDLE_MS / 1000}s\n${output}`));
+            }
+          });
+        }, READ_EVERY_MS);
+      }
       signal?.addEventListener('abort', abort, { once: true });
       child.once('error', error => { failure ??= error; });
       child.once('close', code => {
         clearTimeout(budget);
+        clearInterval(watching);
         if (abort) signal?.removeEventListener('abort', abort);
         resolve(code ?? 1);
       });
@@ -63,6 +92,7 @@ export async function runCommand(command: string, args: string[], cwd: string,
     return { code, output, stdout };
   } finally {
     clearTimeout(budget);
+    clearInterval(watching);
     clearTimeout(escalation);
     clearTimeout(shutdown);
     if (abort) signal?.removeEventListener('abort', abort);
