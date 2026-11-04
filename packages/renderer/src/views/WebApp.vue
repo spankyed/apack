@@ -42,6 +42,7 @@
                 v-if="!isOnboarding"
                 orientation="vertical"
                 :collapsed="chatMaximized || panelSizes.canvasHeight >= 93"
+                @mousedown.capture="canvasResizeHeight = undefined"
                 @resize="handleCanvasResize"
                 @click="handleCanvasClick"
                 @right-click="chatMaximized ? handleChatRestore() : handleChatMaximize()"
@@ -232,19 +233,22 @@ const getMainAreaHeight = () => (canvasArea.value?.$el as HTMLElement | undefine
 
 // Guard so drag-to-restore only fires once per maximized drag
 let maxRestored = false
+let canvasResizeHeight: number | undefined
 
 const handleCanvasResize = (delta: number) => {
   if (chatMaximized.value) {
+    canvasResizeHeight = undefined
     if (!maxRestored) { maxRestored = true; handleChatRestore(true) }
     return
   }
   maxRestored = false
   const mainAreaHeight = getMainAreaHeight()
-  // A chat minimum can make the visible canvas smaller than its saved proportion.
-  const currentHeightPx = (canvasArea.value?.$el as HTMLElement | undefined)?.getBoundingClientRect().height ?? (panelSizes.value.canvasHeight / 100) * mainAreaHeight
+  // Start at the visible split, then accumulate pointer deltas even while a chat minimum clamps it.
+  const currentHeightPx = canvasResizeHeight ?? (canvasArea.value?.$el as HTMLElement | undefined)?.getBoundingClientRect().height ?? (panelSizes.value.canvasHeight / 100) * mainAreaHeight
   const newHeightPx = currentHeightPx + delta
   const maxCanvasPercent = ((mainAreaHeight - MIN_CHAT_HEIGHT) / mainAreaHeight) * 100
   const newHeightPercent = Math.min(maxCanvasPercent, (newHeightPx / mainAreaHeight) * 100)
+  canvasResizeHeight = newHeightPercent / 100 * mainAreaHeight
   send({ type: 'RESIZE_PANEL', panel: 'canvas', size: newHeightPercent })
 }
 

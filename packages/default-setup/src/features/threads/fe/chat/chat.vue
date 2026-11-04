@@ -1,6 +1,6 @@
 <template>
-  <!-- History scrolls inside the assigned pane; only its authored minimum affects the shell split. -->
-  <div class="native-chat-shell flex flex-col h-full" :style="{ contain: 'size', ...(currentMode === 'Claude Code' || currentThread?.context?.claudeCode ? { '--native-chat-min-height': nativeToolsExpanded || focusedAgent ? 'min(42rem, max(min(28rem, calc(100vh - 3rem)), calc(100vh - 11rem)))' : 'min(36rem, max(min(28rem, calc(100vh - 3rem)), calc(100vh - 15rem)))' } : {}) }">
+  <!-- A workspace-majority split is an explicit reading choice; bound chat content instead of overriding it. -->
+  <div class="native-chat-shell flex flex-col h-full" :style="{ contain: 'size', ...(currentMode === 'Claude Code' || currentThread?.context?.claudeCode ? { '--native-chat-min-height': canvasHeight > 50 ? '0px' : nativeToolsExpanded || focusedAgent ? 'min(42rem, max(min(28rem, calc(100vh - 3rem)), calc(100vh - 11rem)))' : 'min(36rem, max(min(28rem, calc(100vh - 3rem)), calc(100vh - 15rem)))' } : {}) }">
     <!-- Main content: optional inline dashboard + chat -->
     <div class="flex flex-grow overflow-hidden min-h-0" ref="chatContainerRef">
       <!-- Thread Sidebar (left, hidden during onboarding) -->
