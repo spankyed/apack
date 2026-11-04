@@ -32,7 +32,7 @@ export async function measureWorkspaceLayout({page,composer,workspace,phase,capt
     })
     expect(await composer.textContent()).toBe(draft)
     if(process.env.CLAUDE_RESEARCH_WORKSPACE_LAYOUT_ACCEPT==='1')await expect(send).toBeEnabled()
-    const sendGeometry=await send.evaluate(element=>{const r=element.getBoundingClientRect();const points=[[r.left+2,r.top+2],[r.right-2,r.top+2],[r.left+2,r.bottom-2],[r.right-2,r.bottom-2]];return{top:r.top,bottom:r.bottom,left:r.left,right:r.right,width:r.width,height:r.height,hit:points.every(([x,y])=>element.contains(document.elementFromPoint(x,y)))}})
+    const sendGeometry=await send.evaluate(element=>{const r=element.getBoundingClientRect();const points=[[r.left+r.width/4,r.top+r.height/4],[r.right-r.width/4,r.top+r.height/4],[r.left+r.width/4,r.bottom-r.height/4],[r.right-r.width/4,r.bottom-r.height/4]];return{top:r.top,bottom:r.bottom,left:r.left,right:r.right,width:r.width,height:r.height,borderRadius:getComputedStyle(element).borderRadius,hit:points.every(([x,y])=>element.contains(document.elementFromPoint(x,y)))}})
     const composerGeometry=await composer.evaluate(element=>{const r=element.getBoundingClientRect();return{top:r.top,bottom:r.bottom,height:r.height,width:r.width,clientHeight:element.clientHeight,scrollHeight:element.scrollHeight}})
     const reading:Record<string,unknown>={viewport,state,geometry,composerGeometry,sendGeometry}
     readings.push(reading)
