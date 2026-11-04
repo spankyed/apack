@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { afterEach, expect, it, vi } from 'vitest';
-import { createCompilerWatchMatcher, createCompilerWatchTools, compilerWatchPaths, compilerWatchTargets, mergeCompilerWatchPaths, additionalCompilerObservations } from '../../src/build/compiler-watch.ts';
+import os from 'node:os';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { REPO_ROOT, buildUnitsIn } from '@apackdev/host/build/packages-built';
+import { packageInputWatchPaths, createCompilerWatchMatcher, createCompilerWatchTools, compilerWatchPaths, compilerWatchTargets, mergeCompilerWatchPaths, additionalCompilerObservations } from '../../src/build/compiler-watch.ts';
 import { assertNativeCompilerObservations, createCompilerFileView } from '@apackdev/host/build/compiler-inputs';
 import { packInputFiles } from '@apackdev/host/build/pack-inputs';
 import * as runtime from '../../src/build/compiler-runtime.ts';
@@ -304,4 +306,35 @@ it('reprobes a missing nested input when its ancestor reports change instead of 
   expect(matches(ancestor, 'change')).toBe(true);
   expect(matches(ancestor, 'rename')).toBe(true);
   expect(matches(path.join(root, 'unrelated'), 'change')).toBe(false);
+});
+
+describe('what a package build reads', () => {
+  function unit(root: string) {
+    for (const [file, text] of Object.entries({
+      'src/nested/a.ts': '', 'src/guide/CLAUDE.md': '', 'src/out/built.js': '', 'src/.temp/scratch.js': '', 'package.json': '{}',
+    })) {
+      fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      fs.writeFileSync(path.join(root, file), text);
+    }
+    return { inputs: [path.join(root, 'src'), path.join(root, 'package.json')], outputs: [path.join(root, 'src/out')] };
+  }
+
+  it('is every input and the directories holding them, without output, prose or scratch', () => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-unit-inputs-')));
+    try {
+      const paths = packageInputWatchPaths([unit(root)]);
+      expect(Object.fromEntries([...paths].map(([file, kind]) => [path.relative(root, file), kind]).sort())).toEqual({
+        'package.json': 'file', src: 'entries', 'src/nested': 'entries', 'src/nested/a.ts': 'file',
+      });
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  });
+
+  // These two trees fired nothing when only the compiler's own inputs were watched
+  it.each(['apack-testing', 'apack-cli'])('makes an edit under %s fire in this checkout, and a write to its dist not', pkg => {
+    const paths = packageInputWatchPaths(Object.values(buildUnitsIn(REPO_ROOT)));
+    const fires = createCompilerWatchMatcher(paths);
+    const source = fs.readdirSync(path.join(REPO_ROOT, 'packages', pkg, 'src'), { withFileTypes: true }).find(entry => entry.isFile())!;
+    expect(fires(path.join(REPO_ROOT, 'packages', pkg, 'src', source.name), 'change')).toBe(true);
+    expect(fires(path.join(REPO_ROOT, 'packages', pkg, 'dist/package/package.json'), 'change')).toBe(false);
+  });
 });

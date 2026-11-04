@@ -4,8 +4,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { checkoutFor, ensureCheckoutPackages } from '../../src/build/checkout-packages';
-import { CHECKOUT_MARKER, REPO_ROOT } from '@apackdev/host/build/packages-built';
+import { checkoutBuildUnits, checkoutFor, ensureCheckoutPackages } from '../../src/build/checkout-packages';
+import { BUILD_UNITS, CHECKOUT_MARKER, REPO_ROOT } from '@apackdev/host/build/packages-built';
 
 const tmpDirs: string[] = [];
 afterEach(() => {
@@ -63,6 +63,16 @@ describe('the checkout a pack\'s @apackdev packages come from', () => {
 
   it('is nothing when the pack has no @apackdev/sdk at all', () => {
     expect(checkoutFor(pack('none'))).toBeUndefined();
+  });
+
+  it('gives a linked pack its checkout\'s build units once, however many directories lead there', () => {
+    const units = checkoutBuildUnits([pack('checkout'), pack('checkout')]);
+    expect(units).toHaveLength(Object.keys(BUILD_UNITS).length);
+    expect(units.flatMap(unit => unit.inputs)).toEqual(expect.arrayContaining(Object.values(BUILD_UNITS).flatMap(unit => unit.inputs)));
+  });
+
+  it('gives an installed pack no build units, so its watcher subscribes to nothing extra', () => {
+    expect(checkoutBuildUnits([pack('installed'), pack('none')])).toEqual([]);
   });
 });
 

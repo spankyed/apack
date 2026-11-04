@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import { spawnSync, type StdioOptions } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { CHECKOUT_MARKER } from '@apackdev/host/build/packages-built';
+import { CHECKOUT_MARKER, buildUnitsIn, type BuildUnit } from '@apackdev/host/build/packages-built';
 
 /**
  * The packages a pack can resolve whose dist a checkout builds on demand. Every one is asked, because a
@@ -37,6 +37,12 @@ export function checkoutFor(packDir: string): string | undefined {
     if (checkout) return checkout;
   }
   return undefined;
+}
+
+/** The package build units of every checkout these directories' packages come from; none when all are installed. */
+export function checkoutBuildUnits(directories: readonly string[]): BuildUnit[] {
+  const checkouts = new Set(directories.map(checkoutFor).filter(checkout => checkout !== undefined));
+  return [...checkouts].flatMap(checkout => Object.values(buildUnitsIn(checkout)));
 }
 
 /**

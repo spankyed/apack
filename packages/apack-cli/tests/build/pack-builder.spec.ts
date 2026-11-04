@@ -96,7 +96,9 @@ function fixture() {
   `);
   vi.spyOn(installation, 'compilerPackageDirectory').mockReturnValue(compiler);
   vi.spyOn(checkout, 'ensureCheckoutPackages').mockImplementation(() => {});
-  const builder = createPackBuilder(pack);
+  // Moves on every read, so each build here refreshes; what an unmoved state skips has its own case
+  let packagesMoved = 0;
+  const builder = createPackBuilder(pack, { packagesState: () => String(packagesMoved++) });
   builders.push(builder);
   const report = () => JSON.parse(fs.readFileSync(path.join(pack, '.apack/built.json'), 'utf8')) as { pid: number; bin: string; label: string };
   return { compiler, pack, builder, report };
@@ -358,6 +360,25 @@ it('captures both checkouts after refresh and refuses reuse if refresh fails', a
   expect(report()).toEqual(refreshed);
 });
 
+
+it('refreshes the packages once for each state of what a refresh reads', async () => {
+  let state = 'broken';
+  let failing = true;
+  const refreshPackages = vi.fn(() => { if (failing) throw new Error('Checkout refresh failed'); });
+  const builder = createPackBuilder(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-refresh-')), { refreshPackages, packagesState: () => state });
+  builders.push(builder);
+  await expect(builder.ensurePackages()).rejects.toThrow('Checkout refresh failed');
+  await expect(builder.ensurePackages()).rejects.toThrow('Checkout refresh failed');
+  expect(refreshPackages).toHaveBeenCalledTimes(1);
+  state = 'edited but still broken';
+  await expect(builder.ensurePackages()).rejects.toThrow('Checkout refresh failed');
+  expect(refreshPackages).toHaveBeenCalledTimes(2);
+  state = 'repaired';
+  failing = false;
+  await builder.ensurePackages();
+  await builder.ensurePackages();
+  expect(refreshPackages).toHaveBeenCalledTimes(3);
+});
 
 it('stops remaining compiler descendants before accepting output', async () => {
   const { pack, builder } = fixture();

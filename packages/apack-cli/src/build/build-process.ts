@@ -5,7 +5,8 @@ import os from 'node:os';
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises';
 import { spawnCompilerWorker } from './compiler-process.ts';
 import { COMPILER_PROCESS_GROUP_ENV, stopCompilerProcessGroup } from './compiler-process-group.ts';
-import { checkoutFor, ensureCheckoutPackages } from './checkout-packages.ts';
+import { checkoutBuildUnits, checkoutFor, ensureCheckoutPackages } from './checkout-packages.ts';
+import { packageBuildState } from '@apackdev/host/build/packages-built';
 import { captureCompilerInstallation, compilerPackageDirectory, type CompilerInstallation } from './compiler-installation.ts';
 import { cliPackageDirectory } from './tool-identity.ts';
 import { compilationConditions } from './compilation-inputs.ts';
@@ -27,10 +28,19 @@ export interface PackBuildOptions {
   readonly args?: readonly string[];
   readonly onInputs?: (inputs: BuildWatchInputs) => void | Promise<void>;
   readonly signal?: AbortSignal;
+  /** The caller has just run `ensurePackages`, and will be told of any edit since: a watcher, by its own subscriptions. */
+  readonly packagesEnsured?: boolean;
 }
 
 export interface PackBuilder {
   build(options?: PackBuildOptions): Promise<void>;
+  /**
+   * Brings the checkout's packages up to date ahead of a build, so what a watcher reads next includes what this
+   * rewrote. While nothing a package build reads or writes has moved since the last refresh it spawns nothing: a
+   * refresh that succeeded stands, and one that failed rejects again, since its own scratch writes are watched and
+   * would otherwise restart it for as long as the source stays broken.
+   */
+  ensurePackages(): Promise<void>;
   serveFrontend(changed: (address: PackFrontendAddress | undefined) => void): Promise<PackFrontendAddress | undefined>;
   subscribeFrontendInputs(listener: (inputs: FrontendInputUpdate) => void): () => void;
   isFrontendCurrent(signal?: AbortSignal): Promise<boolean>;
@@ -47,10 +57,22 @@ export interface PackBuilderOptions {
    * builders hands each a `dispose` that leaves it in place.
    */
   readonly captureCompiler?: CaptureCompiler;
+  /** Refreshes the packages this builder's pack and compiler come from. Injected for tests. */
+  readonly refreshPackages?: () => void;
+  /** What a failed refresh is compared against. Injected for tests. */
+  readonly packagesState?: () => string;
 }
 
 /** A pack retains its accepted compiler and frontend until a replacement is ready. */
-export function createPackBuilder(root: string, { captureCompiler }: PackBuilderOptions = {}): PackBuilder {
+export function createPackBuilder(root: string, {
+  captureCompiler,
+  refreshPackages = () => {
+    ensureCheckoutPackages(root);
+    const cli = cliPackageDirectory();
+    if (checkoutFor(cli) !== checkoutFor(root)) ensureCheckoutPackages(cli);
+  },
+  packagesState = () => packageBuildState(checkoutBuildUnits([root, cliPackageDirectory()])),
+}: PackBuilderOptions = {}): PackBuilder {
   interface Generation { compiler: CompilerInstallation; frontend?: PackFrontend; configuration?: string; inputs?: CompilerWatchPaths }
   let current: Generation | undefined;
   const owned = new Set<Generation>();
@@ -118,15 +140,31 @@ export function createPackBuilder(root: string, { captureCompiler }: PackBuilder
     generation.configuration = configuration;
     return generation.frontend.address;
   };
+  let lastRefresh: { state: string; error?: unknown } | undefined;
+  const refresh = () => {
+    const state = packagesState();
+    if (lastRefresh?.state === state) {
+      if ('error' in lastRefresh) throw lastRefresh.error;
+      return;
+    }
+    try {
+      refreshPackages();
+      lastRefresh = { state: packagesState() };
+    } catch (error) {
+      lastRefresh = { state, error };
+      throw error;
+    }
+  };
   return {
-    build({ args = [], onInputs, signal }: PackBuildOptions = {}) {
+    ensurePackages() {
+      return enqueue(async () => refresh());
+    },
+    build({ args = [], onInputs, signal, packagesEnsured }: PackBuildOptions = {}) {
       const options = { args: [...args], onInputs, signal: signal ? AbortSignal.any([signal, stopped.signal]) : stopped.signal };
       return enqueue(async () => {
         options.signal.throwIfAborted();
         assertCompilerLibraryEnvironment();
-        ensureCheckoutPackages(root);
-        const cli = cliPackageDirectory();
-        if (checkoutFor(cli) !== checkoutFor(root)) ensureCheckoutPackages(cli);
+        if (!packagesEnsured) refresh();
         const directory = compilerPackageDirectory();
         const configuration = frontendChanged ? readPackDevServerInputs(root) : undefined;
         const compiler = current?.compiler.isCurrent(directory, { cwd: root }) ? current.compiler : undefined;
