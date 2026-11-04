@@ -152,6 +152,39 @@ export async function verifyAgentBilling(
   await composer.click();await composer.press(process.platform==='darwin'?'Meta+A':'Control+A');await composer.press('Backspace')
   await composer.pressSequentially('Keep the parent release-review draft.')
   await expect(composer).toHaveText('Keep the parent release-review draft.')
+  let taskManagerProof: { readings: any[]; before: any; after: any } | undefined
+  if(process.env.CLAUDE_RESEARCH_TASK_MANAGER==='1'){
+    const before=await context(),readings:any[]=[]
+    const documentBefore=await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())
+    const selectionBefore=await composer.evaluate(element=>(element as any).editor.state.selection.toJSON())
+    for(const size of [{width:1100,height:900},{width:680,height:600}]){
+      await appPage.setViewportSize(size)
+      const tasks=card.getByRole('button',{name:'Claude tasks',exact:true})
+      if(await tasks.isVisible())await tasks.click()
+      else{await card.getByRole('button',{name:'More actions',exact:true}).click();await appPage.getByRole('menuitem',{name:'Claude tasks',exact:true}).click()}
+      const panel=appPage.getByRole('dialog',{name:'Native /tasks panel',exact:true})
+      await expect(panel).toBeVisible({timeout:15000})
+      await expect.poll(async()=>(await context()).nativeUi.some((view:any)=>view.state?.agentInput?.status==='panel'&&view.state.agentInput.panel?.commandName==='tasks'),{timeout:15000}).toBe(true)
+      await expect(panel.getByRole('button',{name:'Close panel',exact:true})).toBeInViewport({ratio:1})
+      await expect.poll(async()=>(await panel.locator('.xterm-rows').innerText()).trim().length,{timeout:15000}).toBeGreaterThan(0)
+      const box=await panel.evaluate(element=>{const r=element.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height,scrollWidth:element.scrollWidth,clientWidth:element.clientWidth}})
+      expect(box.x).toBeGreaterThanOrEqual(0);expect(box.y).toBeGreaterThanOrEqual(0)
+      expect(box.x+box.width).toBeLessThanOrEqual(size.width+1);expect(box.y+box.height).toBeLessThanOrEqual(size.height+1)
+      expect(box.scrollWidth).toBeLessThanOrEqual(box.clientWidth+1)
+      await capture('native-task-manager-'+size.width+'.png')
+      const text=await panel.locator('.xterm-rows').innerText()
+      await panel.getByRole('button',{name:'Close panel',exact:true}).click();await expect(panel).toBeHidden()
+      await expect(composer).toHaveText('Keep the parent release-review draft.')
+      expect(await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())).toEqual(documentBefore)
+      expect(await composer.evaluate(element=>(element as any).editor.state.selection.toJSON())).toEqual(selectionBefore)
+      const after=await context();expect(after.sessionId).toBe(sessionId);expect(after.native.state.nativePid).toBe(boundNativePid)
+      expect(after.turns).toBe(before.turns);expect(after.claude.totalCostUsd).toBe(before.claude.totalCostUsd)
+      readings.push({...size,box,text,panelCommand:'tasks',sessionId,boundNativePid,retainedDraft:true})
+      await capture('native-task-manager-return-'+size.width+'.png')
+    }
+    taskManagerProof={readings,before,after:await context()}
+    await writeFile(join(workspace,'native-task-manager-return-proof.json'),JSON.stringify(taskManagerProof,null,2))
+  }
   await row.getByRole('button',{name:'Open Agent',exact:true}).click()
   const focused=appPage.getByRole('region',{name:'Focused Agent conversation',exact:true})
   const form=focused.getByRole('form',{name:'Agent message',exact:true})
@@ -247,5 +280,5 @@ export async function verifyAgentBilling(
   },{timeout:25000,message:'Same-session recovery completes a new original turn'}).toBe(true)
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
   await writeFile(join(workspace!,'native-agent-billing-proof.json'),JSON.stringify({project,sessionId,taskId,boundNativePid,observation,readings,recovery,final:await context()},null,2))
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:planScenario,nativeAgentBilling:true,nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,...(panelOwnership?{nativeAgentPanelOwnership:true}:{}),...(clientTheme?{nativeClientTheme:true}:{}),sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:planScenario,nativeAgentBilling:true,nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,...(panelOwnership?{nativeAgentPanelOwnership:true}:{}),...(clientTheme?{nativeClientTheme:true}:{}),...(taskManagerProof?{nativeTaskManagerReturn:true,taskManagerReadings:taskManagerProof.readings}:{}),sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
 }
