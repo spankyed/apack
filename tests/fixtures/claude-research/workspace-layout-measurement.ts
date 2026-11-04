@@ -46,8 +46,22 @@ export async function measureWorkspaceLayout({page,composer,workspace,phase,capt
       const artifacts=page.locator('[data-onboarding-id="agent-artifacts"]')
       const details=artifacts.locator('details').first(),summary=details.locator(':scope > summary')
       const bounds=await artifacts.boundingBox();expect(bounds).toBeTruthy()
-      await page.mouse.move(bounds!.x+bounds!.width*.85,bounds!.y+bounds!.height/2)
-      await page.mouse.wheel(0,480)
+      const summaryControl = () => summary.evaluate(element => {
+       const r=element.getBoundingClientRect();let top=0,bottom=innerHeight,left=0,right=innerWidth
+       for(let parent=element.parentElement;parent;parent=parent.parentElement){const style=getComputedStyle(parent);if(/auto|scroll|hidden|clip/.test(style.overflow+style.overflowY)){const p=parent.getBoundingClientRect();top=Math.max(top,p.top);bottom=Math.min(bottom,p.bottom);left=Math.max(left,p.left);right=Math.min(right,p.right)}}
+       const points=[[r.left+r.width/4,r.top+r.height/4],[r.right-r.width/4,r.top+r.height/4],[r.left+r.width/4,r.bottom-r.height/4],[r.right-r.width/4,r.bottom-r.height/4]]
+       return{top:r.top,bottom:r.bottom,height:r.height,fullyVisible:r.top>=top&&r.bottom<=bottom&&r.left>=left&&r.right<=right,hit:points.every(([x,y])=>element.contains(document.elementFromPoint(x,y)))}
+      })
+      let control=await summaryControl()
+      if(!control.fullyVisible||!control.hit){
+       await page.mouse.move(bounds!.x+bounds!.width*.85,bounds!.y+bounds!.height/2)
+       await page.mouse.wheel(0,480)
+       await expect(summary).toBeInViewport({ratio:1})
+       control=await summaryControl()
+      }
+      reading.workspaceSummaryControl=control
+      expect(control.fullyVisible,'Complete Session Details control is readable').toBe(true)
+      expect(control.hit,'Session Details control is not obscured').toBe(true)
       await expect(summary).toBeInViewport({ratio:1})
       await summary.click();await expect(details).toHaveAttribute('open','')
       const session=details.locator('span.font-mono').first()
@@ -72,8 +86,8 @@ export async function measureWorkspaceLayout({page,composer,workspace,phase,capt
   }
   if(process.env.CLAUDE_RESEARCH_AGENT_HIT_DIAGNOSTIC==='1')throw Error('Agent pointer diagnostics recorded; this run cannot establish acceptance')
  }finally{
+  await writeFile(join(workspace,`native-workspace-${phase}-measurement.json`),JSON.stringify({status:process.env.CLAUDE_RESEARCH_WORKSPACE_LAYOUT_ACCEPT==='1'?'candidate-acceptance':'diagnostic-only',original,readings},null,2))
   await page.evaluate(size=>(window as any).applicationState.send({type:'RESIZE_PANEL',panel:'canvas',size}),original.canvasHeight)
   await page.setViewportSize({width:1100,height:900})
-  await writeFile(join(workspace,`native-workspace-${phase}-measurement.json`),JSON.stringify({status:process.env.CLAUDE_RESEARCH_WORKSPACE_LAYOUT_ACCEPT==='1'?'candidate-acceptance':'diagnostic-only',original,readings},null,2))
  }
 }
