@@ -70,7 +70,11 @@ There is no complete balanced sequence, qualified median or valid warm/cold comp
 In particular, these observations do not mean cold execution is faster. Whole-host contention
 was not controlled, and the container recorded CPU throttling.
 
-## Next justified work
+## Fresh-profile follow-ups
+
+These concern first-use provisioning. For the populated-profile delay, the subsequent
+[phase breakdown](populated-startup-breakdown-2026-11-04.json) prioritizes renderer loading
+and startup ordering; this fresh-profile trace does not establish that bottleneck.
 
 1. Count and attribute the existing application startup database opens, schema declarations
    and durability barriers. Separate fresh-profile provisioning from populated-profile reopen.
