@@ -1,3 +1,4 @@
+import { claudeTerminalHelperPolicyRuntime } from '#features/code/be/services/claude-code/terminal-helper-policy-runtime.ts'
 import {spawn} from 'node:child_process'
 import {once} from 'node:events'
 import {rm} from 'node:fs/promises'
@@ -190,7 +191,8 @@ it('binds child drawing and reverse prompts to the original worker and retires t
  await writeFile(join(observer.directory,'worker-119.json'),JSON.stringify({pid:119,sessionId:child,start:identity.start,configPath:join(worker,'observer.json')}),{mode:0o600})
  await writeFile(join(worker,'observer.json'),JSON.stringify({sessionId:child,jobSessionId:child,token,uiSocketPath:socketPath,generations:{subagent:'subagent-generation'}}),{mode:0o600})
  const helperPolicy={allowManagedHooksOnly:false,disableAllHooks:false}
- const native=createServer(async(req,res)=>{let text='';for await(const chunk of req)text+=chunk;const value=JSON.parse(text);res.end(JSON.stringify({id:value.id,pid:119,sessionId:value.sessionId,result:value.request?.subtype==='apack_owner_snapshot'?{sessionId:value.sessionId,subagentCommand:'caption-helper',hooksDisabled:false,policy:helperPolicy}:{attached:true}}))})
+ const helperPolicyFields=new Function('effective','policy',claudeTerminalHelperPolicyRuntime+'\nreturn nativeHelperPolicySnapshot(effective,policy)')
+ const native=createServer(async(req,res)=>{let text='';for await(const chunk of req)text+=chunk;const value=JSON.parse(text);res.end(JSON.stringify({id:value.id,pid:119,sessionId:value.sessionId,result:value.request?.subtype==='apack_owner_snapshot'?{sessionId:value.sessionId,...helperPolicyFields({subagentStatusLine:{type:'command',command:'caption-helper'}},{...helperPolicy,subagentStatusLine:{type:'command',command:'caption-helper'}})}:{attached:true}}))})
  await new Promise<void>(resolve=>native.listen(socketPath,resolve))
  try {
   expect(JSON.parse(await readFile(join(observer.directory,'child-ui-launch.json'),'utf8')).configDir).toBe(join(profile,'claude-code-profile','config'))

@@ -1,3 +1,4 @@
+import { claudeTerminalHelperPolicyRuntime } from './terminal-helper-policy-runtime.ts'
 import { CLAUDE_UI_PROMPT_RPC_SUBTYPES, CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES } from './ui-text-limits.ts'
 import { claudeTerminalBackgroundReplyRuntime } from './terminal-background-reply-runtime.ts'
 import { claudeTerminalLeftArrowRuntime } from './terminal-leftarrow-runtime.ts'
@@ -46,6 +47,7 @@ import {createHash,randomUUID} from 'node:crypto';
 const nativeUiTextMessageMaxBytes=${CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES};
 const nativeUiPromptRpcSubtypes=new Set(${JSON.stringify(CLAUDE_UI_PROMPT_RPC_SUBTYPES)});
 const configUrl=new URL('./observer.json',import.meta.url),config=JSON.parse(readFileSync(configUrl,'utf8'));
+${claudeTerminalHelperPolicyRuntime}
 let helperPolicyReader;
 export function readNativeHelperPolicy(){return helperPolicyReader?.()}
 const clients=new Set(),seen=new Set();let native,initializing,activeSession=config.sessionId,sequenceSession=config.sessionId,sessionTransition,inFlight=0,highestSequence=0;
@@ -783,19 +785,18 @@ async function control(request,abort){
   restoreNativePlanContext(n,binding.toolContext(abort),sessionId);
   helperPolicyReader=()=>{const effective=settings.ut(),policy=settings.me('policySettings')??{};return JSON.stringify([policy.allowManagedHooksOnly===true,policy.disableAllHooks===true,effective.disableAllHooks===true])};
   const effective=settings.ut(),policy=settings.me('policySettings')??{},privateHooksSuppressed=restrictions.xr('plugins')===true;
+  const helperState=nativeHelperPolicySnapshot(effective,policy);
   const facts=nativeViewFacts(n,binding,abort),view=facts.view;
   const activityContext=binding.toolContext(abort),activity=n.toolRendering.bDe({tasks:activityContext.taskRegistry.all(),queuedCommands:activityContext.messageQueue.getCommandQueueSnapshot()});
   const preview=await nativeStreamingPreview(n,facts,n.runtime.lpe());
   const limits=await import('/$bunfs/root/chunk-2bb0j573.js');
   const billing=limits.xme()?{info:limits.ha(),observedAt:limits.HFs()}:null;
-  if(request.policy_only===true)return {...facts,privateHooksSuppressed,preview,billing,transcriptPath:n.runtime.Cf(sessionId),activity,managedTasks:nativeManagedTasks(activityContext.taskRegistry),mcpTasks:nativeMcpTasks(n,activityContext.taskRegistry),shells:nativeShellTasks(activityContext.taskRegistry),workflows:nativeWorkflowTasks(n,activityContext.taskRegistry),focus:nativeFocusProjection(n,facts)??null,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},hooksDisabled:effective.disableAllHooks===true};
+  if(request.policy_only===true)return {...facts,privateHooksSuppressed,preview,billing,transcriptPath:n.runtime.Cf(sessionId),activity,managedTasks:nativeManagedTasks(activityContext.taskRegistry),mcpTasks:nativeMcpTasks(n,activityContext.taskRegistry),shells:nativeShellTasks(activityContext.taskRegistry),workflows:nativeWorkflowTasks(n,activityContext.taskRegistry),focus:nativeFocusProjection(n,facts)??null,...helperState};
   const context=binding.toolContext(abort),messages=binding.messages(),usage=await n.runtime.Hco({},'apack native owner');
-  const helpers=(policy.allowManagedHooksOnly||effective.disableAllHooks&&!policy.disableAllHooks)?policy:effective;
-  const command=value=>value?.type==='command'&&typeof value.command==='string'?value.command:null;
   // Frozen native her: exclude synthetic/meta/virtual tool-result inputs from the human turn count.
   const turns=messages.filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true&&!(Array.isArray(row.message?.content)&&row.message.content.some(block=>block.type==='tool_result'))).length;
   const turn=n.runtime.lpe();
-  return {sessionId,view,privateHooksSuppressed,busy:context.turnActivity.getSnapshot()===true,transcriptPath:n.runtime.Cf(sessionId),hooksDisabled:effective.disableAllHooks===true,metadata:{permissionMode:context.getAppState().toolPermissionContext.mode,prePlanMode:context.getAppState().toolPermissionContext.prePlanMode,cwd:paths.ce(),model:binding.model(),modelSelection:context.getAppState().mainLoopModelForSession??context.getAppState().mainLoopModel??'default',turns,startedAt:usage.startedAt,totalCostUsd:usage.cost.usd},statusCommand:policy.disableAllHooks?null:command(helpers.statusLine),subagentCommand:policy.disableAllHooks?null:command(helpers.subagentStatusLine),shellPrefix:process.env.CLAUDE_CODE_SHELL_PREFIX??null,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},turn:turn?{id:turn.turnId,cancelled:turn.cancelled()}:null,managedTasks:nativeManagedTasks(context.taskRegistry),mcpTasks:nativeMcpTasks(n,context.taskRegistry),shells:nativeShellTasks(context.taskRegistry),workflows:nativeWorkflowTasks(n,context.taskRegistry),taskFacts:Object.values(context.taskRegistry.all()).flatMap(task=>{const identity=n.runtime.flt(task);return identity?[{...identity,status:task.status,isIdle:task.isIdle===true,finalizing:task.finalizing===true,awaitingPlanApproval:task.awaitingPlanApproval===true,keepaliveReasons:[...task.keepaliveReasons??[]]}]:[]})};
+  return {sessionId,view,privateHooksSuppressed,busy:context.turnActivity.getSnapshot()===true,transcriptPath:n.runtime.Cf(sessionId),metadata:{permissionMode:context.getAppState().toolPermissionContext.mode,prePlanMode:context.getAppState().toolPermissionContext.prePlanMode,cwd:paths.ce(),model:binding.model(),modelSelection:context.getAppState().mainLoopModelForSession??context.getAppState().mainLoopModel??'default',turns,startedAt:usage.startedAt,totalCostUsd:usage.cost.usd},...helperState,shellPrefix:process.env.CLAUDE_CODE_SHELL_PREFIX??null,turn:turn?{id:turn.turnId,cancelled:turn.cancelled()}:null,managedTasks:nativeManagedTasks(context.taskRegistry),mcpTasks:nativeMcpTasks(n,context.taskRegistry),shells:nativeShellTasks(context.taskRegistry),workflows:nativeWorkflowTasks(n,context.taskRegistry),taskFacts:Object.values(context.taskRegistry.all()).flatMap(task=>{const identity=n.runtime.flt(task);return identity?[{...identity,status:task.status,isIdle:task.isIdle===true,finalizing:task.finalizing===true,awaitingPlanApproval:task.awaitingPlanApproval===true,keepaliveReasons:[...task.keepaliveReasons??[]]}]:[]})};
  }
  if(request.subtype==='apack_plan_dialogs'){
   let d=nativeDialog(n,'permission_enter_plan_mode');if(!d.item)d=nativeDialog(n,'permission_exit_plan_mode_v2');if(!d.item)return {dialogs:[]};
