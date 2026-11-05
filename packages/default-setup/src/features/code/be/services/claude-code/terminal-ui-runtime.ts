@@ -1313,21 +1313,23 @@ function ownerAgents(facts){
  }
  return [...result.values()];
 }
-let ownerReading=false,ownerIndependent=false,reportedView,reportedTranscript,reportedActivity,activitySequence=0,reportedFocus,focusSequence=0,reportedPreview,previewSequence=0,reportedBilling,billingSequence=0;
+let ownerReading=false,ownerIndependent=false,reportedView,viewHeartbeat=0,reportedTranscript,reportedActivity,activitySequence=0,reportedFocus,focusSequence=0,reportedPreview,previewSequence=0,reportedBilling,billingSequence=0;
 const ownerTimer=setInterval(async()=>{
  if(ownerReading)return;ownerReading=true;
  try{
   const gate=await control({subtype:'apack_owner_snapshot',policy_only:true,follow_native_session:true},new AbortController());
   const viewKey=JSON.stringify([gate.sessionId,gate.view,gate.sequence]);
-  if(viewKey!==reportedView){await ownerPost('/native-view',{sessionId:gate.sessionId,pid:process.pid,view:gate.view,sequence:gate.sequence});reportedView=viewKey;}
+  // Reaffirm unchanged observations after a broker-side session handoff withdraws its view.
+  const refreshView=viewKey!==reportedView||++viewHeartbeat>=4;
+  if(refreshView){await ownerPost('/native-view',{sessionId:gate.sessionId,pid:process.pid,view:gate.view,sequence:gate.sequence});reportedView=viewKey;viewHeartbeat=0;}
   const billingKey=JSON.stringify([gate.sessionId,gate.billing]);
   if(gate.billing&&billingKey!==reportedBilling&&await ownerPost('/native-billing',{sessionId:gate.sessionId,pid:process.pid,sequence:++billingSequence,...gate.billing}))reportedBilling=billingKey;
   const previewKey=JSON.stringify([gate.sessionId,gate.sequence,gate.preview]);
-  if(previewKey!==reportedPreview&&await ownerPost('/native-preview',{sessionId:gate.sessionId,pid:process.pid,sequence:++previewSequence,viewRevision:gate.sequence,preview:gate.preview}))reportedPreview=previewKey;
+  if((refreshView||previewKey!==reportedPreview)&&await ownerPost('/native-preview',{sessionId:gate.sessionId,pid:process.pid,sequence:++previewSequence,viewRevision:gate.sequence,preview:gate.preview}))reportedPreview=previewKey;
   const focusKey=JSON.stringify([gate.sessionId,gate.sequence,gate.focus]);
-  if(focusKey!==reportedFocus){await ownerPost('/native-focus',{sessionId:gate.sessionId,pid:process.pid,sequence:++focusSequence,viewRevision:gate.sequence,focus:gate.focus});reportedFocus=focusKey;}
+  if(refreshView||focusKey!==reportedFocus){await ownerPost('/native-focus',{sessionId:gate.sessionId,pid:process.pid,sequence:++focusSequence,viewRevision:gate.sequence,focus:gate.focus});reportedFocus=focusKey;}
   const activityKey=JSON.stringify([gate.sessionId,gate.activity,gate.workflows,gate.shells,gate.mcpTasks,gate.managedTasks]);
-  if(activityKey!==reportedActivity){await ownerPost('/native-activity',{sessionId:gate.sessionId,pid:process.pid,sequence:++activitySequence,activity:gate.activity,workflows:gate.workflows,shells:gate.shells,mcpTasks:gate.mcpTasks,managedTasks:gate.managedTasks});reportedActivity=activityKey;}
+  if(refreshView||activityKey!==reportedActivity){await ownerPost('/native-activity',{sessionId:gate.sessionId,pid:process.pid,sequence:++activitySequence,activity:gate.activity,workflows:gate.workflows,shells:gate.shells,mcpTasks:gate.mcpTasks,managedTasks:gate.managedTasks});reportedActivity=activityKey;}
   const transcriptKey=JSON.stringify([gate.sessionId,gate.transcriptPath]);
   if(transcriptKey!==reportedTranscript&&await ownerPost('/transcript',{sessionId:gate.sessionId,path:gate.transcriptPath}))reportedTranscript=transcriptKey;
   if(gate.privateHooksSuppressed||gate.policy.allowManagedHooksOnly||gate.policy.disableAllHooks||gate.hooksDisabled)ownerIndependent=true;

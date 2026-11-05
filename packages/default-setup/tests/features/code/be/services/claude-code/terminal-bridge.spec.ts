@@ -555,3 +555,20 @@ it('fences MCP activity by native owner and sequence without partial metadata pu
   expect(bridge!.projection.tasks).toEqual([])
   expect((await request('/native-activity',body)).status).toBe(409)
 })
+
+it('reacquires an unchanged native view after metadata moves away and back without accepting a different equal-revision view', async () => {
+  await create()
+  const main = { sessionId: session, pid: process.pid, sequence: 1, view: { kind: 'main' } }
+  expect((await request('/native-view', main)).status).toBe(200)
+  const otherSession = '22222222-2222-2222-2222-222222222222'
+  await request('/poll', { sessionId: otherSession, agents: [], directOwner: true, busy: false, turn: null })
+  expect(bridge!.view).toBeUndefined()
+  expect((await request('/native-view', main)).status).toBe(409)
+  await request('/poll', { sessionId: session, agents: [], directOwner: true, busy: false, turn: null })
+  expect(bridge!.view).toBeUndefined()
+  expect((await request('/native-view', main)).status).toBe(200)
+  expect(bridge!.view).toEqual({ kind: 'main', revision: 1 })
+  expect((await request('/native-view', { ...main, view: { kind: 'agent', registryId: 'other' } })).status).toBe(409)
+  expect((await request('/native-view', { ...main, sessionId: otherSession })).status).toBe(409)
+  expect((await request('/native-view', { ...main, pid: process.pid + 1 })).status).toBe(409)
+})

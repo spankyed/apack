@@ -50,6 +50,7 @@ export async function createClaudeTerminalBridge(options: {
   let billingSequence = 0
   const transcripts: ClaudeNativeTranscript[] = []
   let nativeViewSequence = 0
+  let nativeViewRecord: string | undefined
   let nativeView: import('../../../common/native-terminal.ts').ClaudeNativeTerminalView | undefined
   let observerPid: number | undefined, observerProblem: string | undefined
   let mainCommand = command(options.settings.effective.statusLine) ?? null
@@ -265,8 +266,11 @@ export async function createClaudeTerminalBridge(options: {
         const view = object(value.view)
         if (value.pid !== observerPid || !Number.isSafeInteger(value.sequence) || (value.sequence as number) < 1 || (value.sequence as number) < nativeViewSequence || !view || !['main', 'agent'].includes(String(view.kind)) || view.kind === 'agent' && (typeof view.registryId !== 'string' || !view.registryId || view.registryId.length > 256 || view.taskId !== undefined && (typeof view.taskId !== 'string' || !view.taskId || view.taskId.length > 256))) return reply(409, {})
         const next: import('../../../common/native-terminal.ts').ClaudeNativeTerminalView = view.kind === 'main' ? { kind: 'main', revision: value.sequence as number } : { kind: 'agent', revision: value.sequence as number, registryId: view.registryId as string, ...(typeof view.taskId === 'string' ? { taskId: view.taskId } : {}) }
-        if (value.sequence === nativeViewSequence && JSON.stringify(next) !== JSON.stringify(nativeView)) return reply(409, {})
+        const record = JSON.stringify([value.sessionId, next])
+        // A session handoff withdraws presentation, not the last admitted observation's identity.
+        if (value.sequence === nativeViewSequence && record !== nativeViewRecord) return reply(409, {})
         nativeViewSequence = value.sequence as number
+        nativeViewRecord = record
         if (JSON.stringify(next) !== JSON.stringify(nativeView)) { preview = undefined; focus = undefined; nativeView = next; options.changed() }
         return reply(200, {})
       }
