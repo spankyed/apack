@@ -23,7 +23,7 @@ export function createAppData({ database, engine, history, registry, settings, o
   /** The run history and its database, which a backup copies and a reset empties with the app's */
   history: { service: RunHistory; database: EarsDatabase };
   registry: PackRegistry; settings: SettingsAdmin; onReplaced: () => void;
-}): AppDataService {
+}): AppDataService & { replacedElsewhere(): Promise<void> } {
   const stores: BackupStores = { lmdb: databaseBackupStore(database, engine), runHistory: databaseBackupStore(history.database) };
   let replacing = false;
   /** One replacement at a time, and none while a pack is being installed or changed: both write the same data */
@@ -54,6 +54,16 @@ export function createAppData({ database, engine, history, registry, settings, o
         history.database.reset();
         // Stored API keys go too, with their data keys, after the database is emptied, since the settings system hears of it
         secretsStore.clearAll();
+        startPacks(registry);
+        _catchUpProjections(engine);
+      }));
+    },
+    /** Another process emptied the stores (`apack db reset`): the rest of what a reset does here */
+    async replacedElsewhere() {
+      await exclusive(() => replaceData(async () => {
+        registry.runShutdownHooks();
+        engine.admin.adoptReplacement();
+        history.database.adoptReplacement();
         startPacks(registry);
         _catchUpProjections(engine);
       }));

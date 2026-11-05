@@ -75,9 +75,10 @@ export interface OpenOptions {
   /**
    * What the command changes. `rows` go a unit at a time, which LMDB orders with anything else writing, an app included,
    * so they hold no lock. `everything` replaces what others are using: it holds the data dir's write lock, and is refused
-   * while an app runs there.
+   * while an app runs there. `all-rows` holds the lock so that no app starts under it, and goes ahead beside a running one,
+   * whose writes elmdb refuses until it has started over on what's there.
    */
-  changes: 'nothing' | 'rows' | 'everything';
+  changes: 'nothing' | 'rows' | 'all-rows' | 'everything';
   /** The command's name, for the lock a change holds */
   command: string;
 }
@@ -95,10 +96,10 @@ export async function openTarget(target: DbTarget, { changes, command }: OpenOpt
   io.err(`Database: ${target.userDataDir} (offline)`);
   if (changes === 'rows') assertNoDatabaseWriter(target.userDataDir);
   // Taken before the check, so an app that starts from here on finds it and refuses to open the database
-  const lock = changes === 'everything' ? holdDatabaseWriteLock(target.userDataDir, `apack db ${command}`) : null;
+  const lock = changes === 'everything' || changes === 'all-rows' ? holdDatabaseWriteLock(target.userDataDir, `apack db ${command}`) : null;
   try {
     const running = findRunningApp(target);
-    if (running && lock) {
+    if (running && changes === 'everything') {
       // Named only here: a refusal has to say how to get out of it, and the file is the way out when the app
       // that wrote it is gone. The warning below must not say it — there the app really is running.
       const clear = running.marker ? ` If it isn't running, delete ${running.marker} and try again.` : '';

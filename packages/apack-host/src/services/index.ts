@@ -57,11 +57,27 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
   const settings = createSettingsService(settingsStore);
   packs.catalog.setSettingsAdmission(candidate => compileSettingsCatalog(candidate).validate(settings.getOverrides()));
   const runHistoryService = createRunHistory(runHistory.engine);
+  // The service replaces the data; naming what the app is told about it belongs here, with the wiring
+  const { replacedElsewhere, ...appData } = createAppData({ database, engine, history: { service: runHistoryService, database: runHistory.database },
+    registry: packs, settings,
+    onReplaced: () => transport.rootEvents.emitIncoming({ to: HOST.bus, event: { type: 'DATA_REPLACED' } }),
+  });
   let refreshing: ReturnType<typeof setTimeout> | undefined;
   /** Runs once a burst of commits from elsewhere has passed. Nothing waits on this timer to catch what it throws, and an uncaught error ends the process */
   const refreshAfterBurst = () => {
     refreshing ??= setTimeout(() => {
       refreshing = undefined;
+      try {
+        if (engine.admin.replacedElsewhere()) {
+          void replacedElsewhere().catch((error: unknown) => {
+            // Its writes stay refused, and the next one refused brings this back
+            logger.error('Starting over after another process replaced the data failed:', error as Error);
+          });
+          return;
+        }
+      } catch (error) {
+        logger.error('Asking whether another process replaced the data failed:', error as Error);
+      }
       try {
         settingsStore.adoptStored();
       } catch (error) {
@@ -104,11 +120,7 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
     }),
     services: {
       onboarding: createOnboarding(engine),
-      // The service replaces the data; naming what the app is told about it belongs here, with the wiring
-      appData: createAppData({ database, engine, history: { service: runHistoryService, database: runHistory.database },
-        registry: packs, settings,
-        onReplaced: () => transport.rootEvents.emitIncoming({ to: HOST.bus, event: { type: 'DATA_REPLACED' } }),
-      }),
+      appData,
       runHistory: runHistoryService,
       inference,
       secrets,

@@ -458,7 +458,7 @@ describe('the lock a change holds', () => {
     expect(findDatabaseWriter(dir)).toBeNull();
     // So does one refused because an app is running
     holdLock(dir);
-    expect((await run(['reset', '--force', '--data-dir', dir])).error?.message).toMatch(/quit it first/);
+    expect((await run(['clear-settings', '--force', '--data-dir', dir])).error?.message).toMatch(/quit it first/);
     expect(findDatabaseWriter(dir)).toBeNull();
   });
 });
@@ -571,11 +571,9 @@ describe('apack db exec', () => {
       expect(await titleIn(dir)).toBe('After');
     });
 
-    it('still refuses to replace or reset the data under it, changing nothing', async () => {
+    it('still refuses to clear the settings under it, changing nothing', async () => {
       const dir = await appDataDir();
       runningApp(dir);
-      const reset = await run(['reset', '--force', '--data-dir', dir]);
-      expect(reset.error?.message).toMatch(/^apack is running on [\s\S]*quit it first/);
       const clearing = await run(['clear-settings', '--force', '--data-dir', dir]);
       expect(clearing.error?.message).toMatch(/quit it first/);
       expect(await titleIn(dir)).toBe('Alpha');
@@ -991,7 +989,7 @@ describe('a dry run of a command that changes data', () => {
     expect(listed.out).toContain('Would delete the database');
     expect(listed.err).toMatch(/Warning: apack is running on it/);
     // Only the change itself is refused
-    expect((await run(['reset', '--force', '--data-dir', running])).error?.message).toMatch(/quit it first/);
+    expect((await run(['clear-settings', '--force', '--data-dir', running])).error?.message).toMatch(/quit it first/);
 
     const copy = await appDataDir();
     const { lmdb } = _appDataPaths(copy);
@@ -1039,7 +1037,7 @@ describe('apack db reset', () => {
     const forced = await ok(['reset', '--force', '--data-dir', dir]);
     expect(forced.out).toContain('Reset.');
     expect(JSON.parse(fs.readFileSync(secretsFile, 'utf-8')).secrets).toEqual([]);
-    expect(fs.existsSync(_appDataPaths(dir).runHistory)).toBe(false);
+    expect((await ok(['runs', '--data-dir', dir])).out, 'emptied in place, since a running app holds it open').not.toContain('flow');
     const after = await ok(['query', 'return query.withTrashed.all().ids()', '--data-dir', dir, '-o', 'json']);
     expect(JSON.parse(after.out)).toEqual([]);
     expect((await ok(['reset', '--data-dir', dir])).out).toContain('Would delete 0 stored API key(s)');
@@ -1059,11 +1057,11 @@ describe('apack db reset', () => {
     expect(JSON.parse((await ok(['query', 'return query.withTrashed.all().ids()', '--data-dir', dir, '-o', 'json'])).out)).toEqual([]);
   });
 
-  it('refuses while an app runs on the data dir', async () => {
+  it('goes ahead beside a running app, saying that it starts over', async () => {
     const dir = await appDataDir();
     publishApi(dir);
-    expect((await run(['reset', '--force', '--data-dir', dir])).error?.message).toMatch(/quit it first/);
-    expect((await ok(['query', 'return query.withTrashed("Note").count()', '--data-dir', dir])).out).toBe('2');
+    expect((await ok(['reset', '--force', '--data-dir', dir])).out).toContain('running apack starts over');
+    expect((await ok(['query', 'return query.withTrashed("Note").count()', '--data-dir', dir])).out).toBe('0');
   });
 });
 

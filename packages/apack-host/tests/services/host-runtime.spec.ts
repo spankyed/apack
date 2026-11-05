@@ -128,6 +128,19 @@ describe('createHostRuntime', () => {
       stop();
     });
 
+    it('starts over when another process replaced the data, instead of refreshing', async () => {
+      const { engine, found, told, stop } = running();
+      vi.spyOn(engine.admin, 'replacedElsewhere').mockImplementation(() => true);
+      const adopted = vi.spyOn(engine.admin, 'adoptReplacement').mockImplementation(() => {});
+      found();
+      await vi.advanceTimersByTimeAsync(250);
+      expect(adopted).toHaveBeenCalledOnce();
+      expect(told).toContain('host/bus DATA_REPLACED');
+      expect(told).not.toContain('host/bus DATA_CHANGED_ELSEWHERE');
+      vi.restoreAllMocks();
+      stop();
+    });
+
     it('still runs when the database cannot hear of other processes', () => {
       const engine = newEngine();
       vi.spyOn(engine.admin, 'onFoundElsewhere').mockImplementation(() => { throw new Error('no loopback here'); });
