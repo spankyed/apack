@@ -35,8 +35,8 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
   let revision = 0;
   let atRevision = -1;
   let validation: ReturnType<typeof compileSettingsCatalog>;
-  /** The overrides last read or written as valid, which `adoptStored` puts back */
-  let lastValid: SettingsOverrides | undefined;
+  /** The row as whoever follows settings last knew it, from the first read on: `adoptStored` tells of a change and only of one */
+  let adopted: unknown;
 
   function declarations(): SettingsCatalog {
     const definitions = catalog();
@@ -58,25 +58,13 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
     if (!isPlainObject(value)) throw new SettingsRefusedError(['Stored settings must be a JSON object']);
     return value as SettingsOverrides;
   }
-  /**
-   * The stored overrides, or while the row is invalid the last valid ones. Another process can write a bad row and the app
-   * may not hear for some time, or ever, and running packs read settings throughout, so a read doesn't throw over it.
-   */
-  function validStored(): SettingsOverrides {
-    try {
-      const overrides = stored();
-      validation.validate(overrides);
-      lastValid = overrides;
-      return overrides;
-    } catch (error) {
-      if (!(error instanceof SettingsRefusedError) || !lastValid) throw error;
-      return structuredClone(lastValid);
-    }
-  }
   function effective(): SettingsDocument {
     if (recovering) throw new SettingsRefusedError(['Settings require recovery. Reset the invalid values and restart.']);
     const base = defaults();
-    return structuredClone(deepMerge(base, validStored())) as SettingsDocument;
+    const overrides = stored();
+    validation.validate(overrides);
+    adopted ??= structuredClone(overrides);
+    return structuredClone(deepMerge(base, overrides)) as SettingsDocument;
   }
   /** In recovery the stored row is invalid, and only `recover()` may change it. */
   function refuseDuringRecovery(): void {
@@ -116,7 +104,7 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
     validation.validate(next, rawStored());
     const database = ears();
     database.upsert(SETTINGS_ENTITY, { id: SETTINGS_ID, data: structuredClone(next) });
-    lastValid = structuredClone(next) as SettingsOverrides;
+    adopted = structuredClone(next);
     revision++;
     tell('written');
   }
@@ -131,25 +119,20 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
     getAll: effective,
     enterRecovery: () => { recovering = true; },
     /**
-     * Takes a stored row written past this store, telling subscribers as for any write if it changed anything, or refuses
-     * it. A refused row is replaced by the last valid one and its problems answered, since running packs read settings
-     * throughout and recovery is for a process that runs none.
+     * Takes a stored row another process wrote, telling subscribers as for any write if it changed anything. What a tool
+     * writes is checked as it commits (`refuseInvalidSettings`), so a row that fails here came past every writer this
+     * repo has: it is reported, reads refuse it, and the next boot offers recovery.
      */
-    adoptStored() {
-      if (recovering || replacingData) return [];
+    adoptStored(): void {
+      if (recovering || replacingData) return;
       declarations();
       const raw = rawStored();
       const problems = validation.inspect(raw);
-      if (problems.length > 0) {
-        if (lastValid) ears().upsert(SETTINGS_ENTITY, { id: SETTINGS_ID, data: structuredClone(lastValid) });
-        return problems;
-      }
-      if (!isEqual(raw, lastValid)) {
-        lastValid = raw as SettingsOverrides;
-        revision++;
-        tell('written');
-      }
-      return problems;
+      if (problems.length > 0) logger.error(`The stored settings are invalid, and the next start offers to recover them: ${problems.map(problem => problem.message).join('; ')}`);
+      if (adopted === undefined || isEqual(raw, adopted)) { adopted = raw; return; }
+      adopted = raw;
+      revision++;
+      tell('written');
     },
     getRecovery,
     recover(request: SettingsRecoveryRequest): void {

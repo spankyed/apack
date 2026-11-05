@@ -36,10 +36,13 @@ test('an invalid settings row from apack db exec is refused, and the app carries
   await app.waitForState('running.connected');
   const dataDir = await electronApp.evaluate(() => process.env.APACK_USER_DATA_DIR);
 
-  await apackDb(dataDir!, 'exec', "upsert(EARS.Entity.Settings, { id: 'Settings-app', data: 'not settings' })");
+  const refused = await apackDb(dataDir!, 'exec', "upsert(EARS.Entity.Settings, { id: 'Settings-app', data: 'not settings' })")
+    .then(() => null, (error: { code?: number; stderr?: string }) => error);
+  expect(refused?.code).toBe(1);
+  expect(refused?.stderr).toContain('Nothing it wrote was kept');
 
-  await expect.poll(async () => (await apackDb(dataDir!, 'query', "return typeof getRow('Settings-app')?.data")).stdout.trim(),
-    { timeout: 15_000 }).toBe('object');
+  const { stdout } = await apackDb(dataDir!, 'query', "return typeof getRow('Settings-app')?.data");
+  expect(stdout.trim()).not.toBe('string');
   expect(await app.getState()).toEqual(expect.objectContaining({ running: 'connected' }));
 });
 

@@ -63,8 +63,7 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
     refreshing ??= setTimeout(() => {
       refreshing = undefined;
       try {
-        const refused = settingsStore.adoptStored();
-        if (refused.length > 0) logger.warn(`Refused the stored settings another process wrote: ${refused.map(problem => problem.message).join('; ')}`);
+        settingsStore.adoptStored();
       } catch (error) {
         logger.error('Reviewing the stored settings after a commit from another process failed:', error as Error);
       }
