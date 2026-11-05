@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import http from 'node:http';
 const configUrl=new URL('./observer.json',import.meta.url);
 const config=JSON.parse(readFileSync(configUrl,'utf8'));
-if(config.originalBunOptions===undefined)delete process.env.BUN_OPTIONS;else process.env.BUN_OPTIONS=config.originalBunOptions;
+if(config.originalBunOptions===null||config.originalBunOptions===undefined)delete process.env.BUN_OPTIONS;else process.env.BUN_OPTIONS=config.originalBunOptions;
 async function publish(path,body){await new Promise(resolve=>{const request=http.request({socketPath:config.socketPath,path,method:'POST',headers:{'x-apack-native-token':config.token,'content-type':'application/json'},timeout:500},response=>{response.resume();response.on('end',resolve)});request.on('error',resolve);request.on('timeout',()=>{request.destroy();resolve()});request.end(JSON.stringify(body))})}
 let readNativeHelperPolicy;
 const original=ChildProcess.prototype.spawn;

@@ -1,3 +1,4 @@
+import { claudeTerminalStatusRuntime } from './terminal-status-runtime.ts'
 import { claudeTerminalUiRuntime } from './terminal-ui-runtime.ts'
 import { mkdir, lstat, readFile, writeFile, rename, readdir } from 'node:fs/promises'
 import { join, isAbsolute } from 'node:path'
@@ -82,6 +83,7 @@ export async function prepareClaudeOwnedChildUi(options: {
   const profile = await prepareClaudeOwnedProfile({userDataDir: options.userDataDir, env: {CLAUDE_SECURESTORAGE_CONFIG_DIR: options.secureStorageConfigDir}})
   await privateDirectory(options.directory)
   await atomicWrite(join(options.directory, 'child-ui-template.mjs'), claudeTerminalUiRuntime, 0o600)
+  await atomicWrite(join(options.directory, 'child-helper-template.mjs'), claudeTerminalStatusRuntime, 0o600)
   await atomicWrite(join(options.directory, 'child-ui-launch.json'), JSON.stringify({
     directory: options.directory, configDir: profile.configDir, executable: await resolveClaudeExecutable(options.executable, options.cwd, options.searchPath), socketPath: options.socketPath, token: options.token,
   }), 0o600)

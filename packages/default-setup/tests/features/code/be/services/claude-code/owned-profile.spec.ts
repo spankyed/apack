@@ -1,3 +1,4 @@
+import { claudeTerminalStatusRuntime } from '#features/code/be/services/claude-code/terminal-status-runtime.ts'
 import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, realpath, symlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
@@ -51,13 +52,15 @@ test('boots only a matching app child, retains its PID and reaps retired bootstr
   const plugin = join(observer, 'plugin'), sessionId = '11111111-1111-4111-8111-111111111111'
   await mkdir(plugin, {mode: 0o700})
   await writeFile(join(observer, 'child-ui-launch.json'), JSON.stringify({directory: observer, configDir: profile.configDir, executable: await realpath(process.execPath), socketPath: join(observer, 'status.sock'), token: 'a'.repeat(64)}), {mode: 0o600})
-  await writeFile(join(observer, 'child-ui-template.mjs'), 'globalThis.childUiStarted = JSON.parse((await import("node:fs")).readFileSync(new URL("./observer.json",import.meta.url),"utf8")).sessionId;', {mode: 0o600})
-  const code = 'const marker=process.env.BUN_OPTIONS.split("--preload=").at(-1); import(require("node:url").pathToFileURL(marker).href).then(()=>console.log(JSON.stringify({pid:process.pid,sessionId:globalThis.childUiStarted,bun:process.env.BUN_OPTIONS})));'
-  for (let attempt=0; attempt<2; attempt++) {
+  await writeFile(join(observer, 'child-ui-template.mjs'), 'export function readNativeHelperPolicy(){return "[false,false,false]"};globalThis.childUiStarted = JSON.parse((await import("node:fs")).readFileSync(new URL("./observer.json",import.meta.url),"utf8")).sessionId;', {mode: 0o600})
+  await writeFile(join(observer, 'child-helper-template.mjs'), claudeTerminalStatusRuntime + '\nglobalThis.childHelperStarted=true;', {mode: 0o600})
+  const code = 'const marker=process.env.BUN_OPTIONS.split("--preload=").at(-1); import(require("node:url").pathToFileURL(marker).href).then(()=>console.log(JSON.stringify({pid:process.pid,sessionId:globalThis.childUiStarted,helper:globalThis.childHelperStarted,bun:process.env.BUN_OPTIONS})));'
+  for (const originalBunOptions of ['original-options', undefined]) {
     const output = execFileSync(profile.launcher, [process.execPath, '-e', code, '--', '--session-id', sessionId, '--plugin-dir', plugin],
-      {encoding: 'utf8', timeout: 10000, env: {...process.env, CLAUDE_CONFIG_DIR: profile.configDir, CLAUDE_CODE_SESSION_KIND: 'bg', CLAUDE_BG_RENDEZVOUS_SOCK: '/owned/rendezvous', BUN_OPTIONS: 'original-options'}})
+      {encoding: 'utf8', timeout: 10000, env: {...process.env, CLAUDE_CONFIG_DIR: profile.configDir, CLAUDE_CODE_SESSION_KIND: 'bg', CLAUDE_BG_RENDEZVOUS_SOCK: '/owned/rendezvous', BUN_OPTIONS: originalBunOptions}})
     const receipt = JSON.parse(output)
-    expect(receipt).toMatchObject({sessionId, bun: 'original-options'})
+    expect(receipt).toMatchObject({sessionId, helper:true})
+    expect(receipt.bun).toBe(originalBunOptions)
     const identity = JSON.parse(await readFile(join(observer, `worker-${receipt.pid}.json`), 'utf8'))
     expect(identity).toMatchObject({pid: receipt.pid, sessionId})
     expect(await readdir(join(observer, 'workers'))).toHaveLength(1)
