@@ -76,7 +76,7 @@ export async function dbReset(args: string[], io: DbIo): Promise<void> {
 
   // Without --force the database opens read-only. data.mdb may be read-only, but lock.mdb still needs
   // writable reader registration.
-  const db = await openTarget(target, { write: force, command: 'reset' }, io);
+  const db = await openTarget(target, { changes: force ? 'everything' : 'nothing', command: 'reset' }, io);
   const done = await withDatabase(db, async () => {
     const secrets = secretsStoreAt(db);
     const keys = fs.existsSync(db.paths.secretsFile) ? keyLines(secrets) : [];
@@ -143,7 +143,7 @@ export async function dbClearSettings(args: string[], io: DbIo): Promise<void> {
   const force = values.force as boolean;
 
   // Without --force nothing is destroyed, so the database opens read-only
-  const db = await openTarget(target, { write: force, command: 'clear-settings' }, io);
+  const db = await openTarget(target, { changes: force ? 'everything' : 'nothing', command: 'clear-settings' }, io);
   const done = await withDatabase(db, () => {
     const rows = db.admin.getEntitiesOfType(SETTINGS_ENTITY as EARS.Entity).map((id) => describeSettingsRow(db, id));
     if (rows.length === 0) {
@@ -186,7 +186,7 @@ export async function dbImport(args: string[], io: DbIo): Promise<void> {
   const force = values.force as boolean;
 
   // Without --force nothing is replaced, so the database opens read-only
-  const db = await openTarget(target, { write: force, command: 'import' }, io);
+  const db = await openTarget(target, { changes: force ? 'everything' : 'nothing', command: 'import' }, io);
   const done = await withDatabase(db, async () => {
     // The backup is checked before anything changes
     const environment = resolveAppEnvironment({ env: target.env, userDataDir: db.userDataDir });

@@ -466,7 +466,7 @@ Every phase that moves a public export runs `npm run api:update` (ears and SDK) 
   barriers, failed-save state and cross-environment behaviour, including what a unit spanning two
   environments promises when one fails, and the trace partition's per-boot root edge. `transact` gives it the
   logical unit it asks for; it doesn't make writes durable.
-- **The console's transactions.** [`goal-console-transactions.md`](../../goals/goal-console-transactions.md)
+- **The console's transactions.** [`goal-console-transactions.md`](../goals/goal-console-transactions.md)
   becomes a caller: console code runs inside `transact`, and its Phase 1 is this plan's Phase 2.
 - **A disk-resident engine** ([`goal-lmdb-only.md`](../goals/goal-lmdb-only.md)). Everything here is
   storage-agnostic; doing this first gives that goal a smaller API to reimplement.

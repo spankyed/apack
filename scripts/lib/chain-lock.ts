@@ -26,7 +26,8 @@ export const CHAIN_LOCK = path.join(STAMP_DIR, 'chain.lock');
  * How long `--wait` waits before refusing anyway: a bound, not a schedule — it returns the moment the holder
  * is gone. Ten minutes against a cold chain's ~180s, the ratio `waitForPackageBuild` chose for the same
  * reason: several times what the waited-for thing costs, so a wedged holder is reported rather than waited on
- * forever, and a bound nobody will wait for is the same as no bound.
+ * forever, and a bound nobody will wait for is the same as no bound. A holder queued for the expensive steps
+ * (`machine-lock.ts`) can outlast it, and then this says it is still running, which it is.
  */
 export const CHAIN_WAIT_MS = 600_000;
 

@@ -134,7 +134,7 @@ data, not a description of it.
   sees what the app has committed. A write to the live data goes through the app already, by the drive server's
   `/transact`. Serving `apack db` too would run a tool's code in the app's process and still need an offline path for
   when no app answers. What a terminal write beside the running app would need instead — the tool writes the files and
-  tells the app, which re-runs every watch — is [a deferred plan](../../plans/deferred/db-writes-beside-the-running-app.md).
+  tells the app, which re-runs every watch — is [a later plan](../plans/db-writes-beside-the-running-app.md).
 
 ## Order
 

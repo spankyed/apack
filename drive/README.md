@@ -94,7 +94,7 @@ is found. `npm run dev:open --` takes the directory back from an app a question 
 The three the npm scripts expose are the three an agent reaches for most.
 
 `/query` and `/transact` reach the **live** database, so a write shows up in the next read —
-`apack db exec` cannot, because it refuses while the app holds the write lock.
+`apack db exec` writes from its own process and tells the app only when it ends.
 
 A write does **not** show up in the UI. A surface holds what its system sent it, and a console write goes
 round every system, so nothing tells the view. `/reload` is what makes every surface ask again; navigating

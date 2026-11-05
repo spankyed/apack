@@ -13,12 +13,12 @@ export default defineConfig((options) => {
     // consumers without the workspace source condition need its compiled type entry.
     clean: !isDev,
     // **What to watch is on the command line, not here, and that is not a preference.** tsup watches a
-    // *directory* rather than the module graph, so `@apackdev/host` and `@apackdev/sdk` — both inlined into
-    // this bundle by the `@apackdev/source` condition below — have to be named or an edit to either rebuilds
-    // nothing: measured 2026-10-10, no rebuild in two and a half minutes. Naming them here does not work,
-    // because a `--watch` flag *overrides* a `watch` in the config rather than merging with it (measured
-    // the same day: the config's paths were ignored). So they live in `build:dev:watch`, which is the one
-    // invocation that wants them.
+    // *directory* rather than the module graph, so `@apackdev/ears`, `@apackdev/host` and `@apackdev/sdk` — all
+    // inlined into this bundle by the `@apackdev/source` condition below — have to be named or an edit to one
+    // rebuilds nothing: measured 2026-10-10, no rebuild in two and a half minutes. `tests/dev-watch.spec.ts`
+    // compares the list with what the bundle reads. Naming them here does not work, because a `--watch` flag
+    // *overrides* a `watch` in the config rather than merging with it (measured the same day: the config's
+    // paths were ignored). So they live in `build:dev:watch`, which is the one invocation that wants them.
     format: isDev ? ['esm'] : ['esm', 'cjs'],
     dts: !isDev,
     shims: true,

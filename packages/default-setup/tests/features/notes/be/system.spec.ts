@@ -3,7 +3,8 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { startApp, type TestApp } from '@apackdev/testing/harness';
 import { resetTestData } from '@apackdev/sdk/testing';
-import { query, EARS } from '#generated/ears.ts';
+import { query, write, EARS } from '#generated/ears.ts';
+import { formatReferenceHref } from '@apackdev/sdk/framework';
 import { repository } from '#generated/repository.ts';
 
 let app: TestApp;
@@ -38,6 +39,19 @@ it.each([
   await app.send('notes', drop(middle, other));
   await app.settle();
   expect(parentOf(middle)).toBe(other);
+});
+
+it('indexes the references in what another process wrote', async () => {
+  const target = note('target');
+  const source = note('source');
+  // Past the repository, which is what would have indexed it
+  write(source).set('content', `[target](${formatReferenceHref({ type: 'note', id: target })})`);
+  expect(query.ids(source).out(EARS.RelKind.REFERENCES, EARS.Entity.Note).ids()).toEqual([]);
+
+  await app.send('notes', { type: 'DATA_CHANGED_ELSEWHERE' });
+  await app.settle();
+
+  expect(query.ids(source).out(EARS.RelKind.REFERENCES, EARS.Entity.Note).ids()).toEqual([target]);
 });
 
 it('ancestorChain is the notes above one, its root first', () => {

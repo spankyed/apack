@@ -6,12 +6,8 @@ import { readApiEndpoint } from '@apackdev/host/process-liveness';
 import { API_HOST, API_TOKEN_HEADER, errorMessage } from '@apackdev/sdk/utils/pure';
 
 /**
- * Asking a running app to install or reload a pack: the `/dev/install` and `/dev/reload` client, and what
- * one came to.
- *
- * It lives beside the bundlers rather than in `commands/dev`, because two commands ask it — `dev` after
- * reinstalling, and `build --watch` after rebuilding the runtime — and `dev` already imports `build`, so
- * the second caller reaching into the first would close a cycle.
+ * Asking a running app to do something for a local tool, and what that came to: `/dev/install` and `/dev/reload` for a
+ * pack, `/db/changed-elsewhere` for a commit made beside it.
  */
 
 /**
@@ -61,22 +57,30 @@ export type DevDelivery =
   /** Nothing answered on the port the app published */
   | { status: 'unreachable'; detail: string };
 
-/** Posts one development request to the running app's API, with its token. */
-async function devRequest(endpoint: string, body: object, place: AppPlace): Promise<DevDelivery> {
-  const found = findAppApi(place);
-  if ('problem' in found) return { status: 'not-running', detail: found.problem };
+/** What a posted request can come to: the app has no answer of `current` to give */
+export type AppDelivery = Exclude<DevDelivery, { status: 'current' }>;
+
+/** Posts one request to a running app's API */
+async function post(url: string, token: string, body: object): Promise<AppDelivery> {
   try {
-    const res = await fetch(`${found.api.url}${endpoint}`, {
+    const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', [API_TOKEN_HEADER]: found.api.token },
+      headers: { 'Content-Type': 'application/json', [API_TOKEN_HEADER]: token },
       body: JSON.stringify(body),
     });
     if (res.ok) return { status: 'delivered' };
     const text = await res.text().catch(() => '');
     return { status: 'failed', detail: `${res.status} ${res.statusText}${text.trim() ? `: ${text.trim()}` : ''}` };
   } catch (err) {
-    return { status: 'unreachable', detail: `${found.api.url}: ${errorMessage(err)}` };
+    return { status: 'unreachable', detail: `${url}: ${errorMessage(err)}` };
   }
+}
+
+/** Posts one development request to the running app's API, with its token. */
+async function devRequest(endpoint: string, body: object, place: AppPlace): Promise<AppDelivery> {
+  const found = findAppApi(place);
+  if ('problem' in found) return { status: 'not-running', detail: found.problem };
+  return post(`${found.api.url}${endpoint}`, found.api.token, body);
 }
 
 /** Asks the running app to reload a pack's runtime. */
@@ -90,4 +94,12 @@ export function reloadPack(packId: string, place: AppPlace = { env: 'development
  */
 export function installPackInApp(root: string, place: AppPlace = { env: 'development' }): Promise<DevDelivery> {
   return devRequest('/dev/install', { root: path.resolve(root) }, place);
+}
+
+/** Tells the running app that this process committed to its database, which it can't otherwise hear. */
+export async function tellAppDataChanged(place: AppPlace): Promise<AppDelivery> {
+  const { apiPortFile } = resolveAppEnvironment(place);
+  const endpoint = readApiEndpoint(apiPortFile);
+  if (!endpoint?.dataChangedToken) return { status: 'not-running', detail: `no running ${place.env} app in ${apiPortFile}` };
+  return post(`http://${API_HOST}:${endpoint.port}/db/changed-elsewhere`, endpoint.dataChangedToken, {});
 }

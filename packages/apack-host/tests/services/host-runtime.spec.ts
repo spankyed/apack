@@ -55,6 +55,62 @@ const externalOrigin = (id: string, name: string) => ({ declarationRevision: 'fi
 });
 
 describe('createHostRuntime', () => {
+  describe('hearing another process committed', () => {
+    const SETTINGS_ROW = 'Settings-app' as EARS.EntityId;
+    function running() {
+      const engine = newEngine();
+      const told: string[] = [];
+      const stopWatching = vi.spyOn(engine.admin, 'changedElsewhere').mockImplementation(() => { told.push('watches'); });
+      const stopHearing = testRootEvents.onIncoming((message) => { told.push(`${message.to} ${message.event.type}`); });
+      const { runHistory } = blockedHistory();
+      const runtime = createHostRuntime({ runHistory, database: {} as EarsDatabase, engine, transport: { rootEvents: testRootEvents },
+        appVersion: '1.2.3', packs: createNativePackTestRegistry() });
+      return { engine, runtime, told, stop: () => { stopHearing(); stopWatching.mockRestore(); } };
+    }
+
+    it('reruns every watch and then tells the bus', () => {
+      const { runtime, told, stop } = running();
+      expect(runtime.dataChangedElsewhere()).toEqual([]);
+      expect(told).toEqual(['watches', 'host/bus DATA_CHANGED_ELSEWHERE']);
+      stop();
+    });
+
+    it('answers the problems of a settings row it refused, and tells them all the same', () => {
+      const { engine, runtime, told, stop } = running();
+      runtime.services.settings.getAll();
+      engine.upsert('Settings', { id: SETTINGS_ROW, data: 'not settings' });
+      expect(runtime.dataChangedElsewhere().length).toBeGreaterThan(0);
+      expect(told).toEqual(['watches', 'host/bus DATA_CHANGED_ELSEWHERE']);
+      stop();
+    });
+
+    it('does not let a failure escape when it found out for itself, which nothing would catch', () => {
+      const engine = newEngine();
+      let found: (() => void) | undefined;
+      vi.spyOn(engine.admin, 'onFoundElsewhere').mockImplementation((listener) => { found = listener; return () => {}; });
+      vi.spyOn(engine.admin, 'changedElsewhere').mockImplementation(() => {});
+      const { runHistory } = blockedHistory();
+      const runtime = createHostRuntime({ runHistory, database: {} as EarsDatabase, engine, transport: { rootEvents: testRootEvents },
+        appVersion: '1.2.3', packs: createNativePackTestRegistry() });
+      runtime.services.settings.getAll();
+      engine.upsert('Settings', { id: SETTINGS_ROW, data: 'not settings' });
+      vi.spyOn(engine, 'upsert').mockImplementation(() => { throw new Error('the disk is full'); });
+      expect(() => found!()).not.toThrow();
+      vi.restoreAllMocks();
+    });
+
+    it('still tells them when putting the settings back fails', () => {
+      const { engine, runtime, told, stop } = running();
+      runtime.services.settings.getAll();
+      engine.upsert('Settings', { id: SETTINGS_ROW, data: 'not settings' });
+      const failing = vi.spyOn(engine, 'upsert').mockImplementation(() => { throw new Error('the disk is full'); });
+      expect(() => runtime.dataChangedElsewhere()).toThrow('the disk is full');
+      expect(told).toEqual(['watches', 'host/bus DATA_CHANGED_ELSEWHERE']);
+      failing.mockRestore();
+      stop();
+    });
+  });
+
   it('refuses overlapping resets and imports before either can touch the store', async () => {
     const { runHistory, reset, finish } = blockedHistory();
     const store = { reset: vi.fn() } as unknown as EarsDatabase;

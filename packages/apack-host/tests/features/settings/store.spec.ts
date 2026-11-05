@@ -34,6 +34,61 @@ beforeEach(() => {
 });
 const rowData = () => untypedQuery.ids(SETTINGS_ID).pickOne(['data'])?.data;
 
+describe('a row written past the store', () => {
+  const written = (limit: unknown) => untypedUpsert(SETTINGS_ENTITY, { id: SETTINGS_ID, data: { features: { [THREADS]: { limit } } } });
+
+  it('is taken when it is valid', () => {
+    written(7);
+    expect(store.adoptStored()).toEqual([]);
+    expect(store.get(feature)).toEqual({ limit: 7, sort: 'newest' });
+  });
+
+  it('is refused and replaced by the last valid one, without entering recovery', () => {
+    store.set(feature, ['limit'], 5);
+    written('many');
+    expect(store.adoptStored().length).toBeGreaterThan(0);
+    expect(store.getRecovery()).toBeUndefined();
+    expect(store.get(feature)).toEqual({ limit: 5, sort: 'newest' });
+    expect(rowData()).toEqual({ features: { [THREADS]: { limit: 5 } } });
+  });
+
+  it('tells subscribers when it changed the settings, and not when it changed nothing', () => {
+    store.getAll();
+    const changes: string[] = [];
+    store.onChange((change) => changes.push(change));
+    expect(store.adoptStored()).toEqual([]);
+    expect(changes, 'nothing moved').toEqual([]);
+    written(7);
+    store.adoptStored();
+    expect(changes).toEqual(['written']);
+    written('many');
+    store.adoptStored();
+    expect(changes, 'refused, so nothing moved').toEqual(['written']);
+  });
+
+  it('leaves reads on the last valid settings before anything has been told of it', () => {
+    store.set(feature, ['limit'], 5);
+    written('many');
+    expect(store.get(feature)).toEqual({ limit: 5, sort: 'newest' });
+    expect(store.getSnapshot().status).toBe('ready');
+    expect(store.getRecovery()).toBeUndefined();
+    expect(() => store.set(feature, ['sort'], 'oldest'), 'a write is refused, as over any invalid row').toThrow(SettingsRefusedError);
+  });
+
+  it('still throws over an invalid row when no valid one was ever read, which is for boot to recover from', () => {
+    written('many');
+    expect(() => store.get(feature)).toThrow(SettingsRefusedError);
+  });
+
+  it('is the last valid one once it has been taken', () => {
+    written(7);
+    store.adoptStored();
+    written('many');
+    store.adoptStored();
+    expect(store.get(feature)).toEqual({ limit: 7, sort: 'newest' });
+  });
+});
+
 describe('definitions and explicit choices', () => {
   it('reads all three owners without creating a row', () => {
     expect(store.getOverrides()).toEqual({});
