@@ -44,6 +44,8 @@ import { stampFor, STAMP_DIR, unitFor } from './lib/chain-stamps.ts';
 import { evidenceLine, openRunEvidence, pruneRunEvidence, type RunEvidence } from './lib/chain-evidence.ts';
 import { CHAIN_FLAGS, chainHelp } from './lib/chain-flags.ts';
 import { CHAIN_WAIT_MS, ChainLockHeld, chainInvocation, holdChainLock } from './lib/chain-lock.ts';
+import { expensiveSteps, MachineLockRefused } from './lib/machine-lock.ts';
+import { deadlinesNote } from './lib/chain-evidence.ts';
 import type { ExclusiveLock } from '@apackdev/host/exclusive-lock';
 import { timeoutMsFor, timedOutBecause, type TimeoutClass } from './lib/step-timeouts.ts';
 import { box } from './lib/core-budget.ts';
@@ -533,6 +535,10 @@ async function main(): Promise<void> {
   const outcome = await schedule({
     steps,
     budget,
+    admission: expensiveSteps({
+      what: `${chainInvocation()} in ${REPO_ROOT}`,
+      onWait: (holder) => console.log(`waiting for another chain's expensive steps, running what else it can:\n  ${holder}`),
+    }),
     skip: (step) => {
       const why = staleReason(step, dispatchSweep);
       if (!all && step.neverCachedBecause === undefined && why === null) {
@@ -557,6 +563,8 @@ async function main(): Promise<void> {
       // that returned non-zero, and which it was is the first thing you need to know.
       const verdict = result.code === 0 ? 'ok' : result.timedOut ? 'TIMEOUT' : 'FAIL';
       console.log(`${verdict.padStart(7)} ${marker(needsApp(step))} ${step.name.padEnd(STEP_NAME_WIDTH)} ${secs(result.ms).padStart(6)}  ${wrapAt(REASON_COLUMN, briefly(reasons.get(step.name) ?? '', declaredIn(step.name)))}`.trimEnd());
+      const deadlines = deadlinesNote(result);
+      if (deadlines) console.log(`${' '.repeat(TIME_COLUMN)}${deadlines}: read that before an assertion`);
       // So whoever profiles a suite next has its slow tests without instrumenting it
       // In the step's own time column, so every time on the screen lines up and these read as its contents
       for (const slow of slowestTests(result.output)) {
@@ -580,6 +588,11 @@ async function main(): Promise<void> {
 
   // A step whose runner threw never produced a Result, so it is reported from the throw itself
   for (const { step, error } of outcome.threw) {
+    // A lock this chain won't wait for says what to do about it, and isn't a bug
+    if (error instanceof MachineLockRefused) {
+      console.log(`\n${'='.repeat(72)}\n${step} didn't start: ${error.message}\n${'='.repeat(72)}`);
+      continue;
+    }
     const threw = steps.find((candidate) => candidate.name === step);
     console.log(`${'ERROR'.padStart(7)} ${marker(threw !== undefined && needsApp(threw))} ${step.padEnd(STEP_NAME_WIDTH)} ${' '.repeat(6)}  the chain could not run it`);
     console.log(`\n${'='.repeat(72)}\n${step}: the runner threw, which is a bug in the chain rather than a failing check\n${'='.repeat(72)}\n${error instanceof Error ? (error.stack ?? error.message) : String(error)}`);

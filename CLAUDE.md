@@ -183,7 +183,7 @@ fast half.
 For this host's shared external Docker storage and relocation checks, see the
 [Docker storage guide](docs/references/guides/docker-storage.md).
 `test:linux` limits each run's entire container to 6 GiB RAM, no additional swap and two CPUs,
-including installation, builds and subprocesses. Coordinate one expensive run across worktrees;
+including installation, builds and subprocesses. Coordinate one expensive run across worktrees: the chain enforces it for the steps it marks `expensive`, where a second chain runs what else it can and says who it is waiting for (`scripts/lib/machine-lock.ts`);
 separate containers each receive their own allowance. These limits do not cover Docker image builds
 or commands run directly on the Mac. Use `npm run test:linux -- npm run test:integration` when the
 integration pool needs this resource boundary; do not retry an out-of-memory run automatically.
