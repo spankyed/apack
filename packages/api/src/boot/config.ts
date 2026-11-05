@@ -22,6 +22,17 @@ export function apiToken(): string {
 /** Whether the API made up its own token (nobody passed one), so only its token file tells clients what it is */
 export const apiTokenIsOwn = (): boolean => !process.env.APACK_API_TOKEN;
 
+let ownDataChangedToken: string | undefined;
+
+/**
+ * The token `POST /db/changed-elsewhere` takes, made up by each API process and good for nothing else. It is apart from
+ * the API token so that it can sit in a file on every run: anything able to read that file can ask for a needless
+ * refresh, where the API token would hand it the whole API.
+ */
+export function dataChangedToken(): string {
+  return ownDataChangedToken ??= randomBytes(32).toString('base64url');
+}
+
 /** Whether `given` is the API token, compared in constant time */
 export function isApiToken(given: string | null | undefined, token = apiToken()): boolean {
   if (!given) return false;

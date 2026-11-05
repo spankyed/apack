@@ -10,9 +10,9 @@ const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'api-dev-reload-'));
 process.env.APACK_ENV = 'test';
 process.env.APACK_USER_DATA_DIR = dataDir;
 process.env.APACK_API_TOKEN = 'the-run-token';
-const { API_PROTOCOL, acceptsConnection, devRequestRefusal, localToolRefusal, publishApiFiles } = await import('../../src/transport/websocket.ts');
+const { API_PROTOCOL, acceptsConnection, dataChangedRefusal, devRequestRefusal, publishApiFiles } = await import('../../src/transport/websocket.ts');
 const { API_HOST } = await import('@apackdev/sdk/utils/pure');
-const { apiToken, apiTokenIsOwn, isApiToken } = await import('../../src/boot/config.ts');
+const { apiToken, apiTokenIsOwn, dataChangedToken, isApiToken } = await import('../../src/boot/config.ts');
 const { resolveAppEnvironment } = await import('@apackdev/sdk/env');
 const { readApiEndpoint } = await import('@apackdev/host/process-liveness');
 const { API_TOKEN_HEADER } = await import('@apackdev/sdk/utils/pure');
@@ -87,13 +87,21 @@ describe('POST /dev/reload', () => {
 });
 
 describe('POST /db/changed-elsewhere', () => {
-  it('is taken with the token, by any app', () => {
-    expect(localToolRefusal(withToken(TOKEN), TOKEN)).toBeNull();
+  it('is taken with its own token', () => {
+    expect(dataChangedRefusal(withToken(dataChangedToken()))).toBeNull();
   });
 
-  it('is refused without the token, or with another', () => {
-    expect(localToolRefusal({}, TOKEN)).toMatch(/token is missing or wrong/);
-    expect(localToolRefusal(withToken('guess'), TOKEN)).toMatch(/token is missing or wrong/);
+  it('is refused without it, or with another, the API token among them', () => {
+    expect(dataChangedRefusal({})).toMatch(/token is missing or wrong/);
+    expect(dataChangedRefusal(withToken('guess'))).toMatch(/token is missing or wrong/);
+    expect(dataChangedRefusal(withToken(apiToken()))).toMatch(/token is missing or wrong/);
+  });
+
+  it('has a token that opens nothing else', () => {
+    expect(dataChangedToken()).not.toBe(apiToken());
+    expect(isApiToken(dataChangedToken())).toBe(false);
+    expect(devRequestRefusal(withToken(dataChangedToken()), 'development')).toMatch(/token is missing or wrong/);
+    expect(acceptsConnection(`apack, apack-token.${dataChangedToken()}`, apiToken())).toBe(false);
   });
 });
 
@@ -102,8 +110,8 @@ it('listens on loopback only', () => {
 });
 
 describe('the files the API publishes', () => {
-  const { apiPortFile, apiTokenFile } = resolveAppEnvironment();
-  const clear = () => { for (const file of [apiPortFile, apiTokenFile]) fs.rmSync(file, { force: true }); };
+  const { apiPortFile, apiTokenFile, dataChangedTokenFile } = resolveAppEnvironment();
+  const clear = () => { for (const file of [apiPortFile, apiTokenFile, dataChangedTokenFile]) fs.rmSync(file, { force: true }); };
 
   it("publishes its port for every run, so a local tool can tell an app is running on the data dir", () => {
     clear();
@@ -120,9 +128,11 @@ describe('the files the API publishes', () => {
     expect(readApiEndpoint(apiPortFile)).toEqual({ port: 4321, pid: process.pid });
     // Only the user reads it, whatever the data dir's own permissions are
     expect(fs.statSync(apiPortFile).mode & 0o777).toBe(0o600);
-    // The token too, for `apack db` to say it committed beside this app; only the user reads that either
-    expect(fs.readFileSync(apiTokenFile, 'utf-8')).toBe(TOKEN);
-    expect(fs.statSync(apiTokenFile).mode & 0o777).toBe(0o600);
+    // So does the token `apack db` says it committed with
+    expect(fs.readFileSync(dataChangedTokenFile, 'utf-8')).toBe(dataChangedToken());
+    expect(fs.statSync(dataChangedTokenFile).mode & 0o777).toBe(0o600);
+    // The API token stays out of the data dir: no local tool needs it there
+    expect(fs.existsSync(apiTokenFile)).toBe(false);
   });
 
   it('publishes the token too for a development app, and for one that made up its own', () => {

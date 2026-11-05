@@ -492,7 +492,7 @@ describe('apack db exec', () => {
       await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
       const { port } = server.address() as AddressInfo;
       fs.writeFileSync(path.join(_appDirOf(dir), 'api-port'), JSON.stringify({ port, pid: process.pid }));
-      fs.writeFileSync(path.join(_appDirOf(dir), 'api-token'), 'the-token');
+      fs.writeFileSync(path.join(_appDirOf(dir), 'data-changed-token'), 'the-token');
       return asked;
     }
 

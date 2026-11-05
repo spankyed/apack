@@ -31,17 +31,17 @@ export interface AppPlace {
 }
 
 /** The running app's API: its URL and the token it requires, from the files the API writes */
-function findAppApi(place: AppPlace): { api: { url: string; token: string } } | { problem: string } {
-  const { apiPortFile, apiTokenFile } = resolveAppEnvironment(place);
+function findAppApi(place: AppPlace, tokenFile: 'apiTokenFile' | 'dataChangedTokenFile'): { api: { url: string; token: string } } | { problem: string } {
+  const { apiPortFile, [tokenFile]: file } = resolveAppEnvironment(place);
   const endpoint = readApiEndpoint(apiPortFile);
   if (!endpoint) return { problem: `no running ${place.env} app in ${apiPortFile}` };
   let token: string;
   try {
-    token = fs.readFileSync(apiTokenFile, 'utf-8').trim();
+    token = fs.readFileSync(file, 'utf-8').trim();
   } catch (err) {
-    return { problem: `couldn't read ${apiTokenFile}: ${errorMessage(err)}` };
+    return { problem: `couldn't read ${file}: ${errorMessage(err)}` };
   }
-  if (!token) return { problem: `${apiTokenFile} is empty` };
+  if (!token) return { problem: `${file} is empty` };
   return { api: { url: `http://${API_HOST}:${endpoint.port}`, token } };
 }
 
@@ -61,9 +61,9 @@ export type DevDelivery =
   /** Nothing answered on the port the app published */
   | { status: 'unreachable'; detail: string };
 
-/** Posts one request to the running app's API, with its token. */
-async function appRequest(endpoint: string, body: object, place: AppPlace): Promise<DevDelivery> {
-  const found = findAppApi(place);
+/** Posts one request to the running app's API, with the token from `tokenFile`. */
+async function appRequest(endpoint: string, body: object, place: AppPlace, tokenFile: 'apiTokenFile' | 'dataChangedTokenFile' = 'apiTokenFile'): Promise<DevDelivery> {
+  const found = findAppApi(place, tokenFile);
   if ('problem' in found) return { status: 'not-running', detail: found.problem };
   try {
     const res = await fetch(`${found.api.url}${endpoint}`, {
@@ -94,5 +94,5 @@ export function installPackInApp(root: string, place: AppPlace = { env: 'develop
 
 /** Tells the running app that this process committed to its database, which it can't otherwise hear. */
 export function tellAppDataChanged(place: AppPlace): Promise<DevDelivery> {
-  return appRequest('/db/changed-elsewhere', {}, place);
+  return appRequest('/db/changed-elsewhere', {}, place, 'dataChangedTokenFile');
 }

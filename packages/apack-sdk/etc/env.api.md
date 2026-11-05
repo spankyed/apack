@@ -25,6 +25,7 @@ export interface AppEnvironment {
     apiTokenFile: string;
     appDir: string;
     appName: string;
+    dataChangedTokenFile: string;
     env: AppEnv;
     installedPacksFile: string;
     // (undocumented)
