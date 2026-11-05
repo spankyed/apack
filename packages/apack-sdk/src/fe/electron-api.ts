@@ -71,6 +71,8 @@ export interface _HostBridge {
     notifyZoomChanged: (factor: number) => void;
   };
   apiStatus: {
+    /** Authenticated app bootstrap waits here before creating its transport. */
+    whenReady: () => Promise<{ port: number; startupId: string }>;
     getStatus: () => Promise<{
       running: boolean;
       port?: number;

@@ -89,6 +89,7 @@ const zoom = {
 
 // API status events (backend crash/restart notifications from main process)
 const apiStatus = {
+  whenReady: () => ipcRenderer.invoke('api:when-ready') as Promise<{ port: number; startupId: string }>,
   getStatus: () => ipcRenderer.invoke('api:get-status') as Promise<{
     running: boolean;
     port?: number;

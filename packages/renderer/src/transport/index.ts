@@ -32,7 +32,9 @@ function connect(port: number) {
   return { port, ws, client: createTRPCClient<AppRouter>({ links: [wsLink({ client: ws })] }) };
 }
 
-let connection = connect(initialPort);
+const ready = typeof window !== 'undefined' && window.electronAPI
+  ? await window.electronAPI.apiStatus.whenReady() : undefined;
+let connection = connect(ready?.port ?? initialPort);
 
 /**
  * The API client. A proxy, because the client is rebuilt when the API restarts on a different

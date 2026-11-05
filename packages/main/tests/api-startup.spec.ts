@@ -62,3 +62,22 @@ it("resolves the window's wait when a launch after a crash becomes ready", async
   api.handleServerReady(3000);
   expect(await outcome).toBe('ready');
 });
+
+it('releases the readiness deadline when startup succeeds', async () => {
+  const api = server();
+  const ready = api.waitForReady(1_000);
+  expect(vi.getTimerCount()).toBe(1);
+  api.handleServerReady(3000);
+  await expect(ready).resolves.toBeUndefined();
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('bounds a readiness wait without changing the underlying startup', async () => {
+  const api = server();
+  const outcome = api.waitForReady(1_000).catch((error: Error) => error.message);
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(await outcome).toContain('1000ms');
+  api.handleServerReady(3000);
+  await expect(api.waitForReady()).resolves.toBeUndefined();
+  expect(vi.getTimerCount()).toBe(0);
+});

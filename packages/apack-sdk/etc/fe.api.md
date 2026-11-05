@@ -287,6 +287,10 @@ export interface _HostBridge {
     apiPort: number;
     // (undocumented)
     apiStatus: {
+        whenReady: () => Promise<{
+            port: number;
+            startupId: string;
+        }>;
         getStatus: () => Promise<{
             running: boolean;
             port?: number;
