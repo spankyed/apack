@@ -74,7 +74,7 @@ it('refuses parent submission during original park progress and restores it afte
 it('keeps the completed parent and retires its controls when the native agents screen changes session', async () => {
   const { prepared, owner, notice } = await fixture()
   try {
-    const continuation = { type: 'continued-in', sessionId: notice.sessionId, continuedInSessionId: '22222222-2222-4222-8222-222222222222', timestamp: '2026-10-30T06:23:31.038Z' }
+    const continuation = { type: 'continued-in', sessionId: notice.sessionId, continuedInSessionId: '22222222-2222-4222-8222-222222222222', timestamp: new Date().toISOString() }
     f.journal.mockResolvedValueOnce({ entries: [{ sessionId: notice.sessionId, row: continuation }], pending: false, problems: [] })
     await owner.readJournal()
     f.projection.sessionId = '33333333-3333-4333-8333-333333333333'
@@ -92,5 +92,22 @@ it('keeps the completed parent and retires its controls when the native agents s
     expect(owner.state).toMatchObject({ sessionId: notice.sessionId, continuation: { sessionId: notice.sessionId, continuedInSessionId: continuation.continuedInSessionId }, handoffPending: false, busy: false, tasks: [] })
     expect(owner.state.notice).toBeUndefined(); expect(owner.state.view).toBeUndefined()
     f.request.mockClear(); await owner.refreshMcpInput(); await owner.refreshNotice(); expect(f.request).not.toHaveBeenCalled()
+  } finally { await prepared.dispose() }
+})
+
+it('keeps a resumed owner live when its journal replays an earlier handoff and still admits a new handoff', async () => {
+  const { prepared, owner, notice } = await fixture()
+  try {
+    const marker = { type: 'continued-in', sessionId: notice.sessionId, continuedInSessionId: '22222222-2222-4222-8222-222222222222', timestamp: new Date(Date.now() - 60000).toISOString() }
+    f.journal.mockResolvedValueOnce({ entries: [{ sessionId: notice.sessionId, row: marker }], pending: false, problems: [] })
+    await owner.readJournal()
+    expect(owner.state.status).toBe('live')
+    expect(owner.state.continuation).toBeUndefined()
+    expect(owner.state.notice).toEqual(notice)
+    const fresh = { ...marker, continuedInSessionId: '33333333-3333-4333-8333-333333333333', timestamp: new Date().toISOString() }
+    f.journal.mockResolvedValueOnce({ entries: [{ sessionId: notice.sessionId, row: fresh }], pending: false, problems: [] })
+    await owner.readJournal()
+    expect(owner.state.continuation?.continuedInSessionId).toBe(fresh.continuedInSessionId)
+    expect(owner.state.notice).toBeUndefined()
   } finally { await prepared.dispose() }
 })

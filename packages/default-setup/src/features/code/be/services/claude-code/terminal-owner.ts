@@ -226,6 +226,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
     trace('launch')
     if (started || closed) throw new Error('Native terminal startup is no longer available')
     started = true
+    const launchedAt = Date.now()
     try {
       const args = ['--resume', options.sessionId, '--permission-mode', options.permissionMode, '--plugin-dir', bridge.pluginRoot]
       terminalEnv.BUN_OPTIONS = bridge.bunOptions
@@ -362,7 +363,8 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         const batch = await readJournal(bridge.transcripts, { final: closed })
         for (const entry of batch.entries) {
           const nextContinuation = parseClaudeNativeContinuation(entry.row, bridge.projection.sessionId)
-          if (nextContinuation && !continuation) {
+          // Replayed history describes an earlier owner; only a handoff from this launch retires this one.
+          if (nextContinuation && !continuation && Date.parse(nextContinuation.timestamp) >= launchedAt) {
             continuation = nextContinuation
             // The native agents screen owns later runtime state; this owner retains the
             // completed parent's identity and history until a separate attachment is chosen.
