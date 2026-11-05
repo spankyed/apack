@@ -54,7 +54,12 @@ class WindowManager implements AppModule {
       // this.#splashScreen.updateStatus('Waking Up Assistant');
     }
     
-    // Wait for API server to be ready before creating window
+    // Loading starts now; the renderer waits for authenticated API readiness before connecting.
+    const initialWindow = this.restoreOrCreateWindow(true).then(
+      window => ({ window, error: undefined }), error => ({ window: undefined, error }),
+    );
+
+    // Preserve the API startup failure dialog while the hidden renderer loads.
     if (this.#apiServer) {
       try {
         await this.#apiServer.waitForReady();
@@ -93,7 +98,8 @@ class WindowManager implements AppModule {
       // this.#splashScreen.updateStatus('Loading...');
     }
     
-    await this.restoreOrCreateWindow(true);
+    const loaded = await initialWindow;
+    if (loaded.error) throw loaded.error;
     app.on('second-instance', () => this.restoreOrCreateWindow(true));
     
     // On macOS, only create/restore window if there are no windows open
@@ -463,22 +469,24 @@ class WindowManager implements AppModule {
   }
 
   private waitForRendererReady(): Promise<void> {
-    return new Promise<void>((resolve) => {
-      const TIMEOUT = 15_000;
-
-      const onReady = () => {
+    return new Promise<void>((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let settled = false;
+      const finish = (error?: unknown) => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timer);
         ipcMain.removeListener('renderer:ready', onReady);
-        resolve();
+        if (error) reject(error); else resolve();
       };
-
-      const timer = setTimeout(() => {
-        console.warn('[MAIN] Renderer did not signal ready within timeout, showing window anyway');
-        ipcMain.removeListener('renderer:ready', onReady);
-        resolve();
-      }, TIMEOUT);
-
+      const onReady = () => finish();
       ipcMain.on('renderer:ready', onReady);
+      void (this.#apiServer?.waitForReady() ?? Promise.resolve()).then(() => {
+        if (!settled) timer = setTimeout(() => {
+          console.warn('[MAIN] Renderer did not signal ready within timeout, showing window anyway');
+          finish();
+        }, 15_000);
+      }, finish);
     });
   }
 
@@ -576,6 +584,8 @@ class WindowManager implements AppModule {
     let rendererReadyPromise: Promise<void> | undefined;
     if (isNewWindow) {
       rendererReadyPromise = this.waitForRendererReady();
+      // A failed API can reject while loadFile is still settling; the await below owns that failure.
+      void rendererReadyPromise.catch(() => {});
       window = await this.createWindow();
       await rendererReadyPromise;
     }
