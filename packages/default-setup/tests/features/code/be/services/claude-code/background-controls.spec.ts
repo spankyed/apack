@@ -54,3 +54,15 @@ it('discovers without a client, clears failed reads, and observes recovery and s
   expect(controls.value).toBeUndefined()
   controls.close()
 })
+
+it('reports one read failure per episode, strips native values and resets after recovery',async()=>{
+ vi.useFakeTimers();const diagnostic=vi.spyOn(console,'debug').mockImplementation(()=>{})
+ const request=vi.fn().mockResolvedValue({control:{kind:'sensitive-native-input'}})
+ const controls=createClaudeBackgroundControls({sessionId,transport:{request},changed:vi.fn()})
+ await vi.advanceTimersByTimeAsync(3000)
+ expect(diagnostic).toHaveBeenCalledOnce()
+ expect(JSON.stringify(diagnostic.mock.calls)).not.toContain('sensitive-native-input')
+ request.mockResolvedValue({control:null});await vi.advanceTimersByTimeAsync(1000)
+ request.mockRejectedValue(Error('Native plan projection unavailable'));await vi.advanceTimersByTimeAsync(2000)
+ expect(diagnostic).toHaveBeenCalledTimes(2);expect(controls.value).toBeUndefined();controls.close();diagnostic.mockRestore()
+})

@@ -1,6 +1,9 @@
+import { createLogger } from '@apackdev/sdk/logger'
 import { z } from 'zod'
 import type { ClaudeTerminalUiTransport } from './terminal-ui.ts'
 import { ClaudeNativeQuestionDialogSchema, ClaudeNativeBashDialogSchema, ClaudeNativeFileDialogSchema, ClaudeNativeWorkflowDialogSchema, ClaudeNativePlanDialogSchema, ClaudeNativeToolPermissionDialogSchema, ClaudeNativeGenericToolPermissionDialogSchema } from './terminal-dialogs.ts'
+
+const logger = createLogger('claude-background-controls')
 
 export const ClaudeBackgroundControlSchema = z.discriminatedUnion('kind', [
   z.object({kind: z.literal('question'), dialog: ClaudeNativeQuestionDialogSchema}),
@@ -29,6 +32,7 @@ export function createClaudeBackgroundControls(options: {
 }): ClaudeBackgroundControls {
   const listeners = new Set<() => void>()
   let epoch = 0
+  let reportedFailure = false
   let closed = false, reading = false
   let control: ClaudeBackgroundControl | undefined
   function replace(next: ClaudeBackgroundControl | undefined) {
@@ -46,10 +50,19 @@ export function createClaudeBackgroundControls(options: {
       if (closed || readEpoch !== epoch) return
       const next = result.control === null ? undefined : ClaudeBackgroundControlSchema.parse(result.control)
       if (next && next.dialog.sessionId !== options.sessionId) throw new Error('Background control owner changed')
+      reportedFailure = false
       replace(next)
-    } catch {
+    } catch (error) {
       // A failed read cannot leave an actionable stale card in any window.
-      if (!closed && readEpoch === epoch) replace(undefined)
+      if (!closed && readEpoch === epoch) {
+        replace(undefined)
+        if (!reportedFailure) {
+          reportedFailure = true
+          // A schema failure needs field paths, never the native prompt or submitted values.
+          const problem = error instanceof z.ZodError ? error.issues.map(issue => ({path: issue.path, code: issue.code})) : error instanceof Error ? error.message.slice(0, 1000) : 'Unknown control read failure'
+          logger.debug('Original child control read failed', {sessionId: options.sessionId, problem})
+        }
+      }
     } finally { reading = false }
   }
   const timer = setInterval(() => { void refresh() }, 1000)
