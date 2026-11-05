@@ -19,6 +19,8 @@ gh workflow run ci.yml --ref <candidate-branch> -f startup_performance=true -f p
 This runs the same maintained comparison command with recording disabled, five warmups and twenty
 measured trials per revision in balanced order. Both checkouts have separate dependencies and profiles;
 their native pins must match. Reports and failures are uploaded even when the comparison fails.
+After the disabled-mode comparison, each revision gets a separate detailed diagnostic capture; those
+single-trial profiles attribute work and are excluded from the timing comparison.
 Its machine identity is specific to the CI run; results do not certify external-drive performance.
 
 Build with the normal repository commands, then run from the checkout root:

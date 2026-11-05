@@ -50,6 +50,19 @@ jobs:
           --candidate "$GITHUB_WORKSPACE"
           --scenario populated-startup --mode disabled --trials 20
           --output .apack/performance/startup-revision-comparison
+      - name: Profile baseline startup outside the timing comparison
+        working-directory: ${{ runner.temp }}/startup-baseline.noindex
+        env:
+          APACK_PERFORMANCE_MODE: detailed
+          APACK_PERFORMANCE_TRIALS: 1
+          APACK_PERFORMANCE_RUN_OUTPUT: ${{ github.workspace }}/.apack/performance/startup-diagnostic/baseline
+        run: node scripts/with-source.mjs tsx tests/performance/startup-run.ts
+      - name: Profile candidate startup outside the timing comparison
+        env:
+          APACK_PERFORMANCE_MODE: detailed
+          APACK_PERFORMANCE_TRIALS: 1
+          APACK_PERFORMANCE_RUN_OUTPUT: ${{ github.workspace }}/.apack/performance/startup-diagnostic/candidate
+        run: node scripts/with-source.mjs tsx tests/performance/startup-run.ts
       - name: Preserve reports and failures
         if: always()
         uses: actions/upload-artifact@v4
@@ -57,6 +70,7 @@ jobs:
           name: startup-revision-comparison-${{ github.run_id }}
           path: |
             .apack/performance/startup-revision-comparison
+            .apack/performance/startup-diagnostic
             node_modules/.cache/apack-chain/runs
             ${{ runner.temp }}/startup-baseline.noindex/node_modules/.cache/apack-chain/runs
           if-no-files-found: warn
