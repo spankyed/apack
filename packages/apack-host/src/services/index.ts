@@ -19,6 +19,13 @@ import { createRunHistory } from './run-history.ts';
 
 const logger = createLogger('host-runtime');
 
+/**
+ * How long a refresh after another process's commit waits for more: a refresh blocks the API for hundreds of milliseconds,
+ * and a shell loop or a repl session tells once per command. Measured 2026-11-05 on the built app at load 13-30: a POST of
+ * the route took 150-1200 ms, at 1 note as at 11,000.
+ */
+const ELSEWHERE_REFRESH_MS = 250;
+
 export interface HostRuntimeOptions {
   /** The app's database, which appData works on */
   database: EarsDatabase;
@@ -43,8 +50,8 @@ export interface HostRuntimeOptions {
 /** The running app as the SDK reaches it, which the composition root binds with `bindHost`, and what only that root calls */
 export type AppRuntime = HostRuntime & {
   /**
-   * A local tool committed to the database from its own process: every view reads it again and every system is told.
-   * Answers the problems of a stored settings row it refused.
+   * A local tool committed to the database from its own process. Answers at once the problems of a stored settings row it
+   * refused; every view reads the data again and every system is told once a burst of these has passed.
    */
   dataChangedElsewhere(): ReturnType<SettingsStore['adoptStored']>;
 };
@@ -58,12 +65,20 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
   const settings = createSettingsService(settingsStore);
   packs.catalog.setSettingsAdmission(candidate => compileSettingsCatalog(candidate).validate(settings.getOverrides()));
   const runHistoryService = createRunHistory(runHistory.engine);
+  let refreshing: ReturnType<typeof setTimeout> | undefined;
+  const refreshAfterBurst = () => {
+    refreshing ??= setTimeout(() => {
+      refreshing = undefined;
+      engine.admin.changedElsewhere();
+      transport.rootEvents.emitIncoming({ to: HOST.bus, event: { type: 'DATA_CHANGED_ELSEWHERE' } });
+    }, ELSEWHERE_REFRESH_MS);
+    refreshing.unref?.();
+  };
   const dataChangedElsewhere = () => {
     try {
       return settingsStore.adoptStored();
     } finally {
-      engine.admin.changedElsewhere();
-      transport.rootEvents.emitIncoming({ to: HOST.bus, event: { type: 'DATA_CHANGED_ELSEWHERE' } });
+      refreshAfterBurst();
     }
   };
   // A tool that was killed after committing told nobody: the app's own next commit finds out

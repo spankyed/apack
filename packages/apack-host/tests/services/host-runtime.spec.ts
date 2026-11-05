@@ -5,7 +5,7 @@ import { secretRedaction } from '../../src/secrets/redaction.ts';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EARS, EarsDatabase } from '@apackdev/ears';
 import { _bindEars } from '@apackdev/sdk/ears';
 import { _createTestEngine, _openTestRunHistory, _openTestDatabase, testRootEvents } from '@apackdev/sdk/testing';
@@ -68,19 +68,30 @@ describe('createHostRuntime', () => {
       return { engine, runtime, told, stop: () => { stopHearing(); stopWatching.mockRestore(); } };
     }
 
-    it('reruns every watch and then tells the bus', () => {
+    beforeEach(() => { vi.useFakeTimers(); });
+    afterEach(() => { vi.useRealTimers(); });
+    const refreshed = ['watches', 'host/bus DATA_CHANGED_ELSEWHERE'];
+
+    it('reruns every watch and then tells the bus, once for a burst', () => {
       const { runtime, told, stop } = running();
       expect(runtime.dataChangedElsewhere()).toEqual([]);
-      expect(told).toEqual(['watches', 'host/bus DATA_CHANGED_ELSEWHERE']);
+      expect(runtime.dataChangedElsewhere()).toEqual([]);
+      expect(told, 'not until the burst has passed').toEqual([]);
+      vi.advanceTimersByTime(250);
+      expect(told).toEqual(refreshed);
+      runtime.dataChangedElsewhere();
+      vi.advanceTimersByTime(250);
+      expect(told, 'a later one refreshes again').toEqual([...refreshed, ...refreshed]);
       stop();
     });
 
-    it('answers the problems of a settings row it refused, and tells them all the same', () => {
+    it('answers the problems of a settings row it refused at once, and refreshes all the same', () => {
       const { engine, runtime, told, stop } = running();
       runtime.services.settings.getAll();
       engine.upsert('Settings', { id: SETTINGS_ROW, data: 'not settings' });
       expect(runtime.dataChangedElsewhere().length).toBeGreaterThan(0);
-      expect(told).toEqual(['watches', 'host/bus DATA_CHANGED_ELSEWHERE']);
+      vi.advanceTimersByTime(250);
+      expect(told).toEqual(refreshed);
       stop();
     });
 
@@ -99,13 +110,14 @@ describe('createHostRuntime', () => {
       vi.restoreAllMocks();
     });
 
-    it('still tells them when putting the settings back fails', () => {
+    it('still refreshes when putting the settings back fails', () => {
       const { engine, runtime, told, stop } = running();
       runtime.services.settings.getAll();
       engine.upsert('Settings', { id: SETTINGS_ROW, data: 'not settings' });
       const failing = vi.spyOn(engine, 'upsert').mockImplementation(() => { throw new Error('the disk is full'); });
       expect(() => runtime.dataChangedElsewhere()).toThrow('the disk is full');
-      expect(told).toEqual(['watches', 'host/bus DATA_CHANGED_ELSEWHERE']);
+      vi.advanceTimersByTime(250);
+      expect(told).toEqual(refreshed);
       failing.mockRestore();
       stop();
     });
