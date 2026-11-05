@@ -7,6 +7,7 @@
       </div>
       <div class="background-session__controls">
         <button v-if="canReply && panel.session?.pid && ['working','blocked'].includes(panel.session.state)" type="button" :aria-label="requestLabel" :title="requestLabel" :aria-expanded="replyOpen" :disabled="panel.pending" @click="replyOpen = !replyOpen"><MessageSquare aria-hidden="true" /><span class="background-session__control-label">{{ requestLabel }}</span></button>
+        <button v-if="panel.desktop && panel.turn && !panel.turn.cancelled" type="button" aria-label="Interrupt response" title="Interrupt response" :disabled="panel.pending" @click="operate(panel.target, {operation: 'interrupt', target: panel.desktop, turnId: panel.turn.id})"><Pause aria-hidden="true" /><span class="background-session__control-label">Interrupt response</span></button>
         <button v-if="panel.session" type="button" aria-label="Open session" title="Open session" :disabled="panel.pending || attached" @click="openSession(panel.target, panel.session.id)"><Terminal aria-hidden="true" /><span class="background-session__control-label">Open session</span></button>
         <button type="button" aria-label="Refresh status" title="Refresh status" :disabled="panel.pending" @click="operate(panel.target, { operation: 'refresh' })"><RefreshCw aria-hidden="true" /><span class="background-session__control-label">{{ panel.pending && panel.operation === 'refresh' ? 'Checking…' : 'Refresh status' }}</span></button>
         <button v-if="panel.session?.pid && ['working', 'blocked'].includes(panel.session.state)" type="button" class="background-session__stop" aria-label="Stop background session" title="Stop background session" :disabled="panel.pending" @click="operate(panel.target, { operation: 'stop', id: panel.session.id, pid: panel.session.pid })"><Square aria-hidden="true" /><span class="background-session__control-label">Stop background session</span></button>
@@ -37,17 +38,17 @@
 </template>
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, useId, useSlots, watch } from 'vue'
-import { MessageSquare, Terminal, RefreshCw, Square } from 'lucide-vue-next'
+import { MessageSquare, Terminal, RefreshCw, Square, Pause } from 'lucide-vue-next'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 import { surfaceStorage } from '@apackdev/sdk/fe'
 import { ref as featureRef } from '#generated/ref.ts'
 import { claudeWindowStorageKey } from './native-window-storage.ts'
 import type { ClaudeNativeContinuation } from '#features/code/be/services/claude-code/terminal-session.ts'
-import type { ClaudeBackgroundStatus, ClaudeBackgroundSessionRequest, ClaudeBackgroundReplyRequest, ClaudeBackgroundSession } from '#features/code/common/native-background.ts'
+import type { ClaudeBackgroundStatus, ClaudeBackgroundSessionRequest, ClaudeBackgroundReplyRequest, ClaudeBackgroundTurnInterruptRequest, ClaudeBackgroundSession } from '#features/code/common/native-background.ts'
 import type { ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'
 import type { ClaudeBackgroundSessionState } from '#features/threads/be/claude-terminal-views.ts'
 const props = defineProps<{ continuation: ClaudeNativeContinuation; state?: ClaudeBackgroundSessionState; info?: ClaudeBackgroundStatus; attached?: boolean; canReply?: boolean }>()
-const emit = defineEmits<{ open: [target: ClaudeNativeContinuation, jobId: string]; operate: [target: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest]; composing: [value: boolean] }>()
+const emit = defineEmits<{ open: [target: ClaudeNativeContinuation, jobId: string]; operate: [target: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest | ClaudeBackgroundTurnInterruptRequest]; composing: [value: boolean] }>()
 const draftSnapshot = ref<ClaudeAgentDraftSnapshot>()
 const draft = ref(''), replyOpen = ref(false), replyInputId = useId()
 const slots = useSlots()
@@ -103,11 +104,12 @@ function openSession(target: ClaudeNativeContinuation, jobId: string) {
     || props.continuation.sessionId !== target.sessionId || props.continuation.continuedInSessionId !== target.continuedInSessionId) return
   emit('open', target, jobId)
 }
-function operate(target: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest) {
+function operate(target: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest | ClaudeBackgroundTurnInterruptRequest) {
   if (props.continuation.sessionId !== target.sessionId || props.continuation.continuedInSessionId !== target.continuedInSessionId) return
   const current = props.state?.sessionId === target.sessionId && props.state.continuedInSessionId === target.continuedInSessionId ? props.state : undefined
   if (current?.status === 'pending') return
   if ((request.operation === 'stop' || request.operation === 'reply') && (!current?.session || current.session.id !== request.id || current.session.pid !== request.pid || !['working', 'blocked'].includes(current.session.state))) return
+  if (request.operation === 'interrupt' && (!current?.desktop || JSON.stringify(current.desktop) !== JSON.stringify(request.target) || current.turn?.id !== request.turnId || current.turn.cancelled)) return
   emit('operate', target, request)
 }
 const panels = computed(() => {
@@ -118,7 +120,7 @@ const panels = computed(() => {
     : !session.pid ? 'Last reported: awaiting a background worker' : session.state === 'blocked' || session.status === 'waiting' ? 'Last reported: needs input' : session.status === 'busy' ? 'Last reported: working in background' : 'Last reported: running in background'
     : pending || !state ? 'Checking background session…' : 'Background session is not listed'
   const info = session?.pid && ['working','blocked'].includes(session.state) && props.info?.sessionId === target.continuedInSessionId && props.info.jobId === session.id && props.info.pid === session.pid ? props.info : undefined
-  return [{ key: JSON.stringify([target.sessionId, target.continuedInSessionId, session?.id, session?.pid]), target, session, info, pending, operation: state?.operation, problem: state?.problem, label }]
+  return [{ key: JSON.stringify([target.sessionId, target.continuedInSessionId, session?.id, session?.pid]), target, session, info, desktop: state?.desktop, turn: state?.turn, pending, operation: state?.operation, problem: state?.problem, label }]
 })
 </script>
 <style scoped>

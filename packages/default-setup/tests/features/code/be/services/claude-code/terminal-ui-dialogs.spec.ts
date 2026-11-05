@@ -15,7 +15,7 @@ function fixture() {
   const binding = { surface: 'terminal', toolContext: () => context }
   let disabled = false
   const reconnect = vi.fn(async (_name: string) => ({client:{type:'connected'}})), toggle = vi.fn(async (name: string) => {disabled = !disabled;const result={name,type:disabled?'disabled':'connected'};appState.mcp.clients=[result];return result}), isDisabled = vi.fn(() => disabled)
-  const native = { mcpControls: {Mot: () => reconnect, urs: () => toggle, Z_e: () => isDisabled}, mcp: { Q_n: vi.fn((_input: unknown) => [{name:'research',status:'connected'}]) }, rename: { Qar: vi.fn(async () => ({ newName: 'Native title', requestedName: 'Requested', isGenerated: false, message: 'Renamed' })), G8s: vi.fn(() => 'Original native reminder') }, questionOptions: { q: () => nativeSessionId, Sye: vi.fn(), x$: vi.fn(), s3: vi.fn(), EN: vi.fn() }, paths: { ce: () => '/workspace', Ar: () => null }, questionText: { VL: (value: string) => value.includes('UNSAFE') }, runtime: { ty: () => true, Cf: () => '/private/original.jsonl', Ae: vi.fn((value: unknown) => value) }, planConsent: { kTe: (mode: string) => ({ applies: [{ type: 'setMode', mode, destination: 'session' }] }), Y_n: () => ({ applies: [] }), hv: () => true }, planAuto: { yp: () => false, Fx: vi.fn() }, planNormalize: { nV: (value: unknown) => value, vSe: (value: unknown) => value }, planTool: { Cxn: () => '' }, planTeams: { is: () => false }, planProactivity: { BG: () => false } }
+  const native = { mcpControls: {Mot: () => reconnect, urs: () => toggle, Z_e: () => isDisabled}, mcp: { Q_n: vi.fn((_input: unknown) => [{name:'research',status:'connected'}]) }, rename: { Qar: vi.fn(async () => ({ newName: 'Native title', requestedName: 'Requested', isGenerated: false, message: 'Renamed' })), G8s: vi.fn(() => 'Original native reminder') }, questionOptions: { q: () => nativeSessionId, Sye: vi.fn(), x$: vi.fn(), s3: vi.fn(), EN: vi.fn() }, paths: { ce: () => '/workspace', Ar: () => null }, questionText: { VL: (value: string) => value.includes('UNSAFE') }, runtime: { lpe: () => null as {turnId:string;cancelled():boolean} | null, ty: () => true, Cf: () => '/private/original.jsonl', Ae: vi.fn((value: unknown) => value) }, planConsent: { kTe: (mode: string) => ({ applies: [{ type: 'setMode', mode, destination: 'session' }] }), Y_n: () => ({ applies: [] }), hv: () => true }, planAuto: { yp: () => false, Fx: vi.fn() }, planNormalize: { nV: (value: unknown) => value, vSe: (value: unknown) => value }, planTool: { Cxn: () => '' }, planTeams: { is: () => false }, planProactivity: { BG: () => false } }
 
   let feedback = ''
   const setter = (value: string) => { feedback = value; fileFiber.memoizedState.memoizedState = value }
@@ -225,9 +225,9 @@ it('reads only one supported original pending control without creating desktop c
  expect(result.control.kind).toBe('file')
  expect(result.control.dialog).toMatchObject({id:'dialog-1',toolName:'Read',input:{file_path:'/original'}})
  f.state.open.push({...f.item,id:'second'})
- expect(await f.control({subtype:'apack_pending_control'}, new AbortController())).toEqual({control:null})
+ expect(await f.control({subtype:'apack_pending_control'}, new AbortController())).toEqual({control:null,turn:null})
  f.state.open=[f.item];f.item.kind='__proto__'
- expect(await f.control({subtype:'apack_pending_control'}, new AbortController())).toEqual({control:null})
+ expect(await f.control({subtype:'apack_pending_control'}, new AbortController())).toEqual({control:null,turn:null})
  expect(f.answer).not.toHaveBeenCalled()
 })
 it('refuses a pending snapshot if the native session changes during its projection', async () => {
@@ -249,4 +249,16 @@ it('rejects a question only through its original current drawing, separately fro
  expect(f.answer).toHaveBeenCalledWith('dialog-1',{behavior:'deny'})
  await expect(deny()).rejects.toThrow('changed or expired')
  expect(f.answer).toHaveBeenCalledOnce()
+})
+
+it('publishes original turn identity alongside an empty pending-control list', async () => {
+ const f=fixture();f.state.open=[];f.native.runtime.lpe=()=>({turnId:'original-turn',cancelled:()=>false})
+ expect(await f.control({subtype:'apack_pending_control'},new AbortController())).toEqual({control:null,turn:{id:'original-turn',cancelled:false}})
+ expect(f.answer).not.toHaveBeenCalled()
+})
+it('refuses a control snapshot if its original turn changes during projection',async()=>{
+ const f=fixture(),one={turnId:'one',cancelled:()=>false},two={turnId:'two',cancelled:()=>false}
+ vi.spyOn(f.native.runtime,'lpe').mockReturnValueOnce(one).mockReturnValue(two)
+ await expect(f.control({subtype:'apack_pending_control'},new AbortController())).rejects.toThrow('Native turn changed')
+ expect(f.answer).not.toHaveBeenCalled()
 })

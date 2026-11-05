@@ -18,6 +18,8 @@ export type ClaudeBackgroundControl = z.infer<typeof ClaudeBackgroundControlSche
 export type ClaudeBackgroundApproval = Exclude<ClaudeBackgroundControl, {kind: 'question'}>
 export interface ClaudeBackgroundControls {
   readonly value: ClaudeBackgroundControl | undefined
+  readonly turn: {id: string; cancelled: boolean} | undefined
+  interrupt(turnId: string): Promise<{cancelled: boolean; ending?: boolean}>
   refresh(): Promise<void>
   subscribe(listener: () => void): () => void
   settled(id: string, revision: string): void
@@ -35,9 +37,11 @@ export function createClaudeBackgroundControls(options: {
   let reportedFailure = false
   let closed = false, reading = false
   let control: ClaudeBackgroundControl | undefined
-  function replace(next: ClaudeBackgroundControl | undefined) {
-    if (JSON.stringify(control) === JSON.stringify(next)) return
-    control = next
+  let turn: {id: string; cancelled: boolean} | undefined, interrupting = false
+  const turnSchema = z.object({id: z.string().min(1).max(256), cancelled: z.boolean()})
+  function replace(next: ClaudeBackgroundControl | undefined, nextTurn: typeof turn) {
+    if (JSON.stringify([control, turn]) === JSON.stringify([next, nextTurn])) return
+    control = next; turn = nextTurn
     options.changed()
     for (const listener of listeners) { try { listener() } catch { /* Isolate presentation clients. */ } }
   }
@@ -46,16 +50,17 @@ export function createClaudeBackgroundControls(options: {
     const readEpoch = epoch
     reading = true
     try {
-      const result = await options.transport.request({ subtype: 'apack_pending_control' }) as { control?: unknown }
+      const result = await options.transport.request({ subtype: 'apack_pending_control' }) as { control?: unknown; turn?: unknown }
       if (closed || readEpoch !== epoch) return
-      const next = result.control === null ? undefined : ClaudeBackgroundControlSchema.parse(result.control)
+      const nextTurn = turnSchema.nullable().parse(result.turn) ?? undefined
+      const next = nextTurn?.cancelled || result.control === null ? undefined : ClaudeBackgroundControlSchema.parse(result.control)
       if (next && next.dialog.sessionId !== options.sessionId) throw new Error('Background control owner changed')
       reportedFailure = false
-      replace(next)
+      replace(next, nextTurn)
     } catch (error) {
       // A failed read cannot leave an actionable stale card in any window.
       if (!closed && readEpoch === epoch) {
-        replace(undefined)
+        replace(undefined, undefined)
         if (!reportedFailure) {
           reportedFailure = true
           // A schema failure needs field paths, never the native prompt or submitted values.
@@ -70,9 +75,22 @@ export function createClaudeBackgroundControls(options: {
   void refresh()
   return {
     get value() { return closed ? undefined : control },
+    get turn() { return closed ? undefined : turn },
+    async interrupt(turnId: string) {
+      if (closed || interrupting || !turn || turn.id !== turnId || turn.cancelled) throw new Error('Original child turn changed or is already ending')
+      interrupting = true
+      try {
+        const result = z.object({cancelled: z.boolean(), ending: z.boolean().optional()}).parse(await options.transport.request({subtype: 'apack_abort_turn', session_id: options.sessionId, turn_id: turnId}))
+        if (closed) throw new Error('Original child owner retired before interruption completed')
+        if (!result.cancelled && result.ending !== true) throw new Error('Original child interruption was not confirmed')
+        // A late acknowledgement must not erase a newer turn's question.
+        if (turn?.id === turnId) { epoch++; replace(undefined, {id: turnId, cancelled: true}) }
+        return result
+      } finally { interrupting = false }
+    },
     refresh,
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener) } },
-    settled(id: string, revision: string) { if (control?.dialog.id === id && control.dialog.revision === revision) { epoch++; replace(undefined) } },
-    close() { closed = true; clearInterval(timer); control = undefined; listeners.clear() },
+    settled(id: string, revision: string) { if (control?.dialog.id === id && control.dialog.revision === revision) { epoch++; replace(undefined, turn) } },
+    close() { closed = true; clearInterval(timer); control = undefined; turn = undefined; listeners.clear() },
   }
 }

@@ -891,17 +891,20 @@ async function control(request,abort){
   return {answered:true};
  }
  if(request.subtype==='apack_pending_control'){
+  const activeTurn=n.runtime.lpe();
+  const turn=activeTurn?{id:activeTurn.turnId,cancelled:activeTurn.cancelled()}:null;
   const binding=originalContext??n.runtime.ey();
   if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native dialogs are not ready');
   const store=binding.toolContext(abort).dialogStore,open=store.getState().open;
-  if(open.length!==1)return {control:null};
+  if(open.length!==1)return {control:null,turn};
   const item=open[0],routes={permission_ask_user_question:['question','apack_question_dialogs'],permission_bash:['bash','apack_bash_dialogs'],permission_file:['file','apack_file_dialogs'],permission_workflow:['workflow','apack_workflow_dialogs'],permission_prompt:['generic','apack_generic_tool_permission_dialogs'],permission_webfetch:['tool','apack_tool_permission_dialogs'],permission_skill:['tool','apack_tool_permission_dialogs'],permission_enter_plan_mode:['plan','apack_plan_dialogs'],permission_exit_plan_mode_v2:['plan','apack_plan_dialogs']};
-  const route=Object.hasOwn(routes,item.kind)?routes[item.kind]:undefined;if(!route)return {control:null};
+  const route=Object.hasOwn(routes,item.kind)?routes[item.kind]:undefined;if(!route)return {control:null,turn};
   const result=await control({subtype:route[1]},abort),dialog=result.dialogs?.length===1?result.dialogs[0]:undefined;
   abort.signal.throwIfAborted();
   const fresh=nativeDialog(n,item.kind);
+  if(n.runtime.lpe()!==activeTurn||activeTurn?.cancelled())throw Error('Native turn changed while reading its control');
   if(!dialog||fresh.item!==item||fresh.revision!==dialog.revision||store.getState().open.length!==1||store.getState().open[0]!==item||dialog.sessionId!==String(n.questionOptions.q())||dialog.sessionId!==JSON.parse(readFileSync(configUrl,'utf8')).sessionId)throw Error('Native control changed while reading');
-  return {control:{kind:route[0],dialog}};
+  return {control:{kind:route[0],dialog},turn};
  }
  if(request.subtype==='apack_question_dialogs'){
   const d=nativeDialog(n,'permission_ask_user_question');if(!d.item)return {dialogs:[]};

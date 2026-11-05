@@ -28,6 +28,9 @@ export interface ClaudeBackgroundSession {
 }
 export type ClaudeBackgroundSessionRequest = { operation: 'refresh' } | { operation: 'stop'; id: string; pid: number }
 
+/** Explicit original turn cancellation; never a whole-worker Stop request. */
+export interface ClaudeBackgroundTurnInterruptRequest { operation: 'interrupt'; target: ClaudeBackgroundUiTarget; turnId: string }
+
 /** Native next-turn reply; an acknowledgement means queued, not a stored transcript receipt. */
 export interface ClaudeBackgroundReplyRequest { operation: 'reply'; id: string; pid: number; text: string }
 

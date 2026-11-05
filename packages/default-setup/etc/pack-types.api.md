@@ -775,6 +775,14 @@ declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObjec
 
 interface ClaudeBackgroundControls {
     readonly value: ClaudeBackgroundControl | undefined;
+    readonly turn: {
+        id: string;
+        cancelled: boolean;
+    } | undefined;
+    interrupt(turnId: string): Promise<{
+        cancelled: boolean;
+        ending?: boolean;
+    }>;
     refresh(): Promise<void>;
     subscribe(listener: () => void): () => void;
     settled(id: string, revision: string): void;
@@ -838,7 +846,11 @@ interface ClaudeBackgroundSessionState {
     sessionId: string;
     continuedInSessionId: string;
     revision: number;
-    operation: 'refresh' | 'reply' | 'stop';
+    operation: 'interrupt' | 'refresh' | 'reply' | 'stop';
+    turn?: {
+        id: string;
+        cancelled: boolean;
+    };
     question?: {
         id: string;
         revision: string;
@@ -884,6 +896,13 @@ interface ClaudeBackgroundStatusIdentity {
 }
 
 type ClaudeBackgroundStatusObserver = Awaited<ReturnType<typeof createClaudeBackgroundStatusObserver>>;
+
+/** Explicit original turn cancellation; never a whole-worker Stop request. */
+interface ClaudeBackgroundTurnInterruptRequest {
+    operation: 'interrupt';
+    target: ClaudeBackgroundUiTarget;
+    turnId: string;
+}
 
 /** Exact app-owned worker incarnation selected by a desktop composer. */
 interface ClaudeBackgroundUiTarget {
@@ -1421,8 +1440,8 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
     url: z.ZodString;
     title: z.ZodString;
     phase: z.ZodEnum<{
-        prompt: "prompt";
         waiting: "waiting";
+        prompt: "prompt";
     }>;
     userConfirmsCompletion: z.ZodBoolean;
     choices: z.ZodArray<z.ZodObject<{
@@ -2527,7 +2546,7 @@ type ClaudeTerminalViewRequest = {
     sessionId: string;
     continuedInSessionId: string;
     revision: number;
-} & (ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest)) | {
+} & (ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest | ClaudeBackgroundTurnInterruptRequest)) | {
     type: 'CLAUDE_BACKGROUND_OPEN';
     sessionId: string;
     continuedInSessionId: string;
@@ -8794,8 +8813,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             loading: z.ZodBoolean;
             copyState: z.ZodOptional<z.ZodEnum<{
                 error: "error";
-                idle: "idle";
                 pending: "pending";
+                idle: "idle";
                 saved: "saved";
             }>>;
             insight: z.ZodOptional<z.ZodString>;

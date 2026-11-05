@@ -578,3 +578,23 @@ it('refreshes the original job when its question disappears and does not keep a 
   expect(background).toHaveBeenCalledTimes(2)
  } finally {views.clear()}
 })
+
+it('keeps child turn interruption separate from job Stop and refuses stale identities',async()=>{
+ const link={sessionId:'parent',continuedInSessionId:'child',timestamp:'2026-11-05T00:00:00Z'}
+ const job={id:'11111111',sessionId:'child',cwd:'/owned',pid:119,state:'working' as const}
+ const desktop={ownerId:'desktop',parentSessionId:'parent',sessionId:'child',jobSessionId:'child',jobId:job.id,pid:119,processStart:'start'}
+ let turn={id:'turn-one',cancelled:false}
+ const background=vi.fn(async(_link:unknown,_request:{operation:string},_thread:string)=>job),interrupt=vi.fn(async()=>{turn={...turn,cancelled:true}}),send=vi.fn()
+ const views=createClaudeTerminalViews({get:()=>undefined,open:vi.fn(),continuation:()=>link,background,desktop:async()=>desktop,desktopCurrent:()=>true,backgroundTurn:()=>turn,interruptBackground:interrupt})
+ try{
+  views.handle(mount,'window',send);views.handle({...mount,type:'CLAUDE_TERMINAL_BACKGROUND',...link,revision:1,operation:'refresh'},'window',send)
+  await vi.waitFor(()=>expect(send.mock.calls.at(-1)![0].background?.turn).toEqual(turn))
+  const request={...mount,type:'CLAUDE_TERMINAL_BACKGROUND' as const,...link,revision:2,operation:'interrupt' as const,target:desktop,turnId:'turn-one'}
+  views.handle({...request,turnId:'old'},'window',send);views.handle({...request,target:{...desktop,processStart:'replacement'}},'window',send);views.handle(request,'foreign-window',send)
+  expect(interrupt).not.toHaveBeenCalled();views.handle(request,'window',send)
+  await vi.waitFor(()=>expect(send.mock.calls.at(-1)![0].background).toMatchObject({status:'done',operation:'interrupt',turn:{cancelled:true}}))
+  expect(interrupt).toHaveBeenCalledExactlyOnceWith('thread',request)
+  expect(background.mock.calls.every(([,request])=>request.operation==='refresh')).toBe(true)
+  views.handle({...request,revision:3},'window',send);await Promise.resolve();expect(interrupt).toHaveBeenCalledOnce()
+ }finally{views.clear()}
+})

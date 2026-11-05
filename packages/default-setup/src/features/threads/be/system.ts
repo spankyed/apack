@@ -52,6 +52,16 @@ const terminalViews = createClaudeTerminalViews({
     const question = control?.kind === 'question' ? control.dialog : undefined
     return question ? {id: question.id, revision: question.revision} : undefined
   },
+  backgroundTurn(key, target) {
+    const owner = getNativeBackgroundDesktopOwner(key, {sessionId: target.parentSessionId, continuedInSessionId: target.jobSessionId})
+    return matchesClaudeBackgroundUiTarget(owner, target) ? owner?.controls.turn : undefined
+  },
+  async interruptBackground(key, request) {
+    const target = request.target
+    const owner = getNativeBackgroundDesktopOwner(key, {sessionId: target.parentSessionId, continuedInSessionId: target.jobSessionId})
+    if (!owner || !matchesClaudeBackgroundUiTarget(owner, target)) throw Error('Background response owner changed')
+    await owner.controls.interrupt(request.turnId)
+  },
   desktopCurrent(key, target) {
     return matchesClaudeBackgroundUiTarget(getNativeBackgroundDesktopOwner(key, {sessionId:target.parentSessionId,continuedInSessionId:target.jobSessionId}), target)
   },

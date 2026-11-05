@@ -114,7 +114,7 @@ import NativeBackgroundReview from './NativeBackgroundReview.vue'
 import NativeBackgroundSession from './NativeBackgroundSession.vue'
 import NativeBackgroundComposer from './NativeBackgroundComposer.vue'
 import type { ClaudeNativeContinuation } from '#features/code/be/services/claude-code/terminal-session.ts'
-import type { ClaudeBackgroundSessionRequest, ClaudeBackgroundReplyRequest } from '#features/code/common/native-background.ts'
+import type { ClaudeBackgroundSessionRequest, ClaudeBackgroundReplyRequest, ClaudeBackgroundTurnInterruptRequest } from '#features/code/common/native-background.ts'
 import { claudeBillingText } from '#features/code/common/native-billing.ts'
 import { isClaudeNativeNoticeDecision, type ClaudeNativeNoticeResponse } from '#features/code/common/native-notice.ts'
 import { PopoverRoot, PopoverTrigger, PopoverPortal, PopoverContent, PopoverClose } from 'reka-ui'
@@ -223,7 +223,7 @@ let terminal: ReturnType<typeof mountNativeTerminal> | undefined, observer: Resi
 let attachedOwner: string | undefined
 const identity = () => ({ threadId: props.threadId, mountId })
 function renew() { actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...identity() }) }
-function operateBackground(target: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest) {
+function operateBackground(target: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest | ClaudeBackgroundTurnInterruptRequest) {
   if (props.continuation?.sessionId !== target.sessionId || props.continuation.continuedInSessionId !== target.continuedInSessionId || view.value?.background?.continuedInSessionId === target.continuedInSessionId && view.value.background.sessionId === target.sessionId && view.value.background.status === 'pending') return
   actor.send({ type: 'CLAUDE_TERMINAL_BACKGROUND', ...identity(), sessionId: target.sessionId, continuedInSessionId: target.continuedInSessionId,
     revision: (view.value?.background?.revision ?? 0) + 1, ...request })

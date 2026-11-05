@@ -1,6 +1,9 @@
 import { createClaudeBackgroundControls } from '#features/code/be/services/claude-code/background-controls.ts'
 
 const sessionId = '05ff1d31-597d-4537-8737-4407191add6e'
+const dialog = {id:'question-1', revision:'24be904a-3c35-4981-9793-cbe7a6c19d46',sessionId,requestId:'tool-1',toolName:'AskUserQuestion',shownInput:{questions:[]},presentation:{previewFormat:null,extendedQuestions:false,optionalDescriptions:false,previews:[]}}
+const snapshot = (id:string) => ({turn:{id,cancelled:false},control:{kind:'question',dialog:{...dialog,id:'question-'+id}}})
+
 afterEach(() => vi.useRealTimers())
 it('bounds overlapping reads and discards replies after the original owner closes', async () => {
   vi.useFakeTimers()
@@ -11,7 +14,7 @@ it('bounds overlapping reads and discards replies after the original owner close
   await vi.advanceTimersByTimeAsync(4000)
   expect(request).toHaveBeenCalledTimes(1)
   controls.close()
-  resolve({control: null})
+  resolve({turn:null,control: null})
   await Promise.resolve()
   await vi.advanceTimersByTimeAsync(4000)
   expect(request).toHaveBeenCalledTimes(1)
@@ -20,7 +23,7 @@ it('bounds overlapping reads and discards replies after the original owner close
 })
 it('rejects foreign and malformed original dialog records without publishing them', async () => {
   vi.useFakeTimers()
-  const request = vi.fn().mockResolvedValue({control: {kind:'question',dialog:{sessionId:'foreign'}}})
+  const request = vi.fn().mockResolvedValue({turn:null,control: {kind:'question',dialog:{sessionId:'foreign'}}})
   const changed = vi.fn()
   const controls = createClaudeBackgroundControls({sessionId, transport: {request}, changed})
   await vi.advanceTimersByTimeAsync(1000)
@@ -31,7 +34,7 @@ it('rejects foreign and malformed original dialog records without publishing the
 it('discovers without a client, clears failed reads, and observes recovery and settlement', async () => {
   vi.useFakeTimers()
   const dialog = {id: 'dialog-1', revision: '24be904a-3c35-4981-9793-cbe7a6c19d46', sessionId, requestId: 'tool-1', toolName: 'AskUserQuestion', shownInput: {questions: []}, presentation: {previewFormat: null, extendedQuestions: false, optionalDescriptions: false, previews: []}}
-  const request = vi.fn().mockResolvedValue({control: {kind:'question',dialog}})
+  const request = vi.fn().mockResolvedValue({turn:null,control: {kind:'question',dialog}})
   const changed = vi.fn()
   const controls = createClaudeBackgroundControls({sessionId, transport: {request}, changed})
   await vi.advanceTimersByTimeAsync(0)
@@ -44,12 +47,12 @@ it('discovers without a client, clears failed reads, and observes recovery and s
   expect(controls.value).toBeUndefined()
   await vi.advanceTimersByTimeAsync(1000)
   expect(controls.value).toEqual({kind:'question',dialog})
-  request.mockResolvedValue({control: {kind:'question',dialog:{...dialog, sessionId:'24be904a-3c35-4981-9793-cbe7a6c19d46'}}})
+  request.mockResolvedValue({turn:null,control: {kind:'question',dialog:{...dialog, sessionId:'24be904a-3c35-4981-9793-cbe7a6c19d46'}}})
   await vi.advanceTimersByTimeAsync(1000)
   expect(controls.value).toBeUndefined()
-  request.mockResolvedValue({control: {kind:'question',dialog}})
+  request.mockResolvedValue({turn:null,control: {kind:'question',dialog}})
   await vi.advanceTimersByTimeAsync(1000)
-  request.mockResolvedValue({control: null})
+  request.mockResolvedValue({turn:null,control: null})
   await vi.advanceTimersByTimeAsync(1000)
   expect(controls.value).toBeUndefined()
   controls.close()
@@ -57,12 +60,54 @@ it('discovers without a client, clears failed reads, and observes recovery and s
 
 it('reports one read failure per episode, strips native values and resets after recovery',async()=>{
  vi.useFakeTimers();const diagnostic=vi.spyOn(console,'debug').mockImplementation(()=>{})
- const request=vi.fn().mockResolvedValue({control:{kind:'sensitive-native-input'}})
+ const request=vi.fn().mockResolvedValue({turn:null,control:{kind:'sensitive-native-input'}})
  const controls=createClaudeBackgroundControls({sessionId,transport:{request},changed:vi.fn()})
  await vi.advanceTimersByTimeAsync(3000)
  expect(diagnostic).toHaveBeenCalledOnce()
  expect(JSON.stringify(diagnostic.mock.calls)).not.toContain('sensitive-native-input')
- request.mockResolvedValue({control:null});await vi.advanceTimersByTimeAsync(1000)
+ request.mockResolvedValue({turn:null,control:null});await vi.advanceTimersByTimeAsync(1000)
  request.mockRejectedValue(Error('Native plan projection unavailable'));await vi.advanceTimersByTimeAsync(2000)
  expect(diagnostic).toHaveBeenCalledTimes(2);expect(controls.value).toBeUndefined();controls.close();diagnostic.mockRestore()
+})
+
+
+it('interrupts only the observed original session/turn and retires its question',async()=>{
+ vi.useFakeTimers()
+ const request=vi.fn().mockResolvedValue(snapshot('one'))
+ const controls=createClaudeBackgroundControls({sessionId,transport:{request},changed:vi.fn()})
+ await vi.advanceTimersByTimeAsync(0)
+ request.mockResolvedValueOnce({cancelled:true})
+ await controls.interrupt('one')
+ expect(request).toHaveBeenLastCalledWith({subtype:'apack_abort_turn',session_id:sessionId,turn_id:'one'})
+ expect(controls.value).toBeUndefined();expect(controls.turn).toEqual({id:'one',cancelled:true})
+ await expect(controls.interrupt('one')).rejects.toThrow()
+ controls.close()
+})
+it('refuses stale turns without sending native cancellation and does not cancel on close',async()=>{
+ vi.useFakeTimers();const request=vi.fn().mockResolvedValue(snapshot('two'))
+ const controls=createClaudeBackgroundControls({sessionId,transport:{request},changed:vi.fn()});await vi.advanceTimersByTimeAsync(0)
+ await expect(controls.interrupt('one')).rejects.toThrow();expect(request).toHaveBeenCalledTimes(1)
+ controls.close();await expect(controls.interrupt('two')).rejects.toThrow();expect(request).toHaveBeenCalledTimes(1)
+})
+it('keeps a new question when a previous interruption acknowledgement arrives late',async()=>{
+ vi.useFakeTimers();let acknowledge!:(value:unknown)=>void
+ const request=vi.fn().mockResolvedValue(snapshot('one'))
+ const controls=createClaudeBackgroundControls({sessionId,transport:{request},changed:vi.fn()});await vi.advanceTimersByTimeAsync(0)
+ request.mockImplementationOnce(()=>new Promise(resolve=>{acknowledge=resolve}))
+ const interrupted=controls.interrupt('one')
+ request.mockResolvedValue(snapshot('two'));await controls.refresh()
+ acknowledge({cancelled:true});await interrupted
+ expect(controls.turn?.id).toBe('two');expect(controls.value?.dialog.id).toBe('question-two');controls.close()
+})
+it('does not retire a question when native interruption fails',async()=>{
+ vi.useFakeTimers();const request=vi.fn().mockResolvedValue(snapshot('one'))
+ const controls=createClaudeBackgroundControls({sessionId,transport:{request},changed:vi.fn()});await vi.advanceTimersByTimeAsync(0)
+ request.mockRejectedValueOnce(Error('broker unavailable'));await expect(controls.interrupt('one')).rejects.toThrow('broker unavailable')
+ expect(controls.value?.dialog.id).toBe('question-one');controls.close()
+})
+it('clears interruption authority after a failed observation',async()=>{
+ vi.useFakeTimers();const request=vi.fn().mockResolvedValue(snapshot('one'))
+ const controls=createClaudeBackgroundControls({sessionId,transport:{request},changed:vi.fn()});await vi.advanceTimersByTimeAsync(0)
+ request.mockRejectedValueOnce(Error('owner lost'));await controls.refresh();expect(controls.turn).toBeUndefined()
+ await expect(controls.interrupt('one')).rejects.toThrow();controls.close()
 })
