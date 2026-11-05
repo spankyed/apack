@@ -37,6 +37,8 @@ declare global {
     __sendToSystem?: (systemId: string, event: { type: string } & Record<string, unknown>) => void;
     /** Developer/test recording; the authenticated backend refuses production admission. */
     __performance: typeof windowPerformance;
+    /** Editor/worker inspection for browser tests; invoking this loads the runtime on demand. */
+    __loadMonaco: () => Promise<typeof import("monaco-editor")>;
     appVersion: string;
   }
 }
@@ -108,7 +110,9 @@ window.electronAPI?.protocolAction?.onAction(({ action, params }) => {
 });
 
 const app = createApp(App);
-provideMonacoRuntime(app, async () => (await import('./boot/monaco')).monaco);
+const loadMonaco = async () => (await import('./boot/monaco')).monaco;
+provideMonacoRuntime(app, loadMonaco);
+window.__loadMonaco = loadMonaco;
 
 app.config.errorHandler = (err, _instance, info) => {
   handleVueError(err, info);
