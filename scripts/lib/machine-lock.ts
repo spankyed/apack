@@ -4,8 +4,7 @@
 // it, and cases die on their deadlines while they are working. Waiting costs the second one time and costs nobody a
 // failure. Cargo's build lock is the same bargain, and it says so the same way.
 //
-// Which steps are expensive is the steps' own declaration: those wide enough to take the machine, and those that launch
-// the app. Asked at admission (`ScheduleOptions.admission`), so a step waiting for the lock holds no cores and its chain
+// Which steps are expensive is the steps' own declaration (`ChainStep.expensive`). Asked at admission (`ScheduleOptions.admission`), so a step waiting for the lock holds no cores and its chain
 // runs what else it can, and a chain that has already failed never starts one.
 import * as os from 'node:os';
 import * as path from 'node:path';
