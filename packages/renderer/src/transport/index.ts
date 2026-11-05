@@ -5,8 +5,6 @@ import type { _HostBridge } from '@apackdev/sdk/fe';
 
 type ApiClient = TRPCClient<AppRouter>;
 
-/** The port this window launched with. The API can move after a restart — see reconnectApiClient. */
-const initialPort = (typeof window !== 'undefined' && window.electronAPI?.apiPort) || 3001;
 /**
  * The token the API requires, which main gives the app's windows, and which only this client reads.
  *
@@ -34,7 +32,7 @@ function connect(port: number) {
 
 const ready = typeof window !== 'undefined' && window.electronAPI
   ? await window.electronAPI.apiStatus.whenReady() : undefined;
-let connection = connect(ready?.port ?? initialPort);
+let connection = connect(ready?.port ?? 3001);
 
 /**
  * The API client. A proxy, because the client is rebuilt when the API restarts on a different

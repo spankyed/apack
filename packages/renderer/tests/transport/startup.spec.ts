@@ -10,7 +10,7 @@ afterEach(() => {
 });
 function bridge(whenReady: () => Promise<{ port: number; startupId: string }>) {
   Object.defineProperty(window, 'electronAPI', { configurable: true, value: {
-    apiPort: 3001, apiToken: 'owned-test-token', apiStatus: { whenReady },
+    apiToken: 'owned-test-token', apiStatus: { whenReady },
   } });
 }
 it('creates no transport until readiness and connects to the authoritative selected port', async () => {

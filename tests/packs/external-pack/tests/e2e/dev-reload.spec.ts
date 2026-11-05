@@ -8,9 +8,9 @@ import { test, expect } from '@apackdev/testing';
 const PACK_ID = 'e2e-fixture';
 
 test('a reloaded pack is left running', async ({ app, appPage }) => {
-  const { apiPort, apiToken } = await appPage.evaluate(() => {
-    const api = (window as { electronAPI?: { apiPort?: number; apiToken?: string } }).electronAPI;
-    return { apiPort: api?.apiPort, apiToken: api?.apiToken ?? '' };
+  const { apiPort, apiToken } = await appPage.evaluate(async () => {
+    const api = (window as { electronAPI?: { apiStatus: { whenReady: () => Promise<{ port: number }> }; apiToken?: string } }).electronAPI;
+    return { apiPort: (await api?.apiStatus.whenReady())?.port, apiToken: api?.apiToken ?? '' };
   });
   expect(apiPort, 'the renderer knows the API port').toBeTruthy();
   expect(apiToken, 'the renderer knows the API token').toBeTruthy();

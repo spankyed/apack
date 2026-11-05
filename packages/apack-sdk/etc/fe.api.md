@@ -284,8 +284,6 @@ export function hasDesignation(role: string): boolean;
 // @internal
 export interface _HostBridge {
     // (undocumented)
-    apiPort: number;
-    // (undocumented)
     apiStatus: {
         whenReady: () => Promise<{
             port: number;
