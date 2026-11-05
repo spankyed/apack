@@ -73,7 +73,7 @@ Its static imports are evaluated first, `virtual:host-shared-modules` among them
 
 ## tRPC client (`src/transport/index.ts`)
 
-- Connects a `wsLink` to `ws://${API_HOST}:<electronAPI.apiPort>` (port default 3001) with `ApiSocket`, which offers the subprotocols `apack` and `apack-token.<electronAPI.apiToken>`; the API refuses connections without the token. The token isn't in the URL, which the browser prints on a failed connection. `AppRouter` is a type-only import from `@app/api`.
+- Awaits `electronAPI.apiStatus.whenReady()` before connecting a `wsLink` to the returned port at `API_HOST` with `ApiSocket`, which offers the subprotocols `apack` and `apack-token.<electronAPI.apiToken>`; the API refuses connections without the token. The token isn't in the URL, which the browser prints on a failed connection. `AppRouter` is a type-only import from `@app/api`.
 - `trpc` is a `Proxy` over the current connection, so importers keep one binding across reconnects.
 - `reconnectApiClient(port)` closes the socket and reconnects only when the port changed, returning whether it did. A restart on the same port keeps the socket; the ws client reconnects on its own.
 
