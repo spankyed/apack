@@ -1,14 +1,20 @@
-// @slow: each case copies the selected Node runtime and a compiler into an installation and runs it
+// Each case copies the selected Node runtime and a compiler into an installation and runs it
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { execFileSync, fork } from 'node:child_process';
+import { execFile, fork } from 'node:child_process';
+import { promisify } from 'node:util';
 import { afterEach, expect, it, vi } from 'vitest';
 import { COMPILER_STORE_ENTRIES, captureCompilerInstallation, compilerStoreEntries, removeCompilerStoreDirectory, removeCompilerStoreEntry, type CompilerInstallation } from '../../src/build/compiler-installation.ts';
 import { isCompilerLocationPath } from '../../src/build/compiler-installation-inputs.ts';
 import { cliBin } from '../../src/utils.ts';
 import { _byDeadline } from '@apackdev/sdk/testing/waiting';
+
+const execFileAsync = promisify(execFile);
+/** What a process printed, trimmed */
+const printed = async (file: string, args: string[], options: { cwd?: string; env?: NodeJS.ProcessEnv } = {}) =>
+  (await execFileAsync(file, args, { encoding: 'utf8', ...options })).stdout.trim();
 
 const roots: string[] = [];
 const installations: CompilerInstallation[] = [];
@@ -55,9 +61,9 @@ function esbuildFixture() {
   fs.symlinkSync(dependency, path.join(compiler.root, 'node_modules/esbuild'), 'dir');
   compiler.write('bin/apack.mjs', `import {transformSync} from 'esbuild'; console.log(transformSync('let value = 1', {minify:true}).code.trim());`);
   const options = { cwd: compiler.root, env: { ESBUILD_BINARY_PATH: path.relative(compiler.root, file) } };
-  const run = (installation: CompilerInstallation) => execFileSync(process.execPath, [installation.bin], {
-    cwd: compiler.root, encoding: 'utf8', timeout: 2_000, env: { ...process.env, ...installation.environment },
-  }).trim();
+  const run = (installation: CompilerInstallation) => printed(process.execPath, [installation.bin], {
+    cwd: compiler.root, env: { ...process.env, ...installation.environment },
+  });
   const capture = async () => {
     const installation = await captureCompilerInstallation(compiler.root, options);
     installations.push(installation);
@@ -70,7 +76,7 @@ it('executes its owned runtime and refuses a damaged, aliased or missing copy', 
   const compiler = fixture();
   const installation = await compiler.capture();
   expect(installation.executable).not.toBe(fs.realpathSync(process.execPath));
-  expect(execFileSync(installation.executable, [installation.bin], { encoding: 'utf8', timeout: process.platform === 'win32' ? 10_000 : 5_000 }).trim()).toBe('captured');
+  expect(await printed(installation.executable, [installation.bin])).toBe('captured');
   expect(installation.isCurrent(compiler.root)).toBe(true);
   fs.chmodSync(installation.executable, 0o755);
   fs.writeFileSync(installation.executable, 'damaged runtime');
@@ -83,7 +89,7 @@ it('executes its owned runtime and refuses a damaged, aliased or missing copy', 
   expect(installation.isCurrent(compiler.root)).toBe(false);
 });
 
-it.skipIf(process.platform === 'win32' || !!process.versions.electron)('retains runtime execution after its selected source is replaced', () => {
+it.skipIf(process.platform === 'win32' || !!process.versions.electron)('retains runtime execution after its selected source is replaced', async () => {
   const compiler = fixture();
   const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-selected-runtime-'));
   roots.push(runtime);
@@ -103,9 +109,7 @@ it.skipIf(process.platform === 'win32' || !!process.versions.electron)('retains 
       }));
     } finally { await captured.dispose(); }
   `;
-  const output = execFileSync(executable, ['--import', 'tsx', '--conditions=@apackdev/source', '--input-type=module', '-e', script, compiler.root], {
-    encoding: 'utf8', timeout: 10_000,
-  });
+  const output = await printed(executable, ['--import', 'tsx', '--conditions=@apackdev/source', '--input-type=module', '-e', script, compiler.root]);
   expect(JSON.parse(output)).toEqual({ current: false, output: 'captured' });
 });
 
@@ -116,13 +120,13 @@ it('owns a relative external esbuild executable and detects changed selection an
   const same = await compiler.capture();
   expect(first.hash).toBe(same.hash);
   expect(first.isCurrent(compiler.root, compiler.options)).toBe(true);
-  expect(compiler.run(first)).toBe('let value=1;');
+  expect(await compiler.run(first)).toBe('let value=1;');
   fs.writeFileSync(compiler.file, 'CHANGED');
   expect(first.isCurrent(compiler.root, compiler.options)).toBe(false);
   const changed = await compiler.capture();
   expect(changed.hash).not.toBe(first.hash);
   fs.rmSync(compiler.file);
-  expect(compiler.run(first)).toBe('let value=1;');
+  expect(await compiler.run(first)).toBe('let value=1;');
   fs.writeFileSync(compiler.file, compiler.bytes, { mode: 0o755 });
   expect(first.isCurrent(compiler.root, { ...compiler.options, env: {} })).toBe(false);
   expect(first.isCurrent(compiler.root, compiler.options)).toBe(true);
@@ -150,7 +154,7 @@ it('keeps the package-native fallback when a missing external override appears a
   expect(warning).toHaveBeenCalledWith(expect.stringContaining('Ignoring bad configuration: ESBUILD_BINARY_PATH='));
   expect(installation.isCurrent(compiler.root, compiler.options)).toBe(true);
   fs.writeFileSync(compiler.file, 'LATE INVALID EXECUTABLE', { mode: 0o755 });
-  expect(compiler.run(installation)).toBe('let value=1;');
+  expect(await compiler.run(installation)).toBe('let value=1;');
   expect(installation.isCurrent(compiler.root, compiler.options)).toBe(false);
 });
 
@@ -159,7 +163,7 @@ it('executes captured nested dependencies after their original files are removed
   const installation = await compiler.capture();
   compiler.write('node_modules/helper/node_modules/nested/index.cjs', 'throw new Error("live compiler escaped");');
   fs.rmSync(compiler.root, { recursive: true, force: true });
-  expect(execFileSync(process.execPath, [installation.bin], { encoding: 'utf8' }).trim()).toBe('captured');
+  expect(await printed(process.execPath, [installation.bin])).toBe('captured');
   // The store entry is shared and outlives its holders; disposing one releases it without removing it
   await installation.dispose();
   expect(fs.existsSync(installation.bin)).toBe(true);
@@ -189,7 +193,7 @@ it.each(['executable', 'addon'] as const)('executes a captured platform %s after
   fs.copyFileSync(source, path.join(compiler.root, 'node_modules/helper', file));
   const installation = await compiler.capture();
   fs.rmSync(compiler.root, { recursive: true, force: true });
-  expect(execFileSync(process.execPath, [installation.bin], { encoding: 'utf8' }).trim()).toBe(expected);
+  expect(await printed(process.execPath, [installation.bin])).toBe(expected);
 });
 
 it('preserves workspace links, file-link module resolution, cycles and executable permissions', async () => {
@@ -207,7 +211,7 @@ it('preserves workspace links, file-link module resolution, cycles and executabl
   const executable = fs.statSync(path.join(compiler.root, 'workspace/actual/index.cjs')).mode & 0o111;
   const installation = await compiler.capture();
   fs.rmSync(compiler.root, { recursive: true, force: true });
-  expect(execFileSync(process.execPath, [installation.bin], { encoding: 'utf8' }).trim()).toBe('linked');
+  expect(await printed(process.execPath, [installation.bin])).toBe('linked');
   const helper = fs.realpathSync(path.join(path.dirname(path.dirname(installation.bin)), 'node_modules/helper'));
   expect(fs.statSync(path.join(helper, 'entry.cjs')).mode & 0o111).toBe(executable);
   expect(fs.statSync(path.join(helper, 'entry.cjs')).mode & 0o222).toBe(0);
@@ -229,8 +233,8 @@ it('shares one installation per input and gives changed bytes their own', async 
   const changed = await compiler.capture();
   expect(changed.hash).not.toBe(first.hash);
   expect(changed.bin).not.toBe(first.bin);
-  expect(execFileSync(process.execPath, [first.bin], { encoding: 'utf8' }).trim()).toBe('captured');
-  expect(execFileSync(process.execPath, [changed.bin], { encoding: 'utf8' }).trim()).toBe('new compiler');
+  expect(await printed(process.execPath, [first.bin])).toBe('captured');
+  expect(await printed(process.execPath, [changed.bin])).toBe('new compiler');
 });
 
 it('preserves a dangling package link without reading outside the captured installation', async () => {
@@ -257,9 +261,9 @@ it('captures dependencies resolved through NODE_PATH and executes without their 
       console.log(execFileSync(process.execPath, [captured.bin], {encoding: 'utf8', env: {...process.env, NODE_PATH: ''}}).trim());
     } finally { await captured.dispose(); }
   `;
-  expect(execFileSync(process.execPath, ['--import', 'tsx', '--conditions=@apackdev/source', '--input-type=module', '-e', script, compiler.root, global], {
-    encoding: 'utf8', env: { ...process.env, NODE_PATH: global },
-  }).trim()).toBe('captured');
+  expect(await printed(process.execPath, ['--import', 'tsx', '--conditions=@apackdev/source', '--input-type=module', '-e', script, compiler.root, global], {
+    env: { ...process.env, NODE_PATH: global },
+  })).toBe('captured');
 });
 
 /** An interrupted capture leaves no entry behind, and nothing a later reuse could mistake for a whole one */
@@ -306,7 +310,7 @@ it('never removes an entry a live process is using', async () => {
     await (await compiler.capture()).dispose();
   }
   expect(compilerStoreEntries(store)).toContain(heldEntry);
-  expect(execFileSync(process.execPath, [held.bin], { encoding: 'utf8' }).trim()).toBe('captured');
+  expect(await printed(process.execPath, [held.bin])).toBe('captured');
   await held.dispose();
   expect(await removeCompilerStoreEntry(heldEntry)).toBe(true);
   expect(compilerStoreEntries(store)).not.toContain(heldEntry);
@@ -322,7 +326,7 @@ it('captures a damaged entry again rather than reusing it', async () => {
   fs.writeFileSync(nested, 'module.exports = "damaged";');
   const second = await compiler.capture();
   expect(second.bin).toBe(first.bin);
-  expect(execFileSync(process.execPath, [second.bin], { encoding: 'utf8' }).trim()).toBe('captured');
+  expect(await printed(process.execPath, [second.bin])).toBe('captured');
 });
 
 it('refuses captured bytes that differ from the captured package graph', async () => {

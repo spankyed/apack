@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { CHECKS, findAppImportsInPackTests, findContractLeafImports, findCrossCheckoutResolution, findCrossFeatureImports, findExtensionlessOwnModules, findHostImports, findJsSpecifiers, findLiveWatchersInIntegrationSpecs, findMissingSourceConditions, findPackageScriptImports, findPackBackendConsole, findPackWindowStorage, findComponentSends, findPackOwnAliases, findRawGitListings, findRawPackHelpers, findRawTransport, findRawWatchesInBuild, findReservedEventKeys, findInternalPackageImports, findElmdbImports, findRepositoryCasts, findSchemeRegistrations, findSharedPackageLists, findSyncSpawnsInSlowSpecs, findUpwardImports, jsSpecifierFixes, LAYERS, UNLAYERED_BY_DESIGN, repoRootDir, findUnimportedDependencies, ELMDB_RULES, MANIFEST_FIELDS, packOwnModuleFixes, packageSourceDirs, CHECK_IDS, type CoveredRuleId, DECLARES_SOURCE_BY_DESIGN, type ImportRuleId, SHARED_LIST_CONSUMERS, sourceConditionPackages, SOURCE_CONDITION, checkedDirs, type ImportRule, packCodeDirs, packDirs, packRule, packRuleProblems, ruleRows, ruleTable } from '../../../scripts/check-import-specifiers.ts';
+import { CHECKS, findAppImportsInPackTests, findContractLeafImports, findCrossCheckoutResolution, findCrossFeatureImports, findExtensionlessOwnModules, findHostImports, findJsSpecifiers, findCompilerRunsInFastSpecs, findLiveWatchersInIntegrationSpecs, findMissingSourceConditions, findPackageScriptImports, findPackBackendConsole, findPackWindowStorage, findComponentSends, findPackOwnAliases, findRawGitListings, findRawPackHelpers, findRawTransport, findRawWatchesInBuild, findReservedEventKeys, findInternalPackageImports, findElmdbImports, findRepositoryCasts, findSchemeRegistrations, findSharedPackageLists, findSyncSpawnsInSlowSpecs, findUpwardImports, jsSpecifierFixes, LAYERS, UNLAYERED_BY_DESIGN, repoRootDir, findUnimportedDependencies, ELMDB_RULES, MANIFEST_FIELDS, packOwnModuleFixes, packageSourceDirs, CHECK_IDS, type CoveredRuleId, DECLARES_SOURCE_BY_DESIGN, type ImportRuleId, SHARED_LIST_CONSUMERS, sourceConditionPackages, SOURCE_CONDITION, checkedDirs, type ImportRule, packCodeDirs, packDirs, packRule, packRuleProblems, ruleRows, ruleTable } from '../../../scripts/check-import-specifiers.ts';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { packFixture as buildPackFixture } from '@apackdev/sdk/testing/pack-fixture';
 import { population } from '@apackdev/sdk/testing';
@@ -702,6 +702,15 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
     // Aliased, so the case also shows the import is read by its exported name
     write('slow.integration.spec.ts', "import { execFileSync as run } from 'node:child_process'; run('true');");
     return findSyncSpawnsInSlowSpecs([path.join(root, 'src', 'slow.integration.spec.ts')], root, {});
+  },
+  findCompilerRunsInFastSpecs: () => {
+    // Called through a namespace and by name, each its own finding, beside a native spec that may
+    write('namespace.spec.ts', "import * as installation from './compiler-installation.ts'; installation.captureCompilerInstallation('.');");
+    write('named.spec.ts', "import { createPackBuilder } from './build-process.ts'; createPackBuilder('.');");
+    write('allowed.native.spec.ts', "import { createPackBuilder } from './build-process.ts'; createPackBuilder('.');");
+    const found = findCompilerRunsInFastSpecs(['namespace.spec.ts', 'named.spec.ts', 'allowed.native.spec.ts']
+      .map((file) => path.join(root, 'src', file)), root, {});
+    return found.length === 2 && found.every((line) => !line.includes('allowed')) ? found : [];
   },
   findLiveWatchersInIntegrationSpecs: () => {
     // A namespace import, a chokidar call and a watcher factory, each its own finding, beside a native spec that may hold one

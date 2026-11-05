@@ -122,17 +122,24 @@ jobs:
           packages/apack-cli/tests/build/compiler-watch.spec.ts
           packages/apack-cli/tests/build/checkout-packages.spec.ts
           packages/apack-cli/tests/build/tool-identity.spec.ts
-          packages/apack-cli/tests/build/compiler-installation.spec.ts
           packages/apack-cli/tests/build/compiler-runtime.spec.ts
           packages/apack-cli/tests/build/compiler-native-libraries.spec.ts
+          --maxWorkers=2
+      - name: Captured compiler runs
+        if: ${{ !inputs.test_name }}
+        env:
+          NODE_OPTIONS: --conditions=@apackdev/source
+        run: >-
+          node node_modules/vitest/vitest.mjs run --config vitest.native.config.ts --project @apackdev/cli
+          packages/apack-cli/tests/build/compiler-installation.native.spec.ts
           --maxWorkers=2
       - name: Compiler publication waits for descendants
         if: ${{ !inputs.test_name }}
         env:
           NODE_OPTIONS: --conditions=@apackdev/source
         run: >-
-          node node_modules/vitest/vitest.mjs run --project @apackdev/cli
-          packages/apack-cli/tests/build/pack-builder.spec.ts
+          node node_modules/vitest/vitest.mjs run --config vitest.native.config.ts --project @apackdev/cli
+          packages/apack-cli/tests/build/pack-builder.native.spec.ts
           --testNamePattern='stops remaining compiler descendants|cancels a frontend input check'
           --reporter=default --reporter=json --outputFile="$env:RUNNER_TEMP/compiler-publication-descendants.json"
           --bail=1 --maxWorkers=2
