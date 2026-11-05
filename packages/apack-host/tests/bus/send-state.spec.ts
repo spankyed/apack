@@ -20,9 +20,9 @@ const typesSeen: Array<readonly string[] | undefined> = [];
 
 /** A system whose whole behaviour is recording the events it declares, in the order they arrive */
 const records = (feature: string, ...types: string[]) => setup({}).createMachine({
-  on: Object.fromEntries(types.map((type) => [type, { actions: ({ event }: { event: { types?: readonly string[] } }) => {
+  on: Object.fromEntries(types.map((type) => [type, { actions: ({ event }) => {
     seen[feature].push(type);
-    if (type === 'DATA_CHANGED_ELSEWHERE') typesSeen.push(event.types);
+    if (type === 'DATA_CHANGED_ELSEWHERE') typesSeen.push((event as { types?: readonly string[] }).types);
   } }])),
 });
 
