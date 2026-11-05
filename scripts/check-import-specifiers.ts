@@ -593,6 +593,23 @@ export function findLiveWatchersInIntegrationSpecs(files: readonly string[] = lo
   }).sort();
 }
 
+/** The compiler's own report directory, watched for one frontend process's life: no build input is read through it. */
+const WATCHES_OUTSIDE_INPUT_SUBSCRIPTIONS = ['packages/apack-cli/src/build/frontend-process.ts'];
+const INPUT_SUBSCRIPTIONS = 'packages/apack-cli/src/build/input-subscriptions.ts';
+
+/**
+ * `file: fs.watch` for each module of the pack watcher that opens a watch itself. On macOS every `fs.watch` on a directory
+ * in a process shares one event stream, and opening or closing any of them discards what that stream had not delivered.
+ * `createInputSubscriptions` is what keeps a wanted watch open and tells its caller to look again when the set moves.
+ */
+export function findRawWatchesInBuild(files: readonly string[] = filesUnder(['packages/apack-cli/src/build'], repoRoot), root = repoRoot): string[] {
+  const allowed = new Set([INPUT_SUBSCRIPTIONS, ...WATCHES_OUTSIDE_INPUT_SUBSCRIPTIONS]);
+  return files.filter((file) => file.endsWith('.ts') && !allowed.has(repoRelative(root, file))).flatMap((file) => {
+    const found = importedCallsIn(file, { fromModules: NODE_FS }).filter((call) => /(^|\.)watch$/.test(call));
+    return found.length === 0 ? [] : [`${repoRelative(root, file)}: ${[...new Set(found)].join(', ')}`];
+  }).sort();
+}
+
 /** The consumers of SHARED_INSTANCE_PACKAGES (@apackdev/host/build/shared-deps), which must not list the packages themselves */
 export const SHARED_LIST_CONSUMERS = [
   'packages/apack-cli/src/build/be-bundler.ts',
@@ -835,6 +852,12 @@ const RULE_LIST = [
     repoOnly: { kind: 'inapplicable', note: "Its subject is this repo's integration test pool, which no pack has" },
     find: findLiveWatchersInIntegrationSpecs,
     rule: 'Hold a live filesystem watcher in a *.native.spec.ts, which runs in the Linux container: on a Mac how long an event takes depends on the load on the machine',
+  },
+  {
+    id: 'findRawWatchesInBuild',
+    repoOnly: { kind: 'inapplicable', note: "Its subject is the CLI's own pack watcher, which no pack has" },
+    find: findRawWatchesInBuild,
+    rule: 'Open a pack watcher\'s file watches through createInputSubscriptions (apack-cli build/input-subscriptions.ts): opening or closing one directly can lose events on every other watch in the process',
   },
   {
     id: 'findSharedPackageLists',

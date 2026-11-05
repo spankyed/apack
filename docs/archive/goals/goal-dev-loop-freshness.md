@@ -122,8 +122,9 @@ are in [the evidence record](../references/evidence/dev-loop-freshness-2026-11-0
 
 **Unproven or left open:**
 
-- Missed file events under load remain, and one leaves `dist` stale until the next edit. Four edits were lost in one
-  session here. Their cause is not proven, because no independent watcher ran beside them.
+- Missed file events under load remained when this closed, and one leaves `dist` stale until the next edit. Four edits
+  were lost in one session here. The cause found afterwards is in
+  [the evidence file](../references/evidence/dev-loop-freshness-2026-11-04.md#why-edits-were-lost-2026-11-05).
 - `test:linux`'s prep timed out three times here at 600 s under load, and a killed prep leaves a
   `packages/default-setup/.apack/build.lock` that makes the next run wait.
 - The readings are from a busy machine, with one sample each.

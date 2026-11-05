@@ -236,7 +236,7 @@ it.each(['root', 'dependency', 'authored'] as const)('drains and attributes an a
 });
 
 it('ignores errors from retired subscriptions and resolves done after normal close', async () => {
-  vi.spyOn(compilerWatch, 'compilerWatchTargets').mockReturnValue(new Map([
+  vi.spyOn(compilerWatch, 'compilerWatchTargets').mockReturnValueOnce(new Map([
     ['/outside', { paths: new Map([['/outside/value', 'file']]), recursive: false }],
   ]));
   const watcher = await startPackBuildWatcher('/fixture');
@@ -250,6 +250,44 @@ it('ignores errors from retired subscriptions and resolves done after normal clo
     expect(fixture.close).not.toHaveBeenCalled();
   } finally { await watcher.close(); }
   await expect(watcher.done).resolves.toBeUndefined();
+});
+
+it('opens and closes no watch on a pass that holds the same set', async () => {
+  const targets = new Map([['/outside', { paths: new Map([['/outside/value', 'file' as const]]), recursive: false }]]);
+  vi.spyOn(compilerWatch, 'compilerWatchTargets').mockImplementation(() => targets);
+  const watcher = await startPackBuildWatcher('/fixture');
+  try {
+    await vi.advanceTimersByTimeAsync(300);
+    const opened = fixture.watches.length;
+    fixture.authored = 'second';
+    fixture.changed!('change', 'apack.json');
+    await vi.advanceTimersByTimeAsync(300);
+    expect(fixture.build).toHaveBeenCalledTimes(2);
+    expect(fixture.watches).toHaveLength(opened);
+    for (const { watcher: held } of fixture.watches) expect(held.close).not.toHaveBeenCalled();
+  } finally { await watcher.close(); }
+});
+
+it('compares its inputs again after the set it holds moves, and stops when that pass moves nothing', async () => {
+  const targets = new Map([['/outside', { paths: new Map([['/outside/value', 'file' as const]]), recursive: false }]]);
+  const read = vi.spyOn(compilerWatch, 'compilerWatchTargets').mockImplementation(() => targets);
+  const watcher = await startPackBuildWatcher('/fixture');
+  try {
+    await vi.advanceTimersByTimeAsync(300);
+    const settled = fixture.ensurePackages.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(fixture.ensurePackages).toHaveBeenCalledTimes(settled);
+
+    read.mockImplementation(() => new Map([...targets, ['/added', { paths: new Map([['/added/value', 'file' as const]]), recursive: false }]]));
+    // What the set was read for is a save, and only the pass after it re-reads what that save's move may have lost
+    fixture.authored = 'second';
+    fixture.changed!('change', 'apack.json');
+    await vi.advanceTimersByTimeAsync(600);
+    expect(fixture.ensurePackages).toHaveBeenCalledTimes(settled + 2);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(fixture.ensurePackages).toHaveBeenCalledTimes(settled + 2);
+    expect(fixture.build).toHaveBeenCalledTimes(2);
+  } finally { await watcher.close(); }
 });
 
 it('cancels and drains an active build before reporting subscription failure', async () => {

@@ -4,8 +4,7 @@ import { createHash } from 'node:crypto';
 import { watch, type FSWatcher } from 'chokidar';
 import type { BuildWatchInputs } from './build-watch-inputs.ts';
 import { physicalWatchPath, relativeCompilerPath } from '@apackdev/host/build/compiler-inputs';
-
-type Subscription = FSWatcher | fs.FSWatcher;
+import { createInputSubscriptions, type InputSubscription } from './input-subscriptions.ts';
 
 const inside = (root: string, file: string) => {
   const relative = relativeCompilerPath(root, file);
@@ -20,20 +19,22 @@ export interface FrontendInputSnapshot {
 /**
  * Compiler observations drive ready subscriptions, never output reuse.
  * @param packageOutputs what a package build writes, whose bytes reach a pack build through the package signature
+ * @param resubscribed called when the watches held changed, which may have lost events on every other watch in the process
  */
-export function createFrontendWatcher(root: string, dataDirectory: string | undefined, changed: (file: string) => void, failed: (error: Error) => void, packageOutputs: readonly string[] = []) {
+export function createFrontendWatcher(root: string, dataDirectory: string | undefined, changed: (file: string) => void, failed: (error: Error) => void, packageOutputs: readonly string[] = [], resubscribed: () => void = () => {}) {
   const authored = [...new Set([path.resolve(root), fs.realpathSync(root)])];
   const data = dataDirectory ? [...new Set([path.resolve(dataDirectory), physicalWatchPath(path.resolve(dataDirectory))])] : [];
   const files = new Set<string>();
   const directories = new Set<string>();
   let linkedInputs = new Set<string>();
   // Retired subscriptions remain owned until their asynchronous close settles.
-  const subscriptions = new Map<Subscription, { closing?: Promise<void> }>();
-  const live = (watcher: Subscription) => {
+  const subscriptions = new Map<FSWatcher, { closing?: Promise<void> }>();
+  const live = (watcher: FSWatcher) => {
     const owned = subscriptions.get(watcher);
     return owned !== undefined && !owned.closing;
   };
-  let current: Subscription[] = [];
+  let current: FSWatcher[] = [];
+  let currentRoots = '';
   let namespace = 0;
   let closed = false;
   let failure: Error | undefined;
@@ -119,7 +120,7 @@ export function createFrontendWatcher(root: string, dataDirectory: string | unde
     notified = hash;
     changed(file);
   };
-  const stop = async (watchers: readonly Subscription[]) => {
+  const stop = async (watchers: readonly FSWatcher[]) => {
     const results = await Promise.allSettled(watchers.map(watcher => {
       const owned = subscriptions.get(watcher);
       if (!owned) return;
@@ -133,7 +134,7 @@ export function createFrontendWatcher(root: string, dataDirectory: string | unde
     }
   };
   const close = (): Promise<void> => {
-    if (!closeTask) { closed = true; signalClose(); closeTask = stop([...subscriptions.keys()]); }
+    if (!closeTask) { closed = true; signalClose(); guardWatches.close(); closeTask = stop([...subscriptions.keys()]); }
     return closeTask;
   };
   const refuse = (directory: string, error: unknown): Error => {
@@ -145,6 +146,7 @@ export function createFrontendWatcher(root: string, dataDirectory: string | unde
     }
     return failure;
   };
+  const guardWatches = createInputSubscriptions(refuse);
   async function subscribe() {
     if (failure) throw failure;
     if (closed) return;
@@ -157,9 +159,11 @@ export function createFrontendWatcher(root: string, dataDirectory: string | unde
       if (path.dirname(directory) === directory) throw new Error(`Frontend resources require a bounded source directory: ${directory}`);
       for (let child = directory; path.dirname(child) !== child; child = path.dirname(child)) guards.add(child);
     }
-    const next: Subscription[] = [];
+    const next: FSWatcher[] = [];
     const ready: Promise<void>[] = [];
-    if (selected.length) {
+    const selectedRoots = JSON.stringify(selected);
+    const rootsMoved = selectedRoots !== currentRoots;
+    if (rootsMoved && selected.length) {
       let watcher: FSWatcher;
       try { watcher = watch(selected, { ignoreInitial: true, followSymlinks: false, disableGlobbing: true, atomic: true, ignored }); }
       catch (error) { throw refuse(selected.join(', '), error); }
@@ -176,27 +180,31 @@ export function createFrontendWatcher(root: string, dataDirectory: string | unde
       }));
     }
     try {
-      for (const child of guards) {
+      const guardSubscriptions = [...guards].map((child): InputSubscription => {
         const identity = fs.statSync(child);
         const parent = path.dirname(child);
-        let guard: fs.FSWatcher;
-        try {
-          guard = fs.watch(parent, (kind, file) => {
-            if (closed || !live(guard) || kind !== 'rename' || (file && path.resolve(parent, file) !== child)) return;
+        return {
+          key: JSON.stringify([child, identity.ino, identity.dev]), directory: parent, recursive: false,
+          receive(kind, file) {
+            if (closed || kind !== 'rename' || (file && path.resolve(parent, file) !== child)) return;
             let stat: fs.Stats | undefined;
             try { stat = fs.statSync(child, { throwIfNoEntry: false }); } catch { notify(child); return; }
             if (!stat || stat.ino !== identity.ino || stat.dev !== identity.dev) notify(child);
-          });
-        } catch (error) { throw refuse(parent, error); }
-        subscriptions.set(guard, {}); next.push(guard);
-        guard.on('error', error => { if (!closed && live(guard)) refuse(parent, error); });
-      }
+          },
+        };
+      });
+      const guardsMoved = guardWatches.hold(guardSubscriptions);
       await Promise.race([Promise.all(ready), closing]);
       if (closed) { await stop(next); if (failure) throw failure; return; }
-      const previous = current;
-      current = next;
-      await stop(previous);
-      if (!closed) notified = signature(files, directories);
+      if (rootsMoved) {
+        const previous = current;
+        current = next;
+        currentRoots = selectedRoots;
+        await stop(previous);
+      }
+      if (closed) return;
+      notified = signature(files, directories);
+      if (rootsMoved || guardsMoved) resubscribed();
     } catch (error) { await stop(next); throw error; }
   }
   return {
