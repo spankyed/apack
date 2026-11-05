@@ -120,7 +120,7 @@ export async function dbScript(args: string[], io: DbIo): Promise<void> {
   const scriptFile = path.resolve(file);
   if (!fs.existsSync(scriptFile)) throw new Error(`No script at ${scriptFile}`);
 
-  // A script writes rows unless it says otherwise, and a running app is told once it ends
+  // A script writes rows unless it says otherwise
   const changes = values['read-only'] ? 'nothing' : values.admin ? 'everything' : 'rows';
   const db = await openTarget(target, { changes, command: 'script' }, io);
   try {

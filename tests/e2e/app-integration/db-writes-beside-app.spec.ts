@@ -1,6 +1,6 @@
-// `apack db exec` writes from its own process, where nothing in the app can hear the commit. This runs the real CLI
-// against a running app's data dir, and the library's tree is what shows the app was told: it renders a live view, and
-// a view runs again only when its engine hears a commit.
+// `apack db exec` writes from its own process, and tells the app nothing: the commit wakes it. This runs the real CLI
+// against a running app's data dir, and the library's tree is what shows the app heard: it renders a live view, and a
+// view runs again only when its engine hears a commit.
 import { execFile } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -36,17 +36,14 @@ test('an invalid settings row from apack db exec is refused, and the app carries
   await app.waitForState('running.connected');
   const dataDir = await electronApp.evaluate(() => process.env.APACK_USER_DATA_DIR);
 
-  const refused = await apackDb(dataDir!, 'exec', "upsert(EARS.Entity.Settings, { id: 'Settings-app', data: 'not settings' })")
-    .then(() => null, (error: { code?: number; stderr?: string }) => error);
-  expect(refused?.code, 'saved, but not taken').toBe(4);
-  expect(refused?.stderr).toContain('it refused its stored settings');
+  await apackDb(dataDir!, 'exec', "upsert(EARS.Entity.Settings, { id: 'Settings-app', data: 'not settings' })");
 
-  const { stdout } = await apackDb(dataDir!, 'query', "return typeof getRow('Settings-app')?.data");
-  expect(stdout.trim()).toBe('object');
+  await expect.poll(async () => (await apackDb(dataDir!, 'query', "return typeof getRow('Settings-app')?.data")).stdout.trim(),
+    { timeout: 15_000 }).toBe('object');
   expect(await app.getState()).toEqual(expect.objectContaining({ running: 'connected' }));
 });
 
-test('a tool killed before telling the app is found at the app\'s next commit', async ({ app, appPage, electronApp }) => {
+test('a tool killed right after committing is heard, with nothing committed in the app', async ({ app, appPage, electronApp }) => {
   await app.waitForSurface('default-setup/library');
   await app.navigate('default-setup/library');
   await expect.poll(() => libraryDocuments(appPage)).toContain('Chat commands');
@@ -59,14 +56,8 @@ test('a tool killed before telling the app is found at the app\'s next commit', 
     process.kill(process.pid, 'SIGKILL');
   };`);
   const killed = await apackDb(dataDir!, 'script', script).then(() => null, (error: { signal?: string }) => error);
-  expect(killed?.signal, 'the tool died before it could tell anyone').toBe('SIGKILL');
+  expect(killed?.signal, 'the tool died as soon as it had committed').toBe('SIGKILL');
 
-  // The app's next commit, which may already have happened: a folder made, staying on the surface
-  await appPage.evaluate(() => {
-    type Actor = { send(event: { type: 'CREATE_FOLDER'; name: string }): void };
-    (window as { applicationState?: { system?: { get(id: string): Actor | undefined } } })
-      .applicationState?.system?.get('default-setup/library')?.send({ type: 'CREATE_FOLDER', name: 'Made after the kill' });
-  });
   await expect.poll(() => libraryDocuments(appPage), { timeout: 15_000 }).toContain('Chat commands from a killed tool');
 });
 

@@ -363,7 +363,7 @@ A pid on disk can't say whether the process that wrote it is still there — pid
 
 `true` is the cautious answer in both, and the shapes differ enough that neither compiles where the other was meant. Each owns its reasoning: a call site picks the predicate that names what it is doing — local knowledge — rather than restating how bad corruption would be here.
 
-`readApiEndpoint(apiPortFile)` is here too — the `{ port, pid, dataChangedToken }` a running API published, or `null` for a file a crashed run left behind — because it is the one reader that needs the bound. Its one reader is the CLI (`apack-cli/src/app/app-api.ts`, which `apack pack dev` and `apack pack build --watch` ask for a reload through). A pack reaches a running API through the app, never by reading its port file, so the export is listed unbridged by design in `tests/packs/runtime/sdk-bridge-drift.spec.ts`.
+`readApiEndpoint(apiPortFile)` is here too — the `{ port, pid }` a running API published, or `null` for a file a crashed run left behind — because it is the one reader that needs the bound. Its one reader is the CLI (`apack-cli/src/app/app-api.ts`, which `apack pack dev` and `apack pack build --watch` ask for a reload through). A pack reaches a running API through the app, never by reading its port file, so the export is listed unbridged by design in `tests/packs/runtime/sdk-bridge-drift.spec.ts`.
 
 Only for a record this machine wrote: `os.uptime()` is this machine's boot and a foreign mtime is on another clock, so callers that can tell whose record it is (the write lock's `machine`, the instance lock's hostname) check that first.
 
