@@ -127,6 +127,13 @@ are in [the evidence record](../references/evidence/dev-loop-freshness-2026-11-0
 - `test:linux`'s prep timed out three times here at 600 s under load, and a killed prep leaves a
   `packages/default-setup/.apack/build.lock` that makes the next run wait.
 - The readings are from a busy machine, with one sample each.
+- The two frontend watcher cases that assert an event changes nothing are skipped on macOS, where a just-created
+  fixture's creation is replayed as new events. Only the timed session covers that behaviour there.
+- `dependency-graph.integration.spec.ts`'s 240 s setup timed out once on CI and passed on the job's re-run and in
+  139 s locally at load 20. Its cause is not proven.
+
+**Gate:** strict chain [41935776562](https://github.com/spankyed/apack/actions/runs/41935776562) passed on
+`a39002d8e6`, on attempt 2 of its one failed job. This closure's text is the only change after it.
 
 ## Acceptance
 
