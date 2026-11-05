@@ -508,6 +508,7 @@ export const FeatureEntrySchema: z.ZodObject<{
     services: z.ZodOptional<z.ZodType<Record<string, string>, Record<string, string>, z.core.$ZodTypeInternals<Record<string, string>, Record<string, string>>>>;
     repositories: z.ZodOptional<z.ZodType<Record<string, string>, Record<string, string>, z.core.$ZodTypeInternals<Record<string, string>, Record<string, string>>>>;
     views: z.ZodOptional<z.ZodString>;
+    projections: z.ZodOptional<z.ZodString>;
     references: z.ZodOptional<z.ZodType<ReferenceDeclarations, unknown, z.core.$ZodTypeInternals<ReferenceDeclarations, unknown>>>;
 }, z.core.$strict>;
 
@@ -756,6 +757,7 @@ export const ManifestSchema: z.ZodObject<{
         services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
         views?: string | undefined;
+        projections?: string | undefined;
         references?: ReferenceDeclarations | undefined;
     }>, Record<string, {
         description: string;
@@ -789,6 +791,7 @@ export const ManifestSchema: z.ZodObject<{
         services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
         views?: string | undefined;
+        projections?: string | undefined;
         references?: unknown;
     }>, z.core.$ZodTypeInternals<Record<string, {
         description: string;
@@ -829,6 +832,7 @@ export const ManifestSchema: z.ZodObject<{
         services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
         views?: string | undefined;
+        projections?: string | undefined;
         references?: ReferenceDeclarations | undefined;
     }>, Record<string, {
         description: string;
@@ -862,6 +866,7 @@ export const ManifestSchema: z.ZodObject<{
         services?: Record<string, string> | undefined;
         repositories?: Record<string, string> | undefined;
         views?: string | undefined;
+        projections?: string | undefined;
         references?: unknown;
     }>>>>;
     extensions: z.ZodOptional<z.ZodObject<{

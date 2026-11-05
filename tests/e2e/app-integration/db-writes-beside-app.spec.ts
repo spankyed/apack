@@ -69,3 +69,18 @@ test('a tool killed before telling the app is found at the app\'s next commit', 
   });
   await expect.poll(() => libraryDocuments(appPage), { timeout: 15_000 }).toContain('Chat commands from a killed tool');
 });
+
+/** Creates two notes through the CLI, the first's text linking to the second, as a tool writes past any repository */
+const linkedNotes = `
+  const fields = { completed: false, displayOrder: 0, hideCompletedChildren: false, icon: '', lastSeen: 0, noteType: 'document' };
+  const target = create(EARS.Entity.Note, { ...fields, title: 'target', content: '' }).id();
+  const source = create(EARS.Entity.Note, { ...fields, title: 'source', content: '[t](apack-ref://note/' + target + ')' }).id();
+  return source;`;
+
+test('a note a tool writes gets its references in the running app', async ({ app, electronApp }) => {
+  await app.waitForState('running.connected');
+  const dataDir = (await electronApp.evaluate(() => process.env.APACK_USER_DATA_DIR))!;
+  const source = JSON.parse((await apackDb(dataDir, 'exec', linkedNotes, '-o', 'json')).stdout) as string;
+  const references = `return findRelations({ source: ${JSON.stringify(source)}, kind: 'references' }).length`;
+  await expect.poll(async () => (await apackDb(dataDir, 'query', references)).stdout.trim(), { timeout: 15_000 }).toBe('1');
+});

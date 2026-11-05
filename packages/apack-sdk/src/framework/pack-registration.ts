@@ -87,6 +87,8 @@ export interface PackFeature {
   settings?: import('./settings-definition.ts').SettingsDefinition;
   /** The feature's views (apack.json `features.<id>.views`), which the host runs for the windows subscribed to them */
   views?: import('./views.ts').ViewDefinitions;
+  /** The feature's projections (apack.json `features.<id>.projections`): rows it derives from others */
+  projections?: import('./projections.ts').ProjectionDefinitions;
 }
 
 export interface PackRegistration {

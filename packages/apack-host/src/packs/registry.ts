@@ -893,6 +893,9 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
 
     getLifecycleHooks: () => [...registrations.values()].flatMap((reg) => (reg.lifecycle ? [reg.lifecycle] : [])),
     getPackRegistration: (packId) => registrations.get(packId) ?? null,
+    projections: () => [...registrations.entries()].flatMap(([packId, pack]) =>
+      Object.entries(pack.features ?? {}).flatMap(([featureId, feature]) =>
+        Object.entries(feature.projections ?? {}).map(([name, projection]) => ({ name: `${packId}/${featureId}/${name}`, projection })))),
 
     packContentTargets(packIds) {
       const wanted = packIds && new Set(packIds);

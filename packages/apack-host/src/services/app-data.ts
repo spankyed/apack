@@ -1,4 +1,5 @@
 // services.appData: reset, back up and restore the app's stored data
+import { _catchUpProjections } from '@apackdev/sdk/runtime';
 import type { AppDataService, BackupDatabase, RunHistory, SettingsAdmin } from '@apackdev/sdk/services';
 import type { EarsDatabase, EarsEngine } from '@apackdev/ears';
 import { databaseBackupStore, exportDatabase, readBackupSummary, importDatabase, type BackupStores } from '../backup/index.ts';
@@ -54,6 +55,7 @@ export function createAppData({ database, engine, history, registry, settings, o
         // Stored API keys go too, with their data keys, after the database is emptied, since the settings system hears of it
         secretsStore.clearAll();
         startPacks(registry);
+        _catchUpProjections(engine);
       }));
     },
     exportBackup: (targetPath, name, databases) =>
@@ -70,6 +72,7 @@ export function createAppData({ database, engine, history, registry, settings, o
             history.service.stopActive();
             // Run declared versioned data changes after restore, before notifying consumers.
             if (runAppMigrations(registry)) runPackMigrations(registry.packMigrationTargets('pack'));
+            _catchUpProjections(engine);
           },
         });
       });

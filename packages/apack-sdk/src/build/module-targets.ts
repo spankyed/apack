@@ -37,6 +37,7 @@ export function _packModuleTargets(manifest: Partial<PackManifest>): ModuleTarge
     for (const [name, target] of Object.entries(feature.services ?? {})) field(`services.${name}`, target);
     for (const [name, target] of Object.entries(feature.repositories ?? {})) field(`repositories.${name}`, target);
     field('views', feature.views);
+    field('projections', feature.projections);
     for (const [name, target] of feature.surface ? _surfaceTargets(feature.surface) : []) {
       field(`surface.${name}`, target, name === 'state' || name === 'fallbackPanel.isShown' ? 'script' : 'component', name === 'fallbackPanel.isShown' ? 'named' : 'default');
     }

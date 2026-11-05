@@ -60,7 +60,7 @@ describe('createHostRuntime', () => {
     function running() {
       const engine = newEngine();
       const told: string[] = [];
-      const stopWatching = vi.spyOn(engine.admin, 'changedElsewhere').mockImplementation(() => { told.push('watches'); return { any: true, types: new Set(['Note']) }; });
+      const stopWatching = vi.spyOn(engine.admin, 'changedElsewhere').mockImplementation(() => { told.push('watches'); return true; });
       const stopHearing = testRootEvents.onIncoming((message) => { told.push(`${message.to} ${message.event.type}`); });
       const { runHistory } = blockedHistory();
       const runtime = createHostRuntime({ runHistory, database: {} as EarsDatabase, engine, transport: { rootEvents: testRootEvents },
@@ -85,25 +85,12 @@ describe('createHostRuntime', () => {
       stop();
     });
 
-    it('tells the bus which types changed, and nothing when no other process committed', () => {
+    it('tells the bus nothing when no other process committed', () => {
       const { engine, runtime, told, stop } = running();
-      const seen: unknown[] = [];
-      const stopSeeing = testRootEvents.onIncoming((message) => { seen.push(message.event); });
-      runtime.dataChangedElsewhere();
-      vi.advanceTimersByTime(250);
-      expect(seen).toEqual([{ type: 'DATA_CHANGED_ELSEWHERE', types: ['Note'] }]);
-
-      vi.mocked(engine.admin.changedElsewhere).mockImplementation(() => ({ any: true, types: 'all' }));
-      runtime.dataChangedElsewhere();
-      vi.advanceTimersByTime(250);
-      expect(seen.at(-1), 'absent when it is not known').toEqual({ type: 'DATA_CHANGED_ELSEWHERE' });
-
-      told.length = 0;
-      vi.mocked(engine.admin.changedElsewhere).mockImplementation(() => ({ any: false, types: new Set() }));
+      vi.mocked(engine.admin.changedElsewhere).mockImplementation(() => false);
       runtime.dataChangedElsewhere();
       vi.advanceTimersByTime(250);
       expect(told).toEqual([]);
-      stopSeeing();
       stop();
     });
 
@@ -130,7 +117,7 @@ describe('createHostRuntime', () => {
       const engine = newEngine();
       let found: (() => void) | undefined;
       vi.spyOn(engine.admin, 'onFoundElsewhere').mockImplementation((listener) => { found = listener; return () => {}; });
-      vi.spyOn(engine.admin, 'changedElsewhere').mockImplementation(() => ({ any: false, types: new Set() }));
+      vi.spyOn(engine.admin, 'changedElsewhere').mockImplementation(() => false);
       const { runHistory } = blockedHistory();
       const runtime = createHostRuntime({ runHistory, database: {} as EarsDatabase, engine, transport: { rootEvents: testRootEvents },
         appVersion: '1.2.3', packs: createNativePackTestRegistry() });

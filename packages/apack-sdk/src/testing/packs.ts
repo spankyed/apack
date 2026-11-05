@@ -1,3 +1,4 @@
+import type { ProjectionDefinition } from '../framework/projections.ts';
 import type { StepBackendBinding } from '../steps/catalog.ts';
 import type { StepCatalogEntry } from '../framework/catalog-view.ts';
 // The registered packs in unit tests that run without an app: a plain in-memory stand-in tests fill directly.
@@ -19,6 +20,8 @@ import { _shortCodeTypes } from '../framework/data-declaration.ts';
 export interface TestPacks {
   /** Role → id of the system that plays it */
   readonly designations: Map<string, string>;
+  /** Projections a test registers, each with the name it is known by */
+  readonly projections: Array<{ name: string; projection: ProjectionDefinition }>;
   /** Refs of systems a test says run, besides the registered packs': what `services.emitter` resolves a send against */
   readonly systems: Set<string>;
   /** Refs of surfaces a test says are there, besides the registered packs' */
@@ -68,9 +71,14 @@ function createTestPacks(): TestPacks {
     earsRelKinds: new Map<string, string>(),
     earsRoles: new Map<string, string>(),
   };
+  const projections: TestPacks['projections'] = [];
   return {
     ...lookups,
-    clear: () => Object.values(lookups).forEach((lookup) => lookup.clear()),
+    projections,
+    clear: () => {
+      projections.length = 0;
+      Object.values(lookups).forEach((lookup) => lookup.clear());
+    },
   };
 }
 
@@ -136,6 +144,7 @@ export function testPacksView(registered?: PackRegistryView): PackRegistryView {
     artifacts: () => withOwn(registered?.artifacts(), testPacks.artifacts),
     block: (type) => testPacks.blocks.get(type) ?? registered?.block(type),
     blocks: () => withOwn(registered?.blocks(), testPacks.blocks),
+    projections: () => [...(registered?.projections() ?? []), ...testPacks.projections],
     getRegisteredServices: () => ({ ...registered?.getRegisteredServices(), ...Object.fromEntries(testPacks.services) }),
     repository: (name) => testPacks.repositories.get(name) ?? registered?.repository(name),
     // A test names a ref as it likes, as it does a role's

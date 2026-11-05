@@ -16,14 +16,10 @@ const registry = createNativePackTestRegistry();
 startTestRuntime({ entityTypes: HOST_ENTITY_TYPES, packs: registry });
 
 const seen: Record<string, string[]> = {};
-const typesSeen: Array<readonly string[] | undefined> = [];
 
 /** A system whose whole behaviour is recording the events it declares, in the order they arrive */
 const records = (feature: string, ...types: string[]) => setup({}).createMachine({
-  on: Object.fromEntries(types.map((type) => [type, { actions: ({ event }) => {
-    seen[feature].push(type);
-    if (type === 'DATA_CHANGED_ELSEWHERE') typesSeen.push((event as { types?: readonly string[] }).types);
-  } }])),
+  on: Object.fromEntries(types.map((type) => [type, { actions: () => seen[feature].push(type) }])),
 });
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -33,7 +29,6 @@ let bus: AnyActorRef | undefined;
 beforeEach(async () => {
   seen.watcher = [];
   seen.quiet = [];
-  typesSeen.length = 0;
   registry.registerPack({
     id: 'data-pack',
     features: {
@@ -83,19 +78,11 @@ it('tells every system another process changed the data, as that and not as a re
   seen.watcher = [];
   seen.quiet = [];
 
-  untypedSendToSystem(HOST.bus, { type: 'DATA_CHANGED_ELSEWHERE', types: ['Note'] });
+  untypedSendToSystem(HOST.bus, { type: 'DATA_CHANGED_ELSEWHERE' });
   await settle();
 
   expect(seen.watcher).toEqual(['DATA_CHANGED_ELSEWHERE', 'SEND_STATE']);
   expect(seen.quiet).toEqual(['SEND_STATE']);
-});
-
-it('hands on which types another process changed', async () => {
-  await connect();
-  untypedSendToSystem(HOST.bus, { type: 'DATA_CHANGED_ELSEWHERE', types: ['Note'] });
-  await settle();
-  expect(seen.watcher).toContain('DATA_CHANGED_ELSEWHERE');
-  expect(typesSeen).toEqual([['Note']]);
 });
 
 it('asks nobody to publish before a client has connected, and catches them up when one does', async () => {

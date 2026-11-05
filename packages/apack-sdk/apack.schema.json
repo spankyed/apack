@@ -111,7 +111,8 @@
                 "Action",
                 "Prompt",
                 "Document",
-                "Collection"
+                "Collection",
+                "ProjectionCursor"
               ]
             }
           },
@@ -383,7 +384,8 @@
                   "Action",
                   "Prompt",
                   "Document",
-                  "Collection"
+                  "Collection",
+                  "ProjectionCursor"
                 ]
               }
             },
@@ -897,6 +899,11 @@
             "type": "string",
             "pattern": "^([^#]+)#([A-Za-z_$][\\w$]*)$",
             "description": "The feature's views: \"path#exportName\" of the object `defineViews` returns, from @apackdev/sdk/framework. A window subscribes to one with `useView` from #generated/fe; each is a pure read of the engine, run again after every commit that could change its result."
+          },
+          "projections": {
+            "type": "string",
+            "pattern": "^([^#]+)#([A-Za-z_$][\\w$]*)$",
+            "description": "The feature's projections: \"path#exportName\" of the object `defineProjections` returns, from @apackdev/sdk/framework."
           },
           "references": {
             "type": "object",
