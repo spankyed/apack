@@ -7,8 +7,17 @@ It contains no recovered Claude implementation, native binary, private traffic, 
 Regenerate from the research checkout after committing its tools:
 
 ```sh
-python3 tools/export-ci-replay.py /absolute/path/to/apack/tests/fixtures/claude-research
+python3 tools/export-ci-replay.py /absolute/path/to/monorepo/tests/fixtures/claude-research
 ```
+
+Current standalone Linux app journeys are exported from `src/integration/`: `driveCombinedEveryday`
+(`apack-combined-everyday-drive.mjs`), `driveChildNotebookDelete` (`apack-child-notebook-drive.mjs`)
+and `drivePermissionModes` (`apack-permission-modes-drive.mjs`). They use the common owned-profile
+Electron driver, preserve original CLI decisions and never build or choose a user profile implicitly.
+They require the prepared owned setup, verified immutable source/pack/app inputs, a read-only pinned
+Linux binary, an inspected offline container and the app-run lock. The control marker must reflect
+actual host inspection; it is not a way to bypass those checks. The older case launcher is not the
+complete journey catalog. Current delivery uses local Linux validation, not CI dispatch.
 
 The runner also contains the current completion-navigation, managed-model precedence, document
 producer/paste and Workflow Resume/layout tooling. These profiles use the authored
