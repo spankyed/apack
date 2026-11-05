@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+vi.mock('@guolao/vue-monaco-editor', () => ({ loader: { config: vi.fn() } }));
 import { createApp, defineComponent, h, nextTick, onMounted, readonly, shallowRef, type App } from 'vue';
 import type { SettingsSnapshot } from '@apackdev/sdk/types';
 import type * as Monaco from 'monaco-editor';

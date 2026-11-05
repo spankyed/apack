@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
+vi.mock('@guolao/vue-monaco-editor', () => ({ loader: { config: vi.fn() } }));
 import { createApp, defineComponent, h, nextTick, type App } from 'vue';
 import { provideMonacoRuntime, useMonacoRuntime } from '@apackdev/ui/components/monaco-config';
 
@@ -33,6 +34,6 @@ it('does not adopt a result after its consumer unmounts', async () => {
 it('exposes a loading failure without creating a partial runtime', async () => {
   const view = mount(async () => { throw new Error('Local editor unavailable'); });
   view.start(); await nextTick();
-  expect(view.states[0]!.problem.value).toBe('Local editor unavailable');
+  await vi.waitFor(() => expect(view.states[0]!.problem.value).toBe('Local editor unavailable'));
   expect(view.states[0]!.monaco.value).toBeUndefined();
 });
