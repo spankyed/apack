@@ -436,9 +436,8 @@ function openConversation() {
 }
 
 // ─── Permission mode segmented control ─────────────────────────────────
-// The three modes surfaced in the UI (other PermissionMode variants exist
-// but aren't useful for interactive work-mode chats). Takes effect on the
-// NEXT turn — chat.ts reads content.permissionMode at action entry.
+// Active sessions apply changes only after the original native acknowledgement.
+// A stopped session retains the selected mode for its next launch.
 const permissionOptions: Array<{
   value: PermissionMode
   label: string
@@ -453,9 +452,21 @@ const permissionOptions: Array<{
   },
   {
     value: 'acceptEdits',
-    label: 'Auto',
+    label: 'Accept edits',
     tooltip: 'Auto-accept file edits; still prompt for Bash',
     description: 'Auto-accepts file edits',
+  },
+  {
+    value: 'auto',
+    label: 'Auto',
+    tooltip: 'Use Claude auto mode when available',
+    description: 'Claude reviews permission decisions',
+  },
+  {
+    value: 'dontAsk',
+    label: "Don't ask",
+    tooltip: 'Deny anything that would require a permission prompt',
+    description: 'Denies new permission requests',
   },
   {
     value: 'bypassPermissions',

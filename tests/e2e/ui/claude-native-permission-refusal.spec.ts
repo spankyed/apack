@@ -146,7 +146,7 @@ test('shows native permission refusal without losing a staged Plan or draft and 
   await expect.poll(async()=>(await context()).claude.permissionMode).toBe('default')
   await expect(refusal).toHaveCount(0)
   await expect(appPage.getByRole('button',{name:'Ask',exact:true})).toHaveAttribute('aria-pressed','true')
-  await appPage.getByRole('button',{name:'Auto',exact:true}).click()
+  await appPage.getByRole('button',{name:'Accept edits',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.permissionMode).toBe(originalMode)
   expect((await context()).native.state.session.permissionMode).toBe(originalMode)
   expect(await humanRows()).toEqual(historyBefore)
