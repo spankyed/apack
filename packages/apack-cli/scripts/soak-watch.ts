@@ -47,6 +47,13 @@ const bystanderReady = new Promise<void>(resolve => {
   });
 });
 
+// In the watcher's process, so on its file-event stream. For a lost edit this says which side lost it: the event reached
+// that stream and the watcher dropped it, or it never reached that stream though it reached the bystander's.
+let streamEventAt = 0;
+const streamWitness = fs.watch(directory, { recursive: true }, (_event, file) => {
+  if (file && path.join(directory, file) === probe) streamEventAt = Date.now();
+});
+
 let ensured = '';
 const builder = {
   async ensurePackages() { ensured = fs.readFileSync(probe, 'utf8'); },
@@ -76,11 +83,12 @@ try {
     if (stopping.signal.aborted) break;
     const result: SoakRound = { pickedUp: ensured === text, bystanderSaw: bystanderEventAt >= saved };
     rounds.push(result);
-    console.log(JSON.stringify({ round, delayMs, ...result, afterMs: Date.now() - saved, load: Number(os.loadavg()[0].toFixed(0)) }));
+    console.log(JSON.stringify({ round, delayMs, ...result, watcherStreamSaw: streamEventAt >= saved, afterMs: Date.now() - saved, load: Number(os.loadavg()[0].toFixed(0)) }));
     await sleep(BETWEEN_ROUNDS_MS);
   }
 } finally {
   await watcher?.close().catch(() => {});
+  streamWitness.close();
   bystander.disconnect();
   removeProbes();
 }
