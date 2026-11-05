@@ -95,6 +95,25 @@ async function handleDevRequest(url: string, req: http.IncomingMessage, res: htt
   }
 }
 
+/** Answers `POST /db/changed-elsewhere`, whatever hearing of it comes to: nothing a tool says may take the app down */
+export function answerDataChanged(
+  res: Pick<http.ServerResponse, 'writeHead' | 'end'>,
+  hear: () => ReadonlyArray<{ message: string }>,
+): void {
+  const plainly = (status: number, text: string) => {
+    res.writeHead(status, { 'Content-Type': 'text/plain' });
+    res.end(text);
+  };
+  try {
+    const refused = hear();
+    if (refused.length === 0) return plainly(200, 'ok');
+    plainly(422, `it refused its stored settings, and the last valid ones are back in place: ${refused.map(problem => problem.message).join('; ')}`);
+  } catch (err) {
+    logger.error('Hearing of a commit from another process failed:', err as Error);
+    plainly(500, (err as Error).message);
+  }
+}
+
 function handleHttpRequest(req: http.IncomingMessage, res: http.ServerResponse) {
   if (req.method === 'POST' && (req.url === '/dev/reload' || req.url === '/dev/install')) {
     void handleDevRequest(req.url, req, res);
@@ -105,11 +124,7 @@ function handleHttpRequest(req: http.IncomingMessage, res: http.ServerResponse) 
   if (req.method === 'POST' && req.url === '/db/changed-elsewhere') {
     const refusal = dataChangedRefusal(req.headers);
     if (refusal) return answer(res, 403, { error: refusal });
-    const refused = appDataChangedElsewhere();
-    if (refused.length === 0) return answer(res, 200, { ok: true });
-    res.writeHead(422, { 'Content-Type': 'text/plain' });
-    res.end(`it refused its stored settings, and the last valid ones are back in place: ${refused.map(problem => problem.message).join('; ')}`);
-    return;
+    return answerDataChanged(res, appDataChangedElsewhere);
   }
 
   res.writeHead(404);

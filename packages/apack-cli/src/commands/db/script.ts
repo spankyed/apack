@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import { builtinModules, createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import type { AppDatabase } from '@apackdev/host/database';
-import { consoleScope, openTarget, parseDbArgs, TARGET_USAGE, withDatabase, withoutAdmin, type DbIo } from './target';
+import { consoleScope, openTarget, parseDbArgs, TARGET_USAGE, withDatabase, type DbIo } from './target';
 import { flushOutput, outputFormat, writeResult } from './output';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 
@@ -126,7 +126,7 @@ export async function dbScript(args: string[], io: DbIo): Promise<void> {
       if (typeof module.default !== 'function') {
         throw new Error(`${scriptFile} exports no function to run: export default ({ db, EARS, args, log }) => { ... }`);
       }
-      const context: DbScriptContext = { db: db.tellApp ? withoutAdmin(db) : db, EARS: consoleScope(db).EARS, args: scriptArgs, log: io.out };
+      const context: DbScriptContext = { db: db.withoutAdmin ?? db, EARS: consoleScope(db).EARS, args: scriptArgs, log: io.out };
       try {
         // Awaited here, inside withDatabase: the script's own work — its writes, an interactive question — finishes
         // before the database is closed, and what it throws or rejects with fails the command rather than being lost

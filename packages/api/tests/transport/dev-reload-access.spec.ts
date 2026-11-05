@@ -10,7 +10,7 @@ const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'api-dev-reload-'));
 process.env.APACK_ENV = 'test';
 process.env.APACK_USER_DATA_DIR = dataDir;
 process.env.APACK_API_TOKEN = 'the-run-token';
-const { API_PROTOCOL, acceptsConnection, dataChangedRefusal, devRequestRefusal, publishApiFiles } = await import('../../src/transport/websocket.ts');
+const { API_PROTOCOL, acceptsConnection, answerDataChanged, dataChangedRefusal, devRequestRefusal, publishApiFiles } = await import('../../src/transport/websocket.ts');
 const { API_HOST } = await import('@apackdev/sdk/utils/pure');
 const { apiToken, apiTokenIsOwn, dataChangedToken, isApiToken } = await import('../../src/boot/config.ts');
 const { resolveAppEnvironment } = await import('@apackdev/sdk/env');
@@ -95,6 +95,32 @@ describe('POST /db/changed-elsewhere', () => {
     expect(dataChangedRefusal({})).toMatch(/token is missing or wrong/);
     expect(dataChangedRefusal(withToken('guess'))).toMatch(/token is missing or wrong/);
     expect(dataChangedRefusal(withToken(apiToken()))).toMatch(/token is missing or wrong/);
+  });
+
+  describe('answers what hearing of it came to', () => {
+    function answered(hear: () => ReadonlyArray<{ message: string }>) {
+      const seen: { status?: number; body?: string } = {};
+      answerDataChanged({
+        writeHead: ((status: number) => { seen.status = status; }) as never,
+        end: ((body: string) => { seen.body = body; }) as never,
+      }, hear);
+      return seen;
+    }
+
+    it('with 200 when it was taken', () => {
+      expect(answered(() => []).status).toBe(200);
+    });
+
+    it('with 422 and the problems when it refused a settings row', () => {
+      const seen = answered(() => [{ message: 'limit must be a number' }]);
+      expect(seen.status).toBe(422);
+      expect(seen.body).toContain('limit must be a number');
+    });
+
+    it('with 500 rather than throwing, which would end the process', () => {
+      const seen = answered(() => { throw new Error('the disk is full'); });
+      expect(seen).toEqual({ status: 500, body: 'the disk is full' });
+    });
   });
 
   it('has a token that opens nothing else', () => {

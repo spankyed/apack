@@ -57,10 +57,12 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
   const runHistoryService = createRunHistory(runHistory.engine);
   return {
     dataChangedElsewhere() {
-      const refused = settingsStore.adoptStored();
-      engine.admin.changedElsewhere();
-      transport.rootEvents.emitIncoming({ to: HOST.bus, event: { type: 'DATA_CHANGED_ELSEWHERE' } });
-      return refused;
+      try {
+        return settingsStore.adoptStored();
+      } finally {
+        engine.admin.changedElsewhere();
+        transport.rootEvents.emitIncoming({ to: HOST.bus, event: { type: 'DATA_CHANGED_ELSEWHERE' } });
+      }
     },
     transport,
     ears: engine,
