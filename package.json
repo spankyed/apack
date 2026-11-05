@@ -110,7 +110,8 @@
     "janitor": "node --disable-warning=ExperimentalWarning scripts/janitor.ts",
     "janitor:install": "node --disable-warning=ExperimentalWarning scripts/janitor.ts --install",
     "test:linux": "tsx scripts/linux-runner.ts",
-    "measure:loop": "tsx scripts/measure-loop.ts"
+    "measure:loop": "tsx scripts/measure-loop.ts",
+    "soak:watch": "node scripts/with-source.mjs tsx packages/apack-cli/scripts/soak-watch.ts"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",

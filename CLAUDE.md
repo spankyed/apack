@@ -381,6 +381,8 @@ npm run measure -- "<cmd>"       # Time a command on a quiet machine; prints a c
                                  #   --runs N  --against "<B>"  --trials N  --busy N  --idle PERCENT  --force
 npm run measure:loop -- "<cmd>"  # How long each process went without turning its event loop, against birpc's 60s
 npm run check:idle               # Is this machine quiet enough to measure on (exit 1 below IDLE_FLOOR)
+npm run soak:watch               # Does an edit made during a watcher pass get picked up? Run on a loaded Mac. Exit 1
+                                 # lost, 3 partial (file events stalled); -- --rounds N --max-delay SECONDS
 npm run janitor                  # Hold elmdb's Rust build caches to a budget (-- --dry to preview); janitor:install
                                  # runs it hourly under launchd, logging to ~/Library/Logs/apack-janitor.log
 
