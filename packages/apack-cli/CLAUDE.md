@@ -93,6 +93,10 @@ then releases the installation.
 and a private writable Vite/temp workspace. A ready replacement publishes its marker before the old
 frontend is retired; worker closure and its POSIX group precede compiler disposal. The watcher accepts
 the session's build operation and owns only its subscriptions; the session closes the shared builder.
+Its file watches go through `createInputSubscriptions` (`input-subscriptions.ts`), which keeps a wanted watch open:
+on macOS, opening or closing any `fs.watch` on a directory can lose events on every other one in the process, so a
+change to the set held is followed by one more pass that compares the inputs. `check:specifiers` refuses a raw
+`fs.watch` elsewhere in `src/build`.
 Pack/npm and shared SDK/UI metadata, module inventory and entry selection also identify the frontend
 configuration. Changes replace its generation after a successful build; ordinary source edits keep
 Vite's live graph. Metadata lookup reuses `findPackageDirectory`, avoiding Node's cached link resolution.

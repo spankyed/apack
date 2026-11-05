@@ -32,9 +32,9 @@ Before-column load was 4 to 16. Startup ran no extra build in either version.
 **The UI and testing rows come from a separate run of the same code.** In the full session at `45a23d292e`, those
 four edits produced no pass at all. A rerun with logging, beside an independent `fs.watch` process, showed one
 build each, and both watchers received each event at the same moment, including the 174 s late one. The missing
-events in the full session had no independent watcher beside them, so their cause is not proven; a lost macOS
-file event is the likely one. An earlier session at `19448b9956` also lost two edits at load 12 to 19. A lost
-event leaves `dist` stale until the next edit, which this goal does not change.
+events in the full session had no independent watcher beside them, so those four are not tied to a cause directly.
+An earlier session at `19448b9956` also lost two edits at load 12 to 19. A lost event leaves `dist` stale until the
+next edit. [Why edits were lost](#why-edits-were-lost-2026-11-05) has what was found afterwards.
 
 ## What the time goes on
 
@@ -81,3 +81,31 @@ publication after a build.
 Of the last 298 commits (2026-10-14 to 2026-11-04) that edited non-test source in `apack-sdk`, `apack-ears` or
 `apack-ui`, 13 (4.4%) changed only comments or blank lines, the edits most likely to leave `dist` byte-identical.
 Commits are a proxy for saves, and the count comes from a line filter over `git log -p`.
+
+## Why edits were lost (2026-11-05)
+
+Two separate causes, both on a Mac under load.
+
+**The watcher lost edits itself.** libuv serves every `fs.watch` on a directory in a process from one FSEvents stream,
+and opening or closing any of them rebuilds that stream from "now", discarding what it had not delivered. Each pass
+replaced about 27 watches. `createInputSubscriptions` now keeps a wanted watch open.
+
+The real watcher with a stand-in ensure, package edits landing mid-pass, old and new code alternating in blocks of six.
+A round is "lost" when a separate FSEvents stream saw the edit and no pass read it within 150 s, and "stalled" when that
+stream saw nothing within 300 s:
+
+| Code | Rounds | Picked up | Lost | Stalled | Load |
+|---|---|---|---|---|---|
+| Old | 18 | 5 | 6 | 7 | 9 to 84 |
+| New | 18 | 13 | 0 | 5 | 14 to 47 |
+
+Without the real watcher, 600 distinct saves to one stable `fs.watch` at load 70 to 88 lost 0 in each of three trials.
+With three replacements of 27 unrelated handles at load 79 to 90, they lost 295, 296 and 320, while a stream that was
+never restarted lost 0 in those trials.
+
+**FSEvents itself stalls, for every process.** `fseventsd` was at 109% CPU when a new process watching a directory got no
+events for 44 s, and four directories then received events at identical moments. No fix to the watcher delivers an edit
+during a stall. A recorder saving once every 30 s found, in its first 45 minutes at load mostly 10 to 50, that 41 of 90
+FSEvents saves had not arrived after 60 s, while a kqueue watch on one file received all 90, the slowest in 0.12 s. No
+drop flag was raised. Whether stalls occur at normal load is not yet measured.
+

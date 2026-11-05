@@ -604,7 +604,7 @@ const INPUT_SUBSCRIPTIONS = 'packages/apack-cli/src/build/input-subscriptions.ts
  */
 export function findRawWatchesInBuild(files: readonly string[] = filesUnder(['packages/apack-cli/src/build'], repoRoot), root = repoRoot): string[] {
   const allowed = new Set([INPUT_SUBSCRIPTIONS, ...WATCHES_OUTSIDE_INPUT_SUBSCRIPTIONS]);
-  return files.filter((file) => /\.ts$/.test(file) && !allowed.has(repoRelative(root, file))).flatMap((file) => {
+  return files.filter((file) => file.endsWith('.ts') && !allowed.has(repoRelative(root, file))).flatMap((file) => {
     const found = importedCallsIn(file, { fromModules: NODE_FS }).filter((call) => /(^|\.)watch$/.test(call));
     return found.length === 0 ? [] : [`${repoRelative(root, file)}: ${[...new Set(found)].join(', ')}`];
   }).sort();
