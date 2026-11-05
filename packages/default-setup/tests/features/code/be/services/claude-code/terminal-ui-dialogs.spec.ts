@@ -27,9 +27,9 @@ function fixture() {
   Object.assign(native, { themeRoots: { ai: () => new Map([[fileStdout, { container: { current: fileFiber } }]]) } })
   const start = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
   const end = claudeTerminalUiRuntime.indexOf('const server=http.createServer')
-  const control = vm.runInNewContext(`${claudeTerminalFileRuntime};${claudeTerminalUiRuntime.slice(start, end)};control`, {
+  const control = vm.runInNewContext(`${claudeTerminalFileRuntime};${claudeTerminalUiRuntime.slice(start, end)};Object.assign(control,{async questionFixture(){const d=nativeDialog(await initialize(),'permission_ask_user_question');const frame={token:'original-question-frame',client:'question-client',item:d.item,revision:d.revision,sessionId:d.sessionId};clients.set(frame.client,{});questionFrames.set(frame.client,frame);return {id:d.item.id,revision:d.revision,session_id:d.sessionId,render_token:frame.token}}})`, {
     nativeFunctionHash: (hash: string) => hash, nativeFunctionName: (name: string) => name, process: { stdout: fileStdout }, createHash, composerFunctionHashes: fileHashes, runToolGroupAction: () => undefined, runToolBackgroundAction: () => undefined, nativeBashChoices: () => undefined,
-    originalContext: binding, initialize: async () => native, AbortController, randomUUID, setTimeout,
+    clients: new Map(), originalContext: binding, initialize: async () => native, AbortController, randomUUID, setTimeout,
     readFileSync: () => JSON.stringify({ sessionId }), configUrl: 'fixture',
   }) as (request: Record<string, unknown>, abort: AbortController) => Promise<any>
   const snapshot = async () => (await control({ subtype: 'apack_file_dialogs' }, new AbortController())).dialogs[0]
@@ -235,4 +235,18 @@ it('refuses a pending snapshot if the native session changes during its projecti
  vi.spyOn(f.native.questionOptions,'q').mockReturnValueOnce(original).mockReturnValue('replacement')
  await expect(f.control({subtype:'apack_pending_control'},new AbortController())).rejects.toThrow(/changed|expired/)
  expect(f.answer).not.toHaveBeenCalled()
+})
+
+it('rejects a question only through its original current drawing, separately from disposal cancellation', async () => {
+ const f=fixture();f.item.kind='permission_ask_user_question';Object.assign(f.item.payload,{toolName:'AskUserQuestion',questions:[]})
+ const request=await (f.control as typeof f.control & {questionFixture():Promise<Record<string,unknown>>}).questionFixture()
+ const deny=(extra={})=>f.control({subtype:'apack_deny_question_dialog',...request,...extra},new AbortController())
+ await expect(deny({render_token:undefined})).rejects.toThrow('requires its drawing')
+ await expect(deny({render_token:'retired'})).rejects.toThrow('drawing changed or expired')
+ await expect(deny({session_id:randomUUID()})).rejects.toThrow('changed or expired')
+ expect(f.answer).not.toHaveBeenCalled()
+ await expect(deny()).resolves.toEqual({answered:true})
+ expect(f.answer).toHaveBeenCalledWith('dialog-1',{behavior:'deny'})
+ await expect(deny()).rejects.toThrow('changed or expired')
+ expect(f.answer).toHaveBeenCalledOnce()
 })

@@ -651,9 +651,7 @@ function forgetQuestionClient(client){
  questionFrames.delete(client);frozenQuestionFrames.delete(client);
  for(const[token,frame]of questionFrameHistory)if(frame.client===client)questionFrameHistory.delete(token);
 }
-function questionCanonicalAnswer(n,dialog,request){
- const original=n.questionTool.shownCardInput(dialog.payload.input);
- if(request.render_token===undefined)return n.questionTool.admitCardAnswer(original,request.answer);
+function questionAnswerFrame(dialog,request){
  let frame=[...questionFrames.values(),...frozenQuestionFrames.values()].find(frame=>frame.token===request.render_token);
  if(request.draft_started===true){
   const issued=questionFrameHistory.get(request.render_token);
@@ -662,6 +660,12 @@ function questionCanonicalAnswer(n,dialog,request){
   frame=held;
  }
  if(!frame||!clients.has(frame.client)||frame.item!==dialog.item||frame.revision!==dialog.revision||frame.sessionId!==dialog.sessionId)throw Error('Native question drawing changed or expired');
+ return frame;
+}
+function questionCanonicalAnswer(n,dialog,request){
+ const original=n.questionTool.shownCardInput(dialog.payload.input);
+ if(request.render_token===undefined)return n.questionTool.admitCardAnswer(original,request.answer);
+ const frame=questionAnswerFrame(dialog,request);
  const admitted=n.questionTool.admitCardAnswer(frame.shownInput,request.answer);
  if(admitted.kind!=='admitted')return admitted;
  const remap=values=>{
@@ -906,6 +910,16 @@ async function control(request,abort){
   abort.signal.throwIfAborted();const d=nativeDialog(n,'permission_ask_user_question');
   if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native question changed or expired');
   holdQuestionFrame(d,request.render_token,request.client_id);return {held:true};
+ }
+ if(request.subtype==='apack_deny_question_dialog'){
+  abort.signal.throwIfAborted();
+  const d=nativeDialog(n,'permission_ask_user_question');
+  if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native question changed or expired');
+  if(typeof request.render_token!=='string')throw Error('Native question rejection requires its drawing');
+  questionAnswerFrame(d,request);
+  // Original Nve Cancel answers deny; store disposal's cancelled is a different lifecycle result.
+  d.store.answer(d.item.id,{behavior:'deny'});dialogRevisions.delete('permission_ask_user_question');
+  return {answered:true};
  }
  if(request.subtype==='apack_answer_question_dialog'){
   abort.signal.throwIfAborted();
