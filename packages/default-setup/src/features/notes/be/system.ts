@@ -404,6 +404,9 @@ export const notesSystem = setup({
         DATA_REPLACED: {
           actions: 'bootstrapReferences',
         },
+        DATA_CHANGED_ELSEWHERE: {
+          actions: 'bootstrapReferences',
+        },
       },
     },
   },

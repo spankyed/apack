@@ -1,6 +1,5 @@
-> **Deferred, and mostly done.** Console transaction code has run as one unit since `b69ca24727` (2026-10-22): code that
-> throws keeps nothing. What's left is small: code can still write after its unit ends. Pick this up when console repair
-> matters enough to close that, or fold it into work on the runner.
+> **Done** (2026-11-04). Code running after its transaction ended writes nothing. See Outcome. The rest is the plan as
+> written, with Decision 1 corrected.
 
 ```text
 # Goal: console transaction code can't write outside its transaction
@@ -65,15 +64,26 @@ Nobody writes these by accident in a one-line repair, but a longer script can, a
 Excluded: sandboxing console code. It's the user's own code and can reach anything in the process; the aim is a helper that
 can't quietly break the promise, not a security boundary.
 
-## Current handoff
+## Outcome
 
-Source state: unstarted, surveyed at 1b69d15677. No failures outstanding. Next action: Phase 1.
+Done 2026-11-04. `runTransactionCode` closes its write helpers and their builders as the unit ends. A later call writes
+nothing and logs an error, a builder's `id` and `row` still answer, and every row of the Scope table now keeps nothing it
+wrote late.
+
+- **Changed from the plan:** Decision 1 said a late write throws. A throw from a timer or unawaited async code is uncaught,
+  which ends the app's API process, so it logs instead.
+- **Specs:** `database-console.spec.ts`. Five mutations each fail it: helpers left open, a closed helper throwing, a raw
+  builder, a chained call returning the raw builder, and a late builder that reads as a thenable.
+- **Through the CLI:** `apack db exec` on a temporary data dir, with a timer writing after success and after a throw. The
+  row stayed as it was.
+- **Gate:** `npm run chain -- --no-native` passed, Node 24.16.0. `test:native` was not run, since the compiler isn't touched.
+  The app's Database surface goes through the same function; it was not driven by hand.
 
 ## Decisions
 
-1. **The write helpers close when the unit ends.** A write through a console helper after that throws, naming why, and the
-   writes made inside the unit stand or fall as they do now. Refusing is simpler and more honest than tracking what
-   escaped.
+1. **The write helpers close when the unit ends.** A write through a console helper after that writes nothing and logs an
+   error naming why, and the writes made inside the unit stand or fall as they do now. It doesn't throw: late code has no
+   caller to catch it, and in the app an uncaught error ends the API process (`packages/api/src/boot/errors.ts`).
 2. **The helpers include what they return.** `const w = write(id)` held past the unit is the same escape as calling `write`
    late, so a held builder is closed too.
 3. **The console only.** `transact` for packs and for host code stays as it is: `engine.md`'s unit contract is elmdb's, and
@@ -83,7 +93,7 @@ Source state: unstarted, surveyed at 1b69d15677. No failures outstanding. Next a
 
 ### Phase 1: close the helpers
 
-In `runTransactionCode`, give the code write helpers that refuse once the unit has ended, returned builders included. A
+In `runTransactionCode`, give the code write helpers that close once the unit has ended, returned builders included. A
 returned promise stays refused, and its message loses the "is kept" clause.
 
 **Done when:** `database-console.spec.ts` shows each row of the table above keeps nothing it wrote after the unit, and the

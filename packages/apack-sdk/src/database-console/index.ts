@@ -11,7 +11,10 @@ import type { EarsNames } from '../runtime/packs-view.ts';
 import { EARS as EARS_NAMES } from '../types/index.ts';
 import { boundEars, catalog, transact, untypedQuery, untypedCreate, untypedUpsert, untypedWrite, getRow, getRoles, getRelation, findRelations, removeRelation, getSchemaStats } from '../ears/index.ts';
 import { defineEars } from '@apackdev/ears';
+import { createLogger } from '../logger/logger.ts';
 import { errorMessage } from '../utils/shared.ts';
+
+const logger = createLogger('database-console');
 
 const { getAttr } = /*#__PURE__*/ defineEars(boundEars);
 
@@ -69,6 +72,11 @@ export interface ConsoleScope {
   EARS: object;
 }
 
+/** A probe, not a name: `await`, `JSON.stringify` and a console's inspection all ask for these by name */
+function isProbe(property: string): boolean {
+  return property === 'then' || property === 'toJSON' || property === 'inspect' || property === 'constructor';
+}
+
 /**
  * A name the database cannot account for is an error, not a number.
  *
@@ -87,8 +95,7 @@ function accountedFor<T extends object>(what: string, names: T, hint?: string): 
   return new Proxy(names, {
     get(target, property, receiver) {
       if (typeof property === 'symbol' || property in target) return Reflect.get(target, property, receiver);
-      // A probe, not a name: `await`, `JSON.stringify` and a console's inspection all ask for these by name
-      if (property === 'then' || property === 'toJSON' || property === 'inspect' || property === 'constructor') return undefined;
+      if (isProbe(property)) return undefined;
       throw new Error(
         `"${property}" is not ${what} this database can account for.\n`
         + `  Known: ${Object.keys(target).sort().join(', ')}`
@@ -141,17 +148,85 @@ export async function runQueryCode(code: string, scope: ConsoleScope): Promise<u
   }
 }
 
+/** What a builder does beyond writing: `id` and `row` read, so they answer after the unit too */
+function isBuilderRead(member: string | symbol): boolean {
+  return member === 'id' || member === 'row';
+}
+
+/**
+ * The write helpers for one run of transaction code, closed by `close()` as its unit ends. Code the run left behind, a
+ * timer or the rest of an async function, may still call them and whatever builder it holds. Such a call writes nothing
+ * and logs an error rather than throwing: nothing is left to catch it by then, and in the app an uncaught error ends the
+ * API process (`packages/api/src/boot/errors.ts`).
+ */
+function closableWriteHelpers(): { helpers: typeof writeHelpers; close: () => void } {
+  let open = true;
+
+  const dropped = (what: string): void => {
+    logger.error(`${what} ran after its transaction ended, so it wrote nothing: only what transaction code does before it returns is in the transaction`);
+  };
+
+  /** What a helper hands back once closed: there is no entity behind it, so its reads answer `undefined` */
+  const noEntity: object = new Proxy({}, {
+    get(_target, member) {
+      if (typeof member === 'symbol' || isProbe(member)) return undefined;
+      if (isBuilderRead(member)) return () => undefined;
+      return () => {
+        dropped(`write builder's ${member}`);
+        return member === 'destroy' ? undefined : noEntity;
+      };
+    },
+  });
+
+  /** A builder that writes only while the run is open, chaining as the builder it wraps does */
+  const closing = (builder: object): object => {
+    const wrapper: object = new Proxy(builder, {
+      get(target, member) {
+        const value: unknown = Reflect.get(target, member);
+        if (typeof value !== 'function' || isBuilderRead(member)) return value;
+        return (...args: unknown[]): unknown => {
+          if (!open) {
+            dropped(`write builder's ${String(member)}`);
+            return member === 'destroy' ? undefined : wrapper;
+          }
+          const result: unknown = Reflect.apply(value, target, args);
+          return result === target ? wrapper : result;
+        };
+      },
+    });
+    return wrapper;
+  };
+
+  const startsBuilder = <Args extends unknown[]>(name: string, helper: (...args: Args) => object) => (...args: Args): object => {
+    if (open) return closing(helper(...args));
+    dropped(name);
+    return noEntity;
+  };
+
+  const helpers = {
+    create: startsBuilder('create', untypedCreate as (...args: unknown[]) => object),
+    upsert: startsBuilder('upsert', untypedUpsert as (...args: unknown[]) => object),
+    write: startsBuilder('write', untypedWrite as (...args: unknown[]) => object),
+    removeRelation: (...args: Parameters<typeof removeRelation>): void => {
+      if (open) removeRelation(...args);
+      else dropped('removeRelation');
+    },
+  } as typeof writeHelpers;
+
+  return { helpers, close: () => { open = false; } };
+}
+
 /**
  * Runs transaction code with the read and write helpers as one unit (`transact`): code that throws part way keeps
- * none of its writes, and its error's message starts "Transaction failed:". The code is synchronous — `await`
- * doesn't parse, and a returned promise is refused — since an await would split the unit. A promise is refused only
- * once the code that made it has started, so what that code writes after its first await is outside the unit and
- * kept, which the message says rather than claiming everything was undone.
+ * none of its writes, and its error's message starts "Transaction failed:". The code is synchronous: `await` doesn't
+ * parse, and a returned promise is refused, since an await would split the unit. The write helpers and the builders
+ * they return close as the unit ends, so code that runs later writes nothing (`closableWriteHelpers`).
  */
 export async function runTransactionCode(code: string, scope: ConsoleScope): Promise<unknown> {
+  const { helpers, close } = closableWriteHelpers();
   let returnedPromise = false;
   try {
-    const body = compileCode(code, scope, { ...readHelpers, ...writeHelpers });
+    const body = compileCode(code, scope, { ...readHelpers, ...helpers });
     return transact(() => {
       const result = body();
       returnedPromise = result !== null && typeof result === 'object' && typeof (result as { then?: unknown }).then === 'function';
@@ -160,8 +235,10 @@ export async function runTransactionCode(code: string, scope: ConsoleScope): Pro
   } catch (error) {
     if (returnedPromise) {
       throw new Error('Transaction failed: transaction code must be synchronous, and this returned a promise.\n'
-        + '  What it wrote before its first await was undone; what it writes after that runs outside the transaction and is kept.');
+        + '  Nothing it wrote was kept: a transaction is undone as a whole, and what runs after it writes nothing.');
     }
     throw new Error(`Transaction failed: ${errorMessage(error)}\n  Nothing it wrote was kept: a transaction is undone as a whole.`);
+  } finally {
+    close();
   }
 }

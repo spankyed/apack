@@ -236,8 +236,14 @@ export interface Connection {
   heard(changes: { sequence: number; touched: number[] }): void;
   /** Tells the commit listeners of a commit made past the connection, whose writes aren't known key by key */
   committedEverything(): void;
+  /** Told that another process has committed: the commit listeners hear everything, and its commits so far aren't news */
+  changedElsewhere(): void;
+  /** Calls `listener` soon after a commit here finds another process's that nobody told of. Returns the unregistration */
+  onFoundElsewhere(listener: () => void): () => void;
   /** The last commit's sequence, or 0 */
   lastCommit(): number;
+  /** The sequence of the last commit made through this connection, or 0: another process's and a builder's aren't */
+  lastOwnCommit(): number;
   /** Counting the calls this connection makes, off until started */
   readonly calls: CallCounting;
   /** The count being kept, while counting runs: what the watch scheduler records each watch's runs into */
@@ -258,7 +264,9 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
   let tracking: number | undefined;
   const listeners = new Set<(commit: Commit) => void>();
   /** Calls every commit listener; a listener's throw is reported, not handed to the writer */
-  const committed = (commit: Commit) => {
+  /** The sequence of the last commit this connection made, or 0 */
+  let ownCommit = 0;
+  const tellListeners = (commit: Commit) => {
     for (const listener of listeners) {
       try {
         listener(commit);
@@ -267,8 +275,26 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
       }
     }
   };
+  const committed = (commit: Commit) => {
+    ownCommit = commit.sequence;
+    tellListeners(commit);
+  };
   const heard = (changes: { sequence: number; touched: number[] }) => {
-    if (listeners.size > 0) committed({ sequence: changes.sequence, touched: new Set(changes.touched) });
+    if (listeners.size > 0) tellListeners({ sequence: changes.sequence, touched: new Set(changes.touched) });
+  };
+  /** The latest of another process's commits this connection has acted on */
+  let reconciled = 0;
+  const foundElsewhere = new Set<() => void>();
+  const everyWatch = () => tellListeners({ sequence: database.sequence, touched: 'all' });
+  const made = (changes: { sequence: number; touched: number[]; elsewhereThrough?: number }) => {
+    ownCommit = changes.sequence;
+    heard(changes);
+    // A commit found another process's that nobody said was coming. One already told of (`changedElsewhere`) isn't news
+    if (changes.elsewhereThrough !== undefined && changes.elsewhereThrough > reconciled) {
+      reconciled = changes.elsewhereThrough;
+      everyWatch();
+      for (const listener of foundElsewhere) queueMicrotask(listener);
+    }
   };
 
   const observation = createOperationObservation(
@@ -361,7 +387,7 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
       // The unit's deferred checks run as it commits; one that fails aborts it
       const changes = timedInUnit(() => unpackr.unpack(crossing(() => held.commit(options?.durable ?? false))));
       unitEnded();
-      heard(changes as { sequence: number; touched: number[] });
+      made(changes as { sequence: number; touched: number[] });
     } catch (error) {
       const open = held.isOpen;
       if (open) held.abort();
@@ -433,7 +459,7 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
         if (target) levels.at(-1)!.kept = true;
         return unpackr.unpack(answer) as { results: OpResult[]; changes?: { sequence: number; touched: number[] } };
       });
-      if (written.changes) heard(written.changes);
+      if (written.changes) made(written.changes);
       return written.results;
     },
     load(loads) {
@@ -465,7 +491,16 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
       return () => { listeners.delete(listener); };
     },
     committedEverything: () => committed({ sequence: database.sequence, touched: 'all' }),
+    changedElsewhere() {
+      reconciled = database.sequence;
+      everyWatch();
+    },
+    onFoundElsewhere(listener) {
+      foundElsewhere.add(listener);
+      return () => { foundElsewhere.delete(listener); };
+    },
     lastCommit: () => database.sequence,
+    lastOwnCommit: () => ownCommit,
     calls,
     tally: () => tally,
     observe: observation.observe,

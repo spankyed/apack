@@ -309,7 +309,7 @@ Things worth knowing before changing it:
   on connect sees everything from then on, where the fixture's array goes back to the launch.
 - **`/query` and `/transact` go over the bus**, to default-setup's `EXECUTE_QUERY`/`EXECUTE_TRANSACTION`,
   which run against the live engine with every installed pack's entity types. So a write is visible to the
-  next read — which `apack db exec` cannot do, since it refuses while the app holds the write lock.
+  next read in the same session, where `apack db exec` writes from its own process and tells the app when it ends.
 - **A write is visible to the next read and not to the UI, and `/reload` is the difference.** A surface's
   state is what its system sent it, so a write that goes round every system reaches no view. Navigating
   between surfaces does not refresh one — the actor survives — while a new connection does, because the bus

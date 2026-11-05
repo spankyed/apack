@@ -118,15 +118,15 @@ export async function dbScript(args: string[], io: DbIo): Promise<void> {
   const scriptFile = path.resolve(file);
   if (!fs.existsSync(scriptFile)) throw new Error(`No script at ${scriptFile}`);
 
-  // A script writes unless it says it only reads, so it's refused while an app runs on the data dir
-  const db = await openTarget(target, { write: !values['read-only'], command: 'script' }, io);
+  // A script writes unless it says it only reads, and a running app is told once it ends
+  const db = await openTarget(target, { changes: values['read-only'] ? 'nothing' : 'rows', command: 'script' }, io);
   try {
     const result = await withDatabase(db, async () => {
       const module = await importScript(scriptFile).catch((error: unknown) => { throw scriptFailure(scriptFile, error); });
       if (typeof module.default !== 'function') {
         throw new Error(`${scriptFile} exports no function to run: export default ({ db, EARS, args, log }) => { ... }`);
       }
-      const context: DbScriptContext = { db, EARS: consoleScope(db).EARS, args: scriptArgs, log: io.out };
+      const context: DbScriptContext = { db: db.withoutAdmin ?? db, EARS: consoleScope(db).EARS, args: scriptArgs, log: io.out };
       try {
         // Awaited here, inside withDatabase: the script's own work — its writes, an interactive question — finishes
         // before the database is closed, and what it throws or rejects with fails the command rather than being lost

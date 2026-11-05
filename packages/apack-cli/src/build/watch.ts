@@ -4,7 +4,7 @@ import { createPackBuilder, type PackBuilder } from './build-process.ts';
 import { withBuildSignals } from './build-signals.ts';
 import { readValidManifest } from '../utils.ts';
 import { isPackInputPath, packInputWatchTargets, packInputsHash } from '@apackdev/host/build/pack-inputs';
-import { reloadPack, type AppPlace, type DevDelivery } from './dev-reload.ts';
+import { reloadPack, type AppPlace, type DevDelivery } from '../app/app-api.ts';
 import { compilerWatchPaths, createCompilerWatchTools, compilerWatchTargets, createCompilerWatchMatcher, mergeCompilerWatchPaths, additionalCompilerObservations, packageInputWatchPaths, type CompilerWatchPaths } from './compiler-watch.ts';
 import { checkoutBuildUnits } from './checkout-packages.ts';
 import { cliPackageDirectory } from './tool-identity.ts';

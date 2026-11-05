@@ -133,6 +133,12 @@ export interface ChainStep {
    */
   readonly linuxOnMac?: true;
   /**
+   * That it takes the machine as well as its budget: the acceptance pools and the app suites. One chain at a time runs
+   * such steps across this machine's checkouts (`scripts/lib/machine-lock.ts`), and the rest stay free to overlap with
+   * another chain's.
+   */
+  readonly expensive?: true;
+  /**
    * How long it may run before its process group is killed, by the kind of work it is
    * (`TIMEOUT_MS`, `scripts/lib/step-timeouts.ts`).
    *
@@ -974,13 +980,13 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
   // never the app — which is why they can run before `build` rather than behind it.
   // Needs `build:default-setup` and not just `packages:ensure`, because `dependency-runtime` builds a pack that depends
   // on default-setup and so reads its `dist`. Table order promises nothing (`orderedSteps`), so the edge is declared.
-  { name: 'test:integration', timeout: 'acceptance',
+  { name: 'test:integration', timeout: 'acceptance', expensive: true,
     // It keeps a cache of its own, like the two unit pools, so `--all` has to reach inside it
     forceArgs: ['--all'],
     ...inputsForSuites(INTEGRATION_SUITES, 'integration') },
   // Native runtime and live-watcher scenarios, beside integration rather than inside it: same reads, and a
   // run of its own so it can be scheduled, selected and sharded apart from the ordinary integration specs.
-  { name: 'test:native', timeout: 'acceptance', linuxOnMac: true,
+  { name: 'test:native', timeout: 'acceptance', linuxOnMac: true, expensive: true,
     forceArgs: ['--all'],
     ...inputsForSuites(NATIVE_SUITES, 'native') },
   // build:default-setup owns pack outputs; build:runtime only builds the four app workspaces.
@@ -997,7 +1003,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
   // app workspace bundle stays identical, so their cache keys must include PACK_OUTPUTS too.
   // Each fixture pack's Playwright suite on one worker per three cores, with the default-fork lifecycle
   // beside them where there are cores for it.
-  { name: 'test:external-pack:app', timeout: 'scenario',
+  { name: 'test:external-pack:app', timeout: 'scenario', expensive: true,
     // Its own Playwright output, rewritten every run
     excludes: FIXTURE_TEST_OUTPUT,
     // PACKAGE_BUILD_OUTPUTS because the fixture it drives *is* one: `@apackdev/testing` resolves to its
@@ -1067,7 +1073,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // APACK_HOST selects default-setup's built snapshot for the external pack's dependency.
     inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/acceptance/packaged-authoring/test-packaged-authoring-author.sh',
       'tests/acceptance/packaged-authoring/support.sh', ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS] },
-  { name: 'test:packaged-authoring:app', timeout: 'suite',
+  { name: 'test:packaged-authoring:app', timeout: 'suite', expensive: true,
     inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/acceptance/packaged-authoring/test-packaged-authoring-app.sh',
       'tests/acceptance/packaged-authoring/support.sh', '.apack/tests/authoring-handoff', ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
 ];

@@ -886,7 +886,7 @@ export interface SurfaceDeclaration {
 export function _surfaceTargets(surface: SurfaceDeclaration): [string, string][];
 
 // @public
-export const SYSTEM_EVENT_TYPES: readonly ["SEND_STATE", "CLIENT_CONNECTED", "PACK_CHANGED", "FEATURE_SETTINGS_UPDATED", "DATA_REPLACED"];
+export const SYSTEM_EVENT_TYPES: readonly ["SEND_STATE", "CLIENT_CONNECTED", "PACK_CHANGED", "FEATURE_SETTINGS_UPDATED", "DATA_REPLACED", "DATA_CHANGED_ELSEWHERE"];
 
 // @public
 export interface SystemContract {
@@ -958,6 +958,16 @@ export type SystemEvents =
 */
 | {
     type: 'DATA_REPLACED';
+}
+/**
+* Another process committed to the database, a local tool such as `apack db exec`, and rows may have changed in any
+* way, though most are as they were. Unlike `DATA_REPLACED` it doesn't mean work held over rows has lost them.
+*
+* Handling it is optional, as there: the bus also asks every system for its startup data. Declare it only for what
+* re-reading cannot fix, such as an index derived from the rows.
+*/
+| {
+    type: 'DATA_CHANGED_ELSEWHERE';
 };
 
 // @public

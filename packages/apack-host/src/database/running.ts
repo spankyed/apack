@@ -44,8 +44,8 @@ export const appLockFile = (userDataDir: string): string => path.join(_appDirOf(
  * booted. Between those two moments, and again while a crashed API is being restarted, the port file says
  * no app is here and this is the only thing that says otherwise.
  *
- * Read by `apack db`, never by the app itself; a tool that finds it refuses rather than writing under a
- * running app. It is not a mutual-exclusion lock — `requestSingleInstanceLock()` is what keeps one app per
+ * Read by `apack db`, never by the app itself; a tool that finds it tells the app what it commits, or refuses a change
+ * that replaces what the app is using. It is not a mutual-exclusion lock — `requestSingleInstanceLock()` is what keeps one app per
  * data dir — so it does not need an atomic create.
  */
 export function publishRunningApp(userDataDir: string): () => void {

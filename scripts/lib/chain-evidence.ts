@@ -85,9 +85,31 @@ export interface EvidenceResult {
  * A bare log does not say how its step ended, and the summary that would have said so is the thing not in
  * scrollback tomorrow. So each file answers that for itself.
  */
+const DEADLINE_WORDS = new RegExp([
+  String.raw`(?:Test|Hook) timed out in \d+ms`,
+  String.raw`Test timeout of \d+ms exceeded`,
+  String.raw`Worker teardown timeout of \d+ms exceeded`,
+  String.raw`Fixture "[^"]+" timeout of \d+ms exceeded`,
+  String.raw`"[^"]+" hook timeout of \d+ms exceeded`,
+  String.raw`Tearing down "[^"]+" exceeded the test timeout of \d+ms`,
+  String.raw`running past the \d+ms ceiling`,
+].join('|'), 'g');
+
 export function evidenceHeader(label: string, result: EvidenceResult): string {
   const ended = result.timedOut === true ? 'timed out' : `exit ${result.code}`;
-  return `# ${label} — ${ended} after ${(result.ms / 1000).toFixed(1)}s`;
+  const deadlines = deadlinesNote(result);
+  return `# ${label} — ${ended} after ${(result.ms / 1000).toFixed(1)}s${deadlines ? `, ${deadlines}` : ''}`;
+}
+
+/**
+ * What a failed step's output says of tests running out of time, in vitest's and Playwright's words and `runCommand`'s. A
+ * deadline hit is a different finding from an assertion, usually about the machine, and which one it was is the first thing
+ * to know about a failure. Counts messages, not tests, since a report can repeat one. A reading, deciding nothing
+ */
+export function deadlinesNote(result: EvidenceResult): string | undefined {
+  if (result.code === 0) return undefined;
+  const messages = result.output.match(DEADLINE_WORDS)?.length ?? 0;
+  return messages === 0 ? undefined : `${messages} deadline message${messages === 1 ? '' : 's'} in its output`;
 }
 
 /**

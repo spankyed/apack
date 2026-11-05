@@ -31,6 +31,8 @@ export type PackClientConnectedEvent = { type: 'PACK_CLIENT_CONNECTED'; packId: 
 export type PackChangedEvent = { type: 'PACK_CHANGED'; packId: string };
 /** Raised once every row the app holds has been replaced and the new world is built (`services.appData`) */
 export type DataReplacedEvent = { type: 'DATA_REPLACED' };
+/** Raised when a local tool says it committed to the app's database from its own process */
+export type DataChangedElsewhereEvent = { type: 'DATA_CHANGED_ELSEWHERE' };
 /** Raised after restarting a pack's systems, once they're in the actor system and can receive events */
 export type SystemsSpawnedEvent = { type: 'SYSTEMS_SPAWNED'; systemIds: string[] };
 
@@ -43,6 +45,7 @@ export type BackendEvents =
   | PackClientConnectedEvent
   | PackChangedEvent
   | DataReplacedEvent
+  | DataChangedElsewhereEvent
   | SystemsSpawnedEvent
   | { type: 'SYSTEMS_STOPPED'; afterStop(): void };
 
@@ -352,9 +355,10 @@ export function createBusMachine(options: BusOptions) {
         sendToRunning(system, running, { type: 'PACK_CHANGED', packId: event.packId });
         if (listening(self)) askToPublish(system, publishable(running, context.awaitingFrontends));
       },
-      sendDataReplaced: ({ context, system, self }) => {
+      sendDataFact: ({ context, event, system, self }) => {
+        if (event.type !== 'DATA_REPLACED' && event.type !== 'DATA_CHANGED_ELSEWHERE') return;
         const running = [...systems().keys()];
-        sendToRunning(system, running, { type: 'DATA_REPLACED' });
+        sendToRunning(system, running, { type: event.type });
         if (listening(self)) askToPublish(system, publishable(running, context.awaitingFrontends));
       },
       sendSpawnedConnected: ({ event, system }) => {
@@ -417,7 +421,8 @@ export function createBusMachine(options: BusOptions) {
       ACTIVATE_PACK: { actions: 'activatePack' },
       PACK_CLIENT_CONNECTED: { actions: 'sendPackConnected' },
       PACK_CHANGED: { actions: 'sendPackChanged' },
-      DATA_REPLACED: { actions: 'sendDataReplaced' },
+      DATA_REPLACED: { actions: 'sendDataFact' },
+      DATA_CHANGED_ELSEWHERE: { actions: 'sendDataFact' },
     },
     states: {
       awaitingClient: {
