@@ -4,6 +4,7 @@
     contain: 'size',
     '--native-chat-min-height': nativeChatMinHeight,
     '--composer-workspace-history-reserve': nativeWorkspaceReading ? '2rem' : undefined,
+    '--composer-navigation-height': nativeConversationNavigation ? '2.5rem' : undefined,
     '--agent-composer-history-reserve': nativeWorkspaceReading ? '2rem' : undefined,
   }">
     <!-- Main content: optional inline dashboard + chat -->
@@ -119,7 +120,7 @@
                 <div v-if="nativeComposerOwner?.preview" data-native-stream-preview class="min-w-0 whitespace-pre-wrap break-words text-sm leading-relaxed" role="status" aria-label="Claude response in progress"><NativeStatusText :text="nativeComposerOwner.preview.output" /></div>
               </div>
             </div>
-            <div v-if="currentThread?.context?.claudeCode && (!isNearBottom || currentThread.context.claudeCode.pendingElicitation) && allMessages.length > 0" aria-label="Conversation navigation" class="relative h-10 shrink-0">
+            <div v-if="nativeConversationNavigation" aria-label="Conversation navigation" class="relative h-10 shrink-0">
               <ScrollToBottomFob :visible="!isNearBottom" aria-label="Scroll to latest message" @click="scrollToBottom('smooth')" />
             </div>
             <ScrollToBottomFob v-else-if="!currentThread?.context?.claudeCode" :visible="!isNearBottom && allMessages.length > 0" @click="scrollToBottom('smooth')" />
@@ -823,6 +824,8 @@ watch(canvasHeight, (height) => {
 const messagesContainer = ref<HTMLElement | null>(null)
 const messagesContent = ref<HTMLElement | null>(null)
 const isNearBottom = ref(true)
+// Navigation takes space beside history; the composer must not consume both.
+const nativeConversationNavigation = computed(() => !!currentThread.value?.context?.claudeCode && (!isNearBottom.value || !!currentThread.value.context.claudeCode.pendingElicitation) && allMessages.value.length > 0)
 const pendingScrollOnSend = ref(false)
 const lightboxOpen = ref(false)
 const lightboxSrc = ref('')
