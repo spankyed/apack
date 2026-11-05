@@ -140,7 +140,7 @@ jobs:
             tests/packs/*/dist/build-inputs.json
       - name: Compiler queue lifecycle
         if: ${{ inputs.suite == 'cli' }}
-        run: node scripts/with-source.mjs node node_modules/vitest/vitest.mjs run --project @apackdev/cli packages/apack-cli/tests/build/pack-builder.spec.ts --maxWorkers 2
+        run: node scripts/with-source.mjs node node_modules/vitest/vitest.mjs run --config vitest.native.config.ts --project @apackdev/cli packages/apack-cli/tests/build/pack-builder.native.spec.ts --maxWorkers 2
       - name: Source pack dev install and rebuild
         if: ${{ !cancelled() && (inputs.suite == 'all' || inputs.suite == 'cli') && steps.preparation.outcome == 'success' }}
         run: node scripts/with-source.mjs tsx tests/acceptance/pack-dev/test-pack-dev.ts

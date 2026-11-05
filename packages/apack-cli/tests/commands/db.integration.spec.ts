@@ -6,7 +6,8 @@ import type { AddressInfo } from 'node:net';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { Readable } from 'node:stream';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { promisify } from 'node:util';
 import { createRequire } from 'node:module';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEarsEngine, type EARS } from '@apackdev/ears';
@@ -410,13 +411,32 @@ describe('the lock a change holds', () => {
 
   const slowCode = 'return new Promise((resolve) => setTimeout(() => resolve(1), 60))';
 
-  it('is held while a change runs and released after, so an app that starts meanwhile refuses to open the database', async () => {
+  it('is held by a script with --admin and released after, so an app that starts meanwhile refuses to open the database', async () => {
     const dir = await appDataDir();
-    // A script, since exec's transaction code is synchronous and so cannot keep the command running
     const script = path.join(dir, 'slow.mjs');
     fs.writeFileSync(script, `export default () => new Promise((resolve) => setTimeout(() => resolve(1), 60));`);
-    expect(await writerDuring(['script', script, '--data-dir', dir], dir))
+    expect(await writerDuring(['script', script, '--admin', '--data-dir', dir], dir))
       .toEqual({ during: `apack db script (pid ${process.pid})`, after: null });
+  });
+
+  it('is not held by a command changing rows, so an app can start beside it', async () => {
+    const dir = await appDataDir();
+    const script = path.join(dir, 'slow.mjs');
+    fs.writeFileSync(script, `export default () => new Promise((resolve) => setTimeout(() => resolve(1), 60));`);
+    expect(await writerDuring(['script', script, '--data-dir', dir], dir)).toEqual({ during: null, after: null });
+  });
+
+  it('refuses a command changing rows while another tool is replacing the database', async () => {
+    const dir = await appDataDir();
+    const held = holdDatabaseWriteLock(dir, 'apack db import');
+    try {
+      const { error } = await run(['exec', "write('Note-a').set('title', 'Changed')", '--data-dir', dir]);
+      expect(error?.message).toContain(`being changed by apack db import (pid ${process.pid})`);
+      expect(error?.message).toContain('then try again');
+    } finally {
+      held.release();
+    }
+    expect((await ok(['query', "return getRow('Note-a')?.title", '--data-dir', dir])).out).toBe('Alpha');
   });
 
   it('is not taken by a command that only reads', async () => {
@@ -500,9 +520,8 @@ describe('apack db exec', () => {
     it('saves the change and tells the app, with its token', async () => {
       const dir = await appDataDir();
       const asked = await runningApp(dir);
-      const { out, err } = await ok(['exec', CHANGE, '--data-dir', dir]);
+      const { out } = await ok(['exec', CHANGE, '--data-dir', dir]);
       expect(out).toBe('answered');
-      expect(err).toMatch(/Note: apack is running on it/);
       expect(asked).toEqual([{ url: '/db/changed-elsewhere', token: 'the-token' }]);
       expect(await titleIn(dir)).toBe('Changed');
     });
@@ -558,25 +577,71 @@ describe('apack db exec', () => {
       expect(await titleIn(refusing)).toBe('Changed');
     });
 
-    it('gives a script rows, and refuses it the admin a running app cannot take', async () => {
-      const dir = await appDataDir();
-      await runningApp(dir);
-      for (const reach of ['db.admin', 'db.database', 'db.ears.admin']) {
-        const script = path.join(dir, `reach-${reach}.mjs`);
-        fs.writeFileSync(script, `export default ({ db }) => ${reach};`);
-        const { error } = await run(['script', script, '--data-dir', dir]);
-        expect(error?.message).toContain(`can't use ${reach} while apack runs`);
+    it('gives a script rows and not the admin, whether or not an app is running', async () => {
+      const closed = await appDataDir();
+      const open = await appDataDir();
+      await runningApp(open);
+      for (const dir of [closed, open]) {
+        for (const reach of ['db.admin', 'db.database', 'db.ears.admin']) {
+          const script = path.join(dir, `reach-${reach}.mjs`);
+          fs.writeFileSync(script, `export default ({ db }) => ${reach};`);
+          const { error } = await run(['script', script, '--data-dir', dir]);
+          expect(error?.message).toContain(`uses ${reach} only with --admin`);
+        }
+        const reads = path.join(dir, 'reads.mjs');
+        fs.writeFileSync(reads, "export default ({ db }) => db.ears.getRow('Note-a')?.title;");
+        expect((await ok(['script', reads, '--data-dir', dir])).out).toBe('Alpha');
       }
-      const reads = path.join(dir, 'reads.mjs');
-      fs.writeFileSync(reads, "export default ({ db }) => db.ears.getRow('Note-a')?.title;");
-      expect((await ok(['script', reads, '--data-dir', dir])).out).toBe('Alpha');
     });
 
-    it('keeps the admin for a script with no app running', async () => {
+    it('gives a script the admin with --admin, which an app running there refuses', async () => {
+      const closed = await appDataDir();
+      const script = path.join(closed, 'admin.mjs');
+      fs.writeFileSync(script, 'export default ({ db }) => typeof db.admin.getAllEntities;');
+      expect((await ok(['script', script, '--admin', '--data-dir', closed])).out).toBe('function');
+
+      const open = await appDataDir();
+      await runningApp(open);
+      const { error } = await run(['script', script, '--admin', '--data-dir', open]);
+      expect(error?.message).toMatch(/quit it first/);
+    });
+
+    it('tells an app that started while it ran', async () => {
       const dir = await appDataDir();
-      const script = path.join(dir, 'admin.mjs');
-      fs.writeFileSync(script, "export default ({ db }) => typeof db.admin.getAllEntities;");
-      expect((await ok(['script', script, '--data-dir', dir])).out).toBe('function');
+      const asked = await runningApp(dir);
+      const port = path.join(_appDirOf(dir), 'api-port');
+      const published = fs.readFileSync(port, 'utf8');
+      fs.rmSync(port);
+      const script = path.join(dir, 'starts.mjs');
+      fs.writeFileSync(script, `import * as fs from 'node:fs';
+        export default ({ db }) => {
+          db.ears.write('Note-a').set('title', 'Changed');
+          fs.writeFileSync(${JSON.stringify(port)}, ${JSON.stringify(published)});
+        };`);
+      const { exitCode } = await ok(['script', script, '--data-dir', dir]);
+      expect(exitCode).toBeUndefined();
+      expect(asked.map((call) => call.url)).toEqual(['/db/changed-elsewhere']);
+    });
+
+    it('reopens a write repl when an app has declared a schema since it opened', async () => {
+      const dir = await appDataDir();
+      const elmdb = createRequire(createRequire(import.meta.url).resolve('@apackdev/ears/package.json')).resolve('elmdb');
+      async function* lines() {
+        yield "write('Note-a').set('title', 'Before')\n";
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        await promisify(execFile)(process.execPath, ['-e', [
+          `const { Database } = require(${JSON.stringify(elmdb)});`,
+          'const database = Database.open(process.argv[1]);',
+          "database.setSchema({ ...database.schema, roles: { ...database.schema.roles, declared_since: {} } });",
+          'database.close();',
+        ].join('\n'), _appDataPaths(dir).lmdb]);
+        yield "write('Note-a').set('title', 'After')\n";
+        yield '.exit\n';
+      }
+      const err: string[] = [];
+      await dbRepl(['--write', '--data-dir', dir], { out: () => {}, err: (line) => err.push(line) }, Readable.from(lines()));
+      expect(err.filter((line) => line.startsWith('Error:'))).toEqual([]);
+      expect(await titleIn(dir)).toBe('After');
     });
 
     it('has nothing to say to an app that quit while it ran', async () => {
@@ -606,15 +671,6 @@ describe('apack db exec', () => {
       process.exitCode = undefined;
       expect(exitCode).toBeUndefined();
       expect(statuses).toEqual([]);
-    });
-
-    it('names the way out when a script is refused the admin and the app may be gone', async () => {
-      const dir = await appDataDir();
-      holdLock(dir);
-      const script = path.join(dir, 'reach.mjs');
-      fs.writeFileSync(script, 'export default ({ db }) => db.admin;');
-      const { error } = await run(['script', script, '--data-dir', dir]);
-      expect(error?.message).toContain(`delete ${path.join(_appDirOf(dir), 'app.lock')}`);
     });
 
     it('still refuses to replace or reset the data under it, changing nothing', async () => {

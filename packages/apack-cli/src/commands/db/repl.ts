@@ -1,7 +1,10 @@
 // apack db repl: console code line by line, on the data dir's database
 import * as readline from 'node:readline/promises';
 import { runQueryCode, runTransactionCode } from '@apackdev/sdk/database-console';
-import { consoleScope, openTarget, parseDbArgs, TARGET_USAGE, withDatabase, type DbIo } from './target';
+import { consoleScope, openTarget, parseDbArgs, TARGET_USAGE, withDatabase, type DbIo, type TargetDatabase } from './target';
+
+/** What elmdb's refusal says when another process changed the schema after this handle opened */
+const SCHEMA_CHANGED_MESSAGE = 'Another process changed the database schema';
 import { toPretty } from './output';
 
 const OPTIONS = {
@@ -23,20 +26,33 @@ export async function dbRepl(args: string[], io: DbIo, input: NodeJS.ReadableStr
   const { values, positionals, target } = parseDbArgs(args, OPTIONS, REPL_USAGE);
   if (positionals.length > 0) throw new Error(`Unexpected argument ${positionals[0]}\n\n${REPL_USAGE}`);
   const write = values.write as boolean;
-  const db = await openTarget(target, { changes: write ? 'rows' : 'nothing', command: 'repl' }, io);
-  const scope = consoleScope(db);
+  const open = () => openTarget(target, { changes: write ? 'rows' : 'nothing', command: 'repl' }, io);
+  let db = await open();
+  let scope = consoleScope(db);
   const run = write ? runTransactionCode : runQueryCode;
   const lines = readline.createInterface({ input, terminal: false });
   io.err(`${write ? 'Transaction' : 'Query'} code, one line at a time; .exit to quit`);
-  await withDatabase(db, async () => {
+  const session: TargetDatabase = { ...db, close: () => db.close(), tellApp: async () => db.tellApp?.() };
+  await withDatabase(session, async () => {
     try {
       for await (const line of lines) {
         const code = line.trim();
         if (code === '.exit') break;
         if (!code) continue;
         try {
-          io.out(toPretty(await run(code, scope)));
-          await db.tellApp?.();
+          let answer;
+          try {
+            answer = await run(code, scope);
+          } catch (error) {
+            // The app declared a schema after this session opened, as it may on restarting: nothing was written
+            if (!(error as Error).message.includes(SCHEMA_CHANGED_MESSAGE)) throw error;
+            db.close();
+            db = await open();
+            scope = consoleScope(db);
+            answer = await run(code, scope);
+          }
+          io.out(toPretty(answer));
+          await session.tellApp?.();
         } catch (error) {
           io.err(`Error: ${(error as Error).message}`);
         }

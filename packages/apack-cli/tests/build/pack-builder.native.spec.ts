@@ -1,17 +1,20 @@
-// @slow: one pack builder taken through 25 real builds: reuse, refusal and recovery
+// One pack builder taken through 25 real builds: reuse, refusal and recovery
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { afterEach, expect, it, vi } from 'vitest';
 import * as installation from '../../src/build/compiler-installation.ts';
 import * as checkout from '../../src/build/checkout-packages.ts';
+import { readPackDevServerInputs } from '../../src/build/fe-bundler.ts';
 import { _declarationRevision, PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
 import { PACK_LAYOUT, readPackBuild, sealPackBuild } from '@apackdev/host/packs';
 import { packInputsHash } from '@apackdev/host/build/pack-inputs';
 import { createPackBuilder, type PackBuilder } from '../../src/build/build-process.ts';
-import { readPackDevServerInputs } from '../../src/build/fe-bundler.ts';
+
+const execFileAsync = promisify(execFile);
 
 function stopDescendant(pid: number) {
   try { process.kill(pid, 'SIGKILL'); }
@@ -108,7 +111,7 @@ async function prepareCompiler(compiler: string) {
   const captured = await installation.captureCompilerInstallation(compiler);
   try {
     // First launch of a copied native executable can exceed the shutdown tests' readiness budget.
-    execFileSync(captured.executable, ['-e', ''], { timeout: 5_000 });
+    await execFileAsync(captured.executable, ['-e', '']);
   } catch (error) {
     await captured.dispose();
     throw error;
@@ -289,36 +292,6 @@ it('replaces the frontend for environment changes without recopying the compiler
   expect(capture).toHaveBeenCalledTimes(1);
 });
 
-it('tracks frontend SDK and UI metadata while leaving bundled EARS outside the shared frontend inputs', () => {
-  const { pack } = fixture();
-  const metadata = (name: string, description: string) => {
-    const directory = path.join(pack, 'node_modules', name);
-    fs.mkdirSync(directory, { recursive: true });
-    fs.writeFileSync(path.join(directory, 'package.json'), JSON.stringify({ name, description, exports: {} }));
-  };
-  for (const name of ['@apackdev/sdk', '@apackdev/ui', '@apackdev/ears']) metadata(name, 'original');
-  const before = readPackDevServerInputs(pack);
-  metadata('@apackdev/ears', 'changed');
-  expect(readPackDevServerInputs(pack)).toBe(before);
-  metadata('@apackdev/sdk', 'changed');
-  const sdkChanged = readPackDevServerInputs(pack);
-  expect(sdkChanged).not.toBe(before);
-  metadata('@apackdev/ui', 'changed');
-  expect(readPackDevServerInputs(pack)).not.toBe(sdkChanged);
-});
-
-it('tracks effective ordered frontend Node options without treating source-mode flags as runtime changes', () => {
-  const { pack } = fixture();
-  vi.stubEnv('NODE_OPTIONS', '--require one.cjs --import two.mjs');
-  const first = readPackDevServerInputs(pack);
-  vi.stubEnv('NODE_OPTIONS', '--require "one.cjs"   --import two.mjs --conditions=@apackdev/source');
-  expect(readPackDevServerInputs(pack)).toBe(first);
-  vi.stubEnv('NODE_OPTIONS', '--import two.mjs --require one.cjs');
-  expect(readPackDevServerInputs(pack)).not.toBe(first);
-  vi.stubEnv('NODE_OPTIONS', '--require other.cjs --import two.mjs');
-  expect(readPackDevServerInputs(pack)).not.toBe(first);
-});
-
 it('stops its worker before removing the compiler on close', async () => {
   const { compiler, pack, builder, report } = fixture();
   const captured = await prepareCompiler(compiler);
@@ -390,8 +363,8 @@ it('stops remaining compiler descendants before accepting output', async () => {
       expect(() => process.kill(pid!, 0)).toThrow();
     } else {
       let state = '';
-      try { state = execFileSync('ps', ['-p', String(pid), '-o', 'stat='], { encoding: 'utf8' }).trim(); }
-      catch (error) { if ((error as { status?: number }).status !== 1) throw error; }
+      try { state = (await execFileAsync('ps', ['-p', String(pid), '-o', 'stat='], { encoding: 'utf8' })).stdout.trim(); }
+      catch (error) { if ((error as { code?: unknown }).code !== 1) throw error; }
       expect(state === '' || state.startsWith('Z'), `Compiler descendant ${pid} is still ${state}`).toBe(true);
     }
     expect(readPackBuild(path.join(pack, 'dist')).snapshot.manifest.id).toBe('builder');
