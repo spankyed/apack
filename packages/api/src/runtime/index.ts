@@ -162,8 +162,8 @@ export async function setupBackend(): Promise<void> {
 
 async function initializeBackend(performance?: ReturnType<typeof createNodePerformanceController>): Promise<void> {
 
-  // Before anything opens the database: a tool changing it (`apack db`) holds a lock until it's done, and boot's own
-  // writes (content applied, migrations) would land in the middle of a change meant to finish alone
+  // Before anything opens the database: a tool replacing it (`apack db reset`, `import`) holds a lock until it's done,
+  // and boot's own writes (content applied, migrations) would land in the middle of that
   const appContext = resolveAppEnvironment();
   assertNoDatabaseWriter(appContext.userDataDir);
 

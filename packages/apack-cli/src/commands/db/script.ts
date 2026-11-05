@@ -7,12 +7,13 @@ import * as path from 'node:path';
 import { builtinModules, createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import type { AppDatabase } from '@apackdev/host/database';
-import { consoleScope, openTarget, parseDbArgs, TARGET_USAGE, withDatabase, type DbIo } from './target';
+import { consoleScope, openTarget, parseDbArgs, TARGET_USAGE, withDatabase, withoutAdmin, type DbIo } from './target';
 import { flushOutput, outputFormat, writeResult } from './output';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 const OPTIONS = {
   'read-only': { type: 'boolean', default: false },
+  admin: { type: 'boolean', default: false },
   output: { type: 'string', short: 'o' },
   out: { type: 'string' },
 } as const;
@@ -29,13 +30,14 @@ export const SCRIPT_USAGE = [
   '    return notes.map((id) => db.ears.getRow(id));',
   '  };',
   '',
-  '  db     the open database: ears (query, create, upsert, write, the finders), admin, store, schema, paths, userDataDir',
+  '  db     the open database: ears (query, create, upsert, write, the finders), schema, paths',
   '  EARS   the entity types and relation kinds of the packs installed in the data dir',
   '  args   what follows -- on the command line',
   '  log    prints a line, like the script\'s own output',
   '',
   'Options:',
-  '  --read-only            Open the database without writing, so the script can run while apack does',
+  '  --read-only            Open the database without writing',
+  '  --admin                Also db.admin and db.database, for schema changes and resets: holds the data dir\'s lock, and needs apack closed on it',
   '  -o, --output <format>  pretty (default), json or csv, for what the script returns',
   '  --out <file>           Write that result to a file',
   TARGET_USAGE,
@@ -118,15 +120,16 @@ export async function dbScript(args: string[], io: DbIo): Promise<void> {
   const scriptFile = path.resolve(file);
   if (!fs.existsSync(scriptFile)) throw new Error(`No script at ${scriptFile}`);
 
-  // A script writes unless it says it only reads, and a running app is told once it ends
-  const db = await openTarget(target, { changes: values['read-only'] ? 'nothing' : 'rows', command: 'script' }, io);
+  // A script writes rows unless it says otherwise, and a running app is told once it ends
+  const changes = values['read-only'] ? 'nothing' : values.admin ? 'everything' : 'rows';
+  const db = await openTarget(target, { changes, command: 'script' }, io);
   try {
     const result = await withDatabase(db, async () => {
       const module = await importScript(scriptFile).catch((error: unknown) => { throw scriptFailure(scriptFile, error); });
       if (typeof module.default !== 'function') {
         throw new Error(`${scriptFile} exports no function to run: export default ({ db, EARS, args, log }) => { ... }`);
       }
-      const context: DbScriptContext = { db: db.withoutAdmin ?? db, EARS: consoleScope(db).EARS, args: scriptArgs, log: io.out };
+      const context: DbScriptContext = { db: values.admin ? db : withoutAdmin(db), EARS: consoleScope(db).EARS, args: scriptArgs, log: io.out };
       try {
         // Awaited here, inside withDatabase: the script's own work — its writes, an interactive question — finishes
         // before the database is closed, and what it throws or rejects with fails the command rather than being lost

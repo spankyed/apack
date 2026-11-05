@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 import { parseArgs, type ParseArgsConfig } from 'node:util';
 import { resolveAppEnvironment, APP_ENVS, type AppEnvironment, type AppEnv } from '@apackdev/sdk/env';
-import { findRunningApp, holdDatabaseWriteLock, openAppDatabase, type RunningApp, type AppDatabase } from '@apackdev/host/database';
+import { assertNoDatabaseWriter, findRunningApp, holdDatabaseWriteLock, openAppDatabase, type AppDatabase } from '@apackdev/host/database';
 import { consoleEars, type ConsoleScope } from '@apackdev/sdk/database-console';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { tellAppDataChanged } from '../../app/app-api';
@@ -75,13 +75,11 @@ export function parseDbArgs<O extends NonNullable<ParseArgsConfig['options']>>(a
 /** An opened target */
 export type TargetDatabase = AppDatabase & {
   /**
-   * Set where a change is made beside a running app. Tells it of what was committed since it was last told; one it can't
-   * tell doesn't throw, since the change stands, and a command's answer is still to come: it says so, and sets the exit
-   * code `SAVED_BUT_NOT_TAKEN`.
+   * Set where the command changes rows. Tells an app running on the data dir of what was committed since it was last
+   * told, whenever that app started; one it can't tell doesn't throw, since the change stands, and a command's answer is
+   * still to come: it says so, and sets the exit code `SAVED_BUT_NOT_TAKEN`.
    */
   tellApp?(): Promise<void>;
-  /** Set beside a running app: what a script is handed in place of the database */
-  withoutAdmin?: AppDatabase;
 };
 
 /**
@@ -92,8 +90,9 @@ export const SAVED_BUT_NOT_TAKEN = 4;
 
 export interface OpenOptions {
   /**
-   * What the command changes. `rows` go a unit at a time, which an app running on the data dir can take from another
-   * process as long as it is told. `everything` replaces or resets what that app is using, so it's refused there.
+   * What the command changes. `rows` go a unit at a time, which LMDB orders with anything else writing, an app included,
+   * so they hold no lock. `everything` replaces what others are using: it holds the data dir's write lock, and is refused
+   * while an app runs there.
    */
   changes: 'nothing' | 'rows' | 'everything';
   /** The command's name, for the lock a change holds */
@@ -102,9 +101,8 @@ export interface OpenOptions {
 
 /**
  * Opens the target's database offline, after printing which data dir it is. A command that changes the database says
- * which data dir it means, so the production app's data is never the one a forgotten flag hits. A change to `rows` is
- * made with an app running on that data dir, which is told once it is closed (`withDatabase`); a change to `everything`
- * is refused there. A read sees what the app has committed, and says so.
+ * which data dir it means, so the production app's data is never the one a forgotten flag hits. A read sees what an app
+ * running there has committed, and says so.
  */
 export async function openTarget(target: DbTarget, { changes, command }: OpenOptions, io: DbIo): Promise<TargetDatabase> {
   const write = changes !== 'nothing';
@@ -112,18 +110,18 @@ export async function openTarget(target: DbTarget, { changes, command }: OpenOpt
     throw new Error('Name the data dir to change: --profile <name> or --data-dir <path>');
   }
   io.err(`Database: ${target.userDataDir} (offline)`);
+  if (changes === 'rows') assertNoDatabaseWriter(target.userDataDir);
   // Taken before the check, so an app that starts from here on finds it and refuses to open the database
-  const lock = write ? holdDatabaseWriteLock(target.userDataDir, `apack db ${command}`) : null;
+  const lock = changes === 'everything' ? holdDatabaseWriteLock(target.userDataDir, `apack db ${command}`) : null;
   try {
     const running = findRunningApp(target);
-    if (running && changes === 'everything') {
+    if (running && lock) {
       // Named only here: a refusal has to say how to get out of it, and the file is the way out when the app
       // that wrote it is gone. The warning below must not say it — there the app really is running.
       const clear = running.marker ? ` If it isn't running, delete ${running.marker} and try again.` : '';
       throw new Error(`apack is running on ${target.userDataDir} (${running.why}): quit it first, this command changes its database.${clear}`);
     }
-    if (running && write) io.err(`Note: apack is running on it (${running.why}): it is told what this commits`);
-    else if (running) io.err(`Warning: apack is running on it (${running.why}); this reads what it has committed, as of each query`);
+    if (running && !write) io.err(`Warning: apack is running on it (${running.why}); this reads what it has committed, as of each query`);
     const db = await openAppDatabase({
       env: target.env,
       userDataDir: target.userDataDir,
@@ -144,20 +142,17 @@ export async function openTarget(target: DbTarget, { changes, command }: OpenOpt
       io.err('  A query may name them here, and so may a write — but no installed pack checks what it writes, '
         + 'so name their pack with --schema-from before changing them.');
     }
-    if (!lock) return db;
+    if (lock) return { ...db, close: () => { try { db.close(); } finally { lock.release(); } } };
+    if (!write) return db;
     let told = 0;
     return {
       ...db,
-      close: () => { try { db.close(); } finally { lock.release(); } },
-      ...(running && {
-        tellApp: async () => {
-          const committed = db.admin.lastOwnCommit();
-          if (committed === told) return;
-          told = committed;
-          await tellRunningApp(target, running, io);
-        },
-        withoutAdmin: withoutAdmin(db, target, running),
-      }),
+      tellApp: async () => {
+        const committed = db.admin.lastOwnCommit();
+        if (committed === told) return;
+        told = committed;
+        await tellRunningApp(target, io);
+      },
     };
   } catch (error) {
     lock?.release();
@@ -170,14 +165,15 @@ export async function openTarget(target: DbTarget, { changes, command }: OpenOpt
  * anything short of the app taking it says that it does, and what the app is missing; an app that has quit since has
  * nothing left to be told.
  */
-async function tellRunningApp(target: DbTarget, running: RunningApp, io: DbIo): Promise<void> {
+async function tellRunningApp(target: DbTarget, io: DbIo): Promise<void> {
   const delivery = await tellAppDataChanged({ env: target.env, userDataDir: target.userDataDir });
   if (delivery.status === 'delivered') {
     // Every commit so far is covered, so an earlier line's failed telling has been made good
     if (process.exitCode === SAVED_BUT_NOT_TAKEN) process.exitCode = undefined;
     return;
   }
-  if (!findRunningApp(target)) return;
+  const running = findRunningApp(target);
+  if (!running) return;
   process.exitCode = SAVED_BUT_NOT_TAKEN;
   if (delivery.status === 'failed') {
     io.err(`The change was saved, but apack on ${target.userDataDir} answered: ${delivery.detail}`);
@@ -189,13 +185,13 @@ async function tellRunningApp(target: DbTarget, running: RunningApp, io: DbIo): 
 }
 
 /**
- * What a script gets beside a running app: rows, and not the engine's or the database's admin, whose schema changes and
- * resets a running app can't take. A guard against reaching for them, since a script runs as any code does.
+ * What a script gets unless it asks for `--admin`: rows, and not the engine's or the database's admin, whose schema
+ * changes and resets an app running on the data dir can't take. The same whether one is running, since one can start
+ * while the script does. A guard against reaching for them, since a script runs as any code does.
  */
-function withoutAdmin(db: AppDatabase, target: DbTarget, running: RunningApp): AppDatabase {
+export function withoutAdmin(db: AppDatabase): AppDatabase {
   const refuse = (what: string): never => {
-    const clear = running.marker ? ` If it isn't running, delete ${running.marker} and try again.` : '';
-    throw new Error(`A script can't use ${what} while apack runs on ${target.userDataDir} (${running.why}): quit it first.${clear}`);
+    throw new Error(`A script uses ${what} only with --admin, which needs apack closed on the data dir`);
   };
   return {
     ...db,

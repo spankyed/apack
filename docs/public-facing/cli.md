@@ -714,24 +714,9 @@ pack runtimes.
 
 **While the app runs.** The commands open the database files themselves (offline). An app counts as running on the data dir when the API it published is running or (on macOS and Linux) its single-instance lock is held by a live process; files left behind by a crash name processes that have exited, so they don't stand in the way. `exec`, `script` and `repl --write` work beside it, as below. `import`, `reset` and `clear-settings` with `--force` refuse, so quit the app first. Reading commands work, with a warning that they miss what the app hasn't written yet, and so do the dry runs: they open the database without writing to it, so they also work against a copy you have no permission to change.
 
-While a command changes the database it holds a lock on the data dir (`db-write.lock`), so a second `apack db` is refused and an apack started meanwhile refuses to open that database instead of overwriting the change. A lock left behind by a command that was killed is ignored once its process is gone.
+`reset`, `import`, `clear-settings` and `script --admin` replace what others are using, so while one runs it holds a lock on the data dir (`db-write.lock`): a second one and any command changing rows are refused, and an apack started meanwhile refuses to open that database. A lock left behind by a command that was killed is ignored once its process is gone.
 
-**The run history.** What each flow run did is not in the database: it is the run history, a store of its own beside it (`run-history`), which `apack db runs` reads. Backups, `import` and `reset` cover it with the database, and the app keeps 30 days of it.
-
-**Writing.** There is no apply command: apack content each pack's data when it starts (and `apack pack dev` re-applies a pack it rebuilds), so start the app rather than content a data dir by hand.
-
-**Installed packs.** Entity types, relation kinds and where each type is stored come from the packs installed in the data dir — every enabled pack in `packs/`, the ones the app ships included, read from its own `apack.json`; no pack code runs. A data dir with no packs installed knows only the names the app itself declares, which is the truth about it rather than a degraded reading of it.
-
-#### `apack db query <code> | --file <path> [-o pretty|json|csv] [--out <file>]`
-
-Run query code with the Database console's read helpers: `query` (with `query.withTrashed` and `query.trashed`), `EARS`, `getRow`, `getAttr`, `getRoles`, `findRelations`, `catalog`, `getSchemaStats`. The code is a function body, as in the console: `return` the result. `EARS.Entity` holds the installed packs' entity types. It runs as a plain function, so it can't use top-level `await`, `import` or `require` — a script (`apack db script`) can.
-
-```bash
-apack db query "return query(EARS.Entity.Settings).pickAll()" -o json --out settings.json
-apack db query --file ./report.js -o csv
-```
-
-**Beside a running app.** `exec`, `script` and `repl --write` work with the app open. Each writes from its own process and tells the app what it committed: when it ends, or after each line in `repl`. The app runs every view again and has every system publish its state; a flow that is running keeps running. **Exit code 4** means the change is saved but the app didn't take all of it, so don't run it again: the app wasn't reachable and shows the old data until it restarts, or it refused an invalid settings row and put the last valid one back. A tool killed before it could tell the app is caught at the app's next commit. A write holds up the app's own writes for as long as it takes, so a script that keeps one transaction open makes the app wait, and an open `repl --write` keeps the app from starting. Beside a running app a script gets `db.ears` and not `db.admin` or `db.database`. `reset`, `import` and `clear-settings` still ask you to quit the app first, since they replace what it is using.
+**Beside a running app.** `exec`, `script` and `repl --write` work with the app open. Each writes from its own process and tells the app what it committed: when it ends, or after each line in `repl`. The app runs every view again and has every system publish its state; a flow that is running keeps running. **Exit code 4** means the change is saved but the app didn't take all of it, so don't run it again: the app wasn't reachable and shows the old data until it restarts, or it refused an invalid settings row and put the last valid one back. A tool killed before it could tell the app is caught at the app's next commit. These commands hold no lock, so the app can start or restart while one runs, and two can run at once; a write holds up the app's own writes only for as long as it takes, so a script that keeps one transaction open makes the app wait. A script gets `db.ears` and not `db.admin` or `db.database` unless it asks with `--admin`, which needs the app closed. `reset`, `import` and `clear-settings` still ask you to quit the app first, since they replace what it is using.
 
 #### `apack db exec <code> | --file <path> [-o pretty|json|csv] [--out <file>]` (names its data dir)
 
