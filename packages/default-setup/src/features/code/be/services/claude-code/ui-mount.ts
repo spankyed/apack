@@ -1,5 +1,6 @@
 import { readClaudeUiActionKeys, type ClaudeUiActionKeyState, type ClaudeUiActionKeyRequest } from './ui-controls.ts'
 import { readClaudePromptPalette } from '../../../common/native-prompt-theme.ts'
+import { createClaudeApprovalHost } from './ui-approval-host.ts'
 import { createClaudeQuestionHost } from './ui-question-host.ts'
 import { selectClaudeAgentTranscriptRows } from './ui-agent-transcript.ts'
 import { createClaudeTranscriptMessageHost } from './ui-transcript-messages.ts'
@@ -15,6 +16,7 @@ import type { ClaudeUiFieldEvent, ClaudeUiFocusEvent, ClaudeUiFocusReply, Claude
 export interface ClaudeUiOwner {
   readAgent?(): Promise<import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails>
   readonly nativeView?: import('./ui-controls.ts').ClaudeUiAttach['native_view']
+  readonly approval?: import('./ui-approval-source.ts').ClaudeUiApprovalSource
   readonly question?: { ownerId: string; render: import('./terminal-owner.ts').ClaudeNativeTerminalOwner['renderQuestionDialog']; hold: import('./terminal-owner.ts').ClaudeNativeTerminalOwner['holdQuestionDialog']; row?(): import('./ui-presentation.ts').ClaudeUiQuestionRow | undefined; subscribe?(listener: () => void): () => void; answer?: import('./terminal-owner.ts').ClaudeNativeTerminalOwner['answerQuestionDialog'] }
   readonly done: Promise<void>
   readonly sessionId?: string
@@ -56,6 +58,7 @@ export function mountClaudeUi(options: {
   let disposal: Promise<void> | undefined
   let unsubscribe = () => {}
   let unsubscribeQuestion = () => {}
+  let unsubscribeApproval = () => {}
   let promptPalette: Record<string, string> | undefined
   let actionKeyState: ClaudeUiActionKeyState | undefined
   let keyQueue: Promise<unknown> = Promise.resolve()
@@ -107,6 +110,7 @@ export function mountClaudeUi(options: {
     return rows
   }, publish: () => publish(lastState) })
 
+  const approval = createClaudeApprovalHost({source: owner.approval, current, publish: () => publish(lastState)})
   const question = createClaudeQuestionHost({ source: owner.question, ui: owner.handle.ui, client, row: () => owner.question?.row ? owner.question.row() : options.question?.(), current, publish: () => publish(lastState) })
 
   const notices = createClaudeUiNotices({ current, sessionId: () => owner.sessionId, publish: () => publish(lastState) })
@@ -116,7 +120,7 @@ export function mountClaudeUi(options: {
     lastState = state
     const pane = panes?.state?.roster
     notices.setHeld(pane?.panes.find(value => value.id === pane.shown_id)?.hold_toasts === true)
-    try { options.publish({ ...state, billing: current() ? owner.billing : undefined, ...(messages.managedSettingsDiagnostics.length?{managedSettingsDiagnostics:messages.managedSettingsDiagnostics}:{}), ...(messages.diagnostics.length?{diagnostics:messages.diagnostics}:{}), ...(actionKeyState ? { actionKeys: actionKeyState } : {}), ...(promptPalette ? { promptPalette } : {}), ...(agent ? { agent } : {}), ...(agentProblem ? { agentProblem } : {}), ...(gestureProblem ? { gestureProblem } : {}), ...(agentInput ? { agentInput } : {}), ...(question.state ? { question: question.state } : {}), ...(messages.state.some(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? { transcriptMessages: messages.state.filter(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) } : {}), ...(messages.state.some(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? {composer:messages.state.filter(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component))} : {}), ...(notices.state ? { notices: notices.state } : {}), ...(panes?.state ? { panes: panes.state } : {}), ...(scroll.state ? { scroll: scroll.state } : {}) }) } catch { /* presentation is not process authority */ }
+    try { options.publish({ ...state, billing: current() ? owner.billing : undefined, ...(messages.managedSettingsDiagnostics.length?{managedSettingsDiagnostics:messages.managedSettingsDiagnostics}:{}), ...(messages.diagnostics.length?{diagnostics:messages.diagnostics}:{}), ...(actionKeyState ? { actionKeys: actionKeyState } : {}), ...(promptPalette ? { promptPalette } : {}), ...(agent ? { agent } : {}), ...(agentProblem ? { agentProblem } : {}), ...(gestureProblem ? { gestureProblem } : {}), ...(agentInput ? { agentInput } : {}), ...(question.state ? { question: question.state } : {}), ...(approval.state ? {approval: approval.state} : {}), ...(messages.state.some(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? { transcriptMessages: messages.state.filter(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) } : {}), ...(messages.state.some(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? {composer:messages.state.filter(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component))} : {}), ...(notices.state ? { notices: notices.state } : {}), ...(panes?.state ? { panes: panes.state } : {}), ...(scroll.state ? { scroll: scroll.state } : {}) }) } catch { /* presentation is not process authority */ }
   }
   function current(): boolean {
     if (disposed) return false
@@ -193,6 +197,7 @@ export function mountClaudeUi(options: {
     scroll.dispose()
     notices.dispose()
     const messagesReleased = messages.dispose()
+    approval.dispose()
     question.dispose()
     stopPromptHost?.(); stopPromptHost = undefined
     fieldDrawing = undefined
@@ -202,6 +207,7 @@ export function mountClaudeUi(options: {
     drawing = undefined
     if (scheduled) clearTimeout(scheduled)
     scheduled = undefined
+    unsubscribeApproval()
     unsubscribeQuestion()
     unsubscribe()
     promptPalette = undefined
@@ -218,6 +224,7 @@ export function mountClaudeUi(options: {
 
   panes = createClaudePaneHost({ ui: owner.handle.ui, client, current, publish: () => publish(lastState), actionKeys: state => { actionKeyState = state }, requestFocus: options.requestFocus })
   publish({ status: 'connecting' })
+  unsubscribeApproval = owner.approval?.subscribe(() => approval.refresh()) ?? (() => {})
   unsubscribeQuestion = owner.question?.subscribe?.(() => question.refresh()) ?? (() => {})
   unsubscribe = owner.subscribe(event => {
     const line = event as Record<string, unknown>
@@ -249,7 +256,7 @@ export function mountClaudeUi(options: {
       if (options.promptHost) stopPromptHost = owner.handle.ui.servePrompt(client.client_id, options.promptHost)
       await owner.handle.ui.attach({ ...client, ...((options.nativeView ?? owner.nativeView) ? { native_view: options.nativeView ?? owner.nativeView } : {}) })
       attached = true
-      if (current()) { await refreshAgent(); if (!current()) return; invalidate(); messages.start(); question.start(); await panes?.start(); if (current()) agentTimer = setInterval(() => { void refreshAgent() }, 1000) }
+      if (current()) { await refreshAgent(); if (!current()) return; invalidate(); messages.start(); question.start(); approval.refresh(); await panes?.start(); if (current()) agentTimer = setInterval(() => { void refreshAgent() }, 1000) }
     } catch (error) {
       stopPromptHost?.(); stopPromptHost = undefined
       attachmentError = error instanceof Error ? error.message : 'Native UI attachment failed'
@@ -386,6 +393,7 @@ export function mountClaudeUi(options: {
       } catch (error) { if (current()) { agentInput = { revision, status: 'error', problem: error instanceof Error ? error.message : 'Native command decision failed' }; publish(lastState) } }
     },
     answerQuestion: question.answer,
+    answerApproval: approval.answer,
     refreshTranscript: () => { messages.refresh(); question.refresh() },
     notice(event: import('./ui-presentation.ts').ClaudeUiNoticeEvent) { notices.operate(event) },
     transcriptLayout(event: import('./ui-presentation.ts').ClaudeUiTranscriptLayout) { messages.layout(event) },

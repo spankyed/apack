@@ -520,6 +520,7 @@ export type ClaudeUiViewRequest =
   | { type: 'CLAUDE_UI_UNMOUNT'; threadId: string; mountId: string; resumeKey?: string }
   | ({ type: 'CLAUDE_UI_CLIENT'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiClientEvent)
   | ({ type: 'CLAUDE_UI_FIELD'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFieldEvent)
+  | { type: 'CLAUDE_UI_APPROVAL_ANSWER'; threadId: string; mountId: string; frameId: string; answer: import('#features/code/common/native-approval.ts').ClaudeUiApprovalAnswer }
   | { type: 'CLAUDE_UI_QUESTION_ANSWER'; threadId: string; mountId: string; messageId: string; token: string; answer: import('#features/code/common/native-question.ts').ClaudeQuestionAnswer }
   | { type: 'CLAUDE_UI_PRESS'; threadId: string; mountId: string; actionId: string; href?: string };
 

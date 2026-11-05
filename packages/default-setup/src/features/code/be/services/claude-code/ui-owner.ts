@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { createClaudeChildApprovalSource } from './ui-approval-source.ts'
 import { ClaudeNativeQuestionRenderSchema } from './terminal-dialogs.ts'
 import { getConversation, getNativeTerminal, getNativeBackgroundDesktopOwner } from './handle-store.ts'
 import type { ClaudeNativeTerminalOwner } from './terminal-owner.ts'
@@ -36,10 +37,11 @@ export function getClaudeUiOwner(threadId: string, target?: ClaudeNativeAgentUiT
     initialized.catch(() => {})
     const owner: ClaudeUiOwner = {
       done: desktop.done, sessionId: desktop.identity.sessionId, subscribe: listener => desktop.transport.subscribe(listener),
+      approval: createClaudeChildApprovalSource(desktop),
       question: {
         ownerId: desktop.id,
-        row() { const q = desktop.questions.value; return q ? {messageId: `${desktop.id}:${q.id}:${q.revision}`, id: q.id, revision: q.revision, sessionId: q.sessionId, requestId: q.requestId} : undefined },
-        subscribe: desktop.questions.subscribe,
+        row() { const current = desktop.controls.value; const q = current?.kind === 'question' ? current.dialog : undefined; return q ? {messageId: `${desktop.id}:${q.id}:${q.revision}`, id: q.id, revision: q.revision, sessionId: q.sessionId, requestId: q.requestId} : undefined },
+        subscribe: desktop.controls.subscribe,
         async render(request) {
           if (request.sessionId !== desktop.identity.sessionId) throw new Error('Background question owner changed')
           return ClaudeNativeQuestionRenderSchema.parse(await desktop.transport.request({subtype: 'apack_render_question_dialog', id: request.id, revision: request.revision, session_id: request.sessionId, client_id: request.clientId, viewport: request.viewport}))
@@ -50,11 +52,11 @@ export function getClaudeUiOwner(threadId: string, target?: ClaudeNativeAgentUiT
           if (result.held !== true) throw new Error('Background question draft was not acknowledged')
         },
         async answer(request) {
-          const q = desktop.questions.value
+          const current = desktop.controls.value; const q = current?.kind === 'question' ? current.dialog : undefined
           if (!q || q.id !== request.id || q.revision !== request.revision || q.sessionId !== request.sessionId) throw new Error('Background question changed')
           const result = await desktop.transport.request({subtype: 'apack_answer_question_dialog', id: request.id, revision: request.revision, session_id: request.sessionId, answer: request.answer, render_token: request.renderToken, draft_started: request.draftStarted}) as {answered?: unknown}
           if (result.answered !== true) throw new Error('Background question answer was not acknowledged')
-          desktop.questions.settled(request.id, request.revision)
+          desktop.controls.settled(request.id, request.revision)
         },
       },
       handle: {ui: createClaudeUiControls(initialized, desktop.transport, desktop.transport.promptHosts)},

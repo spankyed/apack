@@ -218,3 +218,21 @@ it('awaits original queued MCP publication before reporting a completed mutation
  await f.run({operation:'disable'})
  expect(f.native.mcp.Q_n).toHaveBeenLastCalledWith({connections:[result],tools:[]})
 })
+
+it('reads only one supported original pending control without creating desktop clients', async () => {
+ const f = fixture()
+ const result = await f.control({subtype:'apack_pending_control'}, new AbortController())
+ expect(result.control.kind).toBe('file')
+ expect(result.control.dialog).toMatchObject({id:'dialog-1',toolName:'Read',input:{file_path:'/original'}})
+ f.state.open.push({...f.item,id:'second'})
+ expect(await f.control({subtype:'apack_pending_control'}, new AbortController())).toEqual({control:null})
+ f.state.open=[f.item];f.item.kind='__proto__'
+ expect(await f.control({subtype:'apack_pending_control'}, new AbortController())).toEqual({control:null})
+ expect(f.answer).not.toHaveBeenCalled()
+})
+it('refuses a pending snapshot if the native session changes during its projection', async () => {
+ const f = fixture(), original=f.native.questionOptions.q()
+ vi.spyOn(f.native.questionOptions,'q').mockReturnValueOnce(original).mockReturnValue('replacement')
+ await expect(f.control({subtype:'apack_pending_control'},new AbortController())).rejects.toThrow(/changed|expired/)
+ expect(f.answer).not.toHaveBeenCalled()
+})

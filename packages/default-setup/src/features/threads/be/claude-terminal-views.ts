@@ -58,6 +58,7 @@ export interface ClaudeBackgroundSessionState {
   revision: number
   operation: 'refresh' | 'stop' | 'reply'
   question?: {id: string; revision: string}
+  approval?: {id: string; revision: string}
   desktop?: ClaudeBackgroundUiTarget
   status: 'pending' | 'done' | 'error'
   session?: ClaudeBackgroundSession
@@ -130,6 +131,7 @@ export function createClaudeTerminalViews(dependencies: {
   continuation?(threadId: string): ClaudeNativeContinuation | undefined
   background?(continuation: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest, threadId: string): Promise<ClaudeBackgroundSession | undefined>
   desktop?(continuation: ClaudeNativeContinuation, jobId: string, pid: number, threadId: string): Promise<ClaudeBackgroundUiTarget | undefined>
+  backgroundApproval?(threadId: string, target: ClaudeBackgroundUiTarget): {id: string; revision: string} | undefined
   backgroundQuestion?(threadId: string, target: ClaudeBackgroundUiTarget): {id: string; revision: string} | undefined
   desktopCurrent?(threadId: string, target: ClaudeBackgroundUiTarget): boolean
   backgroundInfo?(threadId: string): import('#features/code/common/native-background.ts').ClaudeBackgroundStatus | undefined
@@ -164,9 +166,11 @@ export function createClaudeTerminalViews(dependencies: {
     if (views.get(key) !== view) return
     if (view.background?.desktop && !dependencies.desktopCurrent?.(view.threadId, view.background.desktop)) view.background.desktop = undefined
     if (view.background) {
+      const priorApproval = view.background.approval
+      view.background.approval = view.background.desktop ? dependencies.backgroundApproval?.(view.threadId, view.background.desktop) : undefined
       const priorQuestion = view.background.question
       view.background.question = view.background.desktop ? dependencies.backgroundQuestion?.(view.threadId, view.background.desktop) : undefined
-      if (priorQuestion && !view.background.question) refreshSettledQuestion(key, view)
+      if (priorQuestion && !view.background.question || priorApproval && !view.background.approval) refreshSettledControl(key, view)
     }
     if (view.attachment && !attachmentCurrent(view)) retireAttachment(view)
     if (view.attachment && view.attachmentOwner) view.attachment.state = view.attachmentOwner.snapshot
@@ -177,7 +181,7 @@ export function createClaudeTerminalViews(dependencies: {
       if (output.length) view.sequence = output.at(-1)!.sequence
     } catch { drop(key) }
   }
-  function refreshSettledQuestion(key: string, view: View) {
+  function refreshSettledControl(key: string, view: View) {
     const operation = view.background, desktop = operation?.desktop, session = operation?.session
     const continuation = dependencies.continuation?.(view.threadId)
     if (!operation || operation.status !== 'done' || !desktop || !session || !dependencies.background || !continuation

@@ -493,6 +493,10 @@ interface ClaudeAgentHandback {
     warning?: string;
 }
 
+type ClaudeBackgroundApproval = Exclude<ClaudeBackgroundControl, {
+    kind: 'question';
+}>;
+
 interface ClaudeBackgroundAttachment {
     readonly snapshot: ClaudeBackgroundAttachmentSnapshot;
     subscribe(listener: () => void): () => void;
@@ -528,13 +532,262 @@ interface ClaudeBackgroundAttachmentView {
 
 type ClaudeBackgroundCheckpoint = NonNullable<Awaited<ReturnType<typeof claimClaudeBackgroundCheckpoint>>>;
 
+type ClaudeBackgroundControl = z.infer<typeof ClaudeBackgroundControlSchema>;
+
+declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
+    kind: z.ZodLiteral<"question">;
+    dialog: z.ZodObject<{
+        id: z.ZodString;
+        revision: z.ZodString;
+        sessionId: z.ZodString;
+        requestId: z.ZodString;
+        toolName: z.ZodLiteral<"AskUserQuestion">;
+        shownInput: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+        presentation: z.ZodObject<{
+            notice: z.ZodOptional<z.ZodString>;
+            previewFormat: z.ZodNullable<z.ZodString>;
+            extendedQuestions: z.ZodBoolean;
+            optionalDescriptions: z.ZodBoolean;
+            previews: z.ZodArray<z.ZodObject<{
+                question: z.ZodString;
+                option: z.ZodString;
+                kind: z.ZodEnum<{
+                    empty: "empty";
+                    full: "full";
+                    withheld: "withheld";
+                }>;
+                markdown: z.ZodOptional<z.ZodString>;
+                html: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>>;
+        }, z.core.$strip>;
+    }, z.core.$strip>;
+}, z.core.$strip>, z.ZodObject<{
+    kind: z.ZodLiteral<"bash">;
+    dialog: z.ZodObject<{
+        id: z.ZodString;
+        revision: z.ZodString;
+        sessionId: z.ZodString;
+        requestId: z.ZodString;
+        toolName: z.ZodLiteral<"Bash">;
+        command: z.ZodString;
+        cwd: z.ZodString;
+        choices: z.ZodOptional<z.ZodArray<z.ZodObject<{
+            value: z.ZodString;
+            token: z.ZodString;
+            label: z.ZodString;
+            prefix: z.ZodOptional<z.ZodString>;
+        }, z.core.$strip>>>;
+        choiceToken: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+        reason: z.ZodOptional<z.ZodString>;
+        input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    }, z.core.$strip>;
+}, z.core.$strip>, z.ZodObject<{
+    kind: z.ZodLiteral<"file">;
+    dialog: z.ZodObject<{
+        id: z.ZodString;
+        revision: z.ZodString;
+        sessionId: z.ZodString;
+        requestId: z.ZodString;
+        toolName: z.ZodEnum<{
+            Read: "Read";
+            Write: "Write";
+            Edit: "Edit";
+            NotebookEdit: "NotebookEdit";
+        }>;
+        review: z.ZodOptional<z.ZodObject<{
+            withheld: z.ZodBoolean;
+            notice: z.ZodOptional<z.ZodString>;
+            before: z.ZodOptional<z.ZodString>;
+            after: z.ZodOptional<z.ZodString>;
+            replaceAll: z.ZodOptional<z.ZodBoolean>;
+            notebook: z.ZodOptional<z.ZodObject<{
+                editMode: z.ZodEnum<{
+                    replace: "replace";
+                    insert: "insert";
+                    delete: "delete";
+                }>;
+                cellId: z.ZodOptional<z.ZodString>;
+                cellType: z.ZodOptional<z.ZodEnum<{
+                    code: "code";
+                    markdown: "markdown";
+                }>>;
+            }, z.core.$strip>>;
+        }, z.core.$strip>>;
+        approval: z.ZodOptional<z.ZodObject<{
+            token: z.ZodString;
+            ready: z.ZodBoolean;
+            choices: z.ZodArray<z.ZodObject<{
+                value: z.ZodString;
+                label: z.ZodString;
+                decision: z.ZodEnum<{
+                    deny: "deny";
+                    allow: "allow";
+                }>;
+                feedback: z.ZodBoolean;
+            }, z.core.$strip>>;
+        }, z.core.$strip>>;
+        title: z.ZodString;
+        question: z.ZodString;
+        reason: z.ZodOptional<z.ZodString>;
+        input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    }, z.core.$strip>;
+}, z.core.$strip>, z.ZodObject<{
+    kind: z.ZodLiteral<"workflow">;
+    dialog: z.ZodObject<{
+        id: z.ZodString;
+        revision: z.ZodString;
+        sessionId: z.ZodString;
+        requestId: z.ZodString;
+        toolName: z.ZodLiteral<"Workflow">;
+        presentation: z.ZodObject<{
+            token: z.ZodString;
+            ready: z.ZodBoolean;
+            withheld: z.ZodBoolean;
+            script: z.ZodOptional<z.ZodString>;
+            args: z.ZodOptional<z.ZodString>;
+            summary: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                title: z.ZodString;
+                detail: z.ZodOptional<z.ZodString>;
+                prompts: z.ZodArray<z.ZodString>;
+            }, z.core.$strip>>>;
+            canEdit: z.ZodOptional<z.ZodBoolean>;
+            description: z.ZodOptional<z.ZodString>;
+            raw: z.ZodOptional<z.ZodBoolean>;
+            summaryUnavailable: z.ZodOptional<z.ZodBoolean>;
+            choices: z.ZodArray<z.ZodObject<{
+                value: z.ZodEnum<{
+                    yes: "yes";
+                    no: "no";
+                    "yes-always": "yes-always";
+                }>;
+                label: z.ZodString;
+                decision: z.ZodEnum<{
+                    deny: "deny";
+                    allow: "allow";
+                }>;
+                feedback: z.ZodBoolean;
+            }, z.core.$strip>>;
+        }, z.core.$strip>;
+        reason: z.ZodOptional<z.ZodString>;
+        input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    }, z.core.$strip>;
+}, z.core.$strip>, z.ZodObject<{
+    kind: z.ZodLiteral<"plan">;
+    dialog: z.ZodObject<{
+        id: z.ZodString;
+        revision: z.ZodString;
+        sessionId: z.ZodString;
+        requestId: z.ZodString;
+        toolName: z.ZodEnum<{
+            EnterPlanMode: "EnterPlanMode";
+            ExitPlanMode: "ExitPlanMode";
+        }>;
+        presentation: z.ZodObject<{
+            plan: z.ZodString;
+            planFilePath: z.ZodOptional<z.ZodString>;
+            initialChoice: z.ZodString;
+            empty: z.ZodBoolean;
+            withheld: z.ZodBoolean;
+            choices: z.ZodArray<z.ZodObject<{
+                value: z.ZodString;
+                label: z.ZodString;
+                mode: z.ZodEnum<{
+                    plan: "plan";
+                    default: "default";
+                    auto: "auto";
+                    acceptEdits: "acceptEdits";
+                    bypassPermissions: "bypassPermissions";
+                }>;
+                clearContext: z.ZodBoolean;
+            }, z.core.$strip>>;
+        }, z.core.$strip>;
+        reason: z.ZodOptional<z.ZodString>;
+        input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    }, z.core.$strip>;
+}, z.core.$strip>, z.ZodObject<{
+    kind: z.ZodLiteral<"tool">;
+    dialog: z.ZodObject<{
+        id: z.ZodString;
+        revision: z.ZodString;
+        sessionId: z.ZodString;
+        requestId: z.ZodString;
+        toolName: z.ZodEnum<{
+            WebFetch: "WebFetch";
+            Skill: "Skill";
+        }>;
+        presentation: z.ZodObject<{
+            token: z.ZodString;
+            ready: z.ZodBoolean;
+            choices: z.ZodArray<z.ZodObject<{
+                value: z.ZodString;
+                label: z.ZodString;
+                decision: z.ZodEnum<{
+                    deny: "deny";
+                    allow: "allow";
+                }>;
+                feedback: z.ZodBoolean;
+            }, z.core.$strip>>;
+            title: z.ZodString;
+            details: z.ZodArray<z.ZodObject<{
+                label: z.ZodString;
+                value: z.ZodString;
+                ansi: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>>;
+        }, z.core.$strip>;
+        reason: z.ZodOptional<z.ZodString>;
+        input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    }, z.core.$strip>;
+}, z.core.$strip>, z.ZodObject<{
+    kind: z.ZodLiteral<"generic">;
+    dialog: z.ZodObject<{
+        id: z.ZodString;
+        revision: z.ZodString;
+        sessionId: z.ZodString;
+        requestId: z.ZodString;
+        toolName: z.ZodString;
+        presentation: z.ZodObject<{
+            token: z.ZodString;
+            ready: z.ZodBoolean;
+            choices: z.ZodArray<z.ZodObject<{
+                value: z.ZodString;
+                label: z.ZodString;
+                decision: z.ZodEnum<{
+                    deny: "deny";
+                    allow: "allow";
+                }>;
+                feedback: z.ZodBoolean;
+            }, z.core.$strip>>;
+            title: z.ZodString;
+            details: z.ZodArray<z.ZodObject<{
+                label: z.ZodString;
+                value: z.ZodString;
+                ansi: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>>;
+            defaultFocusValue: z.ZodOptional<z.ZodString>;
+            canCancel: z.ZodBoolean;
+            choiceDescriptions: z.ZodRecord<z.ZodString, z.ZodString>;
+        }, z.core.$strip>;
+        reason: z.ZodOptional<z.ZodString>;
+        input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    }, z.core.$strip>;
+}, z.core.$strip>], "kind">;
+
+interface ClaudeBackgroundControls {
+    readonly value: ClaudeBackgroundControl | undefined;
+    refresh(): Promise<void>;
+    subscribe(listener: () => void): () => void;
+    settled(id: string, revision: string): void;
+    close(): void;
+}
+
 interface ClaudeBackgroundDesktopOwner {
     readonly id: string;
     readonly parentSessionId: string;
     readonly identity: Readonly<ClaudeBackgroundStatusIdentity>;
     readonly registration: number;
     readonly transport: ClaudeTerminalUiTransport;
-    readonly questions: ReturnType<typeof createClaudeBackgroundQuestions>;
+    readonly controls: ReturnType<typeof createClaudeBackgroundControls>;
     readonly done: Promise<void>;
 }
 
@@ -587,6 +840,10 @@ interface ClaudeBackgroundSessionState {
     revision: number;
     operation: 'refresh' | 'reply' | 'stop';
     question?: {
+        id: string;
+        revision: string;
+    };
+    approval?: {
         id: string;
         revision: string;
     };
@@ -1374,10 +1631,10 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
             value: z.ZodString;
             label: z.ZodString;
             mode: z.ZodEnum<{
+                plan: "plan";
                 default: "default";
                 auto: "auto";
                 acceptEdits: "acceptEdits";
-                plan: "plan";
                 bypassPermissions: "bypassPermissions";
             }>;
             clearContext: z.ZodBoolean;
@@ -2325,6 +2582,26 @@ type ClaudeUiActionKeyRequest = z.infer<typeof actionKeyRequest>;
 
 type ClaudeUiActionKeyState = z.infer<typeof actionKeys>;
 
+type ClaudeUiApprovalAnswer = z.infer<typeof ClaudeUiApprovalAnswerSchema>;
+
+/** App decisions carry original choice tokens; native owns their admission and effects. */
+declare const ClaudeUiApprovalAnswerSchema: z.ZodObject<{
+    approved: z.ZodBoolean;
+    cancelled: z.ZodOptional<z.ZodBoolean>;
+    reason: z.ZodOptional<z.ZodString>;
+    choice: z.ZodOptional<z.ZodString>;
+    choiceToken: z.ZodOptional<z.ZodString>;
+    prefix: z.ZodOptional<z.ZodString>;
+    plan: z.ZodOptional<z.ZodString>;
+}, z.core.$strict>;
+
+interface ClaudeUiApprovalFrame {
+    id: string;
+    control: ClaudeBackgroundApproval;
+    pending?: boolean;
+    problem?: string;
+}
+
 type ClaudeUiAttach = z.infer<typeof attach>;
 
 interface ClaudeUiBoxLayout {
@@ -2512,6 +2789,7 @@ type ClaudeUiMountState = ({
     })[];
     transcriptMessages?: ClaudeUiTranscriptFrame[];
     question?: ClaudeUiQuestionFrame;
+    approval?: ClaudeUiApprovalFrame;
 };
 
 type ClaudeUiNode = {
@@ -2966,6 +3244,12 @@ type ClaudeUiViewRequest = ({
     threadId: string;
     mountId: string;
 } & ClaudeUiFieldEvent) | {
+    type: 'CLAUDE_UI_APPROVAL_ANSWER';
+    threadId: string;
+    mountId: string;
+    frameId: string;
+    answer: ClaudeUiApprovalAnswer;
+} | {
     type: 'CLAUDE_UI_QUESTION_ANSWER';
     threadId: string;
     mountId: string;
@@ -3314,9 +3598,9 @@ declare const CommandLifecycleLineSchema: z.ZodObject<{
     command_uuid: z.ZodString;
     state: z.ZodEnum<{
         completed: "completed";
+        cancelled: "cancelled";
         queued: "queued";
         started: "started";
-        cancelled: "cancelled";
         discarded: "discarded";
         refused: "refused";
     }>;
@@ -6673,10 +6957,10 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  * classifier instead of prompting.
  */
 declare const PermissionModeSchema: z.ZodEnum<{
+    plan: "plan";
     default: "default";
     auto: "auto";
     acceptEdits: "acceptEdits";
-    plan: "plan";
     bypassPermissions: "bypassPermissions";
     dontAsk: "dontAsk";
 }>;
@@ -8755,37 +9039,11 @@ declare function create(options: CreateArtifactOptions): {
 };
 
 /** Observe the verified child once, independently of desktop clients and Reply visibility. */
-declare function createClaudeBackgroundQuestions(options: {
+declare function createClaudeBackgroundControls(options: {
     sessionId: string;
     transport: Pick<ClaudeTerminalUiTransport, 'request'>;
     changed(): void;
-}): {
-    readonly value: {
-        id: string;
-        revision: string;
-        sessionId: string;
-        requestId: string;
-        toolName: "AskUserQuestion";
-        shownInput: Record<string, unknown>;
-        presentation: {
-            previewFormat: string | null;
-            extendedQuestions: boolean;
-            optionalDescriptions: boolean;
-            previews: {
-                question: string;
-                option: string;
-                kind: "empty" | "full" | "withheld";
-                markdown?: string | undefined;
-                html?: string | undefined;
-            }[];
-            notice?: string | undefined;
-        };
-    } | undefined;
-    refresh: () => Promise<void>;
-    subscribe(listener: () => void): () => void;
-    settled(id: string, revision: string): void;
-    close(): void;
-};
+}): ClaudeBackgroundControls;
 
 /** A read-only original runtime owns identity checks independently of the parent's UI socket. */
 declare function createClaudeBackgroundStatusAuthority(parentSessionId: string, options: SpawnStreamOptions): {
@@ -9507,8 +9765,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        append: "append";
         insert: "insert";
+        append: "append";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;

@@ -39,10 +39,17 @@ const terminalViews = createClaudeTerminalViews({
   async desktop(continuation, jobId, pid, key) {
     return snapshotClaudeBackgroundUiTarget(await prepareNativeBackgroundDesktop(key, continuation, jobId, pid))
   },
+  backgroundApproval(key, target) {
+    const owner = getNativeBackgroundDesktopOwner(key, {sessionId: target.parentSessionId, continuedInSessionId: target.sessionId})
+    if (!matchesClaudeBackgroundUiTarget(owner, target)) return
+    const control = owner?.controls.value
+    return control && control.kind !== 'question' ? {id: control.dialog.id, revision: control.dialog.revision} : undefined
+  },
   backgroundQuestion(key, target) {
     const owner = getNativeBackgroundDesktopOwner(key, {sessionId: target.parentSessionId, continuedInSessionId: target.sessionId})
     if (!matchesClaudeBackgroundUiTarget(owner, target)) return
-    const question = owner?.questions.value
+    const control = owner?.controls.value
+    const question = control?.kind === 'question' ? control.dialog : undefined
     return question ? {id: question.id, revision: question.revision} : undefined
   },
   desktopCurrent(key, target) {
@@ -155,7 +162,7 @@ export const threadsSystem = setup({
       if (event.type === 'CLAUDE_BACKGROUND_OPEN' || event.type === 'CLAUDE_BACKGROUND_INPUT' || event.type === 'CLAUDE_BACKGROUND_RESIZE' || event.type === 'CLAUDE_BACKGROUND_CLOSE' || event.type === 'CLAUDE_TERMINAL_MOUNT' || event.type === 'CLAUDE_TERMINAL_UNMOUNT' || event.type === 'CLAUDE_TERMINAL_OPEN' || event.type === 'CLAUDE_TERMINAL_CANCEL_OPEN' || event.type === 'CLAUDE_TERMINAL_SUBMIT' || event.type === 'CLAUDE_TERMINAL_INPUT' || event.type === 'CLAUDE_TERMINAL_RESIZE' || event.type === 'CLAUDE_TERMINAL_CLOSE' || event.type === 'CLAUDE_TERMINAL_BACKGROUND' || event.type === 'CLAUDE_TERMINAL_TASK' || event.type === 'CLAUDE_TERMINAL_NOTICE' || event.type === 'CLAUDE_TERMINAL_MCP_FORM' || event.type === 'CLAUDE_TERMINAL_MCP_URL') terminalViews.handle(event, client, reply);
     },
     claudeUiView: ({ event, client, reply }) => {
-      if (event.type === 'CLAUDE_UI_TRANSCRIPT_LAYOUT' || event.type === 'CLAUDE_UI_AGENTS_GESTURE' || event.type === 'CLAUDE_UI_BACKGROUND_REVIEW' || event.type === 'CLAUDE_UI_SETTINGS' || event.type === 'CLAUDE_UI_COMMAND_PANEL' || event.type === 'CLAUDE_UI_COMMAND_DECISION' || event.type === 'CLAUDE_UI_AGENT_INPUT' || event.type === 'CLAUDE_UI_CLIENT' || event.type === 'CLAUDE_UI_NOTICE' || event.type === 'CLAUDE_UI_SCROLL' || event.type === 'CLAUDE_UI_PANE' || event.type === 'CLAUDE_UI_MOUNT' || event.type === 'CLAUDE_UI_UNMOUNT' || event.type === 'CLAUDE_UI_KEY' || event.type === 'CLAUDE_UI_QUESTION_ANSWER' || event.type === 'CLAUDE_UI_PRESS' || event.type === 'CLAUDE_UI_FIELD' || event.type === 'CLAUDE_UI_FOCUS' || event.type === 'CLAUDE_PROMPT_HOST_RESPONSE' || event.type === 'CLAUDE_PROMPT_EDIT' || event.type === 'CLAUDE_PROMPT_AUTOCOMPLETE') handleClaudeUiView(event, client, reply);
+      if (event.type === 'CLAUDE_UI_TRANSCRIPT_LAYOUT' || event.type === 'CLAUDE_UI_AGENTS_GESTURE' || event.type === 'CLAUDE_UI_BACKGROUND_REVIEW' || event.type === 'CLAUDE_UI_SETTINGS' || event.type === 'CLAUDE_UI_COMMAND_PANEL' || event.type === 'CLAUDE_UI_COMMAND_DECISION' || event.type === 'CLAUDE_UI_AGENT_INPUT' || event.type === 'CLAUDE_UI_CLIENT' || event.type === 'CLAUDE_UI_NOTICE' || event.type === 'CLAUDE_UI_SCROLL' || event.type === 'CLAUDE_UI_PANE' || event.type === 'CLAUDE_UI_MOUNT' || event.type === 'CLAUDE_UI_UNMOUNT' || event.type === 'CLAUDE_UI_KEY' || event.type === 'CLAUDE_UI_APPROVAL_ANSWER' || event.type === 'CLAUDE_UI_QUESTION_ANSWER' || event.type === 'CLAUDE_UI_PRESS' || event.type === 'CLAUDE_UI_FIELD' || event.type === 'CLAUDE_UI_FOCUS' || event.type === 'CLAUDE_PROMPT_HOST_RESPONSE' || event.type === 'CLAUDE_PROMPT_EDIT' || event.type === 'CLAUDE_PROMPT_AUTOCOMPLETE') handleClaudeUiView(event, client, reply);
     },
     // ---- Thread management actions ----
     createThread: ({ event, reply }) => {
@@ -778,6 +785,7 @@ export const threadsSystem = setup({
       CLAUDE_UI_MOUNT: { actions: 'claudeUiView' },
       CLAUDE_UI_UNMOUNT: { actions: 'claudeUiView' },
       CLAUDE_UI_KEY: { actions: 'claudeUiView' },
+      CLAUDE_UI_APPROVAL_ANSWER: { actions: 'claudeUiView' },
       CLAUDE_UI_QUESTION_ANSWER: { actions: 'claudeUiView' },
       CLAUDE_UI_PRESS: { actions: 'claudeUiView' },
       CLAUDE_PROMPT_HOST_RESPONSE: { actions: 'claudeUiView' },

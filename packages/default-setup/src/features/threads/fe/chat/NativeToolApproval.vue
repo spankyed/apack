@@ -68,10 +68,10 @@
       </details>
     </div>
     <footer>
-      <button type="button" class="cancel" :disabled="canCancel === undefined ? disabled : controlsDisabled || !canCancel" @click="cancel">Cancel</button>
+      <button type="button" class="cancel" :disabled="canCancel === undefined ? disabled : controlsDisabled || !canCancel" @click="cancel">{{ cancelLabel ?? 'Cancel' }}</button>
       <div class="decisions">
         <button type="button" ref="denyElement" class="deny" :disabled="controlsDisabled || !!tool && !tool.choices.some(choice => choice.value === 'no')" @click="deny">Deny</button>
-        <button type="button" ref="approveElement" class="approve" :disabled="controlsDisabled || !!tool && !tool.choices.some(choice => choice.value === selectedChoice && choice.decision === 'allow') || selectedChoice !== 'yes' && !currentChoice || !!workflow && !workflow.choices.some(choice => choice.value === selectedChoice && choice.decision === 'allow')" @click="approve">{{ tool ? selectedChoice === 'yes' ? tool.choices.find(choice => choice.value === 'yes')?.label ?? 'Allow once' : 'Continue' : workflow ? workflow.choices.find(choice => choice.value === selectedChoice)?.label ?? 'Allow' : selectedChoice !== 'yes' || file && file.choices.find(choice => choice.value === 'yes')?.label !== 'Yes' ? 'Continue' : toolName === 'Read' ? 'Approve' : 'Allow once' }}</button>
+        <button type="button" ref="approveElement" class="approve" :disabled="controlsDisabled || canApprove === false || !!bash && !bash.choices.some(choice => choice.value === selectedChoice) || !!tool && !tool.choices.some(choice => choice.value === selectedChoice && choice.decision === 'allow') || selectedChoice !== 'yes' && !currentChoice || !!workflow && !workflow.choices.some(choice => choice.value === selectedChoice && choice.decision === 'allow')" @click="approve">{{ tool ? selectedChoice === 'yes' ? tool.choices.find(choice => choice.value === 'yes')?.label ?? 'Allow once' : 'Continue' : workflow ? workflow.choices.find(choice => choice.value === selectedChoice)?.label ?? 'Allow' : selectedChoice !== 'yes' || file && file.choices.find(choice => choice.value === 'yes')?.label !== 'Yes' ? 'Continue' : toolName === 'Read' ? 'Approve' : 'Allow once' }}</button>
       </div>
     </footer>
   </section>
@@ -85,7 +85,7 @@ import type { ClaudeWorkflowApproval } from '#features/code/common/native-workfl
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { ClaudeBashApprovalPresentation } from '#features/code/common/native-bash-approval.ts'
 import type { ClaudeFileApprovalReview, ClaudeFileApprovalPresentation } from '#features/code/common/native-file-approval.ts'
-const props = withDefaults(defineProps<{ tool?: ClaudeToolPermissionApproval; workflow?: ClaudeWorkflowApproval; bash?: ClaudeBashApprovalPresentation; file?: ClaudeFileApprovalPresentation; toolName: string; choiceDescriptions?: Record<string, string>; defaultFocusValue?: string; canCancel?: boolean; review?: ClaudeFileApprovalReview; title: string; question: string; filePath?: string; command?: string; cwd?: string; reason?: string; disabled: boolean }>(), { canCancel: undefined })
+const props = withDefaults(defineProps<{ tool?: ClaudeToolPermissionApproval; workflow?: ClaudeWorkflowApproval; bash?: ClaudeBashApprovalPresentation; file?: ClaudeFileApprovalPresentation; toolName: string; cancelLabel?: string; canApprove?: boolean; choiceDescriptions?: Record<string, string>; defaultFocusValue?: string; canCancel?: boolean; review?: ClaudeFileApprovalReview; title: string; question: string; filePath?: string; command?: string; cwd?: string; reason?: string; disabled: boolean }>(), { canCancel: undefined, canApprove: undefined })
 const emit = defineEmits<{ respond: [response: { approved: boolean; cancelled?: boolean; reason?: string; choice?: string; choiceToken?: string; prefix?: string }]; pause: []; 'edit-workflow': [] }>()
 const rawWorkflow = ref<boolean>()
 const showRawWorkflow = computed(() => rawWorkflow.value ?? props.workflow?.raw ?? true)

@@ -15,14 +15,14 @@
       <fieldset v-if="presentation.choices.length" class="choices"><legend>{{ entering ? 'Continue with' : 'Context and permissions' }}</legend><label v-for="option in presentation.choices" :key="option.value"><input v-model="selected" type="radio" name="native-plan-choice" :value="option.value" :disabled="disabled" /><span>{{ option.label }}</span></label></fieldset>
       <label v-if="!entering" class="feedback"><span>Feedback for Claude</span><textarea v-model="feedback" aria-label="Plan feedback" maxlength="4000" rows="2" :disabled="disabled" placeholder="Tell Claude what to change, or add a note to your approval" /></label>
     </div>
-    <footer><button type="button" class="quiet" :disabled="disabled" @click="$emit('pause')">Cancel</button><div class="decisions"><button type="button" class="secondary" :disabled="disabled" @click="$emit('respond', { approved: false, reason: feedback.trim() || undefined })">{{ entering ? 'Decline' : 'Keep planning' }}</button><button v-if="presentation.choices.length" type="button" class="primary" :disabled="disabled || !selected" @click="approve">{{ entering ? 'Enter plan mode' : 'Approve plan' }}</button></div></footer>
+    <footer><button type="button" class="quiet" :disabled="disabled" @click="$emit('pause')">{{ cancelLabel ?? 'Cancel' }}</button><div class="decisions"><button type="button" class="secondary" :disabled="disabled" @click="$emit('respond', { approved: false, reason: feedback.trim() || undefined })">{{ entering ? 'Decline' : 'Keep planning' }}</button><button v-if="presentation.choices.length" type="button" class="primary" :disabled="disabled || !selected" @click="approve">{{ entering ? 'Enter plan mode' : 'Approve plan' }}</button></div></footer>
   </section>
 </template>
 <script setup lang="ts">
 import { ref } from 'vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import type { ClaudePlanPresentation } from '#features/code/common/native-plan.ts'
-const props = defineProps<{ entering: boolean; presentation: ClaudePlanPresentation; reason?: string; disabled: boolean }>()
+const props = defineProps<{ entering: boolean; cancelLabel?: string; presentation: ClaudePlanPresentation; reason?: string; disabled: boolean }>()
 const emit = defineEmits<{ respond: [response: { approved: boolean; choice?: string; reason?: string; plan?: string }]; pause: [] }>()
 const draft = ref(props.presentation.plan), feedback = ref(''), editing = ref(false)
 const selected = ref(props.presentation.initialChoice)

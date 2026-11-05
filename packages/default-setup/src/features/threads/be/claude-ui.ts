@@ -346,6 +346,12 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     }).catch(() => { logger.debug('Native action key acknowledgement unavailable', identity) })
     return
   }
+  if (event.type === 'CLAUDE_UI_APPROVAL_ANSWER') {
+    if (!view || !view.backgroundView || !validId(event.frameId) || !event.answer || typeof event.answer !== 'object' || JSON.stringify(event.answer).length > 210000) return
+    bind(view)
+    void view.mount?.answerApproval(event.frameId, event.answer)
+    return
+  }
   if (event.type === 'CLAUDE_UI_QUESTION_ANSWER') {
     if (!view || !view.backgroundView || typeof event.messageId !== 'string' || event.messageId.length > 512 || typeof event.token !== 'string' || !event.answer || typeof event.answer !== 'object' || JSON.stringify(event.answer).length > 131072) return
     bind(view)
