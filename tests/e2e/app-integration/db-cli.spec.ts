@@ -1,5 +1,5 @@
 // apack db opens a data dir's database offline (docs/goals/goal-apack-db-cli.md, Decision 2 A): with the app running
-// on it, a read works and warns that it may be stale, and a change is refused, so the app stays its only writer
+// on it, a read works and warns that it may be stale, and replacing or resetting the data is refused
 import { spawnSync } from 'node:child_process';
 import * as path from 'node:path';
 import { test, expect } from '@apackdev/testing';
@@ -11,7 +11,7 @@ function apackDb(args: string[]) {
   return { status: result.status, stdout: result.stdout.trim(), stderr: result.stderr };
 }
 
-test("reads the running app's data and refuses to change it", async ({ electronApp, app, appPage }) => {
+test("reads the running app's data and refuses to reset it", async ({ electronApp, app, appPage }) => {
   // Connected: the API booted, hydrated and written the app's data
   await app.waitForState('running.connected');
   // Defaults are declarative; a Settings row exists only after an explicit override is saved.
@@ -28,13 +28,10 @@ test("reads the running app's data and refuses to change it", async ({ electronA
   // The app's settings and written flows
   expect(JSON.parse(read.stdout)).toEqual([true, true]);
 
-  const write = apackDb(['exec', "create(EARS.Entity.Note).set('title', 'written while the app runs')", '--data-dir', dataDir]);
-  expect(write.status).toBe(1);
-  expect(write.stderr).toMatch(/apack is running on .*: quit it first, this command changes its database/);
   const reset = apackDb(['reset', '--force', '--data-dir', dataDir]);
   expect(reset.status).toBe(1);
   expect(reset.stderr).toMatch(/quit it first/);
 
-  const notes = apackDb(['query', "return query(EARS.Entity.Note).pickAll().filter((note) => note.title === 'written while the app runs').length", '--data-dir', dataDir]);
-  expect(notes.stdout).toBe('0');
+  const flows = apackDb(['query', 'return query(EARS.Entity.Flow).count() > 0', '--data-dir', dataDir]);
+  expect(flows.stdout).toBe('true');
 });

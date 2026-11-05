@@ -109,7 +109,7 @@ export async function dbInspect(args: string[], io: DbIo): Promise<void> {
   const [incoming, outgoing] = [values.incoming as boolean, values.outgoing as boolean];
   const directions: Direction[] = incoming === outgoing ? ['outgoing', 'incoming'] : incoming ? ['incoming'] : ['outgoing'];
 
-  const db = await openTarget(target, { write: false, command: 'inspect' }, io);
+  const db = await openTarget(target, { changes: 'nothing', command: 'inspect' }, io);
   await withDatabase(db, () => {
     if (entityId) {
       graphLines(db.ears, entityId, { depth, directions }).forEach((line) => io.out(line));

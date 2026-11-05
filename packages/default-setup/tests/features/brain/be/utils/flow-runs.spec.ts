@@ -149,6 +149,16 @@ describe('brain start', () => {
     expect(brainState(app), 'it stops, and does not restart itself').toEqual({ running: false, hasActor: false })
   })
 
+  // A terminal edit of one row must not cost the user the flow they have running
+  it('keeps running when another process changes some rows', async () => {
+    importFlows({ 'Root Flow': { root: true, tracks: staysRunning } })
+    const app = await startBrain()
+
+    await app.send('brain', { type: 'DATA_CHANGED_ELSEWHERE' })
+
+    expect(brainState(app)).toEqual({ running: true, hasActor: true })
+  })
+
   it('stops with no flow to run, and starts from START_BRAIN once a root flow exists', async () => {
     const app = await startBrain()
     expect(brainState(app)).toEqual({ running: false, hasActor: false })

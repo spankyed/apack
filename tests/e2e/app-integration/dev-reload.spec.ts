@@ -4,10 +4,10 @@
 // the document it renames is one of default-setup's command documents, compiled under its `commands` key.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { Page } from '@playwright/test';
 import { API_TOKEN_HEADER } from '@apackdev/sdk/utils/pure';
 import { test, expect } from '@apackdev/testing';
 import { PACK_LAYOUT, readPackBuild, sealPackBuild } from '@apackdev/host/packs';
+import { libraryDocuments } from './library-documents.ts';
 
 const DIST = path.resolve(import.meta.dirname, '../../../packages/default-setup/dist');
 const CONTENT_FILE = path.join(DIST, 'runtime/content/commands.content.json');
@@ -15,27 +15,6 @@ const WRITTEN_DOCUMENT = 'Codex commands';
 const REBUILT_DOCUMENT = 'Codex commands after a rebuild';
 
 interface LibraryRecord { entity?: string; name?: string; children?: LibraryRecord[] }
-
-interface ShownItem { id: string; type: 'folder' | 'document'; name: string }
-interface LibraryShown { items: ShownItem[]; expandedFolderIds: string[]; expandedFolderChildren: Record<string, ShownItem[]> }
-
-/**
- * The documents the library's tree shows, as its actor holds them. Each call expands every folder shown and not yet
- * expanded, as a user opening the tree would, so polling it reaches a document however deep its folder is.
- */
-async function libraryDocuments(appPage: Page): Promise<string[]> {
-  return appPage.evaluate(() => {
-    type Actor = { getSnapshot(): { context: LibraryShown }; send(event: { type: 'EXPAND_FOLDER'; folderId: string }): void };
-    const actor = (window as { applicationState?: { system?: { get(id: string): Actor | undefined } } }).applicationState?.system?.get('default-setup/library');
-    if (!actor) return [];
-    const { items, expandedFolderIds, expandedFolderChildren } = actor.getSnapshot().context;
-    const shown = [...items, ...Object.values(expandedFolderChildren).flat()];
-    for (const item of shown) {
-      if (item.type === 'folder' && !expandedFolderIds.includes(item.id)) actor.send({ type: 'EXPAND_FOLDER', folderId: item.id });
-    }
-    return shown.filter((item) => item.type === 'document').map((item) => item.name);
-  });
-}
 
 /** Renames a compiled record, as recompiling the pack's content sources after an edit would */
 function renameWrittenDocument(records: LibraryRecord[], from: string, to: string): boolean {

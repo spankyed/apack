@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { startPackBuildWatcher } from '../../src/build/watch.ts';
-import * as reload from '../../src/build/dev-reload.ts';
+import * as reload from '../../src/app/app-api.ts';
 import { compilerWatchFixture } from '../_support/compiler-watch-fixture.ts';
 
 const roots: string[] = [];
