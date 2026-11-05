@@ -628,7 +628,6 @@ describe('apack db exec', () => {
       const elmdb = createRequire(createRequire(import.meta.url).resolve('@apackdev/ears/package.json')).resolve('elmdb');
       async function* lines() {
         yield "write('Note-a').set('title', 'Before')\n";
-        await new Promise((resolve) => setTimeout(resolve, 50));
         await promisify(execFile)(process.execPath, ['-e', [
           `const { Database } = require(${JSON.stringify(elmdb)});`,
           'const database = Database.open(process.argv[1]);',
