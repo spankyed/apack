@@ -152,7 +152,7 @@ but no longer serving, which no pid check can. The pack watcher already works th
 5. **No heartbeat locks.** `proper-lockfile` and anything else that renews an mtime lapses under the
    synchronous LMDB work the lock protects, producing the double-writer it exists to prevent.
 
-6. **Locking fails closed.** If the addon will not load, or the filesystem will not honour the lock, a
+6. **Locking fails closed**, for the commands that take the lock; a command changing rows takes none, since LMDB orders its commits with everything else writing. If the addon will not load, or the filesystem will not honour the lock, a
    write is refused with an error saying why. The current scheme degrades to a pid guess; the new one
    must not degrade silently to nothing.
 
