@@ -1,3 +1,4 @@
+import { loader } from '@guolao/vue-monaco-editor';
 import { inject, onScopeDispose, shallowRef, type App, type ShallowRef } from 'vue';
 
 type Monaco = typeof import('monaco-editor');
@@ -18,7 +19,12 @@ export function useMonacoRuntime(): { monaco: ShallowRef<Monaco | undefined>; pr
   const problem = shallowRef<string>();
   let active = true;
   onScopeDispose(() => { active = false; });
-  void load().then(value => { if (active) monaco.value = value; }, error => {
+  void load().then(value => {
+    if (!active) return;
+    // A bundled UI has its own loader; it must receive the same host-owned runtime too.
+    loader.config({ monaco: value });
+    monaco.value = value;
+  }).catch(error => {
     if (active) problem.value = error instanceof Error ? error.message : String(error);
   });
   return { monaco, problem };

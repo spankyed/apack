@@ -1,4 +1,3 @@
-import { loader } from '@guolao/vue-monaco-editor';
 import * as monaco from 'monaco-editor';
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import JsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker';
@@ -16,6 +15,5 @@ self.MonacoEnvironment = {
     return new EditorWorker();
   },
 };
-loader.config({ monaco });
 
 export { monaco };
