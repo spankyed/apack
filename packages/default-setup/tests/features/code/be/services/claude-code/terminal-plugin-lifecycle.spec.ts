@@ -50,3 +50,27 @@ it('installs a child formatter with its existing prefix and restores only its ow
  for(let i=0;i<4;i++){f.tick();await new Promise(resolve=>setTimeout(resolve,0))}
  await vi.waitFor(()=>expect(set).toHaveBeenLastCalledWith('CLAUDE_CODE_SHELL_PREFIX','user -flag'));expect(f.cancel).not.toHaveBeenCalled()
 })
+
+it('rebinds child polling to a fresh session without accepting late old formatter output',async()=>{
+ const f=fixture();let release!:(value:any)=>void
+ const oldSession=await f.api.session.id(),freshSession='77777777-7777-4777-8777-777777777777'
+ const set=vi.fn(async()=>({}));Object.assign(f.api.env,{set})
+ f.api.http.fetch.mockImplementation(async(url:string,init:any)=>{
+  const path=new URL(url).pathname,body=JSON.parse(init.body);f.requests.push({path,body})
+  if(path==='/background-status'&&body.sessionId===oldSession)return new Promise(resolve=>{release=resolve})
+  return{ok:true,text:JSON.stringify(path==='/poll'?{background:true}:path==='/background-register'?{token:body.sessionId===freshSession?'fresh-lease':'old-lease'}:{})}
+ })
+ await f.start();f.tick();await vi.waitFor(()=>expect(f.requests.some(row=>row.path==='/background-register')).toBe(true));await new Promise(resolve=>setTimeout(resolve,0))
+ const oldTick=f.api.clock.every.mock.calls[0]![1]
+ f.tick();await vi.waitFor(()=>expect(release).toBeTypeOf('function'))
+ const freshApi={...f.api,session:{...f.api.session,id:async()=>freshSession}},next=async(value:any)=>value
+ await f.hooks.get('session.start')!(freshApi,{},next)
+ expect(f.cancel).toHaveBeenCalledOnce();expect(f.api.clock.every).toHaveBeenCalledTimes(2)
+ f.tick();await vi.waitFor(()=>expect(f.requests.some(row=>row.path==='/background-register'&&row.body.sessionId===freshSession)).toBe(true));await new Promise(resolve=>setTimeout(resolve,0))
+ release({ok:true,text:JSON.stringify({shellPrefix:'stale-prefix',originalPrefix:'stale-user'})});await new Promise(resolve=>setTimeout(resolve,0));expect(set).not.toHaveBeenCalled()
+ const count=f.requests.length;oldTick();await new Promise(resolve=>setTimeout(resolve,0));expect(f.requests).toHaveLength(count)
+ f.tick();await vi.waitFor(()=>expect(f.requests.some(row=>row.path==='/background-status'&&row.body.sessionId===freshSession)).toBe(true))
+ const status=f.requests.find(row=>row.path==='/background-status'&&row.body.sessionId===freshSession)!
+ expect(status.body.token).toBe('fresh-lease');expect(status.body.sequence).toBe(1)
+ await f.hooks.get('ui.render')!(freshApi,{},next);expect(f.api.clock.every).toHaveBeenCalledTimes(2);expect(f.api.process.run).toHaveBeenCalledOnce()
+})
