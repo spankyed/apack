@@ -215,7 +215,7 @@ test('accepted dependency credentials enforce shared, owner-only and reload boun
   let installed = false;
   const messages: { answering?: string; event: Record<string, unknown> }[] = [];
   const address = await appPage.evaluate(async () => ({
-    port: (await window.electronAPI.apiStatus.whenReady()).port,
+    port: (await window.electronAPI!.apiStatus.whenReady()).port,
     token: (window as any).electronAPI.apiToken as string,
   }));
   const ws = createWSClient({ url: `ws://127.0.0.1:${address.port}`, WebSocket: class extends WebSocket {
