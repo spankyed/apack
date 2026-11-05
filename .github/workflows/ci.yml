@@ -188,7 +188,7 @@ jobs:
   # Builds tests/packs/external-pack with the apack CLI and runs its Playwright
   # suite from the pack dir against the built app — the third-party pack path.
   external-pack-e2e:
-    if: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux }}
+    if: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux && !inputs.startup_performance }}
     runs-on: macos-14
     timeout-minutes: 30
 
