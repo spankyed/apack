@@ -81,3 +81,20 @@ it('bounds a readiness wait without changing the underlying startup', async () =
   await expect(api.waitForReady()).resolves.toBeUndefined();
   expect(vi.getTimerCount()).toBe(0);
 });
+
+it('waits through restart backoff instead of reusing the previous ready process', async () => {
+  vi.spyOn(ProcessManager.prototype, 'getFatalErrors').mockReturnValue([]);
+  const api = server();
+  api.handleServerReady(3000);
+  await api.waitForReady();
+  api.handleProcessExit(1, null);
+  let resolved = false;
+  const next = api.waitForReady().then(() => { resolved = true; });
+  await Promise.resolve();
+  expect(resolved).toBe(false);
+  await vi.advanceTimersByTimeAsync(API_CONFIG.RESTART_DELAY);
+  expect(resolved).toBe(false);
+  api.handleServerReady(4000);
+  await next;
+  expect(resolved).toBe(true);
+});
