@@ -2,7 +2,7 @@ import { createClaudeBackgroundStatus } from '#features/code/be/services/claude-
 import { claudeTerminalBackgroundStatusRuntime } from '#features/code/be/services/claude-code/terminal-background-status-runtime.ts'
 import { rewriteClaudeNativePlatformSelectors } from '#features/code/be/services/claude-code/native-platform-runtime.ts'
 const parent='24be904a-3c35-4981-9793-cbe7a6c19d46',child='05ff1d31-597d-4537-8737-4407191add6e'
-const identity={jobId:'05ff1d31',sessionId:child,pid:119,start:'worker-start',hostPid:100,hostStart:'host-start',cwd:'/owned'}
+const identity={jobId:'05ff1d31',sessionId:child,activeSessionId:child,pid:119,start:'worker-start',hostPid:100,hostStart:'host-start',cwd:'/owned'}
 function fixture(){
  let clock=10000
  const identify=vi.fn(async()=>({...identity})),changed=vi.fn()
@@ -35,7 +35,7 @@ it('refuses foreign sessions, lease tokens and malformed original usage',async()
 })
 it('binds the public helper PID to the original roster, dispatch, durable job and both process starts',async()=>{
  const worker={pid:100,procStart:'host-start',replPid:119,replProcStart:'worker-start',dispatch:{sessionId:child,cwd:'/owned'}}
- const jobs={uL:vi.fn(async()=>({workers:{'05ff1d31':worker}})),io:vi.fn(()=>'/job'),Kp:vi.fn(),Zr:vi.fn(async()=>({sessionId:child,cwd:'/owned',daemonShort:'05ff1d31'})),iZt:vi.fn(async()=>true)}
+ const jobs={uL:vi.fn(async()=>({workers:{'05ff1d31':worker}})),io:vi.fn(()=>'/job'),Kp:vi.fn(),Zr:vi.fn(async()=>({sessionId:child,resumeSessionId:child,cwd:'/owned',daemonShort:'05ff1d31'})),iZt:vi.fn(async()=>true)}
  const source=rewriteClaudeNativePlatformSelectors(claudeTerminalBackgroundStatusRuntime)
  const processIdentity={jh:vi.fn(async ():Promise<boolean|undefined>=>true)}
  const api=new Function('config','importClaudeNativeModule',source+';return identifyNativeBackground')({sessionId:parent},async(name:string)=>name==='chunk-0xj14bee.js'?processIdentity:jobs)
@@ -103,4 +103,31 @@ it('invalidates pending registrations and publications when the independently ow
  await expect(pending).rejects.toThrow('expired');expect(f.store.identity).toBeUndefined()
  const token=(await f.store.register(child,119)).token;await f.store.accept({...f.message,token});f.store.reset()
  await expect(f.store.accept({...f.message,token,sequence:2})).rejects.toThrow('expired');expect(f.store.value).toBeUndefined();f.store.close()
+})
+
+it('keeps the authenticated daemon job identity separate from its original active resume session',async()=>{
+ const active='72fd7bf0-568f-490d-9917-ded54c2014b0'
+ const worker={pid:100,procStart:'host-start',replPid:119,replProcStart:'worker-start',dispatch:{sessionId:child,cwd:'/owned'}}
+ const state={sessionId:child,resumeSessionId:active,cwd:'/owned',daemonShort:'05ff1d31'}
+ const jobs={uL:async()=>({workers:{'05ff1d31':worker}}),io:()=>'/job',Kp:()=>{},Zr:async()=>state,iZt:async()=>true}
+ const source=rewriteClaudeNativePlatformSelectors(claudeTerminalBackgroundStatusRuntime)
+ const api=new Function('config','importClaudeNativeModule',source+';return identifyNativeBackground')({sessionId:parent},async(name:string)=>name==='chunk-0xj14bee.js'?{jh:async()=>true}:jobs)
+ const request={parent_session_id:parent,child_session_id:child,pid:119,cwd:'/owned'}
+ await expect(api(request)).resolves.toEqual({...identity,activeSessionId:active})
+ state.resumeSessionId=parent;await expect(api(request)).rejects.toThrow('active session')
+ state.resumeSessionId='invalid';await expect(api(request)).rejects.toThrow('active session')
+ state.resumeSessionId=active;worker.dispatch.sessionId=active
+ await expect(api(request)).rejects.toThrow('worker changed')
+})
+
+it('rotates status lease to the authenticated active session and refuses late old-session writes',async()=>{
+ const f=fixture(),active='72fd7bf0-568f-490d-9917-ded54c2014b0'
+ const old=await f.store.register(child,119)
+ f.identify.mockResolvedValue({...identity,activeSessionId:active})
+ await expect(f.store.accept({...f.message,token:old.token})).rejects.toThrow('replaced')
+ const fresh=await f.store.register(active,119)
+ await expect(f.store.accept({...f.message,token:old.token,sequence:2})).rejects.toThrow('expired')
+ await f.store.accept({...f.message,sessionId:active,token:fresh.token})
+ expect(f.store.identity).toMatchObject({sessionId:child,activeSessionId:active})
+ f.store.close()
 })

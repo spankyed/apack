@@ -6,7 +6,7 @@ const token='a'.repeat(64)
 function fixture() {
  let control:ClaudeBackgroundApproval|undefined={kind:'bash',dialog:{id:'dialog',revision:sessionId,sessionId,requestId:'tool',toolName:'Bash',command:'printf original',cwd:'/owned',input:{command:'printf original'},choiceToken:'b'.repeat(64),choices:[{value:'yes',token,label:'Yes'}]}}
  const request=vi.fn(async(_value:unknown)=>({answered:true})),settled=vi.fn()
- const owner={identity:{sessionId},controls:{get value(){return control},subscribe:()=>()=>{},settled},transport:{request}} as unknown as ClaudeBackgroundDesktopOwner
+ const owner={identity:{sessionId,activeSessionId:sessionId},controls:{get value(){return control},subscribe:()=>()=>{},settled},transport:{request}} as unknown as ClaudeBackgroundDesktopOwner
  return{source:createClaudeChildApprovalSource(owner),request,settled,get control(){return control!},replace(value?:ClaudeBackgroundApproval){control=value}}
 }
 it('uses the selected original consent token and never sends replacement input or permission updates',async()=>{

@@ -9,7 +9,7 @@ import { writeFile, access } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createClaudeBackgroundStatusObserver } from '#features/code/be/services/claude-code/background-status-observer.ts'
 const parent='24be904a-3c35-4981-9793-cbe7a6c19d46',child='05ff1d31-597d-4537-8737-4407191add6e'
-const original={jobId:'05ff1d31',sessionId:child,pid:119,start:'worker-start',hostPid:100,hostStart:'host-start',cwd:'/owned'}
+const original={jobId:'05ff1d31',sessionId:child,activeSessionId:child,pid:119,start:'worker-start',hostPid:100,hostStart:'host-start',cwd:'/owned'}
 async function fixture(target:()=>{sessionId:string;cwd:string}|undefined=()=>({sessionId:child,cwd:'/owned'})){
  let identity={...original}
  const authorities:{identify:ReturnType<typeof vi.fn>;close:ReturnType<typeof vi.fn>}[]=[],changed=vi.fn()
@@ -188,8 +188,8 @@ it('binds child drawing and reverse prompts to the original worker and retires t
  // mkdir's intermediates use the process umask; the private workers parent is explicit.
  const {chmod}=await import('node:fs/promises');await chmod(join(observer.directory,'workers'),0o700)
  await writeFile(join(observer.directory,'worker-119.json'),JSON.stringify({pid:119,sessionId:child,start:identity.start,configPath:join(worker,'observer.json')}),{mode:0o600})
- await writeFile(join(worker,'observer.json'),JSON.stringify({sessionId:child,token,uiSocketPath:socketPath}),{mode:0o600})
- const native=createServer(async(req,res)=>{let text='';for await(const chunk of req)text+=chunk;const value=JSON.parse(text);res.end(JSON.stringify({id:value.id,pid:119,sessionId:child,result:{attached:true}}))})
+ await writeFile(join(worker,'observer.json'),JSON.stringify({sessionId:child,jobSessionId:child,token,uiSocketPath:socketPath}),{mode:0o600})
+ const native=createServer(async(req,res)=>{let text='';for await(const chunk of req)text+=chunk;const value=JSON.parse(text);res.end(JSON.stringify({id:value.id,pid:119,sessionId:value.sessionId,result:{attached:true}}))})
  await new Promise<void>(resolve=>native.listen(socketPath,resolve))
  try {
   expect(JSON.parse(await readFile(join(observer.directory,'child-ui-launch.json'),'utf8')).configDir).toBe(join(profile,'claude-code-profile','config'))
@@ -213,7 +213,18 @@ it('binds child drawing and reverse prompts to the original worker and retires t
   expect(filled.code).toBe(200)
   const after=await post('/ui-host',{pid:119,sessionId:child,request_id:randomUUID(),sequence:3,request:{subtype:'ui_prompt_read',client_id:'child-view',surface:'desktop'}},token)
   expect(after.value.result).toEqual({text:'Child replacement 🙂',cursor:'Child replacement 🙂'.length})
-  identity={...identity,start:'replacement-worker'}
+  const nextSession='72fd7bf0-568f-490d-9917-ded54c2014b0'
+  identity={...identity,activeSessionId:nextSession}
+  expect((await post('/background-register',{sessionId:nextSession,pid:119})).code).toBe(200)
+  await desktop.done
+  await expect(transport!.request({subtype:'ui_render'})).rejects.toThrow()
+  const freshTransport=await observer.desktopTransport();expect(freshTransport).toBeDefined()
+  expect(observer.desktopOwner?.identity).toMatchObject({sessionId:child,activeSessionId:nextSession,start:identity.start})
+  expect(JSON.parse(await readFile(join(worker,'observer.json'),'utf8'))).toMatchObject({sessionId:nextSession,jobSessionId:child})
+  await expect(freshTransport!.request({subtype:'ui_attach',client_id:'fresh',surface:'desktop'})).resolves.toEqual({attached:true})
+  expect((await post('/ui-event',{pid:119,sessionId:child,event},token)).code).toBe(409)
+  expect((await post('/ui-event',{pid:119,sessionId:nextSession,event},token)).code).toBe(200)
+  identity={...identity,activeSessionId:child,start:'replacement-worker'}
   await expect(transport!.request({subtype:'ui_render'})).rejects.toThrow('owner changed')
   expect((await post('/ui-event',{pid:119,sessionId:child,event},token)).code).toBe(403)
   await desktop.done;expect(observer.desktopOwner).toBeUndefined()

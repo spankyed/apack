@@ -388,7 +388,7 @@ it('routes action keys only through the current connection and mounted thread', 
 it('does not retarget a child desktop lease during heartbeats or connection resumption',async()=>{
  const {ui}=await native(),owner=getConversation('thread')!.owner
  const read=vi.spyOn(uiOwners,'getClaudeUiOwner').mockImplementation(()=>owner)
- const backgroundView={ownerId:'child-owner',parentSessionId:'parent',sessionId:'child',jobId:'11111111',pid:119,processStart:'start'}
+ const backgroundView={ownerId:'child-owner',parentSessionId:'parent',sessionId:'child',jobSessionId:'child',jobId:'11111111',pid:119,processStart:'start'}
  const child={...mount,backgroundView},delivery=reply(),replacement=reply()
  try{
   handleClaudeUiView(child,'child-window',delivery);await vi.advanceTimersByTimeAsync(100)

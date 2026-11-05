@@ -4,7 +4,7 @@ import type { DecodedLine } from '#features/code/be/services/claude-code/ndjson.
 vi.hoisted(()=>vi.resetModules())
 vi.mock('#features/code/be/services/claude-code/runner.ts',()=>({spawnStream:vi.fn()}))
 const parent='24be904a-3c35-4981-9793-cbe7a6c19d46',child='05ff1d31-597d-4537-8737-4407191add6e'
-const identity={jobId:'05ff1d31',sessionId:child,pid:119,start:'worker-start',hostPid:100,hostStart:'host-start',cwd:'/owned'}
+const identity={jobId:'05ff1d31',sessionId:child,activeSessionId:child,pid:119,start:'worker-start',hostPid:100,hostStart:'host-start',cwd:'/owned'}
 function fixture(){
  let waiting:(()=>void)|undefined,ended=false,finish!:(value:{exitCode:number;signal:null;stderr:string})=>void
  const queue:DecodedLine[]=[],done=new Promise<{exitCode:number;signal:null;stderr:string}>(resolve=>{finish=resolve})

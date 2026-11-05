@@ -58,14 +58,14 @@ it('does not attach conversation UI after the original owner has a durable backg
 
 it('keeps child desktop controls on the exact original incarnation, separate from parent and Agent UI', () => {
   const request = vi.fn(async () => ({capabilities: ['ui_surface_v1']}))
-  const desktop = {id: 'child-owner', parentSessionId: 'parent', identity: {sessionId:'child',jobId:'11111111',pid:119,start:'start',hostPid:100,hostStart:'host-start',cwd:'/owned'},
+  const desktop = {id: 'child-owner', parentSessionId: 'parent', identity: {sessionId:'child',activeSessionId:'child',jobId:'11111111',pid:119,start:'start',hostPid:100,hostStart:'host-start',cwd:'/owned'},
     controls: {value: undefined, subscribe: vi.fn(() => () => {}), settled: vi.fn()}, registration:1, done:new Promise<void>(() => {}), transport:{request, subscribe:vi.fn(), promptHosts:{}}} as unknown as NonNullable<ReturnType<typeof store.getNativeBackgroundDesktopOwner>>
   const read = vi.spyOn(store, 'getNativeBackgroundDesktopOwner').mockReturnValue(desktop)
   const child = snapshotClaudeBackgroundUiTarget(desktop)
   const owner = getClaudeUiOwner('thread', undefined, child)
   expect(owner?.sessionId).toBe('child');expect(owner?.done).toBe(desktop.done);expect(owner?.nativeView).toBeUndefined()
   expect(getClaudeUiOwner('thread',undefined,{...child})).toBe(owner)
-  for (const foreign of [{ownerId:'other'},{parentSessionId:'other'},{sessionId:'other'},{jobId:'other'},{pid:120},{processStart:'reused-pid'}]) {
+  for (const foreign of [{ownerId:'other'},{parentSessionId:'other'},{sessionId:'other'},{jobSessionId:'other'},{jobId:'other'},{pid:120},{processStart:'reused-pid'}]) {
     expect(getClaudeUiOwner('thread',undefined,{...child,...foreign})).toBeUndefined()
   }
   expect(getClaudeUiOwner('thread',target,child)).toBeUndefined()

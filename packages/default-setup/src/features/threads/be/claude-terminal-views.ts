@@ -188,7 +188,7 @@ export function createClaudeTerminalViews(dependencies: {
       || continuation.sessionId !== operation.sessionId || continuation.continuedInSessionId !== operation.continuedInSessionId) return
     void dependencies.background(continuation, {operation: 'refresh'}, view.threadId).then(fresh => {
       if (views.get(key) !== view || view.background !== operation || operation.desktop !== desktop || !dependencies.desktopCurrent?.(view.threadId, desktop)
-        || !fresh || fresh.id !== session.id || fresh.sessionId !== desktop.sessionId || fresh.cwd !== session.cwd
+        || !fresh || fresh.id !== session.id || fresh.sessionId !== desktop.jobSessionId || fresh.cwd !== session.cwd
         || fresh.pid !== desktop.pid && !['done', 'failed', 'stopped'].includes(fresh.state)) return
       operation.session = fresh
       if (!fresh.pid || !['working', 'blocked'].includes(fresh.state)) operation.desktop = undefined

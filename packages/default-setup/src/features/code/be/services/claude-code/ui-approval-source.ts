@@ -17,7 +17,7 @@ export function createClaudeChildApprovalSource(owner: ClaudeBackgroundDesktopOw
     read, subscribe: owner.controls.subscribe,
     async answer(control, raw) {
       const current = read(), response = ClaudeUiApprovalAnswerSchema.parse(raw)
-      if (answering || !current || current.kind !== control.kind || current.dialog.id !== control.dialog.id || current.dialog.revision !== control.dialog.revision || current.dialog.requestId !== control.dialog.requestId || current.dialog.sessionId !== control.dialog.sessionId || current.dialog.sessionId !== owner.identity.sessionId) throw new Error('Background approval changed or is already being answered')
+      if (answering || !current || current.kind !== control.kind || current.dialog.id !== control.dialog.id || current.dialog.revision !== control.dialog.revision || current.dialog.requestId !== control.dialog.requestId || current.dialog.sessionId !== control.dialog.sessionId || current.dialog.sessionId !== owner.identity.activeSessionId) throw new Error('Background approval changed or is already being answered')
       const d = current.dialog
       const request: Record<string, unknown> & {subtype: string} = {subtype: answerSubtypes[current.kind], id: d.id, revision: d.revision, session_id: d.sessionId, decision: response.approved ? 'allow' : 'deny', ...(response.reason ? {feedback: response.reason} : {})}
       if (response.cancelled && current.kind !== 'generic') throw new Error('Native cancellation is unavailable for this approval')

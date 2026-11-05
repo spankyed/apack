@@ -59,6 +59,7 @@ export interface ClaudeBackgroundUiTarget {
   ownerId: string
   parentSessionId: string
   sessionId: string
+  jobSessionId: string
   jobId: string
   pid: number
   processStart: string

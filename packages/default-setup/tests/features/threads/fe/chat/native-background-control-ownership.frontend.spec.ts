@@ -12,7 +12,7 @@ afterEach(()=>{app?.unmount();app=undefined;document.body.replaceChildren()})
 it('never retargets queued old responses even when the replacement asks the same question or needs a tokenless denial',async()=>{
  captured.questions.length=0;captured.approvals.length=0;captured.send.mockClear();context=reactive({nativeUiViews:{}})
  const root=document.createElement('div');document.body.append(root)
- app=createApp({render:()=>h(NativeBackgroundComposer,{threadId:'thread',target:{ownerId:'owner',parentSessionId:'parent',sessionId:'child',jobId:'11111111',pid:119,processStart:'start'},draft:'',disabled:false,send:async()=>{}})});app.mount(root)
+ app=createApp({render:()=>h(NativeBackgroundComposer,{threadId:'thread',target:{ownerId:'owner',parentSessionId:'parent',sessionId:'child',jobSessionId:'child',jobId:'11111111',pid:119,processStart:'start'},draft:'',disabled:false,send:async()=>{}})});app.mount(root)
  const mount=captured.send.mock.calls.find(([event])=>event.type==='CLAUDE_UI_MOUNT')![0]
  const question=(id:string):ClaudeUiQuestionFrame=>({messageId:id,id:'dialog',revision:id,draftActionId:id,token:id,body:{status:'rendering'}})
  context.nativeUiViews[mount.mountId]={threadId:'thread',attachmentId:'attached',state:{status:'disconnected',question:question('first')}};await nextTick()

@@ -13,7 +13,7 @@ import type { ClaudeBackgroundUiTarget } from '../../../common/native-background
 const backgroundOwners = new WeakMap<ClaudeBackgroundDesktopOwner, ClaudeUiOwner>()
 
 export function snapshotClaudeBackgroundUiTarget(owner: ClaudeBackgroundDesktopOwner): ClaudeBackgroundUiTarget {
-  return {ownerId: owner.id, parentSessionId: owner.parentSessionId, sessionId: owner.identity.sessionId, jobId: owner.identity.jobId, pid: owner.identity.pid, processStart: owner.identity.start}
+  return {ownerId: owner.id, parentSessionId: owner.parentSessionId, sessionId: owner.identity.activeSessionId, jobSessionId: owner.identity.sessionId, jobId: owner.identity.jobId, pid: owner.identity.pid, processStart: owner.identity.start}
 }
 
 export function matchesClaudeBackgroundUiTarget(owner: ClaudeBackgroundDesktopOwner | undefined, target: ClaudeBackgroundUiTarget): boolean {
@@ -28,7 +28,7 @@ const nativeOwners = new WeakMap<ClaudeNativeTerminalOwner, { key: string; owner
 export function getClaudeUiOwner(threadId: string, target?: ClaudeNativeAgentUiTarget, background?: ClaudeBackgroundUiTarget): ClaudeUiOwner | undefined {
   if (background) {
     if (target) return
-    const desktop = getNativeBackgroundDesktopOwner(threadId, {sessionId: background.parentSessionId, continuedInSessionId: background.sessionId})
+    const desktop = getNativeBackgroundDesktopOwner(threadId, {sessionId: background.parentSessionId, continuedInSessionId: background.jobSessionId})
     if (!desktop) return
     if (!matchesClaudeBackgroundUiTarget(desktop, background)) return
     const cached = backgroundOwners.get(desktop)
@@ -36,18 +36,18 @@ export function getClaudeUiOwner(threadId: string, target?: ClaudeNativeAgentUiT
     const initialized = desktop.transport.request({subtype: 'apack_ui_capabilities'}).then(value => z.object({capabilities: z.array(z.string())}).parse(value))
     initialized.catch(() => {})
     const owner: ClaudeUiOwner = {
-      done: desktop.done, sessionId: desktop.identity.sessionId, subscribe: listener => desktop.transport.subscribe(listener),
+      done: desktop.done, sessionId: desktop.identity.activeSessionId, subscribe: listener => desktop.transport.subscribe(listener),
       approval: createClaudeChildApprovalSource(desktop),
       question: {
         ownerId: desktop.id,
         row() { const current = desktop.controls.value; const q = current?.kind === 'question' ? current.dialog : undefined; return q ? {messageId: `${desktop.id}:${q.id}:${q.revision}`, id: q.id, revision: q.revision, sessionId: q.sessionId, requestId: q.requestId} : undefined },
         subscribe: desktop.controls.subscribe,
         async render(request) {
-          if (request.sessionId !== desktop.identity.sessionId) throw new Error('Background question owner changed')
+          if (request.sessionId !== desktop.identity.activeSessionId) throw new Error('Background question owner changed')
           return ClaudeNativeQuestionRenderSchema.parse(await desktop.transport.request({subtype: 'apack_render_question_dialog', id: request.id, revision: request.revision, session_id: request.sessionId, client_id: request.clientId, viewport: request.viewport}))
         },
         async hold(request) {
-          if (request.sessionId !== desktop.identity.sessionId) throw new Error('Background question owner changed')
+          if (request.sessionId !== desktop.identity.activeSessionId) throw new Error('Background question owner changed')
           const result = await desktop.transport.request({subtype: 'apack_hold_question_dialog', id: request.id, revision: request.revision, session_id: request.sessionId, client_id: request.clientId, render_token: request.renderToken}) as {held?: unknown}
           if (result.held !== true) throw new Error('Background question draft was not acknowledged')
         },

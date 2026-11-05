@@ -10,6 +10,8 @@ async function identifyNativeBackground(request){
  if(!/^[a-f0-9]{8}$/.test(id)||typeof worker.procStart!=='string'||!worker.procStart||typeof worker.replProcStart!=='string'||!worker.replProcStart||await processIdentity.jh(worker.replPid,worker.replProcStart)!==true||!await jobs.iZt(worker.replPid,worker.replProcStart)||await processIdentity.jh(worker.pid,worker.procStart)!==true||!await jobs.iZt(worker.pid,worker.procStart))throw Error('Background status process retired');
  const directory=jobs.io(id);jobs.Kp(directory);const state=await jobs.Zr(directory);
  if(!state||state.sessionId!==request.child_session_id||state.cwd!==request.cwd||state.daemonShort!==id)throw Error('Background status job changed');
- return {jobId:id,sessionId:request.child_session_id,pid:worker.replPid,start:worker.replProcStart,hostPid:worker.pid,hostStart:worker.procStart,cwd:request.cwd};
+ const activeSessionId=state.resumeSessionId;
+ if(typeof activeSessionId!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(activeSessionId)||activeSessionId===config.sessionId)throw Error('Background active session is invalid');
+ return {jobId:id,sessionId:request.child_session_id,activeSessionId,pid:worker.replPid,start:worker.replProcStart,hostPid:worker.pid,hostStart:worker.procStart,cwd:request.cwd};
 }
 `

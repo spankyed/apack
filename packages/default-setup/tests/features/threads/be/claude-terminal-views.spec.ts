@@ -496,7 +496,7 @@ it('recovers background observation once for a mounted view and ignores completi
 it('publishes desktop controls only for the refreshed original child, and retires late or replaced results', async () => {
  const link={sessionId:'parent',continuedInSessionId:'child',timestamp:'2026-11-04T00:00:00Z'}
  const job={id:'11111111',sessionId:'child',cwd:'/owned',pid:119,state:'working' as const}
- const desktop={ownerId:'desktop',parentSessionId:'parent',sessionId:'child',jobId:job.id,pid:119,processStart:'native-start'}
+ const desktop={ownerId:'desktop',parentSessionId:'parent',sessionId:'child',jobSessionId:'child',jobId:job.id,pid:119,processStart:'native-start'}
  let finish!:(target:typeof desktop)=>void, alive=true, notify!:()=>void
  const prepare=vi.fn(()=>new Promise<typeof desktop>(resolve=>{finish=resolve}))
  const send=vi.fn(), views=createClaudeTerminalViews({get:()=>undefined,open:vi.fn(),continuation:()=>link,background:async()=>job,
@@ -521,7 +521,7 @@ it('publishes desktop controls only for the refreshed original child, and retire
 it('attaches the child desktop when native registration arrives after the initial status refresh', async () => {
  const link={sessionId:'parent',continuedInSessionId:'child',timestamp:'2026-11-04T00:00:00Z'}
  const job={id:'11111111',sessionId:'child',cwd:'/owned',pid:119,state:'working' as const}
- const desktop={ownerId:'desktop',parentSessionId:'parent',sessionId:'child',jobId:job.id,pid:119,processStart:'native-start'}
+ const desktop={ownerId:'desktop',parentSessionId:'parent',sessionId:'child',jobSessionId:'child',jobId:job.id,pid:119,processStart:'native-start'}
  let info: ClaudeBackgroundStatus|undefined,notify!:()=>void
  const prepare=vi.fn().mockRejectedValueOnce(Error('Background desktop worker changed; refresh its status')).mockResolvedValue(desktop)
  const send=vi.fn(),views=createClaudeTerminalViews({get:()=>undefined,open:vi.fn(),continuation:()=>link,background:async()=>job,
@@ -542,7 +542,7 @@ it('attaches the child desktop when native registration arrives after the initia
 it('refreshes a PID-less job once when its verified worker registers and ignores repeated status ticks', async () => {
  const link={sessionId:'parent',continuedInSessionId:'child',timestamp:'now'}
  const job={id:'11111111',sessionId:'child',cwd:'/owned',state:'working' as const}
- const desktop={ownerId:'desktop',parentSessionId:'parent',sessionId:'child',jobId:job.id,pid:119,processStart:'start'}
+ const desktop={ownerId:'desktop',parentSessionId:'parent',sessionId:'child',jobSessionId:'child',jobId:job.id,pid:119,processStart:'start'}
  let info:ClaudeBackgroundStatus|undefined, notify!:()=>void
  const background=vi.fn().mockResolvedValueOnce(job).mockResolvedValue({...job,pid:119})
  const prepare=vi.fn(async()=>desktop),send=vi.fn()
@@ -564,7 +564,7 @@ it('refreshes a PID-less job once when its verified worker registers and ignores
 it('refreshes the original job when its question disappears and does not keep a settled waiting label', async () => {
  const link={sessionId:'parent',continuedInSessionId:'child',timestamp:'now'}
  const job={id:'11111111',sessionId:'child',cwd:'/owned',state:'blocked' as const,status:'waiting' as const,waitingFor:'input needed',pid:119}
- const desktop={ownerId:'desktop',parentSessionId:'parent',sessionId:'child',jobId:job.id,pid:119,processStart:'start'}
+ const desktop={ownerId:'desktop',parentSessionId:'parent',sessionId:'child',jobSessionId:'child',jobId:job.id,pid:119,processStart:'start'}
  let question:{id:string;revision:string}|undefined={id:'question',revision:'revision'}, notify!:()=>void
  const background=vi.fn().mockResolvedValueOnce(job).mockResolvedValue({...job,state:'working',status:'idle',waitingFor:undefined})
  const send=vi.fn(),views=createClaudeTerminalViews({get:()=>undefined,open:vi.fn(),continuation:()=>link,background,desktop:async()=>desktop,desktopCurrent:()=>true,backgroundQuestion:()=>question,subscribeBackground:(_key,changed)=>{notify=changed;return()=>{}}})

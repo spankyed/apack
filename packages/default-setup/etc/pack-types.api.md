@@ -694,8 +694,8 @@ declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObjec
                 label: z.ZodString;
                 mode: z.ZodEnum<{
                     default: "default";
-                    auto: "auto";
                     plan: "plan";
+                    auto: "auto";
                     acceptEdits: "acceptEdits";
                     bypassPermissions: "bypassPermissions";
                 }>;
@@ -874,6 +874,7 @@ interface ClaudeBackgroundStatus {
 interface ClaudeBackgroundStatusIdentity {
     jobId: string;
     sessionId: string;
+    activeSessionId: string;
     pid: number;
     start: string;
     hostPid: number;
@@ -888,6 +889,7 @@ interface ClaudeBackgroundUiTarget {
     ownerId: string;
     parentSessionId: string;
     sessionId: string;
+    jobSessionId: string;
     jobId: string;
     pid: number;
     processStart: string;
@@ -1632,8 +1634,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
             label: z.ZodString;
             mode: z.ZodEnum<{
                 default: "default";
-                auto: "auto";
                 plan: "plan";
+                auto: "auto";
                 acceptEdits: "acceptEdits";
                 bypassPermissions: "bypassPermissions";
             }>;
@@ -6964,8 +6966,8 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  */
 declare const PermissionModeSchema: z.ZodEnum<{
     default: "default";
-    auto: "auto";
     plan: "plan";
+    auto: "auto";
     acceptEdits: "acceptEdits";
     bypassPermissions: "bypassPermissions";
     dontAsk: "dontAsk";
@@ -8791,8 +8793,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             loading: z.ZodBoolean;
             copyState: z.ZodOptional<z.ZodEnum<{
                 error: "error";
-                idle: "idle";
                 pending: "pending";
+                idle: "idle";
                 saved: "saved";
             }>>;
             insight: z.ZodOptional<z.ZodString>;

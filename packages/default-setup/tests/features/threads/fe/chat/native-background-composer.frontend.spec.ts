@@ -11,7 +11,7 @@ vi.mock('#features/threads/fe/chat/NativeAgentComposer.vue',()=>({default:{props
 beforeEach(()=>{send.mockClear();context=reactive({nativeUiViews:{}})})
 afterEach(()=>{app?.unmount();app=undefined;document.body.replaceChildren()})
 it('routes controls through its child mount and retires that mount on worker replacement and collapse',async()=>{
- const target=reactive<ClaudeBackgroundUiTarget>({ownerId:'child-one',parentSessionId:'parent',sessionId:'child',jobId:'11111111',pid:119,processStart:'one'})
+ const target=reactive<ClaudeBackgroundUiTarget>({ownerId:'child-one',parentSessionId:'parent',sessionId:'child',jobSessionId:'child',jobId:'11111111',pid:119,processStart:'one'})
  const root=document.createElement('div');document.body.append(root);const leave=vi.fn(),draft=vi.fn()
  app=createApp({render:()=>h(NativeBackgroundComposer,{threadId:'thread',target,draft:'Saved child draft',disabled:false,send:async()=>{},onDraft:draft,onLeave:leave})});app.mount(root)
  const first=send.mock.calls.find(([event])=>event.type==='CLAUDE_UI_MOUNT')![0]
@@ -33,7 +33,7 @@ it('routes controls through its child mount and retires that mount on worker rep
 })
 
 it('renders the original child question and routes answers without changing the retained composer draft', async () => {
- const target:ClaudeBackgroundUiTarget={ownerId:'child',parentSessionId:'parent',sessionId:'child',jobId:'11111111',pid:119,processStart:'one'}
+ const target:ClaudeBackgroundUiTarget={ownerId:'child',parentSessionId:'parent',sessionId:'child',jobSessionId:'child',jobId:'11111111',pid:119,processStart:'one'}
  const root=document.createElement('div');document.body.append(root);const leave=vi.fn()
  app=createApp({render:()=>h(NativeBackgroundComposer,{threadId:'thread',target,draft:'Retained child draft',disabled:false,send:async()=>{},onLeave:leave})});app.mount(root)
  const mounted=send.mock.calls.find(([event])=>event.type==='CLAUDE_UI_MOUNT')![0]
@@ -54,7 +54,7 @@ it('renders the original child question and routes answers without changing the 
 
 it('keeps an opened question mounted while returning to notes and retires it on worker replacement', async () => {
  const root=document.createElement('div');document.body.append(root)
- const state=reactive({sessionId:'parent-question',continuedInSessionId:'child-question',revision:1,operation:'refresh' as const,status:'done' as const,question:{id:'question',revision:'revision'},desktop:{ownerId:'one',parentSessionId:'parent-question',sessionId:'child-question',jobId:'11111111',pid:119,processStart:'one'},session:{id:'11111111',sessionId:'child-question',cwd:'/owned',pid:119,state:'working' as const}})
+ const state=reactive({sessionId:'parent-question',continuedInSessionId:'child-question',revision:1,operation:'refresh' as const,status:'done' as const,question:{id:'question',revision:'revision'},desktop:{ownerId:'one',parentSessionId:'parent-question',sessionId:'child-question',jobSessionId:'child-question',jobId:'11111111',pid:119,processStart:'one'},session:{id:'11111111',sessionId:'child-question',cwd:'/owned',pid:119,state:'working' as const}})
  let close!:()=>void
  app=createApp({render:()=>h(NativeBackgroundSession,{continuation:{sessionId:'parent-question',continuedInSessionId:'child-question',timestamp:'now'},state,canReply:true},{composer:(slot:{active:boolean;close():void})=>{close=slot.close;return h('input',{'aria-label':'Question draft','data-active':String(slot.active)})}})});app.mount(root)
  expect(root.querySelector('input')).toBeNull()

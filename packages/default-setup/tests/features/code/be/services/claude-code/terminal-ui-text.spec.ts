@@ -16,15 +16,16 @@ async function fixture(){
  const end=claudeTerminalUiRuntime.indexOf('await new Promise((resolve,reject)=>{server.once',start)
  expect(start).toBeGreaterThan(0);expect(end).toBeGreaterThan(start)
  // Only the authored HTTP handler executes; original module imports/control implementations do not.
- const server=vm.runInNewContext(claudeTerminalUiRuntime.slice(start,end)+';server',{
+ const runtime={
   http:{createServer},AbortController,Buffer,process:{pid:owner.pid},config:{token},configUrl:'config',
   readFileSync:()=>JSON.stringify({sessionId:owner.sessionId}),activeSession:owner.sessionId,
-  seen:new Set(),highestSequence:0,inFlight:0,control,
+  seen:new Set(),highestSequence:0,sequenceSession:owner.sessionId,inFlight:0,control,
   nativeUiTextMessageMaxBytes:CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES,nativeUiPromptRpcSubtypes:new Set(['ui_prompt_edit','ui_prompt_autocomplete']),
- }) as ReturnType<typeof createServer>
+ };
+ const server=vm.runInNewContext(claudeTerminalUiRuntime.slice(start,end)+';server',runtime) as ReturnType<typeof createServer>
  await new Promise<void>(resolve=>server.listen(socketPath,resolve))
  const ui=createClaudeTerminalUiTransport({socketPath,token,current:()=>owner})
- return{...ui,control,async raw(value:Record<string,unknown>){
+ return{...ui,control,rotateSession(sessionId:string){owner.sessionId=sessionId;runtime.activeSession=sessionId},async raw(value:Record<string,unknown>){
   return new Promise<number>((resolve,reject)=>{
    const request=httpRequest({socketPath,path:'/control',method:'POST',headers:{'x-apack-native-token':token}},response=>{response.resume();response.on('end',()=>resolve(response.statusCode!))})
    request.on('error',reject);request.end(JSON.stringify({id:randomUUID(),sequence:100,ownerPid:owner.pid,sessionId:owner.sessionId,request:value}))
@@ -59,5 +60,17 @@ it('refuses prompt text envelopes beyond the bounded byte budget',async()=>{
   expect(f.control).not.toHaveBeenCalled()
   f.control.mockImplementation(async()=>({text:'a'.repeat(CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES),cursor:0}))
   await expect(f.transport.request({subtype:'ui_prompt_edit',text:'small',cursor:0})).rejects.toThrow('response exceeds')
+ }finally{await f.close()}
+})
+
+it('starts a fresh replay window only after the authenticated configured session changes',async()=>{
+ const f=await fixture()
+ try{
+  expect(await f.raw({subtype:'ui_render'})).toBe(200)
+  expect(await f.raw({subtype:'ui_render'})).toBe(409)
+  f.rotateSession('next-native-session')
+  expect(await f.raw({subtype:'ui_render'})).toBe(200)
+  expect(await f.raw({subtype:'ui_render'})).toBe(409)
+  expect(f.control).toHaveBeenCalledTimes(2)
  }finally{await f.close()}
 })

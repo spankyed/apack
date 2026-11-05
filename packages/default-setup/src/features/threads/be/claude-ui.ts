@@ -81,7 +81,7 @@ const keyOf = (client: string, mountId: string) => JSON.stringify([client, mount
 const viewCurrent = (view: ClaudeUiView) => views.get(keyOf(view.client, view.mountId)) === view
 const sameNativeView = (first: ClaudeUiView['nativeView'], second: ClaudeUiView['nativeView']) => first?.ownerId === second?.ownerId && first?.sessionId === second?.sessionId && first?.revision === second?.revision && first?.taskId === second?.taskId
 
-const sameBackgroundView = (first: ClaudeUiView['backgroundView'], second: ClaudeUiView['backgroundView']) => first?.ownerId === second?.ownerId && first?.parentSessionId === second?.parentSessionId && first?.sessionId === second?.sessionId && first?.jobId === second?.jobId && first?.pid === second?.pid && first?.processStart === second?.processStart
+const sameBackgroundView = (first: ClaudeUiView['backgroundView'], second: ClaudeUiView['backgroundView']) => first?.ownerId === second?.ownerId && first?.parentSessionId === second?.parentSessionId && first?.sessionId === second?.sessionId && first?.jobSessionId === second?.jobSessionId && first?.jobId === second?.jobId && first?.pid === second?.pid && first?.processStart === second?.processStart
 
 function publish(view: ClaudeUiView, state: ClaudeUiMountState): void {
   view.state = state
@@ -191,7 +191,7 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
   if (event.type === 'CLAUDE_UI_MOUNT' && event.blockExpansion !== undefined && (!event.blockExpansion || typeof event.blockExpansion !== 'object' || Array.isArray(event.blockExpansion) || !Object.entries(event.blockExpansion).every(([id, indices]) => id.length > 0 && id.length <= 256 && Array.isArray(indices) && indices.every(index => Number.isSafeInteger(index) && index >= 0)))) return
   if (event.type === 'CLAUDE_UI_MOUNT' && event.backgroundView !== undefined) {
     const target = event.backgroundView
-    if (event.nativeView || !target || typeof target !== 'object' || ![target.ownerId, target.parentSessionId, target.sessionId, target.jobId, target.processStart].every(id => typeof id === 'string' && id.length > 0 && id.length <= 256)
+    if (event.nativeView || !target || typeof target !== 'object' || ![target.ownerId, target.parentSessionId, target.sessionId, target.jobSessionId, target.jobId, target.processStart].every(id => typeof id === 'string' && id.length > 0 && id.length <= 256)
       || !Number.isSafeInteger(target.pid) || target.pid <= 1) return
   }
   if (event.type === 'CLAUDE_UI_MOUNT' && event.nativeView !== undefined) {

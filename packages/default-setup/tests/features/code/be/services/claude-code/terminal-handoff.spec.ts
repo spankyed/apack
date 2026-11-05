@@ -177,7 +177,7 @@ it('retains the original child observer after parent exit and reuses it on same-
  await printOwner()
  const child='22222222-2222-4222-8222-222222222222',continuation={sessionId:session,continuedInSessionId:child,timestamp:'2026-10-30T00:00:00Z'}
  const transport={} as import('#features/code/be/services/claude-code/terminal-ui.ts').ClaudeTerminalUiTransport
- const desktop={id:'desktop-original',parentSessionId:session,identity:{jobId:'22222222',sessionId:child,pid:119,start:'worker-start',hostPid:100,hostStart:'host-start',cwd:'/native-cwd'},registration:1,transport,done:new Promise<void>(()=>{})}
+ const desktop={id:'desktop-original',parentSessionId:session,identity:{jobId:'22222222',sessionId:child,activeSessionId:child,pid:119,start:'worker-start',hostPid:100,hostStart:'host-start',cwd:'/native-cwd'},registration:1,transport,done:new Promise<void>(()=>{})}
  const prepareDesktop=vi.fn(async()=>transport)
  const observer={parentSessionId:session,value:{jobId:'22222222',sessionId:child,pid:119},desktopOwner:desktop,desktopTransport:prepareDesktop,subscribe:vi.fn(()=>()=>{}),close:vi.fn(async()=>{})} as unknown as NonNullable<ClaudeNativeTerminalOwner['backgroundObserver']>
  const first={...terminal(),backgroundObserver:observer},second={...terminal(),backgroundObserver:observer}
