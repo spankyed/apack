@@ -49,14 +49,17 @@ const bystanderReady = new Promise<void>(resolve => {
 
 // In the watcher's process, so on its file-event stream. For a lost edit this says which side lost it: the event reached
 // that stream and the watcher dropped it, or it never reached that stream though it reached the bystander's.
-let streamEventAt = 0;
+// The probe is written once a round, so any event since the round began is that write's; a timestamp couldn't say, since
+// this process blocks during an input read and learns of the write late.
+let streamSawProbe = false;
 const streamWitness = fs.watch(directory, { recursive: true }, (_event, file) => {
-  if (file && path.join(directory, file) === probe) streamEventAt = Date.now();
+  if (file && path.join(directory, file) === probe) streamSawProbe = true;
 });
 
 let ensured = '';
+let passes = 0;
 const builder = {
-  async ensurePackages() { ensured = fs.readFileSync(probe, 'utf8'); },
+  async ensurePackages() { passes++; ensured = fs.readFileSync(probe, 'utf8'); },
   async build() {},
   subscribeFrontendInputs() { return () => {}; },
   async isFrontendCurrent() { return true; },
@@ -71,6 +74,8 @@ try {
   });
   for (let round = 1; round <= roundCount && !stopping.signal.aborted; round++) {
     const text = `// ${round}\n`;
+    streamSawProbe = false;
+    const passesBefore = passes;
     const delayMs = Math.round(Math.random() * maxDelayMs);
     bystander.send({ text, delayMs });
     fs.writeFileSync(driver, text);
@@ -83,7 +88,7 @@ try {
     if (stopping.signal.aborted) break;
     const result: SoakRound = { pickedUp: ensured === text, bystanderSaw: bystanderEventAt >= saved };
     rounds.push(result);
-    console.log(JSON.stringify({ round, delayMs, ...result, watcherStreamSaw: streamEventAt >= saved, afterMs: Date.now() - saved, load: Number(os.loadavg()[0].toFixed(0)) }));
+    console.log(JSON.stringify({ round, delayMs, ...result, watcherStreamSaw: streamSawProbe, passes: passes - passesBefore, afterMs: Date.now() - saved, load: Number(os.loadavg()[0].toFixed(0)) }));
     await sleep(BETWEEN_ROUNDS_MS);
   }
 } finally {
