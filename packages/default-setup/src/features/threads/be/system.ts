@@ -40,20 +40,20 @@ const terminalViews = createClaudeTerminalViews({
     return snapshotClaudeBackgroundUiTarget(await prepareNativeBackgroundDesktop(key, continuation, jobId, pid))
   },
   backgroundApproval(key, target) {
-    const owner = getNativeBackgroundDesktopOwner(key, {sessionId: target.parentSessionId, continuedInSessionId: target.sessionId})
+    const owner = getNativeBackgroundDesktopOwner(key, {sessionId: target.parentSessionId, continuedInSessionId: target.jobSessionId})
     if (!matchesClaudeBackgroundUiTarget(owner, target)) return
     const control = owner?.controls.value
     return control && control.kind !== 'question' ? {id: control.dialog.id, revision: control.dialog.revision} : undefined
   },
   backgroundQuestion(key, target) {
-    const owner = getNativeBackgroundDesktopOwner(key, {sessionId: target.parentSessionId, continuedInSessionId: target.sessionId})
+    const owner = getNativeBackgroundDesktopOwner(key, {sessionId: target.parentSessionId, continuedInSessionId: target.jobSessionId})
     if (!matchesClaudeBackgroundUiTarget(owner, target)) return
     const control = owner?.controls.value
     const question = control?.kind === 'question' ? control.dialog : undefined
     return question ? {id: question.id, revision: question.revision} : undefined
   },
   desktopCurrent(key, target) {
-    return matchesClaudeBackgroundUiTarget(getNativeBackgroundDesktopOwner(key, {sessionId:target.parentSessionId,continuedInSessionId:target.sessionId}), target)
+    return matchesClaudeBackgroundUiTarget(getNativeBackgroundDesktopOwner(key, {sessionId:target.parentSessionId,continuedInSessionId:target.jobSessionId}), target)
   },
   backgroundInfo(key) {
     const state = repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode;
