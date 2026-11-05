@@ -436,3 +436,26 @@ describe.each(['input', 'select'] as const)('%s callback failure ownership', kin
     await f.host.dispose()
   })
 })
+
+it.each(['PromptHint','Spinner'] as const)('reacquires a withdrawn %s source without publishing a message failure or replaying its actions',async component=>{
+ const f=fixture(),old={component,id:'native-placement',revision:'a'.repeat(64)},fresh={...old,revision:'b'.repeat(64)}
+ f.ui.composerPlacements.mockResolvedValue([old])
+ f.setSource((_groups,composer)=>composer.map(item=>({component:item.component,uuid:item.id,sourceRevision:item.revision,messageId:'composer',sessionId:'session',text:'',start:0,end:0})))
+ const states:string[]=[];f.publish.mockImplementation(()=>{states.push(...f.host.state.map(row=>row.body.status))})
+ f.host.start();await vi.advanceTimersByTimeAsync(50)
+ const prior=f.nodes()[0];if(prior.kind!=='button')throw Error('expected button')
+ f.ui.render.mockImplementationOnce(async()=>{f.ui.composerPlacements.mockResolvedValue([fresh]);throw Error('Native composer source changed before rendering')})
+ f.host.receive({type:'system',subtype:'ui_invalidate',event:'ui.render',composer_placements:true,client_id:'view',instances:[{surface:'desktop',component,id:old.id,instance_id:old.id}]})
+ await vi.advanceTimersByTimeAsync(100)
+ expect(states).not.toContain('error')
+ expect(f.host.state[0]).toMatchObject({sourceRevision:fresh.revision,body:{status:'live'}})
+ expect(f.ui.render).toHaveBeenLastCalledWith(expect.objectContaining({props:{source_revision:fresh.revision}}))
+ await expect(f.host.press(prior.actionId!)).resolves.toEqual({handled:false});expect(f.ui.press).not.toHaveBeenCalled()
+ f.host.dispose()
+})
+it('preserves genuine composer render errors without retrying them as source withdrawal',async()=>{
+ const f=fixture();f.setRows([{component:'PromptHint',uuid:'hint',sourceRevision:'a'.repeat(64),messageId:'composer',sessionId:'session',text:'',start:0,end:0}])
+ f.ui.render.mockRejectedValueOnce(Error('Original renderer failed'))
+ f.host.start();await vi.advanceTimersByTimeAsync(100)
+ expect(f.host.state[0].body.status).toBe('error');expect(f.ui.render).toHaveBeenCalledOnce();f.host.dispose()
+})

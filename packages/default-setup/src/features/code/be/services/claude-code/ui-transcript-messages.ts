@@ -170,9 +170,17 @@ export function createClaudeTranscriptMessageHost(options: {
           entry.body = { status: 'live', tree: entry.pressing ? inert(drawing.tree) : drawing.tree }
           for (const id of entry.revisions.keys()) if (!drawing.fields.has(id)) { entry.revisions.delete(id); entry.completed.delete(id) }
           publish()
-        } catch {
+        } catch (error) {
           if (!present(entry)) void release(entry)
-          if (present(entry) && epoch === entry.epoch) fail(entry)
+          if (present(entry) && epoch === entry.epoch) {
+            // Native source withdrawal is a replacement, not a failed message render.
+            // Fetch new authority before rendering again; never retry the cached source.
+            if (composerRow(entry.row) && error instanceof Error && error.message === 'Native composer source changed before rendering') {
+              entry.epoch++; entry.dirty = false; entry.drawing = undefined; entry.fields = undefined
+              entry.engineOutput = undefined; entry.nativeHint = undefined; entry.body = {status: 'rendering'}
+              void release(entry); entry.failedLease = true; publish(); void refreshGroups()
+            } else fail(entry)
+          }
         }
       }
     } finally {
