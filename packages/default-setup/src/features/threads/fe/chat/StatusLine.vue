@@ -13,7 +13,7 @@
     <div v-if="nativeUi?.status === 'live' && hasContent" v-show="toolsOpen" ref="nativeSite" @focusin="reportFocusIn" @focusout="reportFocusOut" @compositionstart="composing = true" @compositionend="composing = false" @keydown="handleSiteKey" class="native-extension-surface rounded-lg bg-transparent px-0 py-3 max-h-80 flex-1 min-h-0 min-w-0 overflow-y-auto text-[13px] leading-5 outline-none" tabindex="0" @focus="focusNativeUi" @pointerover="hover.point" @pointermove="hover.point" @pointerleave="hover.leave" :class="{ 'mt-2 pb-2': statusLine }">
       <div data-native-scroll-content><NativeUiNode :node="nativeUi.tree" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" /></div>
     </div>
-    <p v-else-if="nativeUi?.status === 'error'" class="text-neutral-500" :title="nativeUi.message" role="status">Claude controls unavailable</p>
+    <p v-else-if="nativeUi?.status === 'error'" class="text-neutral-500" :title="nativeUi.message" role="status">Claude controls unavailable <button v-if="reconnect" type="button" class="ml-2 rounded px-1 py-0.5 text-neutral-300 underline underline-offset-2 hover:text-white focus-visible:outline focus-visible:outline-blue-400" @click="reconnect()">Reconnect controls</button></p>
     <span v-if="hasContent" ref="cellMeasure" aria-hidden="true" class="pointer-events-none invisible fixed -left-[9999px] whitespace-pre font-mono text-[13px]">0000000000</span>
   </div>
 </template>
@@ -33,7 +33,7 @@ import { useClaudeHoverSurface, claudeHoverSurface } from './native-ui-hover.ts'
 const hover = useClaudeHoverSurface()
 provide(claudeHoverSurface, hover)
 onBeforeUnmount(() => hover.dispose())
-const props = defineProps<{ statusLine?: string; nativeStatus?: string; cwd?: string; nativeUi?: ClaudeUiMountState; nativeFocus?: ClaudeUiFocusReply }>()
+const props = defineProps<{ statusLine?: string; nativeStatus?: string; cwd?: string; nativeUi?: ClaudeUiMountState; nativeFocus?: ClaudeUiFocusReply; reconnect?: () => void }>()
 watch(() => props.nativeUi, () => hover.invalidate(), { flush: 'post' })
 const toolsOpen = ref(false)
 provide(claudeClientVisible, computed(() => toolsOpen.value))

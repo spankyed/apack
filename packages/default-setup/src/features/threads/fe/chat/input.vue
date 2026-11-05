@@ -22,7 +22,7 @@
         @drop.prevent="onDrop">
         <NativePanePanel v-if="nativeUi?.panes" :preferred-rows="paneRowsPreference" @resize="paneRowsPreference = $event" :panes="nativeUi.panes" :focus="nativeFocus" :grant-focus="paneFocusGrant" @operate="emit('native-ui-pane', $event)" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="emit('native-ui-focus', $event)" @return-focus="focusComposer" />
         <StatusIndicator :anchor="inputCardRef"/>
-        <StatusLine ref="statusLineRef" :status-line="statusLine" :native-status="nativeStatus" :cwd="statusLineCwd" :native-ui="nativeUi" :native-focus="nativeFocus"
+        <StatusLine :reconnect="() => emit('native-ui-reconnect')" ref="statusLineRef" :status-line="statusLine" :native-status="nativeStatus" :cwd="statusLineCwd" :native-ui="nativeUi" :native-focus="nativeFocus"
           @tools-expanded="nativeToolsExpanded = $event; emit('native-tools-expanded', $event)" @return-focus="focusComposer" @click="emit('statusline-click')" @press="(actionId, href) => emit('native-ui-press', actionId, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="emit('native-ui-focus', $event)" />
 
         <NativeComposerPlacements v-if="nativeUi?.composer?.length" :frames="nativeUi.composer" location="status" @height="nativeActivityHeight = $event" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />
@@ -298,6 +298,7 @@ const props = defineProps<{
 const savedChannels=computed(()=>{const state=props.currentThread?.context?.claudeCode;const raw=state?.channelSelection ?? (state?.nativeLaunch as import('#features/code/common/native-launch.ts').ClaudeNativeLaunch|undefined)?.channels;return Array.isArray(raw)?raw.filter((value):value is string=>typeof value==='string'):[]})
 const channelsOpen=ref(false)
 const emit = defineEmits<{
+  (e: 'native-ui-reconnect'): void
   (e: 'channels-change', channels: string[]): void
   (e: 'native-tools-expanded', expanded: boolean): void
   (e: 'send-message', message: string, references?: MessageReferences): void

@@ -144,7 +144,7 @@
           <!-- Keep the draft/editor mounted while the native process needs a decision. -->
           <!-- Input -->
           <div v-show="!nativeBackgroundReplyActive && !mainPanelActive && !mainOutputExpanded && !pendingNativeApproval && !pendingNativeQuestion && !pendingNativePlan" class="flex-shrink-0 w-full" :class="$style.inputContainer">
-            <ChatInput ref="mainComposer" @native-tools-expanded="nativeToolsExpanded = $event"
+            <ChatInput ref="mainComposer" @native-ui-reconnect="reconnectNativeUi" @native-tools-expanded="nativeToolsExpanded = $event"
               :disabled="!nativeSessionBackgrounded && (nativeAgentsDecisionPending || mainCommandActive || !!taskView?.[1].state && taskView[1].state.view?.kind !== 'main')"
               :disabled-reason="!nativeSessionBackgrounded && taskView?.[1].state ? taskView[1].state.view?.kind === 'agent' ? 'Return to the main conversation in the native interface' : taskView[1].state.view ? undefined : 'Connecting to Claude input' : undefined"
               :current-thread="currentThread"
@@ -503,18 +503,23 @@ function pressNativeUi(actionId: string, href?: string) {
   const mount = nativeUiMount.value
   if (mount) actor.send({ type: 'CLAUDE_UI_PRESS', ...mount, actionId, ...(href !== undefined ? { href } : {}) })
 }
+function mountNativeUi() {
+  detachNativeUi()
+  const threadId = currentThread.value?.id, owner = taskView.value?.[1].state
+  if (!threadId || !currentThread.value?.context?.claudeCode || nativeTerminalActive.value || agentSelection.value || owner?.ownerId && owner.view?.kind !== 'main') return
+  nativeUiMount.value = { threadId, mountId: crypto.randomUUID() }
+  renewNativeUi()
+  heartbeat = setInterval(renewNativeUi, 10000)
+}
+function reconnectNativeUi() {
+  const mount = nativeUiMount.value
+  if (!mount || mount.threadId !== currentThread.value?.id || nativeUiViews.value[mount.mountId]?.state.status !== 'error') return
+  mountNativeUi()
+}
 onMounted(() => {
   window.addEventListener('focus', renewNativeUi)
   window.addEventListener('blur', renewNativeUi)
-  stopNativeUiWatch = watch([() => currentThread.value?.id, () => !!currentThread.value?.context?.claudeCode, () => nativeTerminalActive.value, () => taskView.value?.[1].state?.ownerId, () => taskView.value?.[1].state?.view?.kind === 'agent' ? taskView.value[1].state!.view!.revision : 0, () => !!agentSelection.value], ([threadId, enabled, terminalActive, nativeOwnerId]) => {
-    detachNativeUi()
-    if (!threadId || !enabled || terminalActive || agentSelection.value || nativeOwnerId && taskView.value?.[1].state?.view?.kind !== 'main') return
-    const mount = { threadId, mountId: crypto.randomUUID() }
-    nativeUiMount.value = mount
-    const renew = renewNativeUi
-    renew()
-    heartbeat = setInterval(renew, 10000)
-  }, { immediate: true })
+  stopNativeUiWatch = watch([() => currentThread.value?.id, () => !!currentThread.value?.context?.claudeCode, () => nativeTerminalActive.value, () => taskView.value?.[1].state?.ownerId, () => taskView.value?.[1].state?.view?.kind === 'agent' ? taskView.value[1].state!.view!.revision : 0, () => !!agentSelection.value], mountNativeUi, { immediate: true })
 })
 onUnmounted(() => { window.removeEventListener('focus', renewNativeUi); window.removeEventListener('blur', renewNativeUi); stopNativeUiWatch?.(); detachNativeUi() })
 watch(() => JSON.stringify(visibleMessages.value.map(message => message.id)), renewNativeUi, { flush: 'post' })

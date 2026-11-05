@@ -404,3 +404,22 @@ it('does not retarget a child desktop lease during heartbeats or connection resu
   expect(ui.attach).toHaveBeenCalledOnce()
  }finally{read.mockRestore()}
 })
+
+it('recovers a failed attachment through a fresh view without replacing its conversation or reviving the failed lease', async () => {
+ const {ui}=await native(),delivery=reply(),conversation=getConversation('thread')
+ ui.attach.mockRejectedValueOnce(new Error('Native UI request timed out'))
+ handleClaudeUiView(mount,'window',delivery);await vi.advanceTimersByTimeAsync(100)
+ expect(delivery.mock.calls.at(-1)?.[0]).toMatchObject({state:{status:'error',message:'Native UI request timed out'}})
+ const oldHost=ui.servePrompt.mock.calls[0][1]
+ handleClaudeUiView(mount,'window',delivery);await vi.advanceTimersByTimeAsync(100)
+ expect(ui.attach).toHaveBeenCalledOnce()
+ handleClaudeUiView({...mount,type:'CLAUDE_UI_UNMOUNT'},'window',delivery)
+ const fresh={...mount,mountId:randomUUID()};handleClaudeUiView(fresh,'window',delivery);await vi.advanceTimersByTimeAsync(100)
+ expect(ui.attach).toHaveBeenCalledTimes(2);expect(ui.detach).toHaveBeenCalledOnce()
+ expect(getConversation('thread')).toBe(conversation);expect(action(delivery)).toBeTruthy()
+ expect(oldHost.available?.()).toBe(false);expect(ui.servePrompt.mock.calls[1][1].available?.()).toBe(true)
+ handleClaudeUiView(mount,'window',delivery)
+ handleClaudeUiView({...mount,type:'CLAUDE_PROMPT_EDIT',revision:99,text:'Retired draft',cursor:13,by:'person'},'window',delivery)
+ await vi.advanceTimersByTimeAsync(100)
+ expect(ui.attach).toHaveBeenCalledTimes(2);expect(ui.promptEdit).not.toHaveBeenCalled()
+})

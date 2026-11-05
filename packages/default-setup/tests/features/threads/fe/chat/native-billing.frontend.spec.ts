@@ -21,3 +21,16 @@ it('renders billing without helper output and clears it when its owner disappear
   expect(root.querySelector('[data-testid="claude-billing-status"]')).toBeNull()
  } finally {app.unmount();root.remove()}
 })
+
+it('offers recovery only with a host handler and keeps native status while reconnecting', async () => {
+ const state=reactive<{nativeUi:ClaudeUiMountState;nativeStatus:string;reconnect?:()=>void}>({nativeUi:{status:'error',message:'Native UI request timed out'},nativeStatus:'Reviewing release notes'})
+ const root=document.createElement('div');document.body.append(root)
+ const app=createApp({render:()=>h(StatusLine,state)});app.mount(root)
+ try {
+  await nextTick();expect(root.querySelector('button')).toBeNull()
+  const reconnect=vi.fn(()=>{state.nativeUi={status:'connecting'}});state.reconnect=reconnect;await nextTick()
+  const button=root.querySelector('button')!;expect(button.textContent).toBe('Reconnect controls');button.click();await nextTick()
+  expect(reconnect).toHaveBeenCalledOnce();expect(root.querySelector('button')).toBeNull()
+  expect(root.textContent).toContain('Reviewing release notes')
+ }finally{app.unmount();root.remove()}
+})
