@@ -19,9 +19,11 @@ vi.mock('@apackdev/ui/components/tiptap/TiptapEditor', async () => {
     return () => h('div', { ref: root })
   } }) }
 })
-vi.mock('#features/threads/fe/chat/StatusLine.vue', () => ({ default: { render: () => null } }))
-beforeEach(() => { resetSelectionOnCreate = false; preserveEmptyMarker = false; startFeTestRuntime() })
-afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime() })
+vi.mock('#features/threads/fe/chat/StatusLine.vue', () => ({ default: { render: () => h('div', { 'data-testid': 'agent-status' }) } }))
+let resizeCallbacks: (() => void)[] = []
+const disconnectResize = vi.fn()
+beforeEach(() => { resizeCallbacks = []; disconnectResize.mockClear(); vi.stubGlobal('ResizeObserver', class { constructor(callback: () => void) { resizeCallbacks.push(callback) } observe() {} disconnect() { disconnectResize() } }); resetSelectionOnCreate = false; preserveEmptyMarker = false; startFeTestRuntime() })
+afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime(); vi.unstubAllGlobals() })
 async function mount(send: (text: string) => Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void> = async () => {}, connected = false, draftSnapshot?: ClaudeAgentDraftSnapshot, openSettings?: () => Promise<void>, audience?: 'background') {
   const leave = vi.fn(), draft = vi.fn(), saved = vi.fn(), root = document.createElement('div'); document.body.append(root)
   const state = reactive({ draft: 'Unsent Agent draft', attachmentId: 'native-one', promptRevision: 0, prompt: undefined as ClaudePromptReply | undefined })
@@ -204,4 +206,18 @@ it('returns from the background composer without sending or clearing its draft',
  const back=[...f.root.querySelectorAll('button')].find(button=>button.textContent==='Back to parent notes')!
  back.click();expect(f.leave).toHaveBeenCalledOnce();expect(send).not.toHaveBeenCalled()
  expect(editor.state.doc.textContent).toBe('Unsent Agent draft')
+})
+
+it('keeps a full draft viewport when status rows grow and releases its size observer', async () => {
+  const f = await mount(), strip = f.root.querySelector('[data-testid="agent-status"]')!, actions = f.root.querySelector('.native-agent-actions')!, form = f.root.querySelector('form')!
+  Object.defineProperty(strip, 'offsetHeight', { configurable: true, value: 96 })
+  Object.defineProperty(actions, 'offsetHeight', { configurable: true, value: 44 })
+  resizeCallbacks.forEach(callback => callback()); await nextTick()
+  expect(form.style.minHeight).toBe('182px')
+  Object.defineProperty(strip, 'offsetHeight', { configurable: true, value: 16 })
+  Object.defineProperty(actions, 'offsetHeight', { configurable: true, value: 32 })
+  resizeCallbacks.forEach(callback => callback()); await nextTick()
+  expect(form.style.minHeight).toBe('112px')
+  app?.unmount(); app = undefined
+  expect(disconnectResize).toHaveBeenCalledOnce()
 })

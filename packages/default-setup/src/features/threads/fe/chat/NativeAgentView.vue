@@ -234,6 +234,7 @@ onBeforeUnmount(() => { window.removeEventListener('blur', nativeActionKey.cance
   .native-agent-view > details { margin-bottom: 0; }
 }
 @container claude-agent-pane (max-height: 18rem) {
-  .native-agent-messages { min-height: 3rem; }
+  .native-agent-messages { min-height: 2rem; }
+  .native-agent-messages > [role="region"] { padding-block: .25rem; }
 }
 </style>
