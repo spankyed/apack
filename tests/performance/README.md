@@ -10,6 +10,17 @@ All four actions have completed controlled mode comparisons. Source-qualified me
 failures and limitations are in [the evidence record](../../docs/archive/references/evidence/2026-10-30-application-performance.md);
 completed acceptance is recorded in [the goal audit](../../docs/archive/goals/goal-application-performance.md).
 
+For a populated-startup revision comparison on one disposable macOS runner, dispatch:
+
+```sh
+gh workflow run ci.yml --ref <candidate-branch> -f startup_performance=true -f performance_baseline=<baseline-commit>
+```
+
+This runs the same maintained comparison command with recording disabled, five warmups and twenty
+measured trials per revision in balanced order. Both checkouts have separate dependencies and profiles;
+their native pins must match. Reports and failures are uploaded even when the comparison fails.
+Its machine identity is specific to the CI run; results do not certify external-drive performance.
+
 Build with the normal repository commands, then run from the checkout root:
 
 ```sh
