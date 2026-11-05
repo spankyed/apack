@@ -56,7 +56,7 @@ const requestOpened = ref(false)
 watch(() => [replyOpen.value, props.state?.desktop?.ownerId], ([open, owner], previous) => { if (owner !== previous?.[1]) requestOpened.value = false; if (open) requestOpened.value = true })
 const richReplyActive = computed(() => !!(props.canReply && replyOpen.value && props.state?.desktop && slots.composer
   && props.state.sessionId === props.continuation.sessionId && props.state.continuedInSessionId === props.continuation.continuedInSessionId
-  && props.state.desktop.parentSessionId === props.continuation.sessionId && props.state.desktop.sessionId === props.continuation.continuedInSessionId
+  && props.state.desktop.parentSessionId === props.continuation.sessionId && props.state.desktop.jobSessionId === props.continuation.continuedInSessionId
   && props.state.session?.pid && ['working','blocked'].includes(props.state.session.state)))
 watch(richReplyActive, value => emit('composing', value), {immediate:true,flush:'sync'})
 let submitted: {text: string; revision: number; rich: boolean; resolve(): void; reject(error: Error): void} | undefined
