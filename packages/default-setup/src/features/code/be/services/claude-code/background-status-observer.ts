@@ -1,3 +1,5 @@
+import type { ClaudeBackgroundStatus } from '../../../common/native-background.ts'
+import { createClaudeBackgroundHelperProjection } from './background-helper-projection.ts'
 import { writeFileSync, renameSync } from 'node:fs'
 import { createClaudeBackgroundControls } from './background-controls.ts'
 import { prepareClaudeOwnedChildUi } from './owned-profile.ts'
@@ -68,8 +70,8 @@ export async function createClaudeBackgroundStatusObserver(options: {
   let formatter: ReturnType<typeof createClaudeBackgroundFormatter> | undefined
   let launcher: Promise<string> | undefined
   let formatterRegistration = -1, formatterSequence = -1
-  let childUi: {registration: number; identity: string; token: string; transport: ClaudeTerminalUiTransport; bridge: ReturnType<typeof createClaudeTerminalUiTransport>; owner: ClaudeBackgroundDesktopOwner; finish(): void} | undefined
-  const retireChildUi = () => { const held = childUi; childUi = undefined; held?.owner.controls.close(); held?.bridge.close(); held?.finish() }
+  let childUi: {registration: number; identity: string; token: string; transport: ClaudeTerminalUiTransport; bridge: ReturnType<typeof createClaudeTerminalUiTransport>; owner: ClaudeBackgroundDesktopOwner; helper: ReturnType<typeof createClaudeBackgroundHelperProjection>; helperConfigPath: string; helperGeneration: string; helperKey?: string; finish(): void} | undefined
+  const retireChildUi = () => { const held = childUi; childUi = undefined; held?.helper.clear(); held?.owner.controls.close(); held?.bridge.close(); held?.finish() }
   async function childUiCurrent() {
     const held = childUi, identity = status.identity
     if (!held || !identity || closed || held.registration !== status.registration || held.identity !== JSON.stringify(identity)) return
@@ -85,10 +87,58 @@ export async function createClaudeBackgroundStatusObserver(options: {
     }
     return held
   }
+  /** Original identity and a fresh per-worker socket/token scope every desktop attachment. */
+  async function desktopTransport() {
+    const identity = status.identity, registration = status.registration
+    if (!childUiPrepared || closed || !identity) return
+    const fresh = await authority.identify(identity.sessionId, identity.pid, identity.cwd)
+    if (closed || registration !== status.registration || JSON.stringify(fresh) !== JSON.stringify(identity)) throw new Error('Background UI owner changed')
+    if (childUi?.registration === registration && childUi.identity === JSON.stringify(identity)) return childUi.transport
+    const marker = join(directory, 'worker-' + identity.pid + '.json'), info = await lstat(marker)
+    if (!info.isFile() || info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0 || info.size > 65536) throw new Error('Unowned background UI startup marker')
+    const proof = JSON.parse(await readFile(marker, 'utf8'))
+    const workerName = typeof proof.configPath === 'string' ? proof.configPath.split('/').at(-2) : undefined
+    if (proof.pid !== identity.pid || proof.start !== identity.start || proof.sessionId !== identity.sessionId || !workerName || !new RegExp('^w-' + identity.pid + '-[A-Za-z0-9]+$').test(workerName) || proof.configPath !== join(directory, 'workers', workerName, 'observer.json')) throw new Error('Background UI startup does not match its original owner')
+    for (const path of [join(directory, 'workers'), join(directory, 'workers', workerName)]) {
+      const info = await lstat(path)
+      if (!info.isDirectory() || info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0) throw new Error('Unowned background UI startup directory')
+    }
+    const configInfo = await lstat(proof.configPath)
+    if (!configInfo.isFile() || configInfo.uid !== process.getuid?.() || (configInfo.mode & 0o077) !== 0 || configInfo.size > 65536) throw new Error('Unowned background UI startup config')
+    const config = JSON.parse(await readFile(proof.configPath, 'utf8'))
+    if (!config.generations || typeof config.generations.subagent !== 'string' || !config.generations.subagent) throw new Error('Background helper generation is invalid')
+    if (config.jobSessionId !== identity.sessionId || typeof config.sessionId !== 'string' || !/^[a-f0-9-]{36}$/i.test(config.sessionId) || config.uiSocketPath !== join(proof.configPath.slice(0, -'/observer.json'.length), 'ui.sock') || typeof config.token !== 'string' || !/^[a-f0-9]{64}$/.test(config.token)) throw new Error('Background UI scope is invalid')
+    if (closed || registration !== status.registration || JSON.stringify(status.identity) !== JSON.stringify(identity)) throw new Error('Background UI owner changed')
+    retireChildUi()
+    // The original daemon's authenticated resume target may change while its job/PID remain.
+    // Keep the startup proof bound to the root job and atomically advance only the UI session.
+    if (config.sessionId !== identity.activeSessionId) {
+      const temporary = proof.configPath + '.' + randomBytes(8).toString('hex')
+      writeFileSync(temporary, JSON.stringify({...config, sessionId: identity.activeSessionId}), {mode: 0o600, flag: 'wx'})
+      renameSync(temporary, proof.configPath)
+    }
+    const scope = JSON.stringify(identity)
+    const bridge = createClaudeTerminalUiTransport({socketPath: config.uiSocketPath, token: config.token,
+      current: () => !closed && registration === status.registration && JSON.stringify(status.identity) === scope ? {pid: identity.pid, sessionId: identity.activeSessionId} : undefined})
+    const transport: ClaudeTerminalUiTransport = { ...bridge.transport, async request(value) {
+      const held = await childUiCurrent()
+      if (held?.bridge !== bridge) throw new Error('Background UI owner changed')
+      const result = await bridge.transport.request(value)
+      if (await childUiCurrent() !== held) throw new Error('Background UI owner changed before its reply')
+      return result
+    } }
+    let finish!: () => void
+    const done = new Promise<void>(resolve => { finish = resolve })
+    const owner: ClaudeBackgroundDesktopOwner = {id: randomBytes(16).toString('hex'), parentSessionId, identity: Object.freeze({...identity}), registration, transport, done, get controls() { return controls }}
+    childUi = {registration, identity: scope, token: config.token, bridge, transport, owner, helper: createClaudeBackgroundHelperProjection(), helperConfigPath: proof.configPath, helperGeneration: config.generations.subagent, finish}
+    const controls = createClaudeBackgroundControls({sessionId: identity.activeSessionId, transport, changed: () => changed(true)})
+    return transport
+  }
   const server = createServer(async (request, response) => {
     const reply = (code: number, value: unknown) => { if (!response.destroyed && !response.writableEnded) { response.writeHead(code, { 'content-type': 'application/json' }); response.end(JSON.stringify(value)) } }
     try {
-      const uiRoute = request.url === '/ui-host' || request.url === '/ui-event'
+      const helperRoute = request.url === '/native-status'
+      const uiRoute = helperRoute || request.url === '/ui-host' || request.url === '/ui-event'
       if (closed || request.method !== 'POST' || (uiRoute ? !childUi || request.headers['x-apack-native-token'] !== childUi.token : request.headers['x-apack-native-token'] !== token)) return reply(403, {})
       let bytes = 0
       const chunks: Buffer[] = []
@@ -99,6 +149,22 @@ export async function createClaudeBackgroundStatusObserver(options: {
       if (uiRoute) {
         const held = await childUiCurrent()
         if (!held || request.headers['x-apack-native-token'] !== held.token) return reply(409, {})
+        if (helperRoute) {
+          if (value.kind !== 'subagent') return reply(409, {})
+          try {
+            const observed = await held.transport.request({subtype: 'apack_owner_snapshot', policy_only: true, follow_native_session: true}) as {sessionId?: unknown; subagentCommand?: unknown; hooksDisabled?: unknown; policy?: {allowManagedHooksOnly?: unknown; disableAllHooks?: unknown}}
+            if (await childUiCurrent() !== held) return reply(409, {})
+            if (observed.sessionId !== value.sessionId || observed.subagentCommand !== value.command
+              || typeof observed.policy?.allowManagedHooksOnly !== 'boolean' || typeof observed.policy.disableAllHooks !== 'boolean' || typeof observed.hooksDisabled !== 'boolean'
+              || JSON.stringify([observed.policy.allowManagedHooksOnly, observed.policy.disableAllHooks, observed.hooksDisabled]) !== value.policyKey) {
+              held.helper.clear(); changed(true); return reply(409, {})
+            }
+            if (!held.helper.accept(value)) return reply(409, {})
+            changed(true); return reply(200, {})
+          } catch {
+            held.helper.clear(); changed(true); return reply(409, {})
+          }
+        }
         if (request.url === '/ui-event') {
           const event = value.event
           if (value.pid !== status.identity?.pid || value.sessionId !== status.identity?.activeSessionId || !event || typeof event !== 'object' || Array.isArray(event) || event.type !== 'system') return reply(409, {})
@@ -119,6 +185,28 @@ export async function createClaudeBackgroundStatusObserver(options: {
         try {
           await status.accept(value)
           const registration = status.registration, sequence = status.sequence
+          if (childUiPrepared && value.helpers !== undefined) {
+            await desktopTransport()
+            const held = await childUiCurrent(), helpers = value.helpers
+            if (!held || !helpers || typeof helpers !== 'object' || Array.isArray(helpers)) return reply(409, {})
+            const snapshot = helpers as Record<string, unknown>
+            if ((snapshot.command !== null && (typeof snapshot.command !== 'string' || snapshot.command.length > 32768))
+              || typeof snapshot.policyKey !== 'string' || !/^\[(true|false),(true|false),(true|false)\]$/.test(snapshot.policyKey)
+              || !Array.isArray(snapshot.agents) || snapshot.agents.length > 256) return reply(400, {})
+            const key = JSON.stringify([value.sessionId, value.pid, snapshot.command, snapshot.policyKey])
+            if (held.helperKey !== undefined && held.helperKey !== key) {
+              const config = JSON.parse(await readFile(held.helperConfigPath, 'utf8'))
+              const generation = randomBytes(32).toString('hex')
+              const temporary = held.helperConfigPath + '.' + randomBytes(8).toString('hex')
+              writeFileSync(temporary, JSON.stringify({...config, generations: {...config.generations, subagent: generation}}), {mode: 0o600, flag: 'wx'})
+              renameSync(temporary, held.helperConfigPath)
+              held.helperGeneration = generation
+            }
+            if (closed || childUi !== held || registration !== status.registration || sequence !== status.sequence) return reply(409, {})
+            held.helperKey = key
+            if (!held.helper.configure({sessionId: value.sessionId as string, pid: value.pid as number, generation: held.helperGeneration,
+              command: snapshot.command as string | null, policyKey: snapshot.policyKey, agents: snapshot.agents})) return reply(400, {})
+          }
           if (value.formatter && !formatter) {
             launcher ??= installClaudeBackgroundFormatterLauncher()
             const path = await launcher
@@ -174,53 +262,15 @@ export async function createClaudeBackgroundStatusObserver(options: {
       return childUi && !closed && childUi.registration === status.registration && childUi.identity === JSON.stringify(status.identity) ? childUi.owner : undefined
     },
     /** Original identity and a fresh per-worker socket/token scope every desktop attachment. */
-    async desktopTransport() {
-      const identity = status.identity, registration = status.registration
-      if (!childUiPrepared || closed || !identity) return
-      const fresh = await authority.identify(identity.sessionId, identity.pid, identity.cwd)
-      if (closed || registration !== status.registration || JSON.stringify(fresh) !== JSON.stringify(identity)) throw new Error('Background UI owner changed')
-      if (childUi?.registration === registration && childUi.identity === JSON.stringify(identity)) return childUi.transport
-      const marker = join(directory, 'worker-' + identity.pid + '.json'), info = await lstat(marker)
-      if (!info.isFile() || info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0 || info.size > 65536) throw new Error('Unowned background UI startup marker')
-      const proof = JSON.parse(await readFile(marker, 'utf8'))
-      const workerName = typeof proof.configPath === 'string' ? proof.configPath.split('/').at(-2) : undefined
-      if (proof.pid !== identity.pid || proof.start !== identity.start || proof.sessionId !== identity.sessionId || !workerName || !new RegExp('^w-' + identity.pid + '-[A-Za-z0-9]+$').test(workerName) || proof.configPath !== join(directory, 'workers', workerName, 'observer.json')) throw new Error('Background UI startup does not match its original owner')
-      for (const path of [join(directory, 'workers'), join(directory, 'workers', workerName)]) {
-        const info = await lstat(path)
-        if (!info.isDirectory() || info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0) throw new Error('Unowned background UI startup directory')
-      }
-      const configInfo = await lstat(proof.configPath)
-      if (!configInfo.isFile() || configInfo.uid !== process.getuid?.() || (configInfo.mode & 0o077) !== 0 || configInfo.size > 65536) throw new Error('Unowned background UI startup config')
-      const config = JSON.parse(await readFile(proof.configPath, 'utf8'))
-      if (config.jobSessionId !== identity.sessionId || typeof config.sessionId !== 'string' || !/^[a-f0-9-]{36}$/i.test(config.sessionId) || config.uiSocketPath !== join(proof.configPath.slice(0, -'/observer.json'.length), 'ui.sock') || typeof config.token !== 'string' || !/^[a-f0-9]{64}$/.test(config.token)) throw new Error('Background UI scope is invalid')
-      if (closed || registration !== status.registration || JSON.stringify(status.identity) !== JSON.stringify(identity)) throw new Error('Background UI owner changed')
-      retireChildUi()
-      // The original daemon's authenticated resume target may change while its job/PID remain.
-      // Keep the startup proof bound to the root job and atomically advance only the UI session.
-      if (config.sessionId !== identity.activeSessionId) {
-        const temporary = proof.configPath + '.' + randomBytes(8).toString('hex')
-        writeFileSync(temporary, JSON.stringify({...config, sessionId: identity.activeSessionId}), {mode: 0o600, flag: 'wx'})
-        renameSync(temporary, proof.configPath)
-      }
-      const scope = JSON.stringify(identity)
-      const bridge = createClaudeTerminalUiTransport({socketPath: config.uiSocketPath, token: config.token,
-        current: () => !closed && registration === status.registration && JSON.stringify(status.identity) === scope ? {pid: identity.pid, sessionId: identity.activeSessionId} : undefined})
-      const transport: ClaudeTerminalUiTransport = { ...bridge.transport, async request(value) {
-        const held = await childUiCurrent()
-        if (held?.bridge !== bridge) throw new Error('Background UI owner changed')
-        const result = await bridge.transport.request(value)
-        if (await childUiCurrent() !== held) throw new Error('Background UI owner changed before its reply')
-        return result
-      } }
-      let finish!: () => void
-      const done = new Promise<void>(resolve => { finish = resolve })
-      const owner: ClaudeBackgroundDesktopOwner = {id: randomBytes(16).toString('hex'), parentSessionId, identity: Object.freeze({...identity}), registration, transport, done, get controls() { return controls }}
-      childUi = {registration, identity: scope, token: config.token, bridge, transport, owner, finish}
-      const controls = createClaudeBackgroundControls({sessionId: identity.activeSessionId, transport, changed: () => changed(true)})
-      return transport
-    },
+    desktopTransport,
     get parentSessionId() { return parentSessionId },
-    get value() { const value = status.value; return value && formatterRegistration === status.registration && formatterSequence === status.sequence && formatter?.value !== undefined ? {...value, statusLine: formatter?.value} : value },
+    get value(): ClaudeBackgroundStatus | undefined {
+      const value = status.value
+      if (!value) return
+      const current = childUi && childUi.registration === status.registration && childUi.identity === JSON.stringify(status.identity) ? childUi : undefined
+      return {...value, ...(formatterRegistration === status.registration && formatterSequence === status.sequence && formatter?.value !== undefined ? {statusLine: formatter.value} : {}),
+        ...(current ? {agents: current.helper.tasks.filter(task => task.statusText !== undefined)} : {})}
+    },
     get available() { return !closed },
     async resetParent(sessionId: string) {
       if (closed || sessionId === parentSessionId) return

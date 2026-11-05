@@ -869,6 +869,7 @@ interface ClaudeBackgroundStatus {
     };
     totalCostUsd?: number;
     statusLine?: string;
+    agents?: ClaudeNativeTerminalTask[];
 }
 
 interface ClaudeBackgroundStatusIdentity {
@@ -8793,8 +8794,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             loading: z.ZodBoolean;
             copyState: z.ZodOptional<z.ZodEnum<{
                 error: "error";
-                pending: "pending";
                 idle: "idle";
+                pending: "pending";
                 saved: "saved";
             }>>;
             insight: z.ZodOptional<z.ZodString>;
@@ -9083,7 +9084,7 @@ declare function createClaudeBackgroundStatusObserver(options: {
     token: string;
     readonly desktopOwner: ClaudeBackgroundDesktopOwner | undefined;
     /** Original identity and a fresh per-worker socket/token scope every desktop attachment. */
-    desktopTransport(): Promise<ClaudeTerminalUiTransport | undefined>;
+    desktopTransport: () => Promise<ClaudeTerminalUiTransport | undefined>;
     readonly parentSessionId: string;
     readonly value: ClaudeBackgroundStatus | undefined;
     readonly available: boolean;

@@ -188,16 +188,36 @@ it('binds child drawing and reverse prompts to the original worker and retires t
  // mkdir's intermediates use the process umask; the private workers parent is explicit.
  const {chmod}=await import('node:fs/promises');await chmod(join(observer.directory,'workers'),0o700)
  await writeFile(join(observer.directory,'worker-119.json'),JSON.stringify({pid:119,sessionId:child,start:identity.start,configPath:join(worker,'observer.json')}),{mode:0o600})
- await writeFile(join(worker,'observer.json'),JSON.stringify({sessionId:child,jobSessionId:child,token,uiSocketPath:socketPath}),{mode:0o600})
- const native=createServer(async(req,res)=>{let text='';for await(const chunk of req)text+=chunk;const value=JSON.parse(text);res.end(JSON.stringify({id:value.id,pid:119,sessionId:value.sessionId,result:{attached:true}}))})
+ await writeFile(join(worker,'observer.json'),JSON.stringify({sessionId:child,jobSessionId:child,token,uiSocketPath:socketPath,generations:{subagent:'subagent-generation'}}),{mode:0o600})
+ const helperPolicy={allowManagedHooksOnly:false,disableAllHooks:false}
+ const native=createServer(async(req,res)=>{let text='';for await(const chunk of req)text+=chunk;const value=JSON.parse(text);res.end(JSON.stringify({id:value.id,pid:119,sessionId:value.sessionId,result:value.request?.subtype==='apack_owner_snapshot'?{sessionId:value.sessionId,subagentCommand:'caption-helper',hooksDisabled:false,policy:helperPolicy}:{attached:true}}))})
  await new Promise<void>(resolve=>native.listen(socketPath,resolve))
  try {
   expect(JSON.parse(await readFile(join(observer.directory,'child-ui-launch.json'),'utf8')).configDir).toBe(join(profile,'claude-code-profile','config'))
-  await post('/background-register',{sessionId:child,pid:119})
+  const lease=(await post('/background-register',{sessionId:child,pid:119})).value.token
   const transport=await observer.desktopTransport();expect(transport).toBeDefined()
   const desktop=observer.desktopOwner!
   expect(desktop).toMatchObject({parentSessionId:parent,identity:original,transport})
   expect(await observer.desktopTransport()).toBe(transport);expect(observer.desktopOwner).toBe(desktop)
+  const helperSnapshot=(sequence:number)=>({sessionId:child,pid:119,token:lease,sequence,metadata:{model:'sonnet',turns:2},usage:{startedAt:1},helpers:{command:'caption-helper',policyKey:JSON.stringify([helperPolicy.allowManagedHooksOnly,helperPolicy.disableAllHooks,false]),agents:[{id:'reviewer',type:'general-purpose',status:'running'}]}})
+  expect((await post('/background-status',helperSnapshot(1))).code).toBe(200)
+  const helperOutput={sessionId:child,parentPid:119,kind:'subagent',generation:'subagent-generation',policyKey:'[false,false,false]',command:'caption-helper',startedAt:'10',code:0,truncated:false,tasks:[{id:'reviewer',status:'running'}],stdout:JSON.stringify({id:'reviewer',content:'Release review caption'})}
+  expect((await post('/native-status',helperOutput)).code).toBe(403)
+  expect((await post('/native-status',helperOutput,token)).code).toBe(200)
+  expect(observer.value?.agents).toMatchObject([{id:'reviewer',statusText:'Release review caption'}])
+  expect((await post('/native-status',{...helperOutput,kind:'main',command:'root-helper',startedAt:'11'},token)).code).toBe(409)
+  expect(observer.value?.agents).toMatchObject([{id:'reviewer',statusText:'Release review caption'}])
+  helperPolicy.allowManagedHooksOnly=true
+  expect((await post('/native-status',{...helperOutput,startedAt:'11'},token)).code).toBe(409)
+  expect(observer.value?.agents).toEqual([])
+  expect((await post('/background-status',helperSnapshot(2))).code).toBe(200)
+  helperPolicy.allowManagedHooksOnly=false
+  expect((await post('/background-status',helperSnapshot(3))).code).toBe(200)
+  const restoredGeneration=JSON.parse(await readFile(join(worker,'observer.json'),'utf8')).generations.subagent
+  expect(restoredGeneration).not.toBe(helperOutput.generation)
+  expect((await post('/native-status',{...helperOutput,startedAt:'12'},token)).code).toBe(409)
+  expect((await post('/native-status',{...helperOutput,generation:restoredGeneration,startedAt:'13'},token)).code).toBe(200)
+  expect(observer.value?.agents).toMatchObject([{id:'reviewer',statusText:'Release review caption'}])
   let draft='Owned child draft あ🙂'
   transport!.promptHosts.register('child-view',{read:async()=>({text:draft,cursor:draft.length}),fill:async input=>{draft=input.text;return true}})
   await expect(transport!.request({subtype:'ui_attach',client_id:'child-view',surface:'desktop'})).resolves.toEqual({attached:true})

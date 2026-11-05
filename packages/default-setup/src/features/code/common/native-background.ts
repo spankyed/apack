@@ -1,3 +1,5 @@
+import type { ClaudeNativeTerminalTask } from './native-terminal.ts'
+
 /** Original session totals belong to the child snapshot; they are never parent billing deltas. */
 export interface ClaudeBackgroundStatus {
   jobId: string
@@ -10,6 +12,7 @@ export interface ClaudeBackgroundStatus {
   context?: { tokens: number; window: number; percent: number }
   totalCostUsd?: number
   statusLine?: string
+  agents?: ClaudeNativeTerminalTask[]
 }
 
 /** Original background job identity is distinct from the parent app conversation. */

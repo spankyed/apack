@@ -15,6 +15,7 @@
     </header>
     <p v-if="panel.info && !(replyOpen && hasRequest)" aria-label="Background session usage" class="background-session__detail">{{ panel.info.model }} · {{ panel.info.turns }} {{ panel.info.turns === 1 ? 'turn' : 'turns' }}<template v-if="panel.info.context"> · {{ panel.info.context.percent }}% context</template><template v-if="panel.info.totalCostUsd !== undefined"> · Session total ${{ panel.info.totalCostUsd.toFixed(6) }}</template></p>
     <div v-if="panel.info?.statusLine" aria-label="Background Claude configured status" class="background-session__detail background-session__formatter" tabindex="0"><NativeStatusText :text="panel.info.statusLine" /></div>
+    <div v-for="agent in panel.info?.agents" :key="agent.id" aria-label="Background Claude configured agent status" class="background-session__detail background-session__formatter" tabindex="0"><NativeStatusText v-if="agent.statusText" :text="agent.statusText" /></div>
     <p v-if="state?.question && !replyOpen" role="status" class="background-session__detail">Claude has a question. Open Answer question to continue.</p>
     <p v-if="state?.approval && !replyOpen" role="status" class="background-session__detail">Claude needs permission. Open Review request to continue.</p>
     <p v-if="panel.session?.waitingFor && !hasRequest" class="background-session__detail">{{ panel.session.waitingFor }}</p>
