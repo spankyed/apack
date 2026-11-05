@@ -1,3 +1,4 @@
+import { parseClaudeCommandEnvelope } from '../../../common/claude-command-envelope.ts'
 import { stripVTControlCharacters } from 'node:util'
 
 export type ClaudeCommandHistoryPresentation =
@@ -8,16 +9,14 @@ export type ClaudeCommandHistoryPresentation =
 const decode = (text: string) => text.replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&amp;', '&')
 /** Recognize whole persisted command envelopes, never strip tags from ordinary message bodies. */
 export function presentClaudeCommandHistory(row: Record<string, unknown>, text: string): ClaudeCommandHistoryPresentation | undefined {
-  if ((row.type !== 'user' && !(row.type === 'system' && row.subtype === 'local_command')) || row.entrypoint !== 'cli' || row.origin !== undefined) return
-  const invocation = /^<command-name>([^<>]+)<\/command-name>\s*<command-message>([^<>]*)<\/command-message>\s*<command-args>([^<>]*)<\/command-args>$/.exec(text)
-  if (invocation && /^\/[^\s<>]+$/.test(invocation[1]!)) {
-    const name = decode(invocation[1]!), args = stripVTControlCharacters(decode(invocation[3]!))
-    return { kind: 'invocation', name, args, label: decode(invocation[2]!), text: name + (args ? ' ' + args : '') }
+  const envelope = parseClaudeCommandEnvelope(row, text)
+  if (envelope?.kind === 'invocation') {
+    const name = decode(envelope.name), args = stripVTControlCharacters(decode(envelope.args))
+    return { kind: 'invocation', name, args, label: decode(envelope.label), text: name + (args ? ' ' + args : '') }
   }
-  const output = /^<local-command-(stdout|stderr)>([\s\S]*)<\/local-command-\1>$/.exec(text)
-  if (output) {
-    const stream = output[1] as 'stdout' | 'stderr'
-    const value = stripVTControlCharacters(decode(output[2]!)).trim()
+  if (envelope?.kind === 'output') {
+    const stream = envelope.stream
+    const value = stripVTControlCharacters(decode(envelope.text)).trim()
     // Native local-command stdout uses this sentinel for an empty result and hides it.
     return { kind: 'output', stream, text: stream === 'stdout' && value === '(no content)' ? '' : value }
   }

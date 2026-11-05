@@ -1,3 +1,4 @@
+import { parseClaudeCommandEnvelope } from '../../../../features/code/common/claude-command-envelope.ts';
 const object = (value: unknown): Record<string, unknown> | undefined => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 
 /** Native transcript facts used by each saved-session import route. */
@@ -9,6 +10,8 @@ export function importedSessionMetadata(transcript: readonly Record<string, unkn
       && Number.isFinite(row.totalCostUSD) && row.totalCostUSD >= 0) totalCostUsd = Math.max(totalCostUsd, row.totalCostUSD);
     if (row.type !== 'user' && row.type !== 'assistant') continue;
     const message = object(row.message);
+    const content = message?.content;
+    const commandText = typeof content === 'string' ? content : Array.isArray(content) && content.every(block => object(block)?.type === 'text' && typeof object(block)?.text === 'string') ? content.map(block => object(block)!.text as string).join('\n') : undefined;
     const timestamp = typeof row.timestamp === 'string' ? Date.parse(row.timestamp) : Number.NaN;
     if (Number.isFinite(timestamp)) {
       startedAt = Math.min(startedAt ?? timestamp, timestamp);
@@ -21,6 +24,7 @@ export function importedSessionMetadata(transcript: readonly Record<string, unkn
         if (tool?.type === 'tool_use' && typeof tool.id === 'string') tools.add(tool.id);
       }
     } else if (row.isMeta !== true && row.isVirtual !== true
+      && !(commandText !== undefined && parseClaudeCommandEnvelope(row, commandText))
       && !(Array.isArray(message?.content) && message.content.some(block => object(block)?.type === 'tool_result'))) {
       turns.add(typeof row.uuid === 'string' ? row.uuid : String(index));
     }

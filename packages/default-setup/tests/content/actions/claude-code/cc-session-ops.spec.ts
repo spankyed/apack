@@ -94,3 +94,13 @@ it('resumes identical native IDs only within the caller profile', async () => {
  expect(repository.threadQueries.byId(caller.id)?.context?.claudeCode).toMatchObject({sessionId:'native-session',profile:{configDir:'/owned'}})
  expect(repository.threadQueries.byId(source.id)?.context?.claudeCode?.profile?.configDir).toBe('/shared')
 })
+
+it('excludes native legacy command records from imported human turns without excluding real user literals or media', () => {
+ const sessionId='11111111-1111-1111-1111-111111111111';
+ const user=(uuid:string,content:unknown,extra={})=>({type:'user',sessionId,uuid,message:{content},...extra});
+ const command='<command-name>/background</command-name><command-message>background</command-message><command-args>Review</command-args>';
+ const stdout='<local-command-stdout>(no content)</local-command-stdout>';
+ const rows=[user('human','Review the release'),user('command',command,{entrypoint:'cli'}),user('stdout',stdout,{entrypoint:'cli'})];
+ expect(importedSessionMetadata(rows,sessionId).turns).toBe(1);
+ expect(importedSessionMetadata([user('literal',stdout,{entrypoint:'cli',origin:{kind:'human'}}),user('quoted','Explain '+stdout,{entrypoint:'cli'}),user('media',[{type:'text',text:stdout},{type:'image',source:{type:'base64',data:'YWJj',media_type:'image/png'}}],{entrypoint:'cli'})],sessionId).turns).toBe(3);
+});
