@@ -17,6 +17,14 @@ name: CI
 on:
   workflow_dispatch:
     inputs:
+      startup_performance:
+        description: Compare populated startup against a baseline on one disposable runner
+        type: boolean
+        default: false
+      performance_baseline:
+        description: Baseline commit or ref for the manual startup comparison
+        type: string
+        default: ''
       app_acceptance:
         description: Run the app suites and focused recovery, service and pack dev acceptance on disposable macOS
         type: boolean
@@ -68,13 +76,21 @@ on:
   #   branches: [master]
 
 concurrency:
-  group: ci-${{ github.ref }}-${{ inputs.app_acceptance && 'app' || '' }}-${{ inputs.strict_chain && 'strict' || '' }}-${{ inputs.compiler_windows && 'windows' || '' }}-${{ inputs.compiler_macos && 'macos' || '' }}-${{ inputs.compiler_linux && 'linux' || '' }}
+  group: ci-${{ github.ref }}-${{ inputs.app_acceptance && 'app' || '' }}-${{ inputs.strict_chain && 'strict' || '' }}-${{ inputs.compiler_windows && 'windows' || '' }}-${{ inputs.compiler_macos && 'macos' || '' }}-${{ inputs.compiler_linux && 'linux' || '' }}-${{ inputs.startup_performance && 'startup-performance' || '' }}
   # Native diagnostic results must finish; full CI still supersedes older runs.
-  cancel-in-progress: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux }}
+  cancel-in-progress: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux && !inputs.startup_performance }}
 
 jobs:
+  startup-performance:
+    if: ${{ inputs.startup_performance }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/startup-performance.yml
+    with:
+      baseline: ${{ inputs.performance_baseline }}
+
   check:
-    if: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux }}
+    if: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux && !inputs.startup_performance }}
     runs-on: macos-14
     timeout-minutes: 25
 
