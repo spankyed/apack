@@ -28,8 +28,8 @@ test('backup import restores all settings owners and updates an open window', as
   };
   const change = async (prefix: string) => {
     await openJson();
-    const original = await appPage.evaluate(prefix => {
-      const model = (window as any).monaco.editor.getEditors().find((editor: any) =>
+    const original = await appPage.evaluate(async prefix => {
+      const model = (await (window as any).__loadMonaco()).editor.getEditors().find((editor: any) =>
         editor.getDomNode()?.getBoundingClientRect().width > 0 && editor.getModel()?.getLanguageId() === 'json').getModel();
       const original = model.getValue() as string;
       const values = JSON.parse(original);
@@ -114,8 +114,8 @@ test('backup import restores all settings owners and updates an open window', as
       message: expect.stringContaining('restart the brain manually') });
     await expect(other).toHaveValue('Saved Memos');
     await openJson();
-    const restored = await appPage.evaluate(() => {
-      const model = (window as any).monaco.editor.getEditors().find((editor: any) =>
+    const restored = await appPage.evaluate(async () => {
+      const model = (await (window as any).__loadMonaco()).editor.getEditors().find((editor: any) =>
         editor.getDomNode()?.getBoundingClientRect().width > 0 && editor.getModel()?.getLanguageId() === 'json').getModel();
       return JSON.parse(model.getValue());
     });
@@ -130,8 +130,8 @@ test('backup import restores all settings owners and updates an open window', as
     await expect(appPage.getByLabel('Scribbles assistant name', { exact: true })).toHaveValue('Saved Scribbles assistant');
     // These fixtures share an app within a worker; restore the incoming preferences for subsequent cases.
     await openJson();
-    await appPage.evaluate(original => {
-      const editor = (window as any).monaco.editor.getEditors().find((editor: any) =>
+    await appPage.evaluate(async original => {
+      const editor = (await (window as any).__loadMonaco()).editor.getEditors().find((editor: any) =>
         editor.getDomNode()?.getBoundingClientRect().width > 0 && editor.getModel()?.getLanguageId() === 'json');
       editor.getModel().setValue(original);
     }, original);
