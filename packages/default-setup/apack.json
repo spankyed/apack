@@ -491,11 +491,26 @@
         "state": "src/features/threads/fe/state.ts",
         "canvas": {
           "routes": {
-            "list": "src/features/threads/fe/canvas/list.vue",
-            "kanban": "src/features/threads/fe/canvas/kanban.vue",
-            "create": "src/features/threads/fe/canvas/ThreadDetail.vue",
-            "view": "src/features/threads/fe/canvas/ThreadDetail.vue",
-            "dashboard": "src/features/threads/fe/canvas/agent/canvas.vue"
+            "list": {
+              "entry": "src/features/threads/fe/canvas/list.vue",
+              "load": "lazy"
+            },
+            "kanban": {
+              "entry": "src/features/threads/fe/canvas/kanban.vue",
+              "load": "lazy"
+            },
+            "create": {
+              "entry": "src/features/threads/fe/canvas/ThreadDetail.vue",
+              "load": "lazy"
+            },
+            "view": {
+              "entry": "src/features/threads/fe/canvas/ThreadDetail.vue",
+              "load": "lazy"
+            },
+            "dashboard": {
+              "entry": "src/features/threads/fe/canvas/agent/canvas.vue",
+              "load": "lazy"
+            }
           }
         },
         "chat": "src/features/threads/fe/chat/chat.vue",
@@ -893,8 +908,14 @@
         "label": "Notes",
         "icon": "NotebookText",
         "state": "src/features/notes/fe/state.ts",
-        "canvas": "src/features/notes/fe/canvas.vue",
-        "panel": "src/features/notes/fe/panel.vue"
+        "canvas": {
+          "entry": "src/features/notes/fe/canvas.vue",
+          "load": "lazy"
+        },
+        "panel": {
+          "entry": "src/features/notes/fe/panel.vue",
+          "load": "lazy"
+        }
       },
       "services": {},
       "repositories": {
@@ -1072,7 +1093,10 @@
         "label": "Browser",
         "icon": "Globe",
         "state": "src/features/browser/fe/state.ts",
-        "canvas": "src/features/browser/fe/canvas.vue",
+        "canvas": {
+          "entry": "src/features/browser/fe/canvas.vue",
+          "load": "lazy"
+        },
         "isPinned": false
       },
       "repositories": {
@@ -1160,8 +1184,14 @@
         "label": "Library",
         "icon": "Library",
         "state": "src/features/library/fe/state.ts#librarySystem",
-        "canvas": "src/features/library/fe/canvas.vue",
-        "panel": "src/features/library/fe/panel.vue",
+        "canvas": {
+          "entry": "src/features/library/fe/canvas.vue",
+          "load": "lazy"
+        },
+        "panel": {
+          "entry": "src/features/library/fe/panel.vue",
+          "load": "lazy"
+        },
         "isPinned": true
       },
       "services": {
@@ -1343,7 +1373,10 @@
         "label": "Actions",
         "icon": "Play",
         "state": "src/features/actions/fe/state.ts",
-        "canvas": "src/features/actions/fe/canvas.vue",
+        "canvas": {
+          "entry": "src/features/actions/fe/canvas.vue",
+          "load": "lazy"
+        },
         "isPinned": true,
         "options": {}
       },
@@ -1426,7 +1459,10 @@
         "label": "Prompts",
         "icon": "Sparkle",
         "state": "src/features/prompts/fe/state.ts",
-        "canvas": "src/features/prompts/fe/canvas.vue",
+        "canvas": {
+          "entry": "src/features/prompts/fe/canvas.vue",
+          "load": "lazy"
+        },
         "isPinned": true,
         "options": {}
       },
@@ -1568,7 +1604,10 @@
         "label": "Database",
         "icon": "Database",
         "state": "src/features/database/fe/state.ts",
-        "canvas": "src/features/database/fe/canvas.vue",
+        "canvas": {
+          "entry": "src/features/database/fe/canvas.vue",
+          "load": "lazy"
+        },
         "isPinned": true
       },
       "services": {
@@ -1625,7 +1664,10 @@
         "label": "Logs",
         "icon": "Bug",
         "state": "src/features/logs/fe/state.ts",
-        "canvas": "src/features/logs/fe/canvas.vue",
+        "canvas": {
+          "entry": "src/features/logs/fe/canvas.vue",
+          "load": "lazy"
+        },
         "isPinned": true
       },
       "services": {}
