@@ -290,6 +290,8 @@ export class ApiServer implements AppModule {
 
     // Reset state
     this.actualPort = undefined;
+    // A window opened during restart backoff must wait for the next ready process.
+    if (!this.isShuttingDown && !this.serverReadyResolve) this.serverReady = this.createReadyPromise();
 
     // Handle restart
     if (willRestart) {
