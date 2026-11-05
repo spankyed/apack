@@ -42,23 +42,23 @@ function findAppApi(place: AppPlace): { api: { url: string; token: string } } | 
 }
 
 /**
- * What handing a build to the app came to: an install, a reload or a restart. `detail` says which of the several ways it went wrong this was, since they need
+ * What handing a request to the app came to. `detail` says which of the several ways it failed, since they ask
  * different things of the author: start the app, look at its logs, or check what is holding the port.
  */
-export type DevDelivery =
-  /** The app has the build running (or installed, for a disabled pack) */
+export type AppDelivery =
+  /** The app took it */
   | { status: 'delivered' }
-  /** The app already runs this build's backend; Vite serves the rest */
-  | { status: 'current' }
   /** No port or token file to reach an app with */
   | { status: 'not-running'; detail: string }
-  /** The app answered and refused, or couldn't install or reload */
+  /** The app answered and refused, or couldn't do it */
   | { status: 'failed'; detail: string }
   /** Nothing answered on the port the app published */
   | { status: 'unreachable'; detail: string };
 
-/** What a posted request can come to: the app has no answer of `current` to give */
-export type AppDelivery = Exclude<DevDelivery, { status: 'current' }>;
+/** What handing a build to the app came to, which may also be that it already runs it */
+export type DevDelivery = AppDelivery
+  /** The app already runs this build's backend; Vite serves the rest */
+  | { status: 'current' };
 
 /** Posts one request to a running app's API */
 async function post(url: string, token: string, body: object): Promise<AppDelivery> {

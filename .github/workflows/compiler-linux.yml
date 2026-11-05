@@ -66,8 +66,8 @@ jobs:
       - name: Compiler cancellation and descendant ownership
         if: ${{ !inputs.test_name }}
         run: >-
-          node node_modules/vitest/vitest.mjs run --project @apackdev/cli
-          packages/apack-cli/tests/build/pack-builder.spec.ts
+          node node_modules/vitest/vitest.mjs run --config vitest.native.config.ts --project @apackdev/cli
+          packages/apack-cli/tests/build/pack-builder.native.spec.ts
           --testNamePattern='drains an interrupted frontend startup|cancels a frontend input check|stops its worker before removing|stops remaining compiler descendants|force-stops a compiler'
           --reporter=default --reporter=json --outputFile="$RUNNER_TEMP/compiler-cancellation.json"
           --bail=1 --maxWorkers=1

@@ -139,12 +139,19 @@ jobs:
           NODE_OPTIONS: --conditions=@apackdev/source
         run: >-
           node node_modules/vitest/vitest.mjs run --project @apackdev/cli
-          packages/apack-cli/tests/build/compiler-installation.spec.ts
           packages/apack-cli/tests/build/compiler-runtime.spec.ts
           packages/apack-cli/tests/build/compiler-native-libraries.spec.ts
           packages/apack-cli/tests/build/compiler-read-tree.spec.ts
           packages/apack-cli/tests/build/compiler-watch.spec.ts
-          packages/apack-cli/tests/build/pack-builder.spec.ts
+          --bail=1 --maxWorkers=2 --no-file-parallelism
+      - name: Captured compiler runs and the shared pack builder
+        if: ${{ !inputs.test_name && !inputs.sign_runtime }}
+        env:
+          NODE_OPTIONS: --conditions=@apackdev/source
+        run: >-
+          node node_modules/vitest/vitest.mjs run --config vitest.native.config.ts --project @apackdev/cli
+          packages/apack-cli/tests/build/compiler-installation.native.spec.ts
+          packages/apack-cli/tests/build/pack-builder.native.spec.ts
           --bail=1 --maxWorkers=2 --no-file-parallelism
       - name: Native admission, preloads and watch recovery
         env:
