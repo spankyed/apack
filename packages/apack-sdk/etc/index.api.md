@@ -320,10 +320,12 @@ export type SystemEvents =
 * way, though most are as they were. Unlike `DATA_REPLACED` it doesn't mean work held over rows has lost them.
 *
 * Handling it is optional, as there: the bus also asks every system for its startup data. Declare it only for what
-* re-reading cannot fix, such as an index derived from the rows.
+* re-reading cannot fix, such as an index derived from the rows. `types` names the entity types they changed, and is
+* absent when that isn't known, which means any of them may have.
 */
 | {
     type: 'DATA_CHANGED_ELSEWHERE';
+    types?: readonly string[];
 };
 
 // @public
