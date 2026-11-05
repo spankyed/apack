@@ -40,7 +40,7 @@ const emit = defineEmits<{ leave: []; draft: [text: string]; 'draft-snapshot': [
 const toolsExpanded = ref(false)
 const statusLineRef = ref<InstanceType<typeof StatusLine>>(), actionsRef = ref<HTMLElement>(), minimumHeight = ref(112)
 // Closed status and actions must leave a complete draft line, even in a short split pane.
-watch([() => statusLineRef.value?.$el, actionsRef, toolsExpanded], ([strip, actions, expanded], _previous, cleanup) => {
+watch([() => statusLineRef.value?.$el, actionsRef, toolsExpanded, () => props.ui?.status, () => props.statusText], ([strip, actions, expanded], _previous, cleanup) => {
   if (!(actions instanceof HTMLElement)) return
   const measure = () => { minimumHeight.value = expanded ? 112 : Math.max(112, (strip instanceof HTMLElement ? strip.offsetHeight : 0) + actions.offsetHeight + 40 + 2) }
   const observer = new ResizeObserver(measure)

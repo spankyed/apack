@@ -19,16 +19,16 @@ vi.mock('@apackdev/ui/components/tiptap/TiptapEditor', async () => {
     return () => h('div', { ref: root })
   } }) }
 })
-vi.mock('#features/threads/fe/chat/StatusLine.vue', () => ({ default: { render: () => h('div', { 'data-testid': 'agent-status' }) } }))
+vi.mock('#features/threads/fe/chat/StatusLine.vue', () => ({ default: { props: ['nativeStatus'], render(this: { nativeStatus?: string }) { return this.nativeStatus ? h('div', { 'data-testid': 'agent-status' }) : null } } }))
 let resizeCallbacks: (() => void)[] = []
 const disconnectResize = vi.fn()
 beforeEach(() => { resizeCallbacks = []; disconnectResize.mockClear(); vi.stubGlobal('ResizeObserver', class { constructor(callback: () => void) { resizeCallbacks.push(callback) } observe() {} disconnect() { disconnectResize() } }); resetSelectionOnCreate = false; preserveEmptyMarker = false; startFeTestRuntime() })
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime(); vi.unstubAllGlobals() })
 async function mount(send: (text: string) => Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void> = async () => {}, connected = false, draftSnapshot?: ClaudeAgentDraftSnapshot, openSettings?: () => Promise<void>, audience?: 'background') {
   const leave = vi.fn(), draft = vi.fn(), saved = vi.fn(), root = document.createElement('div'); document.body.append(root)
-  const state = reactive({ draft: 'Unsent Agent draft', attachmentId: 'native-one', promptRevision: 0, prompt: undefined as ClaudePromptReply | undefined })
+  const state = reactive({ statusText: 'Ready' as string | undefined, draft: 'Unsent Agent draft', attachmentId: 'native-one', promptRevision: 0, prompt: undefined as ClaudePromptReply | undefined })
   const edit = vi.fn((value: ClaudePromptEdit) => { state.promptRevision = value.revision; state.prompt = { revision: value.revision, status: 'applied', frame: { text: value.text, cursor: value.cursor } } })
-  app = createApp({ render: () => h(NativeAgentComposer, { audience, draft: state.draft, draftSnapshot, 'onDraft-snapshot': saved, disabled: false, send, openSettings, mountId: connected ? 'agent-ui' : undefined, attachmentId: state.attachmentId, promptRevision: state.promptRevision, prompt: state.prompt, onEdit: edit, onLeave: leave, onDraft: (text: string) => { draft(text); state.draft = text } }) }); app.mount(root); await nextTick(); await nextTick()
+  app = createApp({ render: () => h(NativeAgentComposer, { audience, statusText: state.statusText, draft: state.draft, draftSnapshot, 'onDraft-snapshot': saved, disabled: false, send, openSettings, mountId: connected ? 'agent-ui' : undefined, attachmentId: state.attachmentId, promptRevision: state.promptRevision, prompt: state.prompt, onEdit: edit, onLeave: leave, onDraft: (text: string) => { draft(text); state.draft = text } }) }); app.mount(root); await nextTick(); await nextTick()
   return { leave, draft, saved, root, state, edit }
 }
 it('owns Escape before the generic editor keymap and preserves the unsent draft', async () => {
@@ -220,4 +220,16 @@ it('keeps a full draft viewport when status rows grow and releases its size obse
   expect(form.style.minHeight).toBe('112px')
   app?.unmount(); app = undefined
   expect(disconnectResize).toHaveBeenCalledOnce()
+})
+
+it('observes a status root that appears after the helper was absent', async () => {
+  const f = await mount()
+  f.state.statusText = undefined; await nextTick()
+  expect(f.root.querySelector('[data-testid="agent-status"]')).toBeNull()
+  f.state.statusText = 'Reviewing release notes'; await nextTick()
+  const strip = f.root.querySelector('[data-testid="agent-status"]')!, actions = f.root.querySelector('.native-agent-actions')!
+  Object.defineProperty(strip, 'offsetHeight', { value: 96 })
+  Object.defineProperty(actions, 'offsetHeight', { value: 44 })
+  resizeCallbacks.at(-1)!(); await nextTick()
+  expect(f.root.querySelector('form')!.style.minHeight).toBe('182px')
 })
