@@ -5,8 +5,9 @@ import { renderTemplate } from '../templates.ts';
 import { cliVersion, findPackRoot } from '../utils';
 import { npmUpgradeStep, scaffoldUnitTestSetup } from './init';
 
-// The Playwright version @apackdev/testing is tested with
-const PLAYWRIGHT_RANGE = '^1.55.1';
+// The Playwright version @apackdev/testing is tested with, exactly: a range takes whatever was published last, which
+// can be a release whose other half isn't on the registry yet, and is a version nothing here has run against
+const PLAYWRIGHT_RANGE = '1.55.1';
 
 
 /**
