@@ -107,6 +107,8 @@ const boxStyle = computed<CSSProperties>(() => {
   const layout = { ...props.node.layout, ...overrides.value?.layout }
   const result: CSSProperties = { display: 'flex', flexDirection: 'column', position: 'relative' }
   const scale = { xs: 0.25, sm: 0.5, md: 1, lg: 1.5, xl: 2 }
+  // Desktop action rows have native xs spacing unless the author chooses a gap.
+  if (layout.gap === undefined && ['row', 'row-reverse'].includes(layout.flexDirection ?? '') && props.node.children.length > 1 && props.node.children.every(child => child.kind === 'button')) result.gap = `${scale.xs}rem`
   for (const [name, value] of Object.entries(layout)) {
     const horizontal = /(?:Width|width|Left|left|Right|right|columnGap|X)$/.test(name)
     const unit = horizontal ? 'ch' : 'lh'
