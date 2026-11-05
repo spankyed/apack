@@ -146,6 +146,8 @@ export const settingsSystem = setup({
       },
     }),
 
+    reviewStoredSettings: () => preferences().reviewStored(),
+
     // The settings surface's view of all the settings, after a change it didn't make itself
     sendSettingsUpdate: () => broadcastSettings('SETTINGS_UPDATED'),
 
@@ -285,6 +287,9 @@ export const settingsSystem = setup({
         // while it is loading and `SETTINGS_UPDATED` once ready, so what publishing means here depends on
         // the receiver's state. The ask covers the first; this covers the second and the features whose defaults came or went
         PACK_CHANGED: { actions: ['sendSettingsUpdate', 'tellChangedFeatures'] },
+        // A tool wrote past this store, perhaps to the stored settings. Whatever it wrote, features are told as for any
+        // other write, and a row no longer valid puts the store in the recovery a boot would have found it needing
+        DATA_CHANGED_ELSEWHERE: { actions: ['reviewStoredSettings', 'sendSettingsUpdate', 'tellChangedFeatures'] },
         DATA_REPLACING: { target: 'replacingData' },
         UPDATE_SETTINGS: {
           actions: 'updateSettings',

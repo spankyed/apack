@@ -442,6 +442,7 @@ export interface SettingsAdmin extends SettingsService {
     replaceAll(document: unknown, condition?: SettingsWriteCondition): void;
     // (undocumented)
     resetAll(): void;
+    reviewStored(): void;
     // (undocumented)
     whileReplacingData<T>(replace: () => Promise<T>): Promise<T>;
 }

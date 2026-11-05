@@ -34,6 +34,22 @@ beforeEach(() => {
 });
 const rowData = () => untypedQuery.ids(SETTINGS_ID).pickOne(['data'])?.data;
 
+describe('a row written past the store', () => {
+  it('is what the next read answers', () => {
+    untypedUpsert(SETTINGS_ENTITY, { id: SETTINGS_ID, data: { features: { [THREADS]: { limit: 7 } } } });
+    store.reviewStored();
+    expect(store.get(feature)).toEqual({ limit: 7, sort: 'newest' });
+    expect(store.getRecovery()).toBeUndefined();
+  });
+
+  it('needs the recovery a boot would give it when it is no longer valid', () => {
+    untypedUpsert(SETTINGS_ENTITY, { id: SETTINGS_ID, data: { features: { [THREADS]: { limit: 'many' } } } });
+    store.reviewStored();
+    expect(store.getRecovery()?.problems.length).toBeGreaterThan(0);
+    expect(() => store.get(feature)).toThrow(/require recovery/);
+  });
+});
+
 describe('definitions and explicit choices', () => {
   it('reads all three owners without creating a row', () => {
     expect(store.getOverrides()).toEqual({});

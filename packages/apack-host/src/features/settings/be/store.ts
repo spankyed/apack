@@ -114,6 +114,12 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
   return {
     getAll: effective,
     enterRecovery: () => { recovering = true; },
+    /** The stored row may have been written past this store: one invalid now needs the recovery a boot would give it. */
+    reviewStored(): void {
+      revision++;
+      declarations();
+      if (!recovering && validation.inspect(rawStored()).length > 0) recovering = true;
+    },
     getRecovery,
     recover(request: SettingsRecoveryRequest): void {
       if (replacingData) throw new SettingsRefusedError(['Data is being replaced. Wait before repairing settings.']);

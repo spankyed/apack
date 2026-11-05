@@ -15,7 +15,7 @@ export const REPL_USAGE = [
   'function body: `return query(EARS.Entity.Note).count()`. .exit (or Ctrl+D) closes the database and exits.',
   '',
   'Options:',
-  '  --write                Transaction code: the write helpers too, and the changes are saved on exit',
+  '  --write                Transaction code: the write helpers too. A running app is told when this exits',
   TARGET_USAGE,
 ].join('\n');
 
@@ -23,7 +23,7 @@ export async function dbRepl(args: string[], io: DbIo, input: NodeJS.ReadableStr
   const { values, positionals, target } = parseDbArgs(args, OPTIONS, REPL_USAGE);
   if (positionals.length > 0) throw new Error(`Unexpected argument ${positionals[0]}\n\n${REPL_USAGE}`);
   const write = values.write as boolean;
-  const db = await openTarget(target, { write, command: 'repl' }, io);
+  const db = await openTarget(target, { write, command: 'repl', besideApp: write }, io);
   const scope = consoleScope(db);
   const run = write ? runTransactionCode : runQueryCode;
   const lines = readline.createInterface({ input, terminal: false });

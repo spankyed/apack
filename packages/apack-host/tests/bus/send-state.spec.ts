@@ -34,7 +34,7 @@ beforeEach(async () => {
     features: {
       // One system with something to tear down, and one with nothing. The second is the case that matters:
       // it is every system that never thought about any of this, and it must stay correct anyway
-      watcher: { system: { machine: records('watcher', 'SEND_STATE', 'DATA_REPLACED', 'CLIENT_CONNECTED'), receives: [] } },
+      watcher: { system: { machine: records('watcher', 'SEND_STATE', 'DATA_REPLACED', 'DATA_CHANGED_ELSEWHERE', 'CLIENT_CONNECTED'), receives: [] } },
       quiet: { system: { machine: records('quiet', 'SEND_STATE'), receives: [] } },
     },
   });
@@ -71,6 +71,18 @@ it('tells every system the data was replaced, then asks each to publish', async 
   // Told before being asked, so work held over rows that are gone is dropped before the system describes itself
   expect(seen.watcher).toEqual(['DATA_REPLACED', 'SEND_STATE']);
   expect(seen.quiet, 'and a system that declares no fact is refreshed anyway').toEqual(['SEND_STATE']);
+});
+
+it('tells every system another process changed the data, as that and not as a replacement, then asks each to publish', async () => {
+  await connect();
+  seen.watcher = [];
+  seen.quiet = [];
+
+  untypedSendToSystem(HOST.bus, { type: 'DATA_CHANGED_ELSEWHERE' });
+  await settle();
+
+  expect(seen.watcher).toEqual(['DATA_CHANGED_ELSEWHERE', 'SEND_STATE']);
+  expect(seen.quiet).toEqual(['SEND_STATE']);
 });
 
 it('asks nobody to publish before a client has connected, and catches them up when one does', async () => {

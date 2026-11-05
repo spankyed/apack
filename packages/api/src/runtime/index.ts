@@ -68,6 +68,14 @@ export let appPerformance: ReturnType<typeof createNodePerformanceController> | 
 
 export let appDatabase: EarsDatabase | undefined;
 
+let appEngine: EarsEngine | undefined;
+
+/** A local tool committed to the app's database: every view reads it again, and every system is told. */
+export function hearDataChangedElsewhere(): void {
+  appEngine?.admin.changedElsewhere();
+  rootEvents.emitIncoming({ to: HOST.bus, event: { type: 'DATA_CHANGED_ELSEWHERE' } });
+}
+
 /** The run history's open database, so shutdown can close it */
 export let appRunHistory: RunsDatabase | undefined;
 
@@ -120,6 +128,7 @@ export function openAppStore(performance?: ReturnType<typeof createNodePerforman
     countCalls: resolveAppEnvironment().env === 'development',
   });
   bindHost(runtime);
+  appEngine = engine;
   printLogEvents();
   appPacks = packs;
   appSettingsAccess = createSettingsAccess(runtime.services.settings, packs.getPackRuntime);
@@ -158,8 +167,8 @@ export async function setupBackend(): Promise<void> {
 
 async function initializeBackend(performance?: ReturnType<typeof createNodePerformanceController>): Promise<void> {
 
-  // Before anything opens the database: a tool changing it (`apack db`) holds a lock until it's done, and opening
-  // now would overwrite its change from this process's memory
+  // Before anything opens the database: a tool changing it (`apack db`) holds a lock until it's done, and boot's own
+  // writes (content applied, migrations) would land in the middle of a change meant to finish alone
   const appContext = resolveAppEnvironment();
   assertNoDatabaseWriter(appContext.userDataDir);
 

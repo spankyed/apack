@@ -6,8 +6,8 @@ import { readApiEndpoint } from '@apackdev/host/process-liveness';
 import { API_HOST, API_TOKEN_HEADER, errorMessage } from '@apackdev/sdk/utils/pure';
 
 /**
- * Asking a running app to install or reload a pack: the `/dev/install` and `/dev/reload` client, and what
- * one came to.
+ * Asking a running app to do something for a local tool, and what that came to: `/dev/install` and `/dev/reload` for a
+ * pack, `/db/changed-elsewhere` for a commit made beside it.
  *
  * It lives beside the bundlers rather than in `commands/dev`, because two commands ask it — `dev` after
  * reinstalling, and `build --watch` after rebuilding the runtime — and `dev` already imports `build`, so
@@ -61,8 +61,8 @@ export type DevDelivery =
   /** Nothing answered on the port the app published */
   | { status: 'unreachable'; detail: string };
 
-/** Posts one development request to the running app's API, with its token. */
-async function devRequest(endpoint: string, body: object, place: AppPlace): Promise<DevDelivery> {
+/** Posts one request to the running app's API, with its token. */
+async function appRequest(endpoint: string, body: object, place: AppPlace): Promise<DevDelivery> {
   const found = findAppApi(place);
   if ('problem' in found) return { status: 'not-running', detail: found.problem };
   try {
@@ -81,7 +81,7 @@ async function devRequest(endpoint: string, body: object, place: AppPlace): Prom
 
 /** Asks the running app to reload a pack's runtime. */
 export function reloadPack(packId: string, place: AppPlace = { env: 'development' }): Promise<DevDelivery> {
-  return devRequest('/dev/reload', { packId }, place);
+  return appRequest('/dev/reload', { packId }, place);
 }
 
 /**
@@ -89,5 +89,10 @@ export function reloadPack(packId: string, place: AppPlace = { env: 'development
  * files and loads them itself, so nothing else it does can load a half-copied build.
  */
 export function installPackInApp(root: string, place: AppPlace = { env: 'development' }): Promise<DevDelivery> {
-  return devRequest('/dev/install', { root: path.resolve(root) }, place);
+  return appRequest('/dev/install', { root: path.resolve(root) }, place);
+}
+
+/** Tells the running app that this process committed to its database, which it can't otherwise hear. */
+export function tellAppDataChanged(place: AppPlace): Promise<DevDelivery> {
+  return appRequest('/db/changed-elsewhere', {}, place);
 }

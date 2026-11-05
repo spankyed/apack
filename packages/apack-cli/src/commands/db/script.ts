@@ -118,10 +118,11 @@ export async function dbScript(args: string[], io: DbIo): Promise<void> {
   const scriptFile = path.resolve(file);
   if (!fs.existsSync(scriptFile)) throw new Error(`No script at ${scriptFile}`);
 
-  // A script writes unless it says it only reads, so it's refused while an app runs on the data dir
-  const db = await openTarget(target, { write: !values['read-only'], command: 'script' }, io);
+  // A script writes unless it says it only reads, and a running app is told once it ends
+  const write = !values['read-only'];
+  const db = await openTarget(target, { write, command: 'script', besideApp: write }, io);
   try {
-    const result = await withDatabase(db, async () => {
+    await withDatabase(db, async () => {
       const module = await importScript(scriptFile).catch((error: unknown) => { throw scriptFailure(scriptFile, error); });
       if (typeof module.default !== 'function') {
         throw new Error(`${scriptFile} exports no function to run: export default ({ db, EARS, args, log }) => { ... }`);
@@ -134,8 +135,9 @@ export async function dbScript(args: string[], io: DbIo): Promise<void> {
       } catch (error) {
         throw scriptFailure(scriptFile, error);
       }
+    }, (result) => {
+      if (result !== undefined) writeResult(result, { format, out: values.out as string | undefined }, io);
     });
-    if (result !== undefined) writeResult(result, { format, out: values.out as string | undefined }, io);
   } finally {
     // What the script printed reaches stdout before the CLI exits, which drops whatever is still buffered for a pipe
     await flushOutput();

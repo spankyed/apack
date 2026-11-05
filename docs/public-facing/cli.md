@@ -348,8 +348,8 @@ The three drains are POSTs because each one *clears* what it returns: draining i
 for an hour, but a GET that answers differently on a retry is a trap.
 
 **A write does not update the UI; `/reload` is how you see it.** A surface's state is what its system
-sent it, so a write made outside that system — `/transact`, the database console, `apack db exec` — changes
-the database and reaches no view. That is the console being a console rather than a fault, and it is not
+sent it, so a write made outside that system — `/transact`, the database console — changes
+the database and reaches no view. (`apack db exec` tells the app when it ends, which is what `/reload` does here.) That is the console being a console rather than a fault, and it is not
 staleness that time fixes: navigating between surfaces does not refresh one, because the surface's actor
 survives. `/reload` does, because a new connection makes every system send its startup data again.
 
@@ -366,8 +366,8 @@ concurrent `/query` calls would otherwise be indistinguishable, each reply still
 may run together and one you stopped waiting for is ignored.
 
 **`/query` and `/transact` reach the live database**, not the files on disk — they go to the running app, so a
-write is visible to the next read in the same session. `apack db exec` cannot do that: it refuses while
-the app holds the write lock.
+write is visible to the next read in the same session. `apack db exec` writes from its own process, and tells
+the app once it has closed the database.
 
 **A failed verb answers `200` with `{ "ok": false, "error": ... }`** — the request was fine and the
 operation was not, which is the common case while driving. A malformed request, a missing token or an
@@ -731,6 +731,8 @@ apack db query "return query(EARS.Entity.Settings).pickAll()" -o json --out sett
 apack db query --file ./report.js -o csv
 ```
 
+**Beside a running app.** `exec`, `script` and `repl --write` work with the app open. Each writes from its own process and, when it ends having committed something, tells the app, which runs every view again and has every system publish its state; a flow that is running keeps running. If the app can't be told, the command says so and exits non-zero: the change is saved, and the app shows the old data until it restarts. A write holds up the app's own writes for as long as it takes, so a script that keeps one transaction open makes the app wait. `reset`, `import` and `clear-settings` still ask you to quit the app first, since they replace what it is using.
+
 #### `apack db exec <code> | --file <path> [-o pretty|json|csv] [--out <file>]` (names its data dir)
 
 Run transaction code with the console's read and write helpers (`create`, `upsert`, `write` and `removeRelation`; `write(id)` sets, links, grants, trashes and destroys an entity, and `removeRelation(relationId)` removes one relation). The code runs as one transaction: if it throws part way, none of its writes are kept, and the failure says so. It is synchronous — `await` doesn't parse, and code returning a promise is refused — since an await would split the transaction. Code still running after the transaction ends, such as a timer, writes nothing and logs an error. A write that fails to reach the files fails the command.
@@ -741,7 +743,7 @@ apack db exec "write('Note-123').set('title', 'Renamed')"
 
 #### `apack db repl [--write]` (`--write` names its data dir)
 
-Run console code a line at a time and print each result: query code, or with `--write` transaction code, whose changes are written on exit. `.exit` or Ctrl+D quits.
+Run console code a line at a time and print each result: query code, or with `--write` transaction code, whose changes are saved line by line, and a running app is told on exit. `.exit` or Ctrl+D quits.
 
 #### `apack db script <file> [--read-only] [-o pretty|json|csv] [--out <file>] [-- <script arguments>]` (names its data dir)
 

@@ -2,9 +2,10 @@
 import * as path from 'node:path';
 import { parseArgs, type ParseArgsConfig } from 'node:util';
 import { resolveAppEnvironment, APP_ENVS, type AppEnvironment, type AppEnv } from '@apackdev/sdk/env';
-import { findRunningApp, holdDatabaseWriteLock, openAppDatabase, type AppDatabase } from '@apackdev/host/database';
+import { findRunningApp, holdDatabaseWriteLock, openAppDatabase, type RunningApp, type AppDatabase } from '@apackdev/host/database';
 import { consoleEars, type ConsoleScope } from '@apackdev/sdk/database-console';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
+import { tellAppDataChanged } from '../../build/dev-reload';
 import { cliDirs } from '../../app/pack-host';
 import { resolveStoredProfile } from '../../app/profiles';
 import { defaultDataEnv } from '../../utils';
@@ -71,20 +72,32 @@ export function parseDbArgs<O extends NonNullable<ParseArgsConfig['options']>>(a
   return { values: parsed.values as typeof parsed.values & Record<keyof O, unknown>, positionals: parsed.positionals, target };
 }
 
+/** An opened target, with what is left to do after it closes */
+export type TargetDatabase = AppDatabase & {
+  /** Set where a change is made beside a running app: tells it, if anything was committed, or throws naming why not */
+  tellApp?(): Promise<void>;
+};
+
 export interface OpenOptions {
-  /** The command changes the database: refused while an app runs on the data dir */
+  /** The command changes the database */
   write: boolean;
+  /**
+   * What it changes is rows, a unit at a time, which an app running on the data dir can take from another process as
+   * long as it is told. Without this a change is refused while an app runs there: replacing or resetting the database
+   * has to happen around the app's own state.
+   */
+  besideApp?: boolean;
   /** The command's name, for the lock a change holds */
   command: string;
 }
 
 /**
  * Opens the target's database offline, after printing which data dir it is. A command that changes the database says
- * which data dir it means, so the production app's data is never the one a forgotten flag hits, and is refused while
- * an app runs on that data dir, which holds the database in memory and would overwrite the change or lose it; a read
- * warns that it may miss what the app hasn't written yet.
+ * which data dir it means, so the production app's data is never the one a forgotten flag hits. A change `besideApp` is
+ * made with an app running on that data dir and the app is told once it is closed (`withDatabase`); any other change is
+ * refused there. A read sees what the app has committed, and says so.
  */
-export async function openTarget(target: DbTarget, { write, command }: OpenOptions, io: DbIo): Promise<AppDatabase> {
+export async function openTarget(target: DbTarget, { write, command, besideApp }: OpenOptions, io: DbIo): Promise<TargetDatabase> {
   if (write && !target.named) {
     throw new Error('Name the data dir to change: --profile <name> or --data-dir <path>');
   }
@@ -93,13 +106,14 @@ export async function openTarget(target: DbTarget, { write, command }: OpenOptio
   const lock = write ? holdDatabaseWriteLock(target.userDataDir, `apack db ${command}`) : null;
   try {
     const running = findRunningApp(target);
-    if (running && write) {
+    if (running && write && !besideApp) {
       // Named only here: a refusal has to say how to get out of it, and the file is the way out when the app
       // that wrote it is gone. The warning below must not say it — there the app really is running.
       const clear = running.marker ? ` If it isn't running, delete ${running.marker} and try again.` : '';
       throw new Error(`apack is running on ${target.userDataDir} (${running.why}): quit it first, this command changes its database.${clear}`);
     }
-    if (running) io.err(`Warning: apack is running on it (${running.why}); this reads what it has committed, as of each query`);
+    if (running && write) io.err(`Note: apack is running on it (${running.why}): it is told what changed when this command ends`);
+    else if (running) io.err(`Warning: apack is running on it (${running.why}); this reads what it has committed, as of each query`);
     const db = await openAppDatabase({
       env: target.env,
       userDataDir: target.userDataDir,
@@ -120,34 +134,64 @@ export async function openTarget(target: DbTarget, { write, command }: OpenOptio
       io.err('  A query may name them here, and so may a write — but no installed pack checks what it writes, '
         + 'so name their pack with --schema-from before changing them.');
     }
-    return lock ? { ...db, close: () => { try { db.close(); } finally { lock.release(); } } } : db;
+    if (!lock) return db;
+    const opened = db.database.sequence;
+    let committed = false;
+    return {
+      ...db,
+      close: () => {
+        committed = db.database.sequence !== opened;
+        try { db.close(); } finally { lock.release(); }
+      },
+      ...(running && {
+        tellApp: async () => {
+          if (committed) await tellRunningApp(target, running);
+        },
+      }),
+    };
   } catch (error) {
     lock?.release();
     throw error;
   }
 }
 
+/**
+ * Tells the app running on the data dir that this process committed to its database. The commit stands either way, so a
+ * failure says that it does, and what the app is missing; an app that has quit since has nothing left to be told.
+ */
+async function tellRunningApp(target: DbTarget, running: RunningApp): Promise<void> {
+  const delivery = await tellAppDataChanged({ env: target.env, userDataDir: target.userDataDir });
+  if (delivery.status === 'delivered' || delivery.status === 'current' || !findRunningApp(target)) return;
+  const clear = running.marker ? ` If it isn't running, delete ${running.marker}.` : '';
+  throw new Error(`The change was saved, but apack on ${target.userDataDir} wasn't told: ${delivery.detail}. `
+    + `It shows the old data until it restarts.${clear}`);
+}
+
 /** The message of whatever a command threw */
 const reason = (error: unknown) => (errorMessage(error));
 
 /**
- * Runs `use` with the database and closes it after, whatever happens. Closing syncs what the command committed to
- * disk, so a failure there is reported — but never in place of what the command hit first.
+ * Runs `use` with the database, closes it after whatever happens, and then gives `answer` the result and tells a
+ * running app. Closing syncs what the command committed to disk, and telling reaches the app only once all of it is
+ * there, even for a command that failed part way, since a script may have committed units before it did. Either failing
+ * is reported, but never in place of what the command hit first; and the answer comes before the telling, so a command
+ * whose change the app didn't hear of still says what it did.
  */
-export async function withDatabase<T>(db: AppDatabase, use: () => Promise<T> | T): Promise<T> {
+export async function withDatabase<T>(db: TargetDatabase, use: () => Promise<T> | T, answer?: (result: T) => void): Promise<T> {
   let result: T;
   let failure: unknown;
-  try {
-    result = await use();
-  } catch (error) {
-    failure = error;
-  }
-  try {
-    db.close();
-  } catch (closeFailure) {
-    if (failure === undefined) throw closeFailure;
-    throw new Error(`${reason(failure)}\n  The database also failed to close: ${reason(closeFailure)}`, { cause: failure });
-  }
+  const attempt = async (step: () => unknown, alsoFailed: string) => {
+    try {
+      await step();
+    } catch (error) {
+      failure = failure === undefined ? error
+        : new Error(`${reason(failure)}\n  ${alsoFailed}: ${reason(error)}`, { cause: failure });
+    }
+  };
+  await attempt(async () => { result = await use(); }, '');
+  await attempt(() => db.close(), 'The database also failed to close');
+  if (failure === undefined) await attempt(() => answer?.(result), '');
+  await attempt(() => db.tellApp?.(), 'The running app also was not told');
   if (failure !== undefined) throw failure;
   return result!;
 }

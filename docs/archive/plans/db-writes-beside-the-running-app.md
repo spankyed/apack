@@ -1,8 +1,15 @@
 # `apack db` writes beside the running app
 
-Status: deferred, 2026-10-26. Nothing built. Revisit when a person needs to change the database from a terminal
-without quitting the app; an agent already can, through the drive server's `/transact` (`docs/public-facing/cli.md`,
-"`/query` and `/transact` reach the live database").
+Status: built, 2026-11-05. `exec`, `script` and `repl --write` run with the app open and tell it when they end;
+`docs/public-facing/cli.md` has the behaviour. What was built differs from the plan below in three places:
+
+- **`DATA_CHANGED_ELSEWHERE`, not `DATA_REPLACED`.** `DATA_REPLACED` means the rows are gone, and the brain answers it by
+  stopping the running flow, so a terminal edit of one row would have cost the user their flow. The new fact goes
+  through the same bus path, and only the systems that derive something from the rows handle it (notes, settings).
+- **`POST /db/changed-elsewhere`, not a tRPC procedure.** tRPC runs over the WebSocket; a tool's one call uses the HTTP
+  path `apack pack dev` already does.
+- **The two open questions needed no decision.** A tool is held to the schema the app last declared, which elmdb stores,
+  so the two cannot disagree. A destroyed row an open editor holds is handled as after an import.
 
 ## Where it stands
 
