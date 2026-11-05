@@ -85,6 +85,15 @@ describe('createHostRuntime', () => {
       stop();
     });
 
+    it('tells the bus and does not throw when the refresh fails, as it does on a database closed meanwhile', () => {
+      const { engine, runtime, told, stop } = running();
+      vi.mocked(engine.admin.changedElsewhere).mockImplementation(() => { throw new Error('The database is closed'); });
+      runtime.dataChangedElsewhere();
+      expect(() => vi.advanceTimersByTime(250), 'a throw in this timer would end the process').not.toThrow();
+      expect(told).toEqual(['host/bus DATA_CHANGED_ELSEWHERE']);
+      stop();
+    });
+
     it('answers the problems of a settings row it refused at once, and refreshes all the same', () => {
       const { engine, runtime, told, stop } = running();
       runtime.services.settings.getAll();

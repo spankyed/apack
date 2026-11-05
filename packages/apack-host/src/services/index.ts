@@ -69,7 +69,12 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
   const refreshAfterBurst = () => {
     refreshing ??= setTimeout(() => {
       refreshing = undefined;
-      engine.admin.changedElsewhere();
+      // Nothing is waiting on this timer to catch what it throws, and an uncaught error ends the process
+      try {
+        engine.admin.changedElsewhere();
+      } catch (error) {
+        logger.error('Refreshing after a commit from another process failed:', error as Error);
+      }
       transport.rootEvents.emitIncoming({ to: HOST.bus, event: { type: 'DATA_CHANGED_ELSEWHERE' } });
     }, ELSEWHERE_REFRESH_MS);
     refreshing.unref?.();
