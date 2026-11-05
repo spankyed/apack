@@ -78,7 +78,7 @@ describe('the checkout a pack\'s @apackdev packages come from', () => {
 
 /**
  * Test orchestration refreshes directly; builds refresh through the shared builder before capturing
- * a compiler. pack-builder.spec.ts exercises that ordering with a real captured worker.
+ * a compiler. pack-builder.native.spec.ts exercises that ordering with a real captured worker.
  */
 describe('the commands that refresh a checkout before loading its packages', () => {
   const source = (file: string) => fs.readFileSync(path.join(import.meta.dirname, '..', '..', 'src', file), 'utf-8');
