@@ -15,6 +15,8 @@ Status: built, 2026-11-05. `exec`, `script` and `repl --write` run with the app 
 - **`repl --write` tells the app after each line, not on exit, and a script gets no admin beside a running app.**
 - **The app refuses an invalid settings row a tool wrote**, putting the last valid one back, since recovery is for a process
   running no packs.
+- **A tool that dies before telling is caught anyway.** elmdb's commits say when they found another process had committed
+  (`elsewhereThrough`), and the app's next commit acts on that, without polling.
 - **The two open questions needed no decision.** A tool is held to the schema the app last declared, which elmdb stores,
   so the two cannot disagree. A destroyed row an open editor holds is handled as after an import.
 

@@ -84,6 +84,21 @@ describe('createHostRuntime', () => {
       stop();
     });
 
+    it('does not let a failure escape when it found out for itself, which nothing would catch', () => {
+      const engine = newEngine();
+      let found: (() => void) | undefined;
+      vi.spyOn(engine.admin, 'onFoundElsewhere').mockImplementation((listener) => { found = listener; return () => {}; });
+      vi.spyOn(engine.admin, 'changedElsewhere').mockImplementation(() => {});
+      const { runHistory } = blockedHistory();
+      const runtime = createHostRuntime({ runHistory, database: {} as EarsDatabase, engine, transport: { rootEvents: testRootEvents },
+        appVersion: '1.2.3', packs: createNativePackTestRegistry() });
+      runtime.services.settings.getAll();
+      engine.upsert('Settings', { id: SETTINGS_ROW, data: 'not settings' });
+      vi.spyOn(engine, 'upsert').mockImplementation(() => { throw new Error('the disk is full'); });
+      expect(() => found!()).not.toThrow();
+      vi.restoreAllMocks();
+    });
+
     it('still tells them when putting the settings back fails', () => {
       const { engine, runtime, told, stop } = running();
       runtime.services.settings.getAll();
