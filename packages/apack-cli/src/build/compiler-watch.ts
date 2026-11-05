@@ -8,6 +8,7 @@ import { compilerPackageDirectory, readEsbuildOverride } from './compiler-instal
 import { readCompilerRuntimeInputs } from './compiler-runtime.ts';
 import { compilerEnvironmentIdentity } from './compiler-environment.ts';
 import type { BuildInputKind, BuildInputObserver } from '@apackdev/host/build/pack-inputs';
+import { REPO_ROOT, covers, readTree, repoRelative, skipsFingerprint, type BuildUnit } from '@apackdev/host/build/packages-built';
 
 export type CompilerWatchPaths = ReadonlyMap<string, BuildInputKind>;
 const priority = { directory: 0, file: 1, entries: 2 };
@@ -22,6 +23,27 @@ function addPath(paths: Map<string, BuildInputKind>, file: string, kind: BuildIn
 export function mergeCompilerWatchPaths(before: CompilerWatchPaths, next: CompilerWatchPaths): CompilerWatchPaths {
   const paths = new Map(before);
   for (const [file, kind] of next) addPath(paths, file, kind);
+  return paths;
+}
+
+/**
+ * What a package build reads, so an edit that moves no input of the pack's own still reaches `ensurePackages`. The
+ * outputs stay out, as they do of a unit's fingerprint: a build's own writes are no reason for another pass.
+ */
+export function packageInputWatchPaths(units: readonly BuildUnit[]): CompilerWatchPaths {
+  const paths = new Map<string, BuildInputKind>();
+  for (const { inputs, outputs } of units) {
+    const written = outputs.map(output => repoRelative(output));
+    for (const input of inputs) {
+      for (const file of readTree.listInputs(input)) {
+        if (skipsFingerprint(file) || written.some(output => covers(output, file))) continue;
+        const absolute = path.resolve(REPO_ROOT, file);
+        addPath(paths, absolute, 'file');
+        // Membership, so a new file in a directory it already reads is seen
+        if (absolute !== input) for (let directory = path.dirname(absolute); directory !== path.dirname(input); directory = path.dirname(directory)) addPath(paths, directory, 'entries');
+      }
+    }
+  }
   return paths;
 }
 

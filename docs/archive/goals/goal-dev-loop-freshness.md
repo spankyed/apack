@@ -1,15 +1,14 @@
 > **Written in session** `36f122d9-3a1e-40ef-988d-40b2574fc098` (Claude Code, 2026-09-18). Resume it with
 > `claude -r 36f122d9-3a1e-40ef-988d-40b2574fc098`.
 
-Status: open, not started, blocked on one owner decision (Decision 1). Surveyed 2026-11-03 at `1b69d15677` on
-`master`. The pack watcher already rebuilds stale package `dist` as a side effect of rebuilding the pack, so this
-goal extends that watcher rather than adding one. What remains is what that path costs, what it does not cover,
-and the guide that describes it wrongly.
+Status: completed 2026-11-04 on `session/dev-loop-freshness`, with the ears watch in
+[#338](https://github.com/spankyed/apack/pull/338). The [Outcome](#outcome-2026-11-04) owns closure. The survey
+below is dated 2026-11-03 at `1b69d15677` and describes the code before this work.
 
 ```text
 # Goal: a package edit during a dev session refreshes that package's dist, and costs only what it affects
 
-Implement docs/goals/goal-dev-loop-freshness.md. Follow CLAUDE.md and docs/AGENTS.md.
+Implement docs/archive/goals/goal-dev-loop-freshness.md. Follow CLAUDE.md and docs/AGENTS.md.
 Read Scope, Current handoff, Decisions, Phases and Constraints before continuing.
 The survey was made at 1b69d15677 on master; inspect current code before relying on it.
 Decision 1 is the owner's and blocks Phase 2. Phases 1, 3 and 4 do not wait for it.
@@ -36,8 +35,8 @@ in `packages/apack-*/dist/*.d.ts`. An SDK type edit stays invisible there until 
 
 **Out of scope:** pack descriptor, codegen and catalog freshness. Each watched rebuild publishes one complete
 verified build, and a failed one retains the accepted build (`startPackBuildWatcher`, `publishPackBuild`), which
-is what the completed [discovery work](../archive/plans/discovery-without-activation.md) required
-([closure](../archive/goals/goal-settings-and-pack-contracts.md#outcome-2026-10-19)). This goal must not weaken that.
+is what the completed [discovery work](../plans/discovery-without-activation.md) required
+([closure](goal-settings-and-pack-contracts.md#outcome-2026-10-19)). This goal must not weaken that.
 
 ### What runs today
 
@@ -104,30 +103,55 @@ Not measured: `npm run packages:ensure` (this checkout has no `node_modules/.cac
 have rebuilt all five under other sessions), `build:package` and `apack pack build` for default-setup, for the same
 reason. Phase 1 takes them in a worktree.
 
-## Current handoff
+## Outcome (2026-11-04)
 
-- **Source:** `master` at `1b69d15677`. Nothing is implemented for this goal, and no branch exists.
-- **Next:** Phase 1 in its own worktree, and the owner's answer to Decision 1.
-- **Proven:** the probes and readings above, and the existing specs named in the table below. No suite was run for this
-  survey, which changed only this document.
-- **Unresolved:** the "read from source" consequences above are unobserved.
+A package edit during a session now refreshes the `dist` it made stale and runs at most one pack build. The readings
+are in [the evidence record](../references/evidence/dev-loop-freshness-2026-11-04.md).
+
+- **Double build:** removed. A watcher pass runs the ensure before it reads its inputs, so a rewritten `dist` is in
+  the signature it compares. The frontend watcher no longer counts an unread file's new bytes or a package build's
+  writes as a change, because those events can arrive long after that signature.
+- **Coverage:** every `BUILD_UNITS` input of the pack's and the CLI's checkouts is watched.
+- **Failed and idle passes:** a refresh with its inputs and outputs unmoved spawns nothing and repeats any failure,
+  which ended a retry loop that ran about every 45 s with no edits.
+- **Early cutoff (skipping the pack build when a refresh leaves `dist` unchanged):** closed, not built. A pack build
+  is slow enough to interrupt work, at 84 to 99 s alone and about 150 to 260 s from save to publication at load 7 to
+  17, so the first condition for building it is met. The second is not: only 4.4% of recent commits to these
+  packages' source changed nothing but comments or blank lines, and any other change moves `dist`. Most of the time
+  before a build starts is the watcher's input read, which is a better place to look if this cost matters later.
+
+**Unproven or left open:**
+
+- Missed file events under load remain, and one leaves `dist` stale until the next edit. Four edits were lost in one
+  session here. Their cause is not proven, because no independent watcher ran beside them.
+- `test:linux`'s prep timed out three times here at 600 s under load, and a killed prep leaves a
+  `packages/default-setup/.apack/build.lock` that makes the next run wait.
+- The readings are from a busy machine, with one sample each.
+- The two frontend watcher cases that assert an event changes nothing are skipped on macOS, where a just-created
+  fixture's creation is replayed as new events. Only the timed session covers that behaviour there.
+- `dependency-graph.integration.spec.ts`'s 240 s setup timed out once on CI and passed on the job's re-run and in
+  139 s locally at load 20. Its cause is not proven.
+
+**Gate:** strict chain [41935776562](https://github.com/spankyed/apack/actions/runs/41935776562) passed on
+`a39002d8e6`, on attempt 2 of its one failed job. This closure's text is the only change after it.
 
 ## Acceptance
 
-| Requirement | Implementation | Evidence | Remaining |
-|---|---|---|---|
-| Editing `@apackdev/ears`, `/sdk` or `/ui` source during a session rebuilds that package's `dist` on its own, within a few seconds | Partial: mechanism exists through the pack watcher | Probe above; `pack-builder.spec.ts` (refresh runs before capture) | Observe it and record the time (Phase 1) |
-| It does so without a full build of the shipped pack | **Missing:** every firing edit publishes a complete build | `watch.ts` `publish()` | Decision 1, Phase 2 |
-| The trigger is derived from `BUILD_UNITS`, so a unit's new input needs no second edit | **Missing:** the watch set derives from the compiler and package graphs; `apack-testing/src`, `apack-cli/src` and repo build scripts do not fire | Probe above | Phase 3 |
-| A build failing mid-edit leaves the session running, and the next save retries | Implemented | `watch.spec.ts` ("takes a pending edit after a run that failed"), `pack-builder.spec.ts` ("Checkout refresh failed"), the `catch` in `watch.ts` `runs` | Observe once in Phase 1 |
-| A held build lock leaves the session running and refreshes `dist` without another edit | Implemented for a holder that writes `dist`; a wedged holder is logged and waits for an edit | `package-freshness.spec.ts` ("waits for a live holder…"), `watch.ts`; no spec joins the two | Phase 1 observation; a spec only if it finds a gap |
-| The same holds for `apack pack dev`, and an installed pack starts no package build | Implemented: one watcher, and `checkoutFor` makes ensure a no-op | `checkout-packages.spec.ts` | Inherits Phases 2 and 3 |
-| `packages/apack-testing/CLAUDE.md` says what happens | **Missing:** several statements are wrong | Phase 4 lists them | Phase 4 |
+| Requirement | Result | Evidence |
+|---|---|---|
+| Editing `@apackdev/ears`, `/sdk` or `/ui` source during a session rebuilds that package's `dist` on its own, within a few seconds | Met, at 6 to 19 s from the event, on a busy machine | Evidence record |
+| ~~It does so without a full build of the shipped pack~~ | Withdrawn by Decision 1: a package edit that moves what the pack builds against costs one complete build | `watch-package-edit.native.spec.ts` counts one build |
+| The trigger is derived from `BUILD_UNITS`, so a unit's new input needs no second edit | Met | `packageInputWatchPaths`, `compiler-watch` specs |
+| A build failing mid-edit leaves the session running, and the next save retries | Met, observed | Evidence record, broken-build rows |
+| A held build lock leaves the session running and refreshes `dist` without another edit | Met for a holder that writes `dist`, observed | Evidence record, lock rows |
+| The same holds for `apack pack dev`, and an installed pack starts no package build | Met through the one watcher; `dev` itself was not run | `checkout-packages.spec.ts`, specs for an installed pack |
+| `packages/apack-testing/CLAUDE.md` says what happens | Met | That guide, root `CLAUDE.md`, `packages/apack-cli/CLAUDE.md` |
 
 ## Decisions
 
-1. **OPEN, for the owner, blocks Phase 2: what a package edit should cost the pack.** The required outcome says no
-   full pack build, on the reasoning that its time is not worth what it refreshes. Today every firing edit gets one,
+1. **Decided by the owner: withdraw the requirement.** One complete build per package edit that moves what the pack
+   builds against, with the second build removed. The options as they stood: the required outcome said no
+   full pack build, on the reasoning that its time is not worth what it refreshes. Every firing edit got one,
    which does keep the facade, compiled content and step build current during a session.
    - **Keep the requirement.** A package edit runs the ensure, and the pack rebuilds only if its accepted build is
      affected. The saving is largest for `@apackdev/ui`, which replaces no compiler. For the SDK and ears it needs a
@@ -144,9 +168,9 @@ reason. Phase 1 takes them in a worktree.
    builds only what is stale. Reaching it through `npm run packages:ensure` stays: `ensureCheckoutPackages` serves a
    pack whose checkout need not be the CLI's own, and a build spawns `npm run build:package` regardless. The stat-before-hash
    proposal stays rejected; the comment on `fingerprintInputs` holds its measurements.
-4. **OPEN, for the owner, does not block: the API watch omits ears.** `build:dev:watch` names `apack-host/src` and
-   `apack-sdk/src`, and the API bundle inlines ears, so a backend ears edit reaches no running API. It is a one-flag fix, but
-   outside this goal's `dist` outcome, so it needs authorizing. Phase 4 states the behaviour either way.
+4. **Decided by the owner: add ears to the API watch**, in [#338](https://github.com/spankyed/apack/pull/338).
+   `build:dev:watch` named `apack-host/src` and `apack-sdk/src`, and the API bundle inlines ears, so a backend ears
+   edit reached no running API.
 
 ## Phases
 

@@ -105,7 +105,7 @@ this ledger is not permission to downgrade an outcome to a survey.
 
 - [Lazy activation](../../plans/deferred/lazy-activation.md) is deferred by request, outside the active sequence.
   Revisit only when boot attribution justifies it; discovery completion does not trigger this work.
-- [Dev-loop freshness](../../goals/goal-dev-loop-freshness.md) remains a scoped follow-up; descriptor freshness
+- [Dev-loop freshness](../goals/goal-dev-loop-freshness.md) remains a scoped follow-up; descriptor freshness
   needed by discovery belongs in discovery's checkpoints, not in an unrelated package watcher redesign.
 - [Pack security isolation](../../goals/goal-pack-security-isolation.md) remains a separate design-first goal.
   Reconcile its frontend isolation input there; security confinement is not required to discover data.

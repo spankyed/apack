@@ -636,7 +636,7 @@ not become a second coordination layer alongside the old shell actions.
    from declarations. Start with surface navigation, reference types and anonymous editor contribution lists.
    Materialize help/step metadata and API/lifecycle contracts until the inventory has no executable reads.
 4. **Extend checked binding and freshness before switching readers.** Audit watch/codegen/snapshot
-   invalidation with [dev-loop freshness](../../goals/goal-dev-loop-freshness.md). For each added kind,
+   invalidation with [dev-loop freshness](../goals/goal-dev-loop-freshness.md). For each added kind,
    generate metadata and bindings from the same declaration and build revision; reject added, missing
    or inconsistent bindings. Preserve the last valid catalog on a failed rebuild and report it as stale.
    Do not publish new runtime code against stale metadata. Keep owned binding cleanup and reload checks.

@@ -17,8 +17,11 @@ export interface FrontendInputSnapshot {
   current(): boolean;
 }
 
-/** Compiler observations drive ready subscriptions, never output reuse. */
-export function createFrontendWatcher(root: string, dataDirectory: string | undefined, changed: (file: string) => void, failed: (error: Error) => void) {
+/**
+ * Compiler observations drive ready subscriptions, never output reuse.
+ * @param packageOutputs what a package build writes, whose bytes reach a pack build through the package signature
+ */
+export function createFrontendWatcher(root: string, dataDirectory: string | undefined, changed: (file: string) => void, failed: (error: Error) => void, packageOutputs: readonly string[] = []) {
   const authored = [...new Set([path.resolve(root), fs.realpathSync(root)])];
   const data = dataDirectory ? [...new Set([path.resolve(dataDirectory), physicalWatchPath(path.resolve(dataDirectory))])] : [];
   const files = new Set<string>();
@@ -101,13 +104,16 @@ export function createFrontendWatcher(root: string, dataDirectory: string | unde
       && ![...directories, ...linkedInputs].some(root => inside(root, file) || inside(file, root))
       && (data.some(root => inside(root, file)) || file.split(/[\\/]/).includes('.git'));
   };
-  const notify = (file: string) => {
+  const notify = (file: string, event?: string) => {
     if (closed || ignored(file)) return;
     let trackedLink = false;
     try { trackedLink = contentLink(file); }
     catch { /* An unreadable path still invalidates unknown namespace inputs. */ }
-    // Link topology is in the directory signature; target metadata alone need not change inputs.
-    if (!files.has(file) && !trackedLink) namespace++;
+    // Link topology is in the directory signature; target metadata alone need not change inputs. New bytes in a file
+    // the build never read can't change resolution, and a package build's writes are seen by the signature it runs
+    // before. Their events can arrive long after that snapshot, so neither may count as a change during the build.
+    const packageWrite = file.split(/[\\/]/).includes('.temp') || packageOutputs.some(output => file === output || inside(output, file));
+    if (!files.has(file) && !trackedLink && event !== 'change' && !packageWrite) namespace++;
     const hash = signature(files, directories);
     if (hash === notified) return;
     notified = hash;
@@ -159,7 +165,7 @@ export function createFrontendWatcher(root: string, dataDirectory: string | unde
       catch (error) { throw refuse(selected.join(', '), error); }
       subscriptions.set(watcher, {}); next.push(watcher);
       let initialized = false;
-      watcher.on('all', (_event, file) => { if (initialized && live(watcher)) notify(path.resolve(file)); });
+      watcher.on('all', (event, file) => { if (initialized && live(watcher)) notify(path.resolve(file), event); });
       ready.push(new Promise<void>((resolve, reject) => {
         watcher.once('ready', () => { initialized = true; resolve(); });
         watcher.on('error', error => {

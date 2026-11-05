@@ -5,7 +5,9 @@ import { withBuildSignals } from './build-signals.ts';
 import { readValidManifest } from '../utils.ts';
 import { isPackInputPath, packInputWatchTargets, packInputsHash } from '@apackdev/host/build/pack-inputs';
 import { reloadPack, type AppPlace, type DevDelivery } from '../app/app-api.ts';
-import { compilerWatchPaths, createCompilerWatchTools, compilerWatchTargets, createCompilerWatchMatcher, mergeCompilerWatchPaths, additionalCompilerObservations, type CompilerWatchPaths } from './compiler-watch.ts';
+import { compilerWatchPaths, createCompilerWatchTools, compilerWatchTargets, createCompilerWatchMatcher, mergeCompilerWatchPaths, additionalCompilerObservations, packageInputWatchPaths, type CompilerWatchPaths } from './compiler-watch.ts';
+import { checkoutBuildUnits } from './checkout-packages.ts';
+import { cliPackageDirectory } from './tool-identity.ts';
 import { createFrontendWatcher, type FrontendInputSnapshot } from './frontend-watch.ts';
 import type { BuildWatchInputs } from './build-watch-inputs.ts';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
@@ -25,7 +27,7 @@ export interface WatchOptions {
    */
   readonly onBuilt?: () => Promise<DevDelivery | void>;
   /** A dev session owns its shared compiler; standalone watchers own their builder. */
-  readonly builder?: Pick<PackBuilder, 'build' | 'subscribeFrontendInputs' | 'isFrontendCurrent'>;
+  readonly builder?: Pick<PackBuilder, 'build' | 'ensurePackages' | 'subscribeFrontendInputs' | 'isFrontendCurrent'>;
   readonly buildArgs?: readonly string[];
 }
 
@@ -85,7 +87,11 @@ export function coalescingRunner(run: () => Promise<void>, delayMs: number = DEB
   };
 }
 
-/** Every edit publishes a complete build. done reports terminal failure after cleanup; close drains disposal. */
+/**
+ * An edit that moves what the pack builds against publishes one complete build; an edit that moves only a package
+ * the pack doesn't build against refreshes that package's `dist` and publishes nothing. done reports terminal failure
+ * after cleanup; close drains disposal.
+ */
 export async function startPackBuildWatcher(root: string, options: WatchOptions = {}): Promise<{ close: () => Promise<void>; readonly done: Promise<void> }> {
   const controller = new AbortController();
   const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
@@ -126,8 +132,11 @@ export async function startPackBuildWatcher(root: string, options: WatchOptions 
   };
   const dataDirectory = options.place?.userDataDir ?? (options.place ? resolveAppEnvironment(options.place).userDataDir : undefined);
   const frontend = createFrontendWatcher(root, dataDirectory,
-    file => request(path.relative(root, file)), fail);
+    file => request(path.relative(root, file)), fail, checkoutBuildUnits([root, cliPackageDirectory()]).flatMap(unit => unit.outputs));
   const publish = async (): Promise<boolean> => {
+    // First, so the signature below already includes what this rewrites and the build isn't followed by a second
+    await builder.ensurePackages();
+    signal.throwIfAborted();
     const compiler = refreshInputs();
     const authored = packInputsHash(root) + JSON.stringify(compiler.authored);
     const beforeFrontend = frontend.snapshot();
@@ -141,7 +150,7 @@ export async function startPackBuildWatcher(root: string, options: WatchOptions 
     let observed: CompilerWatchPaths = new Map();
     let nativeReported = false;
     try {
-      await builder.build({ args: options.buildArgs, signal, onInputs: async inputs => {
+      await builder.build({ args: options.buildArgs, signal, packagesEnsured: true, onInputs: async inputs => {
         if (inputs.probes) { nativeReported = true; observed = mergeCompilerWatchPaths(observed, new Map(inputs.probes)); return; }
         reported = { inputs, snapshot: await frontend.observe(inputs) };
       } });
@@ -224,7 +233,8 @@ export async function startPackBuildWatcher(root: string, options: WatchOptions 
   }
   function refreshInputs(replace = false) {
     const next: InputWatcher[] = [];
-    const compiler = compilerWatchPaths(root, tools, mergeCompilerWatchPaths(observedPaths, frontendPaths));
+    const compiler = compilerWatchPaths(root, tools, mergeCompilerWatchPaths(mergeCompilerWatchPaths(observedPaths, frontendPaths),
+      packageInputWatchPaths(checkoutBuildUnits([root, cliPackageDirectory()]))));
     const paths = replace && compiler.complete ? compiler.paths : mergeCompilerWatchPaths(compilerPaths, compiler.paths);
     const authored = packInputWatchTargets(root);
     try {

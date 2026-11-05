@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { INTERRUPTS } from '@apackdev/host/exclusive-lock';
-import { ABSENT, ALLOW_UNBUILT, BUILD_UNITS, buildScriptFor, changedInputs, CHECKOUT_MARKER, covers, declaredPaths, diffableStamp, ensurePackagesBuilt, fingerprintInputs, fingerprintUnit, fingerprintWithDigests, freshnessSweep, inputFiles, outputDigests, INPUTS_CHANGED, PACKAGES_PREBUILT_ENV, packageWriter, PackagesWentStale, repoRelative, NOT_A_BUILD_INPUT, REPO_ROOT, staleMessage, stampRecord, stampedBuild, stampedRun, stampedRunAll, stampFile, unbuiltRefusal, unitStaleReason, withBuildLock, type BuildIntent, type BuildUnit, type StaleUnit } from '@apackdev/host/build/packages-built';
+import { ABSENT, ALLOW_UNBUILT, BUILD_UNITS, packageBuildState, buildScriptFor, changedInputs, CHECKOUT_MARKER, covers, declaredPaths, diffableStamp, ensurePackagesBuilt, fingerprintInputs, fingerprintUnit, fingerprintWithDigests, freshnessSweep, inputFiles, outputDigests, INPUTS_CHANGED, PACKAGES_PREBUILT_ENV, packageWriter, PackagesWentStale, repoRelative, NOT_A_BUILD_INPUT, REPO_ROOT, staleMessage, stampRecord, stampedBuild, stampedRun, stampedRunAll, stampFile, unbuiltRefusal, unitStaleReason, withBuildLock, type BuildIntent, type BuildUnit, type StaleUnit } from '@apackdev/host/build/packages-built';
 
 /**
  * The freshness rule behind `npm test -w @apackdev/cli`'s pretest (@apackdev/host/build/packages-built):
@@ -741,6 +741,30 @@ describe('a freshness sweep', () => {
  * not a list — printing a file name beside a reason saying the stamp could not be compared, on one line,
  * contradicting itself. Both halves get one message, because to a caller they are one thing.
  */
+describe('the state a package build starts from', () => {
+  it('moves with an input or an output and not with scratch or prose, and takes an output that is not there yet', () => {
+    const root = tempDir();
+    fs.mkdirSync(path.join(root, 'src'));
+    fs.writeFileSync(path.join(root, 'src/a.ts'), 'one');
+    fs.writeFileSync(path.join(root, 'src/CLAUDE.md'), 'prose');
+    const unit = { inputs: [path.join(root, 'src')], outputs: [path.join(root, 'dist')] };
+    const absent = packageBuildState([unit]);
+    fs.mkdirSync(path.join(root, 'dist'));
+    fs.writeFileSync(path.join(root, 'dist/a.js'), 'built');
+    const built = packageBuildState([unit]);
+    expect(built).not.toBe(absent);
+    fs.mkdirSync(path.join(root, 'src/.temp'));
+    fs.writeFileSync(path.join(root, 'src/.temp/scratch.js'), 'scratch');
+    fs.writeFileSync(path.join(root, 'src/CLAUDE.md'), 'more prose');
+    expect(packageBuildState([unit])).toBe(built);
+    fs.writeFileSync(path.join(root, 'dist/a.js'), 'built by the lock holder');
+    const written = packageBuildState([unit]);
+    expect(written).not.toBe(built);
+    fs.writeFileSync(path.join(root, 'src/a.ts'), 'two');
+    expect(packageBuildState([unit])).not.toBe(written);
+  });
+});
+
 describe('diffableStamp', () => {
   const why = (record: Parameters<typeof diffableStamp>[0]) => diffableStamp(record).undiffable ?? null;
   const complete = { fingerprint: 'abc', declared: ['packages/x/src'], files: { 'packages/x/src/a.ts': 'd' } };
