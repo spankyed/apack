@@ -10,7 +10,7 @@ export function createClaudeTerminalPlugin(socketPath: string, token: string, ba
 
       on('session.start',async($,e,next)=>{try{await send($,'/ui-ready',{});}catch{}await begin($);return next(e);});
       on('ui.render',{component:'SessionMode'},async($,e,next)=>{await begin($);return next(e);});
-      on('turn.start',async($,e,next)=>{if(!e.agentId)await send($,'/turn',{running:true}).catch(()=>{});return next(e);});
-      on('turn.complete',async($,e,next)=>{const result=await next(e);if(!e.agentId)await send($,'/turn',{running:false,turnId:e.turnId,reason:e.reason}).catch(()=>{});return result;});
+      on('turn.start',async($,e,next)=>{if(!e.agentId){await begin($);await send($,'/turn',{running:true}).catch(()=>{});}return next(e);});
+      on('turn.complete',async($,e,next)=>{const result=await next(e);if(!e.agentId){await begin($);await send($,'/turn',{running:false,turnId:e.turnId,reason:e.reason}).catch(()=>{});}return result;});
     }`
 }
