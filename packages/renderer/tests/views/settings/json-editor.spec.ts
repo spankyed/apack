@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createApp, defineComponent, h, nextTick, onMounted, readonly, shallowRef, type App } from 'vue';
 import type { SettingsSnapshot } from '@apackdev/sdk/types';
 import type * as Monaco from 'monaco-editor';
+import { provideMonacoRuntime } from '@apackdev/ui/components/monaco-config';
 
 const { replaceAll } = vi.hoisted(() => ({ replaceAll: vi.fn(async () => ({ status: 'saved' })) }));
 vi.mock('@/runtime/settings', () => ({ useWindowSettingsSnapshot: () => readonly(snapshot), windowSettings: { replaceAll } }));
@@ -19,25 +20,23 @@ const group = { schema: { type: 'object', properties: { name: { type: 'string' }
 const snapshot = shallowRef<SettingsSnapshot>();
 let app: App | undefined;
 let options: Monaco.json.DiagnosticsOptions;
-const originalMonaco = Object.getOwnPropertyDescriptor(window, 'monaco');
+let monaco: typeof Monaco;
 beforeEach(() => {
   snapshot.value = { runId: 'editor-run', revision: 0, status: 'ready',
     catalog: { revision: 0, app: { schema: { type: 'object' }, defaults: {} }, packs: { fixture: { assistant: group } }, features: {}, dependencies: {} },
     values: { app: { hotkeys: {}, personal: {}, projects: [] }, packs: { fixture: { assistant: { name: '' } }, absent: { assistant: { name: 'Keep' } } }, features: {} },
   };
   options = { validate: true, enableSchemaRequest: false, schemas: [] };
-  Object.defineProperty(window, 'monaco', { configurable: true, value: { json: { jsonDefaults: {
+  monaco = { json: { jsonDefaults: {
     get diagnosticsOptions() { return options; }, setDiagnosticsOptions(value: Monaco.json.DiagnosticsOptions) { options = value; },
-  } } } });
+  } } } as typeof Monaco;
 });
 afterEach(() => {
   app?.unmount(); app = undefined; vi.clearAllMocks();
-  if (originalMonaco) Object.defineProperty(window, 'monaco', originalMonaco);
-  else Reflect.deleteProperty(window, 'monaco');
 });
 function render() {
   const el = document.createElement('div');
-  app = createApp(SettingsJsonEditor); app.mount(el); return el;
+  app = createApp(SettingsJsonEditor); provideMonacoRuntime(app, async () => monaco); app.mount(el); return el;
 }
 async function edit(el: HTMLElement, value: unknown) {
   const textarea = el.querySelector('textarea')!;
