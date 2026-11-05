@@ -2,6 +2,7 @@
 // against a running app's data dir, and the library's tree is what shows the app was told: it renders a live view, and
 // a view runs again only when its engine hears a commit.
 import { execFile } from 'node:child_process';
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { promisify } from 'node:util';
 import { test, expect } from '@apackdev/testing';
@@ -44,4 +45,30 @@ test('an invalid settings row from apack db exec is refused, and the app carries
   const { stdout } = await apackDb('query', "return typeof getRow('Settings-app')?.data");
   expect(stdout.trim()).toBe('object');
   expect(await app.getState()).toEqual(expect.objectContaining({ running: 'connected' }));
+});
+
+test('a tool killed before telling the app is found at the app\'s next commit', async ({ app, appPage, electronApp }) => {
+  await app.waitForSurface('default-setup/library');
+  await app.navigate('default-setup/library');
+  await expect.poll(() => libraryDocuments(appPage)).toContain('Chat commands');
+  const dataDir = await electronApp.evaluate(() => process.env.APACK_USER_DATA_DIR);
+
+  const script = path.join(dataDir!, 'killed.mjs');
+  fs.writeFileSync(script, `export default ({ db, EARS }) => {
+    const [id] = db.ears.query(EARS.Entity.Document).where('name', 'Chat commands').ids();
+    db.ears.write(id).set('name', 'Chat commands from a killed tool');
+    process.kill(process.pid, 'SIGKILL');
+  };`);
+  const killed = await promisify(execFile)(process.execPath, [CLI, 'db', 'script', script, '--data-dir', dataDir!], {
+    env: { ...process.env, APACK_ENV: 'test' },
+  }).then(() => null, (error: { signal?: string }) => error);
+  expect(killed?.signal, 'the tool died before it could tell anyone').toBe('SIGKILL');
+
+  // The app's next commit, which may already have happened: a folder made, staying on the surface
+  await appPage.evaluate(() => {
+    type Actor = { send(event: { type: 'CREATE_FOLDER'; name: string }): void };
+    (window as { applicationState?: { system?: { get(id: string): Actor | undefined } } })
+      .applicationState?.system?.get('default-setup/library')?.send({ type: 'CREATE_FOLDER', name: 'Made after the kill' });
+  });
+  await expect.poll(() => libraryDocuments(appPage), { timeout: 15_000 }).toContain('Chat commands from a killed tool');
 });

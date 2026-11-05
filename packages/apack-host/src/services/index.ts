@@ -8,6 +8,7 @@ import type { PackRegistry } from '../packs/registry.ts';
 import { createAppData } from './app-data.ts';
 import { createOnboarding } from './onboarding.ts';
 import { HOST } from '../refs.ts';
+import { createLogger } from '@apackdev/sdk/logger';
 import { filesystem } from './filesystem.ts';
 import { createSettingsService } from './settings.ts';
 import { createSettingsStore, type SettingsStore } from '../features/settings/be/store.ts';
@@ -15,6 +16,8 @@ import { createSettingsStore, type SettingsStore } from '../features/settings/be
 import { inference } from './inference.ts';
 import { secrets } from './secrets.ts';
 import { createRunHistory } from './run-history.ts';
+
+const logger = createLogger('host-runtime');
 
 export interface HostRuntimeOptions {
   /** The app's database, which appData works on */
@@ -55,13 +58,19 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
   const settings = createSettingsService(settingsStore);
   packs.catalog.setSettingsAdmission(candidate => compileSettingsCatalog(candidate).validate(settings.getOverrides()));
   const runHistoryService = createRunHistory(runHistory.engine);
+  const dataChangedElsewhere = () => {
+    const refused = settingsStore.adoptStored();
+    engine.admin.changedElsewhere();
+    transport.rootEvents.emitIncoming({ to: HOST.bus, event: { type: 'DATA_CHANGED_ELSEWHERE' } });
+    return refused;
+  };
+  // A tool that was killed after committing told nobody: the app's own next commit finds out
+  engine.admin.onFoundElsewhere(() => {
+    const refused = dataChangedElsewhere();
+    if (refused.length > 0) logger.warn(`Refused the stored settings another process wrote: ${refused.map(problem => problem.message).join('; ')}`);
+  });
   return {
-    dataChangedElsewhere() {
-      const refused = settingsStore.adoptStored();
-      engine.admin.changedElsewhere();
-      transport.rootEvents.emitIncoming({ to: HOST.bus, event: { type: 'DATA_CHANGED_ELSEWHERE' } });
-      return refused;
-    },
+    dataChangedElsewhere,
     transport,
     ears: engine,
     packs,
