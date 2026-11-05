@@ -20,9 +20,9 @@ import { createRunHistory } from './run-history.ts';
 const logger = createLogger('host-runtime');
 
 /**
- * How long a refresh after another process's commit waits for more: a refresh blocks the API for hundreds of milliseconds,
- * and a shell loop or a repl session tells once per command. Measured 2026-11-05 on the built app at load 13-30: a POST of
- * the route took 150-1200 ms, at 1 note as at 11,000.
+ * How long a refresh after another process's commit waits for more: a shell loop or a repl session tells once per command,
+ * and each refresh has every system publish and notes walk every note. CPU profile of the built app, 2026-11-05, load about
+ * 40: 148 ms per refresh at 1 note, 259 ms at 11,000, before the packs list stopped re-reading the disk for it.
  */
 const ELSEWHERE_REFRESH_MS = 250;
 

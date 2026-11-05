@@ -258,6 +258,19 @@ describe('app-default installation intent and lifecycle', () => {
     } finally { system.stop(); }
   });
 
+  it('publishes the list without reading the packs directory, and reads it when asked', async () => {
+    const system = runPacksSystem();
+    try {
+      const refresh = vi.spyOn(registry, 'refreshCatalog');
+      system.send({ type: 'SEND_STATE' });
+      await vi.waitFor(() => expect(emitted(system.sent).map(e => e.type)).toContain('PACKS_LIST'));
+      expect(refresh, 'no row change can alter this list').not.toHaveBeenCalled();
+      system.send({ type: 'GET_INSTALLED_PACKS' });
+      expect(refresh).toHaveBeenCalledOnce();
+      refresh.mockRestore();
+    } finally { system.stop(); }
+  });
+
   it('restores a missing default, replaces it with a user fork, then restores the selected app revision', async () => {
     const appDefault = path.join(tmpDir, 'app-default');
     fs.renameSync(packSource('1.0.0'), appDefault);
