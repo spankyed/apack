@@ -90,3 +90,13 @@ it('projects original informational notice rows as inert system text with native
   }
   expect(projectClaudeTerminalHistory({sessionId,row:{...notice,level:'debug'}})).toBeUndefined()
 })
+
+it('omits native empty-command stdout while preserving literal user text and stderr', () => {
+  const stdout = '<local-command-stdout>\u001b[2m(no content)\u001b[22m</local-command-stdout>'
+  const command = { ...row, type: 'user', entrypoint: 'cli', message: { content: stdout } }
+  expect(projectClaudeTerminalHistory({ sessionId, row: command })).toBeUndefined()
+  expect(projectClaudeTerminalHistory({ sessionId, row: { ...command, type: 'system', subtype: 'local_command', content: stdout, message: undefined } })).toBeUndefined()
+  expect(projectClaudeTerminalHistory({ sessionId, row: { ...command, origin: { kind: 'human' } } })?.text).toBe(stdout)
+  expect(projectClaudeTerminalHistory({ sessionId, row: { ...command, message: { content: '(no content)' } } })?.text).toBe('(no content)')
+  expect(projectClaudeTerminalHistory({ sessionId, row: { ...command, message: { content: '<local-command-stderr>(no content)</local-command-stderr>' } } })?.text).toBe('(no content)')
+})

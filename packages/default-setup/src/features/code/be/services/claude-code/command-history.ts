@@ -15,5 +15,10 @@ export function presentClaudeCommandHistory(row: Record<string, unknown>, text: 
     return { kind: 'invocation', name, args, label: decode(invocation[2]!), text: name + (args ? ' ' + args : '') }
   }
   const output = /^<local-command-(stdout|stderr)>([\s\S]*)<\/local-command-\1>$/.exec(text)
-  if (output) return { kind: 'output', stream: output[1] as 'stdout' | 'stderr', text: stripVTControlCharacters(decode(output[2]!)).trim() }
+  if (output) {
+    const stream = output[1] as 'stdout' | 'stderr'
+    const value = stripVTControlCharacters(decode(output[2]!)).trim()
+    // Native local-command stdout uses this sentinel for an empty result and hides it.
+    return { kind: 'output', stream, text: stream === 'stdout' && value === '(no content)' ? '' : value }
+  }
 }
