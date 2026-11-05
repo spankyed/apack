@@ -41,7 +41,7 @@ provideClaudeHoverGroups(() => mountId.value && attachment.value?.attachmentId &
 const identity = () => ({threadId: props.threadId, mountId: mountId.value!})
 let heartbeat: ReturnType<typeof setInterval> | undefined
 function renew() { if (mountId.value) actor.send({type: 'CLAUDE_UI_MOUNT', ...identity(), promptFocused: props.active !== false && !state.value?.question && !state.value?.approval && document.hasFocus(), backgroundView: {...props.target}}) }
-watch(() => [props.active, !!state.value?.question, !!state.value?.approval], renew)
+watch([() => props.active, () => !!state.value?.question, () => !!state.value?.approval], renew)
 function detach() {
   if (heartbeat) clearInterval(heartbeat); heartbeat = undefined
   if (mountId.value) {

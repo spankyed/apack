@@ -17,13 +17,17 @@ it('never retargets queued old responses even when the replacement asks the same
  const question=(id:string):ClaudeUiQuestionFrame=>({messageId:id,id:'dialog',revision:id,draftActionId:id,token:id,body:{status:'rendering'}})
  context.nativeUiViews[mount.mountId]={threadId:'thread',attachmentId:'attached',state:{status:'disconnected',question:question('first')}};await nextTick()
  const oldQuestion=captured.questions[0]!
+ const mountsBeforeReplacement=captured.send.mock.calls.filter(([event])=>event.type==='CLAUDE_UI_MOUNT').length
  context.nativeUiViews[mount.mountId]!.state={status:'disconnected',question:question('replacement')};await nextTick()
+ expect(captured.send.mock.calls.filter(([event])=>event.type==='CLAUDE_UI_MOUNT')).toHaveLength(mountsBeforeReplacement)
  oldQuestion.run();expect(captured.send.mock.calls.filter(([event])=>event.type==='CLAUDE_UI_QUESTION_ANSWER')).toHaveLength(0)
  captured.questions.at(-1)!.run();expect(captured.send).toHaveBeenLastCalledWith(expect.objectContaining({type:'CLAUDE_UI_QUESTION_ANSWER',messageId:'replacement',token:'replacement'}))
  const approval=(id:string)=>({id,control:{kind:'bash' as const,dialog:{id:'dialog',revision:id,sessionId:'child',requestId:'tool',toolName:'Bash' as const,command:'printf original',cwd:'/owned',input:{}}}})
  context.nativeUiViews[mount.mountId]!.state={status:'disconnected',approval:approval('first')};await nextTick()
  const oldApproval=captured.approvals[0]!
+ const mountsBeforeApprovalReplacement=captured.send.mock.calls.filter(([event])=>event.type==='CLAUDE_UI_MOUNT').length
  context.nativeUiViews[mount.mountId]!.state={status:'disconnected',approval:approval('replacement')};await nextTick()
+ expect(captured.send.mock.calls.filter(([event])=>event.type==='CLAUDE_UI_MOUNT')).toHaveLength(mountsBeforeApprovalReplacement)
  oldApproval.run();expect(captured.send.mock.calls.filter(([event])=>event.type==='CLAUDE_UI_APPROVAL_ANSWER')).toHaveLength(0)
  captured.approvals.at(-1)!.run();expect(captured.send).toHaveBeenLastCalledWith(expect.objectContaining({type:'CLAUDE_UI_APPROVAL_ANSWER',frameId:'replacement',answer:{approved:false}}))
 })
