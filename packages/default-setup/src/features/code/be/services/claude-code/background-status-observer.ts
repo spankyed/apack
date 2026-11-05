@@ -88,7 +88,11 @@ export async function createClaudeBackgroundStatusObserver(options: {
     return held
   }
   /** Original identity and a fresh per-worker socket/token scope every desktop attachment. */
-  async function desktopTransport() {
+  let preparingDesktop: Promise<ClaudeTerminalUiTransport | undefined> | undefined
+  function desktopTransport() {
+    return preparingDesktop ??= prepareDesktopTransport().finally(() => { preparingDesktop = undefined })
+  }
+  async function prepareDesktopTransport() {
     const identity = status.identity, registration = status.registration
     if (!childUiPrepared || closed || !identity) return
     const fresh = await authority.identify(identity.sessionId, identity.pid, identity.cwd)

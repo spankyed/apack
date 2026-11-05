@@ -195,7 +195,7 @@ it('binds child drawing and reverse prompts to the original worker and retires t
  try {
   expect(JSON.parse(await readFile(join(observer.directory,'child-ui-launch.json'),'utf8')).configDir).toBe(join(profile,'claude-code-profile','config'))
   const lease=(await post('/background-register',{sessionId:child,pid:119})).value.token
-  const transport=await observer.desktopTransport();expect(transport).toBeDefined()
+  const [transport,parallelTransport]=await Promise.all([observer.desktopTransport(),observer.desktopTransport()]);expect(transport).toBeDefined();expect(parallelTransport).toBe(transport)
   const desktop=observer.desktopOwner!
   expect(desktop).toMatchObject({parentSessionId:parent,identity:original,transport})
   expect(await observer.desktopTransport()).toBe(transport);expect(observer.desktopOwner).toBe(desktop)
