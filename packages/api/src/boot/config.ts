@@ -26,7 +26,7 @@ let ownDataChangedToken: string | undefined;
 
 /**
  * The token `POST /db/changed-elsewhere` takes, made up by each API process and good for nothing else. It is apart from
- * the API token so that it can sit in a file on every run: anything able to read that file can ask for a needless
+ * the API token so that it can sit in the port file on every run: anything able to read that can ask for a needless
  * refresh, where the API token would hand it the whole API.
  */
 export function dataChangedToken(): string {

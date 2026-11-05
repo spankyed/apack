@@ -1,7 +1,7 @@
 # `apack db` writes beside the running app
 
 Status: built, 2026-11-05. `exec`, `script` and `repl --write` run with the app open and tell it when they end;
-`docs/public-facing/cli.md` has the behaviour. What was built differs from the plan below in four places:
+`docs/public-facing/cli.md` has the behaviour. What was built differs from the plan below in these places:
 
 - **`DATA_CHANGED_ELSEWHERE`, not `DATA_REPLACED`.** `DATA_REPLACED` means the rows are gone, and the brain answers it by
   stopping the running flow, so a terminal edit of one row would have cost the user their flow. The new fact goes
@@ -9,9 +9,12 @@ Status: built, 2026-11-05. `exec`, `script` and `repl --write` run with the app 
 - **`POST /db/changed-elsewhere`, not a tRPC procedure.** tRPC runs over the WebSocket; a tool's one call uses the HTTP
   path `apack pack dev` already does.
 - **A token of its own, not the API token in a file.** The API token opens the whole API, secrets mutations included, so
-  writing it on every run would let anything able to read the data dir control the app. Each API process makes up a
-  token that `POST /db/changed-elsewhere` alone takes, and the most it can do is cause a needless refresh. The API
-  token's file stays as it was, so the plan's one security change is not made.
+  writing it on every run would let anything able to read the data dir control the app. Each API process publishes one
+  in its port file that `POST /db/changed-elsewhere` alone takes, and the most it can do is cause a needless refresh.
+  The API token's file stays as it was, so the plan's one security change is not made.
+- **`repl --write` tells the app after each line, not on exit, and a script gets no admin beside a running app.**
+- **The app refuses an invalid settings row a tool wrote**, putting the last valid one back, since recovery is for a process
+  running no packs.
 - **The two open questions needed no decision.** A tool is held to the schema the app last declared, which elmdb stores,
   so the two cannot disagree. A destroyed row an open editor holds is handled as after an import.
 

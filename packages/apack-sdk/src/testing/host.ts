@@ -129,7 +129,7 @@ const unmockedSettings = () => {
 
 const memorylessSettings: SettingsAdmin = {
   get: unmockedSettings, set: unmockedSettings, reset: unmockedSettings,
-  enterRecovery: unmockedSettings, reviewStored: unmockedSettings, getRecovery: unmockedSettings, recover: unmockedSettings,
+  enterRecovery: unmockedSettings, getRecovery: unmockedSettings, recover: unmockedSettings,
   getAll: unmockedSettings, getSnapshot: unmockedSettings, getOverrides: unmockedSettings, replaceAll: unmockedSettings,
   removeOverrides: unmockedSettings, resetAll: unmockedSettings, whileReplacingData: unmockedSettings,
   forPack: unmockedSettings, onChange: unmockedSettings,

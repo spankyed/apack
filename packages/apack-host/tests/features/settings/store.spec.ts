@@ -35,18 +35,29 @@ beforeEach(() => {
 const rowData = () => untypedQuery.ids(SETTINGS_ID).pickOne(['data'])?.data;
 
 describe('a row written past the store', () => {
-  it('is what the next read answers', () => {
-    untypedUpsert(SETTINGS_ENTITY, { id: SETTINGS_ID, data: { features: { [THREADS]: { limit: 7 } } } });
-    store.reviewStored();
+  const written = (limit: unknown) => untypedUpsert(SETTINGS_ENTITY, { id: SETTINGS_ID, data: { features: { [THREADS]: { limit } } } });
+
+  it('is taken when it is valid', () => {
+    written(7);
+    expect(store.adoptStored()).toEqual([]);
     expect(store.get(feature)).toEqual({ limit: 7, sort: 'newest' });
-    expect(store.getRecovery()).toBeUndefined();
   });
 
-  it('needs the recovery a boot would give it when it is no longer valid', () => {
-    untypedUpsert(SETTINGS_ENTITY, { id: SETTINGS_ID, data: { features: { [THREADS]: { limit: 'many' } } } });
-    store.reviewStored();
-    expect(store.getRecovery()?.problems.length).toBeGreaterThan(0);
-    expect(() => store.get(feature)).toThrow(/require recovery/);
+  it('is refused and replaced by the last valid one, without entering recovery', () => {
+    store.set(feature, ['limit'], 5);
+    written('many');
+    expect(store.adoptStored().length).toBeGreaterThan(0);
+    expect(store.getRecovery()).toBeUndefined();
+    expect(store.get(feature)).toEqual({ limit: 5, sort: 'newest' });
+    expect(rowData()).toEqual({ features: { [THREADS]: { limit: 5 } } });
+  });
+
+  it('is the last valid one once it has been taken', () => {
+    written(7);
+    store.adoptStored();
+    written('many');
+    store.adoptStored();
+    expect(store.get(feature)).toEqual({ limit: 7, sort: 'newest' });
   });
 });
 

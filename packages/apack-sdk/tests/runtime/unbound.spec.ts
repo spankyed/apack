@@ -49,7 +49,7 @@ const runtime: HostRuntime = {
     filesystem: { writeFile: unused, readFile: unused, exists: unused, mkdir: unused, readDir: unused, remove: unused, rename: unused, stat: unused },
     settings: {
       get: unused, set: unused, reset: unused, getAll: unused, getSnapshot: unused, getOverrides: unused,
-      enterRecovery: unused, reviewStored: unused, getRecovery: unused, recover: unused,
+      enterRecovery: unused, getRecovery: unused, recover: unused,
       replaceAll: unused, removeOverrides: unused, resetAll: unused, whileReplacingData: unused,
       forPack: unused, onChange: unused,
     },

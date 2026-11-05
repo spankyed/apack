@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import { builtinModules, createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import type { AppDatabase } from '@apackdev/host/database';
-import { consoleScope, openTarget, parseDbArgs, TARGET_USAGE, withDatabase, type DbIo } from './target';
+import { consoleScope, openTarget, parseDbArgs, TARGET_USAGE, withDatabase, withoutAdmin, type DbIo } from './target';
 import { flushOutput, outputFormat, writeResult } from './output';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 
@@ -119,15 +119,14 @@ export async function dbScript(args: string[], io: DbIo): Promise<void> {
   if (!fs.existsSync(scriptFile)) throw new Error(`No script at ${scriptFile}`);
 
   // A script writes unless it says it only reads, and a running app is told once it ends
-  const write = !values['read-only'];
-  const db = await openTarget(target, { write, command: 'script', besideApp: write }, io);
+  const db = await openTarget(target, { changes: values['read-only'] ? 'nothing' : 'rows', command: 'script' }, io);
   try {
-    await withDatabase(db, async () => {
+    const result = await withDatabase(db, async () => {
       const module = await importScript(scriptFile).catch((error: unknown) => { throw scriptFailure(scriptFile, error); });
       if (typeof module.default !== 'function') {
         throw new Error(`${scriptFile} exports no function to run: export default ({ db, EARS, args, log }) => { ... }`);
       }
-      const context: DbScriptContext = { db, EARS: consoleScope(db).EARS, args: scriptArgs, log: io.out };
+      const context: DbScriptContext = { db: db.tellApp ? withoutAdmin(db) : db, EARS: consoleScope(db).EARS, args: scriptArgs, log: io.out };
       try {
         // Awaited here, inside withDatabase: the script's own work — its writes, an interactive question — finishes
         // before the database is closed, and what it throws or rejects with fails the command rather than being lost
@@ -135,9 +134,8 @@ export async function dbScript(args: string[], io: DbIo): Promise<void> {
       } catch (error) {
         throw scriptFailure(scriptFile, error);
       }
-    }, (result) => {
-      if (result !== undefined) writeResult(result, { format, out: values.out as string | undefined }, io);
     });
+    if (result !== undefined) writeResult(result, { format, out: values.out as string | undefined }, io);
   } finally {
     // What the script printed reaches stdout before the CLI exits, which drops whatever is still buffered for a pipe
     await flushOutput();

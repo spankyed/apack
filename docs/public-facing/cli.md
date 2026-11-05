@@ -731,7 +731,7 @@ apack db query "return query(EARS.Entity.Settings).pickAll()" -o json --out sett
 apack db query --file ./report.js -o csv
 ```
 
-**Beside a running app.** `exec`, `script` and `repl --write` work with the app open. Each writes from its own process and, when it ends having committed something, tells the app, which runs every view again and has every system publish its state; a flow that is running keeps running. If the app can't be told, the command says so and exits non-zero: the change is saved, and the app shows the old data until it restarts. A write holds up the app's own writes for as long as it takes, so a script that keeps one transaction open makes the app wait. `reset`, `import` and `clear-settings` still ask you to quit the app first, since they replace what it is using.
+**Beside a running app.** `exec`, `script` and `repl --write` work with the app open. Each writes from its own process and tells the app what it committed: when it ends, or after each line in `repl`. The app runs every view again and has every system publish its state; a flow that is running keeps running. **Exit code 4** means the change is saved but the app didn't take all of it, so don't run it again: the app wasn't reachable and shows the old data until it restarts, or it refused an invalid settings row and put the last valid one back. A write holds up the app's own writes for as long as it takes, so a script that keeps one transaction open makes the app wait, and an open `repl --write` keeps the app from starting. Beside a running app a script gets `db.ears` and not `db.admin` or `db.database`. `reset`, `import` and `clear-settings` still ask you to quit the app first, since they replace what it is using.
 
 #### `apack db exec <code> | --file <path> [-o pretty|json|csv] [--out <file>]` (names its data dir)
 
@@ -743,7 +743,7 @@ apack db exec "write('Note-123').set('title', 'Renamed')"
 
 #### `apack db repl [--write]` (`--write` names its data dir)
 
-Run console code a line at a time and print each result: query code, or with `--write` transaction code, whose changes are saved line by line, and a running app is told on exit. `.exit` or Ctrl+D quits.
+Run console code a line at a time and print each result: query code, or with `--write` transaction code, whose changes are saved line by line, each telling a running app. `.exit` or Ctrl+D quits.
 
 #### `apack db script <file> [--read-only] [-o pretty|json|csv] [--out <file>] [-- <script arguments>]` (names its data dir)
 

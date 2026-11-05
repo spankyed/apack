@@ -10,7 +10,7 @@ import { createOnboarding } from './onboarding.ts';
 import { HOST } from '../refs.ts';
 import { filesystem } from './filesystem.ts';
 import { createSettingsService } from './settings.ts';
-import { createSettingsStore } from '../features/settings/be/store.ts';
+import { createSettingsStore, type SettingsStore } from '../features/settings/be/store.ts';
 
 import { inference } from './inference.ts';
 import { secrets } from './secrets.ts';
@@ -37,16 +37,31 @@ export interface HostRuntimeOptions {
   performance?: PerformanceExecution;
 }
 
-/** The running app as the SDK reaches it, which the composition root binds with `bindHost` */
-export function createHostRuntime({ transport, appVersion, database, runHistory, engine, packs, countCalls, performance }: HostRuntimeOptions): HostRuntime {
-  const settings = createSettingsService(createSettingsStore({
+/** The running app as the SDK reaches it, which the composition root binds with `bindHost`, and what only that root calls */
+export type AppRuntime = HostRuntime & {
+  /**
+   * A local tool committed to the database from its own process: every view reads it again and every system is told.
+   * Answers the problems of a stored settings row it refused.
+   */
+  dataChangedElsewhere(): ReturnType<SettingsStore['adoptStored']>;
+};
+
+export function createHostRuntime({ transport, appVersion, database, runHistory, engine, packs, countCalls, performance }: HostRuntimeOptions): AppRuntime {
+  const settingsStore = createSettingsStore({
     ears: () => engine,
     catalog: packs.settingsCatalog,
     onCatalogChanged: packs.onCatalogChanged,
-  }));
+  });
+  const settings = createSettingsService(settingsStore);
   packs.catalog.setSettingsAdmission(candidate => compileSettingsCatalog(candidate).validate(settings.getOverrides()));
   const runHistoryService = createRunHistory(runHistory.engine);
   return {
+    dataChangedElsewhere() {
+      const refused = settingsStore.adoptStored();
+      engine.admin.changedElsewhere();
+      transport.rootEvents.emitIncoming({ to: HOST.bus, event: { type: 'DATA_CHANGED_ELSEWHERE' } });
+      return refused;
+    },
     transport,
     ears: engine,
     packs,

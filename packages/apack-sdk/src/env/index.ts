@@ -65,11 +65,6 @@ export interface AppEnvironment {
   apiPortFile: string;
   /** A development app's API token, for local tools calling its API (written by the API, readable only by the user) */
   apiTokenFile: string;
-  /**
-   * The token that lets a local tool say it committed to the database beside a running app, and nothing else; every run
-   * publishes it (written by the API, readable only by the user)
-   */
-  dataChangedTokenFile: string;
   urlScheme: string;
 }
 
@@ -135,7 +130,6 @@ export function resolveAppEnvironment(input: { env?: AppEnv; userDataDir?: strin
     installedPacksFile: path.join(appDir, 'installed-packs.json'),
     apiPortFile: path.join(appDir, 'api-port'),
     apiTokenFile: path.join(appDir, 'api-token'),
-    dataChangedTokenFile: path.join(appDir, 'data-changed-token'),
     urlScheme: env === 'beta' ? 'apack-beta' : env === 'preview' ? 'apack-preview' : 'apack',
   };
 }

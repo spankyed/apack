@@ -2,7 +2,7 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import type { EventEmitter } from 'node:events';
 import type { PackBuilder } from '../../src/build/build-process.ts';
 import * as packInputs from '@apackdev/host/build/pack-inputs';
-import type { DevDelivery } from '../../src/build/dev-reload.ts';
+import type { DevDelivery } from '../../src/app/app-api.ts';
 import { startPackBuildWatcher, watchPackBuild } from '../../src/build/watch.ts';
 import * as fs from 'node:fs';
 import * as compilerWatch from '../../src/build/compiler-watch.ts';
@@ -49,7 +49,7 @@ vi.mock('../../src/build/compiler-watch.ts', () => ({
   compilerWatchTargets: () => new Map(),
   createCompilerWatchMatcher: () => () => false,
 }));
-vi.mock('../../src/build/dev-reload.ts', () => ({ reloadPack: fixture.reload }));
+vi.mock('../../src/app/app-api.ts', () => ({ reloadPack: fixture.reload }));
 vi.mock('../../src/build/frontend-watch.ts', () => ({
   createFrontendWatcher: (_root: string, _data: unknown, _changed: unknown, failed: (error: Error) => void) => {
     fixture.frontendFailed = failed;

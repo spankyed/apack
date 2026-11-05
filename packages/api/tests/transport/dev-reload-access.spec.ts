@@ -110,8 +110,8 @@ it('listens on loopback only', () => {
 });
 
 describe('the files the API publishes', () => {
-  const { apiPortFile, apiTokenFile, dataChangedTokenFile } = resolveAppEnvironment();
-  const clear = () => { for (const file of [apiPortFile, apiTokenFile, dataChangedTokenFile]) fs.rmSync(file, { force: true }); };
+  const { apiPortFile, apiTokenFile } = resolveAppEnvironment();
+  const clear = () => { for (const file of [apiPortFile, apiTokenFile]) fs.rmSync(file, { force: true }); };
 
   it("publishes its port for every run, so a local tool can tell an app is running on the data dir", () => {
     clear();
@@ -123,14 +123,12 @@ describe('the files the API publishes', () => {
     process.env.APACK_API_TOKEN = TOKEN;
     publishApiFiles(4321, TOKEN);
 
-    expect(JSON.parse(fs.readFileSync(apiPortFile, 'utf-8'))).toEqual({ port: 4321, pid: process.pid });
+    const published = { port: 4321, pid: process.pid, dataChangedToken: dataChangedToken() };
+    expect(JSON.parse(fs.readFileSync(apiPortFile, 'utf-8'))).toEqual(published);
     // A tool reads it back as this running API
-    expect(readApiEndpoint(apiPortFile)).toEqual({ port: 4321, pid: process.pid });
+    expect(readApiEndpoint(apiPortFile)).toEqual(published);
     // Only the user reads it, whatever the data dir's own permissions are
     expect(fs.statSync(apiPortFile).mode & 0o777).toBe(0o600);
-    // So does the token `apack db` says it committed with
-    expect(fs.readFileSync(dataChangedTokenFile, 'utf-8')).toBe(dataChangedToken());
-    expect(fs.statSync(dataChangedTokenFile).mode & 0o777).toBe(0o600);
     // The API token stays out of the data dir: no local tool needs it there
     expect(fs.existsSync(apiTokenFile)).toBe(false);
   });

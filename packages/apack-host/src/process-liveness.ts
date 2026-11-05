@@ -98,6 +98,8 @@ export interface ApiEndpoint {
   port: number;
   /** The API process. A file whose process is gone is one a crash left behind, not a running app */
   pid: number;
+  /** What a local tool shows to say it committed to the database beside this API, and good for nothing else */
+  dataChangedToken?: string;
 }
 
 /** What a process writes about itself in a record: enough to tell its own leftover from a later holder's */
@@ -124,15 +126,19 @@ export const sameWriter = (a: WriterRecord | null, b: WriterRecord | null): bool
  * run's file names an unrelated live process and would otherwise report an API that isn't there.
  */
 export function readApiEndpoint(apiPortFile: string): ApiEndpoint | null {
-  let published: { port?: unknown; pid?: unknown };
+  let published: { port?: unknown; pid?: unknown; dataChangedToken?: unknown };
   try {
-    published = JSON.parse(fs.readFileSync(apiPortFile, 'utf-8')) as { port?: unknown; pid?: unknown };
+    published = JSON.parse(fs.readFileSync(apiPortFile, 'utf-8')) as typeof published;
   } catch {
     return null;
   }
-  const { port, pid } = published;
+  const { port, pid, dataChangedToken } = published;
   if (!Number.isInteger(port) || (port as number) <= 0 || (port as number) > 65535) return null;
   if (!Number.isInteger(pid) || (pid as number) <= 0) return null;
   if (recordIsStale(apiPortFile, pid as number)) return null;
-  return { port: port as number, pid: pid as number };
+  return {
+    port: port as number,
+    pid: pid as number,
+    ...(typeof dataChangedToken === 'string' && { dataChangedToken }),
+  };
 }

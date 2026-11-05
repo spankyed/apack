@@ -75,7 +75,7 @@ describe('apack pack dev reloads', () => {
     try {
       fs.writeFileSync(path.join(userDataDir, 'api-port'), JSON.stringify({ port: api.port, pid: process.pid }));
       fs.writeFileSync(path.join(userDataDir, 'api-token'), 'the-dev-token\n');
-      const { reloadPack } = await import('../../src/build/dev-reload.ts');
+      const { reloadPack } = await import('../../src/app/app-api.ts');
 
       expect(await reloadPack('my-pack')).toEqual({ status: 'delivered' });
       expect(api.requests).toEqual([{ url: '/dev/reload', token: 'the-dev-token', body: JSON.stringify({ packId: 'my-pack' }) }]);
@@ -89,7 +89,7 @@ describe('apack pack dev reloads', () => {
     try {
       fs.writeFileSync(path.join(userDataDir, 'api-port'), JSON.stringify({ port: api.port, pid: process.pid }));
       fs.writeFileSync(path.join(userDataDir, 'api-token'), 'the-dev-token');
-      const { installPackInApp } = await import('../../src/build/dev-reload.ts');
+      const { installPackInApp } = await import('../../src/app/app-api.ts');
 
       expect(await installPackInApp('relative/pack')).toEqual({ status: 'delivered' });
       expect(api.requests).toEqual([{ url: '/dev/install', token: 'the-dev-token', body: JSON.stringify({ root: path.resolve('relative/pack') }) }]);
@@ -101,7 +101,7 @@ describe('apack pack dev reloads', () => {
   // Each of these needs something different of the author — start the app, read its logs, look at what
   // holds the port — so the status alone was not enough to act on
   it('report a refused reload, a missing port or token file, and an app that no longer answers, and say which', async () => {
-    const { reloadPack } = await import('../../src/build/dev-reload.ts');
+    const { reloadPack } = await import('../../src/app/app-api.ts');
     expect(await reloadPack('my-pack')).toMatchObject({ status: 'not-running', detail: expect.stringContaining('api-port') });
 
     const api = await fakeApi(403);

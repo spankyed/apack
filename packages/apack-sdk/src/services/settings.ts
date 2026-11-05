@@ -14,8 +14,6 @@ export interface SettingsAdmin extends SettingsService {
   getSnapshot(): SettingsSnapshot;
   /** Boot found stored values the declarations reject: reads refuse until the app restarts. */
   enterRecovery(): void;
-  /** The stored row may have been written past the store: one invalid now needs the recovery a boot would give it */
-  reviewStored(): void;
   getRecovery(): SettingsRecovery | undefined;
   recover(request: SettingsRecoveryRequest): void;
   getOverrides(): SettingsOverrides;

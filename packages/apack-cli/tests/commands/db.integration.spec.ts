@@ -20,7 +20,7 @@ import { _appDataPaths } from '@apackdev/sdk/utils';
 import { _appDirOf, appDataDirFor, resolveAppEnvironment } from '@apackdev/sdk/env';
 import { API_TOKEN_HEADER } from '@apackdev/sdk/utils/pure';
 import { db } from '../../src/commands/db';
-import { parseDbArgs } from '../../src/commands/db/target';
+import { parseDbArgs, SAVED_BUT_NOT_TAKEN } from '../../src/commands/db/target';
 import { dbRepl } from '../../src/commands/db/repl';
 import { mintProfile, openProfile } from '../../src/app/profiles';
 import type { CliDirs } from '../../src/app/pack-host';
@@ -130,7 +130,7 @@ function writeUnreadableFiles(databaseDir: string): void {
 }
 
 /** Runs `apack db <args>` and returns its stdout and stderr lines, and its error */
-async function run(args: string[]): Promise<{ out: string; err: string; error?: Error }> {
+async function run(args: string[]): Promise<{ out: string; err: string; error?: Error; exitCode?: number | string | null }> {
   const out: string[] = [];
   const err: string[] = [];
   let error: Error | undefined;
@@ -139,7 +139,9 @@ async function run(args: string[]): Promise<{ out: string; err: string; error?: 
   } catch (caught) {
     error = caught as Error;
   }
-  return { out: out.join('\n'), err: err.join('\n'), error };
+  const { exitCode } = process;
+  process.exitCode = undefined;
+  return { out: out.join('\n'), err: err.join('\n'), error, exitCode };
 }
 
 async function ok(args: string[]) {
@@ -491,8 +493,7 @@ describe('apack db exec', () => {
       servers.push(server);
       await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
       const { port } = server.address() as AddressInfo;
-      fs.writeFileSync(path.join(_appDirOf(dir), 'api-port'), JSON.stringify({ port, pid: process.pid }));
-      fs.writeFileSync(path.join(_appDirOf(dir), 'data-changed-token'), 'the-token');
+      fs.writeFileSync(path.join(_appDirOf(dir), 'api-port'), JSON.stringify({ port, pid: process.pid, dataChangedToken: 'the-token' }));
       return asked;
     }
 
@@ -525,30 +526,57 @@ describe('apack db exec', () => {
       expect(asked.map((call) => call.url)).toEqual(['/db/changed-elsewhere']);
     });
 
-    it('tells it when a write repl exits', async () => {
+    it('tells it after each line of a write repl that committed', async () => {
       const dir = await appDataDir();
       const asked = await runningApp(dir);
-      const lines = Readable.from([`${CHANGE}\n`, '.exit\n']);
-      await dbRepl(['--write', '--data-dir', dir], { out: () => {}, err: () => {} }, lines);
+      const lines = Readable.from([`${CHANGE}\n`, 'return 1\n', '.exit\n']);
+      // Each answer prints before its line's telling, so the second shows the first's was made during the session
+      const toldAtEachAnswer: number[] = [];
+      await dbRepl(['--write', '--data-dir', dir], { out: () => toldAtEachAnswer.push(asked.length), err: () => {} }, lines);
+      expect(toldAtEachAnswer).toEqual([0, 1]);
       expect(asked.map((call) => call.url)).toEqual(['/db/changed-elsewhere']);
       expect(await titleIn(dir)).toBe('Changed');
     });
 
-    it('says when the app could not be told, after saving and answering', async () => {
+    it('says when the app did not take it, answering anyway, with an exit code of its own', async () => {
       const unreachable = await appDataDir();
       holdLock(unreachable);
-      const noToken = await run(['exec', CHANGE, '--data-dir', unreachable]);
-      expect(noToken.out, 'the answer still comes').toBe('answered');
-      expect(noToken.error?.message).toMatch(/^The change was saved, but apack on [\s\S]*wasn't told: no running/);
+      const noApi = await run(['exec', CHANGE, '--data-dir', unreachable]);
+      expect(noApi.error).toBeUndefined();
+      expect(noApi.out, 'the answer still comes').toBe('answered');
+      expect(noApi.exitCode).toBe(SAVED_BUT_NOT_TAKEN);
+      expect(noApi.err).toMatch(/The change was saved, but apack on [\s\S]*wasn't told: no running/);
       // The marker outlives a crash and its pid can be one the OS has since reused: the way out has to be named
-      expect(noToken.error?.message).toContain(`delete ${path.join(_appDirOf(unreachable), 'app.lock')}`);
+      expect(noApi.err).toContain(`delete ${path.join(_appDirOf(unreachable), 'app.lock')}`);
       expect(await titleIn(unreachable)).toBe('Changed');
 
       const refusing = await appDataDir();
-      await runningApp(refusing, 403);
+      await runningApp(refusing, 422);
       const refused = await run(['exec', CHANGE, '--data-dir', refusing]);
-      expect(refused.error?.message).toMatch(/wasn't told: 403/);
+      expect(refused.exitCode).toBe(SAVED_BUT_NOT_TAKEN);
+      expect(refused.err).toMatch(/The change was saved, but apack on [\s\S]*answered: 422/);
       expect(await titleIn(refusing)).toBe('Changed');
+    });
+
+    it('gives a script rows, and refuses it the admin a running app cannot take', async () => {
+      const dir = await appDataDir();
+      await runningApp(dir);
+      for (const reach of ['db.admin', 'db.database', 'db.ears.admin']) {
+        const script = path.join(dir, `reach-${reach}.mjs`);
+        fs.writeFileSync(script, `export default ({ db }) => ${reach};`);
+        const { error } = await run(['script', script, '--data-dir', dir]);
+        expect(error?.message).toContain(`can't use ${reach} while apack runs`);
+      }
+      const reads = path.join(dir, 'reads.mjs');
+      fs.writeFileSync(reads, "export default ({ db }) => db.ears.getRow('Note-a')?.title;");
+      expect((await ok(['script', reads, '--data-dir', dir])).out).toBe('Alpha');
+    });
+
+    it('keeps the admin for a script with no app running', async () => {
+      const dir = await appDataDir();
+      const script = path.join(dir, 'admin.mjs');
+      fs.writeFileSync(script, "export default ({ db }) => typeof db.admin.getAllEntities;");
+      expect((await ok(['script', script, '--data-dir', dir])).out).toBe('function');
     });
 
     it('has nothing to say to an app that quit while it ran', async () => {

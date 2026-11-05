@@ -35,6 +35,8 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
   let revision = 0;
   let atRevision = -1;
   let validation: ReturnType<typeof compileSettingsCatalog>;
+  /** The overrides last read or written as valid, which `adoptStored` puts back */
+  let lastValid: SettingsOverrides | undefined;
 
   function declarations(): SettingsCatalog {
     const definitions = catalog();
@@ -61,6 +63,7 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
     const base = defaults();
     const overrides = stored();
     validation.validate(overrides);
+    lastValid = overrides;
     return structuredClone(deepMerge(base, overrides)) as SettingsDocument;
   }
   /** In recovery the stored row is invalid, and only `recover()` may change it. */
@@ -101,6 +104,7 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
     validation.validate(next, rawStored());
     const database = ears();
     database.upsert(SETTINGS_ENTITY, { id: SETTINGS_ID, data: structuredClone(next) });
+    lastValid = structuredClone(next) as SettingsOverrides;
     revision++;
     tell('written');
   }
@@ -114,11 +118,18 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
   return {
     getAll: effective,
     enterRecovery: () => { recovering = true; },
-    /** The stored row may have been written past this store: one invalid now needs the recovery a boot would give it. */
-    reviewStored(): void {
-      revision++;
+    /**
+     * Takes a stored row written past this store, or refuses it. A refused row is replaced by the last valid one and its
+     * problems answered, since running packs read settings throughout and recovery is for a process that runs none.
+     */
+    adoptStored() {
+      if (recovering || replacingData) return [];
       declarations();
-      if (!recovering && validation.inspect(rawStored()).length > 0) recovering = true;
+      const problems = validation.inspect(rawStored());
+      if (problems.length === 0) lastValid = stored();
+      else if (lastValid) ears().upsert(SETTINGS_ENTITY, { id: SETTINGS_ID, data: structuredClone(lastValid) });
+      revision++;
+      return problems;
     },
     getRecovery,
     recover(request: SettingsRecoveryRequest): void {

@@ -3,7 +3,7 @@ import { createStartupPerformance, observeIndexAdmission } from './startup-perfo
 import { createNodePerformanceController } from '@apackdev/host/diagnostics/node';
 import { createActor } from 'xstate';
 import { createLogger, reportError } from '@apackdev/sdk/logger';
-import { bindHost, type HostRuntime } from '@apackdev/sdk/runtime';
+import { bindHost } from '@apackdev/sdk/runtime';
 import { _getLmdbPath, _getRunHistoryPath } from '@apackdev/sdk/utils';
 import type { EarsDatabase, EarsEngine } from '@apackdev/ears';
 import { assertNoDatabaseWriter, openDatabaseStore, openRunHistory, storedSettings, type RunsDatabase } from '@apackdev/host/database';
@@ -16,7 +16,7 @@ import {
   APPLICATION_SYSTEM_EVENTS, createApplicationSystem, createPacksSystem, createSettingsSystem, hostRegistration, hostDeclaration, packsEvents, settingsEvents,
 } from '@apackdev/host/features';
 import { createAppBus, createParticipantClaims, HOST } from '@apackdev/host/bus';
-import { createHostRuntime } from '@apackdev/host/services';
+import { createHostRuntime, type AppRuntime } from '@apackdev/host/services';
 import { createViewHost, type ViewHost } from '@apackdev/host/views';
 import { _settingsAdmin } from '@apackdev/sdk/services';
 import { compileSettingsCatalog, createSettingsAccess } from '@apackdev/host/settings';
@@ -68,13 +68,8 @@ export let appPerformance: ReturnType<typeof createNodePerformanceController> | 
 
 export let appDatabase: EarsDatabase | undefined;
 
-let appEngine: EarsEngine | undefined;
-
-/** A local tool committed to the app's database: every view reads it again, and every system is told. */
-export function hearDataChangedElsewhere(): void {
-  appEngine?.admin.changedElsewhere();
-  rootEvents.emitIncoming({ to: HOST.bus, event: { type: 'DATA_CHANGED_ELSEWHERE' } });
-}
+/** A local tool committed to the app's database (`createHostRuntime`) */
+export let appDataChangedElsewhere: AppRuntime['dataChangedElsewhere'];
 
 /** The run history's open database, so shutdown can close it */
 export let appRunHistory: RunsDatabase | undefined;
@@ -104,7 +99,7 @@ function bootReading(): string {
 
 export function openAppStore(performance?: ReturnType<typeof createNodePerformanceController>): AppStore {
   // Installed packs that aren't running keep their settings: the settings take writes for their features too
-  let runtime: HostRuntime;
+  let runtime: AppRuntime;
   const packs = createPackRegistry({
     nativeDeclarations: [hostDeclaration],
     installedPacksDir: () => resolveAppEnvironment().packsDir,
@@ -128,7 +123,7 @@ export function openAppStore(performance?: ReturnType<typeof createNodePerforman
     countCalls: resolveAppEnvironment().env === 'development',
   });
   bindHost(runtime);
-  appEngine = engine;
+  appDataChangedElsewhere = runtime.dataChangedElsewhere;
   printLogEvents();
   appPacks = packs;
   appSettingsAccess = createSettingsAccess(runtime.services.settings, packs.getPackRuntime);

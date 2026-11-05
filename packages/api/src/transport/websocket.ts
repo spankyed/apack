@@ -8,7 +8,7 @@ import { createRpcContext } from './context.ts';
 import { jsonSafeEncoder } from './encoder.ts';
 import { createLogger } from '@apackdev/sdk/logger';
 import { SERVER_CONFIG, apiToken, apiTokenIsOwn, dataChangedToken, isApiToken } from '../boot/config.ts';
-import { appDatabase, appPacks, appRunHistory, backendActor, hearDataChangedElsewhere } from '../runtime/index.ts';
+import { appDatabase, appPacks, appRunHistory, backendActor, appDataChangedElsewhere } from '../runtime/index.ts';
 import { installDevPack, reloadPackById } from '@apackdev/host/packs/runtime';
 import { writePrivateRuntimeFile } from '@apackdev/host/private-file';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
@@ -105,8 +105,11 @@ function handleHttpRequest(req: http.IncomingMessage, res: http.ServerResponse) 
   if (req.method === 'POST' && req.url === '/db/changed-elsewhere') {
     const refusal = dataChangedRefusal(req.headers);
     if (refusal) return answer(res, 403, { error: refusal });
-    hearDataChangedElsewhere();
-    return answer(res, 200, { ok: true });
+    const refused = appDataChangedElsewhere();
+    if (refused.length === 0) return answer(res, 200, { ok: true });
+    res.writeHead(422, { 'Content-Type': 'text/plain' });
+    res.end(`it refused its stored settings, and the last valid ones are back in place: ${refused.map(problem => problem.message).join('; ')}`);
+    return;
   }
 
   res.writeHead(404);
@@ -115,18 +118,17 @@ function handleHttpRequest(req: http.IncomingMessage, res: http.ServerResponse) 
 
 /**
  * Tells local tools where this API is. Every run publishes its port, so a tool can tell that an app is running on the
- * data dir, whatever the platform, and the token that lets one say it committed there (`apack db`), which opens nothing
- * else; the port alone opens nothing either. The API token goes to a file only where a local tool may use it: a
- * development app (`apack pack dev`, the built-in pack's watcher), and an API started by hand, which made up its own.
- * All three are readable only by the user, and removed when the process exits.
+ * data dir, whatever the platform, with the token that lets one say it committed there (`apack db`), which opens nothing
+ * else. The API token goes to a file only where a local tool may use it: a development app (`apack pack dev`, the
+ * built-in pack's watcher), and an API started by hand, which made up its own. Both files are readable only by the user,
+ * and removed when the process exits.
  */
 export function publishApiFiles(port: number, token: string): void {
-  const { apiPortFile, apiTokenFile, dataChangedTokenFile } = resolveAppEnvironment();
+  const { apiPortFile, apiTokenFile } = resolveAppEnvironment();
   try {
     fs.mkdirSync(path.dirname(apiPortFile), { recursive: true });
     // With the process id, so a tool can tell a running API from a file a crashed run left behind
-    writePrivateRuntimeFile(apiPortFile, JSON.stringify({ port, pid: process.pid } satisfies ApiEndpoint));
-    writePrivateRuntimeFile(dataChangedTokenFile, dataChangedToken());
+    writePrivateRuntimeFile(apiPortFile, JSON.stringify({ port, pid: process.pid, dataChangedToken: dataChangedToken() } satisfies ApiEndpoint));
   } catch {}
 
   if (process.env.NODE_ENV !== 'development' && !apiTokenIsOwn()) return;
@@ -183,8 +185,8 @@ export function createWebSocketServer() {
     } catch (error) {
       console.error('[backend] Closing the run history failed', error);
     }
-    const { apiPortFile, apiTokenFile, dataChangedTokenFile } = resolveAppEnvironment();
-    for (const file of [apiPortFile, apiTokenFile, dataChangedTokenFile]) {
+    const { apiPortFile, apiTokenFile } = resolveAppEnvironment();
+    for (const file of [apiPortFile, apiTokenFile]) {
       try { fs.unlinkSync(file); } catch {}
     }
   });
