@@ -6,10 +6,6 @@ import CssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker';
 import HtmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker';
 import TypeScriptWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
 
-declare global {
-  interface Window { monaco: typeof monaco }
-}
-
 // The renderer owns the editor and its workers; pack components share this locally bundled instance.
 self.MonacoEnvironment = {
   getWorker(_moduleId, label) {
@@ -20,5 +16,6 @@ self.MonacoEnvironment = {
     return new EditorWorker();
   },
 };
-window.monaco = monaco;
 loader.config({ monaco });
+
+export { monaco };

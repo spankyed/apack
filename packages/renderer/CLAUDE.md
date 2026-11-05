@@ -57,7 +57,7 @@ Its static imports are evaluated first, `virtual:host-shared-modules` among them
     is not something it can crawl.
   - injects `<script type="importmap">` ahead of the app's script (`transformIndexHtml`, `head-prepend`), so
     it is parsed before any module resolves against it. A popout loads this same document and inherits it.
-  - `virtual:host-shared-modules` imports every one of them and does nothing else. It is in the graph for
+  - `virtual:host-shared-modules` imports them for development discovery only; production returns an empty module and serves the separately emitted import-map entries on demand. It is in the graph for
     two reasons: in **dev** it is what the map is read from — transforming it hands back the URLs Vite serves
     each module at, which cannot be derived (measured 2026-10-08, this app's deps carried four different
     `?v=` hashes at once, and a URL differing by one is a second copy of the module) — and it is how the dep
@@ -133,9 +133,11 @@ in a `SurfaceScope` for that surface, so a form's `useSurface()` reaches the sur
 
 ## Local editor assets
 
-`src/boot/monaco.ts` configures the shared Vue editor loader with the bundled Monaco instance and
-Vite-built editor/JSON/CSS/HTML/TypeScript workers before any editor mounts. The renderer supplies
-`window.monaco` for the existing editor components. No editor or worker CDN request is needed.
+The renderer provides a window-owned asynchronous Monaco resource with `provideMonacoRuntime`
+(`@apackdev/ui/components/monaco-config`) before mounting Vue. The first editor consumer imports
+`src/boot/monaco.ts`, which configures the shared Vue editor loader and Vite-built
+editor/JSON/CSS/HTML/TypeScript workers. Concurrent consumers share loading; editor components
+wait for it before mounting their Monaco child. No editor or worker CDN request is needed.
 Vite gives Monaco its own vendor chunk so recoverable cancellation can be attributed to its origin
 frame; application errors called through Monaco still reach the fatal error reporter. The external
 settings JSON test blocks non-local HTTP and exercises real schema completion, validation and saving.

@@ -97,7 +97,7 @@ if (new Set(SHARED_ENTRIES.map(entryName)).size !== SHARED_ENTRIES.length) {
   throw new Error('Two shared modules take the same entry name; entryName() has to tell them apart');
 }
 
-function hostSharedModulesPlugin(): Plugin {
+function hostSharedModulesPlugin(serving: boolean): Plugin {
   /**
    * The module that puts every shared module in *this window's* graph, which is its whole job — it has no
    * runtime effect and the app imports it for two side effects of being in the graph.
@@ -176,7 +176,7 @@ function hostSharedModulesPlugin(): Plugin {
     name: 'host-shared-modules',
     enforce: 'pre',
     resolveId(source) { if (source === VIRTUAL_ID) return RESOLVED_VIRTUAL; },
-    load(id) { if (id === RESOLVED_VIRTUAL) return virtualContent; },
+    load(id) { if (id === RESOLVED_VIRTUAL) return serving ? virtualContent : ''; },
     transformIndexHtml: {
       order: 'post',
       async handler(_html, ctx) {
@@ -216,7 +216,7 @@ export default defineConfig(({ command }) => ({
   },
   plugins: [
     devPackFrontendsPlugin(command === 'serve'),
-    hostSharedModulesPlugin(),
+    hostSharedModulesPlugin(command === 'serve'),
     vue({
       template: {
         compilerOptions: {

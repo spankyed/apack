@@ -6,7 +6,7 @@ import { createActor } from 'xstate';
 import type { Actor } from 'xstate';
 import App from './views/App.vue'
 import './style.css'
-import './boot/monaco';
+import { provideMonacoRuntime } from '@apackdev/ui/components/monaco-config';
 // highlight.js's stylesheet is global (.hljs, pre code.hljs), so the app owns it: imported from
 // @apackdev/ui it would ship again inside every build.bundleUi pack and restyle code everywhere.
 import 'highlight.js/styles/github-dark.css'
@@ -108,6 +108,7 @@ window.electronAPI?.protocolAction?.onAction(({ action, params }) => {
 });
 
 const app = createApp(App);
+provideMonacoRuntime(app, async () => (await import('./boot/monaco')).monaco);
 
 app.config.errorHandler = (err, _instance, info) => {
   handleVueError(err, info);
