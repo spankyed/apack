@@ -155,6 +155,7 @@ jobs:
           packages/apack-cli/tests/build/compiler-native-vite.native.spec.ts
           packages/apack-cli/tests/build/compiler-native-libraries.native.spec.ts
           packages/apack-cli/tests/build/compiler-native-launch.native.spec.ts
+          packages/apack-cli/tests/build/input-subscriptions.native.spec.ts
           --testNamePattern "$APACK_TEST_NAME"
           --reporter=default --reporter=json --outputFile="$RUNNER_TEMP/apack-native-tests.json"
           --bail=1 --maxWorkers=1 --no-file-parallelism
