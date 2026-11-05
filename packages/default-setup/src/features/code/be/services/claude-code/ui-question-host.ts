@@ -92,6 +92,18 @@ export function createClaudeQuestionHost(options: {
         if (valid(target)) { target.frame.problem = error instanceof Error ? error.message : 'Native question answer failed'; publish() }
       } finally { target.answering = false; target.frame.pending = false; if (valid(target)) publish() }
     },
+    async reject(messageId: string, token: string): Promise<void> {
+      const target=entry
+      if(!target||!valid(target)||!options.source?.reject||target.answering||target.row.messageId!==messageId||token!==(target.heldToken??target.frame.token))return
+      target.answering=true;target.frame.pending=true;target.frame.problem=undefined;publish()
+      try {
+        await target.holding
+        if(!valid(target)||token!==(target.heldToken??target.frame.token))return
+        await options.source.reject({...target.row,renderToken:token,draftStarted:!!target.heldToken})
+        if(valid(target)){entry=undefined;publish()}
+      }catch(error){if(valid(target)){target.frame.problem=error instanceof Error?error.message:'Native question rejection failed';publish()}}
+      finally{target.answering=false;target.frame.pending=false;if(valid(target))publish()}
+    },
     ownsAction(id: string) { return !!entry?.drawing?.actions.has(id) },
     ownsField(id: string) { return entry?.frame.draftActionId === id || !!entry?.fields?.fields.has(id) },
     async field(event: ClaudeUiFieldEvent): Promise<{ handled: boolean }> {

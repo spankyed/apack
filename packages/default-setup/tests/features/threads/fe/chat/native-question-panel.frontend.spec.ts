@@ -4,11 +4,11 @@ import NativeQuestionPanel from '#features/threads/fe/chat/NativeQuestionPanel.v
 
 function mount(card: Record<string, unknown>, presentation?: ClaudeQuestionPresentation) {
   const root = document.createElement('div'); document.body.append(root)
-  const props = reactive({ card, presentation, disabled: false, renderToken: 'initial-token' }), respond = vi.fn(), pause = vi.fn(), started = vi.fn()
-  const app = createApp({ render: () => h(NativeQuestionPanel, { ...props, onRespond: respond, onPause: pause, onStarted: started }) }); app.mount(root)
+  const props = reactive({ card, presentation, disabled: false, renderToken: 'initial-token',canReject:false,cancelLabel:undefined as string|undefined }), respond = vi.fn(), pause = vi.fn(), reject = vi.fn(), started = vi.fn()
+  const app = createApp({ render: () => h(NativeQuestionPanel, { ...props, onRespond: respond, onReject: reject, onPause: pause, onStarted: started }) }); app.mount(root)
   const button = (text: string) => Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === text)!
   const input = async (selector: string, text: string) => { const element = root.querySelector<HTMLInputElement>(selector)!; element.value = text; element.dispatchEvent(new Event('input', { bubbles: true })); await nextTick() }
-  return { root, props, respond, pause, started, button, input, close() { app.unmount(); root.remove() } }
+  return { root, props, respond, pause, reject, started, button, input, close() { app.unmount(); root.remove() } }
 }
 const option = (label: string, preview?: string) => ({ label, description: label + ' description', ...(preview ? { preview } : {}) })
 it('retains custom/multi/annotation drafts across navigation and identical owner projections', async () => {
@@ -108,4 +108,15 @@ it('updates and clears original tool notices during an answer without changing i
     f.button('Submit answers').click()
     expect(f.respond).toHaveBeenCalledWith({answers:{'Audience?':'Keep my answer'},annotations:{}})
   } finally {f.close()}
+})
+
+it('keeps explicit native rejection separate from returning to parent notes',async()=>{
+ const f=mount({questions:[{question:'Audience?',header:'Audience',options:[option('Developers'),option('Operators')]}]})
+ try{
+  expect(f.root.textContent).not.toContain('Reject question')
+  f.props.canReject=true;f.props.cancelLabel='Back to parent notes';await nextTick()
+  f.button('Back to parent notes').click();expect(f.pause).toHaveBeenCalledOnce();expect(f.reject).not.toHaveBeenCalled()
+  f.button('Reject question').click();expect(f.reject).toHaveBeenCalledOnce();expect(f.respond).not.toHaveBeenCalled()
+  f.props.disabled=true;await nextTick();expect(f.button('Reject question').disabled).toBe(true)
+ }finally{f.close()}
 })

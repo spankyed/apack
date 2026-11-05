@@ -352,6 +352,10 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     void view.mount?.answerApproval(event.frameId, event.answer)
     return
   }
+  if(event.type==='CLAUDE_UI_QUESTION_REJECT') {
+    if(!view||!view.backgroundView||typeof event.messageId!=='string'||event.messageId.length>512||!validId(event.token))return
+    bind(view);void view.mount?.rejectQuestion(event.messageId,event.token);return
+  }
   if (event.type === 'CLAUDE_UI_QUESTION_ANSWER') {
     if (!view || !view.backgroundView || typeof event.messageId !== 'string' || event.messageId.length > 512 || typeof event.token !== 'string' || !event.answer || typeof event.answer !== 'object' || JSON.stringify(event.answer).length > 131072) return
     bind(view)

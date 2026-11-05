@@ -1,7 +1,7 @@
 <template>
   <div v-for="shown in [frame]" :key="shown?.messageId" class="question-drawing" tabindex="-1" @keydown="key" @pointerover="hover.point" @pointermove="hover.point" @pointerleave="hover.leave">
     <NativeUiNode v-if="shown?.body.status === 'live' && shown.shownInput && shown.token" :node="shown.body.tree" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)">
-      <template #engine><NativeQuestionPanel :key="shown.messageId" :card="shown.shownInput" :presentation="shown.presentation" :render-token="shown.token" :cancel-label="cancelLabel" :disabled="disabled" :error="error" @started="token => started(shown, token)" @respond="answer => respond(shown, answer)" @pause="pause(shown)" /></template>
+      <template #engine><NativeQuestionPanel :key="shown.messageId" :card="shown.shownInput" :presentation="shown.presentation" :render-token="shown.token" :cancel-label="cancelLabel" :can-reject="canReject" @reject="reject(shown)" :disabled="disabled" :error="error" @started="token => started(shown, token)" @respond="answer => respond(shown, answer)" @pause="pause(shown)" /></template>
     </NativeUiNode>
     <section v-else role="status" class="p-4 text-xs text-neutral-400">{{ shown?.body.status === 'error' ? shown.body.message : 'Loading native question…' }}</section>
   </div>
@@ -14,8 +14,8 @@ import NativeUiNode from './NativeUiNode.vue'
 import NativeQuestionPanel from './NativeQuestionPanel.vue'
 import { useClaudeHoverSurface, claudeHoverSurface } from './native-ui-hover.ts'
 import { pressClaudeUiHotkey } from './native-ui-hotkeys.ts'
-const props = defineProps<{ frame?: ClaudeUiQuestionFrame; cancelLabel?: string; disabled: boolean; error?: string }>()
-const emit = defineEmits<{ press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent]; started: [token: string, identity: ClaudeUiQuestionAnswerIdentity]; respond: [answer: ClaudeQuestionAnswer, identity: ClaudeUiQuestionAnswerIdentity]; pause: [identity: ClaudeUiQuestionAnswerIdentity] }>()
+const props = defineProps<{ frame?: ClaudeUiQuestionFrame; cancelLabel?: string; canReject?: boolean; disabled: boolean; error?: string }>()
+const emit = defineEmits<{ press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent]; started: [token: string, identity: ClaudeUiQuestionAnswerIdentity]; respond: [answer: ClaudeQuestionAnswer, identity: ClaudeUiQuestionAnswerIdentity]; reject: [identity: ClaudeUiQuestionAnswerIdentity]; pause: [identity: ClaudeUiQuestionAnswerIdentity] }>()
 let draftFrame: ClaudeUiQuestionAnswerIdentity | undefined
 watch(() => props.frame?.messageId, () => { draftFrame = undefined })
 function started(shown: ClaudeUiQuestionFrame | undefined, token?: string) {
@@ -27,6 +27,7 @@ function rendered(shown?: ClaudeUiQuestionFrame): ClaudeUiQuestionAnswerIdentity
   return draftFrame?.messageId === shown.messageId ? draftFrame : shown.token ? {messageId: shown.messageId, token: shown.token} : undefined
 }
 function respond(shown: ClaudeUiQuestionFrame | undefined, answer: ClaudeQuestionAnswer) { const identity = rendered(shown); if (identity) emit('respond', answer, identity) }
+function reject(shown?: ClaudeUiQuestionFrame) { const identity=rendered(shown);if(identity)emit('reject',identity) }
 function pause(shown?: ClaudeUiQuestionFrame) { const identity = rendered(shown); if (identity) emit('pause', identity) }
 const hover = useClaudeHoverSurface(); provide(claudeHoverSurface, hover)
 watch(() => props.frame?.body, () => hover.invalidate(), { flush: 'post' })

@@ -51,6 +51,13 @@ export function getClaudeUiOwner(threadId: string, target?: ClaudeNativeAgentUiT
           const result = await desktop.transport.request({subtype: 'apack_hold_question_dialog', id: request.id, revision: request.revision, session_id: request.sessionId, client_id: request.clientId, render_token: request.renderToken}) as {held?: unknown}
           if (result.held !== true) throw new Error('Background question draft was not acknowledged')
         },
+        async reject(request) {
+          const current=desktop.controls.value, q=current?.kind==='question'?current.dialog:undefined
+          if(!q||q.id!==request.id||q.revision!==request.revision||q.sessionId!==request.sessionId)throw new Error('Background question changed')
+          const result=await desktop.transport.request({subtype:'apack_deny_question_dialog',id:request.id,revision:request.revision,session_id:request.sessionId,render_token:request.renderToken,draft_started:request.draftStarted}) as {answered?:unknown}
+          if(result.answered!==true)throw new Error('Background question rejection was not acknowledged')
+          desktop.controls.settled(request.id,request.revision)
+        },
         async answer(request) {
           const current = desktop.controls.value; const q = current?.kind === 'question' ? current.dialog : undefined
           if (!q || q.id !== request.id || q.revision !== request.revision || q.sessionId !== request.sessionId) throw new Error('Background question changed')

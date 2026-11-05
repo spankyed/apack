@@ -5,7 +5,7 @@ const row: ClaudeUiQuestionRow = { messageId: 'message', id: 'dialog', revision:
 const frame = () => ({ tree: { type: 'Box', children: [{ type: 'Button', props: { key: 'refresh', label: 'Refresh' }, press: { plugin: 'fixture', handle: 1 } }, { type: 'engine', ref: 1 }] }, question: { token: 'issued-token', dialogId: 'dialog', revision: 'revision', shownInput: { questions: [] }, presentation: { previewFormat: 'markdown' as const, extendedQuestions: false, optionalDescriptions: false, previews: [] } }, props: {}, hooked: true, rewritten: true })
 function fixture() {
   let pending: ClaudeUiQuestionRow | undefined = row
-  const source = { ownerId: 'owner', render: vi.fn(async () => frame()), hold: vi.fn(async () => {}), answer: vi.fn(async (_request: unknown) => {}) }
+  const source = { reject: vi.fn(async (_request: unknown) => {}), ownerId: 'owner', render: vi.fn(async () => frame()), hold: vi.fn(async () => {}), answer: vi.fn(async (_request: unknown) => {}) }
   const ui = { press: vi.fn(async () => ({ handled: true })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })) }
   const create = (id: string) => createClaudeQuestionHost({ source, ui, client: { client_id: id, surface: 'desktop' }, row: () => pending, current: () => true, publish: vi.fn() })
   return { source, ui, create, replace(value?: ClaudeUiQuestionRow) { pending = value } }
@@ -89,4 +89,24 @@ it('retains the question on refusal and never submits a replaced row after a pen
   held(); await holding; await answering
   expect(f.source.answer).toHaveBeenCalledTimes(1)
   host.dispose()
+})
+
+it('rejects only the displayed question token and preserves the form on native refusal', async () => {
+ const f=fixture(),host=f.create('child');host.start();await vi.advanceTimersByTimeAsync(50)
+ await host.reject('foreign','issued-token');await host.reject(row.messageId,'foreign')
+ expect(f.source.reject).not.toHaveBeenCalled()
+ f.source.reject.mockRejectedValueOnce(Error('Original rejection refused'))
+ await host.reject(row.messageId,'issued-token')
+ expect(host.state?.problem).toBe('Original rejection refused')
+ await host.reject(row.messageId,'issued-token')
+ expect(f.source.reject).toHaveBeenLastCalledWith({...row,renderToken:'issued-token',draftStarted:false})
+ expect(host.state).toBeUndefined();host.dispose()
+})
+it('serializes rejection and discards its late acknowledgement after replacement',async()=>{
+ const f=fixture(),host=f.create('child');host.start();await vi.advanceTimersByTimeAsync(50)
+ let finish!:()=>void;f.source.reject.mockImplementationOnce(()=>new Promise<void>(resolve=>{finish=resolve}))
+ const pending=host.reject(row.messageId,'issued-token');await Promise.resolve()
+ await host.reject(row.messageId,'issued-token');expect(f.source.reject).toHaveBeenCalledOnce()
+ f.replace({...row,messageId:'replacement',revision:'new'});host.refresh();finish();await pending
+ expect(host.state?.messageId).toBe('replacement');host.dispose()
 })

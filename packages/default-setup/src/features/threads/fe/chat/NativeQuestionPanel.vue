@@ -31,6 +31,7 @@
     <footer>
       <button type="button" class="quiet" :disabled="disabled" @click="$emit('pause')">{{ cancelLabel ?? 'Cancel' }}</button>
       <div class="navigation">
+        <button v-if="canReject" type="button" :disabled="disabled" @click="emit('reject')">Reject question</button>
         <button v-if="step > 0" type="button" :disabled="disabled" @click="step--">Back</button>
         <button v-if="parsed && current" type="button" :disabled="disabled" @click="skip">Skip</button>
         <button v-if="parsed && step + 1 === parsed.questions.length && parsed.questions.every(question => typeof question.kind === 'string')" type="button" :disabled="disabled" @click="submit(true)">Ask again</button>
@@ -45,8 +46,8 @@ import { computed, reactive, ref, shallowRef, watch } from 'vue'
 import NativeQuestionHtmlPreview from './NativeQuestionHtmlPreview.vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import { ClaudeQuestionCardSchema, type ClaudeQuestionAnswer, type ClaudeQuestionPresentation } from '#features/code/common/native-question.ts'
-const props = defineProps<{ card: Record<string, unknown>; cancelLabel?: string; disabled: boolean; error?: string; presentation?: ClaudeQuestionPresentation; renderToken?: string }>()
-const emit = defineEmits<{ respond: [answer: ClaudeQuestionAnswer]; started: [token?: string]; pause: [] }>()
+const props = defineProps<{ card: Record<string, unknown>; cancelLabel?: string; canReject?: boolean; disabled: boolean; error?: string; presentation?: ClaudeQuestionPresentation; renderToken?: string }>()
+const emit = defineEmits<{ respond: [answer: ClaudeQuestionAnswer]; started: [token?: string]; pause: []; reject: [] }>()
 const answering = ref(false), acceptedCard = shallowRef(props.card), acceptedPresentation = shallowRef(props.presentation), acceptedToken = ref(props.renderToken)
 watch(() => [JSON.stringify(props.card), props.presentation, props.renderToken], () => {
   if (!answering.value) { acceptedCard.value = props.card; acceptedPresentation.value = props.presentation; acceptedToken.value = props.renderToken }

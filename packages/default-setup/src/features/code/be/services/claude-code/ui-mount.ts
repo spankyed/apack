@@ -17,7 +17,7 @@ export interface ClaudeUiOwner {
   readAgent?(): Promise<import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails>
   readonly nativeView?: import('./ui-controls.ts').ClaudeUiAttach['native_view']
   readonly approval?: import('./ui-approval-source.ts').ClaudeUiApprovalSource
-  readonly question?: { ownerId: string; render: import('./terminal-owner.ts').ClaudeNativeTerminalOwner['renderQuestionDialog']; hold: import('./terminal-owner.ts').ClaudeNativeTerminalOwner['holdQuestionDialog']; row?(): import('./ui-presentation.ts').ClaudeUiQuestionRow | undefined; subscribe?(listener: () => void): () => void; answer?: import('./terminal-owner.ts').ClaudeNativeTerminalOwner['answerQuestionDialog'] }
+  readonly question?: { reject?(request: Omit<import('./terminal-dialogs.ts').ClaudeNativeQuestionDialogResponse, 'answer'>): Promise<void>; ownerId: string; render: import('./terminal-owner.ts').ClaudeNativeTerminalOwner['renderQuestionDialog']; hold: import('./terminal-owner.ts').ClaudeNativeTerminalOwner['holdQuestionDialog']; row?(): import('./ui-presentation.ts').ClaudeUiQuestionRow | undefined; subscribe?(listener: () => void): () => void; answer?: import('./terminal-owner.ts').ClaudeNativeTerminalOwner['answerQuestionDialog'] }
   readonly done: Promise<void>
   readonly sessionId?: string
   readonly billing?: import('../../../common/native-billing.ts').ClaudeBillingObservation
@@ -393,6 +393,7 @@ export function mountClaudeUi(options: {
       } catch (error) { if (current()) { agentInput = { revision, status: 'error', problem: error instanceof Error ? error.message : 'Native command decision failed' }; publish(lastState) } }
     },
     answerQuestion: question.answer,
+    rejectQuestion: question.reject,
     answerApproval: approval.answer,
     refreshTranscript: () => { messages.refresh(); question.refresh() },
     notice(event: import('./ui-presentation.ts').ClaudeUiNoticeEvent) { notices.operate(event) },
