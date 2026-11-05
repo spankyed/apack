@@ -20,10 +20,6 @@ per channel would restate this file rather than test it.
 - **The API token comes from main over `api:token`, never from an argument.** `process.argv` is readable by
   any process on the machine, so a token passed that way is one every process has. The firing case offers it
   on the command line and expects it to be ignored.
-- **A port argument is a port or the default.** `parseInt` answered `NaN` for an empty or non-numeric value,
-  and a window then connected to `ws://localhost:NaN` and failed about the URL rather than the argument. An
-  assertion rather than a gate — main builds the argument from a number it holds — so the case names the
-  edit that makes it fire: dropping the `Number.isInteger` guard.
 - **Every `on*` unsubscribe leaves no listener behind**, counted across all eight, which is where a partial
   unsubscribe would hide: `apiStatus.onEvent` registers five listeners for one subscription.
 - **One global and no second one**, since a second name is a second surface every pack frontend can reach.
@@ -43,7 +39,9 @@ the bridge just called — every assertion reads an empty map.
 
 ## Values read at load
 
-- `apiPort` — from the `--api-port=<n>` argument main appends when it creates the window (default `3001`). It is fixed for the window's life; the renderer follows later port changes through `apiStatus.onEvent` (`api:started`).
+The API endpoint is asynchronous: `apiStatus.whenReady()` waits for main to report the
+current ready process and returns its port and startup identity. Renderer loading may precede
+backend startup, so no port is copied into the preload at window creation.
 - `apiToken` — the token the API requires for this app run, read from main with `ipcRenderer.sendSync('api:token')` as the preload loads (never on the command line, where other processes could read it). The renderer's tRPC client sends it when connecting. The SDK's `Window.electronAPI` type leaves it out on purpose, so pack authors aren't pointed at it; the renderer reads it through its own type (`core/trpc.ts`). Leaving it out of the type only stops advertising it: external pack frontends run in the app window (loaded with `import()` from `pack://`), so they can still read `electronAPI.apiToken`, and the rest of `electronAPI`, at runtime. Closing that means isolating pack frontends from the app window, for example in a sandboxed iframe or a `WebContentsView` per pack with only an SDK message bridge and no preload. That isn't built yet; the plan is [`docs/goals/goal-pack-frontend-isolation.md`](../../docs/goals/goal-pack-frontend-isolation.md).
 - `startupId` — from `--startup-id=<id>`: the id main generates per launch and also passes to the API as `APACK_STARTUP_ID`.
 
