@@ -58,13 +58,25 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
     if (!isPlainObject(value)) throw new SettingsRefusedError(['Stored settings must be a JSON object']);
     return value as SettingsOverrides;
   }
+  /**
+   * The stored overrides, or while the row is invalid the last valid ones. Another process can write a bad row and the app
+   * may not hear for some time, or ever, and running packs read settings throughout, so a read doesn't throw over it.
+   */
+  function validStored(): SettingsOverrides {
+    try {
+      const overrides = stored();
+      validation.validate(overrides);
+      lastValid = overrides;
+      return overrides;
+    } catch (error) {
+      if (!(error instanceof SettingsRefusedError) || !lastValid) throw error;
+      return structuredClone(lastValid);
+    }
+  }
   function effective(): SettingsDocument {
     if (recovering) throw new SettingsRefusedError(['Settings require recovery. Reset the invalid values and restart.']);
     const base = defaults();
-    const overrides = stored();
-    validation.validate(overrides);
-    lastValid = overrides;
-    return structuredClone(deepMerge(base, overrides)) as SettingsDocument;
+    return structuredClone(deepMerge(base, validStored())) as SettingsDocument;
   }
   /** In recovery the stored row is invalid, and only `recover()` may change it. */
   function refuseDuringRecovery(): void {
@@ -119,16 +131,24 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
     getAll: effective,
     enterRecovery: () => { recovering = true; },
     /**
-     * Takes a stored row written past this store, or refuses it. A refused row is replaced by the last valid one and its
-     * problems answered, since running packs read settings throughout and recovery is for a process that runs none.
+     * Takes a stored row written past this store, telling subscribers as for any write if it changed anything, or refuses
+     * it. A refused row is replaced by the last valid one and its problems answered, since running packs read settings
+     * throughout and recovery is for a process that runs none.
      */
     adoptStored() {
       if (recovering || replacingData) return [];
       declarations();
-      const problems = validation.inspect(rawStored());
-      if (problems.length === 0) lastValid = stored();
-      else if (lastValid) ears().upsert(SETTINGS_ENTITY, { id: SETTINGS_ID, data: structuredClone(lastValid) });
-      revision++;
+      const raw = rawStored();
+      const problems = validation.inspect(raw);
+      if (problems.length > 0) {
+        if (lastValid) ears().upsert(SETTINGS_ENTITY, { id: SETTINGS_ID, data: structuredClone(lastValid) });
+        return problems;
+      }
+      if (!isEqual(raw, lastValid)) {
+        lastValid = raw as SettingsOverrides;
+        revision++;
+        tell('written');
+      }
       return problems;
     },
     getRecovery,

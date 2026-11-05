@@ -285,8 +285,6 @@ export const settingsSystem = setup({
         // while it is loading and `SETTINGS_UPDATED` once ready, so what publishing means here depends on
         // the receiver's state. The ask covers the first; this covers the second and the features whose defaults came or went
         PACK_CHANGED: { actions: ['sendSettingsUpdate', 'tellChangedFeatures'] },
-        // A tool wrote past the store, perhaps to the stored settings, which `dataChangedElsewhere` has taken or refused
-        DATA_CHANGED_ELSEWHERE: { actions: ['sendSettingsUpdate', 'tellChangedFeatures'] },
         DATA_REPLACING: { target: 'replacingData' },
         UPDATE_SETTINGS: {
           actions: 'updateSettings',

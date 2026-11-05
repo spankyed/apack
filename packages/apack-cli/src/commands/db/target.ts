@@ -80,6 +80,8 @@ export type TargetDatabase = AppDatabase & {
    * code `SAVED_BUT_NOT_TAKEN`.
    */
   tellApp?(): Promise<void>;
+  /** Set beside a running app: what a script is handed in place of the database */
+  withoutAdmin?: AppDatabase;
 };
 
 /**
@@ -120,7 +122,7 @@ export async function openTarget(target: DbTarget, { changes, command }: OpenOpt
       const clear = running.marker ? ` If it isn't running, delete ${running.marker} and try again.` : '';
       throw new Error(`apack is running on ${target.userDataDir} (${running.why}): quit it first, this command changes its database.${clear}`);
     }
-    if (running && write) io.err(`Note: apack is running on it (${running.why}): it is told what changed when this command ends`);
+    if (running && write) io.err(`Note: apack is running on it (${running.why}): it is told what this commits`);
     else if (running) io.err(`Warning: apack is running on it (${running.why}); this reads what it has committed, as of each query`);
     const db = await openAppDatabase({
       env: target.env,
@@ -154,6 +156,7 @@ export async function openTarget(target: DbTarget, { changes, command }: OpenOpt
           told = committed;
           await tellRunningApp(target, running, io);
         },
+        withoutAdmin: withoutAdmin(db, target, running),
       }),
     };
   } catch (error) {
@@ -169,7 +172,12 @@ export async function openTarget(target: DbTarget, { changes, command }: OpenOpt
  */
 async function tellRunningApp(target: DbTarget, running: RunningApp, io: DbIo): Promise<void> {
   const delivery = await tellAppDataChanged({ env: target.env, userDataDir: target.userDataDir });
-  if (delivery.status === 'delivered' || !findRunningApp(target)) return;
+  if (delivery.status === 'delivered') {
+    // Every commit so far is covered, so an earlier line's failed telling has been made good
+    if (process.exitCode === SAVED_BUT_NOT_TAKEN) process.exitCode = undefined;
+    return;
+  }
+  if (!findRunningApp(target)) return;
   process.exitCode = SAVED_BUT_NOT_TAKEN;
   if (delivery.status === 'failed') {
     io.err(`The change was saved, but apack on ${target.userDataDir} answered: ${delivery.detail}`);
@@ -184,9 +192,10 @@ async function tellRunningApp(target: DbTarget, running: RunningApp, io: DbIo): 
  * What a script gets beside a running app: rows, and not the engine's or the database's admin, whose schema changes and
  * resets a running app can't take. A guard against reaching for them, since a script runs as any code does.
  */
-export function withoutAdmin(db: AppDatabase): AppDatabase {
+function withoutAdmin(db: AppDatabase, target: DbTarget, running: RunningApp): AppDatabase {
   const refuse = (what: string): never => {
-    throw new Error(`A script can't use ${what} while apack runs on this data dir: quit it first`);
+    const clear = running.marker ? ` If it isn't running, delete ${running.marker} and try again.` : '';
+    throw new Error(`A script can't use ${what} while apack runs on ${target.userDataDir} (${running.why}): quit it first.${clear}`);
   };
   return {
     ...db,

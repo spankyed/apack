@@ -150,7 +150,7 @@ async function ok(args: string[]) {
   return result;
 }
 
-/** What a running app publishes in its data dir, which `apack db` refuses to write under */
+/** What a running app publishes in its data dir, which `apack db` finds */
 const holdLock = (dir: string) =>
   fs.writeFileSync(path.join(_appDirOf(dir), 'app.lock'), JSON.stringify({ pid: process.pid, machine: os.hostname(), since: new Date().toISOString() }));
 
@@ -586,8 +586,35 @@ describe('apack db exec', () => {
       const script = path.join(dir, 'quits.mjs');
       fs.writeFileSync(script, `import * as fs from 'node:fs';
         export default ({ db }) => { db.ears.write('Note-a').set('title', 'Changed'); fs.rmSync(${JSON.stringify(path.join(appDir, 'api-port'))}); };`);
-      await ok(['script', script, '--data-dir', dir]);
+      const { err, exitCode } = await ok(['script', script, '--data-dir', dir]);
+      expect(exitCode).toBeUndefined();
+      expect(err).not.toContain("wasn't told");
       expect(await titleIn(dir)).toBe('Changed');
+    });
+
+    it('clears its exit code when a later telling covers what an earlier one could not', async () => {
+      const dir = await appDataDir();
+      const statuses = [500, 200];
+      const server = http.createServer((_req, res) => { res.writeHead(statuses.shift()!).end(); });
+      servers.push(server);
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+      const { port } = server.address() as AddressInfo;
+      fs.writeFileSync(path.join(_appDirOf(dir), 'api-port'), JSON.stringify({ port, pid: process.pid, dataChangedToken: 'the-token' }));
+      const lines = Readable.from([`${CHANGE}\n`, "write('Note-a').set('title', 'Again')\n", '.exit\n']);
+      await dbRepl(['--write', '--data-dir', dir], { out: () => {}, err: () => {} }, lines);
+      const { exitCode } = process;
+      process.exitCode = undefined;
+      expect(exitCode).toBeUndefined();
+      expect(statuses).toEqual([]);
+    });
+
+    it('names the way out when a script is refused the admin and the app may be gone', async () => {
+      const dir = await appDataDir();
+      holdLock(dir);
+      const script = path.join(dir, 'reach.mjs');
+      fs.writeFileSync(script, 'export default ({ db }) => db.admin;');
+      const { error } = await run(['script', script, '--data-dir', dir]);
+      expect(error?.message).toContain(`delete ${path.join(_appDirOf(dir), 'app.lock')}`);
     });
 
     it('still refuses to replace or reset the data under it, changing nothing', async () => {
