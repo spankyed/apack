@@ -203,8 +203,8 @@ const MUTATIONS: readonly Mutation[] = [
      */
     why: 'the loop stops when nothing is running and nothing was dispatched',
     in: 'chain-schedule',
-    from: 'if (!turnedAway || failed !== undefined) break;',
-    to: 'await new Promise(() => {});',
+    from: 'if (running.size === 0 && retry === undefined) break;',
+    to: '',
     call: async (lib) => {
       const ran = scheduled(lib, [sstep('orphan', ['absent'])], 10).then(() => 'returned');
       return Promise.race([ran, new Promise((resolve) => setTimeout(() => resolve('hung'), 250))]);

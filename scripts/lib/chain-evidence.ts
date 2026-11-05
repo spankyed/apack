@@ -97,18 +97,19 @@ const DEADLINE_WORDS = new RegExp([
 
 export function evidenceHeader(label: string, result: EvidenceResult): string {
   const ended = result.timedOut === true ? 'timed out' : `exit ${result.code}`;
-  const deadlines = deadlinesHit(result.output);
-  const why = result.code !== 0 && deadlines > 0 ? `, ${deadlines} of its tests' deadlines hit` : '';
-  return `# ${label} — ${ended} after ${(result.ms / 1000).toFixed(1)}s${why}`;
+  const deadlines = deadlinesNote(result);
+  return `# ${label} — ${ended} after ${(result.ms / 1000).toFixed(1)}s${deadlines ? `, ${deadlines}` : ''}`;
 }
 
 /**
- * How many times a step's output says a test ran out of time: vitest's and Playwright's words for it, and `runCommand`'s. A
+ * What a failed step's output says of tests running out of time, in vitest's and Playwright's words and `runCommand`'s. A
  * deadline hit is a different finding from an assertion, usually about the machine, and which one it was is the first thing
- * to know about a failure. A reading, deciding nothing
+ * to know about a failure. Counts messages, not tests, since a report can repeat one. A reading, deciding nothing
  */
-export function deadlinesHit(output: string): number {
-  return output.match(DEADLINE_WORDS)?.length ?? 0;
+export function deadlinesNote(result: EvidenceResult): string | undefined {
+  if (result.code === 0) return undefined;
+  const messages = result.output.match(DEADLINE_WORDS)?.length ?? 0;
+  return messages === 0 ? undefined : `${messages} deadline message${messages === 1 ? '' : 's'} in its output`;
 }
 
 /**

@@ -9,7 +9,6 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { holdExclusiveLock, readLock, type ExclusiveLock } from '@apackdev/host/exclusive-lock';
-import type { SchedulableStep } from './chain-schedule.ts';
 import { TIMEOUT_MS } from './step-timeouts.ts';
 
 /** Under the home directory, since no checkout owns it and `TMPDIR` differs between two shells on one machine */
@@ -25,6 +24,8 @@ export const UNRESOLVED_WAIT_MS = 30_000;
 
 const POLL_MS = 2_000;
 
+type ExpensiveStep = { readonly name: string; readonly expensive?: true };
+
 /** A lock this chain won't wait any longer for, naming what to do about it: a refusal rather than a bug in the chain */
 export class MachineLockRefused extends Error {
   constructor(holder: string, file: string) {
@@ -32,15 +33,15 @@ export class MachineLockRefused extends Error {
   }
 }
 
-class Held extends Error {}
+const HELD = new Error('held');
+
+const sleep = (): Promise<void> => new Promise((resolve) => { setTimeout(resolve, POLL_MS); });
 
 /**
  * What a chain's scheduler asks before an expensive step starts and tells when it ends. One hold for as long as any of its
  * steps is inside, so its own steps overlap as its budget allows, and the lock goes back between them.
  */
-export function expensiveSteps<S extends SchedulableStep & { readonly expensive?: true }>({
-  what, file = MACHINE_LOCK, onWait, now = Date.now, pause = () => new Promise((resolve) => { setTimeout(resolve, POLL_MS); }),
-}: {
+export function expensiveSteps({ what, file = MACHINE_LOCK, onWait, now = Date.now, pause = sleep }: {
   what: string;
   /** The spec passes its own: it runs inside a chain that may hold the real one */
   file?: string;
@@ -53,49 +54,45 @@ export function expensiveSteps<S extends SchedulableStep & { readonly expensive?
   let waitingSince: number | undefined;
   let unresolvedSince: number | undefined;
 
-  /** Whether anything can tell if this lock's holder is running */
-  const resolvable = (): boolean => {
+  /** Notes a turn spent behind another's lock, refusing once it has gone on too long */
+  const wait = (): void => {
+    const at = now();
     const lock = readLock(file);
-    return lock !== null && lock.machine === os.hostname() && lock.pid !== process.pid;
+    const holder = lock === null ? "a tool whose lock can't be read" : `${lock.what} (pid ${lock.pid}, on ${lock.machine})`;
+    if (waitingSince === undefined) {
+      waitingSince = at;
+      onWait?.(`${holder}\n  lock: ${file}`);
+    }
+    const resolvable = lock !== null && lock.machine === os.hostname() && lock.pid !== process.pid;
+    unresolvedSince = resolvable ? undefined : unresolvedSince ?? at;
+    const tooLong = at - waitingSince >= MACHINE_WAIT_MS;
+    if (tooLong || (unresolvedSince !== undefined && at - unresolvedSince >= UNRESOLVED_WAIT_MS)) {
+      throw new MachineLockRefused(holder, file);
+    }
   };
 
   return {
     /** Takes the lock for an expensive step, answering whether it may start; only a lock actually held is waited for */
-    admit(step: S): boolean {
+    admit(step: ExpensiveStep): boolean {
       if (step.expensive !== true) return true;
-      if (held === undefined) {
-        try {
-          held = holdExclusiveLock({ file, what, refuse: () => new Held() });
-        } catch (error) {
-          if (!(error instanceof Held)) throw error;
-          const at = now();
-          const holder = () => {
-            const lock = readLock(file);
-            return lock === null ? `a tool whose lock can't be read` : `${lock.what} (pid ${lock.pid}, on ${lock.machine})`;
-          };
-          if (waitingSince === undefined) {
-            waitingSince = at;
-            onWait?.(`${holder()}\n  lock: ${file}`);
-          }
-          unresolvedSince = resolvable() ? undefined : unresolvedSince ?? at;
-          if (at - waitingSince >= MACHINE_WAIT_MS || (unresolvedSince !== undefined && at - unresolvedSince >= UNRESOLVED_WAIT_MS)) {
-            throw new MachineLockRefused(holder(), file);
-          }
-          return false;
-        }
+      try {
+        held ??= holdExclusiveLock({ file, what, refuse: () => HELD });
+      } catch (error) {
+        if (error !== HELD) throw error;
+        wait();
+        return false;
       }
       waitingSince = undefined;
       unresolvedSince = undefined;
       inside++;
       return true;
     },
-    leave(step: S): void {
+    leave(step: ExpensiveStep): void {
       if (step.expensive !== true) return;
       inside--;
-      if (inside === 0) {
-        held?.release();
-        held = undefined;
-      }
+      if (inside > 0) return;
+      held?.release();
+      held = undefined;
     },
     pause,
   };

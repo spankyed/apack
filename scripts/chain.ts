@@ -45,7 +45,7 @@ import { evidenceLine, openRunEvidence, pruneRunEvidence, type RunEvidence } fro
 import { CHAIN_FLAGS, chainHelp } from './lib/chain-flags.ts';
 import { CHAIN_WAIT_MS, ChainLockHeld, chainInvocation, holdChainLock } from './lib/chain-lock.ts';
 import { expensiveSteps, MachineLockRefused } from './lib/machine-lock.ts';
-import { deadlinesHit } from './lib/chain-evidence.ts';
+import { deadlinesNote } from './lib/chain-evidence.ts';
 import type { ExclusiveLock } from '@apackdev/host/exclusive-lock';
 import { timeoutMsFor, timedOutBecause, type TimeoutClass } from './lib/step-timeouts.ts';
 import { box } from './lib/core-budget.ts';
@@ -563,9 +563,8 @@ async function main(): Promise<void> {
       // that returned non-zero, and which it was is the first thing you need to know.
       const verdict = result.code === 0 ? 'ok' : result.timedOut ? 'TIMEOUT' : 'FAIL';
       console.log(`${verdict.padStart(7)} ${marker(needsApp(step))} ${step.name.padEnd(STEP_NAME_WIDTH)} ${secs(result.ms).padStart(6)}  ${wrapAt(REASON_COLUMN, briefly(reasons.get(step.name) ?? '', declaredIn(step.name)))}`.trimEnd());
-      if (result.code !== 0 && deadlinesHit(result.output) > 0) {
-        console.log(`${' '.repeat(TIME_COLUMN)}${deadlinesHit(result.output)} of its tests' deadlines hit: read that before an assertion`);
-      }
+      const deadlines = deadlinesNote(result);
+      if (deadlines) console.log(`${' '.repeat(TIME_COLUMN)}${deadlines}: read that before an assertion`);
       // So whoever profiles a suite next has its slow tests without instrumenting it
       // In the step's own time column, so every time on the screen lines up and these read as its contents
       for (const slow of slowestTests(result.output)) {

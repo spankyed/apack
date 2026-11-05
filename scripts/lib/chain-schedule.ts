@@ -149,19 +149,20 @@ export async function schedule<S extends SchedulableStep>({ steps, budget, skip,
         started.push(step.name);
         live.add(step.name);
         spent += step.cores ?? 1;
+        const ended = (): void => {
+          live.delete(step.name);
+          spent -= step.cores ?? 1;
+          admission?.leave(step);
+        };
         running.set(step.name, run(step).then(
           (passed) => {
-            live.delete(step.name);
-            spent -= step.cores ?? 1;
-            admission?.leave(step);
+            ended();
             if (passed) done.add(step.name);
             else failed ??= step.name;
             return step.name;
           },
           (error: unknown) => {
-            live.delete(step.name);
-            spent -= step.cores ?? 1;
-            admission?.leave(step);
+            ended();
             threw.push({ step: step.name, error });
             failed ??= step.name;
             return step.name;
@@ -171,16 +172,10 @@ export async function schedule<S extends SchedulableStep>({ steps, budget, skip,
     }
     // Nothing running and nothing dispatched means the rest depends on a step that failed, or on nothing
     // this loop can satisfy. Either way there is no one left to wait for.
-    if (running.size === 0) {
-      if (!turnedAway || failed !== undefined) break;
-      await admission?.pause();
-      continue;
-    }
-    const ended = await Promise.race<string | undefined>([
-      ...running.values(),
-      ...(turnedAway && admission ? [admission.pause().then(() => undefined)] : []),
-    ]);
-    if (ended !== undefined) running.delete(ended);
+    const retry = turnedAway && failed === undefined ? admission?.pause() : undefined;
+    if (running.size === 0 && retry === undefined) break;
+    const finished = await Promise.race<string | void>([...running.values(), ...(retry ? [retry] : [])]);
+    if (finished) running.delete(finished);
   }
 
   return { started, skipped, threw, ...(failed === undefined ? {} : { failed }) };

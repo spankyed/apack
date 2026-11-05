@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { STAMP_DIR } from '../../../scripts/lib/chain-stamps.ts';
 import {
-  KEEP_RUNS, RUNS_DIR, deadlinesHit, evidenceFile, evidenceHeader, evidenceLine, openRunEvidence, runId, runsToPrune,
+  KEEP_RUNS, RUNS_DIR, deadlinesNote, evidenceFile, evidenceHeader, evidenceLine, openRunEvidence, runId, runsToPrune,
 } from '../../../scripts/lib/chain-evidence.ts';
 
 const temps: string[] = [];
@@ -173,17 +173,17 @@ describe('a failure on a deadline', () => {
     ['a Playwright hook', '"beforeAll" hook timeout of 60000ms exceeded.'],
     ['a Playwright tear-down', 'Tearing down "app" exceeded the test timeout of 60000ms.'],
   ])('is told apart from an assertion: %s', (_who, line) => {
-    expect(deadlinesHit(line)).toBe(1);
-    expect(evidenceHeader('test:integration', failed(`${line}\nmore\n`))).toContain("1 of its tests' deadlines hit");
+    expect(deadlinesNote(failed(line))).toBe('1 deadline message in its output');
+    expect(evidenceHeader('test:integration', failed(`${line}\nmore\n`))).toContain('1 deadline message in its output');
   });
 
   it('leaves an assertion and a pass as they read', () => {
-    expect(evidenceHeader('test:integration', failed('AssertionError: expected 1 to be 2'))).not.toContain('deadlines');
+    expect(evidenceHeader('test:integration', failed('AssertionError: expected 1 to be 2'))).not.toContain('deadline');
     // A pass that mentions one, a spec of the words themselves, isn't a failure on it
-    expect(evidenceHeader('test:integration', { code: 0, ms: 1_000, output: 'Test timed out in 100ms' })).not.toContain('deadlines');
+    expect(evidenceHeader('test:integration', { code: 0, ms: 1_000, output: 'Test timed out in 100ms' })).not.toContain('deadline');
   });
 
-  it('counts each one', () => {
-    expect(deadlinesHit('Test timed out in 1ms\nTest timed out in 2ms\nHook timed out in 3ms')).toBe(3);
+  it('counts each message', () => {
+    expect(deadlinesNote(failed('Test timed out in 1ms\nTest timed out in 2ms\nHook timed out in 3ms'))).toBe('3 deadline messages in its output');
   });
 });
