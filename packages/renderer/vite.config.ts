@@ -196,7 +196,11 @@ export default defineConfig(({ command }) => ({
     modulePreload: false,
     rollupOptions: {
       // Preserve vendor provenance in cancellation stacks without hiding application errors.
-      output: { manualChunks: id => id.includes('/node_modules/monaco-editor/') ? 'monaco' : undefined },
+      output: {
+        // Shared preload helpers must not pull the lazy editor into the initial entry.
+        onlyExplicitManualChunks: true,
+        manualChunks: id => id.includes('/node_modules/monaco-editor/') ? 'monaco-vendor' : undefined,
+      },
       // **Only when building.** Naming `build.rollupOptions.input` also tells the dev server to crawl those
       // entries for dependency discovery in place of index.html, and a bare specifier is not something it
       // can crawl — dev would then discover nothing and pre-bundle nothing.

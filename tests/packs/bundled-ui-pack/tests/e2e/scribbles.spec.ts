@@ -22,7 +22,7 @@ test('renders and edits with its bundled @apackdev/ui editor', async ({ appPage,
   await editor.fill('Bundled editor typed');
   await expect(appPage.getByTestId('scribbles-text')).toContainText('Bundled editor typed');
   expect(await appPage.evaluate(() => performance.getEntriesByType('resource')
-    .some(entry => /\/monaco-[^/]+\.js/.test(entry.name)))).toBe(false);
+    .some(entry => /\/monaco-vendor-[^/]+\.js/.test(entry.name)))).toBe(false);
   await appPage.getByTestId('scribbles-open-code').click();
   const code = appPage.getByTestId('scribbles-code');
   await expect(code.locator('.monaco-editor')).toBeVisible();
