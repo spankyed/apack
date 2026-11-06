@@ -35,14 +35,15 @@ test('a write from apack db exec shows in the running app, without a restart', a
 test('an invalid settings row from apack db exec is refused, and the app carries on', async ({ app, electronApp }) => {
   await app.waitForState('running.connected');
   const dataDir = await electronApp.evaluate(() => process.env.APACK_USER_DATA_DIR);
+  const stored = async () => (await apackDb(dataDir!, 'query', "return JSON.stringify(getRow('Settings-app')?.data ?? null)")).stdout.trim();
+  const before = await stored();
 
   const refused = await apackDb(dataDir!, 'exec', "upsert(EARS.Entity.Settings, { id: 'Settings-app', data: 'not settings' })")
     .then(() => null, (error: { code?: number; stderr?: string }) => error);
   expect(refused?.code).toBe(1);
   expect(refused?.stderr).toContain('Nothing it wrote was kept');
 
-  const { stdout } = await apackDb(dataDir!, 'query', "return typeof getRow('Settings-app')?.data");
-  expect(stdout.trim()).not.toBe('string');
+  expect(await stored(), 'what was there stays').toBe(before);
   expect(await app.getState()).toEqual(expect.objectContaining({ running: 'connected' }));
 });
 

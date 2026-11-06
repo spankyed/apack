@@ -55,6 +55,15 @@ describe('a row another process wrote', () => {
     expect(changes, 'told once').toEqual(['written']);
   });
 
+  it('tells nobody of an invalid one, whose reads refuse it', () => {
+    store.getAll();
+    const changes: string[] = [];
+    store.onChange((change) => changes.push(change));
+    written('many');
+    store.adoptStored();
+    expect(changes).toEqual([]);
+  });
+
   it('is not news when this store wrote it', () => {
     store.set(feature, ['limit'], 5);
     const changes: string[] = [];

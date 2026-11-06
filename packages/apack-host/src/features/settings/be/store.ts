@@ -128,7 +128,11 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
       declarations();
       const raw = rawStored();
       const problems = validation.inspect(raw);
-      if (problems.length > 0) logger.error(`The stored settings are invalid, and the next start offers to recover them: ${problems.map(problem => problem.message).join('; ')}`);
+      if (problems.length > 0) {
+        // Nothing to tell anyone: reads refuse it, so what they were shown stands until a restart offers recovery
+        logger.error(`The stored settings are invalid, and the next start offers to recover them: ${problems.map(problem => problem.message).join('; ')}`);
+        return;
+      }
       if (adopted === undefined || isEqual(raw, adopted)) { adopted = raw; return; }
       adopted = raw;
       revision++;
