@@ -497,7 +497,7 @@ describe('registerPack projections', () => {
 
   it('refuses a projection over a type kept in no change order, naming the declaration to add', () => {
     expect(() => registerPack(projecting('unordered-pack', 'Memo', { Memo: { required: [] } })))
-      .toThrow('Pack "unordered-pack" projection "derived/mirrors" derives from "Memo", which keeps no change order: give "Memo" "changeOrder": true');
+      .toThrow('Pack "unordered-pack" can\'t register: projection "unordered-pack/derived/mirrors" derives from "Memo", which keeps no change order: give "Memo" "changeOrder": true');
     expect(getPackRegistration('unordered-pack')).toBeNull();
   });
 
@@ -507,5 +507,20 @@ describe('registerPack projections', () => {
     registerPack({ id: 'reading-pack', features: { derived: { projections: { mirrors: { from: ['Memo'], apply: () => {} } } } } } as unknown as PackRegistration);
     registered.push('reading-pack');
     expect(getPackRegistration('reading-pack')).not.toBeNull();
+  });
+
+  it('refuses a new version of a pack that stops keeping the order another pack\'s projection reads, keeping the old', () => {
+    const owning = (rules: Record<string, unknown>) => ({ id: 'owning-pack', ears: { entities: { Memo: 'Memo' }, relKinds: {}, roles: {}, rowRules: { Memo: rules } } }) as unknown as PackRegistration;
+    registerPack(owning({ required: [], changeOrder: true }));
+    registerPack({ id: 'reading-pack', features: { derived: { projections: { mirrors: { from: ['Memo'], apply: () => {} } } } } } as unknown as PackRegistration);
+    registered.push('reading-pack');
+    unregisterPack('owning-pack');
+    expect(() => registerPack(owning({ required: [] })))
+      .toThrow('Pack "owning-pack" can\'t register: projection "reading-pack/derived/mirrors" derives from "Memo", which keeps no change order, which "owning-pack" would stop keeping');
+    expect(getPackRegistration('owning-pack')).toBeNull();
+    // A pack declaring nothing the stranded projection reads is no party to it
+    registerPack({ id: 'unrelated-pack' } as unknown as PackRegistration);
+    registered.push('unrelated-pack');
+    expect(getPackRegistration('unrelated-pack')).not.toBeNull();
   });
 });

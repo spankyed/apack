@@ -804,16 +804,27 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
   /**
    * A projection reads what changed in each type it derives from, which the database keeps only for a type whose owner
    * declares `changeOrder`: one without it would derive everything again on every catch-up. The owner may be the pack
-   * itself, a dependency or the SDK, whose rules are registered by then
+   * itself, a dependency or the SDK. Another pack's projections are checked over the types this one declares, now or
+   * in the version it replaces, so a new version that stops keeping an order another's projection reads is refused, and
+   * nothing this pack doesn't declare can refuse it
    */
   function checkProjections(registration: PackRegistration): void {
-    const ordered = new Map([...rowRules(), ...Object.entries(registration.ears?.rowRules ?? {})]);
-    for (const [featureId, feature] of Object.entries(registration.features ?? {})) {
-      for (const [name, projection] of Object.entries(feature.projections ?? {})) {
-        const unordered = projection.from.find((type) => ordered.get(type)?.changeOrder !== true);
-        if (unordered !== undefined) {
-          throw new Error(`Pack "${registration.id}" projection "${featureId}/${name}" derives from "${unordered}", which keeps no `
-            + `change order: give "${unordered}" "changeOrder": true in the apack.json of the pack that declares it`);
+    const staying = [...registrations.values()].filter((reg) => reg.id !== registration.id);
+    const ordered = new Map<string, RowRules>([
+      ...Object.entries(SDK_ROW_RULES),
+      ...[...staying, registration].flatMap((reg) => Object.entries(reg.ears?.rowRules ?? {})),
+    ]);
+    const declares = new Set([registration, registrations.get(registration.id)].flatMap((reg) => Object.keys(reg?.ears?.rowRules ?? {})));
+    for (const reg of [registration, ...staying]) {
+      for (const [featureId, feature] of Object.entries(reg.features ?? {})) {
+        for (const [name, projection] of Object.entries(feature.projections ?? {})) {
+          const unordered = projection.from.find((type) =>
+            (reg === registration || declares.has(type)) && ordered.get(type)?.changeOrder !== true);
+          if (unordered === undefined) continue;
+          const whose = reg === registration ? '' : `, which "${registration.id}" would stop keeping`;
+          throw new Error(`Pack "${registration.id}" can't register: projection "${reg.id}/${featureId}/${name}" derives from `
+            + `"${unordered}", which keeps no change order${whose}: give "${unordered}" "changeOrder": true in the apack.json `
+            + 'of the pack that declares it');
         }
       }
     }
