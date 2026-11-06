@@ -21,6 +21,13 @@ interface Declared { name: string; projection: ProjectionDefinition }
  * reach the end. What its own unit changed last it has derived already, so it skips those; another projection doesn't
  */
 type OwnUnits = Set<number>;
+
+/**
+ * What a chunk did: whether there is more, and the unit it wrote, which is the projection's own only once it has
+ * committed. Counted before, a unit refused as it commits would leave its sequence to the next commit, whose writes the
+ * projection would then pass over as its own
+ */
+interface Step { more: boolean; wrote?: number }
 /**
  * Where a projection has read to. During a full pass, `pass` is the sequence the pass began from: the pass walks every
  * entity of its types in change order from the start, and once through, the cursor goes back to that sequence, so what
@@ -82,11 +89,11 @@ function inWrite(engine: EarsEngine, { name, projection }: Declared, own: OwnUni
 }
 
 /**
- * In a unit of its own: one chunk of catching up. Answers whether there is more. The unit's write transaction is opened
- * first, so what it reads is what's there under the write lock: read before it, another process could commit in between,
- * and the cursor would move past that commit unread
+ * In a unit of its own: one chunk of catching up. The unit's write transaction is opened first, so what it reads is
+ * what's there under the write lock: read before it, another process could commit in between, and the cursor would move
+ * past that commit unread
  */
-function chunk(engine: EarsEngine, { name, projection }: Declared, own: OwnUnits): boolean {
+function chunk(engine: EarsEngine, { name, projection }: Declared, own: OwnUnits): Step {
   const here = thisUnit(engine);
   const cursor = readCursor(engine, name);
   if (cursor?.version === versionOf(projection) && cursor.pass !== undefined) return passChunk(engine, { name, projection }, cursor.position, cursor.pass, own, here);
@@ -95,21 +102,20 @@ function chunk(engine: EarsEngine, { name, projection }: Declared, own: OwnUnits
     // A first run, a new version, or what changed can't all be known: everything again, a chunk at a time from the start
     projection.reset?.();
     own.clear();
-    own.add(here);
     writeCursor(engine, name, projection, START, here);
-    return true;
+    return { more: true, wrote: here };
   }
   const ids = [...notOwn(changed, own), ...changed.destroyed];
   if (ids.length > 0) projection.apply(ids);
   if (changed.done) {
-    if (ids.length === 0) return false;
+    if (ids.length === 0) return { more: false };
     writeCursor(engine, name, projection, { sequence: here });
+    // Past every unit of its own: none can be read again
     own.clear();
-    return false;
+    return { more: false };
   }
-  own.add(here);
   writeCursor(engine, name, projection, changed.next);
-  return true;
+  return { more: true, wrote: here };
 }
 
 /**
@@ -119,19 +125,18 @@ function chunk(engine: EarsEngine, { name, projection }: Declared, own: OwnUnits
  */
 function passChunk(
   engine: EarsEngine, { name, projection }: Declared, position: ChangedPosition, began: number, own: OwnUnits, here: number,
-): boolean {
+): Step {
   const changed = engine.admin.changedSince(projection.from, position, CHUNK);
   const ids = notOwn(changed, own);
   if (ids.length > 0) projection.apply(ids);
-  own.add(here);
   if (!changed.done) {
     writeCursor(engine, name, projection, changed.next, began);
-    return true;
+    return { more: true, wrote: here };
   }
   writeCursor(engine, name, projection, { sequence: began });
   // What changed during the pass is caught up on next, unless that can't be known either: then the next catch-up starts
   // another pass, rather than this one going round for good
-  return engine.admin.changedSince(projection.from, { sequence: began }, 1).complete;
+  return { more: engine.admin.changedSince(projection.from, { sequence: began }, 1).complete, wrote: here };
 }
 
 /** What keeps an engine's projections in step: installed once per engine, and asked to catch up when anything may be behind */
@@ -156,15 +161,18 @@ export function _installProjections(engine: EarsEngine): ProjectionRunner {
   let again = false;
   const pass = async () => {
     for (const each of declared()) {
+      const own = ownOf(each.name);
       for (;;) {
-        let more: boolean;
+        let step: Step;
         try {
-          more = engine.admin.transactWithoutHook(() => chunk(engine, each, ownOf(each.name)));
+          step = engine.admin.transactWithoutHook(() => chunk(engine, each, own));
         } catch (error) {
           logger.error(`Catching up the projection ${each.name} failed, and it will try again:`, error as Error);
           break;
         }
-        if (!more) break;
+        // Committed: what this unit wrote is the projection's own
+        if (step.wrote !== undefined) own.add(step.wrote);
+        if (!step.more) break;
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
     }

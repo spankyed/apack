@@ -122,6 +122,32 @@ it('reaches the end of a pass once when it writes the type it derives from, appl
   expect(writing, 'and nothing after').toEqual([]);
 });
 
+it('takes a chunk\'s unit for its own only once it commits, so a commit that takes its sequence after a refusal is applied', async () => {
+  engine().admin.transactWithoutHook(() => {
+    for (let i = 0; i < 1200; i++) untypedCreate('Collection', { name: `backlog ${i}` });
+  });
+  const admin = engine().admin as unknown as { transactWithoutHook: <T>(fn: () => T) => T };
+  const original = admin.transactWithoutHook.bind(admin);
+  let refuse = true;
+  // The first chunk's unit refused as it commits, as a replacement elsewhere or a full disk would
+  admin.transactWithoutHook = <T>(fn: () => T): T => original(() => {
+    const value = fn();
+    if (refuse) { refuse = false; throw new Error('the commit was refused'); }
+    return value;
+  });
+  try {
+    await catchUpTestProjections();
+  } finally {
+    admin.transactWithoutHook = original;
+  }
+  applied.length = 0;
+  // The next commit takes the sequence the refused unit would have had
+  let later: EARS.EntityId | undefined;
+  original(() => { later = aCollection(); });
+  await catchUpTestProjections();
+  expect(everyApplied(), 'applied, not taken for the projection\'s own').toContain(later);
+});
+
 it('applies in the write what the write changed, and nothing for a write to anything else', () => {
   const second = aCollection();
   expect(applied).toEqual([[second]]);
