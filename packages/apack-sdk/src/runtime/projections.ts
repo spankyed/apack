@@ -1,11 +1,10 @@
 // Keeping projections in step. A write that changes what one derives from runs it in the write's own unit, so a row and
 // what's derived from it commit together. Anything else, a commit from another process or one that went past the
 // projection, is caught up on from what the database says changed since the projection's cursor, in chunks, so a
-// backlog never holds a write up for longer than one chunk. The cursor is a row, written in the same transaction as
-// what it derives, so a crash can't leave the two apart.
+// backlog never holds a write up for longer than one chunk. The cursor is a checkpoint the database keeps, written in
+// the same unit as what it derives, so a crash can't leave the two apart.
 import type { ChangedPosition, EarsEngine, PendingChanges } from '@apackdev/ears';
 import type { ProjectionDefinition } from '../framework/projections.ts';
-import { SDK_ENTITIES } from '../types/sdk-entities.ts';
 import { _isHostBound, boundHost } from './host-runtime.ts';
 import { createLogger } from '../logger/index.ts';
 
@@ -19,16 +18,16 @@ interface Cursor { position: ChangedPosition; version: number }
 
 const declared = (): readonly Declared[] => (_isHostBound() ? boundHost().packs.projections() : []);
 const typeOf = (id: string) => id.slice(0, id.indexOf('-'));
-const cursorRow = (name: string) => `${SDK_ENTITIES.ProjectionCursor}-${name}` as never;
+const checkpointOf = (name: string) => `projection:${name}`;
 const versionOf = (projection: ProjectionDefinition) => projection.version ?? 1;
 
 function readCursor(engine: EarsEngine, name: string): Cursor | undefined {
-  const row = engine.query.ids(cursorRow(name)).pickOne() as Partial<Cursor> | undefined;
-  return row?.position !== undefined && typeof row.version === 'number' ? { position: row.position, version: row.version } : undefined;
+  const held = engine.admin.checkpoint(checkpointOf(name)) as Partial<Cursor> | undefined;
+  return held?.position !== undefined && typeof held.version === 'number' ? { position: held.position, version: held.version } : undefined;
 }
 
 function writeCursor(engine: EarsEngine, name: string, projection: ProjectionDefinition, position: ChangedPosition): void {
-  engine.upsert(SDK_ENTITIES.ProjectionCursor, { id: cursorRow(name), position, version: versionOf(projection) } as never);
+  engine.admin.setCheckpoint(checkpointOf(name), { position, version: versionOf(projection) } satisfies Cursor);
 }
 
 /** Past everything this unit writes, its own derived rows included, which it stamps with the sequence it commits as */

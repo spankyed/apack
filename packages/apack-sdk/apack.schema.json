@@ -111,8 +111,7 @@
                 "Action",
                 "Prompt",
                 "Document",
-                "Collection",
-                "ProjectionCursor"
+                "Collection"
               ]
             }
           },
@@ -384,8 +383,7 @@
                   "Action",
                   "Prompt",
                   "Document",
-                  "Collection",
-                  "ProjectionCursor"
+                  "Collection"
                 ]
               }
             },

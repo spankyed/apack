@@ -1145,10 +1145,8 @@ declare namespace EARS {
         type Document = typeof Document;
         const Collection = "Collection";
         type Collection = typeof Collection;
-        const ProjectionCursor = "ProjectionCursor";
-        type ProjectionCursor = typeof ProjectionCursor;
     }
-    type Entity = Entity.Thread | Entity.Message | Entity.Artifact | Entity.Terminal | Entity.Note | Entity.BrowserTab | Entity.BrowserBookmark | Entity.SearchIndex | Entity.IndexedDoc | Entity.Flow | Entity.Node | Entity.Action | Entity.Prompt | Entity.Document | Entity.Collection | Entity.ProjectionCursor;
+    type Entity = Entity.Thread | Entity.Message | Entity.Artifact | Entity.Terminal | Entity.Note | Entity.BrowserTab | Entity.BrowserBookmark | Entity.SearchIndex | Entity.IndexedDoc | Entity.Flow | Entity.Node | Entity.Action | Entity.Prompt | Entity.Document | Entity.Collection;
     type EntityId<E extends string = string> = _apackdev_ears.EARS.EntityId<E>;
     type RelationId = _apackdev_ears.EARS.RelationId;
     namespace RelKind {
