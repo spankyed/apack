@@ -78,6 +78,15 @@ export function openRunHistory(dir: string, { readOnly }: { readOnly?: boolean }
   }
 }
 
+/**
+ * Empties the run history at `dir` where it is, beside an app that may hold it open: opened as it stands, declaring no
+ * schema and moving nothing aside, since either would change it under that app
+ */
+export function resetRunHistoryInPlace(dir: string): void {
+  const database = openDatabase({ path: dir });
+  try { database.reset(); } finally { database.close(); }
+}
+
 /** An app's database opened outside the app */
 export interface AppDatabase {
   userDataDir: string;

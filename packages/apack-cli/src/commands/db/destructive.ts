@@ -7,7 +7,7 @@ import { readInstalledContributionCatalog, disabledPackIds } from '@apackdev/hos
 import { createSettingsBackupValidator } from '@apackdev/host/settings';
 import type { EARS } from '@apackdev/ears';
 import { databaseBackupStore, importDatabase, readBackup, type BackupLog } from '@apackdev/host/backup';
-import { findRunningApp, openRunHistory, type AppDatabase } from '@apackdev/host/database';
+import { findRunningApp, openRunHistory, resetRunHistoryInPlace, type AppDatabase } from '@apackdev/host/database';
 import { createSecretsStore } from '@apackdev/host/secrets';
 import { _secretProviderLabel } from '@apackdev/sdk/services';
 import { openTarget, parseDbArgs, TARGET_USAGE, withDatabase, type DbIo } from './target';
@@ -96,10 +96,7 @@ export async function dbReset(args: string[], io: DbIo): Promise<void> {
       return null;
     }
     // In place, since a running app holds it open. Its own database goes last: emptying that is what an app hears
-    if (hasHistory) {
-      const runs = openRunHistory(db.paths.runHistory);
-      try { runs.database.reset(); } finally { runs.database.close(); }
-    }
+    if (hasHistory) resetRunHistoryInPlace(db.paths.runHistory);
     if (!keepKeys) secrets.clearAll();
     // Every entry but the database's format and schema
     db.admin.clear();

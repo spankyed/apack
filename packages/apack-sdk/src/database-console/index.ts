@@ -237,7 +237,7 @@ export async function runTransactionCode(code: string, scope: ConsoleScope): Pro
       throw new Error('Transaction failed: transaction code must be synchronous, and this returned a promise.\n'
         + '  Nothing it wrote was kept: a transaction is undone as a whole, and what runs after it writes nothing.');
     }
-    throw new Error(`Transaction failed: ${errorMessage(error)}\n  Nothing it wrote was kept: a transaction is undone as a whole.`);
+    throw new Error(`Transaction failed: ${errorMessage(error)}\n  Nothing it wrote was kept: a transaction is undone as a whole.`, { cause: error });
   } finally {
     close();
   }

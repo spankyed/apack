@@ -571,6 +571,26 @@ describe('apack db exec', () => {
       expect(await titleIn(dir)).toBe('After');
     });
 
+    it('reopens a write repl when another process has replaced the data since it opened', async () => {
+      const dir = await appDataDir();
+      const elmdb = createRequire(createRequire(import.meta.url).resolve('@apackdev/ears/package.json')).resolve('elmdb');
+      async function* lines() {
+        yield "write('Note-a').set('title', 'Before')\n";
+        await promisify(execFile)(process.execPath, ['-e', [
+          `const { Database } = require(${JSON.stringify(elmdb)});`,
+          'const database = Database.open(process.argv[1]);',
+          'database.reset();',
+          'database.close();',
+        ].join('\n'), _appDataPaths(dir).lmdb]);
+        yield "create(EARS.Entity.Note, { title: 'After', content: '', completed: false, displayOrder: 0, hideCompletedChildren: false, icon: '', lastSeen: 0, noteType: 'document' })\n";
+        yield '.exit\n';
+      }
+      const err: string[] = [];
+      await dbRepl(['--write', '--data-dir', dir], { out: () => {}, err: (line) => err.push(line) }, Readable.from(lines()));
+      expect(err.filter((line) => line.startsWith('Error:'))).toEqual([]);
+      expect((await ok(['query', "return query(EARS.Entity.Note).where('title', 'After').count()", '--data-dir', dir])).out).toBe('1');
+    });
+
     it('still refuses to clear the settings under it, changing nothing', async () => {
       const dir = await appDataDir();
       runningApp(dir);

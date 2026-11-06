@@ -136,7 +136,7 @@ export async function openTarget(target: DbTarget, { changes, command }: OpenOpt
 
 /**
  * What a script gets unless it asks for `--admin`: rows, and not the engine's or the database's admin, whose schema
- * changes and resets an app running on the data dir can't take. The same whether one is running, since one can start
+ * changes, loads and replacements an app running on the data dir can't take. The same whether one is running, since one can start
  * while the script does. A guard against reaching for them, since a script runs as any code does.
  */
 export function withoutAdmin(db: AppDatabase): AppDatabase {
