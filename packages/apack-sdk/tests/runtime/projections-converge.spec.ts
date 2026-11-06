@@ -41,7 +41,8 @@ type Step =
   | { step: 'burst'; count: number }
   | { step: 'reset' }
   | { step: 'catchUp' }
-  | { step: 'version' };
+  | { step: 'version' }
+  | { step: 'passWhileWriting'; op: Op; count: number };
 
 function anOp(r: ReturnType<typeof random>): Op {
   const id = r.pick(TASKS);
@@ -63,7 +64,9 @@ function history(seed: number): Step[] {
     if (roll < 27) return { step: 'there', op: anOp(r), die: r.pick(DEATHS) };
     if (roll < 30) return { step: 'burst', count: 501 + r.below(600) };
     if (roll < 31) return { step: 'reset' };
-    if (roll < 39) return { step: 'catchUp' };
+    if (roll < 37) return { step: 'catchUp' };
+    // A full pass, chunk by chunk, while the other process writes and destroys between its chunks
+    if (roll < 39) return { step: 'passWhileWriting', op: { op: 'destroy', id: r.pick(TASKS) }, count: 501 + r.below(600) };
     return { step: 'version' };
   });
 }
@@ -137,9 +140,8 @@ function mirroring(engine: EarsEngine) {
     from: ['Task'],
     version: 1,
     apply(ids: readonly string[]) { for (const id of ids) sync(id); },
-    rebuild() {
+    reset() {
       for (const id of engine.query.withTrashed('Mirror').ids()) engine.write(id).destroy();
-      for (const id of engine.query('Task').ids()) sync(id);
     },
   };
 }
@@ -180,6 +182,14 @@ async function run(seed: number): Promise<void> {
         expect(mirrors(engine), `seed ${seed}`).toEqual(expected(engine));
       } else if (step.step === 'version') {
         projection.version += 1;
+      } else if (step.step === 'passWhileWriting') {
+        projection.version += 1;
+        const passing = runner.catchUp();
+        await there.send({ burst: step.count });
+        await there.send({ op: step.op, die: false });
+        await passing;
+        await startOver();
+        expect(mirrors(engine), `seed ${seed}`).toEqual(expected(engine));
       } else {
         await there.send(step.step === 'there' ? { op: step.op, die: step.die } : step.step === 'burst' ? { burst: step.count } : { reset: true });
         if (there.gone()) {

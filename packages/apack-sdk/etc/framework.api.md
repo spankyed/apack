@@ -636,7 +636,7 @@ export function _parseServiceReference(ref: string): {
 export interface ProjectionDefinition {
     apply(ids: readonly string[]): void;
     readonly from: readonly string[];
-    rebuild(): void;
+    reset?(): void;
     readonly version?: number;
 }
 

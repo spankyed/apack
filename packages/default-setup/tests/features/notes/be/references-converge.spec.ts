@@ -42,6 +42,7 @@ it.each([1, 2, 3, 4, 5, 6, 7, 8])('holds what a rebuild from nothing would, afte
   }
   const inline = snapshot();
   expect(Object.keys(inline).length).toBeGreaterThan(2);
-  noteProjections.references.rebuild();
+  // Deriving everything again is apply over every note
+  noteProjections.references.apply(query.withTrashed(EARS.Entity.Note).ids());
   expect(snapshot()).toEqual(inline);
 });

@@ -7,8 +7,12 @@
 // read, a chunk at a time. The database keeps that for a type whose `apack.json` entry sets `changeOrder`, which costs a
 // write to it about a fifth more; a projection over a type without it is refused when its pack registers.
 //
-// `apply` and `rebuild` read and write the engine like any backend code, and are run again without warning: `apply` with
-// ids it has seen, and `rebuild` from nothing. They hold the write lock, so they stay quick.
+// `apply` and `reset` read and write the engine like any backend code, and are run again without warning: `apply` with
+// ids it has seen. They hold the write lock, so they stay quick: `apply` is given a chunk of ids at a time.
+//
+// Deriving everything again — the first time, after `version` changes, or when what changed can't be known — is
+// `apply` over every entity of the `from` types, a chunk per unit, so it never holds a write up for longer than a chunk.
+// What it derived is part-built meanwhile.
 //
 // An entity counts as changed when a field, its trash state or a relation at either end changed. A projection that
 // writes relations itself hears its own writes as part of the unit that made them, and not again.
@@ -19,11 +23,14 @@ export interface ProjectionDefinition {
   readonly from: readonly string[];
   /** Brings what's derived from these entities up to date. Each is read as it is now, and may be gone */
   apply(ids: readonly string[]): void;
-  /** Derives everything again: the first time it runs, after `version` changes, and when what changed can't be known */
-  rebuild(): void;
   /**
-   * Which derivation `apply` and `rebuild` make, 1 unless given. Raise it when what they derive changes, so what was
-   * derived before is derived again
+   * Clears everything it derived, before it derives everything again. Only a projection whose rows can outlive what
+   * they derive from needs one: an entity destroyed before the pass would leave its rows behind, since no `apply` names it
+   */
+  reset?(): void;
+  /**
+   * Which derivation `apply` makes, 1 unless given. Raise it when what it derives changes, so what was derived before
+   * is derived again
    */
   readonly version?: number;
 }
