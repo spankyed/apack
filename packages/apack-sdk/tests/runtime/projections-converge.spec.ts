@@ -31,14 +31,8 @@ function random(seed: number) {
   return { below: (n: number) => Math.floor(next() * n), pick: <T>(xs: readonly T[]) => xs[Math.floor(next() * xs.length)]! };
 }
 
-/**
- * How the other process may end after a step. Killed inside an open unit only where LMDB frees the write lock its holder
- * died with: on macOS elmdb locks with POSIX semaphores, which only an environment's first opener resets, so while this
- * process holds the database open a writer killed there leaves every later write waiting. Nothing prevents that yet
- */
-const DEATHS = process.platform === 'darwin'
-  ? (['after', false, false, false] as const)
-  : (['after', 'inside', false, false, false] as const);
+/** How the other process may end after a step: killed after its commit, killed inside an open unit, or not at all */
+const DEATHS = ['after', 'inside', false, false, false] as const;
 
 type Op = Record<string, unknown>;
 type Step =

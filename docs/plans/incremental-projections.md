@@ -1,6 +1,6 @@
 # Incremental projections
 
-Status: steps 1 to 5 built, 2026-11-06: elmdb #83 and #84, apack #359, #360 and the PR above them. Builds on `database-owns-change.md`, whose seven steps are open as PRs (apack #349 to #358,
+Status: steps 1 to 5 built, 2026-11-06: elmdb #83, #84 and #85, apack #359, #360 and #361. Builds on `database-owns-change.md`, whose seven steps are open as PRs (apack #349 to #358,
 elmdb #80 to #82). Each step below is a PR of its own, stacked on those, elmdb first where a step touches both.
 
 ## Why
@@ -105,16 +105,14 @@ a write skipping a backlog and a catch-up skipping ahead each fail it on a mutat
 
 **What it found:** on macOS a writer killed inside an open unit leaves the write lock held while another process has
 the database open, and every later write there waits for good. elmdb locks with POSIX semaphores on macOS, which only an
-environment's first opener resets; Linux and Windows keep LMDB's robust mutexes. The test leaves that death out on macOS
-until elmdb handles it, below.
+environment's first opener resets; Linux and Windows keep LMDB's robust mutexes. elmdb #85 fixes it: a writer holds a
+kernel-released lock on a file beside the database for its whole transaction, and whoever holds that lock releases a
+semaphore left taken. The test kills writers inside a unit on every platform.
 
 ## Deferred, with what would bring each back
 
 - **Refreshing only the watches a foreign commit touched.** The refresh reading puts it under a few ms. A profile in
   which re-running watches or publishing shows as a real share is what would bring it back.
-- **A writer killed inside a unit on macOS** (found by step 5). Needs elmdb to notice a dead holder of the write lock:
-  recording the writer's process beside the lock, and a waiter that finds that process gone releasing it. It is
-  elmdb's own design question, so it is reported rather than built here.
 - **The newest foreign commit's sequence in meta,** so the lost-wake check is one read. It reads a few log records today,
   only after an index build. A profile showing that read is what would bring it back.
 
