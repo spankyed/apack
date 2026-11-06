@@ -267,6 +267,8 @@ export interface PackRegistry extends PackRegistryView {
   getRelationRules(kind: string): RelationRules | undefined;
   /** The rank indexes the registered packs declare, by name */
   getRankIndexes(): Readonly<Record<string, RankDeclaration>>;
+  /** The entity types the registered packs' projections derive from */
+  getChangeOrderTypes(): ReadonlySet<string>;
   /** Lifecycle hooks of the currently registered packs, in registration order. */
   getLifecycleHooks(): PackLifecycleHooks[];
   /** A registered pack's registration, as it was registered */
@@ -888,6 +890,8 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     getRowRules: (type) => rowRules().get(type),
     getRelationRules: (kind) => relationRules().get(kind),
     getRankIndexes: () => rankIndexes(),
+    getChangeOrderTypes: () => new Set([...registrations.values()].flatMap((pack) =>
+      Object.values(pack.features ?? {}).flatMap((feature) => Object.values(feature.projections ?? {}).flatMap((projection) => projection.from)))),
     entityTypeOfShortCode: (code) => shortCodeTypes()(code),
     getRegisteredServices: services,
 

@@ -46,9 +46,6 @@ export function _boundPackExtensions(): PackExtensionsView;
 // @internal
 export function _carryPerformanceEvent(event: object, carrier: unknown): void;
 
-// @internal
-export function _catchUpProjections(engine: EarsEngine): void;
-
 export { Ears }
 
 // @public
@@ -135,7 +132,7 @@ export interface HostRuntimeServices {
 }
 
 // @internal
-export function _installProjections(engine: EarsEngine): void;
+export function _installProjections(engine: EarsEngine): ProjectionRunner;
 
 // @internal
 export function _isFeHostBound(): boolean;
@@ -253,6 +250,11 @@ export interface _PerformanceProfiles {
     stoppedBy: 'owner' | 'limit';
     // (undocumented)
     windowLimitMs: number;
+}
+
+// @public
+export interface ProjectionRunner {
+    catchUp(): Promise<void>;
 }
 
 // @internal

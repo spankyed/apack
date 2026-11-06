@@ -47,6 +47,9 @@ export function answerTo<E extends {
     type: string;
 }>(call: string, event: E): E;
 
+// @public
+export function catchUpTestProjections(): Promise<void>;
+
 // @internal
 export const _createTestEngine: (options?: Parameters<typeof _openTestDatabase>[0]) => EarsEngine;
 

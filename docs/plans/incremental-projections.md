@@ -1,6 +1,6 @@
 # Incremental projections
 
-Status: planned, 2026-11-06. Builds on `database-owns-change.md`, whose seven steps are open as PRs (apack #349 to #358,
+Status: steps 1 and 2 built, 2026-11-06 (elmdb #83 and the apack PR above it); steps 3 to 5 planned. Builds on `database-owns-change.md`, whose seven steps are open as PRs (apack #349 to #358,
 elmdb #80 to #82). Each step below is a PR of its own, stacked on those, elmdb first where a step touches both.
 
 ## Why
@@ -49,64 +49,38 @@ them ordinary.
 The change log stays, for what it is good at: whether another process committed and which types, for watches and
 `DATA_CHANGED_ELSEWHERE`. Its per-commit entity lists go, since nothing reads them.
 
-## Step 1: a change sequence on every entity (elmdb)
+## Step 1: a change sequence on every entity (elmdb) — built, elmdb #83
 
-- **Stored:** `p/i id` becomes `[place, trashed, changed]`, `changed` being the sequence of the commit that last wrote
-  the entity: a field, its trash state, or a relation with it at either end. Format 1 is edited in place
-  (`format.md`); a database from before reads as an entity with no change sequence, which `changed_since` treats as
-  changed at 0, so a reader starts from everything.
-- **Derived:** `d/h type changed place → id`, the entities of a type in change order. A write moves the entity's key:
-  the old one removed, the new one put, once per entity per commit however many of its fields the commit wrote.
-  `rebuild()` derives it from `p/i`, and `check()` compares it.
-- **Destroyed entities:** a destroy leaves no `p/i`, so it writes `l/d changed type id`, bounded like the change log
-  (newest 4,096) and trimmed with it. A reader whose cursor is older than the oldest kept tombstone, when one of its
-  types has had a destroy since, is told the answer is incomplete. The type's newest destroy is kept in meta
-  (`m/destroyed/<type>`) so that is one read.
-- **Read:** `Database::changed_since(types, cursor, limit) -> Changed { ids, destroyed, through, complete }`, merging
-  the types' ranges in change order, at most `limit`, `through` the last sequence read. `Unit::changed_since` reads in
-  the unit, so its own writes are there, and `Unit::next_sequence()` says which sequence its commit will take: the
-  stored one plus one, read under the write transaction the unit already holds.
-- **Commit sequence before commit:** `commit_txn` assigns the sequence it does now; the change sequence an entity gets
-  in a unit is that same number, which the unit knows from its first write since it holds the write lock.
-- **Binding:** `changedSince(types, cursor, limit)` on `Database` and `Unit`, `nextSequence()` on `Unit`, generated
-  types, the protocol type.
-- **Cost, gated:** `examples/write-cost.rs` before and after, three runs, `cargo xtask compare`. Each written entity
-  costs one more `p/i` put and a `d/h` delete and put. A relation op bumps both ends. If one row's commit costs more
-  than the run-to-run spread, the change is narrowed before it lands: relation bumps for the source only, or behind a
-  schema flag per type.
-- **Tests:** a reader in another process asking from 0, from the middle and from past the end; a field write, a trash,
-  a restore, a relation link and unlink each moving the entity; a destroy reported once and then trimmed, after which
-  an old cursor is incomplete; `check()` catching a missing and a stale `d/h` key on a mutated copy; `rebuild()`
-  making `d/h` from `p/i`; a dump and load starting every entity at the load's sequence; a unit seeing its own writes
-  and its next sequence.
+- **Stored:** `p/i id` is `[place, trashed, changed]`, `changed` the sequence of the commit that last wrote the entity: a
+  field, its trash state, or a relation at either end. A commit stamps what it wrote once, as it commits.
+- **Kept only where asked:** a type whose schema sets `changeOrder` keeps `d/h type changed place → id`, derived from
+  `p/i`, built at open from the entities it holds and dropped when the schema stops asking. Keeping it for every type
+  failed the write-cost gate: 100- and 2,000-row commits cost 20 to 30% more. A type that keeps one pays about a fifth
+  more (one row about 48 µs against 40 µs, 100 rows about 1,500 µs against 1,230 µs); a type that keeps none pays
+  nothing measurable (`examples/write-cost.rs`, 2026-11-06, load 6 to 12).
+- **Read:** `changed_since(types, from, limit)` pages by position, a sequence plus the type and place to resume after,
+  since one commit can stamp more entities than a page. Destroyed entities come from tombstones (`l/d`), kept and trimmed
+  with the change log. A reader of a type keeping no order, from before its order was built, or older than the kept
+  tombstones of a type with a destroy since, is told the answer is incomplete.
+- **In a unit:** `next_sequence()` names the sequence its commit takes, so a reader inside it can say where it will have
+  read to.
 
-## Step 2: projections read what changed since their cursor (SDK, host)
+## Step 2: projections read what changed since their cursor (SDK, host) — built
 
-- **One algorithm for a write and a catch-up.** Read `changed_since(from, cursor)`, apply those ids and the destroyed
-  ones, and set the cursor to the sequence this unit commits as. In a write the unit's own changes are in the range, so
-  the special handling of pending changes and of origins goes.
-- **A write that touches none of `from`** runs nothing, as now: the unit's pending types are checked first.
-- **A backlog doesn't land on a write.** If what changed since the cursor, beyond the unit's own, is more than a chunk
-  (500 entities), the write applies only its own entities and leaves the cursor; catching up takes the rest.
-- **Catching up in chunks, outside a write.** `_catchUpProjections` becomes a job: a chunk of 500 ids per unit, its
-  cursor moved in the same unit, and the event loop given back between chunks, so a write never waits for more than
-  one chunk. A boot, a replacement, a wake and a pack change start it; one already running carries on rather than
-  starting twice.
-- **Rebuild only when the answer is incomplete.** A cursor of 0 needs no rebuild: everything is in the range, applied in
-  chunks. `rebuild()` becomes optional and runs only when `changed_since` says it is incomplete (a destroy lost from
-  the tombstones), as a chunked walk when the projection supplies none.
-- **Versions.** `ProjectionDefinition.version` (a number, default 1). The cursor row stores it; a different one starts
-  the cursor at 0, which re-applies everything in chunks. A cursor whose projection is no longer declared is removed
-  when its pack is uninstalled.
-- **Relations.** A projection hears an entity whose relations changed, at either end, which removes the limitation the
-  contract states now. A projection that writes relations itself, as notes' does, hears its own writes as changes at
-  the sequence its cursor moves to, so they don't come back.
-- **Remove:** the origin filtering, `everything`/`truncated` handling and pending-id reading in
-  `apack-sdk/src/runtime/projections.ts`; `rebuild` from the notes projection if the chunked default serves.
-- **Tests:** the readings' three cases as SDK specs (the first run, a bulk import, a cursor far behind), each applying
-  what changed and never rebuilding; a write behind a large backlog applying only its own; a catch-up interleaved with
-  writes landing between chunks; a version change re-applying; a relation change heard; an incomplete answer
-  rebuilding. Then both readings taken again on the built app, the rebuild column expected empty but for the first run.
+- **The types:** the registry names every projection's `from` types, and the app's engine schema has them keep a change
+  order (`EngineSchema.changeOrder`).
+- **In a write:** the write applies what it changed, and what changed before it since the cursor when that is a chunk
+  (500) or less, then moves the cursor past its own unit. A first run, a new version or a larger backlog applies the
+  write's own and leaves the rest to a catch-up.
+- **Catching up:** `installProjections` returns a runner whose `catchUp()` applies a chunk per unit and gives the event
+  loop back between them, running again rather than twice at once. A projection that throws keeps its cursor and holds up
+  no other. The host holds the runner: boot, a replacement, a wake and a pack change start it.
+- **Rebuilding:** only on a first run, a new `version`, or an incomplete answer. `rebuild` stays required for those;
+  a chunked rebuild is still to do, the first run being the only common case and cheap on an empty database.
+- **The readings again**, the built app, 2026-11-06, load 7 to 9, 11,000 notes: one rebuild in the session (the first
+  run, 0.1 ms); the 11,000-note import applied in 22 chunks of 500, the longest held 28.4 ms (311 ms in one hold
+  before); the note edit after 4,200 folder commits applied one note in under 0.5 ms (468 ms before); a refresh 9.1 ms at
+  one note and 11.0 ms at 11,000, as before.
 
 ## Step 3: the change log drops its entity lists (elmdb)
 

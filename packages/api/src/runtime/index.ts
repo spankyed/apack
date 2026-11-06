@@ -3,7 +3,7 @@ import { createStartupPerformance, observeIndexAdmission } from './startup-perfo
 import { createNodePerformanceController } from '@apackdev/host/diagnostics/node';
 import { createActor } from 'xstate';
 import { createLogger, reportError } from '@apackdev/sdk/logger';
-import { _catchUpProjections, bindHost } from '@apackdev/sdk/runtime';
+import { bindHost } from '@apackdev/sdk/runtime';
 import { _getLmdbPath, _getRunHistoryPath } from '@apackdev/sdk/utils';
 import type { EarsDatabase, EarsEngine } from '@apackdev/ears';
 import { assertNoDatabaseWriter, openDatabaseStore, openRunHistory, storedSettings, type RunsDatabase } from '@apackdev/host/database';
@@ -55,6 +55,8 @@ export interface AppStore {
   runHistory: RunsDatabase;
   engine: EarsEngine;
   packs: PackRegistry;
+  /** Brings the engine's projections up to what changed since each last read */
+  catchUpProjections(): Promise<void>;
 }
 
 /** The app's registered packs, which openAppStore creates: the transport's procedures and dev reload work on them */
@@ -127,7 +129,7 @@ export function openAppStore(performance?: ReturnType<typeof createNodePerforman
   appViews = createViewHost({ ears: () => engine, packs, observe: recording ? () => createViewObservation(recording) : undefined });
   appDatabase = database;
   appRunHistory = runHistory;
-  return { database, runHistory, engine, packs };
+  return { database, runHistory, engine, packs, catchUpProjections: () => runtime.catchUpProjections() };
 }
 
 /**
@@ -164,7 +166,7 @@ async function initializeBackend(performance?: ReturnType<typeof createNodePerfo
   assertNoDatabaseWriter(appContext.userDataDir);
 
   // The app's data: the engine reads and writes it from here on
-  const { engine, packs } = openAppStore(performance);
+  const { engine, packs, catchUpProjections } = openAppStore(performance);
 
   // Packs require workspace @apackdev/* packages at runtime: from a checkout they must get source,
   // not a stale dist (main starts the API with the condition; manual boots must pass it). The
@@ -233,7 +235,7 @@ async function initializeBackend(performance?: ReturnType<typeof createNodePerfo
   // ── Start the packs: each one's onInit, the migrations (the app's, then external packs'), the content
   if (!recoveringSettings) {
     startPacks(packs);
-    _catchUpProjections(engine);
+    await catchUpProjections();
   }
 
   // ── Start backend actor ──────────────────────────────────────────────

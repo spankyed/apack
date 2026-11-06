@@ -1,7 +1,9 @@
-// Keeping projections in step: in the unit of a write that changes what one derives from, and from the change log for
-// commits another process made. What each has read up to is a row, written in the same transaction as what it derives,
-// so a crash can't leave the two apart.
-import type { EarsEngine, LoggedChanges } from '@apackdev/ears';
+// Keeping projections in step. A write that changes what one derives from runs it in the write's own unit, so a row and
+// what's derived from it commit together. Anything else, a commit from another process or one that went past the
+// projection, is caught up on from what the database says changed since the projection's cursor, in chunks, so a
+// backlog never holds a write up for longer than one chunk. The cursor is a row, written in the same transaction as
+// what it derives, so a crash can't leave the two apart.
+import type { ChangedPosition, EarsEngine, LoggedChanges } from '@apackdev/ears';
 import type { ProjectionDefinition } from '../framework/projections.ts';
 import { SDK_ENTITIES } from '../types/sdk-entities.ts';
 import { _isHostBound, boundHost } from './host-runtime.ts';
@@ -9,66 +11,124 @@ import { createLogger } from '../logger/index.ts';
 
 const logger = createLogger('projections');
 
-/** More than the change log holds, so one read is everything since any cursor */
-const WHOLE_LOG = 8192;
+/** How many changed entities one unit applies */
+const CHUNK = 500;
 
 interface Declared { name: string; projection: ProjectionDefinition }
+interface Cursor { position: ChangedPosition; version: number }
 
 const declared = (): readonly Declared[] => (_isHostBound() ? boundHost().packs.projections() : []);
 const typeOf = (id: string) => id.slice(0, id.indexOf('-'));
 const cursorRow = (name: string) => `${SDK_ENTITIES.ProjectionCursor}-${name}` as never;
+const versionOf = (projection: ProjectionDefinition) => projection.version ?? 1;
 
-/** The ids a unit being written holds of the types `from` names */
+function readCursor(engine: EarsEngine, name: string): Cursor | undefined {
+  const row = engine.query.ids(cursorRow(name)).pickOne() as Partial<Cursor> | undefined;
+  return row?.position !== undefined && typeof row.version === 'number' ? { position: row.position, version: row.version } : undefined;
+}
+
+function writeCursor(engine: EarsEngine, name: string, projection: ProjectionDefinition, position: ChangedPosition): void {
+  engine.upsert(SDK_ENTITIES.ProjectionCursor, { id: cursorRow(name), position, version: versionOf(projection) } as never);
+}
+
+/** Past everything this unit writes, its own derived rows included, which it stamps with the sequence it commits as */
+function pastThisUnit(engine: EarsEngine): ChangedPosition {
+  const sequence = engine.admin.nextSequence();
+  if (sequence === undefined) throw new Error('A projection moves its cursor only inside a unit');
+  return { sequence };
+}
+
+/** The ids of the types `from` names that the unit being written holds */
 const pendingOf = (changes: LoggedChanges, from: ReadonlySet<string>) =>
   Object.keys(changes.pending?.entities ?? {}).filter((id) => from.has(typeOf(id)));
 
-function bringUp(engine: EarsEngine, { name, projection }: Declared, inWrite: boolean): void {
+/**
+ * In a write's unit: applies what the write changed of the projection's types, and what changed before it since the
+ * cursor when that is a chunk or less. Answers whether more is left for a catch-up
+ */
+function inWrite(engine: EarsEngine, { name, projection }: Declared): boolean {
   const from = new Set(projection.from);
-  // A write that changed nothing this derives from leaves it, and other processes' commits, to their own catching up,
-  // and reads no more of the log than its own unit's changes
-  if (inWrite && pendingOf(engine.admin.changesSince(engine.lastCommit(), 1), from).length === 0) return;
-  const row = cursorRow(name);
-  const cursor = (engine.query.ids(row).pickOne() as { through?: number } | undefined)?.through;
-  const changes: LoggedChanges = engine.admin.changesSince(cursor ?? 0, WHOLE_LOG);
-  const mine = pendingOf(changes, from);
-
-  const own = engine.admin.origin();
-  const theirs = changes.commits.filter((commit) => commit.origin !== own);
-  // This process's commits went through the write hook, which ran this as they were written, but for one that didn't
-  // say what it changed: an admin load, which no hook sees
-  const unknowable = cursor === undefined || changes.truncated
-    || changes.commits.some((commit) => commit.everything)
-    || theirs.some((commit) => commit.entities === undefined && commit.types.some((type) => from.has(type)));
-  if (unknowable) {
-    projection.rebuild();
-  } else {
-    const ids = new Set([...mine, ...theirs.flatMap((commit) => (commit.entities ?? []).filter((id) => from.has(typeOf(id))))]);
-    if (ids.size > 0) projection.apply([...ids]);
-    else if (changes.through === cursor) return;
+  const mine = pendingOf(engine.admin.changesSince(engine.lastCommit(), 1), from);
+  if (mine.length === 0) return false;
+  const cursor = readCursor(engine, name);
+  const changed = cursor?.version === versionOf(projection) ? engine.admin.changedSince(projection.from, cursor.position, CHUNK) : undefined;
+  if (!changed?.complete || !changed.done) {
+    // A first run, a new version or a backlog: the write applies its own and leaves the rest to a catch-up
+    projection.apply(mine);
+    return true;
   }
-  engine.upsert(SDK_ENTITIES.ProjectionCursor, { id: row, through: changes.through } as never);
+  projection.apply([...new Set([...changed.ids, ...changed.destroyed, ...mine])]);
+  writeCursor(engine, name, projection, pastThisUnit(engine));
+  return false;
+}
+
+/** In a unit of its own: one chunk of catching up. Answers whether there is more */
+function chunk(engine: EarsEngine, { name, projection }: Declared): boolean {
+  const cursor = readCursor(engine, name);
+  const changed = cursor?.version === versionOf(projection) ? engine.admin.changedSince(projection.from, cursor.position, CHUNK) : undefined;
+  if (!changed?.complete) {
+    // A first run, a new version, or what changed can't all be known: everything again, in this unit
+    projection.rebuild();
+    writeCursor(engine, name, projection, pastThisUnit(engine));
+    return false;
+  }
+  const ids = [...changed.ids, ...changed.destroyed];
+  if (ids.length === 0) return false;
+  projection.apply(ids);
+  writeCursor(engine, name, projection, changed.done ? pastThisUnit(engine) : changed.next);
+  return !changed.done;
+}
+
+/** What keeps an engine's projections in step: installed once per engine, and asked to catch up when anything may be behind */
+export interface ProjectionRunner {
+  /**
+   * Brings every projection up to what changed since its cursor, a chunk per unit, giving the event loop back between
+   * chunks. One already running runs again once it finishes rather than twice at once, and this resolves then. A
+   * projection that throws keeps its cursor, to try again next time, and holds up no other
+   */
+  catchUp(): Promise<void>;
 }
 
 /** @internal Runs the bound app's projections in the unit of every write that changes what they derive from */
-export function _installProjections(engine: EarsEngine): void {
+export function _installProjections(engine: EarsEngine): ProjectionRunner {
+  let running: Promise<void> | undefined;
+  let again = false;
+  const pass = async () => {
+    for (const each of declared()) {
+      for (;;) {
+        let more: boolean;
+        try {
+          more = engine.admin.transactWithoutHook(() => chunk(engine, each));
+        } catch (error) {
+          logger.error(`Catching up the projection ${each.name} failed, and it will try again:`, error as Error);
+          break;
+        }
+        if (!more) break;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    }
+  };
+  const catchUp = (): Promise<void> => {
+    if (running) {
+      again = true;
+      return running;
+    }
+    running = (async () => {
+      do {
+        again = false;
+        await pass();
+      } while (again);
+    })().finally(() => { running = undefined; });
+    return running;
+  };
   engine.admin.beforeCommit({
     wants: (type) => declared().some(({ projection }) => projection.from.includes(type)),
     run: () => {
-      for (const each of declared()) bringUp(engine, each, true);
+      let behind = false;
+      for (const each of declared()) behind = inWrite(engine, each) || behind;
+      // Once the write has returned: a catch-up runs units of its own, and this is the write's
+      if (behind) queueMicrotask(() => void catchUp());
     },
   });
-}
-
-/**
- * @internal Brings every projection up to the change log: at boot, after the data was replaced, and told of another
- * process. Each in a unit of its own, so one that throws keeps its cursor, to try again next time, and holds up no other
- */
-export function _catchUpProjections(engine: EarsEngine): void {
-  for (const each of declared()) {
-    try {
-      engine.admin.transactWithoutHook(() => bringUp(engine, each, false));
-    } catch (error) {
-      logger.error(`Catching up the projection ${each.name} failed, and it will try again:`, error as Error);
-    }
-  }
+  return { catchUp };
 }

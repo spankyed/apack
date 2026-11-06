@@ -5,7 +5,7 @@ import type { SettingsAdmin } from '../services/settings.ts';
 import { createEarsEngine, type CallCounting, type EarsDatabase, type EarsEngine, type EngineSchema, type RankDeclaration, type RelationRules, type RowRules } from '@apackdev/ears';
 import { createTemporaryDatabases } from '@apackdev/ears/lmdb';
 import { _bindEars } from '../ears/index.ts';
-import { _installProjections } from '../runtime/projections.ts';
+import { _installProjections, type ProjectionRunner } from '../runtime/projections.ts';
 import type { ContentRuntime } from '../framework/content-runtime.ts';
 export { nativePackDeclarationFixture } from './pack-declaration.ts';
 import { SDK_ENTITIES, SDK_REL_KINDS, SDK_RELATION_RULES, SDK_ROW_RULES, SDK_ROLES, _withSdkIndexes } from '../types/sdk-entities.ts';
@@ -71,6 +71,7 @@ const ranks = new Map<string, RankDeclaration>();
 let started: Pick<TestRuntimeStartOptions, 'packs' | 'appVersion' | 'onboarding' | 'settings' | 'serviceOverrides'> | undefined;
 let engine: EarsEngine | undefined;
 let disposeDatabase: (() => void) | undefined;
+let projections: ProjectionRunner | undefined;
 /** The process's test databases, each removed when it is replaced or the process exits */
 const databases = createTemporaryDatabases();
 
@@ -80,6 +81,8 @@ const testSchema = (): EngineSchema => ({
   relations: Object.fromEntries([...relationKinds].map((kind) => [kind, relationRules.get(kind) ?? {}])),
   roles: [...roles],
   ranks: Object.fromEntries(ranks),
+  // Every type, since a test may declare a projection over any after the database is made
+  changeOrder: [...entityTypes],
 });
 
 /** A new engine on a new database holding the test runtime's names, and installed */
@@ -90,7 +93,7 @@ function installFreshEngine(): EarsEngine {
   // Every value a read gives back is frozen: code that changes one, expecting the database to change, throws here
   // rather than silently not persisting in the app
   engine = createEarsEngine({ database, freeze: true });
-  _installProjections(engine);
+  projections = _installProjections(engine);
   _bindEars(engine);
   return engine;
 }
@@ -107,6 +110,12 @@ export function _openTestDatabase({ entityTypes: types = [], relationKinds: kind
     roles: [...Object.values(SDK_ROLES), ...given],
   });
   return { database, engine: createEarsEngine({ database }) };
+}
+
+/** Brings the test runtime's projections up to what changed since each last read, as the app does after another process commits */
+export function catchUpTestProjections(): Promise<void> {
+  if (!projections) throw new Error('catchUpTestProjections() needs startTestRuntime() first');
+  return projections.catchUp();
 }
 
 /** @internal `_openTestDatabase`'s engine */
