@@ -604,13 +604,12 @@ reads only what changed since the projection last read, a chunk at a time, howev
 ```typescript
 // src/features/notes/be/projections.ts
 import { defineProjections } from '@apackdev/sdk/framework';
-import { query, EARS } from '#generated/ears.ts';
+import { EARS } from '#generated/ears.ts';
 
 export const noteProjections = defineProjections({
   references: {
     from: [EARS.Entity.Note],
     apply(ids) { for (const id of ids) syncReferences(id); },
-    rebuild() { for (const id of query.withTrashed(EARS.Entity.Note).ids()) syncReferences(id); },
   },
 });
 ```
@@ -625,17 +624,22 @@ and keep each type it derives from in change order, in the `apack.json` of the p
 - **`from` is the entity types it derives from.** A write to none of them doesn't run it, and costs a write nothing more.
 - **`apply(ids)` brings what's derived from those entities up to date.** Each is read as it is now, and may have been
   trashed or destroyed. It is run again with ids it has seen, so it rewrites rather than adds.
-- **`rebuild()` derives everything again**: the first time it runs, after `version` changes, and in the rare case what
-  changed can't all be known.
-- **`version`** (1 unless given) says which derivation `apply` and `rebuild` make. Raise it when that changes, so what
-  was derived before is derived again.
+- **Deriving everything again is `apply` over every entity of `from`**, a chunk per unit like any backlog, so it never
+  holds the write lock longer than a chunk: the first time it runs, after `version` changes, and in the rare case what
+  changed can't all be known. What it derived is part-built until that pass is through, and what changed while it ran
+  is applied after it.
+- **`reset()`** (optional) clears everything it derived, before such a pass. Only a projection whose rows can outlive
+  what they derive from needs one: a row derived from an entity destroyed before the pass would otherwise stay.
+- **`version`** (1 unless given) says which derivation `apply` makes. Raise it when that changes, so what was derived
+  before is derived again.
 - **A write to a type kept in change order costs about a fifth more**, for keeping that order, and writes to other types
   nothing. A projection over a type that keeps none is refused when its pack registers, and so is a new version of a
   pack that stops keeping an order another pack's projection reads.
-- **Both hold the write lock**, so keep them quick, and a throw undoes the write that ran them. A catch-up that throws is
+- **`apply` and `reset` hold the write lock**, so keep them quick, and a throw undoes the write that ran them. A catch-up that throws is
   logged and tried again next time, from where it last read.
 - **An entity counts as changed when a field, its trash state or a relation at either end changed.** A projection that
-  writes relations itself hears its own writes as part of the unit that made them, and not again.
+  writes the types it derives from, as notes write a note's link targets, isn't given back what it wrote: a catch-up
+  passes over what its own units changed last, and another projection still sees it.
 
 ### Trash
 
