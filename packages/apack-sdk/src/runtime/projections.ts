@@ -114,11 +114,16 @@ export function _installProjections(engine: EarsEngine): ProjectionRunner {
       return running;
     }
     running = (async () => {
-      do {
-        again = false;
-        await pass();
-      } while (again);
-    })().finally(() => { running = undefined; });
+      try {
+        do {
+          again = false;
+          await pass();
+        } while (again);
+      } finally {
+        // Cleared as the last pass ends, in the same turn: a catch-up asked for after it starts a pass of its own
+        running = undefined;
+      }
+    })();
     return running;
   };
   engine.admin.beforeCommit({
