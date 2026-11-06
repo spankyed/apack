@@ -4,8 +4,8 @@
 // A write in this process runs a projection in its own transaction, so a row and what's derived from it commit together,
 // like a database index. Anything else, a commit from another process (which can't run pack code) or one made while the
 // projecting pack wasn't registered, is caught up on from what the database says changed since the projection last
-// read, a chunk at a time. The database keeps that for the types a projection derives from, which costs a write to them
-// about a fifth more.
+// read, a chunk at a time. The database keeps that for a type whose `apack.json` entry sets `changeOrder`, which costs a
+// write to it about a fifth more; a projection over a type without it is refused when its pack registers.
 //
 // `apply` and `rebuild` read and write the engine like any backend code, and are run again without warning: `apply` with
 // ids it has seen, and `rebuild` from nothing. They hold the write lock, so they stay quick.

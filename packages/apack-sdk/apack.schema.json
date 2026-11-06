@@ -231,6 +231,10 @@
                   "type": "string",
                   "pattern": "^[a-z][A-Za-z0-9]*$"
                 }
+              },
+              "changeOrder": {
+                "type": "boolean",
+                "description": "Keep this entity's rows in the order of the commits that last wrote them, which a projection deriving from it reads (changedSince). A write to it costs about a fifth more, so set it only for an entity a projection derives from; a projection over an entity without it is refused when its pack registers."
               }
             },
             "additionalProperties": false,
@@ -503,6 +507,10 @@
                     "type": "string",
                     "pattern": "^[a-z][A-Za-z0-9]*$"
                   }
+                },
+                "changeOrder": {
+                  "type": "boolean",
+                  "description": "Keep this entity's rows in the order of the commits that last wrote them, which a projection deriving from it reads (changedSince). A write to it costs about a fifth more, so set it only for an entity a projection derives from; a projection over an entity without it is refused when its pack registers."
                 }
               },
               "additionalProperties": false,

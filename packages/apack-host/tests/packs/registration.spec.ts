@@ -481,3 +481,31 @@ describe('registered settings authority', () => {
     expect(packs.settingsCatalog().features).not.toHaveProperty('invalid-pack/widget');
   });
 });
+
+describe('registerPack projections', () => {
+  const projecting = (id: string, from: string, rowRules: Record<string, unknown>, dependsOnRules = {}) => ({
+    id,
+    ears: { entities: Object.fromEntries(Object.keys(rowRules).map((type) => [type, type])), relKinds: {}, roles: {}, rowRules: { ...rowRules, ...dependsOnRules } },
+    features: { derived: { projections: { mirrors: { from: [from], apply: () => {}, rebuild: () => {} } } } },
+  }) as unknown as PackRegistration;
+
+  it('takes a projection over a type its owner keeps in change order', () => {
+    registerPack(projecting('ordered-pack', 'Memo', { Memo: { required: [], changeOrder: true } }));
+    registered.push('ordered-pack');
+    expect(getPackRegistration('ordered-pack')).not.toBeNull();
+  });
+
+  it('refuses a projection over a type kept in no change order, naming the declaration to add', () => {
+    expect(() => registerPack(projecting('unordered-pack', 'Memo', { Memo: { required: [] } })))
+      .toThrow('Pack "unordered-pack" projection "derived/mirrors" derives from "Memo", which keeps no change order: give "Memo" "changeOrder": true');
+    expect(getPackRegistration('unordered-pack')).toBeNull();
+  });
+
+  it('takes a projection over another registered pack\'s type that it keeps in change order', () => {
+    registerPack({ id: 'owning-pack', ears: { entities: { Memo: 'Memo' }, relKinds: {}, roles: {}, rowRules: { Memo: { required: [], changeOrder: true } } } } as unknown as PackRegistration);
+    registered.push('owning-pack');
+    registerPack({ id: 'reading-pack', features: { derived: { projections: { mirrors: { from: ['Memo'], apply: () => {}, rebuild: () => {} } } } } } as unknown as PackRegistration);
+    registered.push('reading-pack');
+    expect(getPackRegistration('reading-pack')).not.toBeNull();
+  });
+});

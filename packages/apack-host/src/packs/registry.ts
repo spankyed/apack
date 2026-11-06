@@ -267,8 +267,6 @@ export interface PackRegistry extends PackRegistryView {
   getRelationRules(kind: string): RelationRules | undefined;
   /** The rank indexes the registered packs declare, by name */
   getRankIndexes(): Readonly<Record<string, RankDeclaration>>;
-  /** The entity types the registered packs' projections derive from */
-  getChangeOrderTypes(): ReadonlySet<string>;
   /** Lifecycle hooks of the currently registered packs, in registration order. */
   getLifecycleHooks(): PackLifecycleHooks[];
   /** A registered pack's registration, as it was registered */
@@ -652,6 +650,7 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     }
 
     checkEARS(registration, replacing ? registration.id : undefined);
+    checkProjections(registration);
 
     const providedServices = Object.keys(registration.services ?? {});
     const hostService = providedServices.find((key) => (_HOST_SERVICE_NAMES as readonly string[]).includes(key));
@@ -802,6 +801,23 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     ...Object.entries(SDK_ROW_RULES),
     ...[...registrations.values()].flatMap((reg) => Object.entries(reg.ears?.rowRules ?? {})),
   ]));
+  /**
+   * A projection reads what changed in each type it derives from, which the database keeps only for a type whose owner
+   * declares `changeOrder`: one without it would derive everything again on every catch-up. The owner may be the pack
+   * itself, a dependency or the SDK, whose rules are registered by then
+   */
+  function checkProjections(registration: PackRegistration): void {
+    const ordered = new Map([...rowRules(), ...Object.entries(registration.ears?.rowRules ?? {})]);
+    for (const [featureId, feature] of Object.entries(registration.features ?? {})) {
+      for (const [name, projection] of Object.entries(feature.projections ?? {})) {
+        const unordered = projection.from.find((type) => ordered.get(type)?.changeOrder !== true);
+        if (unordered !== undefined) {
+          throw new Error(`Pack "${registration.id}" projection "${featureId}/${name}" derives from "${unordered}", which keeps no `
+            + `change order: give "${unordered}" "changeOrder": true in the apack.json of the pack that declares it`);
+        }
+      }
+    }
+  }
   const relationRules = derived((): ReadonlyMap<string, RelationRules> => new Map<string, RelationRules>([
     ...Object.entries(SDK_RELATION_RULES),
     ...[...registrations.values()].flatMap((reg) => Object.entries(reg.ears?.relationRules ?? {})),
@@ -890,8 +906,6 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     getRowRules: (type) => rowRules().get(type),
     getRelationRules: (kind) => relationRules().get(kind),
     getRankIndexes: () => rankIndexes(),
-    getChangeOrderTypes: () => new Set([...registrations.values()].flatMap((pack) =>
-      Object.values(pack.features ?? {}).flatMap((feature) => Object.values(feature.projections ?? {}).flatMap((projection) => projection.from)))),
     entityTypeOfShortCode: (code) => shortCodeTypes()(code),
     getRegisteredServices: services,
 

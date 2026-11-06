@@ -30,8 +30,6 @@ export interface DatabaseSchema {
   getRelationRules?(kind: string): RelationRules | undefined;
   /** The rank indexes the packs declare, by name */
   getRankIndexes?(): Readonly<Record<string, RankDeclaration>>;
-  /** The entity types the registered packs' projections derive from, which the database keeps a change order for */
-  getChangeOrderTypes?(): ReadonlySet<string>;
   /** Calls `listener` after the names change — the app's registry, as a pack registers — returning the unsubscribe */
   onRegistrationChanged?(listener: (packId: string) => void): () => void;
 }
@@ -46,7 +44,6 @@ export function engineSchemaOf(schema: DatabaseSchema): EngineSchema {
     relations: Object.fromEntries([...schema.getRegisteredRelationKinds()].map((kind) => [kind, schema.getRelationRules?.(kind) ?? {}])),
     roles: [...schema.getRegisteredRoles()],
     ranks: schema.getRankIndexes?.() ?? {},
-    changeOrder: [...(schema.getChangeOrderTypes?.() ?? [])],
   };
 }
 

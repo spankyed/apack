@@ -147,8 +147,8 @@ function mirroring(engine: EarsEngine) {
 async function run(seed: number): Promise<void> {
   const directory = mkdtempSync(join(tmpdir(), 'projections-converge-'));
   const database = openDatabase({ path: directory, syncs: false, schema: {
-    types: { Task: { required: [], indexes: [] }, Mirror: { required: [], indexes: [] } },
-    relations: {}, roles: [], changeOrder: ['Task'],
+    types: { Task: { required: [], indexes: [], changeOrder: true }, Mirror: { required: [], indexes: [] } },
+    relations: {}, roles: [],
   } });
   const engine = createEarsEngine({ database });
   const projection = mirroring(engine);
