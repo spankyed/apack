@@ -5,9 +5,12 @@ import { renderTemplate } from '../templates.ts';
 import { cliVersion, findPackRoot } from '../utils';
 import { npmUpgradeStep, scaffoldUnitTestSetup } from './init';
 
-// The Playwright version @apackdev/testing is tested with, exactly: a range takes whatever was published last, which
-// can be a release whose other half isn't on the registry yet, and is a version nothing here has run against
-const PLAYWRIGHT_RANGE = '1.55.1';
+/**
+ * The Playwright version @apackdev/testing is tested with, exactly, and the repo's own: a range takes whatever was
+ * published last, which can be a release whose other half isn't on the registry yet, and is a version nothing here has
+ * run against
+ */
+export const PLAYWRIGHT_VERSION = '1.55.1';
 
 
 /**
@@ -79,8 +82,8 @@ export async function initTests(_args: string[]): Promise<void> {
     // lockstep, so one range names all of them.
     const wanted: Record<string, string> = {
       '@apackdev/testing': `^${cliVersion()}`,
-      '@playwright/test': PLAYWRIGHT_RANGE,
-      'playwright-core': PLAYWRIGHT_RANGE,
+      '@playwright/test': PLAYWRIGHT_VERSION,
+      'playwright-core': PLAYWRIGHT_VERSION,
     };
     const missing = Object.keys(wanted).filter(name => !pkg.devDependencies?.[name] && !pkg.dependencies?.[name]);
     if (missing.length > 0) {
