@@ -70,3 +70,25 @@ it('rebuilds catching up when it has read nothing yet', () => {
   _catchUpProjections(boundEars() as EarsEngine);
   expect(rebuilds).toBe(1);
 });
+
+it('rebuilds catching up after a commit that did not say what it changed, its own process\'s included', () => {
+  aCollection();
+  rebuilds = 0;
+  const engine = boundEars() as EarsEngine;
+  engine.admin.bulkLoadAttr(aCollection(), 'name' as EARS.AttrKind, 'loaded');
+  rebuilds = 0;
+  _catchUpProjections(engine);
+  expect(rebuilds).toBe(1);
+});
+
+it('keeps catching up the others when one fails, and its cursor where it was', () => {
+  const second = { ...projection, rebuild() { rebuilds += 10; }, apply() {} };
+  testPacks.projections.push({ name: 'test/feature/other', projection: second });
+  failing = true;
+  untypedCreate('Flow', { label: 'f', flowType: 'root' });
+  expect(() => _catchUpProjections(boundEars() as EarsEngine)).not.toThrow();
+  expect(rebuilds, 'the other rebuilt').toBe(10);
+  failing = false;
+  _catchUpProjections(boundEars() as EarsEngine);
+  expect(rebuilds, 'the one that failed still had nothing read, and rebuilt now').toBe(11);
+});

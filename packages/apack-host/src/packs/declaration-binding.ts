@@ -69,7 +69,8 @@ export function backendBindingProblem(manifest: PackManifest, registration: unkn
       || Object.values(feature.views).some(view => typeof view !== 'function'))) return problem(`features.${id}.views`);
     if ((feature.projections !== undefined) !== (declaration.projections !== undefined)) return problem(`features.${id}.projections`);
     if (feature.projections !== undefined && (!isPlainObject(feature.projections)
-      || Object.values(feature.projections as Record<string, { apply?: unknown; rebuild?: unknown }>).some(projection => typeof projection?.apply !== 'function' || typeof projection?.rebuild !== 'function'))) return problem(`features.${id}.projections`);
+      || Object.values(feature.projections as Record<string, { from?: unknown; apply?: unknown; rebuild?: unknown }>).some(projection => typeof projection?.apply !== 'function' || typeof projection?.rebuild !== 'function'
+        || !Array.isArray(projection.from) || projection.from.length === 0 || projection.from.some(type => typeof type !== 'string' || type === '')))) return problem(`features.${id}.projections`);
   }
   const eventsProblem = eventBindingProblem(eventContracts, features);
   if (eventsProblem) return problem(eventsProblem);

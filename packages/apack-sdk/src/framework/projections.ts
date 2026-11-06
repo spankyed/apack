@@ -6,6 +6,10 @@
 //
 // `apply` and `rebuild` read and write the engine like any backend code, and are run again without warning: `apply` with
 // ids it has seen, and `rebuild` from nothing. They hold the write lock, so they stay quick.
+//
+// What a projection hears is which entities changed. A change to a relation alone names no entity, so a projection
+// derives from entities' fields, and whatever relations it writes are its own output, which nothing else should write.
+// Writes this process made while the projecting pack wasn't registered aren't run again when it is.
 
 /** Rows derived from others */
 export interface ProjectionDefinition {

@@ -21,8 +21,8 @@ const logger = createLogger('host-runtime');
 
 /**
  * How long a refresh after another process's commit waits for more: a shell loop or a repl session tells once per command,
- * and each refresh has every system publish. CPU profile of the built app, 2026-11-05, load about
- * 40: 148 ms per refresh at 1 note, 259 ms at 11,000, before the packs list stopped re-reading the disk for it.
+ * and each refresh has every system publish. CPU profile of the built app, 2026-11-05, load about 40: 10 ms per refresh at
+ * 1 note, 148 ms at 11,000.
  */
 const ELSEWHERE_REFRESH_MS = 250;
 
@@ -74,10 +74,11 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
       let changed = true;
       try {
         changed = engine.admin.changedElsewhere();
-        if (changed) _catchUpProjections(engine);
       } catch (error) {
         logger.error('Refreshing after a commit from another process failed:', error as Error);
       }
+      // Whatever the answer, since each projection reads the log from its own cursor
+      _catchUpProjections(engine);
       if (changed) transport.rootEvents.emitIncoming({ to: HOST.bus, event: { type: 'DATA_CHANGED_ELSEWHERE' } });
     }, ELSEWHERE_REFRESH_MS);
     refreshing.unref?.();
