@@ -1,5 +1,5 @@
-import type { AppDatabase } from '@apackdev/host/database';
 // apack db repl: console code line by line, on the data dir's database
+import type { AppDatabase } from '@apackdev/host/database';
 import * as readline from 'node:readline/promises';
 import { runQueryCode, runTransactionCode } from '@apackdev/sdk/database-console';
 import { consoleScope, openTarget, parseDbArgs, TARGET_USAGE, withDatabase, type DbIo } from './target';
