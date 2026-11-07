@@ -313,3 +313,6 @@ popover and retained selection/status on return. Its screenshots still require v
 
 The parent-reset journey verifies original /clear saved-session rotation and fresh-context
 continuation. It does not establish naturally gated quota/return offer acceptance.
+
+The everyday-layout journey also checks visible formatting controls, native status hit tests
+and no selected-text overlap. Compact shortcut-hint overlap remains a separate visual gap.
