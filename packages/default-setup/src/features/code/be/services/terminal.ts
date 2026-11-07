@@ -79,7 +79,7 @@ class TerminalService {
 
     const info: TerminalInfo = { id, title, pid: session.pid, shell, cwd, active: true, cols, rows }
     this.terminals.set(id, { info, session })
-    repository.terminalCommands.create({ id, title, pid: session.pid, shell, cwd, cols, rows })
+    repository.terminalCommands.create({ id, title, shell, cwd, cols, rows })
 
     const integration = featureSettings.forFeature('code').get()
     if (integration?.enableShellIntegration !== false) {
@@ -112,10 +112,10 @@ class TerminalService {
     await terminal.session.resize(cols, rows)
     terminal.info.cols = cols
     terminal.info.rows = rows
-
-    // Update in EARS storage
-    repository.terminalCommands.resize(id as EARS.EntityId, cols, rows)
-
+    // **No row is written.** A drag produces one resize per observed frame — 24 per action, measured, each
+    // one an EARS write with no coalescing (F5). The pty's size is not application state: it is whatever the
+    // window last fitted, and a restored terminal is re-fitted the moment its host attaches. What the row
+    // keeps is the size it was created at, which is a starting point and not a record of the live size.
     return true
   }
 
@@ -291,7 +291,6 @@ class TerminalService {
           rows: row.rows,
         }
         this.terminals.set(row.id, { info, session })
-        repository.terminalCommands.updatePid(row.id, session.pid)
         if (shellIntegrationEnabled) await this.injectShellIntegration(session, row.shell)
 
         logger.info(`Restored terminal ${row.title} (${row.id}) as a new shell (pid ${session.pid}); the previous process and its output are gone`)

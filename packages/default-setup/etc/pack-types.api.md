@@ -4595,7 +4595,13 @@ interface TerminalEntity {
     entityType: EARS.Entity.Terminal;
     title: string;
     customTitle?: string;
-    pid: number;
+    /**
+     * **No pid.** A row used to carry the process id its session had, and `restoreAll` reached for it on the
+     * next boot — checking whether that process was alive and killing it and its group, which is F7, and
+     * which could name a process the OS had since given to something else. The broker owns the processes a run
+     * leaves behind, so nothing persisted addresses one. The live descriptor still carries a pid, because the
+     * renderer tells a new shell from the previous one by it; that is a diagnostic, not a handle.
+     */
     shell: string;
     cwd: string;
     active: boolean;
@@ -6012,13 +6018,11 @@ declare function storeHandle(key: string, handle: CodexTurnHandle): void;
 
 declare const terminalCommands: {
     /** Records a terminal the service started, under the id it took for it (`newId`) */
-    create: (terminal: Pick<TerminalEntity, "cols" | "cwd" | "pid" | "rows" | "shell" | "title"> & {
+    create: (terminal: Pick<TerminalEntity, "cols" | "cwd" | "rows" | "shell" | "title"> & {
         id: EARS.EntityId<"Terminal">;
     }) => EARS.EntityId;
-    resize: (id: EARS.EntityId, cols: number, rows: number) => void;
     rename: (id: EARS.EntityId, customTitle: string) => void;
     updateCwd: (id: EARS.EntityId, cwd: string, title?: string) => void;
-    updatePid: (id: EARS.EntityId, pid: number) => void;
     markClosed: (id: EARS.EntityId) => void;
     delete: (id: EARS.EntityId) => void;
 };

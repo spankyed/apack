@@ -12,7 +12,13 @@ export interface TerminalEntity {
   entityType: EARS.Entity.Terminal
   title: string
   customTitle?: string
-  pid: number
+  /**
+   * **No pid.** A row used to carry the process id its session had, and `restoreAll` reached for it on the
+   * next boot — checking whether that process was alive and killing it and its group, which is F7, and
+   * which could name a process the OS had since given to something else. The broker owns the processes a run
+   * leaves behind, so nothing persisted addresses one. The live descriptor still carries a pid, because the
+   * renderer tells a new shell from the previous one by it; that is a diagnostic, not a handle.
+   */
   shell: string
   cwd: string
   active: boolean
@@ -41,23 +47,11 @@ export const terminalQueries = {
 
 export const terminalCommands = {
   /** Records a terminal the service started, under the id it took for it (`newId`) */
-  create: (terminal: Pick<TerminalEntity, 'title' | 'pid' | 'shell' | 'cwd' | 'cols' | 'rows'> & { id: EARS.EntityId<'Terminal'> }): EARS.EntityId => {
+  create: (terminal: Pick<TerminalEntity, 'title' | 'shell' | 'cwd' | 'cols' | 'rows'> & { id: EARS.EntityId<'Terminal'> }): EARS.EntityId => {
     return create(EARS.Entity.Terminal, { ...terminal, active: true }).id()
   },
   
   
-  resize: (id: EARS.EntityId, cols: number, rows: number): void => {
-    if (!query.ids(id).exists()) {
-      logger.error(`Terminal ${id} not found`)
-      return
-    }
-
-    write(id).setMany({
-      cols,
-      rows
-    })
-  },
-
   rename: (id: EARS.EntityId, customTitle: string): void => {
     if (!query.ids(id).exists()) {
       logger.error(`Terminal ${id} not found`)
@@ -87,16 +81,6 @@ export const terminalCommands = {
     write(id).setMany(updates)
   },
   
-  updatePid: (id: EARS.EntityId, pid: number): void => {
-    if (!query.ids(id).exists()) {
-      logger.error(`Terminal ${id} not found`)
-      return
-    }
-    
-    write(id).setMany({
-      pid
-    })
-  },
   
   markClosed: (id: EARS.EntityId): void => {
     if (!query.ids(id).exists()) {

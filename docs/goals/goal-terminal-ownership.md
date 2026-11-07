@@ -81,10 +81,10 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 
 ## Current handoff
 
-- **Checkout:** `master` at `fe34a67781`, the current one — no branch or worktree, clean tree.
+- **Checkout:** `master` at `d4ab9a9620`, the current one — no branch or worktree, clean tree.
   **Phase T is complete**: every track below has landed with a firing spec, or is placed with its reason
   (T6 → Phase H, T7 → Phase P, G1 → the output pipe). **Phase G's six readings are complete**, with G1, F4 and F5 priced and F18 found.
-  **Phase S's four seams are built** — the fourth's service in Phase H's shape; what remains of its *screen* is Phase B's first deliverable. Phases B, P and A are not started.
+  **Phase S is complete and Phase B is begun**: the terminal feature owns no pty, and F5, F7, F8 and L2 are closed with guards. Phases P and A are not started.
   **Collision surface against #372**, measured 2026-11-07: one file, `features/code/fe/state.ts` (+24/-2 on
   that branch). Every other file Phase T touches is untouched there — `bus/client-events.ts`,
   `api/src/boot/config.ts`, `be/services/terminal.ts`, `fe/features/terminal/state.ts`, `fe/hotkeys.ts`,
@@ -287,14 +287,29 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
     built, and nothing in the chain builds it — per-platform broker builds are Phase B's deliverable. A test
     that refused on a fresh checkout would be worse than none; the Rust side's six cases and the client's six
     cover both halves meanwhile, and the seam they meet at is the generated protocol.
-- **Next action: Phase B, which is the point of no return.** What is left of Phase S's "output reaches a
-  screen" is the terminal feature calling `services.terminal` instead of `node-pty` — and that **is** Phase
-  B's first deliverable ("the terminal feature no longer imports node-pty; `services/terminal.ts` spawns
-  nothing"). Writing a second, hard-coded renderer path to the same place first is work Phase P deletes,
-  which is the test this goal applies to T6 and T7. So the skeleton's last step and Phase B's first are the
-  same change, and it should be made once — after which Phase S is no longer revertable in one commit.
-  **The sync-to-async consequence lands there**: the pack's terminal service is synchronous throughout
-  (`create()` returns a `TerminalInfo` in the same turn), and every call site that assumes it must change.
+- **Phase B is begun, and the point of no return is behind us.** `default-setup` imports `node-pty` nowhere:
+  the terminal feature asks `services.terminal` for a session and holds no handle to a process. **Proven in
+  the real app** — a terminal opens and its emulator attaches, a 64 KiB corpus comes back as 118 messages and
+  77,097 bytes against node-pty's 115 and 76,824, and `tests/e2e/smoke` passes.
+  - **F5, F7, F8 and L2 are closed as `dissolved` with guards**, each mutation-checked independently
+    (`tests/features/code/be/terminal-owns-no-process.spec.ts`). The storage changed for two of them: a
+    resize writes no row, and the Terminal entity declares no `pid` — `updatePid` and
+    `terminalCommands.resize` are gone as unread.
+  - **The sync-to-async consequence had a hazard no typecheck can see**: `if (!success)` where `success` had
+    become a promise is never true, so three refusal paths were dead the moment the broker owned the process.
+  - **`onShutdown` cannot await** — it is synchronous and the API runs it in `process.on('exit')` — so the
+    broker ends a connection's sessions when the connection goes, with a test that drops the client and
+    checks the shell is gone by pid. That gap was found by this conversion, not by reading.
+  - **Two more found by running it**: the service resolved the binary from its own module path, which is
+    wrong because the host is bundled into the API build (it looked one directory above the checkout, which
+    its own refusal reported); and the inert `vi.mock` recorded earlier is replaced by `mockService`, a seam
+    a test can take — that spec no longer spawns a real pty and now asserts its mock was used.
+- **Next action: Phase B's remaining acceptance.** In the order they can be done here: **F4's guard** (the
+  perf budget — its before is recorded, 115 messages and 76.8 KB per 64 KiB, and the bounded channel is what
+  it holds), **the bounded presentation channel with credit-based flow control** and its firing case (a
+  saturating producer *and* a pending query together), **resize under an alternate-screen app**, and
+  **`portable-pty` validated** for containment and cancellation. **X1, X2 and ConPTY need a Windows run** and
+  cannot be claimed here, which the goal already says. Then Phases P and A.
 - **What Phase S deliberately does not have yet**, and should not before Phase B: a second client, bounded
   history and backpressure, reattach, and `command-group` in the spawn path — the probe proved the API, and
   `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` needs a Windows run. One connection's sessions live as long as the
