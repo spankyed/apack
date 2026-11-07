@@ -81,8 +81,10 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   reachable, resolves 0.9.0), `cargo build` with that native dependency (5.8s, cc present), an **absolute**
   symlink at `vendor/apack-terminal` matching `readlink vendor/elmdb`, a commit in the new repo, and
   `vendor/apack-terminal.rev`. `cargo`/`rustc` are on PATH and the global git identity is set, so a fresh
-  repo commits unconfigured. **Creating is unrestricted; deleting outside the checkout prompts** — expect to
-  be asked, and ask before removing anything over there rather than spending the approval.
+  repo commits unconfigured. **Creating and removing are both unrestricted there**, re-probed after the first
+  attempt prompted and the permission was granted: a file, a subdirectory and the directory itself all go
+  without asking. The judgement is separate from the permission — ask before removing something that might
+  be wanted rather than tidying unilaterally, which is what the first probe got wrong.
   One dependency and one build produced a **48 MB `target/`**, confirming that widening
   `lib/janitor-policy.ts` past one checkout is load-bearing rather than bookkeeping: that path is outside the
   budget entirely today. The review's findings were re-verified against the tree on 2026-11-07 for
