@@ -55,6 +55,19 @@ vi.mock('@xterm/addon-webgl', () => ({ WebglAddon: StubAddon }))
 vi.mock('@xterm/xterm/css/xterm.css', () => ({}))
 vi.mock('@apackdev/sdk/fe', () => ({ openLink: () => {} }))
 
+// jsdom has neither of these. The attachment uses both, and what is under test is its bookkeeping rather
+// than the browser's layout — a size observer that never fires and an immediate frame are enough for that
+class StubResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+globalThis.ResizeObserver ??= StubResizeObserver as unknown as typeof ResizeObserver
+globalThis.requestAnimationFrame ??= ((callback: FrameRequestCallback) => {
+  callback(0)
+  return 0
+}) as typeof requestAnimationFrame
+
 const { terminalPool } = await import('#features/code/fe/utils/terminal-pool.ts')
 const { terminalEventBus } = await import('#features/code/fe/utils/terminal-events.ts')
 
@@ -129,21 +142,71 @@ describe('one session, one host', () => {
     expect(sent, 'one keystroke, sent once').toEqual(['x'])
   })
 
-  it('keeps one scroll policy per session, whichever host reads it', () => {
+  it('keeps one scroll policy per session, whichever host is drawing it', () => {
     const terminal = info()
     const entry = terminalPool.ensure(terminal, () => {})
-    terminalPool.attach(entry.terminalId, host())
+    const first = host()
+    const following: boolean[] = []
+    const attachment = terminalPool.attach(entry.terminalId, first, {
+      onFollowingChange: (is) => following.push(is),
+    })!
 
-    expect(terminalPool.isPinned(entry.terminalId), 'a new session follows its output').toBe(true)
-    // The panel's write handler and the canvas's both read this one value (F2)
-    terminalPool.setPinned(entry.terminalId, false)
-    expect(terminalPool.isPinned(entry.terminalId)).toBe(false)
+    expect(following.at(-1), 'a new session follows its output').toBe(true)
+    expect(terminalPool.isFollowingOutput(entry.terminalId)).toBe(true)
+
+    // The user scrolls back in this host; the *session* stops following, so the other host stops too (F2)
+    entry.pinnedToBottom = false
+    expect(terminalPool.isFollowingOutput(entry.terminalId)).toBe(false)
+
+    // And asking to follow again is the session's answer, *told* to this host — the control it draws is the
+    // only reader, so a change it is not told about is a scroll control stuck in the wrong state
+    const before = following.length
+    attachment.followOutput()
+    expect(following.slice(before)).toEqual([true])
+    expect(terminalPool.isFollowingOutput(entry.terminalId)).toBe(true)
+
+    // A second host is told where the session stands as it attaches, rather than assuming
+    const second: boolean[] = []
+    terminalPool.attach(entry.terminalId, host(), { onFollowingChange: (is) => second.push(is) })
+    expect(second).toEqual([true])
   })
 
   it('reports a session it has never seen as following its output', () => {
-    // The panel reads the policy on a write that can arrive before the entry exists; unpinned by default
-    // would silently stop a terminal from scrolling at all
-    expect(terminalPool.isPinned('never-opened')).toBe(true)
+    // A write can arrive before any host has opened it; not following by default would silently stop a
+    // terminal from scrolling at all
+    expect(terminalPool.isFollowingOutput('never-opened')).toBe(true)
+  })
+
+  it('gives each host its own listeners, and takes back only its own on release', () => {
+    const terminal = info()
+    const entry = terminalPool.ensure(terminal, () => {})
+    const oldHost = host()
+    const newHost = host()
+    const oldResizes: unknown[] = []
+    const newResizes: unknown[] = []
+
+    const old = terminalPool.attach(entry.terminalId, oldHost, { onResize: (size) => oldResizes.push(size) })!
+    const live = terminalPool.attach(entry.terminalId, newHost, { onResize: (size) => newResizes.push(size) })!
+    old.release()
+
+    // Releasing the host that was taken over from leaves the live one drawing and listening (F1)
+    expect(newHost.contains(entry.wrapper)).toBe(true)
+    live.refit()
+    expect(newResizes, 'the live host still hears its own resizes').toHaveLength(1)
+    old.refit()
+    expect(oldResizes, 'a released attachment reports nothing').toHaveLength(0)
+  })
+
+  it('is the only module that reaches the emulator, which is what makes it the seam', () => {
+    // Not a reading of the source — `check:specifiers`' `findEmulatorImports` is that, and is the gate. This
+    // is the behavioural half: everything a host does to a terminal is on the attachment, so a host needs no
+    // emulator at all
+    const entry = terminalPool.ensure(info(), () => {})
+    const attachment = terminalPool.attach(entry.terminalId, host())!
+
+    expect(Object.keys(attachment).sort()).toEqual(
+      ['clear', 'focus', 'followOutput', 'paste', 'refit', 'release', 'selectAll', 'selection', 'terminalId'],
+    )
   })
 })
 

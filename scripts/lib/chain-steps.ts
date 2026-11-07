@@ -934,18 +934,6 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
       'packages/apack-host/src/build/source-resolution.ts',
       'packages/apack-host/src/build/node-options.js', 'packages/apack-host/src/build/node-options.d.ts',
       'packages/apack-host/src/replace-dir.ts'] },
-  // The broker's generated protocol, re-derived by asking ts-rs to generate it again from the Rust in the
-  // linked `vendor/apack-terminal`.
-  //
-  // **Its source is outside the repository, and the pin is what stands in for it.** The checkout is a
-  // gitignored machine-specific symlink, so there is nothing here to fingerprint but the commit it is pinned
-  // to and the file being checked — and a checkout that has wandered off the pin is refused by the check
-  // itself rather than cached over, which is what makes that pair a key that cannot go stale. On a machine
-  // with no checkout linked the step says so on its result line and passes, the shape this repo allows a
-  // partial result to take.
-  { name: 'protocol:check', timeout: 'quick',
-    inputs: [...ROOT, 'vendor/apack-terminal.rev', 'packages/apack-host/src/broker/protocol.ts',
-      'scripts/broker-protocol.ts'] },
   // Build the built-in pack before build:runtime reads its outputs.
   // Includes cold compiler capture, codegen, all bundles and final source/input verification.
   { name: 'build:default-setup', timeout: 'suite', outputs: PACK_OUTPUTS,

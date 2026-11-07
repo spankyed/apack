@@ -519,6 +519,49 @@ export function findRawGitListings(dirs: readonly string[] = CHECKED_DIRS, root 
   return problems.sort();
 }
 
+/**
+ * The one module in the code surface that reaches its terminal emulator.
+ *
+ * Every host that draws a terminal holds a `TerminalAttachment` from this module and no emulator type, which
+ * is what makes replacing xterm an implementation swap behind one file. Two hosts reached it directly before,
+ * each wiring its own listeners, and the two halves of that were F1 and F2 in the terminal review: a detach
+ * that tore the wrapper out of whichever host held it, and one host scrolling on every write while the other
+ * honoured where the user had scrolled back to.
+ */
+const EMULATOR_OWNER = 'packages/default-setup/src/features/code/fe/utils/terminal-pool.ts';
+
+/**
+ * And its own spec, which stands in for the emulator so the pool's bookkeeping can be driven without a canvas
+ * or a GL context. It names the emulator because it is replacing it, which is the one other place the
+ * dependency legitimately appears.
+ */
+const EMULATOR_OWNER_SPEC = 'packages/default-setup/tests/features/code/fe/utils/terminal-pool.frontend.spec.ts';
+
+/**
+ * `file:line: @xterm/…` for each import of the emulator outside `EMULATOR_OWNER`, and the owner itself when it
+ * has stopped importing one.
+ *
+ * **The second half is the check having a subject.** A rule that only ever reports the absence of something
+ * passes just as happily when the thing it is about has been renamed out from under it, so the owner is
+ * derived from the same constant and asserted to be an importer.
+ */
+export function findEmulatorImports(dirs: readonly string[] = PACK_CODE_DIRS, root = repoRoot): string[] {
+  const rule: Rule = (node) => (ts.isStringLiteralLike(node) && node.text.startsWith('@xterm/')
+    ? [node.text] : undefined);
+  const files = filesUnder(dirs, root);
+  const allowed = new Set([EMULATOR_OWNER, EMULATOR_OWNER_SPEC]);
+  const outside = files
+    .filter((file) => !allowed.has(repoRelative(root, file)))
+    .flatMap((file) => findInFiles([file], root, rule));
+
+  const owner = files.find((file) => repoRelative(root, file) === EMULATOR_OWNER);
+  const ownerImports = owner !== undefined && findInFiles([owner], root, rule).length > 0;
+  return [
+    ...outside,
+    ...(ownerImports ? [] : [`${EMULATOR_OWNER}: imports no emulator, so this rule has no subject`]),
+  ].sort();
+}
+
 /** The one module that hands Electron its custom schemes' privileges */
 const SCHEME_REGISTRAR = 'packages/main/src/modules/privileged-schemes/PrivilegedSchemes.ts';
 
@@ -855,6 +898,13 @@ const RULE_LIST = [
     repoOnly: { kind: 'covered', by: 'elmdb-imports', note: "What is left here is the API, the host and the engine's own root" },
     find: findElmdbImports,
     rule: "Only @apackdev/ears/lmdb loads elmdb: the host and the API open the database through it, the engine's root and packs never load it",
+  },
+  {
+    id: 'findEmulatorImports',
+    over: PACK_CODE_DIRS,
+    repoOnly: { kind: 'inapplicable', note: "Its subject is the code surface's own seam to xterm.js, which is this pack's choice of emulator and not a contract any other pack is held to" },
+    find: findEmulatorImports,
+    rule: "Only the code surface's terminal pool imports @xterm/*: a host that draws a terminal holds a TerminalAttachment, so replacing the emulator is a swap behind one module rather than a second rewrite of ownership",
   },
   {
     id: 'findSchemeRegistrations',

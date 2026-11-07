@@ -10,16 +10,18 @@ import type { TerminalInfo } from '../features/terminal/state.ts'
 import '@xterm/xterm/css/xterm.css'
 
 /**
- * Long-lived xterm.js instance pool keyed by terminal id.
+ * **The feature's seam to its emulator.** Every xterm.js instance the code surface has is here, and this is
+ * the only module that imports `@xterm/*` at all — the hosts that draw a terminal hold a `TerminalAttachment`
+ * and no emulator type, so replacing xterm is an implementation swap behind this file rather than a second
+ * rewrite of who owns what. That is what the goal's D10 keeps open and what its Phase P is for.
  *
- * Each entry owns a detached wrapper div with a Terminal mounted into it.
- * TerminalView.vue re-parents the wrapper into its own container on mount and
- * removes it on unmount. The xterm instance survives tab switches, so there
- * is no replay-on-remount cycle and no class of bugs where synthesized DA/DSR/
- * OSC responses get forwarded to the pty.
+ * Each entry owns a detached wrapper div with a terminal mounted into it, and a host re-parents that wrapper
+ * into its own container. The emulator survives a host's teardown, so there is no replay-on-remount cycle
+ * and no class of bugs where synthesized DA/DSR/OSC responses get forwarded to the pty — and measured, a
+ * reattach with 256 KiB of history costs 5.55 ms and not one message.
  *
- * The pool is the sole subscriber to terminalEventBus for each terminal, so
- * pty output is written into the xterm whether or not any view is mounted.
+ * The pool is the sole subscriber to `terminalEventBus` for each terminal, so pty output is written into the
+ * emulator whether or not any host is mounted.
  */
 
 const THEME = {
@@ -86,6 +88,51 @@ const showLoadingContent = (term: Terminal, info: TerminalInfo) => {
   term.write('\x1b[1;36m🚀 Starting terminal...\x1b[0m\r\n')
   term.write('\x1b[90mConnecting to shell: \x1b[0m' + (info.shell || 'default') + '\r\n')
   term.write('\x1b[90mWorking directory: \x1b[0m' + info.cwd + '\r\n\r\n')
+}
+
+/**
+ * What a host that is drawing a terminal can do to it. **No emulator type crosses this line**: a host holds
+ * one of these and a container, which is the whole of its reach into the terminal.
+ *
+ * It owns what belongs to *this* host — the size observer, the scroll and selection listeners — so a host
+ * ends by releasing it rather than by unwinding a list of disposables and remembering to name its own
+ * container. **That is F1 by construction**: a host that has been taken over from has already released, and
+ * a released attachment detaches nothing.
+ */
+export interface TerminalAttachment {
+  readonly terminalId: string
+  /** What the user has selected, empty when nothing is */
+  selection(): string
+  selectAll(): void
+  /**
+   * Through the emulator, which wraps the text in the bracketed-paste markers when the application has asked
+   * for them — how a shell or an editor tells a paste from typing. Sent as input, a pasted newline runs a
+   * command (F12).
+   */
+  paste(text: string): void
+  clear(): void
+  /** Only where the user asked for it: an attach is not a request (F15) */
+  focus(): void
+  /**
+   * Size the terminal to its host now, rather than waiting for the size observer.
+   *
+   * The observer covers every resize on its own; this is for a host that is *driving* one frame by frame —
+   * the panel's list divider being dragged — where waiting a layout pass behind the drag is visible.
+   */
+  refit(): void
+  /** Follow the output again, from wherever the user had scrolled back to */
+  followOutput(): void
+  /** This host is done. Idempotent, and a no-op once another host has taken the terminal over */
+  release(): void
+}
+
+/** What a host wants to hear about. Each is optional: a host that does not draw a control does not ask */
+export interface TerminalAttachmentHandlers {
+  /** The emulator sized itself to this host, and the pty is the caller's to tell */
+  onResize?(size: { cols: number; rows: number }): void
+  onSelectionChange?(hasSelection: boolean): void
+  /** Whether the session is following its output, which a host draws a scroll control from */
+  onFollowingChange?(following: boolean): void
 }
 
 class TerminalPool {
@@ -235,8 +282,95 @@ class TerminalPool {
     return entry
   }
 
-  /** Attach (or re-attach) the entry's wrapper into a host container. */
-  attach(terminalId: string, host: HTMLElement): PoolEntry | null {
+  /**
+   * Draws this terminal in `host`, and hands back what that host may do to it.
+   *
+   * Everything a host used to wire for itself is wired here once: the fit on the next frame, the viewport's
+   * scroll listener, the pin-aware scroll on each write, the selection tracking and the size observer. Two
+   * hosts wired them separately before, and the two halves of that are F1 and F2 — one of them scrolled on
+   * every write while the other honoured where the user had scrolled back to.
+   */
+  attach(terminalId: string, host: HTMLElement, handlers: TerminalAttachmentHandlers = {}): TerminalAttachment | null {
+    const entry = this.attachWrapper(terminalId, host)
+    if (!entry) return null
+
+    const term = entry.term
+    const own: Array<() => void> = []
+    let released = false
+
+    const report = () => {
+      const viewport = this.getViewport(entry)
+      if (!viewport) return
+      const following = viewport.scrollTop + viewport.clientHeight >= viewport.scrollHeight - 10
+      entry.pinnedToBottom = following
+      handlers.onFollowingChange?.(following)
+    }
+
+    // Deferred a frame so the browser has laid out the re-attached wrapper and the host's dimensions are
+    // what the cols/rows are computed from
+    requestAnimationFrame(() => {
+      if (released) return
+      entry.fitAddon.fit()
+      handlers.onResize?.({ cols: term.cols, rows: term.rows })
+      this.syncViewport(terminalId)
+    })
+
+    const viewport = this.getViewport(entry)
+    if (viewport) {
+      viewport.addEventListener('scroll', report, { passive: true })
+      own.push(() => viewport.removeEventListener('scroll', report))
+    }
+
+    const selection = term.onSelectionChange(() => handlers.onSelectionChange?.(term.getSelection() !== ''))
+    const written = term.onWriteParsed(() => {
+      // **One policy per session, whichever host is drawing it** (F2): during a live write the emulator's own
+      // follow works, so this is the cheap in-tree scroll rather than a round trip through the viewport
+      if (entry.pinnedToBottom) term.scrollToBottom()
+    })
+    const resized = term.onResize(({ cols, rows }) => handlers.onResize?.({ cols, rows }))
+    own.push(() => selection.dispose(), () => written.dispose(), () => resized.dispose())
+
+    const observer = new ResizeObserver(() => {
+      entry.fitAddon.fit()
+      handlers.onResize?.({ cols: term.cols, rows: term.rows })
+      if (entry.pinnedToBottom) this.syncViewport(terminalId)
+    })
+    observer.observe(host)
+    own.push(() => observer.disconnect())
+
+    handlers.onFollowingChange?.(entry.pinnedToBottom)
+
+    return {
+      terminalId,
+      selection: () => term.getSelection(),
+      selectAll: () => term.selectAll(),
+      paste: (text) => term.paste(text),
+      clear: () => term.clear(),
+      focus: () => term.focus(),
+      refit: () => {
+        if (released) return
+        entry.fitAddon.fit()
+        handlers.onResize?.({ cols: term.cols, rows: term.rows })
+      },
+      followOutput: () => {
+        entry.pinnedToBottom = true
+        handlers.onFollowingChange?.(true)
+        this.syncViewport(terminalId)
+      },
+      release: () => {
+        if (released) return
+        released = true
+        for (const undo of own) {
+          try { undo() } catch { /* a listener on an element already gone */ }
+        }
+        own.length = 0
+        this.detach(terminalId, host)
+      },
+    }
+  }
+
+  /** The wrapper into the host, and the renderer that needs live DOM metrics to size itself */
+  private attachWrapper(terminalId: string, host: HTMLElement): PoolEntry | null {
     const entry = this.entries.get(terminalId)
     if (!entry) return null
 
@@ -286,20 +420,16 @@ class TerminalPool {
     entry.attachedContainer = null
   }
 
-  /** Update pin-to-bottom state. View layer calls this from its scroll listener. */
-  setPinned(terminalId: string, pinned: boolean): void {
-    const entry = this.entries.get(terminalId)
-    if (!entry) return
-    entry.pinnedToBottom = pinned
-  }
-
   /**
-   * Whether this session is pinned to the bottom — **one policy per session, whichever host is drawing it**
+   * Whether this session is following its output — **one policy per session, whichever host is drawing it**
    * (F2). The canvas honoured it and the panel scrolled to the bottom on every write, so the same terminal
    * jumped under the user in one host and not the other, and scrolling back in the panel was impossible
    * while anything was writing. A session has one scroll position because it has one buffer.
+   *
+   * A host reads it through its attachment's `onFollowingChange`; this answers for a session no host has
+   * opened, which is a new one and follows its output.
    */
-  isPinned(terminalId: string): boolean {
+  isFollowingOutput(terminalId: string): boolean {
     return this.entries.get(terminalId)?.pinnedToBottom ?? true
   }
 

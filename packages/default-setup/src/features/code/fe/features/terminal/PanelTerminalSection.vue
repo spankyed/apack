@@ -219,9 +219,7 @@ import RunScriptPopover from './RunScriptPopover.vue'
 import ContextMenuPopup from '@apackdev/ui/design/ContextMenuPopup'
 import { useSectionVisibilityMenu } from '#features/code/fe/composables/useSectionVisibilityMenu.ts'
 import type { TerminalScript } from '#generated/types.ts'
-import type { Terminal } from '@xterm/xterm'
-import type { FitAddon } from '@xterm/addon-fit'
-import type { IDisposable } from '@xterm/xterm'
+import type { TerminalAttachment } from '#features/code/fe/utils/terminal-pool.ts'
 import { codeChild } from '../children.ts';
 
 const props = withDefaults(defineProps<{ height?: number }>(), { height: 256 })
@@ -262,13 +260,10 @@ const listWidth = ref(125)
 const MIN_LIST_WIDTH = 80
 const MAX_LIST_WIDTH = 300
 
-// Terminal rendering
+// Terminal rendering. **The whole of this host's reach into the terminal is its attachment**: the pool owns
+// the emulator, its listeners and its size observer, so nothing here holds an emulator type.
 const hasSelection = ref(false)
-let term: Terminal | null = null
-let fitAddon: FitAddon | null = null
-let resizeObserver: ResizeObserver | null = null
-let attachedTerminalId: string | null = null  // tracks which terminal is actually attached to the DOM
-const viewDisposables: IDisposable[] = []
+let attachment: TerminalAttachment | null = null
 
 /** Set by `selectTerminal`, read by the attach it causes: whether this attach is a user's request (F15) */
 let focusOnAttach = false
@@ -277,115 +272,50 @@ const attachTerminal = (terminalId: string) => {
   const info = terminals.value.find((t: TerminalInfo) => t.id === terminalId)
   if (!container.value || !info) return
 
-  const sendInput = (data: string) => {
+  terminalPool.ensure(info, data => {
     terminalActor?.send({ type: 'terminal.INPUT', terminalId, data })
-  }
-
-  const entry = terminalPool.ensure(info, sendInput)
-  terminalPool.attach(terminalId, container.value)
-  attachedTerminalId = terminalId
-
-  term = entry.term
-  fitAddon = entry.fitAddon
-
-  // Defer fit to next frame so the browser has laid out the re-attached wrapper
-  requestAnimationFrame(() => {
-    fitAddon?.fit()
-    sendResize(terminalId)
-    terminalPool.syncViewport(terminalId)
+  })
+  attachment = terminalPool.attach(terminalId, container.value, {
+    onResize: ({ cols, rows }) => {
+      terminalActor?.send({ type: 'terminal.RESIZE', terminalId, cols, rows })
+    },
+    onSelectionChange: has => { hasSelection.value = has },
   })
 
-  // The session's own scroll policy, not this host's: the canvas honoured pinning and this scrolled to the
-  // bottom on every write, so the same terminal jumped under the user here and not there (F2)
-  viewDisposables.push(term.onWriteParsed(() => {
-    if (terminalPool.isPinned(terminalId)) term?.scrollToBottom()
-  }))
-
-  // And this host updates that policy, so scrolling back in the panel holds while output arrives
-  const viewport = term.element?.querySelector('.xterm-viewport') as HTMLElement | null
-  if (viewport) {
-    const onScroll = () => {
-      const atBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 2
-      terminalPool.setPinned(terminalId, atBottom)
-    }
-    viewport.addEventListener('scroll', onScroll, { passive: true })
-    viewDisposables.push({ dispose: () => viewport.removeEventListener('scroll', onScroll) })
-  }
-
-  viewDisposables.push(term.onResize(({ cols, rows }) => {
-    terminalActor?.send({ type: 'terminal.RESIZE', terminalId, cols, rows })
-  }))
-
-  viewDisposables.push(term.onSelectionChange(() => {
-    hasSelection.value = !!term?.getSelection()
-  }))
-
-  resizeObserver = new ResizeObserver(() => {
-    requestAnimationFrame(() => {
-      fitAddon?.fit()
-      if (attachedTerminalId) terminalPool.syncViewport(attachedTerminalId)
-    })
-  })
-  resizeObserver.observe(container.value)
-
-  // **Focused only when the user asked for this terminal** (F15). This runs on mount too — a panel re-open,
-  // an actor replacement, a reconnect — none of which is a request, and taking focus from what they were
-  // typing in is the defect. `selectTerminal` is the request, and sets the flag the attach it triggers reads.
+  // **Focused only when the user asked for this terminal** (F15). An attach happens on mount too — a panel
+  // re-open, an actor replacement, a reconnect — none of which is a request, and taking focus from what they
+  // were typing in is the defect. `selectTerminal` is the request, and sets the flag this reads.
   if (focusOnAttach) {
     focusOnAttach = false
-    term.focus()
+    attachment?.focus()
   }
 }
 
 const detachTerminal = () => {
-  resizeObserver?.disconnect()
-  resizeObserver = null
-  for (const d of viewDisposables) {
-    try { d.dispose() } catch { /* ignore */ }
-  }
-  viewDisposables.length = 0
-  if (attachedTerminalId) {
-    // Named, so a host another has taken over from detaches nothing (F1)
-    terminalPool.detach(attachedTerminalId, container.value ?? undefined)
-    attachedTerminalId = null
-  }
+  // Releasing is also how a host another has taken over from detaches nothing (F1)
+  attachment?.release()
+  attachment = null
   hasSelection.value = false
-  term = null
-  fitAddon = null
-}
-
-const sendResize = (terminalId: string) => {
-  if (!term) return
-  terminalActor?.send({
-    type: 'terminal.RESIZE',
-    terminalId,
-    cols: term.cols,
-    rows: term.rows
-  })
 }
 
 // Context menu actions
 const copySelection = () => {
-  if (!term) return
-  const selection = term.getSelection()
-  if (selection) navigator.clipboard.writeText(selection)
+  const selection = attachment?.selection()
+  // A clipboard the window may not write rejects; unhandled, that is a console error nobody can act on (F16)
+  if (selection) void navigator.clipboard.writeText(selection).catch(() => {})
 }
 
-const pasteClipboard = async () => {
-  if (!term || !panelTerminalId.value) return
-  const text = await navigator.clipboard.readText()
-  if (text) {
-    terminalActor?.send({ type: 'terminal.INPUT', terminalId: panelTerminalId.value, data: text })
-  }
+const pasteClipboard = () => {
+  // **Through the emulator, not as input** (F12). This host sent the text as a keystroke, so a pasted
+  // newline ran the command and no application ever saw the bracketed-paste markers it had asked for.
+  void navigator.clipboard.readText().then(text => {
+    if (text) attachment?.paste(text)
+  }).catch(() => {})
 }
 
-const selectAll = () => {
-  term?.selectAll()
-}
+const selectAll = () => attachment?.selectAll()
 
-const clearTerminal = () => {
-  term?.clear()
-}
+const clearTerminal = () => attachment?.clear()
 
 const killPanelTerminal = () => {
   if (!panelTerminalId.value) return
@@ -485,7 +415,9 @@ const startListResize = (e: MouseEvent) => {
     if (!rafPending) {
       rafPending = true
       requestAnimationFrame(() => {
-        fitAddon?.fit()
+        // Driven frame by frame while the divider is dragged; the size observer would catch up a layout
+        // pass behind, which is visible on a drag and nowhere else
+        attachment?.refit()
         rafPending = false
       })
     }
@@ -560,7 +492,7 @@ onMounted(() => {
   const expanded = isExpanded.value
   const termId = panelTerminalId.value
   const info = activeTerminalInfo.value
-  if (expanded && termId && info && !attachedTerminalId) {
+  if (expanded && termId && info && !attachment) {
     attachTerminal(termId)
   }
 })
@@ -569,11 +501,11 @@ onMounted(() => {
 watch([isExpanded, panelTerminalId, activeTerminalInfo], async ([expanded, termId, info]) => {
   if (expanded && termId && info) {
     // Detach old terminal if switching
-    if (attachedTerminalId && attachedTerminalId !== termId) {
+    if (attachment && attachment.terminalId !== termId) {
       detachTerminal()
     }
-    // Only attach if not already attached to this terminal
-    if (attachedTerminalId !== termId) {
+    // Only attach if not already attached to this terminal — the attachment names the one it holds
+    if (attachment?.terminalId !== termId) {
       await nextTick()
       attachTerminal(termId)
     }

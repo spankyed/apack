@@ -11,6 +11,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { _whenSatisfied } from '@apackdev/sdk/testing/waiting';
 import { BrokerError, startBroker, type Broker } from '../../src/broker/client.ts';
 
 /**
@@ -100,12 +101,18 @@ describe('the broker client', () => {
   it('delivers an exit once, to the session that ended', async () => {
     const fake = await broker({ ...OPENS, kill: ['{"kind":"exited","session":"$session","code":0}'] });
     const exits: Array<number | null> = [];
-    const session = await fake.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit: code => exits.push(code) });
+    let exited = () => {};
+    const session = await fake.open({ cols: 80, rows: 24 }, {
+      onOutput() {},
+      onExit: code => { exits.push(code); exited(); },
+    });
 
     await session.kill();
-    await new Promise(resolve => setTimeout(resolve, 50));
+    // Awaiting the exit itself, not a sleep long enough for one: the listener is the notification
+    await _whenSatisfied(notify => { exited = notify; return () => { exited = () => {}; }; },
+      () => (exits.length > 0 ? exits : undefined), 'the exit the broker reported');
 
-    expect(exits).toEqual([0]);
+    expect(exits, 'one exit, delivered once').toEqual([0]);
   });
 
   it('raises a refusal as its code, not as a message to match on', async () => {
