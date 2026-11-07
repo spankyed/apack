@@ -231,7 +231,13 @@ resized and killed — through the process layer, the protocol, the host session
 session — with nothing else built. Hard-coded where it must be; no second client, no bounded history, no
 agent facts, no reattach.
 
-**Dependencies:** D9, D10, D11. Phase G's baseline.
+**Dependencies:** D9, D10, D11. Phase G's baseline. The janitor and toolchain tracks in Phase T, both of
+which must land before anything is built at the sibling path.
+
+**Before the symlink exists:** add `vendor/apack-terminal` to `.gitignore` and commit
+`vendor/apack-terminal.rev`, which is how elmdb is arranged — the symlink is machine-specific and ignored,
+the revision is the committed pin. Skip it and the first `git add -A` commits an absolute path to one
+developer's home directory.
 
 **Done when:** a keystroke reaches a pty and its output reaches a screen through all four seams, and
 `tests/e2e/smoke/` still passes.
@@ -281,6 +287,7 @@ concurrent with the spine.
 | App keyboard | X3, X10 | `packages/main` menu, `apack-sdk/src/fe/hotkeys.ts` |
 | Agent writes | G1 | the agent streaming writers — **verify against #372 first**, the file moves there |
 | The janitor's reach | — | `scripts/janitor.ts`, **before Phase S builds anything** |
+| The container's Rust toolchain | — | `scripts/linux-runner.ts`, **before the broker runs in the container** |
 | Tab and panel behaviour | T1, T2, T3, T5, T6, T8, T9 | the pack feature |
 
 **The janitor track is not a finding — it is a precondition.** `janitor.ts:45` resolves exactly
@@ -292,6 +299,14 @@ rules: **mutate the vendor listing in the test** and assert the answer changes, 
 rather than returning `[]`, since a janitor that resolves nothing currently runs hourly and reports nothing,
 which is the "a check that reports nothing may have looked at nothing" case inside the tooling that enforces
 it. This must land before Phase S, or the first build is unbudgeted and the disk is what notices.
+
+**The toolchain track is the same bug as the janitor's, in a second place.** `linux-runner.ts:32` reads the
+Rust channel from **elmdb's** `rust-toolchain.toml` alone and keys the image on it, so a second Rust checkout
+pinning a different channel is built with elmdb's — silently, not as a failure — and any Linux run at all
+fails if elmdb's file is missing. Both pin 1.99.1 today, which is why edition 2024 works, but nothing holds
+them together. Derive the channel from every linked Rust checkout and **refuse a disagreement**, naming both
+paths, rather than picking one. Same rule, same shape, same guard as the janitor: derive the subject, and
+make the ambiguous case loud.
 
 **T7 is deliberately absent**: the panel's attach watcher never tearing down is a pool-lifecycle defect that
 Phase P's session model dissolves, so fixing it here is work Phase P deletes. It closes as dissolved there,
