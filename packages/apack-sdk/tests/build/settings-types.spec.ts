@@ -25,7 +25,12 @@ describe('settings type generation', () => {
       },
     };
     const before = structuredClone(definition);
-    const types = await generateSettingsTypes(definition, 'GeneratedSettings');
+    const [types, alternate] = await Promise.all([
+      generateSettingsTypes(definition, 'GeneratedSettings'),
+      generateSettingsTypes(definition, 'AlternateSettings'),
+    ]);
+    expect(alternate).toContain('interface AlternateSettings');
+    expect(alternate).not.toContain('interface GeneratedSettings');
     expect(definition).toEqual(before);
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-settings-types-'));
     try {
@@ -50,6 +55,15 @@ const extra: GeneratedSettings = {...valid, extra:true};
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it('keeps the validated schema when the caller changes its definition before completion', async () => {
+    const definition = { defaults: { name: 'original' }, schema: {
+      type: 'object', required: ['name'], properties: { name: { type: 'string' } },
+    } };
+    const pending = generateSettingsTypes(definition, 'AcceptedSettings');
+    definition.schema.properties.name.type = 'number';
+    expect(await pending).toContain('name: string');
   });
 
   it('refuses invalid defaults before emitting a usable declaration', async () => {

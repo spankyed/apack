@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { contentHash } from '../compile-utils.ts';
+import { contentHash } from '../content-hash.ts';
 import { compileMarkdownTree, type MarkdownItem } from './markdown-tree.ts';
 import type { ContentFormatConfig } from '../manifest.ts';
 
