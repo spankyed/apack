@@ -1,4 +1,21 @@
-// How long a step may run before its process group is killed, by the kind of work it is.
+// How much a step may spend before its process group is killed, by the kind of work it is.
+//
+// **A deadline is CPU time, not the clock, wherever the tree can be read** (`boundedSpawn`, which falls back to the
+// clock on Windows, under `APACK_WATCHDOG=off`, for work inside a VM, and once `ps` fails). What a ceiling exists to
+// catch is a loop that spins, which spends CPU without end; a busy machine or a slow disk stretches a run's wall
+// time and leaves its CPU where it was, so a CPU ceiling never fires on a run that is only slow. A step's CPU is
+// its whole tree's, so a step that fans out spends several CPU-seconds a second: the rungs below are sized for
+// that, against forced runs on 2026-11-07 (a 10-core Mac at a load of 14 to 23, `chain --all --e2e`). The
+// heaviest of each kind: `quick` 40s (`typecheck:pack`), `suite` 271s (`test:unit:host`), `scenario` 228s
+// (`test:packaged-authoring:author`), `acceptance` 3,640s (`test:integration` at 5 cores). Each rung is
+// several times that, because a reading is a lower bound — a process that starts and exits between two
+// `ps` readings is never seen — and a wider machine spends more on each worker's start.
+//
+// **Inside the Linux test container, CPU time is not a reading of work.** OrbStack's VM accounts no steal
+// time, so a guest's CPU grows with the host's load: one fixed loop read 11.4s of CPU in the VM and 35.6s with
+// the Mac saturated, against 10.1s and 10.3s on the Mac itself (2026-11-07), and the container's forced setup
+// build, 102s of CPU on the Mac, read 724s there at a host load of 20. A ceiling there would be a clock, so the
+// container runs with none (`APACK_CEILING`, below).
 //
 // **A deadline is a declared class, never a multiple of a measurement.** A class carries no machine: it
 // states the kind of work and is chosen for the slowest plausible box, so a smaller machine runs the same
@@ -51,12 +68,28 @@ export function watchdogEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   throw new Error(`APACK_WATCHDOG is ${JSON.stringify(value)}: set it to off to disable the watchdog, or on (the default)`);
 }
 
-/** Each class's deadline, in milliseconds — what `boundedSpawn` is given */
+/**
+ * `APACK_CEILING=off` leaves a run the watchdog can read with no ceiling at all, for a machine whose CPU time
+ * is not a reading of work: `test:linux` sets it in the container, whose VM counts the host's load as the
+ * guest's CPU (see the header), so a ceiling there would be a clock under another name. A stall still reads as
+ * no CPU in a VM, so the watchdog keeps its meaning; what bounds a spin is the honest ceiling on the Mac and CI,
+ * which run the same builds, and the outer bound of the step that started the container. Where the watchdog is
+ * off too, the clock still applies, so nothing runs unbounded. `on`, or unset, keeps the ceiling; any other
+ * value is refused, as `APACK_WATCHDOG`'s is.
+ */
+export function ceilingEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const value = env.APACK_CEILING;
+  if (value === undefined || value === 'on') return true;
+  if (value === 'off') return false;
+  throw new Error(`APACK_CEILING is ${JSON.stringify(value)}: set it to off to run with the watchdog alone, or on (the default)`);
+}
+
+/** Each class's deadline, in milliseconds of CPU time (of the clock where the tree cannot be read) — what `boundedSpawn` is given */
 export const TIMEOUT_MS = {
   quick: { ms: 300_000 },
-  suite: { ms: 600_000 },
-  scenario: { ms: 900_000 },
-  acceptance: { ms: 7_200_000 },
+  suite: { ms: 1_200_000 },
+  scenario: { ms: 1_800_000 },
+  acceptance: { ms: 14_400_000 },
 } as const satisfies Record<string, { readonly ms: number }>;
 
 export type TimeoutClass = keyof typeof TIMEOUT_MS;
@@ -94,6 +127,8 @@ export function timedOutBecause({ what, timeout, seconds, stalled }: { what: str
   const recorded = seconds !== undefined && seconds > 0
     ? ` It usually takes ${seconds}s here.`
     : ' This machine has no recorded cost for it.';
-  return `${what} timed out: it exceeded its ${timeoutText(timeout)} budget and its process group was killed.`
-    + recorded + ' A timeout alone does not distinguish slow progress from stalled work. Inspect the run output before retrying or changing its budget.';
+  return `${what} timed out: it spent its ${timeoutText(timeout)} budget of CPU time, or of the clock where its CPU`
+    + ' could not be read, and its process group was killed.' + recorded
+    + ' The [bounded] line at the end of its output says which, and what it spent: CPU close to its wall time with no'
+    + ' recent output is a loop that spins. Inspect the run output before retrying or changing its budget.';
 }

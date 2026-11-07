@@ -136,10 +136,44 @@ spawn(process.execPath, ['-e', ${JSON.stringify(burn(CPU_IDLE + 2_000))}], { det
     expect(result).toMatchObject({ code: 0 });
   });
 
-  it('leaves a tree that spins to its budget, which reports a timeout and not a stall', async () => {
-    const [command, args] = node(burn(60_000));
-    const result = await boundedSpawn(command, args, CPU_IDLE + 2_000, { idleMs: CPU_IDLE });
+  it('leaves a tree that spins to its CPU budget, which reports a timeout and not a stall', async () => {
+    // For ever, so the case rests on the CPU it spends and not on how soon a starved machine gets through a burn
+    const [command, args] = node('for (;;) {}');
+    const budget = 4_000;
+    const result = await boundedSpawn(command, args, budget, { idleMs: CPU_IDLE });
     expect(result).toMatchObject({ code: 124, timedOut: true });
     expect(result.stalled).toBeUndefined();
+    expect(result.cpuMs).toBeGreaterThanOrEqual(budget);
+    expect(result.output).toContain(`spent its ${budget / 1000}s CPU budget`);
+  });
+
+  it('leaves a tree that outlives its budget by the clock alone, which is what a busy machine does to a run', async () => {
+    // Twice its budget in wall time, with next to no CPU and output keeping the watchdog quiet
+    const [command, args] = node('let n = 0; const t = setInterval(() => { console.log(n); if (++n === 10) clearInterval(t); }, 400)');
+    const result = await boundedSpawn(command, args, 2_000, { idleMs: 3_000 });
+    expect(result).toMatchObject({ code: 0 });
+    expect(result.ms).toBeGreaterThan(2_000);
+    expect(result.cpuMs).toBeLessThan(2_000);
+  });
+
+  it('leaves a tree past its CPU budget alone under APACK_CEILING=off, with the watchdog still on', async () => {
+    // The container's case: CPU there is the host's load too, so the watchdog is the only bound
+    const [command, args] = node(burn(3_000));
+    process.env.APACK_CEILING = 'off';
+    try {
+      const result = await boundedSpawn(command, args, 1_000, { idleMs: CPU_IDLE });
+      expect(result).toMatchObject({ code: 0 });
+      expect(result.cpuMs, 'nothing is proven unless it spent past its budget').toBeGreaterThan(1_000);
+    } finally {
+      delete process.env.APACK_CEILING;
+    }
+  });
+
+  it('bounds a tree it cannot read by the clock', async () => {
+    const [command, args] = node('setTimeout(() => {}, 20_000)');
+    const result = await boundedSpawn(command, args, 1_500, { idleMs: false });
+    expect(result).toMatchObject({ code: 124, timedOut: true });
+    expect(result.cpuMs).toBeUndefined();
+    expect(result.output).toContain('by the clock');
   });
 });

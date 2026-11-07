@@ -432,15 +432,15 @@ describe('every spawn an orchestrator makes is bounded', () => {
   describe('what a timed-out step reports', () => {
     it('reports the bound and the usual cost without diagnosing stalled work', () => {
       const why = timedOutBecause({ what: 'test:integration', timeout: 'suite', seconds: 60 });
-      expect(why).toContain('600s (suite)');
+      expect(why).toContain('1200s (suite)');
       expect(why).toContain('usually takes 60s here');
-      expect(why).toContain('does not distinguish slow progress from stalled work');
+      expect(why).toContain('budget of CPU time');
       expect(why).not.toMatch(/wedged|deadlock/);
     });
 
     it.each([undefined, 0])('does not invent a recorded cost for %s', seconds => {
       const why = timedOutBecause({ what: 'bash tests/acceptance/x.sh', timeout: 'scenario', seconds });
-      expect(why).toContain('900s (scenario)');
+      expect(why).toContain('1800s (scenario)');
       expect(why).toContain('no recorded cost');
       expect(why).not.toContain('usually takes');
     });

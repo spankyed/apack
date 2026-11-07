@@ -218,7 +218,7 @@ refuseWithoutSpace();
 /**
  * What the chain and its pools tell a step about the run it is part of.
  *
- * `PACKAGES_PREBUILT_ENV` is the one `APACK_` variable that must not cross: it says the publishable packages
+ * Two `APACK_` variables must not cross. `APACK_CEILING` is the container's own, set below. `PACKAGES_PREBUILT_ENV` says the publishable packages
  * are already built, which is true of the Mac's tree and false of this volume by construction — the copy
  * below excludes every `packages/<pkg>/dist`, so the container builds its own. Forwarded, it makes the
  * `packages:ensure` in `sync` read that intended absence as a writer rewriting the tree mid-run, and refuse
@@ -226,7 +226,7 @@ refuseWithoutSpace();
  * it survived: the excluded paths persist, so only the first container run in a checkout is refused.
  */
 const forwarded = Object.keys(process.env)
-  .filter((key) => (key.startsWith('APACK_') && key !== PACKAGES_PREBUILT_ENV) || key === 'FORCE_COLOR');
+  .filter((key) => (key.startsWith('APACK_') && key !== PACKAGES_PREBUILT_ENV && key !== 'APACK_CEILING') || key === 'FORCE_COLOR');
 
 const quote = (arg: string): string => `'${arg.replace(/'/g, `'\\''`)}'`;
 /**
@@ -315,6 +315,9 @@ const child = spawn('docker', [
   '-v', `${ELMDB_CHECKOUT}:/elmdb-src:ro`, '-v', `${ELMDB_VOLUME}:/elmdb`, '-v', `${CARGO_REGISTRY_VOLUME}:/usr/local/cargo/registry`,
   ...gitDirMount(),
   ...forwarded.flatMap((key) => ['-e', key]),
+  // Set here and never forwarded: the VM counts the host's load as its CPU, so a ceiling in it is a clock
+  // (`ceilingEnabled`, `scripts/lib/step-timeouts.ts`), whatever the Mac's own setting is
+  '-e', 'APACK_CEILING=off',
   ...(compilerStore ? ['-e', `APACK_COMPILER_STORE=${compilerStore}`] : []),
   IMAGE, 'bash', '-c', script,
 ], { stdio: 'inherit' });
