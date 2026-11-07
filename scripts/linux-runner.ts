@@ -16,6 +16,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PACKAGES_PREBUILT_ENV, REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { linuxTestInvocation } from './lib/linux-native-scratch.ts';
+import { oneRustToolchain, pinnedChannel, rustCheckoutsIn, vendoredCheckouts } from './lib/vendored-checkouts.ts';
 
 const DOCKERFILE = path.join(REPO_ROOT, 'scripts', 'linux', 'Dockerfile');
 const short = (text: string | Buffer): string => createHash('sha256').update(text).digest('hex').slice(0, 12);
@@ -28,12 +29,27 @@ const ELMDB_CHECKOUT = (() => {
     process.exit(1);
   }
 })();
-/** The Rust toolchain elmdb pins, which the image installs */
-const RUST_TOOLCHAIN = /^channel\s*=\s*"([^"]+)"/m.exec(fs.readFileSync(path.join(ELMDB_CHECKOUT, 'rust-toolchain.toml'), 'utf8'))?.[1];
-if (RUST_TOOLCHAIN === undefined) {
-  process.stderr.write(`${ELMDB_CHECKOUT}/rust-toolchain.toml names no channel\n`);
-  process.exit(1);
-}
+/** Where `vendor/elmdb` points, which `APACK_LINUX_ELMDB_ROOT` stands in for when a run is qualifying a frozen one */
+const VENDOR_ELMDB = (() => {
+  try { return fs.realpathSync(path.join(REPO_ROOT, 'vendor', 'elmdb')); } catch { return undefined; }
+})();
+/**
+ * The Rust toolchain the image installs, from **every** Rust checkout this container has to build rather than
+ * from elmdb's pin alone — a second checkout pinning another channel was built with elmdb's, silently.
+ * `oneRustToolchain` refuses a disagreement and names both pins; there is one image, so there is one answer.
+ */
+const RUST_TOOLCHAIN = (() => {
+  try {
+    const checkouts = [
+      ELMDB_CHECKOUT,
+      ...rustCheckoutsIn(vendoredCheckouts(REPO_ROOT)).filter((dir) => dir !== VENDOR_ELMDB),
+    ];
+    return oneRustToolchain(checkouts.map((dir) => ({ path: dir, channel: pinnedChannel(dir) })));
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.exit(1);
+  }
+})();
 /** Keyed by the Dockerfile's bytes and the toolchain it installs, so either changing builds a new image */
 const IMAGE = `apack-linux-test:${short(`${fs.readFileSync(DOCKERFILE, 'utf8')}\n${RUST_TOOLCHAIN}`)}`;
 /**

@@ -112,7 +112,16 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   is drawn, so what a menu contributes there is global accelerators, and installing none left Electron's
   default — whose Ctrl+R, Ctrl+W and Ctrl+C fire wherever focus is. Both templates are functions of the
   platform, so both are checked from a Mac.
-- **Next deliverable:** Phase T's **G1**, then the two tooling tracks, in either order.
+- **Done:** Phase T's **two tooling tracks**, which were the same bug twice and are now one derivation.
+  `scripts/lib/vendored-checkouts.ts` answers what is linked under `vendor/`: `rustCheckoutsIn` gives the
+  janitor its subject (a sibling is covered the day it is linked, not the day someone remembers the file),
+  and `oneRustToolchain` gives the container its channel from **every** linked Rust checkout, refusing a
+  disagreement by naming both pins rather than silently building one under the other's. Both refuse an empty
+  set. The module imports nothing outside `node:`, which `janitor.ts` requires — launchd runs it with no npm.
+  Checked in place: the janitor still reports the same four targets and the image still keys on `1.99.1`.
+  **Phase S's two preconditions are met.**
+- **Next deliverable:** Phase T's **G1** — verify against #372 first, since the file moves there — and the
+  tab-and-panel track (T1, T2, T3, T5, T6, T8, T9), checking each for a fix the spine would delete.
   **Phase G is blocked on a quiet machine**: `npm run check:idle`
   reported 60% against a 70% floor on 2026-11-07, so the baseline could not be taken. Retry before Phase S,
   since it cannot be taken once state moves. Phase B's first commit is the last cheap exit — see Constraints.
