@@ -3,7 +3,7 @@ import type { PerformanceWindow } from './window.ts';
 /** Installed once in the owned page; all callbacks remain in the renderer's execution context. */
 export function installViewCompletion() {
   const win = window as unknown as PerformanceWindow;
-  win.__waitForPerformanceView = ({ accept, check: ready, dispatch, errors }) => new Promise<void>((resolve, reject) => {
+  win.__waitForPerformanceView = ({ accept, check: ready, dispatch, errors, awaitsDelivery = true }) => new Promise<void>((resolve, reject) => {
     const recording = win.__performance;
     let checking = false;
     let delivered = false;
@@ -18,7 +18,7 @@ export function installViewCompletion() {
         if (failure) reject(failure.error); else resolve();
       },
       async check() {
-        if (checking || finished || !delivered) return;
+        if (checking || finished || (awaitsDelivery && !delivered)) return;
         checking = true;
         try {
           await recording.flushView();

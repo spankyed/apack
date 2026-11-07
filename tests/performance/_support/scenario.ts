@@ -23,7 +23,7 @@ type ScenarioResult = {
 
 /** Warm scenarios own their fixture directory, provenance, journal and process acknowledgments. */
 export async function createWarmScenario<F extends { identity: PerformanceManifest['fixture']; data: unknown }>(
-  scenario: 'thread-open' | 'search' | 'streaming',
+  scenario: 'thread-open' | 'search' | 'streaming' | 'terminal-open',
   makeFixture: (trials: number) => F,
   target: { app: AppDriver; appPage: Page; electronApp: ElectronApplication },
 ) {

@@ -8,6 +8,16 @@ export interface PerformanceViewCompletion {
   check(): boolean;
   dispatch(): void;
   errors: readonly string[];
+  /**
+   * Whether readiness waits for a view delivery this completion accepted. Default true.
+   *
+   * It has to be true for an action whose result is a **view**: the DOM changes while a page is still
+   * filling, so checking on mutation alone would complete the trial before the data it is measuring had
+   * arrived. It has to be false for an action whose result is a **feed** — a terminal's output is broadcast
+   * news and the code feature declares no views at all, so there is no delivery to accept and the only
+   * readiness there is is what the window has drawn.
+   */
+  awaitsDelivery?: boolean;
 }
 export interface PerformanceWindow {
   __waitForPerformanceView(options: PerformanceViewCompletion): Promise<void>;
@@ -24,7 +34,9 @@ export interface PerformanceWindow {
   applicationState: {
     getSnapshot(): { value: unknown; context: Record<string, unknown> };
     send(event: Record<string, unknown>): void;
-    system: { get(ref: string): { send(event: Record<string, unknown>): void; getSnapshot(): { context: { currentThread?: { id: string }; chatMessageIds: string[]; chatLimit: number; messageContents: Record<string, { text?: string; sender?: string; responseTimestamp?: number }>; messageSearch: { query: string; searching: boolean; results: Array<{ messageId: string; threadId: string; timestamp: number }> } } } } };
+    // The threads surface's context, which three scenarios read, plus the code surface's panel fields. A
+    // surface addressed here answers with its own context; the optional half is what the others hold.
+    system: { get(ref: string): { send(event: Record<string, unknown>): void; getSnapshot(): { context: { currentThread?: { id: string }; chatMessageIds: string[]; chatLimit: number; messageContents: Record<string, { text?: string; sender?: string; responseTimestamp?: number }>; messageSearch: { query: string; searching: boolean; results: Array<{ messageId: string; threadId: string; timestamp: number }> }; panelTerminalId?: string | null; panelTerminalExpanded?: boolean } } } };
   };
 }
 
