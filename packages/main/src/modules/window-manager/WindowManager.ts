@@ -54,7 +54,12 @@ class WindowManager implements AppModule {
       // this.#splashScreen.updateStatus('Waking Up Assistant');
     }
     
-    // Wait for API server to be ready before creating window
+    // Loading starts now; the renderer waits for authenticated API readiness before connecting.
+    const initialWindow = this.restoreOrCreateWindow(true).then(
+      window => ({ window, error: undefined }), error => ({ window: undefined, error }),
+    );
+
+    // Preserve the API startup failure dialog while the hidden renderer loads.
     if (this.#apiServer) {
       try {
         await this.#apiServer.waitForReady();
@@ -93,7 +98,8 @@ class WindowManager implements AppModule {
       // this.#splashScreen.updateStatus('Loading...');
     }
     
-    await this.restoreOrCreateWindow(true);
+    const loaded = await initialWindow;
+    if (loaded.error) throw loaded.error;
     app.on('second-instance', () => this.restoreOrCreateWindow(true));
     
     // On macOS, only create/restore window if there are no windows open
@@ -408,10 +414,8 @@ class WindowManager implements AppModule {
     // Determine icon path based on platform (use dev icon in development)
     const iconPath = getWindowIcon();
 
-    // Get the API port before creating the window
-    const apiPort = this.#apiServer?.getStatus().port || 3001;
     const startupId = this.#apiServer?.getStatus().startupId;
-    console.log(`[MAIN] Creating window with API port: ${apiPort}`);
+    console.log('[MAIN] Creating application window');
 
     const browserWindow = new BrowserWindow({
       show: false,
@@ -434,15 +438,15 @@ class WindowManager implements AppModule {
         sandbox: false, // Sandbox disabled because the demo of preload script depend on the Node.ts api
         webviewTag: false, // The webview tag is not recommended. Consider alternatives like an iframe or Electron's BrowserView. @see https://www.electronjs.org/docs/latest/api/webview-tag#warning
         preload: this.#preload.path,
-        additionalArguments: [
-          `--api-port=${apiPort}`,
-          ...(startupId ? [`--startup-id=${startupId}`] : []),
-        ],
+        additionalArguments: startupId ? [`--startup-id=${startupId}`] : [],
       },
     });
 
     contextMenu({ window: browserWindow });
     this.attachRendererDiagnostics(browserWindow);
+    const readiness = new AbortController();
+    const ready = this.waitForRendererReady(browserWindow, readiness.signal);
+    void ready.catch(() => {});
 
     try {
       const query = performanceStartupQuery();
@@ -453,7 +457,9 @@ class WindowManager implements AppModule {
       } else {
         await browserWindow.loadFile(this.#renderer.path, { query });
       }
+      await ready;
     } catch (error) {
+      readiness.abort();
       console.error('[MAIN] Failed to load renderer:', error);
       await this.closeSplashWithDelay();
       throw error;
@@ -462,29 +468,38 @@ class WindowManager implements AppModule {
     return browserWindow;
   }
 
-  private waitForRendererReady(): Promise<void> {
-    return new Promise<void>((resolve) => {
-      const TIMEOUT = 15_000;
-
-      const onReady = () => {
+  private waitForRendererReady(window: BrowserWindow, signal: AbortSignal): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let settled = false;
+      const finish = (error?: unknown) => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timer);
         ipcMain.removeListener('renderer:ready', onReady);
-        resolve();
+        window.removeListener('closed', onClosed);
+        signal.removeEventListener('abort', onAborted);
+        if (error) reject(error); else resolve();
       };
-
-      const timer = setTimeout(() => {
-        console.warn('[MAIN] Renderer did not signal ready within timeout, showing window anyway');
-        ipcMain.removeListener('renderer:ready', onReady);
-        resolve();
-      }, TIMEOUT);
-
+      const onReady = (event: Electron.IpcMainEvent) => {
+        if (event.sender === window.webContents) finish();
+      };
+      const onClosed = () => finish(new Error('The window closed before its renderer became ready'));
+      const onAborted = () => finish(new Error('Renderer loading was cancelled'));
+      window.once('closed', onClosed);
+      signal.addEventListener('abort', onAborted, { once: true });
       ipcMain.on('renderer:ready', onReady);
+      void (this.#apiServer?.waitForReady() ?? Promise.resolve()).then(() => {
+        if (!settled) timer = setTimeout(() => {
+          console.warn('[MAIN] Renderer did not signal ready within timeout, showing window anyway');
+          finish();
+        }, 15_000);
+      }, finish);
     });
   }
 
   async createPopoutWindow(surfaceId: string, surfaceTitle?: string): Promise<BrowserWindow> {
     const iconPath = getWindowIcon();
-    const apiPort = this.#apiServer?.getStatus().port || 3001;
     const startupId = this.#apiServer?.getStatus().startupId;
     const title = `${WINDOW_CONFIG.POPOUT_TITLE_PREFIX}-${surfaceId}`;
 
@@ -508,10 +523,7 @@ class WindowManager implements AppModule {
         sandbox: false,
         webviewTag: false,
         preload: this.#preload.path,
-        additionalArguments: [
-          `--api-port=${apiPort}`,
-          ...(startupId ? [`--startup-id=${startupId}`] : []),
-        ],
+        additionalArguments: startupId ? [`--startup-id=${startupId}`] : [],
       },
     });
 
@@ -573,12 +585,7 @@ class WindowManager implements AppModule {
     );
 
     const isNewWindow = window === undefined;
-    let rendererReadyPromise: Promise<void> | undefined;
-    if (isNewWindow) {
-      rendererReadyPromise = this.waitForRendererReady();
-      window = await this.createWindow();
-      await rendererReadyPromise;
-    }
+    if (isNewWindow) window = await this.createWindow();
 
     if (!show || !window) {
       return window;

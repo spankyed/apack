@@ -71,6 +71,8 @@ export interface _HostBridge {
     notifyZoomChanged: (factor: number) => void;
   };
   apiStatus: {
+    /** Authenticated app bootstrap waits here before creating its transport. */
+    whenReady: () => Promise<{ port: number; startupId: string }>;
     getStatus: () => Promise<{
       running: boolean;
       port?: number;
@@ -135,7 +137,6 @@ export interface _HostBridge {
     onAction: (callback: (data: { action: string; params: Record<string, string> }) => void) => () => void;
   };
   rendererReady: () => void;
-  apiPort: number;
   startupId?: string;
   /**
    * The token the API requires for this app run, read from main as the preload loads rather than taken

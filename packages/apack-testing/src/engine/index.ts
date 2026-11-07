@@ -96,7 +96,7 @@ export const asSessionPage = (page: Page, app: EngineAppDriver, window?: EngineW
  */
 async function apiAddressFromWindow(page: SessionPage): Promise<{ port: number; token: string }> {
   const found = await page.evaluateExpression(
-    '(() => { const api = window.electronAPI; return { port: api?.apiPort, token: api?.apiToken }; })()',
+    '(async () => { const api = window.electronAPI; const ready = await api?.apiStatus.whenReady(); return { port: ready?.port, token: api?.apiToken }; })()',
   ) as { port?: number; token?: string };
   if (typeof found?.port !== 'number' || !found.token) {
     throw new Error(

@@ -84,7 +84,7 @@ if (!restarting) test('an externally built default fork refreshes both windows a
     await expect(appPage.getByTestId('fork-component')).toBeVisible();
     await expect(second.getByText('Acceptance fork', { exact: true })).toBeVisible();
     const previous = await runtime(appPage);
-    const api = await appPage.evaluate(() => ({ port: (window as any).electronAPI.apiPort, token: (window as any).electronAPI.apiToken }));
+    const api = await appPage.evaluate(async () => ({ port: (await window.electronAPI!.apiStatus.whenReady()).port, token: (window as any).electronAPI.apiToken }));
     const response = await fetch(`http://127.0.0.1:${api.port}/dev/reload`, { method: 'POST',
       headers: { 'Content-Type': 'application/json', [API_TOKEN_HEADER]: api.token }, body: JSON.stringify({ packId: 'default-setup' }),
     });

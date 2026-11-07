@@ -87,6 +87,12 @@ export class ApiServer implements AppModule {
     // The app's windows read the API token as their preload loads
     ipcMain.on('api:token', (event) => { event.returnValue = this.apiToken; });
 
+    ipcMain.handle('api:when-ready', async () => {
+      await this.waitForReady();
+      if (this.actualPort === undefined) throw new Error('The API has no ready port');
+      return { port: this.actualPort, startupId: this.startupId };
+    });
+
     // Let renderer query current API status on startup (avoids IPC race condition)
     ipcMain.handle('api:get-status', () => ({
       running: this.processManager.isRunning(),
@@ -284,6 +290,8 @@ export class ApiServer implements AppModule {
 
     // Reset state
     this.actualPort = undefined;
+    // A window opened during restart backoff must wait for the next ready process.
+    if (!this.isShuttingDown && !this.serverReadyResolve) this.serverReady = this.createReadyPromise();
 
     // Handle restart
     if (willRestart) {
@@ -373,14 +381,11 @@ export class ApiServer implements AppModule {
   }
 
   public waitForReady(timeout = API_CONFIG.READY_TIMEOUT): Promise<void> {
-    return Promise.race([
-      this.serverReady,
-      new Promise<void>((_, reject) => {
-        setTimeout(() => {
-          reject(new Error(`API server failed to start within ${timeout}ms`));
-        }, timeout);
-      })
-    ]);
+    let timer: ReturnType<typeof setTimeout>;
+    const expired = new Promise<void>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`API server failed to start within ${timeout}ms`)), timeout);
+    });
+    return Promise.race([this.serverReady, expired]).finally(() => clearTimeout(timer));
   }
 }
 
