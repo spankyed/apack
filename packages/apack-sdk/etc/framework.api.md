@@ -635,6 +635,7 @@ export interface ProjectionDefinition {
     apply(ids: readonly string[]): void;
     readonly from: readonly string[];
     rebuild(): void;
+    readonly version?: number;
 }
 
 // @public

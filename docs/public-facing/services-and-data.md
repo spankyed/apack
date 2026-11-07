@@ -597,8 +597,9 @@ surface; a send from the machine's own entry is in none, carries no sender, and 
 A projection is rows a feature derives from other rows, kept in step however those rows were written: by the app, by a
 tool such as `apack db exec`, or by another process while the app was closed. A write in the app runs it in the write's
 own unit, so a row and what's derived from it commit together, the way a database keeps an index. A commit from another
-process, which can't run your pack's code, is caught up on from the database's change log when the app hears of it, and
-at the app's next start.
+process, which can't run your pack's code, is caught up on when the app hears of it, and at the app's next start: the
+database keeps the types a projection derives from in the order of the commits that last wrote them, so catching up
+reads only what changed since the projection last read, a chunk at a time, however long ago that was.
 
 ```typescript
 // src/features/notes/be/projections.ts
@@ -619,12 +620,16 @@ Name the export in the feature's `projections` (`"projections": "src/features/no
 - **`from` is the entity types it derives from.** A write to none of them doesn't run it, and costs a write nothing more.
 - **`apply(ids)` brings what's derived from those entities up to date.** Each is read as it is now, and may have been
   trashed or destroyed. It is run again with ids it has seen, so it rewrites rather than adds.
-- **`rebuild()` derives everything again**, for when what changed can't be known: the first time, after the change log
-  has moved past where it last read, and after a commit that didn't say which entities it wrote.
+- **`rebuild()` derives everything again**: the first time it runs, after `version` changes, and in the rare case what
+  changed can't all be known.
+- **`version`** (1 unless given) says which derivation `apply` and `rebuild` make. Raise it when that changes, so what
+  was derived before is derived again.
+- **A write to a type a projection derives from costs about a fifth more**, for keeping that order, and writes to other
+  types nothing.
 - **Both hold the write lock**, so keep them quick, and a throw undoes the write that ran them. A catch-up that throws is
   logged and tried again next time, from where it last read.
-- **It hears which entities changed, not which relations.** Derive from entities' fields, and treat the relations a
-  projection writes as its own output, which nothing else writes.
+- **An entity counts as changed when a field, its trash state or a relation at either end changed.** A projection that
+  writes relations itself hears its own writes as part of the unit that made them, and not again.
 
 ### Trash
 

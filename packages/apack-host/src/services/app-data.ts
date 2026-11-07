@@ -1,5 +1,5 @@
 // services.appData: reset, back up and restore the app's stored data
-import { _catchUpProjections } from '@apackdev/sdk/runtime';
+import type { ProjectionRunner } from '@apackdev/sdk/runtime';
 import type { AppDataService, BackupDatabase, RunHistory, SettingsAdmin } from '@apackdev/sdk/services';
 import type { EarsDatabase, EarsEngine } from '@apackdev/ears';
 import { databaseBackupStore, exportDatabase, readBackupSummary, importDatabase, type BackupStores } from '../backup/index.ts';
@@ -16,13 +16,15 @@ import { createSettingsBackupValidator } from '../features/settings/be/backup.ts
  * already put back what was there. What it does with that is the caller's — replacing the data is this service's
  * job, and telling the app is not.
  */
-export function createAppData({ database, engine, history, registry, settings, onReplaced }: {
+export function createAppData({ database, engine, history, registry, settings, onReplaced, projections }: {
   database: EarsDatabase;
   /** The engine reading `database`, through which it is emptied and replaced, so the engine's watches hear of it */
   engine: EarsEngine;
   /** The run history and its database, which a backup copies and a reset empties with the app's */
   history: { service: RunHistory; database: EarsDatabase; engine: EarsEngine };
   registry: PackRegistry; settings: SettingsAdmin; onReplaced: () => void;
+  /** The engine's projections, caught up once the data is replaced */
+  projections: ProjectionRunner;
 }): AppDataService & { replacedElsewhere(): Promise<void> } {
   const stores: BackupStores = { lmdb: databaseBackupStore(database, engine), runHistory: databaseBackupStore(history.database) };
   let replacing = false;
@@ -55,7 +57,7 @@ export function createAppData({ database, engine, history, registry, settings, o
         // Stored API keys go too, with their data keys, after the database is emptied, since the settings system hears of it
         secretsStore.clearAll();
         startPacks(registry);
-        _catchUpProjections(engine);
+        await projections.catchUp();
       }));
     },
     /**
@@ -75,7 +77,7 @@ export function createAppData({ database, engine, history, registry, settings, o
         // Their stored keys may have gone with it, and this process's store hears only its own changes
         secretsStore.changedElsewhere();
         startPacks(registry);
-        _catchUpProjections(engine);
+        await projections.catchUp();
       }));
     },
     exportBackup: (targetPath, name, databases) =>
@@ -92,7 +94,7 @@ export function createAppData({ database, engine, history, registry, settings, o
             history.service.stopActive();
             // Run declared versioned data changes after restore, before notifying consumers.
             if (runAppMigrations(registry)) runPackMigrations(registry.packMigrationTargets('pack'));
-            _catchUpProjections(engine);
+            await projections.catchUp();
           },
         });
       });

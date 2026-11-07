@@ -2,7 +2,7 @@ import { compileSettingsCatalog } from '../features/settings/validation.ts';
 // The host's implementations of the services packs reach through `services` (contracts in @apackdev/sdk/services),
 // and the one place the app's HostRuntime is assembled.
 import { secretRedaction } from '../secrets/redaction.ts';
-import { _catchUpProjections, _installProjections, type HostRuntime, type RootEvents, type PerformanceExecution } from '@apackdev/sdk/runtime';
+import { _installProjections, type HostRuntime, type RootEvents, type PerformanceExecution } from '@apackdev/sdk/runtime';
 import type { EarsDatabase, EarsEngine } from '@apackdev/ears';
 import type { PackRegistry } from '../packs/registry.ts';
 import { createAppData } from './app-data.ts';
@@ -47,8 +47,11 @@ export interface HostRuntimeOptions {
   performance?: PerformanceExecution;
 }
 
-export function createHostRuntime({ transport, appVersion, database, runHistory, engine, packs, countCalls, performance }: HostRuntimeOptions): HostRuntime {
-  _installProjections(engine);
+export function createHostRuntime({ transport, appVersion, database, runHistory, engine, packs, countCalls, performance }: HostRuntimeOptions): HostRuntime & {
+  /** Brings the engine's projections up to what changed since each last read: at boot, once the packs have started */
+  catchUpProjections(): Promise<void>;
+} {
+  const projections = _installProjections(engine);
   const settingsStore = createSettingsStore({
     ears: () => engine,
     catalog: packs.settingsCatalog,
@@ -59,7 +62,7 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
   const runHistoryService = createRunHistory(runHistory.engine);
   // The service replaces the data; naming what the app is told about it belongs here, with the wiring
   const { replacedElsewhere, ...appData } = createAppData({ database, engine, history: { service: runHistoryService, database: runHistory.database, engine: runHistory.engine },
-    registry: packs, settings,
+    registry: packs, settings, projections,
     onReplaced: () => transport.rootEvents.emitIncoming({ to: HOST.bus, event: { type: 'DATA_REPLACED' } }),
   });
   let refreshing: ReturnType<typeof setTimeout> | undefined;
@@ -90,8 +93,8 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
       } catch (error) {
         logger.error('Refreshing after a commit from another process failed:', error as Error);
       }
-      // Whatever the answer, since each projection reads the log from its own cursor
-      _catchUpProjections(engine);
+      // Whatever the answer, since each projection reads from its own cursor
+      void projections.catchUp();
       if (changed) transport.rootEvents.emitIncoming({ to: HOST.bus, event: { type: 'DATA_CHANGED_ELSEWHERE' } });
     }, ELSEWHERE_REFRESH_MS);
     refreshing.unref?.();
@@ -106,6 +109,7 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
   // A pack changing may have waited out a start-over refused while it ran, and its projections may have missed commits
   packs.onRegistrationChanged(refreshAfterBurst);
   return {
+    catchUpProjections: projections.catchUp,
     transport,
     ears: engine,
     packs,
