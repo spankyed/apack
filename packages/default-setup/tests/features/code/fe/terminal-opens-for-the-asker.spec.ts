@@ -33,7 +33,7 @@ vi.mock('#features/code/fe/utils/terminal-events.ts', () => ({
 
 const { terminalState } = await import('#features/code/fe/features/terminal/state.ts');
 
-const aTerminal = (id: string) => ({ id, title: id, cwd: '/tmp' }) as never;
+const aTerminal = (id: string) => ({ id, title: id, cwd: '/tmp', submit: '\n' }) as never;
 
 const terminals = (actor: ReturnType<typeof createActor>) =>
   (actor.getSnapshot().context as { terminals: Array<{ id: string }> }).terminals.map((t) => t.id);

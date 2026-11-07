@@ -350,7 +350,9 @@ const runScript = (script: TerminalScript) => {
   const hasPanel = panelTerminalId.value && terminals.value.some((t: TerminalInfo) => t.id === panelTerminalId.value)
   if (hasPanel) {
     // Reuse existing panel terminal
-    terminalActor?.send({ type: 'terminal.INPUT', terminalId: panelTerminalId.value!, data: script.command + '\n' })
+    // Ended the way this shell ends a line (X6), which the descriptor carries because a window cannot know
+    const submit = terminals.value.find((t: TerminalInfo) => t.id === panelTerminalId.value)?.submit ?? '\n'
+    terminalActor?.send({ type: 'terminal.INPUT', terminalId: panelTerminalId.value!, data: script.command + submit })
   } else {
     // No panel terminal — create a new one
     terminalActor?.send({ type: 'terminal.CREATE', title: script.label, command: script.command })

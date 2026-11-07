@@ -9,7 +9,7 @@
 // row-level validation. "Import a backup someone sent you" is enough to turn a stored string into an
 // executable at the next boot.
 import { describe, expect, it } from 'vitest'
-import { defaultShell, listedShells, shellIsKnown, shellToStart } from '#features/code/be/services/known-shells.ts'
+import { defaultShell, listedShells, shellIsKnown, shellToStart, submitFor } from '#features/code/be/services/known-shells.ts'
 
 const POSIX: NodeJS.Platform = 'darwin'
 const LISTED = ['/bin/sh', '/bin/zsh', '/opt/homebrew/bin/fish']
@@ -105,5 +105,16 @@ describe('the shell a terminal starts', () => {
   it('answers the platform default where there is no $SHELL', () => {
     expect(defaultShell('darwin', {} as NodeJS.ProcessEnv)).toBe('/bin/sh')
     expect(defaultShell('win32', {} as NodeJS.ProcessEnv)).toBe('powershell.exe')
+  })
+})
+
+// What ends a typed line, which belongs to the shell and not to the window typing into it — X6.
+describe('what submits a line', () => {
+  it('is a line feed on POSIX and a carriage return and line feed on Windows', () => {
+    // Measured through a real ConPTY on 2026-11-07, not assumed: `\n` is echoed and never runs, `\r` alone
+    // does not get that far, `\r\n` both echoes and runs
+    expect(submitFor('darwin')).toBe('\n')
+    expect(submitFor('linux')).toBe('\n')
+    expect(submitFor('win32')).toBe('\r\n')
   })
 })

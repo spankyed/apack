@@ -16,6 +16,14 @@ export interface TerminalInfo {
   active: boolean
   cols: number
   rows: number
+  /**
+   * What ends a typed line for this session's shell — X6.
+   *
+   * A window cannot know which shell is on the other end, and it matters: typed into a Windows console,
+   * `\n` is echoed and never runs, so a command sits on screen looking typed while nothing happens. The
+   * backend computes it where the shell is chosen.
+   */
+  submit: string
 }
 
 const createTerminalTab = (info: TerminalInfo) => ({
@@ -320,12 +328,15 @@ export const terminalState = setup({
           updateParentState(self, { panelTerminalId: terminalInfo.id, panelTerminalExpanded: true })
         }
 
-        // Run pending command if set
+        // Run pending command if set. **Ended the way this shell ends a line** (X6): a window cannot know
+        // which shell is on the other end, so the descriptor carries it
         if (command) {
           sendToSystem('code', {
             type: 'terminal.TERMINAL_INPUT',
             terminalId: terminalInfo.id,
-            data: command + '\n',
+            // A descriptor from before this field existed, or from a backend mid-reload, must not put the
+            // word `undefined` on the end of the user's command
+            data: command + (terminalInfo.submit ?? '\n'),
           })
         }
       })

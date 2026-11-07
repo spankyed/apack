@@ -126,3 +126,16 @@ export function directoryToStart(cwd: string | undefined): { cwd: string; refuse
   } catch { /* gone, or not reachable */ }
   return { cwd: home, refused: cwd };
 }
+
+/**
+ * What ends a typed line for a shell on `platform` — X6.
+ *
+ * **Measured on Windows, 2026-11-07**, through a real ConPTY: `\n` is echoed and never runs, `\r` alone
+ * does not get that far, and `\r\n` both echoes and runs. A POSIX pty's line discipline takes `\n`.
+ *
+ * It belongs to the session rather than to the window, which is why it is computed here and carried on the
+ * descriptor: a window has no idea which shell is on the other end.
+ */
+export function submitFor(platform: NodeJS.Platform = process.platform): string {
+  return platform === 'win32' ? '\r\n' : '\n';
+}

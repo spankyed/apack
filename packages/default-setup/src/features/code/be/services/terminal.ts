@@ -8,7 +8,7 @@ import { repository } from '#generated/repository.ts';
 import { createLogger } from '@apackdev/sdk/logger';
 import { services } from '#generated/services.ts'
 import type { TerminalSession } from '@apackdev/sdk/services'
-import { directoryToStart, shellToStart } from './known-shells.ts'
+import { directoryToStart, shellToStart, submitFor } from './known-shells.ts'
 
 const logger = createLogger('terminal');
 
@@ -69,7 +69,7 @@ class TerminalService {
       },
     })
 
-    const info: TerminalInfo = { id, title, pid: session.pid, shell, cwd, active: true, cols, rows }
+    const info: TerminalInfo = { id, title, pid: session.pid, shell, cwd, active: true, cols, rows, submit: submitFor() }
     this.terminals.set(id, { info, session, sizedBy })
     repository.terminalCommands.create({ id, title, shell, cwd, cols, rows })
 
@@ -286,6 +286,7 @@ class TerminalService {
           active: true,
           cols: row.cols,
           rows: row.rows,
+          submit: submitFor(),
         }
         // Restored by nobody, so the first window to fit it takes the size (M2)
         this.terminals.set(row.id, { info, session, sizedBy: undefined })
