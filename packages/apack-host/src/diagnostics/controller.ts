@@ -5,7 +5,7 @@ import { createTraceSession, type RecordingMode } from './session.ts';
 import { PROFILE_BYTES } from './profiles.ts';
 
 export const APPLICATION_SPAN_NAMES = new Set([
-  'app.thread.open', 'app.reply.stream', 'app.search', 'app.startup',
+  'app.thread.open', 'app.terminal.open', 'app.reply.stream', 'app.search', 'app.startup',
   'app.dispatch', 'app.view.read', 'app.view.deliver', 'app.view.ready', 'app.index.admission',
 ]);
 export const APPLICATION_SPAN_ATTRIBUTES = new Set([
