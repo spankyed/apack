@@ -73,8 +73,9 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 ## Current handoff
 
 - **Checkout:** `master` at `c2bb387a1a`. Nothing implemented for this goal.
-- **Next deliverable:** Phase T's independent tracks, in any order, concurrently with Phase G's baseline.
-  Phase B's first commit is the `apack-terminal` repository and its link (D11).
+- **Next deliverable:** Phase G's baseline, which must precede any state moving, and Phase T's independent
+  tracks concurrently with it. Then Phase S's walking skeleton, whose first commit is the `apack-terminal`
+  repository and its link (D11). Phase B's first commit is the last cheap exit — see Constraints.
 - **Proven checks:** none yet. The review's findings were re-verified against the tree on 2026-11-07 for
   S1, S2, F3, F9, F10 and L2; the rest carry pre-rename citations and are verified as each is touched.
 - **Unresolved:** `docs/archive/issues/postmortem-pattern-kill-note-loss.md` still
@@ -136,6 +137,13 @@ should not be offered as one:
 terminal, the agent flows and the "stable session APIs usable by apack's CLI and packs" the refactor target
 names. Phase B has the two layers and why the agent path shapes them.
 
+**Non-goals, stated because a new repository invites creep.** The broker owns processes, ptys, VT state and
+bounded I/O and nothing else: no agent status rules, no UI, no EARS or app schema, no app policy, no
+multiplexing beyond one session per pty, and none of the cloud, SSH, updater or workspace management the
+refactor target also lists as out. Application policy, agent workflows, persistence relationships and the
+Vue/XState presentation stay in apack. A capability that does not need a process handle does not belong
+here.
+
 **Home:** `apack-terminal`, a sibling checkout of this one and of elmdb, symlinked as
 `vendor/apack-terminal`, pinned by `vendor/apack-terminal.rev`, maintained by `npm run link:apack-terminal`,
 with `packages/api` depending on it for the packaged app. Rust stays out of the monorepo for a reason that
@@ -163,8 +171,10 @@ not settle has found a gap in it, and should record the gap rather than choose.
 
 ## Phases
 
-Phase T runs concurrently with everything. Phase G must complete before any state moves. The spine is
-B → H → P → A, and each link consumes only the guarantee named.
+Phase G comes first: its baseline cannot be taken once state moves. Phase S then proves the whole path with
+one session before either layer is built out, so the protocol is derived from its clients rather than
+proposed to them. Phase T runs concurrently with all of it. The spine is **G → S → B → H → P → A**, and each
+link consumes only the guarantee named — not a barrier by phase number.
 
 ### Phase G — the gate
 
@@ -190,6 +200,25 @@ measured main-thread cost of the corpus with headroom named. A constant carries 
 reading's date. This document fixes no number: a figure here would be one no record owns, which is what the
 repository's own rule on figures refuses.
 
+### Phase S — one session end to end, before either layer is built out
+
+**Deliverable:** a walking skeleton. One terminal, spawned by the broker, written to, output rendered,
+resized and killed — through the process layer, the protocol, the host session service and the renderer's
+session — with nothing else built. Hard-coded where it must be; no second client, no bounded history, no
+agent facts, no reattach.
+
+**Dependencies:** D9, D10, D11. Phase G's baseline.
+
+**Done when:** a keystroke reaches a pty and its output reaches a screen through all four seams, and
+`tests/e2e/smoke/` still passes.
+
+**Why this phase exists.** Phase B otherwise designs a protocol **before either consumer exists**, which is
+designing against imagined requirements — and a cross-repo protocol is the most expensive thing here to get
+wrong, since fixing it later costs two commits, a `.rev` bump and a migration. The thinnest path through all
+four layers first means the protocol is *derived from its clients* rather than proposed to them, which is
+the rule this repo applies to everything else it derives. It is also the cheapest moment to meet the
+sync-to-async consequence in real call sites rather than in a plan.
+
 ### Phase T — independent tracks
 
 **Deliverable:** the findings that depend on no ownership decision. Separate files, no shared seam, any order,
@@ -204,7 +233,12 @@ concurrent with the spine.
 | Error surfacing | F9, through `reportError` | the pack feature |
 | App keyboard | X3, X10 | `packages/main` menu, `apack-sdk/src/fe/hotkeys.ts` |
 | Agent writes | G1 | the agent streaming writers — **verify against #372 first**, the file moves there |
-| Tab and panel behaviour | T1, T2, T3, T5, T6, T7, T8, T9 | the pack feature |
+| Tab and panel behaviour | T1, T2, T3, T5, T6, T8, T9 | the pack feature |
+
+**T7 is deliberately absent**: the panel's attach watcher never tearing down is a pool-lifecycle defect that
+Phase P's session model dissolves, so fixing it here is work Phase P deletes. It closes as dissolved there,
+with the one-attached-host invariant as its guard. Check each T track for the same shape before starting it —
+a fix the spine removes is the cheapest thing not to write.
 
 S1 and S2 each land with the firing case that fails when the list goes stale: a deny-list rotting unnoticed
 is the defect in both, and a fix without that case only resets the clock.
@@ -245,8 +279,8 @@ monorepo pins a `.rev` and a stale pin should be a clear refusal rather than a s
 `APP_ONLY_EXPORTS` keeps `@apackdev/ears/lmdb` from packs, and with a fake so a terminal test needs no built
 binary.
 
-**Dependencies:** D11 for the broker's home and core, D9 for what it parses, Phase G's baseline so
-acceptance has a before.
+**Dependencies:** Phase S's proven path and the protocol it derived. D11 for the broker's home and core, D9
+for what it parses, Phase G's baseline so acceptance has a before.
 
 **Done when:**
 
@@ -414,6 +448,40 @@ avoid.
 
 ## Acceptance and evidence
 
+### A dissolved finding needs a guard, not only a construction
+
+Sixteen findings close as *dissolved*, which is a claim about structure rather than a passing test. Nothing
+in the claim stops a later change rebuilding what the structure removed, and "it cannot happen now" is the
+shape this repo already distrusts: a check that cannot fail today is a gate or an assertion, and each wants
+something different.
+
+So every dissolved row names, beside its construction, **the check that fails if the construction is
+undone**:
+
+| Dissolved | The guard |
+|---|---|
+| F7, L2, L3 — a stored row as a handle | a spec asserting the Terminal entity declares no pid field, and that no row outlives its session |
+| F4 — one event per chunk | the perf budget: N MB of output produces at most M channel messages |
+| F5 — an EARS write per resize | a spec asserting a resize writes no application row |
+| F1, F2 — two hosts, two scroll policies | the invariant spec: one attached host, one `onData`/resize registration per session |
+| F3, F6 — a second and third scrollback copy | a `check:specifiers` rule: the pack reaches neither window storage nor its own output buffer |
+| X1, X2 — an unowned process tree | the Windows dispatch, required on each release rather than passed once |
+| node-pty returning to the pack | a `check:specifiers` rule, as `APP_ONLY_EXPORTS` does for the lmdb entry |
+
+**A row whose guard cannot be named is not dissolved — it is unverified, and stays `open`.**
+
+### The complaint, not only the findings
+
+The findings came from reading code; the original report was experiential — "super buggy in general,
+especially in the FE UX". Those can both be satisfied and still disagree, so this goal is not finished on a
+full table alone. Name the user-observable journeys **now**, before any of them is reshaped, as `drive/`
+scripts checked by eye at the end: open a terminal and run a build; scroll back during output; drag the
+divider mid-command; switch tabs and come back; run `vim`, quit it, and keep working; kill a terminal with a
+child process running; restart the app and find the terminal where it was. A journey that was broken and
+still is means the findings were the wrong list, which is worth learning at the end rather than never.
+
+### The table
+
 One table, in `docs/references/evidence/terminal-ownership.md`, with a row per finding in the review
 document and these columns: finding, disposition (`test` | `dissolved` | `open`), implementation commit,
 evidence (spec path, or `driven: <what>`), remaining work. A row closes only as D6 allows. The table is the
@@ -440,6 +508,12 @@ Standing repository rules apply as written; this section records only what is sp
 - **Checkpoints are evidence boundaries.** A commit lands because something is proven, not because it is a
   safe place to stop.
 - **The baseline is unrepeatable.** Once Phase B moves state, the before cannot be taken again.
+- **Name the point of no return before passing it.** Phase S and Phase T are revertable in one commit each.
+  Phase B is not: once the pack stops owning a pty, going back means restoring an owner that was deleted, and
+  the broker lives in a repository with its own history. So Phase B's first commit is the last cheap exit,
+  and the thing that makes it safe is Phase S having already proven the path end to end. If the broker
+  regresses first-open latency past Phase G's reading, that is a result to investigate inside Phase B, not a
+  reason to unwind four layers.
 - **The broker can lose on the metric it is measured by.** A pty spawns in-process today; a broker has to
   start first, and first-open latency is one of Phase G's readings. Treat a regression there as a result to
   investigate, not a cost to absorb silently.
