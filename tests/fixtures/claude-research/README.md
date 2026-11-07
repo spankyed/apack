@@ -316,3 +316,6 @@ continuation. It does not establish naturally gated quota/return offer acceptanc
 
 The everyday-layout journey also checks visible formatting controls, native status hit tests
 and no selected-text overlap. Compact shortcut-hint overlap remains a separate visual gap.
+
+The native IDE fixture/journey verifies original discovery, authentication and selection
+permission context. The current /ide terminal fallback is not an inline chooser implementation.
