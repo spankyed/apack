@@ -101,6 +101,37 @@ it('retains a Client button DOM identity while its callback retires and redraws'
   button.click(); expect(f.press).toHaveBeenCalledExactlyOnceWith('review', undefined)
 })
 
+it('restores retained button focus when browser DOM movement blurs it', async () => {
+  const review = { kind: 'button' as const, label: 'Review release notes', actionId: 'review' }
+  const later = { kind: 'button' as const, label: 'Save for later', actionId: 'later' }
+  const tree = (children: ClaudeUiNode[]) => ({ kind: 'box' as const, children })
+  const f = await mount({ nativeUi: { status: 'live', tree: tree([later, review]) } })
+  const button = f.root.querySelector<HTMLButtonElement>('[aria-label="Review release notes"]')!
+  const editor = f.root.querySelector<HTMLTextAreaElement>('[aria-label="Message"]')!
+  vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  const insertBefore = Node.prototype.insertBefore
+  let deliberatelyMoveFocus = false
+  const move = vi.spyOn(Node.prototype, 'insertBefore').mockImplementation(function <T extends Node>(this: Node, node: T, before: Node | null): T {
+    // Chromium blurs a focused element moved with insertBefore; jsdom does not.
+    if (node === button && node.parentNode === this) { button.blur(); if (deliberatelyMoveFocus) editor.focus() }
+    return insertBefore.call(this, node, before) as T
+  })
+  try {
+    button.focus()
+    f.state.nativeUi = { status: 'live', tree: tree([{ ...review }, { ...later }]) }
+    await nextTick()
+    expect(button.isConnected).toBe(true)
+    expect(document.activeElement).toBe(button)
+    deliberatelyMoveFocus = true
+    f.state.nativeUi = { status: 'live', tree: tree([{ ...later }, { ...review }]) }
+    await nextTick()
+    button.focus()
+    f.state.nativeUi = { status: 'live', tree: tree([{ ...review }, { ...later }]) }
+    await nextTick()
+    expect(document.activeElement).toBe(editor)
+  } finally { move.mockRestore(); vi.mocked(document.hasFocus).mockRestore() }
+})
+
 it('retires visible buttons on redraw, disconnect and error while preserving typed input', async () => {
   const f = await mount({ statusLine: '/fixture', nativeUi: live })
   const editor = f.root.querySelector('textarea')!; editor.value = 'Unsent input'; editor.focus()

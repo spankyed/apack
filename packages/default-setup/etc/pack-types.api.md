@@ -693,8 +693,8 @@ declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObjec
                 value: z.ZodString;
                 label: z.ZodString;
                 mode: z.ZodEnum<{
-                    default: "default";
                     plan: "plan";
+                    default: "default";
                     auto: "auto";
                     acceptEdits: "acceptEdits";
                     bypassPermissions: "bypassPermissions";
@@ -1440,8 +1440,8 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
     url: z.ZodString;
     title: z.ZodString;
     phase: z.ZodEnum<{
-        waiting: "waiting";
         prompt: "prompt";
+        waiting: "waiting";
     }>;
     userConfirmsCompletion: z.ZodBoolean;
     choices: z.ZodArray<z.ZodObject<{
@@ -1653,8 +1653,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
             value: z.ZodString;
             label: z.ZodString;
             mode: z.ZodEnum<{
-                default: "default";
                 plan: "plan";
+                default: "default";
                 auto: "auto";
                 acceptEdits: "acceptEdits";
                 bypassPermissions: "bypassPermissions";
@@ -2892,6 +2892,7 @@ type ClaudeUiNode = {
     plugin?: string;
 } | {
     kind: 'button';
+    renderId?: string;
     expanded?: boolean;
     color?: string;
     hotkeyColor?: string;
@@ -6985,8 +6986,8 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  * classifier instead of prompting.
  */
 declare const PermissionModeSchema: z.ZodEnum<{
-    default: "default";
     plan: "plan";
+    default: "default";
     auto: "auto";
     acceptEdits: "acceptEdits";
     bypassPermissions: "bypassPermissions";

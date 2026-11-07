@@ -29,7 +29,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, provide, ref, onBeforeUnmount, onUpdated, type ComponentPublicInstance, type CSSProperties } from 'vue'
+import { computed, inject, provide, ref, onBeforeUnmount, onBeforeUpdate, onUpdated, type ComponentPublicInstance, type CSSProperties } from 'vue'
 import { openLink } from '@apackdev/sdk/fe'
 import NativeUiClient from './NativeUiClient.vue'
 import NativeUiSvg from './NativeUiSvg.vue'
@@ -66,7 +66,19 @@ function hoverElement(value: Element | ComponentPublicInstance | null) {
   if (registeredElement instanceof HTMLElement && surface) unregister = surface.register({ element: registeredElement, underPointer, group })
 }
 onBeforeUnmount(() => unregister?.())
-onUpdated(() => surface?.refresh())
+let movingFocus: HTMLButtonElement | undefined
+onBeforeUpdate(() => {
+  const active = document.activeElement
+  movingFocus = props.node.kind === 'box' && active instanceof HTMLButtonElement && registeredElement?.contains(active) ? active : undefined
+})
+onUpdated(() => {
+  const target = movingFocus
+  movingFocus = undefined
+  // Moving a keyed DOM node can blur it in Chromium. Never reacquire a replaced control
+  // or override focus deliberately moved elsewhere during the redraw.
+  if (target?.isConnected && !target.disabled && registeredElement?.contains(target) && document.activeElement === document.body && document.hasFocus()) target.focus({ preventScroll: true })
+  surface?.refresh()
+})
 function childScopeEnabled(index: number): boolean {
   const node = props.node
   if (!('children' in node) || !node.children) return true
