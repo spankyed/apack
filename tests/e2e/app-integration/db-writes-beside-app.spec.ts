@@ -65,6 +65,30 @@ test('a tool killed right after committing is heard, with nothing committed in t
   await expect.poll(() => libraryDocuments(appPage), { timeout: 15_000 }).toContain('Chat commands from a killed tool');
 });
 
+test('a reset from apack db starts the running app over, and it goes on working', async ({ app, appPage, electronApp }) => {
+  await app.waitForSurface('default-setup/library');
+  await app.navigate('default-setup/library');
+  await expect.poll(() => libraryDocuments(appPage)).toContain('Claude Code commands');
+  const dataDir = (await electronApp.evaluate(() => process.env.APACK_USER_DATA_DIR))!;
+
+  await apackDb(dataDir, 'exec', "write(query(EARS.Entity.Document).where('name', 'Claude Code commands').ids()[0]).set('name', 'Renamed before the reset')");
+  const nameCount = (name: string) => `return query(EARS.Entity.Document).where('name', ${JSON.stringify(name)}).count()`;
+  const { stdout } = await apackDb(dataDir, 'reset', '--force', '--keep-keys');
+  expect(stdout).toContain('running apack starts over');
+
+  await expect.poll(async () => (await apackDb(dataDir, 'query', nameCount('Claude Code commands'))).stdout.trim(), { timeout: 15_000 }).toBe('1');
+  expect((await apackDb(dataDir, 'query', nameCount('Renamed before the reset'))).stdout.trim()).toBe('0');
+  expect(await app.getState()).toEqual(expect.objectContaining({ running: 'connected' }));
+
+  await appPage.evaluate(() => {
+    type Actor = { send(event: { type: 'CREATE_FOLDER'; name: string }): void };
+    (window as { applicationState?: { system?: { get(id: string): Actor | undefined } } })
+      .applicationState?.system?.get('default-setup/library')?.send({ type: 'CREATE_FOLDER', name: 'Made after the reset' });
+  });
+  const folders = "return query(EARS.Entity.Collection).where('name', 'Made after the reset').count()";
+  await expect.poll(async () => (await apackDb(dataDir, 'query', folders)).stdout.trim(), { timeout: 15_000 }).toBe('1');
+});
+
 /** Creates two notes through the CLI, the first's text linking to the second, as a tool writes past any repository */
 const linkedNotes = `
   const fields = { completed: false, displayOrder: 0, hideCompletedChildren: false, icon: '', lastSeen: 0, noteType: 'document' };

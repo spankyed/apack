@@ -58,6 +58,15 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
     if (!isPlainObject(value)) throw new SettingsRefusedError(['Stored settings must be a JSON object']);
     return value as SettingsOverrides;
   }
+  /** What readers are shown while the data is replaced: the effective settings, or the defaults over a row they refuse */
+  function publishable(): SettingsDocument {
+    try {
+      return effective();
+    } catch (error) {
+      if (!(error instanceof SettingsRefusedError)) throw error;
+      return structuredClone(defaults());
+    }
+  }
   function effective(): SettingsDocument {
     if (recovering) throw new SettingsRefusedError(['Settings require recovery. Reset the invalid values and restart.']);
     const base = defaults();
@@ -203,7 +212,7 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
     },
     async whileReplacingData<T>(replace: () => Promise<T>): Promise<T> {
       // Database hydration bypasses the writer. Readers retain the published view until replacement settles.
-      if (replacingData === 0) replacementSnapshot = { values: effective(), catalog: declarations() };
+      if (replacingData === 0) replacementSnapshot = { values: publishable(), catalog: declarations() };
       if (replacingData++ === 0) { revision++; tell('replacing'); }
       // Host-owned initialization/migrations may write; unrelated async callers still wait.
       const scope = { active: true };

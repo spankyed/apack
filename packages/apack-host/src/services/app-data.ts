@@ -21,9 +21,9 @@ export function createAppData({ database, engine, history, registry, settings, o
   /** The engine reading `database`, through which it is emptied and replaced, so the engine's watches hear of it */
   engine: EarsEngine;
   /** The run history and its database, which a backup copies and a reset empties with the app's */
-  history: { service: RunHistory; database: EarsDatabase };
+  history: { service: RunHistory; database: EarsDatabase; engine: EarsEngine };
   registry: PackRegistry; settings: SettingsAdmin; onReplaced: () => void;
-}): AppDataService {
+}): AppDataService & { replacedElsewhere(): Promise<void> } {
   const stores: BackupStores = { lmdb: databaseBackupStore(database, engine), runHistory: databaseBackupStore(history.database) };
   let replacing = false;
   /** One replacement at a time, and none while a pack is being installed or changed: both write the same data */
@@ -54,6 +54,26 @@ export function createAppData({ database, engine, history, registry, settings, o
         history.database.reset();
         // Stored API keys go too, with their data keys, after the database is emptied, since the settings system hears of it
         secretsStore.clearAll();
+        startPacks(registry);
+        _catchUpProjections(engine);
+      }));
+    },
+    /**
+     * Another process emptied the stores (`apack db reset`): the rest of what a reset does here, once the packs have
+     * stopped, whose last writes are refused rather than landing on the new data. Throws when another replacement landed
+     * meanwhile, leaving the writes refused, for the caller to start over again
+     */
+    async replacedElsewhere() {
+      const app = engine.admin.replacedElsewhere();
+      const runs = history.engine.admin.replacedElsewhere();
+      if (app === undefined && runs === undefined) return;
+      await exclusive(() => replaceData(async () => {
+        registry.runShutdownHooks();
+        const adopted = (app === undefined || engine.admin.adoptReplacement(app))
+          && (runs === undefined || history.engine.admin.adoptReplacement(runs));
+        if (!adopted) throw new Error('Another process replaced the data again while this app started over');
+        // Their stored keys may have gone with it, and this process's store hears only its own changes
+        secretsStore.changedElsewhere();
         startPacks(registry);
         _catchUpProjections(engine);
       }));

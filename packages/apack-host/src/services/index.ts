@@ -57,11 +57,28 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
   const settings = createSettingsService(settingsStore);
   packs.catalog.setSettingsAdmission(candidate => compileSettingsCatalog(candidate).validate(settings.getOverrides()));
   const runHistoryService = createRunHistory(runHistory.engine);
+  // The service replaces the data; naming what the app is told about it belongs here, with the wiring
+  const { replacedElsewhere, ...appData } = createAppData({ database, engine, history: { service: runHistoryService, database: runHistory.database, engine: runHistory.engine },
+    registry: packs, settings,
+    onReplaced: () => transport.rootEvents.emitIncoming({ to: HOST.bus, event: { type: 'DATA_REPLACED' } }),
+  });
   let refreshing: ReturnType<typeof setTimeout> | undefined;
   /** Runs once a burst of commits from elsewhere has passed. Nothing waits on this timer to catch what it throws, and an uncaught error ends the process */
   const refreshAfterBurst = () => {
     refreshing ??= setTimeout(() => {
       refreshing = undefined;
+      try {
+        // Either database: a tool resets the run history first, and may stop before the app's
+        if (engine.admin.replacedElsewhere() !== undefined || runHistory.engine.admin.replacedElsewhere() !== undefined) {
+          void replacedElsewhere().catch((error: unknown) => {
+            // Its writes stay refused: the next one refused, a pack changing or another wake tries again
+            logger.error('Starting over after another process replaced the data failed:', error as Error);
+          });
+          return;
+        }
+      } catch (error) {
+        logger.error('Asking whether another process replaced the data failed:', error as Error);
+      }
       try {
         settingsStore.adoptStored();
       } catch (error) {
@@ -79,11 +96,15 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
     }, ELSEWHERE_REFRESH_MS);
     refreshing.unref?.();
   };
-  try {
-    engine.admin.onFoundElsewhere(refreshAfterBurst);
-  } catch (error) {
-    logger.warn('This app will hear of commits from other processes only at its own next commit:', error as Error);
+  for (const hearing of [engine, runHistory.engine]) {
+    try {
+      hearing.admin.onFoundElsewhere(refreshAfterBurst);
+    } catch (error) {
+      logger.warn('This app will hear of commits from other processes only at its own next commit:', error as Error);
+    }
   }
+  // A pack changing may have waited out a start-over refused while it ran, and its projections may have missed commits
+  packs.onRegistrationChanged(refreshAfterBurst);
   return {
     transport,
     ears: engine,
@@ -105,11 +126,7 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
     }),
     services: {
       onboarding: createOnboarding(engine),
-      // The service replaces the data; naming what the app is told about it belongs here, with the wiring
-      appData: createAppData({ database, engine, history: { service: runHistoryService, database: runHistory.database },
-        registry: packs, settings,
-        onReplaced: () => transport.rootEvents.emitIncoming({ to: HOST.bus, event: { type: 'DATA_REPLACED' } }),
-      }),
+      appData,
       runHistory: runHistoryService,
       inference,
       secrets,

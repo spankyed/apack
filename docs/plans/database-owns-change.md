@@ -116,14 +116,13 @@ Built, differently from what this step first said.
 
 ## Step 7: the epoch
 
-- **Mechanism:** `reset` and `replaceWith` bump a stored epoch, checked inside each transaction by the same mechanism as the schema fingerprint (`EngineSchema::validate`). Handles notice, and a wake delivers it at once. `DATA_REPLACED` becomes that one signal, for a replacement from any process.
-- **`reset` first:** it can run beside a running app, which remounts.
+Built: elmdb #82, and the apack PR it stacks under.
 
-**`import` may never get here, and that's a correction to what I said earlier.** An in-app import also replaces the run history and media, and then runs migrations and pack starts (`services/app-data.ts`). A tool can't run pack code, so a tool's import beside a running app would need the app to do that half. I'd keep refusing it.
+- **Mechanism:** `reset` and `replace_with` move a stored epoch on. A handle's commit under an epoch it hasn't seen is refused (`DATA_REPLACED`), and its reads carry on, so a process isn't broken for the moment before it hears. A wake, or a refused write when a wake was lost, sends the app to `replacedElsewhere`.
+- **The app:** it runs the rest of what its own reset runs (pack shutdown, adopt, pack start, projections) and sends `DATA_REPLACED`, so surfaces take a tool's reset through the path they already take the app's.
+- **`apack db reset`:** goes ahead beside a running app. It still holds the write lock, so no app starts under it, and resets the run history in place rather than deleting files the app holds open.
 
-**The lock doesn't fully go away either.** `backup` and `pack-mutation.ts` also hold it, for reasons that have nothing to do with replacing rows. This step removes it only for `reset`.
-
-**Gate:** remounting is only as safe as every surface. Do it only if `reset` beside a running app is actually wanted.
+**`import` stays refused.** It also replaces media, and needs migrations and pack starts. **`clear-settings`, `backup` and `pack-mutation.ts` keep their lock and refusal.**
 
 ## Order and what it costs
 
@@ -135,9 +134,9 @@ Built, differently from what this step first said.
 | 4 Projections | SDK, codegen, the write path, pack authoring | Derived-row special cases, the boot walk | Changes how packs write derived data |
 | 5 Wake-ups | elmdb, binding | Tell, token, route, exit code, most bookkeeping | Windows, socket paths |
 | 6 Commit rules | host, CLI | Settings special cases | Low: one validator |
-| 7 Epoch | elmdb, surfaces | `DATA_REPLACED` as a separate path | Surface remounts, likely `reset` only |
+| 7 Epoch | elmdb, CLI, host | The refusal of `reset` beside an app | `reset` only |
 
-**Natural stopping points:** step 1 stands alone. After 3 we have a proven log and a test. After 5 the bookkeeping is gone. Steps 6 and 7 are optional.
+**Natural stopping points:** step 1 stands alone. After 3 we have a proven log and a test. After 5 the bookkeeping is gone.
 
 ## Working arrangement
 

@@ -45,8 +45,11 @@ export async function dbRepl(args: string[], io: DbIo, input: NodeJS.ReadableStr
           try {
             answer = await run(code, scope);
           } catch (error) {
-            // The app declared a schema after this session opened, as it may on restarting: nothing was written
-            if (!(error as Error).message.includes(SCHEMA_CHANGED_MESSAGE)) throw error;
+            // The app declared a schema after this session opened, as it may on restarting, or the data was replaced
+            // under it: nothing was written, and what it had read is gone
+            const replaced = [error, (error as { cause?: unknown }).cause].some((each) => (each as { code?: unknown } | undefined)?.code === 'DATA_REPLACED');
+            const stale = (error as Error).message.includes(SCHEMA_CHANGED_MESSAGE) || replaced;
+            if (!stale) throw error;
             db.close();
             db = await open();
             scope = consoleScope(db);

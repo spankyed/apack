@@ -65,9 +65,10 @@ describe('createHostRuntime', () => {
       vi.spyOn(engine.admin, 'onFoundElsewhere').mockImplementation((listener) => { found = listener; return () => {}; });
       const stopHearing = testRootEvents.onIncoming((message) => { told.push(`${message.to} ${message.event.type}`); });
       const { runHistory } = blockedHistory();
+      vi.spyOn(runHistory.engine.admin, 'onFoundElsewhere').mockImplementation(() => () => {});
       const runtime = createHostRuntime({ runHistory, database: {} as EarsDatabase, engine, transport: { rootEvents: testRootEvents },
         appVersion: '1.2.3', packs: createNativePackTestRegistry() });
-      return { engine, runtime, found: () => found(), told, stop: () => { stopHearing(); stopWatching.mockRestore(); } };
+      return { engine, runHistoryEngine: runHistory.engine, runtime, found: () => found(), told, stop: () => { stopHearing(); stopWatching.mockRestore(); } };
     }
 
     beforeEach(() => { vi.useFakeTimers(); });
@@ -125,6 +126,43 @@ describe('createHostRuntime', () => {
       expect(() => vi.advanceTimersByTime(250), 'a throw in this timer would end the process').not.toThrow();
       expect(told).toEqual(refreshed);
       failing.mockRestore();
+      stop();
+    });
+
+    it('starts over when another process replaced the data, instead of refreshing', async () => {
+      const { engine, found, told, stop } = running();
+      vi.spyOn(engine.admin, 'replacedElsewhere').mockImplementation(() => 1);
+      const adopted = vi.spyOn(engine.admin, 'adoptReplacement').mockImplementation(() => true);
+      found();
+      await vi.advanceTimersByTimeAsync(250);
+      expect(adopted).toHaveBeenCalledWith(1);
+      expect(told).toContain('host/bus DATA_REPLACED');
+      expect(told).not.toContain('host/bus DATA_CHANGED_ELSEWHERE');
+      vi.restoreAllMocks();
+      stop();
+    });
+
+    it('starts over when only the run history was replaced, as a reset stopped part way leaves it', async () => {
+      const { runHistoryEngine, found, told, stop } = running();
+      vi.spyOn(runHistoryEngine.admin, 'replacedElsewhere').mockImplementation(() => 1);
+      const adopted = vi.spyOn(runHistoryEngine.admin, 'adoptReplacement').mockImplementation(() => true);
+      found();
+      await vi.advanceTimersByTimeAsync(250);
+      expect(adopted).toHaveBeenCalledWith(1);
+      expect(told).toContain('host/bus DATA_REPLACED');
+      vi.restoreAllMocks();
+      stop();
+    });
+
+    it('leaves the writes refused when another replacement lands while it starts over, for the next to try again', async () => {
+      const { engine, found, stop } = running();
+      vi.spyOn(engine.admin, 'replacedElsewhere').mockImplementation(() => 1);
+      vi.spyOn(engine.admin, 'adoptReplacement').mockImplementation(() => false);
+      const started = vi.spyOn(engine.admin, 'changedElsewhere');
+      found();
+      await vi.advanceTimersByTimeAsync(250);
+      expect(started, 'no refresh over data it never adopted').not.toHaveBeenCalled();
+      vi.restoreAllMocks();
       stop();
     });
 
