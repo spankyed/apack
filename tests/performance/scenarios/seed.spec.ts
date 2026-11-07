@@ -50,5 +50,16 @@ test('prepare a populated startup profile outside measurement', async ({ app, ap
     const manifest = performanceIdentity({ fixture: fixture.identity, mode: manifestSchema.shape.mode.parse(process.env.APACK_PERFORMANCE_MODE ?? 'lightweight'),
       cache: 'fresh-process-warm-filesystem', warmups: 5, runtime: { ...runtime, performancePolicy: process.env.APACK_PERFORMANCE_EXECUTION_POLICY ?? 'single-scenario-v1' } });
     writeFileSync(`${process.env.APACK_PERFORMANCE_SEED_REPORT}.manifest.json`, JSON.stringify(manifest, null, 2));
+  } catch (error) {
+    try {
+      const state = await appPage.evaluate(() => {
+        const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context as unknown as {
+          threadsImport: unknown; threadMap: Record<string, unknown>;
+        };
+        return { import: context.threadsImport, threadIds: Object.keys(context.threadMap) };
+      });
+      writeFileSync(path.join(path.dirname(process.env.APACK_PERFORMANCE_SEED_REPORT!), 'seed-failure.json'), JSON.stringify(state, null, 2));
+    } catch { /* Preserve the original seed failure even if the window has already closed. */ }
+    throw error;
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
