@@ -231,6 +231,10 @@ the renderer over a dedicated bounded channel, never one bus event per chunk.
 
 - A **process layer**: spawn, process-tree ownership, lifetime independent of any client, bounded I/O with
   backpressure, close with a deadline, reattach. Nothing here knows what a screen is.
+  **Its protocol is a contract, not an internal detail.** That is forced rather than chosen: the broker
+  lives in a pinned sibling repository (D11), so the message set crosses a `.rev` boundary and has to be
+  specified, versioned and testable from the app side without the broker's source. The useful consequence is
+  that any implementation speaking it is interchangeable — see *Comparing implementations*.
 - A **terminal capability** over it: pty, VT core, screen and bounded history.
 
 The split exists because **the agent path needs the first and none of the second.**
@@ -305,6 +309,29 @@ screen. So the provenance split the refactor target prescribes is not two equal 
 covers apack's own flows, and the inference rules are a smaller, bounded case. Build the reported path first
 and let the screen rules serve only what it cannot reach.
 
+## Comparing implementations
+
+The protocol makes a side-by-side cheap **at the process layer**: a second broker binary speaking the same
+message set, chosen by a developer-only path rather than a user setting. Nothing in the app changes, which is
+what specifying a protocol buys that an engine abstraction would not.
+
+Scope any comparison to that layer. A Node arm there is small — spawn, tree kill, lifetime and bounded I/O
+over node-pty, close to what the app does today moved out of process — and the measurements are meaningful:
+startup latency, memory per idle session, sustained throughput, and whether a tree kill actually reaps
+grandchildren. The **terminal capability** is a different matter: a Node arm needs a JS VT core and its own
+bounded history, which is most of the work rather than a wrapper, and the answer is largely known since
+xterm.js already parses this volume in the renderer. Duplicating it buys little for roughly twice the cost.
+
+**Read the result with its bias stated.** A Node arm cannot implement the Windows half at all — Job Objects
+need native code — so the comparison runs on macOS and Linux, which is exactly where the gap is narrowest.
+It therefore measures the dimensions on which Node looks best and omits the one that decided D11. That is a
+reason to interpret it correctly rather than to skip it: if the POSIX numbers are close the decision still
+rests on Windows, and if they are not close that is information D11 did not have.
+
+A second arm is temporary and names its removal date when it is created. Two implementations mean two sets
+of bugs and a "which one was this?" question in every report, which is the cost the rule above exists to
+avoid.
+
 ## Acceptance and evidence
 
 One table, in `docs/references/evidence/terminal-ownership.md`, with a row per finding in the review
@@ -325,8 +352,11 @@ Standing repository rules apply as written; this section records only what is sp
   owner at a time (`machine-lock.ts`), the Windows VM is one coordinated machine, a strict chain run is five
   macOS jobs, and `npm run measure` refuses below `IDLE_FLOOR`. Plan concurrency around those, not around
   how fast code is written.
-- **No shim, no dual engine, no selection flag.** The broker replaces the pack service's ownership in the
-  same change that migrates its callers; both deferred plans refuse an engine abstraction and so does this.
+- **No shim, no dual engine, no selection flag — in a shipped build.** The broker replaces the pack
+  service's ownership in the same change that migrates its callers, and no user-facing switch selects an
+  implementation. Both deferred plans refuse an engine abstraction and so does this. The prohibition is
+  about what ships, not about what may be measured: a second implementation behind a developer-only broker
+  path, with the date it is deleted, is a different thing and is covered under *Comparing implementations*.
 - **Checkpoints are evidence boundaries.** A commit lands because something is proven, not because it is a
   safe place to stop.
 - **The baseline is unrepeatable.** Once Phase B moves state, the before cannot be taken again.
