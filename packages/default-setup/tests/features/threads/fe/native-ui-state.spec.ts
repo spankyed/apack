@@ -258,3 +258,19 @@ it('retains native MCP form acknowledgments only in the live addressed terminal 
   expect(actor.getSnapshot().context.nativeTerminalViews[identity.mountId]).toBeUndefined()
   actor.stop()
 })
+
+
+it('retains Stop acknowledgements only in the live addressed terminal view', () => {
+  const actor = createActor(nativeState).start(), identity = { mountId: 'stop-view', threadId: 'thread' }
+  actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...identity })
+  const reply = { type: 'CLAUDE_TERMINAL_STATE' as const, ...identity, opening: false, output: [], stop: { ownerId: 'owner', revision: 1, status: 'pending' as const } }
+  actor.send({ ...reply, threadId: 'foreign' })
+  expect(actor.getSnapshot().context.nativeTerminalViews[identity.mountId]?.stop).toBeUndefined()
+  actor.send(reply)
+  expect(actor.getSnapshot().context.nativeTerminalViews[identity.mountId]?.stop).toEqual(reply.stop)
+  actor.send({ ...reply, stop: { ...reply.stop, status: 'done' } })
+  expect(actor.getSnapshot().context.nativeTerminalViews[identity.mountId]?.stop?.status).toBe('done')
+  actor.send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...identity }); actor.send(reply)
+  expect(actor.getSnapshot().context.nativeTerminalViews[identity.mountId]).toBeUndefined()
+  actor.stop()
+})

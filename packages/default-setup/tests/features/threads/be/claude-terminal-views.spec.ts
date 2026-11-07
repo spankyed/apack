@@ -598,3 +598,47 @@ it('keeps child turn interruption separate from job Stop and refuses stale ident
   views.handle({...request,revision:3},'window',send);await Promise.resolve();expect(interrupt).toHaveBeenCalledOnce()
  }finally{views.clear()}
 })
+
+
+it('publishes Stop acknowledgement, deduplicates pending requests and permits identical-error retries', async () => {
+  const f = fixture(); let reject!: (error: Error) => void
+  vi.mocked(f.owner.close).mockImplementation(() => new Promise((_resolve, no) => { reject = no }))
+  const request = { ...mount, type: 'CLAUDE_TERMINAL_CLOSE' as const, ownerId: f.owner.state.ownerId }
+  try {
+    f.views.handle(mount, 'one', f.send)
+    f.views.handle(request, 'one', f.send); f.views.handle(request, 'one', f.send)
+    expect(f.send.mock.calls.at(-1)![0].stop).toMatchObject({ ownerId: request.ownerId, revision: 1, status: 'pending' })
+    await vi.waitFor(() => expect(f.owner.close).toHaveBeenCalledOnce())
+    reject(new Error('Original close failure'))
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].stop).toMatchObject({ revision: 1, status: 'error', problem: 'Original close failure' }))
+    f.views.handle(request, 'one', f.send)
+    await vi.waitFor(() => expect(f.owner.close).toHaveBeenCalledTimes(2))
+    reject(new Error('Original close failure'))
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].stop).toMatchObject({ revision: 2, status: 'error', problem: 'Original close failure' }))
+  } finally { f.views.clear() }
+})
+
+it('does not publish a late Stop result after its window detaches', async () => {
+  const f = fixture(); let finish!: () => void
+  vi.mocked(f.owner.close).mockImplementation(() => new Promise(resolve => { finish = resolve }))
+  try {
+    f.views.handle(mount, 'one', f.send)
+    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_CLOSE', ownerId: f.owner.state.ownerId }, 'one', f.send)
+    await vi.waitFor(() => expect(f.owner.close).toHaveBeenCalledOnce())
+    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_UNMOUNT' }, 'one', f.send)
+    const count = f.send.mock.calls.length; finish(); await Promise.resolve(); await Promise.resolve()
+    expect(f.send).toHaveBeenCalledTimes(count)
+  } finally { f.views.clear() }
+})
+
+it('still carries out an accepted Stop when its requesting window immediately detaches', async () => {
+  const f = fixture()
+  try {
+    f.views.handle(mount, 'one', f.send)
+    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_CLOSE', ownerId: f.owner.state.ownerId }, 'one', f.send)
+    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_UNMOUNT' }, 'one', f.send)
+    const count = f.send.mock.calls.length
+    await vi.waitFor(() => expect(f.owner.close).toHaveBeenCalledOnce())
+    expect(f.send).toHaveBeenCalledTimes(count)
+  } finally { f.views.clear() }
+})

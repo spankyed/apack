@@ -85,8 +85,8 @@
             <span aria-hidden="true" />{{ stateLabel }}
           </span>
           <button type="button" class="native-button native-button--size" :aria-expanded="expanded" @click="expanded = !expanded">{{ expanded ? 'Minimize' : 'Expand' }}</button>
-          <button v-if="active" type="button" class="native-button native-button--return" :disabled="!ended && (!!returning || view?.task?.status === 'pending')" @click="returnToConversation">Back to conversation <span aria-hidden="true">↗</span></button>
-          <button v-if="!ended" type="button" class="native-button native-button--stop" @click="stop"><span class="native-stop-icon" aria-hidden="true" />Stop session</button>
+          <button v-if="active" type="button" class="native-button native-button--return" :disabled="!ended && (!!stopping || !!returning || view?.task?.status === 'pending')" @click="returnToConversation">Back to conversation <span aria-hidden="true">↗</span></button>
+          <button v-if="!ended" type="button" class="native-button native-button--stop" :disabled="!!stopping" @click="stop"><span class="native-stop-icon" aria-hidden="true" />{{ stopping ? 'Stopping…' : 'Stop session' }}</button>
         </div>
       </header>
       <p v-if="returnProblem" role="alert" class="native-problem">{{ returnProblem }}</p>
@@ -192,10 +192,15 @@ const stateLabel = computed(() => {
 })
 const selectedAgent = computed(() => { const state = view.value?.state; return state?.view?.kind === 'agent' ? state.tasks.find(task => task.id === (state.view?.kind === 'agent' ? state.view.taskId : undefined))?.name ?? state.view.taskId ?? 'Unavailable Agent' : undefined })
 const returning = ref<{ ownerId: string; revision: number }>(), returnProblem = ref<string>()
+const stopping = ref<{ ownerId: string; afterRevision: number }>()
+watch(view, value => {
+  const pending = stopping.value
+  if (pending && (value?.state?.ownerId !== pending.ownerId || ['exited', 'error'].includes(value?.state?.status ?? '') || value?.stop?.ownerId === pending.ownerId && value.stop.revision > pending.afterRevision && value.stop.status === 'error')) stopping.value = undefined
+})
 function returnToConversation() {
   const state = view.value?.state
   if (!state || ended.value) { dismissed.value = true; return }
-  if (returning.value || view.value?.task?.status === 'pending') return
+  if (stopping.value || returning.value || view.value?.task?.status === 'pending') return
   const revision = (view.value?.task?.revision ?? 0) + 1
   returning.value = { ownerId: state.ownerId, revision }; returnProblem.value = undefined
   const taskId = state.view?.kind === 'agent' ? state.view.taskId ?? state.view.registryId : '@main-view'
@@ -269,7 +274,12 @@ function cancelOpen() {
   requested.value = false; dismissed.value = true
   actor.send({ type: 'CLAUDE_TERMINAL_CANCEL_OPEN', ...identity(), openingId })
 }
-function stop() { const ownerId = view.value?.state?.ownerId; if (ownerId) actor.send({ type: 'CLAUDE_TERMINAL_CLOSE', ...identity(), ownerId }) }
+function stop() {
+  const ownerId = view.value?.state?.ownerId
+  if (!ownerId || stopping.value) return
+  stopping.value = { ownerId, afterRevision: view.value?.stop?.revision ?? 0 }
+  actor.send({ type: 'CLAUDE_TERMINAL_CLOSE', ...identity(), ownerId })
+}
 function detach() { observer?.disconnect(); observer = undefined; terminal?.detach(); terminal = undefined; attachedOwner = undefined }
 watch(displayActive, value => emit('active', value), { immediate: true })
 watch([view, active], async ([value, showing]) => {

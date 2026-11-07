@@ -44,6 +44,12 @@ export interface ClaudeTerminalTaskState {
   details?: import('#features/code/common/native-terminal.ts').ClaudeNativeTaskDetails
   problem?: string
 }
+export interface ClaudeTerminalStopState {
+  ownerId: string
+  revision: number
+  status: 'pending' | 'done' | 'error'
+  problem?: string
+}
 export interface ClaudeTerminalSubmissionState {
   ownerId: string
   revision: number
@@ -82,6 +88,7 @@ export type ClaudeTerminalViewSnapshot = {
   mcpOperation?: { sequence: number; status: 'pending' | 'done' | 'error'; problem?: string }
   noticeAnswer?: { id: string; revision: string; status: 'pending' | 'done' | 'error'; problem?: string }
   task?: ClaudeTerminalTaskState
+  stop?: ClaudeTerminalStopState
   submission?: ClaudeTerminalSubmissionState
   state?: ClaudeNativeTerminalState
   opening: boolean
@@ -121,6 +128,7 @@ interface View {
   mcpOperation?: ClaudeTerminalViewSnapshot['mcpOperation']
   noticeAnswer?: ClaudeTerminalViewSnapshot['noticeAnswer']
   task?: ClaudeTerminalTaskState
+  stop?: ClaudeTerminalStopState
   submission?: ClaudeTerminalSubmissionState
   submissionRevision?: number
 }
@@ -181,7 +189,7 @@ export function createClaudeTerminalViews(dependencies: {
     const output = view.owner?.output.filter(chunk => chunk.sequence > view.sequence) ?? []
     try {
       view.send({ type: 'CLAUDE_TERMINAL_STATE', backgroundInfo: dependencies.backgroundInfo?.(view.threadId), canReplyBackground: dependencies.get(view.threadId) ? dependencies.get(view.threadId)?.canReplyBackground === true : !!dependencies.replyBackground && !!dependencies.continuation?.(view.threadId), threadId: view.threadId, mountId: view.mountId,
-        state: view.owner?.state, attachment: view.attachment ? {...view.attachment} : undefined, background: view.background, mcpOperation: view.mcpOperation, noticeAnswer: view.noticeAnswer, task: view.task, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
+        state: view.owner?.state, attachment: view.attachment ? {...view.attachment} : undefined, background: view.background, mcpOperation: view.mcpOperation, noticeAnswer: view.noticeAnswer, task: view.task, stop: view.stop, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
       if (output.length) view.sequence = output.at(-1)!.sequence
     } catch { drop(key) }
   }
@@ -446,9 +454,19 @@ export function createClaudeTerminalViews(dependencies: {
       }
       else if (event.type === 'CLAUDE_TERMINAL_INPUT') owner.input(event.ownerId, event.text)
       else if (event.type === 'CLAUDE_TERMINAL_RESIZE') owner.resize(event.ownerId, event.columns, event.rows)
-      else if (event.type === 'CLAUDE_TERMINAL_CLOSE') void owner.close().catch(error => {
-        target.problem = error instanceof Error ? error.message : 'Native session could not stop'; publish(key, target)
-      })
+      else if (event.type === 'CLAUDE_TERMINAL_CLOSE') {
+        if (target.stop?.ownerId === event.ownerId && target.stop.status === 'pending') return
+        const stop: ClaudeTerminalStopState = { ownerId: event.ownerId, revision: (target.stop?.revision ?? 0) + 1, status: 'pending' }
+        target.stop = stop; target.problem = undefined; publish(key, target)
+        const current = () => views.get(key) === target && target.owner === owner && target.stop === stop
+        void Promise.resolve().then(() => owner.close()).then(() => {
+          if (current()) { target.stop = { ...stop, status: 'done' }; publish(key, target) }
+        }).catch(error => {
+          if (!current()) return
+          const problem = error instanceof Error ? error.message : 'Native session could not stop'
+          target.stop = { ...stop, status: 'error', problem }; target.problem = problem; publish(key, target)
+        })
+      }
     },
     clear(threadId?: string) { for (const [key, view] of views) if (threadId === undefined || view.threadId === threadId) drop(key) },
   }

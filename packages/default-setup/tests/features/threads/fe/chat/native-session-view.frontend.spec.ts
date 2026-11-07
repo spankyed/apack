@@ -389,3 +389,39 @@ it('shows an inline model offer without taking focus, inventing buttons or answe
   f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice: undefined } }); await nextTick()
   expect(f.root.querySelector('[aria-label="Claude model offer"]')).toBeNull(); expect(document.activeElement).toBe(input)
 })
+
+
+it('waits for Stop acknowledgement before returning and never backgrounds the retiring owner', async () => {
+  const f = await fixture()
+  const stop = [...f.root.querySelectorAll('button')].find(button => button.textContent === 'Stop session')!
+  actor.send.mockClear(); stop.click(); await nextTick()
+  expect(stop.disabled).toBe(true); expect(stop.textContent).toBe('Stopping…'); expect(f.back.disabled).toBe(true)
+  stop.click(); f.back.click(); await nextTick()
+  expect(actor.send).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ type: 'CLAUDE_TERMINAL_CLOSE', ownerId: 'owner' }))
+  f.publish({ ...f.snapshot, stop: { ownerId: 'owner', revision: 1, status: 'done' } }); await nextTick(); expect(f.back.disabled).toBe(true)
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status: 'exited' } }); await nextTick()
+  expect(f.back.disabled).toBe(false); f.back.click(); await nextTick()
+  expect(f.active).toHaveBeenLastCalledWith(false)
+  expect(actor.send.mock.calls.some(([event]) => event.type === 'CLAUDE_TERMINAL_TASK')).toBe(false)
+})
+
+it('allows retry and return after the original Stop reports an error', async () => {
+  const f = await fixture()
+  const stop = [...f.root.querySelectorAll('button')].find(button => button.textContent === 'Stop session')!
+  stop.click(); await nextTick()
+  f.publish({ ...f.snapshot, stop: { ownerId: 'owner', revision: 1, status: 'error' }, problem: 'Native session could not stop' }); await nextTick()
+  expect(stop.disabled).toBe(false); expect(stop.textContent).toBe('Stop session'); expect(f.back.disabled).toBe(false)
+  stop.click(); await nextTick(); expect(stop.disabled).toBe(true)
+  f.publish({ ...f.snapshot, stop: { ownerId: 'owner', revision: 2, status: 'error' }, problem: 'Native session could not stop' }); await nextTick()
+  expect(stop.disabled).toBe(false); expect(f.back.disabled).toBe(false)
+})
+
+it('retires Stop intent when another native owner replaces it', async () => {
+  const f = await fixture()
+  const stop = [...f.root.querySelectorAll('button')].find(button => button.textContent === 'Stop session')!
+  stop.click(); await nextTick()
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, ownerId: 'replacement' } }); await nextTick()
+  expect(stop.disabled).toBe(false); expect(f.back.disabled).toBe(false)
+  actor.send.mockClear(); stop.click(); await nextTick()
+  expect(actor.send).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ type: 'CLAUDE_TERMINAL_CLOSE', ownerId: 'replacement' }))
+})

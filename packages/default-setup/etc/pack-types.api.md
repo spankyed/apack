@@ -693,8 +693,8 @@ declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObjec
                 value: z.ZodString;
                 label: z.ZodString;
                 mode: z.ZodEnum<{
-                    default: "default";
                     plan: "plan";
+                    default: "default";
                     auto: "auto";
                     acceptEdits: "acceptEdits";
                     bypassPermissions: "bypassPermissions";
@@ -1713,8 +1713,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
             value: z.ZodString;
             label: z.ZodString;
             mode: z.ZodEnum<{
-                default: "default";
                 plan: "plan";
+                default: "default";
                 auto: "auto";
                 acceptEdits: "acceptEdits";
                 bypassPermissions: "bypassPermissions";
@@ -2501,6 +2501,13 @@ type ClaudeSettingsView = {
     savedKey?: string;
 };
 
+interface ClaudeTerminalStopState {
+    ownerId: string;
+    revision: number;
+    status: 'done' | 'error' | 'pending';
+    problem?: string;
+}
+
 interface ClaudeTerminalSubmissionState {
     ownerId: string;
     revision: number;
@@ -2646,6 +2653,7 @@ type ClaudeTerminalViewSnapshot = {
         problem?: string;
     };
     task?: ClaudeTerminalTaskState;
+    stop?: ClaudeTerminalStopState;
     submission?: ClaudeTerminalSubmissionState;
     state?: ClaudeNativeTerminalState;
     opening: boolean;
@@ -7054,8 +7062,8 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  * classifier instead of prompting.
  */
 declare const PermissionModeSchema: z.ZodEnum<{
-    default: "default";
     plan: "plan";
+    default: "default";
     auto: "auto";
     acceptEdits: "acceptEdits";
     bypassPermissions: "bypassPermissions";
