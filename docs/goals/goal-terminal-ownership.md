@@ -363,7 +363,35 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 - **L3 is dissolved**: a closed terminal's row is trashed, which is the one way a Terminal row ends. The
   annotation it replaced — `active: false` and a `closedAt` nothing read — left a row behind for every
   terminal the user had ever opened.
-- **Next action: Phase H, then Phase A.** What is left of Phase B needs Windows and a Mac cannot give it:
+- **Phase H is done except for one requirement, and that requirement rests on a fork this goal does not
+  settle.** M1, M2, M4 and M5 are closed as dissolved with guards; a second window observes without sizing
+  the pty (`sizedBy`, the connection that opened it) and without sending it anything (attaching writes
+  nothing and injects nothing); and attach, detach and termination are already distinct — a host releases its
+  attachment when its view closes, and only `terminate` ends a session.
+  - **`client` is what made M2 checkable**, and it was already there: a handler is handed the connection a
+    message arrived on, which the API stamps and nobody can forge. No SDK surface had to be invented.
+  - **`ownsAppLayout` is the shell's existing answer, asked again.** Which window records the app's layout is
+    a fact the shell already holds — it is how the last-open surface is recorded — so M5 takes that answer
+    rather than inventing a second one, and it arrives on `SURFACE_STARTED`, the event a surface already
+    gets in a delivery naming it.
+
+  **The fork: what ends a session when its client does not come back.** Phase H requires that *an API restart
+  leaves a session running*, so the broker must keep sessions across a connection close. Today it ends them,
+  deliberately — a pack's `onShutdown` is synchronous and runs in `process.on('exit')`, where no socket write
+  completes, so the broker is the backstop for an app that quits, crashes or is killed. Keeping sessions
+  across a disconnect removes that backstop and **nothing in this goal says what replaces it**:
+  - *the broker keeps them until an explicit kill* — a user who quits the app leaves shells running until
+    they reboot;
+  - *a grace period after the last client goes* — a number with no decision behind it, which this repo
+    rejects, and an API restart slower than the grace loses the session anyway;
+  - *Electron main owns the broker's lifetime and ends it on `will-quit`* — an API restart keeps sessions
+    because main is still alive, and quitting the app ends them. But this goal assigns broker spawn to the
+    API's composition ("spawn, socket discovery, crash-restart and one-broker-per-data-dir"), so it moves
+    that ownership.
+
+  Each is defensible and each is user-visible, so the choice is not one to make while implementing. **Phase H
+  stops here** until it is settled; everything in it that does not depend on the answer is done and guarded.
+- **Next action: settle the fork above, then Phase A.** What is left of Phase B needs Windows and a Mac cannot give it:
   **X1, X2 and ConPTY's resize and exit**, which the goal already says are claimed on a Windows run or not
   at all. `command-group`'s API is retired so that change is a wiring job rather than a question. **X1, X2 and ConPTY need a Windows run** and
   cannot be claimed here, which the goal already says. Then Phases P and A.

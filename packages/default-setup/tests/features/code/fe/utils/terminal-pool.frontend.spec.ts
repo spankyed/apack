@@ -142,6 +142,19 @@ describe('one session, one host', () => {
     expect(sent, 'one keystroke, sent once').toEqual(['x'])
   })
 
+  it('sends nothing to the shell when another host starts drawing it', () => {
+    // A second host — a second window's, or the panel's — attaching is not something the user did to the
+    // shell. Nothing is written on attach, and nothing is injected: whatever is on that screen stays what the
+    // process put there. (Shell integration is injected once, at create, and never on an attach.)
+    const terminal = info()
+    const sent: string[] = []
+    const entry = terminalPool.ensure(terminal, (data) => sent.push(data))
+    terminalPool.attach(entry.terminalId, host())
+    terminalPool.attach(entry.terminalId, host())
+
+    expect(sent, 'attaching typed into the shell').toEqual([])
+  })
+
   it('keeps one scroll policy per session, whichever host is drawing it', () => {
     const terminal = info()
     const entry = terminalPool.ensure(terminal, () => {})
