@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { PackServiceAccess } from '@apackdev/sdk/services';
 
 export interface ActionRun {
@@ -22,5 +23,5 @@ export function runActionCode(actionFn: string, { label, params, servicesForActi
   const actionServices = servicesForAction(label);
   // `z` and `flowId` come from an enclosing scope, so the code can declare its own
   const scoped = new Function('z', 'flowId', `return async function (params, services) {\n${actionFn}\n};`);
-  return import('./action-schema.ts').then(({ z }) => scoped(z, flowId)(params, actionServices));
+  return scoped(z, flowId)(params, actionServices);
 }

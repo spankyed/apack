@@ -3,6 +3,7 @@ import { featureSettings } from '#generated/settings.ts';
 import { GitRepository } from '#features/code/be/services/git.ts'
 import * as ghCli from '#features/code/be/services/gh-cli.ts'
 import type { GitStatusFile, GhPullRequest, GhPRComment, GhReviewThread } from '#features/code/be/types.ts'
+import { claudeCode } from './claude-code/index.ts'
 import type { QueryOptions, QueryHandle, AuthStatus, SessionInfo, SessionListOptions, SessionTranscriptEntry, SessionViewOptions } from './claude-code/index.ts'
 import type { ExecOnceOptions, ExecOnceResult } from './claude-code/runner.ts'
 import { storeHandle, getHandle, clearHandle } from './claude-code/handle-store.ts'
@@ -174,32 +175,27 @@ function createCliService(): CliServiceType {
         // in Claude at src/main.tsx:1944-1950 (cliArgs.replayUserMessages
         // || UDS_INBOX feature). Callers can still override by passing
         // `replayUserMessages: false` explicitly (spread order honors it).
-        const options = { replayUserMessages: true, ...opts, cwd }
-        return import('./claude-code/index.ts').then(({ claudeCode }) => claudeCode.query(options))
+        return claudeCode.query({ replayUserMessages: true, ...opts, cwd })
       },
       version() {
-        return import('./claude-code/index.ts').then(({ claudeCode }) => claudeCode.system.version())
+        return claudeCode.system.version()
       },
       authStatus() {
-        return import('./claude-code/index.ts').then(({ claudeCode }) => claudeCode.auth.status())
+        return claudeCode.auth.status()
       },
       listSessions(opts) {
         const cwd = opts?.cwd ?? resolveCwd()
-        const options = { ...opts, cwd }
-        return import('./claude-code/index.ts').then(({ claudeCode }) => claudeCode.sessions.list(options))
+        return claudeCode.sessions.list({ ...opts, cwd })
       },
       listAllSessions(opts) {
-        const options = opts && { ...opts }
-        return import('./claude-code/index.ts').then(({ claudeCode }) => claudeCode.sessions.listAll(options))
+        return claudeCode.sessions.listAll(opts)
       },
       viewSession(id, opts) {
         const cwd = opts?.cwd ?? resolveCwd()
-        const options = { ...opts, cwd }
-        return import('./claude-code/index.ts').then(({ claudeCode }) => claudeCode.sessions.view(id, options))
+        return claudeCode.sessions.view(id, { ...opts, cwd })
       },
       viewSessionByFile(filePath, opts) {
-        const options = opts && { ...opts }
-        return import('./claude-code/index.ts').then(({ claudeCode }) => claudeCode.sessions.viewByFile(filePath, options))
+        return claudeCode.sessions.viewByFile(filePath, opts)
       },
       getWorkingDir() {
         return resolveCwd()
@@ -209,8 +205,7 @@ function createCliService(): CliServiceType {
       clearHandle,
       exec(args, opts) {
         const cwd = opts?.cwd ?? resolveCwd()
-        const options = { ...opts, cwd }
-        return import('./claude-code/index.ts').then(({ claudeCode }) => claudeCode.exec(args, options))
+        return claudeCode.exec(args, { ...opts, cwd })
       },
       async readSettings() {
         const settingsPath = path.join(configDir(), 'settings.json')
@@ -291,12 +286,10 @@ function createCliService(): CliServiceType {
       },
       async renameSession(id, title, opts) {
         const cwd = opts?.cwd ?? resolveCwd()
-        const { claudeCode } = await import('./claude-code/index.ts')
         await claudeCode.sessions._experimental_rename(id, title, { cwd })
       },
       async sessionExists(id, opts) {
         const cwd = opts?.cwd ?? resolveCwd()
-        const { claudeCode } = await import('./claude-code/index.ts')
         const info = await claudeCode.sessions.find(id, { cwd })
         return info !== null
       },
