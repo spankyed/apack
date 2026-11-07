@@ -57,6 +57,7 @@ names every workspace that has a second config.
 
 | Spec | Subject |
 |---|---|
+| `claude-research-cache` | the explicit replay script retains one owned workspace, keeps failed-run diagnostics and refuses concurrent, foreign or symlinked replacement |
 | `performance-scenario-view` | serialized renderer completion, receipt matching and cleanup for the manual performance harness |
 | `preview-build` | preview version parsing, isolated build environment, and isolated staging builds, build integrity before packaging, and beta release naming |
 | `packaged-app` | manifest-based bundle selection, channel isolation, reset scope, captured exit status, signing assessment failures, and diagnostics from the selected app and profile |
