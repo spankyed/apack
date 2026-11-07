@@ -544,5 +544,44 @@ on its merits rather than rediscover the question.
    turns X4 from a dead end into a supported platform, and treats reported paths and titles as untrusted
    metadata, which the refactor requires.
    The cheap deletion remains available if the refactor is abandoned; it is a false economy while it is not.
-4. **S2's remediation is the code fix only.** The log files already written are out of scope: the app log is
+4. **S1 is fixed at the source, not at the spawn.** The API token reaches every pty because
+   `apiToken()` reads `process.env.APACK_API_TOKEN` lazily on every call
+   (`packages/api/src/boot/config.ts`), so the variable has to stay set for the process's whole life and
+   every child inherits it. Read it once at boot, memoise it and delete the variable; `apiTokenIsOwn()`
+   reflects the captured provenance instead of re-reading. That removes the leak for **every** child the API
+   spawns, now and later, rather than for the one spawn site a filter would cover, and it is asserted by a
+   boot-time check that the variable is gone. The cost is that the token is no longer readable from the
+   environment by anything that expects to find it there; nothing in this repo does, and a tool that wants
+   it reads `apiTokenFile`.
+   **The app's identity variables are stripped from spawned shells by a derived list**, not a written one:
+   `APACK_ENV`, `APACK_USER_DATA_DIR`, `SHIPPED_PACKS_DIR`, `API_PORT`, `ELECTRON_RUN_AS_NODE` and
+   `NODE_ENV` are what `packages/main/src/modules/api-server/config.ts` adds when it starts the API, and a
+   user's shell inheriting them gets an `ELECTRON_RUN_AS_NODE=1` that breaks any Electron app they launch
+   from it. Deriving the list from that construction is what makes a variable added there impossible to
+   forget here; the hand-written `BLOCKED_ENV_VARS` deny-list in the terminal service is the shape that
+   rots, and S2 is what that shape costs.
+5. **The bus logs an event's type, target and sender — never its payload.** `TERMINAL_INPUT` carries a
+   keystroke, so a payload at that seam is every password typed at a `sudo` or `ssh` prompt written to
+   `main.log` and `main.jsonl`, which outlive the session and get attached to bug reports. Not behind the
+   debug gate either: debug is what gets turned on when a terminal misbehaves, which is exactly when
+   keystrokes would be captured. A per-type allow-list at the seam is the deny-list that rotted into this,
+   so there is none; a payload worth reading is read at the handler, where what it holds is known. The cost
+   is that one grep no longer reconstructs a session's traffic, and the guard is a sentinel search over the
+   serialized record rather than a check for named fields.
+6. **A finding closes with recorded evidence, in one of three shapes.** A test that fails before the change
+   and passes after; or `dissolved`, which names the construction that removes the finding **and** a guard
+   that fails if that construction is undone; or an explicit `driven: <what was done>` with the reason no
+   test fits. A `dissolved` row with no guard is not closed, it is unverified. The record is
+   [`docs/references/evidence/terminal-ownership.md`](../references/evidence/terminal-ownership.md), whose
+   rows are added as findings are touched rather than pre-seeded, since this document is the list and a copy
+   of it there would drift. A fix that exists only on an unmerged branch stays `open` with its branch named.
+7. **The presentation rewrite lands as a series, where the core rewrite lands as one change.** D1's argument
+   is that reasoning about a structure due for deletion costs more than one larger diff, and that holds for
+   the service, system, pool and bus, which no user sees. It does not hold for the renderer: F1, F2, F3, F6,
+   F10, F11, F12, F15 and F16 are each independently observable, so a regression in one is a bisect over the
+   others, and a rewrite that lands as a single commit makes that bisect impossible exactly where the user
+   notices. Phase P therefore lands per behaviour. The cost is that intermediate commits hold a seam that is
+   half old and half new, which is why the one-host and single-registration assertions are specs rather than
+   a final review.
+8. **S2's remediation is the code fix only.** The log files already written are out of scope: the app log is
    off-limits for cleanup. The fix stops the accumulation, which is the whole of what is in scope here.
