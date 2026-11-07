@@ -105,22 +105,22 @@ describe('createHostRuntime', () => {
       stop();
     });
 
-    it('puts back a settings row it refused, and refreshes all the same', () => {
-      const { engine, runtime, found, told, stop } = running();
+    it('takes a settings row another process wrote, and tells who follows settings', () => {
+      const { engine, runtime, found, stop } = running();
       runtime.services.settings.getAll();
-      engine.upsert('Settings', { id: SETTINGS_ROW, data: 'not settings' });
+      const changes: string[] = [];
+      const stopFollowing = runtime.services.settings.onChange((change) => changes.push(change));
+      engine.upsert('Settings', { id: SETTINGS_ROW, data: { app: { personal: {} } } });
       found();
       vi.advanceTimersByTime(250);
-      expect(typeof engine.getRow(SETTINGS_ROW)?.data).toBe('object');
-      expect(told).toEqual(refreshed);
+      expect(changes).toEqual(['written']);
+      stopFollowing();
       stop();
     });
 
-    it('still refreshes when putting the settings back fails', () => {
-      const { engine, runtime, found, told, stop } = running();
-      runtime.services.settings.getAll();
-      engine.upsert('Settings', { id: SETTINGS_ROW, data: 'not settings' });
-      const failing = vi.spyOn(engine, 'upsert').mockImplementation(() => { throw new Error('the disk is full'); });
+    it('still refreshes when reading the settings fails', () => {
+      const { engine, found, told, stop } = running();
+      const failing = vi.spyOn(engine.query, 'ids').mockImplementation(() => { throw new Error('the disk is full'); });
       found();
       expect(() => vi.advanceTimersByTime(250), 'a throw in this timer would end the process').not.toThrow();
       expect(told).toEqual(refreshed);

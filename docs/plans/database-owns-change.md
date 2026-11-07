@@ -107,11 +107,12 @@ Built: elmdb #81, and the apack PR it stacks under.
 
 ## Step 6: rules enforced at commit
 
-- **Goal:** an invalid `Settings` row can't commit, so `adoptStored`, `lastValid`, `validStored` and the 422 go.
-- **Shape of the work:** today's checks are JSON schemas compiled in JS (`features/settings/validation.ts`, with a `previous` rule that lets a write repair only the invalid part). elmdb's row rules cover required fields, types and enums. Doing this means a schema validator in Rust, the catalog stored with the schema and re-declared when packs register, and the same answer as the JS validator wherever both run.
-- **Boot recovery stays.** A pack update can still narrow a schema over a row already stored.
+Built, differently from what this step first said.
 
-**Gate:** this is the weakest cost-to-value step. It removes roughly 30 lines of host code and adds a validator and a parity problem. **I'd skip it unless a second rule like this appears.** The current refusal works.
+- **What changed:** a tool's write to the `Settings` row is checked in its unit, by the validator the settings store uses, against the installed packs' catalog (`refuseInvalidSettings`, `@apackdev/host/database`). An invalid row never commits, and the tool fails with the reason.
+- **Removed:** `lastValid`, `validStored`, and `adoptStored` putting a row back. `adoptStored` only follows a valid change now, because the app still has to tell subscribers about one.
+- **Not built:** a schema validator in Rust with the catalog stored beside the schema. The rules are JSON schemas in pack manifests, so that meant two validators agreeing on all of them, and re-declaring the schema on every pack change, for a row nothing else can write. Declining it leaves one gap: code that opens the database files with `elmdb` directly isn't checked. The app logs such a row, and the next boot offers recovery.
+- **Boot recovery stays.** A pack update can still narrow a schema over a row already stored.
 
 ## Step 7: the epoch
 
@@ -133,7 +134,7 @@ Built: elmdb #81, and the apack PR it stacks under.
 | 3 Invariant test | tests | nothing | Low |
 | 4 Projections | SDK, codegen, the write path, pack authoring | Derived-row special cases, the boot walk | Changes how packs write derived data |
 | 5 Wake-ups | elmdb, binding | Tell, token, route, exit code, most bookkeeping | Windows, socket paths |
-| 6 Commit rules | elmdb, host | Settings special cases | Poor value, likely skipped |
+| 6 Commit rules | host, CLI | Settings special cases | Low: one validator |
 | 7 Epoch | elmdb, surfaces | `DATA_REPLACED` as a separate path | Surface remounts, likely `reset` only |
 
 **Natural stopping points:** step 1 stands alone. After 3 we have a proven log and a test. After 5 the bookkeeping is gone. Steps 6 and 7 are optional.

@@ -502,6 +502,26 @@ describe('apack db exec', () => {
       fs.writeFileSync(path.join(_appDirOf(dir), 'api-port'), JSON.stringify({ port: 4321, pid: process.pid }));
     };
 
+    it('refuses an invalid settings row as it commits, keeping what was there', async () => {
+      const dir = await appDataDir();
+      const row = async () => (await ok(['query', "return typeof getRow('Settings-app')?.data", '--data-dir', dir])).out;
+      const before = await row();
+      const bad = "upsert(EARS.Entity.Settings, { id: 'Settings-app', data: 'not settings' })";
+      for (const code of [bad, `${bad}; ${bad}`]) {
+        const { error } = await run(['exec', code, '--data-dir', dir]);
+        expect(error?.message).toMatch(/Nothing it wrote was kept/);
+      }
+      expect(await row()).toBe(before);
+
+      const script = path.join(dir, 'settings.mjs');
+      fs.writeFileSync(script, `export default ({ db }) => db.ears.upsert('Settings', { id: 'Settings-app', data: 'not settings' });`);
+      expect((await run(['script', script, '--data-dir', dir])).error?.message).toMatch(/JSON object|must be/);
+      expect(await row()).toBe(before);
+
+      await ok(['exec', "upsert(EARS.Entity.Settings, { id: 'Settings-app', data: {} })", '--data-dir', dir]);
+      expect(await row()).toBe('object');
+    });
+
     it('gives a script rows and not the admin, whether or not an app is running', async () => {
       const closed = await appDataDir();
       const open = await appDataDir();
