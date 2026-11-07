@@ -413,6 +413,25 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
     with no caller, and the consumer Phase A is designed against — #372's native adapter — is on another
     branch. Add it with the caller.
   - **Reported paths and titles as untrusted metadata**, and no status rule shipped.
+- **The evidence table is complete**: every one of the review's findings has a row, which is what the goal
+  made it the completion criterion for. Writing the last nineteen is what found the two below.
+- **A guard can stop having a subject without failing**, and this goal did it to itself. S1 stripped the
+  app's ten identity variables from the shell the *pack* spawned, with a spec over the function that did it.
+  Phase B moved the spawn to the broker, the function was left with no caller, and the spec went on passing —
+  so a user's shell inherited `ELECTRON_RUN_AS_NODE=1`, `APACK_USER_DATA_DIR`, `SHIPPED_PACKS_DIR` and
+  `API_PORT` again for the length of that change (**G4**). The same reading found **G2** live and S1's row
+  overstating it: the agent child's env deleted two of the ten.
+  - Both call one derived strip in the SDK now, beside the declaration `@app/main`'s construction is typed
+    by, and the terminal's half is in the host **because that is where the spawn is**. The lesson is not
+    "add a test": it is that hygiene has to live with the thing it is hygiene for, or moving that thing
+    leaves the hygiene behind, passing.
+  - **The drive asks the shell itself**, because a unit test over the strip and one over the broker can each
+    only say what they intend. Its first version read as a pass while proving nothing — the probe went to a
+    shell that had not finished starting, so every *is it absent?* answered yes — and it reports
+    `shellAnswered` beside the verdict now.
+- **L1, T7 and the node-pty rule are closed**, the last being the guard this goal's acceptance names for
+  "node-pty returning to the pack". `L1`'s `onError` has no firing case and the source says which edit would
+  give it one, rather than the row implying a gate.
 - **Next action: settle the fork above, then Phase A.** What is left of Phase B needs Windows and a Mac cannot give it:
   **X1, X2 and ConPTY's resize and exit**, which the goal already says are claimed on a Windows run or not
   at all. `command-group`'s API is retired so that change is a wiring job rather than a question. **X1, X2 and ConPTY need a Windows run** and
