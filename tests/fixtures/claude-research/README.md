@@ -302,4 +302,8 @@ at least 104px history beside the draft, and stable normal/compact reflow before
 ordinary approval/question/Pause/recovery flow. Source recovery now records the quota
 idle-draft/Enter/paste guards with lexical and byte-offset verification. Native-backed
 resume/newer-model dialog hosts remain implemented but native/app-unverified; this
-bundle does not establish rollout admission or complete the cold-quota/inline-offer paths.
+bundle does not establish rollout admission or actual-app acceptance of the quota/return/inline hosts.
+
+The bundled analyzer recovers native display/onScreen and key-handler ownership on both
+pinned platforms. The research-side verifier (outside this src-only archive) refuses
+missing/ambiguous handlers and missing onScreen callbacks.
