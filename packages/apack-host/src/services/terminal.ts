@@ -10,13 +10,24 @@
 // one-broker-per-data-dir that go with it, are the composition's to own when the broker ships, and the goal
 // says so rather than leaving it to be discovered.
 import * as path from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import type { TerminalListeners, TerminalService, TerminalSession } from '@apackdev/sdk/services';
 import { type Broker, startBroker } from '../broker/client.ts';
 
-/** Where the broker's socket goes: beside the app's other runtime files, one per data dir */
-const socketPath = (): string => path.join(resolveAppEnvironment().appDir, 'terminal-broker.sock');
+/**
+ * Where the broker's socket goes: beside the app's other runtime files, one per data dir.
+ *
+ * **The directory is created here rather than assumed.** The app's boot makes `appDir`, but this service
+ * starts on the first session and must not depend on having been reached after that step — driving it
+ * against a fresh data dir failed with the broker's own `NotFound` from `bind`, which is a confusing way to
+ * learn about an ordering.
+ */
+function socketPath(): string {
+  const directory = resolveAppEnvironment().appDir;
+  mkdirSync(directory, { recursive: true });
+  return path.join(directory, 'terminal-broker.sock');
+}
 
 /**
  * The broker binary this app runs.

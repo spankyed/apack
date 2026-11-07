@@ -81,10 +81,10 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 
 ## Current handoff
 
-- **Checkout:** `master` at `67905ccaa3`, the current one — no branch or worktree, clean tree.
+- **Checkout:** `master` at `fe34a67781`, the current one — no branch or worktree, clean tree.
   **Phase T is complete**: every track below has landed with a firing spec, or is placed with its reason
   (T6 → Phase H, T7 → Phase P, G1 → the output pipe). **Phase G's six readings are complete**, with G1, F4 and F5 priced and F18 found.
-  **Phase S has three of its four seams**; the fourth is Phase H's service, and Phases B, P and A are not started.
+  **Phase S's four seams are built** — the fourth's service in Phase H's shape; what remains of its *screen* is Phase B's first deliverable. Phases B, P and A are not started.
   **Collision surface against #372**, measured 2026-11-07: one file, `features/code/fe/state.ts` (+24/-2 on
   that branch). Every other file Phase T touches is untouched there — `bus/client-events.ts`,
   `api/src/boot/config.ts`, `be/services/terminal.ts`, `fe/features/terminal/state.ts`, `fe/hotkeys.ts`,
@@ -270,14 +270,31 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
     pty spawned, a command run, its output returned, its exit reported.
   - **The sync-to-async consequence is met**, which is part of why this phase exists: every operation on the
     client is a promise, where EARS is synchronous because elmdb is in-process.
-- **Next action: the fourth seam, which is Phase H's service.** A keystroke reaching a *screen* needs the
-  broker's bytes to reach pack code, and a pack may not import `@apackdev/host` — so it needs a host service
-  (`services.terminal`: an SDK contract, a host implementation, a `HostRuntime` member), which is **exactly
-  Phase H's deliverable** ("sessions in `@apackdev/host`, addressed and authorized by the host"). Phase S
-  allows hard-coding, but a hard-coded second path to the same place is work Phase H deletes, which is the
-  test this goal applies to T6 and T7 — so the honest order is to build that service once, in H's shape,
-  and let it close S's last seam. Everything beneath it is proven, which is what S was for: **the protocol
-  is derived from a client that exists.**
+- **The fourth seam's service is built: `services.terminal`.** The SDK owns the contract
+  (`services/terminal.ts`: open, write, resize, terminate — every one a promise, which is a fact about the
+  broker and not a style), the host owns one broker and starts it on the **first session** rather than at
+  boot, and the manifest schema now offers `host/terminal` to a pack's `consumes.services`. **Attach and
+  detach are deliberately absent**, which is what keeps this Phase H's shape rather than a hard-coded path
+  that phase would delete: this is the one session an owner opens and ends.
+  - **Driven against the real broker**, through the service, in the app's own process arrangement: a session
+    opened, a command run, its output returned, its exit reported. That found a real bug — the broker could
+    not bind because `appDir` did not exist yet, since the service starts on first use and must not depend on
+    having been reached after boot's `prepareHostDataDirs`. It creates the directory now.
+  - **Four completeness assertions caught the wiring**, which is the design working rather than luck:
+    `_HOST_SERVICE_NAMES`' exhaustiveness check, the host's boundary list, the SDK's test runtime and the
+    unbound stand-in.
+  - **No automated end-to-end test yet, and the reason is sequencing.** Such a test needs the Rust binary
+    built, and nothing in the chain builds it — per-platform broker builds are Phase B's deliverable. A test
+    that refused on a fresh checkout would be worse than none; the Rust side's six cases and the client's six
+    cover both halves meanwhile, and the seam they meet at is the generated protocol.
+- **Next action: Phase B, which is the point of no return.** What is left of Phase S's "output reaches a
+  screen" is the terminal feature calling `services.terminal` instead of `node-pty` — and that **is** Phase
+  B's first deliverable ("the terminal feature no longer imports node-pty; `services/terminal.ts` spawns
+  nothing"). Writing a second, hard-coded renderer path to the same place first is work Phase P deletes,
+  which is the test this goal applies to T6 and T7. So the skeleton's last step and Phase B's first are the
+  same change, and it should be made once — after which Phase S is no longer revertable in one commit.
+  **The sync-to-async consequence lands there**: the pack's terminal service is synchronous throughout
+  (`create()` returns a `TerminalInfo` in the same turn), and every call site that assumes it must change.
 - **What Phase S deliberately does not have yet**, and should not before Phase B: a second client, bounded
   history and backpressure, reattach, and `command-group` in the spawn path — the probe proved the API, and
   `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` needs a Windows run. One connection's sessions live as long as the
