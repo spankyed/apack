@@ -81,10 +81,10 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 
 ## Current handoff
 
-- **Checkout:** `master` at `88a2bca617`, the current one — no branch or worktree, clean tree.
+- **Checkout:** `master` at `67905ccaa3`, the current one — no branch or worktree, clean tree.
   **Phase T is complete**: every track below has landed with a firing spec, or is placed with its reason
   (T6 → Phase H, T7 → Phase P, G1 → the output pipe). **Phase G's six readings are complete**, with G1, F4 and F5 priced and F18 found.
-  **Phase S is begun** (repo, candidates, pin, link); its walking skeleton and Phases B, H, P and A are not.
+  **Phase S has three of its four seams**; the fourth is Phase H's service, and Phases B, P and A are not started.
   **Collision surface against #372**, measured 2026-11-07: one file, `features/code/fe/state.ts` (+24/-2 on
   that branch). Every other file Phase T touches is untouched there — `bus/client-events.ts`,
   `api/src/boot/config.ts`, `be/services/terminal.ts`, `fe/features/terminal/state.ts`, `fe/hotkeys.ts`,
@@ -251,11 +251,37 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   - **Both Phase T preconditions paid off on contact**: the janitor now reports five Rust targets including
     `apack-terminal/target`, and the toolchain derivation reads 1.99.1 from both checkouts and agrees, so the
     container's image key did not move. The new repo pins elmdb's channel deliberately for that reason.
-- **Next action: Phase S's walking skeleton** — a keystroke reaching a pty and its output reaching a screen
-  through all four seams, with `tests/e2e/smoke/` still passing. Nothing of it is built: the broker is
-  `cargo init`'s `main.rs`, there is no protocol, no host session service and no renderer session. The
-  sync-to-async consequence the goal names is still ahead, and this is the phase that is meant to meet it in
-  real call sites.
+- **Phase S's skeleton: three of its four seams are built and proven.** `apack-terminal` at `8d34399`,
+  pinned.
+  - **The process layer** (`src/session.rs`): a pty, its process, and nothing that knows what a screen is.
+    The slave is dropped after the spawn or the master never sees EOF, and **nothing polls for an exit** —
+    the pty closing *is* the process ending, so the reader thread waits on the child at EOF and `Exited` is
+    reported once however the process died.
+  - **The protocol** (`src/protocol.rs`, generated to `protocol/protocol.ts`): newline-delimited JSON, Rust
+    as the source of truth, `ErrorCode` as a closed string union so a caller switches on a value the
+    compiler knows. **The handshake is first or the connection is refused**, because the monorepo pins a
+    commit of that repository and a stale pin has to be a clear refusal. `tests/broker.rs` drives six cases
+    through a real socket in the real binary, including a keystroke reaching a pty and its output coming
+    back.
+  - **The app's client** (`@apackdev/host/src/broker/client.ts`): starts the broker, greets it, turns its
+    frames into calls and a feed. Output goes to its session's listener and never through the call waiting
+    for an answer — there is a case for exactly the ordering that would lose one. Proven two ways: against a
+    scripted broker in `tests/broker/client.spec.ts`, and **driven against the real binary end to end** — a
+    pty spawned, a command run, its output returned, its exit reported.
+  - **The sync-to-async consequence is met**, which is part of why this phase exists: every operation on the
+    client is a promise, where EARS is synchronous because elmdb is in-process.
+- **Next action: the fourth seam, which is Phase H's service.** A keystroke reaching a *screen* needs the
+  broker's bytes to reach pack code, and a pack may not import `@apackdev/host` — so it needs a host service
+  (`services.terminal`: an SDK contract, a host implementation, a `HostRuntime` member), which is **exactly
+  Phase H's deliverable** ("sessions in `@apackdev/host`, addressed and authorized by the host"). Phase S
+  allows hard-coding, but a hard-coded second path to the same place is work Phase H deletes, which is the
+  test this goal applies to T6 and T7 — so the honest order is to build that service once, in H's shape,
+  and let it close S's last seam. Everything beneath it is proven, which is what S was for: **the protocol
+  is derived from a client that exists.**
+- **What Phase S deliberately does not have yet**, and should not before Phase B: a second client, bounded
+  history and backpressure, reattach, and `command-group` in the spawn path — the probe proved the API, and
+  `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` needs a Windows run. One connection's sessions live as long as the
+  connection; surviving a client is Phase B's and nothing is shaped to prevent it.
 - **Everything before Phase S is done.** Phase G's readings are taken and the gate's purpose — a before that later phases
   are checked against — is met. What Phase G still owes (the bounds as named constants) needs Phase B and
   Phase P to exist first, and its parsing reading is baseline data the goal says is not a decision input.
