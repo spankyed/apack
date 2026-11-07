@@ -5,7 +5,7 @@ import { readFile, writeFile, readdir } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createClaudeTerminalBridge } from '#features/code/be/services/claude-code/terminal-bridge.ts'
-const session = '11111111-1111-1111-1111-111111111111'
+const session = '11111111-1111-4111-8111-111111111111'
 let bridge: Awaited<ReturnType<typeof createClaudeTerminalBridge>> | undefined
 async function config() { return JSON.parse(await readFile(bridge!.directory + '/observer.json', 'utf8')) }
 async function request(path: string, body: unknown, token?: string) {
@@ -24,7 +24,7 @@ async function create(enter = () => {}, pasteImage?: (path: string) => void) {
   await request('/observer-ready', { sessionId: session, pid: process.pid })
   await request('/poll', { sessionId: session, agents: [], statusCommand: 'main', subagentCommand: 'sub', shellPrefix: null })
 }
-afterEach(async () => { await bridge?.close(); bridge = undefined })
+afterEach(async () => { vi.useRealTimers(); await bridge?.close(); bridge = undefined })
 it('reopens a parent bridge using its retained background observer and refreshes the plugin', async () => {
   await create()
   const previous = bridge!, observer = previous.backgroundObserver, pluginRoot = previous.pluginRoot
@@ -587,4 +587,85 @@ it('reacquires an unchanged native view after metadata moves away and back witho
   expect((await request('/native-view', { ...main, view: { kind: 'agent', registryId: 'other' } })).status).toBe(409)
   expect((await request('/native-view', { ...main, sessionId: otherSession })).status).toBe(409)
   expect((await request('/native-view', { ...main, pid: process.pid + 1 })).status).toBe(409)
+})
+
+const liveQuestion = { control: { kind: 'question', dialog: {
+  id: 'question-1', revision: '44444444-4444-4444-8444-444444444444', sessionId: session,
+  requestId: 'tool-question', toolName: 'AskUserQuestion', shownInput: {},
+  presentation: { previewFormat: null, extendedQuestions: false, optionalDescriptions: false, previews: [] },
+} }, turn: null }
+async function timedSubmission() {
+  await create()
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  const outcome = bridge!.submit('Review release').then(value => ({ value }), error => ({ error: error.message }))
+  const poll = await request('/poll', { sessionId: session, agents: [] })
+  await request('/result', { sessionId: session, id: poll.value.id, filled: true })
+  return { outcome, id: poll.value.id }
+}
+it('waits for the original question and then still requires a canonical prompt receipt', async () => {
+  const { outcome, id } = await timedSubmission()
+  const read = vi.spyOn(bridge!.uiTransport, 'request').mockResolvedValue(liveQuestion)
+  let finished = false; void outcome.then(() => { finished = true })
+  await vi.advanceTimersByTimeAsync(10000)
+  expect(finished).toBe(false)
+  expect(read).toHaveBeenCalledWith({ subtype: 'apack_pending_control' })
+  read.mockResolvedValue({ control: null, turn: null })
+  await vi.advanceTimersByTimeAsync(5000)
+  expect(finished).toBe(false)
+  const uuid = '33333333-3333-3333-3333-333333333333'
+  await request('/append', { sessionId: session, submissionId: id, uuid, door: 'prompt', origin: { kind: 'composer' }, message: { type: 'user', role: 'user', content: [{ type: 'text', text: 'Review release' }] } })
+  await request('/submission', { sessionId: session, id, accepted: true })
+  expect(await outcome).toEqual({ value: { sessionId: session, uuid, text: 'Review release' } })
+})
+it.each([
+  ['no interaction', { control: null, turn: null }],
+  ['foreign owner', { ...liveQuestion, control: { ...liveQuestion.control, dialog: { ...liveQuestion.control.dialog, sessionId: '22222222-2222-2222-2222-222222222222' } } }],
+  ['cancelled turn', { ...liveQuestion, turn: { id: 'turn-1', cancelled: true } }],
+  ['malformed response', {}],
+])('bounds missing acknowledgements with %s', async (_name, state) => {
+  const { outcome } = await timedSubmission()
+  vi.spyOn(bridge!.uiTransport, 'request').mockResolvedValue(state)
+  await vi.advanceTimersByTimeAsync(5000)
+  expect(await outcome).toEqual({ error: 'Native prompt bridge timed out' })
+})
+it('does not revive a closed submission after a late native interaction read', async () => {
+  const { outcome } = await timedSubmission()
+  let reply!: (value: unknown) => void
+  vi.spyOn(bridge!.uiTransport, 'request').mockImplementation(() => new Promise(resolve => { reply = resolve }))
+  await vi.advanceTimersByTimeAsync(5000)
+  await bridge!.close()
+  expect(await outcome).toEqual({ error: 'Native terminal closed' })
+  reply(liveQuestion)
+  await vi.advanceTimersByTimeAsync(10000)
+  expect(bridge!.busy).toBe(false)
+})
+
+it('restores a bounded acknowledgement deadline after the native interaction closes', async () => {
+  const { outcome } = await timedSubmission()
+  const read = vi.spyOn(bridge!.uiTransport, 'request').mockResolvedValue(liveQuestion)
+  await vi.advanceTimersByTimeAsync(5000)
+  read.mockResolvedValue({ control: null, turn: null })
+  await vi.advanceTimersByTimeAsync(5000)
+  let finished = false; void outcome.then(() => { finished = true })
+  await vi.advanceTimersByTimeAsync(4999)
+  expect(finished).toBe(false)
+  await vi.advanceTimersByTimeAsync(1)
+  expect(await outcome).toEqual({ error: 'Native prompt bridge timed out' })
+})
+it('does not extend the draft handoff deadline for an unrelated native question', async () => {
+  await create()
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  const read = vi.spyOn(bridge!.uiTransport, 'request').mockResolvedValue(liveQuestion)
+  const outcome = bridge!.submit('Unentered draft').catch(error => error.message)
+  await vi.advanceTimersByTimeAsync(5000)
+  expect(await outcome).toBe('Native prompt bridge timed out')
+  expect(read).not.toHaveBeenCalled()
+})
+it('refuses to preserve a formerly open interaction after its broker fails', async () => {
+  const { outcome } = await timedSubmission()
+  const read = vi.spyOn(bridge!.uiTransport, 'request').mockResolvedValue(liveQuestion)
+  await vi.advanceTimersByTimeAsync(5000)
+  read.mockRejectedValue(new Error('Broker closed'))
+  await vi.advanceTimersByTimeAsync(5000)
+  expect(await outcome).toEqual({ error: 'Native prompt bridge timed out' })
 })

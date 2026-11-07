@@ -1,4 +1,6 @@
 import type { createClaudeBackgroundStatusAuthority } from './background-status-authority.ts'
+import { ClaudeBackgroundControlSchema } from './background-controls.ts'
+import { z } from 'zod'
 import { CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES } from './ui-text-limits.ts'
 import { createClaudeTerminalPlugin } from './terminal-plugin.ts'
 import { createClaudeBackgroundStatusObserver, type ClaudeBackgroundStatusObserver } from './background-status-observer.ts'
@@ -78,12 +80,46 @@ export async function createClaudeTerminalBridge(options: {
   const ui = createClaudeTerminalUiTransport({ socketPath: uiSocketPath, token, current: () => !closed && observerPid ? { pid: observerPid, sessionId: projection.sessionId } : undefined })
   let backgroundObserver: ClaudeBackgroundStatusObserver | undefined
   const linkedBackground = () => { const target = options.backgroundTarget?.(); return target?.parentSessionId === projection.sessionId ? target : undefined }
-  let pending: { id: string; sessionId: string; text: string; images: readonly ClaudeNativeImage[]; sent: boolean; prepared?: boolean; entered?: boolean; accepted?: ClaudeNativeSubmissionReceipt; timer: ReturnType<typeof setTimeout>; resolve(receipt: ClaudeNativeSubmissionReceipt): void; reject(error: Error): void } | undefined
+  let pending: { id: string; sessionId: string; text: string; images: readonly ClaudeNativeImage[]; sent: boolean; prepared?: boolean; entered?: boolean; waitingForInteraction?: boolean; accepted?: ClaudeNativeSubmissionReceipt; timer: ReturnType<typeof setTimeout>; resolve(receipt: ClaudeNativeSubmissionReceipt): void; reject(error: Error): void } | undefined
   const settle = (error?: Error, receipt?: ClaudeNativeSubmissionReceipt) => {
     const current = pending
     if (!current) return
     pending = undefined; clearTimeout(current.timer)
     if (error) current.reject(error); else if (receipt) current.resolve(receipt); else current.reject(new Error('Native submission had no stored prompt receipt'))
+  }
+  const pendingControlSchema = z.object({
+    control: ClaudeBackgroundControlSchema.nullable(),
+    turn: z.object({ id: z.string().min(1).max(256), cancelled: z.boolean() }).nullable(),
+  })
+  function submissionTimer(hasImages = !!pending?.images.length) {
+    const timer = setTimeout(() => { void expireSubmission() }, hasImages ? 30000 : 5000)
+    timer.unref()
+    return timer
+  }
+  async function expireSubmission() {
+    const current = pending
+    if (!current) return
+    if (current.entered) {
+      try {
+        const state = pendingControlSchema.parse(await ui.transport.request({ subtype: 'apack_pending_control' }))
+        if (closed || pending !== current || projection.sessionId !== current.sessionId) return
+        if (state.turn?.cancelled || state.control && state.control.dialog.sessionId !== current.sessionId) throw new Error('Native interaction owner changed')
+        // The original prompt hook cannot acknowledge until its native question or approval returns.
+        if (state.control) {
+          current.waitingForInteraction = true
+          current.timer = submissionTimer()
+          return
+        }
+        if (current.waitingForInteraction) {
+          current.waitingForInteraction = false
+          current.timer = submissionTimer()
+          return
+        }
+      } catch {
+        // Failed or malformed reads cannot keep a stale submission alive.
+      }
+    }
+    if (pending === current) settle(new Error('Native prompt bridge timed out'))
   }
   const server = createServer(async (request, response) => {
     const reply = (status: number, value: unknown) => { if (response.destroyed || response.writableEnded) return; response.writeHead(status, { 'content-type': 'application/json' }); response.end(JSON.stringify(value)) }
@@ -391,7 +427,7 @@ export async function createClaudeTerminalBridge(options: {
         if (closed || !ready || pending || busy || !text.trim() && !images.length || text.length > 32768) return Promise.reject(new Error('Native terminal cannot accept this draft now'))
         if (images.some(image => !['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(image.mediaType) || !image.data || image.data.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(image.data))) return Promise.reject(new Error('Native image content is invalid'))
         return new Promise((resolve, reject) => {
-          const timer = setTimeout(() => settle(new Error('Native prompt bridge timed out')), images.length ? 30000 : 5000); timer.unref()
+          const timer = submissionTimer(images.length > 0)
           pending = { id: randomUUID(), sessionId: projection.sessionId, text, images: images.map(image => ({ ...image })), sent: false, timer, resolve, reject }
         })
       },
