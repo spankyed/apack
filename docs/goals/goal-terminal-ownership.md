@@ -226,6 +226,25 @@ has another client:
 (The refactor target's reusable core takes "executable/argv, environment, cwd, dimensions, resource policy
 and opaque IDs", which conflates the two; `dimensions` belongs to the second.)
 
+**The app's side is a protocol client, and it is asynchronous.** Follow `elmdb-node`'s shape — Rust types as
+the source of truth, TS generated into a `protocol/` directory and shipped with the package — but without
+the addon: the broker is a process, not a `cdylib`, so there is no `.node`, no napi and **no
+`electron-rebuild`**, which is where D11's ABI independence actually lands.
+
+The consequence to plan for rather than discover: **EARS is synchronous by design** and that only works
+because elmdb is in-process — `query`/`create`/`write` are documented as "do NOT await". A socket client is
+not, so every pty write, resize and kill becomes a promise, reaching the terminal system's machine code and
+every call site that assumed sync. Budget for it; it is pervasive and cheap now, expensive late.
+
+Four more that follow from shipping a binary instead of an addon: per-platform broker builds included by
+electron-builder with the executable bit and macOS signing intact, and resolved differently in dev and
+packaged; composition owning spawn, socket discovery, crash-restart and one-broker-per-data-dir
+(`api/src/runtime/index.ts`, as `openAppStore()` does); the generated protocol treated as a recorded artifact
+with `check`/`update` halves so staleness fails a typecheck; and a protocol-version handshake, since the
+monorepo pins a `.rev` and a stale pin should be a clear refusal rather than a strange bug. Host-only, like
+`APP_ONLY_EXPORTS` keeps `@apackdev/ears/lmdb` from packs, and with a fake so a terminal test needs no built
+binary.
+
 **Dependencies:** D11 for the broker's home and core, D9 for what it parses, Phase G's baseline so
 acceptance has a before.
 
