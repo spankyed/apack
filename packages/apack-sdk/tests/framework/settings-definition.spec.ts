@@ -141,7 +141,10 @@ describe('settings data contract', () => {
 });
 
 
-it.each([{ ...definition, visible: false }, { ...definition, access: 'private' }, { ...definition, title: 3 }])('refuses invalid definition metadata in native registrations too: %j', invalid => {
+it.each([{ ...definition, visible: false }, { ...definition, access: 'private' }, { ...definition, title: 3 },
+  { ...definition, form: { entry: 'form.vue', load: 'lazy' } },
+  { ...definition, form: { entry: 'form.vue', unknown: true } },
+])('refuses invalid definition metadata in native registrations too: %j', invalid => {
   expect(() => _compileSettingsDefinition(invalid as SettingsDefinition)).toThrow();
 });
 

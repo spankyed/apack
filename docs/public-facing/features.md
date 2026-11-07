@@ -207,7 +207,10 @@ machine and views; the host addresses it at `<packId>/bookmarks`.
 ```
 
 A module path uses its default export. Use `path#exportName` for a named machine or component export.
-A component target can instead be `{ "entry": "path", "load": "lazy" }` to preserve lazy view loading.
+Pack UI components load on demand by default. Use `{ "entry": "path", "load": "eager" }` only to
+import an entry with the pack. This applies to surfaces, settings forms, step forms/nodes, block
+renderers, artifact viewers, editor popups and app extensions. Imports within those components and
+actor/predicate registration are unchanged.
 A custom icon uses `{ "entry": "src/icon.vue" }`; a string icon names a Lucide export.
 A routed canvas uses `{ "routes": { "list": "src/list.vue", "view": "src/view.vue" } }`.
 Discovery reads these declarations without loading the machine or component modules.

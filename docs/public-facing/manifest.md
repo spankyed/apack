@@ -321,8 +321,8 @@ across its dependency tree fail validation/build; a shared ancestor arriving thr
 retains its actual owner. Between independently installed packs, the app checks the same thing: if two
 enabled packs claim one name, both are refused and the Packs view names the shared claim, as it does
 for two surfaces opening one entity. Disabling either one resolves it. A type may use a category declared by its pack or a dependency. Each category
-owns one provider. Icons name Lucide exports or use `{ "entry": "src/icon.vue", "load": "lazy" }` for a
-custom component. SVG geometry supports path, rect and circle tuples.
+owns one provider. Icons name Lucide exports or use `{ "entry": "src/icon.vue" }` for a custom
+component. Component entries load on demand; `{ "entry": "path", "load": "eager" }` opts into eager loading. SVG geometry supports path, rect and circle tuples.
 
 `useItems()` is a Vue composable returning a reactive
 reference-item list. Providers must work in an owned effect scope and release subscriptions with
@@ -387,10 +387,7 @@ Flow step types are declared under `extensions.steps`, keyed by type.
           },
           "colorKey": "indigo",
           "components": {
-            "form": {
-              "entry": "src/extensions/steps/my-step/form.vue",
-              "load": "lazy"
-            }
+            "form": "src/extensions/steps/my-step/form.vue"
           }
         },
         "runtime": {
@@ -428,10 +425,7 @@ Flow step types are declared under `extensions.steps`, keyed by type.
           },
           "colorKey": "blue",
           "components": {
-            "form": {
-              "entry": "src/extensions/steps/my-trigger/form.vue",
-              "load": "lazy"
-            }
+            "form": "src/extensions/steps/my-trigger/form.vue"
           }
         },
         "types": "src/extensions/steps/my-trigger/types.ts"
@@ -837,10 +831,7 @@ For each entry with a `monaco` target, `apack pack build` writes `dist/defs/mona
           },
           "colorKey": "indigo",
           "components": {
-            "form": {
-              "entry": "src/extensions/steps/bookmark-check/form.vue",
-              "load": "lazy"
-            }
+            "form": "src/extensions/steps/bookmark-check/form.vue"
           }
         },
         "node": {

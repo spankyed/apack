@@ -23,11 +23,19 @@ export function _compileSettingsDefinition(definition: SettingsDefinition): Sett
   if (!definition || typeof definition !== 'object' || Array.isArray(definition)) throw new Error('Settings definition must be an object');
   const allowed = new Set(['schema', 'defaults', 'title', 'description', 'form', 'access']);
   for (const key of Object.keys(definition)) if (!allowed.has(key)) throw new Error(`Unknown settings definition field "${key}"`);
-  for (const key of ['title', 'description', 'form'] as const) {
+  for (const key of ['title', 'description'] as const) {
     const value = definition[key];
     if (value !== undefined && (typeof value !== 'string' || (key !== 'description' && value.length === 0))) {
       throw new Error(`Settings ${key} must be ${key === 'description' ? 'a string' : 'a nonempty string'}`);
     }
+  }
+  const form = definition.form;
+  if (form !== undefined && (typeof form === 'string' ? !form.length
+    : !form || Array.isArray(form) || _settingsJsonProblems(form).length > 0
+      || typeof form.entry !== 'string' || !form.entry.length
+      || (form.load !== undefined && form.load !== 'eager')
+      || Object.keys(form).some(key => key !== 'entry' && key !== 'load'))) {
+    throw new Error('Settings form must be a component target');
   }
   if (definition.access !== undefined && !['shared', 'owner'].includes(definition.access)) throw new Error('Settings access must be shared or owner');
   const schemaProblems = _settingsJsonProblems(definition.schema);

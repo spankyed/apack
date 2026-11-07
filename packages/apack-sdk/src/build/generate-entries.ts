@@ -704,8 +704,7 @@ export async function generatePackFiles(
 
   /**
    * The same blocks for the frontend registration, carrying the component each declares instead of the
-   * backend facet. A component is taken by its default export, as a surface's entry is, so the manifest
-   * names a file rather than a `"path#export"` target.
+   * backend facet. Component bindings use the same loading policy as surfaces.
    */
   function blockDefinitionsFE(): { imports: string[]; literal: string } {
     const imports: string[] = [];
@@ -713,9 +712,9 @@ export async function generatePackFiles(
       const parts = [`type: '${type}'`];
       if (entry.kind) parts.push(`kind: '${entry.kind}'`);
       if (entry.fe) {
-        const local = `__blockFE_${index}`;
-        imports.push(`import ${local} from '${toImportPath(root, componentFile(`Block "${type}": fe`, entry.fe))}';`);
-        parts.push(`fe: { component: ${local} }`);
+        const binding = frontendBindings(`__blockFE_${index}`, `Block "${type}": fe`);
+        parts.push(`fe: { component: ${binding.component(entry.fe)} }`);
+        imports.push(...binding.imports);
       }
       return `    { ${parts.join(', ')} },`;
     });
@@ -775,7 +774,7 @@ export async function generatePackFiles(
     return { imports, member: `${facet}: { ${members.join(', ')} }` };
   }
 
-  /** Shared component binding grammar for feature surfaces and step presentation. */
+  /** Shared component binding grammar for pack UI entry points. */
   function frontendBindings(prefix: string, owner: string) {
     const imports: string[] = [];
     let nextBinding = 0;
@@ -800,8 +799,8 @@ export async function generatePackFiles(
       return binding;
     }
     function component(value: ComponentTarget): string {
-      if (typeof value === 'string' || value.load !== 'lazy') return target(typeof value === 'string' ? value : value.entry);
-      const { source, exportName } = reference(value.entry);
+      if (typeof value !== 'string' && value.load === 'eager') return target(value.entry);
+      const { source, exportName } = reference(typeof value === 'string' ? value : value.entry);
       imports.push("import { defineAsyncComponent } from 'vue';");
       return `defineAsyncComponent(() => import(${dataLiteral(toImportPath(root, source))}).then(module => module.${exportName}))`;
     }
@@ -963,20 +962,13 @@ ${items.join('\n')}
     const items = entries.map(([type, entry], index) => {
       const facet = [`icon: ${entry.icon}`];
       if (entry.fe) {
-        const local = `__artifactFE_${index}`;
-        imports.push(`import ${local} from '${toImportPath(root, componentFile(`Artifact "${type}": fe`, entry.fe))}';`);
-        facet.push(`component: ${local}`);
+        const binding = frontendBindings(`__artifactFE_${index}`, `Artifact "${type}": fe`);
+        facet.push(`component: ${binding.component(entry.fe)}`);
+        imports.push(...binding.imports);
       }
       return `    { type: '${type}', fe: { ${facet.join(', ')} } },`;
     });
     return { imports, literal: `[\n${items.join('\n')}\n  ]` };
-  }
-
-  /** A manifest path naming a component file, taken by its default export */
-  function componentFile(label: string, manifestPath: string): string {
-    const file = findSourceModule(root, manifestPath, [...SCRIPT_MODULE_EXTENSIONS, '.vue'], label);
-    if (!file) throw new Error(`${label}: no file at ${manifestPath}`);
-    return relative(root, file).split('\\').join('/');
   }
 
   function receivedEventTypes(feature: PackFeature): string[] {
@@ -1161,9 +1153,10 @@ ${contractCheck}`;
     const surfaceFeatures = features.filter(f => f.surface);
     const featureForms = features.filter(f => f.settings?.form);
     const groupForms = Object.entries(manifest.extensions?.settings ?? {}).filter(([, definition]) => definition.form);
-    const formImports = [
-      ...featureForms.map(f => `import __settingsFeature_${f.id} from '${toImportPath(root, f.settings!.form!)}';`),
-      ...groupForms.map(([id, definition]) => `import __settingsGroup_${id} from '${toImportPath(root, definition.form!)}';`),
+    const forms = frontendBindings('__settings', 'Settings form');
+    const formDefinitions = [
+      ...featureForms.map(f => `const __settingsFeature_${f.id} = ${forms.component(f.settings!.form!)};`),
+      ...groupForms.map(([id, definition]) => `const __settingsGroup_${id} = ${forms.component(definition.form!)};`),
     ];
 
     const surfaceImports: string[] = [];
@@ -1224,7 +1217,9 @@ ${contractCheck}`;
         `${propertyKey(name)}: ${editorBinding(`${label}.extensions.${name}`, target)}`).join(', ')} }`);
       if (contribution.popups) parts.push(`popups: { ${Object.entries(contribution.popups).map(([name, target]) => {
         const local = `__editor_${nextEditorBinding++}`;
-        extraImports.push(`import ${local} from '${toImportPath(root, componentFile(`${label}.popups.${name}`, target))}';`);
+        const binding = frontendBindings(local, `${label}.popups.${name}`);
+        const component = binding.component(target);
+        extraImports.push(...binding.imports, `const ${local} = ${component};`);
         return `${propertyKey(name)}: ${local}`;
       }).join(', ')} }`);
       if (contribution.isSuggestionActive) parts.push(`isSuggestionActive: ${editorBinding(`${label}.isSuggestionActive`, contribution.isSuggestionActive, true)}`);
@@ -1233,7 +1228,9 @@ ${contractCheck}`;
     extraImports.push(...steps.imports, ...artifacts.imports, ...blocks.imports);
     const appExt = Object.entries(frontend.appExtensions ?? {});
     for (const [key, extPath] of appExt) {
-      extraImports.push(`import __appExtension_${key} from '${toImportPath(root, extPath)}';`);
+      const binding = frontendBindings(`__appExtension_${key}`, `extensions.appExtensions.${key}`);
+      const component = binding.component(extPath);
+      extraImports.push(...binding.imports, `const __appExtension_${key} = ${component};`);
     }
 
     const regProps: string[] = [];
@@ -1250,7 +1247,8 @@ ${contractCheck}`;
     return `${HEADER}
 import type { PackFERegistration${surfaceFeatures.length ? ', SurfaceDefinition' : ''} } from '@apackdev/sdk/fe';
 import { bindSettings } from './settings-fe.ts';
-${[...new Set([...surfaceImports, ...formImports, ...extraImports])].join('\n')}
+${[...new Set([...surfaceImports, ...forms.imports, ...extraImports])].join('\n')}
+${formDefinitions.join('\n')}
 ${surfaceDefinitions.join('\n')}
 
 export default {
@@ -2041,7 +2039,7 @@ export type { PackFeatureSettings, PackGroupSettings } from './settings.ts';
         imports.push(`import { ${declaration} as ${binding} } from 'lucide-vue-next';`);
         return binding;
       }
-      return bind(label, declaration.entry, false, declaration.load === 'lazy');
+      return bind(label, declaration.entry, false, declaration.load !== 'eager');
     };
     for (const feature of packFeatures(manifest)) {
       const references = feature.references;

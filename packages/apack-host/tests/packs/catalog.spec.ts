@@ -300,7 +300,7 @@ it('projects native, disabled installed and authoring surfaces without activatin
   catalog.setNative([native]);
   const installed = source('installed', false);
   installed.snapshot.manifest.features = { view: { description: 'Feature declaration fixture.', surface: { label: 'Installed view', state: 'src/state.ts',
-    canvas: { routes: { list: 'src/list.vue', view: { entry: 'src/view.vue', load: 'lazy' } } } } } };
+    canvas: { routes: { list: 'src/list.vue', view: 'src/view.vue' } } } } };
   installed.snapshot.declarationRevision = _declarationRevision(installed.snapshot.manifest);
   Object.assign(installed.snapshot, { eventContracts: eventContractsFixture(installed.snapshot.manifest) });
   catalog.replace([installed]);
@@ -354,7 +354,7 @@ it('projects native, disabled installed and unbuilt source steps without loading
   const step = { node: { label: 'Memo', defaults: JSON.parse('{"__proto__":{"retained":true},"tags":["draft"]}') },
     build: { compile: 'unavailable.ts#compile', validate: 'unavailable.ts#validate', getLabel: 'unavailable.ts#getLabel' }, types: 'unavailable-types.ts',
     fe: { nodeConfig: { icon: 'Box', category: 'data' as const, connectionRules: { inputs: 1, outputs: 1 } },
-      components: { form: { entry: 'unavailable.vue', load: 'lazy' as const } },
+      components: { form: 'unavailable.vue' },
       layout: { hasInput: true, getHeight: 'unavailable.ts#getHeight' } },
   };
   catalog.setNative([{ id: 'native', steps: { memo: step } }]);

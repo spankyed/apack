@@ -192,7 +192,7 @@ without importing components or layout code. Codegen assembles the checked `Step
     "category": "logic"
   },
   "colorKey": "indigo",
-  "components": { "form": { "entry": "src/extensions/steps/my-step/form.vue", "load": "lazy" } },
+  "components": { "form": "src/extensions/steps/my-step/form.vue" },
   "layout": { "hasInput": true, "getHeight": "src/extensions/steps/my-step/layout.ts#getHeight" }
 }
 ```
@@ -200,7 +200,7 @@ without importing components or layout code. Codegen assembles the checked `Step
 | Field | Description |
 |---|---|
 | `nodeConfig` | Palette category, icon, connection rules and availability flags (below) |
-| `components?` | Optional `node` and `form` targets: a component path or `{ entry, load?: "lazy" }`. A script component may name `path#export`; Vue SFCs use their default export. `node` replaces the default canvas node; `form` replaces the default form |
+| `components?` | Optional `node` and `form` targets: a component path or `{ entry, load?: "eager" }`. Components load on demand by default; `load: "eager"` imports one with the pack. A script component may name `path#export`; Vue SFCs use their default export. `node` replaces the default canvas node; `form` replaces the default form |
 | `colorKey?` | Node style color: `purple`, `blue`, `amber`, `cyan`, `orange`, `emerald`, `indigo`, `neutral`, `red` or `yellow` |
 | `handlePrefix?` | Multi-output steps: outgoing handles are `<prefix>-0`, `<prefix>-1`, … |
 | `layout?` | Inline `hasInput`/`usesExitCount` flags and named `getHeight`/`getPorts` function references. Functions receive `(node, { exitCount })`; omitted layout uses one input and one output |
@@ -288,10 +288,7 @@ A step is declared in `apack.json` under `extensions.steps`, keyed by its type, 
           },
           "colorKey": "indigo",
           "components": {
-            "form": {
-              "entry": "src/extensions/steps/my-step/form.vue",
-              "load": "lazy"
-            }
+            "form": "src/extensions/steps/my-step/form.vue"
           }
         },
         "runtime": {
@@ -326,10 +323,7 @@ A step is declared in `apack.json` under `extensions.steps`, keyed by its type, 
           },
           "colorKey": "blue",
           "components": {
-            "form": {
-              "entry": "src/extensions/steps/my-trigger/form.vue",
-              "load": "lazy"
-            }
+            "form": "src/extensions/steps/my-trigger/form.vue"
           }
         },
         "node": {

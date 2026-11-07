@@ -100,7 +100,7 @@ it('checks declared presentation and panes without resolving a component or pred
   const { manifest, registration, component } = fixture();
   const declaration = manifest.features!.notes.surface!;
   Object.assign(declaration, { label: 'Notes', isPinned: true, icon: 'NotebookText',
-    canvas: { routes: { list: 'src/list.vue', view: { entry: 'src/view.vue', load: 'lazy' } } },
+    canvas: { routes: { list: 'src/list.vue', view: 'src/view.vue' } },
     panel: 'src/panel.vue', chat: 'src/chat.vue', hotkeys: [{ action: 'open', global: false }],
     options: { headerClass: 'notes' }, fallbackPanel: { label: 'Inspect', toggle: { type: 'INSPECT' }, isShown: 'src/predicate.ts#isShown' } });
   const isShown = vi.fn();

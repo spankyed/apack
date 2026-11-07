@@ -90,6 +90,13 @@ const ModulePathSchema = z.string().regex(_MODULE_PATH_PATTERN, 'Must name a mod
 /** A named export of a pack source file. */
 const ExportTargetSchema = z.string().regex(_MODULE_REFERENCE_PATTERN, 'Must be "path#exportName"');
 
+const ModuleTargetSchema = z.string().regex(/^[^#]+(?:#[A-Za-z_$][\w$]*)?$/, 'Must be a module path or path#exportName');
+const ComponentModuleSchema = z.object({
+  entry: ModuleTargetSchema.describe("Pack-root-relative component module, using its default export unless #exportName selects a binding."),
+  load: z.literal('eager').describe("Import the component eagerly with the pack; omission loads it on demand when rendered.").optional(),
+}).strict();
+const ComponentTargetSchema = z.union([ModuleTargetSchema, ComponentModuleSchema]);
+
 /** `provider:model` for a provider `services.inference` embeds with */
 const _EMBEDDING_MODEL_PATTERN = new RegExp(`^(${Object.entries(providerCapabilities)
   .filter(([, kinds]) => (kinds as readonly string[]).includes('embedding')).map(([provider]) => provider).join('|')}):.+$`);
@@ -201,7 +208,7 @@ const SettingsDefinitionShape = {
   defaults: JsonObjectSchema.describe('Complete explicit baseline values, validated without coercion or schema default population.'),
   title: z.string().min(1).describe("Display title for this preference group; falls back to its group ID or feature label.").optional(),
   description: z.string().describe("Explanatory text shown above this group's custom settings form.").optional(),
-  form: ModulePathSchema.describe('Source path of the custom settings form; its default export is a component.').optional(),
+  form: ComponentTargetSchema.describe('Custom settings form component, loaded on demand by default.').optional(),
   access: z.enum(['shared', 'owner']).describe('Shared with declared dependents by default; owner restricts writes and resets.').optional(),
 } satisfies Record<keyof SettingsDefinition, z.ZodTypeAny>;
 
@@ -569,12 +576,7 @@ const SystemSchema = z.object({
   }).strict().describe('Event routing declarations.').optional(),
 }).strict();
 
-const ModuleTargetSchema = z.string().regex(/^[^#]+(?:#[A-Za-z_$][\w$]*)?$/, 'Must be a module path or path#exportName');
-const ComponentModuleSchema = z.object({
-  entry: ModuleTargetSchema.describe("Pack-root-relative component module, using its default export unless #exportName selects a binding."),
-  load: z.literal('lazy').describe("Load the component on demand; omission uses the normal eager component binding.").optional(),
-}).strict();
-const ComponentTargetSchema = z.union([ModuleTargetSchema, ComponentModuleSchema]);
+
 
 /** The same feature ownership checks apply to authored and native declarations. */
 function checkReferenceClaims(features: Record<string, { references?: ReferenceDeclarations }> | undefined, ctx: z.RefinementCtx): void {
@@ -696,12 +698,11 @@ const EXTENSION_TYPE_SCHEMA = z.string()
   .regex(/^[a-z][a-z0-9_-]*$/, 'Must be a lowercase letter, then lowercase letters, digits, underscores and hyphens');
 
 /**
- * One message block: what it is, and where the code that draws it lives. `fe` is a path because a `.vue`
- * file's component is its default export, the way `extensions.appExtensions` names one.
+ * One message block: what it is, and the component that draws it.
  */
 export const BlockEntrySchema = z.object({
   kind: z.enum(['display', 'input']).describe('Whether the chat renders it as content or as something the user acts on. Display is the default.').optional(),
-  fe: ModulePathSchema.describe('Path to the component that draws it (a .vue file, taken by its default export).').optional(),
+  fe: ComponentTargetSchema.describe('Component that draws the block, loaded on demand by default.').optional(),
   be: ExportTargetSchema.describe('"path#exportName" of its backend facet (BlockBEFacet), for a block that summarises itself in a transcript.').optional(),
 }).strict();
 
@@ -714,7 +715,7 @@ export const BlockEntrySchema = z.object({
 export const ArtifactEntrySchema = z.object({
   icon: z.string().regex(/^[A-Z][A-Za-z0-9]*$/, 'Must be the name of a lucide-vue-next export, e.g. "ListTodo"')
     .describe('Name of the lucide-vue-next icon shown in the artifact list.'),
-  fe: ModulePathSchema.describe('Path to the viewer that opens it (a .vue file, taken by its default export). Without one the host shows the text viewer.').optional(),
+  fe: ComponentTargetSchema.describe('Artifact viewer, loaded on demand by default. Without one the host shows the text viewer.').optional(),
 }).strict();
 
 export const ContentConfigSchema = z.object({
@@ -796,13 +797,13 @@ const BuildConfigSchema = z.object({
 
 const TextEditorExtensionsSchema = z.object({
   extensions: declarationRecord(IdentifierSchema, ExportTargetSchema).describe('Tiptap extension name to its exported extension object ("path#exportName"). Each key must match the exported object\'s Tiptap name.').optional(),
-  popups: declarationRecord(IdentifierSchema, ModulePathSchema).describe('Popup IDs local to this group, mapped to pack-root-relative Vue component modules.').optional(),
+  popups: declarationRecord(IdentifierSchema, ComponentTargetSchema).describe('Popup IDs local to this group, mapped to pack-root-relative Vue component modules.').optional(),
   isSuggestionActive: ExportTargetSchema.describe('Exported predicate ("path#exportName") reporting whether this group has an active suggestion for the current editor state.').optional(),
 } satisfies Record<keyof TextEditorExtensionsDeclaration, z.ZodTypeAny>).strict();
 
 const FrontendConfigSchema = z.object({
   textEditor: declarationRecord(IdentifierSchema, TextEditorExtensionsSchema).describe('Named rich-text editor contribution groups. Extensions, popup IDs and the optional suggestion predicate are declared without loading pack code.').optional(),
-  appExtensions: declarationRecord(IdentifierSchema, ModulePathSchema).describe('Named app extensions. Keys are extension names (identifiers), values are paths to Vue components.').optional(),
+  appExtensions: declarationRecord(IdentifierSchema, ComponentTargetSchema).describe('Named app extensions. Keys are extension names (identifiers), values are paths to Vue components.').optional(),
 } satisfies Record<keyof FrontendDeclaration, z.ZodTypeAny>).strict().describe('Frontend contributions: what the pack adds to the app\'s own UI.');
 
 /**
