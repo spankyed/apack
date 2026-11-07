@@ -1,0 +1,56 @@
+// The link to the apack-terminal checkout the broker is built from: `vendor/apack-terminal`, a gitignored
+// symlink, beside the commit it is pinned to, `vendor/apack-terminal.rev`. Arranged as `link-elmdb.mjs` is, and
+// plain Node with no dependencies for the same reason: it runs before anything is installed. The checkout is
+// `APACK_TERMINAL_DIR`, or `~/Develop/Projects/apack/apack-terminal`.
+//
+// **It links a source checkout and nothing else.** elmdb's linker also refuses a checkout whose binding is not
+// built, because npm resolves a `file:` dependency through that link and an unbuilt one fails later and less
+// clearly. The broker is a binary rather than a package: nothing here resolves through the link, so what the
+// link is for is the toolchain derivation (`lib/vendored-checkouts.ts`), the janitor's budget, and builds — none
+// of which need `target/` to exist already.
+import { execFileSync } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+/** The apack-terminal checkout the link points at @param {NodeJS.ProcessEnv} [env] */
+export function apackTerminalCheckout(env = process.env) {
+  return path.resolve(env.APACK_TERMINAL_DIR ?? path.join(os.homedir(), 'Develop', 'Projects', 'apack', 'apack-terminal'));
+}
+
+/**
+ * Points `<root>/vendor/apack-terminal` at the checkout, refusing one that isn't an apack-terminal checkout or
+ * that doesn't hold the pinned commit in its history. A link already there is replaced
+ * @param {string} root @param {string} [checkout]
+ */
+export function linkApackTerminal(root, checkout = apackTerminalCheckout()) {
+  const rev = fs.readFileSync(path.join(root, 'vendor', 'apack-terminal.rev'), 'utf8').trim();
+  const manifest = path.join(checkout, 'Cargo.toml');
+  if (!fs.existsSync(manifest) || !/^name\s*=\s*"apack-terminal"$/m.test(fs.readFileSync(manifest, 'utf8'))) {
+    throw new Error(`${checkout} isn't an apack-terminal checkout (no Cargo.toml naming apack-terminal). Clone it there, or set APACK_TERMINAL_DIR`);
+  }
+  try {
+    execFileSync('git', ['-C', checkout, 'merge-base', '--is-ancestor', rev, 'HEAD'], { stdio: 'ignore' });
+  } catch {
+    throw new Error(`The apack-terminal checkout at ${checkout} doesn't hold the pinned commit ${rev} (vendor/apack-terminal.rev) in its history: fetch and check out a commit that does`);
+  }
+  const link = path.join(root, 'vendor', 'apack-terminal');
+  const held = fs.lstatSync(link, { throwIfNoEntry: false });
+  if (held?.isSymbolicLink()) fs.unlinkSync(link);
+  else if (held) throw new Error(`${link} is a ${held.isDirectory() ? 'directory' : 'file'}, not the link to an apack-terminal checkout: move it away first`);
+  // A junction on Windows, as elmdb's is: neither elevation nor Developer Mode, and Node reads either as a link
+  fs.symlinkSync(checkout, link, process.platform === 'win32' ? 'junction' : 'dir');
+  return { link, checkout, rev };
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  try {
+    const { link, checkout, rev } = linkApackTerminal(root);
+    console.log(`${path.relative(root, link)} → ${checkout} (pinned ${rev.slice(0, 12)})`);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    process.exit(1);
+  }
+}

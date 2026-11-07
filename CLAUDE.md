@@ -27,6 +27,16 @@ apack is an Electron desktop app with an actor-based architecture. Both frontend
 
 Monorepo using npm workspaces. Requires Node 24 LTS (>=24.11.0) and npm >= 11: npm 10 crashes resolving vitest 4.1, which a new pack's first install does.
 
+**Two sibling checkouts are vendored, not depended on as packages.** Each is a gitignored symlink under
+`vendor/` beside a committed `.rev` naming the commit it is pinned to, linked by its own script:
+`vendor/elmdb` (`npm run link:elmdb`) is the Rust engine `@apackdev/ears` builds against, and
+`vendor/apack-terminal` (`npm run link:apack-terminal`) is the terminal broker. The link is
+machine-specific, so it is ignored and the `.rev` is the shared fact; both linkers refuse a checkout that
+isn't one and a checkout that doesn't hold the pin. **Whatever reads `vendor/` derives its subject from the
+links rather than naming a checkout** — the janitor's budget and the Linux container's Rust toolchain both do
+(`scripts/lib/vendored-checkouts.ts`), so a third sibling is covered the day it is linked, and two checkouts
+pinning different toolchains is a refusal naming both rather than a silent build with one of them.
+
 ## Parallel editing sessions
 
 Use the current checkout by default. Create a separate branch and worktree when requested or when
