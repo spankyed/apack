@@ -1,5 +1,5 @@
 // Events the app's clients send its backend systems (the API's `bus.send`): checked against the registered systems,
-// logged and put on the root event bus the app bus listens to (the SDK's bound transport).
+// logged by type and target, and put on the root event bus the app bus listens to (the SDK's bound transport).
 import { _rootEvents } from '@apackdev/sdk/runtime';
 import { createLogger } from '@apackdev/sdk/logger';
 import type { PackRegistry } from '../packs/registry.ts';
@@ -13,24 +13,6 @@ export class UnknownClientEventError extends Error {
     super(message);
     this.name = 'UnknownClientEventError';
   }
-}
-
-/** The event as logged: arrays over 5 items become their count and first 5 */
-function summarizeEventForLog(event: Message['event']) {
-  const MAX_ARRAY_LOG_SIZE = 5;
-  const summary: Record<string, unknown> = {};
-  let truncated = false;
-
-  for (const [key, value] of Object.entries(event)) {
-    if (Array.isArray(value) && value.length > MAX_ARRAY_LOG_SIZE) {
-      summary[key] = { count: value.length, sample: value.slice(0, MAX_ARRAY_LOG_SIZE) };
-      truncated = true;
-    } else {
-      summary[key] = value;
-    }
-  }
-
-  return truncated ? summary : event;
 }
 
 /**
@@ -51,6 +33,12 @@ export function receiveClientEvent(registry: Pick<PackRegistry, 'getEventValidat
     throw new UnknownClientEventError(`Unknown event "${event.type}" for system "${to}"${sender}`);
   }
 
-  logger.info(`→ Incoming: "${event.type}"`, { to, ...(from ? { from } : {}), ...(message.via ? { via: message.via } : {}), event: summarizeEventForLog(event) });
+  // The type, the target and who sent it — never the payload. `terminal.TERMINAL_INPUT` carries a keystroke,
+  // so a payload here is every password typed at a `sudo` or `ssh` prompt written to `main.log` and
+  // `main.jsonl`, which outlive the session and get attached to bug reports. A payload worth reading is worth
+  // reading at the handler, where what it holds is known; a per-type allow-list at this seam is the deny-list
+  // that rotted into this. Not even behind the debug gate: debug is what gets turned on when a terminal
+  // misbehaves, which is exactly when keystrokes would be captured.
+  logger.info(`→ Incoming: "${event.type}"`, { to, ...(from ? { from } : {}), ...(message.via ? { via: message.via } : {}) });
   _rootEvents.emitIncoming(message);
 }

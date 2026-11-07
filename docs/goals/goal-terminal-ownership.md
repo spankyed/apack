@@ -1,6 +1,6 @@
 # Terminal session ownership
 
-Status: planned. No open decisions; Phase T is ready to start.
+Status: in progress. No open decisions. Phase T started; Phase G waits on a quiet machine.
 
 ````text
 ```text
@@ -88,9 +88,16 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   `MacOSAppMenu.ts` and `stream-writer.ts` — so T3 and T9 are the only tracks with a rebase to think about.
   Phase G's baseline is unaffected by that branch, since it touches neither `services/terminal.ts` nor
   `terminal-pool.ts`.
-- **Next deliverable:** Phase G's baseline, which must precede any state moving, and Phase T's independent
-  tracks concurrently with it. Then Phase S's walking skeleton, whose first commit is the `apack-terminal`
-  repository and its link (D11). Phase B's first commit is the last cheap exit — see Constraints.
+- **Done:** Phase T's **S2** — the bus logs an event's type, target and sender and never its payload
+  (`apack-host/src/bus/client-events.ts`; `summarizeEventForLog` deleted with it). Guarded by a sentinel
+  search over the whole serialized log record, so re-adding a payload under any key fails; mutation-checked
+  by restoring `event` to the log, which fails three cases. The two live CLAUDE.md files that documented the
+  old array-summarizing behaviour moved with it.
+- **Next deliverable:** Phase T's **S1** — capture the API token at boot and delete it from `process.env`,
+  and strip the app's identity variables from spawned shells by a derived list (D4). Then F9, X3/X10, G1 and
+  the two tooling tracks, in any order. **Phase G is blocked on a quiet machine**: `npm run check:idle`
+  reported 60% against a 70% floor on 2026-11-07, so the baseline could not be taken. Retry before Phase S,
+  since it cannot be taken once state moves. Phase B's first commit is the last cheap exit — see Constraints.
 - **Proven checks:** the sibling-repo path is clear, probed 2026-11-07 and then removed —
   `mkdir` at `/apack/apack-terminal`, `git init`, `cargo init`, `cargo add portable-pty` (crates.io
   reachable, resolves 0.9.0), `cargo build` with that native dependency (5.8s, cc present), an **absolute**

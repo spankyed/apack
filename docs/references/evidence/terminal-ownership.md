@@ -18,6 +18,7 @@ removes the finding rather than fixing it, and names the construction that does.
 |---|---|---|---|---|---|
 | T4 | test | correlation work, pre-goal | `tests/features/code/fe/terminal-opens-for-the-asker.spec.ts` | the spec itself | — |
 | M3 | test | correlation work, pre-goal | `tests/features/code/be/terminal-answers-the-asker.spec.ts` | the spec itself | — |
+| S2 | test | `apack-host/src/bus/client-events.ts` — payload out of the log, `summarizeEventForLog` deleted | `apack-host/tests/bus/client-events.spec.ts` "lets no part of a payload reach a log, by any field" | the sentinel search over the serialized record: re-adding a payload under any key fails it. Mutation-checked — restoring `event` to the log fails 3 cases | — |
 | G3 | open | fixed on `session/claude-code-integration` (#372), not on master | `hooks.ts` calls `killAllHandles()` there | — | closes when #372 lands; confirm it survives the cleanup pass |
 
 Disposition values: `test`, `dissolved`, `driven`, `open`.

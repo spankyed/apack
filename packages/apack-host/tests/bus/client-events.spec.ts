@@ -1,6 +1,6 @@
 import { createNativePackTestRegistry } from '@apackdev/host/testing';
 // A client's event reaches the root event bus only when a registered system accepts its type, and is logged
-// with long arrays summarized
+// by type, target and sender — never by payload
 import { afterAll, describe, expect, it } from 'vitest';
 import { setup } from 'xstate';
 import { testRootEvents } from '@apackdev/sdk/testing';
@@ -29,11 +29,37 @@ function during(run: () => void): { incoming: unknown[]; logs: LogEvent[] } {
 }
 
 describe('receiveClientEvent', () => {
-  it('puts an accepted event on the bus and logs it', () => {
+  it('puts an accepted event on the bus and logs its type and target', () => {
     const message = { to: 'host/ping', event: { type: 'PING', note: 'hi' } };
     const { incoming, logs } = during(() => receiveClientEvent(registry, message));
     expect(incoming).toEqual([message]);
-    expect(logs).toEqual([expect.objectContaining({ level: 'info', source: 'app-events', meta: message })]);
+    expect(logs).toEqual([expect.objectContaining({ level: 'info', source: 'app-events', meta: { to: 'host/ping' } })]);
+    expect(logs[0]!.message).toContain('PING');
+  });
+
+  it('logs who sent it, which is identity rather than payload', () => {
+    const message = { to: 'host/ping', event: { type: 'PING' }, from: 'memo-pack', via: 'action:Add Memo' };
+    const { logs } = during(() => receiveClientEvent(registry, message));
+    expect(logs[0]!.meta).toEqual({ to: 'host/ping', from: 'memo-pack', via: 'action:Add Memo' });
+  });
+
+  /**
+   * The guard for the finding: `terminal.TERMINAL_INPUT` carries a keystroke, and this seam logged whole event
+   * payloads into `main.log` and `main.jsonl` — so a password typed at a `sudo` prompt was written to disk.
+   *
+   * It searches the serialized record rather than one field, because the defect is "a payload reached a log",
+   * not "that expression reached a log": re-adding it anywhere, under any key or through a future summarizer,
+   * puts the sentinel back and fails this.
+   */
+  it('lets no part of a payload reach a log, by any field', () => {
+    const sentinel = 'pa55word-sentinel';
+    const message = {
+      to: 'client-events-pack/any',
+      event: { type: 'TERMINAL_INPUT', data: sentinel, nested: { also: sentinel }, many: [sentinel, sentinel] },
+    };
+    const { logs } = during(() => receiveClientEvent(registry, message));
+    expect(logs).toHaveLength(1);
+    expect(JSON.stringify(logs[0])).not.toContain(sentinel);
   });
 
   it('accepts any type for a system that lists *', () => {

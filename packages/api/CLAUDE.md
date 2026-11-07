@@ -44,7 +44,7 @@ transport, boot or composition belongs in `@apackdev/host`, which the same guard
   without loading their modules. Each frame carries a backend-run ID and committed catalog revision;
   subscription teardown releases its catalog listener. Discovery and execution/readiness are separate.
 - `bus.ts` (`bus.*`):
-  - `send` (mutation) — `receiveClientEvent(appPacks, { ...input, client: ctx.client })` (`@apackdev/host/bus`), which checks `systemId` and `type` against the app's registered systems (a `*` entry accepts any type), logs the event through the `app-events` logger (arrays over 5 items summarized) and emits it on the bound root event bus. Its `UnknownClientEventError` becomes `BAD_REQUEST`.
+  - `send` (mutation) — `receiveClientEvent(appPacks, { ...input, client: ctx.client })` (`@apackdev/host/bus`), which checks `systemId` and `type` against the app's registered systems (a `*` entry accepts any type), logs the event's type, target and sender through the `app-events` logger — never its payload — and emits it on the bound root event bus. Its `UnknownClientEventError` becomes `BAD_REQUEST`.
   - `packClientReady({ packId })` — logs it and calls `rootEvents.emitPackClientConnected`, which the bus turns into `PACK_CLIENT_CONNECTED`.
   - `claim({ as })` — takes a name on this connection for something no pack registered, so a system can be told to
     answer *it*: an agent driving the app claims `host/drive`. The name is checked against the ref grammar, a name
