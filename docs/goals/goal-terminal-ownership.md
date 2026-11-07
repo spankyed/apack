@@ -432,6 +432,33 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 - **L1, T7 and the node-pty rule are closed**, the last being the guard this goal's acceptance names for
   "node-pty returning to the pack". `L1`'s `onError` has no firing case and the source says which edit would
   give it one, rather than the row implying a gate.
+- **The Windows findings are closed, on a Windows machine.** An Azure VM was started for this on
+  2026-11-07; the broker's own suite now passes there in full (12 of 12), and `tests/parser.rs` with it.
+  - **X1 and X2 were reproduced before they were fixed** — *the grandchild 2944 outlived the session it
+    belonged to* — and closed with a Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`), mutation-checked on
+    the VM. **`command-group` turned out not to apply** and is deleted: this repo retired its API for exactly
+    this moment, and it wraps `std::process::Command`, which `portable-pty` does not give you.
+  - **Three defects nothing on POSIX could have found**, each making the broker's premise false on Windows:
+    a session emitted ConPTY's cursor-position request and stopped, because nothing answered it — in the app
+    xterm.js does, so a terminal with a window worked and one without never started; a shell's exit was
+    inferred from an EOF a ConPTY never gives, so a shell the user exited was never reported (X2's undead
+    terminal); and a session whose shell ended was never forgotten, which was wrong everywhere and is X9's
+    window there.
+  - **X6 is measured rather than asserted**: `\n` is echoed and never runs, `\r` alone does not get that
+    far, `\r\n` runs. That is also how the keystroke case was found to be passing on the echo alone.
+  - **X5, X7, X8 and X12 did not need the VM at all**, and that is the better answer: each is a pure
+    function reading a path with the running machine's semantics instead of the path's own, so each closes
+    with a case that asserts the Windows answer from a Mac. X12 is the exception that used it — what a stock
+    Server 2025 image actually has (`pwsh.exe` and `bash.exe` absent, `wsl.exe` present) is a fact, not a
+    guess, and the derivation follows it.
+  - **The one thing the VM is still needed for** is the app itself on Windows: everything above is the broker
+    and the pure functions around it. Nothing has launched the Electron app there.
+- **`test:native` had never once run in this checkout, and the cause was not the tests.** A container killed
+  mid-sync left `chain.lock` in the work volume naming its own hostname; `exclusive-lock.ts` correctly cannot
+  resolve another machine's pid, so it counted as held for ever and every later `test:linux` refused before
+  its command started. The lock in the volume was from 11:11 that morning. `linux-runner.ts` already clears
+  two other orphan classes under its volume lease, with the reasoning written out — the chain's own, which
+  its sync phase creates, was the one left out.
 - **Next action: settle the fork above, then Phase A.** What is left of Phase B needs Windows and a Mac cannot give it:
   **X1, X2 and ConPTY's resize and exit**, which the goal already says are claimed on a Windows run or not
   at all. `command-group`'s API is retired so that change is a wiring job rather than a question. **X1, X2 and ConPTY need a Windows run** and

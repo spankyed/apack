@@ -16,6 +16,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PACKAGES_PREBUILT_ENV, REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { linuxTestInvocation } from './lib/linux-native-scratch.ts';
+import { CHAIN_LOCK } from './lib/chain-lock.ts';
 import { oneRustToolchain, pinnedChannel, rustCheckoutsIn, vendoredCheckouts } from './lib/vendored-checkouts.ts';
 
 const DOCKERFILE = path.join(REPO_ROOT, 'scripts', 'linux', 'Dockerfile');
@@ -312,6 +313,12 @@ const run = [
   'fi',
   // Orphans of a container that was killed: this run holds the only slot, so none of them is live
   'rm -f /work/node_modules/.cache/apack-unit-pool/*.lock',
+  // **The chain's own, which this runner's sync phase is what creates.** It was the one lock class left out
+  // of this cleanup, and it wedged every later run for good: a container killed mid-sync leaves a lock
+  // naming its hostname, `exclusive-lock.ts` correctly cannot resolve another machine's pid and so counts it
+  // as held, and the sync chain below refuses before the command even starts. Found on 2026-11-07 with a
+  // lock from 11:11 that morning still in the volume and `test:native` having never once run since.
+  `rm -f /work/${path.relative(REPO_ROOT, CHAIN_LOCK)}`,
   // Keep immutable compiler captures with this checkout's volume instead of discarding them at container exit.
   // The volume lease excludes live users; stale container hostnames/PIDs cannot hold these records forever.
   `rm -f /work/node_modules/.cache/${COMPILER_CACHE}/*.lock /work/node_modules/.cache/${COMPILER_CACHE}/*.users/*`,
