@@ -1333,10 +1333,19 @@ function ownerAgents(facts){
  return [...result.values()];
 }
 let ownerReading=false,ownerIndependent=false,reportedView,viewHeartbeat=0,reportedTranscript,reportedActivity,activitySequence=0,reportedFocus,focusSequence=0,reportedPreview,previewSequence=0,reportedBilling,billingSequence=0;
+// Admit a native reset before publishing observations that are fenced by the broker's old session.
+async function followNativeOwnerSession(gate){
+ if(gate.sessionId===JSON.parse(readFileSync(configUrl,'utf8')).sessionId)return;
+ const snapshot=await control({subtype:'apack_owner_snapshot',follow_native_session:true},new AbortController());
+ if(snapshot.sessionId!==gate.sessionId)throw Error('Native session changed during owner handoff');
+ await ownerPost('/poll',{...snapshot,agents:ownerAgents(snapshot.taskFacts),directOwner:true});
+ ownerIndependent=true;
+}
 const ownerTimer=setInterval(async()=>{
  if(ownerReading)return;ownerReading=true;
  try{
   const gate=await control({subtype:'apack_owner_snapshot',policy_only:true,follow_native_session:true},new AbortController());
+  await followNativeOwnerSession(gate);
   const viewKey=JSON.stringify([gate.sessionId,gate.view,gate.sequence]);
   // Reaffirm unchanged observations after a broker-side session handoff withdraws its view.
   const refreshView=viewKey!==reportedView||++viewHeartbeat>=4;
