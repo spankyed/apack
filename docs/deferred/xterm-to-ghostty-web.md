@@ -3,6 +3,10 @@
 Status: deferred by request. This document authorizes no implementation. Revisit when terminal work is
 scheduled and a compatibility spike can demonstrate that ghostty-web meets the contracts below.
 
+Follow-on: after this migration and the agreed terminal-review fixes are accepted, consider the
+[terminal runtime refactor target](terminal-runtime-refactor-target.md). It adds headless agent
+observation and independent session authority; it does not expand this migration's scope.
+
 Written 2026-10-21 against the current checkout. Re-audit source paths and the selected upstream release
 before starting.
 
