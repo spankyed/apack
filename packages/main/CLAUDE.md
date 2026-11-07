@@ -93,7 +93,7 @@ is untrusted whoever asked, and the two rules live in one module rather than at 
 
 - `WindowManager.enable` waits for `apiServer.waitForReady()` (60 s). On failure it shows a Relaunch/Quit dialog and exits.
 - `restoreOrCreateWindow` creates the main window (title `apack-Main`, the key `isMainWindow` matches on) and waits for the renderer's `renderer:ready` IPC (15 s timeout) before showing it and closing the splash. `second-instance` and macOS `activate` restore or recreate it.
-- Windows get `contextIsolation: true`, `nodeIntegration: false`, `sandbox: false`, the preload script, and `additionalArguments` `--api-port=<port>` and `--startup-id=<id>`, which the preload reads. The port is read when the window is created; later moves reach the renderer through `api:started`.
+- Windows get `contextIsolation: true`, `nodeIntegration: false`, `sandbox: false`, the preload script, and `additionalArguments` `--startup-id=<id>`, which the preload reads. The renderer obtains its initial endpoint through `apiStatus.whenReady()` and follows later moves through `api:started`.
 - `surface:popout` opens one popout per surface id (`apack-Popout-<id>`), loading the renderer with `?popout=surface&surfaceId=…&title=…`; Cmd/Ctrl+W closes it.
 - Size: 1400×900 in a dev build, 1920×1200 otherwise (`constants.ts`, `import.meta.env.DEV`).
 - Under Playwright, windows are never shown or focused unless `PLAYWRIGHT_VISIBLE=1`; the same check guards the splash and protocol handler.

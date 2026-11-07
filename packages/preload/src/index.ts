@@ -1,24 +1,6 @@
 import {ipcRenderer, contextBridge, webFrame, webUtils} from 'electron';
 import type {_HostBridge, SpeechEvent} from '@apackdev/sdk/fe';
 
-const DEFAULT_API_PORT = 3001;
-
-/**
- * The port main gave this window, from `--api-port=<n>`.
- *
- * **A port or the default, never whatever `parseInt` made of the value.** Main builds this argument from a
- * number it already holds, so nothing reachable from the UI produces a malformed one — which makes the
- * guard an assertion rather than a gate. Without it an empty or non-numeric value answers `NaN`, and the
- * window then connects to `ws://localhost:NaN` and fails with a message about the URL rather than about the
- * argument, two layers from the mistake.
- */
-function getApiPort(): number {
-  const portArg = process.argv.find(arg => arg.startsWith('--api-port='));
-  if (portArg === undefined) return DEFAULT_API_PORT;
-  const port = Number(portArg.slice('--api-port='.length));
-  return Number.isInteger(port) && port > 0 ? port : DEFAULT_API_PORT;
-}
-
 function getStartupId(): string | undefined {
   const startupArg = process.argv.find(arg => arg.startsWith('--startup-id='));
   return startupArg?.split('=')[1];
@@ -47,8 +29,7 @@ const fileUtils = {
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
 } satisfies _HostBridge['fileUtils'];
 
-// Get the API port, and the token the API requires (from main, never on the command line)
-const apiPort = getApiPort();
+// The run token comes from main, never from the command line.
 const apiToken = ipcRenderer.sendSync('api:token') as string;
 const startupId = getStartupId();
 
@@ -89,6 +70,7 @@ const zoom = {
 
 // API status events (backend crash/restart notifications from main process)
 const apiStatus = {
+  whenReady: () => ipcRenderer.invoke('api:when-ready') as Promise<{ port: number; startupId: string }>,
   getStatus: () => ipcRenderer.invoke('api:get-status') as Promise<{
     running: boolean;
     port?: number;
@@ -243,7 +225,6 @@ const electronAPI = {
   zoom,
   apiStatus,
   rendererLog,
-  apiPort,
   apiToken,
   startupId,
   browser,

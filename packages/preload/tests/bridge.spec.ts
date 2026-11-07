@@ -2,8 +2,8 @@
 //
 // **Why this package has a suite at all.** It is the narrowest layer in the repo and the only one a
 // renderer — and every pack's frontend, which runs in the same window — can reach directly, so a mistake
-// here is reachable by code the app did not write. The three claims below are the ones nothing else holds:
-// where the API token comes from, that a port argument is a port, and that every subscription can be
+// here is reachable by code the app did not write. The two claims below are the ones nothing else holds:
+// where the API token comes from and that every subscription can be
 // undone. Everything else about this module is a list of channels, which `CLAUDE.md` tables and a spec
 // could only restate.
 import { describe, expect, it, vi } from 'vitest';
@@ -51,29 +51,6 @@ describe('the API token', () => {
     const { api } = await load(['--api-token=from-the-command-line', '--apiToken=from-the-command-line']);
 
     expect(api.apiToken).toBe('a-token-from-main');
-  });
-});
-
-describe('the API port', () => {
-  it('is the one main passed', async () => {
-    expect((await load(['--api-port=3099'])).api.apiPort).toBe(3099);
-  });
-
-  it('falls back to 3001 when no argument names one', async () => {
-    expect((await load()).api.apiPort).toBe(3001);
-  });
-
-  /**
-   * A port is a port or it is the default. Main builds this argument from a number it already has
-   * (`WindowManager`), so nothing reachable from the UI produces a malformed one — which makes this an
-   * assertion about the pair rather than a gate on input. **The edit that makes it fire** is dropping the
-   * guard: `parseInt` answers `NaN` for an empty or non-numeric value, and a window would then connect to
-   * `ws://localhost:NaN` and fail with a message about the URL rather than about the argument.
-   */
-  it('is the default rather than a number that is not one', async () => {
-    for (const value of ['', 'abc', '-1', '0']) {
-      expect((await load([`--api-port=${value}`])).api.apiPort, value).toBe(3001);
-    }
   });
 });
 

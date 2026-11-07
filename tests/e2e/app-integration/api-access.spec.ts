@@ -28,9 +28,9 @@ function sendMalformedUpgrade(port: number): Promise<void> {
 }
 
 test('refuses API connections and reloads without the run token', async ({ appPage }) => {
-  const { apiPort, apiToken } = await appPage.evaluate(() => {
-    const api = (window as { electronAPI?: { apiPort?: number; apiToken?: string } }).electronAPI;
-    return { apiPort: api?.apiPort, apiToken: api?.apiToken ?? '' };
+  const { apiPort, apiToken } = await appPage.evaluate(async () => {
+    const api = (window as { electronAPI?: { apiStatus: { whenReady: () => Promise<{ port: number }> }; apiToken?: string } }).electronAPI;
+    return { apiPort: (await api?.apiStatus.whenReady())?.port, apiToken: api?.apiToken ?? '' };
   });
   expect(apiPort, 'the renderer knows the API port').toBeTruthy();
   expect(apiToken, 'the renderer knows the API token').toBeTruthy();

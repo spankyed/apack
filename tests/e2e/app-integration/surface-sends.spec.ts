@@ -102,9 +102,9 @@ test("a reloaded pack's browser surface restores what its system saved, asking a
   const url = `https://example.com/e2e-surface-sends-${Date.now()}`;
   await recordSurfaceEvents(appPage);
   await sendToSystem(appPage, 'browser', { type: 'SYNC_BOOKMARKS', bookmarks: [{ url, title: 'E2E bookmark', displayOrder: 0 }] });
-  const { apiPort, apiToken } = await appPage.evaluate(() => {
-    const api = (window as { electronAPI?: { apiPort?: number; apiToken?: string } }).electronAPI;
-    return { apiPort: api?.apiPort, apiToken: api?.apiToken ?? '' };
+  const { apiPort, apiToken } = await appPage.evaluate(async () => {
+    const api = (window as { electronAPI?: { apiStatus: { whenReady: () => Promise<{ port: number }> }; apiToken?: string } }).electronAPI;
+    return { apiPort: (await api?.apiStatus.whenReady())?.port, apiToken: api?.apiToken ?? '' };
   });
   expect(apiPort, 'the renderer knows the API port').toBeTruthy();
   expect(apiToken, 'the renderer knows the API token').toBeTruthy();

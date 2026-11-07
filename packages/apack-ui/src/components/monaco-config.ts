@@ -449,11 +449,9 @@ export interface InitializeMonacoOptions {
 /**
  * Initialize Monaco editor with base configuration
  */
-export function initializeMonaco(options: InitializeMonacoOptions = {}): void {
+export function initializeMonaco(monaco: Monaco, options: InitializeMonacoOptions = {}): void {
   if (monacoInitialized) return
   
-  const monaco = (window as any).monaco as Monaco
-  if (!monaco) return
   
   monacoInitialized = true
   
@@ -503,7 +501,7 @@ export function setupMonacoForFile(
   
   // Initialize base Monaco if needed
   if (!monacoInitialized) {
-    initializeMonaco({
+    initializeMonaco(monaco, {
       enableTypeChecking: false,
       enableSuggestions: false
     })
@@ -714,3 +712,4 @@ export function getMonacoState(): {
     initializedLanguages: Array.from(initializedLanguages)
   }
 }
+export { provideMonacoRuntime, useMonacoRuntime } from './internal/monaco-runtime.ts'

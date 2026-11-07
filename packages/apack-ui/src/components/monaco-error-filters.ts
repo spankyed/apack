@@ -15,7 +15,7 @@ export function isRecoverableMonacoError(error: unknown): boolean {
   const origin = error.stack?.split('\n').find(line => line.trimStart().startsWith('at ')) ?? '';
   return error.message.includes('cannot be after endLineNumberExclusive')
     || (error.name === 'Canceled' && error.message === 'Canceled'
-      && (/\/monaco(?:-editor|-[A-Za-z0-9_-]+\.js)/.test(origin)));
+      && (/\/monaco(?:-editor|-vendor-[A-Za-z0-9_-]+\.js)/.test(origin)));
 }
 
 /** Stops recoverable Monaco errors from reaching a global error handler. Safe to call repeatedly. */

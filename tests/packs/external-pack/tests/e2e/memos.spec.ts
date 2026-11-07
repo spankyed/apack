@@ -24,7 +24,7 @@ test('advanced settings JSON provides offline declared completion, descriptions 
   await expect(appPage.getByRole('heading', { name: 'Settings JSON' })).toBeVisible();
   await expect(appPage.locator('.monaco-editor')).toBeVisible();
   const original = await appPage.evaluate(async () => {
-    const monaco = (window as any).monaco;
+    const monaco = (await (window as any).__loadMonaco());
     const model = monaco.editor.getModels().find((model: any) => model.getLanguageId() === 'json');
     const text = model.getValue();
     const data = JSON.parse(text);
@@ -36,14 +36,14 @@ test('advanced settings JSON provides offline declared completion, descriptions 
   await expect(save).toBeDisabled();
   await expect(appPage.getByText(/features\/e2e-fixture\/memos.*string/)).toBeVisible();
   await expect.poll(async () => appPage.evaluate(async () => {
-    const monaco = (window as any).monaco;
+    const monaco = (await (window as any).__loadMonaco());
     const model = monaco.editor.getModels().find((model: any) => model.getLanguageId() === 'json');
     const worker = await (await monaco.json.getWorker())(model.uri);
     const diagnostics = await worker.doValidation(model.uri.toString());
     return diagnostics.map((problem: any) => problem.message) as string[];
   })).toContain('Incorrect type. Expected "string".');
   const assistance = await appPage.evaluate(async (text) => {
-    const monaco = (window as any).monaco;
+    const monaco = (await (window as any).__loadMonaco());
     const model = monaco.editor.getModels().find((model: any) => model.getLanguageId() === 'json');
     model.setValue(text);
     const worker = await (await monaco.json.getWorker())(model.uri);
@@ -65,8 +65,8 @@ test('advanced settings JSON provides offline declared completion, descriptions 
   expect(assistance.hover).toContain('Heading shown above the memo list');
   expect(assistance.completions).toContain('listTitle');
   await expect(save).toBeDisabled();
-  await appPage.evaluate(text => {
-    const monaco = (window as any).monaco;
+  await appPage.evaluate(async text => {
+    const monaco = (await (window as any).__loadMonaco());
     const model = monaco.editor.getModels().find((model: any) => model.getLanguageId() === 'json');
     const data = JSON.parse(text);
     data.features['e2e-fixture/memos'].listTitle = 'Saved through JSON';
