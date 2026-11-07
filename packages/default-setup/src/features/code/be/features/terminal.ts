@@ -325,8 +325,14 @@ export const terminalSystem = setup({
         // **A rejection here used to stop the terminal system for the session** (L1), in silence: with no
         // `onError` the machine stays in `initializing`, where it handles nothing, so every later
         // `terminal.CREATE_TERMINAL` and every `GET_CODE_START` went nowhere and the surface showed an
-        // empty list for ever. Restoring is best-effort — what it restores is a convenience — so a failure
-        // is reported and the system goes on doing its job.
+        // empty list for ever. Restoring is best-effort — what it restores is a convenience, and the
+        // previous run's processes are gone either way — so a failure is reported and the system goes on.
+        //
+        // **Nothing fires this branch today**, and the edit that would is in `restoreAll`: everything it
+        // does per terminal is inside a `try`, so an open that fails is already survived
+        // (`terminal-survives-a-failed-restore.spec.ts` is that case). What is left outside is the settings
+        // read and the query — move either inside the loop's `try`, or add an `await` after it, and the
+        // actor can reject again.
         onError: {
           target: 'idle',
           actions: [
