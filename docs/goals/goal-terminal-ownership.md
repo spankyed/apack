@@ -81,10 +81,10 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 
 ## Current handoff
 
-- **Checkout:** `master` at `25d8a8120b`, the current one — no branch or worktree, clean tree.
+- **Checkout:** `master` at `88a2bca617`, the current one — no branch or worktree, clean tree.
   **Phase T is complete**: every track below has landed with a firing spec, or is placed with its reason
   (T6 → Phase H, T7 → Phase P, G1 → the output pipe). **Phase G's six readings are complete**, with G1, F4 and F5 priced and F18 found.
-  Nothing of Phases S, B, H, P or A is started.
+  **Phase S is begun** (repo, candidates, pin, link); its walking skeleton and Phases B, H, P and A are not.
   **Collision surface against #372**, measured 2026-11-07: one file, `features/code/fe/state.ts` (+24/-2 on
   that branch). Every other file Phase T touches is untouched there — `bus/client-events.ts`,
   `api/src/boot/config.ts`, `be/services/terminal.ts`, `fe/features/terminal/state.ts`, `fe/hotkeys.ts`,
@@ -229,7 +229,34 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   assigns G1 to. `stream-writer.ts` is untouched by #372 (checked 2026-11-07 against
   `origin/session/claude-code-integration`), but `thinking-writer.ts` (+51) and `stream-consumer.ts` (+362)
   move substantially there, so that branch's cleanup is the cheapest place for the feed.
-- **Next action: Phase S.** Phase G's readings are taken and the gate's purpose — a before that later phases
+- **Phase S is started: the repo exists, the candidate set is settled, the pin and link are in.**
+  `/apack/apack-terminal` at `ce155c08be`, pinned by `vendor/apack-terminal.rev` with
+  `npm run link:apack-terminal` beside `link:elmdb`; `vendor/apack-terminal` was gitignored **before** the
+  link existed, as this phase requires, and the symlink is correctly absent from `git status`.
+  **The candidate set was added at once and tried**, which is what this phase asks for, and
+  `apack-terminal/tests/candidates.rs` keeps the four attempts as tests so the answers stay checked:
+  `portable-pty` runs a command in a pty and its output comes back, `alacritty_terminal` parses bytes into a
+  screen that reads back cell by cell, `command-group` spawns into a group this process owns and killing the
+  group reaps it, `ts-rs` generates a declaration. `interprocess`, `insta` and `proptest` resolve and build.
+  All of it compiles together in 13.9s on Rust 1.99.1.
+  - **`termwiz` is settled and dropped.** The pairing question — it is wezterm's crate, from the same project
+    as `portable-pty` — was answered by the registry: **`wezterm-term`, wezterm's actual terminal model, is
+    not published to crates.io**, so termwiz offers a parser and surface primitives and not the emulation,
+    and using it would mean vendoring or a git dependency for the part that matters. `alacritty_terminal`
+    stands, on a checkable ground rather than on lineage.
+  - **The Windows half of `command-group` is untestable here**, as the goal says:
+    `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` is what makes X1 the kernel's answer, and it needs a Windows run.
+  - **The pty probe found the lifetime the broker's session must get right**: holding the slave keeps its fd
+    open, so the master never sees EOF and a read loop blocks for ever after the shell exits.
+  - **Both Phase T preconditions paid off on contact**: the janitor now reports five Rust targets including
+    `apack-terminal/target`, and the toolchain derivation reads 1.99.1 from both checkouts and agrees, so the
+    container's image key did not move. The new repo pins elmdb's channel deliberately for that reason.
+- **Next action: Phase S's walking skeleton** — a keystroke reaching a pty and its output reaching a screen
+  through all four seams, with `tests/e2e/smoke/` still passing. Nothing of it is built: the broker is
+  `cargo init`'s `main.rs`, there is no protocol, no host session service and no renderer session. The
+  sync-to-async consequence the goal names is still ahead, and this is the phase that is meant to meet it in
+  real call sites.
+- **Everything before Phase S is done.** Phase G's readings are taken and the gate's purpose — a before that later phases
   are checked against — is met. What Phase G still owes (the bounds as named constants) needs Phase B and
   Phase P to exist first, and its parsing reading is baseline data the goal says is not a decision input.
   Two things no reading covers are recorded with their reason: **first-byte latency** and **whether a
