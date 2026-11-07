@@ -328,24 +328,42 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 - **A guard that hangs is worse than one that fails.** The resize mutation left `less` with nothing to
   redraw and a blocking read turned it into a ten-minute hang; every read in the broker's tests is bounded
   by the socket's receive timeout now, and that mutation fails in eleven seconds.
-- **Phase P's findings are closed; its deliverable is not.** F1, F2, F10, F11, F12, F15 and F16 land with
-  `tests/features/code/fe/utils/terminal-pool.frontend.spec.ts` (nine cases, each mutation-checked), and the
-  invariant the phase names — **one attached host, one `onData` registration, one scroll policy per session**
-  — is three of them. The pin state moved into the pool, which is what made F2 a one-line read in both hosts
-  rather than a second policy.
+- **Phase P is complete.** Its deliverable is the `TerminalAttachment` a host gets from `terminal-pool.ts`:
+  what that host may do to the terminal, owning the listeners and the size observer that belong to it.
+  `@xterm/*` is imported by one module, which `check:specifiers` enforces **both ways** — an import elsewhere
+  fails, and so does the owner having stopped importing one, so the rule cannot pass by having no subject.
+  F1, F2, F10, F11, F12, F15 and F16 close with it, and the third paste path — the panel sending the text as
+  a keystroke — went with the rewrite rather than being found again.
   - **F15 was half-fixed by the obvious edit.** Removing the canvas's mount focus left the panel focusing on
-    every attach, including the mount that a panel re-open causes. The honest fix needed the *request* to be
-    distinguishable from the attach it causes, so `selectTerminal` records it and the attach reads it.
-  - **F11 had no code left to fix.** The only thing that un-cleared a terminal was the replay of the byte log
-    F3 and F6 deleted, so it is `dissolved` — and its guard needed the regression modelled in **both** files
-    (the accumulation *and* a replay reading it) before it would fail, which is what the row records.
-  - **F16's guard is the run and not a case.** An uncaught clipboard rejection is an unhandled rejection,
-    which vitest exits 1 on with every case still passing; verified both ways rather than asserted.
-  - **What Phase P still owes**, and none of it is a finding: the VT layer tested **as a parser** (`insta`
-    snapshots and a `proptest` splitting UTF-8/CSI/OSC/DCS/APC streams at every byte boundary), which needs a
-    VT core the broker does not yet have; the alternate-screen drive through a panel drag, a tab switch, a
-    window resize and a detach/reattach; and the output budget asserted rather than read.
-- **Next action: Phase P, then Phase A.** What is left of Phase B needs Windows and a Mac cannot give it:
+    every attach, the mount a panel re-open causes included. The request had to become distinguishable from
+    the attach it causes, so `selectTerminal` records it and the attach reads it.
+  - **F11 had no code left to fix**, the byte log it replayed from being gone, so it is `dissolved` — and its
+    guard needed the regression modelled in **both** files before it would fail.
+  - **The VT core is Phase B's second layer and is here**: `alacritty_terminal` fed the same bytes the
+    renderer draws, *before* they leave for it, with 1,000 lines of history and a `Screen` request. The
+    parser is tested **as a parser** — `insta` snapshots of the grid for eight streams, and the same stream
+    split at every byte boundary demanding the same grid. Its first snapshot found the one defect: a wide
+    character occupies two cells and the second holds a space, so the grid read as text said `日 本 語`.
+  - **The output budget is derived from the two bounds rather than chosen**, so it is load-independent.
+- **Two defects the app found that no test could**, both from driving `less` through a tab switch, two window
+  resizes and the panel taking the session over:
+  - **No terminal opened at all** under a disposable profile. The broker's socket was a file in the data dir
+    and `sockaddr_un.sun_path` holds 104 bytes on macOS. A user under a long home directory or a synced
+    folder would have hit the same wall.
+  - **Every flush reported itself throttled**, at a level that reads as an error, saying it had waited 0 ms:
+    `take` timed the mutex it holds to reach the credit rather than the condvar it waits on. **The overload
+    case was passing for the wrong reason** — a megabyte with a stalled reader never touches the bound, so
+    nothing was ever throttled and the lock-timing bug was the whole of what made the case green.
+  - The lesson both carry: this goal's guards are good at the code and blind to the app. A phase that touches
+    what a window draws is not finished until something has driven it.
+- **The generated protocol is a recorded file now** (`protocol:check`/`protocol:update`), re-derived by asking
+  ts-rs to generate it again from the pinned checkout rather than compared against a file a command left. It
+  is a typecheck leg and not a chain step: its source is a gitignored symlink, so the chain's graph has
+  nothing to order it against, and it says on its result line when there is no checkout to look at.
+- **L3 is dissolved**: a closed terminal's row is trashed, which is the one way a Terminal row ends. The
+  annotation it replaced — `active: false` and a `closedAt` nothing read — left a row behind for every
+  terminal the user had ever opened.
+- **Next action: Phase H, then Phase A.** What is left of Phase B needs Windows and a Mac cannot give it:
   **X1, X2 and ConPTY's resize and exit**, which the goal already says are claimed on a Windows run or not
   at all. `command-group`'s API is retired so that change is a wiring job rather than a question. **X1, X2 and ConPTY need a Windows run** and
   cannot be claimed here, which the goal already says. Then Phases P and A.
