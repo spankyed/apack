@@ -615,7 +615,12 @@ export const noteProjections = defineProjections({
 });
 ```
 
-Name the export in the feature's `projections` (`"projections": "src/features/notes/be/projections.ts#noteProjections"`).
+Name the export in the feature's `projections` (`"projections": "src/features/notes/be/projections.ts#noteProjections"`),
+and keep each type it derives from in change order, in the `apack.json` of the pack that declares the type:
+
+```json
+"Note": { "shape": "src/features/notes/be/types.ts#NoteEntity", "changeOrder": true }
+```
 
 - **`from` is the entity types it derives from.** A write to none of them doesn't run it, and costs a write nothing more.
 - **`apply(ids)` brings what's derived from those entities up to date.** Each is read as it is now, and may have been
@@ -624,8 +629,9 @@ Name the export in the feature's `projections` (`"projections": "src/features/no
   changed can't all be known.
 - **`version`** (1 unless given) says which derivation `apply` and `rebuild` make. Raise it when that changes, so what
   was derived before is derived again.
-- **A write to a type a projection derives from costs about a fifth more**, for keeping that order, and writes to other
-  types nothing.
+- **A write to a type kept in change order costs about a fifth more**, for keeping that order, and writes to other types
+  nothing. A projection over a type that keeps none is refused when its pack registers, and so is a new version of a
+  pack that stops keeping an order another pack's projection reads.
 - **Both hold the write lock**, so keep them quick, and a throw undoes the write that ran them. A catch-up that throws is
   logged and tried again next time, from where it last read.
 - **An entity counts as changed when a field, its trash state or a relation at either end changed.** A projection that

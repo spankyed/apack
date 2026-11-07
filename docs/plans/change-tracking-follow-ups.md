@@ -1,6 +1,6 @@
 # Change tracking: the follow-ups
 
-Status: steps 1 to 3 and 4a built, 2026-11-06 (elmdb #86, #87, #88; apack #362 and the PR above it); 4b and 4c planned. Builds on `database-owns-change.md` and `incremental-projections.md`, whose PRs are open
+Status: steps 1 to 3, 4a and 4b built, 2026-11-06 (elmdb #86, #87, #88; apack #362, #363 and the PR above it); 4c planned. Builds on `database-owns-change.md` and `incremental-projections.md`, whose PRs are open
 (apack #349 to #361, elmdb #80 to #85). Each step below is a PR of its own, stacked on those, elmdb first where a step
 touches both.
 

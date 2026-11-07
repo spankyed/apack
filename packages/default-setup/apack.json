@@ -851,7 +851,7 @@
     "notes": {
       "description": "Write, organize and export notes.",
       "entities": {
-        "Note": { "shape": "src/features/notes/be/types.ts#NoteEntity", "indexes": ["title", "linkTargets"], "search": { "fields": { "title": 3, "content": 1 } } }
+        "Note": { "shape": "src/features/notes/be/types.ts#NoteEntity", "indexes": ["title", "linkTargets"], "search": { "fields": { "title": 3, "content": 1 } }, "changeOrder": true }
       },
       "settings": {
         "schema": {

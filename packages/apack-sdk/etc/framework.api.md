@@ -437,6 +437,7 @@ export function _packEntities(declaration: PackDataDeclarations): _PackEntityDec
 
 // @public
 export interface PackEntityDeclaration {
+    readonly changeOrder?: boolean;
     readonly embed?: PackEmbedDeclaration;
     readonly indexes?: readonly string[];
     readonly search?: PackSearchDeclaration;
@@ -447,6 +448,7 @@ export interface PackEntityDeclaration {
 
 // @internal
 export interface _PackEntityDeclaration {
+    changeOrder?: true;
     embed?: EmbedDeclaration;
     indexes?: readonly string[];
     // (undocumented)

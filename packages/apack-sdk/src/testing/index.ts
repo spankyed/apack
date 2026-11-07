@@ -81,8 +81,6 @@ const testSchema = (): EngineSchema => ({
   relations: Object.fromEntries([...relationKinds].map((kind) => [kind, relationRules.get(kind) ?? {}])),
   roles: [...roles],
   ranks: Object.fromEntries(ranks),
-  // Every type, since a test may declare a projection over any after the database is made
-  changeOrder: [...entityTypes],
 });
 
 /** A new engine on a new database holding the test runtime's names, and installed */

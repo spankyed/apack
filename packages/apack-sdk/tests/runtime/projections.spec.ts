@@ -6,8 +6,10 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import type { EARS, EarsEngine } from '@apackdev/ears';
 import { catchUpTestProjections, resetTestData, startTestRuntime, testPacks } from '../../src/testing/index.ts';
 import { boundEars, untypedCreate, untypedQuery, untypedWrite } from '../../src/ears/index.ts';
+import { SDK_ROW_RULES } from '../../src/types/sdk-entities.ts';
 
-startTestRuntime();
+// A projection derives from a type kept in change order, which the type's owner declares: here, over the SDK's own
+startTestRuntime({ rowRules: { Collection: { ...SDK_ROW_RULES.Collection, changeOrder: true } } });
 
 const applied: string[][] = [];
 let rebuilds = 0;

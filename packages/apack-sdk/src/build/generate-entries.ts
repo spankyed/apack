@@ -2192,6 +2192,7 @@ export type { ImportMode } from '@apackdev/sdk/utils';
     const searched = new Map(entities.flatMap(({ name, search }) => (search ? [[name, search] as const] : [])));
     const embedded = new Map(entities.flatMap(({ name, embed }) => (embed ? [[name, embed] as const] : [])));
     const substringed = new Map(entities.flatMap(({ name, substrings }) => (substrings ? [[name, substrings] as const] : [])));
+    const ordered = new Set(entities.flatMap(({ name, changeOrder }) => (changeOrder ? [name] : [])));
     // A prefix numbers one type across the app, so a dependency's are taken as the SDK's are: a collision fails the
     // build here, rather than the install at the host registry. A dependency's snapshot carries its manifest whole
     const taken = new Map<string, string>();
@@ -2240,14 +2241,14 @@ export type { ImportMode } from '@apackdev/sdk/utils';
       }
       rules[entity] = {
         required, ...(declared !== undefined && { shortCode: declared }), ...(indexes && { indexes }), ...(search && { search }), ...(embed && { embed }),
-        ...(substrings && { substrings }), ...(Object.keys(types).length > 0 && { fields: types }),
+        ...(substrings && { substrings }), ...(ordered.has(entity) && { changeOrder: true }), ...(Object.keys(types).length > 0 && { fields: types }),
       };
     }
-    for (const { name: entity, shortCode, indexes, search, embed, substrings } of entities) {
-      if (shaped.has(entity) || (shortCode === undefined && indexes === undefined && search === undefined && embed === undefined && substrings === undefined)) continue;
+    for (const { name: entity, shortCode, indexes, search, embed, substrings, changeOrder } of entities) {
+      if (shaped.has(entity) || (shortCode === undefined && indexes === undefined && search === undefined && embed === undefined && substrings === undefined && !changeOrder)) continue;
       rules[entity] = {
         required: [], ...(shortCode !== undefined && { shortCode }), ...(indexes && { indexes }), ...(search && { search }), ...(embed && { embed }),
-        ...(substrings && { substrings }),
+        ...(substrings && { substrings }), ...(changeOrder && { changeOrder: true }),
       };
     }
     return dataLiteral(rules);
