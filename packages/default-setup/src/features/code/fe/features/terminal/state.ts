@@ -36,7 +36,6 @@ interface PendingOpen {
 
 export interface CodeTerminalContext {
   terminals: TerminalInfo[]
-  terminalError: string | null
   /**
    * What each outstanding `terminal.CREATE_TERMINAL` meant, by the call it was asked under.
    *
@@ -270,17 +269,18 @@ export const terminalState = setup({
       })
     }),
 
-    clearTerminalError: assign({
-      terminalError: null
-    }),
-
-    assignTerminalError: assign(({ event, context }) => {
-      const ev = event as { type: 'terminal.ERROR'; data: { message: string; terminalId?: string } }
-      // A replied error settles the ask it answers, so its intent goes with it: a create that failed would
-      // otherwise leave its target and command in the map for the life of the surface. Only `pending` is
-      // wanted here — there is nothing to do with what the failed ask meant
-      return { terminalError: ev.data.message, pendingOpens: settleCall(context.pendingOpens, event).pending }
-    }),
+    /**
+     * A failed ask stops being outstanding. What the user is told is the backend's job, through `reportError`
+     * — the app raises the toast. This surface held the message in a context field instead, which nothing
+     * rendered, and that is what made every terminal failure silent.
+     *
+     * A replied error settles the ask it answers, so its intent goes with it: a create that failed would
+     * otherwise leave its target and command in the map for the life of the surface. Only `pending` is
+     * wanted here — there is nothing to do with what the failed ask meant.
+     */
+    settleFailedAsk: assign(({ event, context }) => ({
+      pendingOpens: settleCall(context.pendingOpens, event).pending
+    })),
 
     cleanupTerminalOutput: ({ event }) => {
       const ev = event as { type: 'terminal.CLOSED'; data: { terminalId: string } }
@@ -428,12 +428,11 @@ export const terminalState = setup({
   initial: 'idle',
   context: {
     terminals: [],
-    terminalError: null,
     pendingOpens: {}
   },
   on: {
     'terminal.CREATE': {
-      actions: ['clearTerminalError', 'createTerminal']
+      actions: 'createTerminal'
     },
     'terminal.CLOSE': {
       actions: 'closeTerminal'
@@ -457,12 +456,12 @@ export const terminalState = setup({
       actions: 'openTerminalTabs'
     },
     'terminal.TERMINALS_LISTED': {
-      actions: ['clearTerminalError', 'assignTerminals']
+      actions: 'assignTerminals'
     },
     // The news, which every window takes: the list grows and nothing else happens
     // A terminal exists, in some window: ask for the list again, which the system answers this window alone
     'terminal.CREATED': {
-      actions: ['clearTerminalError', 'listTerminals']
+      actions: 'listTerminals'
     },
     // The answer, which only the window that asked is sent
     'terminal.OPENED': {
@@ -481,7 +480,7 @@ export const terminalState = setup({
       actions: 'handleTerminalOutput'
     },
     'terminal.ERROR': {
-      actions: 'assignTerminalError'
+      actions: 'settleFailedAsk'
     },
     'terminal.TERMINAL_TAB_OPENED': {
       actions: 'handleTerminalTabOpened'

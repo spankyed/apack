@@ -100,7 +100,12 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   `shellEnvironment` (`features/code/be/services/shell-environment.ts`) strips that same list plus the four
   loader variables. The old hand-written deny-list named two of the ten. Closes G2 and G4. Both halves have a
   firing spec and the record has the typecheck; mutation-checked three ways.
-- **Next deliverable:** Phase T's **F9**, then X3/X10, G1 and the two tooling tracks, in any order.
+- **Done:** Phase T's **F9** — one `failTerminal` reports through `reportError` and answers the asker, so a
+  failure raises the app's toast; `terminal.ERROR` left `TerminalNewsType`, since an error is not news and a
+  broadcast one would raise a toast in windows whose user did nothing. The surface's write-only
+  `terminalError` field is gone with its three `clearTerminalError` wirings; the settle that was buried in the
+  same action is now `settleFailedAsk`.
+- **Next deliverable:** Phase T's **X3/X10**, then G1 and the two tooling tracks, in any order.
   **Phase G is blocked on a quiet machine**: `npm run check:idle`
   reported 60% against a 70% floor on 2026-11-07, so the baseline could not be taken. Retry before Phase S,
   since it cannot be taken once state moves. Phase B's first commit is the last cheap exit — see Constraints.
@@ -117,6 +122,12 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   `lib/janitor-policy.ts` past one checkout is load-bearing rather than bookkeeping: that path is outside the
   budget entirely today. The review's findings were re-verified against the tree on 2026-11-07 for
   S1, S2, F3, F9, F10 and L2; the rest carry pre-rename citations and are verified as each is touched.
+- **A backend spec in default-setup cannot stub a pack-internal module.** `tests/setup.ts` is a setup file and
+  imports `#generated/pack-entry.ts`, so the real module is in the graph before any test file's `vi.mock`
+  registers. Found while writing F9's guard, which is therefore mock-free: every case fails over a terminal
+  that does not exist, so it spawns no process. **`tests/features/code/be/terminal-answers-the-asker.spec.ts`
+  spawns a real pty on every run for this reason** — its `vi.mock` of the terminal service is inert, and its
+  assertions pass either way. Not this track's to fix, and worth settling before Phase P writes its specs.
 - **Unresolved:** `docs/archive/issues/postmortem-pattern-kill-note-loss.md` still
   claims a live write-discard defect whose mechanism the move to elmdb removed; that claim needs its own
   check and is not this goal's.

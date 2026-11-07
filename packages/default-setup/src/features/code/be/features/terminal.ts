@@ -8,7 +8,9 @@ import { setup, assign, fromPromise } from 'xstate'
 
 import { terminalService } from '../services/terminal.ts'
 import type { TerminalInfo } from '../types.ts'
-import { createLogger } from '@apackdev/sdk/logger';
+import { createLogger, reportError } from '@apackdev/sdk/logger';
+import type { Reply } from '@apackdev/sdk/events';
+import type { OutgoingCodeEvents } from '../contract.ts'
 
 const logger = createLogger('terminal');
 
@@ -41,7 +43,7 @@ export type Event =
   | { type: 'GET_CODE_START' };
 
 /** A terminal's news, for every window showing the code surface: what its process did, never a listing */
-type TerminalNewsType = 'terminal.CWD_CHANGED' | 'terminal.OUTPUT' | 'terminal.CLOSED' | 'terminal.CREATED' | 'terminal.ERROR'
+type TerminalNewsType = 'terminal.CWD_CHANGED' | 'terminal.OUTPUT' | 'terminal.CLOSED' | 'terminal.CREATED'
 type TerminalNews = Extract<OutgoingTerminalEvents, { type: TerminalNewsType }>
 
 /** Tell every window showing the code surface what a terminal did */
@@ -90,6 +92,29 @@ const setupTerminalHandlers = (terminalInfo: TerminalInfo) => {
       logger.error(`Error emitting CLOSED for ${terminalInfo.id}`, { error })
     }
   })
+}
+
+/**
+ * A terminal failure: reported to the user, and answered to whoever asked.
+ *
+ * `terminal.ERROR` settles the ask it answers — the surface keeps one entry per outstanding open — so it
+ * still travels. What it never did was reach the user: the surface wrote the message to a context field that
+ * nothing rendered, so every terminal failure was silent. `reportError` is the mechanism that reaches them,
+ * the app turning a system error into a toast, and it needs no new published API — `HostShell` exposes no
+ * `notify`, and adding one for this would publish a second way to say the same thing.
+ *
+ * A failure nobody asked for is reported and not broadcast. An error is not news: every window would raise
+ * it, including the ones whose user did nothing.
+ */
+const failTerminal = (
+  reply: Reply<OutgoingCodeEvents> | undefined,
+  operation: string,
+  error: unknown,
+  terminalId?: string,
+) => {
+  const message = error instanceof Error ? error.message : String(error)
+  reportError({ error, title: 'Terminal error', source: 'terminal', operation })
+  answer(reply, { type: 'terminal.ERROR', data: { message, ...(terminalId ? { terminalId } : {}) } })
 }
 
 /** Hands each handler the answer for the message it is handling — see `defineHandlers` */
@@ -145,10 +170,8 @@ export const terminalSystem = setup({
         // asked opens it. A terminal's id is minted here, so nothing the asker sent could have identified it
         emitToFrontend({ type: 'terminal.CREATED', data: { terminalId: terminalInfo.id } })
         reply?.({ type: 'terminal.OPENED', data: terminalInfo })
-      } catch (error: any) {
-        // A failure to create is the asker's to see; with nobody to answer it is still worth reporting
-        const failed = { type: 'terminal.ERROR' as const, data: { message: error.message } }
-        if (reply) reply(failed); else emitToFrontend(failed)
+      } catch (error) {
+        failTerminal(reply, 'create', error)
       }
     },
 
@@ -159,16 +182,10 @@ export const terminalSystem = setup({
         const terminalName = terminal ? terminal.info.title : 'Terminal'
         const success = terminalService.kill(ev.terminalId)
         if (!success) {
-          answer(reply, {
-            type: 'terminal.ERROR',
-            data: { message: `${terminalName} not found`, terminalId: ev.terminalId }
-          })
+          failTerminal(reply, 'close', `${terminalName} not found`, ev.terminalId)
         }
-      } catch (error: any) {
-        answer(reply, {
-          type: 'terminal.ERROR',
-          data: { message: error.message, terminalId: ev.terminalId }
-        })
+      } catch (error) {
+        failTerminal(reply, 'close', error, ev.terminalId)
       }
     },
 
@@ -179,16 +196,10 @@ export const terminalSystem = setup({
         const terminalName = terminal ? terminal.info.title : 'Terminal'
         const success = terminalService.write(ev.terminalId, ev.data)
         if (!success) {
-          answer(reply, {
-            type: 'terminal.ERROR',
-            data: { message: `${terminalName} not found`, terminalId: ev.terminalId }
-          })
+          failTerminal(reply, 'input', `${terminalName} not found`, ev.terminalId)
         }
-      } catch (error: any) {
-        answer(reply, {
-          type: 'terminal.ERROR',
-          data: { message: error.message, terminalId: ev.terminalId }
-        })
+      } catch (error) {
+        failTerminal(reply, 'input', error, ev.terminalId)
       }
     },
 
@@ -199,16 +210,10 @@ export const terminalSystem = setup({
         const terminalName = terminal ? terminal.info.title : 'Terminal'
         const success = terminalService.resize(ev.terminalId, ev.cols, ev.rows)
         if (!success) {
-          answer(reply, {
-            type: 'terminal.ERROR',
-            data: { message: `${terminalName} not found`, terminalId: ev.terminalId }
-          })
+          failTerminal(reply, 'resize', `${terminalName} not found`, ev.terminalId)
         }
-      } catch (error: any) {
-        answer(reply, {
-          type: 'terminal.ERROR',
-          data: { message: error.message, terminalId: ev.terminalId }
-        })
+      } catch (error) {
+        failTerminal(reply, 'resize', error, ev.terminalId)
       }
     },
 
@@ -219,10 +224,7 @@ export const terminalSystem = setup({
         const terminalName = terminal ? terminal.info.title : 'Terminal'
         const success = terminalService.rename(ev.terminalId, ev.customTitle)
         if (!success) {
-          answer(reply, {
-            type: 'terminal.ERROR',
-            data: { message: `${terminalName} not found`, terminalId: ev.terminalId }
-          })
+          failTerminal(reply, 'rename', `${terminalName} not found`, ev.terminalId)
         } else {
           // Emit success event
           broadcastToSurface(surfaceId, {
@@ -230,11 +232,8 @@ export const terminalSystem = setup({
             data: { terminalId: ev.terminalId, customTitle: ev.customTitle }
           })
         }
-      } catch (error: any) {
-        answer(reply, {
-          type: 'terminal.ERROR',
-          data: { message: error.message, terminalId: ev.terminalId }
-        })
+      } catch (error) {
+        failTerminal(reply, 'rename', error, ev.terminalId)
       }
     },
 
@@ -245,11 +244,8 @@ export const terminalSystem = setup({
           type: 'terminal.TERMINALS_LISTED',
           data: terminals
         })
-      } catch (error: any) {
-        answer(reply, {
-          type: 'terminal.ERROR',
-          data: { message: error.message }
-        })
+      } catch (error) {
+        failTerminal(reply, 'list', error)
       }
     },
 
@@ -265,19 +261,10 @@ export const terminalSystem = setup({
             data: terminal
           })
         } else {
-          answer(reply, {
-            type: 'terminal.ERROR',
-            data: {
-              message: `Terminal not found`,
-              terminalId: ev.terminalId
-            }
-          })
+          failTerminal(reply, 'open-tab', 'Terminal not found', ev.terminalId)
         }
-      } catch (error: any) {
-        answer(reply, {
-          type: 'terminal.ERROR',
-          data: { message: error.message, terminalId: ev.terminalId }
-        })
+      } catch (error) {
+        failTerminal(reply, 'open-tab', error, ev.terminalId)
       }
     },
 
