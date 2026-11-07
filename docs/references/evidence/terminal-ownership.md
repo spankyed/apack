@@ -40,6 +40,7 @@ removes the finding rather than fixing it, and names the construction that does.
 | F7 | dissolved | the Terminal entity declares no `pid`, `updatePid` is gone, and `restoreAll` reaches for no stored process; the live descriptor keeps a pid because the renderer tells a new shell from the old by it | `default-setup/tests/features/code/be/terminal-owns-no-process.spec.ts` "declares no pid on a Terminal row" | **the guard**: the attribute must not be on the row at all, which is what a later `restoreAll` would need. Mutation-checked — putting `pid` back fails it |
 | F8 | dissolved | `services.terminal.open` takes the listeners, so they exist before the session does | `default-setup/tests/features/code/be/terminal-owns-no-process.spec.ts` "hands the output listener to the service at open" | **the guard**: what the shell writes immediately reaches the surface. Mutation-checked — a listener that drops it fails. The *given at open* half is the contract's second argument, which the typecheck requires |
 | L2 | dissolved | `killAll` marks every row closed and `restoreAll` is no longer unbounded by a stored pid | `default-setup/tests/features/code/be/terminal-owns-no-process.spec.ts` "leaves no active row behind when every terminal is killed" | **the guard**: no active row survives `killAll`. Mutation-checked — dropping the `markClosed` fails it |
+| F4 | dissolved | the broker coalesces output per session on a 16 ms window or a 64 KiB cap, and output is bounded by credit while answers carry none (`apack-terminal/src/output.rs`) | `apack-terminal/tests/channel.rs`, plus the `terminal-output` scenario re-run in the app: **6 messages for 64 KiB against 115 before** | **the budget, with a before and after**: ~96 messages per MB against the ~1,840 Phase G measured. Mutation-checked — flushing every chunk fails the coalescing case, and not reporting a wait fails the overload case |
 | G3 | open | fixed on `session/claude-code-integration` (#372), not on master | `hooks.ts` calls `killAllHandles()` there | — | closes when #372 lands; confirm it survives the cleanup pass |
 
 Disposition values: `test`, `dissolved`, `driven`, `open`.
@@ -308,6 +309,30 @@ asks for remain:
 - **Declaring the bounds** as named constants "in the broker and the presentation seam" — which cannot land
   before those exist. The figures they take their values from are recorded here; the rule each takes is
   Phase G's to state when Phase B and Phase P build the places they live.
+
+### The presentation channel after coalescing (Phase B) — 2026-11-07
+
+The same scenario and corpus as Phase G's sustained-output reading, so the two are comparable, re-run in the
+app with the broker owning the pty. 10 measured trials, all passed.
+
+| | before (node-pty) | after (broker) |
+|---|---|---|
+| **Messages per 64 KiB** | 115 | **6** |
+| Bytes on the bus | 76,824 | **66,905** |
+| Renderer task time | 51.0 ms | **40.1 ms** |
+| Delivery | 1,389 ms | 1,272 ms |
+
+**19× fewer messages, and fewer bytes with them** — the envelope is paid once per flush rather than once per
+pty read. About **96 messages per MB** against the ~1,840 the before implies, which is the budget F4's guard
+holds.
+
+**What has no case, recorded rather than implied.** Output spends credit and answers do not, so an answer is
+never behind a megabyte of output. That split is guarded by its *structure* — `Outgoing::answer` carries no
+credit — and **not** by a behavioural case: three mutations that gave answers output's credit passed every
+case written for them (a saturating producer with an idle reader, a lowered bound, a request during
+saturation), because in this design an answer is never waiting on anything. What deadlocks is a shared
+**bounded** queue, which this is not and which no mutation small enough to model can make it. The edit to
+watch for is one that bounds the queue itself; `src/output.rs` says so where that edit would be made.
 
 ### Baseline (Phase G) — superseded
 

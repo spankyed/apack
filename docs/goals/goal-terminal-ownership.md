@@ -81,10 +81,10 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 
 ## Current handoff
 
-- **Checkout:** `master` at `d4ab9a9620`, the current one — no branch or worktree, clean tree.
+- **Checkout:** `master` at `e02bfc811b`, the current one — no branch or worktree, clean tree.
   **Phase T is complete**: every track below has landed with a firing spec, or is placed with its reason
   (T6 → Phase H, T7 → Phase P, G1 → the output pipe). **Phase G's six readings are complete**, with G1, F4 and F5 priced and F18 found.
-  **Phase S is complete and Phase B is begun**: the terminal feature owns no pty, and F5, F7, F8 and L2 are closed with guards. Phases P and A are not started.
+  **Phase S is complete and Phase B is begun**: the terminal feature owns no pty, and F4, F5, F7, F8 and L2 are closed with guards. Phases P and A are not started.
   **Collision surface against #372**, measured 2026-11-07: one file, `features/code/fe/state.ts` (+24/-2 on
   that branch). Every other file Phase T touches is untouched there — `bus/client-events.ts`,
   `api/src/boot/config.ts`, `be/services/terminal.ts`, `fe/features/terminal/state.ts`, `fe/hotkeys.ts`,
@@ -304,11 +304,22 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
     wrong because the host is bundled into the API build (it looked one directory above the checkout, which
     its own refusal reported); and the inert `vi.mock` recorded earlier is replaced by `mockService`, a seam
     a test can take — that spec no longer spawns a real pty and now asserts its mock was used.
-- **Next action: Phase B's remaining acceptance.** In the order they can be done here: **F4's guard** (the
-  perf budget — its before is recorded, 115 messages and 76.8 KB per 64 KiB, and the bounded channel is what
-  it holds), **the bounded presentation channel with credit-based flow control** and its firing case (a
-  saturating producer *and* a pending query together), **resize under an alternate-screen app**, and
-  **`portable-pty` validated** for containment and cancellation. **X1, X2 and ConPTY need a Windows run** and
+- **F4 is closed as dissolved, with a before and after in the app.** The broker coalesces output on a 16 ms
+  window — one frame at 60 Hz, the next value up from Phase G's measured 12 ms inter-chunk interval — or a
+  64 KiB cap, so **64 KiB arrives as 6 messages against 115**, with fewer bytes (66,905 against 76,824) and
+  less renderer time (40 ms against 51 ms). About 96 messages per MB against the ~1,840 the before implies.
+  Output is bounded by credit; an overload is reported as `Throttled` with how long a flush waited, and is a
+  wait rather than a loss.
+- **One thing the goal asks for has no case, and the attempt is recorded rather than implied.** Output
+  spends credit and answers do not, so an answer is never behind a megabyte of output. That split is guarded
+  by its **structure** and not by a behavioural case: three mutations giving answers output's credit passed
+  every case written for them — a saturating producer with an idle reader, a lowered bound, a request during
+  saturation — because in this design an answer is never waiting on anything. What deadlocks is a shared
+  **bounded** queue, which this is not and which no mutation small enough to model can make it. The edit to
+  watch for is one that bounds the queue itself, and `src/output.rs` says so where that edit would be made.
+  An env seam added to force the state was removed with the case it could not serve.
+- **Next action: Phase B's remaining acceptance.** In the order they can be done here: **resize under an
+  alternate-screen app**, and **`portable-pty` validated** for containment and cancellation. **X1, X2 and ConPTY need a Windows run** and
   cannot be claimed here, which the goal already says. Then Phases P and A.
 - **What Phase S deliberately does not have yet**, and should not before Phase B: a second client, bounded
   history and backpressure, reattach, and `command-group` in the spawn path — the probe proved the API, and
