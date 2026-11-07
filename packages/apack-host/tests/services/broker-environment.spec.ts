@@ -49,11 +49,16 @@ describe("what the broker's shells inherit", () => {
     expect(shell.HOME).toBe('/Users/someone');
   });
 
-  it('says the terminal is a capable one', () => {
-    const shell = brokerEnvironment(asTheApiProcess());
+  it('says what terminal this is, rather than letting the shell inherit an answer', () => {
+    // **X13**: nothing else declares `TERM` — `portable-pty` sets none — so the shell took whatever this
+    // process happened to have, which is the shell the app was launched from in development and nothing at
+    // all in a packaged app opened from the Dock. A shell with no `TERM` gives `less`, `vim` and `top` their
+    // dumb fallbacks, and nothing about that failure names the app
+    const inheritedSomethingElse = brokerEnvironment({ ...asTheApiProcess(), TERM: 'dumb' });
 
-    expect(shell.TERM_PROGRAM).toBe('apack');
-    expect(shell.COLORTERM).toBe('truecolor');
+    expect(inheritedSomethingElse.TERM).toBe('xterm-256color');
+    expect(inheritedSomethingElse.TERM_PROGRAM).toBe('apack');
+    expect(inheritedSomethingElse.COLORTERM).toBe('truecolor');
   });
 
   it('strips every name the list holds, so the list is not describing nothing', () => {
