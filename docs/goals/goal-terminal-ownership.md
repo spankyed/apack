@@ -81,7 +81,10 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 
 ## Current handoff
 
-- **Checkout:** `master` at `9ed87075ba`, the current one — no branch or worktree. Nothing implemented yet.
+- **Checkout:** `master` at `25d8a8120b`, the current one — no branch or worktree, clean tree.
+  **Phase T is complete**: every track below has landed with a firing spec, or is placed with its reason
+  (T6 → Phase H, T7 → Phase P, G1 → the output pipe). **Phase G has 2 of its 6 readings** and G1 priced.
+  Nothing of Phases S, B, H, P or A is started.
   **Collision surface against #372**, measured 2026-11-07: one file, `features/code/fe/state.ts` (+24/-2 on
   that branch). Every other file Phase T touches is untouched there — `bus/client-events.ts`,
   `api/src/boot/config.ts`, `be/services/terminal.ts`, `fe/features/terminal/state.ts`, `fe/hotkeys.ts`,
@@ -181,9 +184,21 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   assigns G1 to. `stream-writer.ts` is untouched by #372 (checked 2026-11-07 against
   `origin/session/claude-code-integration`), but `thinking-writer.ts` (+51) and `stream-consumer.ts` (+362)
   move substantially there, so that branch's cleanup is the cheapest place for the feed.
-- **Phase G also needs a quiet machine**, whichever instrument it uses: `npm run check:idle` reported 60%
-  against a 70% floor and later 0% straight after a suite run, both 2026-11-07. Take it before Phase S,
-  since it cannot be taken once state moves. Phase B's first commit is the last cheap exit — see Constraints.
+- **Next action: the byte-level output signal**, which two of Phase G's four remaining readings wait on
+  (sustained output responsiveness, large-history replay) and which the first-byte latency the attach
+  reading could not cover also needs. The other two need nothing new: **memory with several hidden sessions**
+  is in the process reports' RSS already, and **resize behaviour** is a write count like G1's —
+  `services/terminal.ts:145` writes an EARS row on every `resize()` call with no coalescing, which is F5 and
+  is confirmed on current source. Then Phase S.
+- **A latency reading needs a quiet machine; a byte count does not.** `npm run check:idle` reported 60%
+  against a 70% floor, and 0% when macOS was indexing this session's build output — `fseventsd`,
+  `spotlightknowledged` and `mds` together, which is what a build leaves behind. The attach reading waited
+  for the floor; G1's pricing did not need to, because a span's `ears.request_bytes` does not move with load.
+  Gate the right readings. Phase B's first commit is the last cheap exit — see Constraints.
+- **This machine's default Node is v23.11.1 against the declared `^24.11.0`.** `apack pack build` fails on
+  v23 inside the CLI's captured compiler (`ERR_INVALID_RETURN_PROPERTY_VALUE` from its `load` hook), which
+  is nothing to do with the pack. `v24.16.0` is installed under nvm; every build and measurement recorded
+  here ran with it on `PATH`.
 - **Proven checks:** the sibling-repo path is clear, probed 2026-11-07 and then removed —
   `mkdir` at `/apack/apack-terminal`, `git init`, `cargo init`, `cargo add portable-pty` (crates.io
   reachable, resolves 0.9.0), `cargo build` with that native dependency (5.8s, cc present), an **absolute**
