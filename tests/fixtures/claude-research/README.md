@@ -341,3 +341,10 @@ answer, same-session follow-up and retained draft, exact app/native humans/UUIDs
 profile restoration and normal shutdown. All six captures opened; five corruptions and
 actual failed app3 are refused. Cold helper/API startup and other named scopes remain open.
 This source-only refresh does not rebuild or extend the accepted runtime scope.
+
+Original inline Client theme preview/cancel has scoped client-theme-preview-app4 acceptance
+on source1792b6917d / unchanged runtime624e2d1277. Same Client, notes/selected range and
+composer draft survive native preview/cancel; one Save and exact keyboard-replaced follow-up
+retain original journal/accounting and owned restoration/shutdown. All five captures opened;
+five corruptions plus actual app2/app3 refused. Other owner/policy/window/editor and cold
+startup cases, original combined F1–F5 and repository readiness remain open.

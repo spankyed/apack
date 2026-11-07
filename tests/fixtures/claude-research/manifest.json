@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "d97c85e02211abce8e87bd97d9879faac2176456",
+  "researchCommit": "372cad36990d351ca9b65d54b8eba381f3e91867",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -91,6 +91,7 @@
     "src/integration/apack-child-question-rejection-drive.mjs": "46efe17fa4a4fef76aa1d9c116d919b1296618261d5eaaf0413bed93b109ca21",
     "src/integration/apack-child-workflows-drive.mjs": "4e862e275ac00eff3fe6ef394d350653ce33b7f2b15d4b2ec10eb3bfd8e9362f",
     "src/integration/apack-client-rich-theme-drive.mjs": "85d5e9c9841f04c516112e2c4851aa9182fe03585a0a8d61aecc7b13cd112b4c",
+    "src/integration/apack-client-theme-preview-drive.mjs": "fa475d2f6ca75383abd8216a9defefff534597cd2436f8c184a72e6481b09fab",
     "src/integration/apack-combined-everyday-drive.mjs": "182bc0ac88a253d5568fff182aab60e8ade189607afcb0eff1132a2a63658daa",
     "src/integration/apack-configured-hooks-app.mjs": "61f7888f0345b3324892a9724df36ce06a109675226ecb9e1a8e4cbc7a9d0df2",
     "src/integration/apack-controls.mjs": "654ef34879daa4089d6c4f7e61be6107843e47e93ee82cf5401dbbbe956fc1f5",
@@ -477,5 +478,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "7d973511a0d04b062325158542b49982cb7497679341420747b8b55bd6f9ee09"
+  "archiveSha256": "9dc0454ae90571024471eead278de3e43b9ed3c6cbe7a95a7bd04b62b7b313ef"
 }
