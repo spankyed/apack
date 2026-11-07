@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "686389126b1173b47fb5418821903caa20a4d4d7",
+  "researchCommit": "4d3748d9baecea57268f0d4a0bd6d8542a28f757",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -75,7 +75,7 @@
     "src/integration/apack-artifact-wheel-drive.mjs": "0df066d57d1eba35f6d4dcd60439a67ab02709a7cc376ea2dfbbfcfc37ec4ca9",
     "src/integration/apack-background.mjs": "6c1ea4fae462410b0dbc704f4b961b4006684d03bca5598d8430dfa93648583d",
     "src/integration/apack-child-caption-drive.mjs": "5875f7fffd058b8c53fb7fa431b6f552286a56e48a1fb895f07892fcb66df1df",
-    "src/integration/apack-child-composer-drive.mjs": "77272a077821db7a2dc289e084ec5f1b2a9ac3e33cbf3f7f8afb716608f2692c",
+    "src/integration/apack-child-composer-drive.mjs": "117337faa39fba2c8f9e0743ec92384737ad589f45389c1fa89e7fe9045d78c0",
     "src/integration/apack-child-controls-drive.mjs": "7f4f54cde766653945e85d71cced87091ee8e361f2a53278cd537f50af60afa5",
     "src/integration/apack-child-files-drive.mjs": "9e102a47374536573e66bb5bacfb362cd6602a4021809fa0c89df138f01e4a6c",
     "src/integration/apack-child-generic-drive.mjs": "78863b1f84806f06ddfbe967d3dd62c2c26317706196a37ae99bc77a6bfc82ee",
@@ -94,6 +94,7 @@
     "src/integration/apack-document-media.mjs": "f668ce463a8672923db7d3c25baff498e813353f2695016aea67faaf5bbbd441",
     "src/integration/apack-empty-command-history-drive.mjs": "a70c19241e051b0b20ad746934ddbbd886701ed4d5402882e6e04ef026eb1877",
     "src/integration/apack-file-rewind.mjs": "290a2d423e1f63f45157c3af2abcac340f66f84a979ed0cc654bfc65b8235e58",
+    "src/integration/apack-held-main-policy-drive.mjs": "563e944711c137d94f50def2eed3195126cb450ce35eab8a0937021f4632467b",
     "src/integration/apack-hook.mjs": "a1d0402d74ce64271a336fbee7794681aa50a7aba524060d6227cb3184d7e7fa",
     "src/integration/apack-interrupt.mjs": "2fb034eb638f50ce74570a989917aa341b4c6be810fe84601727e18aaab8335d",
     "src/integration/apack-launch.mjs": "ecceba81f3e83caced3840fb66811c4d522003032185ef07a64477f58f8528d9",
@@ -152,6 +153,7 @@
     "src/integration/elicitation-app.mjs": "f7e39cc3b9af1e855ce98000990e1bc75b2c7f0218b8e2c52cda8c8c3b02982c",
     "src/integration/elicitation-lifecycle-driver.mjs": "1ad58b6241433df791e3a47d4b1b8a1bc0fdc436cb69fc0315534d9a55c0d17a",
     "src/integration/elicitation-lifecycle.mjs": "ef0a663260e6b70577ac582d613be49a370a2258c6f87e427f749c770b341b1c",
+    "src/integration/held-main-policy-root.py": "203237f85a7e7f0d4370154ce5ddff1134d821cb91bb853e362f173b29b3d545",
     "src/integration/live-model-driver.mjs": "8b537fe75e3ae1596d6d3043f4ff3bfefbf625abf98f1789dfae7fce910ba042",
     "src/integration/live-model.mjs": "9fad315d5baea27a81f725e6c230b4bf7ce0293418f8c9274384f641acc0a787",
     "src/integration/metadata-lifecycle-driver.mjs": "6d55e0bcbf6d8fe56e007ae798a09f91186d903f62b447866d567a5aa132310a",
@@ -301,6 +303,7 @@
     "src/protocol/native-focus-context-fixture.mjs": "e984d97d0ba5e172bf03a6514d1505479c7af0690606f4f92e063af2bb032c4f",
     "src/protocol/native-generic-permission-fixture.mjs": "551f7b8404031be9da0ff3484a12411da8224ad1a825e5517565ecdd4ad1a205",
     "src/protocol/native-handback-state-fixture.mjs": "cd3ae4c3f07d2c9e2944da77a41e97b5e4c6df277db0b274e8cf99b2d487cf89",
+    "src/protocol/native-held-main-zero-fixture.mjs": "ac2094ee16201d6de64b3610b540af016afa35ee229b9877e4572885335a8925",
     "src/protocol/native-help-proof.mjs": "10be4b61f53aad165d32134abf6ab39612266d873d5240fc96556492eb17177e",
     "src/protocol/native-history-reopen-fixture.mjs": "35957458e3d38b8a938cee1d453655c4b153f98f0d9e26329dae85668affc8c4",
     "src/protocol/native-inline-eligibility-preload.mjs": "ad47a06d05a6250c9a202f84c7460c57869987ac3af744093121e98a524fcb3d",
@@ -443,5 +446,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "80216e1a82fcea5d73e8595471c7aaba8edfad4c550134f4b06a0e9e12918957"
+  "archiveSha256": "69ea050072eb28b77f92d053af5c50ee15392633ecadb73480a84ebaef06ac1d"
 }
