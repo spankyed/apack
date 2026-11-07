@@ -83,7 +83,7 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 
 - **Checkout:** `master` at `25d8a8120b`, the current one — no branch or worktree, clean tree.
   **Phase T is complete**: every track below has landed with a firing spec, or is placed with its reason
-  (T6 → Phase H, T7 → Phase P, G1 → the output pipe). **Phase G has 2 of its 6 readings** and G1 priced.
+  (T6 → Phase H, T7 → Phase P, G1 → the output pipe). **Phase G has 3 of its 6 readings**, with G1 and F5 priced.
   Nothing of Phases S, B, H, P or A is started.
   **Collision surface against #372**, measured 2026-11-07: one file, `features/code/fe/state.ts` (+24/-2 on
   that branch). Every other file Phase T touches is untouched there — `bus/client-events.ts`,
@@ -171,6 +171,17 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   `*.map` and other platforms' `prebuilds/` but not `*.pdb` or `third_party/`, so a Windows package carries
   **26 MB of node-pty debug symbols** and every package, macOS included, carries **2.3 MB of Windows
   `OpenConsole.exe`**. Recorded, not changed — packaging is release configuration and outside this goal.
+- **Phase G reading 3 of 6 is taken, and F5 is priced with it: 24 resizes → 24 app writes, 2,112 bytes**,
+  identical in all 10 trials. F5 is exactly as claimed — `services/terminal.ts:145` writes inside `resize()`
+  — so Phase B's guard ("a resize writes no application row") now has its before.
+  **The scenario also turned up F18**, which the review did not have: `resizeTerminal` answers only on
+  failure and broadcasts nothing, so no window is ever told a resize happened and a surface's `TerminalInfo`
+  keeps the size its terminal was created with. The first attempt at this reading timed out at `cols: 80`
+  with 24 writes already landed, which is how it surfaced. Adjacent to M2, not the same defect.
+- **The completion primitive gained `subscribe`** for an action that changes neither a view nor the DOM — a
+  resize does neither, xterm being canvas-drawn — so a feed-shaped completion is told by the surface that
+  records the change instead of polling for it. `terminal-open` did not need it only because mounting xterm
+  happens to mutate the DOM.
 - **G1 is priced and stays open, with its fix placed.** Measured with the existing `streaming` scenario,
   which already drives the writer at `intervalMs: 80`: **9,726 → 30,054 → 95,924 app write bytes** for
   **864 → 2,160 → 4,340** characters of reply, so bytes-per-character climbs 11.3 → 13.9 → 22.1. Every flush

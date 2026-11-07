@@ -33,6 +33,8 @@ removes the finding rather than fixing it, and names the construction that does.
 | T8 | test | `fe/composables/useTerminalActions.ts` — `customTitle` then `title`; the cwd derivation is the backend's and was being overridden here | `tests/features/code/fe/composables/use-terminal-actions.spec.ts` | the spec: restoring the cwd basename fails the case where a create passed a title |
 | T9 | test | `fe/state.ts` — `moveTerminalToPanel` prunes the group it emptied, as the four other removals in that machine do | `tests/features/code/fe/state.spec.ts` | the spec: dropping the prune fails it |
 | G1 | open | priced, not fixed — see [the pricing](#g1-priced-what-the-throttled-writer-writes-to-ears--2026-11-07) | three streaming runs at 24, 60 and 120 chunks; `ears.write` request bytes on the app database | — | the mechanism and its cost model are measured and the review's 15 MB figure confirmed. The fix is a delta feed beside a less frequent durable write, which is the output pipe's payload discipline the review assigns it to — the writer alone cannot fix it, since the 80 ms write is what updates the window |
+| F5 | priced | not fixed — `services/terminal.ts:145` writes inside `resize()` | `terminal-resize` scenario: 24 resizes, 24 app writes, 2,112 bytes, 10/10 trials with min = max | — | dissolves in Phase B, whose acceptance names the guard ("a resize writes no application row"). This is its before |
+| F18 | open | found by the resize scenario, not fixed | the scenario's first attempt timed out at `cols: 80` after 24 writes had landed | — | new; recorded in the review. Adjacent to M2 and not the same defect |
 | G3 | open | fixed on `session/claude-code-integration` (#372), not on master | `hooks.ts` calls `killAllHandles()` there | — | closes when #372 lands; confirm it survives the cleanup pass |
 
 Disposition values: `test`, `dissolved`, `driven`, `open`.
@@ -172,14 +174,38 @@ is compared against, and the comparison should use the 0.9 MB rather than the 29
 `node-pty` suggests — the 64 MB that package occupies on disk is almost entirely other platforms' prebuilds
 and their symbols.
 
-### Baseline (Phase G) — the remaining five readings, not taken
+### Resize behaviour (Phase G, reading 3 of 6), and F5 priced — 2026-11-07
 
-Still outstanding: **sustained output responsiveness**, **large-history replay**, **memory with several
-hidden sessions** and **resize behaviour**, plus the parsing-cost reading (`npm run measure:loop`). The
-first two need an output corpus and a byte-level completion signal, which the attach reading above
-establishes is not available from the DOM — so that signal is the next thing to build, and it serves the
-first-byte reading too. Memory and resize need neither: the process reports already carry RSS, and a resize
-reading is a write count like G1's.
+`APACK_PERFORMANCE_SCENARIO=terminal-resize`, 24 resizes per action — the shape a panel drag has, one per
+observed frame — counting `ears.write` spans on the app database. **Write counts, not durations**: identical
+in every trial, where the durations are not and are not cited.
+
+| | |
+|---|---|
+| Resizes per action | 24 |
+| **App writes** | **24** |
+| **App write bytes** | **2,112** (88 bytes each) |
+| Trials | 10 measured, 10 passed; min = max on every count |
+
+**F5 is exactly as claimed: one EARS write per resize, no coalescing.** `services/terminal.ts:145` writes
+the row inside `resize()`, so a drag writes a row per frame. The guard Phase B's acceptance names for this —
+"a spec asserting a resize writes no application row" — has its before: 24.
+
+**And the scenario turned up F18, which the review did not have.** The first attempt completed on the
+surface's record of its terminal's size and timed out at `cols: 80` while 24 writes had already landed:
+`resizeTerminal` answers only on failure and broadcasts nothing, so **no window is ever told a resize
+happened** and the `TerminalInfo` in a surface's `terminals` keeps the size the terminal was created with.
+Asking for the list again is the only way a window learns its own terminal's size, which is what the action
+now ends with. That is adjacent to M2 but not the same defect: M2 is about which window's size wins, this is
+that none of them knows.
+
+### Baseline (Phase G) — the remaining three readings, not taken
+
+Still outstanding: **sustained output responsiveness**, **large-history replay** and **memory with several
+hidden sessions**, plus the parsing-cost reading (`npm run measure:loop`). The first two need an output
+corpus and a byte-level completion signal, which the attach reading above establishes is not available from
+the DOM — so that signal is the next thing to build, and it serves the first-byte reading too. Memory needs
+nothing new: the process reports already carry `rssSampledMaxBytes`.
 
 The baseline is unrepeatable once Phase B moves state, and the
 [ghostty-web migration](../../deferred/xterm-to-ghostty-web.md) requires the same measurement for its own

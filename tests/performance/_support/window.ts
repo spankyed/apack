@@ -18,6 +18,14 @@ export interface PerformanceViewCompletion {
    * readiness there is is what the window has drawn.
    */
   awaitsDelivery?: boolean;
+  /**
+   * A signal that readiness may have changed, for an action whose result changes neither a view nor the DOM.
+   *
+   * The loop's two built-in triggers are a view delivery and a DOM mutation. A resize has neither: no view,
+   * and xterm draws to a canvas, so the screen changing mutates nothing the observer sees. Rather than poll,
+   * such a completion subscribes to whatever does know — the surface's actor — and returns its unsubscribe.
+   */
+  subscribe?: (notify: () => void) => () => void;
 }
 export interface PerformanceWindow {
   __waitForPerformanceView(options: PerformanceViewCompletion): Promise<void>;
@@ -36,7 +44,12 @@ export interface PerformanceWindow {
     send(event: Record<string, unknown>): void;
     // The threads surface's context, which three scenarios read, plus the code surface's panel fields. A
     // surface addressed here answers with its own context; the optional half is what the others hold.
-    system: { get(ref: string): { send(event: Record<string, unknown>): void; getSnapshot(): { context: { currentThread?: { id: string }; chatMessageIds: string[]; chatLimit: number; messageContents: Record<string, { text?: string; sender?: string; responseTimestamp?: number }>; messageSearch: { query: string; searching: boolean; results: Array<{ messageId: string; threadId: string; timestamp: number }> }; panelTerminalId?: string | null; panelTerminalExpanded?: boolean } } } };
+    system: { get(ref: string): { send(event: Record<string, unknown>): void; getSnapshot(): {
+      context: { currentThread?: { id: string }; chatMessageIds: string[]; chatLimit: number; messageContents: Record<string, { text?: string; sender?: string; responseTimestamp?: number }>; messageSearch: { query: string; searching: boolean; results: Array<{ messageId: string; threadId: string; timestamp: number }> }; panelTerminalId?: string | null; panelTerminalExpanded?: boolean };
+      // A surface's children are private to it; a scenario reads one only to assert what the surface did,
+      // never to drive it — the code surface routes `<child>.*` by prefix, which is how a send gets there.
+      children?: Record<string, { getSnapshot(): { context: { terminals?: Array<{ id: string; cols?: number; rows?: number }> } } } | undefined>;
+    }; subscribe(listener: () => void): { unsubscribe(): void } } };
   };
 }
 

@@ -3,7 +3,7 @@ import type { PerformanceWindow } from './window.ts';
 /** Installed once in the owned page; all callbacks remain in the renderer's execution context. */
 export function installViewCompletion() {
   const win = window as unknown as PerformanceWindow;
-  win.__waitForPerformanceView = ({ accept, check: ready, dispatch, errors, awaitsDelivery = true }) => new Promise<void>((resolve, reject) => {
+  win.__waitForPerformanceView = ({ accept, check: ready, dispatch, errors, awaitsDelivery = true, subscribe }) => new Promise<void>((resolve, reject) => {
     const recording = win.__performance;
     let checking = false;
     let delivered = false;
@@ -15,6 +15,7 @@ export function installViewCompletion() {
         clearTimeout(timeout);
         observer.disconnect();
         detach();
+        unsubscribe?.();
         if (failure) reject(failure.error); else resolve();
       },
       async check() {
@@ -33,6 +34,7 @@ export function installViewCompletion() {
       delivered = true;
       void completion.check();
     });
+    const unsubscribe = subscribe?.(() => { void completion.check(); });
     const observer = new MutationObserver(() => { void completion.check(); });
     observer.observe(document.body, { subtree: true, childList: true, characterData: true });
     const timeout = setTimeout(() => completion.finish({ error: Error('missing-view-ready') }), 15_000);

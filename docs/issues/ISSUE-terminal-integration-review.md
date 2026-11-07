@@ -132,6 +132,7 @@ orchestration, `L` = lifecycle and persisted data, `G` = agent sessions.
 | **F15** | Low | Focus is stolen on every attach | `TerminalView.vue:202`, `PanelTerminalSection.vue:316` |
 | **F16** | Low | Unhandled clipboard promise rejections | `terminal-pool.ts:194,200` |
 | **F17** | Low | Module-scope `document` listener is never removed | `terminal-pool.ts:355` |
+| **F18** | Medium | Nothing tells a surface its terminal was resized, so its `TerminalInfo` keeps the size the terminal was created with; only asking for the list again reveals the real one | `be/features/terminal.ts` `resizeTerminal` (answers only on failure), `fe/features/terminal/state.ts` (`terminals`) |
 | **F1** | Low | `detach` does not verify attachment ownership (see Corrections) | `terminal-pool.ts:260-272` |
 | **F2** | Medium | The panel scroll-jacks during output | `PanelTerminalSection.vue:296` |
 | **T6** | Low | "Restart Terminal" loses the tab's pin, group and position | `fe/canvas/canvas.vue:277-285` |
