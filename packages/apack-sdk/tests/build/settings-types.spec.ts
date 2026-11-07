@@ -57,6 +57,15 @@ const extra: GeneratedSettings = {...valid, extra:true};
     }
   });
 
+  it('keeps the validated schema when the caller changes its definition before completion', async () => {
+    const definition = { defaults: { name: 'original' }, schema: {
+      type: 'object', required: ['name'], properties: { name: { type: 'string' } },
+    } };
+    const pending = generateSettingsTypes(definition, 'AcceptedSettings');
+    definition.schema.properties.name.type = 'number';
+    expect(await pending).toContain('name: string');
+  });
+
   it('refuses invalid defaults before emitting a usable declaration', async () => {
     await expect(generateSettingsTypes({ defaults: {}, schema: {
       type: 'object', required: ['name'], properties: { name: { type: 'string' } },

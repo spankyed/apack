@@ -49,13 +49,16 @@ standalone diagnostic tooling. Relative to the measured source, the corrected im
 `fd687c8e0f6ec18acf43dacf8699a5c231568cf3` removes only that diagnostic workflow/docs/test hook,
 updates inferred API-report member ordering, trims private compiler whitespace and extends the
 existing concurrent-generation test. The removed hook was disabled and ran before application launch.
-Application behavior and the compiler-loading boundary are unchanged; the recorded source identities
-above remain the exact identities measured. Later evidence/EOF-only changes are not a new benchmark.
+The compiler-loading boundary in the startup path is unchanged; the recorded source identities
+above remain the exact identities measured. Later review fixes the test package import and snapshots
+a validated authoring schema before awaiting its compiler import. The startup scenario restores
+compiled data and does not invoke type generation. These later changes are not a new benchmark.
 
 ## Correctness and loading-boundary evidence
 
-- The regression check imports the public SDK build entry and complete host bridge with forbidden compiler
-  modules mocked to throw if loaded. It passes without weakening shared-instance module ownership.
+- The regression check imports the built SDK by its public package name in a fresh Node process with
+  the source condition removed, then checks the complete host bridge with forbidden compiler modules
+  mocked to throw if loaded. It passes without weakening shared-instance module ownership.
 - Independent fresh Node imports of the built SDK and source host bridge observed zero TypeScript,
   esbuild, Prettier or schema-to-TypeScript loads through Node's module load hooks.
 - A fresh built-SDK process then ran real bundling and settings type generation concurrently: both passed;
@@ -64,7 +67,10 @@ above remain the exact identities measured. Later evidence/EOF-only changes are 
   errors and content hash were identical (`46e007c8920759c5`).
 - Thirty explicit compiler/settings/content tests passed, plus the loading-boundary test. The existing
   settings case now also checks concurrent first-use generation with distinct requested names; all three
-  settings tests pass. Invalid-default and external-reference refusals remain covered.
+  settings tests pass. Final review adds a fourth case proving the validated schema is captured before
+  the new async import can yield to caller mutation; the case fails with the unfixed ordering and
+  passes with the original snapshot ownership restored. The final loading/settings/placement/
+  subprocess check bundle passes all 36 cases. Invalid-default and external-reference refusals remain covered.
 - Repository lint, scripts/E2E/repo/publish typechecks and all 30 SDK API-report checks passed locally.
   The API report changes four inferred member positions; public signatures are unchanged. Its existing
   CRLF representation is preserved.
