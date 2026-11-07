@@ -291,6 +291,7 @@ server supplies a PNG and generic binary. Native tools save both; explicit app a
 open the existing viewer. PNG pixels, saved bytes, separate physical action readings,
 retained draft/selection/native owner, complete continuation and exact accounting/cleanup
 must verify at both sizes. Generic binary formats remain explicitly unsupported.
-Short upward native history reads retire tail following. The separate external-path
-Explorer directory notice stays an open UI follow-up, not part of the accepted viewer claim.
+Short upward native history reads retire tail following. External resource views must
+retain the project root/files/tree selection without false directory warnings at both sizes.
+Research verifier --require-explorer enforces those four additional actual-app readings.
 Original unaccepted attempts and fixed deadlines remain preserved in research evidence.
