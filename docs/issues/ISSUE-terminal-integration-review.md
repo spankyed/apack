@@ -84,67 +84,73 @@ defensive is simply unfinished. X4 adds that on Windows it does nothing even whe
 Severity-ordered. `F` = round 1, `S` = security, `M` = multi-window, `X` = platform, `T` = tab/panel
 orchestration, `L` = lifecycle and persisted data, `G` = agent sessions.
 
+**A ✔ means the row is closed**, with its disposition and evidence in
+[`docs/references/evidence/terminal-ownership.md`](../references/evidence/terminal-ownership.md) — that table
+is where a finding's *state* lives, and this one stays what the findings *are*. A row without one is open,
+and the evidence table says what each is waiting for. The marks are derived from that table's dispositions
+rather than set by hand here, so the two cannot disagree about what is done.
+
 | | Sev | Finding | Where |
 |---|---|---|---|
-| **S2** | **Critical** | Every terminal keystroke is logged at `info` and written to `main.log` + `main.jsonl` in plaintext | `apack-host/src/bus/client-events.ts:54` |
-| **S1** | **High** | The API process's whole env — app API token included — is handed to every pty | `be/services/terminal.ts:318-331`, `main/.../api-server/config.ts:100` |
-| **S3** | **High** | The restore path spawns a persisted `shell` and `cwd` with no validation | `be/services/terminal.ts:379-385` |
-| **F3** | **High** | O(n²) string accumulation per terminal, on the renderer's main thread | `fe/utils/terminal-events.ts:111` |
-| **F4** | **High** | One bus event per pty chunk; no coalescing, no flow control | `be/features/terminal.ts:76` |
-| **F5** | **High** | Resize storm, amplified into an EARS write per resize | `be/services/terminal.ts:153`, `TerminalView.vue:159,190,195` |
-| **F7** | **High** | `restoreAll` SIGKILLs a stored pid and its process group, unbounded | `be/services/terminal.ts:366` |
-| **F9** | **High** | Every terminal error is silently swallowed | `fe/features/terminal/state.ts:250` |
-| **L2** | **High** | `restoreAll` is unbounded and `killAll` never marks rows closed, so active rows grow forever | `be/services/terminal.ts:232-245`, `:347-355` |
-| **M2** | **High** | The pty's size is owned by whichever window fitted last | `TerminalView.vue:159-199`, `be/services/terminal.ts:153-163` |
-| **X1** | **High** | Windows: no terminal process is ever killed when the app quits | `be/services/terminal.ts:51-55`, `main/.../process-manager.ts:153` |
-| **X2** | **High** | Windows: closing a terminal leaves its children, and may leave the terminal undead | `be/services/terminal.ts:199-230` |
-| **X3** | **High** | Windows/Linux: Ctrl+R reloads the window and Ctrl+W closes it while typing in a shell | `main/src/modules/app-menu.ts` (was `MacOSAppMenu.ts:12`) |
+| **S2** ✔ | **Critical** | Every terminal keystroke is logged at `info` and written to `main.log` + `main.jsonl` in plaintext | `apack-host/src/bus/client-events.ts:54` |
+| **S1** ✔ | **High** | The API process's whole env — app API token included — is handed to every pty | `be/services/terminal.ts:318-331`, `main/.../api-server/config.ts:100` |
+| **S3** ✔ | **High** | The restore path spawns a persisted `shell` and `cwd` with no validation | `be/services/terminal.ts:379-385` |
+| **F3** ✔ | **High** | O(n²) string accumulation per terminal, on the renderer's main thread | `fe/utils/terminal-events.ts:111` |
+| **F4** ✔ | **High** | One bus event per pty chunk; no coalescing, no flow control | `be/features/terminal.ts:76` |
+| **F5** ✔ | **High** | Resize storm, amplified into an EARS write per resize | `be/services/terminal.ts:153`, `TerminalView.vue:159,190,195` |
+| **F7** ✔ | **High** | `restoreAll` SIGKILLs a stored pid and its process group, unbounded | `be/services/terminal.ts:366` |
+| **F9** ✔ | **High** | Every terminal error is silently swallowed | `fe/features/terminal/state.ts:250` |
+| **L2** ✔ | **High** | `restoreAll` is unbounded and `killAll` never marks rows closed, so active rows grow forever | `be/services/terminal.ts:232-245`, `:347-355` |
+| **M2** ✔ | **High** | The pty's size is owned by whichever window fitted last | `TerminalView.vue:159-199`, `be/services/terminal.ts:153-163` |
+| **X1** ✔ | **High** | Windows: no terminal process is ever killed when the app quits | `be/services/terminal.ts:51-55`, `main/.../process-manager.ts:153` |
+| **X2** ✔ | **High** | Windows: closing a terminal leaves its children, and may leave the terminal undead | `be/services/terminal.ts:199-230` |
+| **X3** ✔ | **High** | Windows/Linux: Ctrl+R reloads the window and Ctrl+W closes it while typing in a shell | `main/src/modules/app-menu.ts` (was `MacOSAppMenu.ts:12`) |
 | **G1** | **High** | Agent streaming rewrites the whole message to EARS every 80 ms and re-broadcasts it | `content/actions/claude-code/_helpers/stream-writer.ts:54,64` |
-| **L1** | Medium | `restoreTerminalsActor` has no `onError`: a rejection stops the terminal system for the session, silently | `be/features/terminal.ts:302-310` |
-| **T1** | Medium | `handleTerminalClosed` can pick the just-closed terminal as the next panel terminal | `fe/features/terminal/state.ts:321` |
+| **L1** ✔ | Medium | `restoreTerminalsActor` has no `onError`: a rejection stops the terminal system for the session, silently | `be/features/terminal.ts:302-310` |
+| **T1** ✔ | Medium | `handleTerminalClosed` can pick the just-closed terminal as the next panel terminal | `fe/features/terminal/state.ts:321` |
 | ~~**T4**~~ | ~~Medium~~ | **Fixed.** `pendingTarget`/`pendingCommand` were single uncorrelated slots for N in-flight creates; the intent is keyed by the envelope's call now (`pendingOpens`) | `fe/features/terminal/state.ts` |
-| **T3** | Medium | The 2,500 ms restore settle drops terminal tabs *and* rewrites the persisted list without them | `fe/state.ts:560-564,1208-1218` |
-| **T2** | Medium | A pinned terminal tab becomes a permanent ghost when its terminal dies | `fe/utils/tab-management.ts:29` |
-| **T5** | Medium | "Open Terminal Here" spawns a terminal without expanding the panel | `fe/features/CodePanelHeader.vue:22` |
+| **T3** ✔ | Medium | The 2,500 ms restore settle drops terminal tabs *and* rewrites the persisted list without them | `fe/state.ts:560-564,1208-1218` |
+| **T2** ✔ | Medium | A pinned terminal tab becomes a permanent ghost when its terminal dies | `fe/utils/tab-management.ts:29` |
+| **T5** ✔ | Medium | "Open Terminal Here" spawns a terminal without expanding the panel | `fe/features/CodePanelHeader.vue:22` |
 | ~~**M3**~~ | ~~Medium~~ | **Fixed.** `terminal.CREATED` was broadcast and every window consumed it as if it had asked; the opening is a `reply` to the asker's connection now (`terminal.OPENED`) | `be/features/terminal.ts` |
-| **M1** | Medium | Two windows write the same persisted-output key from differently-based copies | `fe/utils/terminal-events.ts` |
-| **M4** | Medium | A window attaching after a pty replacement content the dead shell's scrollback with no seam | `fe/utils/terminal-pool.ts:164-178` |
-| **M5** | Medium | Every window restores and rewrites the one persisted-tabs key | `fe/utils/persisted-tabs.ts` |
-| **L3** | Medium | No Terminal row is ever deleted; `terminalCommands.delete` is dead code | `be/repository/index.ts:136-145` |
-| **F6** | Medium | Up to 1 MB of synchronous window storage per terminal per output burst | `fe/utils/terminal-events.ts` (via `surfaceStorage`) |
-| **F8** | Medium | First pty output can be lost before `onData` is registered | `be/features/terminal.ts:131` |
-| **F10** | Medium | No WebGL context-loss recovery | absent |
-| **F11** | Medium | Clear doesn't survive a restart | `fe/canvas/TerminalView.vue:133` |
-| **F12** | Medium | Paste bypasses bracketed paste in two of three paths | `TerminalView.vue:125`, `terminal-pool.ts:201` |
+| **M1** ✔ | Medium | Two windows write the same persisted-output key from differently-based copies | `fe/utils/terminal-events.ts` |
+| **M4** ✔ | Medium | A window attaching after a pty replacement content the dead shell's scrollback with no seam | `fe/utils/terminal-pool.ts:164-178` |
+| **M5** ✔ | Medium | Every window restores and rewrites the one persisted-tabs key | `fe/utils/persisted-tabs.ts` |
+| **L3** ✔ | Medium | No Terminal row is ever deleted; `terminalCommands.delete` is dead code | `be/repository/index.ts:136-145` |
+| **F6** ✔ | Medium | Up to 1 MB of synchronous window storage per terminal per output burst | `fe/utils/terminal-events.ts` (via `surfaceStorage`) |
+| **F8** ✔ | Medium | First pty output can be lost before `onData` is registered | `be/features/terminal.ts:131` |
+| **F10** ✔ | Medium | No WebGL context-loss recovery | absent |
+| **F11** ✔ | Medium | Clear doesn't survive a restart | `fe/canvas/TerminalView.vue:133` |
+| **F12** ✔ | Medium | Paste bypasses bracketed paste in two of three paths | `TerminalView.vue:125`, `terminal-pool.ts:201` |
 | **X4** | Medium | Windows: shell integration is inert even when enabled | `be/services/terminal.ts:334-344` |
-| **X5** | Medium | Windows: an OSC 7 URL decodes to an unusable path, which is persisted and respawned from | `be/features/terminal.ts:49,66` |
-| **X6** | Medium | Windows: the run-script path sends LF, which does not submit a line | `fe/features/terminal/state.ts:290` |
-| **X9** | Medium | Windows: `resize`/`write` have no error handling; ConPTY throws for ~1 s after exit | `be/services/terminal.ts:145-165` |
-| **X10** | Medium | Windows/Linux: the code surface's `cmd`-based hotkeys can never match | `apack-sdk/src/fe/hotkeys.ts:31` |
-| **X11** | Medium | Linux: the `$SHELL`-missing fallback is a hardcoded `/bin/bash` | `be/services/terminal.ts:48` |
-| **X12** | Medium | Windows: `pwsh.exe`/`bash.exe`/`wsl.exe` are silently replaced by PowerShell 5.1 | `be/services/terminal.ts:25-37` |
-| **G2** | Medium | `ELECTRON_RUN_AS_NODE=1` is handed to every agent child and everything its Bash tool spawns | `claude-code/runner.ts:117-121` |
+| **X5** ✔ | Medium | Windows: an OSC 7 URL decodes to an unusable path, which is persisted and respawned from | `be/features/terminal.ts:49,66` |
+| **X6** ✔ | Medium | Windows: the run-script path sends LF, which does not submit a line | `fe/features/terminal/state.ts:290` |
+| **X9** ✔ | Medium | Windows: `resize`/`write` have no error handling; ConPTY throws for ~1 s after exit | `be/services/terminal.ts:145-165` |
+| **X10** ✔ | Medium | Windows/Linux: the code surface's `cmd`-based hotkeys can never match | `apack-sdk/src/fe/hotkeys.ts:31` |
+| **X11** ✔ | Medium | Linux: the `$SHELL`-missing fallback is a hardcoded `/bin/bash` | `be/services/terminal.ts:48` |
+| **X12** ✔ | Medium | Windows: `pwsh.exe`/`bash.exe`/`wsl.exe` are silently replaced by PowerShell 5.1 | `be/services/terminal.ts:25-37` |
+| **G2** ✔ | Medium | `ELECTRON_RUN_AS_NODE=1` is handed to every agent child and everything its Bash tool spawns | `claude-code/runner.ts:117-121` |
 | **G3** | Medium | `onShutdown` kills ptys but not in-flight agent children | `src/features/hooks.ts:12-17` |
-| **G4** | Medium | "Open in terminal" hands the resumed CLI an env the agent runner exists to scrub | `be/services/terminal.ts:38-45` |
+| **G4** ✔ | Medium | "Open in terminal" hands the resumed CLI an env the agent runner exists to scrub | `be/services/terminal.ts:38-45` |
 | **G6** | Medium | `handle.close()` is awaited without a timeout; a held stdio pipe pins the thread `isRunning` | `claude-code/query.ts:244-248` |
 | **S4** | Medium | `openLink` and the in-app tab path apply no scheme filter; only the external branch does | `apack-sdk/src/fe/navigation.ts:32-35` |
-| **F13** | Low | The shell allow-list is inert on the default path | `be/services/terminal.ts:276` |
-| **F15** | Low | Focus is stolen on every attach | `TerminalView.vue:202`, `PanelTerminalSection.vue:316` |
-| **F16** | Low | Unhandled clipboard promise rejections | `terminal-pool.ts:194,200` |
+| **F13** ✔ | Low | The shell allow-list is inert on the default path | `be/services/terminal.ts:276` |
+| **F15** ✔ | Low | Focus is stolen on every attach | `TerminalView.vue:202`, `PanelTerminalSection.vue:316` |
+| **F16** ✔ | Low | Unhandled clipboard promise rejections | `terminal-pool.ts:194,200` |
 | **F17** | Low | Module-scope `document` listener is never removed | `terminal-pool.ts:355` |
 | **F18** | Medium | Nothing tells a surface its terminal was resized, so its `TerminalInfo` keeps the size the terminal was created with; only asking for the list again reveals the real one | `be/features/terminal.ts` `resizeTerminal` (answers only on failure), `fe/features/terminal/state.ts` (`terminals`) |
-| **F1** | Low | `detach` does not verify attachment ownership (see Corrections) | `terminal-pool.ts:260-272` |
-| **F2** | Medium | The panel scroll-jacks during output | `PanelTerminalSection.vue:296` |
+| **F1** ✔ | Low | `detach` does not verify attachment ownership (see Corrections) | `terminal-pool.ts:260-272` |
+| **F2** ✔ | Medium | The panel scroll-jacks during output | `PanelTerminalSection.vue:296` |
 | **T6** | Low | "Restart Terminal" loses the tab's pin, group and position | `fe/canvas/canvas.vue:277-285` |
-| **T7** | Low | The panel's attach watcher never tears down when its terminal disappears | `PanelTerminalSection.vue:545-559` |
-| **T8** | Low | The panel list discards the terminal's title in favour of the cwd basename | `fe/composables/useTerminalActions.ts:34` |
-| **T9** | Low | `moveTerminalToPanel` leaves an emptied tab group rendered | `fe/state.ts:869-885` |
+| **T7** ✔ | Low | The panel's attach watcher never tears down when its terminal disappears | `PanelTerminalSection.vue:545-559` |
+| **T8** ✔ | Low | The panel list discards the terminal's title in favour of the cwd basename | `fe/composables/useTerminalActions.ts:34` |
+| **T9** ✔ | Low | `moveTerminalToPanel` leaves an emptied tab group rendered | `fe/state.ts:869-885` |
 | **T10** | Medium | During a restore, **every** `saveTabsAction` persists a list without the tabs still arriving, not only the settle | `fe/state.ts:248-252` (`persistCodeTabs`) |
 | **L6-L8** | Low | `terminal.INITIAL_OUTPUT`, `CODE_STARTUP` and the `terminal.CREATE` inbox shape are dead or disagree | `be/contract.ts:188`, `fe/contract.ts:122` |
-| **M6** | Low | Every window loads every persisted terminal buffer into memory | `fe/utils/terminal-events.ts:19-35` |
-| **X7** | Low | Windows: three FE paths split cwd on `/`, so the whole path becomes the name | `useTerminalActions.ts:34`, `fe/state.ts:155` |
-| **X8** | Low | Windows: a terminal at a drive root is titled "root" | `be/services/terminal.ts:80` |
-| **X13** | Low | Windows: `name: 'xterm-256color'` is inert and the pty inherits no `TERM` | `be/services/terminal.ts:87-93` |
+| **M6** ✔ | Low | Every window loads every persisted terminal buffer into memory | `fe/utils/terminal-events.ts:19-35` |
+| **X7** ✔ | Low | Windows: three FE paths split cwd on `/`, so the whole path becomes the name | `useTerminalActions.ts:34`, `fe/state.ts:155` |
+| **X8** ✔ | Low | Windows: a terminal at a drive root is titled "root" | `be/services/terminal.ts:80` |
+| **X13** ✔ | Low | Windows: `name: 'xterm-256color'` is inert and the pty inherits no `TERM` | `be/services/terminal.ts:87-93` |
 | **G7** | Low | Unbounded stderr accumulation per streaming agent child | `claude-code/runner.ts:274-275` |
 
 ### S2 — keystrokes on disk (verified against the live log)
