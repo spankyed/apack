@@ -79,6 +79,12 @@ it("installs each shipped pack and loads its built runtime, with its systems and
     expect(loaded.map((pack) => pack.origin.id)).toContain('default-setup');
     expect(app.packs.systemIds()).toContain('default-setup/threads');
     expect(app.packs.surfaceIds()).toContain('default-setup/threads');
+    // An installed pack has no node_modules: lazy action dependencies must still resolve through the host.
+    const action = loaded.find(pack => pack.origin.id === 'default-setup')!.registration.services!.action as {
+      executeAction(code: string, params: Record<string, unknown>): Promise<unknown>;
+    };
+    expect(await Promise.all(['one', 'two'].map(value =>
+      action.executeAction('return z.string().parse(params.value)', { value })))).toEqual(['one', 'two']);
   });
 });
 
