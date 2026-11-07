@@ -16,7 +16,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PACKAGES_PREBUILT_ENV, REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { linuxTestInvocation } from './lib/linux-native-scratch.ts';
-import { TIMEOUT_MS } from './lib/step-timeouts.ts';
+import { BUDGET_MS } from './lib/step-budgets.ts';
 
 const DOCKERFILE = path.join(REPO_ROOT, 'scripts', 'linux', 'Dockerfile');
 const short = (text: string | Buffer): string => createHash('sha256').update(text).digest('hex').slice(0, 12);
@@ -333,7 +333,7 @@ const script = ['set -e', run].join('\n');
  * container running.
  */
 const CONTAINER = `apack-linux-${process.pid}-${randomBytes(4).toString('hex')}`;
-const RUN_LIMIT_MS = TIMEOUT_MS.acceptance.ms;
+const RUN_LIMIT_MS = BUDGET_MS.acceptance.ms;
 let ranOut = false;
 
 const child = spawn('docker', [
@@ -345,7 +345,7 @@ const child = spawn('docker', [
   ...gitDirMount(),
   ...forwarded.flatMap((key) => ['-e', key]),
   // Set here and never forwarded: the VM counts the host's load as its CPU, so a ceiling in it is a clock
-  // (`ceilingEnabled`, `scripts/lib/step-timeouts.ts`), whatever the Mac's own setting is
+  // (`ceilingEnabled`, `scripts/lib/step-budgets.ts`), whatever the Mac's own setting is
   '-e', 'APACK_CEILING=off',
   ...(compilerStore ? ['-e', `APACK_COMPILER_STORE=${compilerStore}`] : []),
   IMAGE, 'bash', '-c', script,

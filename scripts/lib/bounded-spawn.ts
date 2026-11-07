@@ -9,7 +9,7 @@
  * Two rules this enforces, and both matter:
  *
  * - **A budget is a declared class, not a multiple of a measurement**, which would make it a function of one
- *   machine. Callers pass `TIMEOUT_MS[class]` (`scripts/lib/step-timeouts.ts`), which carries no machine. A
+ *   machine. Callers pass `BUDGET_MS[class]` (`scripts/lib/step-budgets.ts`), which carries no machine. A
  *   bound longer than anyone will wait is the same as no bound, which keeps the ladder short.
  * - **A hang is no progress, not a long time.** A starved process is slow and still working, and a budget
  *   that measures the clock kills it for the machine being busy. So the watchdog below ends a run whose
@@ -28,7 +28,7 @@
  */
 import { spawn } from 'node:child_process';
 import { describeRefusal, processWork, watchWork } from '@apackdev/host/build/process-progress';
-import { IDLE_MS, ceilingEnabled, watchdogEnabled } from './step-timeouts.ts';
+import { IDLE_MS, ceilingEnabled, watchdogEnabled } from './step-budgets.ts';
 
 
 

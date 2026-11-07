@@ -342,7 +342,7 @@ describe('a timeout written as a sum of its phases', () => {
 
   it('is left unknown once it names a value, which the budget check then requires a reason for', () => {
     expect(constantMs(expression('WATCH_REBUILD_BUDGET_MS + 20_000'))).toBeUndefined();
-    expect(constantMs(expression('timeoutMsFor("quick")'))).toBeUndefined();
+    expect(constantMs(expression('budgetMsFor("quick")'))).toBeUndefined();
   });
 });
 

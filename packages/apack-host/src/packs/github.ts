@@ -5,7 +5,7 @@
  */
 
 /** Metadata requests: a release list or a manifest, small enough that a slow one is a stuck one. */
-const TIMEOUT_MS = 10_000;
+const BUDGET_MS = 10_000;
 
 /**
  * Downloads: a pack archive is a few megabytes, so this covers a slow connection while still
@@ -41,7 +41,7 @@ function headers(accept: string): Record<string, string> {
 }
 
 /** Fetches a GitHub URL, throwing GitHubRequestError with the cause when it doesn't succeed. */
-export async function githubFetch(url: string, accept = 'application/vnd.github+json', timeoutMs = TIMEOUT_MS): Promise<Response> {
+export async function githubFetch(url: string, accept = 'application/vnd.github+json', timeoutMs = BUDGET_MS): Promise<Response> {
   let response: Response;
   try {
     response = await fetch(url, { headers: headers(accept), signal: AbortSignal.timeout(timeoutMs) });

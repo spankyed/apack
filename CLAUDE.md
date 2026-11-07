@@ -155,7 +155,7 @@ strict-chain dispatches remain available and are used where the execution bounda
 goal requires them; cite actual results, not an assumption that all CI runs or never runs.
 
 **CI may fail a check, never a clock.** Every kill deadline is a declared class rather than a multiple of a
-measurement (`scripts/lib/step-timeouts.ts`), and what a step costs is a reading of the machine it ran on.
+measurement (`scripts/lib/step-budgets.ts`), and what a step costs is a reading of the machine it ran on.
 A deadline is a ceiling for a tree that spins, so it counts the tree's CPU time, which load and a slow disk cannot
 inflate; the clock bounds only a tree that cannot be read (Windows, `APACK_WATCHDOG=off`, work inside a VM).
 Inside the Linux test container CPU time grows with the Mac's load (its VM accounts no steal time), so a ceiling

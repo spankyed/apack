@@ -21,7 +21,7 @@
 // looking for tomorrow's.
 //
 // **Five modules, and what qualifies one is reachability rather than subject.** It began as one, grew to two
-// when the sample-recording primitives moved to `measure.ts`, and took `step-timeouts.ts`,
+// when the sample-recording primitives moved to `measure.ts`, and took `step-budgets.ts`,
 // `chain-schedule.ts` and `core-budget.ts` when the hand-run version of this ritual was retired: copy the
 // file, edit it, run a
 // filtered command, read the output, restore. That has three independent ways to lie — a restore that takes
@@ -36,7 +36,7 @@ import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import * as realMeasure from '../../../scripts/lib/measure.ts';
-import * as realStepTimeouts from '../../../scripts/lib/step-timeouts.ts';
+import * as realStepBudgets from '../../../scripts/lib/step-budgets.ts';
 import * as realChainSchedule from '../../../scripts/lib/chain-schedule.ts';
 import * as realCoreBudget from '../../../scripts/lib/core-budget.ts';
 import * as realStepTiming from '../../../scripts/lib/step-timing.ts';
@@ -55,7 +55,7 @@ import * as realStepTiming from '../../../scripts/lib/step-timing.ts';
  */
 const MODULES = {
   measure: { file: 'measure.ts', real: realMeasure as unknown as Lib },
-  'step-timeouts': { file: 'step-timeouts.ts', real: realStepTimeouts as unknown as Lib },
+  'step-budgets': { file: 'step-budgets.ts', real: realStepBudgets as unknown as Lib },
   'chain-schedule': { file: 'chain-schedule.ts', real: realChainSchedule as unknown as Lib },
   'core-budget': { file: 'core-budget.ts', real: realCoreBudget as unknown as Lib },
   // Reachable for the same reason the others are: its only imports are siblings in `scripts/lib`, which
@@ -65,7 +65,7 @@ const MODULES = {
 type Module = keyof typeof MODULES;
 
 /** The intersection, because an entry calls only its own module's exports and the harness is generic over all */
-type Lib = typeof realMeasure & typeof realStepTimeouts & typeof realChainSchedule
+type Lib = typeof realMeasure & typeof realStepBudgets & typeof realChainSchedule
   & typeof realCoreBudget & typeof realStepTiming;
 
 interface Step { readonly name: string; readonly dependsOn: string[]; readonly conflicts?: string[]; readonly cores?: number }
@@ -211,8 +211,8 @@ const MUTATIONS: readonly Mutation[] = [
     },
   },
   /**
-   * `step-timeouts.ts` has no spec of its own. `chain-graph` reaches what a kill reports through
-   * `timedOutBecause`, but nothing there pins a rung's *deadline*, so changing `quick` to six seconds still
+   * `step-budgets.ts` has no spec of its own. `chain-graph` reaches what a kill reports through
+   * `whyKilled`, but nothing there pins a rung's *deadline*, so changing `quick` to six seconds still
    * leaves every case in the repo green. These three are what observes the rest.
    */
   {
@@ -220,31 +220,31 @@ const MUTATIONS: readonly Mutation[] = [
     // a ceiling, so the confident wrong answer is the permissive one". Dropping the guard would now throw a
     // TypeError on `rung.ms`, which differs from the named error and so would pass this — while testing that
     // reading a field of `undefined` fails, not that the function refuses
-    why: 'timeoutMsFor refuses a class the ladder has not got, rather than defaulting to one',
-    in: 'step-timeouts',
-    from: '    throw new Error(`No such timeout class: ${className} — one of ${TIMEOUT_CLASSES.join(\', \')}`);',
-    to: '    return TIMEOUT_MS.quick.ms;',
-    call: (lib) => lib.timeoutMsFor('nonsense'),
+    why: 'budgetMsFor refuses a class the ladder has not got, rather than defaulting to one',
+    in: 'step-budgets',
+    from: '    throw new Error(`No such timeout class: ${className} — one of ${BUDGET_CLASSES.join(\', \')}`);',
+    to: '    return BUDGET_MS.quick.ms;',
+    call: (lib) => lib.budgetMsFor('nonsense'),
   },
   {
     // Not the values themselves, which an entry cannot assert without restating them: the property the
     // ladder has to have is that a rung is slower than the one below, which is what makes `quick` a
     // meaningful thing to give a step. `suite` dropping under `quick` breaks it.
     why: 'the ladder climbs, so a class is slower than the one below it',
-    in: 'step-timeouts',
+    in: 'step-budgets',
     from: '  suite: { ms: 1_200_000 },',
     to: '  suite: { ms: 30_000 },',
     call: (lib) => {
-      const ms = lib.TIMEOUT_CLASSES.map((className) => lib.TIMEOUT_MS[className].ms);
+      const ms = lib.BUDGET_CLASSES.map((className) => lib.BUDGET_MS[className].ms);
       return ms.every((value, at) => at === 0 || value > ms[at - 1]!) ? 'climbs' : 'does not climb';
     },
   },
   {
-    why: 'timeoutText says a class in seconds, not milliseconds',
-    in: 'step-timeouts',
-    from: '`${TIMEOUT_MS[className].ms / 1000}s (${className})`',
-    to: '`${TIMEOUT_MS[className].ms}s (${className})`',
-    call: (lib) => lib.timeoutText('quick'),
+    why: 'budgetText says a class in seconds, not milliseconds',
+    in: 'step-budgets',
+    from: '`${BUDGET_MS[className].ms / 1000}s (${className})`',
+    to: '`${BUDGET_MS[className].ms}s (${className})`',
+    call: (lib) => lib.budgetText('quick'),
   },
   {
     /**

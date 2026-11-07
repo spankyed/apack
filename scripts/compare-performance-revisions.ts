@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { packagesBuiltOrRefuse } from '@apackdev/host/build/packages-built';
 import { boundedSpawn, type BoundedResult } from './lib/bounded-spawn.ts';
-import { TIMEOUT_MS } from './lib/step-timeouts.ts';
+import { BUDGET_MS } from './lib/step-budgets.ts';
 import { performanceQualificationCommand, performanceRevisionOptions } from './lib/performance-qualification.ts';
 
 /** How long one scenario's pair of runs may take on the clock: a qualification's own limit, not a CPU class */
@@ -22,7 +22,7 @@ if (options.roots.A !== options.roots.B && realpathSync(path.join(options.roots.
 mkdirSync(path.dirname(options.output), { recursive: true }); mkdirSync(options.output);
 const preparation: Array<{ root: string; code: number; timedOut: boolean }> = [];
 for (const own of new Set(Object.values(options.roots))) {
-  const result = await boundedSpawn(process.execPath, ['scripts/with-source.mjs', 'tsx', 'scripts/chain.ts', '--only', 'packages:ensure,build:default-setup,build:runtime', '--no-native', '--cores', '1'], TIMEOUT_MS.suite.ms, { cwd: own, stream: true });
+  const result = await boundedSpawn(process.execPath, ['scripts/with-source.mjs', 'tsx', 'scripts/chain.ts', '--only', 'packages:ensure,build:default-setup,build:runtime', '--no-native', '--cores', '1'], BUDGET_MS.suite.ms, { cwd: own, stream: true });
   preparation.push({ root: own, code: result.code, timedOut: result.timedOut ?? false });
   writeFileSync(path.join(options.output, 'preparation.json'), JSON.stringify(preparation, null, 2));
   if (result.code !== 0) throw Error(`Revision preparation failed; evidence: ${options.output}`);
@@ -38,7 +38,7 @@ for (const scenario of options.scenarios) {
     const gate = path.join(output, 'coordination', variant); mkdirSync(gate, { recursive: true });
     const command = performanceQualificationCommand(scenario, own, { mode: options.mode, measured: options.measured }, process.env);
     command.env.APACK_PERFORMANCE_GATE = JSON.stringify({ directory: gate, deadline, mode: options.mode, lastIndex: options.measured + 4 });
-    return boundedSpawn(process.execPath, command.args, TIMEOUT_MS.scenario.ms, { cwd: options.roots[variant], env: command.env, stream: true, signal: abort.signal }).then(result => {
+    return boundedSpawn(process.execPath, command.args, BUDGET_MS.scenario.ms, { cwd: options.roots[variant], env: command.env, stream: true, signal: abort.signal }).then(result => {
       workers[variant] = result;
       try { writeFileSync(path.join(own, 'invocation.json'), JSON.stringify({ code: result.code, durationMs: result.ms,
         timedOut: result.timedOut ?? false, aborted: result.aborted ?? false, root: options.roots[variant], command: command.args }, null, 2)); }

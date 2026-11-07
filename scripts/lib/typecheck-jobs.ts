@@ -7,14 +7,14 @@
 import path from 'node:path';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { ENSURE } from './typecheck-legs.ts';
-import type { TimeoutClass } from './step-timeouts.ts';
+import type { BudgetClass } from './step-budgets.ts';
 
 export interface TypecheckCommand {
   readonly name: string;
   readonly command: string;
   readonly cwd?: string;
   /** A source derivation can do different work from the chain's built-output check. */
-  readonly timeout?: TimeoutClass;
+  readonly budget?: BudgetClass;
 }
 const defaultSetupDirectory = path.join(REPO_ROOT, 'packages/default-setup');
 
@@ -51,7 +51,7 @@ export const RECORDED_FILE_CHECKS: readonly TypecheckCommand[] = [
   // while the legs read it, which is the one reason it is not a leg itself
   // The chain reads a verified build; standalone typechecking bundles declarations from source.
   { name: 'facade:check', command: 'node ../apack-cli/bin/apack.mjs pack facade-report --skip-generate',
-    cwd: defaultSetupDirectory, timeout: 'suite' },
+    cwd: defaultSetupDirectory, budget: 'suite' },
 ];
 
 /** Both prerequisites, in the order they must run: each writes what every job after it reads */

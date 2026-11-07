@@ -49,10 +49,10 @@ import { IDLE_MS } from '@apackdev/host/build/process-progress';
  * whether it declares a `POOL_WIDTH` entry (never what `coresFor` returns, which varies with the machine),
  * `builds` from whether it declares `outputs` — and holds the reviewed exceptions.
  *
- * It is a check and not the declaration: `ChainStep.timeout` stays written down, because deriving a kill
+ * It is a check and not the declaration: `ChainStep.budget` stays written down, because deriving a kill
  * deadline from what a step costs would let a cost change silently move when it is killed.
  */
-export const rungForKind = (work: { installs: boolean; fansOut: boolean; builds: boolean }): TimeoutClass =>
+export const rungForKind = (work: { installs: boolean; fansOut: boolean; builds: boolean }): BudgetClass =>
   work.installs ? 'scenario' : (work.fansOut || work.builds) ? 'suite' : 'quick';
 
 /** How long a process tree may go without CPU or output before `boundedSpawn` ends it as stalled */
@@ -87,41 +87,41 @@ export function ceilingEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
 }
 
 /** Each class's deadline, in milliseconds of CPU time (of the clock where the tree cannot be read) — what `boundedSpawn` is given */
-export const TIMEOUT_MS = {
+export const BUDGET_MS = {
   quick: { ms: 300_000 },
   suite: { ms: 1_200_000 },
   scenario: { ms: 1_800_000 },
   acceptance: { ms: 14_400_000 },
 } as const satisfies Record<string, { readonly ms: number }>;
 
-export type TimeoutClass = keyof typeof TIMEOUT_MS;
+export type BudgetClass = keyof typeof BUDGET_MS;
 
 /** Every class, for a check that wants to know none is unused */
-export const TIMEOUT_CLASSES = Object.keys(TIMEOUT_MS) as readonly TimeoutClass[];
+export const BUDGET_CLASSES = Object.keys(BUDGET_MS) as readonly BudgetClass[];
 
 /**
  * A class named as a string — from a command line, where no type checked it.
  *
  * Refused rather than defaulted, for `sizeOf`'s reason: a budget is a ceiling, so a confident wrong answer
- * is the permissive one. The typed path (`TIMEOUT_MS[step.timeout].ms`) needs none of this.
+ * is the permissive one. The typed path (`BUDGET_MS[step.budget].ms`) needs none of this.
  */
-export function timeoutMsFor(className: string): number {
-  const rung = (TIMEOUT_MS as Readonly<Record<string, { readonly ms: number } | undefined>>)[className];
+export function budgetMsFor(className: string): number {
+  const rung = (BUDGET_MS as Readonly<Record<string, { readonly ms: number } | undefined>>)[className];
   if (rung === undefined) {
-    throw new Error(`No such timeout class: ${className} — one of ${TIMEOUT_CLASSES.join(', ')}`);
+    throw new Error(`No such timeout class: ${className} — one of ${BUDGET_CLASSES.join(', ')}`);
   }
   return rung.ms;
 }
 
 /** A class as a span, for a message that names what was spent rather than a number nobody chose */
-export const timeoutText = (className: TimeoutClass): string =>
-  `${TIMEOUT_MS[className].ms / 1000}s (${className})`;
+export const budgetText = (className: BudgetClass): string =>
+  `${BUDGET_MS[className].ms / 1000}s (${className})`;
 
 /**
  * Report the enforced bound and the step's recorded cost here, without diagnosing the cause from elapsed time.
  * `seconds` is the median from `step-durations.ts`, absent where this machine has no reading.
  */
-export function timedOutBecause({ what, timeout, seconds, stalled }: { what: string; timeout: TimeoutClass; seconds?: number; stalled?: boolean }): string {
+export function whyKilled({ what, budget, seconds, stalled }: { what: string; budget: BudgetClass; seconds?: number; stalled?: boolean }): string {
   if (stalled) {
     return `${what} stalled: its process tree used no CPU and wrote no output for ${IDLE_MS / 1000}s, so its process group`
       + ' was killed before its budget. Inspect the run output for what it was waiting on.';
@@ -129,7 +129,7 @@ export function timedOutBecause({ what, timeout, seconds, stalled }: { what: str
   const recorded = seconds !== undefined && seconds > 0
     ? ` It usually takes ${seconds}s here.`
     : ' This machine has no recorded cost for it.';
-  return `${what} timed out: it spent its ${timeoutText(timeout)} budget of CPU time, or of the clock where its CPU`
+  return `${what} timed out: it spent its ${budgetText(budget)} budget of CPU time, or of the clock where its CPU`
     + ' could not be read, and its process group was killed.' + recorded
     + ' The [bounded] line at the end of its output says which, and what it spent: CPU close to its wall time with no'
     + ' recent output is a loop that spins. Inspect the run output before retrying or changing its budget.';

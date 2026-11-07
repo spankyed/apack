@@ -65,7 +65,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { boundedSpawn } from './lib/bounded-spawn.ts';
 import { SPEC_COUNT_FILE } from './lib/spec-count-reporter.ts';
-import { TIMEOUT_MS } from './lib/step-timeouts.ts';
+import { BUDGET_MS } from './lib/step-budgets.ts';
 import { ENSURE_LABEL, exitCodeFor, packageOf, planChanged, planTargets, type Run, splitArgs, verdictOf } from './lib/spec-plan.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -233,7 +233,7 @@ async function main(): Promise<number> {
       if (run.label !== ENSURE_LABEL) console.log(`\n→ ${run.label}`);
       const counter = run.claimsCoverageOf === undefined ? undefined : counted(run, index);
       // Bounded for its process group: a vitest that dies on a worker's native abort leaves no workers behind
-      const result = await boundedSpawn(run.command, counter?.args ?? [...run.args], TIMEOUT_MS.scenario.ms,
+      const result = await boundedSpawn(run.command, counter?.args ?? [...run.args], BUDGET_MS.scenario.ms,
         { cwd: run.cwd, stream: true, ...(counter?.env !== undefined && { env: counter.env }) });
       const verdict = verdictOf(run, result.code, counter?.read());
       if (verdict === 'fail') {
