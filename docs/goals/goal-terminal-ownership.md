@@ -56,8 +56,10 @@ those first is paying for code the destination deletes.
 - **Agent status rules** (is a Claude/Codex turn working, waiting or ready). Phase A builds the facts
   pipeline; the rules are product surface with their own iteration, and the refactor target warns herdr's
   can mistake an unrecognized screen for idle. Owner: a later goal, once facts exist.
-- **G2–G7** (the agent path beyond G1). A different feature; their own issue. G1 is in scope because it is
-  the same payload discipline as Phase S and is independent of everything here.
+- **G2–G7** (the agent path beyond G1). Their own goal, and Phase B's factoring is what makes it cheap:
+  most of them dissolve against the process layer rather than needing fixes, so that goal is "migrate the
+  agent path onto the broker", not "fix seven findings". G1 is in scope here because it is payload
+  discipline rather than process ownership, and independent of everything else.
 - **node-pty-shaped Windows findings** (X1, X2 and their neighbours). Dissolved by the spine, so not fixed
   separately. X3 and X10 are the app's menu and hotkeys, belong to no terminal plan, and are in Phase T.
 - **Keeping sessions alive across app quit.** A lifecycle policy, not an ownership question; the refactor
@@ -125,6 +127,12 @@ halves, and the first of them carries a premise Phase G tests.
   rather than proceed either way.
   What does **not** justify this is that Rust is already here. Precedent lowers the cost of a second tree;
   it is not a reason to want one.
+  **Phase B's two-layer factoring sharpens the premise rather than settling it.** The runtime properties that
+  justify Rust — off-loop VT parsing above all — belong to the *terminal capability*. The **process layer**
+  has no VT at all, and it is the layer the agent path needs. So if Phase G's reading shows JS carries VT
+  parsing comfortably, what remains for Rust is bounded buffers and ABI independence over a process layer
+  that a detached Node process could own — which is the Node broker, serving both clients. Weigh the premise
+  against the layer it actually applies to.
 
 - **Home:** `apack-terminal`, a sibling checkout of this one and of elmdb, symlinked as
   `vendor/apack-terminal`, pinned by `vendor/apack-terminal.rev`, maintained by `npm run link:apack-terminal`,
@@ -212,6 +220,26 @@ is the defect in both, and a fix without that case only resets the clock.
 **Deliverable:** one authority owning spawn, PTY/ConPTY, VT state, bounded history and bounded I/O, with
 serialized writes, coalesced resize and reserved capacity for terminal responses. Presentation bytes reach
 the renderer over a dedicated bounded channel, never one bus event per chunk.
+
+**Factored as two layers, because the second has another client.** The refactor target's reusable core takes
+"executable/argv, environment, cwd, dimensions, resource policy and opaque IDs", which conflates them;
+`dimensions` is a terminal's.
+
+- A **process layer**: spawn, process-tree ownership, lifetime independent of any client, bounded I/O with
+  backpressure, close with a deadline, reattach. Nothing here knows what a screen is.
+- A **terminal capability** over it: pty, VT core, screen and bounded history.
+
+The split exists because **the agent path needs the first and none of the second.**
+`claude-code/runner.ts` spawns with `stdio: ['pipe','pipe','pipe']` and reads NDJSON — no pty, no VT — and
+its defects are the process layer's, item for item: `kill(signal)` is `child.kill(signal)`, which signals the
+CLI and not its tree, so a Bash grandchild outlives a deliberate kill (the mirror of F7, where the terminal
+over-kills and this under-kills); handles live in an in-memory `Map` and die with the API (G3); `close()` is
+awaited with no deadline, so a grandchild holding stdout pins a thread `isRunning` forever (G6); stderr
+accumulates unbounded to serve a 500-character tail (G7). Each of those dissolves against the process layer
+the same way the terminal's do.
+
+Build the layer so that is possible; **do not migrate the agent path here.** Its migration is its own goal,
+and the deliverable in this one is the seam, not the second client.
 **Dependencies:** D11 for the broker's home and core, D9 for what it parses. Phase G's baseline,
 so acceptance has a before.
 **Done when:** **node-pty is gone from the repository** — the dependency dropped from
@@ -265,6 +293,15 @@ Launch-time shell integration (D3) supplies the OSC markers.
 **Dependencies:** Phase B's VT core. Phase T's shell-integration mechanism.
 **Done when:** F13 and F14 are closed; a hidden session answers a bounded screen read and a wait; reported
 paths and titles are treated as untrusted metadata; and no status rule is shipped (see Excluded).
+
+**Screen inference is needed for less than the refactor target assumes.** Its observation pipeline is
+designed to read agent state off a terminal screen, which it also warns is the error-prone part — herdr's
+rules "can mistake an unrecognized screen for idle". But a flow-launched agent already emits structured
+NDJSON, so its state is `reported` **by construction** and needs no screen at all. Only a session a *user*
+started in a terminal tab — what the session artifact's "open in terminal" button does — has nothing but the
+screen. So the provenance split the refactor target prescribes is not two equal paths: the reliable one
+covers apack's own flows, and the inference rules are a smaller, bounded case. Build the reported path first
+and let the screen rules serve only what it cannot reach.
 
 ## Acceptance and evidence
 
