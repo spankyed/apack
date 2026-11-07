@@ -129,6 +129,7 @@ export interface HostRuntimeServices {
     runHistory: RunHistory;
     secrets: SecretsService;
     settings: SettingsAdmin;
+    terminal: TerminalService;
 }
 
 // @internal

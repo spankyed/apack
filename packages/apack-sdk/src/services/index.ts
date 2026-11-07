@@ -8,6 +8,7 @@ import type { RunHistory } from './run-history.ts';
 import type { InferenceService } from './inference.ts';
 import type { SecretsService } from './secrets.ts';
 import type { FilesystemService } from './filesystem.ts';
+import type { TerminalService } from './terminal.ts';
 import type { SettingsService } from './settings.ts';
 import type { SettingsAdmin } from './settings.ts';
 import type { SettingsTarget } from '../types/settings.ts';
@@ -22,6 +23,7 @@ export {
 } from './run-history.ts';
 export { _createInferenceService, type _InferenceModels, type InferenceService, type OutputSchema, type OutputSpec, type _ResolveModel } from './inference.ts';
 export type { FileEntry, FileStat, FilesystemService } from './filesystem.ts';
+export type { TerminalService, TerminalSession, TerminalListeners } from './terminal.ts';
 export type { SettingsChange, SettingsService, SettingsAdmin } from './settings.ts';
 export type { SecretMetadata, SecretProvider, SecretsProtection, SecretsService, SecretsSnapshot, SecretsStatus } from './secrets.ts';
 export { _secretRules, _secretProviderLabel, _toSecretMetadata } from './secrets-rules.ts';
@@ -95,6 +97,7 @@ export interface HostServices {
   secrets: SecretsService;
   /** Files and folders on the user's disk */
   filesystem: FilesystemService;
+  terminal: TerminalService;
   /** Caller-bound access to app, pack/group and feature preferences */
   settings: SettingsService;
 }

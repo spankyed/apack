@@ -115,6 +115,10 @@ const unmockedFilesystem = () => Promise.reject(new Error(
   "No disk access through services in unit tests: mock it with mockService('filesystem', { ... }) from @apackdev/testing/harness",
 ));
 
+const unmockedTerminal = () => Promise.reject(new Error(
+  "No terminal sessions in unit tests: they are the broker's processes. Mock it with mockService('terminal', { ... }) from @apackdev/testing/harness",
+));
+
 /**
  * The app's settings need the host's store, which the SDK doesn't have: `@apackdev/testing/harness` supplies the real
  * one (it inlines @apackdev/host), so a test running on the SDK's runtime alone says so rather than reading a fake
@@ -186,6 +190,7 @@ export function bindTestRuntime({ engine, resetData, packs, appVersion = '0.0.0-
         writeFile: unmockedFilesystem, readFile: unmockedFilesystem, exists: unmockedFilesystem, mkdir: unmockedFilesystem,
         readDir: unmockedFilesystem, remove: unmockedFilesystem, rename: unmockedFilesystem, stat: unmockedFilesystem,
       },
+      terminal: { open: unmockedTerminal },
       settings,
     },
   };

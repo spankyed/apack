@@ -54,7 +54,7 @@ function runtimeClosure(entry: string): Set<string> {
 }
 
 /** The services the app implements, each in `src/services/<kebab-case key>.ts`; the type checks the list is complete */
-const HOST_SERVICE_KEYS = ['appData', 'onboarding', 'runHistory', 'inference', 'secrets', 'filesystem', 'settings'] as const satisfies readonly (keyof HostRuntime['services'])[];
+const HOST_SERVICE_KEYS = ['appData', 'onboarding', 'runHistory', 'inference', 'secrets', 'filesystem', 'terminal', 'settings'] as const satisfies readonly (keyof HostRuntime['services'])[];
 type MissingServiceKey = Exclude<keyof HostRuntime['services'], (typeof HOST_SERVICE_KEYS)[number]>;
 const serviceKeysComplete: [MissingServiceKey] extends [never] ? true : MissingServiceKey = true;
 const kebab = (key: string) => key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
