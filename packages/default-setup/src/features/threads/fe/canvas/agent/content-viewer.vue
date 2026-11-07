@@ -18,7 +18,7 @@
     <!-- Artifact Content -->
     <div :class="sessionDetailsCollapsed ? 'p-0.5' : contentPadding" class="flex-1 h-full overflow-auto bg-neutral-900 min-h-0">
       <PopoverRoot v-if="sessionDetailsCollapsed && selectedArtifact" :key="selectedArtifact.id">
-        <PopoverTrigger class="flex h-8 w-full min-w-0 items-center gap-2 rounded-md px-2 text-xs text-neutral-300 hover:bg-neutral-800 focus-visible:outline focus-visible:outline-blue-400" aria-label="Open Claude session details">
+        <PopoverTrigger class="flex h-6 w-full min-w-0 items-center gap-2 rounded-md px-2 text-xs text-neutral-300 hover:bg-neutral-800 focus-visible:outline focus-visible:outline-blue-400" aria-label="Open Claude session details">
           <FileText :size="14" class="shrink-0 text-neutral-500" />
           <span class="min-w-0 flex-1 truncate text-left" :title="selectedArtifact.title">{{ selectedArtifact.title }}</span>
           <span class="shrink-0 text-neutral-400">Details ↗</span>
