@@ -255,3 +255,9 @@ Notebook result reading replay exports `driveNotebookWidthReview` from
 original Read/NotebookEdit approvals and formatter, durable settings preimages,
 and physical header/body reading through normal/compact/restored sizes. Compact
 insertion needs separate scroll positions; broader formatter/owner/F1–F5 work remains open.
+
+Held-response native recovery replay exports `driveHeldOwnerReview` from
+`src/integration/apack-held-owner-drive.mjs`. It uses the isolated Linux profile and
+existing bounded local model barrier, verifies the exact owned native PID/start/argv
+before a deliberate SIGKILL, then checks late-output isolation and same-session recovery.
+Durable settings preimages and normal/compact captures remain required.
