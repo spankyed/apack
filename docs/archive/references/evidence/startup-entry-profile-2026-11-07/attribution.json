@@ -1,0 +1,125 @@
+{
+  "run": "https://github.com/spankyed/apack/actions/runs/42336447107",
+  "artifactId": 13561042368,
+  "source": "57ff8904b494114f2fab60557efee076710db56d",
+  "native": "4b67670ba9b2ed58ee13f8463486a6a91292e412",
+  "limitation": "Profiler-on attribution, not disabled-mode latency or a speedup comparison. Inclusive CPU categories overlap. First observed initializeBackend sample only approximates the end of initial module loading.",
+  "trials": [
+    {
+      "index": 5,
+      "launchToApiSpawnMs": 1297.525390625,
+      "electronReadyToApiSpawnMs": 504.0966796875,
+      "apiSpawnToPreloaderMs": 149.50634765625,
+      "apiPreloaderToReadyMs": 2465.293701171875,
+      "apiReadyToRendererReadyMs": 204.53125,
+      "profiledLaunchToUsableViewMs": 6294.522,
+      "mainCpuMs": {
+        "createSplashWindow": 245.912,
+        "createWindow": 52.042
+      },
+      "backendCpuMs": {
+        "esmCompilationSelf": 79.708,
+        "moduleFormatDetectionSelf": 409.75,
+        "compileSettingsDefinitionInclusive": 420.665,
+        "readPackBuildInclusive": 571.667
+      },
+      "sampledReadPackBuildContexts": 6,
+      "firstInitializeBackendSampleMs": 1048.167
+    },
+    {
+      "index": 6,
+      "launchToApiSpawnMs": 1321.914306640625,
+      "electronReadyToApiSpawnMs": 564.226318359375,
+      "apiSpawnToPreloaderMs": 92.16796875,
+      "apiPreloaderToReadyMs": 2239.551513671875,
+      "apiReadyToRendererReadyMs": 167.947021484375,
+      "profiledLaunchToUsableViewMs": 5242.151,
+      "mainCpuMs": {
+        "createSplashWindow": 214.128,
+        "createWindow": 60.051
+      },
+      "backendCpuMs": {
+        "esmCompilationSelf": 179.917,
+        "moduleFormatDetectionSelf": 173.749,
+        "compileSettingsDefinitionInclusive": 459.334,
+        "readPackBuildInclusive": 597.666
+      },
+      "sampledReadPackBuildContexts": 6,
+      "firstInitializeBackendSampleMs": 835.0
+    },
+    {
+      "index": 7,
+      "launchToApiSpawnMs": 1440.580322265625,
+      "electronReadyToApiSpawnMs": 578.42626953125,
+      "apiSpawnToPreloaderMs": 162.25390625,
+      "apiPreloaderToReadyMs": 2916.956298828125,
+      "apiReadyToRendererReadyMs": 248.19677734375,
+      "profiledLaunchToUsableViewMs": 7336.102207999999,
+      "mainCpuMs": {
+        "createSplashWindow": 238.322,
+        "createWindow": 64.525
+      },
+      "backendCpuMs": {
+        "esmCompilationSelf": 199.124,
+        "moduleFormatDetectionSelf": 199.583,
+        "compileSettingsDefinitionInclusive": 574.126,
+        "readPackBuildInclusive": 736.542
+      },
+      "sampledReadPackBuildContexts": 6,
+      "firstInitializeBackendSampleMs": 932.417
+    }
+  ],
+  "sha256": {
+    "trial-5/entry-profile/main.cpuprofile": "bcfcfc16159aa3b77dda6d88d6d979010f59a43c3bc93ffa65baae628674aaa0",
+    "trial-5/entry-profile/backend.cpuprofile": "24b1d271a96b995f38107edf1333af4885bcd050f11455d3c8ec29c09e193eaf",
+    "trial-5/entry-profile/chromium.json": "cea92683aedebe13189fd5b0d18a956d1f866beb3f091c2c4c5896823be11200",
+    "trial-5/trial.json": "771ee088fa4df92e35ab36475ec7a79f1b1634262dee749b8ea1e51dbafe3e1d",
+    "trial-6/entry-profile/main.cpuprofile": "78f25e2d95672ee2629bf28a161dc316a18e2c32011b66d17c28816c70895659",
+    "trial-6/entry-profile/backend.cpuprofile": "ec43deaaf80c000a7272023559cede74410c932201b49f547646522268fc3d21",
+    "trial-6/entry-profile/chromium.json": "68442c2960ee407016937f82338a884c5f14082dee5cf92233828dab5f6da1f3",
+    "trial-6/trial.json": "02a49c8407b19dab6784769183b21a59dbc9a40310049c16b57d1841bf61944a",
+    "trial-7/entry-profile/main.cpuprofile": "ee58f9676b08c7c2087cd0d9b381b260d6ead6185973aefbcf8ed14403f93228",
+    "trial-7/entry-profile/backend.cpuprofile": "8b6c1f090af15d658ddda00f1d066154059627a0ddd79554a3b1cc9a6a0b573f",
+    "trial-7/entry-profile/chromium.json": "fdfac41725746b1b1e99a4c036905900edc3d51f9d2445be486f4b0a408ad819",
+    "trial-7/trial.json": "e0e0017afebd23a30a257c348627ed9641bcd5594b43f9011c9c3a4b80e39b2b",
+    "manifest.json": "0a6eb448dd59bfdb2a736c316d4c0d66b5499957a5339bc900a12aa83f86f9fd",
+    "results.json": "869ea55f8de7524903f39332e8aed0a5c43a2b075c6d204e63e52d609c0c01ba"
+  },
+  "rendererTracingOnly": {
+    "run": "https://github.com/spankyed/apack/actions/runs/42336138740",
+    "source": "565c54630ff1b1a5afcac3cab28ed904ebc8e2ec",
+    "limitation": "Separate three profiler-on trials; actual app renderer only, splash excluded. Timeline event totals are inclusive and overlap.",
+    "trials": [
+      {
+        "index": 5,
+        "inclusiveEventMs": {
+          "V8.CompileCode": 234.304,
+          "v8.evaluateModule": 110.218,
+          "Layout": 80.011,
+          "UpdateLayoutTree": 48.767,
+          "Paint": 57.018
+        }
+      },
+      {
+        "index": 6,
+        "inclusiveEventMs": {
+          "V8.CompileCode": 205.916,
+          "v8.evaluateModule": 79.721,
+          "Layout": 57.998,
+          "UpdateLayoutTree": 38.379,
+          "Paint": 33.844
+        }
+      },
+      {
+        "index": 7,
+        "inclusiveEventMs": {
+          "V8.CompileCode": 192.952,
+          "v8.evaluateModule": 92.546,
+          "Layout": 60.762,
+          "UpdateLayoutTree": 58.175,
+          "Paint": 55.458
+        }
+      }
+    ]
+  }
+}
