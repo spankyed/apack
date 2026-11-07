@@ -1564,8 +1564,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"cold_resume_quota">;
     trigger: z.ZodEnum<{
-        resume: "resume";
         idle: "idle";
+        resume: "resume";
     }>;
     preferredChoice: z.ZodOptional<z.ZodEnum<{
         quota_resume: "quota_resume";
@@ -1650,9 +1650,9 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
     sourceCommand: z.ZodString;
     choices: z.ZodArray<z.ZodObject<{
         value: z.ZodEnum<{
+            disable: "disable";
             yes: "yes";
             no: "no";
-            disable: "disable";
         }>;
         label: z.ZodString;
     }, z.core.$strip>>;
@@ -1669,9 +1669,9 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
     choices: z.ZodArray<z.ZodObject<{
         value: z.ZodEnum<{
             never: "never";
+            disable: "disable";
             yes: "yes";
             no: "no";
-            disable: "disable";
         }>;
         label: z.ZodString;
     }, z.core.$strip>>;
@@ -8734,6 +8734,10 @@ declare function claimClaudeBackgroundCheckpoint(options: {
 } | undefined>;
 
 declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<[z.ZodObject<{
+    kind: z.ZodLiteral<"ideSelect">;
+    revision: z.ZodString;
+    value: z.ZodString;
+}, z.core.$strict>, z.ZodObject<{
     kind: z.ZodLiteral<"helpTab">;
     revision: z.ZodString;
     tab: z.ZodEnum<{
@@ -8815,6 +8819,25 @@ declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strict>], "kind">;
 
 declare const claudeSettingsSnapshot: z.ZodObject<{
+    ide: z.ZodOptional<z.ZodObject<{
+        stage: z.ZodEnum<{
+            selection: "selection";
+            enable: "enable";
+            disable: "disable";
+            connecting: "connecting";
+            finished: "finished";
+        }>;
+        title: z.ZodString;
+        description: z.ZodOptional<z.ZodString>;
+        paragraphs: z.ZodArray<z.ZodString>;
+        options: z.ZodArray<z.ZodObject<{
+            value: z.ZodString;
+            label: z.ZodString;
+            description: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>>;
+        selectedValue: z.ZodOptional<z.ZodString>;
+        disabled: z.ZodOptional<z.ZodBoolean>;
+    }, z.core.$strict>>;
     help: z.ZodOptional<z.ZodObject<{
         selectedTab: z.ZodEnum<{
             General: "General";
@@ -9370,6 +9393,19 @@ declare function createClaudeUiControls(initialized: () => Promise<Pick<ClaudeIn
                 editorAvailable?: boolean | undefined;
                 lockReason?: string | undefined;
             }[];
+            ide?: {
+                stage: "connecting" | "disable" | "enable" | "finished" | "selection";
+                title: string;
+                paragraphs: string[];
+                options: {
+                    value: string;
+                    label: string;
+                    description?: string | undefined;
+                }[];
+                description?: string | undefined;
+                selectedValue?: string | undefined;
+                disabled?: boolean | undefined;
+            } | undefined;
             help?: {
                 selectedTab: "Commands" | "Custom commands" | "General";
                 tabs: ("Commands" | "Custom commands" | "General")[];
@@ -9857,8 +9893,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        insert: "insert";
         append: "append";
+        insert: "insert";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;

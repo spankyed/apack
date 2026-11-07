@@ -38,7 +38,13 @@ export const claudeSettingsEditor = z.discriminatedUnion('kind', [
 export type ClaudeSettingsEditor = z.infer<typeof claudeSettingsEditor>
 export const claudeHelpTab = z.enum(['General', 'Commands', 'Custom commands'])
 export const claudeHelpSnapshot = z.object({selectedTab:claudeHelpTab,tabs:z.array(claudeHelpTab).length(3),paragraphs:z.array(z.string().max(65536)).max(4096),commands:z.array(z.object({name:z.string().max(4096),label:z.string().max(4096),description:z.string().max(65536)}).strict()).max(2048),links:z.array(z.string().url().max(4096)).max(32)}).strict()
+export const claudeIdeSnapshot = z.object({
+  stage:z.enum(['selection','enable','disable','connecting','finished']),title:z.string().max(65536),description:z.string().max(65536).optional(),
+  paragraphs:z.array(z.string().max(65536)).max(256),options:z.array(z.object({value:z.string().max(1024),label:z.string().max(65536),description:z.string().max(65536).optional()}).strict()).max(256),
+  selectedValue:z.string().max(1024).optional(),disabled:z.boolean().optional(),
+}).strict()
 export const claudeSettingsSnapshot = z.object({
+  ide: claudeIdeSnapshot.optional(),
   help: claudeHelpSnapshot.optional(),
   frame: claudeSettingsFrame.optional(),
   editor: claudeSettingsEditor.optional(),
@@ -70,6 +76,7 @@ export const claudeSettingsEditorCommand = z.discriminatedUnion('action', [
   z.object({action:z.literal('cancel')}).strict(),
 ])
 export const claudeSettingsOperation = z.discriminatedUnion('kind', [
+  z.object({kind:z.literal('ideSelect'),revision:z.string().regex(/^[a-f0-9]{64}$/),value:z.string().max(1024)}).strict(),
   z.object({kind:z.literal('helpTab'),revision:z.string().regex(/^[a-f0-9]{64}$/),tab:claudeHelpTab}).strict(),
   z.object({kind:z.literal('read')}).strict(),
   z.object({kind:z.literal('stats'),revision:z.string().regex(/^[a-f0-9]{64}$/),action:z.enum(['Overview','Models','cycleDates','copy'])}).strict(),

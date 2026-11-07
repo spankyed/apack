@@ -1,5 +1,6 @@
 <template>
   <NativeBackgroundReview v-if="state?.status === 'panel' && state.panel?.commandName === 'background'" :key="state.panel.id" :panel-id="state.panel.id" :state="state.backgroundReview" @answer="emit('background', $event)" />
+  <NativeIdePanel v-else-if="state?.status === 'panel' && state.panel?.commandName === 'ide'" :key="state.panel.id" :state="state.settings" @operate="emit('settings', $event)" @close="emit('panel')" />
   <NativeHelpPanel v-else-if="state?.status === 'panel' && state.panel?.commandName === 'help'" :key="state.panel.id" :state="state.settings" @operate="emit('settings', $event)" @close="emit('panel')" />
   <NativeSettingsPanel v-else-if="state?.status === 'panel' && state.panel && ['config','model','status','usage','theme'].includes(state.panel.commandName)" :key="state.panel.id" :subject="state.panel.commandName === 'model' ? 'model' : state.panel.commandName === 'theme' ? 'theme' : 'settings'" :state="state.settings" @operate="emit('settings', $event)" @close="emit('panel')" />
   <NativeCommandPanel v-else-if="state?.status === 'panel' && state.panel" :name="state.panel.commandName" :owner-id="ownerId" :output="output" @input="emit('panel', $event)" @close="emit('panel')" @resize="emit('resize', $event)" />
@@ -25,6 +26,7 @@ import type { ClaudeUiTranscriptFrame, ClaudeUiFieldEvent } from '#features/code
 import NativeCommandPanel from './NativeCommandPanel.vue'
 import NativeSettingsPanel from './NativeSettingsPanel.vue'
 import NativeHelpPanel from './NativeHelpPanel.vue'
+import NativeIdePanel from './NativeIdePanel.vue'
 const props = defineProps<{ state?: ClaudeUiMountState['agentInput']; frame?: ClaudeUiTranscriptFrame; ownerId: string; output: readonly { sequence: number; text: string }[]; dismissed: boolean; expanded: boolean }>()
 const emit = defineEmits<{ background: [request: { panelId: string; revision: string; decision: 'confirm' | 'cancel' }]; settings: [action: import('#features/code/common/native-settings.ts').ClaudeSettingsOperation]; press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent]; panel: [text?: string]; resize: [size: { columns: number; rows: number }]; decide: [decision: 'confirm' | 'cancel']; dismiss: []; expand: [value: boolean] }>()
 const cancel = ref<HTMLButtonElement>()

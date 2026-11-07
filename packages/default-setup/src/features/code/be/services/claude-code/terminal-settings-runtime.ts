@@ -1,3 +1,4 @@
+import { claudeTerminalIdeRuntime } from './terminal-ide-runtime.ts'
 import { claudeTerminalThemePanelRuntime } from './terminal-theme-panel-runtime.ts'
 import { claudeTerminalHelpRuntime } from './terminal-help-runtime.ts'
 import { claudeTerminalModelPanelRuntime } from './terminal-model-panel-runtime.ts'
@@ -11,9 +12,10 @@ ${claudeTerminalSettingsFrameRuntime}
 ${claudeTerminalSettingsEditorRuntime}
 ${claudeTerminalModelPanelRuntime}
 ${claudeTerminalThemePanelRuntime}
+${claudeTerminalIdeRuntime}
 function nativeSettingsPanel(request){
  const entry=agentCommandDialogs.get(request.panel_id);
- if(!entry||entry.kind!=='panel'||!['config','model','status','usage','help','theme'].includes(entry.commandName)||entry.clientId!==request.client_id||entry.closed||entry.answered)throw Error('Native Settings panel expired');
+ if(!entry||entry.kind!=='panel'||!['config','model','status','usage','help','theme','ide'].includes(entry.commandName)||entry.clientId!==request.client_id||entry.closed||entry.answered)throw Error('Native Settings panel expired');
  entry.current();
  if(!entry.store.getState().open.some(item=>item.id===entry.dialogId&&item.kind==='local_jsx'&&item.payload?.nodeId===entry.nodeId))throw Error('Native Settings panel replaced');
  return entry;
@@ -65,6 +67,7 @@ async function nativeSettings(n,request,abort){
  await n.gate._Jo('desktop');
  const entry=nativeSettingsPanel(request);
  if(entry.commandName==='help')return nativeHelpPanel(n,entry,request,abort);
+ if(entry.commandName==='ide')return nativeIdePanel(n,entry,request,abort);
  if(entry.commandName==='model')return nativeModelPanel(n,entry,request,abort);
  if(entry.commandName==='theme')return nativeThemePanel(n,entry,request,abort);
  const isEditorCancel=request.operation==='editor'&&request.command?.action==='cancel';
