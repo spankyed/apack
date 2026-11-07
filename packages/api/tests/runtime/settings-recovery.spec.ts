@@ -99,6 +99,9 @@ it('boots host recovery before loading external modules, repairs, and starts nor
   unbindHost();
   await backend.setupBackend();
   expect(loadAppPacks).toHaveBeenCalledTimes(1);
+  expect(loadAppPacks).toHaveBeenCalledWith(backend.appPacks, expect.arrayContaining([
+    expect.objectContaining({ id: 'memo', build: expect.objectContaining({ revision: expect.any(String) }) }),
+  ]));
   expect(startPacks).toHaveBeenCalledTimes(1);
   expect(_settingsAdmin().getRecovery()).toBeUndefined();
 });
