@@ -1,6 +1,6 @@
 # Change tracking: the follow-ups
 
-Status: steps 1 to 3, 4a and 4b built, 2026-11-06 (elmdb #86, #87, #88; apack #362, #363 and the PR above it); 4c planned. Builds on `database-owns-change.md` and `incremental-projections.md`, whose PRs are open
+Status: built, 2026-11-06: elmdb #86, #87 and #88; apack #362, #363, #364 and the PR above it. Builds on `database-owns-change.md` and `incremental-projections.md`, whose PRs are open
 (apack #349 to #361, elmdb #80 to #85). Each step below is a PR of its own, stacked on those, elmdb first where a step
 touches both.
 
@@ -132,6 +132,12 @@ projections run again from nothing either way.
 - The notes projection drops its `rebuild`.
 - **The cost, stated:** a projection's rows are part-built during a pass. That's a few hundred milliseconds on an
   11,000-note first run or `version` bump, rather than a write lock held for 311 ms.
+
+**What building it found**, each fixed in the same PRs:
+
+- **Unstamped rows.** elmdb stamps only the types that keep a change order, so a type that starts keeping one holds rows at 0, which a read from the start skipped. A reader at the start now reads them too (#88).
+- **Re-stamped rows.** A projection that writes the type it derives from re-stamps what it applied, and a write of an unchanged value stamps too. So a page read after the projection's own units met those rows again, and a pass never ended. elmdb now answers each id's sequence (#88), and the runner skips what its own catch-up units changed last. The backlog chunking from #359 had the same flaw.
+- **Read before the lock.** A catch-up chunk read what changed before its unit had opened the write transaction, so another process could commit in between, and the cursor moved past that commit unread. Present since #359. The chunk now opens its transaction first.
 
 **Checks:**
 

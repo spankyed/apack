@@ -18,8 +18,5 @@ export const noteProjections = defineProjections({
         resolveReferencesTo(id);
       }
     },
-    rebuild() {
-      for (const id of query.withTrashed(EARS.Entity.Note).ids()) sync(id as EARS.EntityId);
-    },
   },
 });
