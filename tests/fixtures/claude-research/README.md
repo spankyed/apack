@@ -318,4 +318,4 @@ The everyday-layout journey also checks visible formatting controls, native stat
 and no selected-text overlap. Compact shortcut-hint overlap remains a separate visual gap.
 
 The native IDE fixture/journey verifies original discovery, authentication and selection
-permission context. The native inline IDE chooser/reconnect, selected/opened-file context and dismissal, and enable/disable preference choices have scoped actual-app acceptance at runtime 5a6b349651 / ide-inline-app5/6/8. Other IDE variants and combined F1–F5 remain open.
+permission context. The native inline IDE chooser/reconnect, selected/opened-file context and dismissal, and enable/disable preference choices have scoped actual-app acceptance at runtime 5a6b349651 / ide-inline-app5/6/8. Cancellation guidance has separate scoped app14 acceptance at runtime85f4b89740; the original Escape/Enter comparison uses normal desktop detachment. Other IDE variants and combined F1–F5 remain open.

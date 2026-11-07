@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "b34f8705bc6d4be91c05c2b4fc152ec34d51c9ba",
+  "researchCommit": "5568afae859e5835ff66a7a1df7928f8a4685d31",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -109,7 +109,7 @@
     "src/integration/apack-mcp.mjs": "a01e12e6a45341aaa4dc8703a7ed7b724d7ba8eef92cb86cc7c973ef42cd9de3",
     "src/integration/apack-multi-turn.mjs": "e6b638a23df3e7b2f9590d47934c44bfe767212dce30d2322636158689d7ac66",
     "src/integration/apack-native-discovery-drive.mjs": "a479ab94973c9288f6e46f461877f29f9add81eeac50d2b56cc4f9fde4a6b603",
-    "src/integration/apack-native-ide-drive.mjs": "971c93cf14d15f12c4843550df8c1cd1ffee816fef82880289226b815d22b1a8",
+    "src/integration/apack-native-ide-drive.mjs": "0c9acb49f5634dd696797737aef5c53a23658e413ce63a78ac62f45afff31ac0",
     "src/integration/apack-native-parent-reset-drive.mjs": "64637c732e4565d7dc753975ee95e8cfb8d146221dc9937090b183b6dd807b20",
     "src/integration/apack-notebook-width-drive.mjs": "2642b1bf07ff2921d01adff32fc21c3fc20a09b1c351872d524616e395b91cc0",
     "src/integration/apack-owner-cron.mjs": "5052ce662e9f893312a005a4815bad0b05e73a194636f1e42caa5354405510bb",
@@ -472,5 +472,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "a3be4e9e9746655c6b24bf452825e60427e607f34a0e9fc192ce8ac708f5f7a8"
+  "archiveSha256": "6e8396a5d6657d0937a5f21ef7a4dbbea7dde149fb36d7b545da7f38b66958e9"
 }
