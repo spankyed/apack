@@ -156,8 +156,12 @@ goal requires them; cite actual results, not an assumption that all CI runs or n
 
 **CI may fail a check, never a clock.** Every kill deadline is a declared class rather than a multiple of a
 measurement (`scripts/lib/step-timeouts.ts`), and what a step costs is a reading of the machine it ran on.
-A deadline is a ceiling for a tree that spins; what ends a stuck one is `boundedSpawn`'s watchdog, which kills a
-process tree that has gone `IDLE_MS` without CPU or output, so a step slowed by a busy machine is never killed for it.
+A deadline is a ceiling for a tree that spins, so it counts the tree's CPU time, which load and a slow disk cannot
+inflate; the clock bounds only a tree that cannot be read (Windows, `APACK_WATCHDOG=off`, work inside a VM).
+Inside the Linux test container CPU time grows with the Mac's load (its VM accounts no steal time), so a ceiling
+there would be a clock: `test:linux` sets `APACK_CEILING=off` and the container runs with the watchdog alone. What
+ends a stuck one is `boundedSpawn`'s watchdog, which kills a process tree that has gone `IDLE_MS` without CPU or
+output, so a step slowed by a busy machine is never killed for it.
 A spec's `runCommand` is bounded the same way (`@apackdev/host/build/process-progress`).
 `APACK_WATCHDOG=off` turns it off for a run and everything the run starts.
 **Do not gate any of this on `process.env.CI`**: a CI-gated refusal never fires. The condition is the

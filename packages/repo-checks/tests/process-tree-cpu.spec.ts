@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { cpuAdded, createStallTracker, parseCpuTime, treeCpuMs } from '../../../scripts/lib/bounded-spawn.ts';
-import { watchdogEnabled } from '../../../scripts/lib/step-timeouts.ts';
+import { cpuAdded, createStallTracker, parseCpuTime, spentLine, treeCpuMs } from '../../../scripts/lib/bounded-spawn.ts';
+import { ceilingEnabled, watchdogEnabled } from '../../../scripts/lib/step-timeouts.ts';
 
 describe('reading a process tree for the watchdog', () => {
   it.each([
@@ -49,6 +49,16 @@ describe('APACK_WATCHDOG', () => {
   });
 });
 
+describe('APACK_CEILING', () => {
+  it.each([[undefined, true], ['on', true], ['off', false]])('reads %s', (value, enabled) => {
+    expect(ceilingEnabled(value === undefined ? {} : { APACK_CEILING: value })).toBe(enabled);
+  });
+
+  it('refuses a value that is neither', () => {
+    expect(() => ceilingEnabled({ APACK_CEILING: '0' })).toThrow(/set it to off/);
+  });
+});
+
 describe('the stall decision', () => {
   const IDLE = 120_000;
   const tree = (ms: number) => new Map([[100, ms]]);
@@ -90,5 +100,38 @@ describe('the stall decision', () => {
     for (let i = 1; i <= 10; i++) {
       expect(stall.reading(new Map([[100, 0], [101 + i, 2_000]]), i * IDLE / 2)).toBe(false);
     }
+  });
+});
+
+describe('what a tree has spent, which the ceiling measures', () => {
+  it('counts the first reading whole, then what each process added, through processes that come and go', () => {
+    const tracker = createStallTracker(120_000, 0);
+    tracker.reading(new Map([[100, 3_000]]), 5_000);
+    expect(tracker.spentMs).toBe(3_000);
+    // 101 ran 4s and exited unseen by this reading; 102 is new. The live total falls and the spend does not
+    tracker.reading(new Map([[100, 3_500], [101, 4_000]]), 10_000);
+    tracker.reading(new Map([[100, 3_500], [102, 1_000]]), 15_000);
+    expect(tracker.spentMs).toBe(8_500);
+  });
+
+  it('is unmoved by time passing, which is the point: a slow tree spends no more than a fast one', () => {
+    const tracker = createStallTracker(120_000, 0);
+    for (let at = 0; at <= 3_600_000; at += 5_000) tracker.reading(new Map([[100, 2_000]]), at);
+    expect(tracker.spentMs).toBe(2_000);
+  });
+
+  it('keeps when the tree last wrote output, apart from when it last made progress', () => {
+    const tracker = createStallTracker(120_000, 0);
+    expect(tracker.lastOutputAt).toBeUndefined();
+    tracker.output(7_000);
+    tracker.reading(new Map([[100, 0]]), 8_000);
+    tracker.reading(new Map([[100, 5_000]]), 9_000);
+    expect(tracker.lastOutputAt).toBe(7_000);
+  });
+
+  it('says what a run killed at its ceiling spent, so a spin reads as one', () => {
+    expect(spentLine({ budgetMs: 600_000, wallMs: 612_400, cpuMs: 600_200, sinceOutputMs: 540_000 }))
+      .toBe('spent its 600s CPU budget: 600s of CPU in 612s of wall time, last output 540s ago. Its process group was killed');
+    expect(spentLine({ budgetMs: 10_000, wallMs: 11_000, cpuMs: 10_000, sinceOutputMs: undefined })).toContain('no output at all');
   });
 });

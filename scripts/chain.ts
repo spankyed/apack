@@ -145,7 +145,7 @@ function pruneStamps(): void {
 const wrote = (step: ChainStep): string[] =>
   (step.outputs ?? []).map((target) => path.join(REPO_ROOT, target));
 
-type Result = { step: string; ms: number; code: number; output: string; timedOut?: true; stalled?: true };
+type Result = { step: string; ms: number; code: number; output: string; cpuMs?: number; timedOut?: true; stalled?: true };
 
 /**
  * What moved under a step's inputs since its last successful run, against that run's own stamp.
@@ -219,9 +219,9 @@ async function run(step: string, timeout: TimeoutClass, force: readonly string[]
   const withForce = inLinuxContainer(step) ? ['run', 'test:linux', '--', 'npm', ...direct] : direct;
   // Explicit feedback limits may shorten the declared work class's ceiling. A step in the container does its
   // work in the VM, where its process tree here cannot see it, so only the ceiling bounds it.
-  const { code, output, ms, timedOut, stalled } = await boundedSpawn('npm', withForce, timeoutMsFor(timeout),
+  const { code, output, ms, cpuMs, timedOut, stalled } = await boundedSpawn('npm', withForce, timeoutMsFor(timeout),
     { env, ...(withForce === direct ? {} : { idleMs: false as const }) });
-  const result = { step, ms, code, output, timedOut, stalled };
+  const result = { step, ms, code, output, cpuMs, timedOut, stalled };
   // Here rather than where a step's result is read, because this is the one place a step's bytes exist and
   // every caller passes through it. Written as the step ends, so a run that is interrupted keeps what finished.
   evidence?.keep(step, result);

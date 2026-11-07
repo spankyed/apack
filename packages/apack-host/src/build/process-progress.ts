@@ -1,6 +1,7 @@
 // Whether a process tree is still working: the CPU it adds and the output it writes, for whatever bounds a process by
 // its progress rather than a clock (`scripts/lib/bounded-spawn.ts`, `apack-cli/tests/_support/run-command.ts`). A starved
-// process is slow and still working, and a budget that measures the clock kills it for the machine being busy.
+// process is slow and still working, and a budget that measures the clock kills it for the machine being busy, which is
+// why the ceiling counts CPU time where a tree can be read.
 import { execFile } from 'node:child_process';
 
 /**
@@ -55,15 +56,29 @@ export function cpuAdded(before: ReadonlyMap<number, number>, after: ReadonlyMap
 /**
  * Whether a tree has stalled, from its readings and its output, with the times given rather than read: the
  * watchdog's whole decision, so it is tested over made-up readings and no clock.
+ *
+ * It also keeps what the tree has spent, which is what a ceiling measures: a busy machine or a slow disk
+ * stretches a run's wall time and leaves its CPU time where it was, so a CPU ceiling is reached by a loop that
+ * spins and never by a run that is slow. `spentMs` is a lower bound — a process that starts and exits between
+ * two readings is never seen — which errs toward leaving a run alone.
  */
 export function createStallTracker(idleMs: number, startedAt: number) {
   let last: ReadonlyMap<number, number> | undefined;
   let work = 0;
+  let spent = 0;
   let progressAt = startedAt;
+  let outputAt: number | undefined;
   return {
-    output(at: number): void { progressAt = at; },
+    output(at: number): void { progressAt = at; outputAt = at; },
+    /** The CPU the tree has spent since it started, as far as the readings saw */
+    get spentMs(): number { return spent; },
+    /** When the tree last wrote output, or nothing if it never has */
+    get lastOutputAt(): number | undefined { return outputAt; },
     /** Records a reading and answers whether the tree has now gone `idleMs` without progress */
     reading(now: ReadonlyMap<number, number>, at: number): boolean {
+      // The first reading counts whole toward what was spent, its processes having started with the tree;
+      // toward progress it is only the baseline, so a tree has to keep working to count as working
+      spent += cpuAdded(last ?? new Map(), now);
       if (last !== undefined) work += cpuAdded(last, now);
       last = now;
       if (work >= PROGRESS_CPU_MS) {

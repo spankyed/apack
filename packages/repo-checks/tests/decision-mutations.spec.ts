@@ -232,7 +232,7 @@ const MUTATIONS: readonly Mutation[] = [
     // meaningful thing to give a step. `suite` dropping under `quick` breaks it.
     why: 'the ladder climbs, so a class is slower than the one below it',
     in: 'step-timeouts',
-    from: '  suite: { ms: 600_000 },',
+    from: '  suite: { ms: 1_200_000 },',
     to: '  suite: { ms: 30_000 },',
     call: (lib) => {
       const ms = lib.TIMEOUT_CLASSES.map((className) => lib.TIMEOUT_MS[className].ms);
