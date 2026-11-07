@@ -693,9 +693,9 @@ declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObjec
                 value: z.ZodString;
                 label: z.ZodString;
                 mode: z.ZodEnum<{
-                    plan: "plan";
                     default: "default";
                     auto: "auto";
+                    plan: "plan";
                     acceptEdits: "acceptEdits";
                     bypassPermissions: "bypassPermissions";
                 }>;
@@ -1713,9 +1713,9 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
             value: z.ZodString;
             label: z.ZodString;
             mode: z.ZodEnum<{
-                plan: "plan";
                 default: "default";
                 auto: "auto";
+                plan: "plan";
                 acceptEdits: "acceptEdits";
                 bypassPermissions: "bypassPermissions";
             }>;
@@ -2807,6 +2807,8 @@ interface ClaudeUiHover {
     layout?: Pick<ClaudeUiBoxLayout, 'bottom' | 'display' | 'left' | 'right' | 'top'>;
 }
 
+type ClaudeUiIdeContext = z.infer<typeof ideContext>;
+
 type ClaudeUiInput = z.infer<typeof input>;
 
 type ClaudeUiMountRequest = {
@@ -2831,6 +2833,7 @@ type ClaudeUiMountState = ({
     status: 'error';
     message: string;
 }) & {
+    ide?: ClaudeUiIdeContext;
     billing?: ClaudeBillingObservation;
     actionKeys?: ClaudeUiActionKeyState;
     promptPalette?: Record<string, string>;
@@ -7049,9 +7052,9 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  * classifier instead of prompting.
  */
 declare const PermissionModeSchema: z.ZodEnum<{
-    plan: "plan";
     default: "default";
     auto: "auto";
+    plan: "plan";
     acceptEdits: "acceptEdits";
     bypassPermissions: "bypassPermissions";
     dontAsk: "dontAsk";
@@ -9668,6 +9671,12 @@ declare function createClaudeUiControls(initialized: () => Promise<Pick<ClaudeIn
     /** Hooks may redirect the ring; the mounted owner validates the returned identity before applying it. */
     focus(options: ClaudeUiFocus): Promise<ClaudeUiFocusResult>;
     /** Native resolves configured keys; no terminal callback handle is accepted from the renderer. */
+    dismissIde(options: {
+        client_id: string;
+        revision: string;
+    }): Promise<{
+        handled: boolean;
+    }>;
     key(options: ClaudeUiActionKeyRequest & {
         client_id: string;
     }): Promise<{
@@ -9893,8 +9902,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        append: "append";
         insert: "insert";
+        append: "append";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;
@@ -10013,6 +10022,11 @@ declare const focusResult: z.ZodObject<{
 }, z.core.$loose>;
 
 declare function getHandle(key: string): CodexTurnHandle | undefined;
+
+declare const ideContext: z.ZodObject<{
+    text: z.ZodString;
+    revision: z.ZodString;
+}, z.core.$strict>;
 
 /** Import canonical native rows without acquiring or persisting live drawing capabilities. */
 declare function importClaudeSessionMessages({ threadId, transcript, sessionId }: {
@@ -10416,6 +10430,10 @@ declare const render: z.ZodObject<{
 }, z.core.$strict>;
 
 declare const renderResult: z.ZodObject<{
+    _apack_ide: z.ZodCatch<z.ZodOptional<z.ZodObject<{
+        text: z.ZodString;
+        revision: z.ZodString;
+    }, z.core.$strict>>>;
     _apack_action_keys: z.ZodCatch<z.ZodOptional<z.ZodObject<{
         revision: z.ZodString;
         bindings: z.ZodArray<z.ZodArray<z.ZodObject<{

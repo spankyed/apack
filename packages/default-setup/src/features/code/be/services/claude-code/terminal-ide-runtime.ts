@@ -42,4 +42,38 @@ async function nativeIdePanel(n,entry,request,abort){
 async function closeNativeIdePanel(n,entry){
  const frame=nativeIdeFrame(n,entry);entry.current();if(frame.cancel)await frame.cancel();else await entry.cancel();return {open:!entry.closed};
 }
+
+const nativeIdeContextLeases=new Map();
+function nativeIdeContextSource(n,clientId){
+ if(!clients.has(clientId)||!clientViewCurrent(n,clientId))return;
+ const binding=originalContext??n.runtime.ey();
+ if(!binding||nativeViewFacts(n,binding,new AbortController()).view.kind!=='main')return;
+ const roots=[];
+ nativeIdeWalk(n.themeRoots.ai().get(process.stdout)?.container?.current,f=>{if(typeof f.type==='function'&&['27d5a95406b3213bae0037343d4ac93c17db5140c9466cf138beacd105723b25','bbe8ae7138c0835f0f581081d990d2bb6b45ba17036c2ed5f078ac1e2ac6e521'].includes(nativeModelFunctionHash(f.type)))roots.push(f);});
+ if(roots.length!==1||roots[0].memoizedProps?.ideSelection?.source==='diff')return;
+ const dismiss=roots[0].memoizedProps?.chrome?.dismissIdeSelection;if(typeof dismiss!=='function')return;
+ const pills=new Set();nativeIdeWalk(roots[0].child,f=>{const pill=f.memoizedProps?.leadingPill;if(pill&&pill.onDelete===dismiss&&typeof pill.text==='string'&&pill.text.length>0&&pill.text.length<=256)pills.add(pill);});
+ if(pills.size!==1)return;return [...pills][0];
+}
+function nativeIdeContext(n,clientId){
+ const pill=nativeIdeContextSource(n,clientId);if(!pill){nativeIdeContextLeases.delete(clientId);return;}
+ let lease=nativeIdeContextLeases.get(clientId);
+ if(!lease||lease.pill!==pill||lease.text!==pill.text||lease.callback!==pill.onDelete){lease={pill,text:pill.text,callback:pill.onDelete,revision:createHash('sha256').update(randomUUID()).digest('hex')};nativeIdeContextLeases.set(clientId,lease);}
+ return lease.consumed?undefined:{text:lease.text,revision:lease.revision};
+}
+function refreshNativeIdeContext(n){
+ for(const clientId of clients.keys()){
+  const previous=nativeIdeContextLeases.get(clientId);const before=previous&&!previous.consumed?previous.revision:undefined;let after;
+  try{after=nativeIdeContext(n,clientId)?.revision;}catch{nativeIdeContextLeases.delete(clientId);}
+  if(before!==after)publish({type:'system',subtype:'ui_invalidate',event:'ui.render',client_id:clientId,component:'AbovePrompt'});
+ }
+}
+async function dismissNativeIdeContext(n,request){
+ await n.gate._Jo('desktop');
+ const current=nativeIdeContext(n,request.client_id),lease=nativeIdeContextLeases.get(request.client_id);
+ if(!current||!lease||lease.consumed||current.revision!==request.revision)return {handled:false};
+ lease.consumed=true;await lease.callback();
+ publish({type:'system',subtype:'ui_invalidate',event:'ui.render',client_id:request.client_id,component:'AbovePrompt'});
+ return {handled:true};
+}
 `

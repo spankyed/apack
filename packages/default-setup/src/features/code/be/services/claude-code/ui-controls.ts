@@ -98,7 +98,9 @@ const paneRoster = z.object({ panes: z.array(pane), shown_id: paneId.nullable(),
 const paneSelection = z.object({ client_id: clientId, surface, id: paneId }).strict()
 export type ClaudeUiPaneRoster = z.infer<typeof paneRoster>
 
-const renderResult = z.object({ _apack_action_keys: actionKeys.optional().catch(undefined), native_hint:z.boolean().optional(), group_engine:z.boolean().optional(), tree: z.unknown(), props: z.record(z.string(), z.unknown()), rewritten: z.boolean(), hooked: z.boolean(), output_rewritten: z.boolean().optional(), output_in_native_process:z.boolean().optional(), engine_output: z.string().max(65536).optional(), drawn_by: z.array(z.string()).optional(), client_modules: z.record(z.string(), z.string()).optional() }).passthrough().refine(value => value.tree !== undefined, 'native UI response must contain a tree')
+const ideContext = z.object({text:z.string().min(1).max(256),revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict()
+export type ClaudeUiIdeContext = z.infer<typeof ideContext>
+const renderResult = z.object({ _apack_ide:ideContext.optional().catch(undefined), _apack_action_keys: actionKeys.optional().catch(undefined), native_hint:z.boolean().optional(), group_engine:z.boolean().optional(), tree: z.unknown(), props: z.record(z.string(), z.unknown()), rewritten: z.boolean(), hooked: z.boolean(), output_rewritten: z.boolean().optional(), output_in_native_process:z.boolean().optional(), engine_output: z.string().max(65536).optional(), drawn_by: z.array(z.string()).optional(), client_modules: z.record(z.string(), z.string()).optional() }).passthrough().refine(value => value.tree !== undefined, 'native UI response must contain a tree')
 
 export type ClaudeUiAttach = z.infer<typeof attach>
 export type ClaudeUiRender = z.infer<typeof render>
@@ -283,6 +285,11 @@ export function createClaudeUiControls(initialized: () => Promise<Pick<ClaudeIni
       return focusResult.parse(await request({ subtype: 'ui_focus', ...valid }))
     },
     /** Native resolves configured keys; no terminal callback handle is accepted from the renderer. */
+    async dismissIde(options: {client_id:string;revision:string}) {
+      const valid=z.object({client_id:clientId,revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict().parse(options)
+      if (!(await initialized()).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native IDE context is unavailable')
+      return z.object({handled:z.boolean()}).strict().parse(await request({subtype:'apack_ui_ide_dismiss',...valid}))
+    },
     async key(options: ClaudeUiActionKeyRequest & { client_id: string }) {
       const valid = actionKeyRequest.extend({ client_id: clientId }).parse(options)
       if (!(await initialized()).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native action keys are unavailable')

@@ -770,6 +770,7 @@ async function control(request,abort){
  const toolGroupResult=runToolGroupAction(n,request,abort);if(toolGroupResult!==undefined)return toolGroupResult;
  const toolBackgroundResult=runToolBackgroundAction(n,request,abort);if(toolBackgroundResult!==undefined)return toolBackgroundResult;
  if(['ui_press','ui_input','ui_select'].includes(request.subtype)){currentCommandOutputAction(n,request);currentToolResultAction(n,request);currentToolUseAction(n,request);currentToolProgressAction(n,request);currentToolGroupAction(n,request);currentComposerAction(n,request);currentTerminalPlacementAction(n,request);}
+ if(request.subtype==='apack_ui_ide_dismiss')return dismissNativeIdeContext(n,request);
  if(request.subtype==='apack_ui_action_key'){
   if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))return {handled:false,action_keys:actionKeys.snapshot(n,request.client_id)};
   await n.gate._Jo('desktop');
@@ -1106,6 +1107,7 @@ async function control(request,abort){
   return {surfaces:n.runtime.lY()};
  }
  if(value.subtype==='ui_detach'){
+  nativeIdeContextLeases.delete(clientId);
   actionKeys.detach(n,clientId);
   await retireNativeAgentCommands(clientId);
   instanceLifetimes.detach(clientId);
@@ -1277,7 +1279,7 @@ async function control(request,abort){
   recordDrawing(n,value,drawingTree);
   actionKeys.capture(n,{...value,instance_revision:instanceRevision},documentTree);
   const wire=toolFacts?nativeToolResultWireProps(result.props):{props:result.props};
-  return {_apack_action_keys:actionKeys.snapshot(n,clientId),...(composerFacts?.component==='PromptHint'?{native_hint:result.props.hint===composerFacts.props.hint}:{}),...(groupFacts?{group_engine:nativeDrawingUsesEngine(result.tree)}:{}),...(questionFrame?{question:questionFrame}:{}),...(engineOutput!==undefined?{engine_output:engineOutput}:{}),...(toolFacts?{output_rewritten:JSON.stringify(result.props.output)!==JSON.stringify(toolFacts.props.output)}:{}),tree:nativeThemeTree(n,documentTree),...wire,props:questionFrame?{...wire.props,questions:questionFrame.shownInput.questions}:wire.props,rewritten:result.rewritten,hooked:n.gate.n5r(value.component,'desktop'),...(Object.keys(result.clientModules).length?{client_modules:result.clientModules}:{}),drawn_by:result.drawnBy};
+  return {...(value.component==='AbovePrompt'?{_apack_ide:nativeIdeContext(n,clientId)}:{}),_apack_action_keys:actionKeys.snapshot(n,clientId),...(composerFacts?.component==='PromptHint'?{native_hint:result.props.hint===composerFacts.props.hint}:{}),...(groupFacts?{group_engine:nativeDrawingUsesEngine(result.tree)}:{}),...(questionFrame?{question:questionFrame}:{}),...(engineOutput!==undefined?{engine_output:engineOutput}:{}),...(toolFacts?{output_rewritten:JSON.stringify(result.props.output)!==JSON.stringify(toolFacts.props.output)}:{}),tree:nativeThemeTree(n,documentTree),...wire,props:questionFrame?{...wire.props,questions:questionFrame.shownInput.questions}:wire.props,rewritten:result.rewritten,hooked:n.gate.n5r(value.component,'desktop'),...(Object.keys(result.clientModules).length?{client_modules:result.clientModules}:{}),drawn_by:result.drawnBy};
  }
  if(!clients.size)throw Error('Native UI has no attached app view');
  for(const site of sites.values())refreshSite(n,site);
@@ -1306,7 +1308,7 @@ const server=http.createServer(async(request,response)=>{
   if(seen.has(body.sequence)||body.sequence<=highestSequence-4096||inFlight>=64)return reply(409,{...identity,error:'Native UI request is repeated, stale or exceeds its concurrent limit'});
   highestSequence=Math.max(highestSequence,body.sequence);seen.add(body.sequence);for(const sequence of seen)if(sequence<=highestSequence-4096)seen.delete(sequence);inFlight++;
   try{
-   while(activeSession!==body.sessionId){if(JSON.parse(readFileSync(configUrl,'utf8')).sessionId!==body.sessionId)throw Error('Native session changed during client retirement');await (sessionTransition??=(async()=>{await retireNativeAgentCommands();if(native){nativeRasterMirrors.detach();native.nativeClients.detach();for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}instanceLifetimes.clear();actionKeys.clear(native);clients.clear();clientViews.clear();commandOutputFrames.clear();toolResultFrames.clear();toolUseFrames.clear();toolProgressFrames.clear();toolGroupFrames.clear();toolGroupSnapshot=undefined;toolGroupRevisions.clear();composerFrames.clear();composerSeen.clear();composerClocks.clear();terminalPlacementFrames.clear();terminalPlacementSeen.clear();questionFrames.clear();questionFrameHistory.clear();frozenQuestionFrames.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;})().finally(()=>{sessionTransition=undefined;}));}
+   while(activeSession!==body.sessionId){if(JSON.parse(readFileSync(configUrl,'utf8')).sessionId!==body.sessionId)throw Error('Native session changed during client retirement');await (sessionTransition??=(async()=>{await retireNativeAgentCommands();if(native){nativeRasterMirrors.detach();native.nativeClients.detach();for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}instanceLifetimes.clear();actionKeys.clear(native);clients.clear();nativeIdeContextLeases.clear();clientViews.clear();commandOutputFrames.clear();toolResultFrames.clear();toolUseFrames.clear();toolProgressFrames.clear();toolGroupFrames.clear();toolGroupSnapshot=undefined;toolGroupRevisions.clear();composerFrames.clear();composerSeen.clear();composerClocks.clear();terminalPlacementFrames.clear();terminalPlacementSeen.clear();questionFrames.clear();questionFrameHistory.clear();frozenQuestionFrames.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;})().finally(()=>{sessionTransition=undefined;}));}
    const result=await control(body.request,abort);
    if(JSON.parse(readFileSync(configUrl,'utf8')).sessionId!==body.sessionId)throw Error('Native session changed during UI request');
    reply(200,{...identity,result});
@@ -1361,7 +1363,7 @@ const ownerTimer=setInterval(async()=>{
   const transcriptKey=JSON.stringify([gate.sessionId,gate.transcriptPath]);
   if(transcriptKey!==reportedTranscript&&await ownerPost('/transcript',{sessionId:gate.sessionId,path:gate.transcriptPath}))reportedTranscript=transcriptKey;
   if(gate.privateHooksSuppressed||gate.policy.allowManagedHooksOnly||gate.policy.disableAllHooks||gate.hooksDisabled)ownerIndependent=true;
-  if(native){refreshNativeTheme(native);refreshNativeToolProgress(native);refreshNativeToolGroups(native);refreshNativeComposer(native);refreshTerminalPlacements(native);nativeRasterMirrors.refresh();actionKeys.poll(native);}
+  if(native){refreshNativeTheme(native);refreshNativeToolProgress(native);refreshNativeToolGroups(native);refreshNativeComposer(native);refreshNativeIdeContext(native);refreshTerminalPlacements(native);nativeRasterMirrors.refresh();actionKeys.poll(native);}
   if(!ownerIndependent)return;
   const snapshot=await control({subtype:'apack_owner_snapshot',follow_native_session:true},new AbortController());
   const body={...snapshot,agents:ownerAgents(snapshot.taskFacts),directOwner:true};

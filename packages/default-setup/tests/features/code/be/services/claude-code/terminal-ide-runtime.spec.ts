@@ -79,3 +79,43 @@ it('does not replay an unacknowledged selection while the original callback is p
   await expect(s.act('0',revision)).rejects.toThrow('unavailable')
   release();await first;expect(s.select).toHaveBeenCalledOnce()
 })
+
+function contextSetup() {
+  function Composer() {}
+  const dismiss=vi.fn(),clients=new Map([['owner',{}]])
+  const pill={text:'[⧉ 1 line selected] ',onDelete:dismiss}
+  const root:any={type:Composer,memoizedProps:{chrome:{dismissIdeSelection:dismiss},ideSelection:{source:'editor',text:'private selection must not cross this UI contract'}},child:{memoizedProps:{leadingPill:pill}}}
+  const gate=vi.fn(),publish=vi.fn(),view={kind:'main'}
+  const n={gate:{_Jo:gate},themeRoots:{ai:()=>new Map([[undefined,{container:{current:root}}]])}}
+  const api=vm.runInNewContext(claudeTerminalIdeRuntime+';({read:nativeIdeContext,dismiss:dismissNativeIdeContext,refresh:refreshNativeIdeContext})',{
+    createHash,randomUUID,process:{stdout:undefined},AbortController,clients,clientViewCurrent:()=>true,originalContext:{},nativeViewFacts:()=>({view}),publish,
+    nativeModelFunctionHash:(fn:Function)=>fn===Composer?'27d5a95406b3213bae0037343d4ac93c17db5140c9466cf138beacd105723b25':undefined,
+  })
+  return {api,n,root,pill,dismiss,gate,publish,clients,view}
+}
+it('projects only the source-admitted label and dismisses through its native callback once',async()=>{
+  const s=contextSetup(),frame=s.api.read(s.n,'owner')
+  expect(frame.text).toBe(s.pill.text);expect(JSON.stringify(frame)).not.toContain('private selection')
+  expect(s.dismiss).not.toHaveBeenCalled()
+  expect(await s.api.dismiss(s.n,{client_id:'owner',revision:frame.revision})).toEqual({handled:true})
+  expect(await s.api.dismiss(s.n,{client_id:'owner',revision:frame.revision})).toEqual({handled:false})
+  expect(s.dismiss).toHaveBeenCalledOnce();expect(s.gate).toHaveBeenCalledWith('desktop')
+})
+it('refuses stale native labels and detached or Agent view owners',async()=>{
+  const s=contextSetup(),frame=s.api.read(s.n,'owner')
+  s.root.child.memoizedProps.leadingPill={...s.pill,text:'[⧉ 2 lines selected] '}
+  expect(await s.api.dismiss(s.n,{client_id:'owner',revision:frame.revision})).toEqual({handled:false})
+  s.view.kind='agent';expect(s.api.read(s.n,'owner')).toBeUndefined()
+  s.view.kind='main';s.clients.clear();expect(s.api.read(s.n,'owner')).toBeUndefined()
+  expect(s.dismiss).not.toHaveBeenCalled()
+})
+it('does not resurrect hidden context or reinterpret native diff selection as IDE context',()=>{
+  const s=contextSetup();s.root.memoizedProps.ideSelection.source='diff';expect(s.api.read(s.n,'owner')).toBeUndefined()
+  s.root.memoizedProps.ideSelection.source='editor';delete s.root.child.memoizedProps.leadingPill
+  expect(s.api.read(s.n,'owner')).toBeUndefined()
+})
+it('honors policy refusal before invoking the native context dismissal',async()=>{
+  const s=contextSetup(),frame=s.api.read(s.n,'owner');s.gate.mockRejectedValue(Error('managed refusal'))
+  await expect(s.api.dismiss(s.n,{client_id:'owner',revision:frame.revision})).rejects.toThrow('managed refusal')
+  expect(s.dismiss).not.toHaveBeenCalled()
+})

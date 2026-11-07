@@ -1,9 +1,10 @@
 <template>
-  <div ref="strip" v-if="nativeStatus || statusLine || nativeUi?.billing || nativeUi?.status === 'connecting' || nativeUi?.status === 'error' || hasContent" :style="{ minHeight: stripMinimumHeight }"
+  <div ref="strip" v-if="nativeUi?.ide || nativeStatus || statusLine || nativeUi?.billing || nativeUi?.status === 'connecting' || nativeUi?.status === 'error' || hasContent" :style="{ minHeight: stripMinimumHeight }"
     class="flex min-h-0 min-w-0 flex-col overflow-hidden px-5 py-3 text-xs text-neutral-400" :class="{ 'shrink-0': !toolsOpen, 'native-strip--open': toolsOpen, 'border-b border-white/[0.06]': toolsOpen || nativeUi?.status === 'error' }" data-testid="composer-session-strip" @keydown="handleStripKey" @keydown.esc="returnToComposer">
     <div class="flex shrink-0 min-w-0 items-center gap-3">
       <button v-if="statusLine" type="button" class="inline-flex min-w-0 flex-1 items-center gap-2 rounded-md py-0.5 text-[11px] text-neutral-400 transition-colors hover:bg-white/[0.04] hover:text-neutral-300 focus-visible:outline focus-visible:outline-blue-400"
         :title="cwd || statusLine" @click="emit('click')"><FolderOpen v-if="cwd" :size="12" class="shrink-0" aria-hidden="true" /><span class="min-w-0" :class="'truncate'">{{ displayPath }}</span></button>
+      <span v-for="context in ideContext ? [ideContext] : []" :key="context.revision" role="status" aria-label="Claude IDE context" class="inline-flex min-w-0 max-w-[55%] items-center gap-1 text-[11px]" :title="context.text"><span class="truncate">{{ context.text }}</span><button type="button" aria-label="Dismiss IDE context" class="shrink-0 rounded px-1 py-0.5 hover:bg-white/5 focus-visible:outline focus-visible:outline-blue-400" @click="emit('press', 'native-ide-dismiss:' + context.revision)">×</button></span>
       <button v-if="hasContent" type="button" aria-label="Session tools" :aria-expanded="toolsOpen" class="ml-auto inline-flex shrink-0 items-center gap-2 rounded-md px-2 py-1 text-[11px] font-medium text-neutral-300 hover:bg-white/[0.06] hover:text-white focus-visible:outline focus-visible:outline-blue-400" @click="toolsOpen = !toolsOpen">
         <span>Session tools</span> <ChevronDown :size="12" aria-hidden="true" class="transition-transform" :class="{ 'rotate-180': toolsOpen }" />
       </button>
@@ -35,6 +36,7 @@ provide(claudeHoverSurface, hover)
 onBeforeUnmount(() => hover.dispose())
 const props = defineProps<{ statusLine?: string; nativeStatus?: string; cwd?: string; nativeUi?: ClaudeUiMountState; nativeFocus?: ClaudeUiFocusReply; reconnect?: () => void }>()
 watch(() => props.nativeUi, () => hover.invalidate(), { flush: 'post' })
+const ideContext = computed(() => props.nativeUi?.ide ? {...props.nativeUi.ide} : undefined)
 const toolsOpen = ref(false)
 provide(claudeClientVisible, computed(() => toolsOpen.value))
 const isWorkspacePath = computed(() => !!props.statusLine && (props.statusLine === props.cwd || props.statusLine.startsWith('/') || /^[a-z]:[\\/]/i.test(props.statusLine)))
