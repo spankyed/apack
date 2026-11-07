@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto'
 import { createClaudeUiDrawing, type ClaudeUiDrawing } from './ui-tree.ts'
 import type { ClaudeUiControls } from './ui-controls.ts'
 
-import type { ClaudeUiFieldEvent, ClaudeUiFocusEvent, ClaudeUiFocusReply, ClaudeUiMountState, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply } from './ui-presentation.ts'
+import type { ClaudeUiNode, ClaudeUiFieldEvent, ClaudeUiFocusEvent, ClaudeUiFocusReply, ClaudeUiMountState, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply } from './ui-presentation.ts'
 
 export interface ClaudeUiOwner {
   readAgent?(): Promise<import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails>
@@ -140,7 +140,7 @@ export function mountClaudeUi(options: {
         const { actionId, ...inert } = node
         // Retain Client control identity without retaining its retired callback capability.
         return node.kind === 'button' && actionId && fieldDrawing?.clientActions.has(actionId)
-          ? { ...inert, renderId: actionId } : inert
+          ? { ...(inert as Extract<ClaudeUiNode, { kind: 'button' }>), renderId: actionId } : inert
       }
       if (node.kind === 'box' || node.kind === 'link' || node.kind === 'client') return { ...node, children: node.children.map(retire) }
       if (node.kind === 'text' && node.children) return { ...node, children: node.children.map(retire) }

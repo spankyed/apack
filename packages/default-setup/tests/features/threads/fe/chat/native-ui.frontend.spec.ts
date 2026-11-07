@@ -83,7 +83,7 @@ it('keeps keyboard focus and activation on the same native button when siblings 
 it('retains a Client button DOM identity while its callback retires and redraws', async () => {
   const review = { kind: 'button' as const, label: 'Review release notes', actionId: 'review', focusId: 'review-focus' }
   const later = { kind: 'button' as const, label: 'Save for later', actionId: 'later' }
-  const tree = (children: ClaudeUiNode[]) => ({ kind: 'client' as const, id: 'release-review', children: [{ kind: 'box' as const, children }] })
+  const tree = (children: ClaudeUiNode[]) => ({ kind: 'client' as const, id: 'release-review', pointer: false, keys: false, children: [{ kind: 'box' as const, children }] })
   const f = await mount({ nativeUi: { status: 'live', tree: tree([review, later]) } })
   const button = f.root.querySelector<HTMLButtonElement>('[aria-label="Review release notes"]')!
   button.focus()
@@ -113,7 +113,7 @@ it('restores retained button focus when browser DOM movement blurs it', async ()
   let deliberatelyMoveFocus = false
   const move = vi.spyOn(Node.prototype, 'insertBefore').mockImplementation(function <T extends Node>(this: Node, node: T, before: Node | null): T {
     // Chromium blurs a focused element moved with insertBefore; jsdom does not.
-    if (node === button && node.parentNode === this) { button.blur(); if (deliberatelyMoveFocus) editor.focus() }
+    if ((node as Node) === button && button.parentNode === this) { button.blur(); if (deliberatelyMoveFocus) editor.focus() }
     return insertBefore.call(this, node, before) as T
   })
   try {
