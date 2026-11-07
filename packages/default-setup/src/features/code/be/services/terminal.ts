@@ -1,15 +1,14 @@
 import { featureSettings } from '#generated/settings.ts';
 
 import { newId } from '#generated/ears.ts';
-import * as os from 'os'
 import * as path from 'path'
-import * as fs from 'fs'
 import type { TerminalInfo, TerminalCreate } from '../types.ts'
 import { EARS } from '#generated/ears.ts'
 import { repository } from '#generated/repository.ts';
 import { createLogger } from '@apackdev/sdk/logger';
 import { services } from '#generated/services.ts'
 import type { TerminalSession } from '@apackdev/sdk/services'
+import { directoryToStart, shellToStart } from './known-shells.ts'
 
 const logger = createLogger('terminal');
 
@@ -43,23 +42,6 @@ export interface TerminalHandlers {
 
 class TerminalService {
   private terminals: Map<string, Terminal> = new Map()
-  private readonly ALLOWED_SHELLS = [
-    '/bin/bash',
-    '/bin/sh',
-    '/bin/zsh',
-    '/usr/bin/bash',
-    '/usr/bin/sh',
-    '/usr/bin/zsh',
-    'bash',
-    'sh',
-    'zsh',
-    'powershell.exe',
-    'cmd.exe'
-  ]
-
-  private get defaultShell(): string {
-    return process.platform === 'win32' ? 'powershell.exe' : (process.env.SHELL || '/bin/bash')
-  }
 
   async create(options: TerminalCreate, handlers: TerminalHandlers, sizedBy?: string): Promise<TerminalInfo> {
     // Check terminal limit (0 = no limit)
@@ -71,8 +53,8 @@ class TerminalService {
 
     // The id is taken now and the row written once the terminal has started, with what it started with
     const id = newId(EARS.Entity.Terminal)
-    const shell = this.validateShell(options.shell || this.defaultShell)
-    const cwd = this.validateCwd(options.cwd)
+    const shell = this.shellFor(options.shell)
+    const cwd = this.directoryFor(options.cwd)
     const cols = Math.max(1, Math.min(options.cols || 80, 500))
     const rows = Math.max(1, Math.min(options.rows || 24, 200))
     const title = this.sanitizeTitle(options.title || path.basename(cwd) || 'root')
@@ -211,39 +193,28 @@ class TerminalService {
     }))
   }
 
-  private validateShell(shell: string): string {
-    // Normalize shell path
-    const normalizedShell = shell.toLowerCase().trim()
-    
-    // Check against allowed shells
-    if (this.ALLOWED_SHELLS.some(allowed =>
-      normalizedShell === allowed.toLowerCase() ||
-      path.basename(normalizedShell) === allowed.toLowerCase()
-    )) {
-      return shell
+  /**
+   * The shell to start, and a line in the log when it is not the one asked for.
+   *
+   * `known-shells.ts` has why the answer is derived rather than listed (F13) and why a shell arriving as
+   * data has to be checked at all (S3). What is here is the reporting: a refusal is worth a line, because
+   * the user asked for one shell and got another.
+   */
+  private shellFor(shell: string | undefined): string {
+    const chosen = shellToStart(shell)
+    if (chosen.refused !== undefined) {
+      logger.warn(`This machine does not start ${chosen.refused}; using ${chosen.shell}. `
+        + 'A shell has to be the login shell or listed in /etc/shells.')
     }
-    
-    logger.warn(`Invalid shell requested: ${shell}, defaulting to ${this.defaultShell}`)
-    return this.defaultShell
+    return chosen.shell
   }
 
-  private validateCwd(cwd?: string): string {
-    if (!cwd) {
-      // No directory provided, use home directory
-      return os.homedir()
+  private directoryFor(cwd: string | undefined): string {
+    const chosen = directoryToStart(cwd)
+    if (chosen.refused !== undefined) {
+      logger.warn(`${chosen.refused} is not a directory to start in; using ${chosen.cwd}`)
     }
-    
-    try {
-      // Check if directory exists and is accessible
-      const stats = fs.statSync(cwd)
-      if (stats.isDirectory()) {
-        return cwd
-      }
-    } catch (error) {
-      logger.warn(`Invalid cwd: ${cwd}, defaulting to home directory`, { error })
-    }
-    // Fall back to home directory if provided path is invalid
-    return os.homedir()
+    return chosen.cwd
   }
 
   private sanitizeTitle(title: string): string {
@@ -287,9 +258,14 @@ class TerminalService {
 
     for (const row of persisted) {
       if (this.terminals.has(row.id)) continue
+      // **A row is data** (S3): the database console writes one, `apack db exec` writes one, and a backup
+      // import replaces the whole store without looking at a row. So a stored shell and a stored directory
+      // go through the same check a created one does, rather than straight to a spawn.
+      const shell = this.shellFor(row.shell)
+      const cwd = this.directoryFor(row.cwd)
       try {
         const session = await services.terminal.open(
-          { cols: row.cols, rows: row.rows, shell: row.shell, cwd: row.cwd },
+          { cols: row.cols, rows: row.rows, shell, cwd },
           {
             onOutput: (data) => handlers.onData(row.id, data),
             onExit: (code) => {
@@ -305,15 +281,15 @@ class TerminalService {
           title: row.title,
           customTitle: row.customTitle,
           pid: session.pid,
-          shell: row.shell,
-          cwd: row.cwd,
+          shell,
+          cwd,
           active: true,
           cols: row.cols,
           rows: row.rows,
         }
         // Restored by nobody, so the first window to fit it takes the size (M2)
         this.terminals.set(row.id, { info, session, sizedBy: undefined })
-        if (shellIntegrationEnabled) await this.injectShellIntegration(session, row.shell)
+        if (shellIntegrationEnabled) await this.injectShellIntegration(session, shell)
 
         logger.info(`Restored terminal ${row.title} (${row.id}) as a new shell (pid ${session.pid}); the previous process and its output are gone`)
       } catch (error) {
