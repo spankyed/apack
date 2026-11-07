@@ -327,3 +327,10 @@ Agent formatting and Stop/Back recovery have scoped combined-formatting-app6 acc
 runtime a61d3ee75a: exact draft/selection, caption/hint, six formatting controls, Agent return,
 Read approval, question, Pause and same-session recovery. All12 captures opened and seven
 corrupted proofs refused. Original F1–F5/final gate and other named gaps remain open.
+
+Native notice pending/timeout feedback has scoped notice-feedback-app6 acceptance at runtime
+0c4684659d: original notice/process/session identity, retained draft, exact three app/native
+humans and UUIDs, final cost0.0007, restoration and normal shutdown. All10 captures opened;
+eight corrupted proofs and the actual bad-input app5 are refused. Final journal acquisition
+is after shutdown; app6 preserves its early capture plus a prefix-verified final native append.
+Other notice outcomes/lifetimes, cold startup and original F1–F5/final gate remain open.

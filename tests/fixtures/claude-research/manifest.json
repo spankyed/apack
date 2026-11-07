@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "efdf91a0c4c0ac1a81c0175f23fa1df2f5310da2",
+  "researchCommit": "b5ac9b26e145f199cbbbbfb4e9994a93893294e8",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -113,6 +113,7 @@
     "src/integration/apack-native-ide-drive.mjs": "3d887f732ea077dd0e071ce4442a5b5509baa91e4782ff9c003a74133a1799f3",
     "src/integration/apack-native-parent-reset-drive.mjs": "64637c732e4565d7dc753975ee95e8cfb8d146221dc9937090b183b6dd807b20",
     "src/integration/apack-notebook-width-drive.mjs": "2642b1bf07ff2921d01adff32fc21c3fc20a09b1c351872d524616e395b91cc0",
+    "src/integration/apack-notice-feedback-drive.mjs": "a4304c3093c2946db4b9c5f076885a23a47011a2f1eb8ca26c32b42fb7423747",
     "src/integration/apack-owner-cron.mjs": "5052ce662e9f893312a005a4815bad0b05e73a194636f1e42caa5354405510bb",
     "src/integration/apack-owner.mjs": "00e2df0cab097d4544d68339534047463ac96f0852432893e73b7a4d789a278f",
     "src/integration/apack-parent-readiness-drive.mjs": "12280dbf269673ff525370866f0b76ac656314c212106d5bbb6342c6a1210056",
@@ -473,5 +474,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "0f432f22c0de186fb85d6b3a5738c816c6f8f7026b7f3dd32e1d31c5167f6369"
+  "archiveSha256": "871c2d6b629ee299a340f0878b77e8c1bc170ddd8a2f588d54bb0d6973942b86"
 }
