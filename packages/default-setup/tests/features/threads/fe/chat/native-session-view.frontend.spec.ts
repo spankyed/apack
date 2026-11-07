@@ -252,6 +252,7 @@ const ownedNoticeCases: { notice: ClaudeNativeNotice; button: string; decision: 
  {notice:{...identity,kind:'plugin_hint',pluginName:'review',marketplaceName:'local',sourceCommand:'review',choices:[{value:'yes',label:'Install'},{value:'no',label:'Not now'},{value:'disable',label:'Disable'}]},button:'Install',decision:'yes'},
  {notice:{...identity,kind:'lsp_recommendation',pluginName:'review',marketplaceName:'local',fileExtension:'ts',choices:[{value:'yes',label:'Install'},{value:'no',label:'Not now'},{value:'never',label:'Never'},{value:'disable',label:'Disable'}]},button:'Install',decision:'yes'},
  {notice:{...identity,kind:'resume_return',choices:[{value:'resume_compact',label:'Resume from summary'},{value:'resume_continue',label:'Resume full session as-is'},{value:'resume_never',label:"Don't ask me again"}]},button:'Resume from summary',decision:'resume_compact'},
+ {notice:{...identity,kind:'newer_model_offer',choices:[{value:'newer_keep',label:'Keep current model'},{value:'newer_accept',label:'Resume on newer model'}]},button:'Resume on newer model',decision:'newer_accept'},
 ]
 it.each(ownedNoticeCases)('does not retarget a displayed $notice.kind click or Escape to a replacement',async({notice,button,decision})=>{
  const f=await fixture();f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
@@ -322,7 +323,7 @@ it('retains parent startup cancellation and refusal feedback beside background c
 })
 
 it.each(['escape', 'button'])('dismisses the current resume offer through its captured native owner using %s', async method => {
- const f=await fixture(),notice=ownedNoticeCases.at(-1)!.notice
+ const f=await fixture(),notice=ownedNoticeCases.find(row=>row.notice.kind==='resume_return')!.notice
  f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
  f.root.querySelector<HTMLButtonElement>('button')!.focus()
  f.publish({...f.snapshot,state:{...f.snapshot.state!,notice}});await nextTick();actor.send.mockClear()
@@ -334,7 +335,7 @@ it.each(['escape', 'button'])('dismisses the current resume offer through its ca
 })
 
 it.each([false, true])('restores resume-offer focus only while its owner remains current (replacement=%s)', async replacement => {
- const f=await fixture(),notice=ownedNoticeCases.at(-1)!.notice
+ const f=await fixture(),notice=ownedNoticeCases.find(row=>row.notice.kind==='resume_return')!.notice
  f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
  const previous=document.createElement('input');f.root.append(previous);previous.focus()
  f.publish({...f.snapshot,state:{...f.snapshot.state!,notice}});await nextTick()
@@ -343,4 +344,16 @@ it.each([false, true])('restores resume-offer focus only while its owner remains
  await nextTick();await nextTick()
  if(replacement)expect(document.activeElement).not.toBe(previous)
  else expect(document.activeElement).toBe(previous)
+})
+
+it.each(['escape', 'button'])('dismisses a newer-model offer with captured native ownership using %s', async method => {
+ const f=await fixture(),notice=ownedNoticeCases.find(row=>row.notice.kind==='newer_model_offer')!.notice
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
+ f.root.querySelector<HTMLButtonElement>('button')!.focus()
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,notice}});await nextTick();actor.send.mockClear()
+ const card=f.root.querySelector('[data-native-notice="newer_model_offer"]')!
+ await vi.waitFor(()=>expect(document.activeElement?.textContent).toBe('Keep current model'))
+ if(method==='escape')card.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))
+ else [...card.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Not now')!.click()
+ expect(actor.send).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ownerId:'owner',notice:{id:notice.id,revision:notice.revision,sessionId:notice.sessionId,decision:'newer_dismiss'}}))
 })

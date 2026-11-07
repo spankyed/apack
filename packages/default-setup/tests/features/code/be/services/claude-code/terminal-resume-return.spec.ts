@@ -5,8 +5,9 @@ import { claudeTerminalResumeReturnRuntime } from '#features/code/be/services/cl
 
 function fixture() {
   const sessionId = randomUUID(), item = { id: randomUUID(), kind: 'resume_return', payload: { sessionAgeMinutes: 90, estimatedTokens: 120000, hasPrecomputedSummary: true } }, open = [item]
-  const BCo = () => {}, vwe = () => {}
+  const BCo = () => {}, vwe = () => {}, Xe = () => {}
   const hashes = new Map([
+    ['e4dae558e89660907f9bba0c9481fcbc49b0b2efb6c32e5695b4799212e419a5', createHash('sha256').update(Xe.toString()).digest('hex')],
     ['eb1d5c3dc90bb98e32ee2cae9da94b6f918fe5e6d93a653cf7e108db9565e62d', createHash('sha256').update(BCo.toString()).digest('hex')],
     ['8c9ad04491cf97fdfc934537c57e592350bdaa27b1253b1390cdd226acabddd8', createHash('sha256').update(vwe.toString()).digest('hex')],
   ])
@@ -15,6 +16,7 @@ function fixture() {
   const panel = { title: 'This session is 90 minutes old and 120k tokens.', onCancel: () => answer('dismiss') }
   const row = Array(22).fill(undefined); row[6] = 'We recommend resuming from a summary.'; row[17] = { props: control }; row[21] = { props: panel }
   const view = { type: vwe, memoizedProps: { ...item.payload, onDone: answer }, updateQueue: { memoCache: { data: [row] } } }
+  Object.assign(view, { child: { memoizedProps: panel, child: { type: Xe, memoizedProps: control } } })
   const root = { type: BCo, memoizedProps: { payload: item.payload, answer }, child: view }
   const binding = { surface: 'terminal', toolContext: () => ({ dialogStore: { getState: () => ({ open }) } }) }
   const n = { themeRoots: { ai: () => new Map([[undefined, { container: { current: root } }]]) }, questionOptions: { q: () => sessionId } }
@@ -65,4 +67,10 @@ it('does not acknowledge a native callback that refused to settle', () => {
 it('does not expose a mounted-looking view without its original wrapper answer', () => {
   const f = fixture(); Reflect.deleteProperty(f.root.memoizedProps, 'answer'); Reflect.deleteProperty(f.view.memoizedProps, 'onDone')
   expect(f.runtime.read(f.n).item).toBeUndefined(); expect(f.answer).not.toHaveBeenCalled()
+})
+
+it('refuses retained memo state after the original choice control unmounts', () => {
+  const f = fixture(), request = f.request(); Reflect.deleteProperty(f.view, 'child')
+  expect(f.runtime.read(f.n).item).toBeUndefined()
+  expect(() => f.runtime.answer(f.n, request)).toThrow('expired'); expect(f.answer).not.toHaveBeenCalled()
 })
