@@ -35,6 +35,7 @@ removes the finding rather than fixing it, and names the construction that does.
 | G1 | open | priced, not fixed — see [the pricing](#g1-priced-what-the-throttled-writer-writes-to-ears--2026-11-07) | three streaming runs at 24, 60 and 120 chunks; `ears.write` request bytes on the app database | — | the mechanism and its cost model are measured and the review's 15 MB figure confirmed. The fix is a delta feed beside a less frequent durable write, which is the output pipe's payload discipline the review assigns it to — the writer alone cannot fix it, since the 80 ms write is what updates the window |
 | F5 | priced | not fixed — `services/terminal.ts:145` writes inside `resize()` | `terminal-resize` scenario: 24 resizes, 24 app writes, 2,112 bytes, 10/10 trials with min = max | — | dissolves in Phase B, whose acceptance names the guard ("a resize writes no application row"). This is its before |
 | F18 | open | found by the resize scenario, not fixed | the scenario's first attempt timed out at `cols: 80` after 24 writes had landed | — | new; recorded in the review. Adjacent to M2 and not the same defect |
+| F4 | priced | not fixed — one `broadcastToSurface` per pty chunk | `terminal-output` scenario: 64 KiB of output → 115 messages, 76,824 bytes, 10/10 trials | — | dissolves in Phase B, whose guard ("N MB of output produces at most M channel messages") now has its before: ~1,840 messages and 1.2 MB per MB |
 | G3 | open | fixed on `session/claude-code-integration` (#372), not on master | `hooks.ts` calls `killAllHandles()` there | — | closes when #372 lands; confirm it survives the cleanup pass |
 
 Disposition values: `test`, `dissolved`, `driven`, `open`.
@@ -227,15 +228,51 @@ monotonic and linear, which is what a per-session cost should look like.
 first-open median taken on a fresh app. So nothing in today's implementation degrades with session count,
 which is a property the broker has to keep rather than one it needs to fix.
 
-### Baseline (Phase G) — the remaining two readings, not taken
+### Sustained output (Phase G, reading 5 of 6), and F4 priced — 2026-11-07
 
-Still outstanding: **sustained output responsiveness** and **large-history replay**, plus the parsing-cost
-reading (`npm run measure:loop`). Both need an output corpus and a **byte-level completion signal**, which
-the attach reading establishes is not available from the DOM — xterm draws to a canvas and its buffer is in
-the pack's module-scoped pool — and which no span records either: the instrumented names are `app.*` and
-`ears.*`, and a terminal's output is neither. So that signal is new instrumentation, it is the next thing to
-build, and it serves the first-byte latency the attach reading could not cover **and** F4's "one bus event
-per pty chunk" at the same time.
+`APACK_PERFORMANCE_SCENARIO=terminal-output`: a fixed 64 KiB corpus (`head -c 65536 /dev/zero | tr '\0' x`),
+10 measured trials, all passed. Completion is the shell exiting — the one end-of-output signal a page can
+see, since xterm draws to a canvas.
+
+**This reading needed instrumentation that did not exist.** Nothing recorded the app's outgoing traffic, so
+`app.surface.send` was added at the API's `emitOutgoing` — the one funnel everything a client receives
+passes through — carrying the event type, the target and the **byte size**, never the content. Checked
+against the observer effect it could have introduced: the resize reading re-run with the recorder in place
+is byte-for-byte what it was without it (24 writes, 2,112 bytes, min = max).
+
+| | median | min | max |
+|---|---|---|---|
+| **Output messages** | **115.5** | 115 | 116 |
+| **Bytes on the bus** | **76,824** | 76,709 | 76,915 |
+| Renderer task time | 51.0 ms | 44.2 | 96.0 |
+| Renderer script time | 18.8 ms | 16.0 | 30.0 |
+| Delivery | 1,389 ms | 1,243 | 1,991 |
+
+**F4 is as claimed: one bus event per pty chunk, no coalescing.** 64 KiB of output becomes **115 messages**
+at ~665 bytes each, and **1.17 bytes cross the bus per byte the shell wrote** — the overhead being JSON
+escaping and the envelope. Phase B's guard for this — "N MB of output produces at most M channel messages" —
+now has its before: **115 messages and 76.8 KB per 64 KiB**, or about 1,840 messages and 1.2 MB per MB.
+
+**Two things to carry into Phase B.** The renderer spends ~51 ms of task time on 64 KiB, so a megabyte of
+output is roughly 800 ms of main thread at today's shape — which is the cost a bounded channel is meant to
+cap. And delivery took 1.39 s for 64 KiB, which is the pipe's rate rather than the shell's: `tr` writes it
+in small chunks and every one becomes a message.
+
+**A correction worth recording.** A first attempt sent `terminal.TERMINAL_INPUT` to the surface — the
+*system's* event name — which the surface's child drops silently, so the command never ran and only the
+shell's prompt came back. I read that as the review's X6 (LF not submitting a line) reproducing on macOS and
+was wrong: with `terminal.INPUT`, `\n` submits correctly. X6 stays a Windows finding. The near-miss is the
+reason the rule says to measure before accepting a measurement, including one's own — and why the drop was
+silent is itself worth noting beside F18.
+
+### Baseline (Phase G) — the last reading, not taken
+
+Still outstanding: **large-history replay**, plus the parsing-cost reading (`npm run measure:loop`). The
+replay reading needs a way to assert a restored screen, which the attach reading establishes the DOM cannot
+give — xterm draws to a canvas and its buffer is in the pack's module-scoped pool — so it wants either a
+screen read through the emulator (which Phase P's seam provides) or an `app.surface.send` count over a
+reattach, which is now available. **First-byte latency** is still uncovered for the same reason, and is the
+other thing that screen read would settle.
 
 The baseline is unrepeatable once Phase B moves state, and the
 [ghostty-web migration](../../deferred/xterm-to-ghostty-web.md) requires the same measurement for its own

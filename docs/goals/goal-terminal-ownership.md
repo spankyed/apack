@@ -83,7 +83,7 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 
 - **Checkout:** `master` at `25d8a8120b`, the current one — no branch or worktree, clean tree.
   **Phase T is complete**: every track below has landed with a firing spec, or is placed with its reason
-  (T6 → Phase H, T7 → Phase P, G1 → the output pipe). **Phase G has 4 of its 6 readings**, with G1 and F5 priced; the last two wait on one piece of new instrumentation.
+  (T6 → Phase H, T7 → Phase P, G1 → the output pipe). **Phase G has 5 of its 6 readings**, with G1, F4 and F5 priced; the last wants a screen read.
   Nothing of Phases S, B, H, P or A is started.
   **Collision surface against #372**, measured 2026-11-07: one file, `features/code/fe/state.ts` (+24/-2 on
   that branch). Every other file Phase T touches is untouched there — `bus/client-events.ts`,
@@ -188,6 +188,23 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   (8–11 ms at every count), so that is a property the broker must keep rather than one it fixes. Cite the
   heap and not `rssSampledMaxBytes`, which fell 296 → 129 MiB over the same run while the heap rose
   monotonically: it is a maximum of a shrinking process.
+- **Phase G reading 5 of 6 is taken, and F4 is priced with it: 64 KiB of terminal output becomes 115 bus
+  messages carrying 76,824 bytes** (10/10 trials, ~665 bytes a message, 1.17 bytes on the bus per byte the
+  shell wrote), with ~51 ms of renderer task time — so about **1,840 messages and 1.2 MB per MB of output**,
+  which is the before for Phase B's guard. F4 is exactly as claimed: one event per pty chunk, no coalescing.
+- **The byte-level signal is built**, which is what that reading needed: `app.surface.send` at the API's
+  `emitOutgoing`, the one funnel everything a client receives passes through, recording the event type, the
+  target and the **byte size** and never the content. It cost a `record` member on `PerformanceExecution`
+  (host-only port, so `api:update`), a `_recordPerformance` helper whose attributes are a **thunk** so an
+  idle app serialises nothing on a per-token path, and the name and three attributes in the allow-lists.
+  `encodeJsonSafely` measures the size because it cannot throw — a size that failed to compute must not take
+  the message with it. **Checked for the observer effect it could have introduced**: the resize reading
+  re-run with the recorder in place is byte-for-byte what it was without it.
+- **One wrong conclusion, caught before it was committed.** A first attempt at the output reading sent
+  `terminal.TERMINAL_INPUT` to the *surface* — the system's event name, which the surface's child drops
+  silently — so the command never ran and only the prompt came back. I read that as X6 (LF not submitting a
+  line) reproducing on macOS; with `terminal.INPUT`, `\n` submits correctly and **X6 stays a Windows
+  finding**. That the drop was silent is worth noting beside F18.
 - **G1 is priced and stays open, with its fix placed.** Measured with the existing `streaming` scenario,
   which already drives the writer at `intervalMs: 80`: **9,726 → 30,054 → 95,924 app write bytes** for
   **864 → 2,160 → 4,340** characters of reply, so bytes-per-character climbs 11.3 → 13.9 → 22.1. Every flush
@@ -201,14 +218,12 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   assigns G1 to. `stream-writer.ts` is untouched by #372 (checked 2026-11-07 against
   `origin/session/claude-code-integration`), but `thinking-writer.ts` (+51) and `stream-consumer.ts` (+362)
   move substantially there, so that branch's cleanup is the cheapest place for the feed.
-- **Next action: the byte-level output signal.** It is the only thing between Phase G and its gate, and it
-  pays for four things at once: **sustained output responsiveness** and **large-history replay** (the two
-  readings left), the **first-byte latency** the attach reading could not cover, and **F4** ("one bus event
-  per pty chunk; no coalescing"), which nothing today can count. It is genuinely new instrumentation, not a
-  scenario: the instrumented span names are `app.*` and `ears.*`, a terminal's output is neither, and the
-  DOM cannot see it because xterm draws to a canvas and its buffer lives in the pack's module-scoped pool.
-  Phase B needs the same signal for its own acceptance ("the presentation channel is bounded … with a firing
-  case proving a producer past it is throttled"), so it is not throwaway work. Then Phase S.
+- **Next action: a screen read, then Phase S.** One reading is left — **large-history replay** — and with it
+  the **first-byte latency** the attach reading could not cover. Both want the same thing and the DOM cannot
+  give it: xterm draws to a canvas, so a restored or filling screen is unreadable from the page, and the
+  buffer is inside the pack's module-scoped pool. The two ways to get it are a read through the emulator,
+  which **Phase P's seam provides anyway**, or an `app.surface.send` count across a reattach, which is now
+  available and is the cheaper of the two. Everything else Phase G asked for is recorded.
 
   **Where it has to go, researched so the next session does not repeat it.** The natural seam is the API's
   outgoing surface send (`rootEvents.emitOutgoing`, `api/src/transport/emitter.ts`), which every

@@ -9,4 +9,4 @@ export { _rootEvents, type RootEvents } from './root-events.ts';
 export { _installProjections, type ProjectionRunner } from './projections.ts';
 
 export type { PerformanceCarrier, PerformanceExecution, _RecordingMode, _PerformanceProfiles, _RendererPerformanceStatistics, _RendererPerformanceResources } from './performance.ts';
-export { _recordingModeSchema, _parseStartupPerformance, _performanceExecution, _performanceCarrier, _performanceEnvelope, _withPerformanceCarrier, _carryPerformanceEvent, _withPerformanceEvent, _withPerformanceDelivery } from './performance.ts';
+export { _recordingModeSchema, _parseStartupPerformance, _performanceExecution, _recordPerformance, _performanceCarrier, _performanceEnvelope, _withPerformanceCarrier, _carryPerformanceEvent, _withPerformanceEvent, _withPerformanceDelivery } from './performance.ts';

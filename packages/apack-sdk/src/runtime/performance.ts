@@ -25,6 +25,14 @@ export interface PerformanceExecution {
   withCarrier<T>(carrier: unknown, fn: () => T): T;
   carryEvent(event: object, carrier: unknown): void;
   withEvent<T>(event: object, fn: () => T): T;
+  /**
+   * Record one instantaneous observation: a name and scalar attributes.
+   *
+   * For a fact with a size rather than a duration — how many bytes a send carried, how many messages a
+   * chunk became. **Attributes only, and never a payload**: what is being counted at a send is often an
+   * event whose content is a keystroke, and no part of it may reach a record (the bus's rule).
+   */
+  record(name: string, attributes?: Record<string, string | number | boolean>): void;
 }
 
 /** @internal The currently bound process/window resource, absent when recording is unavailable. */
@@ -32,6 +40,17 @@ export function _performanceExecution(): PerformanceExecution | undefined {
   if (_isFeHostBound()) return boundFeHost().diagnostics;
   if (_isHostBound()) return boundHost().diagnostics?.performance;
   return undefined;
+}
+
+/**
+ * @internal Record an observation when something is recording, and do nothing at all when not.
+ *
+ * `attributes` is a thunk rather than a value because the callers are hot paths: an idle app must not
+ * serialise a message or allocate an object to decide it is not recording.
+ */
+export function _recordPerformance(name: string, attributes: () => Record<string, string | number | boolean>): void {
+  const execution = _performanceExecution();
+  if (execution) execution.record(name, attributes());
 }
 
 /** @internal Use an explicit cause when supplied; otherwise capture the current execution. */
