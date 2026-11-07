@@ -34,6 +34,6 @@ function choose(option:{value:string;revision:string}){if(!pending.value&&!ide.v
 function move(direction:number){const enabled=[...buttons.values()].filter(button=>!button.hasAttribute('disabled')),index=enabled.indexOf(document.activeElement as HTMLElement);enabled[(index+direction+enabled.length)%enabled.length]?.focus()}
 watch(()=>ide.value?.stage,async()=>{await nextTick();if(!document.hasFocus()||!root.value?.contains(document.activeElement))return;(buttons.get(ide.value?.selectedValue??'')??buttons.values().next().value)?.focus({preventScroll:true})})
 let timer:ReturnType<typeof setInterval>|undefined
-onMounted(()=>{if(document.hasFocus()&&(document.activeElement===document.body||document.activeElement?.closest('[data-onboarding-id="agent-chat-input"]')))root.value?.focus({preventScroll:true});read();timer=setInterval(()=>{if(ide.value?.stage==='connecting'||!ide.value)read()},500)})
+onMounted(()=>{if(document.hasFocus()&&(document.activeElement===document.body||document.activeElement?.closest('[data-onboarding-id="agent-chat-input"]')))root.value?.focus({preventScroll:true});read();timer=setInterval(read,500)})
 onBeforeUnmount(()=>{if(timer)clearInterval(timer);buttons.clear()})
 </script>

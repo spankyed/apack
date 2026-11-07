@@ -42,3 +42,13 @@ it('does not steal focus from another input and routes Escape to the native clos
     expect(s.close).toHaveBeenCalledOnce()
   } finally {s.dispose();input.remove()}
 })
+
+it('refreshes mounted native choices after source changes even outside the connecting stage',async()=>{
+  vi.useFakeTimers();const s=mount()
+  try {
+    await nextTick();s.operate.mockClear()
+    await vi.advanceTimersByTimeAsync(500);expect(s.operate).toHaveBeenCalledExactlyOnceWith({kind:'read'})
+    s.state.status='pending';await nextTick();await vi.advanceTimersByTimeAsync(500);expect(s.operate).toHaveBeenCalledOnce()
+    s.dispose();await vi.advanceTimersByTimeAsync(1000);expect(s.operate).toHaveBeenCalledOnce()
+  } finally {vi.useRealTimers()}
+})
