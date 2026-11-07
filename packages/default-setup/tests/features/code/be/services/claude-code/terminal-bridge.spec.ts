@@ -25,6 +25,22 @@ async function create(enter = () => {}, pasteImage?: (path: string) => void) {
   await request('/poll', { sessionId: session, agents: [], statusCommand: 'main', subagentCommand: 'sub', shellPrefix: null })
 }
 afterEach(async () => { await bridge?.close(); bridge = undefined })
+it('reopens a parent bridge using its retained background observer and refreshes the plugin', async () => {
+  await create()
+  const previous = bridge!, observer = previous.backgroundObserver, pluginRoot = previous.pluginRoot
+  const previousPlugin = await readFile(join(pluginRoot, 'hooks/register.ts'), 'utf8')
+  await previous.close(); bridge = undefined
+  try {
+    bridge = await createClaudeTerminalBridge({ backgroundObserver: observer, backgroundAuthority: () => ({ identify: async () => { throw Error('No child in this fixture') }, close: async () => {} }), sessionId: session, settings: { effective: {}, sources: [] }, ownsProcess: async pid => pid === process.pid, changed() {}, enter() {} })
+    expect(bridge.backgroundObserver).toBe(observer)
+    expect(bridge.pluginRoot).toBe(pluginRoot)
+    expect(await readFile(join(pluginRoot, 'hooks/register.ts'), 'utf8')).not.toBe(previousPlugin)
+    expect(JSON.parse(await readFile(join(pluginRoot, 'hooks/hooks.json'), 'utf8')).modules).toEqual(['./register.ts'])
+    expect((await request('/observer-ready', { sessionId: session, pid: process.pid })).status).toBe(200)
+    expect((await request('/poll', { sessionId: session, agents: [] })).status).toBe(200)
+  } finally { await bridge?.close(); bridge = undefined; await observer.close() }
+})
+
 it('fences prompt requests by session and nonce and never enters a rejected or repeated request', async () => {
   const enter = vi.fn()
   bridge = await createClaudeTerminalBridge({ backgroundAuthority: () => ({identify: async () => {throw Error("No child in this fixture")},close: async () => {}}), sessionId: session, settings: { effective: { statusLine: { type: 'command', command: '/usr/bin/printf fixture' } }, sources: [] }, changed() {}, enter })

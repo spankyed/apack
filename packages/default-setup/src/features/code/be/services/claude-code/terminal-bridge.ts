@@ -368,7 +368,7 @@ export async function createClaudeTerminalBridge(options: {
     await saveObserver()
     const bunOptions = (options.bunOptions ? options.bunOptions + ' ' : '') + '--preload=' + nativeQuote(runtime)
     const pluginRoot = join(backgroundObserver.directory, 'plugin')
-    await mkdir(join(pluginRoot, '.claude-plugin'), { recursive: true }); await mkdir(join(pluginRoot, 'hooks'))
+    await mkdir(join(pluginRoot, '.claude-plugin'), { recursive: true }); await mkdir(join(pluginRoot, 'hooks'), { recursive: true })
     await writeFile(join(pluginRoot, '.claude-plugin/plugin.json'), JSON.stringify({ name: 'apack-native-terminal', version: '0.0.1' }), { mode: 0o600 })
     await writeFile(join(pluginRoot, 'hooks/hooks.json'), JSON.stringify({ modules: ['./register.ts'] }), { mode: 0o600 })
     const plugin = createClaudeTerminalPlugin(socketPath, token, { parentSessionId: options.sessionId, socketPath: backgroundObserver.socketPath, token: backgroundObserver.token })
