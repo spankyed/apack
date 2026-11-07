@@ -38,7 +38,9 @@ closes with a test in the resulting structure, or is recorded as dissolved by co
 **Why one goal rather than three plans.** The review's fixes, the
 [ghostty-web migration](../deferred/xterm-to-ghostty-web.md) and the
 [runtime refactor](../deferred/terminal-runtime-refactor-target.md) are three different answers to *who owns
-a terminal session*. Today nobody does: the renderer's pool owns the emulator, the pack's service owns the
+a terminal session*. This goal delivers the refactor's design and the review's findings together, and takes
+the migration out of scope; the refactor remains the design authority for the broker, the host service and
+the agent contracts, cited here rather than restated. Today nobody does: the renderer's pool owns the emulator, the pack's service owns the
 pty. Run in sequence, ownership moves three times and each move rewrites the previous one's work. Counted
 against the destination, roughly a third of the findings — including five of the fourteen High ones — stop
 existing rather than needing a fix: F1, F2, F3, F4, F5, F6, F7, F8, L2, L3, M1, M2, M4, M5, X1, X2. Fixing

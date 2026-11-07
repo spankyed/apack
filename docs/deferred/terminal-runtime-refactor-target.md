@@ -1,10 +1,15 @@
 # Terminal runtime refactor target
 
-Status: deferred design proposal, 2026-11-07. Activate after the
-[ghostty-web migration](xterm-to-ghostty-web.md) and the agreed work from the
-[terminal integration review](../issues/ISSUE-terminal-integration-review.md) are accepted. Re-audit
-their delivered contracts before implementation; this proposal does not mark their requirements
-complete or supersede their current scope. No implementation or dependency adoption is authorized here.
+Status: **active as design, through
+[goal-terminal-ownership](../goals/goal-terminal-ownership.md)**, which owns the delivery this document
+describes and settles the decisions it left to activation. Read the goal first: it keeps xterm.js and takes
+the [ghostty-web migration](xterm-to-ghostty-web.md) out of scope, so the order this document originally
+named — migration first, then this — is **inverted**. The reason is that both are answers to who owns a
+terminal session, and sequencing them moves ownership twice.
+
+This document remains the design authority for the broker, the host service, the ownership tables and the
+agent-observation contracts; the goal cites it rather than restating it. It does not mark any requirement
+complete, and it authorizes nothing by itself — the goal does.
 
 ## Recommendation
 

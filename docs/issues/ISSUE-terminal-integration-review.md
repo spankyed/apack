@@ -1,10 +1,18 @@
 # Issue: Terminal integration — review findings and path forward
 
 **Date:** 2026-10-01 — findings re-verified against the tree 2026-11-07
-**Status:** Open. Scope and the four decisions below are settled; T4 and M3 are fixed, the rest stand
+**Status:** Open. Decisions D1–D8 below are settled and D9–D11 live in the goal; T4 and M3 are fixed, the
+rest stand
 **Severity:** Critical — one finding writes user credentials to disk in plaintext; two more can lose work
 **Component:** `packages/default-setup/src/features/code` — terminal (xterm.js front end, node-pty back end),
 plus the app plumbing it depends on (`packages/main`, `packages/api`, `@apackdev/host/bus`)
+
+**Delivery is owned by [goal-terminal-ownership](../goals/goal-terminal-ownership.md).** This document owns
+the findings, the root causes and decisions D1–D8; the goal owns the outcome, the execution order and
+completion, and cites those decisions rather than restating them. Its D9–D11 settle what this document left
+open. A finding's disposition and the evidence that closed it live in
+[the evidence record](../references/evidence/terminal-ownership.md), not here; a row is struck here as it
+closes there.
 
 ## Symptom
 
@@ -28,10 +36,10 @@ finding is touched.** The mechanisms have held every spot-check so far; the cita
 is the reason: a `window-storage` pack rule now refuses a pack reaching `localStorage` itself, so the
 terminal's persistence moved behind `surfaceStorage(featureRef('code'))` — the same synchronous backing store
 at a different call site. Verifying a finding before acting on it belongs to the stage that acts, not to a
-pass run first; the four in Stage A were checked on 2026-11-07 and are accurate.
+pass run first; the four harm findings (S1, S2, F9, F10) were checked on 2026-11-07 and are accurate.
 
 Still not done: **nothing here was measured at runtime.** F3, F4, F5 and G1 are severity claims derived from
-reading code. See Stage 0.
+reading code; the goal's Phase G prices them.
 
 ---
 
@@ -375,15 +383,15 @@ terminal-state authority into a host-owned service over a Rust broker. Neither i
 undated, and this list is meant to land first. Reading them changes four things here, and it is cheaper to
 know now than to discover at each stage:
 
-- **The migration's primary replacement point is `terminal-pool.ts`** — the file Stage 1 rewrites. Its
-  Phase 1 requirements *are* Stage 1's invariants, in its own words: one output subscription and input
+- **The migration's primary replacement point is `terminal-pool.ts`** — the file the presentation phase rewrites.
+  Its Phase 1 requirements *are* that phase's invariants, in its own words: one output subscription and input
   registration per entry, concurrent creation for one id deduplicated, asynchronous completion guarded
-  against a disposed or replaced entry. So the two are not redundant, but Stage 1 must **draw its boundary
+  against a disposed or replaced entry. So the two are not redundant, but that phase must **draw its boundary
   at the emulator**: the session owns lifecycle, ownership and subscription, and reaches the emulator
   through a seam narrow enough that the migration swaps an implementation rather than reopening ownership.
   Not an engine abstraction and not a selection flag — the migration refuses both, and so does this: one
   emulator at a time, the seam internal to the feature.
-- **Stage 0's measurement is the migration's required baseline.** It asks for first-open latency including
+- **The baseline measurement is the migration's too.** It asks for first-open latency including
   WASM, sustained output responsiveness, large-history replay, memory with several hidden sessions, resize
   behaviour and packaged payload size, on one machine and corpus, with limits agreed *before* cutover.
   Measuring once and recording it where that plan can cite it is the whole of the saving.
@@ -398,28 +406,14 @@ know now than to discover at each stage:
 
 The one reversal is F14, recorded in decision 3.
 
-## Scope and phases
+## What each fix looks like
 
-The findings span three cost classes, and two of them are not the terminal. They are phased accordingly
-rather than by severity alone, because what can be *closed* here differs.
+**Ordering belongs to the goal, not here.** These are the design sketches its phases cite — what a fix *is*,
+not when it happens. Each heading names the goal phase that delivers it; where the two differ, the goal is
+current. These groups carried stage numbers until the goal existed, and dropping them is deliberate: a
+document with its own stage ordering beside a goal with phases is two plans for one body of work.
 
-- **Phase 1 — the terminal proper** (F, S, M, T, L). Local work against the local gate, startable and
-  finishable in a checkout. The stages below are this phase.
-- **Phase 2 — G1 alone**, lifted out of the agent findings as its own change. It is High, it is cheap, and
-  it is the same payload-discipline fix as Stage 2, so it travels with that stage rather than waiting for a
-  decision about the agent path.
-- **Phase 3 — the platform tier** (X1–X13), split by whether the refactor would delete it. X3 and X10 (the
-  app's non-darwin menu and `cmd`-keyed hotkeys) belong to the app and survive every plan, so they travel
-  with this work. X1, X2 and the node-pty-shaped rest are held: they need the
-  [Windows development VM](../references/guides/windows-development-vm.md) and a `compiler_windows=true`
-  dispatch to accept, and the refactor would move that ownership to the broker. Revisit if a Windows release
-  is scheduled before the refactor.
-- **Deferred — G2–G7.** The remaining agent-path findings belong to that feature, not this one, and want
-  their own issue rather than a tail on this list.
-
-## Path forward
-
-### Stage A — stop the bleeding (independent of everything else)
+### The harm — independent of everything else *(goal: Phase T)*
 
 1. **S2**: log the event type and target, never the payload, at the bus seam (decision 5), with the firing
    case that fails if a payload reaches a log.
@@ -436,14 +430,14 @@ rather than by severity alone, because what can be *closed* here differs.
 None depends on the restructure. 1 and 2 are the only items in this document that are about user harm rather
 than user annoyance.
 
-### Stage 0 — make it observable before touching the hot path
+### Observability, before the hot path moves *(goal: Phase G)*
 
 The pack suite is `environment: 'node'`, so `terminal-pool.ts` is unreachable by it. Add a jsdom project for
 the pool and the bus, and `drive/` scripts for the interactive invariants. **This stage is also where F3, F4,
 F5 and G1 get measured** — they are currently inferences, and the repo's own rule is to measure before
 optimising *and before accepting someone else's measurement*, including mine.
 
-### Stage 1 — one owner per terminal
+### One owner per terminal *(goal: Phases B, H and P)*
 
 A `TerminalSession` owning the xterm, the wrapper, the subscriptions and the pty wiring. Views become hosts
 that receive a node and emit intent, and cannot register a handler. Fixes F1, F2, F15, T1, T7, and makes
@@ -459,33 +453,32 @@ choosing to support it means a real multiplexer (two xterms over one pty, with r
 more work. Either way the rule belongs in **one owner** rather than in template conditions a new entry point
 can forget — that part is settled by M3 regardless of which way the fork goes.
 
-### Stage 2 — fix the pipe
+### The output pipe *(goal: Phases B and P)*
 
 Coalesce pty data in the backend on a ~8 ms or size threshold; enable node-pty `flowControl` with ack-based
 pause; replace the concat ring with a chunk list or drop the second copy and snapshot xterm's buffer with
-`SerializeAddon`; move persistence off `localStorage`. Fixes F3, F4, F6, M1, M6, and makes F11 trivial. Apply
-the same payload discipline to G1, which is the same defect in another feature.
+`SerializeAddon`; move persistence off `localStorage`. Fixes F3, F4, F6, M1, M6, and makes F11 trivial. Apply the same payload discipline to G1, which is the same defect in another feature.
 
-### Stage 3 — request/reply with correlation, and resize discipline
+### Correlation and resize discipline *(correlation done; resize goal: Phase B)*
 
 Give create a correlation id so a reply finds its requester, and scope a session to a window. Fixes T4, M3,
 M5. Separately: one resize send per settled size, rAF-debounced, guarded on changed dimensions, and stop
 writing EARS on resize at all. Fixes F5, which no longer bears on the write-discard investigation — see G1
 for why that link lapsed.
 
-### Stage 4 — stop treating stored rows as handles
+### Stored rows are not handles *(goal: Phase B)*
 
 Bound or remove the orphan kill (F7); make `killAll` mark rows closed and cap `restoreAll` (L2); validate
 shell and cwd on restore after settling F13 (S3); delete or trash closed rows (L3); add `onError` to the
 restore actor (L1).
 
-### Stage 5 — platform
+### Platform *(X3 and X10 goal: Phase T; the rest held)*
 
 X1/X2 need a Windows job object or an explicit tree kill, and a shutdown path that can await. X3 needs a
 non-darwin menu. X10 needs `cmd`→`ctrl` normalisation. The rest of X follows from one allow-list and one
 path-handling decision.
 
-### Stage 6 — completeness and the F14 decision
+### Completeness, and shell integration *(goal: Phases A and P)*
 
 Shell integration needs a decision, not a fix, because it has never run. The options, from cheapest:
 **delete it** and title from the shell/process name; **listen instead of inject** via xterm's
@@ -497,7 +490,7 @@ cooperation. Then: `SearchAddon`, scrollback/font settings, bracketed paste ever
 explicitly, and the dead declarations (L6-L8).
 
 Separate from the terminal but found here: **G2, G3, G4, G6** are four small, independent fixes to the agent
-path, and **G1** belongs in Stage 2's payload discipline.
+path, and **G1** belongs with the output pipe's payload discipline.
 
 ### What makes it stay fixed
 
@@ -509,22 +502,22 @@ path, and **G1** belongs in Stage 2's payload discipline.
   only thing here that would have caught F3, F4 and G1 before a user felt them.
 - A correlation id on every request/reply pair, so "which reply is mine" is not answerable by luck.
 
-## Decisions
+## Decisions (D1–D8)
 
-Settled 2026-11-07. Each records what was chosen and what choosing it costs, so a later reader can reopen one
+Settled 2026-11-07. D9–D11 are the goal's and are not repeated here. Each records what was chosen and what choosing it costs, so a later reader can reopen one
 on its merits rather than rediscover the question.
 
-1. **Restructure, not repair** (Stage 1). Seven of the root causes are structural, and the existing code is
-   not a quality baseline, so Stage 1 rewrites the ~1,340-line core (service 430, system 330, pool 362, bus
+1. **Restructure, not repair.** Seven of the root causes are structural, and the existing code is
+   not a quality baseline, so the rewrite covers the ~1,340-line core (service 430, system 330, pool 362, bus
    218) against the invariants here, with the findings as its acceptance criteria. The cost is that it lands
    as one larger change rather than 58 reviewable ones; the alternative's cost is reasoning about a structure
    that is going to be deleted, once per finding.
-2. **One visible host per session** (Stage 1), not a multiplexer. The argument is the pty's shape — one
+2. **One visible host per session**, not a multiplexer. The argument is the pty's shape — one
    `(cols, rows)` and one stateful stream, so two visible hosts at different sizes is a contradiction rather
    than a bug, which is what M2 looks like in practice. It holds whether or not today's guards exist. The
    cost is the case it refuses: watching one terminal in a popout on a second monitor, which would need two
    xterms over one pty with replay. Revisit if that case is wanted.
-3. **F14: fix the mechanism, keep the capability** (Stage 6). An earlier revision of this document chose to
+3. **F14: fix the mechanism, keep the capability.** An earlier revision of this document chose to
    delete `injectShellIntegration` and take titles from xterm's `onTitleChange`. That was wrong, and the
    deferred [terminal runtime refactor](../deferred/terminal-runtime-refactor-target.md) is why: its
    agent-observation pipeline runs on *"parsed OSC command markers for cwd, prompt, command start/end and
