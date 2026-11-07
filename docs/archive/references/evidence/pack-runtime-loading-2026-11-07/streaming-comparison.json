@@ -1,0 +1,633 @@
+{
+  "status": "compared",
+  "scenario": "streaming",
+  "baseline": {
+    "manifest": {
+      "format": 1,
+      "source": {
+        "revision": "f76a2774eb0213e49c99a4e43d768d16fb4ce7b6",
+        "dirty": false,
+        "excludedUntracked": [],
+        "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "builds": [
+        {
+          "path": "packages/api/dist",
+          "sha256": "ef3004c3c2e449e23714ccc46f4b8ecca28c85fa98a1df89c76c04092775724d"
+        },
+        {
+          "path": "packages/main/dist",
+          "sha256": "090c0334428eaf226f290dd9152f785a70809f94c6e1d9c2549958f5b1dfdb74"
+        },
+        {
+          "path": "packages/preload/dist",
+          "sha256": "7d147eab5eebe53d6b04a114462e40fcd7ed77debea79bf31f3054b49161be86"
+        },
+        {
+          "path": "packages/renderer/dist",
+          "sha256": "10795619f588f2b088c9c9aef67e6ebe935d467d6ee9a34c0349e4484a83f90c"
+        },
+        {
+          "path": "packages/default-setup/dist",
+          "sha256": "010406db952e023f17f9927abc9b4b3010771f03ce08b9b77fa21a8031d1e0e9"
+        },
+        {
+          "path": "vendor/elmdb/crates/elmdb-node/elmdb.darwin-arm64.node",
+          "sha256": "0d76db4323af7e987b35a74941d5e73db0a69ef68ebaef6fde92113e398dac43"
+        }
+      ],
+      "fixture": {
+        "generator": "streaming-conversations-v1",
+        "seed": 0,
+        "sha256": "dee70d9e4785cadeee1497ed7319612a0f8cb150a79923e0c8ddc74babd53520",
+        "distribution": {
+          "threads": 25,
+          "historyMessagesPerThread": 20,
+          "scriptedChunks": 24,
+          "intervalMs": 25,
+          "bodyRepetitions": 50
+        }
+      },
+      "native": {
+        "pin": "4b67670ba9b2ed58ee13f8463486a6a91292e412",
+        "checkoutRevision": "4b67670ba9b2ed58ee13f8463486a6a91292e412",
+        "dirty": false,
+        "excludedUntracked": []
+      },
+      "runtime": {
+        "node": "24.22.2",
+        "v8": "13.6.233.17-node.63",
+        "osRelease": "25.6.0",
+        "electron": "44.9.3",
+        "chromium": "152.0.7977.167",
+        "appNode": "24.22.0",
+        "appV8": "15.2.124.43-electron.0",
+        "interactiveWindow": "focused-v1",
+        "performancePolicy": "paired-focused-revisions-v1"
+      },
+      "machine": {
+        "platform": "darwin",
+        "arch": "arm64",
+        "cpus": 3,
+        "memoryBytes": 7516192768,
+        "identity": "670b41b6b8524043850342e8f4a5b55e761dbb6e9d78328018e8fcd5af735f6e"
+      },
+      "mode": "disabled",
+      "cache": "warm-process",
+      "warmups": 5,
+      "clock": "Local monotonic durations; cross-process epoch alignment is approximate"
+    },
+    "scenario": "streaming",
+    "samples": [
+      {
+        "scenario": "streaming",
+        "index": 0,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 1641.2000000001863,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 1,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 829.8000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 2,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 829.5999999998603,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 3,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 817.8000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 4,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 897.8000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 5,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 846,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 6,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 929.5,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 7,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 952.5,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 8,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 962.4000000001397,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 9,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 824.1000000000931,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 10,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 830.6999999999534,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 11,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 840.6999999999534,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 12,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 869,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 13,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 908.3999999999069,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 14,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 947.7999999998137,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 15,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 829.9000000001397,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 16,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 826.1999999999534,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 17,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 836.8000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 18,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 817.8000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 19,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 963,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 20,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 882.5,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 21,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 851.3000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 22,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 910.1000000000931,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 23,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 827.8000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 24,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 911.1000000000931,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    ],
+    "summary": {
+      "measured": 20,
+      "passed": 20,
+      "unsuccessful": 0,
+      "medianMs": 860.1500000000233,
+      "minMs": 817.8000000000466,
+      "maxMs": 963
+    }
+  },
+  "candidate": {
+    "manifest": {
+      "format": 1,
+      "source": {
+        "revision": "659be6717791e3f15074dcf400912ff2e2c021a0",
+        "dirty": false,
+        "excludedUntracked": [],
+        "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "builds": [
+        {
+          "path": "packages/api/dist",
+          "sha256": "ef3004c3c2e449e23714ccc46f4b8ecca28c85fa98a1df89c76c04092775724d"
+        },
+        {
+          "path": "packages/main/dist",
+          "sha256": "090c0334428eaf226f290dd9152f785a70809f94c6e1d9c2549958f5b1dfdb74"
+        },
+        {
+          "path": "packages/preload/dist",
+          "sha256": "7d147eab5eebe53d6b04a114462e40fcd7ed77debea79bf31f3054b49161be86"
+        },
+        {
+          "path": "packages/renderer/dist",
+          "sha256": "10795619f588f2b088c9c9aef67e6ebe935d467d6ee9a34c0349e4484a83f90c"
+        },
+        {
+          "path": "packages/default-setup/dist",
+          "sha256": "7cd0b67083200227f67b7337cdd16a0a8a864adc424bc3b738a89508a60290d1"
+        },
+        {
+          "path": "vendor/elmdb/crates/elmdb-node/elmdb.darwin-arm64.node",
+          "sha256": "0d76db4323af7e987b35a74941d5e73db0a69ef68ebaef6fde92113e398dac43"
+        }
+      ],
+      "fixture": {
+        "generator": "streaming-conversations-v1",
+        "seed": 0,
+        "sha256": "dee70d9e4785cadeee1497ed7319612a0f8cb150a79923e0c8ddc74babd53520",
+        "distribution": {
+          "threads": 25,
+          "historyMessagesPerThread": 20,
+          "scriptedChunks": 24,
+          "intervalMs": 25,
+          "bodyRepetitions": 50
+        }
+      },
+      "native": {
+        "pin": "4b67670ba9b2ed58ee13f8463486a6a91292e412",
+        "checkoutRevision": "4b67670ba9b2ed58ee13f8463486a6a91292e412",
+        "dirty": false,
+        "excludedUntracked": []
+      },
+      "runtime": {
+        "node": "24.22.2",
+        "v8": "13.6.233.17-node.63",
+        "osRelease": "25.6.0",
+        "electron": "44.9.3",
+        "chromium": "152.0.7977.167",
+        "appNode": "24.22.0",
+        "appV8": "15.2.124.43-electron.0",
+        "interactiveWindow": "focused-v1",
+        "performancePolicy": "paired-focused-revisions-v1"
+      },
+      "machine": {
+        "platform": "darwin",
+        "arch": "arm64",
+        "cpus": 3,
+        "memoryBytes": 7516192768,
+        "identity": "670b41b6b8524043850342e8f4a5b55e761dbb6e9d78328018e8fcd5af735f6e"
+      },
+      "mode": "disabled",
+      "cache": "warm-process",
+      "warmups": 5,
+      "clock": "Local monotonic durations; cross-process epoch alignment is approximate"
+    },
+    "scenario": "streaming",
+    "samples": [
+      {
+        "scenario": "streaming",
+        "index": 0,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 1191.3999999999069,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 1,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 843.1999999999534,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 2,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 827.5999999998603,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 3,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 833.9000000001397,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 4,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 814.3999999999069,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 5,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 857.1000000000931,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 6,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 875.5999999998603,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 7,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 885.6000000000931,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 8,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 955.3000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 9,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 945,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 10,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 831.3000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 11,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 902.9000000001397,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 12,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 825,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 13,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 902.8000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 14,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 942.1000000000931,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 15,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 868.1999999999534,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 16,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 814.3000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 17,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 855.0999999998603,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 18,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 852.8000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 19,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 864.8000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 20,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 883.1000000000931,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 21,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 822.3000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 22,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 834.6999999999534,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 23,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 857.2999999998137,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "streaming",
+        "index": 24,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 1104,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    ],
+    "summary": {
+      "measured": 20,
+      "passed": 20,
+      "unsuccessful": 0,
+      "medianMs": 866.5,
+      "minMs": 814.3000000000466,
+      "maxMs": 1104
+    }
+  },
+  "medianDifferenceMs": 6.349999999976717,
+  "medianChangePercent": 0.738243329649078,
+  "policy": "Two isolated workers, five warmups per revision, then individually balanced ABBA actions; no tail-percentile claim"
+}

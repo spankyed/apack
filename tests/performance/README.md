@@ -30,6 +30,9 @@ single-trial profiles attribute work and are excluded from the timing comparison
 Its machine identity is specific to the CI run; results do not certify external-drive performance.
 The [startup loading qualification](../../docs/archive/references/evidence/2026-11-07-startup-demand-loading.md)
 records the matched comparison, diagnostic attribution and retained failures for the startup-loading stack.
+The subsequent [pack-admission qualification](../../docs/archive/references/evidence/2026-11-07-pack-startup-admission.md)
+records its retained startup improvement. The [runtime-loading investigation](../../docs/archive/references/evidence/2026-11-07-pack-runtime-loading.md)
+records the rejected runtime deferral and qualified thread/streaming comparisons, including fixture ownership.
 
 Build with the normal repository commands, then run from the checkout root:
 
