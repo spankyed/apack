@@ -36,6 +36,18 @@ because it owns interaction — selection, reflow, IME — and nothing in the ap
 The broker is the authority and is fed before the bytes leave for the renderer, which is the only direction in
 which a disagreement is merely stale rather than wrong.
 
+**A terminal answers what a program asks it, and the broker is what answers.** ConPTY's first act is a
+cursor-position request (`ESC [ 6 n`) and it waits for the reply before initialising — so on Windows a
+session nobody answers never starts. In the app xterm.js replies, which would make a terminal with a window
+work and one without never start: exactly the independence the broker exists for, false. `alacritty_terminal`
+computes those replies and the reader thread writes them back. A POSIX pty asks nothing, which is why this
+was invisible until the suite first ran on Windows.
+
+**A shell's exit is waited for, not inferred from its output ending.** A POSIX pty gives EOF on the master
+when the last slave closes; a ConPTY does not, because the broker still holds the pseudoconsole. The exit is
+the one signal both platforms give, and waiting on it still polls nothing. A session whose shell has gone is
+forgotten as its exit is reported, so a later write is refused by code rather than reaching a dead handle.
+
 ## The protocol
 
 Rust is the source of truth; `protocol/protocol.ts` is generated from it with ts-rs and committed in both
@@ -68,10 +80,36 @@ the same corpus either side of the change: **64 KiB of output was 115 messages a
 
 ## The socket
 
-A 0700 directory under the system temporary directory, named for a hash of the data dir — one broker per data
-dir. It is not in the data dir, and the reason is a hard limit: `sockaddr_un.sun_path` holds 104 bytes on
-macOS, and a data dir under a long home directory, a synced folder or a long profile name is longer than
-that. A path that still does not fit is refused naming the limit.
+**A name, and its spelling differs by platform.** On POSIX it is a Unix socket in a 0700 directory under the
+system temporary directory, named for a hash of the data dir — one broker per data dir. It is not in the data
+dir, and the reason is a hard limit: `sockaddr_un.sun_path` holds 104 bytes on macOS, and a data dir under a
+long home directory, a synced folder or a long profile name is longer than that. A path that still does not
+fit is refused naming the limit.
+
+On Windows it is a named pipe, `\\.\pipe\apack-terminal-<hash>`, because the transport refuses a
+filesystem path there outright. The hash is the same one and does the same job: a pipe name is one flat
+namespace for the machine, so it is what keeps one app's broker apart from another's.
+
+## Owning a process tree
+
+On POSIX, killing a session's shell makes the kernel send SIGHUP to the pty's foreground process group, which
+takes the grandchildren with it — demonstrated rather than assumed, including with the pty master held open,
+so it is the session leader's death that carries it.
+
+Windows has no equivalent, which is what X1 and X2 are about. A Job Object with
+`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` is held for the session's lifetime, so the kill *is* the close: the OS
+ends every process in the job when the last handle goes, and a `kill`, a client disconnecting and a broker
+that crashes all reap the tree by one mechanism rather than three paths remembering to walk it.
+
+**`command-group` is not what does it.** It wraps `std::process::Command`, and `portable-pty` spawns the
+child itself, so there is no `Command` to wrap; the job is assigned to the pid afterwards instead.
+
+## What submits a line
+
+Not the same on both platforms, and measured rather than assumed. Typed into a Windows console, `\n` is
+echoed and never runs, `\r` alone does not get that far, and `\r\n` both echoes and runs. A POSIX pty's
+line discipline takes `\n`. The app carries the answer on a session's descriptor, because a window cannot
+know which shell is on the other end.
 
 ## What is not there yet
 
@@ -80,8 +118,13 @@ that. A path that still does not fit is refused naming the limit.
   synchronous and runs in `process.on('exit')`, where no socket write completes. Surviving a client, attach
   and detach, and reattach belong to the host session service.
 - **One connection at a time.** A second client is the same piece of work.
-- **Windows.** `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` and ConPTY's resize and exit are claimed on a Windows run
-  or not at all; see the [Windows development VM guide](guides/windows-development-vm.md).
+- **The app on Windows.** The broker's own suite passes there in full — 12 of 12, on a Windows VM on
+  2026-11-07 — and so does the parser's. What has not been done there is launching the Electron app itself.
+  See the [Windows development VM guide](guides/windows-development-vm.md).
+- **The channel's bounds on Windows.** `tests/channel.rs` is POSIX-only: its cases need a shell that produces
+  a megabyte as fast as the pty takes it, which Windows has no one-liner for. The coalescing and the credit
+  are the broker's own code and platform-independent; how much output it takes to fill a *named pipe*, which
+  the bound's arithmetic includes, is not.
 - **A packaged build ships no broker.** The binary is resolved from `APACK_TERMINAL_BINARY` or the linked
   checkout's debug build. Per-platform builds, their signing and crash-restart belong with the composition
   that ships it.
