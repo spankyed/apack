@@ -30,6 +30,7 @@ import BubbleMenuNodeSelector from './bubble-menu/BubbleMenuNodeSelector.vue'
 import BubbleMenuToolbar from './bubble-menu/BubbleMenuToolbar.vue'
 import BubbleMenuColorSelector from './bubble-menu/BubbleMenuColorSelector.vue'
 import BubbleMenuLinkInput from './bubble-menu/BubbleMenuLinkInput.vue'
+import { findFormattingMenuPosition } from './internal/formatting-menu-position.ts'
 
 const props = defineProps<{ editor: Editor; containWithinEditor?: boolean }>()
 
@@ -49,23 +50,44 @@ const menuOptions = {
     }
     return { boundary, padding: 4 }
   } : {},
-  shift: { limiter: { fn: ({ x, y, rects }: { x: number; y: number; rects: { floating: { width: number } } }) => {
+  shift: { limiter: { fn: ({ x, y, rects }: { x: number; y: number; rects: { floating: { width: number; height: number } } }) => {
     // Resolve at positioning time: EditorContent attaches its DOM asynchronously.
-    const boundary = editorElement.closest('form')?.getBoundingClientRect()
-    if (!boundary || boundary.width < rects.floating.width + 16) return { x, y }
-    return { x: Math.max(boundary.left + 8, Math.min(x, boundary.right - rects.floating.width - 8)), y }
+    const form = editorElement.closest('form'), boundary = form?.getBoundingClientRect()
+    if (!form || !boundary || boundary.width < rects.floating.width + 16) return { x, y }
+    const clamped = { x: Math.max(boundary.left + 8, Math.min(x, boundary.right - rects.floating.width - 8)), y }
+    if (!props.containWithinEditor) return clamped
+    // Text, including status and keyboard hints, is an obstacle even when it has no control.
+    const obstacles: DOMRect[] = [], walker = ownerDocument.createTreeWalker(form, NodeFilter.SHOW_TEXT)
+    let node: Node | null
+    while ((node = walker.nextNode())) {
+      if (!node.textContent?.trim() || !(node.parentElement instanceof HTMLElement) || ownerDocument.defaultView!.getComputedStyle(node.parentElement).visibility === 'hidden') continue
+      const range = ownerDocument.createRange(); range.selectNodeContents(node)
+      obstacles.push(...[...range.getClientRects()].filter(r => r.width > 0 && r.height > 0))
+      if (obstacles.length > 1024) return clamped
+    }
+    for (const control of form.querySelectorAll('button,input,textarea,select')) {
+      const rect = control.getBoundingClientRect()
+      if (rect.width && rect.height) obstacles.push(rect)
+    }
+    const viewport = { x: Math.max(0, boundary.x), y: Math.max(0, boundary.y), width: Math.min(ownerDocument.documentElement.clientWidth, boundary.right) - Math.max(0, boundary.x), height: Math.min(ownerDocument.documentElement.clientHeight, boundary.bottom) - Math.max(0, boundary.y) }
+    return findFormattingMenuPosition(clamped, rects.floating, viewport, obstacles) ?? clamped
   } } },
 }
 
 // A private host preserves the menu's blur boundary while escaping editor scroll clipping.
 const menuHost = ownerDocument.createElement('div')
 let positionFrame: number | undefined
-function onAncestorScroll(event: Event) {
-  if (!(event.target instanceof Element) || !event.target.contains(editorElement) || positionFrame !== undefined) return
+let composerObserver: MutationObserver | undefined
+function requestPositionUpdate() {
+  if (positionFrame !== undefined) return
   positionFrame = requestAnimationFrame(() => {
     positionFrame = undefined
     if (!props.editor.isDestroyed) props.editor.view.dispatch(props.editor.state.tr.setMeta(menuKey, 'updatePosition'))
   })
+}
+
+function onAncestorScroll(event: Event) {
+  if (event.target instanceof Element && event.target.contains(editorElement)) requestPositionUpdate()
 }
 
 // Reading should not leave formatting controls covering the selected text.
@@ -84,6 +106,11 @@ function onMouseDown() { rightClicked = false }
 
 onMounted(() => {
   ownerDocument.body.appendChild(menuHost)
+  const form = props.containWithinEditor ? editorElement.closest('form') : null
+  if (form) {
+    composerObserver = new MutationObserver(requestPositionUpdate)
+    composerObserver.observe(form, { childList: true, subtree: true, characterData: true })
+  }
   ownerDocument.addEventListener('scroll', onAncestorScroll, true)
   ownerDocument.addEventListener('wheel', onReadingWheel, { capture: true, passive: true })
   const el = editorElement
@@ -92,6 +119,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  composerObserver?.disconnect()
   ownerDocument.removeEventListener('scroll', onAncestorScroll, true)
   ownerDocument.removeEventListener('wheel', onReadingWheel, true)
   if (positionFrame !== undefined) cancelAnimationFrame(positionFrame)
