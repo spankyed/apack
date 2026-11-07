@@ -39,6 +39,9 @@ For this host's shared external OrbStack data location, safe relocation and veri
 For recording contracts and the maintained diagnosis/comparison workflow, see
 [application performance recording](references/application-performance.md).
 
+A terminal's process is owned by a Rust broker outside the app, pinned as a sibling checkout: see
+[the terminal broker](references/terminal-broker.md).
+
 ## Document lifecycle
 
 Keep current decisions and requirements in place. When a decision changes, reconcile the affected
