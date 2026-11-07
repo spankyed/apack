@@ -1,6 +1,6 @@
 # Incremental projections
 
-Status: steps 1 to 4 built, 2026-11-06 (elmdb #83 and #84, apack #359 and the PR above it); step 5 planned. Builds on `database-owns-change.md`, whose seven steps are open as PRs (apack #349 to #358,
+Status: steps 1 to 5 built, 2026-11-06: elmdb #83, #84 and #85, apack #359, #360 and #361. Builds on `database-owns-change.md`, whose seven steps are open as PRs (apack #349 to #358,
 elmdb #80 to #82). Each step below is a PR of its own, stacked on those, elmdb first where a step touches both.
 
 ## Why
@@ -95,13 +95,19 @@ verifying the pack builds, 9 ms compiling (median of 20, 2026-11-06, load 8). `r
 compiled catalog keyed by what it is read from (the packs directory's entries, each pack's directory, receipt and
 snapshot, and the record of which are disabled), a few stats, and reads it again only when that key moves.
 
-## Step 5: the invariant, generated (ears)
+## Step 5: the invariant, generated (SDK) — built
 
-`writers-converge.spec.ts` checks fixed scenarios. A model-based test generates sequences of: app writes, a second
-process's writes, a second process killed mid-unit, a reset elsewhere, a burst large enough to pass the log's bound,
-and a projection version change. After each it asserts what the app's engine shows, its projections included, equals
-what a fresh engine over the same files shows. It runs a fixed number of seeded sequences in the fast pool and prints
-the seed of a failure, as elmdb's own model tests do.
+`projections-converge.spec.ts` generates histories from seeds, a failure printing its seed: the app's engine writing,
+a real second process writing and dying after a commit or inside an open unit, bursts larger than a chunk, a reset from
+the second process, catch-ups, and the projection's version changing. After every catch-up the projection's rows must
+be what deriving them afresh gives. Sixteen histories run in the fast pool in about 3 s. Ignoring destroyed entities,
+a write skipping a backlog and a catch-up skipping ahead each fail it on a mutated copy.
+
+**What it found:** on macOS a writer killed inside an open unit leaves the write lock held while another process has
+the database open, and every later write there waits for good. elmdb locks with POSIX semaphores on macOS, which only an
+environment's first opener resets; Linux and Windows keep LMDB's robust mutexes. elmdb #85 fixes it: a writer holds a
+kernel-released lock on a file beside the database for its whole transaction, and whoever holds that lock releases a
+semaphore left taken. The test kills writers inside a unit on every platform.
 
 ## Deferred, with what would bring each back
 
