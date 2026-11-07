@@ -32,7 +32,7 @@ export type PackChangedEvent = { type: 'PACK_CHANGED'; packId: string };
 /** Raised once every row the app holds has been replaced and the new world is built (`services.appData`) */
 export type DataReplacedEvent = { type: 'DATA_REPLACED' };
 /** Raised when a local tool says it committed to the app's database from its own process */
-export type DataChangedElsewhereEvent = { type: 'DATA_CHANGED_ELSEWHERE'; types?: readonly string[] };
+export type DataChangedElsewhereEvent = { type: 'DATA_CHANGED_ELSEWHERE' };
 /** Raised after restarting a pack's systems, once they're in the actor system and can receive events */
 export type SystemsSpawnedEvent = { type: 'SYSTEMS_SPAWNED'; systemIds: string[] };
 

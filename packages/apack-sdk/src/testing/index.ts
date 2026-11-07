@@ -5,6 +5,7 @@ import type { SettingsAdmin } from '../services/settings.ts';
 import { createEarsEngine, type CallCounting, type EarsDatabase, type EarsEngine, type EngineSchema, type RankDeclaration, type RelationRules, type RowRules } from '@apackdev/ears';
 import { createTemporaryDatabases } from '@apackdev/ears/lmdb';
 import { _bindEars } from '../ears/index.ts';
+import { _installProjections } from '../runtime/projections.ts';
 import type { ContentRuntime } from '../framework/content-runtime.ts';
 export { nativePackDeclarationFixture } from './pack-declaration.ts';
 import { SDK_ENTITIES, SDK_REL_KINDS, SDK_RELATION_RULES, SDK_ROW_RULES, SDK_ROLES, _withSdkIndexes } from '../types/sdk-entities.ts';
@@ -89,6 +90,7 @@ function installFreshEngine(): EarsEngine {
   // Every value a read gives back is frozen: code that changes one, expecting the database to change, throws here
   // rather than silently not persisting in the app
   engine = createEarsEngine({ database, freeze: true });
+  _installProjections(engine);
   _bindEars(engine);
   return engine;
 }

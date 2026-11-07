@@ -64,34 +64,31 @@ The log starts as a pure addition. Nothing is deleted until a consumer moves ont
 
 This is the step that changes how packs are written. Review it as a design first.
 
-**Two modes, chosen per projection, because there are two situations.** This is the pattern of Marten's inline and async projections, and of CQRS systems with checkpoints.
+**Built as one kind, not two.** The plan proposed inline and async modes, with library search rows as the async one. Reading the code showed that feature is switched off (`[SEARCH_INDEX_FF]`), so nothing maintains those rows, in the app or anywhere. An async mode and `whenProjected` would have had no user, so neither was built.
 
-- **Inline:** runs in the same transaction as the write that caused it, so the source and its derived rows commit together, like a database index or trigger. A note and its references are never seen apart, by any process.
-- **Async:** runs after the commit, from the cursor, for work too slow to do under the write lock.
-- **Other processes' commits always go the async way, for both modes.** A tool can't run pack code. An inline projection catches up on them at the app's next wake or commit.
+- **A write in this process** runs the projection in its own unit, so a row and what's derived from it commit together, like a database index.
+- **Another process's commit** can't run pack code. It's caught up on from the change log: at boot, after data is replaced, and when told.
 
-**Declared:** `defineProjection({ from: ['Note'], mode: 'inline', apply(changes) })` in `@apackdev/sdk/framework`, named in `apack.json` at `features.<id>.projections`, and generated like `views` and `repositories`. An `apply` works only from the changes and the engine, and must be rebuildable from nothing.
+**Declared:** `defineProjections({ references: { from: ['Note'], apply(ids), rebuild() } })` in `@apackdev/sdk/framework`, named in `apack.json` at `features.<id>.projections`, generated like `views`.
 
-**Exactly once, in order:** each projection's cursor lives in a host-owned row, written in the same transaction as its output. The inline step holds the write lock, so it applies any other process's commits before its cursor first, then the unit's own pending changes, then advances. `truncated` means rebuild from nothing. At boot, every projection catches up from its cursor.
-
-**Waiting:** `whenProjected(sequence)` lets a reader wait for an async projection or for another process's commit where that matters. Inline projections never need it.
+**Exactly once:** each projection's cursor is a `ProjectionCursor` row, written in the same transaction as its output. No cursor, a `truncated` log, or a commit that can't say what it changed means `rebuild()`.
 
 **The hook:** every outermost write becomes a unit that runs matching inline projections before it commits. Only projections whose `from` matches the unit's changed types run, so a write to anything else pays a type check and no more.
 
 **Failure:** a throw in an inline projection fails the write and undoes it, as a trigger does. That's the safer failure, since the alternative is derived data quietly drifting. An async projection's failure is reported, and it retries from its cursor without losing its place.
 
-**Which mode:**
-- **Notes' references, inline:** `syncReferences` and `resolveReferencesTo` leave `notes/be/repository/commands.ts`. `bootstrapReferences` and its fact handlers go, which also removes the notes walk from the profile. `resolveReferencesTo` queries `linkTargets` across notes, so measure that under the lock.
-- **Library search rows, async:** `fileDocument` and `indexDocument` move off the write path, which fixes the stale `IndexedDoc` rows a tool's edit leaves today. Search results lag a write slightly, and embedding is already deferred.
+**The first projection:** notes' references. `syncReferences` and `resolveReferencesTo` leave `notes/be/repository/commands.ts`, and `bootstrapReferences` and its fact handlers go, which removes the notes walk from the profile and from every boot after the first.
 
 **Also touched:** public API reports, the pack facade, `apack pack` templates, `docs/public-facing/features.md`, and content goldens if applied content moves.
 
-**Gate, before anything moves onto it:** measure the hook on `write` benches and on a real notes write, with no projection matching and with references inline. Stop and report if a write that matches no projection gets more than 5% slower, or if holding the lock through references visibly stalls the app's other writes.
+**Gate, measured 2026-11-05 (CPU per create, median of five, load about 36):** a write matching no projection 41.5 µs against 41.4 µs with no hook; a matching one 58.4 µs, the price of a unit.
+
+**A known cost:** a projection untouched for more than the log's 4096 commits rebuilds on its next write, under the lock. That's about 140 ms at 11,000 notes, and rare.
 
 **Verify:**
 - Step 3's test extended so that every projection equals a rebuild from zero, under random histories and kills.
 - A case that a reader in another process never sees a note without its references, which is what inline promises.
-- A throwing inline projection undoes the write, and a throwing async one resumes.
+- A throwing projection undoes the write.
 - The existing notes and library suites pass unchanged, which is the proof that behaviour held.
 - An E2E where a tool edits a note and a document, with the app open and with it closed.
 
@@ -136,7 +133,7 @@ This is the step that changes how packs are written. Review it as a design first
 | 1 Packs list cache | host | About 100 ms per refresh | Low |
 | 2 Log and cursors | elmdb format, write path; ears | `reconciled`, the notes walk on unrelated commits | Write cost, gated by measurement |
 | 3 Invariant test | tests | nothing | Low |
-| 4 Projections | SDK, codegen, the write path, pack authoring | Derived-row special cases | Highest: changes how packs are written, and adds a hook to every write |
+| 4 Projections | SDK, codegen, the write path, pack authoring | Derived-row special cases, the boot walk | Changes how packs write derived data |
 | 5 Wake-ups | elmdb, binding | Tell, token, route, exit code, most bookkeeping | Windows, socket paths |
 | 6 Commit rules | elmdb, host | Settings special cases | Poor value, likely skipped |
 | 7 Epoch | elmdb, surfaces | `DATA_REPLACED` as a separate path | Surface remounts, likely `reset` only |

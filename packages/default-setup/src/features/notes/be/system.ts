@@ -10,7 +10,6 @@ import { EARS } from '#generated/ears.ts';
 import type { Contract } from './contract.ts';
 import { repository } from '#generated/repository.ts';
 
-import { syncReferences } from './repository/link-utils.ts';
 import { exportNotes } from './export-notes.ts';
 import { importNotes } from './import-notes.ts';
 import { createLogger, reportError } from '@apackdev/sdk/logger';
@@ -149,16 +148,6 @@ export const notesSystem = setup({
           }
         }
       });
-    },
-
-    // Every note's links, in the trash or not, derived again from its text: data written before a note recorded
-    // its link targets gets them here, and data replaced wholesale is indexed afresh
-    bootstrapReferences: () => {
-      const allNotes = query.withTrashed(EARS.Entity.Note).pick(['content']);
-      for (const note of allNotes) {
-        syncReferences(note.id as EARS.EntityId, (note.content as string | undefined) ?? '');
-      }
-      logger.info(`Bootstrapped REFERENCES relations for ${allNotes.length} notes`);
     },
 
     softDeleteNote: ({ event, reply }) => {
@@ -398,17 +387,7 @@ export const notesSystem = setup({
   },
   states: {
     idle: {
-      entry: ['bootstrapReferences', 'cleanupExpiredNotes'],
-      on: {
-        // References are an index derived from note text, so data restored or reset is indexed again from its text
-        DATA_REPLACED: {
-          actions: 'bootstrapReferences',
-        },
-        DATA_CHANGED_ELSEWHERE: {
-          guard: ({ event }) => event.types === undefined || event.types.includes(EARS.Entity.Note),
-          actions: 'bootstrapReferences',
-        },
-      },
+      entry: 'cleanupExpiredNotes',
     },
   },
 });

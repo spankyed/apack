@@ -2,8 +2,8 @@ import { compileSettingsCatalog } from '../features/settings/validation.ts';
 // The host's implementations of the services packs reach through `services` (contracts in @apackdev/sdk/services),
 // and the one place the app's HostRuntime is assembled.
 import { secretRedaction } from '../secrets/redaction.ts';
-import type { HostRuntime, RootEvents, PerformanceExecution } from '@apackdev/sdk/runtime';
-import type { ChangedElsewhere, EarsDatabase, EarsEngine } from '@apackdev/ears';
+import { _catchUpProjections, _installProjections, type HostRuntime, type RootEvents, type PerformanceExecution } from '@apackdev/sdk/runtime';
+import type { EarsDatabase, EarsEngine } from '@apackdev/ears';
 import type { PackRegistry } from '../packs/registry.ts';
 import { createAppData } from './app-data.ts';
 import { createOnboarding } from './onboarding.ts';
@@ -21,8 +21,8 @@ const logger = createLogger('host-runtime');
 
 /**
  * How long a refresh after another process's commit waits for more: a shell loop or a repl session tells once per command,
- * and each refresh has every system publish and notes walk every note. CPU profile of the built app, 2026-11-05, load about
- * 40: 148 ms per refresh at 1 note, 259 ms at 11,000, before the packs list stopped re-reading the disk for it.
+ * and each refresh has every system publish. CPU profile of the built app, 2026-11-05, load about 40: 10 ms per refresh at
+ * 1 note, 148 ms at 11,000.
  */
 const ELSEWHERE_REFRESH_MS = 250;
 
@@ -57,6 +57,7 @@ export type AppRuntime = HostRuntime & {
 };
 
 export function createHostRuntime({ transport, appVersion, database, runHistory, engine, packs, countCalls, performance }: HostRuntimeOptions): AppRuntime {
+  _installProjections(engine);
   const settingsStore = createSettingsStore({
     ears: () => engine,
     catalog: packs.settingsCatalog,
@@ -70,16 +71,15 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
     refreshing ??= setTimeout(() => {
       refreshing = undefined;
       // Nothing is waiting on this timer to catch what it throws, and an uncaught error ends the process
-      let changed: ChangedElsewhere = { any: true, types: 'all' };
+      let changed = true;
       try {
         changed = engine.admin.changedElsewhere();
       } catch (error) {
         logger.error('Refreshing after a commit from another process failed:', error as Error);
       }
-      if (!changed.any) return;
-      transport.rootEvents.emitIncoming({ to: HOST.bus, event: {
-        type: 'DATA_CHANGED_ELSEWHERE', ...(changed.types !== 'all' && { types: [...changed.types] }),
-      } });
+      // Whatever the answer, since each projection reads the log from its own cursor
+      _catchUpProjections(engine);
+      if (changed) transport.rootEvents.emitIncoming({ to: HOST.bus, event: { type: 'DATA_CHANGED_ELSEWHERE' } });
     }, ELSEWHERE_REFRESH_MS);
     refreshing.unref?.();
   };

@@ -3,7 +3,7 @@ import { createStartupPerformance, observeIndexAdmission } from './startup-perfo
 import { createNodePerformanceController } from '@apackdev/host/diagnostics/node';
 import { createActor } from 'xstate';
 import { createLogger, reportError } from '@apackdev/sdk/logger';
-import { bindHost } from '@apackdev/sdk/runtime';
+import { _catchUpProjections, bindHost } from '@apackdev/sdk/runtime';
 import { _getLmdbPath, _getRunHistoryPath } from '@apackdev/sdk/utils';
 import type { EarsDatabase, EarsEngine } from '@apackdev/ears';
 import { assertNoDatabaseWriter, openDatabaseStore, openRunHistory, storedSettings, type RunsDatabase } from '@apackdev/host/database';
@@ -235,7 +235,10 @@ async function initializeBackend(performance?: ReturnType<typeof createNodePerfo
   logger.info(bootReading());
 
   // ── Start the packs: each one's onInit, the migrations (the app's, then external packs'), the content
-  if (!recoveringSettings) startPacks(packs);
+  if (!recoveringSettings) {
+    startPacks(packs);
+    _catchUpProjections(engine);
+  }
 
   // ── Start backend actor ──────────────────────────────────────────────
   backendActor = createActor(createAppBus(packs, appClaims), {

@@ -19,6 +19,8 @@ export const SDK_ENTITIES = {
   Document: 'Document',
   /** A folder documents and other folders sit in */
   Collection: 'Collection',
+  /** How far through the change log a projection has read */
+  ProjectionCursor: 'ProjectionCursor',
 } as const;
 
 /**

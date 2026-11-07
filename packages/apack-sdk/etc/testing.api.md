@@ -211,6 +211,10 @@ export interface TestPacks {
     readonly earsRoles: Map<string, string>;
     // (undocumented)
     readonly help: Map<string, HelpArticle[]>;
+    readonly projections: Array<{
+        name: string;
+        projection: ProjectionDefinition;
+    }>;
     readonly repositories: Map<string, unknown>;
     readonly services: Map<string, unknown>;
     readonly stepDeclarations: Map<string, StepCatalogEntry>;

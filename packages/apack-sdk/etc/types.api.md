@@ -181,6 +181,7 @@ export namespace EARS {
         readonly Prompt: "Prompt";
         readonly Document: "Document";
         readonly Collection: "Collection";
+        readonly ProjectionCursor: "ProjectionCursor";
     };
     // (undocumented)
     export type AttributePayloads = EARS_2.AttributePayloads;
@@ -340,6 +341,7 @@ export const SDK_ENTITIES: {
     readonly Prompt: "Prompt";
     readonly Document: "Document";
     readonly Collection: "Collection";
+    readonly ProjectionCursor: "ProjectionCursor";
 };
 
 // @public

@@ -37,6 +37,22 @@ test('an app starts while a script writes rows, and both come through', async ({
     await app!.close();
     app = undefined;
 
+    // A note written with no app running gets its references when one next starts
+    const env = { ...process.env, APACK_ENV: 'test' };
+    const fields = "{ completed: false, displayOrder: 0, hideCompletedChildren: false, icon: '', lastSeen: 0, noteType: 'document' }";
+    const { stdout: created } = await promisify(execFile)(process.execPath, [CLI, 'db', 'exec', `
+      const target = create(EARS.Entity.Note, { ...${fields}, title: 'target', content: '' }).id();
+      return create(EARS.Entity.Note, { ...${fields}, title: 'source', content: '[t](apack-ref://note/' + target + ')' }).id();`,
+    '--data-dir', userDataDir, '-o', 'json'], { env });
+    const source = JSON.parse(created.trim().split('\n').at(-1)!) as string;
+    const references = `return findRelations({ source: ${JSON.stringify(source)}, kind: 'references' }).length`;
+    const countReferences = async () => (await promisify(execFile)(process.execPath, [CLI, 'db', 'query', references, '--data-dir', userDataDir], { env })).stdout.trim().split('\n').at(-1);
+    expect(await countReferences(), 'no pack code ran in the tool').toBe('0');
+    await launch();
+    expect(await countReferences()).toBe('1');
+    await app!.close();
+    app = undefined;
+
     fs.writeFileSync(script, `import fs from 'node:fs';
       export default async ({ db, EARS, log }) => {
         let written = 0;

@@ -1,6 +1,7 @@
 // What the registered packs contributed, as the SDK reads it. The app that registers them owns the data (host's
 // createPackRegistry and createFePackRegistry) and binds read-only views: HostRuntime.packs in a backend process,
 // FeHostRuntime.packs (FePackRegistryView, fe-host.ts) in the renderer.
+import type { ProjectionDefinition } from '../framework/projections.ts';
 import type { FeatureRef } from '../ids/refs.ts';
 import type { StepDefinition } from '../steps/types.ts';
 import type { StepBackendBinding } from '../steps/catalog.ts';
@@ -42,6 +43,8 @@ export interface PackRegistryView extends PackExtensionsView {
   stepBindings(): ReadonlyMap<string, StepBackendBinding>;
   /** Every registered pack's services, by name */
   getRegisteredServices(): Record<string, unknown>;
+  /** Every registered feature's projections, with the name each is known by */
+  projections(): ReadonlyArray<{ name: string; projection: ProjectionDefinition }>;
   /** The repository a registered pack declares under `name`, or undefined */
   repository(name: string): unknown;
   /** The refs of every registered system, the host's included */

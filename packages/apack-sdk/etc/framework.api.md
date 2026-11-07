@@ -123,6 +123,9 @@ export function defineHandlers<TContext extends MachineContext, TEvent extends E
 }>(): Handlers<TContext, TEvent, TOut>;
 
 // @public
+export function defineProjections<const T extends ProjectionDefinitions>(projections: T): T;
+
+// @public
 export function defineSystem<C extends SystemContract>(): SystemSpec<C>;
 
 // @public
@@ -467,6 +470,7 @@ export type PackEventContracts = Record<string, FeatureEventContract>;
 export interface PackFeature {
     // (undocumented)
     designation?: string;
+    projections?: ProjectionDefinitions;
     services?: readonly string[];
     settings?: SettingsDefinition;
     // (undocumented)
@@ -625,6 +629,16 @@ export function _parseServiceReference(ref: string): {
     packId: string;
     name: string;
 };
+
+// @public
+export interface ProjectionDefinition {
+    apply(ids: readonly string[]): void;
+    readonly from: readonly string[];
+    rebuild(): void;
+}
+
+// @public
+export type ProjectionDefinitions = Readonly<Record<string, ProjectionDefinition>>;
 
 // @public (undocumented)
 export interface ReferenceCatalogEntry {
@@ -964,12 +978,11 @@ export type SystemEvents =
 * way, though most are as they were. Unlike `DATA_REPLACED` it doesn't mean work held over rows has lost them.
 *
 * Handling it is optional, as there: the bus also asks every system for its startup data. Declare it only for what
-* re-reading cannot fix, such as an index derived from the rows. `types` names the entity types they changed, and is
-* absent when that isn't known, which means any of them may have.
+* re-reading cannot fix. Rows derived from others are for a projection (`defineProjections`), which is caught up before
+* this arrives.
 */
 | {
     type: 'DATA_CHANGED_ELSEWHERE';
-    types?: readonly string[];
 };
 
 // @public

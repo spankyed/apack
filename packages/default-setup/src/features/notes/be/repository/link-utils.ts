@@ -48,9 +48,13 @@ export function syncReferences(sourceId: EARS.EntityId, content: string): void {
   }
 }
 
-/** Indexes the links other notes' text already makes to a note that has just been created, found through the value index */
+/**
+ * Indexes the links other notes' text makes to a note that they have no REFERENCES relation for yet, as when it has just
+ * been created: who links to it is found through the value index, and those already related are left unread
+ */
 export function resolveReferencesTo(noteId: EARS.EntityId): void {
+  const related = new Set(findRelations({ target: noteId, kind: EARS.RelKind.REFERENCES }).map((r) => r.source));
   for (const note of query.withTrashed(EARS.Entity.Note).where('linkTargets', noteId).pick(['content'])) {
-    syncReferences(note.id as EARS.EntityId, note.content as string);
+    if (!related.has(note.id)) syncReferences(note.id as EARS.EntityId, note.content as string);
   }
 }
