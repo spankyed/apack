@@ -405,6 +405,7 @@ export const notesSystem = setup({
           actions: 'bootstrapReferences',
         },
         DATA_CHANGED_ELSEWHERE: {
+          guard: ({ event }) => event.types === undefined || event.types.includes(EARS.Entity.Note),
           actions: 'bootstrapReferences',
         },
       },

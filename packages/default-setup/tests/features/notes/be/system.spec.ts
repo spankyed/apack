@@ -54,6 +54,20 @@ it('indexes the references in what another process wrote', async () => {
   expect(query.ids(source).out(EARS.RelKind.REFERENCES, EARS.Entity.Note).ids()).toEqual([target]);
 });
 
+it('leaves the references alone when another process changed no note', async () => {
+  const target = note('target');
+  const source = note('source');
+  write(source).set('content', `[target](${formatReferenceHref({ type: 'note', id: target })})`);
+
+  await app.send('notes', { type: 'DATA_CHANGED_ELSEWHERE', types: ['Document'] });
+  await app.settle();
+  expect(query.ids(source).out(EARS.RelKind.REFERENCES, EARS.Entity.Note).ids()).toEqual([]);
+
+  await app.send('notes', { type: 'DATA_CHANGED_ELSEWHERE', types: ['Note'] });
+  await app.settle();
+  expect(query.ids(source).out(EARS.RelKind.REFERENCES, EARS.Entity.Note).ids()).toEqual([target]);
+});
+
 it('ancestorChain is the notes above one, its root first', () => {
   const { top, middle, bottom } = tree();
   expect(repository.noteQueries.ancestorChain(bottom).map((n) => n.id)).toEqual([top, middle]);

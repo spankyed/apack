@@ -3,7 +3,7 @@ import { compileSettingsCatalog } from '../features/settings/validation.ts';
 // and the one place the app's HostRuntime is assembled.
 import { secretRedaction } from '../secrets/redaction.ts';
 import type { HostRuntime, RootEvents, PerformanceExecution } from '@apackdev/sdk/runtime';
-import type { EarsDatabase, EarsEngine } from '@apackdev/ears';
+import type { ChangedElsewhere, EarsDatabase, EarsEngine } from '@apackdev/ears';
 import type { PackRegistry } from '../packs/registry.ts';
 import { createAppData } from './app-data.ts';
 import { createOnboarding } from './onboarding.ts';
@@ -70,12 +70,16 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
     refreshing ??= setTimeout(() => {
       refreshing = undefined;
       // Nothing is waiting on this timer to catch what it throws, and an uncaught error ends the process
+      let changed: ChangedElsewhere = { any: true, types: 'all' };
       try {
-        engine.admin.changedElsewhere();
+        changed = engine.admin.changedElsewhere();
       } catch (error) {
         logger.error('Refreshing after a commit from another process failed:', error as Error);
       }
-      transport.rootEvents.emitIncoming({ to: HOST.bus, event: { type: 'DATA_CHANGED_ELSEWHERE' } });
+      if (!changed.any) return;
+      transport.rootEvents.emitIncoming({ to: HOST.bus, event: {
+        type: 'DATA_CHANGED_ELSEWHERE', ...(changed.types !== 'all' && { types: [...changed.types] }),
+      } });
     }, ELSEWHERE_REFRESH_MS);
     refreshing.unref?.();
   };
