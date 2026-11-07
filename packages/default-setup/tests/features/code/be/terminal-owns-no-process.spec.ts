@@ -92,18 +92,21 @@ describe('what the broker owning the process removes', () => {
     await app.stop()
   })
 
-  it('leaves no active row behind when every terminal is killed (L2)', async () => {
+  it('leaves no row behind when every terminal is killed (L2, L3)', async () => {
     recordingSessions()
     const app = await startApp({ systems: ['code'] })
     await app.connect()
     await openATerminal(app)
-    expect(repository.terminalQueries.active()).toHaveLength(1)
+    expect(repository.terminalQueries.all()).toHaveLength(1)
 
     const { terminalService } = await import('#features/code/be/services/terminal.ts')
     await terminalService.killAll()
 
-    // A run that quit used to leave its rows active, so the next boot restored terminals that were never open
-    expect(repository.terminalQueries.active(), 'killAll marks every row closed').toEqual([])
+    // L2: a run that quit used to leave its rows open, so the next boot restored terminals that were never
+    // open. L3: and the rows themselves never went anywhere — a closed one was annotated, not removed, so a
+    // row accumulated for every terminal the user had ever opened. `restoreAll` opens what the query
+    // answers, which is the whole of what a row is for
+    expect(repository.terminalQueries.all(), 'a closed terminal leaves no row').toEqual([])
     await app.stop()
     resetTestData()
   })

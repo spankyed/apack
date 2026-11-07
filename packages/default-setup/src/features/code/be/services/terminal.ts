@@ -260,7 +260,7 @@ class TerminalService {
    * behind, so there is nothing here to clean up.
    */
   async restoreAll(handlers: TerminalHandlers): Promise<void> {
-    const persisted = repository.terminalQueries.active()
+    const persisted = repository.terminalQueries.all()
     const codeSettings = featureSettings.forFeature('code').get()
     const shellIntegrationEnabled = codeSettings?.enableShellIntegration !== false
 
@@ -286,7 +286,7 @@ class TerminalService {
           pid: session.pid,
           shell: row.shell,
           cwd: row.cwd,
-          active: row.active,
+          active: true,
           cols: row.cols,
           rows: row.rows,
         }

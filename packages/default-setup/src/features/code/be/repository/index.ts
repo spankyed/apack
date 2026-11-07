@@ -21,12 +21,10 @@ export interface TerminalEntity {
    */
   shell: string
   cwd: string
-  active: boolean
   cols: number
   rows: number
   createdAt: number
   updatedAt: number
-  closedAt?: number
 }
 
 export const terminalQueries = {
@@ -34,21 +32,20 @@ export const terminalQueries = {
     return query.ids(id).ofType(EARS.Entity.Terminal).pickOne() ?? undefined
   },
 
+  /**
+   * The terminals there are — which is every row, because **a closed one leaves none** (L3). A query leaves
+   * out the trash, and `markClosed` puts a row there, so there is no `active` attribute to filter on and no
+   * second record of whether a terminal exists.
+   */
   all: (): TerminalEntity[] => {
     return query(EARS.Entity.Terminal).pickAll()
-  },
-
-  active: (): TerminalEntity[] => {
-    // A query already leaves out the trash; keep the active ones
-    const all = query(EARS.Entity.Terminal).pickAll()
-    return all.filter(t => t.active === true)
   },
 }
 
 export const terminalCommands = {
   /** Records a terminal the service started, under the id it took for it (`newId`) */
   create: (terminal: Pick<TerminalEntity, 'title' | 'shell' | 'cwd' | 'cols' | 'rows'> & { id: EARS.EntityId<'Terminal'> }): EARS.EntityId => {
-    return create(EARS.Entity.Terminal, { ...terminal, active: true }).id()
+    return create(EARS.Entity.Terminal, terminal).id()
   },
   
   
@@ -82,27 +79,21 @@ export const terminalCommands = {
   },
   
   
+  /**
+   * The terminal is gone, so its row goes to the trash — **the one way a Terminal row ends** (L3).
+   *
+   * It used to set `active: false` and a `closedAt` nothing ever read, leaving a row behind for every
+   * terminal the user had ever opened; beside it sat an unreached `delete` that did the trashing. Nothing
+   * reads a closed terminal: `restoreAll` opens what the query answers, and that is the whole of what a row
+   * is for. So there is one path, and it removes the record rather than annotating it.
+   */
   markClosed: (id: EARS.EntityId): void => {
-    if (!query.ids(id).exists()) {
-      logger.error(`Terminal ${id} not found`)
-      return
-    }
-    
-    const now = Date.now()
-    write(id).setMany({
-      active: false,
-      closedAt: now
-    })
-  },
-  
-  delete: (id: EARS.EntityId): void => {
-    if (!query.ids(id).exists()) {
-      logger.error(`Terminal ${id} not found`)
-      return
-    }
+    // **Already gone is the desired state, not an error.** A kill closes the row and the exit that follows
+    // closes it again; so does a restore that failed after its session had already exited. The row being
+    // absent is what this call is for
+    if (!query.ids(id).exists()) return
 
-    // To the trash, inactive, rather than deleted
-    write(id).set('active', false).trash()
+    write(id).trash()
   }
 }
 
