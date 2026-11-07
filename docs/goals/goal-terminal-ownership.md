@@ -337,6 +337,11 @@ second instance and neither owns it alone:
 - **No silent failure on the channel.** Not `.catch(() => {})`; the same rule as F9.
 - **Prefer hooks to polling**, and where a fact has no change notification, say so once rather than letting a
   timer become the default. The same standing rule the repo applies elsewhere.
+- **Design the inbound channel, not the poll interval.** A host that permits only outbound requests gives
+  the injected code no way to *receive* work, so commands from the app end up riding a tick — which is why
+  #372's plugin polls four times a second per session: its `/poll` response is how a queued prompt reaches
+  `$.prompt.fill`. Hooking every outbound event leaves that timer exactly where it was. The answer is a
+  long-poll, or a streamed response where the host allows one; a tick is the symptom.
 - **Ask upstream before working around.** The convention already exists in the ghostty plan: prefer an
   upstream integration change, keep a fork only if the needed public interface is small.
 - **One renderer per element, and one side admits a decision.** Where the app draws a host CLI's UI natively
