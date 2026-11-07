@@ -1,14 +1,13 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import ts from 'typescript';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { readPackageInputs } from '@apackdev/host/build/package-inputs';
-import { readPackBuild } from '@apackdev/host/packs';
 import { packFixture } from '@apackdev/sdk/testing/pack-fixture';
 import * as installations from '../../src/build/compiler-installation.ts';
 import { createPackBuilder, type PackBuilder } from '../../src/build/build-process.ts';
+import { publishedViewCode } from '../_support/published-view.ts';
 import type { PackFrontendAddress } from '../../src/build/frontend-process.ts';
 import { startPackBuildWatcher } from '../../src/build/watch.ts';
 
@@ -109,22 +108,6 @@ async function response(address: PackFrontendAddress, template = false): Promise
   return text;
 }
 
-/** This fixture publishes one deferred view; inspect the chunk its entry actually imports. */
-function publishedViewCode(root: string): string {
-  const output = path.join(root, 'dist');
-  const entry = fs.readFileSync(path.join(output, 'runtime/fe.js'), 'utf8');
-  const targets: string[] = [];
-  function visit(node: ts.Node): void {
-    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword
-      && node.arguments[0] && ts.isStringLiteral(node.arguments[0])) targets.push(node.arguments[0].text);
-    ts.forEachChild(node, visit);
-  }
-  visit(ts.createSourceFile('fe.js', entry, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS));
-  expect(targets).toHaveLength(1);
-  const asset = path.posix.normalize(path.posix.join('runtime', targets[0]!));
-  expect(Object.hasOwn(readPackBuild(output).integrity.files, asset)).toBe(true);
-  return fs.readFileSync(path.join(output, asset), 'utf8');
-}
 
 it('refreshes backend and live frontend together, retains failed incumbents and awaits retirement', async () => {
   const { root, entry, generation, captures } = pack;
