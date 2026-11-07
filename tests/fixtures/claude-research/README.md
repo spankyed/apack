@@ -249,3 +249,9 @@ ordinary user-theme file and durable settings preimage from `safe-theme-profile.
 Native command history is distinct from conversational model turns. The accepted scope
 is custom-theme restriction, Cancel preservation and preset recovery; live policy
 transitions and combined F1–F5 acceptance remain separate.
+
+Notebook result reading replay exports `driveNotebookWidthReview` from
+`src/integration/apack-notebook-width-drive.mjs`. It uses the isolated Linux profile,
+original Read/NotebookEdit approvals and formatter, durable settings preimages,
+and physical header/body reading through normal/compact/restored sizes. Compact
+insertion needs separate scroll positions; broader formatter/owner/F1–F5 work remains open.
