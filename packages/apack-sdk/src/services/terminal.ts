@@ -44,7 +44,24 @@ export interface TerminalService {
    * broker's.
    */
   open(
-    options: { cols: number; rows: number; shell?: string; cwd?: string },
+    options: {
+      cols: number;
+      rows: number;
+      shell?: string;
+      /**
+       * The shell's own launch arguments, in order.
+       *
+       * **This is how shell integration is arranged.** The markers a terminal reads facts from — the working
+       * directory, and the prompt and command boundaries — come from code the shell runs at startup, and
+       * each shell takes that a different way: bash and PowerShell as an argument, zsh and fish as
+       * environment. Typing it into the shell once it has started is the alternative, and it echoes, races
+       * startup, needs a branch per shell and has none for PowerShell or cmd.
+       */
+      args?: readonly string[];
+      /** Added to the environment the session is started in, which carries none of the app's own identity */
+      env?: Readonly<Record<string, string>>;
+      cwd?: string;
+    },
     listeners: TerminalListeners,
   ): Promise<TerminalSession>;
 }

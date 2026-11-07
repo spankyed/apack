@@ -764,7 +764,7 @@
           "restoreTerminals": true,
           "defaultBaseDirectory": null,
           "baseDirectory": null,
-          "enableShellIntegration": false,
+          "enableShellIntegration": true,
           "confirmTerminalClose": true,
           "closeTerminalOnTabClose": true,
           "maxTerminals": 25,

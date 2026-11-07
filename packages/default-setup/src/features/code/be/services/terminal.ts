@@ -9,6 +9,7 @@ import { createLogger } from '@apackdev/sdk/logger';
 import { services } from '#generated/services.ts'
 import type { TerminalSession } from '@apackdev/sdk/services'
 import { directoryToStart, shellToStart, submitFor } from './known-shells.ts'
+import { integrationDirectory, integrationFor } from './shell-integration.ts'
 
 const logger = createLogger('terminal');
 
@@ -59,8 +60,14 @@ class TerminalService {
     const rows = Math.max(1, Math.min(options.rows || 24, 200))
     const title = this.sanitizeTitle(options.title || path.basename(cwd) || 'root')
 
+    // **Arranged before the shell starts, not typed into it after** (D3, F14). `undefined` means this
+    // platform or shell has no arrangement yet, and the session is started exactly as the user would.
+    const integration = await this.arrangeIntegration(shell)
+
     // The handlers are bound to the id before the session exists, so no byte can arrive with nowhere to go
-    const session = await services.terminal.open({ cols, rows, shell, cwd }, {
+    const session = await services.terminal.open({
+      cols, rows, shell, cwd, args: integration?.args, env: integration?.env,
+    }, {
       onOutput: (data) => handlers.onData(id, data),
       onExit: (code) => {
         this.terminals.delete(id)
@@ -72,11 +79,6 @@ class TerminalService {
     const info: TerminalInfo = { id, title, pid: session.pid, shell, cwd, active: true, cols, rows, submit: submitFor() }
     this.terminals.set(id, { info, session, sizedBy })
     repository.terminalCommands.create({ id, title, shell, cwd, cols, rows })
-
-    const integration = featureSettings.forFeature('code').get()
-    if (integration?.enableShellIntegration !== false) {
-      await this.injectShellIntegration(session, shell)
-    }
 
     return info
   }
@@ -225,21 +227,31 @@ class TerminalService {
   }
 
   /**
-   * Types the OSC 7 hook into the user's shell, which is the mechanism D3 calls defective and keeps for now:
-   * it echoes, races startup and has no branch for PowerShell or cmd (X4). Launch-time injection replaces it
-   * in the phase that owns the markers; what changed here is only that it writes through the session.
+   * Writes what a shell needs to report itself, and answers how to start it — or `undefined` when there is
+   * nothing arranged for this shell or this platform, or when the user has turned integration off.
+   *
+   * The files are rewritten on every session rather than once: they are small, they are ours, and the
+   * alternative is a stale copy surviving an app upgrade with nobody able to say which version wrote it.
    */
-  private async injectShellIntegration(session: TerminalSession, shell: string): Promise<void> {
-    const shellName = path.basename(shell).replace(/\.exe$/i, '').toLowerCase()
-    const comment = '# apack listener'
+  private async arrangeIntegration(shell: string) {
+    const settings = featureSettings.forFeature('code').get()
+    if (settings?.enableShellIntegration === false) return undefined
 
-    if (shellName.includes('bash')) {
-      await session.write(`__ab_osc7(){ printf "\\033]7;file://%s%s\\007" "$(hostname)" "$PWD"; }; PROMPT_COMMAND="__ab_osc7\${PROMPT_COMMAND:+;$PROMPT_COMMAND}" ${comment}\n`)
-    } else if (shellName.includes('zsh')) {
-      await session.write(`__ab_osc7(){ printf "\\033]7;file://%s%s\\007" "$(hostname)" "$PWD"; }; precmd_functions+=(__ab_osc7) ${comment}\n`)
-    } else if (shellName.includes('fish')) {
-      await session.write(`function __ab_osc7 --on-event fish_prompt; printf "\\033]7;file://%s%s\\007" (hostname) $PWD; end ${comment}\n`)
+    const directory = integrationDirectory()
+    const arrangement = integrationFor(shell, directory)
+    if (!arrangement) return undefined
+
+    try {
+      for (const file of arrangement.files) {
+        await services.filesystem.writeFile(path.join(directory, file.at), file.contents)
+      }
+    } catch (error) {
+      // A shell that starts without its hook is a terminal that does not follow `cd`; one that does not
+      // start at all is a terminal. So this reports and carries on
+      logger.warn('Could not write shell integration; the terminal will not report its directory', { error })
+      return undefined
     }
+    return arrangement
   }
 
   /**
@@ -253,8 +265,6 @@ class TerminalService {
    */
   async restoreAll(handlers: TerminalHandlers): Promise<void> {
     const persisted = repository.terminalQueries.all()
-    const codeSettings = featureSettings.forFeature('code').get()
-    const shellIntegrationEnabled = codeSettings?.enableShellIntegration !== false
 
     for (const row of persisted) {
       if (this.terminals.has(row.id)) continue
@@ -264,8 +274,9 @@ class TerminalService {
       const shell = this.shellFor(row.shell)
       const cwd = this.directoryFor(row.cwd)
       try {
+        const integration = await this.arrangeIntegration(shell)
         const session = await services.terminal.open(
-          { cols: row.cols, rows: row.rows, shell, cwd },
+          { cols: row.cols, rows: row.rows, shell, cwd, args: integration?.args, env: integration?.env },
           {
             onOutput: (data) => handlers.onData(row.id, data),
             onExit: (code) => {
@@ -290,7 +301,6 @@ class TerminalService {
         }
         // Restored by nobody, so the first window to fit it takes the size (M2)
         this.terminals.set(row.id, { info, session, sizedBy: undefined })
-        if (shellIntegrationEnabled) await this.injectShellIntegration(session, shell)
 
         logger.info(`Restored terminal ${row.title} (${row.id}) as a new shell (pid ${session.pid}); the previous process and its output are gone`)
       } catch (error) {

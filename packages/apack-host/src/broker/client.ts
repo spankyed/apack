@@ -70,8 +70,27 @@ export interface BrokerSessionListeners {
  */
 const logger = createLogger('broker');
 
+/** What a session is started with */
+export interface BrokerSessionOptions {
+  cols: number;
+  rows: number;
+  shell?: string;
+  /**
+   * The shell's own launch arguments, in order.
+   *
+   * **This is how shell integration is arranged**: the markers a terminal reads facts from come from code
+   * the shell runs at startup, and bash and PowerShell take that as an argument (`--init-file`, `-NoExit`)
+   * where zsh and fish take it as environment. Typing it into the shell after it starts is the alternative,
+   * and it echoes, races startup and has no branch for PowerShell or cmd.
+   */
+  args?: readonly string[];
+  /** Added to the environment the broker runs in, which already has the app's own identity stripped out */
+  env?: Readonly<Record<string, string>>;
+  cwd?: string;
+}
+
 export interface Broker {
-  open(options: { cols: number; rows: number; shell?: string; cwd?: string }, listeners: BrokerSessionListeners): Promise<BrokerSession>;
+  open(options: BrokerSessionOptions, listeners: BrokerSessionListeners): Promise<BrokerSession>;
   close(): Promise<void>;
 }
 
@@ -105,8 +124,16 @@ export async function startBroker(options: { binary: string; socket: string; env
   }
 
   return {
-    async open({ cols, rows, shell, cwd }, sessionListeners) {
-      connection.send({ kind: 'spawn', cols, rows, shell: shell ?? null, cwd: cwd ?? null });
+    async open({ cols, rows, shell, args, env, cwd }, sessionListeners) {
+      connection.send({
+        kind: 'spawn',
+        cols,
+        rows,
+        shell: shell ?? null,
+        args: [...args ?? []],
+        env: Object.entries(env ?? {}),
+        cwd: cwd ?? null,
+      });
       const spawned = await connection.next(event => event.kind === 'spawned');
       if (spawned.kind !== 'spawned') throw new BrokerError('PTY', 'the broker answered no session');
       listeners.set(spawned.session, sessionListeners);
