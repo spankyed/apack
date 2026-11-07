@@ -39,7 +39,7 @@ of a truncated larger result set or an independent late-response fault injection
 
 Streaming configures a fixture CLI through normal Settings, then exercises the actual Claude Code
 chat flow, process protocol, throttled writer and message views. A fresh twenty-message conversation
-per trial keeps history size constant. The fixture emits twenty-four chunks at fixed intervals.
+per trial keeps history size constant. The fixture emits twenty-four chunks at fixed intervals by default; `APACK_PERFORMANCE_STREAM_CHUNKS` sets another count from 1 to 64 — the bound is `streamingBacklog`'s on progress points, and a larger count is refused where it is set rather than failing the trial's backlog later — and it changes the fixture's hash and its recorded distribution, so two sizes are two corpora. A larger one is how the throttled writer's cost is priced against reply length.
 Completion requires visible intermediate progress and the complete reply plus completion timestamp in
 its database-backed view and DOM. Reports retain first-visible and maximum visible-update-gap timings;
 backlog reports additionally retain bounded producer-enqueue and database-backed-view receipt

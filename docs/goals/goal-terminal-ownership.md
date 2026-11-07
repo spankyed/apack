@@ -161,12 +161,19 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   canvas; the buffer is in the pack's module-scoped pool). So *the next thing to build is a byte-level
   completion signal*, which the sustained-output, history-replay and first-byte readings all need, and
   without which "the broker can lose on the metric it is measured by" cannot be checked against this number.
-- **G1 is Phase T's last track and sits behind Phase G's reading.** The review states G1's severity is an inference
-  from reading, Phase G's *Done when* prices it, and the repo's rule is to measure before optimising.
-  `stream-writer.ts` is untouched by #372 (checked 2026-11-07 against
-  `origin/session/claude-code-integration`), so the fix has no rebase to think about — but
-  `thinking-writer.ts` (+51) and `stream-consumer.ts` (+362) do move there, so the thinking writer's half
-  belongs with that branch's cleanup rather than here.
+- **G1 is priced and stays open, with its fix placed.** Measured with the existing `streaming` scenario,
+  which already drives the writer at `intervalMs: 80`: **9,726 → 30,054 → 95,924 app write bytes** for
+  **864 → 2,160 → 4,340** characters of reply, so bytes-per-character climbs 11.3 → 13.9 → 22.1. Every flush
+  writes the whole accumulated text (a monotonic staircase in chunk-sized steps), and the cost follows
+  **flushes × final size / 2** with **flushes ≈ duration / 80 ms**, confirmed to within 10% at all three
+  sizes. That makes the review's ~15 MB for a 40 KB/60 s reply a measured result rather than an estimate.
+  [The pricing](../references/evidence/terminal-ownership.md#g1-priced-what-the-throttled-writer-writes-to-ears--2026-11-07).
+  **The writer cannot fix it alone** — the window renders streamed text from the view over the stored row,
+  so the 80 ms write *is* the UI update and lengthening it degrades the stream. The fix is a delta feed
+  beside a much less frequent durable write, which is the output pipe's payload discipline the review
+  assigns G1 to. `stream-writer.ts` is untouched by #372 (checked 2026-11-07 against
+  `origin/session/claude-code-integration`), but `thinking-writer.ts` (+51) and `stream-consumer.ts` (+362)
+  move substantially there, so that branch's cleanup is the cheapest place for the feed.
 - **Phase G also needs a quiet machine**, whichever instrument it uses: `npm run check:idle` reported 60%
   against a 70% floor and later 0% straight after a suite run, both 2026-11-07. Take it before Phase S,
   since it cannot be taken once state moves. Phase B's first commit is the last cheap exit — see Constraints.

@@ -32,6 +32,7 @@ removes the finding rather than fixing it, and names the construction that does.
 | T6 | open | not attempted | — | — | its honest fix is restart-in-place, which needs the session generation **Phase H** delivers ("a crashed shell is a new generation whose predecessor's transcript is labelled history"). Carrying a tab's pin, group and position across a kill-then-create is a hack Phase H deletes — the shape T7 was excluded for. Closes there, `dissolved`, with the generation as its guard |
 | T8 | test | `fe/composables/useTerminalActions.ts` — `customTitle` then `title`; the cwd derivation is the backend's and was being overridden here | `tests/features/code/fe/composables/use-terminal-actions.spec.ts` | the spec: restoring the cwd basename fails the case where a create passed a title |
 | T9 | test | `fe/state.ts` — `moveTerminalToPanel` prunes the group it emptied, as the four other removals in that machine do | `tests/features/code/fe/state.spec.ts` | the spec: dropping the prune fails it |
+| G1 | open | priced, not fixed — see [the pricing](#g1-priced-what-the-throttled-writer-writes-to-ears--2026-11-07) | three streaming runs at 24, 60 and 120 chunks; `ears.write` request bytes on the app database | — | the mechanism and its cost model are measured and the review's 15 MB figure confirmed. The fix is a delta feed beside a less frequent durable write, which is the output pipe's payload discipline the review assigns it to — the writer alone cannot fix it, since the 80 ms write is what updates the window |
 | G3 | open | fixed on `session/claude-code-integration` (#372), not on master | `hooks.ts` calls `killAllHandles()` there | — | closes when #372 lands; confirm it survives the cleanup pass |
 
 Disposition values: `test`, `dissolved`, `driven`, `open`.
@@ -87,6 +88,60 @@ reading does not cover. So the goal's constraint that "the broker can lose on th
 cannot be checked against *this* number: a broker adds its cost to the part that is still unmeasured. The
 first-byte reading has to exist before the broker's first-open latency can be compared to anything, and it
 needs a byte-level signal rather than the DOM.
+
+### G1 priced: what the throttled writer writes to EARS — 2026-11-07
+
+**The review states G1's severity is an inference from reading, and Phase G prices it. This is that price.**
+Taken with the existing `streaming` scenario, which drives the real Claude Code chat flow through
+`stream-consumer.ts`'s writer at `intervalMs: 80` — G1's exact subject — and reading the backend's
+`ears.write` spans' `ears.request_bytes` on the app database. **Byte counts, not durations**: a span's
+request size is unaffected by machine load, which is why these did not wait on `check:idle` and why no
+latency from these runs is cited.
+
+| | 24 chunks | 60 chunks | 120 chunks |
+|---|---|---|---|
+| Reply characters | 864 | 2,160 | 4,340 |
+| App write spans | 39 | 51 | 70 |
+| **App write bytes** | **9,726** | **30,054** | **95,924** |
+| The writer's own (>150 B) | 7,238 | 27,566 | 93,450 |
+| Flushes | 15 | 27 | 46 |
+| Largest single write | 974 | 2,270 | 4,450 |
+| **Bytes written per character** | **11.3** | **13.9** | **22.1** |
+| Trials | 20 measured, clean | 10 measured, clean | 1, see below |
+
+Fixtures `dee70d9e4785` and `1fb312fa24f6`; both runs' backend reports had `truncated: false`, `dropped: 0`.
+The 120-chunk trial **failed on `backlog-progress-data` only** — `streamingBacklog` records at most 64
+progress points — while its action completed correctly with a complete backend report, so its write data is
+sound and its latency is not cited. The knob now refuses a count past 64 where the count is set, rather than
+letting a correct stream fail its bookkeeping later.
+
+**The mechanism is confirmed, not inferred: every flush writes the whole accumulated text.** The writer's
+writes are a monotonic staircase in ~108-byte steps — the chunk size — `226, 235, 328, …, 875, 983, …,
+4,386, 4,450` at 120 chunks. And the cost follows one model, which the three sizes confirm to within 10%:
+
+> **bytes written ≈ flushes × (final size / 2)**, where **flushes ≈ duration / 80 ms**
+
+Checked: 15 × 974/2 = 7,305 against 7,238; 27 × 2,270/2 = 30,645 against 27,566; 46 × 4,450/2 = 102,350
+against 93,450. So it is **quadratic in reply length at a fixed chunk rate**, and linear in duration — which
+is why bytes-per-character climbs from 11.3 to 22.1 as the reply grows.
+
+**The review's headline figure survives being measured.** It estimated ~15 MB for a 40 KB reply over 60
+seconds. The model gives 60,000/80 = 750 flushes at an average 20 KB payload = **15 MB** — the same answer,
+now resting on a measured per-flush payload and a measured flush rate rather than on two assumptions. Worth
+recording because the repo's rule is to measure before accepting someone else's measurement, including its
+own, and here the inference was right.
+
+**Also measured: the 24 small writes are fixed overhead, not per-chunk.** They stay at 24 whether the reply
+has 24 chunks or 120, so they are the trial's other rows, and an earlier reading of them as one-per-chunk was
+wrong.
+
+**Where the fix belongs, which this pricing settles.** The writer cannot fix this alone: the window renders
+streamed text from the **view** over the stored row, so the 80 ms write *is* the UI update, and lengthening
+the interval degrades the stream rather than making it cheaper. The fix is a delta **feed** beside a much
+less frequent durable write — which is what this pack's own rule already prescribes for a feed, "patch what
+a window already holds, as streaming tokens would" — and that is the output pipe's payload discipline the
+review assigns G1 to, not a change to `stream-writer.ts`. G1 therefore stays **open** with a measured price
+and a named home, rather than closing on a fix that would trade the defect for a worse one.
 
 ### Baseline (Phase G) — the remaining five readings, not taken
 
