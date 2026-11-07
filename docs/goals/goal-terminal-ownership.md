@@ -81,10 +81,10 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 
 ## Current handoff
 
-- **Checkout:** `master` at `e02bfc811b`, the current one — no branch or worktree, clean tree.
+- **Checkout:** `master` at `6e0c629fec`, the current one — no branch or worktree, clean tree.
   **Phase T is complete**: every track below has landed with a firing spec, or is placed with its reason
   (T6 → Phase H, T7 → Phase P, G1 → the output pipe). **Phase G's six readings are complete**, with G1, F4 and F5 priced and F18 found.
-  **Phase S is complete and Phase B is begun**: the terminal feature owns no pty, and F4, F5, F7, F8 and L2 are closed with guards. Phases P and A are not started.
+  **Phase S is complete and Phase B is begun**: the terminal feature owns no pty, F4, F5, F7, F8 and L2 are closed with guards, and X1 is dissolved on POSIX. Phases P and A are not started.
   **Collision surface against #372**, measured 2026-11-07: one file, `features/code/fe/state.ts` (+24/-2 on
   that branch). Every other file Phase T touches is untouched there — `bus/client-events.ts`,
   `api/src/boot/config.ts`, `be/services/terminal.ts`, `fe/features/terminal/state.ts`, `fe/hotkeys.ts`,
@@ -318,8 +318,19 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   **bounded** queue, which this is not and which no mutation small enough to model can make it. The edit to
   watch for is one that bounds the queue itself, and `src/output.rs` says so where that edit would be made.
   An env seam added to force the state was removed with the case it could not serve.
-- **Next action: Phase B's remaining acceptance.** In the order they can be done here: **resize under an
-  alternate-screen app**, and **`portable-pty` validated** for containment and cancellation. **X1, X2 and ConPTY need a Windows run** and
+- **`portable-pty` is validated, and X1 is dissolved on POSIX.** Three cases in the broker: killing a
+  session reaps its grandchildren, a shell trapping INT and TERM and busy-looping is still killed, and
+  `less` on the alternate screen is resized three times, redraws, survives and still takes input.
+  **The containment's mechanism was measured, not assumed**: a mutation keeping the pty master open still
+  passed, so it is the kernel sending SIGHUP to a pty's foreground group when its session leader dies.
+  That is POSIX, which is why `command-group` moved to dev-dependencies — the spawn path does not use it,
+  and keeping it a dependency would claim otherwise.
+- **A guard that hangs is worse than one that fails.** The resize mutation left `less` with nothing to
+  redraw and a blocking read turned it into a ten-minute hang; every read in the broker's tests is bounded
+  by the socket's receive timeout now, and that mutation fails in eleven seconds.
+- **Next action: Phase P, then Phase A.** What is left of Phase B needs Windows and a Mac cannot give it:
+  **X1, X2 and ConPTY's resize and exit**, which the goal already says are claimed on a Windows run or not
+  at all. `command-group`'s API is retired so that change is a wiring job rather than a question. **X1, X2 and ConPTY need a Windows run** and
   cannot be claimed here, which the goal already says. Then Phases P and A.
 - **What Phase S deliberately does not have yet**, and should not before Phase B: a second client, bounded
   history and backpressure, reattach, and `command-group` in the spawn path — the probe proved the API, and
