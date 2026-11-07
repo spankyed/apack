@@ -40,7 +40,8 @@ const menuKey = new PluginKey('textBubbleMenu')
 const editorElement = props.editor.view.dom
 const ownerDocument = editorElement.ownerDocument
 const menuOptions = {
-  placement: 'top' as const, offset: 8, strategy: 'fixed' as const, inline: true,
+  // Tiptap applies offset after shift; chat collision placement supplies its own spacing.
+  placement: 'top' as const, offset: props.containWithinEditor ? 0 : 8, strategy: 'fixed' as const, inline: true,
   // Chat status and controls surround the draft; keep formatting inside its visible scroll area.
   flip: props.containWithinEditor ? () => {
     const boundary: HTMLElement[] = [editorElement]
