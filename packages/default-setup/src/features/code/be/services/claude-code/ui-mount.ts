@@ -137,8 +137,10 @@ export function mountClaudeUi(options: {
     if (!fieldDrawing || !fieldDrawing.fields.size && !fieldDrawing.clientInstances.size) { publish({ status: 'rendering' }); return }
     function retire(node: import('./ui-presentation.ts').ClaudeUiNode): import('./ui-presentation.ts').ClaudeUiNode {
       if (node.kind === 'button' || node.kind === 'markdown') {
-        const { actionId: _, ...inert } = node
-        return inert
+        const { actionId, ...inert } = node
+        // Retain Client control identity without retaining its retired callback capability.
+        return node.kind === 'button' && actionId && fieldDrawing?.clientActions.has(actionId)
+          ? { ...inert, renderId: actionId } : inert
       }
       if (node.kind === 'box' || node.kind === 'link' || node.kind === 'client') return { ...node, children: node.children.map(retire) }
       if (node.kind === 'text' && node.children) return { ...node, children: node.children.map(retire) }

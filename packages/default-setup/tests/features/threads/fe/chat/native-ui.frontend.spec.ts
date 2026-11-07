@@ -80,6 +80,27 @@ it('keeps keyboard focus and activation on the same native button when siblings 
   expect(f.submit).not.toHaveBeenCalled()
 })
 
+it('retains a Client button DOM identity while its callback retires and redraws', async () => {
+  const review = { kind: 'button' as const, label: 'Review release notes', actionId: 'review', focusId: 'review-focus' }
+  const later = { kind: 'button' as const, label: 'Save for later', actionId: 'later' }
+  const tree = (children: ClaudeUiNode[]) => ({ kind: 'client' as const, id: 'release-review', children: [{ kind: 'box' as const, children }] })
+  const f = await mount({ nativeUi: { status: 'live', tree: tree([review, later]) } })
+  const button = f.root.querySelector<HTMLButtonElement>('[aria-label="Review release notes"]')!
+  button.focus()
+  const { actionId, ...retired } = review
+  f.state.nativeUi = { status: 'live', tree: tree([{ ...retired, renderId: actionId }, later]) }
+  await nextTick()
+  expect(f.root.querySelector('[aria-label="Review release notes"]')).toBe(button)
+  expect(button.disabled).toBe(false)
+  expect(button.getAttribute('aria-disabled')).toBe('true')
+  button.click(); expect(f.press).not.toHaveBeenCalled()
+  f.state.nativeUi = { status: 'live', tree: tree([later, review]) }
+  await nextTick()
+  expect(document.activeElement).toBe(button)
+  expect(button.hasAttribute('aria-disabled')).toBe(false)
+  button.click(); expect(f.press).toHaveBeenCalledExactlyOnceWith('review', undefined)
+})
+
 it('retires visible buttons on redraw, disconnect and error while preserving typed input', async () => {
   const f = await mount({ statusLine: '/fixture', nativeUi: live })
   const editor = f.root.querySelector('textarea')!; editor.value = 'Unsent input'; editor.focus()

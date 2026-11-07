@@ -386,7 +386,7 @@ it('keeps a Client container mounted during native redraws and routes its scoped
  expect(f.ui.focus.mock.calls.at(-1)?.[0]).not.toHaveProperty('element')
  f.invalidate()
  expect(f.states.at(-1)).toMatchObject({status:'live',tree:{kind:'client',id,children:[{kind:'button'}]}})
- const state=f.states.at(-1);if(state?.status==='live'&&state.tree.kind==='client')expect('actionId' in state.tree.children[0]!).toBe(false)
+ const state=f.states.at(-1);if(state?.status==='live'&&state.tree.kind==='client'){expect('actionId' in state.tree.children[0]!).toBe(false);expect(state.tree.children[0]).toHaveProperty('renderId')}
  await mount.clientEvent({id,sequence:1,event:{kind:'key',key:'x'}})
  expect(f.ui.clientEvent).toHaveBeenCalledWith(expect.objectContaining({id,sequence:1,event:{kind:'key',key:'x'}}))
  await mount.dispose();expect(await mount.clientEvent({id,sequence:2,event:{kind:'key',key:'y'}})).toEqual({handled:false})
