@@ -63,6 +63,23 @@ it('hides empty and base-engine-only surfaces, and leaves the CWD-only state com
   expect(f.root.querySelector('button')?.textContent).toBe('/fixture')
 })
 
+it('keeps keyboard focus and activation on the same native button when siblings reorder', async () => {
+  const apply = { kind: 'button' as const, label: 'Apply release changes', actionId: 'apply-release', focusId: 'apply-focus' }
+  const cancel = { kind: 'button' as const, label: 'Cancel review', actionId: 'cancel-review', focusId: 'cancel-focus' }
+  const f = await mount({ nativeUi: { status: 'live', tree: { kind: 'box', children: [apply, cancel] } } })
+  const editor = f.root.querySelector('textarea')!; editor.value = 'Keep my unsent release notes.'
+  const button = f.root.querySelector<HTMLButtonElement>('[aria-label="Apply release changes"]')!
+  button.focus()
+  f.state.nativeUi = { status: 'live', tree: { kind: 'box', children: [cancel, apply] } }
+  await nextTick()
+  expect(document.activeElement).toBe(button)
+  expect(document.activeElement?.getAttribute('aria-label')).toBe('Apply release changes')
+  ;(document.activeElement as HTMLButtonElement).click()
+  expect(f.press).toHaveBeenCalledExactlyOnceWith('apply-release', undefined)
+  expect(editor.value).toBe('Keep my unsent release notes.')
+  expect(f.submit).not.toHaveBeenCalled()
+})
+
 it('retires visible buttons on redraw, disconnect and error while preserving typed input', async () => {
   const f = await mount({ statusLine: '/fixture', nativeUi: live })
   const editor = f.root.querySelector('textarea')!; editor.value = 'Unsent input'; editor.focus()

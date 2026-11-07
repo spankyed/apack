@@ -1,6 +1,6 @@
 <template>
   <div v-if="node.kind === 'box'" :ref="hoverElement" class="min-w-0 native-box" :data-native-scroll-id="node.scrollId" :style="boxStyle" :data-native-border-dim="boxPaint?.borderDimColor === true ? 'true' : undefined" :data-native-plugin="node.plugin">
-    <NativeUiNode v-for="(child, index) in node.children" :key="child.kind === 'input' || child.kind === 'select' ? child.actionId : index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" ><template #engine><slot name="engine" /></template></NativeUiNode>
+    <NativeUiNode v-for="(child, index) in node.children" :key="child.kind === 'input' || child.kind === 'select' || child.kind === 'button' ? child.actionId ?? index : index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" ><template #engine><slot name="engine" /></template></NativeUiNode>
   </div>
   <NativeUiClient v-else-if="node.kind === 'client'" :key="node.id" :node="node"><NativeUiNode v-for="(child,index) in node.children" :key="index" :node="child" @press="(id,href)=>emit('press',id,href)" @field="emit('field',$event)" /></NativeUiClient>
   <NativeUiImage v-else-if="node.kind === 'image'" :node="node" />
