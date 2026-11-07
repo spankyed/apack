@@ -73,7 +73,7 @@ export function _compileSettingsDefinition(definition: SettingsDefinition): Sett
 // @public
 export type ComponentTarget = string | {
     entry: string;
-    load?: 'lazy';
+    load?: 'eager';
 };
 
 // @public
@@ -224,7 +224,7 @@ export interface FrontendCatalogEntry {
 // @public
 export interface FrontendDeclaration {
     // (undocumented)
-    appExtensions?: Record<string, string>;
+    appExtensions?: Record<string, ComponentTarget>;
     // (undocumented)
     textEditor?: Record<string, TextEditorExtensionsDeclaration>;
 }
@@ -733,7 +733,7 @@ export interface SettingsDefinition {
     // (undocumented)
     description?: string;
     // (undocumented)
-    form?: string;
+    form?: ComponentTarget;
     // (undocumented)
     schema: SettingsSchema;
     // (undocumented)
@@ -883,7 +883,7 @@ export interface SurfaceDeclaration {
     // (undocumented)
     icon?: string | {
         entry: string;
-        load?: 'lazy';
+        load?: 'eager';
     };
     // (undocumented)
     isPinned?: boolean;
@@ -1024,7 +1024,7 @@ export interface TextEditorExtensionsDeclaration {
     // (undocumented)
     isSuggestionActive?: string;
     // (undocumented)
-    popups?: Record<string, string>;
+    popups?: Record<string, ComponentTarget>;
 }
 
 // @public

@@ -494,7 +494,10 @@ export const FeatureEntrySchema: z.ZodObject<{
         defaults: z.ZodPipe<z.ZodCustom<Record<string, unknown>, Record<string, unknown>>, z.ZodTransform<Record<string, unknown>, Record<string, unknown>>>;
         title: z.ZodOptional<z.ZodString>;
         description: z.ZodOptional<z.ZodString>;
-        form: z.ZodOptional<z.ZodString>;
+        form: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodObject<{
+            entry: z.ZodString;
+            load: z.ZodOptional<z.ZodLiteral<"eager">>;
+        }, z.core.$strict>]>>;
         access: z.ZodOptional<z.ZodEnum<{
             owner: "owner";
             shared: "shared";
@@ -751,7 +754,10 @@ export const ManifestSchema: z.ZodObject<{
             defaults: Record<string, unknown>;
             title?: string | undefined;
             description?: string | undefined;
-            form?: string | undefined;
+            form?: string | {
+                entry: string;
+                load?: "eager" | undefined;
+            } | undefined;
             access?: "owner" | "shared" | undefined;
         } | undefined;
         types?: string | undefined;
@@ -828,7 +834,10 @@ export const ManifestSchema: z.ZodObject<{
             defaults: Record<string, unknown>;
             title?: string | undefined;
             description?: string | undefined;
-            form?: string | undefined;
+            form?: string | {
+                entry: string;
+                load?: "eager" | undefined;
+            } | undefined;
             access?: "owner" | "shared" | undefined;
         } | undefined;
         types?: string | undefined;
@@ -884,22 +893,46 @@ export const ManifestSchema: z.ZodObject<{
     extensions: z.ZodOptional<z.ZodObject<{
         textEditor: z.ZodOptional<z.ZodType<Record<string, {
             extensions?: Record<string, string> | undefined;
-            popups?: Record<string, string> | undefined;
+            popups?: Record<string, string | {
+                entry: string;
+                load?: "eager" | undefined;
+            }> | undefined;
             isSuggestionActive?: string | undefined;
         }>, Record<string, {
             extensions?: Record<string, string> | undefined;
-            popups?: Record<string, string> | undefined;
+            popups?: Record<string, string | {
+                entry: string;
+                load?: "eager" | undefined;
+            }> | undefined;
             isSuggestionActive?: string | undefined;
         }>, z.core.$ZodTypeInternals<Record<string, {
             extensions?: Record<string, string> | undefined;
-            popups?: Record<string, string> | undefined;
+            popups?: Record<string, string | {
+                entry: string;
+                load?: "eager" | undefined;
+            }> | undefined;
             isSuggestionActive?: string | undefined;
         }>, Record<string, {
             extensions?: Record<string, string> | undefined;
-            popups?: Record<string, string> | undefined;
+            popups?: Record<string, string | {
+                entry: string;
+                load?: "eager" | undefined;
+            }> | undefined;
             isSuggestionActive?: string | undefined;
         }>>>>;
-        appExtensions: z.ZodOptional<z.ZodType<Record<string, string>, Record<string, string>, z.core.$ZodTypeInternals<Record<string, string>, Record<string, string>>>>;
+        appExtensions: z.ZodOptional<z.ZodType<Record<string, string | {
+            entry: string;
+            load?: "eager" | undefined;
+        }>, Record<string, string | {
+            entry: string;
+            load?: "eager" | undefined;
+        }>, z.core.$ZodTypeInternals<Record<string, string | {
+            entry: string;
+            load?: "eager" | undefined;
+        }>, Record<string, string | {
+            entry: string;
+            load?: "eager" | undefined;
+        }>>>>;
         commands: z.ZodOptional<z.ZodObject<{
             list: z.ZodType<Record<string, {
                 placeholder: string;
@@ -920,14 +953,20 @@ export const ManifestSchema: z.ZodObject<{
             defaults: Record<string, unknown>;
             title?: string | undefined;
             description?: string | undefined;
-            form?: string | undefined;
+            form?: string | {
+                entry: string;
+                load?: "eager" | undefined;
+            } | undefined;
             access?: "owner" | "shared" | undefined;
         }>, Record<string, unknown>, z.core.$ZodTypeInternals<Record<string, {
             schema: Record<string, unknown>;
             defaults: Record<string, unknown>;
             title?: string | undefined;
             description?: string | undefined;
-            form?: string | undefined;
+            form?: string | {
+                entry: string;
+                load?: "eager" | undefined;
+            } | undefined;
             access?: "owner" | "shared" | undefined;
         }>, Record<string, unknown>>>>;
         help: z.ZodOptional<z.ZodObject<{
@@ -1108,32 +1147,56 @@ export const ManifestSchema: z.ZodObject<{
         }>>>>;
         artifacts: z.ZodOptional<z.ZodType<Record<string, {
             icon: string;
-            fe?: string | undefined;
+            fe?: string | {
+                entry: string;
+                load?: "eager" | undefined;
+            } | undefined;
         }>, Record<string, {
             icon: string;
-            fe?: string | undefined;
+            fe?: string | {
+                entry: string;
+                load?: "eager" | undefined;
+            } | undefined;
         }>, z.core.$ZodTypeInternals<Record<string, {
             icon: string;
-            fe?: string | undefined;
+            fe?: string | {
+                entry: string;
+                load?: "eager" | undefined;
+            } | undefined;
         }>, Record<string, {
             icon: string;
-            fe?: string | undefined;
+            fe?: string | {
+                entry: string;
+                load?: "eager" | undefined;
+            } | undefined;
         }>>>>;
         blocks: z.ZodOptional<z.ZodType<Record<string, {
             kind?: "input" | "display" | undefined;
-            fe?: string | undefined;
+            fe?: string | {
+                entry: string;
+                load?: "eager" | undefined;
+            } | undefined;
             be?: string | undefined;
         }>, Record<string, {
             kind?: "input" | "display" | undefined;
-            fe?: string | undefined;
+            fe?: string | {
+                entry: string;
+                load?: "eager" | undefined;
+            } | undefined;
             be?: string | undefined;
         }>, z.core.$ZodTypeInternals<Record<string, {
             kind?: "input" | "display" | undefined;
-            fe?: string | undefined;
+            fe?: string | {
+                entry: string;
+                load?: "eager" | undefined;
+            } | undefined;
             be?: string | undefined;
         }>, Record<string, {
             kind?: "input" | "display" | undefined;
-            fe?: string | undefined;
+            fe?: string | {
+                entry: string;
+                load?: "eager" | undefined;
+            } | undefined;
             be?: string | undefined;
         }>>>>;
         services: z.ZodOptional<z.ZodType<Record<string, string>, Record<string, string>, z.core.$ZodTypeInternals<Record<string, string>, Record<string, string>>>>;
@@ -1444,14 +1507,20 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
         defaults: Record<string, unknown>;
         title?: string | undefined;
         description?: string | undefined;
-        form?: string | undefined;
+        form?: string | {
+            entry: string;
+            load?: "eager" | undefined;
+        } | undefined;
         access?: "owner" | "shared" | undefined;
     }>, Record<string, unknown>, z.core.$ZodTypeInternals<Record<string, {
         schema: Record<string, unknown>;
         defaults: Record<string, unknown>;
         title?: string | undefined;
         description?: string | undefined;
-        form?: string | undefined;
+        form?: string | {
+            entry: string;
+            load?: "eager" | undefined;
+        } | undefined;
         access?: "owner" | "shared" | undefined;
     }>, Record<string, unknown>>>>;
     services: z.ZodOptional<z.ZodLazy<z.ZodType<Record<string, string>, Record<string, string>, z.core.$ZodTypeInternals<Record<string, string>, Record<string, string>>>>>;
@@ -1761,32 +1830,56 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
     }>>>>>;
     artifacts: z.ZodLazy<z.ZodOptional<z.ZodType<Record<string, {
         icon: string;
-        fe?: string | undefined;
+        fe?: string | {
+            entry: string;
+            load?: "eager" | undefined;
+        } | undefined;
     }>, Record<string, {
         icon: string;
-        fe?: string | undefined;
+        fe?: string | {
+            entry: string;
+            load?: "eager" | undefined;
+        } | undefined;
     }>, z.core.$ZodTypeInternals<Record<string, {
         icon: string;
-        fe?: string | undefined;
+        fe?: string | {
+            entry: string;
+            load?: "eager" | undefined;
+        } | undefined;
     }>, Record<string, {
         icon: string;
-        fe?: string | undefined;
+        fe?: string | {
+            entry: string;
+            load?: "eager" | undefined;
+        } | undefined;
     }>>>>>;
     blocks: z.ZodLazy<z.ZodOptional<z.ZodType<Record<string, {
         kind?: "input" | "display" | undefined;
-        fe?: string | undefined;
+        fe?: string | {
+            entry: string;
+            load?: "eager" | undefined;
+        } | undefined;
         be?: string | undefined;
     }>, Record<string, {
         kind?: "input" | "display" | undefined;
-        fe?: string | undefined;
+        fe?: string | {
+            entry: string;
+            load?: "eager" | undefined;
+        } | undefined;
         be?: string | undefined;
     }>, z.core.$ZodTypeInternals<Record<string, {
         kind?: "input" | "display" | undefined;
-        fe?: string | undefined;
+        fe?: string | {
+            entry: string;
+            load?: "eager" | undefined;
+        } | undefined;
         be?: string | undefined;
     }>, Record<string, {
         kind?: "input" | "display" | undefined;
-        fe?: string | undefined;
+        fe?: string | {
+            entry: string;
+            load?: "eager" | undefined;
+        } | undefined;
         be?: string | undefined;
     }>>>>>;
     dsl: z.ZodLazy<z.ZodOptional<z.ZodType<Record<string, {
@@ -1851,22 +1944,46 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
     }>>>>;
     textEditor: z.ZodLazy<z.ZodOptional<z.ZodType<Record<string, {
         extensions?: Record<string, string> | undefined;
-        popups?: Record<string, string> | undefined;
+        popups?: Record<string, string | {
+            entry: string;
+            load?: "eager" | undefined;
+        }> | undefined;
         isSuggestionActive?: string | undefined;
     }>, Record<string, {
         extensions?: Record<string, string> | undefined;
-        popups?: Record<string, string> | undefined;
+        popups?: Record<string, string | {
+            entry: string;
+            load?: "eager" | undefined;
+        }> | undefined;
         isSuggestionActive?: string | undefined;
     }>, z.core.$ZodTypeInternals<Record<string, {
         extensions?: Record<string, string> | undefined;
-        popups?: Record<string, string> | undefined;
+        popups?: Record<string, string | {
+            entry: string;
+            load?: "eager" | undefined;
+        }> | undefined;
         isSuggestionActive?: string | undefined;
     }>, Record<string, {
         extensions?: Record<string, string> | undefined;
-        popups?: Record<string, string> | undefined;
+        popups?: Record<string, string | {
+            entry: string;
+            load?: "eager" | undefined;
+        }> | undefined;
         isSuggestionActive?: string | undefined;
     }>>>>>;
-    appExtensions: z.ZodLazy<z.ZodOptional<z.ZodType<Record<string, string>, Record<string, string>, z.core.$ZodTypeInternals<Record<string, string>, Record<string, string>>>>>;
+    appExtensions: z.ZodLazy<z.ZodOptional<z.ZodType<Record<string, string | {
+        entry: string;
+        load?: "eager" | undefined;
+    }>, Record<string, string | {
+        entry: string;
+        load?: "eager" | undefined;
+    }>, z.core.$ZodTypeInternals<Record<string, string | {
+        entry: string;
+        load?: "eager" | undefined;
+    }>, Record<string, string | {
+        entry: string;
+        load?: "eager" | undefined;
+    }>>>>>;
     features: z.ZodOptional<z.ZodType<Record<string, {
         description: string;
         references?: ReferenceDeclarations | undefined;
@@ -1894,7 +2011,10 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
             defaults: Record<string, unknown>;
             title?: string | undefined;
             description?: string | undefined;
-            form?: string | undefined;
+            form?: string | {
+                entry: string;
+                load?: "eager" | undefined;
+            } | undefined;
             access?: "owner" | "shared" | undefined;
         } | undefined;
         surface?: SurfaceDeclaration | undefined;
@@ -1951,7 +2071,10 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
             defaults: Record<string, unknown>;
             title?: string | undefined;
             description?: string | undefined;
-            form?: string | undefined;
+            form?: string | {
+                entry: string;
+                load?: "eager" | undefined;
+            } | undefined;
             access?: "owner" | "shared" | undefined;
         } | undefined;
         surface?: SurfaceDeclaration | undefined;

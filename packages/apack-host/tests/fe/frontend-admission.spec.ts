@@ -93,6 +93,7 @@ it('captures every metadata container while retaining machines, components and c
   expect(registry.settingsForm({ kind: 'feature', featureRef: 'owner/view' })).toBe(component);
   expect(registry.settingsForm({ kind: 'pack', packId: 'owner', groupId: 'extra' })).toBe(component);
   expect(registry.appExtension('welcome')).toBe(component);
+  expect(registry.appExtensionBinding('welcome')).toEqual({ packId: 'owner', component });
   expect(registry.artifact('card')?.fe?.component).toBe(component);
   expect(registry.block('answer')?.fe?.component).toBe(component);
   const row = registry.stepBindings().get('memo')!;

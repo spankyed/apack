@@ -8,7 +8,7 @@
 // Mocked here: `@/main`, which is the window's boot, and the three sibling views, none of which this case is
 // about. The registry is the real one (`@/runtime/packs`), and the pack registers through it as the loader does.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createApp, defineComponent, h, type App as VueApp } from 'vue';
+import { createApp, defineAsyncComponent, defineComponent, h, type App as VueApp, type Component } from 'vue';
 import { fePacks } from '@/runtime/packs';
 import App from '@/views/App.vue';
 
@@ -30,16 +30,21 @@ vi.mock('@/runtime/settings', async () => {
   return { useSettingsRecovery: () => shallowRef(undefined) };
 });
 
+vi.mock('@/runtime/catalog', () => ({ windowCatalog: {
+  getSnapshot: () => ({ native: [{ id: 'welcome-pack' }] }),
+  status: () => 'ready', subscribe: () => () => {},
+} }));
+
 const Welcome = defineComponent({ render: () => h('div', { class: 'pack-welcome' }, 'Hello') });
 
 /** A pack's frontend loading, as the loader does it: the declared slot, and the component bound to it */
-function registerWelcomePack(): void {
+function registerWelcomePack(component: Component = Welcome): void {
   fePacks.registerPackFE(
     {
       kind: 'native',
       declaration: { id: 'welcome-pack', appExtensions: { welcome: 'src/Welcome.vue' } },
     },
-    { id: 'welcome-pack', appExtensions: { welcome: Welcome } },
+    { id: 'welcome-pack', appExtensions: { welcome: component } },
   );
 }
 
@@ -81,4 +86,16 @@ describe('the welcome overlay a pack contributes', () => {
 
     expect(mounted.querySelector('.pack-welcome')).toBeNull();
   });
+});
+
+it('contains a failed welcome import, preserves the app and retries the accepted extension', async () => {
+  const loader = vi.fn().mockRejectedValueOnce(new Error('welcome import failed')).mockResolvedValue(Welcome);
+  registerWelcomePack(defineAsyncComponent(loader));
+  expect(loader).not.toHaveBeenCalled();
+  const mounted = render();
+  await vi.waitFor(() => expect(mounted.querySelector('[role="alert"]')?.textContent).toContain('welcome import failed'));
+  expect(mounted.querySelector('.web-app')).not.toBeNull();
+  mounted.querySelector<HTMLButtonElement>('[role="alert"] button')!.click();
+  await vi.waitFor(() => expect(mounted.querySelector('.pack-welcome')).not.toBeNull());
+  expect(loader).toHaveBeenCalledTimes(2);
 });

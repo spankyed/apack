@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import WebApp from './WebApp.vue';
+import ContributionBoundary from './layout/ContributionBoundary.vue';
 import SettingsRecovery from './settings/SettingsRecovery.vue';
 import { useSettingsRecovery } from '@/runtime/settings';
 import SurfacePopoutApp from './SurfacePopoutApp.vue';
@@ -16,8 +17,8 @@ const recovery = useSettingsRecovery();
  * always `undefined` and a pack contributing a welcome screen has nothing drawn for it on the one boot it is
  * meant for.
  */
-const WelcomeComponent = shallowRef(fePacks.getAppExtension('welcome'));
-onScopeDispose(fePacks.onChanged(() => { WelcomeComponent.value = fePacks.getAppExtension('welcome'); }));
+const welcome = shallowRef(fePacks.appExtensionBinding('welcome'));
+onScopeDispose(fePacks.onChanged(() => { welcome.value = fePacks.appExtensionBinding('welcome'); }));
 const isWelcome = useSelector(applicationState, (s) => s.hasTag('welcome'));
 const isConnecting = useSelector(applicationState, (s) => s.hasTag('connecting'));
 const isSurfacePopout = new URLSearchParams(window.location.search).get('popout') === 'surface';
@@ -27,7 +28,11 @@ const isSurfacePopout = new URLSearchParams(window.location.search).get('popout'
   <SettingsRecovery v-if="recovery" :recovery="recovery" />
   <template v-else>
     <!-- Welcome modal overlay (first-time users) -->
-    <component v-if="isWelcome && !isSurfacePopout && WelcomeComponent" :is="WelcomeComponent" />
+    <ContributionBoundary v-if="isWelcome && !isSurfacePopout && welcome" class="fixed inset-0 z-[9999]"
+      :pack-id="welcome.packId" :owner="`${welcome.packId}/welcome`" area="app extension"
+      :current="() => fePacks.appExtensionBinding('welcome') === welcome">
+      <component :is="welcome.component" />
+    </ContributionBoundary>
     <!-- Main web app component (always rendered, surfaces show own loading states) -->
     <SurfacePopoutApp v-if="isSurfacePopout" />
     <WebApp v-else />
