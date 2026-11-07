@@ -4604,12 +4604,10 @@ interface TerminalEntity {
      */
     shell: string;
     cwd: string;
-    active: boolean;
     cols: number;
     rows: number;
     createdAt: number;
     updatedAt: number;
-    closedAt?: number;
 }
 
 interface TerminalInfo {
@@ -6023,14 +6021,25 @@ declare const terminalCommands: {
     }) => EARS.EntityId;
     rename: (id: EARS.EntityId, customTitle: string) => void;
     updateCwd: (id: EARS.EntityId, cwd: string, title?: string) => void;
+    /**
+     * The terminal is gone, so its row goes to the trash — **the one way a Terminal row ends** (L3).
+     *
+     * It used to set `active: false` and a `closedAt` nothing ever read, leaving a row behind for every
+     * terminal the user had ever opened; beside it sat an unreached `delete` that did the trashing. Nothing
+     * reads a closed terminal: `restoreAll` opens what the query answers, and that is the whole of what a row
+     * is for. So there is one path, and it removes the record rather than annotating it.
+     */
     markClosed: (id: EARS.EntityId) => void;
-    delete: (id: EARS.EntityId) => void;
 };
 
 declare const terminalQueries: {
     byId: (id: EARS.EntityId) => TerminalEntity | undefined;
+    /**
+     * The terminals there are — which is every row, because **a closed one leaves none** (L3). A query leaves
+     * out the trash, and `markClosed` puts a row there, so there is no `active` attribute to filter on and no
+     * second record of whether a terminal exists.
+     */
     all: () => TerminalEntity[];
-    active: () => TerminalEntity[];
 };
 
 declare const threadCommands: {

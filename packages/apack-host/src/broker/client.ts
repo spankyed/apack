@@ -23,12 +23,31 @@ export class BrokerError extends Error {
   }
 }
 
+/** The screen the broker has for a session, as its own parse of the bytes it sent */
+export interface BrokerScreen {
+  /** The history that was asked for, then the viewport, oldest first */
+  readonly lines: readonly string[];
+  /** Within the viewport, so `0` is its first line however much history came with it */
+  readonly cursorRow: number;
+  readonly cursorColumn: number;
+  /** An alternate-screen app is showing — `vim`, `less`, a TUI agent — which has no scrollback of its own */
+  readonly altScreen: boolean;
+}
+
 /** One session's feed and the operations on it */
 export interface BrokerSession {
   readonly id: string;
   readonly pid: number;
   write(data: string): Promise<void>;
   resize(cols: number, rows: number): Promise<void>;
+  /**
+   * The screen as the broker has it, with up to `history` lines above the viewport.
+   *
+   * **It answers whether or not a window is drawing this session**, which is the gain the ownership refactor
+   * is for: the broker parses the same bytes it sends and is the authority on them, so nothing here depends
+   * on a renderer holding state. `history` is a ceiling and not a promise.
+   */
+  screen(history?: number): Promise<BrokerScreen>;
   kill(): Promise<void>;
 }
 
@@ -93,6 +112,19 @@ export async function startBroker(options: { binary: string; socket: string; env
         pid: spawned.pid,
         async write(data) { connection.send({ kind: 'write', session: id, data }); },
         async resize(cols_, rows_) { connection.send({ kind: 'resize', session: id, cols: cols_, rows: rows_ }); },
+        async screen(history = 0) {
+          connection.send({ kind: 'screen', session: id, history });
+          // Keyed by the session, because two of these can be outstanding and an answer must not be taken
+          // for the other one's — the broker answers per request and the frames carry no call of their own
+          const answer = await connection.next(event => event.kind === 'screen' && event.session === id);
+          if (answer.kind !== 'screen') throw new BrokerError('PTY', 'the broker answered no screen');
+          return {
+            lines: answer.lines,
+            cursorRow: answer.cursor_row,
+            cursorColumn: answer.cursor_column,
+            altScreen: answer.alt_screen,
+          };
+        },
         async kill() { connection.send({ kind: 'kill', session: id }); },
       };
     },

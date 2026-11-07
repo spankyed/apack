@@ -119,6 +119,30 @@ describe('the broker client', () => {
     await expect(refused).rejects.toMatchObject({ code: 'PTY' });
   });
 
+  it('reads a session\'s screen, and gives each answer to the session that asked', async () => {
+    // Two sessions, each answered with its own id: the frames carry no call, so the session is the whole of
+    // the correlation and an answer taken for the other one's ask is the bug this pins
+    const fake = await broker({
+      ...GREETS,
+      spawn: [{ kind: 'spawned', session: 's-1', pid: 1 }, { kind: 'spawned', session: 's-2', pid: 2 }],
+      screen: [
+        { kind: 'screen', session: 's-2', lines: ['theirs'], cursor_row: 0, cursor_column: 6, alt_screen: true },
+        { kind: 'screen', session: 's-1', lines: ['scrolled off', 'mine'], cursor_row: 1, cursor_column: 4, alt_screen: false },
+      ],
+    });
+    const listeners = { onOutput() {}, onExit() {} };
+    const first = await fake.open({ cols: 80, rows: 24 }, listeners);
+
+    const screen = await first.screen(20);
+
+    expect(screen).toEqual({
+      lines: ['scrolled off', 'mine'],
+      cursorRow: 1,
+      cursorColumn: 4,
+      altScreen: false,
+    });
+  });
+
   it('says why a broker that never listened did not start, rather than timing out', async () => {
     directory = mkdtempSync(path.join(tmpdir(), 'broker-client-'));
     const binary = path.join(directory, 'silent.cjs');

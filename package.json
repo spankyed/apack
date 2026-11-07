@@ -62,6 +62,8 @@
     "specifiers:fix": "tsx scripts/fix-specifiers.ts",
     "check:tiers": "tsx scripts/check-test-tiers.ts",
     "check:repro": "tsx scripts/repro.ts",
+    "protocol:check": "tsx scripts/broker-protocol.ts",
+    "protocol:update": "tsx scripts/broker-protocol.ts --update",
     "api:check": "tsx scripts/api-check.ts",
     "api:update": "npm run packages:ensure && npm run api:update -w @apackdev/ears -w @apackdev/sdk -w @apackdev/ui -w @apackdev/testing",
     "exports:check": "npm run exports:check -w @apackdev/ui",

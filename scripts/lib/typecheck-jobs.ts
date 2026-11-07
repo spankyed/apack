@@ -52,6 +52,11 @@ export const RECORDED_FILE_CHECKS: readonly TypecheckCommand[] = [
   // The chain reads a verified build; standalone typechecking bundles declarations from source.
   { name: 'facade:check', command: 'node ../apack-cli/bin/apack.mjs pack facade-report --skip-generate',
     cwd: defaultSetupDirectory, timeout: 'suite' },
+  // The broker's generated protocol. Its derivation is `cargo test export_bindings` in the linked
+  // `vendor/apack-terminal`, which is 0.4s with that crate built and says on its result line when the
+  // checkout is not linked — the one recorded file here whose source is outside the repo, which is also why
+  // it is not a chain step with declared inputs.
+  { name: 'protocol:check', command: 'npm run protocol:check' },
 ];
 
 /** Both prerequisites, in the order they must run: each writes what every job after it reads */
