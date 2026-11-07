@@ -81,7 +81,7 @@ on:
   #   branches: [master]
 
 concurrency:
-  group: ci-${{ github.ref }}-${{ inputs.app_acceptance && 'app' || '' }}-${{ inputs.strict_chain && 'strict' || '' }}-${{ inputs.compiler_windows && 'windows' || '' }}-${{ inputs.compiler_macos && 'macos' || '' }}-${{ inputs.compiler_linux && 'linux' || '' }}-${{ inputs.startup_performance && 'startup-performance' || '' }}
+  group: ci-${{ github.ref }}-${{ inputs.app_acceptance && 'app' || '' }}-${{ inputs.strict_chain && 'strict' || '' }}-${{ inputs.compiler_windows && 'windows' || '' }}-${{ inputs.compiler_macos && 'macos' || '' }}-${{ inputs.compiler_linux && 'linux' || '' }}-${{ inputs.startup_performance && format('performance-{0}', inputs.performance_scenario) || '' }}
   # Native diagnostic results must finish; full CI still supersedes older runs.
   cancel-in-progress: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux && !inputs.startup_performance }}
 
