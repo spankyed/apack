@@ -8,7 +8,9 @@ export function nativeTranscriptLatestTop(viewport: HTMLElement): number {
   if (!row || !viewport.clientHeight) return tail
   const rowBounds = row.getBoundingClientRect()
   const body = row.querySelector<HTMLElement>('[data-chat-message-content]')?.getBoundingClientRect()
-  const bounds = rowBounds.height > viewport.clientHeight && body && body.height > 0 ? body : rowBounds
+  // A pending request includes its inputs and decision buttons, beyond its short title.
+  const pending = row.querySelector<HTMLElement>('[data-chat-pending-interaction]')
+  const bounds = rowBounds.height > viewport.clientHeight && body && body.height > 0 && !pending?.getBoundingClientRect().height ? body : rowBounds
   const top = viewport.scrollTop + bounds.top - viewport.getBoundingClientRect().top
   if (top >= tail) return tail
   return Math.max(0, Math.min(tail, bounds.height <= viewport.clientHeight ? top : top + bounds.height - viewport.clientHeight))
