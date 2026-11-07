@@ -1,0 +1,44 @@
+name: Startup process-entry diagnosis
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      APACK_CHAIN_CORES: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.2
+          cache: npm
+      - run: npm install -g npm@11.21.1
+      - uses: ./.github/actions/elmdb
+      - name: Install dependencies
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npm ci --no-audit --no-fund
+      - name: Build the candidate once
+        run: node scripts/with-source.mjs tsx scripts/chain.ts --only packages:ensure,build:default-setup,build:runtime --no-native --cores 2
+      - name: Profile maintained populated startup from process entry
+        env:
+          APACK_STARTUP_ENTRY_PROFILE: '1'
+          APACK_PERFORMANCE_MODE: disabled
+          APACK_PERFORMANCE_TRIALS: '3'
+          APACK_PERFORMANCE_RUN_OUTPUT: .apack/performance/startup-entry-profile
+        run: node scripts/with-source.mjs tsx tests/performance/startup-run.ts
+      - name: Preserve diagnostic captures and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: startup-entry-profile-${{ github.run_id }}
+          include-hidden-files: true
+          path: |
+            .apack/performance/startup-entry-profile
+            node_modules/.cache/apack-chain/runs

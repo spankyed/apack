@@ -17,6 +17,10 @@ name: CI
 on:
   workflow_dispatch:
     inputs:
+      startup_entry_profile:
+        description: Capture process-entry CPU profiles and Chromium startup tracing
+        type: boolean
+        default: false
       startup_performance:
         description: Compare populated startup against a baseline on one disposable runner
         type: boolean
@@ -78,9 +82,15 @@ on:
 concurrency:
   group: ci-${{ github.ref }}-${{ inputs.app_acceptance && 'app' || '' }}-${{ inputs.strict_chain && 'strict' || '' }}-${{ inputs.compiler_windows && 'windows' || '' }}-${{ inputs.compiler_macos && 'macos' || '' }}-${{ inputs.compiler_linux && 'linux' || '' }}-${{ inputs.startup_performance && 'startup-performance' || '' }}
   # Native diagnostic results must finish; full CI still supersedes older runs.
-  cancel-in-progress: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux && !inputs.startup_performance }}
+  cancel-in-progress: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux && !inputs.startup_performance && !inputs.startup_entry_profile }}
 
 jobs:
+  startup-entry-profile:
+    if: ${{ inputs.startup_entry_profile }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/startup-entry-profile.yml
+
   startup-performance:
     if: ${{ inputs.startup_performance }}
     permissions:
@@ -90,7 +100,7 @@ jobs:
       baseline: ${{ inputs.performance_baseline }}
 
   check:
-    if: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux && !inputs.startup_performance }}
+    if: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux && !inputs.startup_performance && !inputs.startup_entry_profile }}
     runs-on: macos-14
     timeout-minutes: 25
 
@@ -188,7 +198,7 @@ jobs:
   # Builds tests/packs/external-pack with the apack CLI and runs its Playwright
   # suite from the pack dir against the built app — the third-party pack path.
   external-pack-e2e:
-    if: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux && !inputs.startup_performance }}
+    if: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux && !inputs.startup_performance && !inputs.startup_entry_profile }}
     runs-on: macos-14
     timeout-minutes: 30
 

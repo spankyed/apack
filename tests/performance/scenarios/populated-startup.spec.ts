@@ -16,6 +16,7 @@ const test = base.extend<{}, { startupRecording: void }>({
   // eslint-disable-next-line no-empty-pattern
   startupRecording: [async ({}, use) => {
     if (!process.env.E2E_DATA_DIR || !process.env.APACK_PERFORMANCE_SEED_REPORT) throw Error('Use the owned startup controller');
+    if (process.env.APACK_STARTUP_ENTRY_PROFILE === '1') await import('../_support/entry-profile/driver.mjs');
     const previous = process.env.APACK_PERFORMANCE_STARTUP;
     parent = createNodePerformanceController(); parent.start(mode);
     await parent.ready();
