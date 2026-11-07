@@ -218,19 +218,13 @@ class TerminalPool {
     })
     entry.disposables.push({ dispose: unsubscribe })
 
-    // Replay the persisted output (first open after app restart) and wire
-    // onData only after the replay has been fully parsed, so any DA/DSR/OSC
-    // responses xterm synthesizes during it go nowhere.
-    const storedOutput = terminalEventBus.getOutput(info.id)
-    if (storedOutput) {
-      term.write(storedOutput, () => {
-        entry.disposables.push(term.onData(sendInput))
-      })
-    } else {
-      showLoadingContent(term, info)
-      entry.isShowingLoadingContent = true
-      entry.disposables.push(term.onData(sendInput))
-    }
+    // **Nothing is replayed, because nothing keeps a copy to replay from.** The byte log and its window
+    // storage are deleted (F3, F6): the scrollback lives in this emulator, which the pool keeps alive across
+    // a host's teardown — so a tab switch costs 5.55 ms and no bytes, measured. A *fresh* emulator starts
+    // fresh, and serving history for that case is the broker's bounded history, where one copy belongs.
+    showLoadingContent(term, info)
+    entry.isShowingLoadingContent = true
+    entry.disposables.push(term.onData(sendInput))
 
     this.entries.set(info.id, entry)
     return entry

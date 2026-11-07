@@ -142,7 +142,6 @@ export const terminalState = setup({
       enqueue(assign({ terminals }))
 
       enqueue(() => {
-        terminalEventBus.prunePersistedOutputs(terminals.map(t => t.id))
         // A terminal keeps its id across a backend restart but not its process, so this is where a pool
         // entry learns the shell under it was replaced
         terminalPool.syncProcesses(terminals)

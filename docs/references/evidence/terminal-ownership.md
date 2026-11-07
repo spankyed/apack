@@ -43,6 +43,8 @@ removes the finding rather than fixing it, and names the construction that does.
 | F4 | dissolved | the broker coalesces output per session on a 16 ms window or a 64 KiB cap, and output is bounded by credit while answers carry none (`apack-terminal/src/output.rs`) | `apack-terminal/tests/channel.rs`, plus the `terminal-output` scenario re-run in the app: **6 messages for 64 KiB against 115 before** | **the budget, with a before and after**: ~96 messages per MB against the ~1,840 Phase G measured. Mutation-checked — flushing every chunk fails the coalescing case, and not reporting a wait fails the overload case |
 | X1 | dissolved on POSIX, open on Windows | killing a session reaps its grandchildren; the broker owns the processes a run leaves behind, and ends a connection's sessions when it closes | `apack-terminal/tests/broker.rs` "killing a session takes the whole tree with it", "a client that disconnects leaves no shell running" | **the guard, with its mechanism measured**: a mutation keeping the pty master open still passed, so it is the kernel sending SIGHUP to the pty's foreground group when its session leader dies — a POSIX property. `command-group` is a dev-dependency for that reason | Windows: `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` and a Windows run, which the goal requires and a Mac cannot give |
 | portable-pty validated | — | containment, cancellation and resize under an alternate screen | `apack-terminal/tests/broker.rs` three cases: a trapped, busy shell is still killed; `less` is resized three times, redraws, survives and still takes input | each its own case; the resize one is mutation-checked. Every read is bounded by the socket's receive timeout, after that mutation turned a blocking read into a ten-minute hang | ConPTY resize and exit need Windows |
+| F3 | dissolved | the bus keeps no per-terminal string; the quadratic concatenation and the `getOutput` a replay read are deleted, not made cheaper | `default-setup/tests/features/code/fe/utils/terminal-events.spec.ts` "exposes no accumulated output to read back" | **the guard**: the prototype's own methods are asserted, so adding a buffer or a reader fails it. Mutation-checked — restoring the accumulation fails two cases |
+| F6 | dissolved | no window-storage write at all; the debounced per-terminal copy and its pruner are deleted | `default-setup/tests/features/code/fe/utils/terminal-events.spec.ts` "writes nothing to window storage, however much output passes through it" | **the guard**: a megabyte through the bus must leave storage empty, read through the Storage API. Mutation-checked |
 | G3 | open | fixed on `session/claude-code-integration` (#372), not on master | `hooks.ts` calls `killAllHandles()` there | — | closes when #372 lands; confirm it survives the cleanup pass |
 
 Disposition values: `test`, `dissolved`, `driven`, `open`.
@@ -335,6 +337,22 @@ case written for them (a saturating producer with an idle reader, a lowered boun
 saturation), because in this design an answer is never waiting on anything. What deadlocks is a shared
 **bounded** queue, which this is not and which no mutation small enough to model can make it. The edit to
 watch for is one that bounds the queue itself; `src/output.rs` says so where that edit would be made.
+
+### The output budget after the byte log went (Phase P) — 2026-11-07
+
+The same corpus again, so all three readings compare: **7 messages median for 64 KiB** (5–7, 10 of 10
+passed), against 6 with the byte log still in place and 115 before the broker. So deleting the renderer's
+copies did not cost the budget the coalescer bought, which is what Phase P asks be asserted over the
+baseline's own corpus.
+
+Renderer task time read 56 ms against 40 ms, with a 139 ms maximum in the same run — this machine was not
+quiet, and a latency from a loaded machine is a report and not a gate, so it is recorded and not cited.
+
+**What the deletion costs, stated rather than discovered.** A *fresh* emulator now starts fresh: nothing
+replays, because nothing keeps a copy to replay from. The common case is unaffected and that is measured —
+the pool keeps the emulator alive across a host's teardown, so a reattach with 256 KiB of history is 5.55 ms
+and sends no bytes. Serving history to a new emulator is the broker's bounded history, which is where one
+copy belongs and which Phase B has not built.
 
 ### Baseline (Phase G) — superseded
 

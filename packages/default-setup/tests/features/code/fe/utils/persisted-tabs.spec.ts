@@ -5,7 +5,6 @@ import {
   saveOpenTabs,
   type PersistedTabState,
 } from '#features/code/fe/utils/persisted-tabs.ts'
-import { terminalEventBus } from '#features/code/fe/utils/terminal-events.ts'
 
 describe('code persisted tabs', () => {
   beforeEach(() => {
@@ -139,13 +138,4 @@ describe('code persisted tabs', () => {
     })
   })
 
-  it('prunes stale terminal output cache entries', () => {
-    localStorage.setItem('default-setup/code:terminal-output:Terminal-live', 'live')
-    localStorage.setItem('default-setup/code:terminal-output:Terminal-stale', 'stale')
-
-    terminalEventBus.prunePersistedOutputs(['Terminal-live'])
-
-    expect(localStorage.getItem('default-setup/code:terminal-output:Terminal-live')).toBe('live')
-    expect(localStorage.getItem('default-setup/code:terminal-output:Terminal-stale')).toBeNull()
-  })
 })
