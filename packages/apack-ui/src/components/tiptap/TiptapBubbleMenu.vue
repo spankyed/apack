@@ -31,7 +31,7 @@ import BubbleMenuToolbar from './bubble-menu/BubbleMenuToolbar.vue'
 import BubbleMenuColorSelector from './bubble-menu/BubbleMenuColorSelector.vue'
 import BubbleMenuLinkInput from './bubble-menu/BubbleMenuLinkInput.vue'
 
-const props = defineProps<{ editor: Editor }>()
+const props = defineProps<{ editor: Editor; containWithinEditor?: boolean }>()
 
 const linkInput = ref<InstanceType<typeof BubbleMenuLinkInput>>()
 
@@ -40,6 +40,15 @@ const editorElement = props.editor.view.dom
 const ownerDocument = editorElement.ownerDocument
 const menuOptions = {
   placement: 'top' as const, offset: 8, strategy: 'fixed' as const, inline: true,
+  // Chat status and controls surround the draft; keep formatting inside its visible scroll area.
+  flip: props.containWithinEditor ? () => {
+    const boundary: HTMLElement[] = [editorElement]
+    for (let parent = editorElement.parentElement; parent && parent !== ownerDocument.body; parent = parent.parentElement) {
+      const style = ownerDocument.defaultView!.getComputedStyle(parent)
+      if (/(auto|scroll|hidden|clip)/.test(style.overflow + style.overflowX + style.overflowY)) boundary.push(parent)
+    }
+    return { boundary, padding: 4 }
+  } : {},
   shift: { limiter: { fn: ({ x, y, rects }: { x: number; y: number; rects: { floating: { width: number } } }) => {
     // Resolve at positioning time: EditorContent attaches its DOM asynchronously.
     const boundary = editorElement.closest('form')?.getBoundingClientRect()
