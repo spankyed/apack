@@ -5,7 +5,7 @@ import { createLogger } from '@apackdev/sdk/logger';
 import { resolveAppEnvironment, getAppVersion } from '@apackdev/sdk/env';
 import { _packDeclarationProblem, type PackRegistration } from '@apackdev/sdk/framework';
 import { packSystemIds, type PackRegistry, type PackOrigin } from '../registry.ts';
-import { readInstalledPackBuild, type PackManifest } from '../discovery.ts';
+import { readInstalledPackBuild, type InstalledPackBuild, type PackManifest } from '../discovery.ts';
 import { disabledPackIds, forgetPacksExcept } from '../installed.ts';
 import { PACK_LAYOUT } from '../layout.ts';
 import { isHostCompatible } from '../installer.ts';
@@ -65,11 +65,15 @@ function skipped(id: string, problem: string): PackLoadProblem {
 export function loadSingleExternalPack(
   registry: Pick<PackRegistry, 'catalog'>,
   dir: string,
+  expectedBuildRevision?: string,
 ): LoadedPack | PackLoadProblem {
   let build;
   try { build = readInstalledPackBuild(dir); }
   catch (error) { return skipped(path.basename(dir), (error as Error).message); }
   const { snapshot, integrity, revision: buildRevision } = build;
+  if (expectedBuildRevision !== undefined && buildRevision !== expectedBuildRevision) {
+    return skipped(path.basename(dir), 'build changed after discovery; rediscover before loading');
+  }
   const { manifest, declarationRevision } = snapshot;
   try {
     registry.catalog.assertPackSettings(manifest);
@@ -141,9 +145,9 @@ export function clearPackRequireCache(packDir: string): void {
  * Reads every enabled installed pack against one committed catalog. Validate the complete installed
  * claim set before importing any candidate; record individual load refusals in the same registry.
  */
-export function loadExternalPacks(registry: LoadProblemSink & Pick<PackRegistry, 'catalog' | 'refreshCatalog'>): LoadedPack[] {
+export function loadExternalPacks(registry: LoadProblemSink & Pick<PackRegistry, 'catalog' | 'refreshCatalog'>, discoveredBuilds?: readonly InstalledPackBuild[]): LoadedPack[] {
   const { packsDir } = resolveAppEnvironment();
-  const discovered = registry.refreshCatalog(packsDir);
+  const discovered = discoveredBuilds ?? registry.refreshCatalog({ packsDir, settings: 'enforce' });
   // Boot is where what is installed is settled, so it is where rows for packs that are gone are dropped
   forgetPacksExcept(new Set(discovered.map(entry => entry.id)));
   const disabled = disabledPackIds();
@@ -166,7 +170,7 @@ export function loadExternalPacks(registry: LoadProblemSink & Pick<PackRegistry,
       continue;
     }
     const { dir, build: { snapshot: { manifest } } } = entry;
-    const pack = loadSingleExternalPack(registry, dir);
+    const pack = loadSingleExternalPack(registry, dir, entry.build.revision);
     if ('problem' in pack) registry.recordLoadProblem(manifest.id, pack.problem);
     else loaded.push(pack);
   }
@@ -194,7 +198,7 @@ export function registerExternalPacks(registry: PackRegistry, packs: LoadedPack[
 }
 
 /** Load and register every enabled installed pack; advertisements grant no registration priority. */
-export function loadAppPacks(registry: PackRegistry): { loaded: LoadedPack[] } {
-  const loaded = loadExternalPacks(registry);
+export function loadAppPacks(registry: PackRegistry, discoveredBuilds?: readonly InstalledPackBuild[]): { loaded: LoadedPack[] } {
+  const loaded = loadExternalPacks(registry, discoveredBuilds);
   return { loaded: loaded.length > 0 ? registerExternalPacks(registry, loaded) : [] };
 }

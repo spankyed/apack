@@ -81,7 +81,7 @@ export function activatePack(
   busActor: import('xstate').AnyActorRef,
 ): boolean {
   const { packsDir } = resolveAppEnvironment();
-  registry.refreshCatalog(packsDir);
+  registry.refreshCatalog({ packsDir, settings: 'enforce' });
   const packDir = path.join(packsDir, packId);
 
   const failed = (problem: string, err?: Error): false => {
@@ -153,7 +153,7 @@ function startAcceptedPack(
   if (previousSystemIds) registry.runShutdownHooksForKey(packId);
   if (lifecycle?.onShutdown) registry.registerShutdownHook(lifecycle.onShutdown, packId);
   try {
-    registry.refreshCatalog(resolveAppEnvironment().packsDir);
+    registry.refreshCatalog({ packsDir: resolveAppEnvironment().packsDir, settings: 'enforce' });
     lifecycle?.onInit?.();
     runPackMigrations(registry.packMigrationTargets('pack', [packId]));
     applyPacks(registry.packContentTargets([packId]));

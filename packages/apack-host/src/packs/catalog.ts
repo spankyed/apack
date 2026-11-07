@@ -93,6 +93,20 @@ function immutable<T>(data: T): CatalogData<T> {
   return captureData(data) as CatalogData<T>;
 }
 
+function checkedAppSources(input: AppPackSources) {
+  const ids = new Set<string>();
+  const sources = input.sources.map(source => {
+    const result = parseSnapshot(source.snapshot);
+    if (!result.snapshot || result.snapshot.manifest.id !== source.id || ids.has(source.id)
+      || source.sourceRevision !== shippedPackRevision(source.files)) {
+      throw new Error(`Invalid or conflicting app source declarations: ${source.dir}`);
+    }
+    ids.add(source.id);
+    return { ...source, snapshot: result.snapshot };
+  });
+  return sources;
+}
+
 /** One declaration catalog; settings are a projection, not another store of contributed defaults. */
 export function createContributionCatalog(appSettings: SettingsDefinition) {
   const logger = createLogger('pack-catalog');
@@ -191,16 +205,7 @@ export function createContributionCatalog(appSettings: SettingsDefinition) {
     },
     /** Available app defaults are not active owners and never change settings/help definitions. */
     setAppPackSources(input: AppPackSources): void {
-      const ids = new Set<string>();
-      const sources = input.sources.map(source => {
-        const result = parseSnapshot(source.snapshot);
-        if (!result.snapshot || result.snapshot.manifest.id !== source.id || ids.has(source.id)
-          || source.sourceRevision !== shippedPackRevision(source.files)) {
-          throw new Error(`Invalid or conflicting app source declarations: ${source.dir}`);
-        }
-        ids.add(source.id);
-        return { ...source, snapshot: result.snapshot };
-      });
+      const sources = checkedAppSources(input);
       publish({ appPackSources: sources, appPackSourceProblems: input.problems });
     },
     setNative(declarations: readonly CatalogData<NativePackDeclaration>[]): void {
@@ -238,7 +243,7 @@ export function createContributionCatalog(appSettings: SettingsDefinition) {
      * what is installed, and a stored value it makes invalid is recovery's to settle, not a reason to refuse the pack
      */
     replace(sources: readonly PackCatalogSource[], problems: readonly PackCatalogProblem[] = [],
-      { reportConflicts = false, admitSettings = true }: { reportConflicts?: boolean; admitSettings?: boolean } = {}): void {
+      { reportConflicts = false, admitSettings = true, appSources }: { reportConflicts?: boolean; admitSettings?: boolean; appSources?: AppPackSources } = {}): void {
       const next = new Map<string, PackCatalogEntry>();
       for (const source of sources) {
         const candidate = immutable(source);
@@ -264,7 +269,8 @@ export function createContributionCatalog(appSettings: SettingsDefinition) {
         refused = packs.filter(pack => conflicts.has(pack.snapshot.manifest.id));
         packs = packs.filter(pack => !conflicts.has(pack.snapshot.manifest.id));
       }
-      publish({ packs, problems }, refused, { admitSettings });
+      const offers = appSources && { appPackSources: checkedAppSources(appSources), appPackSourceProblems: appSources.problems };
+      publish({ packs, problems, ...offers }, refused, { admitSettings });
     },
 
     onChanged(listener: () => void): () => void {

@@ -388,7 +388,7 @@ describe('pack information without activation', () => {
       finally { bus.stop(); }
       expect(registry.loadProblem(PACK_ID)).toContain('Do not activate');
     }
-    registry.refreshCatalog(resolveAppEnvironment().packsDir);
+    registry.refreshCatalog({ packsDir: resolveAppEnvironment().packsDir, settings: 'enforce' });
     const system = runPacksSystem();
     try {
       expect(list(system)).toMatchObject({ name: 'Declared pack', version: '1.0.0', enabled: kind !== 'disabled',
@@ -403,7 +403,7 @@ describe('pack information without activation', () => {
 
   it('retains accepted metadata and publishes a replacement refusal before notifying readers', async () => {
     await installPackFromLocal(packSource('1.0.0'));
-    registry.refreshCatalog(resolveAppEnvironment().packsDir);
+    registry.refreshCatalog({ packsDir: resolveAppEnvironment().packsDir, settings: 'enforce' });
     const observations: Array<string | undefined> = [];
     const stop = registry.catalog.onChanged(() => observations.push(registry.loadProblem(PACK_ID)));
     const dir = path.join(resolveAppEnvironment().packsDir, PACK_ID);
@@ -794,7 +794,7 @@ describe('live updates preserve availability and enablement', () => {
     const { recordInstalled } = await import('../../../../src/packs/installed.ts');
     recordInstalled(PACK_ID, 'acme/pack');
     setPackEnabled(PACK_ID, false);
-    registry.refreshCatalog();
+    registry.refreshCatalog({ settings: 'enforce' });
     await stubRelease(packSource('2.0.0'));
     const system = runPacksSystem();
     try {
@@ -1227,7 +1227,7 @@ it('refuses a conflicting destination before saving enablement or importing its 
   setPackEnabled(PACK_ID, false);
   const system = runPacksSystem();
   try {
-    registry.refreshCatalog(resolveAppEnvironment().packsDir);
+    registry.refreshCatalog({ packsDir: resolveAppEnvironment().packsDir, settings: 'enforce' });
     const before = registry.catalog.getSnapshot();
     takeSystemErrors();
     system.send({ type: 'TOGGLE_PACK_ENABLED', packId: PACK_ID });

@@ -300,6 +300,22 @@ describe('loadAppPacks deterministic registration', () => {
     expect(registry.catalog.getSnapshot().appPackSources[0].snapshot.manifest.name).toBe('App default');
   });
 
+  it('reuses boot discovery but refuses a changed valid build before executing it', () => {
+    const packsDir = path.join(_appDirOf(tmpDir), 'packs');
+    const dir = makePack(packsDir, 'changed-build', { id: 'changed-build', name: 'Original', version: '1.0.0' });
+    const discovered = registry.refreshCatalog({ packsDir, settings: 'inspect' });
+    const marker = path.join(tmpDir, 'changed-build-executed');
+    fs.appendFileSync(path.join(dir, PACK_LAYOUT.runtimeEntry), `;require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'executed');`);
+    sealPack(dir);
+    const refresh = vi.spyOn(registry, 'refreshCatalog');
+    try {
+      expect(loadExternalPacks(registry, discovered)).toEqual([]);
+      expect(refresh).not.toHaveBeenCalled();
+      expect(registry.loadProblem('changed-build')).toContain('build changed after discovery');
+      expect(fs.existsSync(marker)).toBe(false);
+    } finally { refresh.mockRestore(); }
+  });
+
   it('orders by pack id and reports both owners when a designation conflicts', () => {
     const packs = path.join(_appDirOf(tmpDir), 'packs');
     makePack(packs, 'z-default', { id: 'z-default', name: 'Default', version: '1.0.0', features: { owner: { description: 'Feature declaration fixture.', designation: 'loader-spec-role' } } }, "{ owner: { designation: 'loader-spec-role' } }");
@@ -382,7 +398,7 @@ describe('pack-loader: bundled runtime (runtime/index.cjs)', () => {
       features: { widget: { system: { machine, receives: ['PING'] }, surface: { receives: [] }, settings: { defaults: { size: 3 }, schema: { type: 'object' } } } },
     `), { features: { widget: { description: 'Exercise the widget system.', system: { entry: 'system.ts' }, surface: { label: 'Fixture', state: 'surface.ts', defaultVisible: false }, settings: { defaults: { size: 3 }, schema: { type: 'object' } } } }, content: { writers: { Widget: 'writer.ts#writer' } } }, ['PING']);
 
-    registry.refreshCatalog(path.join(_appDirOf(tmpDir), 'packs'));
+    registry.refreshCatalog({ packsDir: path.join(_appDirOf(tmpDir), 'packs'), settings: 'enforce' });
     const [pack] = loadExternalPacks(registry);
     expect(registerExternalPacks(registry, [pack])).toEqual([pack]);
     try {

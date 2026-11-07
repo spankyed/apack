@@ -134,7 +134,7 @@ function publishPacksList(registry: PackRegistry) {
  * refresh that fails can't undo an operation that completed, so it is reported and the accepted declarations kept
  */
 function emitPacksList(registry: PackRegistry) {
-  try { registry.refreshCatalog(resolveAppEnvironment().packsDir); }
+  try { registry.refreshCatalog({ packsDir: resolveAppEnvironment().packsDir, settings: 'enforce' }); }
   catch (error) { reportError({ source: 'packs', operation: 'refreshPacksList', severity: 'error', error: new Error(errorMessage(error)) }); }
   publishPacksList(registry);
 }
@@ -322,7 +322,7 @@ export function createPacksSystem(registry: PackRegistry) {
             if (ev.type === 'REPLACE_PACK') {
               if (manifest.id !== ev.packId) throw new Error(`Replacement expected pack "${ev.packId}", received "${manifest.id}"`);
             } else {
-              registry.refreshCatalog();
+              registry.refreshCatalog({ settings: 'enforce' });
               const catalog = registry.catalog.getSnapshot();
               if (packRecord(manifest.id).updatesWith === 'app'
                 || catalog.appPackSources.some(source => source.id === manifest.id)
@@ -396,7 +396,7 @@ export function createPacksSystem(registry: PackRegistry) {
         broadcastToSurface('packs', { type: 'PACK_INSTALL_STARTED' as const, packSlug: packId });
         let startAccepted: (() => boolean) | undefined;
         Promise.resolve().then(() => {
-          registry.refreshCatalog();
+          registry.refreshCatalog({ settings: 'enforce' });
           const catalog = registry.catalog.getSnapshot();
           const source = catalog.appPackSources.find(source => source.id === packId);
           if (!source || catalog.appPackSourceProblems.some(problem => problem.id === packId)) {
@@ -482,7 +482,7 @@ export function createPacksSystem(registry: PackRegistry) {
         let startAccepted: (() => boolean) | undefined;
         let enabled = false;
         Promise.resolve().then(() => {
-          registry.refreshCatalog();
+          registry.refreshCatalog({ settings: 'enforce' });
           const catalog = registry.catalog.getSnapshot();
           const source = catalog.appPackSources.find(source => source.id === packId);
           if (!source || catalog.appPackSourceProblems.some(problem => problem.id === packId)) throw new Error(`App source "${packId}" is unavailable; refresh to see source diagnostics`);
@@ -499,7 +499,7 @@ export function createPacksSystem(registry: PackRegistry) {
           });
         }).then(result => {
           const activated = enabled ? startAccepted!() : false;
-          if (!enabled) registry.refreshCatalog();
+          if (!enabled) registry.refreshCatalog({ settings: 'enforce' });
           const problem = enabled ? activationProblem(registry, packId, activated) : undefined;
           if (problem) fail(new Error(`${result.name} was updated but ${problem}`));
           else {
@@ -552,7 +552,7 @@ export function createPacksSystem(registry: PackRegistry) {
           }
           finally {
             if (entry.enabled) activated = startAccepted!();
-            else { registry.refreshCatalog(); activated = false; }
+            else { registry.refreshCatalog({ settings: 'enforce' }); activated = false; }
           }
           const problem = entry.enabled ? activationProblem(registry, packId, activated) : undefined;
           if (problem) {
@@ -627,7 +627,7 @@ export function createPacksSystem(registry: PackRegistry) {
 
           try {
             if (newEnabled) {
-              registry.refreshCatalog(resolveAppEnvironment().packsDir);
+              registry.refreshCatalog({ packsDir: resolveAppEnvironment().packsDir, settings: 'enforce' });
               registry.catalog.assertPackEnabled(packId, true);
             }
           } catch (error) {

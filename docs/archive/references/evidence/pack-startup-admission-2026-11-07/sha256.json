@@ -1,0 +1,13 @@
+{
+  "startup-revision-comparison/populated-startup/execution.json": "78fdc29c35222c81a838068b34057e40dc5fa87f305a65c17c6f4c1cac0b46cf",
+  "startup-revision-comparison/populated-startup/A/manifest.json": "45b0aff25a432feb22260de3a84d6f8bd975cf259de42c0c3d55a6a09164c9d9",
+  "startup-revision-comparison/populated-startup/A/results.json": "b6c6ced8d8a7046a5169a044e74dc8123e7c47a616ff173fd6d04dd3d6646fa9",
+  "startup-revision-comparison/populated-startup/A/lifecycle.json": "1e7bac0a62282aa0809304957a3139e5739b4c4f8afbc173a910b1a46084f45c",
+  "startup-revision-comparison/populated-startup/B/manifest.json": "6f9de9aaa75d23666d1a023c7dba72f49b25f7c255e2a16db21416a2e9ca19ff",
+  "startup-revision-comparison/populated-startup/B/results.json": "4ff1da6f87b01afcbdb5ea8f1d680b3a8f934d20c5dbde07052bfaf9bce659b8",
+  "startup-revision-comparison/populated-startup/B/lifecycle.json": "1e7bac0a62282aa0809304957a3139e5739b4c4f8afbc173a910b1a46084f45c",
+  "startup-diagnostic/baseline/manifest.json": "08385ff068ee27d256a141c2c7df3b4d08ea7a11ef6f28e78bec3bfbf601250a",
+  "startup-diagnostic/baseline/results.json": "71bfe348ada5de1969c04277b9a9bbcbbe5d8a5f5ea0fe5b8900d27abc37622e",
+  "startup-diagnostic/candidate/manifest.json": "7cc42048c181244445b668ec97fd3aea574c09697aa23e400b9679846ae294da",
+  "startup-diagnostic/candidate/results.json": "25479e215c742a1043704d354662041b5a41df8200d5fb8bc88565ed0c9d61b4"
+}

@@ -68,7 +68,7 @@ beforeEach(() => {
   bus.send.mockReset();
   shutdown.mockReset();
   // The incumbent is an installed pack, not a host-native contribution with the same ID.
-  registry.refreshCatalog(resolveAppEnvironment().packsDir);
+  registry.refreshCatalog({ packsDir: resolveAppEnvironment().packsDir, settings: 'enforce' });
   registerPack(running, {
     id: PACK_ID, name: PACK_ID, version: '1.0.0',
     eventContracts,

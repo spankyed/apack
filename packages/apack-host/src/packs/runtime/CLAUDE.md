@@ -35,12 +35,21 @@ profile's installation record file and runs before installed-pack discovery.
 
 ### Loading
 
-`loadAppPacks(registry)` in `loader.ts` — one path for every pack:
+`loadAppPacks(registry, discoveredBuilds?)` in `loader.ts` — one path for every pack. Boot passes
+its discovery result after inspecting stored settings; standalone loading discovers fresh declarations.
+`refreshCatalog({ settings: 'inspect' | 'enforce', ... })` makes boot recovery versus live settings
+admission explicit. A refresh publishes shipped offers and installed declarations atomically.
+Boot captures shipped offers once for installation and publication; actual installation still verifies
+staged bytes against the captured source revision.
 
-- **Discovery** — `discoverPacks(packsDir)` plus the `installed-packs.json` rows, minus the disabled.
+For every pack:
+
+- **Discovery** — verified installed build results plus the `installed-packs.json` rows, minus the disabled.
 - **Order** — deterministic pack-id order, with no advertisement/ownership priority. Contribution conflicts name both owners; dependency content order is handled separately by `packContentTargets`.
 - **Loading** — `runtime/index.cjs` in the pack's own installed directory, written by its `apack pack build`, required with `withHostResolution()`. The api bundle carries no pack's backend, so this is the path packaged and from source alike.
 - Before loading code, `readPackBuild` validates declarations and verifies the complete installed file inventory. Changed/missing/extra files, malformed checksums and symbolic links are refused. The accepted content identity is retained in the pack origin separately from its declaration revision.
+  The fresh build revision must match discovery; a changed valid build is refused before execution,
+  requiring fresh discovery rather than combining old declarations with new executable bytes.
 - A pack with no built runtime, or one whose load throws, has a **load problem recorded** and the rest load.
 - Each loaded module's `setCompiledDir(<pack>/runtime/content)` is called, then `registry.registerPack(mod.registration)`.
 

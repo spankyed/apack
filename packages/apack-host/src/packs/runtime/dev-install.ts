@@ -43,7 +43,7 @@ export async function installDevPack(
     if (start) {
       if (!start()) throw new Error(`Installed ${result.id}, but ${registry.loadProblem(result.id) ?? 'it failed to start'}`);
     } else {
-      registry.refreshCatalog(packsDir);
+      registry.refreshCatalog({ packsDir, settings: 'enforce' });
       backendActor.send({ type: 'PACK_CHANGED', packId: result.id });
       logger.info(`Installed ${result.id}, which is disabled, so it was not started`);
     }

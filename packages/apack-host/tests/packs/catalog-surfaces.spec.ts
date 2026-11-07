@@ -102,7 +102,7 @@ it('reports every competing installed owner without stopping boot or importing i
     expect(loadSingleExternalPack(registry, path.join(packsDir, 'first'))).toMatchObject({ problem: expect.stringContaining('second/view') });
     expect(fs.existsSync(path.join(root, 'first'))).toBe(false);
     expect(fs.existsSync(path.join(root, 'second'))).toBe(false);
-    registry.refreshCatalog(packsDir, new Set(['second']));
+    registry.refreshCatalog({ packsDir, disabled: new Set(['second']), settings: 'enforce' });
     expect(registry.catalog.getSnapshot().problems).toEqual([]);
     expect(registry.catalog.get('first')?.enabled).toBe(true);
     expect(registry.catalog.get('second')?.enabled).toBe(false);
@@ -144,7 +144,7 @@ it('withholds every installed owner of a shared reference name at boot, without 
     expect(registry.loadProblem('second')).toBe(registry.loadProblem('first'));
     expect(fs.existsSync(path.join(root, 'first'))).toBe(false);
     expect(fs.existsSync(path.join(root, 'second'))).toBe(false);
-    registry.refreshCatalog(packsDir, new Set(['second']));
+    registry.refreshCatalog({ packsDir, disabled: new Set(['second']), settings: 'enforce' });
     expect(registry.catalog.getSnapshot().problems).toEqual([]);
   } finally { vi.unstubAllEnvs(); fs.rmSync(root, { recursive: true, force: true }); }
 });

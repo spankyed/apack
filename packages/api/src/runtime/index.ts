@@ -7,7 +7,7 @@ import { bindHost } from '@apackdev/sdk/runtime';
 import { _getLmdbPath, _getRunHistoryPath } from '@apackdev/sdk/utils';
 import type { EarsDatabase, EarsEngine } from '@apackdev/ears';
 import { assertNoDatabaseWriter, openDatabaseStore, openRunHistory, storedSettings, type RunsDatabase } from '@apackdev/host/database';
-import { createPackRegistry, installShippedPacks, prepareHostDataDirs, type PackRegistry } from '@apackdev/host/packs';
+import { createPackRegistry, readAppPackSources, installCapturedShippedPacks, prepareHostDataDirs, type PackRegistry } from '@apackdev/host/packs';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
 import { loadAppPacks, startPacks } from '@apackdev/host/packs/runtime';
@@ -186,12 +186,13 @@ async function initializeBackend(performance?: ReturnType<typeof createNodePerfo
   // Install before discovery. Ownership, shipped source revision and deliberate removal decide refresh;
   // matching bytes never grant app ownership of an existing user build.
   const shippedDir = process.env.SHIPPED_PACKS_DIR;
+  const appSources = shippedDir ? readAppPackSources(shippedDir) : { sources: [], problems: [] };
   if (!shippedDir) {
     // "This app ships no packs" and "nobody told me where they are" are different answers, and installing
     // nothing looks the same either way: on a fresh data dir both give an app with no surfaces
     console.warn('[packs] SHIPPED_PACKS_DIR is not set, so no pack the app ships is installed');
   } else {
-    const results = await installShippedPacks(shippedDir, appContext.packsDir, { installedPacksFile: appContext.installedPacksFile, hostVersion: APP_VERSION, packFormat: PACK_SNAPSHOT_FORMAT, settingsOverrides: () => storedSettings(engine) });
+    const results = await installCapturedShippedPacks(appSources, appContext.packsDir, { installedPacksFile: appContext.installedPacksFile, hostVersion: APP_VERSION, packFormat: PACK_SNAPSHOT_FORMAT, settingsOverrides: () => storedSettings(engine) });
     if (results.length === 0) console.warn(`[packs] ${shippedDir} holds no pack to install`);
     for (const result of results) {
       if (result.outcome === 'failed') console.error(`[packs] Could not install ${result.id}, which this app ships: ${result.error}`);
@@ -200,7 +201,7 @@ async function initializeBackend(performance?: ReturnType<typeof createNodePerfo
   }
 
   // Static discovery and a direct stored-row read precede executable pack loading and hydration.
-  packs.refreshCatalog(appContext.packsDir);
+  const discoveredBuilds = packs.refreshCatalog({ packsDir: appContext.packsDir, settings: 'inspect', appSources });
   const settingsProblems = compileSettingsCatalog(packs.settingsCatalog()).inspect(storedSettings(engine));
   const recoveringSettings = settingsProblems.length > 0;
   if (recoveringSettings) {
@@ -219,7 +220,7 @@ async function initializeBackend(performance?: ReturnType<typeof createNodePerfo
   }));
 
   // Recovery starts only host actors; no executable external pack is imported.
-  const loadedPacks = observeIndexAdmission(appPerformance, () => recoveringSettings ? [] : loadAppPacks(packs).loaded);
+  const loadedPacks = observeIndexAdmission(appPerformance, () => recoveringSettings ? [] : loadAppPacks(packs, discoveredBuilds).loaded);
 
   console.log(`[app] apack v${APP_VERSION} startupId=${process.env.APACK_STARTUP_ID ?? 'unknown'}`);
 
