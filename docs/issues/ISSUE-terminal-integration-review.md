@@ -138,6 +138,7 @@ orchestration, `L` = lifecycle and persisted data, `G` = agent sessions.
 | **T7** | Low | The panel's attach watcher never tears down when its terminal disappears | `PanelTerminalSection.vue:545-559` |
 | **T8** | Low | The panel list discards the terminal's title in favour of the cwd basename | `fe/composables/useTerminalActions.ts:34` |
 | **T9** | Low | `moveTerminalToPanel` leaves an emptied tab group rendered | `fe/state.ts:869-885` |
+| **T10** | Medium | During a restore, **every** `saveTabsAction` persists a list without the tabs still arriving, not only the settle | `fe/state.ts:248-252` (`persistCodeTabs`) |
 | **L6-L8** | Low | `terminal.INITIAL_OUTPUT`, `CODE_STARTUP` and the `terminal.CREATE` inbox shape are dead or disagree | `be/contract.ts:188`, `fe/contract.ts:122` |
 | **M6** | Low | Every window loads every persisted terminal buffer into memory | `fe/utils/terminal-events.ts:19-35` |
 | **X7** | Low | Windows: three FE paths split cwd on `/`, so the whole path becomes the name | `useTerminalActions.ts:34`, `fe/state.ts:155` |

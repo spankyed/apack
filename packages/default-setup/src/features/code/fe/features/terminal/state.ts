@@ -316,8 +316,9 @@ export const terminalState = setup({
           // Explicit tab target — create canvas tab
           addTabToParent(self, createTerminalTab(terminalInfo))
         } else {
-          // Default — route to panel
-          updateParentState(self, { panelTerminalId: terminalInfo.id })
+          // Default — route to panel, and show it. A terminal spawned into a collapsed panel is one the
+          // user asked for and cannot see; "Open Terminal Here" was the way to meet it
+          updateParentState(self, { panelTerminalId: terminalInfo.id, panelTerminalExpanded: true })
         }
 
         // Run pending command if set
@@ -356,7 +357,10 @@ export const terminalState = setup({
           const tabbedIds = new Set(
             (result.openFiles || []).filter((f: any) => f.isTerminal).map((f: any) => f.terminalInfo.id)
           )
-          const next = context.terminals.find(t => !tabbedIds.has(t.id))
+          // `context` is the snapshot this body was entered with, so the closed terminal is still in it:
+          // `removeTerminal` is queued above and assigns after the body returns. Excluding it by id rather
+          // than relying on that order, since the order is what made the panel show a dead terminal
+          const next = context.terminals.find(t => t.id !== terminalId && !tabbedIds.has(t.id))
           panelUpdate = { panelTerminalId: next?.id ?? null }
         }
 

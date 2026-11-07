@@ -120,8 +120,17 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   set. The module imports nothing outside `node:`, which `janitor.ts` requires — launchd runs it with no npm.
   Checked in place: the janitor still reports the same four targets and the image still keys on `1.99.1`.
   **Phase S's two preconditions are met.**
-- **Next deliverable:** Phase T's **G1** — verify against #372 first, since the file moves there — and the
-  tab-and-panel track (T1, T2, T3, T5, T6, T8, T9), checking each for a fix the spine would delete.
+- **Done:** Phase T's **tab-and-panel track** — T1, T2, T3, T5, T8 and T9, each with a firing spec and each
+  mutation-checked. **T6 was excluded** on the same ground as T7: see Phase T. All seven were verified
+  against current source first; T3 turned out worse than its row said and the extra half is recorded as
+  **T10** in the review rather than folded in here.
+- **Next deliverable:** Phase T's **G1** is the last track, and it is **blocked on Phase G**: the review
+  states G1's severity is an inference from reading, Phase G's *Done when* prices it, and the repo's rule is
+  to measure before optimising. `stream-writer.ts` is untouched by #372 (checked 2026-11-07 against
+  `origin/session/claude-code-integration`), so the fix has no rebase to think about — but
+  `thinking-writer.ts` (+51) and `stream-consumer.ts` (+362) do move there, so the thinking writer's half
+  belongs with that branch's cleanup rather than here. **Phase G is still blocked on a quiet machine**:
+  `npm run check:idle` reported 0% immediately after a suite run, and 60% earlier on 2026-11-07.
   **Phase G is blocked on a quiet machine**: `npm run check:idle`
   reported 60% against a 70% floor on 2026-11-07, so the baseline could not be taken. Retry before Phase S,
   since it cannot be taken once state moves. Phase B's first commit is the last cheap exit — see Constraints.
@@ -367,6 +376,20 @@ make the ambiguous case loud.
 Phase P's session model dissolves, so fixing it here is work Phase P deletes. It closes as dissolved there,
 with the one-attached-host invariant as its guard. Check each T track for the same shape before starting it —
 a fix the spine removes is the cheapest thing not to write.
+
+**T6 turned out to be the same shape, and was excluded on the same ground.** "Restart Terminal" is a kill
+followed by a create, so the new tab is a new tab and the old one's pin, group and position go with it. Its
+honest fix is a restart that replaces the terminal *in the same tab*, which is the session generation
+**Phase H** delivers — "a crashed shell is a new generation whose predecessor's transcript is labelled
+history" is the same mechanism. Carrying a tab's metadata across a kill-then-create would be a hack Phase H
+deletes. T1 was checked against the same test and kept: the review names it as fixed by the one-owner
+refactor too, but a *selection policy* — which terminal the panel shows when its own closes — still has to
+exist after the refactor, so the bug survives with it unless fixed.
+
+**T10 was found while verifying T3 and is not in this track.** `persistCodeTabs` prunes against `openFiles`
+alone, so **any** `saveTabsAction` during the restore window writes a list without the tabs still arriving —
+not only the settle, which is all T3's row names. T3's fix makes the settle non-destructive; the intervening
+saves are a separate finding, recorded in the review.
 
 S1 and S2 each land with the firing case that fails when the list goes stale: a deny-list rotting unnoticed
 is the defect in both, and a fix without that case only resets the clock.

@@ -25,8 +25,10 @@ export function removeTabs<T extends BaseTab>(
 ): { openFiles: T[]; activeFilePath: string | null } {
   const pathsSet = new Set(Array.isArray(pathsToRemove) ? pathsToRemove : [pathsToRemove])
   
-  // Filter out tabs to remove, but protect pinned tabs
-  const filteredTabs = openFiles.filter(tab => !pathsSet.has(tab.path) || tab.isPinned)
+  // Pinning is about where a tab sits, not about outliving what it shows. Every caller of this is a subject
+  // that is gone — a terminal that exited, a file deleted, a file that no longer loads — so exempting a
+  // pinned tab left a permanent ghost pointing at nothing. A user closing a tab does not come through here
+  const filteredTabs = openFiles.filter(tab => !pathsSet.has(tab.path))
   
   // Determine new active file if current was removed
   let newActiveFilePath = currentActive

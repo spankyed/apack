@@ -251,22 +251,41 @@ function persistCodeTabs(context: CodeContext): void {
   saveTabGroups(storage, 'tab-groups', tabGroups)
 }
 
+/**
+ * What the surface stops waiting for once the restore deadline passes.
+ *
+ * **The deadline is the give-up, not the answer.** A restore that completes settles itself: the arrival path
+ * clears each metadata entry as its tab lands and clears the order once every persisted path is present. So
+ * this runs only over what never arrived — in practice a terminal whose shell took longer than the deadline
+ * to spawn, which the backend does one at a time.
+ *
+ * Which is why **it keeps the metadata for a path that is still missing**: a tab landing after the deadline
+ * is hydrated from that entry, and dropping it cost the tab its pin, its group and its position. The groups
+ * are pruned against what is still expected as well as what is open, so a group is not removed from under a
+ * tab that is still coming.
+ */
 function finalizeRestoreState(context: CodeContext): Partial<CodeContext> {
   if (context.pendingTabOrder === undefined && context.pendingPersistedMetadata === undefined && context.pendingTerminalTabIds === undefined) {
     return {}
   }
 
   const openPaths = new Set(context.openFiles.map(file => file.path))
-  const tabGroups = pruneEmptyTabGroups(context.openFiles, context.tabGroups)
+  const stillExpected = new Map(
+    [...(context.pendingPersistedMetadata ?? [])].filter(([path]) => !openPaths.has(path))
+  )
+  const accountedFor = [
+    ...context.openFiles.map(file => ({ groupId: 'groupId' in file ? file.groupId : undefined })),
+    ...[...stillExpected.values()].map(metadata => ({ groupId: metadata.groupId })),
+  ]
   const activeFilePath = context.activeFilePath && openPaths.has(context.activeFilePath)
     ? context.activeFilePath
     : context.openFiles[0]?.path ?? null
 
   return {
     pendingTabOrder: undefined,
-    pendingPersistedMetadata: undefined,
+    pendingPersistedMetadata: stillExpected.size > 0 ? stillExpected : undefined,
     pendingTerminalTabIds: undefined,
-    tabGroups,
+    tabGroups: prunePersistedTabGroups(context.tabGroups, accountedFor),
     activeFilePath,
   }
 }
@@ -884,6 +903,8 @@ const codeState = setup({
       return {
         openFiles: newOpenFiles,
         activeFilePath: newActiveFilePath,
+        // The group the moved tab was the last member of, which every other removal here prunes
+        tabGroups: pruneEmptyTabGroups(newOpenFiles, context.tabGroups),
         panelTerminalId: terminalId,
         panelTerminalExpanded: true
       }
@@ -1210,16 +1231,22 @@ const codeState = setup({
       }
     }),
 
+    /**
+     * **Settling writes nothing to storage.** It used to persist the list it had just pruned, which turned a
+     * slow restore into a permanent one: a terminal that had not come back inside the deadline was dropped
+     * from storage as well as from the surface, so the next launch had nothing left to ask for. Every real
+     * change persists through `saveTabsAction`, so leaving storage alone means a tab that is still missing is
+     * still there to try again — and the log says so rather than announcing a settle on every startup.
+     */
     settlePersistedTabsRestore: assign(({ context }) => {
       const updates = finalizeRestoreState(context)
       if (Object.keys(updates).length === 0) return {}
 
-      const nextContext = { ...context, ...updates }
-      persistCodeTabs(nextContext)
-      console.info('[Code Surface] restored tabs settled', {
-        openTabCount: nextContext.openFiles.length,
-        prunedPendingCount: context.pendingTabOrder?.filter(tab => !nextContext.openFiles.some(file => file.path === tab.path)).length ?? 0,
-      })
+      const openPaths = new Set(context.openFiles.map(file => file.path))
+      const missing = context.pendingTabOrder?.filter(tab => !openPaths.has(tab.path)) ?? []
+      if (missing.length > 0) {
+        console.info(`[Code Surface] ${missing.length} restored tab(s) have not arrived; they stay in storage for the next launch`)
+      }
       return updates
     }),
 
