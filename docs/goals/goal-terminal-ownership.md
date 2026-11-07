@@ -154,8 +154,13 @@ unbumped rev is a silent skew; a second pre-push suite at elmdb's bar (`cargo xt
 mutation survivor killed or justified); `lib/janitor-policy.ts` widened past one checkout; per-platform
 native artifacts in the packaged build.
 
-**VT core:** an upstream Rust crate — `alacritty_terminal` for grid and state, over `vte`. This is
-independent of the language decision and unchanged by it. Not because FFI is objectionable:
+**VT core: an upstream Rust crate rather than an FFI to Zig's `libghostty-vt`.** That much is settled and is
+independent of the language decision. **Which** Rust crate is not: `alacritty_terminal` over `vte` is the
+provisional pick, and Phase S weighs `termwiz` against it on a ground this decision never considered — that
+it ships from the same project as `portable-pty` and is built to pair with it. Two questions, and only the
+first is answered here.
+
+The lineage half, settled. Not because FFI is objectionable:
 `libghostty-vt` exposes a public C ABI. Two narrower reasons. Matching Ghostty's lineage pays only when a
 native core and a ghostty-web renderer cannot disagree about a screen, and D10 keeps xterm.js, so that
 benefit is not purchasable here. And the refactor target records that the snapshot contract "explicitly
@@ -166,7 +171,9 @@ and carrying `inferred` provenance. Reopen at the
 [ghostty-web migration](../deferred/xterm-to-ghostty-web.md), where lineage matching starts to pay and the
 snapshot-format risk is what to weigh against it.
 
-**No decision is open**, and every phase below names its owning decision. An agent that reaches any other fork this document does
+**No architectural decision is open**, and every phase below names its owning decision. A phase may still
+settle a narrower choice by trying it — Phase S picks between two VT crates that way, which is a deliverable
+rather than an open question. An agent that reaches any other fork this document does
 not settle has found a gap in it, and should record the gap rather than choose.
 
 ## Phases
@@ -272,28 +279,6 @@ has another client:
   broker's source.
 - A **terminal capability** over it — pty, VT core, screen and bounded history.
 
-(The refactor target's reusable core takes "executable/argv, environment, cwd, dimensions, resource policy
-and opaque IDs", which conflates the two; `dimensions` belongs to the second.)
-
-**The app's side is a protocol client, and it is asynchronous.** Follow `elmdb-node`'s shape — Rust types as
-the source of truth, TS generated into a `protocol/` directory and shipped with the package — but without
-the addon: the broker is a process, not a `cdylib`, so there is no `.node`, no napi and **no
-`electron-rebuild`**, which is where D11's ABI independence actually lands.
-
-The consequence to plan for rather than discover: **EARS is synchronous by design** and that only works
-because elmdb is in-process — `query`/`create`/`write` are documented as "do NOT await". A socket client is
-not, so every pty write, resize and kill becomes a promise, reaching the terminal system's machine code and
-every call site that assumed sync. Budget for it; it is pervasive and cheap now, expensive late.
-
-Four more that follow from shipping a binary instead of an addon: per-platform broker builds included by
-electron-builder with the executable bit and macOS signing intact, and resolved differently in dev and
-packaged; composition owning spawn, socket discovery, crash-restart and one-broker-per-data-dir
-(`api/src/runtime/index.ts`, as `openAppStore()` does); the generated protocol treated as a recorded artifact
-with `check`/`update` halves so staleness fails a typecheck; and a protocol-version handshake, since the
-monorepo pins a `.rev` and a stale pin should be a clear refusal rather than a strange bug. Host-only, like
-`APP_ONLY_EXPORTS` keeps `@apackdev/ears/lmdb` from packs, and with a fake so a terminal test needs no built
-binary.
-
 **Dependencies:** Phase S's proven path and the protocol it derived. D11 for the broker's home and core, D9
 for what it parses, Phase G's baseline so acceptance has a before.
 
@@ -329,6 +314,32 @@ for what it parses, Phase G's baseline so acceptance has a before.
   seam, not the second client. **Re-verify G1, G2, G6 and G7 against #372 first** — `runner.ts`,
   `handle-store.ts`, `query.ts` and `hooks.ts` all move substantially there, and **G3 is already fixed** on
   that branch (`hooks.ts` calls `killAllHandles()`).
+
+#### The app's side of the protocol
+
+(On the split above: the refactor target's reusable core takes "executable/argv, environment, cwd,
+dimensions, resource policy and opaque IDs", which conflates the two layers — `dimensions` belongs only to
+the second.)
+
+
+**The app's side is a protocol client, and it is asynchronous.** Follow `elmdb-node`'s shape — Rust types as
+the source of truth, TS generated into a `protocol/` directory and shipped with the package — but without
+the addon: the broker is a process, not a `cdylib`, so there is no `.node`, no napi and **no
+`electron-rebuild`**, which is where D11's ABI independence actually lands.
+
+The consequence to plan for rather than discover: **EARS is synchronous by design** and that only works
+because elmdb is in-process — `query`/`create`/`write` are documented as "do NOT await". A socket client is
+not, so every pty write, resize and kill becomes a promise, reaching the terminal system's machine code and
+every call site that assumed sync. Budget for it; it is pervasive and cheap now, expensive late.
+
+Four more that follow from shipping a binary instead of an addon: per-platform broker builds included by
+electron-builder with the executable bit and macOS signing intact, and resolved differently in dev and
+packaged; composition owning spawn, socket discovery, crash-restart and one-broker-per-data-dir
+(`api/src/runtime/index.ts`, as `openAppStore()` does); the generated protocol treated as a recorded artifact
+with `check`/`update` halves so staleness fails a typecheck; and a protocol-version handshake, since the
+monorepo pins a `.rev` and a stale pin should be a clear refusal rather than a strange bug. Host-only, like
+`APP_ONLY_EXPORTS` keeps `@apackdev/ears/lmdb` from packs, and with a fake so a terminal test needs no built
+binary.
 
 #### Why the agent path shapes this phase
 
@@ -491,10 +502,16 @@ undone**:
 | F5 — an EARS write per resize | a spec asserting a resize writes no application row |
 | F1, F2 — two hosts, two scroll policies | the invariant spec: one attached host, one `onData`/resize registration per session |
 | F3, F6 — a second and third scrollback copy | a `check:specifiers` rule: the pack reaches neither window storage nor its own output buffer |
+| F8 — output lost before a listener exists | a spec asserting the first byte a pty writes reaches the session, with the listener registered by the spawn rather than after it |
+| M1, M5 — two windows writing one key | a spec asserting a second window observes without writing session-owned state |
+| M2 — the pty sized by whichever window fitted last | a spec asserting one resize authority per session, with a second observer's fit ignored |
+| M4 — a seam missed on first attach | a spec asserting a window attaching after a process was replaced sees the seam |
 | X1, X2 — an unowned process tree | the Windows dispatch, required on each release rather than passed once |
 | node-pty returning to the pack | a `check:specifiers` rule, as `APP_ONLY_EXPORTS` does for the lmdb entry |
 
-**A row whose guard cannot be named is not dissolved — it is unverified, and stays `open`.**
+That is all sixteen, deliberately: a table covering eleven of them would let the five without a guard read as
+closed on the strength of the others. **A row whose guard cannot be named is not dissolved — it is
+unverified, and stays `open`.**
 
 ### The complaint, not only the findings
 

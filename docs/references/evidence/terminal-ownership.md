@@ -14,13 +14,18 @@ A row closes only as the goal's decision D6 allows: a test that fails before the
 an explicit `driven: <what was done>` with the reason no test fits. `dissolved` records that the destination
 removes the finding rather than fixing it, and names the construction that does.
 
-| Finding | Disposition | Implementation | Evidence | Remaining |
-|---|---|---|---|---|
-| T4 | test | correlation work, pre-goal | `tests/features/code/fe/terminal-opens-for-the-asker.spec.ts` | — |
-| M3 | test | correlation work, pre-goal | `tests/features/code/be/terminal-answers-the-asker.spec.ts` | — |
-| G3 | open | fixed on `session/claude-code-integration` (#372), not on master | `hooks.ts` calls `killAllHandles()` there | closes when #372 lands; confirm it survives the cleanup pass |
+| Finding | Disposition | Implementation | Evidence | Guard | Remaining |
+|---|---|---|---|---|---|
+| T4 | test | correlation work, pre-goal | `tests/features/code/fe/terminal-opens-for-the-asker.spec.ts` | the spec itself | — |
+| M3 | test | correlation work, pre-goal | `tests/features/code/be/terminal-answers-the-asker.spec.ts` | the spec itself | — |
+| G3 | open | fixed on `session/claude-code-integration` (#372), not on master | `hooks.ts` calls `killAllHandles()` there | — | closes when #372 lands; confirm it survives the cleanup pass |
 
-Disposition values: `test`, `dissolved`, `driven`, `open`. A fix that exists only on an unmerged branch is
+Disposition values: `test`, `dissolved`, `driven`, `open`.
+
+**Guard** is required for `dissolved` and is what makes that disposition mean anything: the check that fails
+if the construction which removed the finding is undone. A `dissolved` row with no guard is **not** closed —
+it is unverified and stays `open`. For a `test` row the spec is its own guard. The goal's acceptance section
+lists the guards its sixteen dissolved findings are expected to carry. A fix that exists only on an unmerged branch is
 `open` with its branch named: the goal runs against master, and a row that reads closed because another
 branch closed it is how a regression gets shipped.
 
