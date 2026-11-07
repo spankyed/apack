@@ -26,13 +26,12 @@ Disposition values: `test`, `dissolved`, `driven`, `open`.
 None yet. Each entry carries its date, source commit, the exact commands run and their results, and any
 limitation the run did not cover. A failed check stays visible until it is resolved.
 
-### D11's premise (Phase G) — not taken
+### VT parsing cost (Phase G) — not taken
 
-The Rust broker's language half rests on JavaScript being unable to carry headless VT parsing at this app's
-output volumes inside a budget. That reading is recorded here with its corpus and conditions, because it is
-a decision input rather than a performance note: if JS carries it with headroom, a detached Node broker buys
-the same architecture without a second repository, toolchain, mutation suite or cross-language IPC, and the
-goal's D11 needs re-deciding by the user.
+The reading that sizes the broker's parsing worker and its history cap, with its corpus and conditions. It
+is no longer a decision input: D11 settled on a Node broker by inspection, since `worker_threads` is already
+how this repo keeps compiler work off a loop. An earlier revision of the goal made this reading the premise
+that chose the broker's language, which would have answered a question whose real support lay elsewhere.
 
 ### Baseline (Phase G) — not taken
 
