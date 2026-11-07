@@ -279,7 +279,7 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
 
   return {
     pid: stream.child.pid,
-    ui: createClaudeUiControls(initialized, hostControls, promptHosts, printClients.projection),
+    ui: createClaudeUiControls(() => initialized, hostControls, promptHosts, printClients.projection),
     initialized,
     sessionId: sessionId.promise,
     events: eventQueue,

@@ -6,7 +6,7 @@ import type { ClaudeNativeTerminalState } from '#features/code/common/native-ter
 const target = { ownerId: 'owner', sessionId: 'session', revision: 2, taskId: 'agent' }
 function native() {
   const state: ClaudeNativeTerminalState = { ownerId: 'owner', sessionId: 'session', cwd: '/private/fixture', busy: false, tasks: [], status: 'live', view: { kind: 'agent', revision: 2, registryId: 'registry-agent', taskId: 'agent' } }
-  const request = vi.fn(async () => ({ capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }))
+  const request = vi.fn(async (_value: Record<string, unknown>): Promise<unknown> => ({ capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }))
   const owner = { state, done: new Promise<void>(() => {}), uiTransport: { request, subscribe: vi.fn(), promptHosts: {} } } as unknown as ClaudeNativeTerminalOwner
   vi.mocked(store.getNativeTerminal).mockReturnValue(owner)
   return { state, owner, request }
@@ -20,7 +20,7 @@ it('requires an explicit exact Agent target and exposes its attachment to the mo
   expect(selected?.nativeView).toEqual({ session_id: 'session', revision: 2, agent_id: 'agent' })
   expect(getClaudeUiOwner('thread', { ...target })).toBe(selected)
   for (const foreign of [{ ...target, ownerId: 'other' }, { ...target, sessionId: 'other' }, { ...target, revision: 1 }, { ...target, taskId: 'registry-agent' }]) expect(getClaudeUiOwner('thread', foreign)).toBeUndefined()
-  expect(request).toHaveBeenCalledOnce()
+  expect(request).not.toHaveBeenCalled()
 })
 it('retires main and Agent identities across return, reselection and session replacement', () => {
   const { state } = native(); const agent = getClaudeUiOwner('thread', target)
@@ -70,10 +70,47 @@ it('keeps child desktop controls on the exact original incarnation, separate fro
   }
   expect(getClaudeUiOwner('thread',target,child)).toBeUndefined()
   expect(getClaudeUiOwner('thread')).toBeUndefined()
-  expect(request).toHaveBeenCalledOnce()
+  expect(request).not.toHaveBeenCalled()
   read.mockReturnValue({...desktop,id:'replacement'})
   expect(getClaudeUiOwner('thread',undefined,child)).toBeUndefined()
   const replacement = getClaudeUiOwner('thread',undefined,{...child,ownerId:'replacement'})
   expect(replacement).toBeTruthy();expect(replacement).not.toBe(owner)
   read.mockReturnValue(undefined);expect(getClaudeUiOwner('thread',undefined,{...child,ownerId:'replacement'})).toBeUndefined()
+})
+
+
+it('allows a fresh attachment after failed capability discovery without replacing its native owner', async () => {
+  const { owner: nativeOwner, request } = native()
+  Object.assign(nativeOwner.uiTransport.promptHosts, { answers: () => [] })
+  request.mockRejectedValueOnce(new Error('Native UI request timed out'))
+  const owner = getClaudeUiOwner('thread', target)!
+  const attach = (id: string) => owner.handle.ui.attach({ client_id: id, surface: 'desktop', native_view: owner.nativeView })
+  await expect(attach('first')).rejects.toThrow('Native UI request timed out')
+  expect(request).toHaveBeenCalledTimes(1)
+  expect(getClaudeUiOwner('thread', target)).toBe(owner)
+  request.mockImplementation(async value => value.subtype === 'apack_ui_capabilities'
+    ? { capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }
+    : { surfaces: ['desktop'] })
+  await expect(attach('second')).resolves.toEqual({ surfaces: ['desktop'] })
+  await expect(attach('third')).resolves.toEqual({ surfaces: ['desktop'] })
+  expect(request.mock.calls.filter(([value]) => value.subtype === 'apack_ui_capabilities')).toHaveLength(2)
+  expect(getClaudeUiOwner('thread', target)).toBe(owner)
+})
+
+
+it('shares in-flight capability discovery and preserves native capability refusal', async () => {
+  const { state, owner: nativeOwner, request } = native()
+  state.view = { kind: 'main', revision: 3 }
+  Object.assign(nativeOwner.uiTransport.promptHosts, { answers: () => [] })
+  let finish!: (value: unknown) => void
+  request.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  const owner = getClaudeUiOwner('thread')!
+  const first = owner.handle.ui.attach({ client_id: 'first', surface: 'desktop' })
+  const second = owner.handle.ui.attach({ client_id: 'second', surface: 'desktop' })
+  expect(request).toHaveBeenCalledOnce()
+  finish({ capabilities: [] })
+  await expect(first).rejects.toThrow('native UI surface capability is unavailable')
+  await expect(second).rejects.toThrow('native UI surface capability is unavailable')
+  await expect(owner.handle.ui.attach({ client_id: 'third', surface: 'desktop' })).rejects.toThrow('native UI surface capability is unavailable')
+  expect(request).toHaveBeenCalledOnce()
 })

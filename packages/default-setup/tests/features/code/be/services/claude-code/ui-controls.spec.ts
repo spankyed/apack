@@ -4,7 +4,7 @@ import { createHostControls } from '#features/code/be/services/claude-code/host-
 function fixture(capabilities: string[] = ['ui_surface_v1']) {
   const writes: Array<{ request_id: string; request: Record<string, unknown> }> = []
   const controls = createHostControls(value => { writes.push(value as typeof writes[number]); return true })
-  const ui = createClaudeUiControls(Promise.resolve({ commands: [], agents: [], models: [], capabilities }), controls)
+  const ui = createClaudeUiControls(() => Promise.resolve({ commands: [], agents: [], models: [], capabilities }), controls)
   return { ui, controls, writes, reply(index: number, response: unknown) {
     controls.receive({ response: { request_id: writes[index]!.request_id, subtype: 'success', response } })
   } }
@@ -14,18 +14,18 @@ const client = { client_id: 'fixture-ui', surface: 'desktop' as const }
 describe('native UI transport', () => {
   it('keeps native admission review distinct from a delivered Agent message', async () => {
     const request = vi.fn(async () => ({ kind: 'review', text: '', removed: 1 }))
-    const ui = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }), { request })
+    const ui = createClaudeUiControls(() => Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }), { request })
     const result = await ui.submitAgent({ client_id: 'agent-ui', text: '\u200b' })
     expect(result).toEqual({ kind: 'review', text: '', removed: 1 }); expect(result).not.toHaveProperty('input')
   })
 
   it('retains Agent reply text and validates the original native human receipt', async () => {
     const request = vi.fn(async () => ({ kind: 'input', messageId: '12345678-1234-4234-8234-123456789abc', previousStatus: 'completed' }))
-    const ui = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }), { request })
+    const ui = createClaudeUiControls(() => Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }), { request })
     await expect(ui.submitAgent({ client_id: 'agent-ui', text: '  Keep whitespace  ' })).resolves.toMatchObject({ kind: 'input', messageId: '12345678-1234-4234-8234-123456789abc' })
     expect(request).toHaveBeenCalledWith({ subtype: 'apack_ui_agent_dispatch', client_id: 'agent-ui', text: '  Keep whitespace  ' })
     await expect(ui.submitAgent({ client_id: 'agent-ui', text: ' ' })).rejects.toThrow()
-    const print = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request })
+    const print = createClaudeUiControls(() => Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request })
     await expect(print.submitAgent({ client_id: 'parent-ui', text: 'Do not send' })).rejects.toThrow('capability is unavailable')
     expect(request).toHaveBeenCalledOnce()
   })
@@ -33,10 +33,10 @@ describe('native UI transport', () => {
   it('requires terminal-owner capability before advertising a selected Agent prompt host', async () => {
     const request = vi.fn(async () => ({ surfaces: ['desktop'] }))
     const target = { session_id: 'native-session', revision: 4, agent_id: 'agent-one' }
-    const print = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request })
+    const print = createClaudeUiControls(() => Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request })
     await expect(print.attach({ ...client, native_view: target })).rejects.toThrow('Agent UI attachment capability')
     expect(request).not.toHaveBeenCalled()
-    const terminal = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }), { request })
+    const terminal = createClaudeUiControls(() => Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }), { request })
     await expect(terminal.attach({ ...client, native_view: target })).resolves.toEqual({ surfaces: ['desktop'] })
     expect(request).toHaveBeenCalledWith({ subtype: 'ui_attach', ...client, native_view: target, answers: [] })
     await expect(terminal.attach({ ...client, surface: 'mobile', native_view: target })).rejects.toThrow('requires desktop')
@@ -48,7 +48,7 @@ describe('native UI transport', () => {
     let ready!: (value: { commands: []; agents: []; models: []; capabilities: string[] }) => void
     const initialized = new Promise<{ commands: []; agents: []; models: []; capabilities: string[] }>(resolve => { ready = resolve })
     const request = vi.fn(async () => ({ surfaces: ['desktop'] }))
-    const ui = createClaudeUiControls(initialized, { request })
+    const ui = createClaudeUiControls(() => initialized, { request })
     const attaching = ui.attach(client)
     await Promise.resolve()
     expect(request).not.toHaveBeenCalled()
@@ -243,22 +243,22 @@ it('preserves native scroll denial/follow-end and validates site geometry before
 
 it('fences panel transport capability and refuses payload on read operations', async () => {
   const request = vi.fn(async () => ({ open: true })), panel_id = '12345678-1234-4234-8234-123456789abc'
-  const ui = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }), { request })
+  const ui = createClaudeUiControls(() => Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }), { request })
   await expect(ui.agentPanel({ client_id: 'agent-ui', panel_id, operation: 'input', text: '\x1b' })).resolves.toEqual({ open: true })
   expect(request).toHaveBeenCalledWith({ subtype: 'apack_ui_agent_panel', client_id: 'agent-ui', panel_id, operation: 'input', text: '\x1b' })
   await expect(ui.agentPanel({ client_id: 'agent-ui', panel_id, operation: 'read', text: 'forged' } as never)).rejects.toThrow()
-  const print = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request })
+  const print = createClaudeUiControls(() => Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request })
   await expect(print.agentPanel({ client_id: 'agent-ui', panel_id, operation: 'close' })).rejects.toThrow('capability')
   expect(request).toHaveBeenCalledOnce()
 })
 
 it('keeps instance lifetime metadata on the native adapter and never sends it to the original print transport', async () => {
   const request = vi.fn(async () => ({ tree: {}, props: {}, rewritten: false, hooked: false, released: true, handled: true }))
-  const native = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_ui_instance_lifetime_v1'] }), { request })
+  const native = createClaudeUiControls(() => Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_ui_instance_lifetime_v1'] }), { request })
   const scope = { client_id: 'view', component: 'ToolResult', instance_id: 'result', instance_revision: 2 }
   await native.releaseInstance(scope); expect(request).toHaveBeenLastCalledWith({ subtype: 'apack_ui_release_instance', ...scope })
   await native.render({ ...scope, surface: 'desktop', props: {} }); expect(request).toHaveBeenLastCalledWith({ subtype: 'ui_render', ...scope, surface: 'desktop', props: {} })
-  const print = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request })
+  const print = createClaudeUiControls(() => Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request })
   request.mockClear(); expect(await print.releaseInstance(scope)).toEqual({ released: false }); expect(request).not.toHaveBeenCalled()
   await print.render({ ...scope, surface: 'desktop', props: {} }); expect(request).toHaveBeenLastCalledWith({ subtype: 'ui_render', client_id: 'view', component: 'ToolResult', instance_id: 'result', surface: 'desktop', props: {} })
   await print.press({ ...scope, surface: 'desktop', plugin: 'fixture', handle: 1 }); expect(request).toHaveBeenLastCalledWith({ subtype: 'ui_press', client_id: 'view', surface: 'desktop', plugin: 'fixture', handle: 1 })
@@ -268,9 +268,9 @@ it('keeps instance lifetime metadata on the native adapter and never sends it to
 it('discovers only native-adapter groups and validates source revisions before mounting',async()=>{
  const group={id:'native-group',anchorIds:[],members:[{toolUseId:'tool',revision:'b'.repeat(64)}],usesEngine:true,isActive:true,isExpanded:false,initialized:false,revision:'a'.repeat(64)}
  const request=vi.fn(async()=>({groups:[group]}))
- const print=createClaudeUiControls(Promise.resolve({capabilities:['ui_surface_v1']}),{request})
+ const print=createClaudeUiControls(() => Promise.resolve({capabilities:['ui_surface_v1']}),{request})
  await expect(print.toolGroups('view')).resolves.toEqual([]);expect(request).not.toHaveBeenCalled()
- const native=createClaudeUiControls(Promise.resolve({capabilities:['ui_surface_v1','apack_ui_instance_lifetime_v1']}),{request})
+ const native=createClaudeUiControls(() => Promise.resolve({capabilities:['ui_surface_v1','apack_ui_instance_lifetime_v1']}),{request})
  await expect(native.toolGroups('view')).resolves.toEqual([group]);expect(request).toHaveBeenCalledWith({subtype:'apack_ui_tool_groups',client_id:'view'})
  request.mockResolvedValueOnce({groups:[{...group,revision:'not-a-source-revision'}]})
  await expect(native.toolGroups('view')).rejects.toThrow()
@@ -278,10 +278,10 @@ it('discovers only native-adapter groups and validates source revisions before m
 
 it('discovers only source-revision-bound composer placements on the native owner',async()=>{
  const request=vi.fn(async()=>({placements:[{component:'Spinner',id:'native-agent',revision:'a'.repeat(64)}]}))
- const ui=createClaudeUiControls(Promise.resolve({capabilities:['ui_surface_v1','apack_ui_instance_lifetime_v1']}),{request})
+ const ui=createClaudeUiControls(() => Promise.resolve({capabilities:['ui_surface_v1','apack_ui_instance_lifetime_v1']}),{request})
  await expect(ui.composerPlacements('view')).resolves.toHaveLength(1)
  expect(request).toHaveBeenCalledWith({subtype:'apack_ui_composer',client_id:'view'})
- const print=createClaudeUiControls(Promise.resolve({capabilities:['ui_surface_v1']}),{request})
+ const print=createClaudeUiControls(() => Promise.resolve({capabilities:['ui_surface_v1']}),{request})
  await expect(print.composerPlacements('view')).resolves.toEqual([])
  expect(request).toHaveBeenCalledTimes(1)
  request.mockResolvedValue({placements:[{component:'Spinner',id:'native-agent',revision:'wrong'}]})
@@ -295,7 +295,7 @@ describe('print Client projection', () => {
   const projection = () => ({ managedSettingsDiagnostics:vi.fn(async()=>[]), project: vi.fn(async (_request, value) => value), action: vi.fn(async () => undefined as unknown), event: vi.fn(async () => ({ handled: false })), release: vi.fn(async () => ({ released: true })), detach: vi.fn(async () => {}) })
   it('projects only after original public admission and keeps private revisions off the native schema', async () => {
     const bridge = projection(), native = vi.fn(async () => frame)
-    const ui = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request: native }, undefined, bridge)
+    const ui = createClaudeUiControls(() => Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request: native }, undefined, bridge)
     await expect(ui.render(request)).resolves.toEqual(frame)
     expect(native).toHaveBeenCalledWith({ subtype: 'ui_render', client_id: 'print-client', surface: 'desktop', component: 'AbovePrompt', instance_id: 'above', props: {} })
     expect(bridge.project).toHaveBeenCalledWith(request, frame)
@@ -309,11 +309,11 @@ describe('print Client projection', () => {
   it('uses current Client actions without replaying them through public press and preserves native refusals', async () => {
     const bridge = projection(), native = vi.fn(async () => ({ handled: true }))
     bridge.action.mockResolvedValueOnce({ handled: false })
-    const ui = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request: native }, undefined, bridge)
+    const ui = createClaudeUiControls(() => Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request: native }, undefined, bridge)
     const action = { client_id: 'print-client', surface: 'desktop' as const, plugin: 'fixture', handle: 42 }
     await expect(ui.press(action)).resolves.toEqual({ handled: false }); expect(native).not.toHaveBeenCalled()
     await expect(ui.press(action)).resolves.toEqual({ handled: true }); expect(native).toHaveBeenCalledTimes(1)
-    const unavailable = createClaudeUiControls(Promise.resolve({ capabilities: [] }), { request: native }, undefined, bridge)
+    const unavailable = createClaudeUiControls(() => Promise.resolve({ capabilities: [] }), { request: native }, undefined, bridge)
     await expect(unavailable.press(action)).rejects.toThrow('capability')
     expect(bridge.action).toHaveBeenCalledTimes(2)
   })
@@ -323,12 +323,12 @@ describe('print Client projection', () => {
 it('admits only validated action keys on the existing native-owner transport', async () => {
   const action_keys = { revision: 'a'.repeat(64), bindings: [], continuations: [], pending: null }
   const request = vi.fn(async () => ({ handled: true, action_keys }))
-  const native = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }), { request })
+  const native = createClaudeUiControls(() => Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }), { request })
   const key = { client_id: client.client_id, revision: action_keys.revision, event: { key: 'u', ctrl: true, alt: true, shift: false, super: false, from_composer: true } }
   await expect(native.key(key)).resolves.toEqual({ handled: true, action_keys })
   expect(request).toHaveBeenCalledWith({ subtype: 'apack_ui_action_key', ...key })
   await expect(native.key({ ...key, handle: 99 } as typeof key)).rejects.toThrow()
-  const print = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request })
+  const print = createClaudeUiControls(() => Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request })
   await expect(print.key(key)).rejects.toThrow('native action keys are unavailable')
   expect(request).toHaveBeenCalledOnce()
 })
@@ -336,7 +336,7 @@ it('admits only validated action keys on the existing native-owner transport', a
 it('ignores malformed optional key metadata without discarding a valid native drawing', async () => {
   const tree = { type: 'Button', props: { key: 'keep', label: 'Keep reviewing' }, press: { plugin: 'fixture', handle: 1 } }
   const request = vi.fn(async () => ({ tree, props: {}, rewritten: false, hooked: true, _apack_action_keys: { revision: 'invalid' } }))
-  const ui = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request })
+  const ui = createClaudeUiControls(() => Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request })
   const result = await ui.render({ ...client, component: 'AbovePrompt', instance_id: 'above', props: {} })
   expect(result.tree).toEqual(tree)
   expect(result._apack_action_keys).toBeUndefined()
@@ -345,7 +345,7 @@ it('ignores malformed optional key metadata without discarding a valid native dr
 it('reads original structured managed-settings diagnostics without treating them as permission decisions', async () => {
   const warning={file:'/etc/claude-code/managed-settings.json',path:'',message:'Settings file could not be read: EACCES',severity:'fatal',errno:'EACCES'}
   const request=vi.fn(async()=>({diagnostics:[warning]}))
-  const ui=createClaudeUiControls(Promise.resolve({capabilities:['ui_surface_v1','apack_ui_instance_lifetime_v1']}),{request})
+  const ui=createClaudeUiControls(() => Promise.resolve({capabilities:['ui_surface_v1','apack_ui_instance_lifetime_v1']}),{request})
   await expect(ui.managedSettingsDiagnostics('owned')).resolves.toEqual([warning])
   expect(request).toHaveBeenCalledWith({subtype:'apack_ui_managed_settings_diagnostics',client_id:'owned'})
   request.mockResolvedValueOnce({diagnostics:[{...warning,message:'x'.repeat(32769)}]})
@@ -355,13 +355,13 @@ it('reads original structured managed-settings diagnostics without treating them
 it('reads print-owner policy diagnostics through its owned projection without terminal lifetime capability', async()=>{
  const warning={file:'managed settings',path:'',message:'Original unreadable file diagnostic',severity:'fatal' as const}
  const projection={managedSettingsDiagnostics:vi.fn(async()=>[warning]),project:vi.fn(async(_request,value)=>value),action:vi.fn(async()=>undefined),event:vi.fn(async()=>({handled:false})),release:vi.fn(async()=>({released:true})),detach:vi.fn(async()=>{})}
- const request=vi.fn();const ui=createClaudeUiControls(Promise.resolve({capabilities:['ui_surface_v1']}),{request},undefined,projection)
+ const request=vi.fn();const ui=createClaudeUiControls(() => Promise.resolve({capabilities:['ui_surface_v1']}),{request},undefined,projection)
  await expect(ui.managedSettingsDiagnostics('print-view')).resolves.toEqual([warning]);expect(projection.managedSettingsDiagnostics).toHaveBeenCalledWith('print-view');expect(request).not.toHaveBeenCalled()
 })
 
 
 it('does not treat background snapshots as decision acknowledgements or the reverse', async () => {
-  const request = vi.fn(async () => ({ open: true } as unknown)), ui = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }), { request })
+  const request = vi.fn(async () => ({ open: true } as unknown)), ui = createClaudeUiControls(() => Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }), { request })
   const identity = { client_id: 'client', panel_id: crypto.randomUUID() }
   await expect(ui.backgroundReview({ ...identity, operation: 'read' })).resolves.toEqual({ open: true })
   await expect(ui.backgroundReview({ ...identity, operation: 'confirm', revision: crypto.randomUUID() })).rejects.toThrow()

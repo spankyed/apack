@@ -12,6 +12,19 @@ import type { ClaudeBackgroundUiTarget } from '../../../common/native-background
 
 const backgroundOwners = new WeakMap<ClaudeBackgroundDesktopOwner, ClaudeUiOwner>()
 
+/** Share discovery, but let a later explicit operation recover from a failed read. */
+function nativeUiMetadata(transport: { request(value: { subtype: string }): Promise<unknown> }) {
+  let pending: Promise<{ capabilities: string[] }> | undefined
+  return () => {
+    if (!pending) {
+      pending = transport.request({ subtype: 'apack_ui_capabilities' })
+        .then(value => z.object({ capabilities: z.array(z.string()) }).parse(value))
+        .catch(error => { pending = undefined; throw error })
+    }
+    return pending
+  }
+}
+
 export function snapshotClaudeBackgroundUiTarget(owner: ClaudeBackgroundDesktopOwner): ClaudeBackgroundUiTarget {
   return {ownerId: owner.id, parentSessionId: owner.parentSessionId, sessionId: owner.identity.activeSessionId, jobSessionId: owner.identity.sessionId, jobId: owner.identity.jobId, pid: owner.identity.pid, processStart: owner.identity.start}
 }
@@ -33,8 +46,7 @@ export function getClaudeUiOwner(threadId: string, target?: ClaudeNativeAgentUiT
     if (!matchesClaudeBackgroundUiTarget(desktop, background)) return
     const cached = backgroundOwners.get(desktop)
     if (cached) return cached
-    const initialized = desktop.transport.request({subtype: 'apack_ui_capabilities'}).then(value => z.object({capabilities: z.array(z.string())}).parse(value))
-    initialized.catch(() => {})
+    const initialized = nativeUiMetadata(desktop.transport)
     const owner: ClaudeUiOwner = {
       done: desktop.done, sessionId: desktop.identity.activeSessionId, subscribe: listener => desktop.transport.subscribe(listener),
       approval: createClaudeChildApprovalSource(desktop),
@@ -79,9 +91,7 @@ export function getClaudeUiOwner(threadId: string, target?: ClaudeNativeAgentUiT
   const key = JSON.stringify([state.sessionId, view.revision, target?.taskId ?? null])
   const cached = nativeOwners.get(native)
   if (cached?.key === key) return cached.owner
-  const initialized = native.uiTransport.request({ subtype: 'apack_ui_capabilities' }).then(value => z.object({ capabilities: z.array(z.string()) }).parse(value))
-  // A view can disappear before attach awaits metadata; retain the error for that attach.
-  initialized.catch(() => {})
+  const initialized = nativeUiMetadata(native.uiTransport)
   const owner: ClaudeUiOwner = {
     nativeView: target ? { session_id: target.sessionId, revision: target.revision, agent_id: target.taskId } : undefined,
     readAgent: target ? async () => {

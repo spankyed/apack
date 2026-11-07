@@ -125,10 +125,10 @@ const parentCommandResult = z.discriminatedUnion('kind', [
 export type ClaudeParentCommandResult = z.infer<typeof parentCommandResult>
 
 /** Native UI transport only. A renderer must validate tree nodes before displaying them. */
-export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitialization, 'capabilities'>>, controls: Pick<ReturnType<typeof createHostControls>, 'request'>, promptHosts?: Pick<ReturnType<typeof createClaudePromptHosts>, 'register' | 'answers' | 'detach'>, printClients?: ClaudePrintClientProjection) {
-  async function admit() { if (!(await initialized).capabilities?.includes('ui_surface_v1')) throw new ClaudeProtocolError('native UI surface capability is unavailable') }
+export function createClaudeUiControls(initialized: () => Promise<Pick<ClaudeInitialization, 'capabilities'>>, controls: Pick<ReturnType<typeof createHostControls>, 'request'>, promptHosts?: Pick<ReturnType<typeof createClaudePromptHosts>, 'register' | 'answers' | 'detach'>, printClients?: ClaudePrintClientProjection) {
+  async function admit() { if (!(await initialized()).capabilities?.includes('ui_surface_v1')) throw new ClaudeProtocolError('native UI surface capability is unavailable') }
   async function request(value: Record<string, unknown> & { subtype: string }): Promise<unknown> {
-    const metadata = await initialized
+    const metadata = await initialized()
     if (!metadata.capabilities?.includes('ui_surface_v1')) throw new ClaudeProtocolError('native UI surface capability is unavailable')
     // The original print transport does not implement the desktop adapter's instance lifetimes.
     if (!metadata.capabilities?.includes('apack_ui_instance_lifetime_v1')) {
@@ -140,33 +140,33 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
   }
   return {
     async terminalPlacements(id: string): Promise<ClaudeUiTerminalPlacement[]> {
-      if (!(await initialized).capabilities?.includes('apack_ui_instance_lifetime_v1')) return []
+      if (!(await initialized()).capabilities?.includes('apack_ui_instance_lifetime_v1')) return []
       return z.object({placements:z.array(terminalPlacement).max(128)}).strict().parse(await request({subtype:'apack_ui_terminal_placements',client_id:clientId.parse(id)})).placements
     },
     async composerPlacements(id: string): Promise<ClaudeUiComposerPlacement[]> {
-      if (!(await initialized).capabilities?.includes('apack_ui_instance_lifetime_v1')) return []
+      if (!(await initialized()).capabilities?.includes('apack_ui_instance_lifetime_v1')) return []
       return z.object({placements:z.array(composerPlacement).max(32)}).strict().parse(await request({subtype:'apack_ui_composer',client_id:clientId.parse(id)})).placements
     },
     async managedSettingsDiagnostics(id:string):Promise<ClaudeManagedSettingsDiagnostic[]> {
       const valid=clientId.parse(id)
       if(printClients){await admit();return z.array(managedSettingsDiagnostic).max(256).parse(await printClients.managedSettingsDiagnostics(valid))}
-      if (!(await initialized).capabilities?.includes('apack_ui_instance_lifetime_v1')) return []
+      if (!(await initialized()).capabilities?.includes('apack_ui_instance_lifetime_v1')) return []
       return z.object({diagnostics:z.array(managedSettingsDiagnostic).max(256)}).strict().parse(await request({subtype:'apack_ui_managed_settings_diagnostics',client_id:valid})).diagnostics
     },
     async diagnostics(id: string, columns?: number): Promise<ClaudeUiDiagnosticAttachment[]> {
       const valid=clientId.parse(id),width=z.number().int().min(20).max(240).optional().parse(columns)
-      if (!(await initialized).capabilities?.includes('apack_ui_instance_lifetime_v1')) return []
+      if (!(await initialized()).capabilities?.includes('apack_ui_instance_lifetime_v1')) return []
       return z.object({diagnostics:z.array(diagnosticAttachment).max(32)}).strict().parse(await request({subtype:'apack_ui_diagnostics',client_id:valid,...(width===undefined?{}:{columns:width})})).diagnostics
     },
     async toolGroups(id: string): Promise<ClaudeUiToolGroup[]> {
       const valid=clientId.parse(id)
-      if (!(await initialized).capabilities?.includes('apack_ui_instance_lifetime_v1')) return []
+      if (!(await initialized()).capabilities?.includes('apack_ui_instance_lifetime_v1')) return []
       return z.object({groups:z.array(toolGroup).max(256)}).strict().parse(await request({subtype:'apack_ui_tool_groups',client_id:valid})).groups
     },
     async releaseInstance(options: z.infer<typeof instanceRelease>) {
       const valid = instanceRelease.parse(options)
       if (printClients) return printClients.release(valid)
-      if (!(await initialized).capabilities?.includes('apack_ui_instance_lifetime_v1')) return { released: false }
+      if (!(await initialized()).capabilities?.includes('apack_ui_instance_lifetime_v1')) return { released: false }
       return z.object({ released: z.boolean() }).parse(await request({ subtype: 'apack_ui_release_instance', ...valid }))
     },
     async prepareParentCommand(options: { client_id: string; text: string }) {
@@ -187,7 +187,7 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
     },
     async submitAgent(options: { client_id: string; text: string }) {
       const valid = z.object({ client_id: clientId, text: z.string().min(1).max(16384).refine(text => !!text.trim()) }).strict().parse(options)
-      if (!(await initialized).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native Agent UI attachment capability is unavailable')
+      if (!(await initialized()).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native Agent UI attachment capability is unavailable')
       return z.discriminatedUnion('kind', [
         z.object({ kind: z.literal('input'), messageId: z.string().uuid(), previousStatus: z.string().max(64) }).strict(),
         z.object({ kind: z.literal('review'), text: z.string().max(16384), removed: z.number().int().positive() }).strict(),
@@ -199,12 +199,12 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
     },
     async agentsGesture(options: { client_id: string; sequence: number }) {
       const valid = z.object({ client_id: clientId, sequence: z.number().int().positive().safe() }).strict().parse(options)
-      if (!(await initialized).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native agents gesture capability is unavailable')
+      if (!(await initialized()).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native agents gesture capability is unavailable')
       return z.object({ handled: z.boolean() }).strict().parse(await request({ subtype: 'apack_native_agents_gesture', ...valid }))
     },
     async backgroundReview(options: { client_id: string; panel_id: string } & ({ operation: 'read' } | { operation: 'confirm' | 'cancel'; revision: string })) {
       const identity = { client_id: clientId.parse(options.client_id), panel_id: z.string().uuid().parse(options.panel_id) }
-      if (!(await initialized).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native background panel capability is unavailable')
+      if (!(await initialized()).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native background panel capability is unavailable')
       const action = options.operation === 'read' ? { operation: 'read' as const } : { operation: z.enum(['confirm', 'cancel']).parse(options.operation), revision: z.string().uuid().parse(options.revision) }
       const value = await request({ subtype: 'apack_ui_background_review', ...identity, ...action })
       if (action.operation === 'read') return z.object({ open: z.boolean(), review: z.object({ revision: z.string().uuid(), title: z.string().max(16384), paragraphs: z.array(z.string().max(32000)).max(16), confirmLabel: z.string().max(16384), cancelLabel: z.string().max(16384), defaultFocus: z.enum(['confirm', 'cancel']) }).strict().optional() }).strict().parse(value)
@@ -220,12 +220,12 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
         z.object({ client_id: clientId, panel_id: z.string().uuid(), operation: z.enum(['read', 'close']) }).strict(),
         z.object({ client_id: clientId, panel_id: z.string().uuid(), operation: z.literal('input'), text: z.string().min(1).max(4096) }).strict(),
       ]).parse(options)
-      if (!(await initialized).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native Agent panel capability is unavailable')
+      if (!(await initialized()).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native Agent panel capability is unavailable')
       return z.object({ open: z.boolean() }).strict().parse(await request({ subtype: 'apack_ui_agent_panel', ...valid }))
     },
     async answerAgentCommand(options: { client_id: string; command_id: string; decision: 'confirm' | 'cancel' }) {
       const valid = z.object({ client_id: clientId, command_id: z.string().uuid(), decision: z.enum(['confirm', 'cancel']) }).strict().parse(options)
-      if (!(await initialized).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native Agent command capability is unavailable')
+      if (!(await initialized()).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native Agent command capability is unavailable')
       return z.object({ answered: z.literal(true) }).strict().parse(await request({ subtype: 'apack_ui_agent_command', ...valid }))
     },
     async clientEvent(options: {client_id:string;id:string;sequence:number;event:ClaudeUiClientInput}) {
@@ -241,7 +241,7 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
     /** Advertise only reverse APIs the attached view can actually answer. */
     async attach(options: ClaudeUiAttach) {
       const valid = attach.parse(options)
-      if (valid.native_view && !(await initialized).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native Agent UI attachment capability is unavailable')
+      if (valid.native_view && !(await initialized()).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native Agent UI attachment capability is unavailable')
       return z.object({ surfaces }).passthrough().parse(await request({ subtype: 'ui_attach', ...valid, answers: valid.surface === 'desktop' ? promptHosts?.answers(valid.client_id) ?? [] : [] }))
     },
     async detach(id: string) {
@@ -285,7 +285,7 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
     /** Native resolves configured keys; no terminal callback handle is accepted from the renderer. */
     async key(options: ClaudeUiActionKeyRequest & { client_id: string }) {
       const valid = actionKeyRequest.extend({ client_id: clientId }).parse(options)
-      if (!(await initialized).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native action keys are unavailable')
+      if (!(await initialized()).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native action keys are unavailable')
       return z.object({ handled: z.boolean(), action_keys: actionKeys }).strict().parse(await request({ subtype: 'apack_ui_action_key', ...valid }))
     },
     /** Native owns prompt.edit hooks and latest-edit coalescing; app adoption raises no edit hook. */

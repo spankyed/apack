@@ -9126,7 +9126,7 @@ declare function createClaudePromptHosts(write: (value: unknown) => boolean, pai
 };
 
 /** Native UI transport only. A renderer must validate tree nodes before displaying them. */
-declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitialization, 'capabilities'>>, controls: Pick<ReturnType<typeof createHostControls>, 'request'>, promptHosts?: Pick<ReturnType<typeof createClaudePromptHosts>, 'answers' | 'detach' | 'register'>, printClients?: ClaudePrintClientProjection): {
+declare function createClaudeUiControls(initialized: () => Promise<Pick<ClaudeInitialization, 'capabilities'>>, controls: Pick<ReturnType<typeof createHostControls>, 'request'>, promptHosts?: Pick<ReturnType<typeof createClaudePromptHosts>, 'answers' | 'detach' | 'register'>, printClients?: ClaudePrintClientProjection): {
     terminalPlacements(id: string): Promise<ClaudeUiTerminalPlacement[]>;
     composerPlacements(id: string): Promise<ClaudeUiComposerPlacement[]>;
     managedSettingsDiagnostics(id: string): Promise<ClaudeManagedSettingsDiagnostic[]>;
@@ -9794,8 +9794,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        insert: "insert";
         append: "append";
+        insert: "insert";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;
