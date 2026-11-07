@@ -47,10 +47,10 @@ closes with a test in the resulting structure, or is recorded as dissolved by co
 **Why one goal rather than three plans.** The review's fixes, the
 [ghostty-web migration](../deferred/xterm-to-ghostty-web.md) and the
 [runtime refactor](../deferred/terminal-runtime-refactor-target.md) are three different answers to *who owns
-a terminal session*. This goal delivers the refactor's design and the review's findings together, and takes
-the migration out of scope; the refactor remains the design authority for the broker, the host service and
-the agent contracts, cited here rather than restated. Today nobody does: the renderer's pool owns the emulator, the pack's service owns the
-pty. Run in sequence, ownership moves three times and each move rewrites the previous one's work. Counted
+a terminal session* — and today nobody does: the renderer's pool owns the emulator, the pack's service owns
+the pty. This goal delivers the refactor's design and the review's findings together and takes the migration
+out of scope; the refactor remains the design authority for the broker, the host service and the agent
+contracts, cited here rather than restated. Run in sequence, ownership moves three times and each move rewrites the previous one's work. Counted
 against the destination, sixteen findings — five of them High — stop existing rather than needing a fix:
 F1, F2, F3, F4, F5, F6, F7, F8, L2, L3, M1, M2, M4, M5, X1 and X2. Fixing those first is paying for code the
 destination deletes. X1 and X2 are in that list because D11 puts native process ownership in reach: Job
@@ -64,8 +64,8 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 **Excluded, with disposition:**
 
 - **Agent status rules** (is a Claude/Codex turn working, waiting or ready). Phase A builds the facts
-  pipeline; the rules are product surface with their own iteration, and the refactor target warns herdr's
-  can mistake an unrecognized screen for idle. Owner: a later goal, once facts exist.
+  pipeline; the rules are product surface with their own iteration, and the refactor target warns that
+  herdr's can mistake an unrecognized screen for idle. Owner: a later goal, once facts exist.
 - **G2–G7** (the agent path beyond G1), and the native-TUI adapter in #372. Their own goal, against the
   shape recorded on that PR, and Phase B's factoring is what makes it cheap:
   most of them dissolve against the process layer rather than needing fixes, so that goal is "migrate the
@@ -156,8 +156,7 @@ should not be offered as one:
   stream and G7's unbounded stderr are the same mistake three times, and byte accounting is where Rust is
   straightforwardly better rather than merely different.
 - **Not** off-loop VT parsing — `worker_threads` already keeps compiler work off a loop in five CLI modules,
-  so that is a benefit of leaving the API process rather than a reason to choose a language. Phase G's
-  reading sizes the core and decides nothing.
+  so that is a benefit of leaving the API process rather than a reason to choose a language.
 
 **It encompasses the other clients, which is most of why this shape is right.** One broker serves the
 terminal, the agent flows and the "stable session APIs usable by apack's CLI and packs" the refactor target
@@ -186,8 +185,8 @@ provisional pick, and Phase S weighs `termwiz` against it on a ground this decis
 it ships from the same project as `portable-pty` and is built to pair with it. Two questions, and only the
 first is answered here.
 
-The lineage half, settled. Not because FFI is objectionable:
-`libghostty-vt` exposes a public C ABI. Two narrower reasons. Matching Ghostty's lineage pays only when a
+On the lineage half: not because FFI is objectionable — `libghostty-vt` exposes a public C ABI — but for two
+narrower reasons. Matching Ghostty's lineage pays only when a
 native core and a ghostty-web renderer cannot disagree about a screen, and D10 keeps xterm.js, so that
 benefit is not purchasable here. And the refactor target records that the snapshot contract "explicitly
 lacks a binary-compatibility guarantee for snapshot format 1", which this broker persists. A different
@@ -219,10 +218,11 @@ one machine and one output corpus, with their conditions, in `docs/references/ev
 The migration plan's Phase 3 requires exactly this baseline and it can only be taken before state moves.
 This phase also prices F3, F4, F5 and G1, which are inferences from reading and have never been measured.
 
-**It also sizes the worker D11 depends on**: the cost of headless VT parsing at our output volumes, taken
-with `npm run measure:loop` against the window a blocked loop actually has. This is a reading rather than a
-gate — D11 is settled by inspection, since `worker_threads` is already how this repo keeps compiler work off
-a loop. What the reading decides is the worker's shape and the history cap, not the language.
+**It also records what parsing costs today**, in the current implementation: the renderer parses with
+xterm.js and the API carries the stream, both Node, so `npm run measure:loop` is the right instrument for
+that reading. It is baseline data, not a decision input — the broker is Rust (D11) and has neither a Node
+worker nor an event loop for that tool to measure. What the reading informs is the history cap and the
+coalescing window below.
 
 It then **declares the bounds the later phases are checked against**, as named constants in the broker and
 the presentation seam rather than figures in this document: the presentation channel's byte ceiling and its
@@ -283,8 +283,8 @@ sync-to-async consequence in real call sites rather than in a plan.
 
 ### Phase T — independent tracks
 
-**Deliverable:** the findings that depend on no ownership decision. Separate files, no shared seam, any order,
-concurrent with the spine.
+**Deliverable:** the findings that depend on no ownership decision. Separate files, no shared seam,
+concurrent with the spine — in any order except the two tooling tracks, which Phase S depends on.
 **Dependencies:** none.
 **Done when:** each lands with the evidence D6 requires.
 
@@ -339,6 +339,9 @@ has another client:
   broker's source.
 - A **terminal capability** over it — pty, VT core, screen and bounded history.
 
+The refactor target's reusable core takes "executable/argv, environment, cwd, dimensions, resource policy
+and opaque IDs", which conflates the two: `dimensions` belongs only to the second.
+
 **Dependencies:** Phase S's proven path and the protocol it derived. D11 for the broker's home and core, D9
 for what it parses, Phase G's baseline so acceptance has a before.
 
@@ -360,7 +363,8 @@ for what it parses, Phase G's baseline so acceptance has a before.
    or `htop` is where coalescing and ordering mistakes surface. Phase P repeats the check from the
    renderer's side.
 6. **`portable-pty` is validated, not assumed**, for process containment, cancellation and ConPTY
-   resize/exit before selection: the refactor target records that herdr patched its substrate.
+   resize/exit — Phase S picks it, this phase proves it before anything relies on it. The refactor target
+   records that herdr patched its substrate, so a passing build is not the evidence.
 7. Native work runs in the Linux container (`npm run test:linux`), one expensive owner at a time.
 
 **Not in this phase, deliberately:**
@@ -377,12 +381,7 @@ for what it parses, Phase G's baseline so acceptance has a before.
 
 #### The app's side of the protocol
 
-(On the split above: the refactor target's reusable core takes "executable/argv, environment, cwd,
-dimensions, resource policy and opaque IDs", which conflates the two layers — `dimensions` belongs only to
-the second.)
-
-
-**The app's side is a protocol client, and it is asynchronous.** Follow `elmdb-node`'s shape — Rust types as
+**It is a protocol client, and it is asynchronous.** Follow `elmdb-node`'s shape — Rust types as
 the source of truth, TS generated into a `protocol/` directory and shipped with the package — but without
 the addon: the broker is a process, not a `cdylib`, so there is no `.node`, no napi and **no
 `electron-rebuild`**, which is where D11's ABI independence actually lands.
@@ -463,7 +462,8 @@ existing spec covers it.
 **Deliverable:** typed facts out of the VT core — process and session identity, prompt and command
 boundaries, exit status, bounded screen reads, search and wait-for-state — available without mounting a view.
 Launch-time shell integration (D3) supplies the OSC markers.
-**Dependencies:** Phase B's VT core. Phase T's shell-integration mechanism.
+**Dependencies:** Phase B's VT core, for the markers to be parsed somewhere. D3 for the mechanism, which
+this phase builds — no Phase T track supplies it.
 **Done when:** F13 and F14 are closed; a hidden session answers a bounded screen read and a wait; reported
 paths and titles are treated as untrusted metadata; and no status rule is shipped (see Excluded).
 
