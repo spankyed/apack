@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "23084b03819f02416f8d2254a2c833086476a67a",
+  "researchCommit": "686389126b1173b47fb5418821903caa20a4d4d7",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -98,6 +98,8 @@
     "src/integration/apack-interrupt.mjs": "2fb034eb638f50ce74570a989917aa341b4c6be810fe84601727e18aaab8335d",
     "src/integration/apack-launch.mjs": "ecceba81f3e83caced3840fb66811c4d522003032185ef07a64477f58f8528d9",
     "src/integration/apack-managed-security-app.mjs": "fdaafaac3d659c5220409ad527a7d878c03f59d9718cedb14605d471b2c44c52",
+    "src/integration/apack-mcp-pdf-drive.mjs": "0f83e5aabeee07a8254185eaffd9a3be6ce14d44e5d94713a316c4450281c488",
+    "src/integration/apack-mcp-pdf-query.mjs": "445a1a691f081760e5c012a6f46289b4116973a7fcb1f0810d81a8c3cb021250",
     "src/integration/apack-mcp.mjs": "a01e12e6a45341aaa4dc8703a7ed7b724d7ba8eef92cb86cc7c973ef42cd9de3",
     "src/integration/apack-multi-turn.mjs": "e6b638a23df3e7b2f9590d47934c44bfe767212dce30d2322636158689d7ac66",
     "src/integration/apack-owner-cron.mjs": "5052ce662e9f893312a005a4815bad0b05e73a194636f1e42caa5354405510bb",
@@ -183,7 +185,7 @@
     "src/integration/permission-enforcement-app-driver.mjs": "02ebba021cf32856d0e4088afd7ffe6832862228eb378f34d9309c8f1333bebc",
     "src/integration/permission-enforcement-app.mjs": "2e62678f2edf1500c4309cd99b2325ca46d65f47e5fb9f932147c8247976fe2f",
     "src/integration/probe-background-process-identity.py": "ae19ec0ceb6c806bd05b0253f455f3ae41f1695f3b71cf34d9518b23d9f9a9bd",
-    "src/integration/read-permission-preview.mjs": "6f7ccfd3a4d43adad2f9f9731b7a846e7c5e7a2f216661d5be7789fce2953dd7",
+    "src/integration/read-permission-preview.mjs": "10ae82b34b869bb2beb3c5f76122d5b54ba44589d3081f9a5a566364475ae823",
     "src/integration/refusal-result-driver.mjs": "59e875c7267a0901f43879fa7754d609a86c08641259ffc0c1aefe803daf397b",
     "src/integration/refusal-result.mjs": "3b8960ce5d22b689a97b5e7cbc4501c7201d6520368e58d5fa5b08e25865864e",
     "src/integration/retry-driver.mjs": "01970f6269c7dda530aad291413d76a4dceb42e3ec58e72c496c48edf3173a71",
@@ -314,6 +316,7 @@
     "src/protocol/native-managed-model-proof.mjs": "982e7ad0d739dab9aef540f7bab27398beea9984303e347f665b51aea3268c38",
     "src/protocol/native-managed-security-fixture.mjs": "b0e504350eb1f32e7dff6bbb9937685c7a8dfcb6c1148e8f5e487fcffcd68dd1",
     "src/protocol/native-mcp-form-app-fixture.mjs": "77f2a5127575771404d2f7dba5c775eb2e3fc7b99d0b1395ed1945925a6bb938",
+    "src/protocol/native-mcp-pdf-scenario.mjs": "ee61c26316578643cd21d0b4a07ec0904564483bb27b44a1aeb7488c46d6c9d6",
     "src/protocol/native-mcp-renderer-inspector.mjs": "3f49da84d9b2861412f989b1b0a14c28a2aabbca1ace1af507dc6d6a34a49c29",
     "src/protocol/native-mcp-url-app-fixture.mjs": "fe08e89c73578735d7e481edc97573877e22a61e9532b1a1f0abb13ea01a4651",
     "src/protocol/native-model-panel-fixture.mjs": "5185d96418319c323e22f0f9852a909c25b2d9368fa35ce7ef016d17bf2ce42e",
@@ -416,9 +419,10 @@
     "src/protocol/synthetic-lifecycle-hook.mjs": "20224dcbaa4812289235a270d363ab401cab4df4f065f50c521c3aac1c3495b9",
     "src/protocol/synthetic-lsp-model.mjs": "5788a50cc91c60f6ffd276a9a1e995acfc8c79cb9001115efcedd283504af065",
     "src/protocol/synthetic-mcp-health-server.mjs": "f99aff09240efb995e436a7bdda8f8b7fdbd63084460a80d7712b62fa837cc6e",
+    "src/protocol/synthetic-mcp-pdf-server.mjs": "9707166807defd25e3da74694fe30d6611f36a7091bf49f75dbf5876f4ba788a",
     "src/protocol/synthetic-mcp-resource-server.mjs": "c5a1b0162fec7b3a43c0c0cbca5d76e8c7067a9fcac850691271aff2a2089e67",
     "src/protocol/synthetic-mcp-server.mjs": "53a9ecdb3677535f0455769f8895bb015dac0c05c7c5f84d9cce39022cef511a",
-    "src/protocol/synthetic-model.mjs": "b3e97bc8c62260e2ea05cfca8e9cbc3f42750af220bdeb8338c286117f0e3c91",
+    "src/protocol/synthetic-model.mjs": "df2ee7b33831ca3debd322edf1bf6eae8e3d114bfb98200a68ed7131d98d63c3",
     "src/protocol/synthetic-modern-elicitation-server.mjs": "0af57f03fa6138d71c51a62b0215a048b262b3b9646903cb288e6d1c7adbd0a1",
     "src/protocol/synthetic-multi-agent-model.mjs": "e2b34795b415328858eca88c1f0ec0766bfc51ee9a3f99627725254fb73848da",
     "src/protocol/synthetic-quota-headers.mjs": "ee09a56cf50eaf9b281e2b5eed088dc517e9865f4877f14031eae40bd2fa4d7c",
@@ -439,5 +443,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "d96786ec6ed6e261069e75fdea452c98a65876dc04481496fb5ee6d59da80c08"
+  "archiveSha256": "80216e1a82fcea5d73e8595471c7aaba8edfad4c550134f4b06a0e9e12918957"
 }

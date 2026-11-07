@@ -11,9 +11,12 @@ python3 tools/export-ci-replay.py /absolute/path/to/monorepo/tests/fixtures/clau
 ```
 
 Current standalone Linux app journeys are exported from `src/integration/`: `driveCombinedEveryday`
-(`apack-combined-everyday-drive.mjs`), `driveChildNotebookDelete` (`apack-child-notebook-drive.mjs`)
-and `drivePermissionModes` (`apack-permission-modes-drive.mjs`). They use the common owned-profile
+(`apack-combined-everyday-drive.mjs`), `driveChildNotebookDelete` (`apack-child-notebook-drive.mjs`),
+`drivePermissionModes` (`apack-permission-modes-drive.mjs`) and `driveMcpPdf`
+(`apack-mcp-pdf-drive.mjs`). They use the common owned-profile
 Electron driver, preserve original CLI decisions and never build or choose a user profile implicitly.
+The PDF journey exercises an ordinary MCP resource, native saved-file conversion and an exact
+original Read/model document; inline-provider admission and an inline PDF viewer are separate.
 They require the prepared owned setup, verified immutable source/pack/app inputs, a read-only pinned
 Linux binary, an inspected offline container and the app-run lock. The control marker must reflect
 actual host inspection; it is not a way to bypass those checks. The older case launcher is not the
