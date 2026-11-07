@@ -373,3 +373,19 @@ it.each(['idle','resume','none'])('keeps native quota focus semantics for %s',as
  actor.send.mockClear();card.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))
  expect(actor.send).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ownerId:'owner',notice:{id:notice.id,revision:notice.revision,sessionId:notice.sessionId,decision:'quota_dismiss'}}))
 })
+
+it('shows an inline model offer without taking focus, inventing buttons or answering Escape', async () => {
+  const f = await fixture()
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status: 'exited' } }); await nextTick(); f.back.click(); await nextTick()
+  const input = document.createElement('input'); input.value = 'Retained draft'; document.body.append(input); input.focus()
+  const notice = { id: 'newer-model-offer', revision: 'source-one', sessionId: 'session', kind: 'newer_model_inline' as const, title: '', paragraphs: ['New model · ctrl+y <script>'], ansi: 'New model · \u001b[35mctrl+y\u001b[0m <script>' }
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, view: { kind: 'main', revision: 3 }, notice } }); await nextTick()
+  const inline = f.root.querySelector('[aria-label="Claude model offer"]')!
+  expect(inline.textContent).toContain('ctrl+y <script>'); expect(inline.querySelector('script')).toBeNull()
+  expect(inline.querySelector('button')).toBeNull(); expect(inline.getAttribute('role')).toBe('status')
+  expect(document.activeElement).toBe(input); expect(input.value).toBe('Retained draft')
+  inline.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  expect(actor.send.mock.calls.filter(([event]) => event.type === 'CLAUDE_TERMINAL_NOTICE')).toHaveLength(0)
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice: undefined } }); await nextTick()
+  expect(f.root.querySelector('[aria-label="Claude model offer"]')).toBeNull(); expect(document.activeElement).toBe(input)
+})

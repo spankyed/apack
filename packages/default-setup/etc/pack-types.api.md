@@ -1564,8 +1564,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"cold_resume_quota">;
     trigger: z.ZodEnum<{
-        idle: "idle";
         resume: "resume";
+        idle: "idle";
     }>;
     preferredChoice: z.ZodOptional<z.ZodEnum<{
         quota_resume: "quota_resume";
@@ -1579,6 +1579,14 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
         label: z.ZodString;
         description: z.ZodOptional<z.ZodString>;
     }, z.core.$strip>>;
+    title: z.ZodString;
+    paragraphs: z.ZodArray<z.ZodString>;
+    id: z.ZodString;
+    revision: z.ZodString;
+    sessionId: z.ZodString;
+}, z.core.$strip>, z.ZodObject<{
+    kind: z.ZodLiteral<"newer_model_inline">;
+    ansi: z.ZodString;
     title: z.ZodString;
     paragraphs: z.ZodArray<z.ZodString>;
     id: z.ZodString;
@@ -9849,8 +9857,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        append: "append";
         insert: "insert";
+        append: "append";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;

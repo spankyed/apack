@@ -30,8 +30,8 @@ function readNativeActionKeyProvider(n){
  if(captures.length!==1)return;
  return {owner,props,context,node:captures[0],capture:captures[0]._eventHandlers.onKeyDownCapture};
 }
-function createNativeActionKeyBridge({current,view,changed,provider=readNativeActionKeyProvider,requestId=(n,scope)=>scope.instance_id}){
- const frames=new Map(),published=new Map();let sequence=0,pendingClient,pendingRef,pendingValue,pendingBindings;
+function createNativeActionKeyBridge({current,view,changed,provider=readNativeActionKeyProvider,requestId=(n,scope)=>scope.instance_id,nativeActions=()=>[],knownClients=()=>[]}){
+ const frames=new Map(),published=new Map();let sequence=0,pendingClient,pendingRef,pendingValue,pendingBindings,pendingNativeSources;
  const frameKey=s=>JSON.stringify([s.client_id,s.component,s.instance_id]);
  const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
  function held(n,frame,button){
@@ -48,26 +48,28 @@ function createNativeActionKeyBridge({current,view,changed,provider=readNativeAc
  function cancelPending(n,client){
   if(pendingClient!==client)return;
   const p=provider(n);if(ownedPending(p))p.context.setPendingChord(null);
-  pendingClient=undefined;pendingRef=undefined;pendingValue=undefined;pendingBindings=undefined;
+  pendingClient=undefined;pendingRef=undefined;pendingValue=undefined;pendingBindings=undefined;pendingNativeSources=undefined;
  }
  function state(n,client){
   const p=provider(n),entries=buttons(n,client),binding= n.runtime.ey();
   const blocked=!p||binding?.surface!=='terminal'||typeof binding.toolContext!=='function'||n.nativeKeyDialogs.gk(binding.toolContext(new AbortController()).dialogStore.getState())!==null;
   const bindingHash=p?hash(p.props.bindings):undefined;
-  const actions=new Set(entries.map(e=>e.button.action));
+  const nativeEntries=p&&!blocked?nativeActions(n,client,p):[];
+  const blockedActions=new Set(nativeEntries.filter(e=>e.blocked).map(e=>e.action));
+  const actions=new Set([...entries.map(e=>e.button.action),...nativeEntries.filter(e=>!e.blocked).map(e=>e.action)].filter(action=>!blockedActions.has(action)));
   const contexts=new Set(p?.props.bindings.map(b=>b.context));
   const bindings=[];
   if(!blocked)for(const action of actions)for(const context of contexts)for(const chord of n.nativeKeyBindings.o_o(action,context,p.props.bindings))if(chord.length)bindings.push(chord);
   const foreignPending=p?.props.pendingChordRef.current!=null&&!ownedPending(p);
   const effective=foreignPending?[]:bindings;
-  const revision=hash([view(n),client,blocked,bindingHash,entries.map(e=>[e.frame.scope.component,e.frame.scope.instance_id,e.button.identity,e.button.sequence]),p?[...p.props.activeContexts]:[]]);
+  const revision=hash([view(n),client,blocked,bindingHash,entries.map(e=>[e.frame.scope.component,e.frame.scope.instance_id,e.button.identity,e.button.sequence]),p?[...p.props.activeContexts]:[],nativeEntries]);
   const continuations=[],seenContinuations=new Set();
   if(effective.length)for(const binding of p.props.bindings){
    if(typeof binding.action!=='string'||!Array.isArray(binding.chord)||binding.chord.length<2||!effective.some(chord=>n.nativeKeyBindings.FUe(chord[0],binding.chord[0])))continue;
    const pair=JSON.stringify([binding.action,binding.context]);if(seenContinuations.has(pair))continue;seenContinuations.add(pair);
    for(const chord of n.nativeKeyBindings.o_o(binding.action,binding.context,p.props.bindings))if(chord.length>1&&effective.some(candidate=>n.nativeKeyBindings.FUe(candidate[0],chord[0])))continuations.push(chord);
   }
-  return {p,entries,blocked,bindingHash,keys:{revision,bindings:effective,continuations,pending:!blocked&&pendingClient===client&&ownedPending(p)?pendingValue:null}};
+  return {p,entries,nativeEntries,blocked,bindingHash,keys:{revision,bindings:effective,continuations,pending:!blocked&&pendingClient===client&&ownedPending(p)?pendingValue:null}};
  }
  function snapshot(n,client){try{
   const keys=state(n,client).keys;
@@ -97,8 +99,8 @@ function createNativeActionKeyBridge({current,view,changed,provider=readNativeAc
  function retire(scope){frames.delete(frameKey(scope));}
  function detach(n,client){cancelPending(n,client);for(const[key,frame]of frames)if(frame.scope.client_id===client)frames.delete(key);published.delete(client);}
  function poll(n){
-  if(pendingClient!==undefined){const value=state(n,pendingClient);if(value.blocked||!value.entries.length||value.bindingHash!==pendingBindings)cancelPending(n,pendingClient);}
-  const clients=new Set([...frames.values()].map(frame=>frame.scope.client_id));for(const client of published.keys())clients.add(client);
+  if(pendingClient!==undefined){const value=state(n,pendingClient);if(value.blocked||!value.entries.length&&!value.nativeEntries.length||value.bindingHash!==pendingBindings||hash(value.nativeEntries)!==pendingNativeSources)cancelPending(n,pendingClient);}
+  const clients=new Set([...knownClients(),...[...frames.values()].map(frame=>frame.scope.client_id)]);for(const client of published.keys())clients.add(client);
   for(const client of clients){const keys=snapshot(n,client),encoded=JSON.stringify(keys);if(published.get(client)!==encoded){published.set(client,encoded);changed(client,keys);}}
  }
  async function key(n,request,abort,press){
@@ -107,10 +109,11 @@ function createNativeActionKeyBridge({current,view,changed,provider=readNativeAc
   abort.signal.throwIfAborted();
   let before=state(n,request.client_id),p=before.p;
   if(before.blocked||!p){cancelPending(n,request.client_id);return {handled:false,action_keys:snapshot(n,request.client_id)};}
-  if(ownedPending(p)&&pendingClient===request.client_id&&pendingBindings!==before.bindingHash){cancelPending(n,request.client_id);before=state(n,request.client_id);p=before.p;}
+  if(ownedPending(p)&&pendingClient===request.client_id&&(pendingBindings!==before.bindingHash||pendingNativeSources!==hash(before.nativeEntries))){cancelPending(n,request.client_id);before=state(n,request.client_id);p=before.p;}
   if(pendingClient!==request.client_id&&ownedPending(p)){cancelPending(n,pendingClient);before=state(n,request.client_id);p=before.p;}
   const continuing=pendingClient===request.client_id&&ownedPending(p)&&pendingBindings===before.bindingHash;
   if(request.revision!==before.keys.revision&&!continuing)return {handled:false,action_keys:snapshot(n,request.client_id)};
+  if(continuing&&!before.entries.length&&!before.nativeEntries.length){cancelPending(n,request.client_id);return {handled:false,action_keys:snapshot(n,request.client_id)};}
   const name=input.key==='enter'?'return':input.key===' '?'space':input.key;
   // Native construction falls back from meta to option; plain chord keys need explicit false.
   const event=new n.nativeKeyEvents.zDe({name,sequence:input.key==='enter'?'\r':input.key==='escape'?'\x1b':input.key.length===1?input.key:'',ctrl:input.ctrl,shift:input.shift,meta:input.alt,option:false,super:input.super,fn:false});
@@ -130,10 +133,14 @@ function createNativeActionKeyBridge({current,view,changed,provider=readNativeAc
    handlers.onKeyDownCapture=capture;
    try{n.nativeKeyEvents.R8.dispatchDiscrete(p.owner.focusManager.activeElement??p.owner.rootNode,event);}
    finally{if(handlers.onKeyDownCapture===capture)handlers.onKeyDownCapture=original;}
-  });
+  },before.nativeEntries.some(entry=>!entry.blocked)?entry=>{
+   const source=before.nativeEntries.find(item=>item.action===entry.action&&!item.blocked);if(!source)return true;
+   const now=state(n,request.client_id);
+   return !now.blocked&&now.bindingHash===before.bindingHash&&now.p?.props.handlerRegistryRef===p.props.handlerRegistryRef&&p.props.handlerRegistryRef.current.get(entry.action)?.has(entry)===true&&now.nativeEntries.some(item=>item.action===source.action&&item.revision===source.revision&&!item.blocked);
+  }:undefined);
   const pending=p.props.pendingChordRef.current;
-  if(pending!=null){pendingClient=request.client_id;pendingRef=p.props.pendingChordRef;pendingValue=pending;pendingBindings=before.bindingHash;}
-  else if(pendingClient===request.client_id){pendingClient=undefined;pendingRef=undefined;pendingValue=undefined;pendingBindings=undefined;}
+  if(pending!=null){pendingClient=request.client_id;pendingRef=p.props.pendingChordRef;pendingValue=pending;pendingBindings=before.bindingHash;pendingNativeSources=hash(before.nativeEntries);}
+  else if(pendingClient===request.client_id){pendingClient=undefined;pendingRef=undefined;pendingValue=undefined;pendingBindings=undefined;pendingNativeSources=undefined;}
   let handled=event.defaultPrevented===true;
   if(admitted){
    abort.signal.throwIfAborted();

@@ -40,6 +40,7 @@ import { claudeTerminalParentCommandRuntime } from './terminal-parent-command-ru
 import { claudeTerminalAgentInputRuntime } from './terminal-agent-input-runtime.ts'
 import { claudeTerminalTaskRuntime } from './terminal-task-runtime.ts'
 import { claudeTerminalClientRuntime } from './terminal-client-runtime.ts'
+import { claudeTerminalInlineModelRuntime } from './terminal-inline-model-runtime.ts'
 import { claudeTerminalActionKeyRuntime } from './terminal-action-key-runtime.ts'
 /** Authored adapter to reviewed embedded native exports; no recovered vendor files are executed. */
 export const claudeTerminalUiRuntime = withClaudeNativePlatformRuntime(String.raw`import http from 'node:http';
@@ -55,6 +56,8 @@ export function readNativeHelperPolicy(){return helperPolicyReader?.()}
 const clients=new Set(),seen=new Set();let native,initializing,activeSession=config.sessionId,sequenceSession=config.sessionId,sessionTransition,inFlight=0,highestSequence=0;
 const nativeRasterMirrors=createNativeRasterMirrors({current:scope=>{if(!native||!clients.has(scope.client_id)||!clientViewCurrent(native,scope.client_id)||scope.instance_revision!==undefined&&!instanceLifetimes.active(scope,scope.instance_revision))return false;const source=currentTerminalPlacementAction(native,scope);return source?.fingerprint===scope.source_revision;},invalidate:scope=>publish({type:'system',subtype:'ui_invalidate',event:'ui.render',client_snapshot:true,client_id:scope.client_id,instances:[{surface:'desktop',component:scope.component,instance_id:scope.instance_id}]})});
 const actionKeys=createNativeActionKeyBridge({
+ nativeActions:(n,client,p)=>nativeInlineModelActions(n,client,p),
+ knownClients:()=>clients,
  current:(n,scope)=>clients.has(scope.client_id)&&clientViewCurrent(n,scope.client_id)&&(scope.component!=='Pane'||paneRoster(n).shown_id===scope.instance_id)&&(scope.instance_revision===undefined||instanceLifetimes.active(scope,scope.instance_revision)),
  view:n=>clientViewKey(n),
  requestId:(n,scope)=>isTerminalPlacement(scope.component)?currentTerminalPlacementAction(n,scope)?.input.requestId??scope.instance_id:scope.instance_id,
@@ -250,6 +253,7 @@ function paneRoster(n){
 }
 ${claudeTerminalInstanceRuntime}
 ${claudeTerminalActionKeyRuntime}
+${claudeTerminalInlineModelRuntime}
 ${claudeTerminalClientRuntime}
 ${claudeTerminalToolOutputRuntime}
 ${claudeTerminalDiagnosticRuntime}
@@ -750,7 +754,8 @@ async function readNativeNoticeSnapshot(n){
   const agentsReview=nativeLeftArrowReview(n);if(agentsReview.item)return {notice:projectNativeLeftArrow(n,agentsReview),retirements:refusal.retirements};
   const hint=nativePluginHint(n);if(hint.item)return {notice:await projectNativePluginHint(n,hint),retirements:refusal.retirements};
   const recommendation=nativeLspRecommendation(n);if(recommendation.item)return {notice:await projectNativeLspRecommendation(n,recommendation),retirements:refusal.retirements};
-  const d=nativeBillingNotice(n);return {retirements:refusal.retirements,notice:d.item?{id:d.item.id,revision:d.revision,sessionId:d.sessionId,kind:'auto_mode_server_fallback',title:d.payload.title,paragraphs:d.payload.paragraphs,helpUrl:d.payload.helpUrl}:null};
+  const d=nativeBillingNotice(n);if(d.item)return {retirements:refusal.retirements,notice:{id:d.item.id,revision:d.revision,sessionId:d.sessionId,kind:'auto_mode_server_fallback',title:d.payload.title,paragraphs:d.payload.paragraphs,helpUrl:d.payload.helpUrl}};
+  const inline=nativeInlineModelOffer(n);return {retirements:refusal.retirements,notice:inline?await projectNativeInlineModelOffer(n,inline):null};
  }
 ${claudeTerminalBackgroundReplyRuntime}
 async function control(request,abort){

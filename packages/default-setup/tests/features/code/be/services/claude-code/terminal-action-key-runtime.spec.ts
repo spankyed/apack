@@ -3,7 +3,7 @@ import { claudeTerminalActionKeyRuntime } from '#features/code/be/services/claud
 
 // Execute only our generated adapter. Original native code remains a disposable-CI boundary.
 const createBridge = new Function('createHash', `${claudeTerminalActionKeyRuntime}; return createNativeActionKeyBridge`)(createHash)
-function fixture() {
+function fixture(extraOptions: Record<string, unknown> = {}) {
   const registry = new Map<string, Set<any>>(), held = new Map<number, any>()
   const terminal = vi.fn(), hiddenEdit = vi.fn(), press = vi.fn(async () => ({ handled: true })), changed = vi.fn()
   let selectedView = 'main', eligible = true, activeRevision = 1
@@ -39,7 +39,7 @@ function fixture() {
     nativeClients: { action: () => undefined },
     engine: { FPe: () => eligible, r5: { heldPress: (_plugin: string, handle: number) => held.get(handle) } },
   }
-  const options = { current: (_n: any, scope: any) => scope.instance_revision === activeRevision, view: () => selectedView, changed, provider: () => provider }
+  const options = { current: (_n: any, scope: any) => scope.instance_revision === activeRevision, view: () => selectedView, changed, provider: () => provider, ...extraOptions }
   const bridge = createBridge(options)
   const draw = (component: string, id: string, handle: number, client = 'main-window') => {
     held.set(handle, { component, requestId: id })
@@ -133,4 +133,75 @@ it('provides the native option fallback for unmodified key strokes', async () =>
   expect(await f.bridge.key(f.n, { client_id: 'main-window', revision: keys.revision, event }, new AbortController(), f.press)).toMatchObject({ handled: true })
   expect(f.n.nativeKeyEvents.R8.dispatchDiscrete.mock.calls[0]![1].meta).toBe(false)
   expect(f.press).toHaveBeenCalledOnce(); expect(f.terminal).not.toHaveBeenCalled()
+})
+
+function inlineFixture() {
+  let source: any[] = [{ action: 'chat:defaultToNewerModel', revision: 'offer-one', blocked: false }]
+  const f = fixture({ nativeActions: () => source, knownClients: () => ['main-window'] })
+  const entry = { action: 'chat:defaultToNewerModel', context: 'Chat', handler: vi.fn(() => true) }
+  f.props.bindings = [{ action: entry.action, context: 'Chat', chord: [{ ...f.props.bindings[0]!.chord[0]! }] }]
+  f.registry.set(entry.action, new Set([entry]))
+  f.provider.capture = vi.fn(event => { if (entry.handler() !== false) event.defaultPrevented = true })
+  return { ...f, entry, source: (next: any[]) => { source = next } }
+}
+
+it('dispatches an original inline action without a rendered plugin Button or desktop fallback', async () => {
+  const f = inlineFixture()
+  expect(f.bridge.snapshot(f.n, 'main-window').bindings).toHaveLength(1)
+  expect(await f.key()).toMatchObject({ handled: true })
+  expect(f.entry.handler).toHaveBeenCalledOnce(); expect(f.press).not.toHaveBeenCalled()
+  expect(f.hiddenEdit).not.toHaveBeenCalled(); expect(f.registry.get(f.entry.action)?.size).toBe(1)
+})
+
+it('retains original inline grace refusal without retrying or substituting a desktop callback', async () => {
+  const f = inlineFixture(); f.entry.handler.mockReturnValue(false)
+  expect(await f.key()).toMatchObject({ handled: false })
+  expect(f.entry.handler).toHaveBeenCalledOnce(); expect(f.press).not.toHaveBeenCalled()
+})
+
+it('uses original remapping and unbinding for the inline action rather than reserving a default key', async () => {
+  const f = inlineFixture(), old = f.bridge.snapshot(f.n, 'main-window').revision
+  f.props.bindings[0]!.chord[0]!.key = 'm'
+  expect(await f.key(old)).toMatchObject({ handled: false })
+  expect(await f.key()).toMatchObject({ handled: false }); expect(f.entry.handler).not.toHaveBeenCalled()
+  f.event.key = 'm'; expect(await f.key()).toMatchObject({ handled: true })
+  f.props.bindings = []; expect(f.bridge.snapshot(f.n, 'main-window').bindings).toEqual([])
+})
+
+it('withdraws the inline shortcut on source expiry and publishes without plugin frames', async () => {
+  const f = inlineFixture(); f.bridge.poll(f.n)
+  expect(f.changed).toHaveBeenLastCalledWith('main-window', expect.objectContaining({ bindings: expect.any(Array) }))
+  const old = f.bridge.snapshot(f.n, 'main-window').revision
+  f.source([]); f.bridge.poll(f.n)
+  expect(f.changed).toHaveBeenLastCalledWith('main-window', expect.objectContaining({ bindings: [] }))
+  expect(await f.key(old)).toMatchObject({ handled: false }); expect(f.entry.handler).not.toHaveBeenCalled()
+})
+
+it('a blocked native action cannot be re-advertised by a plugin Button sharing that action', async () => {
+  const f = fixture({ nativeActions: () => [{ action: 'review', revision: 'draft-present', blocked: true }] })
+  f.draw('AbovePrompt', 'above', 1)
+  expect(f.bridge.snapshot(f.n, 'main-window').bindings).toEqual([])
+  expect(await f.key()).toMatchObject({ handled: false })
+  expect(f.capture).not.toHaveBeenCalled(); expect(f.press).not.toHaveBeenCalled()
+})
+
+it('retires a partial native chord when its source is replaced, even if the binding stays the same', async () => {
+  const f = inlineFixture()
+  f.props.bindings[0]!.chord.push({ ...f.props.bindings[0]!.chord[0]!, key: 'z' })
+  f.provider.capture = vi.fn(() => f.context.setPendingChord([{ ...f.props.bindings[0]!.chord[0]! }]))
+  await f.key(); expect(f.props.pendingChordRef.current).not.toBeNull()
+  const old = f.bridge.snapshot(f.n, 'main-window').revision
+  f.source([{ action: f.entry.action, revision: 'offer-two', blocked: false }]); f.event.key = 'z'
+  expect(await f.key(old)).toMatchObject({ handled: false })
+  expect(f.props.pendingChordRef.current).toBeNull(); expect(f.provider.capture).toHaveBeenCalledOnce()
+})
+
+it('refuses the original native callback when a prior native event phase replaces its inline source', async () => {
+  const f = inlineFixture(), original = f.entry.handler
+  f.provider.capture = vi.fn(event => {
+    f.source([{ action: f.entry.action, revision: 'replacement-offer', blocked: false }])
+    if (f.entry.handler() !== false) event.defaultPrevented = true
+  })
+  expect(await f.key()).toMatchObject({ handled: false })
+  expect(original).not.toHaveBeenCalled(); expect(f.entry.handler).toBe(original)
 })

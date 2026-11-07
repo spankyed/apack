@@ -19,6 +19,7 @@ export function withClaudeDesktopActionFallbacks(
   register: (entry: ClaudeNativeActionHandler) => () => void,
   admit: (action: string) => boolean,
   dispatch: () => void,
+  nativeGuard?: (entry: ClaudeNativeActionHandler) => boolean,
 ): void {
   const restores: (() => void)[] = [], releases: (() => void)[] = []
   const entriesSeen = new Set<ClaudeNativeActionHandler>(), setsSeen = new Set<Set<ClaudeNativeActionHandler>>()
@@ -28,7 +29,14 @@ export function withClaudeDesktopActionFallbacks(
     if (entriesSeen.has(entry)) return
     if (entriesSeen.size >= 4096) throw Error('Native key registration bound exceeded')
     entriesSeen.add(entry)
-    if (entry.fallback !== true) return
+    if (entry.fallback !== true) {
+      if (!nativeGuard) return
+      const original = entry.handler
+      const guarded = () => nativeGuard(entry) ? original.call(entry) : false
+      entry.handler = guarded
+      restores.push(() => { if (entry.handler === guarded) entry.handler = original })
+      return
+    }
     const original = entry.handler
     const redirected = () => actions.has(entry.action) && admit(entry.action) ? undefined : false
     entry.handler = redirected

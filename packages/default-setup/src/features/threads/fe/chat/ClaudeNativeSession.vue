@@ -12,6 +12,9 @@
     <NativeBackgroundAttachment v-if="view?.attachment" :attachment="view.attachment" @close="closeBackground" @input="inputBackground" @resize="resizeBackground" />
     <NativeManagedSecurityReview v-if="view?.state?.notice?.kind === 'managed_settings_security'" :notice="view.state.notice" :pending="noticePending" :problem="noticeProblem" @answer="answerManagedSecurity" />
     <NativeSandboxNetworkReview v-if="!active && view?.state?.notice?.kind === 'sandbox_network_access'" :notice="view.state.notice" :pending="noticePending" :problem="noticeProblem" @answer="answerSandboxNetwork" />
+    <section v-if="!active && view?.state?.notice?.kind === 'newer_model_inline'" role="status" aria-label="Claude model offer" class="rounded-lg border border-neutral-700/50 bg-neutral-900/40 px-3 py-2 text-xs leading-relaxed">
+      <NativeStatusText :text="view.state.notice.ansi" />
+    </section>
     <section v-for="panel in noticePanels" :key="panel.key" ref="noticeElements" :role="['resume_return', 'newer_model_offer', 'cold_resume_quota'].includes(panel.kind) ? 'dialog' : undefined" :data-native-notice="panel.notice.kind" :aria-label="panel.notice.kind === 'refusal_fallback_prompt' ? 'Claude model fallback' : panel.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : panel.notice.kind === 'plugin_hint' ? 'Claude plugin recommendation' : panel.notice.kind === 'cold_resume_quota' ? 'Claude quota offer' : panel.notice.kind === 'newer_model_offer' ? 'Claude newer model offer' : panel.notice.kind === 'resume_return' ? 'Claude resume offer' : panel.notice.kind === 'goal_proposal' ? 'Claude goal proposal' : panel.notice.kind === 'autocompact_offer' ? 'Claude autocompact offer' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': panel.notice.kind !== 'auto_mode_server_fallback' }" @keydown.esc.stop.prevent="answerNotice(panel, panel.notice.kind === 'autocompact_offer' ? 'compact_dismiss' : panel.notice.kind === 'cold_resume_quota' ? 'quota_dismiss' : panel.notice.kind === 'newer_model_offer' ? 'newer_dismiss' : panel.notice.kind === 'resume_return' ? 'resume_dismiss' : panel.notice.kind === 'goal_proposal' ? 'goal_decline' : panel.notice.kind === 'refusal_fallback_prompt' ? 'cancelled' : panel.notice.kind !== 'auto_mode_server_fallback' ? 'no' : 'interrupt')">
       <div class="native-notice__body" tabindex="0">
         <header v-if="panel.notice.kind === 'refusal_fallback_prompt'" class="native-notice__header">
@@ -218,7 +221,7 @@ const displayActive = computed(() => active.value || !!view.value?.attachment)
 const noticePanels = computed(() => {
   if (active.value) return []
   const state = view.value?.state, notice = state?.notice
-  if (!state || !notice || notice.kind === 'managed_settings_security' || notice.kind === 'sandbox_network_access' || notice.kind === 'left_arrow_confirm') return []
+  if (!state || !notice || notice.kind === 'newer_model_inline' || notice.kind === 'managed_settings_security' || notice.kind === 'sandbox_network_access' || notice.kind === 'left_arrow_confirm') return []
   return [{ key: JSON.stringify([state.ownerId, notice.sessionId, notice.id, notice.kind]), ownerId: state.ownerId, id: notice.id, revision: notice.revision, sessionId: notice.sessionId, kind: notice.kind, notice }]
 })
 const noticeElements = ref<HTMLElement[]>([])

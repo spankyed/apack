@@ -473,6 +473,7 @@ export const claudeNativeLinuxBindings: {
     }
   },
   "functionNames": {
+    "Ene": "Nne",
     "HCo": "XCo",
     "BZe": "UZe",
     "UCo": "ZCo",
@@ -525,6 +526,8 @@ export const claudeNativeLinuxBindings: {
     "Xe": "Xe"
   },
   "functionHashes": {
+    "ceceaddc79eb68b0964b0faa4f0a5a7c57bee5f88691610b3d52823a1f083eb5": "055d596db819752ca805f56329bd3099191bb190dee488fc35f4c4f23d1275c3",
+    "e9be39361cf51bba8fef8fb13ea8c3d407b8040785d1f72a7b1a0dd3b8512076": "4aa0fa14ab4bc16bea7a5fd79a2be6301232595cfe9ba6070d7d24b28f5cd888",
     "7065ff3b6377c8b988df5624a99ffe187a0cf77fe842bbb48fbc50058656ba52": "53d197eec4367dfca37e88fda9eb75d7b93f928bd8af893746d1b5d6d0ed8ed7",
     "7cb36eaa72b80f0c728ce4ff4ba940c1aa1b4f604f0add07a7c2a723bb709346": "985eb5f3f473404dadaa77775389f236ad581a22ae09b28482d5678b08fa1183",
     "70f73db42808df84f5da7f6d87cbea367577dc5a6e23934701267cd18c288442": "c2cd5bf3c6192346c74052d544f1b3e906d8dfd28d90294c09ece31f138c3a16",
