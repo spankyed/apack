@@ -1,7 +1,11 @@
 import { expect, it, vi } from 'vitest';
 import type { ActionRun } from '#extensions/steps/action/sandbox.ts';
 
-const loaded = vi.hoisted(() => ({ cli: false, zod: false }));
+const loaded = vi.hoisted(() => {
+  // Pack setup imports registration first; the check must observe fresh service modules.
+  vi.resetModules();
+  return { cli: false, zod: false };
+});
 vi.mock('#features/code/be/services/claude-code/index.ts', () => {
   loaded.cli = true;
   return { claudeCode: { system: { version: async () => 'test-version' }, auth: { status: async () => ({ loggedIn: false }) } } };
