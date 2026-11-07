@@ -261,3 +261,13 @@ Held-response native recovery replay exports `driveHeldOwnerReview` from
 existing bounded local model barrier, verifies the exact owned native PID/start/argv
 before a deliberate SIGKILL, then checks late-output isolation and same-session recovery.
 Durable settings preimages and normal/compact captures remain required.
+
+Native Client button reordering replay exports `driveButtonReorderReview` from
+`src/integration/apack-button-reorder-drive.mjs`. An ordinary original plugin provides two
+release-review actions. Pointer activation and existing-focus Enter must retain the same
+control through both sibling orders at normal/compact sizes, without driver refocusing.
+Callback retirement remains inert. Exact callback/history/session/cost/Stop evidence and
+opened captures are required. One visible initial Reconnect controls recovery is recorded
+with unchanged native owner/PID/session if needed; it does not accept initial lease timing.
+Keep the owned synthetic profile free of stale setup-terminal PID restoration across containers;
+preserve fixture rows before closing them. No installed user CLI or user profile is selected.
