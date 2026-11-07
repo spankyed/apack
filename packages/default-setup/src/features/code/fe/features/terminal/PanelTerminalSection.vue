@@ -270,6 +270,9 @@ let resizeObserver: ResizeObserver | null = null
 let attachedTerminalId: string | null = null  // tracks which terminal is actually attached to the DOM
 const viewDisposables: IDisposable[] = []
 
+/** Set by `selectTerminal`, read by the attach it causes: whether this attach is a user's request (F15) */
+let focusOnAttach = false
+
 const attachTerminal = (terminalId: string) => {
   const info = terminals.value.find((t: TerminalInfo) => t.id === terminalId)
   if (!container.value || !info) return
@@ -292,9 +295,22 @@ const attachTerminal = (terminalId: string) => {
     terminalPool.syncViewport(terminalId)
   })
 
+  // The session's own scroll policy, not this host's: the canvas honoured pinning and this scrolled to the
+  // bottom on every write, so the same terminal jumped under the user here and not there (F2)
   viewDisposables.push(term.onWriteParsed(() => {
-    term?.scrollToBottom()
+    if (terminalPool.isPinned(terminalId)) term?.scrollToBottom()
   }))
+
+  // And this host updates that policy, so scrolling back in the panel holds while output arrives
+  const viewport = term.element?.querySelector('.xterm-viewport') as HTMLElement | null
+  if (viewport) {
+    const onScroll = () => {
+      const atBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 2
+      terminalPool.setPinned(terminalId, atBottom)
+    }
+    viewport.addEventListener('scroll', onScroll, { passive: true })
+    viewDisposables.push({ dispose: () => viewport.removeEventListener('scroll', onScroll) })
+  }
 
   viewDisposables.push(term.onResize(({ cols, rows }) => {
     terminalActor?.send({ type: 'terminal.RESIZE', terminalId, cols, rows })
@@ -312,7 +328,13 @@ const attachTerminal = (terminalId: string) => {
   })
   resizeObserver.observe(container.value)
 
-  term.focus()
+  // **Focused only when the user asked for this terminal** (F15). This runs on mount too — a panel re-open,
+  // an actor replacement, a reconnect — none of which is a request, and taking focus from what they were
+  // typing in is the defect. `selectTerminal` is the request, and sets the flag the attach it triggers reads.
+  if (focusOnAttach) {
+    focusOnAttach = false
+    term.focus()
+  }
 }
 
 const detachTerminal = () => {
@@ -323,7 +345,8 @@ const detachTerminal = () => {
   }
   viewDisposables.length = 0
   if (attachedTerminalId) {
-    terminalPool.detach(attachedTerminalId)
+    // Named, so a host another has taken over from detaches nothing (F1)
+    terminalPool.detach(attachedTerminalId, container.value ?? undefined)
     attachedTerminalId = null
   }
   hasSelection.value = false
@@ -429,6 +452,8 @@ const killAllTerminals = () => {
 }
 
 const selectTerminal = (terminalId: string) => {
+  // The selection is what attaches, a tick later, so the request is recorded rather than acted on here
+  focusOnAttach = true
   codeActor.send({ type: 'SELECT_PANEL_TERMINAL', terminalId })
 }
 

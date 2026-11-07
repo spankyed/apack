@@ -191,15 +191,20 @@ class TerminalPool {
       // Ctrl+Shift+C → copy selection (Windows/Linux terminal convention)
       if (event.type === 'keydown' && event.ctrlKey && event.shiftKey && event.key === 'C') {
         const selection = term.getSelection()
-        if (selection) navigator.clipboard.writeText(selection)
+        // A clipboard permission the window does not have rejects; unhandled, that is a console error
+        // nobody can act on (F16)
+        if (selection) void navigator.clipboard.writeText(selection).catch(() => {})
         return false
       }
 
       // Ctrl+Shift+V → paste from clipboard (Windows/Linux terminal convention)
       if (event.type === 'keydown' && event.ctrlKey && event.shiftKey && event.key === 'V') {
-        navigator.clipboard.readText().then((text) => {
-          if (text) sendInput(text)
-        })
+        // **`term.paste` rather than a raw write** (F12): xterm wraps it in the bracketed-paste markers
+        // when the application has asked for them, which is how a shell or an editor tells a paste from
+        // typing — without it, a pasted newline runs a command.
+        void navigator.clipboard.readText().then((text) => {
+          if (text) term.paste(text)
+        }).catch(() => {})
         return false
       }
 
@@ -244,16 +249,32 @@ class TerminalPool {
     // DOM metrics rather than a detached wrapper with zero dimensions.
     if (!entry.webglLoaded) {
       const addon = new WebglAddon()
+      // **A lost GL context draws nothing until something gives it up** (F10). The browser takes the context
+      // back under memory pressure, on a GPU reset, or when too many are live — and xterm's addon reports it
+      // rather than recovering, so the terminal goes blank and stays blank. Disposing the addon drops xterm
+      // to its DOM renderer, which is slower and still draws.
+      addon.onContextLoss(() => {
+        try { addon.dispose() } catch { /* already disposed with the context */ }
+        if (entry.webglAddon === addon) entry.webglAddon = null
+      })
       try { entry.term.loadAddon(addon); entry.webglAddon = addon } catch { /* falls back to canvas renderer */ }
       entry.webglLoaded = true
     }
     return entry
   }
 
-  /** Detach the wrapper from its host without disposing the xterm. */
-  detach(terminalId: string): void {
+  /**
+   * Detach the wrapper from its host without disposing the xterm.
+   *
+   * **`host` is checked, not trusted** (F1). Two hosts can be mounted for one terminal during a remount —
+   * the new one attaches before the old one unmounts — and a detach that did not say whose it was tore the
+   * wrapper out of whichever host happened to hold it, leaving the live one blank. A host that is no longer
+   * the attached one detaches nothing.
+   */
+  detach(terminalId: string, host?: HTMLElement): void {
     const entry = this.entries.get(terminalId)
     if (!entry) return
+    if (host && entry.attachedContainer !== host) return
     // Capture scrollTop before wrapper.remove() — Chromium zeroes it on
     // document-remove. Used by syncViewport() on the next attach when the
     // user isn't pinned to bottom.
@@ -270,6 +291,16 @@ class TerminalPool {
     const entry = this.entries.get(terminalId)
     if (!entry) return
     entry.pinnedToBottom = pinned
+  }
+
+  /**
+   * Whether this session is pinned to the bottom — **one policy per session, whichever host is drawing it**
+   * (F2). The canvas honoured it and the panel scrolled to the bottom on every write, so the same terminal
+   * jumped under the user in one host and not the other, and scrolling back in the panel was impossible
+   * while anything was writing. A session has one scroll position because it has one buffer.
+   */
+  isPinned(terminalId: string): boolean {
+    return this.entries.get(terminalId)?.pinnedToBottom ?? true
   }
 
   /**

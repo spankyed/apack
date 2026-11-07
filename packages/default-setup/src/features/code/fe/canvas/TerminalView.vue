@@ -115,15 +115,18 @@ const sendResize = () => {
 const copySelection = () => {
   if (!term) return
   const selection = term.getSelection()
-  if (selection) navigator.clipboard.writeText(selection)
+  // A clipboard the window may not read or write rejects; unhandled, that is a console error nobody can
+  // act on (F16)
+  if (selection) void navigator.clipboard.writeText(selection).catch(() => {})
 }
 
 const pasteClipboard = async () => {
   if (!term) return
-  const text = await navigator.clipboard.readText()
-  if (text) {
-    terminalActor?.send({ type: 'terminal.INPUT', terminalId: props.terminalInfo.id, data: text })
-  }
+  // **Through the emulator, not as input** (F12): `term.paste` wraps the text in the bracketed-paste
+  // markers when the application has asked for them, which is how a shell or an editor tells a paste from
+  // typing. Sent as input, a pasted newline runs a command.
+  const text = await navigator.clipboard.readText().catch(() => '')
+  if (text) term.paste(text)
 }
 
 const selectAll = () => {
@@ -199,7 +202,9 @@ onMounted(() => {
   })
   resizeObserver.observe(container.value)
 
-  term.focus()
+  // **Not focused on mount** (F15). A terminal mounts on a tab switch, a panel drag and an actor
+  // replacement, none of which is the user asking for it — and taking focus from what they were typing in
+  // is the whole defect. The view exposes `focus()` for the cases that *are* a request.
 })
 
 onBeforeUnmount(() => {
@@ -212,8 +217,10 @@ onBeforeUnmount(() => {
   viewDisposables.length = 0
 
   // Detach the pool's wrapper from our container but DO NOT dispose the xterm
-  // instance — it survives in the pool until terminal.CLOSED.
-  terminalPool.detach(props.terminalInfo.id)
+  // instance — it survives in the pool until terminal.CLOSED. **Our container is named**, so a host that
+  // another has already taken over from detaches nothing (F1): during a remount the new host attaches
+  // before this one unmounts.
+  terminalPool.detach(props.terminalInfo.id, container.value ?? undefined)
 
   term = null
   fitAddon = null

@@ -328,6 +328,23 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 - **A guard that hangs is worse than one that fails.** The resize mutation left `less` with nothing to
   redraw and a blocking read turned it into a ten-minute hang; every read in the broker's tests is bounded
   by the socket's receive timeout now, and that mutation fails in eleven seconds.
+- **Phase P's findings are closed; its deliverable is not.** F1, F2, F10, F11, F12, F15 and F16 land with
+  `tests/features/code/fe/utils/terminal-pool.frontend.spec.ts` (nine cases, each mutation-checked), and the
+  invariant the phase names — **one attached host, one `onData` registration, one scroll policy per session**
+  — is three of them. The pin state moved into the pool, which is what made F2 a one-line read in both hosts
+  rather than a second policy.
+  - **F15 was half-fixed by the obvious edit.** Removing the canvas's mount focus left the panel focusing on
+    every attach, including the mount that a panel re-open causes. The honest fix needed the *request* to be
+    distinguishable from the attach it causes, so `selectTerminal` records it and the attach reads it.
+  - **F11 had no code left to fix.** The only thing that un-cleared a terminal was the replay of the byte log
+    F3 and F6 deleted, so it is `dissolved` — and its guard needed the regression modelled in **both** files
+    (the accumulation *and* a replay reading it) before it would fail, which is what the row records.
+  - **F16's guard is the run and not a case.** An uncaught clipboard rejection is an unhandled rejection,
+    which vitest exits 1 on with every case still passing; verified both ways rather than asserted.
+  - **What Phase P still owes**, and none of it is a finding: the VT layer tested **as a parser** (`insta`
+    snapshots and a `proptest` splitting UTF-8/CSI/OSC/DCS/APC streams at every byte boundary), which needs a
+    VT core the broker does not yet have; the alternate-screen drive through a panel drag, a tab switch, a
+    window resize and a detach/reattach; and the output budget asserted rather than read.
 - **Next action: Phase P, then Phase A.** What is left of Phase B needs Windows and a Mac cannot give it:
   **X1, X2 and ConPTY's resize and exit**, which the goal already says are claimed on a Windows run or not
   at all. `command-group`'s API is retired so that change is a wiring job rather than a question. **X1, X2 and ConPTY need a Windows run** and
