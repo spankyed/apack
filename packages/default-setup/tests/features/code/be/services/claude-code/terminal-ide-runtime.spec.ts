@@ -119,3 +119,10 @@ it('honors policy refusal before invoking the native context dismissal',async()=
   await expect(s.api.dismiss(s.n,{client_id:'owner',revision:frame.revision})).rejects.toThrow('managed refusal')
   expect(s.dismiss).not.toHaveBeenCalled()
 })
+
+it('borrows the outer native confirmation callback rather than its nested implementation control',async()=>{
+  const s=setup('enable'),nested=vi.fn()
+  s.control.child={memoizedProps:{...s.control.memoizedProps,onChange:nested}}
+  s.change.mockImplementation(()=>{s.entry.closed=true})
+  await s.act('no');expect(s.change).toHaveBeenCalledExactlyOnceWith('no');expect(nested).not.toHaveBeenCalled()
+})
