@@ -271,3 +271,16 @@ opened captures are required. One visible initial Reconnect controls recovery is
 with unchanged native owner/PID/session if needed; it does not accept initial lease timing.
 Keep the owned synthetic profile free of stale setup-terminal PID restoration across containers;
 preserve fixture rows before closing them. No installed user CLI or user profile is selected.
+
+Native Client rich-theme replay exports `driveClientRichThemeReview` from
+`src/integration/apack-client-rich-theme-drive.mjs`. Original editable fields, Markdown/Code
+and primary action follow custom native dark/light reload with selection/state/callback
+retention. Ordinary and highlighted popup colors both require actual app verification.
+
+Native capability-discovery recovery exports `driveNativeDiscoveryRecovery` from
+`src/integration/apack-native-discovery-drive.mjs`. The owned Linux socket fault fixture
+withholds exactly one verified original successful metadata reply; visible Reconnect must
+fetch fresh metadata on the same PID/session while retaining draft/selection. One original
+action and exact canonical human history/cost/Stop/cleanup must verify at both sizes.
+The proxy never changes native gates, logs credentials or faults actions. These scoped
+journeys do not accept every owner/policy/window/failure or combined F1–F5 requirement.
