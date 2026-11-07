@@ -1191,6 +1191,10 @@ useNativeTranscriptViewport({
     --composer-workspace-history-reserve: 2rem;
     --agent-composer-history-reserve: 2rem;
   }
+  /* Keep an ordinary response readable beside the status and draft in short windows. */
+  .native-chat-shell[data-native-workspace-owner="parent"]:not(:has([data-native-notice], [data-native-command-panel], [data-testid="native-mcp-form"], [data-testid="native-mcp-url"])) {
+    min-height: min(28rem, max(24rem, calc(100vh - 14rem)));
+  }
   /* Expanded tool results need room beside the retained draft and navigation. */
   .native-chat-shell[data-native-workspace-owner="parent"]:has([data-native-tool-result]) {
     min-height: min(28rem, max(24rem, calc(100vh - 12rem)));
