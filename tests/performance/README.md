@@ -24,6 +24,9 @@ single-trial profiles attribute work and are excluded from the timing comparison
 Its machine identity is specific to the CI run; results do not certify external-drive performance.
 The [startup loading qualification](../../docs/archive/references/evidence/2026-11-07-startup-demand-loading.md)
 records the matched comparison, diagnostic attribution and retained failures for the startup-loading stack.
+The subsequent [component-loading default qualification](../../docs/archive/references/evidence/2026-11-07-component-loading-defaults.md)
+records its independent final/intermediate comparisons, source identities and limits; no reliable
+startup speedup is established for that redesign.
 
 Build with the normal repository commands, then run from the checkout root:
 

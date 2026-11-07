@@ -1,0 +1,52 @@
+
+> apack@0.3.14 chain
+> tsx scripts/chain.ts --strict --all --cores 2 --job app,rest
+
+     ok     api:check                       20.5s  --all
+     ok     packages:check                   8.3s  --all
+     ok     facade:check                    10.6s  --all
+     ok     test:external-pack:fork        146.4s  --all
+     ok     test:unit:host                 288.7s  --all
+                                            15.4s  keeps every watch at what its read answers afres…
+                                             8.7s  derives what deriving afresh gives, whatever ano…
+                                             7.5s  leaves every watch showing what its read answers…
+                                             6.0s  refuses, holds and answers what the model does
+                                             6.0s  for feature ids that match generated names, besi…
+                                            15.4s  over its 15.0s budget: packages/apack-ears/tests…
+                                           266.3s  fast half, 557 file(s) this run measured, 218.5s of import and setup around them
+                                           242.4s  work/cores against a 39.9s floor — work-bound: the larger of the two, which is not a prediction of the wall
+                                            46.3s  of the step's 288.7s is neither figure — contention and start-up, which nothing here measures
+                                                2  in the slow tail and unmarked: apack-ears/tests/engine/model-based.spec.ts, apack-sdk/tests/build/generate-entries/modules.spec.ts — reported, not failed, since load can push a file into a tail and never out of one
+                                                5  of 16 @slow: marker(s) sit in a package with no second half, so no spec they guard can move without a new vitest config
+                                            39.9s  apack-sdk/tests/build/generate-entries/compiles.spec.ts  @slow: three cases each build a TypeScript program, which is the subject rather than a detail
+                                            21.6s  apack-ears/tests/engine/model-based.spec.ts
+                                            14.8s  apack-sdk/tests/build/generate-entries/modules.spec.ts
+                                            11.7s  apack-sdk/tests/build/generate-entries/shapes.spec.ts  @slow: 24 cases, every one a temp pack and a full codegen pass — the file 6.3-9.7s
+                                             9.6s  apack-sdk/tests/build/generate-entries/entries.spec.ts  @slow: 16 cases, every one a temp pack and a full codegen pass — the file 2.3-3.6s
+     ok     test:unit:pack                 169.4s  --all
+                                             4.0s  lets an authored root opt out of onboarding
+                                             3.8s  keeps delayed readiness bound to its root across…
+                                             3.5s  leaves completed onboarding alone
+                                             3.4s  discards paused readiness when the root is repla…
+                                             3.3s  resumes existing progress after data replacement…
+                                            72.3s  fast half, 152 file(s) this run measured, 234.9s of import and setup around them
+                                           153.6s  work/cores against a 28.6s floor — work-bound: the larger of the two, which is not a prediction of the wall
+                                            15.8s  of the step's 169.4s is neither figure — contention and start-up, which nothing here measures
+                                             3.5x  default-setup/tests/onboarding-lifecycle.spec.ts at 27.3s against 8.2s — out of line with its half, so a candidate for splitting
+                                                3  of 3 @slow: marker(s) sit in a package with no second half, so no spec they guard can move without a new vitest config
+                                            28.6s  default-setup/tests/onboarding-lifecycle.spec.ts  @slow: each case starts the app on default-setup's flows and content and runs the onboarding flow through
+                                             8.2s  default-setup/tests/feature-settings-updated.spec.ts, 3.5s of it tests
+                                             5.7s  default-setup/tests/harness-app-stop.spec.ts  @slow: the wait is the assertion
+                                             5.3s  default-setup/tests/features/library/be/commands.spec.ts
+                                             5.0s  default-setup/tests/features/code/be/services/claude-code/query.spec.ts, 270ms of it tests
+     ok     build:runtime                   68.5s  --all
+     ok app test:external-pack:app         244.1s  --all
+     ok app test:smoke                      11.3s  --all
+     ok     test:packaged-authoring:author 267.3s  --all
+                                             1.1s  runs on default-setup's brain and llm step with…
+     ok app test:packaged-authoring:app     23.2s  --all
+
+chain passed in 1256.6s on a 2-core budget
+critical path 390s (test:external-pack:fork -> test:external-pack:app)
+  the most any one can buy: test:external-pack:app 100s, test:external-pack:fork 77s
+evidence from this run in node_modules/.cache/apack-chain/runs/2026-11-07T15-09-55Z-11146 (11 steps)

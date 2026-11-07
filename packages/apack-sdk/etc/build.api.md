@@ -495,8 +495,8 @@ export const FeatureEntrySchema: z.ZodObject<{
         title: z.ZodOptional<z.ZodString>;
         description: z.ZodOptional<z.ZodString>;
         form: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodObject<{
-            entry: z.ZodString;
             load: z.ZodOptional<z.ZodLiteral<"eager">>;
+            entry: z.ZodString;
         }, z.core.$strict>]>>;
         access: z.ZodOptional<z.ZodEnum<{
             owner: "owner";

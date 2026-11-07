@@ -1,0 +1,633 @@
+{
+  "status": "compared",
+  "scenario": "populated-startup",
+  "baseline": {
+    "manifest": {
+      "format": 1,
+      "source": {
+        "revision": "418a4ea68ee68741c6a7838a29b094066d1b0312",
+        "dirty": false,
+        "excludedUntracked": [],
+        "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "builds": [
+        {
+          "path": "packages/api/dist",
+          "sha256": "d48ddc48b03a1f8823de2aba213240112872aa047d8478607a4e7453365582f8"
+        },
+        {
+          "path": "packages/main/dist",
+          "sha256": "090c0334428eaf226f290dd9152f785a70809f94c6e1d9c2549958f5b1dfdb74"
+        },
+        {
+          "path": "packages/preload/dist",
+          "sha256": "7d147eab5eebe53d6b04a114462e40fcd7ed77debea79bf31f3054b49161be86"
+        },
+        {
+          "path": "packages/renderer/dist",
+          "sha256": "10795619f588f2b088c9c9aef67e6ebe935d467d6ee9a34c0349e4484a83f90c"
+        },
+        {
+          "path": "packages/default-setup/dist",
+          "sha256": "a2f56978688bf35c671e02573f66a04a8233ff1ff95d56efe5de84d6629561e6"
+        },
+        {
+          "path": "vendor/elmdb/crates/elmdb-node/elmdb.darwin-arm64.node",
+          "sha256": "0d76db4323af7e987b35a74941d5e73db0a69ef68ebaef6fde92113e398dac43"
+        }
+      ],
+      "fixture": {
+        "generator": "message-search-v1",
+        "seed": 0,
+        "sha256": "fdc894145a73053b09dc61228eeb3ff8a73f77dfb7363a7fcbbc6bb65b28baf7",
+        "distribution": {
+          "threads": 12,
+          "messagesPerThread": 100,
+          "matchingQueries": 2,
+          "matchesPerQuery": 20,
+          "resultLimit": 20,
+          "bodyRepetitions": 50
+        }
+      },
+      "native": {
+        "pin": "4b67670ba9b2ed58ee13f8463486a6a91292e412",
+        "checkoutRevision": "4b67670ba9b2ed58ee13f8463486a6a91292e412",
+        "dirty": false,
+        "excludedUntracked": []
+      },
+      "runtime": {
+        "node": "24.22.2",
+        "v8": "13.6.233.17-node.63",
+        "osRelease": "25.6.0",
+        "electron": "44.9.3",
+        "chromium": "152.0.7977.167",
+        "appNode": "24.22.0",
+        "appV8": "15.2.124.43-electron.0",
+        "performancePolicy": "paired-focused-revisions-v1"
+      },
+      "machine": {
+        "platform": "darwin",
+        "arch": "arm64",
+        "cpus": 3,
+        "memoryBytes": 7516192768,
+        "identity": "b23f19bf1ef6a2799229a0bbc6b11aeb418420523f3bc320ff21e0d96014f2f1"
+      },
+      "mode": "disabled",
+      "cache": "fresh-process-warm-filesystem",
+      "warmups": 5,
+      "clock": "Local monotonic durations; cross-process epoch alignment is approximate"
+    },
+    "scenario": "populated-startup",
+    "samples": [
+      {
+        "scenario": "populated-startup",
+        "index": 0,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 5077.815291999999,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 1,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 5448.883625,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 2,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 6576.257540999999,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 3,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 6450.186124999999,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 4,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 5257.0585,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 5,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 6016.256042,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 6,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 5040.837125,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 7,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 5152.3675840000005,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 8,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 5223.676042,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 9,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 4579.603084,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 10,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 4570.851583000001,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 11,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 4250.25025,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 12,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 5633.36575,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 13,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 5425.823667,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 14,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 5202.398542000001,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 15,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 5183.48625,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 16,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 5343.992458,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 17,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 4036.7285,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 18,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 3937.9636670000004,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 19,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 3931.1688750000003,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 20,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 4516.837374999999,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 21,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 4034.9186660000005,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 22,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 3765.6841670000003,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 23,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 3866.994417,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 24,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 7758.983959,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    ],
+    "summary": {
+      "measured": 20,
+      "passed": 20,
+      "unsuccessful": 0,
+      "medianMs": 4810.2201045,
+      "minMs": 3765.6841670000003,
+      "maxMs": 7758.983959
+    }
+  },
+  "candidate": {
+    "manifest": {
+      "format": 1,
+      "source": {
+        "revision": "147b5b8be3747828d39dc4114a71a0138e5e64d4",
+        "dirty": false,
+        "excludedUntracked": [],
+        "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "builds": [
+        {
+          "path": "packages/api/dist",
+          "sha256": "59019987b96ed26c91e6218b00045ae347de7e0fa5b46bedec613881bafc5dfb"
+        },
+        {
+          "path": "packages/main/dist",
+          "sha256": "090c0334428eaf226f290dd9152f785a70809f94c6e1d9c2549958f5b1dfdb74"
+        },
+        {
+          "path": "packages/preload/dist",
+          "sha256": "7d147eab5eebe53d6b04a114462e40fcd7ed77debea79bf31f3054b49161be86"
+        },
+        {
+          "path": "packages/renderer/dist",
+          "sha256": "ebb8a0fa1680108baeb9f6ceef9f404ac0e57304eeb7cd65620389ed55440106"
+        },
+        {
+          "path": "packages/default-setup/dist",
+          "sha256": "3f2a1595a67217431dbd7c8aa60e8e497042c15b680847df11d7287fa39701e7"
+        },
+        {
+          "path": "vendor/elmdb/crates/elmdb-node/elmdb.darwin-arm64.node",
+          "sha256": "0d76db4323af7e987b35a74941d5e73db0a69ef68ebaef6fde92113e398dac43"
+        }
+      ],
+      "fixture": {
+        "generator": "message-search-v1",
+        "seed": 0,
+        "sha256": "fdc894145a73053b09dc61228eeb3ff8a73f77dfb7363a7fcbbc6bb65b28baf7",
+        "distribution": {
+          "threads": 12,
+          "messagesPerThread": 100,
+          "matchingQueries": 2,
+          "matchesPerQuery": 20,
+          "resultLimit": 20,
+          "bodyRepetitions": 50
+        }
+      },
+      "native": {
+        "pin": "4b67670ba9b2ed58ee13f8463486a6a91292e412",
+        "checkoutRevision": "4b67670ba9b2ed58ee13f8463486a6a91292e412",
+        "dirty": false,
+        "excludedUntracked": []
+      },
+      "runtime": {
+        "node": "24.22.2",
+        "v8": "13.6.233.17-node.63",
+        "osRelease": "25.6.0",
+        "electron": "44.9.3",
+        "chromium": "152.0.7977.167",
+        "appNode": "24.22.0",
+        "appV8": "15.2.124.43-electron.0",
+        "performancePolicy": "paired-focused-revisions-v1"
+      },
+      "machine": {
+        "platform": "darwin",
+        "arch": "arm64",
+        "cpus": 3,
+        "memoryBytes": 7516192768,
+        "identity": "b23f19bf1ef6a2799229a0bbc6b11aeb418420523f3bc320ff21e0d96014f2f1"
+      },
+      "mode": "disabled",
+      "cache": "fresh-process-warm-filesystem",
+      "warmups": 5,
+      "clock": "Local monotonic durations; cross-process epoch alignment is approximate"
+    },
+    "scenario": "populated-startup",
+    "samples": [
+      {
+        "scenario": "populated-startup",
+        "index": 0,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 4468.095583,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 1,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 5399.3896669999995,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 2,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 5346.92575,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 3,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 4737.389959,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 4,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 5651.138417,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 5,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 4199.621458,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 6,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 4724.708165999999,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 7,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 4857.966208,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 8,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 5927.286499999999,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 9,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 5422.195125,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 10,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 4360.63925,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 11,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 4227.78075,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 12,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 7028.457875,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 13,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 4255.92875,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 14,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 4522.842042,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 15,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 4852.643542,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 16,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 5561.144333,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 17,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 6133.446207999999,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 18,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 4856.6253750000005,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 19,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 5683.8282500000005,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 20,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 4356.18425,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 21,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 6172.866833,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 22,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 6076.769458,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 23,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 4958.14625,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "populated-startup",
+        "index": 24,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 8270.153999999999,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    ],
+    "summary": {
+      "measured": 20,
+      "passed": 20,
+      "unsuccessful": 0,
+      "medianMs": 4908.056229,
+      "minMs": 4199.621458,
+      "maxMs": 8270.153999999999
+    }
+  },
+  "medianDifferenceMs": 97.83612449999964,
+  "medianChangePercent": 2.0339219905649046,
+  "policy": "Two isolated workers, five warmups per revision, then individually balanced ABBA actions; no tail-percentile claim"
+}

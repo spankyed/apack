@@ -1,5 +1,9 @@
 # Startup loading and initial-view qualification
 
+Historical qualification of the earlier startup stack. The subsequent
+[lazy-default component redesign](2026-11-07-component-loading-defaults.md) changes the component-loading
+contract and has separate source-qualified measurements. The figures here do not qualify that redesign.
+
 [Measurement run](https://github.com/spankyed/apack/actions/runs/42326078534),
 artifact `startup-revision-comparison-42326078534` (ID 13556353749).
 The [comparison](startup-demand-loading-2026-11-07/comparison.json) retains both manifests,
