@@ -294,7 +294,9 @@ refactor target records that herdr patched its substrate.
 Also closed, each as dissolved with the construction that removes it: F4, F5, F7, F8, L2, L3, X1 and X2. The
 pack's `be/services/terminal.ts` no longer spawns or owns a process; no pid is persisted as a handle; a resize writes no application row; and the presentation channel is bounded by Phase G's declared
 ceiling, with a firing case proving a producer past it is throttled and the overload observable rather than
-dropped silently. Native work runs in the Linux container (`npm run test:linux`), one expensive owner at a
+dropped silently. Resize correctness is asserted against an alternate-screen app, not only a shell prompt:
+a pty whose size changes under `vim` or `htop` is where coalescing and ordering mistakes surface, and
+Phase P repeats the check from the renderer's side. Native work runs in the Linux container (`npm run test:linux`), one expensive owner at a
 time.
 
 ### Phase H — the host service owns sessions
@@ -316,6 +318,13 @@ window-storage copy are deleted, not repaired.
 exactly one host is attached and exactly one `onData`/resize registration exists per session, asserted by a
 spec; and the output budget Phase G declared holds, asserted over the same corpus the baseline used so the
 before and after are comparable.
+
+**And an alternate-screen app survives a resize and a reattach.** This was named an unexplored axis in the
+review's second round and reviewed by nobody, so it is a requirement here rather than a finding: drive
+`vim`, `less`, `htop` and a representative agent TUI through a panel drag, a tab switch, a window resize and
+a detach/reattach, and assert the screen is intact afterwards. It is the case where a presentation rewrite
+and a moved pty both fail most visibly — garbled reflow and a stale region are what a user reports — and no
+existing spec covers it.
 
 ### Phase A — agent facts
 
