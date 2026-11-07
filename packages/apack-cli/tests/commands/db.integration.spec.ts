@@ -4,8 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { Readable } from 'node:stream';
-import { execFile, spawn } from 'node:child_process';
-import { promisify } from 'node:util';
+import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEarsEngine, type EARS } from '@apackdev/ears';
@@ -24,6 +23,7 @@ import { mintProfile, openProfile } from '../../src/app/profiles';
 import type { CliDirs } from '../../src/app/pack-host';
 import { _declarationRevision, PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
 import { sealPackBuild, PACK_LAYOUT } from '@apackdev/host/packs';
+import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
 
 // `--profile` resolves a name through the CLI's own data dir, which is the real one on this machine.
 // Pointing it at a temp tree is the only way to test the lookup without reading whatever profiles the
@@ -576,7 +576,7 @@ describe('apack db exec', () => {
       const elmdb = createRequire(createRequire(import.meta.url).resolve('@apackdev/ears/package.json')).resolve('elmdb');
       async function* lines() {
         yield "write('Note-a').set('title', 'Before')\n";
-        await promisify(execFile)(process.execPath, ['-e', [
+        await execFileWhileWorking(process.execPath, ['-e', [
           `const { Database } = require(${JSON.stringify(elmdb)});`,
           'const database = Database.open(process.argv[1]);',
           "database.setSchema({ ...database.schema, roles: { ...database.schema.roles, declared_since: {} } });",
@@ -596,7 +596,7 @@ describe('apack db exec', () => {
       const elmdb = createRequire(createRequire(import.meta.url).resolve('@apackdev/ears/package.json')).resolve('elmdb');
       async function* lines() {
         yield "write('Note-a').set('title', 'Before')\n";
-        await promisify(execFile)(process.execPath, ['-e', [
+        await execFileWhileWorking(process.execPath, ['-e', [
           `const { Database } = require(${JSON.stringify(elmdb)});`,
           'const database = Database.open(process.argv[1]);',
           'database.reset();',

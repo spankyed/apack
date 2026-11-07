@@ -1,17 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { createSession, prepareIntegration } from '../../../scripts/session.mjs';
 import { checkoutProfile, withCheckoutProfile } from '../../../scripts/lib/dev-profile.mjs';
+import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
 
 let dir: string;
 let repo: string;
 let elmdb: string;
-const execFileAsync = promisify(execFile);
+const execFileAsync = execFileWhileWorking;
 const RUN = { encoding: 'utf8', timeout: 60_000, maxBuffer: 64 * 1024 * 1024 } as const;
 const git = async (root: string, ...args: string[]) => (await execFileAsync('git', args, { cwd: root, ...RUN })).stdout.trim();
 beforeEach(async () => {

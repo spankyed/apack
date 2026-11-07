@@ -1,6 +1,6 @@
 import { Worker } from 'node:worker_threads';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { answerWhileWorking, processWork, threadWork } from '../../src/build/process-progress.ts';
+import { answerWhileWorking, execFileWhileWorking, processWork, threadWork } from '../../src/build/process-progress.ts';
 
 /** A reading that adds `step` milliseconds of work each time it is taken */
 const working = (step: number) => { let total = 0; return async () => (total += step); };
@@ -94,5 +94,23 @@ describe('the readings', () => {
 
   it('reads nothing for a thread whose runtime has no per-thread usage', async () => {
     expect(await threadWork({})()).toBeUndefined();
+  });
+});
+
+describe('a process bounded by its work, as promisify(execFile) is by the clock', () => {
+  it('resolves with what it printed, and rejects a failing exit with what it printed', async () => {
+    await expect(execFileWhileWorking(process.execPath, ['-e', 'console.log("out"); console.error("err")'])).resolves.toEqual({ stdout: 'out\n', stderr: 'err\n' });
+    await expect(execFileWhileWorking(process.execPath, ['-e', 'console.error("refused"); process.exit(3)'])).rejects.toMatchObject({ code: 3, stderr: 'refused\n' });
+  });
+
+  it('leaves a process alone that outlives its timeout on the clock while spending no CPU', async () => {
+    // Twice its timeout in wall time: the clock would have ended it, and its CPU is nowhere near the ceiling
+    const started = Date.now();
+    await expect(execFileWhileWorking(process.execPath, ['-e', 'setTimeout(() => console.log("waited"), 2_000)'], { timeout: 1_000 })).resolves.toMatchObject({ stdout: 'waited\n' });
+    expect(Date.now() - started).toBeGreaterThan(1_000);
+  });
+
+  it('ends a process that spins at its CPU ceiling, saying so', async () => {
+    await expect(execFileWhileWorking(process.execPath, ['-e', 'for (;;) {}'], { timeout: 1_500 })).rejects.toThrow(/was ended: it spent \d+s of CPU/);
   });
 });

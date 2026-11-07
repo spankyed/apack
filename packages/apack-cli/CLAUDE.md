@@ -367,9 +367,11 @@ and a refresh with those inputs and outputs unmoved spawns nothing: it returns, 
 frontend watcher counts neither new bytes in a file the build never read nor a package build's writes as a
 change, since their events can arrive long after the signature that already includes them. Frontend replacement retains retiring subscriptions until asynchronous disposal settles.
 
-Integration and native specs start processes asynchronously: `promisify(execFile)` with a timeout for one
-short process, `runCommand` (`tests/_support/run-command.ts`) for the CLI or a nested vitest, which bounds each
-command, stops its process group and names it when it fails. `check:specifiers` refuses a synchronous spawn there.
+Integration and native specs start processes asynchronously: `execFileWhileWorking`
+(`@apackdev/host/build/process-progress`, `promisify(execFile)`'s contract with `timeout` read as CPU) for one
+process, `runCommand` (`tests/_support/run-command.ts`) for the CLI or a nested vitest, which bounds each command by
+its progress, stops its process group and names it when it fails. An in-process build takes a `workSignal` over the
+test's own tree rather than `AbortSignal.timeout`. `check:specifiers` refuses a synchronous spawn there.
 
 Real watcher integration edits use `tests/_support/watch-builds.ts`: wait at most 20s for a rebuild
 request, bound its compiler operation at 60s, then retain the original 20s notification/output checks.

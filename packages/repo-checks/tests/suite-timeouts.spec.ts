@@ -272,6 +272,65 @@ describe('no test is timed out by the clock', () => {
   });
 });
 
+/**
+ * Specs allowed `promisify(execFile)`, and why. It is the clock's form of `execFileWhileWorking`: its `timeout` ends
+ * a process at a wall time a busy machine reaches. An entry is a spec that cannot reach the other one.
+ */
+const CLOCKED_EXEC_ALLOWED: Record<string, string> = {
+  'packages/apack-ears/tests/engine/watch.spec.ts':
+    '`@apackdev/ears` imports no other `@apackdev` package, its tests included, and these calls set no timeout to replace.',
+};
+
+/** Every `promisify(execFile)` in one file, read from its syntax tree so a string holding the text is not one */
+function clockedExecs(absFile: string): number[] {
+  const source = ts.createSourceFile(absFile, fs.readFileSync(absFile, 'utf8'), ts.ScriptTarget.Latest, true);
+  const lines: number[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'promisify'
+      && node.arguments.length === 1 && ts.isIdentifier(node.arguments[0]!) && node.arguments[0].text === 'execFile') {
+      lines.push(source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return lines;
+}
+
+describe('a spec starts a process bounded by its progress, not the clock', () => {
+  const testFiles = (): string[] => [...new Set(UNIT_SUITES.flatMap((suite) => {
+    const tests = path.join(REPO_ROOT, 'packages', suite.dir, 'tests');
+    return fs.existsSync(tests) ? repoFiles().filter((file) => file.startsWith(`packages/${suite.dir}/tests/`) && file.endsWith('.ts')) : [];
+  }))];
+
+  it('uses execFileWhileWorking rather than promisify(execFile), except where the list says why', () => {
+    const files = testFiles();
+    expect(files.length, 'no test files derived, so this passes over nothing').toBeGreaterThan(100);
+    const found = files.filter((file) => !(file in CLOCKED_EXEC_ALLOWED))
+      .flatMap((file) => clockedExecs(path.join(REPO_ROOT, file)).map((line) => `${file}:${line}`));
+    expect(found, 'use execFileWhileWorking (@apackdev/host/build/process-progress), whose timeout is CPU').toEqual([]);
+  });
+
+  it('lists no exception that no longer calls it', () => {
+    expect(Object.keys(CLOCKED_EXEC_ALLOWED).filter((file) => clockedExecs(path.join(REPO_ROOT, file)).length === 0)).toEqual([]);
+  });
+
+  // Over a file written here: the call bound to a const and the one made inline are both found, a string is not
+  it('finds the call however it is written, and not in a string', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'clocked-exec-'));
+    try {
+      const file = path.join(dir, 'forms.spec.ts');
+      fs.writeFileSync(file, [
+        'const run = promisify(execFile);',
+        "await promisify(execFile)('node', []);",
+        "const text = 'promisify(execFile)';",
+      ].join('\n'));
+      expect(clockedExecs(file)).toEqual([1, 2]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('a timeout written as a sum of its phases', () => {
   const expression = (text: string) => (ts.createSourceFile('x.ts', `(${text})`, ts.ScriptTarget.Latest)
     .statements[0] as ts.ExpressionStatement).expression;

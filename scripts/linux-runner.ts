@@ -96,6 +96,9 @@ const FILTERS = [
   ...['api', 'main', 'preload', 'renderer'].map(pkg => `--exclude=/packages/${pkg}/dist`),
   '--exclude=/build-manifest.json', '--exclude=/build-integrity.json',
   '--exclude=/.apack/performance',
+  // Scratch, at any depth: a test run's temp dirs and a package build's staging, which other chain steps create and
+  // remove while this copy runs, so a file in one vanishes mid-copy and rsync exits 24
+  '--exclude=.temp/',
 ];
 
 /**

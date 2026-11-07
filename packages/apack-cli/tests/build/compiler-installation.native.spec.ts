@@ -3,16 +3,16 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { execFile, fork } from 'node:child_process';
-import { promisify } from 'node:util';
+import { fork } from 'node:child_process';
 import { afterEach, expect, it, vi } from 'vitest';
 import { COMPILER_STORE_ENTRIES, captureCompilerInstallation, compilerStoreEntries, removeCompilerStoreDirectory, removeCompilerStoreEntry, type CompilerInstallation } from '../../src/build/compiler-installation.ts';
 import { isCompilerLocationPath } from '../../src/build/compiler-installation-inputs.ts';
 import { cliBin } from '../../src/utils.ts';
 import { _byDeadline } from '@apackdev/sdk/testing/waiting';
 import { cpuBudget } from '@apackdev/testing/vitest';
+import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
 
-const execFileAsync = promisify(execFile);
+const execFileAsync = execFileWhileWorking;
 /** What a process printed, trimmed */
 const printed = async (file: string, args: string[], options: { cwd?: string; env?: NodeJS.ProcessEnv } = {}) =>
   (await execFileAsync(file, args, { encoding: 'utf8', ...options })).stdout.trim();

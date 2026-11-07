@@ -1,11 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { readPeSystemDirectory } from '../../src/build/compiler-pe-environment.ts';
+import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
 
-const execFileAsync = promisify(execFile);
+const execFileAsync = execFileWhileWorking;
 
 interface PolicyEntry {
   folder: 'v1' | 'v2' | 'policy';
