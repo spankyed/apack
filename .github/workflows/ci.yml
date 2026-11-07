@@ -27,7 +27,7 @@ on:
         options: [populated-startup, thread-open, streaming]
         default: populated-startup
       performance_baseline:
-        description: Baseline commit or ref for the manual action comparison
+        description: Baseline commit SHA, tag or origin/<branch> for the manual action comparison
         type: string
         default: ''
       app_acceptance:

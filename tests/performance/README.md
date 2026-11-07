@@ -16,6 +16,9 @@ For a populated-startup revision comparison on one disposable macOS runner, disp
 gh workflow run ci.yml --ref <candidate-branch> -f startup_performance=true -f performance_baseline=<baseline-commit>
 ```
 
+Use a full baseline commit SHA, tag or `origin/<branch>`; a short branch name is not a local ref
+in the fresh CI checkout.
+
 Select `-f performance_scenario=thread-open` or `-f performance_scenario=streaming` for matched
 regression qualification through the same workflow and comparator. Startup remains the default;
 separate detailed startup profiles are collected only for that scenario. Each scenario has its own
@@ -25,8 +28,8 @@ scenario's report.
 This runs the same maintained comparison command with recording disabled, five warmups and twenty
 measured trials per revision in balanced order. Both checkouts have separate dependencies and profiles;
 their native pins must match. Reports and failures are uploaded even when the comparison fails.
-After the disabled-mode comparison, each revision gets a separate detailed diagnostic capture; those
-single-trial profiles attribute work and are excluded from the timing comparison.
+Startup comparisons additionally collect a separate detailed diagnostic capture for each revision;
+those single-trial profiles attribute work and are excluded from the timing comparison.
 Its machine identity is specific to the CI run; results do not certify external-drive performance.
 The [startup loading qualification](../../docs/archive/references/evidence/2026-11-07-startup-demand-loading.md)
 records the matched comparison, diagnostic attribution and retained failures for the startup-loading stack.

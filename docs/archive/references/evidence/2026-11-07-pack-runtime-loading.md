@@ -93,8 +93,19 @@ this is a control/qualification result, not an optimization claim. The sources a
 [Final strict acceptance 42364159120](https://github.com/spankyed/apack/actions/runs/42364159120)
 passed all six jobs on `9b20ffbbe0`: producer, native 1/2, integration 1/2 and application/rest.
 Its production source is identical to admission candidate `a331741c7c`; final helper commit
-`659be67177` changes only the private performance fixture ownership. Subsequent changes archive
-this evidence and link it from the maintained suite documentation.
+`659be67177` changes only the private performance fixture ownership. Subsequent changes add focused captured-install regression coverage, archive
+this evidence and clarify the maintained suite documentation.
 The private warm-scenario helper changed after the production checkpoint; its changed path is validated
 by the corrected maintained streaming comparison and a one-file lint check. Unchanged native/application
 outputs do not require another broad run solely for that helper. Workflow lint passed.
+
+## Post-qualification review
+
+Review traced fresh/unchanged installs, settings recovery, discovery handoff, changed-build refusal,
+live activation/reload, atomic catalog publication and scenario teardown. No additional production
+bug was found. The admission PR adds direct captured-update refusal coverage, with a passing focused
+suite and a failing counterfactual when the revision check is removed. Archived raw identities were
+checked against the qualified downloads. CI guidance now names baseline refs available in a fresh
+checkout, and the packaged action test comment no longer implies runtime deferral is retained.
+No production implementation or qualification criteria changed; earlier production CI and measurements
+remain valid rather than being represented as new runs on these test/docs-only commits.
