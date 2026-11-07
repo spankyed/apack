@@ -27,7 +27,7 @@ test('renders and edits with its bundled @apackdev/ui editor', async ({ appPage,
   const code = appPage.getByTestId('scribbles-code');
   await expect(code.locator('.monaco-editor')).toBeVisible();
   await expect(code).toContainText('bundled');
-  await code.locator('textarea.inputarea').focus();
+  await code.locator('.view-line').first().click();
   await appPage.keyboard.press('ControlOrMeta+A');
   await appPage.keyboard.insertText('{"edited": true}');
   await expect(appPage.getByTestId('scribbles-code-value')).toContainText('{"edited": true}');
