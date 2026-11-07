@@ -242,3 +242,10 @@ python3 src/integration/verify-background-resume.py <saved-app-run> <product-che
 Run this from the research checkout or unpacked authored tools. No positive resume after the
 final journal restoration is claimed; the saved audit proves restored bytes and the exercised
 trusted-resume/refusal sequence.
+
+Safe-mode theme replay exports `driveSafeThemeReview` from
+`src/integration/apack-safe-theme-drive.mjs`. It requires the isolated Linux profile,
+ordinary user-theme file and durable settings preimage from `safe-theme-profile.mjs`.
+Native command history is distinct from conversational model turns. The accepted scope
+is custom-theme restriction, Cancel preservation and preset recovery; live policy
+transitions and combined F1–F5 acceptance remain separate.

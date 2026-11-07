@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "bcd56366a5479c22cd194a3b704cb46b508b4ec1",
+  "researchCommit": "5eb3ed97d1fee2986599fa9b4d1fc8d6b21154cc",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -116,6 +116,7 @@
     "src/integration/apack-resume-target.mjs": "435cab0fade6ffed5eb34c22c065c463d23bf896254947049fc122e1eb30057f",
     "src/integration/apack-resume.mjs": "fa7316c7c71bdd1cb584ba399dab8aed73ef4b666414423091cbf213d6f9e004",
     "src/integration/apack-safe-mode-readiness.mjs": "f7422bfc4035d7a0b6dd335e752d8f61cfcef4faf3930c6cd1a9c31bd390809d",
+    "src/integration/apack-safe-theme-drive.mjs": "6a73efefd541d1a5a29408a14267e42b76b052609ec9adbfb378b0f6971b8820",
     "src/integration/apack-saved-command-history-drive.mjs": "0d48f95754f86d769bbd87c6ec62f96891ccf0dcf10657116f5e0856ca83906a",
     "src/integration/apack-scheduling.mjs": "252f16d9fefad2d93cc3b64678f9677fa4eed7852461378c88c0aa2e3f7b5a51",
     "src/integration/apack-skill-once-app.mjs": "7e53c2055991cd6223a02ae22b9b1988d6ffce9832fb505d295a80b7b03e1773",
@@ -200,6 +201,7 @@
     "src/integration/revalidate-native-question-owner.mjs": "0ae408485822afb83be99d033f423195e6de112035347673fa67dd44e0dad6f0",
     "src/integration/run-apack-controls.mjs": "631e37d543e1b2fc5a0562e106030f8bec736ab875eaa595de7ec7972cd72c42",
     "src/integration/runner-process-vitest.config.mjs": "4ca3fc61bb391a1503bb30c423045858a90ba11d1b9a6bff00f14c649fe238b7",
+    "src/integration/safe-theme-profile.mjs": "4ffeef56d1f6023bf7ef47b88698b5efae8d8952d1149a1858b6330cde303be7",
     "src/integration/skill-management-app-driver.mjs": "a79c5a8e5e93748aa2a95935d356cf6c9fcd1b89fcb0931810a277a3125f88a0",
     "src/integration/skill-management-app.mjs": "1ab63ebd9e63a9c6209bd17fef19f258c71828e4efb0e317a5accaed5cef55f3",
     "src/integration/slash-dispatch-driver.mjs": "e6d6a3155ee0466555da8b4b00779c2a2fadd107101f1ee67eb971184ea9bf85",
@@ -453,5 +455,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "676eb1fe09fc24fe641510e08b372d977c9edc689fe06aed4414be3ea6483fd2"
+  "archiveSha256": "99067b1d5a2a4b7c75a5f0c6c85555c8af5cd6fb596c3fec7e902e473b32c5d5"
 }
