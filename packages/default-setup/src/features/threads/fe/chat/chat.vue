@@ -1183,6 +1183,10 @@ useNativeTranscriptViewport({
     --composer-workspace-history-reserve: 2rem;
     --agent-composer-history-reserve: 2rem;
   }
+  /* Expanded tool results need room beside the retained draft and navigation. */
+  .native-chat-shell[data-native-workspace-owner="parent"]:has([data-native-tool-result]) {
+    min-height: min(28rem, max(24rem, calc(100vh - 12rem)));
+  }
   .native-chat-shell[data-native-workspace-owner="agent"] {
     min-height: min(26rem, max(20.5rem, calc(100vh - 18rem)));
   }
