@@ -284,3 +284,13 @@ fetch fresh metadata on the same PID/session while retaining draft/selection. On
 action and exact canonical human history/cost/Stop/cleanup must verify at both sizes.
 The proxy never changes native gates, logs credentials or faults actions. These scoped
 journeys do not accept every owner/policy/window/failure or combined F1–F5 requirement.
+
+Native saved-resource access replay exports `driveMcpResourceFiles` from
+`src/integration/apack-mcp-resource-files-drive.mjs`. An ordinary original stdio MCP
+server supplies a PNG and generic binary. Native tools save both; explicit app actions
+open the existing viewer. PNG pixels, saved bytes, separate physical action readings,
+retained draft/selection/native owner, complete continuation and exact accounting/cleanup
+must verify at both sizes. Generic binary formats remain explicitly unsupported.
+Short upward native history reads retire tail following. The separate external-path
+Explorer directory notice stays an open UI follow-up, not part of the accepted viewer claim.
+Original unaccepted attempts and fixed deadlines remain preserved in research evidence.
