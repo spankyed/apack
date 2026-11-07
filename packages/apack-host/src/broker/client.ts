@@ -34,6 +34,59 @@ export interface BrokerScreen {
   readonly altScreen: boolean;
 }
 
+/**
+ * What a session's shell has reported about itself, from the broker's own parse of the markers it emitted.
+ *
+ * **Every field is a claim, not a measurement.** A program in the pty can write any of these sequences, so
+ * these say what was *said*: a `cwd` is a path some program named, not a directory this process checked, and
+ * what may be done with one is the caller's decision. The broker knows the pid and the session id for
+ * itself and neither is in here.
+ */
+export interface BrokerFacts {
+  /** The working directory the shell last reported, as reported */
+  readonly cwd: string | null;
+  /** The command line the shell last said it was about to run */
+  readonly command: string | null;
+  /** Between a command starting and finishing — a busy session told apart from one at a prompt **without
+   * reading the screen**, which is what the markers are for */
+  readonly running: boolean;
+  /** The status the last finished command reported. `null` when none has, and when a shell reported a finish
+   * without one: a shell that says nothing about how a command ended is not saying it succeeded */
+  readonly exitStatus: number | null;
+}
+
+/** Where a search found what it was asked for */
+export interface BrokerMatch {
+  /** Into the lines the same request's `screen` would answer, oldest first */
+  readonly line: number;
+  /** Where in that line the match starts, in characters */
+  readonly column: number;
+  /** The whole line, so a caller sees the context without a second read */
+  readonly text: string;
+}
+
+/** What a `wait` is waiting for */
+export type BrokerWaitUntil =
+  /**
+   * No command is running. **Needs shell integration**: without the markers nothing ever reports a command
+   * starting, so a session that emits none is idle from the start and this answers at once — the honest
+   * answer for a shell that says nothing, rather than a guess read off the screen.
+   */
+  | { readonly kind: 'idle' }
+  /** `text` appears in the screen or its history — the fallback for a program that reports nothing */
+  | { readonly kind: 'text'; readonly text: string }
+  /** The process ended */
+  | { readonly kind: 'exit' };
+
+/** How a wait ended */
+export type BrokerWaitOutcome =
+  /** The condition held */
+  | 'MET'
+  /** The deadline passed first */
+  | 'TIMEOUT'
+  /** The session ended before the condition held, so nothing is coming */
+  | 'EXITED';
+
 /** One session's feed and the operations on it */
 export interface BrokerSession {
   readonly id: string;
@@ -48,6 +101,24 @@ export interface BrokerSession {
    * on a renderer holding state. `history` is a ceiling and not a promise.
    */
   screen(history?: number): Promise<BrokerScreen>;
+  /**
+   * What this session's shell has reported about itself.
+   *
+   * **The read shell integration exists for**, and like `screen` it answers whether or not a window is
+   * drawing the session: the markers are parsed where the bytes arrive, so a hidden session's working
+   * directory and command status are known without anything being mounted.
+   */
+  facts(): Promise<BrokerFacts>;
+  /** Where `text` appears in the screen and the `history` lines above it */
+  search(text: string, history?: number): Promise<readonly BrokerMatch[]>;
+  /**
+   * Waits for the session to reach a state, for at most `timeoutMs`.
+   *
+   * **Nothing polls**: the broker checks the condition as bytes arrive, so this costs a condition check per
+   * read rather than a request per tick. The answer comes exactly once however the race between the
+   * condition, the deadline and the session ending goes.
+   */
+  wait(until: BrokerWaitUntil, timeoutMs: number): Promise<BrokerWaitOutcome>;
   kill(): Promise<void>;
 }
 
@@ -155,6 +226,31 @@ export async function startBroker(options: { binary: string; socket: string; env
             cursorColumn: answer.cursor_column,
             altScreen: answer.alt_screen,
           };
+        },
+        async facts() {
+          connection.send({ kind: 'facts', session: id });
+          const answer = await connection.next(event => event.kind === 'facts' && event.session === id);
+          if (answer.kind !== 'facts') throw new BrokerError('PTY', 'the broker answered no facts');
+          return {
+            cwd: answer.cwd,
+            command: answer.command,
+            running: answer.running,
+            exitStatus: answer.exit_status,
+          };
+        },
+        async search(text, history = 0) {
+          connection.send({ kind: 'search', session: id, text, history });
+          const answer = await connection.next(event => event.kind === 'search' && event.session === id);
+          if (answer.kind !== 'search') throw new BrokerError('PTY', 'the broker answered no search');
+          return answer.matches;
+        },
+        async wait(until, timeoutMs) {
+          connection.send({ kind: 'wait', session: id, until, timeout_ms: timeoutMs });
+          // **The deadline is the broker's**, so this waits for its answer rather than racing a timer of its
+          // own: two deadlines would disagree, and the one that matters is the one holding the waiter
+          const answer = await connection.next(event => event.kind === 'waited' && event.session === id);
+          if (answer.kind !== 'waited') throw new BrokerError('PTY', 'the broker answered no wait');
+          return answer.outcome;
         },
         async kill() { connection.send({ kind: 'kill', session: id }); },
       };

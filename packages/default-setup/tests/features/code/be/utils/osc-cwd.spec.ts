@@ -41,3 +41,30 @@ describe('the directory a shell reported', () => {
     expect(cwdFromOsc('/D:/work', 'darwin')).toBe('D:\\work')
   })
 })
+
+/**
+ * **A reported path is a claim, and these are the claims that are refused rather than repaired.**
+ *
+ * The sequence is written by whatever is running in the pty, which need not be the shell. Refusing leaves
+ * the terminal where it was; repairing would store a path nothing is at, and stripping a control character
+ * out of a path changes which directory it names.
+ */
+describe('a claim that is not a path', () => {
+  it('refuses one longer than any platform could hand back', () => {
+    const real = `/Users/me/${'a'.repeat(4000)}`;
+    expect(cwdFromOsc(real), 'a long but possible path is still followed').toBe(real);
+    expect(cwdFromOsc(`/Users/me/${'a'.repeat(5000)}`)).toBeUndefined();
+  });
+
+  it('refuses one carrying a control character', () => {
+    expect(cwdFromOsc('/Users/me/\u001b[31mred')).toBeUndefined();
+    expect(cwdFromOsc('/Users/me/\u0000')).toBeUndefined();
+    expect(cwdFromOsc('/Users/me/ok')).toBe('/Users/me/ok');
+  });
+
+  /** A malformed escape used to throw, which a prompt hook turned into an error logged on every prompt */
+  it('reads a malformed percent escape as the characters it is', () => {
+    expect(cwdFromOsc('/Users/me/100%zz')).toBe('/Users/me/100%zz');
+    expect(cwdFromOsc('/Users/me/a%20b')).toBe('/Users/me/a b');
+  });
+});

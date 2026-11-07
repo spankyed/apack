@@ -499,6 +499,8 @@ export interface TerminalService {
         cols: number;
         rows: number;
         shell?: string;
+        args?: readonly string[];
+        env?: Readonly<Record<string, string>>;
         cwd?: string;
     }, listeners: TerminalListeners): Promise<TerminalSession>;
 }

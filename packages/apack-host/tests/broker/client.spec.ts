@@ -159,4 +159,68 @@ describe('the broker client', () => {
     await expect(startBroker({ binary, socket: path.join(directory, 'b.sock') }))
       .rejects.toThrow(/exited with 3 before it was listening.*no socket for me/s);
   });
+  /**
+   * **A reported status of nothing is not a status of zero**, which is the one thing a typecheck cannot catch
+   * here: the wire is `exit_status` and the contract is `exitStatus`, and a mapping that filled an absent
+   * value with a default would report every command as having succeeded.
+   */
+  it("reports a session's facts as the shell stated them, a missing status included", async () => {
+    const fake = await broker({
+      ...OPENS,
+      facts: [
+        { kind: 'facts', session: 's-1', cwd: '/home/me/w d', command: 'cargo test', running: true, exit_status: null },
+      ],
+    });
+    const session = await fake.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
+
+    expect(await session.facts()).toEqual({
+      cwd: '/home/me/w d',
+      command: 'cargo test',
+      running: true,
+      exitStatus: null,
+    });
+  });
+
+  it('reports a reported status as the number it was', async () => {
+    const fake = await broker({
+      ...OPENS,
+      facts: [{ kind: 'facts', session: 's-1', cwd: null, command: null, running: false, exit_status: 130 }],
+    });
+    const session = await fake.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
+
+    expect((await session.facts()).exitStatus).toBe(130);
+  });
+
+  it("searches a session's screen and gives each answer to the session that asked", async () => {
+    const fake = await broker({
+      ...GREETS,
+      spawn: [{ kind: 'spawned', session: 's-1', pid: 1 }, { kind: 'spawned', session: 's-2', pid: 2 }],
+      search: [
+        { kind: 'search', session: 's-2', matches: [{ line: 0, column: 0, text: 'theirs' }] },
+        { kind: 'search', session: 's-1', matches: [{ line: 3, column: 7, text: 'error: mine' }] },
+      ],
+    });
+    const session = await fake.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
+
+    expect(await session.search('error', 100)).toEqual([{ line: 3, column: 7, text: 'error: mine' }]);
+  });
+
+  /**
+   * **The broker owns the deadline, so the client waits for its answer and keeps no timer of its own.** Two
+   * deadlines would disagree, and the one that matters is the one holding the waiter — so a `TIMEOUT` is
+   * something the broker said rather than something the client concluded.
+   */
+  it('waits for the broker to say how a wait ended, for the session that asked', async () => {
+    const fake = await broker({
+      ...GREETS,
+      spawn: [{ kind: 'spawned', session: 's-1', pid: 1 }, { kind: 'spawned', session: 's-2', pid: 2 }],
+      wait: [
+        { kind: 'waited', session: 's-2', outcome: 'MET' },
+        { kind: 'waited', session: 's-1', outcome: 'TIMEOUT' },
+      ],
+    });
+    const session = await fake.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
+
+    expect(await session.wait({ kind: 'text', text: 'never written' }, 50)).toBe('TIMEOUT');
+  });
 });
