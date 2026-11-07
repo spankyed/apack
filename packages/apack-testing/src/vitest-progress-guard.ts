@@ -17,40 +17,16 @@
  * reports that one, and the step that started the pool bounds it by its process tree.
  */
 import { aroundAll, aroundEach, expect, inject } from 'vitest';
-import { IDLE_MS, cpuAdded, createStallTracker, readTreeCpuMs } from '@apackdev/host/build/process-progress';
+import { IDLE_MS, cpuAdded, describeRefusal, readTreeCpuMs, watchWork, type Watch, type WatchClock, type WorkReading } from '@apackdev/host/build/process-progress';
 // What a config provides and a test declares to it are typed with the package's vitest entry, which packs import
 import type { ProgressMeta } from './vitest.ts';
-
-interface Watch {
-  readonly what: string;
-  readonly budgetMs: number | undefined;
-  readonly startedAt: number;
-  /** The worker's own CPU when it started, exact: `process.cpuUsage` costs nothing, where `ps` costs a process */
-  readonly ownAtStart: NodeJS.CpuUsage;
-  /** What the processes it started have spent, from the readings: a lower bound, a short-lived child being unseen */
-  childrenMs: number;
-  /**
-   * Set once another test ran beside this one (`test.concurrent`): the worker's CPU is then theirs together and
-   * cannot be split, so this one has no budget to be held to and records no spend, and only their stall is judged
-   */
-  shared: boolean;
-  readonly fail: (error: Error) => void;
-}
-
-/** What a watch has spent: the worker's own CPU since it started, and its children's */
-function spentMs(watch: Watch): number {
-  const own = process.cpuUsage(watch.ownAtStart);
-  return (own.user + own.system) / 1000 + watch.childrenMs;
-}
 
 /**
  * The real clock and timers, taken as this module loads. A test that fakes timers (`vi.useFakeTimers`) replaces
  * `Date` and `setInterval` for as long as it runs, and a guard reading those would see no time pass and never find
  * the test stalled — a test that fakes timers and then hangs would run for ever.
  */
-const now = Date.now.bind(Date);
-const every = setInterval;
-const stopEvery = clearInterval;
+const realClock: WatchClock = { now: Date.now.bind(Date), every: setInterval, stopEvery: clearInterval };
 
 const provided = <K extends 'apack.idleMs' | 'apack.testCpuMs'>(key: K): number | undefined => {
   try { return inject(key); } catch { return undefined; }
@@ -60,73 +36,85 @@ const idleMs = provided('apack.idleMs') ?? IDLE_MS;
 const defaultBudgetMs = provided('apack.testCpuMs');
 const ceiling = process.env.APACK_CEILING !== 'off';
 
+interface Running {
+  readonly what: string;
+  readonly budgetMs: number | undefined;
+  /**
+   * Set once another test ran beside this one (`test.concurrent`): the worker's CPU is then theirs together and
+   * cannot be split, so this one has no budget to be held to and records no spend, and only their stall is judged
+   */
+  shared: boolean;
+  readonly fail: (error: Error) => void;
+}
+
+/**
+ * The worker's work from now: its own CPU, exact and free (`process.cpuUsage`), and what the processes it started
+ * have spent, from `ps`. `now()` is what it has read so far, which a test that ends between two readings is told.
+ */
+function workerWork(): WorkReading & { now(): number } {
+  const ownAtStart = process.cpuUsage();
+  let lastChildren: ReadonlyMap<number, number> | undefined;
+  let childrenMs = 0;
+  const now = () => {
+    const own = process.cpuUsage(ownAtStart);
+    return (own.user + own.system) / 1000 + childrenMs;
+  };
+  return Object.assign(async () => {
+    const tree = await readTreeCpuMs(process.pid);
+    if (tree !== undefined) {
+      const children = new Map([...tree].filter(([pid]) => pid !== process.pid));
+      // The first reading is the baseline: a child a hook left running did its earlier work for the hook
+      if (lastChildren !== undefined) childrenMs += cpuAdded(lastChildren, children);
+      lastChildren = children;
+    }
+    return now();
+  }, { now });
+}
+
 /**
  * What is running, in two kinds. A file's hooks nest, so they are a stack and the innermost is judged. Tests do not
  * nest but may run together, so they are a group judged as one: the tree stalling stalls all of them, since none of
- * them is doing anything. Whichever is judged has the one tracker, made afresh whenever what is judged changes, since
- * the quiet before it was something else's.
+ * them is doing anything. Whatever is judged has one watch, made afresh whenever what is judged changes, since the
+ * quiet before it was something else's.
  */
-const hooks: Watch[] = [];
-const tests = new Set<Watch>();
-let tracker = createStallTracker(idleMs, now());
-let lastChildren: ReadonlyMap<number, number> = new Map();
-let timer: ReturnType<typeof setInterval> | undefined;
-let reading = false;
-/** Bumped whenever what is judged changes, so a reading taken across a change is dropped rather than misattributed */
-let generation = 0;
+const hooks: Running[] = [];
+const tests = new Set<Running>();
+let watching: { watch: Watch; work: ReturnType<typeof workerWork> } | undefined;
 
-const judged = (): readonly Watch[] => (tests.size > 0 ? [...tests] : hooks.slice(-1));
+const judged = (): readonly Running[] => (tests.size > 0 ? [...tests] : hooks.slice(-1));
 
 function judgeAfresh(): void {
-  generation += 1;
-  tracker = createStallTracker(idleMs, now());
-}
-
-function sample(): void {
-  if (reading || judged().length === 0) return;
-  reading = true;
-  const taken = generation;
-  void readTreeCpuMs(process.pid).then((tree) => {
-    reading = false;
-    if (tree === undefined || taken !== generation) return;
-    const at = now();
-    const children = new Map([...tree].filter(([pid]) => pid !== process.pid));
-    const added = cpuAdded(lastChildren, children);
-    lastChildren = children;
-    const watches = judged();
-    for (const each of watches) each.childrenMs += added;
-    if (tracker.reading(tree, at)) {
-      const together = watches.length > 1 ? `, with ${watches.length - 1} other test${watches.length > 2 ? 's' : ''} running beside it` : '';
-      for (const each of watches) {
-        each.fail(new Error(`${each.what} stalled: its worker's process tree used no CPU for ${idleMs / 1000}s${together}. `
-          + 'Inspect what it was waiting on; a test that is only slow is never failed for it.'));
-      }
-      return;
-    }
-    if (!ceiling) return;
-    for (const each of watches) {
-      if (each.shared || each.budgetMs === undefined || spentMs(each) < each.budgetMs) continue;
-      each.fail(new Error(`${each.what} spent its ${each.budgetMs / 1000}s CPU budget: `
-        + `${Math.round(spentMs(each) / 1000)}s of CPU in ${Math.round((at - each.startedAt) / 1000)}s of wall time. `
-        + 'A loop that spins reads as CPU close to its wall time.'));
-    }
+  watching?.watch.stop();
+  const running = judged();
+  if (running.length === 0) { watching = undefined; return; }
+  const alone = running.length === 1 && !running[0]!.shared ? running[0] : undefined;
+  const work = workerWork();
+  const watch = watchWork({
+    work, idleMs, clock: realClock, ceilingMs: ceiling ? alone?.budgetMs : undefined,
+    onRefused: (refusal) => {
+      const together = running.length > 1 ? `, with ${running.length - 1} other test${running.length > 2 ? 's' : ''} running beside it` : '';
+      const why = refusal.kind === 'stalled'
+        ? `stalled: its worker's process tree used no CPU for ${idleMs / 1000}s${together}. Inspect what it was waiting on; a test that is only slow is never failed for it.`
+        : `${describeRefusal(refusal)}. A loop that spins reads as CPU close to its wall time.`;
+      for (const each of running) each.fail(new Error(`${each.what} ${why}`));
+    },
   });
+  watching = { watch, work };
 }
 
 function watch(kind: 'hooks' | 'test', what: string, budgetMs: number | undefined, run: () => Promise<unknown>,
-  ended?: (entry: Watch) => void): Promise<void> {
+  ended?: (entry: Running, spentMs: number) => void): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     let settled = false;
     const leave = () => {
       settled = true;
-      ended?.(entry);
+      ended?.(entry, watching?.work.now() ?? 0);
       if (kind === 'test') tests.delete(entry);
       else hooks.splice(hooks.indexOf(entry), 1);
       judgeAfresh();
-      if (tests.size === 0 && hooks.length === 0 && timer !== undefined) { stopEvery(timer); timer = undefined; }
     };
-    const entry: Watch = {
-      what, budgetMs, startedAt: now(), ownAtStart: process.cpuUsage(), childrenMs: 0, shared: false,
+    const entry: Running = {
+      what, budgetMs, shared: false,
       fail: (error) => { if (!settled) { leave(); reject(error); } },
     };
     if (kind === 'test') {
@@ -136,10 +124,6 @@ function watch(kind: 'hooks' | 'test', what: string, budgetMs: number | undefine
       hooks.push(entry);
     }
     judgeAfresh();
-    if (timer === undefined) {
-      timer = every(sample, Math.min(5_000, idleMs / 4));
-      timer.unref();
-    }
     run().then(
       () => { if (!settled) { leave(); resolve(); } },
       (error: unknown) => { if (!settled) { leave(); reject(error); } },
@@ -156,8 +140,8 @@ aroundAll(async (runSuite) => {
 aroundEach(async (runTest, context) => {
   const meta = context.task.meta as ProgressMeta;
   const budget = meta.cpuBudgetMs ?? defaultBudgetMs;
-  await watch('test', `"${context.task.name}"`, budget, async () => { await runTest(); }, (entry) => {
+  await watch('test', `"${context.task.name}"`, budget, async () => { await runTest(); }, (entry, spentMs) => {
     // A shared test's spend is its siblings' too, so it records none rather than one a reporter would misread
-    if (!entry.shared) meta.cpuMs = Math.round(spentMs(entry));
+    if (!entry.shared) meta.cpuMs = Math.round(spentMs);
   });
 });

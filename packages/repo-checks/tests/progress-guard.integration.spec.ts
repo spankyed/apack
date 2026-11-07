@@ -120,7 +120,7 @@ describe('with the CPU ceiling on', () => {
   });
 
   it('fails a test that spins, at its CPU budget, saying what it spent', () => {
-    expect(outcome(report, 'spin.spec.ts', 'spins')!.failureMessages.join('\n')).toMatch(/"spins" spent its 2s CPU budget: \d+s of CPU in \d+s of wall time/);
+    expect(outcome(report, 'spin.spec.ts', 'spins')!.failureMessages.join('\n')).toMatch(/"spins" spent its 2s CPU budget: [\d.]+s of CPU in [\d.]+s of wall time/);
   });
 });
 

@@ -94,7 +94,7 @@ while [ ! -s ${JSON.stringify(pidFile)} ]; do sleep 0.05; done`],
 
 /**
  * The watchdog over real processes. What it decides is `createStallTracker`'s, tested without a clock in
- * `process-tree-cpu.spec.ts`; these are what only a real tree shows: reading it, its output reaching the
+ * `@apackdev/host`'s `process-progress.spec.ts`; these are what only a real tree shows: reading it, its output reaching the
  * tracker, a descendant outside the group, the flag, and a spinning tree reaching its budget.
  */
 describe('a bounded spawn that stops making progress', () => {
@@ -174,6 +174,6 @@ spawn(process.execPath, ['-e', ${JSON.stringify(burn(CPU_IDLE + 2_000))}], { det
     const result = await boundedSpawn(command, args, 1_500, { idleMs: false });
     expect(result).toMatchObject({ code: 124, timedOut: true });
     expect(result.cpuMs).toBeUndefined();
-    expect(result.output).toContain('by the clock');
+    expect(result.output).toContain('on the clock');
   });
 });
