@@ -366,6 +366,38 @@ Recorded so they are not re-investigated.
 
 ---
 
+## What comes after this, and what it changes here
+
+Two deferred plans follow this work, in order: the
+[ghostty-web migration](../deferred/xterm-to-ghostty-web.md) replaces the emulator, and the
+[terminal runtime refactor](../deferred/terminal-runtime-refactor-target.md) moves process and
+terminal-state authority into a host-owned service over a Rust broker. Neither is authorized, both are
+undated, and this list is meant to land first. Reading them changes four things here, and it is cheaper to
+know now than to discover at each stage:
+
+- **The migration's primary replacement point is `terminal-pool.ts`** — the file Stage 1 rewrites. Its
+  Phase 1 requirements *are* Stage 1's invariants, in its own words: one output subscription and input
+  registration per entry, concurrent creation for one id deduplicated, asynchronous completion guarded
+  against a disposed or replaced entry. So the two are not redundant, but Stage 1 must **draw its boundary
+  at the emulator**: the session owns lifecycle, ownership and subscription, and reaches the emulator
+  through a seam narrow enough that the migration swaps an implementation rather than reopening ownership.
+  Not an engine abstraction and not a selection flag — the migration refuses both, and so does this: one
+  emulator at a time, the seam internal to the feature.
+- **Stage 0's measurement is the migration's required baseline.** It asks for first-open latency including
+  WASM, sustained output responsiveness, large-history replay, memory with several hidden sessions, resize
+  behaviour and packaged payload size, on one machine and corpus, with limits agreed *before* cutover.
+  Measuring once and recording it where that plan can cite it is the whole of the saving.
+- **The platform tier is probably obsolete rather than deferred.** X1 and X2 are node-pty's Windows
+  behaviour, and the refactor gives PTY and ConPTY ownership to the broker. With no released build there are
+  no Windows users to protect in the interim, so writing those fixes now is likely paying for code the
+  refactor deletes. X3 and X10 are not in that category — they are the app's menu and hotkey handling, which
+  no terminal plan touches.
+- **S2 is confirmed by the refactor, not merely compatible with it.** It specifies that logs carry *"IDs,
+  sizes, revisions and reason codes, not keystrokes, prompts, raw OSC or transcripts."* The decision below
+  was reached independently; this is the same rule arrived at twice.
+
+The one reversal is F14, recorded in decision 3.
+
 ## Scope and phases
 
 The findings span three cost classes, and two of them are not the terminal. They are phased accordingly
@@ -376,10 +408,12 @@ rather than by severity alone, because what can be *closed* here differs.
 - **Phase 2 — G1 alone**, lifted out of the agent findings as its own change. It is High, it is cheap, and
   it is the same payload-discipline fix as Stage 2, so it travels with that stage rather than waiting for a
   decision about the agent path.
-- **Phase 3 — the platform tier** (X1–X13). X1, X2 and X3 are High, and none of them can be *closed* from a
-  Mac checkout: they need the [Windows development VM](../references/guides/windows-development-vm.md) and a
-  `compiler_windows=true` dispatch to verify. The fixes can be written here; the acceptance cannot. Tracked,
-  not scheduled.
+- **Phase 3 — the platform tier** (X1–X13), split by whether the refactor would delete it. X3 and X10 (the
+  app's non-darwin menu and `cmd`-keyed hotkeys) belong to the app and survive every plan, so they travel
+  with this work. X1, X2 and the node-pty-shaped rest are held: they need the
+  [Windows development VM](../references/guides/windows-development-vm.md) and a `compiler_windows=true`
+  dispatch to accept, and the refactor would move that ownership to the broker. Revisit if a Windows release
+  is scheduled before the refactor.
 - **Deferred — G2–G7.** The remaining agent-path findings belong to that feature, not this one, and want
   their own issue rather than a tail on this list.
 
@@ -395,7 +429,9 @@ rather than by severity alone, because what can be *closed* here differs.
    new `HostShell` command. `HostShell` exposes no `notify`, so the mechanism this document first named does
    not exist; the one that does needs no new published API.
 4. **F10**: add `onContextLoss`. Three lines; a past commit fixing a GL-context crash at teardown proves
-   context loss happens here.
+   context loss happens here. **Provisional**: it is xterm's WebGL addon specifically, and the ghostty-web
+   migration may remove the renderer it guards. Three lines is worth paying twice; a larger fix here would
+   not be.
 
 None depends on the restructure. 1 and 2 are the only items in this document that are about user harm rather
 than user annoyance.
@@ -488,11 +524,18 @@ on its merits rather than rediscover the question.
    than a bug, which is what M2 looks like in practice. It holds whether or not today's guards exist. The
    cost is the case it refuses: watching one terminal in a popout on a second monitor, which would need two
    xterms over one pty with replay. Revisit if that case is wanted.
-3. **F14: listen, don't inject** (Stage 6). Drop `injectShellIntegration` and take titles from xterm's
-   `onTitleChange`, since most prompts already emit OSC 0/2. That removes the pty-writing hack, the three
-   shell branches and X4's Windows dead-end together, and costs the cwd-following that never actually ran.
-   The richer option — env-based injection (`--init-file`, `ZDOTDIR`, `XDG_DATA_DIRS`, `-NoExit`) with
-   shipped rc scripts, which also buys per-command exit status and re-run-command — is a feature rather than
-   a fix, and wants its own decision.
+3. **F14: fix the mechanism, keep the capability** (Stage 6). An earlier revision of this document chose to
+   delete `injectShellIntegration` and take titles from xterm's `onTitleChange`. That was wrong, and the
+   deferred [terminal runtime refactor](../deferred/terminal-runtime-refactor-target.md) is why: its
+   agent-observation pipeline runs on *"parsed OSC command markers for cwd, prompt, command start/end and
+   exit status"* and names VS Code's shell integration as the design to follow. Deleting that capability now
+   means rebuilding it two plans later.
+   What is defective is the **mechanism**, not the feature: `injectShellIntegration` types into the user's
+   interactive shell, which echoes, races startup, needs a branch per shell and has none for PowerShell or
+   cmd (X4). Replace it with launch-time injection — `--init-file`, `ZDOTDIR` over a temporary directory
+   that sources the user's, `XDG_DATA_DIRS`, `-NoExit` — and ship the rc scripts as app assets. That also
+   turns X4 from a dead end into a supported platform, and treats reported paths and titles as untrusted
+   metadata, which the refactor requires.
+   The cheap deletion remains available if the refactor is abandoned; it is a false economy while it is not.
 4. **S2's remediation is the code fix only.** The log files already written are out of scope: the app log is
    off-limits for cleanup. The fix stops the accumulation, which is the whole of what is in scope here.
