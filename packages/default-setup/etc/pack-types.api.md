@@ -4629,6 +4629,14 @@ interface TerminalInfo {
     active: boolean;
     cols: number;
     rows: number;
+    /**
+     * What ends a typed line for *this* shell — X6.
+     *
+     * A window running a command has to end it the way the shell it is running in expects, and only the
+     * backend knows which shell that is. Typed into a Windows console, `\n` is echoed and never runs: the
+     * command sits on screen looking typed, and nothing happens. Measured on Windows rather than assumed.
+     */
+    submit: string;
 }
 
 interface TerminalTab extends OpenFile {
