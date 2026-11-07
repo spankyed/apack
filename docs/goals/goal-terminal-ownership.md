@@ -161,6 +161,13 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   canvas; the buffer is in the pack's module-scoped pool). So *the next thing to build is a byte-level
   completion signal*, which the sustained-output, history-replay and first-byte readings all need, and
   without which "the broker can lose on the metric it is measured by" cannot be checked against this number.
+- **Phase G reading 2 of 6 is taken: packaged payload.** The terminal stack is **~0.9 MB of working code**
+  on macOS — 502 KiB of xterm bundled into the pack's frontend (attributed from the sourcemaps), 136 KiB of
+  native pty, 264 KiB of its JavaScript — which is the figure a broker binary is compared against, not the
+  29 MB a `du` of `node-pty` suggests. Beside it, two rows ship by omission: `electron-builder.mjs` excludes
+  `*.map` and other platforms' `prebuilds/` but not `*.pdb` or `third_party/`, so a Windows package carries
+  **26 MB of node-pty debug symbols** and every package, macOS included, carries **2.3 MB of Windows
+  `OpenConsole.exe`**. Recorded, not changed — packaging is release configuration and outside this goal.
 - **G1 is priced and stays open, with its fix placed.** Measured with the existing `streaming` scenario,
   which already drives the writer at `intervalMs: 80`: **9,726 → 30,054 → 95,924 app write bytes** for
   **864 → 2,160 → 4,340** characters of reply, so bytes-per-character climbs 11.3 → 13.9 → 22.1. Every flush
