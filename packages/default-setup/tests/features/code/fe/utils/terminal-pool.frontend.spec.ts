@@ -224,6 +224,34 @@ describe('what the pool draws, and what it refuses to', () => {
     expect(written.some((chunk) => chunk.includes('Starting terminal'))).toBe(true)
   })
 
+  it('marks the seam when a window meets a terminal whose process was replaced', () => {
+    // M4. A restored terminal keeps its id and gets a **new** shell, so the id cannot say whether what is on
+    // screen came from the process answering now. The pid can, and the buffer above the seam survived only
+    // because this pool outlives the backend — which is what makes the screen read as one session when it is
+    // two.
+    const terminal = info() as unknown as { id: string; pid: number }
+    terminalPool.ensure(terminal as never, () => {})
+    written.length = 0
+
+    // The backend came back with a new shell under the same id, and the list arrives before any host mounts
+    terminalPool.syncProcesses([{ ...terminal, pid: terminal.pid + 1 } as never])
+
+    expect(written.join(''), 'nothing told the user the shell under this buffer is a different one')
+      .toContain(`new shell (pid ${terminal.pid + 1})`)
+  })
+
+  it('says nothing when the process is the one the buffer came from', () => {
+    const terminal = info() as unknown as { id: string; pid: number }
+    terminalPool.ensure(terminal as never, () => {})
+    written.length = 0
+
+    terminalPool.syncProcesses([terminal as never])
+    terminalPool.ensure(terminal as never, () => {})
+
+    // A seam on every list would be noise in the one place a user is reading output
+    expect(written.join('')).not.toContain('new shell')
+  })
+
   it('takes no focus when a host attaches', () => {
     const terminal = info()
     const entry = terminalPool.ensure(terminal, () => {})

@@ -64,6 +64,8 @@ export type Event =
   | CodeInboxEvent
   | { type: 'ADD_TAB'; tab: any; replacePreview?: boolean; extraUpdates?: Partial<CodeContext> }
   | { type: 'SURFACE_ACTIVATED' }
+  // The shell hands this to every surface as it starts it; this one reads which window it is in (M5)
+  | { type: 'SURFACE_STARTED'; ownsAppLayout: boolean }
   | { type: 'SELECT_PANEL'; panel: PanelType }
   // Tab pinning events
   | { type: 'PIN_TAB'; path: string }
@@ -245,7 +247,17 @@ function prunePersistedTabGroups(
   return groups.filter(group => groupIds.has(group.id))
 }
 
+/**
+ * Writes this window's tab layout, **if this window is the one that keeps it** (M5).
+ *
+ * Every window has its own copy of the window storage but they share its names, so two windows showing this
+ * surface kept their layouts under one key: each restored the other's tabs and each rewrote them, and which
+ * one you got was whichever had most recently changed something. The shell already decides which window
+ * records app-wide layout — it is how the last-open surface is recorded — and this is the same question, so
+ * it is the same answer rather than a second one. A popout reads the layout and writes none.
+ */
 function persistCodeTabs(context: CodeContext): void {
+  if (!context.ownsAppLayout) return
   const tabGroups = pruneEmptyTabGroups(context.openFiles, context.tabGroups)
   saveOpenTabs(context.openFiles, context.activeFilePath, context.panelTerminalId, context.panelTerminalExpanded)
   saveTabGroups(storage, 'tab-groups', tabGroups)
@@ -1273,6 +1285,9 @@ const codeState = setup({
   initial: 'canvas',
   entry: ['spawnFeatureActors', 'restorePersistedTabs'],
   context: {
+    // Until the shell says otherwise, this is the window that keeps the layout: a surface started with no
+    // answer is the only window there is
+    ownsAppLayout: true,
     baseDirectory: '', // Will be loaded from backend EARS store
     openFiles: [], // Don't load tabs here - wait for SURFACE_ACTIVATED
     activeFilePath: null,
@@ -1304,7 +1319,11 @@ const codeState = setup({
       on: {
         // What the surface starts from, asked as the shell starts it, in a delivery naming the surface
         SURFACE_STARTED: {
-          actions: () => { sendToSystem('code', { type: 'GET_CODE_START' }) },
+          actions: [
+            // Which window this is, as the shell starts the surface: a popout writes no layout (M5)
+            assign(({ event }) => ({ ownsAppLayout: (event as { ownsAppLayout?: boolean }).ownsAppLayout !== false })),
+            () => { sendToSystem('code', { type: 'GET_CODE_START' }) },
+          ],
         },
         // The directory moved, in every window: ask again for what the surface starts from
         BASE_DIRECTORY_CHANGED: {

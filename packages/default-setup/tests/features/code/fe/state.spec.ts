@@ -97,3 +97,50 @@ describe('moving a terminal from a tab into the panel', () => {
     expect(contextOf(actor).tabGroups, 'a group with no tabs still renders in the tab bar').toEqual([])
   })
 })
+
+// A popout showing this surface observes the layout and writes none, which is M5.
+//
+// Every window has its own copy of the window storage but they share its names, so two windows showing the
+// code surface kept their tabs under one key: each restored the other's and each rewrote them, and which
+// layout you got was whichever window had most recently changed something. The shell already decides which
+// window records app-wide layout — it is how the last-open surface is recorded — and answers the same
+// question on `SURFACE_STARTED`.
+describe('which window keeps the layout', () => {
+  /**
+   * A window with a layout of its own and a tab arriving in it.
+   *
+   * **It has to be a window that would write**, which is the part that took a mutation to notice: a machine
+   * whose restore has not settled saves nothing at all (`saveTabsAction` returns early), so a case over one
+   * passes whether or not the window is allowed to write.
+   */
+  const aWindowWithATab = (ownsAppLayout?: boolean) => {
+    localStorage.setItem(TABS_KEY, JSON.stringify({
+      tabs: [{ path: '/src/a.ts', type: 'file', order: 0 }], activeFilePath: '/src/a.ts',
+    }))
+    const actor = started()
+    if (ownsAppLayout !== undefined) actor.send({ type: 'SURFACE_STARTED', ownsAppLayout })
+    // The restore gives up, which is what makes this machine one that saves from here on
+    actor.send({ type: 'RESTORE_PERSISTED_TABS_SETTLED' })
+    actor.send({ type: 'ADD_TAB', tab: { path: '/src/b.ts', type: 'file', name: 'b.ts' } })
+    return actor
+  }
+
+  it('writes nothing when the shell says another window keeps it', () => {
+    aWindowWithATab(false)
+
+    expect(storedTabs().tabs.map(tab => tab.path), "the popout rewrote the main window's tabs")
+      .toEqual(['/src/a.ts'])
+  })
+
+  it('writes when the shell says this window keeps it', () => {
+    aWindowWithATab(true)
+
+    expect(storedTabs().tabs.map(tab => tab.path)).toContain('/src/b.ts')
+  })
+
+  it('writes when nothing has said otherwise, since a window that was never told is the only one', () => {
+    aWindowWithATab()
+
+    expect(storedTabs().tabs.map(tab => tab.path)).toContain('/src/b.ts')
+  })
+})

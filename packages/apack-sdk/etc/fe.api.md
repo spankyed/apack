@@ -859,6 +859,7 @@ export function surfaceIsRunning(ref: string): boolean;
 // @public
 export type SurfaceLifecycleEvent = {
     type: 'SURFACE_STARTED';
+    ownsAppLayout: boolean;
 } | {
     type: 'SURFACE_ACTIVATED';
 } | {

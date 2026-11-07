@@ -599,6 +599,15 @@ type CodeConnectedData = {
 };
 
 type CodeContext = {
+    /**
+     * Whether this window is the one that keeps the app's layout (M5).
+     *
+     * Every window has its own copy of the window storage but they share its names, so two windows showing
+     * this surface kept their tabs under one key: each restored the other's and each rewrote them. The shell
+     * answers it on `SURFACE_STARTED` — the same fact it records the last-open surface by — and a popout
+     * reads the layout and writes none. Defaults true, since a window that was never told is the only one.
+     */
+    ownsAppLayout: boolean;
     baseDirectory: string;
     openFiles: (OpenFile | TerminalTab | ActionTab | PromptTab)[];
     activeFilePath: string | null;

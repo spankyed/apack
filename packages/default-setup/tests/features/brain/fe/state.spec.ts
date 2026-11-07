@@ -16,7 +16,7 @@ beforeEach(() => { sendToSystem.mockReset(); });
 it('asks for the root run when the shell starts it, and nothing from its own entry', () => {
   const actor = createActor(brainState).start();
   expect(asks(), 'no delivery names an ask from the entry').toEqual([]);
-  actor.send({ type: 'SURFACE_STARTED' });
+  actor.send({ type: 'SURFACE_STARTED', ownsAppLayout: true });
   expect(asks()).toEqual([{ type: 'REQUEST_SURFACE_DATA' }]);
   actor.stop();
 });
@@ -34,7 +34,7 @@ it('asks for the flow it shows on a pulse, and for the root when a run starts ag
 
 it("takes the brain's state from an answer without asking again", () => {
   const actor = createActor(brainState).start();
-  actor.send({ type: 'SURFACE_STARTED' });
+  actor.send({ type: 'SURFACE_STARTED', ownsAppLayout: true });
   actor.send(tree('RunNode-root'));
   actor.send({ type: 'BRAIN_STATE', rootFlowId: 'Flow-root' as never, paused: true, inspectEnabled: true });
   expect(asks(), 'the one ask, answered').toHaveLength(1);
