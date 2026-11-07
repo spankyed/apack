@@ -1,0 +1,3 @@
+# Keep generated contract reports with their source changes, expandable in GitHub review.
+packages/**/etc/*.api.md linguist-generated
+packages/**/etc/*.component.md linguist-generated
