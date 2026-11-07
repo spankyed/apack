@@ -162,15 +162,14 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   reading that can be cited and re-run and the second cannot be. It is recorded unchosen because it widens a
   published schema and adds a primitive to machinery three other scenarios depend on.
 
-- **Phase T's **G1** is the last track in that phase, and it is blocked behind the above:** the review
-  states G1's severity is an inference from reading, Phase G's *Done when* prices it, and the repo's rule is
-  to measure before optimising. `stream-writer.ts` is untouched by #372 (checked 2026-11-07 against
+- **G1 is Phase T's last track and sits behind that fork.** The review states G1's severity is an inference
+  from reading, Phase G's *Done when* prices it, and the repo's rule is to measure before optimising.
+  `stream-writer.ts` is untouched by #372 (checked 2026-11-07 against
   `origin/session/claude-code-integration`), so the fix has no rebase to think about — but
   `thinking-writer.ts` (+51) and `stream-consumer.ts` (+362) do move there, so the thinking writer's half
-  belongs with that branch's cleanup rather than here. **Phase G is still blocked on a quiet machine**:
-  `npm run check:idle` reported 0% immediately after a suite run, and 60% earlier on 2026-11-07.
-  **Phase G is blocked on a quiet machine**: `npm run check:idle`
-  reported 60% against a 70% floor on 2026-11-07, so the baseline could not be taken. Retry before Phase S,
+  belongs with that branch's cleanup rather than here.
+- **Phase G also needs a quiet machine**, whichever instrument it uses: `npm run check:idle` reported 60%
+  against a 70% floor and later 0% straight after a suite run, both 2026-11-07. Take it before Phase S,
   since it cannot be taken once state moves. Phase B's first commit is the last cheap exit — see Constraints.
 - **Proven checks:** the sibling-repo path is clear, probed 2026-11-07 and then removed —
   `mkdir` at `/apack/apack-terminal`, `git init`, `cargo init`, `cargo add portable-pty` (crates.io
