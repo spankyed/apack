@@ -1,7 +1,7 @@
 # Issue: Terminal integration — review findings and path forward
 
-**Date:** 2026-10-01
-**Status:** Open
+**Date:** 2026-10-01 — findings re-verified against the tree 2026-11-07
+**Status:** Open. Scope and the four decisions below are settled; T4 and M3 are fixed, the rest stand
 **Severity:** Critical — one finding writes user credentials to disk in plaintext; two more can lose work
 **Component:** `packages/default-setup/src/features/code` — terminal (xterm.js front end, node-pty back end),
 plus the app plumbing it depends on (`packages/main`, `packages/api`, `@apackdev/host/bus`)
@@ -22,6 +22,13 @@ static read of one feature, on the happy path, on macOS, in one window.
 **Round 2** — six parallel reviews against falsifiable hypotheses, each covering an axis round 1 could not
 see, plus a git-history pass. Produced S, M, X, T, L and G below, **corrected two round-1 findings**, and
 returned several useful negative results.
+
+**Line numbers predate the `apack` rename and the window-storage migration, and are refreshed as each
+finding is touched.** The mechanisms have held every spot-check so far; the citations have not. The migration
+is the reason: a `window-storage` pack rule now refuses a pack reaching `localStorage` itself, so the
+terminal's persistence moved behind `surfaceStorage(featureRef('code'))` — the same synchronous backing store
+at a different call site. Verifying a finding before acting on it belongs to the stage that acts, not to a
+pass run first; the four in Stage A were checked on 2026-11-07 and are accurate.
 
 Still not done: **nothing here was measured at runtime.** F3, F4, F5 and G1 are severity claims derived from
 reading code. See Stage 0.
@@ -74,7 +81,7 @@ orchestration, `L` = lifecycle and persisted data, `G` = agent sessions.
 | **S2** | **Critical** | Every terminal keystroke is logged at `info` and written to `main.log` + `main.jsonl` in plaintext | `apack-host/src/bus/client-events.ts:54` |
 | **S1** | **High** | The API process's whole env — app API token included — is handed to every pty | `be/services/terminal.ts:318-331`, `main/.../api-server/config.ts:100` |
 | **S3** | **High** | The restore path spawns a persisted `shell` and `cwd` with no validation | `be/services/terminal.ts:379-385` |
-| **F3** | **High** | O(n²) string accumulation per terminal, on the renderer's main thread | `fe/utils/terminal-events.ts:106` |
+| **F3** | **High** | O(n²) string accumulation per terminal, on the renderer's main thread | `fe/utils/terminal-events.ts:111` |
 | **F4** | **High** | One bus event per pty chunk; no coalescing, no flow control | `be/features/terminal.ts:76` |
 | **F5** | **High** | Resize storm, amplified into an EARS write per resize | `be/services/terminal.ts:153`, `TerminalView.vue:159,190,195` |
 | **F7** | **High** | `restoreAll` SIGKILLs a stored pid and its process group, unbounded | `be/services/terminal.ts:366` |
@@ -91,12 +98,12 @@ orchestration, `L` = lifecycle and persisted data, `G` = agent sessions.
 | **T3** | Medium | The 2,500 ms restore settle drops terminal tabs *and* rewrites the persisted list without them | `fe/state.ts:560-564,1208-1218` |
 | **T2** | Medium | A pinned terminal tab becomes a permanent ghost when its terminal dies | `fe/utils/tab-management.ts:29` |
 | **T5** | Medium | "Open Terminal Here" spawns a terminal without expanding the panel | `fe/features/CodePanelHeader.vue:22` |
-| **M3** | Medium | `terminal.CREATED` is broadcast and every window consumes it as if it had asked | `fe/features/terminal/state.ts:268-294` |
-| **M1** | Medium | Two windows write the same persisted-output key from differently-based copies | `fe/utils/terminal-events.ts:49` |
+| ~~**M3**~~ | ~~Medium~~ | **Fixed.** `terminal.CREATED` was broadcast and every window consumed it as if it had asked; the opening is a `reply` to the asker's connection now (`terminal.OPENED`) | `be/features/terminal.ts` |
+| **M1** | Medium | Two windows write the same persisted-output key from differently-based copies | `fe/utils/terminal-events.ts` |
 | **M4** | Medium | A window attaching after a pty replacement content the dead shell's scrollback with no seam | `fe/utils/terminal-pool.ts:164-178` |
-| **M5** | Medium | Every window restores and rewrites the single `code-surface-open-tabs` key | `fe/utils/persisted-tabs.ts:18` |
+| **M5** | Medium | Every window restores and rewrites the one persisted-tabs key | `fe/utils/persisted-tabs.ts` |
 | **L3** | Medium | No Terminal row is ever deleted; `terminalCommands.delete` is dead code | `be/repository/index.ts:136-145` |
-| **F6** | Medium | Up to 1 MB of synchronous `localStorage` per terminal per output burst | `fe/utils/terminal-events.ts:47` |
+| **F6** | Medium | Up to 1 MB of synchronous window storage per terminal per output burst | `fe/utils/terminal-events.ts` (via `surfaceStorage`) |
 | **F8** | Medium | First pty output can be lost before `onData` is registered | `be/features/terminal.ts:131` |
 | **F10** | Medium | No WebGL context-loss recovery | absent |
 | **F11** | Medium | Clear doesn't survive a restart | `fe/canvas/TerminalView.vue:133` |
@@ -294,9 +301,16 @@ It independently repeats the write-amplification class, and worse: **G1** flushe
 `updateMessageState(messageId, { text: buffer })` with the *entire accumulated text* every 80 ms, and again
 for thinking at 250 ms. A 60-second answer producing 40 KB is ~750 flushes averaging ~20 KB → **~15 MB of
 LMDB writes and ~15 MB over the bus for 40 KB of text**, quadratic in message length, on every turn. The
-event *count* is coalesced correctly; the payload is not. **This is a stronger suspect for the write-discard
-issue in `docs/archive/issues/postmortem-pattern-kill-note-loss.md` than F5**, because it runs on every
-agent turn rather than only while dragging a divider.
+event *count* is coalesced correctly; the payload is not, and it runs on every agent turn rather than only
+while dragging a divider as F5 does.
+
+**It was filed as a suspect for the write-discard issue
+(`docs/archive/issues/postmortem-pattern-kill-note-loss.md`); that link is historical.** The buffering
+adapter whose failure path discarded writes silently no longer exists — the data layer moved to elmdb, which
+commits as it returns and keeps no copy in memory. So this is wasted work rather than a data-loss vector,
+which is the defect on its own terms and not a smaller one. That postmortem still reads "it is not fixed, and
+it is still happening"; whether the move closed it needs its own check, and the file being gone is not that
+check.
 
 **G3 is the mirror of F7**: the terminal over-kills a stale pid, while the agent path under-kills a live
 child — `onShutdown` doesn't touch `activeHandles`, the child is spawned without `detached`, and
@@ -352,17 +366,36 @@ Recorded so they are not re-investigated.
 
 ---
 
+## Scope and phases
+
+The findings span three cost classes, and two of them are not the terminal. They are phased accordingly
+rather than by severity alone, because what can be *closed* here differs.
+
+- **Phase 1 — the terminal proper** (F, S, M, T, L). Local work against the local gate, startable and
+  finishable in a checkout. The stages below are this phase.
+- **Phase 2 — G1 alone**, lifted out of the agent findings as its own change. It is High, it is cheap, and
+  it is the same payload-discipline fix as Stage 2, so it travels with that stage rather than waiting for a
+  decision about the agent path.
+- **Phase 3 — the platform tier** (X1–X13). X1, X2 and X3 are High, and none of them can be *closed* from a
+  Mac checkout: they need the [Windows development VM](../references/guides/windows-development-vm.md) and a
+  `compiler_windows=true` dispatch to verify. The fixes can be written here; the acceptance cannot. Tracked,
+  not scheduled.
+- **Deferred — G2–G7.** The remaining agent-path findings belong to that feature, not this one, and want
+  their own issue rather than a tail on this list.
+
 ## Path forward
 
 ### Stage A — stop the bleeding (independent of everything else)
 
-1. **S2**: log the event type and target, never the payload, at the bus seam. One line. Then decide what to do
-   about the log files already on disk — they are credential-bearing.
-2. **S1**: replace the pty env deny-list with an allow-list, and add the spec that fails when an app-owned
-   variable appears in a spawned pty's env.
-3. **F9**: route terminal errors through the shell's existing `notify` rather than surface context, so an error
-   nothing renders becomes structurally impossible.
-4. **F10**: add `onContextLoss`. Three lines; `1b414d35e` proves context loss happens here.
+1. **S2**: log the event type and target, never the payload, at the bus seam (decision 5), with the firing
+   case that fails if a payload reaches a log.
+2. **S1**: capture the token at boot and delete it from `process.env`, and strip the app's identity variables
+   from spawned shells by a derived list (decision 4). Closes G2 and G4 with it.
+3. **F9**: report terminal errors through `reportError`, which the shell already turns into a toast — not a
+   new `HostShell` command. `HostShell` exposes no `notify`, so the mechanism this document first named does
+   not exist; the one that does needs no new published API.
+4. **F10**: add `onContextLoss`. Three lines; a past commit fixing a GL-context crash at teardown proves
+   context loss happens here.
 
 None depends on the restructure. 1 and 2 are the only items in this document that are about user harm rather
 than user annoyance.
@@ -401,7 +434,8 @@ the same payload discipline to G1, which is the same defect in another feature.
 
 Give create a correlation id so a reply finds its requester, and scope a session to a window. Fixes T4, M3,
 M5. Separately: one resize send per settled size, rAF-debounced, guarded on changed dimensions, and stop
-writing EARS on resize at all. Fixes F5 and removes a suspect from the LMDB investigation.
+writing EARS on resize at all. Fixes F5, which no longer bears on the write-discard investigation — see G1
+for why that link lapsed.
 
 ### Stage 4 — stop treating stored rows as handles
 
@@ -439,17 +473,26 @@ path, and **G1** belongs in Stage 2's payload discipline.
   only thing here that would have caught F3, F4 and G1 before a user felt them.
 - A correlation id on every request/reply pair, so "which reply is mine" is not answerable by luck.
 
-## Open decisions
+## Decisions
 
-1. **F14** — which of the four shell-integration directions (Stage 6). The current code has never run, so
-   there is nothing to preserve.
-2. **The log files already on disk** — S2 means `main.log` and `main.jsonl` should be treated as
-   credential-bearing.
-3. **Repair vs restructure.** The existing code is not a quality baseline and its past fixes were partial or
-   failed attempts, so Stage 1 is not obliged to preserve any of its structure. Whether to rewrite the core
-   (~1,340 lines: service 430, system 330, pool 362, bus 218) against the invariants above, or to land the
-   stages incrementally, is a scope call.
-4. **One visible host per session, or a real multiplexer** (Stage 1). Still open. Today's exclusivity is
-   emergent from display conditions and is not an argument either way; the argument for one host is that a
-   pty has a single size and a single stateful stream, and the argument against is watching one terminal in a
-   popout on a second monitor.
+Settled 2026-11-07. Each records what was chosen and what choosing it costs, so a later reader can reopen one
+on its merits rather than rediscover the question.
+
+1. **Restructure, not repair** (Stage 1). Seven of the root causes are structural, and the existing code is
+   not a quality baseline, so Stage 1 rewrites the ~1,340-line core (service 430, system 330, pool 362, bus
+   218) against the invariants here, with the findings as its acceptance criteria. The cost is that it lands
+   as one larger change rather than 58 reviewable ones; the alternative's cost is reasoning about a structure
+   that is going to be deleted, once per finding.
+2. **One visible host per session** (Stage 1), not a multiplexer. The argument is the pty's shape — one
+   `(cols, rows)` and one stateful stream, so two visible hosts at different sizes is a contradiction rather
+   than a bug, which is what M2 looks like in practice. It holds whether or not today's guards exist. The
+   cost is the case it refuses: watching one terminal in a popout on a second monitor, which would need two
+   xterms over one pty with replay. Revisit if that case is wanted.
+3. **F14: listen, don't inject** (Stage 6). Drop `injectShellIntegration` and take titles from xterm's
+   `onTitleChange`, since most prompts already emit OSC 0/2. That removes the pty-writing hack, the three
+   shell branches and X4's Windows dead-end together, and costs the cwd-following that never actually ran.
+   The richer option — env-based injection (`--init-file`, `ZDOTDIR`, `XDG_DATA_DIRS`, `-NoExit`) with
+   shipped rc scripts, which also buys per-command exit status and re-run-command — is a feature rather than
+   a fix, and wants its own decision.
+4. **S2's remediation is the code fix only.** The log files already written are out of scope: the app log is
+   off-limits for cleanup. The fix stops the accumulation, which is the whole of what is in scope here.
