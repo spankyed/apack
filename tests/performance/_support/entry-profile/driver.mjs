@@ -12,11 +12,11 @@ _electron.launch = async options => {
   appendFileSync(path.join(directory, 'driver.jsonl'), JSON.stringify({ name: 'launch-request', epochMs: Date.now(), monotonicMs: performance.now() }) + '\n');
   return launch({ ...options,
     args: [
+      '-r', fileURLToPath(new URL('./process.cjs', import.meta.url)),
       '--trace-startup=toplevel,loading,navigation,blink.user_timing,devtools.timeline,v8,disabled-by-default-v8.cpu_profiler,disabled-by-default-v8.compile',
       '--trace-startup-duration=10', '--trace-startup-format=json',
       `--trace-startup-file=${path.join(directory, 'chromium.json')}`, ...options.args,
     ],
-    env: { ...options.env, APACK_ENTRY_PROFILE_DIRECTORY: directory,
-      NODE_OPTIONS: `${options.env.NODE_OPTIONS ?? ''} --require=${JSON.stringify(fileURLToPath(new URL('./process.cjs', import.meta.url)))}` },
+    env: { ...options.env, APACK_ENTRY_PROFILE_DIRECTORY: directory },
   });
 };

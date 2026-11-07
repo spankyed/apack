@@ -38,8 +38,10 @@ if (role && directory) {
       return child;
     };
     require('node:module').syncBuiltinESMExports();
-    process.once('loaded', () => {
-    mark('electron-internal-init-complete');
+    // Playwright strips NODE_OPTIONS at launch; arm it here for the API child only.
+    process.env.NODE_OPTIONS = `${process.env.NODE_OPTIONS ?? ''} --require=${JSON.stringify(__filename)}`;
+    const observeElectron = () => {
+    mark('electron-observers-attached');
     const { app, ipcMain } = require('electron');
     app.whenReady().then(() => mark('electron-ready'));
     app.on('web-contents-created', (_event, contents) => {
@@ -50,7 +52,9 @@ if (role && directory) {
     });
     ipcMain.on('renderer:ready', event => { mark('renderer-ready', { id: event.sender.id }); stop(); });
     app.once('before-quit', stop);
-    });
+    };
+    if (require('electron').app) observeElectron();
+    else process.once('loaded', observeElectron);
   } else {
     const write = process.stdout.write;
     let tail = '';

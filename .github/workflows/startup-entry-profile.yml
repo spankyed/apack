@@ -42,3 +42,7 @@ jobs:
           path: |
             .apack/performance/startup-entry-profile
             node_modules/.cache/apack-chain/runs
+            packages/main/dist
+            packages/api/dist
+            packages/renderer/dist
+            packages/default-setup/dist/runtime
