@@ -134,9 +134,9 @@ it('makes boot inspection explicit while live discovery enforces settings even o
   const registry = createNativePackTestRegistry();
   registry.catalog.setSettingsAdmission(() => { throw new Error('stored settings need recovery'); });
   const before = registry.catalog.getSnapshot();
-  expect(() => registry.refreshCatalog({ packsDir, settings: 'enforce' })).toThrow('stored settings need recovery');
+  expect(() => registry.refreshCatalog({ packsDir, disabled: new Set(), settings: 'enforce' })).toThrow('stored settings need recovery');
   expect(registry.catalog.getSnapshot()).toBe(before);
-  registry.refreshCatalog({ packsDir, settings: 'inspect' });
+  registry.refreshCatalog({ packsDir, disabled: new Set(), settings: 'inspect' });
   expect(registry.settingsCatalog().packs['memo-pack']).toBeDefined();
   expect(registry.loadedPacks()).toEqual([]);
 });
