@@ -124,7 +124,45 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   mutation-checked. **T6 was excluded** on the same ground as T7: see Phase T. All seven were verified
   against current source first; T3 turned out worse than its row said and the extra half is recorded as
   **T10** in the review rather than folded in here.
-- **Next deliverable:** Phase T's **G1** is the last track, and it is **blocked on Phase G**: the review
+- **STOPPED ON A FORK THE GOAL DOES NOT SETTLE — Phase G's instrument.** Recorded here as the goal's
+  prompt requires; it is not chosen.
+
+  **The repo already has the right-looking instrument and the terminal does not fit it.**
+  `tests/performance/` is a manual qualification suite over built output
+  (`@apackdev/testing/performance`, `definePerformanceConfig`, `tests/performance/README.md`): a `manifest.json`
+  recording source/dirty state, build and native output hashes, machine, runtimes, recording mode and warmups;
+  a `results.json` of ordered raw trials with byte counts and SHA-256s; five warmups then twenty measured
+  trials in a warmed process; and three existing scenarios (`thread-open`, `search`, `streaming`) whose
+  readings are kept in an evidence record exactly as Phase G wants its own kept. A scenario costs about 100
+  lines of `_support/<name>-scenario.ts` plus a three-line `scenarios/<name>.spec.ts`.
+
+  **But its completion model is built on views, and the terminal has none.** `installViewCompletion`'s
+  `__waitForPerformanceView` only resolves once a view delivery has arrived (`delivered` gates `check()`), and
+  the code feature declares no `views` module at all — a terminal's output is a broadcast feed, which is D9's
+  point. So a terminal action produces no delivery to correlate a trial against, and the existing machinery
+  cannot complete one. `PerformanceWindow`'s `applicationState.system.get(ref)` context type is the threads
+  system's, too.
+
+  The fork, with what each costs:
+
+  - **Extend the suite.** A second completion primitive beside `__waitForPerformanceView` for an action whose
+    readiness is DOM and emulator state rather than a view delivery, `report.ts`'s
+    `scenario: z.enum(['thread-open', 'streaming', 'search', 'populated-startup'])` widened, and the window
+    port's context type widened or split. Buys the manifest identity, the trial discipline and the retained
+    raw corpus — which is what makes Phase P's "the output budget Phase G declared holds, asserted over the
+    same corpus the baseline used so the before and after are comparable" possible at all. Costs a change to
+    a **published** package's schema (`@apackdev/testing`, so `api:update`) and a primitive in shared
+    machinery whose only user is the terminal until Phase P.
+  - **Measure with `drive/` and `app.report`.** No shared machinery touched and quick. Loses the manifest
+    identity, the warmup/trial discipline and the retained raw trials — so the reading carries far less of
+    its own conditions, which is the one thing Phase G exists to produce, and leaves Phase P's comparable
+    before/after without a corpus it can re-run against.
+
+  My reading, for whoever decides rather than as a decision: the first, because Phase G's deliverable is a
+  reading that can be cited and re-run and the second cannot be. It is recorded unchosen because it widens a
+  published schema and adds a primitive to machinery three other scenarios depend on.
+
+- **Phase T's **G1** is the last track in that phase, and it is blocked behind the above:** the review
   states G1's severity is an inference from reading, Phase G's *Done when* prices it, and the repo's rule is
   to measure before optimising. `stream-writer.ts` is untouched by #372 (checked 2026-11-07 against
   `origin/session/claude-code-integration`), so the fix has no rebase to think about — but
@@ -272,6 +310,10 @@ hidden sessions, resize behaviour and packaged payload size are recorded for the
 one machine and one output corpus, with their conditions, in `docs/references/evidence/terminal-ownership.md`.
 The migration plan's Phase 3 requires exactly this baseline and it can only be taken before state moves.
 This phase also prices F3, F4, F5 and G1, which are inferences from reading and have never been measured.
+
+**The instrument is an open question, recorded in Current handoff.** `tests/performance/` is the suite built
+for exactly this kind of reading, and its completion model assumes the measured action ends in a view
+delivery — which a terminal's never does. Settle that before writing a scenario.
 
 **It also records what parsing costs today**, in the current implementation: the renderer parses with
 xterm.js and the API carries the stream, both Node, so `npm run measure:loop` is the right instrument for
