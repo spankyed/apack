@@ -1,0 +1,39 @@
+{
+  "entry": "server.js",
+  "files": [
+    "server.js",
+    "chunk-DI6JXRBM.js",
+    "chunk-DJ3SO5VC.js",
+    "chunk-YUJONP2S.js"
+  ],
+  "bytes": 1129809,
+  "external": [
+    "assert",
+    "async_hooks",
+    "buffer",
+    "child_process",
+    "crypto",
+    "dotenv/config",
+    "elmdb",
+    "events",
+    "fs",
+    "fs-extra",
+    "fs/promises",
+    "http",
+    "inspector",
+    "module",
+    "node:module",
+    "os",
+    "path",
+    "perf_hooks",
+    "stream",
+    "string_decoder",
+    "url",
+    "util",
+    "ws",
+    "xstate",
+    "zlib",
+    "zod"
+  ],
+  "forbidden": []
+}

@@ -407,4 +407,3 @@ export async function compileSourceDir(
 
   return { entries, warnings: allWarnings, errors: allErrors };
 }
-
