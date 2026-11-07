@@ -22,6 +22,7 @@ import { sendToSystem } from '#generated/events.ts';
 // Import child state machines
 import { explorerState } from './features/explorer/state.ts';
 import { searchState } from './features/search/state.ts';
+import { codeIndexState, type Event as CodeIndexEvent } from './features/code-index/state.ts';
 import { commitState } from './features/commit/state.ts';
 import { pullRequestState } from './features/pull-request/state.ts';
 import { terminalState, type TerminalInfo } from './features/terminal/state.ts';
@@ -57,6 +58,8 @@ export function isEditableDiff(file: OpenFile | { isDiff?: boolean; isPrDiff?: b
 export type { TabGroupColor, TabGroup };
 
 export type Event =
+  // Sent to the surface by a component, which names it as the one to answer, and routed to the `codeIndex` child
+  | CodeIndexEvent
   | OutgoingCodeEvents
   // The app's, when the code surface's settings change
   | { type: 'FEATURE_SETTINGS_UPDATED'; settings: CodeSettings }
@@ -283,7 +286,8 @@ const codeState = setup({
     pullRequestState,
     terminalState,
     actionsState,
-    promptsState
+    promptsState,
+    codeIndexState
   },
   actions: {
     spawnFeatureActors: enqueueActions(({ enqueue }) => {
@@ -295,6 +299,7 @@ const codeState = setup({
         enqueue.spawnChild('pullRequestState', { id: 'pr' });
         enqueue.spawnChild('actionsState', { id: 'codeActions' });
         enqueue.spawnChild('promptsState', { id: 'codePrompts' });
+        enqueue.spawnChild('codeIndexState', { id: 'codeIndex' });
     }),
 
     notifyDirectoryChange: ({ event, context, self }) => {

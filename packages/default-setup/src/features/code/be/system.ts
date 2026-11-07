@@ -38,6 +38,7 @@ import { pullRequestSystem } from './features/pull-request.ts'
 import { terminalSystem } from './features/terminal.ts'
 import { actionsSystem } from './features/actions.ts'
 import { promptsSystem } from './features/prompts.ts'
+import { codeIndexSystem } from './features/code-index.ts'
 
 /** One of this system's children, by the id it was spawned under */
 function child(self: AnyActorRef, id: string): AnyActorRef | undefined {
@@ -89,7 +90,8 @@ export const systemMachine = setup({
     pullRequestSystem,
     terminalSystem,
     actionsSystem,
-    promptsSystem
+    promptsSystem,
+    codeIndexSystem
   },
   actions: codeSpec.actions({
     spawnFeatureActors: enqueueActions(({ enqueue, context, self }) => {
@@ -132,6 +134,7 @@ export const systemMachine = setup({
       });
       enqueue.spawnChild('actionsSystem', { id: 'codeActions' });
       enqueue.spawnChild('promptsSystem', { id: 'codePrompts' });
+      enqueue.spawnChild('codeIndexSystem', { id: 'codeIndex', input: { baseDirectory: context.baseDirectory } });
     }),
 
     routeEvent: ({ event, self }) => {
@@ -197,6 +200,7 @@ export const systemMachine = setup({
       // Note: Updates terminal's base directory for new terminal creation.
       // Individual terminal processes track their own cwd independently.
       child(self, 'terminal')?.send({ type: 'terminal.UPDATE_BASE_DIRECTORY', path: newPath });
+      child(self, 'codeIndex')?.send({ type: 'codeIndex.UPDATE_BASE_DIRECTORY', path: newPath });
 
       // News for every window; each asks again for what it shows of the new directory
       broadcastToSurface('code', { type: 'BASE_DIRECTORY_CHANGED', baseDirectory: newPath });
@@ -299,7 +303,10 @@ export const systemMachine = setup({
   invoke: {
     id: 'gitWatcher', src: 'gitWatcherActor',
     input: ({ context, self }) => ({ watcher: context.gitWatcher, repository: context.gitRepository,
-      onChange: () => child(self, 'commit')?.send({ type: 'commit.GIT_STATUS_CHANGED' }),
+      onChange: () => {
+        child(self, 'commit')?.send({ type: 'commit.GIT_STATUS_CHANGED' });
+        child(self, 'codeIndex')?.send({ type: 'codeIndex.SYNC' });
+      },
     }),
   },
   states: {

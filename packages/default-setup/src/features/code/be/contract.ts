@@ -9,6 +9,7 @@ import type {
 } from './types.ts';
 import type { ActiveTokenInfo } from './services/gh-cli.ts';
 import type { FileChangeInfo } from './services/gitwatcher.ts';
+import type { SemanticDiff, SemanticRange } from './code-index/semantic-diff.ts';
 
 // ── The child actors' events ─────────────────────────────────────────────────────────────────────
 // They live here rather than beside each child because this module is the contract leaf: codegen reads it as a
@@ -236,6 +237,20 @@ export type OutgoingPromptsEvents =
   | { type: 'codePrompts.PROMPT_UPDATED'; prompt: PromptEntity; promptId: string }
   | { type: 'codePrompts.CODE_ERROR'; data: { message: string } }
 
+// ── code index ─────────────────────────────────────────────────────────
+export type IncomingCodeIndexEvents =
+  /** Turns indexing of the current directory on, or off, which removes what it holds */
+  | { type: 'codeIndex.SET_ENABLED'; enabled: boolean }
+  /** Where a symbol is now, answered with `codeIndex.LOCATED` */
+  | { type: 'codeIndex.LOCATE'; symbol: string }
+  /** What a staged change or a range did per definition, answered with `codeIndex.SEMANTIC_DIFF_READY` */
+  | { type: 'codeIndex.SEMANTIC_DIFF'; range: SemanticRange }
+
+export type OutgoingCodeIndexEvents =
+  | { type: 'codeIndex.LOCATED'; data: { path: string; line: number; column: number } | null }
+  | { type: 'codeIndex.SEMANTIC_DIFF_READY'; data: SemanticDiff }
+  | { type: 'codeIndex.SEMANTIC_DIFF_FAILED'; data: { message: string } }
+
 // ── The system's own ─────────────────────────────────────────────────────────────────────────────
 
 export type IncomingCodeEvents =
@@ -246,6 +261,7 @@ export type IncomingCodeEvents =
   | IncomingTerminalEvents
   | IncomingActionsEvents
   | IncomingPromptsEvents
+  | IncomingCodeIndexEvents
   | { type: 'SET_BASE_DIRECTORY'; path: string; fromUserNavigation?: boolean }
   /** Settings → Providers: resolve a CLI and store where it was found, in this feature's own settings */
   | { type: 'TEST_CLI_PROVIDER'; provider: string }
@@ -255,6 +271,7 @@ export type IncomingCodeEvents =
    */
   | { type: 'GET_CODE_START' }
 export type OutgoingCodeEvents =
+  | OutgoingCodeIndexEvents
   | OutgoingExplorerEvents
   | OutgoingSearchEvents
   | OutgoingCommitEvents
