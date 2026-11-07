@@ -63,6 +63,10 @@ export interface BrokerSessionListeners {
  * silent. It is a wait and not a loss: the pty's buffer fills behind it and the process feels it, so every
  * byte still arrives. There is nothing for a caller to do about one; what it is for is being visible when a
  * terminal feels slow, which is why it is logged and not swallowed.
+ *
+ * **One report means the channel genuinely filled.** It did not at first: the broker timed the mutex it holds
+ * to reach its credit rather than the condvar it waits on, so every flush reported itself throttled and this
+ * line went into the log for each one. Driving `less` is what showed it.
  */
 const logger = createLogger('broker');
 
@@ -183,7 +187,7 @@ function frames(socket: net.Socket, listeners: Map<string, BrokerSessionListener
       return;
     }
     if (event.kind === 'throttled') {
-      logger.warn(`the terminal channel was full: a flush waited ${event.waited_ms}ms`, { session: event.session });
+      logger.warn(`the terminal channel was full: a flush waited ${event.waited_us}µs`, { session: event.session });
       return;
     }
     if (event.kind === 'failed') {

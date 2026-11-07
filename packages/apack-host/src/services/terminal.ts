@@ -9,24 +9,50 @@
 // per-platform binary and resolves it from its resources — that, and the crash-restart and
 // one-broker-per-data-dir that go with it, are the composition's to own when the broker ships, and the goal
 // says so rather than leaving it to be discovered.
+import * as os from 'node:os';
 import * as path from 'node:path';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync } from 'node:fs';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import type { TerminalListeners, TerminalService, TerminalSession } from '@apackdev/sdk/services';
 import { type Broker, startBroker } from '../broker/client.ts';
 
 /**
- * Where the broker's socket goes: beside the app's other runtime files, one per data dir.
+ * The longest a Unix socket path may be, conservatively.
  *
- * **The directory is created here rather than assumed.** The app's boot makes `appDir`, but this service
- * starts on the first session and must not depend on having been reached after that step — driving it
- * against a fresh data dir failed with the broker's own `NotFound` from `bind`, which is a confusing way to
- * learn about an ordering.
+ * `sockaddr_un.sun_path` is 104 bytes on macOS and the BSDs and 108 on Linux, and the whole path has to fit
+ * — a limit that belongs to the address structure and not to the filesystem, so a path a `mkdir` is perfectly
+ * happy with is one `bind` refuses. 100 leaves room for the terminator and for the shorter of the two.
+ */
+const SOCKET_PATH_MAX = 100;
+
+/**
+ * Where the broker's socket goes: a private directory in the temporary one, named for the data dir it serves.
+ *
+ * **Not beside the app's other runtime files, and the reason is a hard limit rather than a preference.** It
+ * was in `appDir`, and a data dir deep enough makes every terminal in the app fail — found by driving the app
+ * under a disposable profile, where the broker exited with elmdb-style directness: *local socket name length
+ * exceeds capacity of sun_path of sockaddr_un*. A user whose data dir sits under a long home directory, a
+ * synced folder or a profile name would have hit the same wall, and nothing in the path was ours to shorten.
+ *
+ * So the name is derived instead: one broker per data dir is the rule, and a hash of the data dir says which
+ * one without carrying its length. The directory is created 0700 — the socket lets whoever connects start a
+ * shell, so it is not a thing to leave in a world-writable place — and the temporary directory is per-user on
+ * macOS already. A path that still does not fit is refused here, naming the limit, rather than left to the
+ * broker's `bind`.
  */
 function socketPath(): string {
-  const directory = resolveAppEnvironment().appDir;
-  mkdirSync(directory, { recursive: true });
-  return path.join(directory, 'terminal-broker.sock');
+  const dataDir = resolveAppEnvironment().userDataDir;
+  const directory = path.join(os.tmpdir(), `apack-term-${createHash('sha256').update(dataDir).digest('hex').slice(0, 12)}`);
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const socket = path.join(directory, 't.sock');
+  if (Buffer.byteLength(socket) > SOCKET_PATH_MAX) {
+    throw new Error(
+      `The terminal broker's socket path is ${Buffer.byteLength(socket)} bytes, past the ${SOCKET_PATH_MAX} a `
+      + `Unix socket address holds: ${socket}. Set TMPDIR to a shorter directory.`,
+    );
+  }
+  return socket;
 }
 
 /**
