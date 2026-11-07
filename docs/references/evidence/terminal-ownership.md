@@ -26,6 +26,14 @@ Disposition values: `test`, `dissolved`, `driven`, `open`.
 None yet. Each entry carries its date, source commit, the exact commands run and their results, and any
 limitation the run did not cover. A failed check stays visible until it is resolved.
 
+### D11's premise (Phase G) — not taken
+
+The Rust broker's language half rests on JavaScript being unable to carry headless VT parsing at this app's
+output volumes inside a budget. That reading is recorded here with its corpus and conditions, because it is
+a decision input rather than a performance note: if JS carries it with headroom, a detached Node broker buys
+the same architecture without a second repository, toolchain, mutation suite or cross-language IPC, and the
+goal's D11 needs re-deciding by the user.
+
 ### Baseline (Phase G) — not taken
 
 The goal's Phase G baseline is unrepeatable once Phase B moves state, and the
