@@ -119,31 +119,22 @@ already exist, so this is the second such tree rather than the first.
 **What Rust supplies here**, stated precisely because off-loop VT parsing is *not* one of the reasons and
 should not be offered as one:
 
-- **Native process-tree ownership.** Job Objects are the mechanism, and from Node they need native code
-  regardless — so a Node broker does not avoid that work, it defers it. This is what X1 and X2 are made of,
-  and it is the half that cannot be bought in JS at all.
-- **ABI independence.** A standalone binary does not care about Electron's Node. A *Node* broker would not
-  escape this: `ELECTRON_RUN_AS_NODE: '1'`
-  (`packages/main/src/modules/api-server/config.ts:108`) means one spawned as the API is runs on Electron's
-  Node, so node-pty would still need `electron-rebuild`. Rust is what removes the last Electron-ABI-coupled
-  native module.
+- **Native process-tree ownership.** Job Objects are the mechanism and no JS binding supplies them, so this
+  is the half that cannot be bought in JavaScript at all. It is what X1 and X2 need.
+- **ABI independence.** A standalone binary does not care about Electron's Node, which is what removes the
+  last Electron-ABI-coupled native module. A process spawned the way the API is would not get this:
+  `ELECTRON_RUN_AS_NODE: '1'` (`packages/main/src/modules/api-server/config.ts:108`) runs it on Electron's
+  Node.
 - **Byte-level bounded buffers with real backpressure.** F3's O(n²) accumulation, F4's unbounded event
   stream and G7's unbounded stderr are the same mistake three times, and byte accounting is where Rust is
   straightforwardly better rather than merely different.
-- **Not** off-loop VT parsing, which an earlier revision made the premise. `worker_threads` is already how
-  this repo keeps compiler work off a loop, in five modules of the CLI. Off-loop parsing is a benefit of
-  moving out of the API process, not a reason to choose a language. Phase G's reading sizes the core; it
-  decides nothing.
+- **Not** off-loop VT parsing — `worker_threads` already keeps compiler work off a loop in five CLI modules,
+  so that is a benefit of leaving the API process rather than a reason to choose a language. Phase G's
+  reading sizes the core and decides nothing.
 
-**It encompasses the other clients, which is most of why this shape is right.** The broker is two layers
-(Phase B): a **process layer** that owns spawn, process trees, lifetime, bounded I/O and close-with-deadline
-and knows nothing about screens, and a **terminal capability** over it holding pty, VT core and bounded
-history. The agent path needs the first and none of the second — `claude-code/runner.ts` spawns with
-`stdio: ['pipe','pipe','pipe']` and reads NDJSON — and its defects are the process layer's item for item
-(G3, G6, G7, and a `kill` that signals one process rather than a tree). One broker therefore serves the
-terminal, the agent flows, and the "stable session APIs usable by apack's CLI and packs" the refactor target
-names. Building that layer in Node and the eventual Windows answer in Rust would split one owner across two
-runtimes, which is the outcome worth most avoiding.
+**It encompasses the other clients, which is most of why this shape is right.** One broker serves the
+terminal, the agent flows and the "stable session APIs usable by apack's CLI and packs" the refactor target
+names. Phase B has the two layers and why the agent path shapes them.
 
 **Home:** `apack-terminal`, a sibling checkout of this one and of elmdb, symlinked as
 `vendor/apack-terminal`, pinned by `vendor/apack-terminal.rev`, maintained by `npm run link:apack-terminal`,
@@ -153,8 +144,7 @@ disk went, and a worktree is cheap for TypeScript and expensive for a Rust `targ
 so they are chosen rather than discovered: two commits and a `.rev` bump per broker change, where an
 unbumped rev is a silent skew; a second pre-push suite at elmdb's bar (`cargo xtask pre-push`, every
 mutation survivor killed or justified); `lib/janitor-policy.ts` widened past one checkout; per-platform
-native artifacts in the packaged build; and `portable-pty` validated for process containment, cancellation
-and ConPTY resize/exit before selection, since the refactor target records that herdr patched its substrate.
+native artifacts in the packaged build.
 
 **VT core:** an upstream Rust crate — `alacritty_terminal` for grid and state, over `vte`. This is
 independent of the language decision and unchanged by it. Not because FFI is objectionable:
@@ -223,81 +213,76 @@ is the defect in both, and a fix without that case only resets the clock.
 
 **Deliverable:** one authority owning spawn, PTY/ConPTY, VT state, bounded history and bounded I/O, with
 serialized writes, coalesced resize and reserved capacity for terminal responses. Presentation bytes reach
-the renderer over a dedicated bounded channel, never one bus event per chunk.
+the renderer over a dedicated bounded channel, never one bus event per chunk. Two layers, because the second
+has another client:
 
-**Factored as two layers, because the second has another client.** The refactor target's reusable core takes
-"executable/argv, environment, cwd, dimensions, resource policy and opaque IDs", which conflates them;
-`dimensions` is a terminal's.
+- A **process layer** — spawn, process-tree ownership, lifetime independent of any client, bounded I/O with
+  backpressure, close with a deadline, reattach. Nothing here knows what a screen is. **Its protocol is a
+  contract, not an internal detail**: the broker lives in a pinned sibling repository, so the message set
+  crosses a `.rev` boundary and must be specified, versioned and testable from the app side without the
+  broker's source.
+- A **terminal capability** over it — pty, VT core, screen and bounded history.
 
-- A **process layer**: spawn, process-tree ownership, lifetime independent of any client, bounded I/O with
-  backpressure, close with a deadline, reattach. Nothing here knows what a screen is.
-  **Its protocol is a contract, not an internal detail.** That is forced rather than chosen: the broker
-  lives in a pinned sibling repository (D11), so the message set crosses a `.rev` boundary and has to be
-  specified, versioned and testable from the app side without the broker's source. The useful consequence is
-  that any implementation speaking it is interchangeable — see *Comparing implementations*.
-- A **terminal capability** over it: pty, VT core, screen and bounded history.
+(The refactor target's reusable core takes "executable/argv, environment, cwd, dimensions, resource policy
+and opaque IDs", which conflates the two; `dimensions` belongs to the second.)
 
-**The agent path is a first-class client of both layers, not a later migration of one.** Its programmatic
-half (`claude-code/runner.ts`) spawns with `stdio: ['pipe','pipe','pipe']` and reads NDJSON, so it needs the
-process layer alone. Its **native half**, in flight on `session/claude-code-integration` (#372), runs the
-real `claude` TUI inside a pty and parses its screen into structured dialogs — tool permission, plan, bash,
-question, MCP form — which the app renders natively. That half needs the terminal capability too, and it is
-the *more* demanding client: a display surface needs bytes rendered, while a dialog detector needs a screen
-it can match against.
+**Dependencies:** D11 for the broker's home and core, D9 for what it parses, Phase G's baseline so
+acceptance has a before.
 
-**So design the capability's snapshot and facts API against the TUI adapter, not against the terminal.** A
-screen model with cells, regions and cursor state is what makes dialog detection sturdy; matching ANSI from
-a byte stream, which is what #372 does today, is the fragile version. The terminal is the easier client and
-will be satisfied by whatever serves this one.
+**Done when:**
 
-Also worth carrying into Phase B as evidence rather than assumption: that branch has **three pty owners**
-(`services/terminal.ts`, `claude-code/terminal-owner.ts`, `claude-code/background-attachment.ts`), its own
-`claude-code/native-process-ownership.ts` with an `isClaudeNativeDescendant` check, and its own attach
-lifecycle with `input`/`resize`/`close`. The process-tree and attachment problems are already felt in two
-places and answered in both; Phase B is where they stop being answered twice. The target shape is recorded
-as a non-blocking comment on #372 and nothing here blocks on it.
+1. **The terminal feature no longer imports node-pty.** `services/terminal.ts` spawns nothing; the broker
+   owns the pty.
+2. **F4, F5, F7, F8, L2, L3, X1 and X2 are closed as dissolved**, each naming the construction that removes
+   it. No pid is persisted as a handle, and a resize writes no application row.
+3. **X1 and X2 are claimed only on a Windows run** — the [development VM](../references/guides/windows-development-vm.md)
+   or a `compiler_windows=true` dispatch, never a Mac.
+4. **The presentation channel is bounded** by Phase G's declared ceiling, with a firing case proving a
+   producer past it is throttled and the overload observable rather than dropped silently.
+5. **Resize is correct under an alternate-screen app**, not only a shell prompt — a pty resized under `vim`
+   or `htop` is where coalescing and ordering mistakes surface. Phase P repeats the check from the
+   renderer's side.
+6. **`portable-pty` is validated, not assumed**, for process containment, cancellation and ConPTY
+   resize/exit before selection: the refactor target records that herdr patched its substrate.
+7. Native work runs in the Linux container (`npm run test:linux`), one expensive owner at a time.
 
-The programmatic half's defects remain the process layer's, item for item: `kill(signal)` is `child.kill(signal)`, which signals the
-CLI and not its tree, so a Bash grandchild outlives a deliberate kill (the mirror of F7, where the terminal
-over-kills and this under-kills); handles live in an in-memory `Map` and die with the API (G3); `close()` is
-awaited with no deadline, so a grandchild holding stdout pins a thread `isRunning` forever (G6); stderr
-accumulates unbounded to serve a 500-character tail (G7). Each of those dissolves against the process layer
-the same way the terminal's do.
+**Not in this phase, deliberately:**
 
-Build the layers so both clients are possible; **do not migrate the agent path here.** Its migration is its
-own goal, and the deliverable in this one is the seam, not the second client. **Re-verify G1, G2, G6 and G7
-against #372 before acting on them** — `runner.ts`, `handle-store.ts`, `query.ts` and `hooks.ts` all move
-substantially on that branch, and G3 is already fixed there (`hooks.ts` calls `killAllHandles()` on
-shutdown).
-**Dependencies:** D11 for the broker's home and core, D9 for what it parses. Phase G's baseline,
-so acceptance has a before.
-**Done when:** **the terminal feature no longer imports node-pty** — `services/terminal.ts` spawns nothing,
-and the broker owns the pty.
+- **Dropping the node-pty dependency.** #372 adds two more importers (`claude-code/terminal-owner.ts`,
+  `claude-code/background-attachment.ts`) and migrating them is out of scope here, so the package entries,
+  the `shared-deps.ts` entry, the `build/prod/smoke-native.mjs` probe and the three
+  `npx electron-rebuild --only node-pty` invocations come out when the **last** importer does. Record the
+  remaining importers rather than claiming a removal this phase cannot perform.
+- **Migrating the agent path.** Build the layers so both clients are possible; the deliverable here is the
+  seam, not the second client. **Re-verify G1, G2, G6 and G7 against #372 first** — `runner.ts`,
+  `handle-store.ts`, `query.ts` and `hooks.ts` all move substantially there, and **G3 is already fixed** on
+  that branch (`hooks.ts` calls `killAllHandles()`).
 
-Dropping the **dependency** is a separate, later condition and must not be written into this phase:
-#372 adds two more importers (`claude-code/terminal-owner.ts`, `claude-code/background-attachment.ts`), and
-migrating them is explicitly out of scope here. So the package entries, the `shared-deps.ts` entry, the
-`build/prod/smoke-native.mjs` probe and the three `npx electron-rebuild --only node-pty` invocations in
-`build/build.sh` come out when the **last** importer does, which is the agent path's goal. Record the
-remaining importers rather than claiming the removal; the prize — an app with no Electron-ABI-coupled native
-module, elmdb being N-API — is real but it is not this phase's to claim.
+#### Why the agent path shapes this phase
 
-What disqualifies node-pty is **where it runs and what it is coupled to, not its quality**: it is current
-(1.1.0), Microsoft-maintained, the binding VS Code ships, and sound on POSIX. An addon in the API process
-cannot outlive the API, and it is the only module here needing an Electron ABI rebuild. Its Windows path is
-separately weak — `_deferNoArgs` queues `kill`/`resize` until the first data event, the exit event lags by
-`FLUSH_DATA_INTERVAL = 1000`, and the child kill walks the console process list asynchronously through a
-forked helper — which is what X1 and X2 are made of, and what an owned process tree replaces. Claim those
-two only on a Windows run that proves it; `portable-pty` is validated rather than assumed, since the
-refactor target records that herdr patched its substrate.
+It is a client of **both** layers. Its programmatic half (`claude-code/runner.ts`) spawns with
+`stdio: ['pipe','pipe','pipe']` and reads NDJSON, so it needs the process layer alone, and its defects are
+that layer's item for item: a `kill` that signals the CLI and not its tree (the mirror of F7, where the
+terminal over-kills and this under-kills), handles in an in-memory `Map` that die with the API (G3), a
+`close()` with no deadline (G6), and unbounded stderr (G7).
 
-Also closed, each as dissolved with the construction that removes it: F4, F5, F7, F8, L2, L3, X1 and X2. The
-pack's `be/services/terminal.ts` no longer spawns or owns a process; no pid is persisted as a handle; a resize writes no application row; and the presentation channel is bounded by Phase G's declared
-ceiling, with a firing case proving a producer past it is throttled and the overload observable rather than
-dropped silently. Resize correctness is asserted against an alternate-screen app, not only a shell prompt:
-a pty whose size changes under `vim` or `htop` is where coalescing and ordering mistakes surface, and
-Phase P repeats the check from the renderer's side. Native work runs in the Linux container (`npm run test:linux`), one expensive owner at a
-time.
+Its **native** half (#372) runs the real `claude` TUI in a pty and renders that CLI's dialogs natively, so it
+needs the terminal capability too — and it is the **more demanding client**, because a display surface needs
+bytes rendered while a dialog detector needs a screen it can match against. **So design the snapshot and
+facts API against that adapter**: a screen model with cells, regions and cursor state is what makes dialog
+detection sturdy, and the terminal is satisfied by whatever serves it.
+
+That branch also shows the problem is already felt twice rather than predicted once: **three pty owners**
+(`services/terminal.ts`, `claude-code/terminal-owner.ts`, `claude-code/background-attachment.ts`), a local
+`native-process-ownership.ts` with an `isClaudeNativeDescendant` check, and an attach lifecycle of its own.
+Phase B is where those stop being answered twice. The target shape is a non-blocking comment on #372.
+
+#### What disqualifies node-pty
+
+**Where it runs and what it is coupled to, not its quality.** It is current (1.1.0), Microsoft-maintained,
+the binding VS Code ships, and sound on POSIX. An addon in the API process cannot outlive the API, and it is
+the only module here needing an Electron ABI rebuild. Its Windows weaknesses are the X findings' subject in
+[the review](../issues/ISSUE-terminal-integration-review.md); what replaces them is an owned process tree.
 
 ### Phase H — the host service owns sessions
 
