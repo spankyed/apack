@@ -52,3 +52,21 @@ it('refreshes mounted native choices after source changes even outside the conne
     s.dispose();await vi.advanceTimersByTimeAsync(1000);expect(s.operate).toHaveBeenCalledOnce()
   } finally {vi.useRealTimers()}
 })
+
+it('explains retained enable confirmation after cancel without selecting an option or claiming closure',async()=>{
+  const s=mount()
+  try {
+    s.state.snapshot!.ide={stage:'enable',title:'Do you wish to enable auto-connect to IDE?',paragraphs:[],options:[{value:'yes',label:'Yes'},{value:'no',label:'No'}]}
+    await nextTick();s.operate.mockClear()
+    const cancel=[...s.root.querySelectorAll('button')].find(b=>b.textContent==='Cancel IDE confirmation')!
+    cancel.click();await nextTick()
+    expect(s.close).toHaveBeenCalledOnce();expect(s.operate).not.toHaveBeenCalled()
+    expect(s.root.textContent).toContain('This confirmation is still open. Choose Yes or No to continue.')
+    s.state.snapshot!.revision='b'.repeat(64);await nextTick()
+    expect(s.root.textContent).toContain('Choose Yes or No to continue.')
+    s.root.querySelector<HTMLButtonElement>('[data-native-ide-choice="no"]')!.click()
+    expect(s.operate).toHaveBeenCalledExactlyOnceWith({kind:'ideSelect',revision:'b'.repeat(64),value:'no'})
+    s.state.snapshot!.ide.stage='connecting';await nextTick()
+    expect(s.root.textContent).not.toContain('Choose Yes or No to continue.')
+  } finally {s.dispose()}
+})
