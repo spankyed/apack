@@ -1,0 +1,633 @@
+{
+  "status": "compared",
+  "scenario": "thread-open",
+  "baseline": {
+    "manifest": {
+      "format": 1,
+      "source": {
+        "revision": "a331741c7c9a2ecb83c60528647d027a84c5f283",
+        "dirty": false,
+        "excludedUntracked": [],
+        "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "builds": [
+        {
+          "path": "packages/api/dist",
+          "sha256": "ef3004c3c2e449e23714ccc46f4b8ecca28c85fa98a1df89c76c04092775724d"
+        },
+        {
+          "path": "packages/main/dist",
+          "sha256": "090c0334428eaf226f290dd9152f785a70809f94c6e1d9c2549958f5b1dfdb74"
+        },
+        {
+          "path": "packages/preload/dist",
+          "sha256": "7d147eab5eebe53d6b04a114462e40fcd7ed77debea79bf31f3054b49161be86"
+        },
+        {
+          "path": "packages/renderer/dist",
+          "sha256": "10795619f588f2b088c9c9aef67e6ebe935d467d6ee9a34c0349e4484a83f90c"
+        },
+        {
+          "path": "packages/default-setup/dist",
+          "sha256": "b27ef6e2e7f353f6260a897d8eabaf215649df92e9b3612a87ca288c16658310"
+        },
+        {
+          "path": "vendor/elmdb/crates/elmdb-node/elmdb.darwin-arm64.node",
+          "sha256": "0d76db4323af7e987b35a74941d5e73db0a69ef68ebaef6fde92113e398dac43"
+        }
+      ],
+      "fixture": {
+        "generator": "populated-threads-v1",
+        "seed": 0,
+        "sha256": "09c3c0ac20e9d01a7481b7bd139ba4fc403d569c836f0e42af51de82107f73d9",
+        "distribution": {
+          "threads": 2,
+          "messagesPerThread": 100,
+          "requestedPage": 50,
+          "bodyRepetitions": 50
+        }
+      },
+      "native": {
+        "pin": "4b67670ba9b2ed58ee13f8463486a6a91292e412",
+        "checkoutRevision": "4b67670ba9b2ed58ee13f8463486a6a91292e412",
+        "dirty": false,
+        "excludedUntracked": []
+      },
+      "runtime": {
+        "node": "24.22.2",
+        "v8": "13.6.233.17-node.63",
+        "osRelease": "25.6.0",
+        "electron": "44.9.3",
+        "chromium": "152.0.7977.167",
+        "appNode": "24.22.0",
+        "appV8": "15.2.124.43-electron.0",
+        "interactiveWindow": "focused-v1",
+        "performancePolicy": "paired-focused-revisions-v1",
+        "threadReadiness": "full-bodies-and-user-truncation-v1"
+      },
+      "machine": {
+        "platform": "darwin",
+        "arch": "arm64",
+        "cpus": 3,
+        "memoryBytes": 7516192768,
+        "identity": "c9af4a5f7f5b770703c534e27fce2ddf799fc256394b5d67718c9e609d844f3f"
+      },
+      "mode": "disabled",
+      "cache": "warm-process",
+      "warmups": 5,
+      "clock": "Local monotonic durations; cross-process epoch alignment is approximate"
+    },
+    "scenario": "thread-open",
+    "samples": [
+      {
+        "scenario": "thread-open",
+        "index": 0,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 1478.6000000000931,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 1,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 813.0999999998603,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 2,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 738.8000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 3,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 1036.5,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 4,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 816.7999999998137,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 5,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 794,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 6,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 1027.5,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 7,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 921.3000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 8,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 771.2999999998137,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 9,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 912.3000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 10,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 843.8000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 11,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 621.9000000001397,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 12,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 720.8000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 13,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 572.6999999999534,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 14,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 1236.6999999999534,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 15,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 615.8999999999069,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 16,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 808.3999999999069,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 17,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 659.8000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 18,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 642.6999999999534,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 19,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 455.5,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 20,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 715.6000000000931,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 21,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 597.6999999999534,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 22,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 601.0999999998603,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 23,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 456.29999999981374,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 24,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 721.3999999999069,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    ],
+    "summary": {
+      "measured": 20,
+      "passed": 20,
+      "unsuccessful": 0,
+      "medianMs": 718.2000000000698,
+      "minMs": 455.5,
+      "maxMs": 1236.6999999999534
+    }
+  },
+  "candidate": {
+    "manifest": {
+      "format": 1,
+      "source": {
+        "revision": "828d87f41cf6c9ef6f2590975ab9bff31e629ec5",
+        "dirty": false,
+        "excludedUntracked": [],
+        "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "builds": [
+        {
+          "path": "packages/api/dist",
+          "sha256": "ef3004c3c2e449e23714ccc46f4b8ecca28c85fa98a1df89c76c04092775724d"
+        },
+        {
+          "path": "packages/main/dist",
+          "sha256": "090c0334428eaf226f290dd9152f785a70809f94c6e1d9c2549958f5b1dfdb74"
+        },
+        {
+          "path": "packages/preload/dist",
+          "sha256": "7d147eab5eebe53d6b04a114462e40fcd7ed77debea79bf31f3054b49161be86"
+        },
+        {
+          "path": "packages/renderer/dist",
+          "sha256": "10795619f588f2b088c9c9aef67e6ebe935d467d6ee9a34c0349e4484a83f90c"
+        },
+        {
+          "path": "packages/default-setup/dist",
+          "sha256": "134fcee15379db3b1843bdc700df0950f0ce0b27f13fd765f3578a57756d3633"
+        },
+        {
+          "path": "vendor/elmdb/crates/elmdb-node/elmdb.darwin-arm64.node",
+          "sha256": "0d76db4323af7e987b35a74941d5e73db0a69ef68ebaef6fde92113e398dac43"
+        }
+      ],
+      "fixture": {
+        "generator": "populated-threads-v1",
+        "seed": 0,
+        "sha256": "09c3c0ac20e9d01a7481b7bd139ba4fc403d569c836f0e42af51de82107f73d9",
+        "distribution": {
+          "threads": 2,
+          "messagesPerThread": 100,
+          "requestedPage": 50,
+          "bodyRepetitions": 50
+        }
+      },
+      "native": {
+        "pin": "4b67670ba9b2ed58ee13f8463486a6a91292e412",
+        "checkoutRevision": "4b67670ba9b2ed58ee13f8463486a6a91292e412",
+        "dirty": false,
+        "excludedUntracked": []
+      },
+      "runtime": {
+        "node": "24.22.2",
+        "v8": "13.6.233.17-node.63",
+        "osRelease": "25.6.0",
+        "electron": "44.9.3",
+        "chromium": "152.0.7977.167",
+        "appNode": "24.22.0",
+        "appV8": "15.2.124.43-electron.0",
+        "interactiveWindow": "focused-v1",
+        "performancePolicy": "paired-focused-revisions-v1",
+        "threadReadiness": "full-bodies-and-user-truncation-v1"
+      },
+      "machine": {
+        "platform": "darwin",
+        "arch": "arm64",
+        "cpus": 3,
+        "memoryBytes": 7516192768,
+        "identity": "c9af4a5f7f5b770703c534e27fce2ddf799fc256394b5d67718c9e609d844f3f"
+      },
+      "mode": "disabled",
+      "cache": "warm-process",
+      "warmups": 5,
+      "clock": "Local monotonic durations; cross-process epoch alignment is approximate"
+    },
+    "scenario": "thread-open",
+    "samples": [
+      {
+        "scenario": "thread-open",
+        "index": 0,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 1359.0999999998603,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 1,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 671.1999999999534,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 2,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 645.3999999999069,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 3,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 588.5999999998603,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 4,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 611.3000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 5,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 945,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 6,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 841.0999999998603,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 7,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 1253.8000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 8,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 1033.7999999998137,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 9,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 941.3999999999069,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 10,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 785.6999999999534,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 11,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 657,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 12,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 553.5999999998603,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 13,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 981.6000000000931,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 14,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 867.1000000000931,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 15,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 940,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 16,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 654.0999999998603,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 17,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 775.9000000001397,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 18,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 597.8999999999069,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 19,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 588.8999999999069,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 20,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 511.0999999998603,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 21,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 635.5,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 22,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 666.6999999999534,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 23,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 547.8000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      },
+      {
+        "scenario": "thread-open",
+        "index": 24,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 605.3000000000466,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    ],
+    "summary": {
+      "measured": 20,
+      "passed": 20,
+      "unsuccessful": 0,
+      "medianMs": 721.3000000000466,
+      "minMs": 511.0999999998603,
+      "maxMs": 1253.8000000000466
+    }
+  },
+  "medianDifferenceMs": 3.099999999976717,
+  "medianChangePercent": 0.4316346421576741,
+  "policy": "Two isolated workers, five warmups per revision, then individually balanced ABBA actions; no tail-percentile claim"
+}

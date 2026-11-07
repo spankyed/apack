@@ -1,5 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { expect, type AppDriver } from '@apackdev/testing';
@@ -42,7 +41,9 @@ export async function createWarmScenario<F extends { identity: PerformanceManife
     runtime: { ...runtime, interactiveWindow: 'focused-v1', performancePolicy: performanceExecutionPolicy(comparison),
       ...(scenario === 'thread-open' && { threadReadiness: 'full-bodies-and-user-truncation-v1' }) } });
   const journal = createPerformanceScenarioRun(output, manifest, measured, comparison);
-  const directory = mkdtempSync(path.join(tmpdir(), 'apack-performance-fixture-'));
+  // The Electron fixture removes this profile only after the app and API child stop writing.
+  const profile = await electronApp.evaluate(({ app }) => app.getPath('userData'));
+  const directory = mkdtempSync(path.join(profile, 'performance-fixture-'));
   return {
     fixture, directory, output, schedule,
     async importThreads(lastId: string) {
@@ -98,8 +99,7 @@ export async function createWarmScenario<F extends { identity: PerformanceManife
       await finishPerformanceTrial(entry, trial.outcome);
     },
     close() {
-      try { journal.save(); }
-      finally { rmSync(directory, { recursive: true, force: true }); }
+      journal.save();
     },
   };
 }
