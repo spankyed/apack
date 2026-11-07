@@ -22,6 +22,8 @@ their native pins must match. Reports and failures are uploaded even when the co
 After the disabled-mode comparison, each revision gets a separate detailed diagnostic capture; those
 single-trial profiles attribute work and are excluded from the timing comparison.
 Its machine identity is specific to the CI run; results do not certify external-drive performance.
+The [startup loading qualification](../../docs/archive/references/evidence/2026-11-07-startup-demand-loading.md)
+records the matched comparison, diagnostic attribution and retained failures for the startup-loading stack.
 
 Build with the normal repository commands, then run from the checkout root:
 
