@@ -27,7 +27,7 @@ export function _packModuleTargets(manifest: Partial<PackManifest>): ModuleTarge
     const prefix = ['features', feature.id];
     const field = (name: string, target: string | undefined, kind: ModuleTarget['kind'] = 'script', reference: ModuleTarget['reference'] = 'named') =>
       add([...prefix, ...name.split('.')], target, kind, reference, `Feature "${feature.id}": ${name}`);
-    field('settings.form', component(feature.settings?.form), 'component', 'default');
+    field('settings.form', component(feature.settings?.form), 'component', 'module');
     for (const [name, target] of feature.references ? _referenceTargets(feature.references) : []) {
       const icon = name.endsWith('.icon');
       field(`references.${name}`, target, icon ? 'component' : 'script', icon ? 'default' : 'named');
@@ -45,7 +45,7 @@ export function _packModuleTargets(manifest: Partial<PackManifest>): ModuleTarge
     field('types', feature.types, 'types', 'module');
   }
   for (const [name, definition] of Object.entries(manifest.extensions?.settings ?? {})) {
-    add(['extensions', 'settings', name, 'form'], component(definition.form), 'component', 'default', `Settings group "${name}": form`);
+    add(['extensions', 'settings', name, 'form'], component(definition.form), 'component', 'module', `Settings group "${name}": form`);
   }
   for (const { name, owner, shape } of _packEntities(manifest)) {
     if (shape !== null) add([...owner.split('.'), 'entities', name], shape, 'type', 'named', `Entity shape "${name}"`);
@@ -66,17 +66,17 @@ export function _packModuleTargets(manifest: Partial<PackManifest>): ModuleTarge
   }
   for (const [name, entry] of Object.entries(manifest.extensions?.blocks ?? {})) {
     add(['extensions', 'blocks', name, 'be'], entry.be);
-    add(['extensions', 'blocks', name, 'fe'], component(entry.fe), 'component', 'default');
+    add(['extensions', 'blocks', name, 'fe'], component(entry.fe), 'component', 'module');
   }
-  for (const [name, entry] of Object.entries(manifest.extensions?.artifacts ?? {})) add(['extensions', 'artifacts', name, 'fe'], component(entry.fe), 'component', 'default');
+  for (const [name, entry] of Object.entries(manifest.extensions?.artifacts ?? {})) add(['extensions', 'artifacts', name, 'fe'], component(entry.fe), 'component', 'module');
   for (const [name, entry] of Object.entries(manifest.extensions?.dsl ?? {})) add(['extensions', 'dsl', name, 'entry'], entry.entry, 'types', 'module');
   for (const [id, contribution] of Object.entries(manifest.extensions?.textEditor ?? {})) {
     const prefix = ['extensions', 'textEditor', id];
     for (const [name, target] of Object.entries(contribution.extensions ?? {})) add([...prefix, 'extensions', name], target);
-    for (const [name, target] of Object.entries(contribution.popups ?? {})) add([...prefix, 'popups', name], component(target), 'component', 'default');
+    for (const [name, target] of Object.entries(contribution.popups ?? {})) add([...prefix, 'popups', name], component(target), 'component', 'module');
     add([...prefix, 'isSuggestionActive'], contribution.isSuggestionActive);
   }
-  for (const [name, target] of Object.entries(manifest.extensions?.appExtensions ?? {})) add(['extensions', 'appExtensions', name], component(target), 'component', 'default');
+  for (const [name, target] of Object.entries(manifest.extensions?.appExtensions ?? {})) add(['extensions', 'appExtensions', name], component(target), 'component', 'module');
   for (const [name, target] of Object.entries(manifest.lifecycle ?? {})) add(['lifecycle', name], target);
   for (const line of MIGRATION_LINES) {
     for (const [version, entry] of Object.entries(manifest.migrations?.[line] ?? {})) add(['migrations', line, version, 'up'], entry.up);

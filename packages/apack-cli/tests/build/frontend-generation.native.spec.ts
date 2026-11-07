@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import ts from 'typescript';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { readPackageInputs } from '@apackdev/host/build/package-inputs';
@@ -108,13 +109,30 @@ async function response(address: PackFrontendAddress, template = false): Promise
   return text;
 }
 
+/** This fixture publishes one deferred view; inspect the chunk its entry actually imports. */
+function publishedViewCode(root: string): string {
+  const output = path.join(root, 'dist');
+  const entry = fs.readFileSync(path.join(output, 'runtime/fe.js'), 'utf8');
+  const targets: string[] = [];
+  function visit(node: ts.Node): void {
+    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword
+      && node.arguments[0] && ts.isStringLiteral(node.arguments[0])) targets.push(node.arguments[0].text);
+    ts.forEachChild(node, visit);
+  }
+  visit(ts.createSourceFile('fe.js', entry, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS));
+  expect(targets).toHaveLength(1);
+  const asset = path.posix.normalize(path.posix.join('runtime', targets[0]!));
+  expect(Object.hasOwn(readPackBuild(output).integrity.files, asset)).toBe(true);
+  return fs.readFileSync(path.join(output, asset), 'utf8');
+}
+
 it('refreshes backend and live frontend together, retains failed incumbents and awaits retirement', async () => {
   const { root, entry, generation, captures } = pack;
   const addresses: PackFrontendAddress[] = [];
   await builder!.serveFrontend(address => { if (address) addresses.push(address); });
   const first = addresses[0]!;
   expect(await response(first)).toContain('GENERATION_A');
-  expect(fs.readFileSync(path.join(root, 'dist/runtime/fe.js'), 'utf8')).toContain('GENERATION_A');
+  expect(publishedViewCode(root)).toContain('GENERATION_A');
   const revision = readPackBuild(path.join(root, 'dist')).revision;
 
   const update = await nextComponentUpdate(first);
@@ -132,7 +150,7 @@ it('refreshes backend and live frontend together, retains failed incumbents and 
   const second = addresses.at(-1)!;
   expect(second.pid).not.toBe(first.pid);
   expect(await response(second)).toContain('GENERATION_B');
-  expect(fs.readFileSync(path.join(root, 'dist/runtime/fe.js'), 'utf8')).toContain('GENERATION_B_SECOND');
+  expect(publishedViewCode(root)).toContain('GENERATION_B_SECOND');
   expect(() => process.kill(first.pid, 0)).toThrow();
   // Retiring the frontend releases its compiler installation; the store keeps the entry for the next build
   const accepted = await captures.mock.results[0]!.value;

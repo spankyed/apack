@@ -210,7 +210,8 @@ A module path uses its default export. Use `path#exportName` for a named machine
 Pack UI components load on demand by default. Use `{ "entry": "path", "load": "eager" }` only to
 import an entry with the pack. This applies to surfaces, settings forms, step forms/nodes, block
 renderers, artifact viewers, editor popups and app extensions. Imports within those components and
-actor/predicate registration are unchanged.
+actor/predicate registration are unchanged. Settings forms, block/artifact viewers, editor popups
+and app extensions retain their module-path-only, default-export restriction.
 A custom icon uses `{ "entry": "src/icon.vue" }`; a string icon names a Lucide export.
 A routed canvas uses `{ "routes": { "list": "src/list.vue", "view": "src/view.vue" } }`.
 Discovery reads these declarations without loading the machine or component modules.

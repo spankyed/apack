@@ -553,15 +553,15 @@
                 "anyOf": [
                   {
                     "type": "string",
-                    "pattern": "^[^#]+(?:#[A-Za-z_$][\\w$]*)?$"
+                    "pattern": "^[^#]+$"
                   },
                   {
                     "type": "object",
                     "properties": {
                       "entry": {
                         "type": "string",
-                        "pattern": "^[^#]+(?:#[A-Za-z_$][\\w$]*)?$",
-                        "description": "Pack-root-relative component module, using its default export unless #exportName selects a binding."
+                        "pattern": "^[^#]+$",
+                        "description": "Pack-root-relative component module, using its default export."
                       },
                       "load": {
                         "type": "string",
@@ -1216,15 +1216,15 @@
                 "anyOf": [
                   {
                     "type": "string",
-                    "pattern": "^[^#]+(?:#[A-Za-z_$][\\w$]*)?$"
+                    "pattern": "^[^#]+$"
                   },
                   {
                     "type": "object",
                     "properties": {
                       "entry": {
                         "type": "string",
-                        "pattern": "^[^#]+(?:#[A-Za-z_$][\\w$]*)?$",
-                        "description": "Pack-root-relative component module, using its default export unless #exportName selects a binding."
+                        "pattern": "^[^#]+$",
+                        "description": "Pack-root-relative component module, using its default export."
                       },
                       "load": {
                         "type": "string",
@@ -1711,15 +1711,15 @@
                 "anyOf": [
                   {
                     "type": "string",
-                    "pattern": "^[^#]+(?:#[A-Za-z_$][\\w$]*)?$"
+                    "pattern": "^[^#]+$"
                   },
                   {
                     "type": "object",
                     "properties": {
                       "entry": {
                         "type": "string",
-                        "pattern": "^[^#]+(?:#[A-Za-z_$][\\w$]*)?$",
-                        "description": "Pack-root-relative component module, using its default export unless #exportName selects a binding."
+                        "pattern": "^[^#]+$",
+                        "description": "Pack-root-relative component module, using its default export."
                       },
                       "load": {
                         "type": "string",
@@ -1764,15 +1764,15 @@
                 "anyOf": [
                   {
                     "type": "string",
-                    "pattern": "^[^#]+(?:#[A-Za-z_$][\\w$]*)?$"
+                    "pattern": "^[^#]+$"
                   },
                   {
                     "type": "object",
                     "properties": {
                       "entry": {
                         "type": "string",
-                        "pattern": "^[^#]+(?:#[A-Za-z_$][\\w$]*)?$",
-                        "description": "Pack-root-relative component module, using its default export unless #exportName selects a binding."
+                        "pattern": "^[^#]+$",
+                        "description": "Pack-root-relative component module, using its default export."
                       },
                       "load": {
                         "type": "string",
@@ -1894,15 +1894,15 @@
                   "anyOf": [
                     {
                       "type": "string",
-                      "pattern": "^[^#]+(?:#[A-Za-z_$][\\w$]*)?$"
+                      "pattern": "^[^#]+$"
                     },
                     {
                       "type": "object",
                       "properties": {
                         "entry": {
                           "type": "string",
-                          "pattern": "^[^#]+(?:#[A-Za-z_$][\\w$]*)?$",
-                          "description": "Pack-root-relative component module, using its default export unless #exportName selects a binding."
+                          "pattern": "^[^#]+$",
+                          "description": "Pack-root-relative component module, using its default export."
                         },
                         "load": {
                           "type": "string",
@@ -1939,15 +1939,15 @@
             "anyOf": [
               {
                 "type": "string",
-                "pattern": "^[^#]+(?:#[A-Za-z_$][\\w$]*)?$"
+                "pattern": "^[^#]+$"
               },
               {
                 "type": "object",
                 "properties": {
                   "entry": {
                     "type": "string",
-                    "pattern": "^[^#]+(?:#[A-Za-z_$][\\w$]*)?$",
-                    "description": "Pack-root-relative component module, using its default export unless #exportName selects a binding."
+                    "pattern": "^[^#]+$",
+                    "description": "Pack-root-relative component module, using its default export."
                   },
                   "load": {
                     "type": "string",
