@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { CHECKS, findAppImportsInPackTests, findContractLeafImports, findCrossCheckoutResolution, findCrossFeatureImports, findExtensionlessOwnModules, findHostImports, findJsSpecifiers, findCompilerRunsInFastSpecs, findLiveWatchersInIntegrationSpecs, findMissingSourceConditions, findPackageScriptImports, findPackBackendConsole, findPackWindowStorage, findComponentSends, findPackOwnAliases, findRawGitListings, findRawPackHelpers, findRawTransport, findRawWatchesInBuild, findReservedEventKeys, findInternalPackageImports, findElmdbImports, findRepositoryCasts, findSchemeRegistrations, findSharedPackageLists, findSyncSpawnsInSlowSpecs, findUpwardImports, jsSpecifierFixes, LAYERS, UNLAYERED_BY_DESIGN, repoRootDir, findUnimportedDependencies, ELMDB_RULES, MANIFEST_FIELDS, packOwnModuleFixes, packageSourceDirs, CHECK_IDS, type CoveredRuleId, DECLARES_SOURCE_BY_DESIGN, type ImportRuleId, SHARED_LIST_CONSUMERS, sourceConditionPackages, SOURCE_CONDITION, checkedDirs, type ImportRule, packCodeDirs, packDirs, packRule, packRuleProblems, ruleRows, ruleTable } from '../../../scripts/check-import-specifiers.ts';
+import { CHECKS, findAppImportsInPackTests, findEmulatorImports, findContractLeafImports, findCrossCheckoutResolution, findCrossFeatureImports, findExtensionlessOwnModules, findHostImports, findJsSpecifiers, findCompilerRunsInFastSpecs, findLiveWatchersInIntegrationSpecs, findMissingSourceConditions, findPackageScriptImports, findPackBackendConsole, findPackWindowStorage, findComponentSends, findPackOwnAliases, findRawGitListings, findRawPackHelpers, findRawTransport, findRawWatchesInBuild, findReservedEventKeys, findInternalPackageImports, findElmdbImports, findRepositoryCasts, findSchemeRegistrations, findSharedPackageLists, findSyncSpawnsInSlowSpecs, findUpwardImports, jsSpecifierFixes, LAYERS, UNLAYERED_BY_DESIGN, repoRootDir, findUnimportedDependencies, ELMDB_RULES, MANIFEST_FIELDS, packOwnModuleFixes, packageSourceDirs, CHECK_IDS, type CoveredRuleId, DECLARES_SOURCE_BY_DESIGN, type ImportRuleId, SHARED_LIST_CONSUMERS, sourceConditionPackages, SOURCE_CONDITION, checkedDirs, type ImportRule, packCodeDirs, packDirs, packRule, packRuleProblems, ruleRows, ruleTable } from '../../../scripts/check-import-specifiers.ts';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { packFixture as buildPackFixture } from '@apackdev/sdk/testing/pack-fixture';
 import { population } from '@apackdev/sdk/testing';
@@ -689,6 +689,10 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
     }));
     write('packages/apack-host/src/services/run-history.ts', "import { Database } from 'elmdb';");
     return findElmdbImports(rules, root);
+  },
+  findEmulatorImports: () => {
+    packFixture({ 'src/view.ts': "import { Terminal } from '@xterm/xterm';" });
+    return findEmulatorImports(PACK_SRC, root);
   },
   findSchemeRegistrations: () => {
     write('schemes.ts', "protocol.registerSchemesAsPrivileged([]);");
@@ -1896,6 +1900,33 @@ describe('findCrossFeatureImports', () => {
   it('excepts nothing when the package publishes nothing', () => {
     writeAt(`${src}/fe/index.ts`, "export { memosMachine } from '../features/memos/fe/state';");
     expect(findCrossFeatureImports([src], root)).toEqual([`${src}/fe/index.ts:1: ../features/memos/fe/state`]);
+  });
+});
+
+describe('findEmulatorImports', () => {
+  it('reports a pack file reaching the emulator outside the seam', () => {
+    packFixture({ 'src/panel.vue.ts': "import type { FitAddon } from '@xterm/addon-fit';" });
+    expect(findEmulatorImports(PACK_SRC, root)).toEqual([
+      `${PACK_FIXTURE}/src/panel.vue.ts:1: @xterm/addon-fit`,
+    ]);
+  });
+
+  it('allows the one module that owns the emulator, and its spec', () => {
+    // Both are real paths in this repo rather than fixture ones, so the allowance is checked against the
+    // constants the rule uses rather than against a tree written to match them
+    expect(findEmulatorImports(['packages/default-setup/src/features/code/fe/utils'], repoRootDir())).toEqual([]);
+    expect(findEmulatorImports(['packages/default-setup/tests/features/code/fe/utils'], repoRootDir())).toEqual([]);
+  });
+
+  it('reports the owner itself when it has stopped importing an emulator, so the rule cannot pass over nothing', () => {
+    // The owner is read from disk rather than from the population, so a fixture tree does not report one;
+    // here it is a root where the owner's path exists and holds no import
+    const empty = path.join(root, 'packages/default-setup/src/features/code/fe/utils');
+    fs.mkdirSync(empty, { recursive: true });
+    fs.writeFileSync(path.join(empty, 'terminal-pool.ts'), 'export const terminalPool = {};\n');
+    expect(findEmulatorImports(['src'], root)).toEqual([
+      'packages/default-setup/src/features/code/fe/utils/terminal-pool.ts: imports no emulator, so this rule has no subject',
+    ]);
   });
 });
 

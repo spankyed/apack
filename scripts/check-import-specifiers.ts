@@ -548,17 +548,21 @@ const EMULATOR_OWNER_SPEC = 'packages/default-setup/tests/features/code/fe/utils
 export function findEmulatorImports(dirs: readonly string[] = PACK_CODE_DIRS, root = repoRoot): string[] {
   const rule: Rule = (node) => (ts.isStringLiteralLike(node) && node.text.startsWith('@xterm/')
     ? [node.text] : undefined);
-  const files = filesUnder(dirs, root);
   const allowed = new Set([EMULATOR_OWNER, EMULATOR_OWNER_SPEC]);
-  const outside = files
+  const outside = filesUnder(dirs, root)
     .filter((file) => !allowed.has(repoRelative(root, file)))
     .flatMap((file) => findInFiles([file], root, rule));
 
-  const owner = files.find((file) => repoRelative(root, file) === EMULATOR_OWNER);
-  const ownerImports = owner !== undefined && findInFiles([owner], root, rule).length > 0;
+  // **Asked of the owner on disk, not of the population.** The rule runs over whatever directories it is
+  // given — a fixture tree in a spec, a pack's `src` in a sweep — and in none of those does the owner exist,
+  // so deriving the subject from the files walked would report every one of them as having no subject. An
+  // owner that has been deleted outright is caught by the other half instead: the emulator's imports move
+  // somewhere, and everywhere else is a finding.
+  const owner = path.join(root, EMULATOR_OWNER);
+  const ownerStopped = fs.existsSync(owner) && findInFiles([owner], root, rule).length === 0;
   return [
     ...outside,
-    ...(ownerImports ? [] : [`${EMULATOR_OWNER}: imports no emulator, so this rule has no subject`]),
+    ...(ownerStopped ? [`${EMULATOR_OWNER}: imports no emulator, so this rule has no subject`] : []),
   ].sort();
 }
 
