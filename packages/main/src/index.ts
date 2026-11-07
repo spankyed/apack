@@ -14,7 +14,7 @@ import {createPrivilegedSchemes} from './modules/privileged-schemes/index.ts';
 import {createMediaProtocol} from './modules/media-protocol/index.ts';
 import {createPackProtocol} from './modules/pack-protocol/index.ts';
 import {createSpeechRecognition} from './modules/speech-recognition/index.ts';
-import {createMacOSAppMenu} from './modules/MacOSAppMenu.ts';
+import {createAppMenu} from './modules/app-menu.ts';
 import {createBrowserModule} from './modules/browser/index.ts';
 import {createProtocolHandler} from './modules/ProtocolHandler.ts';
 import {app} from 'electron';
@@ -51,7 +51,7 @@ export async function initApp(initConfig: AppInitConfig) {
     .init(createWindowManagerModule({initConfig, openDevTools: false, apiServer, splashScreen}))
     .init(terminateAppOnLastWindowClose())
     .init(createBrowserModule())
-    .init(createMacOSAppMenu())
+    .init(createAppMenu())
     // Disable auto-updater until GitHub releases are configured
     // .init(autoUpdater())
 

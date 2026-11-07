@@ -36,7 +36,7 @@ Modules, in order (`src/modules/`):
 | `createWindowManagerModule` | `window-manager/` | Main and popout windows, most IPC handlers (see Windows) |
 | `terminateAppOnLastWindowClose` | `ApplicationTerminatorOnLastWindowClose.ts` | Quits on `window-all-closed` except on macOS |
 | `createBrowserModule` | `browser/` | The browser surface's tabs: `WebContentsView`s in the `persist:browser` session, driven by `browser:*` IPC (`BrowserTabManager.ts`) |
-| `createMacOSAppMenu` | `MacOSAppMenu.ts` | macOS menu: Cmd+Q hides, Cmd+Shift+Q quits; packaged builds add "Install 'apack' command in PATH" (`cli-command.ts`, symlinks `Resources/cli/apack` into `/usr/local/bin`, `apack-beta` for beta, via `osascript` on EACCES) |
+| `createAppMenu` | `app-menu.ts` | The application menu, per platform (`appMenuTemplate`, a function of the platform so it is testable from any of them). macOS: the whole menu bar — Cmd+Q hides, Cmd+Shift+Q quits; packaged builds add "Install 'apack' command in PATH" (`cli-command.ts`, symlinks `Resources/cli/apack` into `/usr/local/bin`, `apack-beta` for beta, via `osascript` on EACCES). Everywhere else no menu bar is drawn (every window is `frame: false`), so the menu is only its global accelerators and it carries the two that are not a shell's keys — devtools and fullscreen. Installing *something* is the point: nothing installed means Electron's default, whose Ctrl+R, Ctrl+W and Ctrl+C fire wherever focus is, including a terminal |
 | `allowInternalOrigins` | `BlockNotAllowdOrigins.ts` | Blocks `will-navigate` to origins other than the dev server's |
 | `allowExternalUrls` | `ExternalUrls.ts` | `setWindowOpenHandler` always denies, and sends the URL to the system browser through `shell-access.ts` (see Shell access) |
 

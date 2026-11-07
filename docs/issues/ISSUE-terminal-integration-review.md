@@ -98,7 +98,7 @@ orchestration, `L` = lifecycle and persisted data, `G` = agent sessions.
 | **M2** | **High** | The pty's size is owned by whichever window fitted last | `TerminalView.vue:159-199`, `be/services/terminal.ts:153-163` |
 | **X1** | **High** | Windows: no terminal process is ever killed when the app quits | `be/services/terminal.ts:51-55`, `main/.../process-manager.ts:153` |
 | **X2** | **High** | Windows: closing a terminal leaves its children, and may leave the terminal undead | `be/services/terminal.ts:199-230` |
-| **X3** | **High** | Windows/Linux: Ctrl+R reloads the window and Ctrl+W closes it while typing in a shell | `main/src/modules/MacOSAppMenu.ts:12` |
+| **X3** | **High** | Windows/Linux: Ctrl+R reloads the window and Ctrl+W closes it while typing in a shell | `main/src/modules/app-menu.ts` (was `MacOSAppMenu.ts:12`) |
 | **G1** | **High** | Agent streaming rewrites the whole message to EARS every 80 ms and re-broadcasts it | `content/actions/claude-code/_helpers/stream-writer.ts:54,64` |
 | **L1** | Medium | `restoreTerminalsActor` has no `onError`: a rejection stops the terminal system for the session, silently | `be/features/terminal.ts:302-310` |
 | **T1** | Medium | `handleTerminalClosed` can pick the just-closed terminal as the next panel terminal | `fe/features/terminal/state.ts:321` |

@@ -85,7 +85,7 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   **Collision surface against #372**, measured 2026-11-07: one file, `features/code/fe/state.ts` (+24/-2 on
   that branch). Every other file Phase T touches is untouched there — `bus/client-events.ts`,
   `api/src/boot/config.ts`, `be/services/terminal.ts`, `fe/features/terminal/state.ts`, `fe/hotkeys.ts`,
-  `MacOSAppMenu.ts` and `stream-writer.ts` — so T3 and T9 are the only tracks with a rebase to think about.
+  `app-menu.ts` and `stream-writer.ts` — so T3 and T9 are the only tracks with a rebase to think about.
   Phase G's baseline is unaffected by that branch, since it touches neither `services/terminal.ts` nor
   `terminal-pool.ts`.
 - **Done:** Phase T's **S2** — the bus logs an event's type, target and sender and never its payload
@@ -105,7 +105,14 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   broadcast one would raise a toast in windows whose user did nothing. The surface's write-only
   `terminalError` field is gone with its three `clearTerminalError` wirings; the settle that was buried in the
   same action is now `settleFailedAsk`.
-- **Next deliverable:** Phase T's **X3/X10**, then G1 and the two tooling tracks, in any order.
+- **Done:** Phase T's **X3 and X10** — the app's keyboard off macOS. `cmd` in a hotkey config now means the
+  platform's accelerator (Meta on a Mac, Control elsewhere), so the eleven shipped `cmd` defaults can match
+  off a Mac for the first time, while the two written with `ctrl` do not move. And the application menu is
+  built per platform (`main/src/modules/app-menu.ts`, renamed from `MacOSAppMenu.ts`): off macOS no menu bar
+  is drawn, so what a menu contributes there is global accelerators, and installing none left Electron's
+  default — whose Ctrl+R, Ctrl+W and Ctrl+C fire wherever focus is. Both templates are functions of the
+  platform, so both are checked from a Mac.
+- **Next deliverable:** Phase T's **G1**, then the two tooling tracks, in either order.
   **Phase G is blocked on a quiet machine**: `npm run check:idle`
   reported 60% against a 70% floor on 2026-11-07, so the baseline could not be taken. Retry before Phase S,
   since it cannot be taken once state moves. Phase B's first commit is the last cheap exit — see Constraints.
@@ -122,6 +129,12 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   `lib/janitor-policy.ts` past one checkout is load-bearing rather than bookkeeping: that path is outside the
   budget entirely today. The review's findings were re-verified against the tree on 2026-11-07 for
   S1, S2, F3, F9, F10 and L2; the rest carry pre-rename citations and are verified as each is touched.
+- **The platform sniff is written out four times** — `navigator.platform.toLowerCase().includes('mac')` in
+  `renderer`'s `WindowControls.vue`, `PopoutTitlebar.vue` and `Toolbar.vue`, and `@apackdev/ui`'s
+  `UnifiedMonacoEditor.vue`. X10 declared it once as `primaryModifierIsMeta` (`apack-sdk/src/fe/hotkeys.ts`,
+  deliberately not in the `fe` barrel, so it is not a fifth public name) and left the four alone rather than
+  widen the track. Pointing them at one declaration is a small, typecheck-proven change for whoever is next
+  in those files.
 - **A backend spec in default-setup cannot stub a pack-internal module.** `tests/setup.ts` is a setup file and
   imports `#generated/pack-entry.ts`, so the real module is in the graph before any test file's `vi.mock`
   registers. Found while writing F9's guard, which is therefore mock-free: every case fails over a terminal

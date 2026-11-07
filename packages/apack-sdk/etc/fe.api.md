@@ -553,8 +553,8 @@ export interface KeyboardShortcut {
 // @public (undocumented)
 export function loadTabGroups(storage: SurfaceStorage, name: string): TabGroup[];
 
-// @public (undocumented)
-export function matchesHotkey(event: HotkeyEvent, config: KeyboardShortcut): boolean;
+// @public
+export function matchesHotkey(event: HotkeyEvent, config: KeyboardShortcut, cmdIsMeta?: boolean): boolean;
 
 // @public (undocumented)
 export interface NavHistory<T> {
@@ -618,7 +618,7 @@ export interface PackFERegistration {
 export function pasteIntoElement(el: HTMLElement, text: string): void;
 
 // @public (undocumented)
-export function processHotkeys<const T extends Record<string, string>, H = unknown>(event: HotkeyEvent, hotkeys: H | undefined, actionMap: T): T[keyof T] | undefined;
+export function processHotkeys<const T extends Record<string, string>, H = unknown>(event: HotkeyEvent, hotkeys: H | undefined, actionMap: T, cmdIsMeta?: boolean): T[keyof T] | undefined;
 
 // @public (undocumented)
 export function pushNavHistory<T>(history: NavHistory<T>, entry: T): NavHistory<T>;
