@@ -694,8 +694,8 @@ declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObjec
                 label: z.ZodString;
                 mode: z.ZodEnum<{
                     default: "default";
-                    auto: "auto";
                     plan: "plan";
+                    auto: "auto";
                     acceptEdits: "acceptEdits";
                     bypassPermissions: "bypassPermissions";
                 }>;
@@ -1714,8 +1714,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
             label: z.ZodString;
             mode: z.ZodEnum<{
                 default: "default";
-                auto: "auto";
                 plan: "plan";
+                auto: "auto";
                 acceptEdits: "acceptEdits";
                 bypassPermissions: "bypassPermissions";
             }>;
@@ -2833,7 +2833,9 @@ type ClaudeUiMountState = ({
     status: 'error';
     message: string;
 }) & {
-    ide?: ClaudeUiIdeContext;
+    ide?: ClaudeUiIdeContext & {
+        actionId: string;
+    };
     billing?: ClaudeBillingObservation;
     actionKeys?: ClaudeUiActionKeyState;
     promptPalette?: Record<string, string>;
@@ -7053,8 +7055,8 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  */
 declare const PermissionModeSchema: z.ZodEnum<{
     default: "default";
-    auto: "auto";
     plan: "plan";
+    auto: "auto";
     acceptEdits: "acceptEdits";
     bypassPermissions: "bypassPermissions";
     dontAsk: "dontAsk";
@@ -9902,8 +9904,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        insert: "insert";
         append: "append";
+        insert: "insert";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;

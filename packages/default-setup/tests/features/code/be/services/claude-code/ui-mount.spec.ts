@@ -666,19 +666,20 @@ it('serializes native agents gestures and drops stale prompt revisions or detach
 })
 
 
-it('retires private IDE dismissal on redraw and routes only the current revision once',async()=>{
+it('retires private IDE dismissal on redraw and routes only the current opaque action once',async()=>{
   const f=fixture(),first='a'.repeat(64),second='b'.repeat(64)
   f.ui.render.mockResolvedValue({...rendered(),_apack_ide:{text:'[⧉ 1 line selected] ',revision:first}})
   const view=f.mount();await view.ready;await vi.advanceTimersByTimeAsync(50)
-  expect(f.states.at(-1)?.ide?.revision).toBe(first)
-  f.invalidate()
-  expect(f.states.at(-1)?.ide).toBeUndefined()
-  expect(await view.press('native-ide-dismiss:'+first)).toEqual({handled:false})
+  const old=f.states.at(-1)!.ide!.actionId
+  expect(old).toMatch(/^[0-9a-f-]{36}$/)
+  f.invalidate();expect(f.states.at(-1)?.ide).toBeUndefined()
+  expect(await view.press(old)).toEqual({handled:false})
   f.ui.render.mockResolvedValue({...rendered(),_apack_ide:{text:'[⧉ 2 lines selected] ',revision:second}})
   await vi.advanceTimersByTimeAsync(50)
-  expect(await view.press('native-ide-dismiss:'+first)).toEqual({handled:false})
-  expect(await view.press('native-ide-dismiss:'+second)).toEqual({handled:true})
-  expect(await view.press('native-ide-dismiss:'+second)).toEqual({handled:false})
-  expect(f.ui.dismissIde).toHaveBeenCalledOnce();expect(f.ui.press).not.toHaveBeenCalled()
+  const current=f.states.at(-1)!.ide!.actionId
+  expect(await view.press(old)).toEqual({handled:false})
+  expect(await view.press(current)).toEqual({handled:true})
+  expect(await view.press(current)).toEqual({handled:false})
+  expect(f.ui.dismissIde).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({revision:second}));expect(f.ui.press).not.toHaveBeenCalled()
   await view.dispose();expect(f.states.at(-1)?.ide).toBeUndefined()
 })

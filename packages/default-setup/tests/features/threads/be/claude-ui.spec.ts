@@ -10,7 +10,7 @@ import type { OutgoingThreadsEvents } from '#features/threads/be/types.ts'
 
 async function native(threadId = 'thread') {
   const events = new PassThrough({ objectMode: true })
-  const ui = { scroll: vi.fn(async () => ({ moved: true, offset: 0 })), panes: vi.fn(async () => ({ panes: [], shown_id: null, focused_id: null, focus_requested_id: null })), showPane: vi.fn(async () => ({ shown_id: null })), focusPane: vi.fn(async () => ({ focused_id: null })), closePane: vi.fn(async () => ({ closed: true })), servePrompt: vi.fn((_id: string, _host: ClaudePromptHost) => () => {}), focus: vi.fn(async () => ({ moved: true, element: null as { plugin: string; key: string } | null })), promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async () => ({ surfaces: ['desktop'] })), detach: vi.fn(async () => ({ detached: true, surfaces: [] })),
+  const ui = { dismissIde:vi.fn(async()=>({handled:true})), scroll: vi.fn(async () => ({ moved: true, offset: 0 })), panes: vi.fn(async () => ({ panes: [], shown_id: null, focused_id: null, focus_requested_id: null })), showPane: vi.fn(async () => ({ shown_id: null })), focusPane: vi.fn(async () => ({ focused_id: null })), closePane: vi.fn(async () => ({ closed: true })), servePrompt: vi.fn((_id: string, _host: ClaudePromptHost) => () => {}), focus: vi.fn(async () => ({ moved: true, element: null as { plugin: string; key: string } | null })), promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async () => ({ surfaces: ['desktop'] })), detach: vi.fn(async () => ({ detached: true, surfaces: [] })),
     render: vi.fn(async () => ({ tree: { type: 'Button', props: { label: 'Run', key: 'run' }, press: { plugin: 'fixture', handle: 1 } }, props: {}, hooked: true, rewritten: true })),
     key: vi.fn(async () => ({ handled: true, action_keys: { revision: 'a'.repeat(64), bindings: [], continuations: [], pending: null } })),
     press: vi.fn(async () => ({ handled: true })) }
@@ -422,4 +422,21 @@ it('recovers a failed attachment through a fresh view without replacing its conv
  handleClaudeUiView({...mount,type:'CLAUDE_PROMPT_EDIT',revision:99,text:'Retired draft',cursor:13,by:'person'},'window',delivery)
  await vi.advanceTimersByTimeAsync(100)
  expect(ui.attach).toHaveBeenCalledTimes(2);expect(ui.promptEdit).not.toHaveBeenCalled()
+})
+
+
+it('routes native IDE dismissal through the existing UUID action boundary to its current owner only',async()=>{
+  const {ui}=await native(),delivery=reply()
+  ui.render.mockResolvedValue({...await ui.render(),_apack_ide:{text:'[⧉ 1 line selected] ',revision:'a'.repeat(64)}} as Awaited<ReturnType<typeof ui.render>>)
+  handleClaudeUiView(mount,'window',delivery);await vi.advanceTimersByTimeAsync(100)
+  const event=delivery.mock.calls.at(-1)![0]
+  if(event.type!=='CLAUDE_UI_STATE'||!event.state.ide)throw Error('Expected IDE presentation')
+  const actionId=event.state.ide.actionId
+  handleClaudeUiView({...mount,type:'CLAUDE_UI_PRESS',actionId},'foreign-window',delivery)
+  await vi.advanceTimersByTimeAsync(0);expect(ui.dismissIde).not.toHaveBeenCalled()
+  handleClaudeUiView({...mount,type:'CLAUDE_UI_PRESS',actionId},'window',delivery)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(ui.dismissIde).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({revision:'a'.repeat(64)}))
+  handleClaudeUiView({...mount,type:'CLAUDE_UI_PRESS',actionId},'window',delivery)
+  await vi.advanceTimersByTimeAsync(0);expect(ui.dismissIde).toHaveBeenCalledOnce()
 })

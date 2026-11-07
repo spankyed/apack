@@ -60,7 +60,7 @@ export function mountClaudeUi(options: {
   let unsubscribeQuestion = () => {}
   let unsubscribeApproval = () => {}
   let promptPalette: Record<string, string> | undefined
-  let ide: import('./ui-controls.ts').ClaudeUiIdeContext | undefined
+  let ide: ClaudeUiMountState['ide']
   let actionKeyState: ClaudeUiActionKeyState | undefined
   let keyQueue: Promise<unknown> = Promise.resolve()
   let lastState: ClaudeUiMountState = { status: 'connecting' }
@@ -171,7 +171,7 @@ export function mountClaudeUi(options: {
       const result = await owner.handle.ui.render({ ...client, component: 'AbovePrompt', instance_id: instanceId, props: {} })
       if (!current() || revision !== generation) return
       drawing = createClaudeUiDrawing(result.tree, fieldDrawing, drawing)
-      ide = result._apack_ide
+      ide = result._apack_ide ? {...result._apack_ide,actionId:randomUUID()} : undefined
       actionKeyState = result._apack_action_keys
       function stamp(node: import('./ui-presentation.ts').ClaudeUiNode): void {
         if (node.kind === 'box' || node.kind === 'client') node.children.forEach(stamp)
@@ -499,8 +499,8 @@ export function mountClaudeUi(options: {
       return operation
     },
     async press(actionId: string, href?: string): Promise<{ handled: boolean }> {
-      if (actionId.startsWith('native-ide-dismiss:')) {
-        if(!current()||pressing||href!==undefined||!ide||actionId!=='native-ide-dismiss:'+ide.revision)return {handled:false}
+      if (ide?.actionId === actionId) {
+        if(!current()||pressing||href!==undefined||!ide||actionId!==ide.actionId)return {handled:false}
         const revision=ide.revision;pressing=true;ide=undefined;publish(lastState)
         try {const result=await owner.handle.ui.dismissIde({client_id:client.client_id,revision});return {handled:current()&&result.handled}}
         finally {pressing=false;if(current())invalidate()}
