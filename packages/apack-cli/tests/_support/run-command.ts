@@ -1,10 +1,11 @@
 import { spawn } from 'node:child_process';
-import { createStallTracker, readTreeCpuMs } from '@apackdev/host/build/process-progress';
+import { IDLE_MS, createStallTracker, readTreeCpuMs } from '@apackdev/host/build/process-progress';
 import { stopCompilerProcessGroup } from '../../src/build/compiler-process-group.ts';
-
-/** How long a command's process tree may go without CPU or output before it counts as stalled */
-const IDLE_MS = 120_000;
-/** How long a command may run however busy it is: for the one hang the idle watch can't see, a loop that spins */
+/**
+ * How much CPU a command's tree may spend: for the one hang the idle watch can't see, a loop that spins. CPU rather
+ * than the clock wherever the tree can be read, since a busy machine stretches a command's wall time and leaves its CPU
+ * alone; the clock only where it cannot, on Windows and under `APACK_WATCHDOG=off`.
+ */
 const CEILING_MS = 900_000;
 /** How often a running command's process tree is read, which stops at the first reading still in flight */
 const READ_EVERY_MS = 5_000;
@@ -62,7 +63,10 @@ export async function runCommand(command: string, args: string[], cwd: string,
         shutdown = setTimeout(() => reject(new Error(`${label}: process did not close within the 20s cleanup limit`, { cause: reason })), 20_000);
       };
       abort = () => stop(new Error(`${label}: cancelled`, { cause: signal?.reason }));
-      budget = setTimeout(() => stop(new Error(`${label}: running past the ${ceiling}ms ceiling\n${output}`)), ceiling);
+      const startClock = () => {
+        budget ??= setTimeout(() => stop(new Error(`${label}: running past the ${ceiling}ms ceiling\n${output}`)), ceiling);
+      };
+      if (!stall) startClock();
       if (stall && child.pid !== undefined) {
         let reading = false;
         watching = setInterval(() => {
@@ -70,8 +74,13 @@ export async function runCommand(command: string, args: string[], cwd: string,
           reading = true;
           void readTree(child.pid!).then((tree) => {
             reading = false;
-            if (tree && stall.reading(tree, Date.now())) {
+            // `ps` failing leaves the CPU unknowable, so from then the clock is the bound rather than nothing
+            if (tree === undefined) { startClock(); return; }
+            if (stall.reading(tree, Date.now())) {
               stop(new Error(`${label}: stalled, no CPU or output for ${IDLE_MS / 1000}s\n${output}`));
+            } else if (process.env.APACK_CEILING !== 'off' && stall.spentMs >= ceiling) {
+              stop(new Error(`${label}: running past the ${ceiling}ms ceiling, in CPU: ${Math.round(stall.spentMs / 1000)}s of CPU `
+                + `in ${Math.round((performance.now() - started) / 1000)}s\n${output}`));
             }
           });
         }, READ_EVERY_MS);

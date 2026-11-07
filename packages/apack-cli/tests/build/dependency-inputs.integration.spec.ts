@@ -5,11 +5,12 @@ import { afterEach, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { readPackBuild, PACK_LAYOUT } from '@apackdev/host/packs';
 import { buildPack, callCli, preparePack, packageJson, tsconfig } from '../_support/pack-builds.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 let root: string | undefined;
 afterEach(() => { if (root) fs.rmSync(root, { recursive: true, force: true }); root = undefined; });
 
-it('retains the consumer build when a content compiler changes accepted dependency bytes', async () => {
+it('retains the consumer build when a content compiler changes accepted dependency bytes', { meta: cpuBudget(3 * 60_000 + 20_000) }, async () => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-dependency-publication-'));
   const producer = preparePack(root, 'provider', {
     'apack.json': JSON.stringify({ id: 'provider', name: 'Provider', version: '1.0.0' }),
@@ -45,4 +46,4 @@ export default function compile() {
   const resolution = JSON.parse(fs.readFileSync(path.join(consumer, '.apack/deps/provider/resolution.json'), 'utf8'));
   expect(fs.readFileSync(path.join(consumer, '.apack/deps/provider/builds', resolution.revision, PACK_LAYOUT.runtimeEntry), 'utf8'))
     .toContain('changed during compilation');
-}, 3 * 60_000 + 20_000);
+});

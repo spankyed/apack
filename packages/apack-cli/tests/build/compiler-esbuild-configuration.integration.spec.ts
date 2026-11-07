@@ -18,6 +18,7 @@ import { startTestRuntime } from '@apackdev/sdk/testing';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { loadSingleExternalPack } from '@apackdev/host/packs/runtime';
 import { createPackRegistry, stagePack } from '@apackdev/host/packs';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 startTestRuntime({ appVersion: '1.0.0' });
 
@@ -154,7 +155,7 @@ it('preserves native parent-config discovery when there is no explicit pack conf
   expect(evaluate(fs.readFileSync(path.join(output, 'runtime/index.cjs'), 'utf8'))).toEqual(expected);
 });
 
-it.each(['configuration', 'sources', 'declarations', 'resolution'])('publishes captured %s despite a transient live edit restored during bundling', async change => {
+it.each(['configuration', 'sources', 'declarations', 'resolution'])('publishes captured %s despite a transient live edit restored during bundling', { meta: cpuBudget(120_000 + 20_000) }, async change => {
   const { root, pack } = fixture(false);
   packFixture({ at: pack, nodeModules: path.join(REPO_ROOT, 'node_modules'), manifest: {
     id: 'captured-config', name: 'Captured config', features: {}, lifecycle: { onInit: 'src/on-init.ts#onInit' },
@@ -229,7 +230,7 @@ it.each(['configuration', 'sources', 'declarations', 'resolution'])('publishes c
   if ('problem' in loaded) throw new Error(loaded.problem);
   expect(loaded.registration.lifecycle?.onInit?.())
     .toBe(JSON.stringify({ calls: [7], label: 'PACKAGE', value: 'ALIASED', jsx: 'div' }));
-}, 120_000 + 20_000);
+});
 
 it('keeps implicit absolute configuration inheritance owned while originals are absent', async () => {
   const { root, pack, write } = fixture(false);

@@ -7,8 +7,9 @@ import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { createPackBuilder, type PackBuilder } from '../../src/build/build-process.ts';
 import { readPackBuild } from '@apackdev/host/packs';
 import { startPackBuildWatcher } from '../../src/build/watch.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
-it('rebuilds for worker inputs and repairs missing external reads without authored edits', async () => {
+it('rebuilds for worker inputs and repairs missing external reads without authored edits', { meta: cpuBudget(120_000 + 2 * 60_000 + 20_000) }, async () => {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-watch-worker-'));
   const root = path.join(temporary, 'pack');
   const value = path.join(temporary, 'value.txt');
@@ -56,4 +57,4 @@ it('rebuilds for worker inputs and repairs missing external reads without author
     errors.mockRestore();
     fs.rmSync(temporary, { recursive: true, force: true });
   }
-}, 120_000 + 2 * 60_000 + 20_000);
+});

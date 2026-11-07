@@ -6,6 +6,7 @@ import { WATCH_REBUILD_BUDGET_MS, type TestPackBuildWatcher } from '../_support/
 import { readPackBuild } from '@apackdev/host/packs';
 import { bundlePackFE } from '../../src/build/fe-bundler.ts';
 import { createFrontendWatcher } from '../../src/build/frontend-watch.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 const fixture = createFrontendResourceFixture();
 const { consumer } = fixture;
@@ -59,7 +60,7 @@ it.each(['url', 'import', 'nested'] as const)('watches external %s worker depend
   } finally { await watcher.close(); expect(failures).toEqual([]); }
 });
 
-it('retains the accepted build after a worker error and publishes its repair', async () => {
+it('retains the accepted build after a worker error and publishes its repair', { meta: cpuBudget(120_000 + 2 * WATCH_REBUILD_BUDGET_MS + 20_000) }, async () => {
   const { pack } = consumer();
   const helper = path.join(fixture.root, 'worker-value.ts');
   fs.writeFileSync(helper, 'export const marker = "WORKER_BEFORE";');
@@ -82,5 +83,5 @@ it('retains the accepted build after a worker error and publishes its repair', a
     expect(readFrontendOutput(pack, '.js')).toContain('WORKER_REPAIRED');
     expect(readFrontendOutput(pack, '.js')).not.toContain('WORKER_BEFORE');
   } finally { await watcher?.close(); }
-}, 120_000 + 2 * WATCH_REBUILD_BUDGET_MS + 20_000);
+});
 

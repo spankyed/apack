@@ -13,6 +13,7 @@ import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { generateEntries } from '../../src/commands/generate-entries';
 import { PACK_TYPES_FACADE } from '@apackdev/sdk/build';
 import * as replacement from '@apackdev/host/replace-dir';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 /**
  * **`apack pack build` assembles `dist/` elsewhere and renames it into place**, so a reader finds the previous
@@ -121,7 +122,7 @@ describe('a build that fails', () => {
     } finally { fs.rmSync(external, { recursive: true, force: true }); }
   });
 
-  it('does not reuse facade files from an incumbent with stamps from a refused replacement', async () => {
+  it('does not reuse facade files from an incumbent with stamps from a refused replacement', { meta: cpuBudget(3 * 60_000 + 20_000) }, async () => {
     const dir = previousBuild([]);
     const root = path.dirname(dir);
     packFixture({ at: root, nodeModules: path.join(REPO_ROOT, 'node_modules'), manifest: {
@@ -147,7 +148,7 @@ describe('a build that fails', () => {
     expect(facade()).toMatch(/title:\s*string/);
     await build(['--skip-fe'], root);
     expect(facade()).toMatch(/title:\s*number/);
-  }, 3 * 60_000 + 20_000);
+  });
 
   it('refuses stale generated declarations and retains the previous build', async () => {
     const dir = previousBuild(PREVIOUS);
@@ -181,7 +182,7 @@ describe('a build that fails', () => {
     expect(fs.existsSync(buildStagingDir(root))).toBe(false);
   });
 
-  it('publishes help as snapshot data and retains accepted articles after an invalid edit', async () => {
+  it('publishes help as snapshot data and retains accepted articles after an invalid edit', { meta: cpuBudget(3 * 60_000 + 20_000) }, async () => {
     const dir = previousBuild(PREVIOUS);
     const root = path.dirname(dir);
     packFixture({ at: root, nodeModules: path.join(REPO_ROOT, 'node_modules'), manifest: {
@@ -198,7 +199,7 @@ describe('a build that fails', () => {
     await expect(build(['--skip-fe'], root)).rejects.toThrow('first H1');
     expect(fs.readFileSync(path.join(dir, PACK_LAYOUT.snapshot), 'utf8')).toBe(accepted);
     expect(readPackBuild(dir).snapshot.help![0].title).toBe('Updated');
-  }, 3 * 60_000 + 20_000);
+  });
 
   it('leaves the whole of the previous build in place, and no staging tree', async () => {
     const dir = previousBuild(PREVIOUS);
@@ -256,7 +257,7 @@ describe('a pack whose runtime fails to bundle', () => {
 
 
 describe('a completed build', () => {
-  it.each(['facade', 'cache'] as const)('rebuilds damaged %s data instead of renewing its checksums', async damage => {
+  it.each(['facade', 'cache'] as const)('rebuilds damaged %s data instead of renewing its checksums', { meta: cpuBudget(2 * 60_000 + 20_000) }, async damage => {
     const dir = previousBuild([]);
     const root = path.dirname(dir);
     packFixture({ at: root, manifest: { id: 'sealed-build', name: 'Sealed', features: {} }, nodeModules: path.join(REPO_ROOT, 'node_modules') });
@@ -279,5 +280,5 @@ describe('a completed build', () => {
     const stage = path.join(root, 'stage');
     stagePack(root, stage);
     expect(verifyPack(stage).id).toBe('sealed-build');
-  }, 2 * 60_000 + 20_000);
+  });
 });

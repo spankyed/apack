@@ -13,6 +13,7 @@ import { _declarationRevision, PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build'
 import { PACK_LAYOUT, readPackBuild, sealPackBuild } from '@apackdev/host/packs';
 import { packInputsHash } from '@apackdev/host/build/pack-inputs';
 import { createPackBuilder, type PackBuilder } from '../../src/build/build-process.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 const execFileAsync = promisify(execFile);
 
@@ -167,7 +168,7 @@ it('drains an interrupted frontend startup before removing its compiler and writ
   expect(fs.existsSync(fileURLToPath(accepted.bin))).toBe(true);
 });
 
-it('cancels a frontend input check before retiring its compiler and workspace', async () => {
+it('cancels a frontend input check before retiring its compiler and workspace', { meta: cpuBudget(15_000 + 15_000) }, async () => {
   const { pack, builder, report } = fixture();
   await builder.build();
   const accepted = report();
@@ -184,7 +185,7 @@ it('cancels a frontend input check before retiring its compiler and workspace', 
   expect(() => process.kill(pid, 0)).toThrow();
   expect(fs.existsSync(directory)).toBe(false);
   expect(fs.existsSync(fileURLToPath(accepted.bin))).toBe(true);
-}, 15_000 + 15_000);
+});
 
 it('refuses an unresponsive frontend freshness check and allows its later recovery', async () => {
   const { pack, builder } = fixture();

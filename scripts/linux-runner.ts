@@ -11,11 +11,12 @@
 // volume of its own, where the container builds its Linux binding. The command's exit code and output pass straight
 // through.
 import { spawn, spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PACKAGES_PREBUILT_ENV, REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { linuxTestInvocation } from './lib/linux-native-scratch.ts';
+import { TIMEOUT_MS } from './lib/step-timeouts.ts';
 
 const DOCKERFILE = path.join(REPO_ROOT, 'scripts', 'linux', 'Dockerfile');
 const short = (text: string | Buffer): string => createHash('sha256').update(text).digest('hex').slice(0, 12);
@@ -228,6 +229,11 @@ refuseWithoutSpace();
 const forwarded = Object.keys(process.env)
   .filter((key) => (key.startsWith('APACK_') && key !== PACKAGES_PREBUILT_ENV && key !== 'APACK_CEILING') || key === 'FORCE_COLOR');
 
+/** Where the volume can hold an exclusive lock: the caches, and each pack's `.apack/`, which the sync leaves alone */
+const EXCLUSIVE_LOCK_GLOBS = [
+  '/work/node_modules/.cache/*/*.lock', '/work/node_modules/.cache/*/*/*.lock',
+  '/work/.apack/*.lock', '/work/packages/*/.apack/*.lock', '/work/tests/packs/*/.apack/*.lock',
+];
 const quote = (arg: string): string => `'${arg.replace(/'/g, `'\\''`)}'`;
 /**
  * Copy, install when the lockfile differs from the one the volume last installed from, then make the platform's own
@@ -296,6 +302,11 @@ const run = [
   'fi',
   // Orphans of a container that was killed: this run holds the only slot, so none of them is live
   'rm -f /work/node_modules/.cache/apack-unit-pool/*.lock',
+  // And every lock `holdExclusiveLock` writes — the chain's, a pack build's, a package build's. Each names its holder's
+  // hostname, and a container's is never seen again, so a lock left by one stopped mid-build counts as held for ever
+  // and refuses every later run. Recognised by that format rather than listed by name, because a list is how the
+  // pack build's lock outlived the chain's being cleared; the volume is excluded from the sync, so nothing else would
+  `for f in ${EXCLUSIVE_LOCK_GLOBS.join(' ')}; do [ -f "$f" ] && grep -q '"machine"' "$f" && rm -f "$f"; done; true`,
   // Keep immutable compiler captures with this checkout's volume instead of discarding them at container exit.
   // The volume lease excludes live users; stale container hostnames/PIDs cannot hold these records forever.
   `rm -f /work/node_modules/.cache/${COMPILER_CACHE}/*.lock /work/node_modules/.cache/${COMPILER_CACHE}/*.users/*`,
@@ -307,10 +318,25 @@ const run = [
 ].join('\n');
 const script = ['set -e', run].join('\n');
 
+/**
+ * The one bound on a run as a whole, on the clock, and as generous as the longest class there is.
+ *
+ * Inside the container CPU time is not a reading of work (`APACK_CEILING`, above), so nothing in there catches a loop
+ * that spins: the watchdog sees a spin as progress. A run from the chain is bounded by the step that started it, but
+ * a direct `npm run test:linux` had nothing, so a spin ran until someone noticed. This is that bound — a backstop,
+ * the way a CI job's own time limit is, which no run that is working reaches however busy the machine is.
+ *
+ * The container is stopped by the name it was given here, not by its client: a `docker run` killed outright leaves its
+ * container running.
+ */
+const CONTAINER = `apack-linux-${process.pid}-${randomBytes(4).toString('hex')}`;
+const RUN_LIMIT_MS = TIMEOUT_MS.acceptance.ms;
+let ranOut = false;
+
 const child = spawn('docker', [
   // IPv4 loopback only, as on CI's Linux runners: with IPv6 up, `localhost` resolves to ::1 first here, so a
   // dev server binds where a client dialling 127.0.0.1 cannot reach it
-  'run', '--rm', '--init', ...RESOURCE_LIMITS, ...scratchArgs, '--sysctl', 'net.ipv6.conf.all.disable_ipv6=1',
+  'run', '--rm', '--init', '--name', CONTAINER, ...RESOURCE_LIMITS, ...scratchArgs, '--sysctl', 'net.ipv6.conf.all.disable_ipv6=1',
   '-v', `${REPO_ROOT}:/src:ro`, '-v', `${WORK_VOLUME}:/work`, '-v', `${NPM_CACHE_VOLUME}:/root/.npm`,
   '-v', `${ELMDB_CHECKOUT}:/elmdb-src:ro`, '-v', `${ELMDB_VOLUME}:/elmdb`, '-v', `${CARGO_REGISTRY_VOLUME}:/usr/local/cargo/registry`,
   ...gitDirMount(),
@@ -324,4 +350,12 @@ const child = spawn('docker', [
 
 // Docker forwards these to the container's init, which stops the command and lets `--rm` clean up
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => child.kill(signal));
-child.on('close', (code, signal) => { process.exitCode = code ?? (signal === null ? 1 : 128); });
+const limit = setTimeout(() => {
+  ranOut = true;
+  console.error(`\ntest:linux ran past its ${RUN_LIMIT_MS / 3_600_000}h limit on the clock, which only a loop that spins reaches: stopping ${CONTAINER}`);
+  spawnSync('docker', ['stop', '--time', '10', CONTAINER], { stdio: 'ignore' });
+}, RUN_LIMIT_MS);
+child.on('close', (code, signal) => {
+  clearTimeout(limit);
+  process.exitCode = ranOut ? 124 : code ?? (signal === null ? 1 : 128);
+});

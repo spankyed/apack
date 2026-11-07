@@ -5,6 +5,17 @@ import { syncBuiltinESMExports } from 'node:module';
 import threads, { SHARE_ENV, BroadcastChannel, getEnvironmentData, setEnvironmentData, type WorkerOptions } from 'node:worker_threads';
 import { withoutCompilerFileReads, type CompilerInputObservations } from '@apackdev/host/build/compiler-inputs';
 import { formatNodeOptions, parseNodeOptions } from '@apackdev/host/build/source-resolution';
+import { answerWhileWorking, threadWork } from '@apackdev/host/build/process-progress';
+
+/**
+ * How much of its own CPU a worker may spend before it accepts the final input collection: what refuses a worker
+ * spinning in pack code, which can never reach its message handler, where a plain `apack pack build` has no step
+ * ceiling around it. A worker that is only starved by a busy machine adds almost no CPU while it waits for its turn,
+ * and one finishing a synchronous stretch of compilation reaches its handler at the end of it, so thirty seconds of
+ * its own thread's CPU is past anything a healthy worker spends between the request and its acceptance, and a spin
+ * is refused in about that long rather than held to the build's own bounds.
+ */
+const ACCEPT_CPU_MS = 30_000;
 import { COMPILER_NODE_OPTIONS_ENV, compilerStartupArguments } from './compiler-startup-options.ts';
 
 const HANDOFF = 'apack.compiler.worker';
@@ -56,7 +67,7 @@ export function ownCompilerThreads(bootstrap: string, workspace: string, environ
       const ready = new Promise<void>(resolve => { readyResolve = resolve; });
       let report: ThreadReport | undefined, exited = false, sequence = 0;
       let stopping: Promise<number> | undefined;
-      const pending = new Map<number, { timer?: ReturnType<typeof setTimeout>; resolve(value: CompilerInputObservations[]): void; reject(error: Error): void }>();
+      const pending = new Map<number, { accepted(): void; resolve(value: CompilerInputObservations[]): void; reject(error: Error): void }>();
       const result = (value: ThreadReport): CompilerInputObservations[] => {
         if (value.error) throw new Error(`Compiler worker inputs could not be collected: ${value.error}`);
         if (!value.observations) throw new Error('Compiler worker exited without its input observations');
@@ -67,7 +78,7 @@ export function ownCompilerThreads(bootstrap: string, workspace: string, environ
         if (data.ready) { readyResolve(); return; }
         const request = pending.get(data.id);
         if (!request) return;
-        if (data.collecting) { clearTimeout(request.timer); return; }
+        if (data.collecting) { request.accepted(); return; }
         pending.delete(data.id);
         try { request.resolve(result(data)); } catch (error) { request.reject(error as Error); }
       };
@@ -92,15 +103,21 @@ export function ownCompilerThreads(bootstrap: string, workspace: string, environ
           if (exited) return result(report!);
           const id = ++sequence;
           return await new Promise<CompilerInputObservations[]>((resolve, reject) => {
-            // Bound an unresponsive worker, not filesystem verification or nested collection.
-            const timer = finish ? setTimeout(() => {
-              pending.delete(id);
-              reject(new Error('Compiler worker did not accept input collection before termination; refusing publication'));
-            }, 2_000) : undefined;
+            // Bound an unresponsive worker, not filesystem verification or nested collection: a worker that is
+            // computing answers late and is waited for, and one doing nothing for the watchdog's window is refused.
+            // Its own CPU, since a thread shares its process's pid.
+            let accepted!: () => void;
+            const acceptance = new Promise<void>(settle => { accepted = settle; });
+            if (finish) {
+              answerWhileWorking(acceptance, { work: threadWork(worker), what: 'Compiler worker', ceilingMs: ACCEPT_CPU_MS }).catch((cause: unknown) => {
+                if (!pending.delete(id)) return;
+                reject(new Error('Compiler worker did not accept input collection before termination; refusing publication', { cause }));
+              });
+            }
             pending.set(id, {
-              timer,
-              resolve: value => { clearTimeout(timer); resolve(value); },
-              reject: error => { clearTimeout(timer); reject(error); },
+              accepted,
+              resolve: value => { accepted(); resolve(value); },
+              reject: error => { accepted(); reject(error); },
             });
             channel.postMessage({ id, finish });
           });

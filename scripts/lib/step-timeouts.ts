@@ -32,6 +32,8 @@
 // measurement. `sizeOf` (`scripts/lib/test-timeouts.ts`) is the same rule for tests: it reads the config
 // filename, the half and suite membership — never a duration — and refuses a file it cannot classify.
 
+import { IDLE_MS } from '@apackdev/host/build/process-progress';
+
 /**
  * Which common rung a step's *kind of work* puts it on, as something a check can run:
  *
@@ -54,7 +56,7 @@ export const rungForKind = (work: { installs: boolean; fansOut: boolean; builds:
   work.installs ? 'scenario' : (work.fansOut || work.builds) ? 'suite' : 'quick';
 
 /** How long a process tree may go without CPU or output before `boundedSpawn` ends it as stalled */
-export const IDLE_MS = 120_000;
+export { IDLE_MS };
 
 /**
  * `APACK_WATCHDOG=off` turns the watchdog off for a run and everything it starts, which inherit the variable,

@@ -7,10 +7,11 @@ import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { readPackBuild } from '@apackdev/host/packs';
 import { startTestPackBuildWatcher, WATCH_REBUILD_BUDGET_MS, type TestPackBuildWatcher } from '../_support/watch-builds.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 const sharedCompiler = shareCompilerInstallation();
 
-it('refreshes flow modules loaded through ordinary imports on the next watched build', async ({ signal }) => {
+it('refreshes flow modules loaded through ordinary imports on the next watched build', { meta: cpuBudget(120_000 + WATCH_REBUILD_BUDGET_MS + 20_000) }, async ({ signal }) => {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-watch-flows-'));
   const root = path.join(temporary, 'pack');
   const flow = path.join(root, 'src/content/flows/main.ts');
@@ -49,9 +50,9 @@ it('refreshes flow modules loaded through ordinary imports on the next watched b
     errors.mockRestore();
     fs.rmSync(temporary, { recursive: true, force: true });
   }
-}, 120_000 + WATCH_REBUILD_BUDGET_MS + 20_000);
+});
 
-it('recompiles changed transitive content modules and retains the accepted build on failure', async ({ signal }) => {
+it('recompiles changed transitive content modules and retains the accepted build on failure', { meta: cpuBudget(120_000 + 2 * WATCH_REBUILD_BUDGET_MS + 20_000) }, async ({ signal }) => {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-watch-modules-'));
   const root = path.join(temporary, 'pack');
   const helper = path.join(root, 'src/value.ts');
@@ -93,4 +94,4 @@ it('recompiles changed transitive content modules and retains the accepted build
     errors.mockRestore();
     fs.rmSync(temporary, { recursive: true, force: true });
   }
-}, 120_000 + 2 * WATCH_REBUILD_BUDGET_MS + 20_000);
+});

@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { PACKAGES_BUILT, REPO_ROOT, installPublishedPackages } from '@app/publish-checks';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 /**
  * A pack's facade bundle (dist/types/pack-types.d.ts) is the same whether its @apackdev/* packages come
@@ -93,12 +94,12 @@ describe.skipIf(!PACKAGES_BUILT)('facade bundle determinism (needs dist: npm run
     fs.rmSync(parent, { recursive: true, force: true });
   });
 
-  it('is identical from the workspace and from the packed tarballs a consumer installs', async ({ signal }) => {
+  it('is identical from the workspace and from the packed tarballs a consumer installs', { meta: cpuBudget(60_000 + 2 * 180_000 + 20_000) }, async ({ signal }) => {
     active = buildFacade(parent, 'workspace', path.join(REPO_ROOT, 'node_modules'), signal);
     const fromWorkspace = await active;
     active = buildFacade(parent, 'packed', path.join(installPublishedPackages(), 'node_modules'), signal);
     const fromPacked = await active;
     expect(fromWorkspace).toContain('QueryBuilder');
     expect(fromPacked).toBe(fromWorkspace);
-  }, 60_000 + 2 * 180_000 + 20_000);
+  });
 });

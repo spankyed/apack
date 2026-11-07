@@ -5,6 +5,7 @@ import { createFrontendResourceFixture, readFrontendOutput } from '../_support/f
 import { readPackBuild } from '@apackdev/host/packs';
 import { WATCH_REBUILD_BUDGET_MS, type TestPackBuildWatcher } from '../_support/watch-builds.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 const sharedCompiler = shareCompilerInstallation();
 
@@ -31,9 +32,9 @@ describe('CSS dependency watching', () => {
     publications = 0;
     watcher = await fixture.startWatcher(pack, { place: { env: 'test', userDataDir: path.join(fixture.root, 'profile') },
       onBuilt: async () => { publications++; } });
-  }, 2 * 60_000);
+  });
 
-  it('recovers a missing nested stylesheet while retaining the accepted build', async () => {
+  it('recovers a missing nested stylesheet while retaining the accepted build', { meta: cpuBudget(3 * WATCH_REBUILD_BUDGET_MS + 20_000) }, async () => {
     const css = () => fs.readFileSync(path.join(pack, 'dist/runtime/fe.css'), 'utf8');
     const replacement = path.join(fixture.root, 'replacement.css');
     await watcher.rebuildAfter(() => {
@@ -55,10 +56,10 @@ describe('CSS dependency watching', () => {
     });
     await vi.waitFor(() => expect(publications).toBeGreaterThan(count), { timeout: 20_000 });
     expect(css()).toContain('#abcdef');
-  }, 3 * WATCH_REBUILD_BUDGET_MS + 20_000);
+  });
 });
 
-it.each(['css-url', 'template'] as const)('watches an external %s asset in a separate directory', async kind => {
+it.each(['css-url', 'template'] as const)('watches an external %s asset in a separate directory', { meta: cpuBudget(120_000 + WATCH_REBUILD_BUDGET_MS + 20_000) }, async kind => {
   if (kind === 'template') vi.stubEnv('APACK_NO_BUILD_READS', '1');
   const { pack } = consumer();
   const assets = path.join(fixture.root, 'assets');
@@ -86,9 +87,9 @@ it.each(['css-url', 'template'] as const)('watches an external %s asset in a sep
     expect(readFrontendOutput(pack, '.svg')).toContain('AFTERX');
     expect(readFrontendOutput(pack, '.svg')).not.toContain('BEFORE');
   } finally { await watcher?.close(); }
-}, 120_000 + WATCH_REBUILD_BUDGET_MS + 20_000);
+});
 
-it('watches initially empty external Tailwind content through nested directory links', async () => {
+it('watches initially empty external Tailwind content through nested directory links', { meta: cpuBudget(120_000 + 2 * WATCH_REBUILD_BUDGET_MS + 20_000) }, async () => {
   const { pack } = consumer();
   const content = path.join(fixture.root, 'content');
   const sources = path.join(fixture.root, 'sources');
@@ -127,4 +128,4 @@ it('watches initially empty external Tailwind content through nested directory l
     expect(errors.mock.calls).toEqual([]);
     expect(readFrontendOutput(pack, '.css')).not.toContain('.text-orange-500');
   } finally { await watcher?.close(); }
-}, 120_000 + 2 * WATCH_REBUILD_BUDGET_MS + 20_000);
+});

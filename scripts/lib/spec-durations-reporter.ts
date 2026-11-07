@@ -101,14 +101,13 @@ export interface ReportedModule {
    */
   readonly skipped: boolean;
   /**
-   * The tests that passed past their size budget: the project's `testTimeout` over `DEADLINE_FACTOR`, which is
-   * what every config declares. A slow pass is reported rather than failed, and this is where it is recorded.
-   *
-   * A test with a timeout of its own is recorded too, against the project's budget, because vitest's reporter
-   * API exposes no test's own timeout; the pool leaves those out, having the overrides from the spec's syntax
-   * tree (`timeoutOverrides`).
+   * The tests that passed having spent more CPU than their budget: their own `meta.cpuBudgetMs`, or the project's
+   * `apack.testCpuMs`, over `DEADLINE_FACTOR` — the deadline being that budget's multiple. A costly pass is
+   * reported rather than failed, and this is where it is recorded. CPU rather than wall time, read from the
+   * `meta.cpuMs` the progress guard writes, because load stretches a duration and leaves CPU alone, so a test
+   * named here costs more than it did, not one that ran beside something busy.
    */
-  readonly overBudget: readonly { readonly name: string; readonly ms: number; readonly budgetMs: number }[];
+  readonly overBudget: readonly { readonly name: string; readonly cpuMs: number; readonly budgetMs: number }[];
 }
 
 export interface ReportedRun {
@@ -144,13 +143,16 @@ function workspaceName(name: string, root: string): string {
 
 type ReportedModuleTask = Modules[number];
 
-/** The passing tests of a module that ran past the project's budget */
+/** The passing tests of a module that spent more CPU than their budget */
 function overBudget(module: ReportedModuleTask): ReportedModule['overBudget'] {
-  const budget = module.project.config.testTimeout / DEADLINE_FACTOR;
-  const over: { name: string; ms: number; budgetMs: number }[] = [];
+  const projectCpuMs = (module.project.config.provide as { 'apack.testCpuMs'?: number } | undefined)?.['apack.testCpuMs'];
+  const over: { name: string; cpuMs: number; budgetMs: number }[] = [];
   for (const test of module.children.allTests()) {
-    const ms = test.diagnostic()?.duration;
-    if (test.result().state === 'passed' && ms !== undefined && ms > budget) over.push({ name: test.name, ms, budgetMs: budget });
+    const { cpuMs, cpuBudgetMs } = test.meta() as { cpuMs?: number; cpuBudgetMs?: number };
+    const declared = cpuBudgetMs ?? projectCpuMs;
+    if (declared === undefined || cpuMs === undefined || test.result().state !== 'passed') continue;
+    const budget = declared / DEADLINE_FACTOR;
+    if (cpuMs > budget) over.push({ name: test.name, cpuMs, budgetMs: budget });
   }
   return over;
 }

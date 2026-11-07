@@ -51,6 +51,9 @@ export function prepareIntegration(root, refs) {
   return { dir, inputs, commit: git(dir, ['rev-parse', 'HEAD']) };
 }
 
+/** How long a whole strict chain may run on the clock, before any wait for another checkout's */
+const CHAIN_WALL_MS = 7_200_000;
+
 /** @param {string} dir @param {string[]} args */
 async function npm(dir, args) {
   const { boundedSpawn } = await tsImport('./lib/bounded-spawn.ts', import.meta.url);
@@ -59,7 +62,9 @@ async function npm(dir, args) {
   // The full strict chain contains the complete acceptance pools; it is not one install scenario. It may wait for another
   // checkout's chain on the way, doing nothing for as long, so its own steps' watchdogs are what catch a hang in it
   const chain = args.includes('chain');
-  const budget = chain ? TIMEOUT_MS.acceptance.ms + MACHINE_WAIT_MS : TIMEOUT_MS.suite.ms;
+  // A whole chain is bounded on the clock (`idleMs: false` below), so by a wall time of its own: two hours of steps
+  // and the wait. A class is a budget of CPU, which is what the install below is given
+  const budget = chain ? CHAIN_WALL_MS + MACHINE_WAIT_MS : TIMEOUT_MS.suite.ms;
   const result = await boundedSpawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', args, budget, {
     cwd: dir, stream: true, ...(chain ? { idleMs: false } : {}), shell: process.platform === 'win32', env: { ...process.env, NODE_ENV: 'development' },
   });

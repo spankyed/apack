@@ -16,7 +16,7 @@ export default defineConfig({
   /* Vitest‑specific options -------------------------------------------- */
   test: {
     // A worker exits when its vitest does, rather than running on orphaned
-    setupFiles: ['../apack-testing/src/vitest-exit-with-parent.ts'],
+    setupFiles: ['../apack-testing/src/vitest-exit-with-parent.ts', '../apack-testing/src/vitest-progress-guard.ts'],
     globals: true,                   // use `describe/it/expect` without imports
     environment: 'node',             // happy in pure Node (no jsdom needed here)
     // Specs live where the source they cover does (`CLAUDE.md`, Tests), so one pattern covers every one of
@@ -28,12 +28,13 @@ export default defineConfig({
     include: ['tests/**/*.spec.ts'],
     // Integration tests spawn real subprocesses and gate themselves on env
     // vars (RUN_INTEGRATION=1) so default `npm test` runs skip them cleanly.
-    // Small (`SIZE_MS` × `DEADLINE_FACTOR`, scripts/lib/unit-suites.ts): a unit test that takes longer is hung,
-    // not slow. This suite's slowest test is 0.7s.
-    testTimeout: 30_000,
-    // A hook gets the size's budget too. Without this it falls back to vitest's 10s default, which is
-    // tighter than the size allows — a hook would fail at 10s for a policy that says 15s.
-    hookTimeout: 30_000,
+    // Small (`SIZE_MS` × `DEADLINE_FACTOR`, scripts/lib/unit-suites.ts): the CPU one test may spend. A test that
+    // needs more declares a reviewed `meta.cpuBudgetMs` (`suite-timeouts.spec.ts`)
+    provide: { 'apack.testCpuMs': 30_000 },
+    // Vitest's clock is off: the progress guard in setupFiles fails a test or hook whose process tree stalls, and a
+    // test that spends the CPU budget above (`vitest-progress-guard.ts`, `@apackdev/testing`)
+    testTimeout: 0,
+    hookTimeout: 0,
     // ❶  there is **no** `tsconfig` option – remove it
   },
 

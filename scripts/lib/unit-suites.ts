@@ -60,40 +60,38 @@ export const UNIT_SUITES: readonly UnitSuite[] = [
 export const unitStepName = (suite: UnitSuite): string => `test:unit:${suite.kind}`;
 
 /**
- * What one test may take, by the size of the target that runs it — Bazel's `size`, which is a bucket
- * whose whole purpose is a default timeout.
+ * What one test may spend, by the size of the target that runs it — Bazel's `size`, a bucket whose whole purpose
+ * is a default bound.
+ *
+ * **CPU, not the clock.** Every config turns vitest's clock off and loads the progress guard
+ * (`@apackdev/testing`'s `vitest-progress-guard.ts`), which fails a test or hook whose process tree goes `IDLE_MS`
+ * without CPU and a test that spends its CPU deadline. A busy machine stretches a test's wall time and leaves its
+ * CPU where it was, so neither fires on a test that is only slow: two chain runs at a load of 35 failed different
+ * tests each time on vitest's per-test clock, and a test failed at 240s passed alone in 118s.
  *
  * **One bucket per half, because each half is what consumes one.** The fast half is `small`, the integration
  * half `large`, and the native half `enormous`: its specs compose cold compiler captures, builds and watcher
- * cycles, which a 60s case could not hold, so a `large` budget there made nearly every native case a reviewed
- * exception. A bucket must be one something distinguishes.
+ * cycles. A bucket must be one something distinguishes. Sized against forced readings on 2026-11-07: the fast
+ * half's heaviest test spent 7.3s of CPU and the integration half's heaviest without a budget of its own 34.6s.
  *
- * The point is the ceiling, not the number. `testTimeout: 120_000` on a unit suite turns a hang into a
- * slow pass — a load-induced stall reached a chain summary as two unexplained errors rather than as a
- * timeout. Measured 2026-09-25, the slowest single test in the two suites that set that value was 2.9s
- * (`@app/default-setup`) and 0.7s (`@app/api`), so `small` has five times the headroom it needs.
- *
- * A suite that sets nothing gets vitest's 5s default, which is *tighter* than `small` allows, so a config
- * that declares nothing is running on a third number nobody chose. This is a bound on what a config may
- * declare, checked by `suite-timeouts.spec.ts`, not a value the configs import: a vitest config importing
- * across package layers is the thing `check:specifiers` exists to prevent.
+ * A config declares the deadline, not the budget, as `provide: { 'apack.testCpuMs': … }`; `suite-timeouts.spec.ts`
+ * holds every config to its size's, since a vitest config importing across package layers is the thing
+ * `check:specifiers` exists to prevent.
  */
 export const SIZE_MS = { small: 15_000, large: 60_000, enormous: 300_000 } as const;
 export type Size = keyof typeof SIZE_MS;
 
 /**
- * How far past its size budget a test runs before it is failed: a vitest config declares
- * `DEADLINE_FACTOR × SIZE_MS[size]` as its `testTimeout` and `hookTimeout`.
+ * How far past its size budget a test's CPU goes before it is failed: a config gives the guard
+ * `DEADLINE_FACTOR × SIZE_MS[size]` as `apack.testCpuMs`.
  *
- * **Two numbers with two jobs.** The budget is what a test is expected to cost, and a test that passed past it
- * is *reported* — the pool names it and the chain shows it under the step — because load inflates a duration
- * and never deflates one, so a slow pass is a reading rather than a defect. The deadline is there to catch a
- * hang, and so sits where load cannot reach it. A case that timed out at its budget under the chain's load
- * took 19.9s alone and over 60s beside an Electron suite: the factor is what that kind of contention costs,
- * with headroom, not a measurement of any one run.
+ * **Two numbers with two jobs.** The budget is what a test is expected to cost, and a test that passed having
+ * spent past it is *reported* — the pool names it and the chain shows it under the step — as a reading. The
+ * deadline is there to catch a test that spins, the one hang that keeps spending CPU.
  *
- * Per-case overrides are not multiplied. Each one is composed from operations that carry their own bounds (a
- * `runCommand` budget, a build's), so doubling the outer number would change nothing those inner bounds did not.
+ * A test that needs more declares `meta: cpuBudget(ms)` (`@apackdev/testing/vitest`), which is its deadline and is
+ * not multiplied: each is composed from operations that carry their own bounds, and the reason it needs more is
+ * listed in `suite-timeouts.spec.ts`.
  */
 export const DEADLINE_FACTOR = 2;
 

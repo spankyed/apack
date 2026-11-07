@@ -13,6 +13,7 @@ import { bundlePackFE } from '../../src/build/fe-bundler.ts';
 import { runPackBuild } from '../../src/build/build-process.ts';
 import { readPackBuildInputs, assertPackBuildInputsCurrent } from '@apackdev/host/build/pack-build-inputs';
 import { packInputFiles } from '@apackdev/host/build/pack-inputs';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 let root: string | undefined;
 afterEach(() => {
@@ -111,7 +112,7 @@ it('preserves generated files when installed package bytes change during async g
 });
 
 
-it('keeps a captured build current after standalone generation with unchanged generated code', async () => {
+it('keeps a captured build current after standalone generation with unchanged generated code', { meta: cpuBudget(180_000 + 60_000 + 60_000 + 20_000) }, async () => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-generation-inputs-'));
   const pack = preparePack(root, 'generation-inputs', {
     'apack.json': JSON.stringify({ id: 'generation-inputs', name: 'Generation Inputs', version: '1.0.0' }),
@@ -133,4 +134,4 @@ it('keeps a captured build current after standalone generation with unchanged ge
   assertPackBuildInputsCurrent(pack, inputs);
   fs.appendFileSync(path.join(pack, 'src/__generated__/ears.ts'), '\n// changed generated module\n');
   expect(() => assertPackBuildInputsCurrent(pack, inputs)).toThrow('Compiler startup input changed');
-}, 180_000 + 60_000 + 60_000 + 20_000);
+});

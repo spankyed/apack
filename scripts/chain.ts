@@ -570,10 +570,10 @@ async function main(): Promise<void> {
       for (const slow of slowestTests(result.output)) {
         console.log(dim(`${' '.repeat(TIME_COLUMN)}${secs(slow.ms).padStart(6)}  ${oneLine(REASON_COLUMN, slow.name)}`));
       }
-      // The tests that passed past their size budget: reported, never failed, since load inflates a duration
-      // and never deflates one (`DEADLINE_FACTOR`). Not dimmed, being a finding rather than a profile.
+      // The tests that passed having spent more CPU than their budget: reported, never failed, the deadline being
+      // its multiple (`DEADLINE_FACTOR`). Not dimmed, being a finding rather than a profile.
       for (const over of overBudgetLines(result.output)) {
-        console.log(`${' '.repeat(TIME_COLUMN)}${secs(over.ms).padStart(6)}  ${oneLine(REASON_COLUMN, `over its ${secs(over.budgetMs)} budget: ${over.test}`)}`);
+        console.log(`${' '.repeat(TIME_COLUMN)}${secs(over.cpuMs).padStart(6)}  ${oneLine(REASON_COLUMN, `CPU over its ${secs(over.budgetMs)} budget: ${over.test}`)}`);
       }
       // And the same for whole files, which is the unit a half is decided in. It reads what the run wrote
       // rather than its output: a step's output is buffered and printed only on failure, so until this
