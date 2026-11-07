@@ -36,7 +36,7 @@ it('discovers verified disabled and activation-failed definitions without execut
   install('disabled');
   install('failed');
   const registry = createNativePackTestRegistry();
-  registry.refreshCatalog(packsDir, new Set(['disabled']));
+  registry.refreshCatalog({ packsDir, disabled: new Set(['disabled']), settings: 'enforce' });
   expect(Object.keys(registry.settingsCatalog().features)).toEqual(['disabled/memos', 'failed/memos']);
   expect(registry.catalog.get('disabled')?.enabled).toBe(false);
   registry.recordLoadProblem('failed', 'runtime throws');
@@ -49,15 +49,15 @@ it('discovers verified disabled and activation-failed definitions without execut
 it('retains accepted declarations and reports a malformed replacement instead of silently removing settings', () => {
   const dir = install('memo-pack', 'Accepted');
   const registry = createNativePackTestRegistry();
-  registry.refreshCatalog(packsDir, new Set());
+  registry.refreshCatalog({ packsDir, disabled: new Set(), settings: 'enforce' });
   const previous = registry.settingsCatalog();
   fs.writeFileSync(path.join(dir, PACK_LAYOUT.manifest), '{ broken');
-  registry.refreshCatalog(packsDir, new Set());
+  registry.refreshCatalog({ packsDir, disabled: new Set(), settings: 'enforce' });
   expect(registry.settingsCatalog()).toBe(previous);
   expect(registry.settingsCatalog().packs['memo-pack'].assistant.defaults).toEqual({ name: 'Accepted' });
   expect(registry.loadProblem('memo-pack')).toContain('declarations were refused');
   install('memo-pack', 'Rebuilt');
-  registry.refreshCatalog(packsDir, new Set());
+  registry.refreshCatalog({ packsDir, disabled: new Set(), settings: 'enforce' });
   expect(registry.settingsCatalog().packs['memo-pack'].assistant.defaults).toEqual({ name: 'Rebuilt' });
   expect(registry.loadProblem('memo-pack')).toBeUndefined();
 });
@@ -65,9 +65,9 @@ it('retains accepted declarations and reports a malformed replacement instead of
 it('publishes removal only after the installed directory is gone', () => {
   const dir = install('memo-pack');
   const registry = createNativePackTestRegistry();
-  registry.refreshCatalog(packsDir, new Set());
+  registry.refreshCatalog({ packsDir, disabled: new Set(), settings: 'enforce' });
   fs.rmSync(dir, { recursive: true });
-  registry.refreshCatalog(packsDir, new Set());
+  registry.refreshCatalog({ packsDir, disabled: new Set(), settings: 'enforce' });
   expect(registry.settingsCatalog().features).toEqual({});
   expect(registry.settingsCatalog().packs).toEqual({});
 });
@@ -86,7 +86,7 @@ it('refuses invalid native declarations atomically and retains other contributio
 it('refuses incompatible declarations before publication and retains every accepted projection', () => {
   install('memo-pack');
   const registry = createNativePackTestRegistry();
-  registry.refreshCatalog(packsDir, new Set());
+  registry.refreshCatalog({ packsDir, disabled: new Set(), settings: 'enforce' });
   const previous = registry.catalog.getSnapshot();
   const settings = registry.settingsCatalog();
   registry.catalog.setSettingsAdmission(candidate => compileSettingsCatalog(candidate).validate({ packs: { 'memo-pack': { assistant: { name: 'My choice' } } } }));
@@ -127,4 +127,16 @@ it('refuses installation before moving incumbent files or updating their record'
   })).rejects.toThrow('Pack "memo-pack" settings were refused');
   expect(fs.readFileSync(marker, 'utf8')).toBe('retain');
   expect(fs.readFileSync(recordFile, 'utf8')).toBe('[]');
+});
+
+it('makes boot inspection explicit while live discovery enforces settings even on its first call', () => {
+  install('memo-pack');
+  const registry = createNativePackTestRegistry();
+  registry.catalog.setSettingsAdmission(() => { throw new Error('stored settings need recovery'); });
+  const before = registry.catalog.getSnapshot();
+  expect(() => registry.refreshCatalog({ packsDir, settings: 'enforce' })).toThrow('stored settings need recovery');
+  expect(registry.catalog.getSnapshot()).toBe(before);
+  registry.refreshCatalog({ packsDir, settings: 'inspect' });
+  expect(registry.settingsCatalog().packs['memo-pack']).toBeDefined();
+  expect(registry.loadedPacks()).toEqual([]);
 });

@@ -40,7 +40,7 @@ import type { PackContentTarget } from './runtime/apply.ts';
 import { createOwnedStepStore, createDesignationStore } from './extensions.ts';
 import { createContentWriterStore, createApplierStore, createShutdownHooks } from './backend-extensions.ts';
 import { checkFeatureIds } from './feature-ids.ts';
-import { readAppPackSources } from './app-sources.ts';
+import { readAppPackSources, type AppPackSources } from './app-sources.ts';
 import { createContributionCatalog, type ContributionCatalog, type PackCatalogProblem, type PackCatalogSource } from './catalog.ts';
 import { disabledPackIds } from './installed.ts';
 import { appSettingsDefinition } from '../features/settings/be/app-definition.ts';
@@ -202,9 +202,17 @@ export interface PackReplacementOptions {
   retireBinding(dispose: () => string[]): void;
 }
 
+/** Boot inspects stored settings for recovery; live inventory changes enforce them before publication. */
+export interface RefreshPackCatalogOptions {
+  settings: 'inspect' | 'enforce';
+  packsDir?: string;
+  disabled?: ReadonlySet<string>;
+  appSources?: AppPackSources;
+}
+
 export interface PackRegistry extends PackRegistryView {
   readonly catalog: ContributionCatalog;
-  refreshCatalog(packsDir?: string, disabled?: ReadonlySet<string>): InstalledPackBuild[];
+  refreshCatalog(options: RefreshPackCatalogOptions): InstalledPackBuild[];
   /** Registers a pack; throws on a collision, registering none of it */
   registerPack(pack: PackRegistration, origin?: PackOrigin): void;
   /** Replace an accepted runtime atomically; returns retirement errors after a successful commit. */
@@ -424,11 +432,17 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
 
   let catalogDir: string | undefined;
 
-  function refreshCatalog(packsDir = installedPacksDir?.() ?? catalogDir, disabled?: ReadonlySet<string>): InstalledPackBuild[] {
-    const appSources = appPackSourcesDir?.();
-    if (appPackSourcesDir) catalog.setAppPackSources(appSources === undefined
-      ? { sources: [], problems: [] } : readAppPackSources(appSources));
-    if (!packsDir) return [];
+  function refreshCatalog(options: RefreshPackCatalogOptions): InstalledPackBuild[] {
+    const packsDir = options.packsDir ?? installedPacksDir?.() ?? catalogDir;
+    let { disabled } = options;
+    const appSourcesDir = appPackSourcesDir?.();
+    const appSources = options.appSources ?? (appPackSourcesDir
+      ? appSourcesDir === undefined ? { sources: [], problems: [] } : readAppPackSources(appSourcesDir)
+      : undefined);
+    if (!packsDir) {
+      if (appSources) catalog.setAppPackSources(appSources);
+      return [];
+    }
     disabled ??= disabledPackIds();
     const sources: PackCatalogSource[] = [];
     const problems: PackCatalogProblem[] = [];
@@ -445,8 +459,7 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
         if (previous) sources.push({ snapshot: previous.snapshot, integrity: previous.integrity, dir, enabled: !disabled.has(id) });
       }
     }
-    // The first discovery is boot's, which takes what is installed (`admitSettings`)
-    catalog.replace(sources, problems, { reportConflicts: true, admitSettings: catalogDir !== undefined });
+    catalog.replace(sources, problems, { reportConflicts: true, admitSettings: options.settings === 'enforce', appSources });
     catalogDir = packsDir;
     return discovered;
   }

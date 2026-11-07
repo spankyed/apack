@@ -1,7 +1,7 @@
 import { assertPackSettings } from './settings-admission.ts';
 import * as fs from 'fs';
 import { INSTALL_RECORD_RECOVERY } from './staging.ts';
-import { readAppPackSources } from './app-sources.ts';
+import { readAppPackSources, type AppPackSources } from './app-sources.ts';
 import { readInstalledPacks, writeInstalledPacks, type PackRecord } from './installed.ts';
 import * as path from 'path';
 import * as os from 'os';
@@ -180,8 +180,12 @@ export interface ShippedInstallOptions extends InstallOptions {
 
 export async function installShippedPacks(shippedDir: string, packsDir: string, options: ShippedInstallOptions): Promise<ShippedPackInstall[]> {
   if (!fs.existsSync(shippedDir)) return [];
+  return installCapturedShippedPacks(readAppPackSources(shippedDir), packsDir, options);
+}
+
+/** Install captured offers; staging still verifies copied bytes and their expected source revision. */
+export async function installCapturedShippedPacks(catalog: AppPackSources, packsDir: string, options: ShippedInstallOptions): Promise<ShippedPackInstall[]> {
   const results: ShippedPackInstall[] = [];
-  const catalog = readAppPackSources(shippedDir);
   for (const problem of catalog.problems) {
     if (options.only === undefined || problem.id === options.only) results.push({ id: problem.id, outcome: 'failed', error: problem.message });
   }

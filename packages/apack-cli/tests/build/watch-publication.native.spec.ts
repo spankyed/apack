@@ -100,7 +100,7 @@ async function startWatchedPack(signal: AbortSignal): Promise<WatchedPack & { cl
       onBuilt: async () => { stagePack(root, installed); state.publications++; },
     });
     stagePack(root, installed);
-    registry.refreshCatalog(environment.packsDir);
+    registry.refreshCatalog({ packsDir: environment.packsDir, settings: 'enforce' });
     expect(fs.existsSync(marker), 'catalog inspection must not activate pack modules').toBe(false);
     await reloadPackById(registry, 'watched-pack', backend);
     expect(registry.getPackRegistration('watched-pack')?.lifecycle?.onInit?.()).toBe('first');

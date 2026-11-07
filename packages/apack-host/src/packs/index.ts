@@ -37,7 +37,7 @@ export { PACK_LOAD_MESSAGES, packRegistered, packLoadFailed } from './load-messa
 
 // Installer
 export {
-  installPack, installPackFromLocal, installPackFromGitHub, installShippedPacks, restoreShippedPack, updateShippedPack, type ShippedPackInstall,
+  installPack, installPackFromLocal, installPackFromGitHub, installShippedPacks, installCapturedShippedPacks, restoreShippedPack, updateShippedPack, type ShippedPackInstall,
   uninstallPack, isHostCompatible,
 } from './installer.ts';
 export { recordHostCompatibility, readHostCompatibility, type HostCompatibility } from './host-info.ts';

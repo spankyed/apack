@@ -128,11 +128,11 @@ describe('app-shipped source declarations', () => {
     source('default');
     let directory: string | undefined = root;
     const registry = createPackRegistry({ appPackSourcesDir: () => directory });
-    registry.refreshCatalog();
+    registry.refreshCatalog({ settings: 'enforce' });
     expect(registry.catalog.getSnapshot().appPackSources).toHaveLength(1);
     expect(registry.loadedPacks()).toEqual([]);
     directory = undefined;
-    registry.refreshCatalog();
+    registry.refreshCatalog({ settings: 'enforce' });
     expect(registry.catalog.getSnapshot().appPackSources).toEqual([]);
     expect(fs.existsSync(path.join(tmp, 'activated'))).toBe(false);
   });
@@ -153,4 +153,22 @@ describe('app-shipped source declarations', () => {
     expect(fs.readFileSync(records, 'utf8')).toBe(before);
     expect(readPackBuild(path.join(packs, 'default-pack')).revision).toBe(incumbent.revision);
   });
+});
+
+it('publishes offers and installed declarations together, with no publication after refusal or unchanged input', () => {
+  source('default');
+  const offers = readAppPackSources(root);
+  const catalog = createContributionCatalog({ defaults: {}, schema: { type: 'object' } });
+  const build = readPackBuild(path.join(offers.sources[0]!.dir, 'dist'));
+  const installed = [{ dir: '/installed/default-pack', snapshot: build.snapshot, integrity: build.integrity, enabled: true }];
+  const observations: Array<[number, number]> = [];
+  catalog.onChanged(() => observations.push([catalog.getSnapshot().appPackSources.length, catalog.getSnapshot().packs.length]));
+  catalog.replace(installed, [], { appSources: offers });
+  expect(observations).toEqual([[1, 1]]);
+  const accepted = catalog.getSnapshot();
+  catalog.replace(installed, [], { appSources: offers });
+  expect(catalog.getSnapshot()).toBe(accepted);
+  expect(() => catalog.replace([], [], { appSources: { sources: [{ ...offers.sources[0]!, sourceRevision: 'invalid' }], problems: [] } })).toThrow('Invalid or conflicting');
+  expect(catalog.getSnapshot()).toBe(accepted);
+  expect(observations).toEqual([[1, 1]]);
 });

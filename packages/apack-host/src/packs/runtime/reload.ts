@@ -110,7 +110,7 @@ export async function reloadPackById(
   }
 
   if (disabledPackIds().has(packId)) {
-    registry.refreshCatalog(packsDir);
+    registry.refreshCatalog({ packsDir, settings: 'enforce' });
     backendActor.send({ type: 'PACK_CHANGED', packId });
     return;
   }
@@ -154,7 +154,7 @@ export async function reloadPackById(
       newSystemIds: packSystemIds(pack.registration),
       onShutdown: pack.registration.lifecycle?.onShutdown,
       initialize: () => {
-        registry.refreshCatalog(packsDir);
+        registry.refreshCatalog({ packsDir, settings: 'enforce' });
         pack.registration.lifecycle?.onInit?.();
         runPackMigrations(registry.packMigrationTargets('pack', [packId]));
         applyPacks(registry.packContentTargets([packId]));
