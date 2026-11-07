@@ -43,6 +43,7 @@
             :file="file" removable @remove="removeFile(index)" class="flex-shrink-0" />
         </div>
 
+        <p v-if="nativeDecisionPending" role="status" class="px-5 pt-3 text-xs text-neutral-400">Choose how to continue above. Your draft is kept here.</p>
         <p v-if="disabled && disabledReason" role="status" class="px-5 pt-3 text-xs text-neutral-400">{{ disabledReason }}</p>
 
         <!-- Editor container -->
@@ -76,7 +77,7 @@
           />
         </div>
 
-        <NativePromptCompletions :editor="tiptapRef?.editor" :rows="nativeCompletions" :disabled="disabled || submitting" @select="(index, id) => promptEditor?.selectCompletion(index, id)" @dismiss="promptEditor?.dismissCompletions()" />
+        <NativePromptCompletions :editor="tiptapRef?.editor" :rows="nativeCompletions" :disabled="disabled || nativeDecisionPending || submitting" @select="(index, id) => promptEditor?.selectCompletion(index, id)" @dismiss="promptEditor?.dismissCompletions()" />
 
         <div v-if="nativeUi?.composer?.length" class="flex min-w-0 items-end gap-2 px-5">
           <NativeComposerPlacements class="min-w-0 flex-1" :frames="nativeUi.composer" location="hint" @height="nativeHintHeight = $event" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />
@@ -112,7 +113,7 @@
                       v-for="btn in leftButtons"
                       :key="btn.action"
                       @select="handleButtonClick(btn.action)"
-                      :disabled="(btn.action === 'native-model' || btn.action === 'native-settings' || btn.action === 'native-tasks' || btn.action === 'native-mcp' || btn.action === 'native-background') && submitting"
+                      :disabled="(btn.action === 'native-model' || btn.action === 'native-settings' || btn.action === 'native-tasks' || btn.action === 'native-mcp' || btn.action === 'native-background') && (submitting || nativeDecisionPending) || (btn.action === 'native-themes' && nativeDecisionPending)"
                       class="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer text-neutral-200 hover:bg-neutral-800 focus:bg-neutral-800 focus:outline-none"
                       :class="btn.class"
                     >
@@ -131,7 +132,7 @@
                   class="hidden @lg:block p-2 transition-colors text-neutral-500"
                   :class="[disabled ? 'cursor-not-allowed opacity-50' : (!btn.class && 'hover:text-neutral-200'), btn.class]"
                   :aria-label="btn.label"
-                  :disabled="disabled || ((btn.action === 'native-model' || btn.action === 'native-settings' || btn.action === 'native-tasks' || btn.action === 'native-mcp' || btn.action === 'native-background') && submitting)"
+                  :disabled="disabled || ((btn.action === 'native-model' || btn.action === 'native-settings' || btn.action === 'native-tasks' || btn.action === 'native-mcp' || btn.action === 'native-background') && (submitting || nativeDecisionPending)) || (btn.action === 'native-themes' && nativeDecisionPending)"
                   :title="btn.label"
                   @click="handleButtonClick(btn.action)"
                 >
@@ -197,7 +198,7 @@
               <Button
                 type="submit"
                 aria-label="Send"
-                :disabled="nativeBackgrounded || submitting || (!hasTextContent && !hasAttachments) || disabled"
+                :disabled="nativeBackgrounded || nativeDecisionPending || submitting || (!hasTextContent && !hasAttachments) || disabled"
                 class="h-8 gap-2 rounded-lg px-3 text-xs font-medium shadow-sm @lg:px-3.5"
               >
                 <span class="hidden @lg:inline">Send</span>
@@ -272,6 +273,7 @@ const props = defineProps<{
   quickPromptCursor?: { x: number; y: number } | null
   disabled?: boolean
   disabledReason?: string
+  nativeDecisionPending?: boolean
   /** Text to prefill the input with (e.g., on revert). Consumed once on change. */
   prefillText?: string
   /** Attachments to prefill the input with (e.g., on revert). Consumed once on change. */
@@ -435,13 +437,15 @@ watch([() => tiptapRef.value?.editor, () => props.currentThread?.id, () => props
   if (editor && threadId && sessionId) cleanup(bindClaudeWindowDraft(editor, JSON.stringify([threadId, sessionId])))
 }, { flush: 'post' })
 let promptEditor: ReturnType<typeof bindClaudePromptEditor> | undefined
+watch(() => props.nativeDecisionPending, pending => { if (pending) { promptEditor?.dismissSuggestion(); promptEditor?.dismissCompletions() } })
 watch([() => tiptapRef.value?.editor, () => props.nativePrompt?.mountId, () => props.nativePrompt?.attachmentId], ([editor, mountId]) => {
   promptEditor?.dispose(); promptEditor = undefined; nativePromptProblem.value = undefined
   if (editor && mountId) promptEditor = bindClaudePromptEditor(editor, edit => emit('native-prompt-edit', edit), message => { nativePromptProblem.value = message }, props.nativePrompt?.revision, { initialRevision: props.nativePrompt?.completionRevision, request: request => emit('native-prompt-autocomplete', request), update: (rows, offerId) => {
+    if (props.nativeDecisionPending) { nativeCompletions.value = []; setEditorCompletionOffer(editor, undefined); return }
     nativeCompletions.value = offerId ? rows.map(row => ({ ...row, offerId })) : []
     const owner = promptEditor
     setEditorCompletionOffer(editor, offerId && rows.length ? { id: offerId, rows: rows.map((row, index) => ({ ...row, select: () => owner?.selectCompletion(index, offerId) ?? false })), dismiss: () => owner?.dismissCompletions() } : undefined)
-  } }, { viewport: editorAreaRef.value, canSuggest: () => !props.disabled && !props.isBusy && !submitting.value && !hasAttachments.value && !hostPopupActive.value && !nativeCompletions.value.length && document.hasFocus() && !document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]') })
+  } }, { viewport: editorAreaRef.value, canSuggest: () => !props.disabled && !props.nativeDecisionPending && !props.isBusy && !submitting.value && !hasAttachments.value && !hostPopupActive.value && !nativeCompletions.value.length && document.hasFocus() && !document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]') })
 }, { flush: 'post' })
 watch(() => tiptapRef.value?.editor, (editor, _previous, onCleanup) => {
   if (!editor) { hostPopupActive.value = false; return }
@@ -868,12 +872,12 @@ function collectContextReferences(editor: NonNullable<typeof tiptapRef.value>['e
 async function openNativePanel(command: '/config' | '/model' | '/tasks' | '/mcp' | '/theme' | '/background') {
   const label = command === '/background' ? 'background session review' : command === '/theme' ? 'themes' : command === '/model' ? 'model selection' : command === '/tasks' ? 'task manager' : command === '/mcp' ? 'MCP servers' : 'settings'
   const editor = tiptapRef.value?.editor, bridge = promptEditor, submit = props.nativeSubmit
-  if (props.disabled || props.nativeBackgrounded || submitting.value || !editor || !bridge || !submit) return
+  if (props.disabled || props.nativeDecisionPending || props.nativeBackgrounded || submitting.value || !editor || !bridge || !submit) return
   const epoch = composerEpoch, revision = bridge.revision
   submitting.value = true; submissionProblem.value = undefined
   try {
     if (!await bridge.settle() || bridge.revision !== revision || promptEditor !== bridge
-      || epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled) return
+      || epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled || props.nativeDecisionPending) return
     const result = await submit(command, {})
     if (result && 'review' in result) throw new Error(`Claude requested input review before opening ${label}. Use ${command} to review it.`)
   } catch (error) {
@@ -884,7 +888,7 @@ async function openNativePanel(command: '/config' | '/model' | '/tasks' | '/mcp'
 watch(() => props.nativeBackgrounded, (value, previous) => { if (value && !previous) composerEpoch++ })
 
 const handleSubmit = async () => {
-  if (props.disabled || props.nativeBackgrounded || submitting.value) return
+  if (props.disabled || props.nativeDecisionPending || props.nativeBackgrounded || submitting.value) return
   const editor = tiptapRef.value?.editor
   if (!editor) return
   const epoch = composerEpoch, bridge = promptEditor
@@ -899,7 +903,7 @@ const handleSubmit = async () => {
         return
       }
     }
-    if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled) return
+    if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled || props.nativeDecisionPending) return
     const serialized = (editor.storage as any).markdown.getMarkdown() as string
     const md = editor.state.doc.childCount === 1 && editor.state.doc.firstChild?.type.name === 'claudePromptSource'
       ? serialized : serialized.replace(/(\n&nbsp;)+$/, '').trim()
@@ -910,7 +914,7 @@ const handleSubmit = async () => {
     const contextRefs = collectContextReferences(editor)
     const cmdState = commandSuggestionKey.getState(editor.state)
     const attachmentRefs = await attachments.collect(entityId)
-    if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled) return
+    if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled || props.nativeDecisionPending) return
     const references: MessageReferences = {
       ...attachmentRefs,
       ...(contextRefs.length > 0 ? { context: contextRefs } : {}),

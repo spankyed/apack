@@ -38,7 +38,7 @@ beforeEach(() => { HTMLElement.prototype.scrollIntoView = vi.fn(); vi.stubGlobal
 afterEach(() => { vi.useRealTimers(); app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime(); if (previousElectronApi) Object.defineProperty(window, 'electronAPI', previousElectronApi); else Reflect.deleteProperty(window, 'electronAPI'); vi.unstubAllGlobals() })
 function mount(upload: (...args: unknown[]) => Promise<string | undefined>) {
   Object.defineProperty(window, 'electronAPI', { configurable: true, value: { media: { upload } } })
-  const state = reactive({ currentThread: { id: 'thread-one', messages: [] } as any, currentMode: 'Claude Code', nativeBackgrounded: false, isBusy: false, nativeSubmit: undefined as ((text: string, references: import('#generated/types.ts').MessageReferences) => Promise<import('#features/threads/fe/chat/native-submit.ts').ClaudeComposerSubmitResult>) | undefined, nativeUi: undefined as ClaudeUiMountState | undefined, nativePrompt: undefined as { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; reply?: ClaudePromptReply; completions?: ClaudePromptCompletionReply } | undefined, currentPhase: undefined as string | undefined, modes: [{ name: 'Claude Code' }] as any })
+  const state = reactive({ currentThread: { id: 'thread-one', messages: [] } as any, currentMode: 'Claude Code', nativeBackgrounded: false, nativeDecisionPending: false, isBusy: false, nativeSubmit: undefined as ((text: string, references: import('#generated/types.ts').MessageReferences) => Promise<import('#features/threads/fe/chat/native-submit.ts').ClaudeComposerSubmitResult>) | undefined, nativeUi: undefined as ClaudeUiMountState | undefined, nativePrompt: undefined as { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; reply?: ClaudePromptReply; completions?: ClaudePromptCompletionReply } | undefined, currentPhase: undefined as string | undefined, modes: [{ name: 'Claude Code' }] as any })
   const send = vi.fn(), hostResponse = vi.fn(), press = vi.fn(), command = vi.fn(), prompt = vi.fn(), complete = vi.fn(), root = document.createElement('div'); document.body.append(root)
   app = createApp({ render: () => h(SurfaceScope, { surface: 'default-setup/threads' }, { default: () => h(ChatInput, { ...state, onSendMessage: send, onNativeUiPress: press, onSendCommand: command, onNativePromptHostResponse: hostResponse, onNativePromptEdit: prompt, onNativePromptAutocomplete: complete }) }) }); app.mount(root)
   editor.commands.setContent('first')
@@ -396,4 +396,16 @@ it('keeps backgrounded conversation notes editable but refuses sending to the re
   expect(f.send).not.toHaveBeenCalled(); expect(editor.state.doc.textContent).toBe('Keep these notes for the background conversation.')
   expect(f.root.textContent).toContain('This conversation moved to the background.')
   expect(f.root.querySelector<HTMLButtonElement>('[aria-label="Send"]')?.disabled).toBe(true)
+})
+
+it('keeps editing and the exact draft while a native quota decision blocks submission',async()=>{
+ const f=mount(vi.fn());f.state.nativeDecisionPending=true;editor.commands.setContent('<p><strong>Keep</strong> these notes</p>');editor.commands.setTextSelection({from:1,to:5});const before=editor.getJSON(),selection=editor.state.selection.toJSON();await nextTick()
+ const send=f.root.querySelector<HTMLButtonElement>('button[type="submit"]')!;expect(send.disabled).toBe(true);expect(f.root.textContent).toContain('Choose how to continue above')
+ f.submit();await nextTick();expect(f.send).not.toHaveBeenCalled();expect(editor.getJSON()).toEqual(before);expect(editor.state.selection.toJSON()).toEqual(selection)
+ editor.commands.insertContent('Edited');expect(editor.state.doc.textContent).toContain('Edited')
+ f.state.nativeDecisionPending=false;await nextTick();expect(send.disabled).toBe(false);f.submit();await vi.waitFor(()=>expect(f.send).toHaveBeenCalledOnce())
+})
+it('does not send or clear a draft when a quota offer arrives during attachment collection',async()=>{
+ let finish!:(url:string)=>void;const f=mount(vi.fn(()=>new Promise<string>(resolve=>{finish=resolve})));attachments.pendingImages.value=[image('keep.png')];f.submit();await vi.waitFor(()=>expect(finish).toBeTypeOf('function'))
+ f.state.nativeDecisionPending=true;finish('/media/keep.png');await nextTick();await nextTick();expect(f.send).not.toHaveBeenCalled();expect(editor.state.doc.textContent).toBe('first');expect(attachments.pendingImages.value).toHaveLength(1)
 })

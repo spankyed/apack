@@ -253,6 +253,7 @@ const ownedNoticeCases: { notice: ClaudeNativeNotice; button: string; decision: 
  {notice:{...identity,kind:'lsp_recommendation',pluginName:'review',marketplaceName:'local',fileExtension:'ts',choices:[{value:'yes',label:'Install'},{value:'no',label:'Not now'},{value:'never',label:'Never'},{value:'disable',label:'Disable'}]},button:'Install',decision:'yes'},
  {notice:{...identity,kind:'resume_return',choices:[{value:'resume_compact',label:'Resume from summary'},{value:'resume_continue',label:'Resume full session as-is'},{value:'resume_never',label:"Don't ask me again"}]},button:'Resume from summary',decision:'resume_compact'},
  {notice:{...identity,kind:'newer_model_offer',choices:[{value:'newer_keep',label:'Keep current model'},{value:'newer_accept',label:'Resume on newer model'}]},button:'Resume on newer model',decision:'newer_accept'},
+ {notice:{...identity,kind:'cold_resume_quota',trigger:'idle',preferredChoice:'quota_new_conversation',choices:[{value:'quota_resume',label:'Resume'},{value:'quota_new_conversation',label:'Start a new conversation',description:'Original pointer disclosure'}]},button:'Resume',decision:'quota_resume'},
 ]
 it.each(ownedNoticeCases)('does not retarget a displayed $notice.kind click or Escape to a replacement',async({notice,button,decision})=>{
  const f=await fixture();f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
@@ -356,4 +357,19 @@ it.each(['escape', 'button'])('dismisses a newer-model offer with captured nativ
  if(method==='escape')card.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))
  else [...card.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Not now')!.click()
  expect(actor.send).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ownerId:'owner',notice:{id:notice.id,revision:notice.revision,sessionId:notice.sessionId,decision:'newer_dismiss'}}))
+})
+
+it.each(['idle','resume','none'])('keeps native quota focus semantics for %s',async mode=>{
+ const f=await fixture(),base=ownedNoticeCases.find(row=>row.notice.kind==='cold_resume_quota')!.notice
+ if(base.kind!=='cold_resume_quota')throw Error('Quota fixture kind')
+ const notice={...base,trigger:mode==='idle'?'idle' as const:'resume' as const,preferredChoice:mode==='none'?undefined:base.preferredChoice}
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
+ const previous=document.createElement('input');f.root.append(previous);previous.focus()
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,notice}});await nextTick();await nextTick()
+ const card=f.root.querySelector('[data-native-notice="cold_resume_quota"]')!
+ expect(card.textContent).toContain('Original pointer disclosure')
+ if(mode==='resume')await vi.waitFor(()=>expect(document.activeElement?.getAttribute('data-native-choice')).toBe('quota_new_conversation'))
+ else expect(document.activeElement).toBe(previous)
+ actor.send.mockClear();card.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))
+ expect(actor.send).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ownerId:'owner',notice:{id:notice.id,revision:notice.revision,sessionId:notice.sessionId,decision:'quota_dismiss'}}))
 })

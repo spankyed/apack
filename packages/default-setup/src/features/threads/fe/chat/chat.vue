@@ -148,6 +148,7 @@
             <ChatInput ref="mainComposer" @native-ui-reconnect="reconnectNativeUi" @native-tools-expanded="nativeToolsExpanded = $event"
               :disabled="!nativeSessionBackgrounded && (nativeAgentsDecisionPending || mainCommandActive || !!taskView?.[1].state && taskView[1].state.view?.kind !== 'main')"
               :disabled-reason="!nativeSessionBackgrounded && taskView?.[1].state ? taskView[1].state.view?.kind === 'agent' ? 'Return to the main conversation in the native interface' : taskView[1].state.view ? undefined : 'Connecting to Claude input' : undefined"
+              :native-decision-pending="nativeQuotaDecisionPending"
               :current-thread="currentThread"
               :current-mode="currentMode"
               :current-phase="currentPhase"
@@ -337,6 +338,7 @@ watch(composerAreaRef, (element, _previous, onCleanup) => {
 }, { flush: 'post' })
 const currentMode = useSelector(actor, (state) => state.context.mode)
 const currentThread = useSelector(actor, (state) => state.context.currentThread)
+const nativeQuotaDecisionPending = computed(() => !nativeSessionBackgrounded.value && Object.values(nativeTerminalViews.value).some(view => view.threadId === currentThread.value?.id && view.state?.ownerId === nativeComposerOwner.value?.ownerId && view.state?.notice?.kind === 'cold_resume_quota' && view.state.notice.sessionId === currentThread.value?.context?.claudeCode?.sessionId))
 const nativeAgentsDecisionPending = computed(() => !nativeSessionBackgrounded.value && Object.values(nativeTerminalViews.value).some(view => view.threadId === currentThread.value?.id && (view.state?.notice?.kind === 'left_arrow_confirm' || view.state?.handoffPending === true)))
 const nativeSessionBackgrounded = computed(() => { const native = currentThread.value?.context?.claudeCode; return currentMode.value === 'Claude Code' && !!native?.nativeContinuation && native.nativeContinuation.sessionId === native.sessionId })
 const nativeBackgroundReplyActive = computed(() => nativeSessionBackgrounded.value && nativeBackgroundComposing.value && !nativeTerminalActive.value)
@@ -729,6 +731,7 @@ let nativeSendRevision = 0
 const pendingNativeSend = ref<{ ownerId: string; revision: number; threadId: string; stageRevision?: string; resolve(result?: ClaudeComposerSubmitResult): void; reject(error: Error): void }>()
 function submitNativeMessage(text: string, references: MessageReferences): Promise<ClaudeComposerSubmitResult> {
   const mount = nativeUiMount.value, owner = nativeComposerOwner.value
+  if (nativeQuotaDecisionPending.value) return Promise.reject(new Error('Choose how to continue before sending'))
   if (!mount || !owner || pendingNativeSend.value) return Promise.reject(new Error('Claude input is not ready'))
   return new Promise((resolve, reject) => {
     const revision = ++nativeSendRevision
