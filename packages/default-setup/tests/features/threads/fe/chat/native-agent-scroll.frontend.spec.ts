@@ -23,6 +23,13 @@ it('follows replies, anchors readers through reflow, restores saved positions an
     message.getBoundingClientRect = () => ({ top: messageTop - element.scrollTop, bottom: messageTop + 1000 - element.scrollTop }) as DOMRect
     flush(); expect(element.scrollTop).toBe(500)
     height = 800; observers[0]([], {} as ResizeObserver); flush(); expect(element.scrollTop).toBe(700)
+    element.dispatchEvent(new WheelEvent('wheel', { deltaY: -12 }))
+    element.scrollTop = 688; element.dispatchEvent(new Event('scroll'))
+    expect(scroll.following.value).toBe(false)
+    observers[0]([], {} as ResizeObserver); flush(); expect(element.scrollTop).toBe(688)
+    element.dispatchEvent(new WheelEvent('wheel', { deltaY: 12 }))
+    element.scrollTop = 700; element.dispatchEvent(new Event('scroll'))
+    expect(scroll.following.value).toBe(true)
     element.dispatchEvent(new WheelEvent('wheel', { deltaY: -100 }))
     element.scrollTop = 220; element.dispatchEvent(new Event('scroll'))
     expect(scroll.following.value).toBe(false)

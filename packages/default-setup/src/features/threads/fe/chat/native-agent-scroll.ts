@@ -59,7 +59,7 @@ export function useClaudeAgentScroll(options: {
     const element = options.viewport.value
     if (!element || !options.active() || !element.clientHeight) return
     if (pointer || performance.now() < intentUntil) {
-      following.value = element.scrollHeight - element.clientHeight - element.scrollTop <= 24
+      following.value = element.scrollHeight - element.clientHeight - element.scrollTop <= 1
       capture()
     } else schedule()
   }
