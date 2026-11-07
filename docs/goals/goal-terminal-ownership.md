@@ -345,6 +345,13 @@ second instance and neither owns it alone:
   timer become the default. The same standing rule the repo applies elsewhere.
 - **Ask upstream before working around.** The convention already exists in the ghostty plan: prefer an
   upstream integration change, keep a fork only if the needed public interface is small.
+- **One renderer per element, and one side admits a decision.** Where the app draws a host CLI's UI natively
+  while that CLI is also drawing it, the host's output for that element is suppressed and the decision is
+  accepted from exactly one side. This is the rule with no industry pattern to copy — iTerm2's tmux control
+  mode avoids it because tmux's panes *are* the content — and it is the one whose failure looks like an
+  approval the user did not give, so it needs a case rather than care. #372 is the instance that implements
+  it (its dialog arrays are `.max(1)` and `terminal-ui.ts` has the suppression); the rule is recorded here
+  because it belongs to the pattern rather than to one PR.
 
 Promote this to a `CLAUDE.md` rule once the second instance lands; until then one of the two is still
 hypothetical and a rule with one instance is a description.
