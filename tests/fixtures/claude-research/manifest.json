@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "5568afae859e5835ff66a7a1df7928f8a4685d31",
+  "researchCommit": "abea82c9979685ccbb7d7202616e4db8b71b754f",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -26,6 +26,7 @@
     "src/analysis/extension-commands.mjs": "79f6f7ed35c0e5a13b300256b8aceba9455b9e7da6a309788a97b9233681e9fb",
     "src/analysis/html-assets.mjs": "65629246edce9a322cc3355adfcd61f555c1758effc3e1f9d1eb0bcb4828f899",
     "src/analysis/html-script-ranges.py": "d88050a8cd3cdace337eaf33fa6e39dbc947950c7c6183c8cc6ec890819332ba",
+    "src/analysis/ide-footer-admission.mjs": "08474ce1c740e66ad732f52bb6bf007f948f1644ec518c0b574af3f9516628ce",
     "src/analysis/index.mjs": "6b045d06b5da6398e715ad02489c60df22b2c68638300dd39851c0dcab6c06d1",
     "src/analysis/keybindings.mjs": "7a70b0a581fefe43bb6186371e6a81747bc5bf61892520e00c57a21148b19f7a",
     "src/analysis/message-schemas.mjs": "05b3804076c56b9e92987b8da58dbb921d374ccd7a27dfb7f1864f33cc209f3d",
@@ -95,7 +96,7 @@
     "src/integration/apack-controls.mjs": "654ef34879daa4089d6c4f7e61be6107843e47e93ee82cf5401dbbbe956fc1f5",
     "src/integration/apack-document-media.mjs": "f668ce463a8672923db7d3c25baff498e813353f2695016aea67faaf5bbbd441",
     "src/integration/apack-empty-command-history-drive.mjs": "a70c19241e051b0b20ad746934ddbbd886701ed4d5402882e6e04ef026eb1877",
-    "src/integration/apack-everyday-layout-drive.mjs": "e83d58dc1804d44a5406330f29926b37c35d04192e9983695ab9c66a873966f4",
+    "src/integration/apack-everyday-layout-drive.mjs": "9b9d811d025dc82a0cbf1f8a7083ceb103da394fc47f21089dc70d5b5cd79d90",
     "src/integration/apack-file-rewind.mjs": "290a2d423e1f63f45157c3af2abcac340f66f84a979ed0cc654bfc65b8235e58",
     "src/integration/apack-held-main-policy-drive.mjs": "563e944711c137d94f50def2eed3195126cb450ce35eab8a0937021f4632467b",
     "src/integration/apack-held-owner-drive.mjs": "138844d3b0a8fe0dc94d10b445e8659c89b607481d8aeac1b7d04c2a115da52f",
@@ -109,7 +110,7 @@
     "src/integration/apack-mcp.mjs": "a01e12e6a45341aaa4dc8703a7ed7b724d7ba8eef92cb86cc7c973ef42cd9de3",
     "src/integration/apack-multi-turn.mjs": "e6b638a23df3e7b2f9590d47934c44bfe767212dce30d2322636158689d7ac66",
     "src/integration/apack-native-discovery-drive.mjs": "a479ab94973c9288f6e46f461877f29f9add81eeac50d2b56cc4f9fde4a6b603",
-    "src/integration/apack-native-ide-drive.mjs": "0c9acb49f5634dd696797737aef5c53a23658e413ce63a78ac62f45afff31ac0",
+    "src/integration/apack-native-ide-drive.mjs": "3d887f732ea077dd0e071ce4442a5b5509baa91e4782ff9c003a74133a1799f3",
     "src/integration/apack-native-parent-reset-drive.mjs": "64637c732e4565d7dc753975ee95e8cfb8d146221dc9937090b183b6dd807b20",
     "src/integration/apack-notebook-width-drive.mjs": "2642b1bf07ff2921d01adff32fc21c3fc20a09b1c351872d524616e395b91cc0",
     "src/integration/apack-owner-cron.mjs": "5052ce662e9f893312a005a4815bad0b05e73a194636f1e42caa5354405510bb",
@@ -328,7 +329,7 @@
     "src/protocol/native-held-main-zero-fixture.mjs": "ac2094ee16201d6de64b3610b540af016afa35ee229b9877e4572885335a8925",
     "src/protocol/native-help-proof.mjs": "10be4b61f53aad165d32134abf6ab39612266d873d5240fc96556492eb17177e",
     "src/protocol/native-history-reopen-fixture.mjs": "35957458e3d38b8a938cee1d453655c4b153f98f0d9e26329dae85668affc8c4",
-    "src/protocol/native-ide-fixture.mjs": "68b068d06e63bafcb0bf96114181c132400e82ebd40900ab5918d2e2393c77a9",
+    "src/protocol/native-ide-fixture.mjs": "5800ef6228f278546df4495f1e7e1144674a65851b79bd1b8d286e378da57065",
     "src/protocol/native-inline-eligibility-preload.mjs": "ad47a06d05a6250c9a202f84c7460c57869987ac3af744093121e98a524fcb3d",
     "src/protocol/native-large-document-fixture.mjs": "c0c05db460c2938c8528ec78825c1071de375977957e053877c5a7588f94d8c6",
     "src/protocol/native-leftarrow-lookup-trace.mjs": "c1d7e40488c53215788f390e7aaddf439c0919e0490fe0d273ec963e0de05783",
@@ -472,5 +473,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "6e8396a5d6657d0937a5f21ef7a4dbbea7dde149fb36d7b545da7f38b66958e9"
+  "archiveSha256": "6afc0b68c09f5676f2c1450826a1628e4a64f791ec9df73197e7b6ba826755dc"
 }

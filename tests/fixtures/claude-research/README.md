@@ -314,8 +314,11 @@ popover and retained selection/status on return. Its screenshots still require v
 The parent-reset journey verifies original /clear saved-session rotation and fresh-context
 continuation. It does not establish naturally gated quota/return offer acceptance.
 
-The everyday-layout journey also checks visible formatting controls, native status hit tests
-and no selected-text overlap. Compact shortcut-hint overlap remains a separate visual gap.
+The everyday-layout journey checks formatting controls, native status and selected-text geometry.
+CLAUDE_RESEARCH_TOOLBAR_HINT=1 additionally requires readable native hint glyphs at both sizes.
+The collision/offset repair has scoped toolbar-app5 acceptance at runtime e29be8332b, with
+unchanged history206/102px and exact draft/selection/details return/accounting/cleanup. Broader
+header polish and other menu/media/owner combinations remain open. Screenshots require review.
 
 The native IDE fixture/journey verifies original discovery, authentication and selection
-permission context. The native inline IDE chooser/reconnect, selected/opened-file context and dismissal, and enable/disable preference choices have scoped actual-app acceptance at runtime 5a6b349651 / ide-inline-app5/6/8. Cancellation guidance has separate scoped app14 acceptance at runtime85f4b89740; the original Escape/Enter comparison uses normal desktop detachment. Other IDE variants and combined F1–F5 remain open.
+permission context. The native inline IDE chooser/reconnect, selected/opened-file context and dismissal, and enable/disable preference choices have scoped actual-app acceptance at runtime 5a6b349651 / ide-inline-app5/6/8. Cancellation guidance has separate scoped app14 acceptance at runtime85f4b89740; the original Escape/Enter comparison uses normal desktop detachment. Fullscreen leading-pill context has scoped app15 acceptance via native tui:fullscreen and original alternate-screen admission; the separate compact-footer branch is native-disabled on both pinned platforms. Other IDE variants and combined F1–F5 remain open.
