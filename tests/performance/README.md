@@ -19,7 +19,7 @@ npm run test:e2e -- --config tests/performance/playwright.config.ts
 ```
 
 Use the repository's bounded Linux runner for repeated native/runtime qualification. Electron needs
-an available display there (for example Xvfb). Each invocation selects one scenario and owns a fresh process/profile; `APACK_PERFORMANCE_SCENARIO=thread-open` is the default `search` selects the search corpus, and `streaming` selects deterministic CLI replies. `APACK_PERFORMANCE_MODE` selects `disabled`,
+an available display there (for example Xvfb). Each invocation selects one scenario and owns a fresh process/profile; `APACK_PERFORMANCE_SCENARIO=thread-open` is the default; `search` selects the search corpus, `streaming` deterministic CLI replies, and `terminal-open` a terminal open per trial. `APACK_PERFORMANCE_MODE` selects `disabled`,
 `lightweight` (default), or `detailed`. `APACK_PERFORMANCE_TRIALS=1` is a contract/debug run;
 it cannot establish latency variability or overhead. The default is five warmups followed by twenty
 measured trials in a warmed process. This is not cold disk or fresh-process startup evidence.
@@ -46,6 +46,15 @@ backlog reports additionally retain bounded producer-enqueue and database-backed
 progress. Pending UTF-16 code units at receipt use approximate epoch alignment; clock-order mismatches
 remain explicit. This is pipeline backlog, not database commit latency. Missing/incomplete progress
 fails the scenario. No network/model service is called.
+
+Terminal-open measures opening a terminal: from `terminal.CREATE` to one attached and on screen. It seeds
+no data — a terminal is a process, so the fixture is the shell, the dimensions and the trial count — and each
+trial closes its terminal outside the measured interval, so later trials are not measuring an Nth open.
+**It completes on attachment, not on the first byte**, and that is a limit of what the page can see rather
+than a choice: xterm renders to a canvas here, so there is no `.xterm-rows` text to read the screen from,
+and the buffer lives in the xterm instance inside the pack's module-scoped pool. It is also the first
+scenario whose action ends in no view delivery — a terminal's output is broadcast news and the code feature
+declares no views — so its completion sets `awaitsDelivery: false`, which is what that option is for.
 
 Reports go to ignored `.apack/performance/thread-open-<mode>-<timestamp>/`:
 
