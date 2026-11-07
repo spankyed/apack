@@ -8,7 +8,7 @@ Status: planned. No open decisions; Phase T is ready to start.
 
 Implement docs/goals/goal-terminal-ownership.md. Follow CLAUDE.md and docs/AGENTS.md.
 Read Scope, Current handoff, Decisions, Phases and Constraints before continuing.
-The initial survey was made at c2bb387a1a on master; inspect current code before relying on it.
+The initial survey was made at 98bf6a0935 on master; inspect current code before relying on it.
 Follow the current checkout arrangement and preserve unrelated work.
 
 Findings live in docs/issues/ISSUE-terminal-integration-review.md. Design lives in
@@ -47,7 +47,7 @@ F1, F2, F3, F4, F5, F6, F7, F8, L2, L3, M1, M2, M4, M5, X1 and X2. Fixing those 
 destination deletes. X1 and X2 are in that list because D11 puts native process ownership in reach: Job
 Objects are what own a Windows process tree, and no JS binding supplies them.
 
-**Surveyed** at `c2bb387a1a` on `master`, 2026-11-07. Entry points: `packages/default-setup/src/features/code`
+**Surveyed** at `98bf6a0935` on `master`, 2026-11-07. Entry points: `packages/default-setup/src/features/code`
 (`be/services/terminal.ts`, `be/features/terminal.ts`, `fe/utils/terminal-pool.ts`,
 `fe/utils/terminal-events.ts`, `fe/canvas/TerminalView.vue`, `fe/features/terminal/PanelTerminalSection.vue`),
 `packages/apack-host/src/bus/client-events.ts`, `packages/api/src/boot/config.ts`.
@@ -72,7 +72,13 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 
 ## Current handoff
 
-- **Checkout:** `master` at `c2bb387a1a`. Nothing implemented for this goal.
+- **Checkout:** `master` at `98bf6a0935`, the current one — no branch or worktree. Nothing implemented yet.
+  **Collision surface against #372**, measured 2026-11-07: one file, `features/code/fe/state.ts` (+24/-2 on
+  that branch). Every other file Phase T touches is untouched there — `bus/client-events.ts`,
+  `api/src/boot/config.ts`, `be/services/terminal.ts`, `fe/features/terminal/state.ts`, `fe/hotkeys.ts`,
+  `MacOSAppMenu.ts` and `stream-writer.ts` — so T3 and T9 are the only tracks with a rebase to think about.
+  Phase G's baseline is unaffected by that branch, since it touches neither `services/terminal.ts` nor
+  `terminal-pool.ts`.
 - **Next deliverable:** Phase G's baseline, which must precede any state moving, and Phase T's independent
   tracks concurrently with it. Then Phase S's walking skeleton, whose first commit is the `apack-terminal`
   repository and its link (D11). Phase B's first commit is the last cheap exit — see Constraints.
