@@ -318,4 +318,4 @@ The everyday-layout journey also checks visible formatting controls, native stat
 and no selected-text overlap. Compact shortcut-hint overlap remains a separate visual gap.
 
 The native IDE fixture/journey verifies original discovery, authentication and selection
-permission context. The current /ide terminal fallback is not an inline chooser implementation.
+permission context. The native inline IDE chooser/reconnect/context dismissal has scoped actual-app acceptance at runtime5a6b349651 / ide-inline-app5. Other IDE variants and combined F1–F5 remain open.
