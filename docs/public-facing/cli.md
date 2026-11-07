@@ -349,7 +349,7 @@ for an hour, but a GET that answers differently on a retry is a trap.
 
 **A write does not update the UI; `/reload` is how you see it.** A surface's state is what its system
 sent it, so a write made outside that system — `/transact`, the database console — changes
-the database and reaches no view. (`apack db exec` tells the app when it ends, which is what `/reload` does here.) That is the console being a console rather than a fault, and it is not
+the database and reaches no view. (A commit from `apack db exec` wakes the app, which then does what `/reload` does here.) That is the console being a console rather than a fault, and it is not
 staleness that time fixes: navigating between surfaces does not refresh one, because the surface's actor
 survives. `/reload` does, because a new connection makes every system send its startup data again.
 
@@ -366,8 +366,8 @@ concurrent `/query` calls would otherwise be indistinguishable, each reply still
 may run together and one you stopped waiting for is ignored.
 
 **`/query` and `/transact` reach the live database**, not the files on disk — they go to the running app, so a
-write is visible to the next read in the same session. `apack db exec` writes from its own process, and tells
-the app once it has closed the database.
+write is visible to the next read in the same session. `apack db exec` writes from its own process, and each
+commit wakes the app.
 
 **A failed verb answers `200` with `{ "ok": false, "error": ... }`** — the request was fine and the
 operation was not, which is the common case while driving. A malformed request, a missing token or an
@@ -716,7 +716,7 @@ pack runtimes.
 
 `reset`, `import`, `clear-settings` and `script --admin` replace what others are using, so while one runs it holds a lock on the data dir (`db-write.lock`): a second one and any command changing rows are refused, and an apack started meanwhile refuses to open that database. A lock left behind by a command that was killed is ignored once its process is gone.
 
-**Beside a running app.** `exec`, `script` and `repl --write` work with the app open. Each writes from its own process and tells the app what it committed: when it ends, or after each line in `repl`. The app runs every view again and has every system publish its state, once per burst of these, and resumes any index work a tool left unfinished; a flow that is running keeps running, on the definition it started with, as it does after an edit in the app. What's derived from the rows follows, such as a note's links to other notes, with the app open or when it next starts. **Exit code 4** means the change is saved but the app didn't take all of it, so don't run it again: the app wasn't reachable and shows the old data until it restarts, or it refused an invalid settings row and put the last valid one back. A tool killed before it could tell the app is caught at the app's next commit. These commands hold no lock, so the app can start or restart while one runs, and two can run at once; a write holds up the app's own writes only for as long as it takes, so a script that keeps one transaction open makes the app wait. A script gets `db.ears` and not `db.admin` or `db.database` unless it asks with `--admin`, which needs the app closed. `reset`, `import` and `clear-settings` still ask you to quit the app first, since they replace what it is using.
+**Beside a running app.** `exec`, `script` and `repl --write` work with the app open. Each writes from its own process, and every commit wakes the app. It runs every view again and has every system publish its state, once per burst of commits, and resumes any index work a tool left unfinished; a flow that is running keeps running, on the definition it started with, as it does after an edit in the app. What's derived from the rows follows, such as a note's links to other notes, with the app open or when it next starts. An invalid settings row is refused by the app, which logs it and puts the last valid one back. A wake that doesn't arrive is made good by the app's next commit. These commands hold no lock, so the app can start or restart while one runs, and two can run at once; a write holds up the app's own writes only for as long as it takes, so a script that keeps one transaction open makes the app wait. A script gets `db.ears` and not `db.admin` or `db.database` unless it asks with `--admin`, which needs the app closed. `reset`, `import` and `clear-settings` still ask you to quit the app first, since they replace what it is using.
 
 #### `apack db exec <code> | --file <path> [-o pretty|json|csv] [--out <file>]` (names its data dir)
 
@@ -728,7 +728,7 @@ apack db exec "write('Note-123').set('title', 'Renamed')"
 
 #### `apack db repl [--write]` (`--write` names its data dir)
 
-Run console code a line at a time and print each result: query code, or with `--write` transaction code, whose changes are saved line by line, each telling a running app. `.exit` or Ctrl+D quits.
+Run console code a line at a time and print each result: query code, or with `--write` transaction code, whose changes are saved line by line. `.exit` or Ctrl+D quits.
 
 #### `apack db script <file> [--read-only] [-o pretty|json|csv] [--out <file>] [-- <script arguments>]` (names its data dir)
 

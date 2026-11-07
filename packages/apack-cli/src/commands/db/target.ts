@@ -5,7 +5,6 @@ import { resolveAppEnvironment, APP_ENVS, type AppEnvironment, type AppEnv } fro
 import { assertNoDatabaseWriter, findRunningApp, holdDatabaseWriteLock, openAppDatabase, type AppDatabase } from '@apackdev/host/database';
 import { consoleEars, type ConsoleScope } from '@apackdev/sdk/database-console';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
-import { tellAppDataChanged } from '../../app/app-api';
 import { cliDirs } from '../../app/pack-host';
 import { resolveStoredProfile } from '../../app/profiles';
 import { defaultDataEnv } from '../../utils';
@@ -72,22 +71,6 @@ export function parseDbArgs<O extends NonNullable<ParseArgsConfig['options']>>(a
   return { values: parsed.values as typeof parsed.values & Record<keyof O, unknown>, positionals: parsed.positionals, target };
 }
 
-/** An opened target */
-export type TargetDatabase = AppDatabase & {
-  /**
-   * Set where the command changes rows. Tells an app running on the data dir of what was committed since it was last
-   * told, whenever that app started; one it can't tell doesn't throw, since the change stands, and a command's answer is
-   * still to come: it says so, and sets the exit code `SAVED_BUT_NOT_TAKEN`.
-   */
-  tellApp?(): Promise<void>;
-};
-
-/**
- * The exit code of a command whose change is saved although a running app didn't take all of it. Apart from a failure's,
- * because a failed write is one to run again and this one isn't.
- */
-export const SAVED_BUT_NOT_TAKEN = 4;
-
 export interface OpenOptions {
   /**
    * What the command changes. `rows` go a unit at a time, which LMDB orders with anything else writing, an app included,
@@ -104,7 +87,7 @@ export interface OpenOptions {
  * which data dir it means, so the production app's data is never the one a forgotten flag hits. A read sees what an app
  * running there has committed, and says so.
  */
-export async function openTarget(target: DbTarget, { changes, command }: OpenOptions, io: DbIo): Promise<TargetDatabase> {
+export async function openTarget(target: DbTarget, { changes, command }: OpenOptions, io: DbIo): Promise<AppDatabase> {
   const write = changes !== 'nothing';
   if (write && !target.named) {
     throw new Error('Name the data dir to change: --profile <name> or --data-dir <path>');
@@ -143,45 +126,11 @@ export async function openTarget(target: DbTarget, { changes, command }: OpenOpt
         + 'so name their pack with --schema-from before changing them.');
     }
     if (lock) return { ...db, close: () => { try { db.close(); } finally { lock.release(); } } };
-    if (!write) return db;
-    let told = 0;
-    return {
-      ...db,
-      tellApp: async () => {
-        const committed = db.admin.lastOwnCommit();
-        if (committed === told) return;
-        told = committed;
-        await tellRunningApp(target, io);
-      },
-    };
+    return db;
   } catch (error) {
     lock?.release();
     throw error;
   }
-}
-
-/**
- * Tells the app running on the data dir that this process committed to its database. The commit stands either way, so
- * anything short of the app taking it says that it does, and what the app is missing; an app that has quit since has
- * nothing left to be told.
- */
-async function tellRunningApp(target: DbTarget, io: DbIo): Promise<void> {
-  const delivery = await tellAppDataChanged({ env: target.env, userDataDir: target.userDataDir });
-  if (delivery.status === 'delivered') {
-    // Every commit so far is covered, so an earlier line's failed telling has been made good
-    if (process.exitCode === SAVED_BUT_NOT_TAKEN) process.exitCode = undefined;
-    return;
-  }
-  const running = findRunningApp(target);
-  if (!running) return;
-  process.exitCode = SAVED_BUT_NOT_TAKEN;
-  if (delivery.status === 'failed') {
-    io.err(`The change was saved, but apack on ${target.userDataDir} answered: ${delivery.detail}`);
-    return;
-  }
-  const clear = running.marker ? ` If it isn't running, delete ${running.marker}.` : '';
-  io.err(`The change was saved, but apack on ${target.userDataDir} wasn't told: ${delivery.detail}. `
-    + `It shows the old data until it restarts.${clear}`);
 }
 
 /**
@@ -205,11 +154,10 @@ export function withoutAdmin(db: AppDatabase): AppDatabase {
 const reason = (error: unknown) => (errorMessage(error));
 
 /**
- * Runs `use` with the database, closes it after whatever happens, and then tells a running app, even of a command that
- * failed part way, since a script may have committed units before it did. Closing syncs what the command committed to
- * disk, so a failure there is reported — but never in place of what the command hit first.
+ * Runs `use` with the database and closes it after whatever happens. Closing syncs what the command committed to disk,
+ * so a failure there is reported — but never in place of what the command hit first.
  */
-export async function withDatabase<T>(db: TargetDatabase, use: () => Promise<T> | T): Promise<T> {
+export async function withDatabase<T>(db: AppDatabase, use: () => Promise<T> | T): Promise<T> {
   let result: T;
   let failure: unknown;
   try {
@@ -223,7 +171,6 @@ export async function withDatabase<T>(db: TargetDatabase, use: () => Promise<T> 
     failure = failure === undefined ? closeFailure
       : new Error(`${reason(failure)}\n  The database also failed to close: ${reason(closeFailure)}`, { cause: failure });
   }
-  await db.tellApp?.();
   if (failure !== undefined) throw failure;
   return result!;
 }

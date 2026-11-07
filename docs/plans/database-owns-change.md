@@ -94,18 +94,16 @@ This is the step that changes how packs are written. Review it as a design first
 
 ## Step 5: wake-ups in elmdb
 
-- **Mechanism:** each write handle binds a datagram socket under the data directory, and a commit sends its sequence to every peer without blocking. A failed send is ignored, because the cursor is the truth, and a dead peer's socket is removed. The binding already uses Unix datagram sockets for its process claim (`crates/elmdb-node/src/process.rs`), including abstract names on Linux.
+Built: elmdb #81, and the apack PR it stacks under.
+
+- **Mechanism:** loopback UDP, one code path on all three platforms and no socket path limit. A listening handle binds a port and files it as `wake/<pid>-<port>`, and a commit sends its sequence to what's filed, without blocking and ignoring failure, because the log is the truth. A handle that doesn't listen binds nothing, and a commit with nobody to tell costs one `stat`.
 - **Binding:** `hearCommitsElsewhere(listener)`, built like `hearBuilderCommits`: weak threadsafe function, one listener, dropped on close.
-- **Engine:** on a wake, read `changesSince`, run the watches it names, run projections from their cursors, tell the bus, and queue owed builder work.
+- **On a wake:** elmdb queues owed builder work. The host waits out the burst, reviews the settings row, reads `changesSince`, runs the watches and projections, and tells the bus.
+- **A lost wake:** a commit here that skips a sequence reads the log too, so the app's next commit makes one good.
 
-**Removes:** `POST /db/changed-elsewhere`, `answerDataChanged`, `dataChangedToken` and its place in the port file, `tellAppDataChanged`, `tellApp`, `SAVED_BUT_NOT_TAKEN` and exit code 4, `elsewhereThrough`, `lastOwnCommit`, the elmdb public `queue_owed_work`, and the per-line telling in `repl`.
+**Removed:** `POST /db/changed-elsewhere`, `answerDataChanged`, `dataChangedToken` and its place in the port file, `tellAppDataChanged`, `tellApp`, `SAVED_BUT_NOT_TAKEN` and exit code 4, `elsewhereThrough`, `lastOwnCommit`, the elmdb public `queue_owed_work`, and the per-line telling in `repl`.
 
-**Risks to settle first:**
-- **Windows:** no shared code path. Named pipes, or accept a next-commit check there and say so.
-- **Path length:** a socket path is limited to about 104 bytes on macOS, so a long data dir needs a hashed path under the temp directory.
-- **A lost wake on an idle app:** there's no retry. The next local commit, or a window focus, reads the cursor too.
-
-**Verify:** real processes in elmdb's tests on all three platforms in CI. Kill either side. Hundreds of peers' dead sockets don't slow a commit. The E2Es in `db-writes-beside-app.spec.ts` pass with the route gone.
+**What a tool no longer learns:** that the app refused an invalid settings row. The app logs it and puts the last valid row back, until step 6 refuses it at the commit.
 
 ## Step 6: rules enforced at commit
 

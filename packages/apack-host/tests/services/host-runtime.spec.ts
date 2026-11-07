@@ -61,11 +61,13 @@ describe('createHostRuntime', () => {
       const engine = newEngine();
       const told: string[] = [];
       const stopWatching = vi.spyOn(engine.admin, 'changedElsewhere').mockImplementation(() => { told.push('watches'); return true; });
+      let found = () => {};
+      vi.spyOn(engine.admin, 'onFoundElsewhere').mockImplementation((listener) => { found = listener; return () => {}; });
       const stopHearing = testRootEvents.onIncoming((message) => { told.push(`${message.to} ${message.event.type}`); });
       const { runHistory } = blockedHistory();
       const runtime = createHostRuntime({ runHistory, database: {} as EarsDatabase, engine, transport: { rootEvents: testRootEvents },
         appVersion: '1.2.3', packs: createNativePackTestRegistry() });
-      return { engine, runtime, told, stop: () => { stopHearing(); stopWatching.mockRestore(); } };
+      return { engine, runtime, found: () => found(), told, stop: () => { stopHearing(); stopWatching.mockRestore(); } };
     }
 
     beforeEach(() => { vi.useFakeTimers(); });
@@ -73,71 +75,66 @@ describe('createHostRuntime', () => {
     const refreshed = ['watches', 'host/bus DATA_CHANGED_ELSEWHERE'];
 
     it('reruns every watch and then tells the bus, once for a burst', () => {
-      const { runtime, told, stop } = running();
-      expect(runtime.dataChangedElsewhere()).toEqual([]);
-      expect(runtime.dataChangedElsewhere()).toEqual([]);
+      const { found, told, stop } = running();
+      found();
+      found();
       expect(told, 'not until the burst has passed').toEqual([]);
       vi.advanceTimersByTime(250);
       expect(told).toEqual(refreshed);
-      runtime.dataChangedElsewhere();
+      found();
       vi.advanceTimersByTime(250);
       expect(told, 'a later one refreshes again').toEqual([...refreshed, ...refreshed]);
       stop();
     });
 
     it('tells the bus nothing when no other process committed', () => {
-      const { engine, runtime, told, stop } = running();
+      const { engine, found, told, stop } = running();
       vi.mocked(engine.admin.changedElsewhere).mockImplementation(() => false);
-      runtime.dataChangedElsewhere();
+      found();
       vi.advanceTimersByTime(250);
       expect(told).toEqual([]);
       stop();
     });
 
     it('tells the bus and does not throw when the refresh fails, as it does on a database closed meanwhile', () => {
-      const { engine, runtime, told, stop } = running();
+      const { engine, found, told, stop } = running();
       vi.mocked(engine.admin.changedElsewhere).mockImplementation(() => { throw new Error('The database is closed'); });
-      runtime.dataChangedElsewhere();
+      found();
       expect(() => vi.advanceTimersByTime(250), 'a throw in this timer would end the process').not.toThrow();
       expect(told).toEqual(['host/bus DATA_CHANGED_ELSEWHERE']);
       stop();
     });
 
-    it('answers the problems of a settings row it refused at once, and refreshes all the same', () => {
-      const { engine, runtime, told, stop } = running();
+    it('puts back a settings row it refused, and refreshes all the same', () => {
+      const { engine, runtime, found, told, stop } = running();
       runtime.services.settings.getAll();
       engine.upsert('Settings', { id: SETTINGS_ROW, data: 'not settings' });
-      expect(runtime.dataChangedElsewhere().length).toBeGreaterThan(0);
+      found();
       vi.advanceTimersByTime(250);
+      expect(typeof engine.getRow(SETTINGS_ROW)?.data).toBe('object');
       expect(told).toEqual(refreshed);
       stop();
-    });
-
-    it('does not let a failure escape when it found out for itself, which nothing would catch', () => {
-      const engine = newEngine();
-      let found: (() => void) | undefined;
-      vi.spyOn(engine.admin, 'onFoundElsewhere').mockImplementation((listener) => { found = listener; return () => {}; });
-      vi.spyOn(engine.admin, 'changedElsewhere').mockImplementation(() => false);
-      const { runHistory } = blockedHistory();
-      const runtime = createHostRuntime({ runHistory, database: {} as EarsDatabase, engine, transport: { rootEvents: testRootEvents },
-        appVersion: '1.2.3', packs: createNativePackTestRegistry() });
-      runtime.services.settings.getAll();
-      engine.upsert('Settings', { id: SETTINGS_ROW, data: 'not settings' });
-      vi.spyOn(engine, 'upsert').mockImplementation(() => { throw new Error('the disk is full'); });
-      expect(() => found!()).not.toThrow();
-      vi.restoreAllMocks();
     });
 
     it('still refreshes when putting the settings back fails', () => {
-      const { engine, runtime, told, stop } = running();
+      const { engine, runtime, found, told, stop } = running();
       runtime.services.settings.getAll();
       engine.upsert('Settings', { id: SETTINGS_ROW, data: 'not settings' });
       const failing = vi.spyOn(engine, 'upsert').mockImplementation(() => { throw new Error('the disk is full'); });
-      expect(() => runtime.dataChangedElsewhere()).toThrow('the disk is full');
-      vi.advanceTimersByTime(250);
+      found();
+      expect(() => vi.advanceTimersByTime(250), 'a throw in this timer would end the process').not.toThrow();
       expect(told).toEqual(refreshed);
       failing.mockRestore();
       stop();
+    });
+
+    it('still runs when the database cannot hear of other processes', () => {
+      const engine = newEngine();
+      vi.spyOn(engine.admin, 'onFoundElsewhere').mockImplementation(() => { throw new Error('no loopback here'); });
+      const { runHistory } = blockedHistory();
+      expect(() => createHostRuntime({ runHistory, database: {} as EarsDatabase, engine, transport: { rootEvents: testRootEvents },
+        appVersion: '1.2.3', packs: createNativePackTestRegistry() })).not.toThrow();
+      vi.restoreAllMocks();
     });
   });
 

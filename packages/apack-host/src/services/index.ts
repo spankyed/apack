@@ -11,7 +11,7 @@ import { HOST } from '../refs.ts';
 import { createLogger } from '@apackdev/sdk/logger';
 import { filesystem } from './filesystem.ts';
 import { createSettingsService } from './settings.ts';
-import { createSettingsStore, type SettingsStore } from '../features/settings/be/store.ts';
+import { createSettingsStore } from '../features/settings/be/store.ts';
 
 import { inference } from './inference.ts';
 import { secrets } from './secrets.ts';
@@ -20,9 +20,9 @@ import { createRunHistory } from './run-history.ts';
 const logger = createLogger('host-runtime');
 
 /**
- * How long a refresh after another process's commit waits for more: a shell loop or a repl session tells once per command,
- * and each refresh has every system publish. CPU profile of the built app, 2026-11-05, load about 40: 10 ms per refresh at
- * 1 note, 148 ms at 11,000.
+ * How long a refresh after another process's commit waits for more: a script's every unit wakes the app, and each refresh
+ * has every system publish. CPU profile of the built app, 2026-11-05, load about 40: 10 ms per refresh at 1 note, 148 ms
+ * at 11,000.
  */
 const ELSEWHERE_REFRESH_MS = 250;
 
@@ -47,16 +47,7 @@ export interface HostRuntimeOptions {
   performance?: PerformanceExecution;
 }
 
-/** The running app as the SDK reaches it, which the composition root binds with `bindHost`, and what only that root calls */
-export type AppRuntime = HostRuntime & {
-  /**
-   * A local tool committed to the database from its own process. Answers at once the problems of a stored settings row it
-   * refused; every view reads the data again and every system is told once a burst of these has passed.
-   */
-  dataChangedElsewhere(): ReturnType<SettingsStore['adoptStored']>;
-};
-
-export function createHostRuntime({ transport, appVersion, database, runHistory, engine, packs, countCalls, performance }: HostRuntimeOptions): AppRuntime {
+export function createHostRuntime({ transport, appVersion, database, runHistory, engine, packs, countCalls, performance }: HostRuntimeOptions): HostRuntime {
   _installProjections(engine);
   const settingsStore = createSettingsStore({
     ears: () => engine,
@@ -67,10 +58,16 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
   packs.catalog.setSettingsAdmission(candidate => compileSettingsCatalog(candidate).validate(settings.getOverrides()));
   const runHistoryService = createRunHistory(runHistory.engine);
   let refreshing: ReturnType<typeof setTimeout> | undefined;
+  /** Runs once a burst of commits from elsewhere has passed. Nothing waits on this timer to catch what it throws, and an uncaught error ends the process */
   const refreshAfterBurst = () => {
     refreshing ??= setTimeout(() => {
       refreshing = undefined;
-      // Nothing is waiting on this timer to catch what it throws, and an uncaught error ends the process
+      try {
+        const refused = settingsStore.adoptStored();
+        if (refused.length > 0) logger.warn(`Refused the stored settings another process wrote: ${refused.map(problem => problem.message).join('; ')}`);
+      } catch (error) {
+        logger.error('Reviewing the stored settings after a commit from another process failed:', error as Error);
+      }
       let changed = true;
       try {
         changed = engine.admin.changedElsewhere();
@@ -83,25 +80,12 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
     }, ELSEWHERE_REFRESH_MS);
     refreshing.unref?.();
   };
-  const dataChangedElsewhere = () => {
-    try {
-      return settingsStore.adoptStored();
-    } finally {
-      refreshAfterBurst();
-    }
-  };
-  // A tool that was killed after committing told nobody: the app's own next commit finds out
-  engine.admin.onFoundElsewhere(() => {
-    try {
-      const refused = dataChangedElsewhere();
-      if (refused.length > 0) logger.warn(`Refused the stored settings another process wrote: ${refused.map(problem => problem.message).join('; ')}`);
-    } catch (error) {
-      // Nobody is waiting on this to catch it, and an uncaught error ends the process
-      logger.error('Hearing of a commit from another process failed:', error as Error);
-    }
-  });
+  try {
+    engine.admin.onFoundElsewhere(refreshAfterBurst);
+  } catch (error) {
+    logger.warn('This app will hear of commits from other processes only at its own next commit:', error as Error);
+  }
   return {
-    dataChangedElsewhere,
     transport,
     ears: engine,
     packs,

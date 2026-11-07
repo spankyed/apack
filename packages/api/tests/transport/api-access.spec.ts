@@ -10,9 +10,9 @@ const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'api-dev-reload-'));
 process.env.APACK_ENV = 'test';
 process.env.APACK_USER_DATA_DIR = dataDir;
 process.env.APACK_API_TOKEN = 'the-run-token';
-const { API_PROTOCOL, acceptsConnection, answerDataChanged, dataChangedRefusal, devRequestRefusal, publishApiFiles } = await import('../../src/transport/websocket.ts');
+const { API_PROTOCOL, acceptsConnection, devRequestRefusal, publishApiFiles } = await import('../../src/transport/websocket.ts');
 const { API_HOST } = await import('@apackdev/sdk/utils/pure');
-const { apiToken, apiTokenIsOwn, dataChangedToken, isApiToken } = await import('../../src/boot/config.ts');
+const { apiToken, apiTokenIsOwn, isApiToken } = await import('../../src/boot/config.ts');
 const { resolveAppEnvironment } = await import('@apackdev/sdk/env');
 const { readApiEndpoint } = await import('@apackdev/host/process-liveness');
 const { API_TOKEN_HEADER } = await import('@apackdev/sdk/utils/pure');
@@ -86,51 +86,6 @@ describe('POST /dev/reload', () => {
   });
 });
 
-describe('POST /db/changed-elsewhere', () => {
-  it('is taken with its own token', () => {
-    expect(dataChangedRefusal(withToken(dataChangedToken()))).toBeNull();
-  });
-
-  it('is refused without it, or with another, the API token among them', () => {
-    expect(dataChangedRefusal({})).toMatch(/token is missing or wrong/);
-    expect(dataChangedRefusal(withToken('guess'))).toMatch(/token is missing or wrong/);
-    expect(dataChangedRefusal(withToken(apiToken()))).toMatch(/token is missing or wrong/);
-  });
-
-  describe('answers what hearing of it came to', () => {
-    function answered(hear: () => ReadonlyArray<{ message: string }>) {
-      const seen: { status?: number; body?: string } = {};
-      answerDataChanged({
-        writeHead: ((status: number) => { seen.status = status; }) as never,
-        end: ((body: string) => { seen.body = body; }) as never,
-      }, hear);
-      return seen;
-    }
-
-    it('with 200 when it was taken', () => {
-      expect(answered(() => []).status).toBe(200);
-    });
-
-    it('with 422 and the problems when it refused a settings row', () => {
-      const seen = answered(() => [{ message: 'limit must be a number' }]);
-      expect(seen.status).toBe(422);
-      expect(seen.body).toContain('limit must be a number');
-    });
-
-    it('with 500 rather than throwing, which would end the process', () => {
-      const seen = answered(() => { throw new Error('the disk is full'); });
-      expect(seen).toEqual({ status: 500, body: 'the disk is full' });
-    });
-  });
-
-  it('has a token that opens nothing else', () => {
-    expect(dataChangedToken()).not.toBe(apiToken());
-    expect(isApiToken(dataChangedToken())).toBe(false);
-    expect(devRequestRefusal(withToken(dataChangedToken()), 'development')).toMatch(/token is missing or wrong/);
-    expect(acceptsConnection(`apack, apack-token.${dataChangedToken()}`, apiToken())).toBe(false);
-  });
-});
-
 it('listens on loopback only', () => {
   expect(API_HOST).toBe('127.0.0.1');
 });
@@ -149,7 +104,7 @@ describe('the files the API publishes', () => {
     process.env.APACK_API_TOKEN = TOKEN;
     publishApiFiles(4321, TOKEN);
 
-    const published = { port: 4321, pid: process.pid, dataChangedToken: dataChangedToken() };
+    const published = { port: 4321, pid: process.pid };
     expect(JSON.parse(fs.readFileSync(apiPortFile, 'utf-8'))).toEqual(published);
     // A tool reads it back as this running API
     expect(readApiEndpoint(apiPortFile)).toEqual(published);

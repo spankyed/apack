@@ -7,7 +7,7 @@ import { API_HOST, API_TOKEN_HEADER, errorMessage } from '@apackdev/sdk/utils/pu
 
 /**
  * Asking a running app to do something for a local tool, and what that came to: `/dev/install` and `/dev/reload` for a
- * pack, `/db/changed-elsewhere` for a commit made beside it.
+ * pack.
  */
 
 /**
@@ -96,10 +96,3 @@ export function installPackInApp(root: string, place: AppPlace = { env: 'develop
   return devRequest('/dev/install', { root: path.resolve(root) }, place);
 }
 
-/** Tells the running app that this process committed to its database, which it can't otherwise hear. */
-export async function tellAppDataChanged(place: AppPlace): Promise<AppDelivery> {
-  const { apiPortFile } = resolveAppEnvironment(place);
-  const endpoint = readApiEndpoint(apiPortFile);
-  if (!endpoint?.dataChangedToken) return { status: 'not-running', detail: `no running ${place.env} app in ${apiPortFile}` };
-  return post(`http://${API_HOST}:${endpoint.port}/db/changed-elsewhere`, endpoint.dataChangedToken, {});
-}
