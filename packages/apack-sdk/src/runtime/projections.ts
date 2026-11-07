@@ -3,7 +3,7 @@
 // projection, is caught up on from what the database says changed since the projection's cursor, in chunks, so a
 // backlog never holds a write up for longer than one chunk. The cursor is a row, written in the same transaction as
 // what it derives, so a crash can't leave the two apart.
-import type { ChangedPosition, EarsEngine, LoggedChanges } from '@apackdev/ears';
+import type { ChangedPosition, EarsEngine, PendingChanges } from '@apackdev/ears';
 import type { ProjectionDefinition } from '../framework/projections.ts';
 import { SDK_ENTITIES } from '../types/sdk-entities.ts';
 import { _isHostBound, boundHost } from './host-runtime.ts';
@@ -39,8 +39,8 @@ function pastThisUnit(engine: EarsEngine): ChangedPosition {
 }
 
 /** The ids of the types `from` names that the unit being written holds */
-const pendingOf = (changes: LoggedChanges, from: ReadonlySet<string>) =>
-  Object.keys(changes.pending?.entities ?? {}).filter((id) => from.has(typeOf(id)));
+const pendingOf = (changes: PendingChanges | undefined, from: ReadonlySet<string>) =>
+  Object.keys(changes?.entities ?? {}).filter((id) => from.has(typeOf(id)));
 
 /**
  * In a write's unit: applies what the write changed of the projection's types, and what changed before it since the
@@ -48,7 +48,7 @@ const pendingOf = (changes: LoggedChanges, from: ReadonlySet<string>) =>
  */
 function inWrite(engine: EarsEngine, { name, projection }: Declared): boolean {
   const from = new Set(projection.from);
-  const mine = pendingOf(engine.admin.changesSince(engine.lastCommit(), 1), from);
+  const mine = pendingOf(engine.admin.pendingChanges(), from);
   if (mine.length === 0) return false;
   const cursor = readCursor(engine, name);
   const changed = cursor?.version === versionOf(projection) ? engine.admin.changedSince(projection.from, cursor.position, CHUNK) : undefined;

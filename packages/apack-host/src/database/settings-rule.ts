@@ -46,8 +46,7 @@ export function refuseInvalidSettings(engine: EarsEngine, environment: Environme
   return {
     wants: (type) => type === SETTINGS_ENTITY,
     run() {
-      const { pending } = engine.admin.changesSince(engine.lastCommit(), 1);
-      if (!pending?.entities[SETTINGS_ROW]) return;
+      if (!engine.admin.pendingChanges()?.entities[SETTINGS_ROW]) return;
       // Read only now, since most tool runs never write this row and a pack whose build can't be read need not stop them
       const problems = validation().inspect(storedSettings(engine as Pick<EarsEngine, 'getAttr'>));
       if (problems.length > 0) throw new SettingsRefusedError(problems.map(problem => problem.message));

@@ -6,7 +6,7 @@ import type { EARS } from './entities.ts';
 import type { EARSRuntimeDeps, Embedding, PendingEmbeddings, RelationEdge, RelationPatch } from './runtime.ts';
 import type { CallCounting } from './calls.ts';
 import type { EarsOperationObserver } from './observation.ts';
-import { createConnection, runCommitted, type Answer, type BeforeCommit, type ChangedEntities, type ChangedPosition, type LoggedChanges, type SchemaChange, type UnitOptions } from './database.ts';
+import { createConnection, runCommitted, type Answer, type BeforeCommit, type ChangedEntities, type ChangedPosition, type PendingChanges, type SchemaChange, type UnitOptions } from './database.ts';
 import { createQuery, relationRow, type Query } from './query.ts';
 import { createWrites, type Create, type Upsert, type Write } from './write.ts';
 import { createNameChecks } from './names.ts';
@@ -143,14 +143,12 @@ export interface EarsAdmin {
   /**
    * Another process committed to this database, and said so. Commits this engine didn't make dispatch no watch of its
    * own (elmdb's tracked reads belong to one process), and what they wrote isn't known key by key, so every watch runs
-   * again, as after `clear` or `replaceWith`. If nothing else committed, read from the change log, nothing runs. Answers
+   * again, as after `clear` or `replaceWith`. If nothing else committed, as the database answers, nothing runs. Answers
    * whether something did.
    */
   changedElsewhere(): boolean;
-  /** What the database's change log holds after `cursor`, up to `limit` commits, as the open unit sees it when there is one */
-  changesSince(cursor: number, limit: number): LoggedChanges;
-  /** Names this engine's handle in the change log, so a reader can tell its own commits from another process's */
-  origin(): string;
+  /** What the open unit has changed so far, which code running before it commits may need to act on; none outside a unit */
+  pendingChanges(): PendingChanges | undefined;
   /**
    * What of `types` changed after `from`, in the order of the commits that changed them, at most `limit`, with the
    * entities destroyed since: read in the open unit, whose own writes are stamped only as it commits. A type answers
@@ -175,9 +173,9 @@ export interface EarsAdmin {
   /** Runs `fn` in a unit that what's set to run before a commit stays out of: for that code's own catching up */
   transactWithoutHook<T>(fn: () => T): T;
   /**
-   * Calls `listener` soon after another process commits, which `changedElsewhere` then answers, or after a commit here
-   * shows something else committed, since a wake can be lost. It may be called for a commit that turns out to be this
-   * process's own builder's. Throws when this database can't hear of commits, keeping the listener for that second way.
+   * Calls `listener` soon after another process commits, which `changedElsewhere` then answers. The database hears of
+   * one whose wake was lost at its own next commit, and of one that may not be news, so the answer can be false. Throws
+   * when this database can't hear of commits, keeping the listener: a commit here then asks, and calls it when one did.
    * Returns the unregistration.
    */
   onFoundElsewhere(listener: () => void): () => void;
@@ -383,10 +381,9 @@ export function createEarsEngine({ database, warn, freeze }: EARSRuntimeDeps): E
       runCommitted(() => database.replaceWith(source), () => connection.committedEverything());
     },
     changedElsewhere: () => connection.changedElsewhere(),
-    changesSince: (cursor, limit) => connection.changesSince(cursor, limit),
+    pendingChanges: () => connection.pendingChanges(),
     changedSince: (types, from, limit) => connection.changedSince(types, from, limit),
     nextSequence: () => connection.nextSequence(),
-    origin: () => database.origin,
     replacedElsewhere: () => connection.replacedElsewhere(),
     adoptReplacement: (epoch) => connection.adoptReplacement(epoch),
     beforeCommit: (hook) => connection.beforeCommit(hook),
