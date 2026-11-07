@@ -110,15 +110,14 @@ goal assumes xterm survives; nothing in it blocks on proving a replacement.
 
 **D11 — a Rust broker in a sibling repo, owning processes for every client that needs them.** Settled.
 
-**The destination is Rust because the broker is built once.** An earlier revision of this document chose a
-Node broker on the grounds that Windows might never matter, which made the cheaper error the smaller first
-step. Windows is a target, so that condition does not hold and the asymmetry inverts: Node first means
-building the broker twice and leaving X1 and X2 open for the whole interval between. Precedent is not the
-reason — elmdb lowers the marginal cost of a second Rust tree without being an argument for wanting one —
-but it does mean the toolchain, the janitor, the container and the pre-push discipline all already exist.
+**Rust, in one step, with no intermediate implementation.** Windows is a target, so native process
+ownership is needed; building a non-native broker first would leave X1 and X2 open for its whole lifetime
+and then throw its internals away. Precedent is not the reason — elmdb is not an argument for wanting a
+second Rust tree — but it does mean the toolchain, the janitor, the container and the pre-push discipline
+already exist, so this is the second such tree rather than the first.
 
-**What Rust supplies that the alternative does not.** Stated precisely, because one of the three arguments
-this document first made was wrong and should not be repeated:
+**What Rust supplies here**, stated precisely because off-loop VT parsing is *not* one of the reasons and
+should not be offered as one:
 
 - **Native process-tree ownership.** Job Objects are the mechanism, and from Node they need native code
   regardless — so a Node broker does not avoid that work, it defers it. This is what X1 and X2 are made of,
@@ -362,6 +361,10 @@ covers apack's own flows, and the inference rules are a smaller, bounded case. B
 and let the screen rules serve only what it cannot reach.
 
 ## Comparing implementations
+
+**This section is an option, not a step.** The plan is one Rust broker (D11); nothing here schedules a second
+implementation, and no phase depends on one existing. It records what a comparison would cost and how to
+read it, should a question ever arise that measurement rather than reasoning should settle.
 
 The protocol makes a side-by-side cheap **at the process layer**: a second broker binary speaking the same
 message set, chosen by a developer-only path rather than a user setting. Nothing in the app changes, which is
