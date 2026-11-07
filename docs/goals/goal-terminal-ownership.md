@@ -7,13 +7,22 @@ Status: planned. No open decisions; Phase T is ready to start.
 # Goal: one owner per terminal session, with every review finding closed by a test or by construction
 
 Implement docs/goals/goal-terminal-ownership.md. Follow CLAUDE.md and docs/AGENTS.md.
-Read Scope, Current handoff, Decisions, Phases and Constraints before continuing.
-The initial survey was made at 98bf6a0935 on master; inspect current code before relying on it.
+The survey was made at 98bf6a0935 on master; inspect current code before relying on it.
 Follow the current checkout arrangement and preserve unrelated work.
 
-Findings live in docs/issues/ISSUE-terminal-integration-review.md. Design lives in
-docs/deferred/terminal-runtime-refactor-target.md and docs/deferred/xterm-to-ghostty-web.md.
-Do not restate them here; cite them.
+Read Current handoff and Constraints always. Then only what your phase needs:
+- Phase T (independent tracks): Decisions, your track's row, nothing else.
+- Phase G (the gate): Decisions, Phase G, Acceptance and evidence.
+- Phase S, B, H, P or A: Decisions, your phase, and the phases it depends on.
+Findings live in docs/issues/ISSUE-terminal-integration-review.md -- read the rows you are
+closing, not the document. Design lives in docs/deferred/terminal-runtime-refactor-target.md
+and docs/deferred/xterm-to-ghostty-web.md. Cite all three; do not restate them.
+
+Three rules are easy to skim past and expensive to miss:
+1. A finding closes with evidence. A `dissolved` row needs a named guard or it stays `open`.
+2. Line numbers in the findings predate a rename and a storage migration. The mechanisms have
+   held every spot-check; the citations have not. Verify a finding before acting on it.
+3. Phase B's first commit is the point of no return. Phases S and T revert in one commit each.
 
 Every decision this goal needs is settled in its Decisions section. If you reach a fork it does not
 settle, record the gap in Current handoff and stop; do not choose.
