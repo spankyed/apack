@@ -57,7 +57,8 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 - **Agent status rules** (is a Claude/Codex turn working, waiting or ready). Phase A builds the facts
   pipeline; the rules are product surface with their own iteration, and the refactor target warns herdr's
   can mistake an unrecognized screen for idle. Owner: a later goal, once facts exist.
-- **G2–G7** (the agent path beyond G1). Their own goal, and Phase B's factoring is what makes it cheap:
+- **G2–G7** (the agent path beyond G1), and the native-TUI adapter in #372. Their own goal, against the
+  shape recorded on that PR, and Phase B's factoring is what makes it cheap:
   most of them dissolve against the process layer rather than needing fixes, so that goal is "migrate the
   agent path onto the broker", not "fix seven findings". G1 is in scope here because it is payload
   discipline rather than process ownership, and independent of everything else.
@@ -237,17 +238,38 @@ the renderer over a dedicated bounded channel, never one bus event per chunk.
   that any implementation speaking it is interchangeable — see *Comparing implementations*.
 - A **terminal capability** over it: pty, VT core, screen and bounded history.
 
-The split exists because **the agent path needs the first and none of the second.**
-`claude-code/runner.ts` spawns with `stdio: ['pipe','pipe','pipe']` and reads NDJSON — no pty, no VT — and
-its defects are the process layer's, item for item: `kill(signal)` is `child.kill(signal)`, which signals the
+**The agent path is a first-class client of both layers, not a later migration of one.** Its programmatic
+half (`claude-code/runner.ts`) spawns with `stdio: ['pipe','pipe','pipe']` and reads NDJSON, so it needs the
+process layer alone. Its **native half**, in flight on `session/claude-code-integration` (#372), runs the
+real `claude` TUI inside a pty and parses its screen into structured dialogs — tool permission, plan, bash,
+question, MCP form — which the app renders natively. That half needs the terminal capability too, and it is
+the *more* demanding client: a display surface needs bytes rendered, while a dialog detector needs a screen
+it can match against.
+
+**So design the capability's snapshot and facts API against the TUI adapter, not against the terminal.** A
+screen model with cells, regions and cursor state is what makes dialog detection sturdy; matching ANSI from
+a byte stream, which is what #372 does today, is the fragile version. The terminal is the easier client and
+will be satisfied by whatever serves this one.
+
+Also worth carrying into Phase B as evidence rather than assumption: that branch has **three pty owners**
+(`services/terminal.ts`, `claude-code/terminal-owner.ts`, `claude-code/background-attachment.ts`), its own
+`claude-code/native-process-ownership.ts` with an `isClaudeNativeDescendant` check, and its own attach
+lifecycle with `input`/`resize`/`close`. The process-tree and attachment problems are already felt in two
+places and answered in both; Phase B is where they stop being answered twice. The target shape is recorded
+as a non-blocking comment on #372 and nothing here blocks on it.
+
+The programmatic half's defects remain the process layer's, item for item: `kill(signal)` is `child.kill(signal)`, which signals the
 CLI and not its tree, so a Bash grandchild outlives a deliberate kill (the mirror of F7, where the terminal
 over-kills and this under-kills); handles live in an in-memory `Map` and die with the API (G3); `close()` is
 awaited with no deadline, so a grandchild holding stdout pins a thread `isRunning` forever (G6); stderr
 accumulates unbounded to serve a 500-character tail (G7). Each of those dissolves against the process layer
 the same way the terminal's do.
 
-Build the layer so that is possible; **do not migrate the agent path here.** Its migration is its own goal,
-and the deliverable in this one is the seam, not the second client.
+Build the layers so both clients are possible; **do not migrate the agent path here.** Its migration is its
+own goal, and the deliverable in this one is the seam, not the second client. **Re-verify G1, G2, G6 and G7
+against #372 before acting on them** — `runner.ts`, `handle-store.ts`, `query.ts` and `hooks.ts` all move
+substantially on that branch, and G3 is already fixed there (`hooks.ts` calls `killAllHandles()` on
+shutdown).
 **Dependencies:** D11 for the broker's home and core, D9 for what it parses. Phase G's baseline,
 so acceptance has a before.
 **Done when:** **node-pty is gone from the repository** — the dependency dropped from
@@ -366,6 +388,10 @@ Standing repository rules apply as written; this section records only what is sp
 - **IPC becomes a surface this repo owns** — framing, epochs, authorization, backpressure. Bugs do not
   disappear when ownership moves out of process; some of them move here. Budget for it rather than
   discovering it.
+- **"Session" gets one meaning.** The host owns sessions; nothing else may name one. #372 has a
+  `claude-code/terminal-session.ts` holding Claude session *records*, which is a different thing wearing the
+  same word — the class of problem the `surface` / `system` / `plugin` rule exists for. Settle it by rename
+  while it is a rename, and keep `check:specifiers`' vocabulary rule in mind if a third meaning appears.
 - **Debuggability is JS-shaped today.** `drive/`, `npm run dev:eval`, sourcemaps and the logger all assume
   the failing code is JavaScript. A broker needs its own answer to "what is it doing right now" before it
   owns anything a user can see.
