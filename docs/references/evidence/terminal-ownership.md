@@ -18,8 +18,11 @@ removes the finding rather than fixing it, and names the construction that does.
 |---|---|---|---|---|
 | T4 | test | correlation work, pre-goal | `tests/features/code/fe/terminal-opens-for-the-asker.spec.ts` | — |
 | M3 | test | correlation work, pre-goal | `tests/features/code/be/terminal-answers-the-asker.spec.ts` | — |
+| G3 | open | fixed on `session/claude-code-integration` (#372), not on master | `hooks.ts` calls `killAllHandles()` there | closes when #372 lands; confirm it survives the cleanup pass |
 
-Disposition values: `test`, `dissolved`, `driven`, `open`.
+Disposition values: `test`, `dissolved`, `driven`, `open`. A fix that exists only on an unmerged branch is
+`open` with its branch named: the goal runs against master, and a row that reads closed because another
+branch closed it is how a regression gets shipped.
 
 ## Checkpoints
 

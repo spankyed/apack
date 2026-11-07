@@ -214,7 +214,7 @@ concurrent with the spine.
 | Token at source | S1 (D4), closing G2 and G4 | `api/src/boot/config.ts`, the spawn env |
 | Error surfacing | F9, through `reportError` | the pack feature |
 | App keyboard | X3, X10 | `packages/main` menu, `apack-sdk/src/fe/hotkeys.ts` |
-| Agent writes | G1 | the agent streaming writers |
+| Agent writes | G1 | the agent streaming writers — **verify against #372 first**, the file moves there |
 | Tab and panel behaviour | T1, T2, T3, T5, T6, T7, T8, T9 | the pack feature |
 
 S1 and S2 each land with the firing case that fails when the list goes stale: a deny-list rotting unnoticed
@@ -272,11 +272,16 @@ substantially on that branch, and G3 is already fixed there (`hooks.ts` calls `k
 shutdown).
 **Dependencies:** D11 for the broker's home and core, D9 for what it parses. Phase G's baseline,
 so acceptance has a before.
-**Done when:** **node-pty is gone from the repository** — the dependency dropped from
-`packages/default-setup/package.json` and `packages/api/package.json`, its entry removed from
-`apack-host/src/build/shared-deps.ts`, its probe removed from `build/prod/smoke-native.mjs`, and the three
-`npx electron-rebuild --only node-pty` invocations deleted from `build/build.sh`, which leaves the app with
-no Electron-ABI-coupled native module at all (elmdb is N-API and needs no rebuild).
+**Done when:** **the terminal feature no longer imports node-pty** — `services/terminal.ts` spawns nothing,
+and the broker owns the pty.
+
+Dropping the **dependency** is a separate, later condition and must not be written into this phase:
+#372 adds two more importers (`claude-code/terminal-owner.ts`, `claude-code/background-attachment.ts`), and
+migrating them is explicitly out of scope here. So the package entries, the `shared-deps.ts` entry, the
+`build/prod/smoke-native.mjs` probe and the three `npx electron-rebuild --only node-pty` invocations in
+`build/build.sh` come out when the **last** importer does, which is the agent path's goal. Record the
+remaining importers rather than claiming the removal; the prize — an app with no Electron-ABI-coupled native
+module, elmdb being N-API — is real but it is not this phase's to claim.
 
 What disqualifies node-pty is **where it runs and what it is coupled to, not its quality**: it is current
 (1.1.0), Microsoft-maintained, the binding VS Code ships, and sound on POSIX. An addon in the API process

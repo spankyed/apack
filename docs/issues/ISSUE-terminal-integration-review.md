@@ -298,12 +298,24 @@ throws on resize after exit, `:133-150` kills the console process list **asynchr
 helper, and `:229` delays the exit event by 1,000 ms. `runShutdownHooks()` runs inside `process.on('exit')`,
 where that async kill cannot complete even on a graceful exit.
 
-### G — agent sessions do not share the pty, but repeat one mistake
+### G — agent sessions, which stopped being pty-free while this document sat
 
-**Claude Code does not use `terminalService`.** `node-pty` appears in exactly one file in the repo, and
-`terminalService` has two importers (the terminal system, and `hooks.ts` for `killAll`). The agent path uses
-plain `child_process.spawn` and reaches the UI through the chat/threads pipeline, never `terminal.*`. **So
-F1-F17 do not reach agent sessions** — the review's scope is correct as written.
+**On master, Claude Code does not use `terminalService`.** `node-pty` has one importer in `src/`,
+`terminalService` has two (the terminal system, and `hooks.ts` for `killAll`), and the agent path uses plain
+`child_process.spawn`, reaching the UI through the chat/threads pipeline and never `terminal.*`. So F1-F17
+do not reach agent sessions as the tree stands.
+
+**That is no longer the whole picture, and the difference matters more than the findings below.**
+`session/claude-code-integration` (#372) adds a **native** half that runs the real `claude` TUI inside a pty
+and parses its screen into structured dialogs. On that branch there are three pty owners
+(`services/terminal.ts`, `claude-code/terminal-owner.ts`, `claude-code/background-attachment.ts`), a local
+`claude-code/native-process-ownership.ts`, and an attach lifecycle of its own. So the agent path is a client
+of the terminal capability rather than a stranger to it, and the goal designs that capability against the
+TUI adapter for exactly this reason. The target shape is a non-blocking comment on #372.
+
+**Re-verify every G finding against that branch before acting on it.** `runner.ts`, `handle-store.ts`,
+`query.ts` and `hooks.ts` all move substantially there, and **G3 is already fixed** — `hooks.ts` calls
+`killAllHandles()` on shutdown. The sketches below are against master.
 
 It independently repeats the write-amplification class, and worse: **G1** flushes
 `updateMessageState(messageId, { text: buffer })` with the *entire accumulated text* every 80 ms, and again
@@ -335,7 +347,9 @@ Recorded so they are not re-investigated.
   `@xterm/addon-web-links@0.11.0`'s only regex matches `https?` (read out of the shipped bundle) and no
   `urlRegex` option is passed; and `main/src/modules/shell-access.ts:13` allows only `http:`/`https:` for the
   external branch. The remaining gap is S4, which the terminal cannot reach.
-- **Claude Code does not share the pty infrastructure** (above).
+- **Claude Code does not share the pty infrastructure** — **true on master only.** #372 gives it ptys of
+  its own; see the G section. Recorded here because the original claim shaped this document's scope, and a
+  negative result that has expired is worse than none.
 - **`pty` resize does not oscillate between windows** — every re-fit trigger was traced and none is driven by
   another window or the backend. M2 is last-writer-wins, not thrash.
 - **Keystrokes reach the pty once, not twice, with two windows.** `onData` is registered once per pool entry
