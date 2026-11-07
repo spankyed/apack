@@ -92,5 +92,12 @@ Run [42345049940](https://github.com/spankyed/apack/actions/runs/42345049940) pa
 but app/rest found that the new loading test used a relative import into another package. The test
 now imports the public SDK package by name; built-entry loading and first use remain independently
 verified by the fresh Node smoke checks. The corrected test and all seventeen placement checks
-passed locally. Independent native/integration shards continue; final corrected acceptance is pending.
+passed locally. All four native/integration shards in that run subsequently passed.
+Final reviewed acceptance [42348411661](https://github.com/spankyed/apack/actions/runs/42348411661)
+passed on `35ede0e71af09e10a3c11499fd737c0cb0ca307d`, including the schema snapshot correction:
+producer, integration 1/2, native 1/2 and application/rest all passed. The separate validation ref
+pointed at that exact PR commit; it changed no workflow or job selection and was removed after
+completion. The preceding corrected run
+[42347096625](https://github.com/spankyed/apack/actions/runs/42347096625) also passed all six jobs.
+The final evidence update changes this document only; no runtime code changed after acceptance.
 No deadlines, integrity checks, compiler validation or performance assertions were relaxed.
