@@ -310,3 +310,6 @@ missing/ambiguous handlers and missing onScreen callbacks.
 
 The everyday-layout journey verifies compact parent reading, a bounded native session-details
 popover and retained selection/status on return. Its screenshots still require visual review.
+
+The parent-reset journey verifies original /clear saved-session rotation and fresh-context
+continuation. It does not establish naturally gated quota/return offer acceptance.
