@@ -93,6 +93,13 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
       } catch (error) {
         logger.error('Refreshing after a commit from another process failed:', error as Error);
       }
+      // The run history is a database of its own, which a tool may write without the app's: its watches run again from
+      // what it answers
+      try {
+        runHistory.engine.admin.changedElsewhere();
+      } catch (error) {
+        logger.error('Refreshing the run history after a commit from another process failed:', error as Error);
+      }
       // Whatever the answer, since each projection reads from its own cursor
       void projections.catchUp();
       if (changed) transport.rootEvents.emitIncoming({ to: HOST.bus, event: { type: 'DATA_CHANGED_ELSEWHERE' } });

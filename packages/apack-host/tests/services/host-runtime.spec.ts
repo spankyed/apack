@@ -66,6 +66,7 @@ describe('createHostRuntime', () => {
       const stopHearing = testRootEvents.onIncoming((message) => { told.push(`${message.to} ${message.event.type}`); });
       const { runHistory } = blockedHistory();
       vi.spyOn(runHistory.engine.admin, 'onFoundElsewhere').mockImplementation(() => () => {});
+      vi.spyOn(runHistory.engine.admin, 'changedElsewhere').mockImplementation(() => { told.push('run history watches'); return true; });
       const runtime = createHostRuntime({ runHistory, database: {} as EarsDatabase, engine, transport: { rootEvents: testRootEvents },
         appVersion: '1.2.3', packs: createNativePackTestRegistry() });
       return { engine, runHistoryEngine: runHistory.engine, runtime, found: () => found(), told, stop: () => { stopHearing(); stopWatching.mockRestore(); } };
@@ -73,7 +74,7 @@ describe('createHostRuntime', () => {
 
     beforeEach(() => { vi.useFakeTimers(); });
     afterEach(() => { vi.useRealTimers(); });
-    const refreshed = ['watches', 'host/bus DATA_CHANGED_ELSEWHERE'];
+    const refreshed = ['watches', 'run history watches', 'host/bus DATA_CHANGED_ELSEWHERE'];
 
     it('reruns every watch and then tells the bus, once for a burst', () => {
       const { found, told, stop } = running();
@@ -93,7 +94,7 @@ describe('createHostRuntime', () => {
       vi.mocked(engine.admin.changedElsewhere).mockImplementation(() => false);
       found();
       vi.advanceTimersByTime(250);
-      expect(told).toEqual([]);
+      expect(told, 'the run history is still asked, its watches its own').toEqual(['run history watches']);
       stop();
     });
 
@@ -102,7 +103,16 @@ describe('createHostRuntime', () => {
       vi.mocked(engine.admin.changedElsewhere).mockImplementation(() => { throw new Error('The database is closed'); });
       found();
       expect(() => vi.advanceTimersByTime(250), 'a throw in this timer would end the process').not.toThrow();
-      expect(told).toEqual(['host/bus DATA_CHANGED_ELSEWHERE']);
+      expect(told).toEqual(['run history watches', 'host/bus DATA_CHANGED_ELSEWHERE']);
+      stop();
+    });
+
+    it('refreshes the rest when the run history fails to answer', () => {
+      const { runHistoryEngine, found, told, stop } = running();
+      vi.mocked(runHistoryEngine.admin.changedElsewhere).mockImplementation(() => { throw new Error('The database is closed'); });
+      found();
+      expect(() => vi.advanceTimersByTime(250), 'a throw in this timer would end the process').not.toThrow();
+      expect(told).toEqual(['watches', 'host/bus DATA_CHANGED_ELSEWHERE']);
       stop();
     });
 
