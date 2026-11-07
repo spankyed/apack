@@ -37,6 +37,8 @@ jobs:
           cmp vendor/elmdb.rev "$RUNNER_TEMP/startup-baseline.noindex/vendor/elmdb.rev"
       - uses: ./.github/actions/elmdb
       - name: Install separate revision dependencies
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           ln -s "$GITHUB_WORKSPACE/vendor/elmdb" "$RUNNER_TEMP/startup-baseline.noindex/vendor/elmdb"
           npm ci --no-audit --no-fund
