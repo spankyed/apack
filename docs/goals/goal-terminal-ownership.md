@@ -212,6 +212,21 @@ agent facts, no reattach.
 **Done when:** a keystroke reaches a pty and its output reaches a screen through all four seams, and
 `tests/e2e/smoke/` still passes.
 
+**Three library choices this phase settles by trying them, not by argument:**
+
+- **`termwiz` against `alacritty_terminal`.** D11 chose the latter on lineage grounds, which was the right
+  axis for that question but never weighed the pairing: `termwiz` is wezterm's terminal crate, from the same
+  project as `portable-pty`, and designed to sit with it. Check whether it is usable standalone or drags GUI
+  assumptions; a matched pair beats two ecosystems if it is.
+- **`command-group` for process-tree ownership**, which gives a process group on POSIX and a Job Object on
+  Windows under one API. The primitive that matters is
+  `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`: with it, the OS kills the tree when the handle closes, so **X1 is
+  answered by the kernel rather than by cleanup code** — which is the opposite of today, where cleanup
+  depends on `runShutdownHooks()` running inside `process.on('exit')` and cannot on Windows.
+- **`ts-rs` for the protocol**, reusing `elmdb-node/protocol/`'s arrangement rather than choosing again, and
+  **elmdb's `ErrorCode`** as the error model: a generated closed string union, which is what a typed error
+  across this boundary should be and what #372's name-matching should become.
+
 **Why this phase exists.** Phase B otherwise designs a protocol **before either consumer exists**, which is
 designing against imagined requirements — and a cross-repo protocol is the most expensive thing here to get
 wrong, since fixing it later costs two commits, a `.rev` bump and a migration. The thinnest path through all
@@ -291,7 +306,11 @@ for what it parses, Phase G's baseline so acceptance has a before.
 3. **X1 and X2 are claimed only on a Windows run** — the [development VM](../references/guides/windows-development-vm.md)
    or a `compiler_windows=true` dispatch, never a Mac.
 4. **The presentation channel is bounded** by Phase G's declared ceiling, with a firing case proving a
-   producer past it is throttled and the overload observable rather than dropped silently.
+   producer past it is throttled and the overload observable rather than dropped silently. **Terminal
+   responses hold reserved capacity**, by credit-based flow control rather than one shared queue: a reply to
+   a DA/DSR query that cannot leave because output filled the channel is a deadlock — the app waits for an
+   answer the terminal already produced — and priority inversion on a shared channel is the standard way to
+   arrive at one. The firing case is a saturating producer *and* a pending query, together.
 5. **Resize is correct under an alternate-screen app**, not only a shell prompt — a pty resized under `vim`
    or `htop` is where coalescing and ordering mistakes surface. Phase P repeats the check from the
    renderer's side.
@@ -357,6 +376,10 @@ exactly one host is attached and exactly one `onData`/resize registration exists
 spec; and the output budget Phase G declared holds, asserted over the same corpus the baseline used so the
 before and after are comparable.
 
+**The VT layer is tested as a parser, not only as a feature.** Snapshot the resulting grid for a byte stream
+(`insta`), and split representative streams at every byte boundary — UTF-8, CSI, OSC, DCS, APC — with a
+property test (`proptest`), which is what the refactor target asks for and where VT parsers actually break.
+
 **And an alternate-screen app survives a resize and a reattach.** This was named an unexplored axis in the
 review's second round and reviewed by nobody, so it is a requirement here rather than a finding: drive
 `vim`, `less`, `htop` and a representative agent TUI through a panel drag, a tab switch, a window resize and
@@ -397,6 +420,9 @@ second instance and neither owns it alone:
   long-poll, or a streamed response where the host allows one; a tick is the symptom.
 - **Ask upstream before working around.** The convention already exists in the ghostty plan: prefer an
   upstream integration change, keep a fork only if the needed public interface is small.
+- **Adopt the host ecosystem's wire format rather than inventing one.** For shell integration that means
+  **OSC 633**, VS Code's marker set, whose rc scripts are MIT and readable and which other tools already
+  emit. Inventing sequences for F14 buys nothing and loses interop.
 - **One renderer per element, and one side admits a decision.** Where the app draws a host CLI's UI natively
   while that CLI is also drawing it, the host's output for that element is suppressed and the decision is
   accepted from exactly one side. This is the rule with no industry pattern to copy — iTerm2's tmux control
