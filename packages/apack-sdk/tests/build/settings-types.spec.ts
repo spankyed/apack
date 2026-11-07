@@ -25,7 +25,12 @@ describe('settings type generation', () => {
       },
     };
     const before = structuredClone(definition);
-    const types = await generateSettingsTypes(definition, 'GeneratedSettings');
+    const [types, alternate] = await Promise.all([
+      generateSettingsTypes(definition, 'GeneratedSettings'),
+      generateSettingsTypes(definition, 'AlternateSettings'),
+    ]);
+    expect(alternate).toContain('interface AlternateSettings');
+    expect(alternate).not.toContain('interface GeneratedSettings');
     expect(definition).toEqual(before);
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-settings-types-'));
     try {
