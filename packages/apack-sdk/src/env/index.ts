@@ -167,3 +167,32 @@ export function _inferElectronAppEnv(input: {
 export function getAppVersion(): string {
   return boundHost().appVersion;
 }
+
+/**
+ * The variables the app sets on a process it starts: its identity, its paths, its port and its token.
+ *
+ * The list is the declaration and {@link AppProcessEnv} is derived from it, so the construction that sets them
+ * (`getEnvironment`, `@app/main`'s api-server module) cannot add one the list does not name and cannot omit one
+ * it does — the record it builds is typed by this, and either direction fails the typecheck.
+ *
+ * That is what makes the strip at the other end safe. A terminal spawns the user's shell from the API process's
+ * own environment, so everything here is inherited by it, and every one of them is the app talking to itself:
+ * `ELECTRON_RUN_AS_NODE=1` breaks any Electron app the user launches from that shell, `NODE_ENV=production`
+ * changes what their `npm install` does, and the token is app-process-level access to their own data. The
+ * hand-written deny-list that used to sit beside the spawn named two of these.
+ */
+export const APP_PROCESS_ENV_VARS = [
+  'NODE_ENV',
+  'API_PORT',
+  'APACK_API_TOKEN',
+  'APACK_STARTUP_ID',
+  'APACK_LOG_DIR',
+  'SHIPPED_PACKS_DIR',
+  'APACK_ENV',
+  'APACK_APP_MANIFEST',
+  'APACK_USER_DATA_DIR',
+  'ELECTRON_RUN_AS_NODE',
+] as const;
+
+/** A complete record of {@link APP_PROCESS_ENV_VARS}: what the app sets when it starts a process. */
+export type AppProcessEnv = Record<(typeof APP_PROCESS_ENV_VARS)[number], string | undefined>;

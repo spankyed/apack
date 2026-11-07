@@ -4,7 +4,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'api-dev-reload-'));
 process.env.APACK_ENV = 'test';
@@ -12,7 +12,9 @@ process.env.APACK_USER_DATA_DIR = dataDir;
 process.env.APACK_API_TOKEN = 'the-run-token';
 const { API_PROTOCOL, acceptsConnection, devRequestRefusal, publishApiFiles } = await import('../../src/transport/websocket.ts');
 const { API_HOST } = await import('@apackdev/sdk/utils/pure');
-const { apiToken, apiTokenIsOwn, isApiToken } = await import('../../src/boot/config.ts');
+const { apiToken, apiTokenIsOwn, captureApiToken, isApiToken } = await import('../../src/boot/config.ts');
+// What boot does, in the order boot does it: the token is taken out of the environment before anything can spawn
+captureApiToken();
 const { resolveAppEnvironment } = await import('@apackdev/sdk/env');
 const { readApiEndpoint } = await import('@apackdev/host/process-liveness');
 const { API_TOKEN_HEADER } = await import('@apackdev/sdk/utils/pure');
@@ -21,24 +23,42 @@ afterAll(() => fs.rmSync(dataDir, { recursive: true, force: true }));
 const TOKEN = 'the-run-token';
 const withToken = (token: string) => ({ [API_TOKEN_HEADER]: token });
 
+/**
+ * An API booted by hand, in its own module registry: capture happens once per process, so a second boot needs
+ * a second copy of the modules that hold the token. `transport` comes along for the cases that read the
+ * provenance through `publishApiFiles`.
+ */
+const bootedWithoutAToken = async () => {
+  vi.resetModules();
+  delete process.env.APACK_API_TOKEN;
+  const config = await import('../../src/boot/config.ts');
+  const transport = await import('../../src/transport/websocket.ts');
+  config.captureApiToken();
+  return { ...config, ...transport };
+};
+
 describe('the API token', () => {
   it("is the app run's when one is given", () => {
     expect(apiToken()).toBe(TOKEN);
     expect(apiTokenIsOwn()).toBe(false);
   });
 
-  it('is made up, random and kept, for an API started without one', () => {
-    delete process.env.APACK_API_TOKEN;
-    try {
-      const own = apiToken();
-      expect(apiTokenIsOwn()).toBe(true);
-      expect(own).toMatch(/^[\w-]{43}$/);
-      expect(apiToken()).toBe(own);
-      expect(acceptsConnection('apack', own)).toBe(false);
-      expect(acceptsConnection(`apack, apack-token.${own}`)).toBe(true);
-    } finally {
-      process.env.APACK_API_TOKEN = TOKEN;
-    }
+  it('is gone from the environment once captured, so nothing the API spawns inherits it', () => {
+    // A terminal spawns the user's shell from this process's environment, where any command the user runs can
+    // read it; the token reaches the database system's transaction event, which runs the code it is given.
+    // Re-reading the variable instead of capturing it fails here.
+    expect(process.env.APACK_API_TOKEN).toBeUndefined();
+    expect(apiToken()).toBe(TOKEN);
+  });
+
+  it('is made up, random and kept, for an API started without one', async () => {
+    const { apiToken: ownTokenOf, apiTokenIsOwn: isOwn, acceptsConnection: accepts } = await bootedWithoutAToken();
+    const own = ownTokenOf();
+    expect(isOwn()).toBe(true);
+    expect(own).toMatch(/^[\w-]{43}$/);
+    expect(ownTokenOf()).toBe(own);
+    expect(accepts('apack', own)).toBe(false);
+    expect(accepts(`apack, apack-token.${own}`, own)).toBe(true);
   });
 
   it('matches only itself', () => {
@@ -101,7 +121,6 @@ describe('the files the API publishes', () => {
     fs.writeFileSync(apiPortFile, '1111', { mode: 0o644 });
     // A packaged app: not development, and main gave it the run's token
     delete process.env.NODE_ENV;
-    process.env.APACK_API_TOKEN = TOKEN;
     publishApiFiles(4321, TOKEN);
 
     const published = { port: 4321, pid: process.pid };
@@ -114,7 +133,7 @@ describe('the files the API publishes', () => {
     expect(fs.existsSync(apiTokenFile)).toBe(false);
   });
 
-  it('publishes the token too for a development app, and for one that made up its own', () => {
+  it('publishes the token too for a development app, and for one that made up its own', async () => {
     clear();
     process.env.NODE_ENV = 'development';
     publishApiFiles(4322, TOKEN);
@@ -123,13 +142,9 @@ describe('the files the API publishes', () => {
 
     clear();
     delete process.env.NODE_ENV;
-    delete process.env.APACK_API_TOKEN;
-    try {
-      const own = apiToken();
-      publishApiFiles(4323, own);
-      expect(fs.readFileSync(apiTokenFile, 'utf-8')).toBe(own);
-    } finally {
-      process.env.APACK_API_TOKEN = TOKEN;
-    }
+    const byHand = await bootedWithoutAToken();
+    const own = byHand.apiToken();
+    byHand.publishApiFiles(4323, own);
+    expect(fs.readFileSync(apiTokenFile, 'utf-8')).toBe(own);
   });
 });

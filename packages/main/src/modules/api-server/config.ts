@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {getAppEnvironment, shippedPacksDir} from '../../app-environment.ts';
+import type {AppProcessEnv} from '@apackdev/sdk/env';
 
 // API Server Configuration
 export const API_CONFIG = {
@@ -92,11 +93,14 @@ export const getEnvironment = (port: number, options: { apiToken: string; startu
     env[pathKey] = existing.join(path.delimiter);
   }
 
-  return {
-    ...env,
+  // Typed by AppProcessEnv, which is derived from APP_PROCESS_ENV_VARS: a variable added here without being
+  // named there, or named there and not set here, fails the typecheck. The terminal strips that same list from
+  // the shell it spawns, so this is also the list of what a user's shell must not inherit.
+  const appProcessEnv: AppProcessEnv = {
     NODE_ENV: app.isPackaged ? 'production' : 'development',
     API_PORT: port.toString(),
-    // Clients must present it: the API refuses connections and requests without it
+    // Clients must present it: the API refuses connections and requests without it. The API captures it at boot
+    // and deletes it from its own environment, so nothing it spawns inherits it.
     APACK_API_TOKEN: options.apiToken,
     APACK_STARTUP_ID: options.startupId,
     APACK_LOG_DIR: options.logDir,
@@ -107,6 +111,8 @@ export const getEnvironment = (port: number, options: { apiToken: string; startu
     APACK_USER_DATA_DIR: getAppEnvironment().userDataDir,
     ELECTRON_RUN_AS_NODE: '1',
   };
+
+  return { ...env, ...appProcessEnv };
 };
 
 // Node Executable Configuration

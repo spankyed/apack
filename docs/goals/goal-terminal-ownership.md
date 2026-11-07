@@ -81,7 +81,7 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 
 ## Current handoff
 
-- **Checkout:** `master` at `98bf6a0935`, the current one — no branch or worktree. Nothing implemented yet.
+- **Checkout:** `master` at `9ed87075ba`, the current one — no branch or worktree. Nothing implemented yet.
   **Collision surface against #372**, measured 2026-11-07: one file, `features/code/fe/state.ts` (+24/-2 on
   that branch). Every other file Phase T touches is untouched there — `bus/client-events.ts`,
   `api/src/boot/config.ts`, `be/services/terminal.ts`, `fe/features/terminal/state.ts`, `fe/hotkeys.ts`,
@@ -93,9 +93,15 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   search over the whole serialized log record, so re-adding a payload under any key fails; mutation-checked
   by restoring `event` to the log, which fails three cases. The two live CLAUDE.md files that documented the
   old array-summarizing behaviour moved with it.
-- **Next deliverable:** Phase T's **S1** — capture the API token at boot and delete it from `process.env`,
-  and strip the app's identity variables from spawned shells by a derived list (D4). Then F9, X3/X10, G1 and
-  the two tooling tracks, in any order. **Phase G is blocked on a quiet machine**: `npm run check:idle`
+- **Done:** Phase T's **S1** — the API token is captured at boot and the variable deleted
+  (`captureApiToken()`, `api/src/boot/config.ts`, called from `server.ts` before the app exists), and the
+  shell's environment is derived rather than written: `APP_PROCESS_ENV_VARS` (`@apackdev/sdk/env`) is the one
+  declaration, `getEnvironment` in `@app/main` builds its record typed by it, and
+  `shellEnvironment` (`features/code/be/services/shell-environment.ts`) strips that same list plus the four
+  loader variables. The old hand-written deny-list named two of the ten. Closes G2 and G4. Both halves have a
+  firing spec and the record has the typecheck; mutation-checked three ways.
+- **Next deliverable:** Phase T's **F9**, then X3/X10, G1 and the two tooling tracks, in any order.
+  **Phase G is blocked on a quiet machine**: `npm run check:idle`
   reported 60% against a 70% floor on 2026-11-07, so the baseline could not be taken. Retry before Phase S,
   since it cannot be taken once state moves. Phase B's first commit is the last cheap exit — see Constraints.
 - **Proven checks:** the sibling-repo path is clear, probed 2026-11-07 and then removed —

@@ -73,13 +73,13 @@ is untrusted whoever asked, and the two rules live in one module rather than at 
 
 ## API server (`src/modules/api-server/`)
 
-- `ApiServer` creates the API token for this app run (`apiToken`, 32 random bytes). The API process gets it as `APACK_API_TOKEN` (`getEnvironment`), the app's windows through the synchronous `api:token` IPC their preload sends. The in-app browser's tabs have no preload, so web pages never see it.
+- `ApiServer` creates the API token for this app run (`apiToken`, 32 random bytes). The API process gets it as `APACK_API_TOKEN` (`getEnvironment`), captures it at boot and deletes the variable, so nothing it spawns inherits it; the app's windows get it through the synchronous `api:token` IPC their preload sends. The in-app browser's tabs have no preload, so web pages never see it.
 - `ApiServer.enable` registers IPC (`api:token`, `api:get-status`, `api:open-log-file`, `app:reload`, `app:relaunch`) and starts the server on `app.whenReady()`.
 - `startApiServer` SIGKILLs orphaned API processes (`ps`, macOS/Linux: same `dist/server.js` path, `apack` in the command, parent pid 1), then spawns it:
   - `getApiPaths()`: `<appPath>/packages/api` from source, `<resources>/app/packages/api` packaged (no ASAR).
   - `getNodeExecutable()`: `node` from source; packaged, Electron itself with `ELECTRON_RUN_AS_NODE=1`.
   - `getExecutionArgs()`: from source `--conditions=@apackdev/source dist/server.js`, so packs' `@apackdev/*` imports resolve to workspace source.
-  - `getEnvironment()`: `API_PORT`, `APACK_API_TOKEN` (the run's API token), `NODE_ENV`, `SHIPPED_PACKS_DIR` (`packages/`), `APACK_STARTUP_ID`, `APACK_LOG_DIR`, `APACK_ENV`, `APACK_USER_DATA_DIR`; packaged builds append Homebrew, `/usr/local/bin` and nvm dirs to `PATH`.
+  - `getEnvironment()`: the variables the app sets on the process it starts, as one record typed by `AppProcessEnv` — `APP_PROCESS_ENV_VARS` (`@apackdev/sdk/env`) is the declaration, so one set here and not named there, or named there and not set here, fails the typecheck. `API_PORT`, `APACK_API_TOKEN` (the run's API token), `NODE_ENV`, `SHIPPED_PACKS_DIR` (`packages/`), `APACK_STARTUP_ID`, `APACK_LOG_DIR`, `APACK_ENV`, `APACK_APP_MANIFEST`, `APACK_USER_DATA_DIR`, `ELECTRON_RUN_AS_NODE`; packaged builds append Homebrew, `/usr/local/bin` and nvm dirs to `PATH`. The same list is what a terminal strips from the shell it spawns, which is why it is declared rather than written twice.
   - Port: `getPort({ port: preferredPort })` (3001 first, then the last port that worked) after `clearLockedPorts()`, so a restart keeps the renderer's URL when it can.
 - `ProcessManager` (`process-manager.ts`) pipes stdout/stderr to the log. The server counts as ready at the first stdout line containing `WebSocket Server listening` with `ws://localhost:<port>`. Stderr lines starting with `{"__fatal":` are collected and broadcast as `api:fatal`.
 - On exit it broadcasts `api:stopped` (`{ error, restarting }`) and restarts after 2 s, up to 3 attempts (`API_CONFIG` in `config.ts`); the count resets once a launch has run for 5 s. After the last attempt it broadcasts `api:error` and rejects `waitForReady()`.

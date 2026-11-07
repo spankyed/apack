@@ -9,6 +9,7 @@ import type { TerminalInfo, TerminalCreate } from '../types.ts'
 import { EARS } from '#generated/ears.ts'
 import { repository } from '#generated/repository.ts';
 import { createLogger } from '@apackdev/sdk/logger';
+import { shellEnvironment } from './shell-environment.ts'
 
 const logger = createLogger('terminal');
 
@@ -33,14 +34,6 @@ class TerminalService {
     'zsh',
     'powershell.exe',
     'cmd.exe'
-  ]
-  private readonly BLOCKED_ENV_VARS = [
-    'LD_PRELOAD',
-    'LD_LIBRARY_PATH',
-    'DYLD_INSERT_LIBRARIES',
-    'DYLD_LIBRARY_PATH',
-    'ELECTRON_RUN_AS_NODE',
-    'NODE_ENV',
   ]
 
   private get defaultShell(): string {
@@ -82,7 +75,7 @@ class TerminalService {
 
     try {
       // Sanitize environment variables
-      const sanitizedEnv = this.sanitizeEnvironment(process.env as { [key: string]: string })
+      const sanitizedEnv = shellEnvironment(process.env as { [key: string]: string })
 
       const ptyProcess = pty.spawn(shell, [], {
         name: 'xterm-256color',
@@ -314,21 +307,6 @@ class TerminalService {
     return title.replace(/[\x00-\x1F\x7F]/g, '').substring(0, 100)
   }
 
-  private sanitizeEnvironment(env: { [key: string]: string }): { [key: string]: string } {
-    const sanitized = { ...env }
-
-    // Remove dangerous environment variables
-    for (const blocked of this.BLOCKED_ENV_VARS) {
-      delete sanitized[blocked]
-    }
-
-    // Set terminal identification so shells know they're in a capable terminal
-    sanitized.TERM_PROGRAM = 'apack'
-    sanitized.COLORTERM = 'truecolor'
-
-    return sanitized
-  }
-
   private injectShellIntegration(ptyProcess: pty.IPty, shell: string): void {
     const shellName = path.basename(shell).replace(/\.exe$/i, '').toLowerCase()
 
@@ -371,8 +349,7 @@ class TerminalService {
           }
         }
 
-        // Sanitize environment variables
-        const sanitizedEnv = this.sanitizeEnvironment(process.env as { [key: string]: string })
+        const sanitizedEnv = shellEnvironment(process.env as { [key: string]: string })
 
         // Spawn new pty process for the terminal
         const ptyProcess = pty.spawn(persistedTerminal.shell, [], {
