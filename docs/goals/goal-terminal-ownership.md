@@ -327,12 +327,37 @@ Launch-time shell integration (D3) supplies the OSC markers.
 **Done when:** F13 and F14 are closed; a hidden session answers a bounded screen read and a wait; reported
 paths and titles are treated as untrusted metadata; and no status rule is shipped (see Excluded).
 
+**Driving a third-party CLI is one pattern, and this repo now has two instances of it.** Shell integration
+(F13, F14) injects into a shell to get OSC markers back; #372's native plugin registers hooks with the
+Claude CLI and answers over a Unix socket. Both exist to extract structured state from a program we do not
+own, and both were built bespoke. The convention they converge on, stated here because Phase A delivers the
+second instance and neither owns it alone:
+
+- **Author the injected code as source and bundle it**, interpolating only data at the boundary. Playwright's
+  injected script is the precedent, and this repo already does author-then-bundle in
+  `apack-cli/src/build/be-bundler.ts` and the renderer's `virtual:*` modules. Code in a template string is
+  code no typechecker, linter or unit test can reach; #372's is 8,666 bytes of concurrent logic in one.
+- **Declare the host's API as types, pinned to a version.** An upgrade should be a typecheck failure, not a
+  runtime surprise.
+- **Transport is a socket with a token, and payloads are validated on arrival.** #372 does this already and
+  it is the part to copy.
+- **No silent failure on the channel.** Not `.catch(() => {})`; the same rule as F9.
+- **Prefer hooks to polling**, and where a fact has no change notification, say so once rather than letting a
+  timer become the default. The same standing rule the repo applies elsewhere.
+- **Ask upstream before working around.** The convention already exists in the ghostty plan: prefer an
+  upstream integration change, keep a fork only if the needed public interface is small.
+
+Promote this to a `CLAUDE.md` rule once the second instance lands; until then one of the two is still
+hypothetical and a rule with one instance is a description.
+
 **Screen inference is needed for less than the refactor target assumes.** Its observation pipeline is
 designed to read agent state off a terminal screen, which it also warns is the error-prone part — herdr's
 rules "can mistake an unrecognized screen for idle". But a flow-launched agent already emits structured
 NDJSON, so its state is `reported` **by construction** and needs no screen at all. Only a session a *user*
 started in a terminal tab — what the session artifact's "open in terminal" button does — has nothing but the
-screen. So the provenance split the refactor target prescribes is not two equal paths: the reliable one
+screen. #372's native path is in the reported category too, and for a stronger reason than NDJSON: it reads
+`$.session.usage()`, `$.agent.list()` and `turn.start`/`turn.complete` hooks, so its state is the CLI's own
+answer rather than anything derived from what was drawn. So the provenance split the refactor target prescribes is not two equal paths: the reliable one
 covers apack's own flows, and the inference rules are a smaller, bounded case. Build the reported path first
 and let the screen rules serve only what it cannot reach.
 
