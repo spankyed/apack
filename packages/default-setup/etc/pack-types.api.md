@@ -3539,6 +3539,9 @@ type CodeInboxEvent = {
     type: 'explorer.SET_BASE_DIRECTORY';
     path: string;
 } | {
+    type: 'explorer.OPEN_FILE';
+    path: string;
+} | {
     type: 'codeActions.OPEN_ACTION';
     actionId: EARS.EntityId;
 } | {
@@ -8814,8 +8817,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             loading: z.ZodBoolean;
             copyState: z.ZodOptional<z.ZodEnum<{
                 error: "error";
-                pending: "pending";
                 idle: "idle";
+                pending: "pending";
                 saved: "saved";
             }>>;
             insight: z.ZodOptional<z.ZodString>;

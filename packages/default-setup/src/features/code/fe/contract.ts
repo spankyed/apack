@@ -124,6 +124,7 @@ export type CodeInboxEvent =
   | { type: 'UPDATE_STATE'; updates: Partial<CodeContext> }
   | { type: 'terminal.CREATE'; target: string; command: string; cwd?: string }
   | { type: 'explorer.SET_BASE_DIRECTORY'; path: string }
+  | { type: 'explorer.OPEN_FILE'; path: string }
   | { type: 'codeActions.OPEN_ACTION'; actionId: EARS.EntityId }
   | { type: 'codePrompts.OPEN_PROMPT'; promptId: EARS.EntityId }
 

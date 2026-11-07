@@ -98,6 +98,13 @@
         <NativeToolDrawing v-if="entry.nativeResult" component="ToolResult" :tool-use-id="entry.id" class="mt-1">
           <JsonHoverPopup v-if="entry.outputSummary && !entry.nativeAgent" :value="entry.details?.output || entry.details?.error" :label="`${entry.tool} output`" width="trigger"><div class="truncate text-[10px] text-neutral-500">{{ entry.outputSummary }}</div></JsonHoverPopup>
         </NativeToolDrawing>
+        <div v-if="resourceFiles.get(entry.id)?.length" class="mt-2 flex min-w-0 flex-wrap gap-2">
+          <button v-for="file in resourceFiles.get(entry.id)" :key="file.path" type="button" :title="file.path" :aria-label="'Open resource ' + file.uri"
+            class="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border border-neutral-700 px-2 py-1.5 text-xs text-blue-300 hover:bg-neutral-700/40 focus-visible:outline focus-visible:outline-blue-400"
+            @click="openSurface('code', { type: 'explorer.OPEN_FILE', path: file.path })">
+            <ArrowRight class="h-3 w-3 shrink-0" /><span class="truncate">Open {{ file.label }}</span>
+          </button>
+        </div>
         <section v-if="entry.nativeAgent" class="mt-2 min-w-0 rounded-md border border-white/[0.06] bg-white/[0.02] px-2.5 py-2" aria-label="Native agent status">
           <div class="flex min-w-0 items-center justify-between gap-2 text-[10px] text-neutral-500">
             <span class="min-w-0 truncate" :title="entry.nativeAgent.name">{{ entry.nativeAgent.name }}</span><span class="shrink-0">{{ entry.nativeAgent.status }}</span>
@@ -119,6 +126,8 @@ import { ChevronRight, Wrench, Check, Loader2, X, AlertCircle, ArrowRight } from
 import JsonHoverPopup from '@apackdev/ui/components/JsonHoverPopup'
 import { computeLabel } from './tool-activity-label.ts'
 import { toolInputSummary } from './tool-input-summary.ts'
+import { nativeResourceFiles } from './native-resource-files.ts'
+import { openSurface } from '#generated/fe.ts'
 
 import type { ToolActivityEntry } from '#features/threads/be/types.ts'
 import { claudeToolDrawings } from './native-tool-drawings.ts'
@@ -147,6 +156,8 @@ const props = withDefaults(defineProps<Props>(), {
   defaultOpen: false,
   nativeExpansion: undefined,
 })
+
+const resourceFiles = computed(() => new Map(props.entries.map(entry => [entry.id, nativeResourceFiles(entry)])))
 
 const nativeDrawings = inject(claudeToolDrawings, undefined)
 const NativeGroups = defineComponent({
