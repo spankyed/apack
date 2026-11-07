@@ -391,6 +391,28 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 
   Each is defensible and each is user-visible, so the choice is not one to make while implementing. **Phase H
   stops here** until it is settled; everything in it that does not depend on the answer is done and guarded.
+- **F13 and S3 are closed, which is Phase A's first half and the review's stated ordering.** A Terminal row
+  is data — the database console writes one, `apack db exec` writes one, and a backup import replaces the
+  whole store without looking at a row — and the restore path spawned the shell a row held. The check it now
+  goes through had to stop being inert first: eleven hardcoded paths whose remedy was `$SHELL`, the value
+  that had just failed them, changed no outcome. The answer is derived from `/etc/shells` and the user's own
+  shell, which is what `chsh` validates against.
+- **What is left of Phase A, with what each needs.** None of it is blocked on the fork above.
+  - **D3, launch-time shell integration.** `injectShellIntegration` types into the user's interactive shell:
+    it echoes, races startup, needs a branch per shell and has none for PowerShell or cmd (X4). Replace it
+    with `--init-file`, a `ZDOTDIR` over a temporary directory that sources the user's, `XDG_DATA_DIRS` and
+    `-NoExit`, shipping the rc scripts as app assets. **F14 is the reason this is not cosmetic**: exactly one
+    line in this repo ever writes `enableShellIntegration`, and it writes `false`, so the three shell
+    branches, the OSC 7/633/1337 parsing, `updateCwd` and `CWD_CHANGED` have in all likelihood never run for
+    any user. A default that looks defensive is unfinished.
+  - **Facts out of the VT core**, which is what the markers are for: prompt and command boundaries, exit
+    status, search and wait-for-state, parsed where the screen is (`apack-terminal/src/screen.rs`) and
+    carried over the protocol. The bounded screen read is already there and already answers for a session
+    nobody is drawing (`Request::Screen`, `BrokerSession.screen`).
+  - **Reaching a pack.** `services.terminal` exposes no `screen` yet, deliberately: it would be an export
+    with no caller, and the consumer Phase A is designed against — #372's native adapter — is on another
+    branch. Add it with the caller.
+  - **Reported paths and titles as untrusted metadata**, and no status rule shipped.
 - **Next action: settle the fork above, then Phase A.** What is left of Phase B needs Windows and a Mac cannot give it:
   **X1, X2 and ConPTY's resize and exit**, which the goal already says are claimed on a Windows run or not
   at all. `command-group`'s API is retired so that change is a wiring job rather than a question. **X1, X2 and ConPTY need a Windows run** and
