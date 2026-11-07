@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "9ece77380881c051dd53661668e2d0befb9d43a3",
+  "researchCommit": "53d22328142eb42c6da9fdbdd1c5975ff070c00b",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -39,7 +39,7 @@
     "src/analysis/native-export-graph.mjs": "1a545f4b579d1872b76b6d4eba0f0be96b62cb312f1e9d6833e7c7879dee93d1",
     "src/analysis/native-help-contracts.mjs": "df59564c2e6fc697fd279a756d2ce23566c208aff399449190f16916cb28652a",
     "src/analysis/native-platform-map.mjs": "5314bcc93beab93d815da1589d0e0a4d1b7957408fecdbbeba12c79cec607e4b",
-    "src/analysis/native-return-dialogs.mjs": "984c1221d2eaae9723a2c07d72467f7da646df1696add63352003be686c25edf",
+    "src/analysis/native-return-dialogs.mjs": "e827721e4101dd35b678cd4475c33cabaac12507e849bbfd8772a3dd59eae33a",
     "src/analysis/native-sandbox-consent.mjs": "8849e6defcec8edbe0c6f8eac646305703a786897cfea3cbbea6b64561534aed",
     "src/analysis/nested-settings-schema.mjs": "18b7325340e055a4ff21818199b0ecf69035c8dd7553526818fbef5e17f63ea0",
     "src/analysis/protocol-schemas.mjs": "ad3d3b8138038efaf2d9c3294d1fe8335221f980585fdc061ab49585f6c248ee",
@@ -90,7 +90,7 @@
     "src/integration/apack-child-question-rejection-drive.mjs": "46efe17fa4a4fef76aa1d9c116d919b1296618261d5eaaf0413bed93b109ca21",
     "src/integration/apack-child-workflows-drive.mjs": "4e862e275ac00eff3fe6ef394d350653ce33b7f2b15d4b2ec10eb3bfd8e9362f",
     "src/integration/apack-client-rich-theme-drive.mjs": "85d5e9c9841f04c516112e2c4851aa9182fe03585a0a8d61aecc7b13cd112b4c",
-    "src/integration/apack-combined-everyday-drive.mjs": "4300eedb305ea9a7e8007a106d33f47863241cfe1ae6462352087ff549194fb5",
+    "src/integration/apack-combined-everyday-drive.mjs": "3bf09de780a11e0348593cd70d41a9f3630506ee3e426e9e222be8bba87625af",
     "src/integration/apack-configured-hooks-app.mjs": "61f7888f0345b3324892a9724df36ce06a109675226ecb9e1a8e4cbc7a9d0df2",
     "src/integration/apack-controls.mjs": "654ef34879daa4089d6c4f7e61be6107843e47e93ee82cf5401dbbbe956fc1f5",
     "src/integration/apack-document-media.mjs": "f668ce463a8672923db7d3c25baff498e813353f2695016aea67faaf5bbbd441",
@@ -248,7 +248,7 @@
     "src/integration/workflow-app.mjs": "85c3d9132e36c716c00fa69b2246e3e2fb55ab50222aedc037a5f64256433f0c",
     "src/protocol/README.md": "9b22e9e282e05348aa48d317908298226b52564f48ff82b415476fd72e34ffa4",
     "src/protocol/attribution-settings.mjs": "0a8c96f830b2e80967d693660734e66f3851b9e27f659497e8f4ce525dd1b33c",
-    "src/protocol/combined-everyday-model.mjs": "47e81fed0fd4c44b4e6bf56136120a5a457391a223ac8b5d0e252bb7ee6db444",
+    "src/protocol/combined-everyday-model.mjs": "0b09094424e8528154ed9feb78c9132d7dab8d2d07c4b108c4990ebfac8485ed",
     "src/protocol/command-help-probe.mjs": "6764a0ee6daf5e075ef6d6bf3ec270f208439b7f10debbb64fa233e33572620f",
     "src/protocol/configured-hook-validation.mjs": "f9c5c3d2b56db95c4d68f7df88b1a0f2e8ac7db34ced83173d5b275dd6843ee0",
     "src/protocol/control-probe.mjs": "766b9c8b2342c7c9b7f2d4fe973250e450a8813b3e467393a649c211a2cdbee5",
@@ -436,7 +436,7 @@
     "src/protocol/structured-output.mjs": "10d741f0f9c2966b15525a5fdc04cedd5d499d26a29bc8b51fd34c6a5e547630",
     "src/protocol/subagent-handback-cancel.mjs": "2709c1c81816ab1bf70d679685db90eccd3cd4497880ac092ed07ceaec8ca467",
     "src/protocol/subagent-handback.mjs": "b3fb45689ae960dba5c17683581f682dc7c58404868ed5b537dcc1e0dc7263f2",
-    "src/protocol/synthetic-agent-model.mjs": "7ab2541592e40c802ea26eee3433795e599443d7c894f1e4b484255ed44a999c",
+    "src/protocol/synthetic-agent-model.mjs": "b02d9982416fe6c8d58885ced8b1cf529d5213488efe9408ca97580ee43e4328",
     "src/protocol/synthetic-app-elicitation-server.mjs": "db337db09748af886468d986d52ed0b7fb32fd9232ded89d68ee73300336f499",
     "src/protocol/synthetic-elicitation-server.mjs": "857e43941d36a94af9c6b7944304aeedfc1c496d028ecabfd904126e1036bd46",
     "src/protocol/synthetic-file-model.mjs": "7e0528dfba202c30e40a088e7a6ce1bba28bc2621bb14273b635ca0d77578cb4",
@@ -468,5 +468,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "2557a46257167f3e6e10de2979c3c8e9dfcca42c0c464d74241d342d674d047c"
+  "archiveSha256": "8e51c55f822be14238784cd7a995a4f5f47a7ee7fd9d1a6839a50936dcbbdef4"
 }

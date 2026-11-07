@@ -295,3 +295,11 @@ Short upward native history reads retire tail following. External resource views
 retain the project root/files/tree selection without false directory warnings at both sizes.
 Research verifier --require-explorer enforces those four additional actual-app readings.
 Original unaccepted attempts and fixed deadlines remain preserved in research evidence.
+
+Agent short-reading and return-offer checkpoint: the combined everyday driver accepts
+`agentReadingProbe: true` to verify a native long report, physical 12px upward reads,
+at least 104px history beside the draft, and stable normal/compact reflow before the
+ordinary approval/question/Pause/recovery flow. Source recovery now records the quota
+idle-draft/Enter/paste guards with lexical and byte-offset verification. Native-backed
+resume/newer-model dialog hosts remain implemented but native/app-unverified; this
+bundle does not establish rollout admission or complete the cold-quota/inline-offer paths.
