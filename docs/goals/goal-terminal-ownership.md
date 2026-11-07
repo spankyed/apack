@@ -236,6 +236,14 @@ agent facts, no reattach.
 **Done when:** a keystroke reaches a pty and its output reaches a screen through all four seams, and
 `tests/e2e/smoke/` still passes.
 
+**The first act after `cargo init` is to add the whole candidate set and record what resolves.** One probe
+already showed `portable-pty` resolving at 0.9.0 and compiling here in 5.8s — which retires only "the crate
+exists and builds on this machine", not "it is fit for purpose"; containment, cancellation and ConPTY
+resize/exit are still Phase B's acceptance. The rest are unverified: `termwiz`, `command-group`,
+`interprocess`, `insta`, `proptest`. Adding them together costs one command and either retires or raises
+every remaining caveat at once, before any of them is designed around. Commit `Cargo.lock`: this is a
+binary, not a library.
+
 **Three library choices this phase settles by trying them, not by argument:**
 
 - **`termwiz` against `alacritty_terminal`.** D11 chose the latter on lineage grounds, which was the right
@@ -272,7 +280,18 @@ concurrent with the spine.
 | Error surfacing | F9, through `reportError` | the pack feature |
 | App keyboard | X3, X10 | `packages/main` menu, `apack-sdk/src/fe/hotkeys.ts` |
 | Agent writes | G1 | the agent streaming writers — **verify against #372 first**, the file moves there |
+| The janitor's reach | — | `scripts/janitor.ts`, **before Phase S builds anything** |
 | Tab and panel behaviour | T1, T2, T3, T5, T6, T8, T9 | the pack feature |
+
+**The janitor track is not a finding — it is a precondition.** `janitor.ts:45` resolves exactly
+`vendor/elmdb` and `catch { return [] }`, so a second Rust checkout is outside the budget entirely: one
+dependency and one `cargo build` at the probed sibling path produced **48 MB**, unmanaged. Derive the
+subject instead — the `vendor/*` symlinks that point at a directory with a `Cargo.toml` — so a third sibling
+is covered the day it is linked rather than the day someone remembers. Two guards, both the repo's own
+rules: **mutate the vendor listing in the test** and assert the answer changes, and **refuse an empty set**
+rather than returning `[]`, since a janitor that resolves nothing currently runs hourly and reports nothing,
+which is the "a check that reports nothing may have looked at nothing" case inside the tooling that enforces
+it. This must land before Phase S, or the first build is unbudgeted and the disk is what notices.
 
 **T7 is deliberately absent**: the panel's attach watcher never tearing down is a pool-lifecycle defect that
 Phase P's session model dissolves, so fixing it here is work Phase P deletes. It closes as dissolved there,
