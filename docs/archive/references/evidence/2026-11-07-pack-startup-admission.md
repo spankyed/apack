@@ -59,6 +59,16 @@ passed on `9b20ffbbe0`: producer, native 1/2, integration 1/2 and application/re
 This contains the corrected settings-policy fixture and installed-pack action coverage, with the
 runtime experiment removed. The application shard passed host and pack unit suites, runtime build,
 external-pack application checks, smoke and packaged-authoring checks. The final production source
-is identical to the measured admission candidate. Later changes are the private performance fixture
+is identical to the measured admission candidate. Later changes are focused regression coverage, the private performance fixture
 ownership fix (qualified separately by streaming run 42365886856) and evidence/docs only.
 No integrity checks, deadlines, settings admission or readiness assertions were relaxed.
+
+## Post-qualification review
+
+A direct captured-install regression covers a valid shipped update rebuilt again between capture
+and staging. Refusal retains incumbent bytes and the exact ownership record without executing code.
+All twelve app-source cases passed in a one-worker focused run. Temporarily removing the revision
+check made the new case fail because the changed build was installed; the original source was restored
+byte-for-byte. This adds test coverage only; the measured production implementation is unchanged.
+The existing six-job strict result above remains the production acceptance evidence, rather than
+claiming that the new test was part of that earlier CI source.
