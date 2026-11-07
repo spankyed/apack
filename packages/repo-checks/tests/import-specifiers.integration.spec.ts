@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { CHECKS, findAppImportsInPackTests, findEmulatorImports, findContractLeafImports, findCrossCheckoutResolution, findCrossFeatureImports, findExtensionlessOwnModules, findHostImports, findJsSpecifiers, findCompilerRunsInFastSpecs, findLiveWatchersInIntegrationSpecs, findMissingSourceConditions, findPackageScriptImports, findPackBackendConsole, findPackWindowStorage, findComponentSends, findPackOwnAliases, findRawGitListings, findRawPackHelpers, findRawTransport, findRawWatchesInBuild, findReservedEventKeys, findInternalPackageImports, findElmdbImports, findRepositoryCasts, findSchemeRegistrations, findSharedPackageLists, findSyncSpawnsInSlowSpecs, findUpwardImports, jsSpecifierFixes, LAYERS, UNLAYERED_BY_DESIGN, repoRootDir, findUnimportedDependencies, ELMDB_RULES, MANIFEST_FIELDS, packOwnModuleFixes, packageSourceDirs, CHECK_IDS, type CoveredRuleId, DECLARES_SOURCE_BY_DESIGN, type ImportRuleId, SHARED_LIST_CONSUMERS, sourceConditionPackages, SOURCE_CONDITION, checkedDirs, type ImportRule, packCodeDirs, packDirs, packRule, packRuleProblems, ruleRows, ruleTable } from '../../../scripts/check-import-specifiers.ts';
+import { CHECKS, findAppImportsInPackTests, findEmulatorImports, findNodePtyImports, findContractLeafImports, findCrossCheckoutResolution, findCrossFeatureImports, findExtensionlessOwnModules, findHostImports, findJsSpecifiers, findCompilerRunsInFastSpecs, findLiveWatchersInIntegrationSpecs, findMissingSourceConditions, findPackageScriptImports, findPackBackendConsole, findPackWindowStorage, findComponentSends, findPackOwnAliases, findRawGitListings, findRawPackHelpers, findRawTransport, findRawWatchesInBuild, findReservedEventKeys, findInternalPackageImports, findElmdbImports, findRepositoryCasts, findSchemeRegistrations, findSharedPackageLists, findSyncSpawnsInSlowSpecs, findUpwardImports, jsSpecifierFixes, LAYERS, UNLAYERED_BY_DESIGN, repoRootDir, findUnimportedDependencies, ELMDB_RULES, MANIFEST_FIELDS, packOwnModuleFixes, packageSourceDirs, CHECK_IDS, type CoveredRuleId, DECLARES_SOURCE_BY_DESIGN, type ImportRuleId, SHARED_LIST_CONSUMERS, sourceConditionPackages, SOURCE_CONDITION, checkedDirs, type ImportRule, packCodeDirs, packDirs, packRule, packRuleProblems, ruleRows, ruleTable } from '../../../scripts/check-import-specifiers.ts';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { packFixture as buildPackFixture } from '@apackdev/sdk/testing/pack-fixture';
 import { population } from '@apackdev/sdk/testing';
@@ -689,6 +689,10 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
     }));
     write('packages/apack-host/src/services/run-history.ts', "import { Database } from 'elmdb';");
     return findElmdbImports(rules, root);
+  },
+  findNodePtyImports: () => {
+    packFixture({ 'src/f.ts': "import { spawn } from 'node-pty';" });
+    return findNodePtyImports(PACK_SRC, root);
   },
   findEmulatorImports: () => {
     packFixture({ 'src/view.ts': "import { Terminal } from '@xterm/xterm';" });
@@ -1900,6 +1904,25 @@ describe('findCrossFeatureImports', () => {
   it('excepts nothing when the package publishes nothing', () => {
     writeAt(`${src}/fe/index.ts`, "export { memosMachine } from '../features/memos/fe/state';");
     expect(findCrossFeatureImports([src], root)).toEqual([`${src}/fe/index.ts:1: ../features/memos/fe/state`]);
+  });
+});
+
+describe('findNodePtyImports', () => {
+  it('reports a pack file loading the native pty binding', () => {
+    packFixture({ 'src/terminal.ts': "import * as pty from 'node-pty';" });
+    expect(findNodePtyImports(PACK_SRC, root)).toEqual([`${PACK_FIXTURE}/src/terminal.ts:1: node-pty`]);
+  });
+
+  it('reports a subpath too, which is how a binding is reached when the root is watched', () => {
+    packFixture({ 'src/terminal.ts': "import { spawn } from 'node-pty/lib/index.js';" });
+    expect(findNodePtyImports(PACK_SRC, root)).toEqual([
+      `${PACK_FIXTURE}/src/terminal.ts:1: node-pty/lib/index.js`,
+    ]);
+  });
+
+  it('leaves a pack that asks the host for a session alone', () => {
+    packFixture({ 'src/terminal.ts': "import { services } from '#generated/services.ts';" });
+    expect(findNodePtyImports(PACK_SRC, root)).toEqual([]);
   });
 });
 

@@ -41,6 +41,9 @@ export interface AppEnvironment {
 export type AppProcessEnv = Record<(typeof APP_PROCESS_ENV_VARS)[number], string | undefined>;
 
 // @public
+export const BLOCKED_LOADER_VARS: readonly ["NODE_OPTIONS", "LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES", "DYLD_LIBRARY_PATH"];
+
+// @public
 export function getAppVersion(): string;
 
 // @internal
@@ -59,6 +62,9 @@ export function resolveAppEnvironment(input?: {
     env?: AppEnv;
     userDataDir?: string;
 }): AppEnvironment;
+
+// @public
+export function withoutAppProcessEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv;
 
 // (No @packageDocumentation comment for this package)
 

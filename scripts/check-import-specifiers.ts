@@ -472,6 +472,24 @@ export function findElmdbImports(rules = ELMDB_RULES, root = repoRoot): string[]
   });
 }
 
+/**
+ * `file:line: node-pty` for each pack file that imports the native pty binding.
+ *
+ * **A pack does not own a process.** It asks `services.terminal` for a session; the pty is the broker's, in a
+ * process of its own, which is what makes a session's lifetime independent of the API's and what gives the
+ * Windows half an owned process tree. An addon loaded inside a pack puts a pty back in the API process, and
+ * takes the Electron-ABI rebuild back with it.
+ *
+ * The shape is `APP_ONLY_EXPORTS`' — the list that keeps `@apackdev/ears/lmdb` out of pack code — applied to
+ * the one native module left. It is a rule over pack sources rather than a layer rule, because `node-pty` is
+ * a third-party dependency and no layer table has a row for one.
+ */
+export function findNodePtyImports(dirs: readonly string[] = PACK_CODE_DIRS, root = repoRoot): string[] {
+  const rule: Rule = (node) => (ts.isStringLiteralLike(node)
+    && (node.text === 'node-pty' || node.text.startsWith('node-pty/')) ? [node.text] : undefined);
+  return findInFiles(filesUnder(dirs, root), root, rule).sort();
+}
+
 /** The one module that asks git what files this repo has; every other caller goes through it */
 const REPO_FILES_READER = 'packages/repo-checks/tests/_support/repo-files.ts';
 
@@ -902,6 +920,13 @@ const RULE_LIST = [
     repoOnly: { kind: 'covered', by: 'elmdb-imports', note: "What is left here is the API, the host and the engine's own root" },
     find: findElmdbImports,
     rule: "Only @apackdev/ears/lmdb loads elmdb: the host and the API open the database through it, the engine's root and packs never load it",
+  },
+  {
+    id: 'findNodePtyImports',
+    over: PACK_CODE_DIRS,
+    repoOnly: { kind: 'inapplicable', note: "The pack-facing half is the pack bundle's own check: `apack pack build` refuses a bundle importing a native binding it cannot ship" },
+    find: findNodePtyImports,
+    rule: 'A pack asks services.terminal for a session and never loads node-pty: the pty belongs to the broker, in a process of its own, which is what makes a session outlive the API and what owns a process tree on Windows',
   },
   {
     id: 'findEmulatorImports',

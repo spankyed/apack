@@ -27,6 +27,7 @@ import { resolveForService } from '../../utils/resolve-cli.ts'
 import { createLogger } from '@apackdev/sdk/logger'
 
 import { decodeNdjson, encodeNdjsonLine, type DecodedLine } from './ndjson.ts'
+import { agentChildEnvironment } from '../shell-environment.ts'
 import {
   ClaudeAbortError,
   ClaudeCliNotFoundError,
@@ -115,9 +116,12 @@ export interface StreamHandle {
  * pure function.
  */
 export function buildChildEnv(override?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, ...override }
+  // **The app's own variables go first** (G2): this child, and everything its Bash tool spawns, inherited
+  // `ELECTRON_RUN_AS_NODE=1`, `APACK_USER_DATA_DIR`, `SHIPPED_PACKS_DIR` and `API_PORT`. The strip is derived
+  // from what the construction that sets them declares, so it cannot fall behind it; `NODE_ENV` is one of
+  // the ten, which is why the hand-written delete below no longer names it.
+  const env: NodeJS.ProcessEnv = { ...agentChildEnvironment(process.env), ...override }
   delete env.ANTHROPIC_API_KEY
-  delete env.NODE_ENV
 
   // Disable the CLI's tool-search / deferred-tool feature. Claude Code's
   // tool-search mode ships enabled by default — see leaked source at

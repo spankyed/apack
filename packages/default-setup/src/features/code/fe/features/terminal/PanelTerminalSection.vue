@@ -509,7 +509,11 @@ watch([isExpanded, panelTerminalId, activeTerminalInfo], async ([expanded, termI
       await nextTick()
       attachTerminal(termId)
     }
-  } else if (!expanded || !termId) {
+  } else {
+    // **Anything else means there is nothing to draw**, the panel collapsed, no terminal selected, *and* a
+    // terminal that is gone from the list while still selected — which is the case this used to miss (T7):
+    // `expanded` and `termId` were both truthy, so neither branch ran and this host held an attachment to a
+    // session that no longer exists.
     detachTerminal()
   }
 })

@@ -13,7 +13,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync } from 'node:fs';
-import { resolveAppEnvironment } from '@apackdev/sdk/env';
+import { resolveAppEnvironment, withoutAppProcessEnv } from '@apackdev/sdk/env';
 import type { TerminalListeners, TerminalService, TerminalSession } from '@apackdev/sdk/services';
 import { type Broker, startBroker } from '../broker/client.ts';
 
@@ -83,12 +83,26 @@ function brokerBinary(): string {
   );
 }
 
+/**
+ * The environment the broker is started with, and so the one every shell it spawns inherits.
+ *
+ * **This is where the app's identity stops**, and it is here rather than in the pack because the spawn is
+ * here: the pack had a strip of its own, written for its own `spawn`, and it was left with no caller the
+ * moment the broker took the spawn over — so for the length of that change a user's shell inherited all ten
+ * variables again. Hygiene lives where the spawn is.
+ */
+export function brokerEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  // Tell the shell it is in a capable terminal, which is the one thing added rather than removed
+  return { ...withoutAppProcessEnv(env), TERM_PROGRAM: 'apack', COLORTERM: 'truecolor' };
+}
+
 /** Starts the broker the first time a session is wanted, and once per process thereafter */
 export function createTerminalService(): TerminalService & { shutdown(): Promise<void> } {
   let broker: Promise<Broker> | undefined;
 
   const running = (): Promise<Broker> => {
-    broker ??= startBroker({ binary: brokerBinary(), socket: socketPath() }).catch((error: unknown) => {
+    broker ??= startBroker({ binary: brokerBinary(), socket: socketPath(), env: brokerEnvironment() })
+      .catch((error: unknown) => {
       // A failed start must not be remembered as a broker: the next session tries again, so a contributor
       // who builds the binary and retries is not told to restart the app
       broker = undefined;
