@@ -209,6 +209,26 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   DOM cannot see it because xterm draws to a canvas and its buffer lives in the pack's module-scoped pool.
   Phase B needs the same signal for its own acceptance ("the presentation channel is bounded … with a firing
   case proving a producer past it is throttled"), so it is not throwaway work. Then Phase S.
+
+  **Where it has to go, researched so the next session does not repeat it.** The natural seam is the API's
+  outgoing surface send (`rootEvents.emitOutgoing`, `api/src/transport/emitter.ts`), which every
+  `broadcastToSurface` passes through — so a count and a **byte size** there prices F4 and gives the output
+  corpus its signal in one place. Two things stand in the way, both found by reading:
+  - **`PerformanceExecution` has no way to record anything.** The bound port
+    (`@apackdev/sdk/runtime`) carries `capture`, `withCarrier`, `carryEvent` and `withEvent`; `begin` is on
+    the controller, which only its creator holds. So either that published port gains a recorder, or the
+    API's composition wires `appPerformance` (`runtime/index.ts`) into the emitter — and the emitter is a
+    module-scope `const`, so the second needs a seam it does not have today.
+  - **`app.*` span names are an allow-list** (`APPLICATION_SPAN_NAMES`), so the new name is a one-line
+    addition there, as `app.terminal.open` and `app.terminal.resize` were.
+
+  **Record the size, never the payload** — that is S2's rule and this does not bend it: a byte count is not
+  a keystroke. Worth stating in the change, because an instrumented send is exactly where someone would
+  reach for the event itself.
+
+  **Budget for the observer effect.** This is the hot path for every message in the app, so the recorder has
+  to be a no-op when nothing is recording, and the first thing the new reading should establish is that
+  turning it on does not move the attach and resize readings already taken above.
 - **A latency reading needs a quiet machine; a byte count does not.** `npm run check:idle` reported 60%
   against a 70% floor, and 0% when macOS was indexing this session's build output — `fseventsd`,
   `spotlightknowledged` and `mds` together, which is what a build leaves behind. The attach reading waited
