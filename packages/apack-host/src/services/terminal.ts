@@ -41,9 +41,15 @@ const SOCKET_PATH_MAX = 100;
  * macOS already. A path that still does not fit is refused here, naming the limit, rather than left to the
  * broker's `bind`.
  */
-function socketPath(): string {
-  const dataDir = resolveAppEnvironment().userDataDir;
-  const directory = path.join(os.tmpdir(), `apack-term-${createHash('sha256').update(dataDir).digest('hex').slice(0, 12)}`);
+export function socketPath(platform: NodeJS.Platform = process.platform, dataDir = resolveAppEnvironment().userDataDir): string {
+  const name = createHash('sha256').update(dataDir).digest('hex').slice(0, 12);
+  // **Windows has no Unix socket here, it has a named pipe**, and the transport refuses a filesystem path
+  // outright — *expected a named pipe path*, which is what the broker's own suite got on its first Windows
+  // run, in place of a broker. A pipe name is one flat namespace for the machine, so the data dir's hash is
+  // what keeps one app's broker apart from another's, exactly as the directory does below.
+  if (platform === 'win32') return `\\\\.\\pipe\\apack-terminal-${name}`;
+
+  const directory = path.join(os.tmpdir(), `apack-term-${name}`);
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   const socket = path.join(directory, 't.sock');
   if (Buffer.byteLength(socket) > SOCKET_PATH_MAX) {

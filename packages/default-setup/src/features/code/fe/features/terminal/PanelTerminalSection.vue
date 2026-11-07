@@ -214,6 +214,7 @@ import { MENU_ITEM_CLASS, MENU_ITEM_DANGER_CLASS, MENU_CONTENT_CLASS, MENU_SEPAR
 import type { CodeState } from '#features/code/fe/state.ts'
 import type { TerminalInfo } from './state.ts'
 import { terminalPool } from '#features/code/fe/utils/terminal-pool.ts'
+import { terminalNameFor } from '#features/code/fe/utils/terminal-name.ts'
 import { useTerminalActions } from '#features/code/fe/composables/useTerminalActions.ts'
 import RunScriptPopover from './RunScriptPopover.vue'
 import ContextMenuPopup from '@apackdev/ui/design/ContextMenuPopup'
@@ -443,7 +444,7 @@ const renameInput = ref<HTMLInputElement[]>([])
 
 const startRename = (terminal: TerminalInfo) => {
   renamingTerminalId.value = terminal.id
-  renameValue.value = terminal.customTitle || terminal.cwd.split('/').filter(Boolean).pop() || terminal.title
+  renameValue.value = terminal.customTitle || terminalNameFor(terminal.cwd) || terminal.title
 }
 
 // Focus the rename input when it appears + click-outside to dismiss

@@ -8,6 +8,7 @@ import { setup, type ActorRefFrom, type AnyActorRef, assign, enqueueActions } fr
 import breadcrumb from '@apackdev/sdk/fe';
 import { type HotkeyEvent, type HotkeysMap, createHotkeyProcessor } from '@apackdev/sdk/fe';
 import { saveOpenTabs, loadPersistedTabs, sortTabsByPinned } from './utils/persisted-tabs.ts';
+import { terminalNameFor } from './utils/terminal-name.ts';
 import { loadRecentFiles, addRecentFile } from './utils/recent-files.ts';
 import { pushTabViewHistory, nextActiveFromHistory } from './utils/tab-management.ts';
 import { saveTabGroups, loadTabGroups, getNextAvailableColor, type TabGroupColor, type TabGroup } from '@apackdev/sdk/fe';
@@ -159,7 +160,7 @@ function closeTabWithConfirmation(context: CodeContext, self: AnyActorRef, path:
     const confirmClose = context.settings?.confirmTerminalClose ?? true
     if (confirmClose) {
       const terminalInfo = (file as any).terminalInfo
-      const name = terminalInfo.customTitle || terminalInfo.cwd.split('/').filter(Boolean).pop() || terminalInfo.title
+      const name = terminalInfo.customTitle || terminalNameFor(terminalInfo.cwd) || terminalInfo.title
       if (!confirm(`Close terminal "${name}"?`)) return {}
     }
     if (context.settings?.closeTerminalOnTabClose ?? true) {

@@ -48,11 +48,48 @@ describe('the shell a terminal starts', () => {
     expect(shellIsKnown('zsh', on)).toBe(false)
   })
 
-  it('names the two Windows shells, where there is no /etc/shells to ask', () => {
-    const windows = { platform: 'win32' as NodeJS.Platform, env: {} as NodeJS.ProcessEnv, listed: [] }
-    expect(shellToStart('powershell.exe', windows)).toEqual({ shell: 'powershell.exe' })
-    expect(shellToStart('cmd.exe', windows)).toEqual({ shell: 'cmd.exe' })
-    expect(shellToStart('C:\\\\evil.bat', windows).refused).toBe('C:\\\\evil.bat')
+  describe('on Windows, where there is no /etc/shells to ask', () => {
+    // What a stock Windows Server 2025 image has, read off one on 2026-11-07: PowerShell 5.1 and cmd in
+    // System32, `wsl.exe` beside them, and no `pwsh.exe` or `bash.exe` — those are separate installs. The
+    // list this replaced named two of the five and silently gave PowerShell 5.1 to anyone asking for
+    // `pwsh.exe`, which is X12
+    const installed: Record<string, string> = {
+      'powershell.exe': 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+      'cmd.exe': 'C:\\Windows\\system32\\cmd.exe',
+      'wsl.exe': 'C:\\Windows\\system32\\wsl.exe',
+    }
+    const windows = {
+      platform: 'win32' as NodeJS.Platform,
+      env: {} as NodeJS.ProcessEnv,
+      listed: [],
+      resolve: (name: string) => installed[name],
+    }
+
+    it('starts a shell this machine has, by name', () => {
+      expect(shellToStart('powershell.exe', windows)).toEqual({ shell: 'powershell.exe' })
+      expect(shellToStart('cmd.exe', windows)).toEqual({ shell: 'cmd.exe' })
+      expect(shellToStart('wsl.exe', windows)).toEqual({ shell: 'wsl.exe' })
+    })
+
+    it('refuses a shell this machine does not have, rather than quietly giving another', () => {
+      // The finding itself: `pwsh.exe` became PowerShell 5.1 without a word
+      expect(shellToStart('pwsh.exe', windows).refused).toBe('pwsh.exe')
+      expect(shellToStart('bash.exe', windows).refused).toBe('bash.exe')
+    })
+
+    it('starts one it does have once it is installed, with nothing here to edit', () => {
+      const withPwsh = { ...windows, resolve: (name: string) => ({ ...installed, 'pwsh.exe': 'C:\\pwsh\\pwsh.exe' })[name] }
+      expect(shellToStart('pwsh.exe', withPwsh)).toEqual({ shell: 'pwsh.exe' })
+    })
+
+    it('refuses a lookalike beside a real one, which is the stored string S3 is about', () => {
+      expect(shellToStart('C:\\evil\\cmd.exe', windows).refused).toBe('C:\\evil\\cmd.exe')
+      expect(shellToStart('C:\\evil.bat', windows).refused).toBe('C:\\evil.bat')
+    })
+
+    it('starts one named by its real full path', () => {
+      expect(shellToStart(installed['cmd.exe']!, windows)).toEqual({ shell: installed['cmd.exe'] })
+    })
   })
 
   it('reads the real /etc/shells, so the derivation has a subject on this machine', () => {

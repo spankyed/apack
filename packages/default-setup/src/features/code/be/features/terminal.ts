@@ -7,6 +7,7 @@ import { defineHandlers } from '@apackdev/sdk/framework';
 import { setup, assign, fromPromise } from 'xstate'
 
 import { terminalService } from '../services/terminal.ts'
+import { cwdFromOsc } from '../utils/osc-cwd.ts'
 import type { TerminalInfo } from '../types.ts'
 import { createLogger, reportError } from '@apackdev/sdk/logger';
 import type { Reply } from '@apackdev/sdk/events';
@@ -75,7 +76,10 @@ const terminalHandlers = {
 
     if (cwdMatch) {
       try {
-        const newCwd = decodeURIComponent(cwdMatch[1])
+        // **Decoded through one reader** (X5): an OSC 7 file URL on Windows decodes to `/C:/Users/...`,
+        // which nothing there can open, and which used to be stored on the row and spawned from next launch
+        const newCwd = cwdFromOsc(cwdMatch[1]!)
+        if (!newCwd) return
         const result = terminalService.updateCwd(terminalId, newCwd)
         if (result) {
           emitToFrontend({ type: 'terminal.CWD_CHANGED', data: { terminalId, cwd: result.cwd, title: result.title } })

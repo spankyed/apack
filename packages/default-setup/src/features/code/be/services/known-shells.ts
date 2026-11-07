@@ -23,6 +23,33 @@ import * as path from 'node:path';
 const ETC_SHELLS = '/etc/shells';
 
 /**
+ * The shells Windows has a name for, each one resolved before it counts.
+ *
+ * **Measured on a stock Windows Server 2025 image, 2026-11-07**: `powershell.exe` and `cmd.exe` are in
+ * System32, `wsl.exe` is there too, and `pwsh.exe` and `bash.exe` are absent — PowerShell 7 and Git Bash are
+ * separate installs. So the list that was here named two of five and silently replaced `pwsh.exe` with
+ * PowerShell 5.1, which is X12.
+ *
+ * It is a list of **names**, not paths, and a name only counts once the machine resolves it — which is what
+ * keeps this the same kind of answer as `/etc/shells`: what this machine will start, rather than what
+ * somebody typed into this file. A path whose basename is one of these but which resolves somewhere else is
+ * refused, since `C:\evil\cmd.exe` is exactly the stored string S3 is about.
+ */
+const WINDOWS_SHELLS = ['powershell.exe', 'pwsh.exe', 'cmd.exe', 'bash.exe', 'wsl.exe'];
+
+/** Where this machine's `PATH` finds `name`, or `undefined` */
+function resolvedOnPath(name: string, env: NodeJS.ProcessEnv): string | undefined {
+  const dirs = (env.PATH ?? env.Path ?? '').split(path.win32.delimiter).filter(Boolean);
+  for (const dir of dirs) {
+    const candidate = path.win32.join(dir, name);
+    try {
+      if (fs.statSync(candidate).isFile()) return candidate;
+    } catch { /* not here */ }
+  }
+  return undefined;
+}
+
+/**
  * The shell an unconfigured terminal starts: the user's own.
  *
  * Not validated against anything, because there is nothing above it to validate against — it is the login
@@ -45,6 +72,8 @@ export function listedShells(file = ETC_SHELLS): string[] {
 /** Whether `shell` is one this machine will start */
 export function shellIsKnown(shell: string, options: {
   platform?: NodeJS.Platform; env?: NodeJS.ProcessEnv; listed?: readonly string[];
+  /** Where this machine finds a shell by name; the real one walks `PATH` */
+  resolve?: (name: string) => string | undefined;
 } = {}): boolean {
   const platform = options.platform ?? process.platform;
   const env = options.env ?? process.env;
@@ -52,8 +81,16 @@ export function shellIsKnown(shell: string, options: {
   if (candidate.length === 0) return false;
   if (candidate === defaultShell(platform, env)) return true;
   if (platform === 'win32') {
-    // No `/etc/shells` to ask, so the two the app itself names. X12 is the wider Windows question
-    return ['powershell.exe', 'pwsh.exe', 'cmd.exe'].includes(path.basename(candidate).toLowerCase());
+    // **`path.win32`, not `path`**: a Windows path read on a Mac has no separators as far as `node:path` is
+    // concerned, so its basename is the whole string — which is X7 and X8's mistake made again, here where
+    // it would have meant refusing every shell named by its full path
+    const name = path.win32.basename(candidate).toLowerCase();
+    if (!WINDOWS_SHELLS.includes(name)) return false;
+    const resolve = options.resolve ?? ((one: string) => resolvedOnPath(one, env));
+    const found = resolve(name);
+    if (found === undefined) return false;
+    // A bare name is what the machine resolved; a full path has to *be* it, or `C:\\evil\\cmd.exe` passes
+    return candidate === name || candidate.toLowerCase() === found.toLowerCase();
   }
   const listed = options.listed ?? listedShells();
   return listed.includes(candidate);
@@ -67,6 +104,7 @@ export function shellIsKnown(shell: string, options: {
  */
 export function shellToStart(shell: string | undefined, options: {
   platform?: NodeJS.Platform; env?: NodeJS.ProcessEnv; listed?: readonly string[];
+  resolve?: (name: string) => string | undefined;
 } = {}): { shell: string; refused?: string } {
   const fallback = defaultShell(options.platform ?? process.platform, options.env ?? process.env);
   if (shell === undefined || shell.trim().length === 0) return { shell: fallback };

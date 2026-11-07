@@ -11,7 +11,7 @@
 // ten again.
 import { describe, expect, it } from 'vitest';
 import { APP_PROCESS_ENV_VARS } from '@apackdev/sdk/env';
-import { brokerEnvironment } from '../../src/services/terminal.ts';
+import { brokerEnvironment, socketPath } from '../../src/services/terminal.ts';
 
 /** Every variable the app sets on the API's process, as if this were that process */
 const asTheApiProcess = (): NodeJS.ProcessEnv => ({
@@ -67,5 +67,40 @@ describe("what the broker's shells inherit", () => {
     expect(APP_PROCESS_ENV_VARS.length).toBeGreaterThan(5);
     expect(APP_PROCESS_ENV_VARS).toContain('ELECTRON_RUN_AS_NODE');
     expect(APP_PROCESS_ENV_VARS).toContain('APACK_API_TOKEN');
+  });
+});
+
+// Where the broker listens, which is **a name and not a path**, and spelled differently on each platform.
+//
+// A Unix socket address holds 104 bytes on macOS, so a data dir under a long home directory or a synced
+// folder cannot be one — which is why the name is derived from a hash rather than carrying the dir. And
+// Windows has no Unix socket in this transport at all: a filesystem path there is refused outright,
+// *expected a named pipe path*, which is what the broker's own suite got on its first Windows run instead
+// of a broker.
+describe('where the broker listens', () => {
+  const DATA_DIR = '/Users/someone/Library/Application Support/apack/profiles/.ephemeral/12345-abcdefghij';
+
+  it('is a named pipe on Windows, where a path is refused', () => {
+    const socket = socketPath('win32', DATA_DIR);
+
+    expect(socket.startsWith('\\\\.\\pipe\\apack-terminal-')).toBe(true);
+    expect(socket).not.toContain('/');
+  });
+
+  it('is one pipe per data dir, because the namespace is the whole machine', () => {
+    expect(socketPath('win32', DATA_DIR)).toBe(socketPath('win32', DATA_DIR));
+    expect(socketPath('win32', DATA_DIR)).not.toBe(socketPath('win32', `${DATA_DIR}-other`));
+  });
+
+  it('fits a Unix socket address on POSIX, whatever the data dir is called', () => {
+    const socket = socketPath('darwin', DATA_DIR);
+
+    // The limit is the address structure's, not the filesystem's, so a `mkdir` being happy says nothing
+    expect(Buffer.byteLength(socket)).toBeLessThanOrEqual(100);
+    expect(socket).toContain('apack-term-');
+  });
+
+  it('gives two data dirs two sockets on POSIX too', () => {
+    expect(socketPath('darwin', DATA_DIR)).not.toBe(socketPath('darwin', `${DATA_DIR}-other`));
   });
 });
