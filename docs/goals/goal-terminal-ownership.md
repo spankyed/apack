@@ -76,7 +76,16 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 - **Next deliverable:** Phase G's baseline, which must precede any state moving, and Phase T's independent
   tracks concurrently with it. Then Phase S's walking skeleton, whose first commit is the `apack-terminal`
   repository and its link (D11). Phase B's first commit is the last cheap exit — see Constraints.
-- **Proven checks:** none yet. The review's findings were re-verified against the tree on 2026-11-07 for
+- **Proven checks:** the sibling-repo path is clear, probed 2026-11-07 and then removed —
+  `mkdir` at `/apack/apack-terminal`, `git init`, `cargo init`, `cargo add portable-pty` (crates.io
+  reachable, resolves 0.9.0), `cargo build` with that native dependency (5.8s, cc present), an **absolute**
+  symlink at `vendor/apack-terminal` matching `readlink vendor/elmdb`, a commit in the new repo, and
+  `vendor/apack-terminal.rev`. `cargo`/`rustc` are on PATH and the global git identity is set, so a fresh
+  repo commits unconfigured. **Creating is unrestricted; deleting outside the checkout prompts** — expect to
+  be asked, and ask before removing anything over there rather than spending the approval.
+  One dependency and one build produced a **48 MB `target/`**, confirming that widening
+  `lib/janitor-policy.ts` past one checkout is load-bearing rather than bookkeeping: that path is outside the
+  budget entirely today. The review's findings were re-verified against the tree on 2026-11-07 for
   S1, S2, F3, F9, F10 and L2; the rest carry pre-rename citations and are verified as each is touched.
 - **Unresolved:** `docs/archive/issues/postmortem-pattern-kill-note-loss.md` still
   claims a live write-discard defect whose mechanism the move to elmdb removed; that claim needs its own
