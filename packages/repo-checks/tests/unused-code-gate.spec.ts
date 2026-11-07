@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -23,6 +24,7 @@ import { PACKAGE_DIRS } from '../../../scripts/lib/workspace-deps.ts';
  * through a `tsconfig.package.json`. All of those inherit the flag today, and a narrower population would
  * pass while one of them turned it off. What is excluded is derived rather than named — a config whose
  * parsed file list is empty compiles nothing, which is what a solution config like the renderer's root is.
+ * A config whose input a build generates is judged by that, not by whether the build has run in this tree.
  *
  * The option is read *effective* rather than literal, through the same parser `tsc` uses. That matters
  * twice: these configs carry `//` comments, which `JSON.parse` rejects, and most of them inherit the flag
@@ -44,12 +46,39 @@ const NOT_GATED: Record<string, string> = {
   'packages/apack-testing/tsconfig.api-extractor.json': 'API Extractor\'s input, not a check',
 };
 
-interface Config { readonly rel: string; readonly file: string; readonly compiles: number; readonly gated: boolean }
+interface Config {
+  readonly rel: string;
+  readonly file: string;
+  readonly compiles: number;
+  readonly gated: boolean;
+  readonly generated: boolean;
+}
 
-const parse = (file: string): { compiles: number; gated: boolean } => {
+/** Whether git ignores `target`, which needn't exist: what a build writes is ignored, and may not be there yet */
+const ignored = (target: string): boolean =>
+  spawnSync('git', ['check-ignore', '-q', target], { cwd: REPO_ROOT }).status === 0;
+
+/**
+ * Whether everything a config includes is generated: each pattern's directory is one git ignores, so the config
+ * compiles whatever a build left there, and nothing in a tree where that build hasn't run. The UI's API Extractor
+ * input, `.temp/api-types`, is one: `api:build` writes it
+ */
+const readsGenerated = (include: unknown, dir: string): boolean =>
+  Array.isArray(include) && include.length > 0 && include.every((pattern) => {
+    const parts = String(pattern).split('/');
+    const wild = parts.findIndex((part) => /[*?{]/.test(part));
+    const literal = (wild === -1 ? parts : parts.slice(0, wild)).join('/');
+    return literal !== '' && ignored(path.join(dir, literal));
+  });
+
+const parse = (file: string): { compiles: number; gated: boolean; generated: boolean } => {
   const read = ts.readConfigFile(file, ts.sys.readFile);
   const parsed = ts.parseJsonConfigFileContent(read.config, ts.sys, path.dirname(file));
-  return { compiles: parsed.fileNames.length, gated: parsed.options.noUnusedLocals === true };
+  return {
+    compiles: parsed.fileNames.length,
+    gated: parsed.options.noUnusedLocals === true,
+    generated: readsGenerated(read.config?.include, path.dirname(file)),
+  };
 };
 
 const tsconfigsIn = (workspace: string): string[] => {
@@ -57,11 +86,14 @@ const tsconfigsIn = (workspace: string): string[] => {
   return fs.readdirSync(dir).filter((file) => /^tsconfig.*\.json$/.test(file)).map((file) => path.join(dir, file)).sort();
 };
 
-/** Every tsconfig in the tree that compiles at least one file, so an empty solution config drops out on its own */
+/**
+ * Every tsconfig in the tree that compiles at least one file, or compiles what a build generates, so an empty
+ * solution config drops out on its own and a generated input's config stays in whether or not the build has run
+ */
 const compilingConfigs = (): Config[] => packageDirs()
   .flatMap(tsconfigsIn)
   .map((file) => ({ rel: path.relative(REPO_ROOT, file), file, ...parse(file) }))
-  .filter((config) => config.compiles > 0);
+  .filter((config) => config.compiles > 0 || config.generated);
 
 const hasTypeScript = (workspace: string): boolean => {
   const src = path.join(REPO_ROOT, 'packages', workspace, 'src');
@@ -130,11 +162,19 @@ describe('every workspace is checked for unused code', () => {
         + 'child config would read as on').toBe(false);
     });
 
+    // A config reading generated input is recognised by where its input is, so this rule has something to apply to
+    it('recognises a config whose input a build generates, and only by where that input is', () => {
+      const generated = population('the configs reading generated input',
+        packageDirs().flatMap(tsconfigsIn).filter((file) => parse(file).generated), { atLeast: 1 });
+      expect(generated.every((file) => !/[/\\]tsconfig\.json$/.test(file)), 'a package\'s own tsconfig reads its '
+        + 'source, which git tracks').toBe(true);
+    });
+
     // The one config excluded from the population is excluded for what it compiles, not for its name
     it('excludes a config that compiles nothing, and only that', () => {
       const empty = packageDirs().flatMap(tsconfigsIn)
         .map((file) => ({ rel: path.relative(REPO_ROOT, file), ...parse(file) }))
-        .filter((config) => config.compiles === 0);
+        .filter((config) => config.compiles === 0 && !config.generated);
       expect(empty.map((config) => config.rel), 'the only config compiling nothing should be the renderer\'s '
         + 'solution config; another one here is a config whose include has stopped matching').toEqual(['packages/renderer/tsconfig.json']);
       expect(empty[0]!.gated, 'if the solution config ever sets the flag this exclusion stops being free, '
