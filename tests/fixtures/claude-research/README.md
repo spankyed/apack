@@ -334,3 +334,10 @@ humans and UUIDs, final cost0.0007, restoration and normal shutdown. All10 captu
 eight corrupted proofs and the actual bad-input app5 are refused. Final journal acquisition
 is after shutdown; app6 preserves its early capture plus a prefix-verified final native append.
 Other notice outcomes/lifetimes, cold startup and original F1–F5/final gate remain open.
+
+Installed-plugin notice ownership and delayed ui.ask submissions are scoped app-accepted
+at runtime624e2d1277 / foreign-notice-app4: held question and owner notice, original Operators
+answer, same-session follow-up and retained draft, exact app/native humans/UUIDs/cost0.00042,
+profile restoration and normal shutdown. All six captures opened; five corruptions and
+actual failed app3 are refused. Cold helper/API startup and other named scopes remain open.
+This source-only refresh does not rebuild or extend the accepted runtime scope.

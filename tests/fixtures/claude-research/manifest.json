@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "b5ac9b26e145f199cbbbbfb4e9994a93893294e8",
+  "researchCommit": "d97c85e02211abce8e87bd97d9879faac2176456",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -98,6 +98,7 @@
     "src/integration/apack-empty-command-history-drive.mjs": "a70c19241e051b0b20ad746934ddbbd886701ed4d5402882e6e04ef026eb1877",
     "src/integration/apack-everyday-layout-drive.mjs": "9b9d811d025dc82a0cbf1f8a7083ceb103da394fc47f21089dc70d5b5cd79d90",
     "src/integration/apack-file-rewind.mjs": "290a2d423e1f63f45157c3af2abcac340f66f84a979ed0cc654bfc65b8235e58",
+    "src/integration/apack-foreign-notice-drive.mjs": "5b18253fe51fbe4c940efe8ab1d871dccbb22e7ec50db024b1999633650005ce",
     "src/integration/apack-held-main-policy-drive.mjs": "563e944711c137d94f50def2eed3195126cb450ce35eab8a0937021f4632467b",
     "src/integration/apack-held-owner-drive.mjs": "138844d3b0a8fe0dc94d10b445e8659c89b607481d8aeac1b7d04c2a115da52f",
     "src/integration/apack-hook.mjs": "a1d0402d74ce64271a336fbee7794681aa50a7aba524060d6227cb3184d7e7fa",
@@ -169,6 +170,7 @@
     "src/integration/elicitation-app.mjs": "f7e39cc3b9af1e855ce98000990e1bc75b2c7f0218b8e2c52cda8c8c3b02982c",
     "src/integration/elicitation-lifecycle-driver.mjs": "1ad58b6241433df791e3a47d4b1b8a1bc0fdc436cb69fc0315534d9a55c0d17a",
     "src/integration/elicitation-lifecycle.mjs": "ef0a663260e6b70577ac582d613be49a370a2258c6f87e427f749c770b341b1c",
+    "src/integration/foreign-notice-profile.mjs": "cf4aa1ec04277439b00e68aee8ac742d70d49f39c05564522bd3eed4cf9bf610",
     "src/integration/held-main-policy-root.py": "203237f85a7e7f0d4370154ce5ddff1134d821cb91bb853e362f173b29b3d545",
     "src/integration/live-model-driver.mjs": "8b537fe75e3ae1596d6d3043f4ff3bfefbf625abf98f1789dfae7fce910ba042",
     "src/integration/live-model.mjs": "9fad315d5baea27a81f725e6c230b4bf7ce0293418f8c9274384f641acc0a787",
@@ -186,6 +188,7 @@
     "src/integration/native-background-reply-audit.mjs": "787d283016e5dd60259c9e079cf7ef5c2d96e1e5dad84cbe827e07890f3e8987",
     "src/integration/native-background-session.mjs": "ef5bdd2a9d9d56e8322673d74ca5f0c4c30df1c74a5fcfd4a6c73bfaf4001961",
     "src/integration/native-credit-admission.mjs": "63659e6970b5dede4d832c79ee448be5349fc4caa0f4b8e8ac10f9fb74599ae2",
+    "src/integration/native-foreign-notice-owner.mjs": "2ad25c2c1fc1a33986a2fef6c125131ba35c3dc6189638235ff2c01283f8a7a1",
     "src/integration/native-leftarrow-confirmation.mjs": "bc6f6a3222087b728543248d37ec0dcb2e0cb067d65bdb5bbf1283551e509d36",
     "src/integration/native-main-document-paste.mjs": "bd6890a462acd43ce026cb6d763f8e89bd03576f3565d514ba04b4f843715f33",
     "src/integration/native-os-policy-discovery.mjs": "70766dd350e4041f020a069e221068758e209a4fd0c8998c48faa81f24eaba1a",
@@ -474,5 +477,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "871c2d6b629ee299a340f0878b77e8c1bc170ddd8a2f588d54bb0d6973942b86"
+  "archiveSha256": "7d973511a0d04b062325158542b49982cb7497679341420747b8b55bd6f9ee09"
 }
