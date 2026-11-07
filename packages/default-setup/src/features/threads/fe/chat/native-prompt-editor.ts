@@ -137,7 +137,10 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     const runs = (input.decorations ?? []).map(run => ({ ...run, start: run.start + offset, end: run.end + offset }))
     let parserRefused = false
     const parseFill = (value: string) => { try { return parse(value) } catch (error) { parserRefused = true; throw error } }
-    let next = rewriteClaudePromptDocument(snapshot, { text, cursor }, serialize, parseFill, runs.flatMap(run => [run.start, run.end]))
+    // Replacing a literal draft must also release reference metadata from its former text.
+    const replacesSource = input.mode === 'replace' && snapshot.doc.firstChild?.type.name === 'claudePromptSource'
+    let next: ReturnType<typeof rewriteClaudePromptDocument> = replacesSource ? rewriteClaudePromptSource(snapshot, { text, cursor }, serialize, true) : undefined
+    next ??= rewriteClaudePromptDocument(snapshot, { text, cursor }, serialize, parseFill, runs.flatMap(run => [run.start, run.end]))
     if (parserRefused) return
     if (!next && input.mode === 'replace') {
       // A full replacement may release old atoms; prefer a rich result when its caret is representable.

@@ -90,7 +90,13 @@ it('carries textual hard breaks and reference identity through literal append an
   expect(text()).toBe(content+'\nMore notes')
   const current=editor.state.doc
   expect(bridge.fillDraft({mode:'replace',text:'stale'},old)).toBe(false)
-  expect(editor.state.doc).toBe(current);bridge.dispose()
+  expect(editor.state.doc).toBe(current)
+  const replacement='~~~ts\nconst complete = true\n~~~'
+  expect(bridge.fillDraft({mode:'replace',text:replacement},bridge.revision)).toBe(true)
+  expect(text()).toBe(replacement)
+  expect(editor.state.doc.firstChild!.attrs.references).toEqual([])
+  expect(claudePromptSourceReferences(editor.state.doc.firstChild!)).toEqual([])
+  bridge.dispose()
 })
 
 
