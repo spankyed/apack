@@ -251,6 +251,7 @@ const ownedNoticeCases: { notice: ClaudeNativeNotice; button: string; decision: 
  {notice:{...identity,kind:'autocompact_offer',selectedTokens:400000,canPrevious:false,canNext:true,choices:[{value:'compact_keep',label:'Keep auto'},{value:'compact_accept',label:'Compact sooner'}]},button:'Larger',decision:'compact_next'},
  {notice:{...identity,kind:'plugin_hint',pluginName:'review',marketplaceName:'local',sourceCommand:'review',choices:[{value:'yes',label:'Install'},{value:'no',label:'Not now'},{value:'disable',label:'Disable'}]},button:'Install',decision:'yes'},
  {notice:{...identity,kind:'lsp_recommendation',pluginName:'review',marketplaceName:'local',fileExtension:'ts',choices:[{value:'yes',label:'Install'},{value:'no',label:'Not now'},{value:'never',label:'Never'},{value:'disable',label:'Disable'}]},button:'Install',decision:'yes'},
+ {notice:{...identity,kind:'resume_return',choices:[{value:'resume_compact',label:'Resume from summary'},{value:'resume_continue',label:'Resume full session as-is'},{value:'resume_never',label:"Don't ask me again"}]},button:'Resume from summary',decision:'resume_compact'},
 ]
 it.each(ownedNoticeCases)('does not retarget a displayed $notice.kind click or Escape to a replacement',async({notice,button,decision})=>{
  const f=await fixture();f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
@@ -318,4 +319,28 @@ it('retains parent startup cancellation and refusal feedback beside background c
  f.publish({opening:false,output:[],problem:'Original parent startup refusal'});await nextTick()
  expect(f.root.querySelector('.native-launch__actions')?.textContent).toContain('Original parent startup refusal')
  expect(f.root.querySelector('.native-console')).toBeNull()
+})
+
+it.each(['escape', 'button'])('dismisses the current resume offer through its captured native owner using %s', async method => {
+ const f=await fixture(),notice=ownedNoticeCases.at(-1)!.notice
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
+ f.root.querySelector<HTMLButtonElement>('button')!.focus()
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,notice}});await nextTick();actor.send.mockClear()
+ const card=f.root.querySelector('[data-native-notice="resume_return"]')!
+ await vi.waitFor(()=>expect(document.activeElement).toBe(card.querySelector('button')))
+ if(method==='escape')card.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))
+ else [...card.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Not now')!.click()
+ expect(actor.send).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ownerId:'owner',notice:{id:notice.id,revision:notice.revision,sessionId:notice.sessionId,decision:'resume_dismiss'}}))
+})
+
+it.each([false, true])('restores resume-offer focus only while its owner remains current (replacement=%s)', async replacement => {
+ const f=await fixture(),notice=ownedNoticeCases.at(-1)!.notice
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
+ const previous=document.createElement('input');f.root.append(previous);previous.focus()
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,notice}});await nextTick()
+ await vi.waitFor(()=>expect(document.activeElement).toBe(f.root.querySelector('[data-native-notice="resume_return"] button')))
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:undefined,...(replacement?{ownerId:'new-owner'}:{})}})
+ await nextTick();await nextTick()
+ if(replacement)expect(document.activeElement).not.toBe(previous)
+ else expect(document.activeElement).toBe(previous)
 })

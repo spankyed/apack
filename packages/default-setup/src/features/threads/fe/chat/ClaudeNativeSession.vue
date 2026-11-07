@@ -12,7 +12,7 @@
     <NativeBackgroundAttachment v-if="view?.attachment" :attachment="view.attachment" @close="closeBackground" @input="inputBackground" @resize="resizeBackground" />
     <NativeManagedSecurityReview v-if="view?.state?.notice?.kind === 'managed_settings_security'" :notice="view.state.notice" :pending="noticePending" :problem="noticeProblem" @answer="answerManagedSecurity" />
     <NativeSandboxNetworkReview v-if="!active && view?.state?.notice?.kind === 'sandbox_network_access'" :notice="view.state.notice" :pending="noticePending" :problem="noticeProblem" @answer="answerSandboxNetwork" />
-    <section v-for="panel in noticePanels" :key="panel.key" :data-native-notice="panel.notice.kind" :aria-label="panel.notice.kind === 'refusal_fallback_prompt' ? 'Claude model fallback' : panel.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : panel.notice.kind === 'plugin_hint' ? 'Claude plugin recommendation' : panel.notice.kind === 'goal_proposal' ? 'Claude goal proposal' : panel.notice.kind === 'autocompact_offer' ? 'Claude autocompact offer' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': panel.notice.kind !== 'auto_mode_server_fallback' }" @keydown.esc.stop.prevent="answerNotice(panel, panel.notice.kind === 'autocompact_offer' ? 'compact_dismiss' : panel.notice.kind === 'goal_proposal' ? 'goal_decline' : panel.notice.kind === 'refusal_fallback_prompt' ? 'cancelled' : panel.notice.kind !== 'auto_mode_server_fallback' ? 'no' : 'interrupt')">
+    <section v-for="panel in noticePanels" :key="panel.key" ref="noticeElements" :role="panel.kind === 'resume_return' ? 'dialog' : undefined" :data-native-notice="panel.notice.kind" :aria-label="panel.notice.kind === 'refusal_fallback_prompt' ? 'Claude model fallback' : panel.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : panel.notice.kind === 'plugin_hint' ? 'Claude plugin recommendation' : panel.notice.kind === 'resume_return' ? 'Claude resume offer' : panel.notice.kind === 'goal_proposal' ? 'Claude goal proposal' : panel.notice.kind === 'autocompact_offer' ? 'Claude autocompact offer' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': panel.notice.kind !== 'auto_mode_server_fallback' }" @keydown.esc.stop.prevent="answerNotice(panel, panel.notice.kind === 'autocompact_offer' ? 'compact_dismiss' : panel.notice.kind === 'resume_return' ? 'resume_dismiss' : panel.notice.kind === 'goal_proposal' ? 'goal_decline' : panel.notice.kind === 'refusal_fallback_prompt' ? 'cancelled' : panel.notice.kind !== 'auto_mode_server_fallback' ? 'no' : 'interrupt')">
       <div class="native-notice__body" tabindex="0">
         <header v-if="panel.notice.kind === 'refusal_fallback_prompt'" class="native-notice__header">
           <h3>{{ panel.notice.title }}</h3>
@@ -48,6 +48,7 @@
           <button v-for="choice in panel.notice.choices" :key="choice.value" type="button" class="native-button" :class="{ 'native-button--return': choice.value === 'yes' }" :disabled="noticePending" @click="answerNotice(panel, choice.value)">{{ choice.label }}</button>
           <button v-if="panel.notice.kind === 'refusal_fallback_prompt'" type="button" class="native-button" :disabled="noticePending" @click="answerNotice(panel, 'cancelled')">Cancel</button>
           <button v-if="panel.notice.kind === 'autocompact_offer'" type="button" class="native-button" :disabled="noticePending" @click="answerNotice(panel, 'compact_dismiss')">Not now</button>
+          <button v-if="panel.notice.kind === 'resume_return'" type="button" class="native-button" :disabled="noticePending" @click="answerNotice(panel, 'resume_dismiss')">Not now</button>
         </template>
         <template v-else>
           <button type="button" class="native-button" :disabled="noticePending" @click="answerNotice(panel, 'interrupt')">Cancel</button>
@@ -218,6 +219,24 @@ const noticePanels = computed(() => {
   if (!state || !notice || notice.kind === 'managed_settings_security' || notice.kind === 'sandbox_network_access' || notice.kind === 'left_arrow_confirm') return []
   return [{ key: JSON.stringify([state.ownerId, notice.sessionId, notice.id, notice.kind]), ownerId: state.ownerId, id: notice.id, revision: notice.revision, sessionId: notice.sessionId, kind: notice.kind, notice }]
 })
+const noticeElements = ref<HTMLElement[]>([])
+let resumeFocus: { ownerId: string; sessionId: string; section: HTMLElement; previous: HTMLElement | null } | undefined
+watch(() => noticePanels.value.find(panel => panel.kind === 'resume_return'), async (panel, previous) => {
+  if (panel && previous && panel.ownerId === previous.ownerId && panel.sessionId === previous.sessionId && panel.id === previous.id) return
+  const retained = resumeFocus; resumeFocus = undefined
+  if (!panel) {
+    await nextTick()
+    if (retained && view.value?.state?.ownerId === retained.ownerId && view.value.state.sessionId === retained.sessionId
+      && retained.previous?.isConnected && (document.activeElement === document.body || retained.section.contains(document.activeElement))) retained.previous.focus({ preventScroll: true })
+    return
+  }
+  await nextTick()
+  if (!noticePanels.value.includes(panel) || !document.hasFocus()) return
+  const section = noticeElements.value.find(element => element.dataset.nativeNotice === 'resume_return')
+  if (!section) return
+  resumeFocus = { ownerId: panel.ownerId, sessionId: panel.sessionId, section, previous: document.activeElement instanceof HTMLElement ? document.activeElement : null }
+  section.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true })
+}, { immediate: true })
 const viewport = ref<HTMLElement>()
 let terminal: ReturnType<typeof mountNativeTerminal> | undefined, observer: ResizeObserver | undefined
 let attachedOwner: string | undefined

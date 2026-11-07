@@ -473,6 +473,8 @@ export const claudeNativeLinuxBindings: {
     }
   },
   "functionNames": {
+    "BCo": "JCo",
+    "vwe": "Twe",
     "j1": "aV",
     "Dr": "Nr",
     "KCo": "s_o",
@@ -519,6 +521,8 @@ export const claudeNativeLinuxBindings: {
     "Xe": "Xe"
   },
   "functionHashes": {
+    "eb1d5c3dc90bb98e32ee2cae9da94b6f918fe5e6d93a653cf7e108db9565e62d": "a419b847501b010883036db6fc9c2975adb0732e8c5f6fcc324d71bd688d9ba1",
+    "8c9ad04491cf97fdfc934537c57e592350bdaa27b1253b1390cdd226acabddd8": "f110e6f15feb107649756af2d7c1b39cf0a6a62b6f72a4c527c7ebbf52e4a8c5",
     "c3b67e62aaed8df6ac6850195265ab5bcc7c66780b78befd952b0033174efb5c": "426ae5533b43397b85970ad3c5b897b2ad3723e30060ed1de9dbd0b57eebdb7f",
     "0c022fe3a5b853cbf1707808364eaafa917d49195c7f0d253b99b03fff334226": "79129980ee1e0384f25e2717253ccbd9734fd8d0b8896389bc3d0cbda584de66",
     "39b95d1b454fef19f950ddaf79058089fe1fcfa30bc792c3a7ec22da84bb3535": "c162884e05a8838dc6e3321e4a147d5d38445dc7ff537423149817c80a551ef3",
