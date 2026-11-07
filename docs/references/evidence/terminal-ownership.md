@@ -29,9 +29,11 @@ limitation the run did not cover. A failed check stays visible until it is resol
 ### VT parsing cost (Phase G) — not taken
 
 The reading that sizes the broker's parsing worker and its history cap, with its corpus and conditions. It
-is no longer a decision input: D11 settled on a Node broker by inspection, since `worker_threads` is already
-how this repo keeps compiler work off a loop. An earlier revision of the goal made this reading the premise
-that chose the broker's language, which would have answered a question whose real support lay elsewhere.
+is not a decision input: D11 settles the broker's language on native process ownership and ABI
+independence, neither of which a parsing reading speaks to. An earlier revision of the goal made this
+reading the premise that chose the language, which would have answered a question whose real support lies
+elsewhere — `worker_threads` is already how this repo keeps compiler work off a loop, so off-loop parsing
+was never the discriminator.
 
 ### Baseline (Phase G) — not taken
 

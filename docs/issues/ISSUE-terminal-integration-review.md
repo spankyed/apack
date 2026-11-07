@@ -395,7 +395,7 @@ know now than to discover at each stage:
   WASM, sustained output responsiveness, large-history replay, memory with several hidden sessions, resize
   behaviour and packaged payload size, on one machine and corpus, with limits agreed *before* cutover.
   Measuring once and recording it where that plan can cite it is the whole of the saving.
-- **The platform tier is probably obsolete rather than deferred.** X1 and X2 are node-pty's Windows
+- **The platform tier is dissolved rather than deferred.** X1 and X2 are node-pty's Windows
   behaviour, and the refactor gives PTY and ConPTY ownership to the broker. With no released build there are
   no Windows users to protect in the interim, so writing those fixes now is likely paying for code the
   refactor deletes. X3 and X10 are not in that category — they are the app's menu and hotkey handling, which

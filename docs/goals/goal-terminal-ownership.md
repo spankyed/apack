@@ -42,10 +42,10 @@ a terminal session*. This goal delivers the refactor's design and the review's f
 the migration out of scope; the refactor remains the design authority for the broker, the host service and
 the agent contracts, cited here rather than restated. Today nobody does: the renderer's pool owns the emulator, the pack's service owns the
 pty. Run in sequence, ownership moves three times and each move rewrites the previous one's work. Counted
-against the destination, fourteen findings — four of them High — stop existing rather than needing a fix:
-F1, F2, F3, F4, F5, F6, F7, F8, L2, L3, M1, M2, M4 and M5. Fixing those first is paying for code the
-destination deletes. X1 and X2 are **not** among them: they dissolve only against native process ownership,
-which D11 defers, so they stay held with the rest of the node-pty-shaped platform findings.
+against the destination, sixteen findings — five of them High — stop existing rather than needing a fix:
+F1, F2, F3, F4, F5, F6, F7, F8, L2, L3, M1, M2, M4, M5, X1 and X2. Fixing those first is paying for code the
+destination deletes. X1 and X2 are in that list because D11 puts native process ownership in reach: Job
+Objects are what own a Windows process tree, and no JS binding supplies them.
 
 **Surveyed** at `c2bb387a1a` on `master`, 2026-11-07. Entry points: `packages/default-setup/src/features/code`
 (`be/services/terminal.ts`, `be/features/terminal.ts`, `fe/utils/terminal-pool.ts`,
@@ -61,8 +61,11 @@ which D11 defers, so they stay held with the rest of the node-pty-shaped platfor
   most of them dissolve against the process layer rather than needing fixes, so that goal is "migrate the
   agent path onto the broker", not "fix seven findings". G1 is in scope here because it is payload
   discipline rather than process ownership, and independent of everything else.
-- **node-pty-shaped Windows findings** (X1, X2 and their neighbours). Dissolved by the spine, so not fixed
-  separately. X3 and X10 are the app's menu and hotkeys, belong to no terminal plan, and are in Phase T.
+- **node-pty-shaped Windows findings** (X1, X2 and their neighbours). Dissolved by the spine rather than
+  fixed separately — but **closed on a Windows run, not a Mac one**: Phase B writes them and their
+  acceptance needs the [Windows development VM](../references/guides/windows-development-vm.md) and a
+  `compiler_windows=true` dispatch. X3 and X10 are the app's menu and hotkeys, touch no terminal plan, and
+  are in Phase T with the pack-shaped remainder of X (paths, `TERM`, Enter-as-LF, the shell allow-list).
 - **Keeping sessions alive across app quit.** A lifecycle policy, not an ownership question; the refactor
   target records it as settings and acceptance rather than a side effect.
 
@@ -104,56 +107,68 @@ offline packaged-WASM proof and its own stop conditions. Phase P's deliverable i
 migration becomes an implementation swap behind it rather than a second rewrite of ownership. Nothing in this
 goal assumes xterm survives; nothing in it blocks on proving a replacement.
 
-**D11 — a detached Node broker now; the Rust repo when Windows is scheduled.** Settled, reversing an
-earlier choice in this document whose reasoning did not survive being checked.
+**D11 — a Rust broker in a sibling repo, owning processes for every client that needs them.** Settled.
 
-**The gain decomposes into three unequal parts and only one is Rust's.** *Architecture* is most of it and is
-language-independent: the refactor target's decisive line is that "an addon alone cannot preserve processes
-through API failure", and any out-of-process owner fixes that — its own alternatives row concedes it, "API
-lifetime remains process lifetime *unless another host is introduced*". *The library* is the smallest part.
-*Runtime properties* were supposed to be the case for Rust, and two of the three do not hold up:
+**The destination is Rust because the broker is built once.** An earlier revision of this document chose a
+Node broker on the grounds that Windows might never matter, which made the cheaper error the smaller first
+step. Windows is a target, so that condition does not hold and the asymmetry inverts: Node first means
+building the broker twice and leaving X1 and X2 open for the whole interval between. Precedent is not the
+reason — elmdb lowers the marginal cost of a second Rust tree without being an argument for wanting one —
+but it does mean the toolchain, the janitor, the container and the pre-push discipline all already exist.
 
-- **Off-loop VT parsing is available in JS here.** xterm.js already parses this volume in the renderer, and
-  `worker_threads` is an established pattern in this repo — the CLI's compiler uses it across five modules.
-  An earlier revision made this the premise the gate would test; it would have returned "JS is fine" and
-  read as falsifying a decision whose real support lies elsewhere.
-- **Bounded byte buffers** are easier in Rust and achievable in JS. Not decisive.
-- **ABI independence does not come from choosing Node.** `ELECTRON_RUN_AS_NODE: '1'`
-  (`packages/main/src/modules/api-server/config.ts:108`) means a broker spawned the way the API is runs on
-  Electron's Node, so node-pty still needs `electron-rebuild`. This is a point *for* Rust, and it survives.
+**What Rust supplies that the alternative does not.** Stated precisely, because one of the three arguments
+this document first made was wrong and should not be repeated:
 
-**What survives is Windows, and that is a product question rather than a measurement.** Job Objects are the
-mechanism for owning a process tree, and from Node they need native code regardless — so a Node broker does
-not avoid native work on Windows, it defers it. X1 and X2 are made of exactly this.
+- **Native process-tree ownership.** Job Objects are the mechanism, and from Node they need native code
+  regardless — so a Node broker does not avoid that work, it defers it. This is what X1 and X2 are made of,
+  and it is the half that cannot be bought in JS at all.
+- **ABI independence.** A standalone binary does not care about Electron's Node. A *Node* broker would not
+  escape this: `ELECTRON_RUN_AS_NODE: '1'`
+  (`packages/main/src/modules/api-server/config.ts:108`) means one spawned as the API is runs on Electron's
+  Node, so node-pty would still need `electron-rebuild`. Rust is what removes the last Electron-ABI-coupled
+  native module.
+- **Byte-level bounded buffers with real backpressure.** F3's O(n²) accumulation, F4's unbounded event
+  stream and G7's unbounded stderr are the same mistake three times, and byte accounting is where Rust is
+  straightforwardly better rather than merely different.
+- **Not** off-loop VT parsing, which an earlier revision made the premise. `worker_threads` is already how
+  this repo keeps compiler work off a loop, in five modules of the CLI. Off-loop parsing is a benefit of
+  moving out of the API process, not a reason to choose a language. Phase G's reading sizes the core; it
+  decides nothing.
 
-**So the decision follows the asymmetry of being wrong.** Build Node first and be wrong: the broker's
-internals are rewritten, while the process-layer seam and both clients survive — contained. Build Rust first
-and Windows never arrives: a second repository, toolchain, mutation suite, janitor scope and per-platform
-artifacts are carried permanently for benefits that were never needed. With no released build, and the
-Windows findings already held for the same reason, the cheaper error is Node.
+**It encompasses the other clients, which is most of why this shape is right.** The broker is two layers
+(Phase B): a **process layer** that owns spawn, process trees, lifetime, bounded I/O and close-with-deadline
+and knows nothing about screens, and a **terminal capability** over it holding pty, VT core and bounded
+history. The agent path needs the first and none of the second — `claude-code/runner.ts` spawns with
+`stdio: ['pipe','pipe','pipe']` and reads NDJSON — and its defects are the process layer's item for item
+(G3, G6, G7, and a `kill` that signals one process rather than a tree). One broker therefore serves the
+terminal, the agent flows, and the "stable session APIs usable by apack's CLI and packs" the refactor target
+names. Building that layer in Node and the eventual Windows answer in Rust would split one owner across two
+runtimes, which is the outcome worth most avoiding.
 
-**Reversal condition, stated so it is actionable rather than aspirational:** a scheduled Windows release, or
-a measured need this document does not anticipate. At that point the broker's internals move to Rust in a
-sibling checkout on the elmdb arrangement — `apack-terminal`, symlinked as `vendor/apack-terminal`, pinned
-by `vendor/apack-terminal.rev`, with `packages/api` depending on it for the packaged app — and the cost
-accepted with it: two commits and a `.rev` bump per change where an unbumped rev is a silent skew, a second
-pre-push suite at elmdb's bar, `lib/janitor-policy.ts` widened past one checkout, and per-platform native
-artifacts. Keeping Rust out of the monorepo remains right when that day comes, and for a reason that is not
-reuse: `npm run janitor` exists because the elmdb checkout "and every worktree of it" is where the disk
-went, and a worktree is cheap for TypeScript and expensive for a Rust `target/`.
+**Home:** `apack-terminal`, a sibling checkout of this one and of elmdb, symlinked as
+`vendor/apack-terminal`, pinned by `vendor/apack-terminal.rev`, maintained by `npm run link:apack-terminal`,
+with `packages/api` depending on it for the packaged app. Rust stays out of the monorepo for a reason that
+is not reuse: `npm run janitor` exists because the elmdb checkout "and every worktree of it" is where the
+disk went, and a worktree is cheap for TypeScript and expensive for a Rust `target/`. Accepted costs, named
+so they are chosen rather than discovered: two commits and a `.rev` bump per broker change, where an
+unbumped rev is a silent skew; a second pre-push suite at elmdb's bar (`cargo xtask pre-push`, every
+mutation survivor killed or justified); `lib/janitor-policy.ts` widened past one checkout; per-platform
+native artifacts in the packaged build; and `portable-pty` validated for process containment, cancellation
+and ConPTY resize/exit before selection, since the refactor target records that herdr patched its substrate.
 
-**VT state** comes from a JS parser over the same bytes the renderer sees, in a worker rather than on the
-API's loop. The lineage question D11 previously answered — a Ghostty core versus a Rust crate — does not
-arise until the broker's internals move; the
-[ghostty-web migration](../deferred/xterm-to-ghostty-web.md) is where it reopens, and the snapshot
-contract's missing binary-compatibility guarantee is what to weigh against lineage matching then.
+**VT core:** an upstream Rust crate — `alacritty_terminal` for grid and state, over `vte`. This is
+independent of the language decision and unchanged by it. Not because FFI is objectionable:
+`libghostty-vt` exposes a public C ABI. Two narrower reasons. Matching Ghostty's lineage pays only when a
+native core and a ghostty-web renderer cannot disagree about a screen, and D10 keeps xterm.js, so that
+benefit is not purchasable here. And the refactor target records that the snapshot contract "explicitly
+lacks a binary-compatibility guarantee for snapshot format 1", which this broker persists. A different
+lineage means broker and renderer could disagree about a rendered screen, answered by **where facts come
+from** rather than by matching implementations: explicit OSC markers, with any screen-derived signal bounded
+and carrying `inferred` provenance. Reopen at the
+[ghostty-web migration](../deferred/xterm-to-ghostty-web.md), where lineage matching starts to pay and the
+snapshot-format risk is what to weigh against it.
 
-**The process layer is the part with two clients**, and it is where this decision matters least: it has no
-VT at all, which is why a Node broker serves both the terminal and the agent path.
-
-**No decision is open**, and every phase below names its owning decision. D11 carries a reversal condition
-rather than an open question — a scheduled Windows release, or a measured need — and reaching it is a scope
-change to record and stop on, not to choose between. An agent that reaches any other fork this document does
+**No decision is open**, and every phase below names its owning decision. An agent that reaches any other fork this document does
 not settle has found a gap in it, and should record the gap rather than choose.
 
 ## Phases
@@ -231,24 +246,23 @@ Build the layer so that is possible; **do not migrate the agent path here.** Its
 and the deliverable in this one is the seam, not the second client.
 **Dependencies:** D11 for the broker's home and core, D9 for what it parses. Phase G's baseline,
 so acceptance has a before.
-**Done when:** the pty is owned by a process that outlives the API — node-pty moves out of the API into the
-broker, its entry in `apack-host/src/build/shared-deps.ts` and its probe in `build/prod/smoke-native.mjs`
-following it.
+**Done when:** **node-pty is gone from the repository** — the dependency dropped from
+`packages/default-setup/package.json` and `packages/api/package.json`, its entry removed from
+`apack-host/src/build/shared-deps.ts`, its probe removed from `build/prod/smoke-native.mjs`, and the three
+`npx electron-rebuild --only node-pty` invocations deleted from `build/build.sh`, which leaves the app with
+no Electron-ABI-coupled native module at all (elmdb is N-API and needs no rebuild).
 
-**node-pty stays, and moves.** D11 keeps the broker in Node, so the pty binding is still node-pty — it is
-current, Microsoft-maintained and sound on POSIX, and what disqualified it was never its quality but that it
-ran inside the API. Owned by a detached broker it outlives the API, which is the whole point. The three
-`electron-rebuild` invocations stay with it: a broker spawned as the API is runs on Electron's Node, so the
-ABI coupling is not escaped here, and D11 records that as an accepted cost rather than a solved one.
+What disqualifies node-pty is **where it runs and what it is coupled to, not its quality**: it is current
+(1.1.0), Microsoft-maintained, the binding VS Code ships, and sound on POSIX. An addon in the API process
+cannot outlive the API, and it is the only module here needing an Electron ABI rebuild. Its Windows path is
+separately weak — `_deferNoArgs` queues `kill`/`resize` until the first data event, the exit event lags by
+`FLUSH_DATA_INTERVAL = 1000`, and the child kill walks the console process list asynchronously through a
+forked helper — which is what X1 and X2 are made of, and what an owned process tree replaces. Claim those
+two only on a Windows run that proves it; `portable-pty` is validated rather than assumed, since the
+refactor target records that herdr patched its substrate.
 
-What does **not** dissolve on this path is Windows. `windowsTerminal.js`'s `_deferNoArgs` queues
-`kill`/`resize` until the first data event, the exit event lags by `FLUSH_DATA_INTERVAL = 1000`, and the
-child kill walks the console process list asynchronously through a forked helper — and Job Objects, the
-mechanism that would fix it, need native code from Node. So X1 and X2 remain held rather than dissolved, and
-Phase B must not claim them.
-
-Also closed, each as dissolved with the construction that removes it: F4, F5, F7, F8, L2 and L3. The pack's
-`be/services/terminal.ts` no longer spawns or owns a process; no pid is persisted as a handle; a resize writes no application row; and the presentation channel is bounded by Phase G's declared
+Also closed, each as dissolved with the construction that removes it: F4, F5, F7, F8, L2, L3, X1 and X2. The
+pack's `be/services/terminal.ts` no longer spawns or owns a process; no pid is persisted as a handle; a resize writes no application row; and the presentation channel is bounded by Phase G's declared
 ceiling, with a firing case proving a producer past it is throttled and the overload observable rather than
 dropped silently. Native work runs in the Linux container (`npm run test:linux`), one expensive owner at a
 time.
