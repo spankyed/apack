@@ -83,7 +83,7 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 
 - **Checkout:** `master` at `25d8a8120b`, the current one — no branch or worktree, clean tree.
   **Phase T is complete**: every track below has landed with a firing spec, or is placed with its reason
-  (T6 → Phase H, T7 → Phase P, G1 → the output pipe). **Phase G has 5 of its 6 readings**, with G1, F4 and F5 priced; the last wants a screen read.
+  (T6 → Phase H, T7 → Phase P, G1 → the output pipe). **Phase G's six readings are complete**, with G1, F4 and F5 priced and F18 found.
   Nothing of Phases S, B, H, P or A is started.
   **Collision surface against #372**, measured 2026-11-07: one file, `features/code/fe/state.ts` (+24/-2 on
   that branch). Every other file Phase T touches is untouched there — `bus/client-events.ts`,
@@ -205,6 +205,17 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   silently — so the command never ran and only the prompt came back. I read that as X6 (LF not submitting a
   line) reproducing on macOS; with `terminal.INPUT`, `\n` submits correctly and **X6 stays a Windows
   finding**. That the drop was silent is worth noting beside F18.
+- **Phase G reading 6 of 6 is taken, and it inverts what was expected: reattaching a terminal with 256 KiB
+  of scrollback takes 5.55 ms and the backend sends nothing.** Nothing is replayed — the pool keeps the
+  xterm alive across the host's teardown by design, so a reattach re-parents an instance that never went
+  away. **So it is a property to preserve, not a cost to reduce**: a presentation seam that discarded the
+  emulator would turn 5.5 ms into re-parsing 256 KiB. It is also F3 and F6's mechanism shown rather than
+  argued — cheap reattach and duplicated scrollback are the same decision, so Phase P trades them against
+  each other rather than fixing both.
+- **Phase G's six readings are complete.** What remains of that phase is the parsing-cost reading
+  (`measure:loop`, baseline data by the goal's own account, needs a quiet machine) and *declaring* the
+  bounds as named constants — which cannot land before the broker and the presentation seam exist to hold
+  them. The figures they take their values from are recorded.
 - **G1 is priced and stays open, with its fix placed.** Measured with the existing `streaming` scenario,
   which already drives the writer at `intervalMs: 80`: **9,726 → 30,054 → 95,924 app write bytes** for
   **864 → 2,160 → 4,340** characters of reply, so bytes-per-character climbs 11.3 → 13.9 → 22.1. Every flush
@@ -218,12 +229,12 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   assigns G1 to. `stream-writer.ts` is untouched by #372 (checked 2026-11-07 against
   `origin/session/claude-code-integration`), but `thinking-writer.ts` (+51) and `stream-consumer.ts` (+362)
   move substantially there, so that branch's cleanup is the cheapest place for the feed.
-- **Next action: a screen read, then Phase S.** One reading is left — **large-history replay** — and with it
-  the **first-byte latency** the attach reading could not cover. Both want the same thing and the DOM cannot
-  give it: xterm draws to a canvas, so a restored or filling screen is unreadable from the page, and the
-  buffer is inside the pack's module-scoped pool. The two ways to get it are a read through the emulator,
-  which **Phase P's seam provides anyway**, or an `app.surface.send` count across a reattach, which is now
-  available and is the cheaper of the two. Everything else Phase G asked for is recorded.
+- **Next action: Phase S.** Phase G's readings are taken and the gate's purpose — a before that later phases
+  are checked against — is met. What Phase G still owes (the bounds as named constants) needs Phase B and
+  Phase P to exist first, and its parsing reading is baseline data the goal says is not a decision input.
+  Two things no reading covers are recorded with their reason: **first-byte latency** and **whether a
+  reattached screen's contents are right**, both of which need a read through the emulator that Phase P's
+  own acceptance already requires.
 
   **Where it has to go, researched so the next session does not repeat it.** The natural seam is the API's
   outgoing surface send (`rootEvents.emitOutgoing`, `api/src/transport/emitter.ts`), which every

@@ -265,14 +265,52 @@ was wrong: with `terminal.INPUT`, `\n` submits correctly. X6 stays a Windows fin
 reason the rule says to measure before accepting a measurement, including one's own — and why the drop was
 silent is itself worth noting beside F18.
 
-### Baseline (Phase G) — the last reading, not taken
+### Large-history reattach (Phase G, reading 6 of 6) — 2026-11-07
 
-Still outstanding: **large-history replay**, plus the parsing-cost reading (`npm run measure:loop`). The
-replay reading needs a way to assert a restored screen, which the attach reading establishes the DOM cannot
-give — xterm draws to a canvas and its buffer is in the pack's module-scoped pool — so it wants either a
-screen read through the emulator (which Phase P's seam provides) or an `app.surface.send` count over a
-reattach, which is now available. **First-byte latency** is still uncovered for the same reason, and is the
-other thing that screen read would settle.
+`APACK_PERFORMANCE_SCENARIO=terminal-replay`: a terminal carrying **256 KiB** of scrollback, the action
+navigating off the code surface and back. 10 measured trials, all passed.
+
+| | median | min | max |
+|---|---|---|---|
+| **Reattach** | **5.55 ms** | 4.80 | 6.20 |
+| Backend sends during it | **0** | 0 | 0 |
+| Backend bytes during it | **0** | 0 | 0 |
+
+**Nothing is replayed, which is why it is 5.55 ms.** The backend sends not one message, so the history does
+not come back over the bus; and 5.5 ms is far too little to rebuild an emulator around 256 KiB. The pool
+keeps the xterm alive across the host's teardown on purpose — `TerminalView.vue` says so where it detaches
+("Detach the pool's wrapper from our container but DO NOT dispose the xterm") — so a reattach re-parents an
+instance that never went away.
+
+**So this reading is a property to preserve, not a cost to reduce**, and that is the opposite of what a
+"replay" reading was expected to show. Two consequences for the rewrite:
+
+- **Phase P must not make this a replay.** A presentation seam that discards the emulator on teardown would
+  turn 5.5 ms into the cost of re-parsing 256 KiB, and the before above is what that regression would be
+  measured against. The migration plan's own cutover wants the same number.
+- **It is also F3 and F6's mechanism, shown rather than argued.** The window answers a reattach from a copy
+  it is already holding, which is what those two findings are about — the second and third copies of the
+  scrollback. Cheap reattach and duplicated scrollback are the same design decision, so Phase P trades one
+  against the other rather than fixing both.
+
+### Phase G's readings are complete
+
+All six are above: attach latency, packaged payload, resize, hidden sessions, sustained output and
+large-history reattach — with **G1, F4 and F5 priced** along the way, and **F18** found. Two things Phase G
+asks for remain:
+
+- **The parsing-cost reading** (`npm run measure:loop`), which the goal records as baseline data rather than
+  a decision input, and which needs a quiet machine.
+- **Declaring the bounds** as named constants "in the broker and the presentation seam" — which cannot land
+  before those exist. The figures they take their values from are recorded here; the rule each takes is
+  Phase G's to state when Phase B and Phase P build the places they live.
+
+### Baseline (Phase G) — superseded
+
+What no reading above covers, and why: **first-byte latency** and **whether a reattached screen's contents
+are correct**. Both need a read through the emulator, which the DOM cannot give — xterm draws to a canvas
+and its buffer is inside the pack's module-scoped pool. Phase P's seam provides it, and Phase P's own
+acceptance already requires driving `vim`, `less` and `htop` through a reattach, which is the same read.
 
 The baseline is unrepeatable once Phase B moves state, and the
 [ghostty-web migration](../../deferred/xterm-to-ghostty-web.md) requires the same measurement for its own
