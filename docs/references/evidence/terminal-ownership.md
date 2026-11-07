@@ -57,9 +57,47 @@ reading the premise that chose the language, which would have answered a questio
 elsewhere — `worker_threads` is already how this repo keeps compiler work off a loop, so off-loop parsing
 was never the discriminator.
 
-### Baseline (Phase G) — not taken
+### Terminal attach latency (Phase G, reading 1 of 6) — 2026-11-07
 
-The goal's Phase G baseline is unrepeatable once Phase B moves state, and the
+**One of Phase G's six readings, and it is not the one a user feels.** Recorded so the figure is cited
+rather than copied; the other five are not taken.
+
+`APACK_PERFORMANCE_SCENARIO=terminal-open npm run test:e2e -- --config tests/performance/playwright.config.ts`,
+on a machine `npm run check:idle` passed at the 70% floor first.
+
+| | |
+|---|---|
+| **Median** | **20.7 ms** |
+| Range | 18–25 ms |
+| Trials | 20 measured, 20 passed, 0 unsuccessful; 5 warmups, warm process, `lightweight` |
+| Source | `a37ba66ceb`, clean; 6 build hashes and the elmdb pin `4b67670` recorded in the run's `manifest.json` |
+| Machine | darwin arm64, 10 cpus, 32 GiB (identity `d74b1b3a…`) |
+| Runtimes | Electron 44.9.3, Chromium 152.0.7977.167, app Node 24.22.0 |
+| Fixture | `terminal-open-v1`, 25 terminals at 80×24, `/bin/zsh` (`sha256` in the manifest) |
+
+**What it measures is attachment: from `terminal.CREATE` to a terminal attached and on screen**, which is
+the surface recording it as the panel's and expanded plus xterm's renderer canvases in place. It is **not**
+first-byte latency, and that is a limit of what the page can observe rather than a choice — xterm renders to
+a canvas, so there is no `.xterm-rows` text to read the screen from, and the buffer lives in the xterm
+instance inside the pack's module-scoped pool. The scenario's doc comment has the probe that established it.
+
+**The consequence for Phase B is the point of taking it.** 20.7 ms says the renderer's half of opening a
+terminal is nearly free, so what a user waits for is the pty spawning and the shell starting — which this
+reading does not cover. So the goal's constraint that "the broker can lose on the metric it is measured by"
+cannot be checked against *this* number: a broker adds its cost to the part that is still unmeasured. The
+first-byte reading has to exist before the broker's first-open latency can be compared to anything, and it
+needs a byte-level signal rather than the DOM.
+
+### Baseline (Phase G) — the remaining five readings, not taken
+
+Still outstanding: **sustained output responsiveness**, **large-history replay**, **memory with several
+hidden sessions**, **resize behaviour** and **packaged payload size**, plus the parsing-cost reading
+(`npm run measure:loop`). The first three need an output corpus and a byte-level completion signal, which
+the attach reading above establishes is not available from the DOM — so that signal is the next thing to
+build, and it serves the first-byte reading too.
+
+The baseline is unrepeatable once Phase B moves state, and the
 [ghostty-web migration](../../deferred/xterm-to-ghostty-web.md) requires the same measurement for its own
-cutover. It is recorded here when taken, with the machine, the output corpus and the conditions
-`npm run measure` prints, so both can cite one reading rather than two.
+cutover, so both cite one reading rather than two. Each is recorded here when taken, with its machine, its
+corpus and its conditions — the terminal scenario's `manifest.json` carries them, which is why Phase G's
+instrument is `tests/performance/` and not a driving script.

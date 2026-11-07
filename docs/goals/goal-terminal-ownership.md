@@ -152,6 +152,15 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   its prompt and an attached-but-blank terminal is not open yet. Each trial closes its terminal outside the
   measured interval, so twenty-five trials do not leave twenty-five shells running.
 
+- **Phase G reading 1 of 6 is taken: terminal attach latency, median 20.7 ms (18–25, 20/20 passed).**
+  Conditions, build and native identity in
+  [the evidence record](../references/evidence/terminal-ownership.md#terminal-attach-latency-phase-g-reading-1-of-6--2026-11-07).
+  **It changes what Phase B has to be measured against.** 20.7 ms says the renderer's half of opening a
+  terminal is nearly free, so the wait a user feels is the pty spawning and the shell starting — which this
+  reading does not cover, because first-byte latency is not observable from the page (xterm draws to a
+  canvas; the buffer is in the pack's module-scoped pool). So *the next thing to build is a byte-level
+  completion signal*, which the sustained-output, history-replay and first-byte readings all need, and
+  without which "the broker can lose on the metric it is measured by" cannot be checked against this number.
 - **G1 is Phase T's last track and sits behind Phase G's reading.** The review states G1's severity is an inference
   from reading, Phase G's *Done when* prices it, and the repo's rule is to measure before optimising.
   `stream-writer.ts` is untouched by #372 (checked 2026-11-07 against
