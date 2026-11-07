@@ -1,4 +1,4 @@
-name: Populated startup comparison
+name: Application action comparison
 
 on:
   workflow_call:
@@ -6,6 +6,9 @@ on:
       baseline:
         type: string
         required: true
+      scenario:
+        type: string
+        default: populated-startup
 
 permissions:
   contents: read
@@ -45,14 +48,17 @@ jobs:
           npm ci --prefix "$RUNNER_TEMP/startup-baseline.noindex" --no-audit --no-fund
       - name: Build qualification tools
         run: npm run packages:ensure
-      - name: Compare populated startup
+      - name: Compare maintained action
+        env:
+          PERFORMANCE_SCENARIO: ${{ inputs.scenario }}
         run: >-
           node scripts/with-source.mjs tsx scripts/compare-performance-revisions.ts
           --baseline "$RUNNER_TEMP/startup-baseline.noindex"
           --candidate "$GITHUB_WORKSPACE"
-          --scenario populated-startup --mode disabled --trials 20
+          --scenario "$PERFORMANCE_SCENARIO" --mode disabled --trials 20
           --output .apack/performance/startup-revision-comparison
       - name: Profile baseline startup outside the timing comparison
+        if: inputs.scenario == 'populated-startup'
         working-directory: ${{ runner.temp }}/startup-baseline.noindex
         env:
           APACK_PERFORMANCE_MODE: detailed
@@ -60,6 +66,7 @@ jobs:
           APACK_PERFORMANCE_RUN_OUTPUT: ${{ github.workspace }}/.apack/performance/startup-diagnostic/baseline
         run: node scripts/with-source.mjs tsx tests/performance/startup-run.ts
       - name: Profile candidate startup outside the timing comparison
+        if: inputs.scenario == 'populated-startup'
         env:
           APACK_PERFORMANCE_MODE: detailed
           APACK_PERFORMANCE_TRIALS: 1

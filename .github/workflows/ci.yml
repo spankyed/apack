@@ -18,11 +18,16 @@ on:
   workflow_dispatch:
     inputs:
       startup_performance:
-        description: Compare populated startup against a baseline on one disposable runner
+        description: Compare a maintained action against a baseline on one disposable runner
         type: boolean
         default: false
+      performance_scenario:
+        description: Maintained action for the manual revision comparison
+        type: choice
+        options: [populated-startup, thread-open, streaming]
+        default: populated-startup
       performance_baseline:
-        description: Baseline commit or ref for the manual startup comparison
+        description: Baseline commit or ref for the manual action comparison
         type: string
         default: ''
       app_acceptance:
@@ -88,6 +93,7 @@ jobs:
     uses: ./.github/workflows/startup-performance.yml
     with:
       baseline: ${{ inputs.performance_baseline }}
+      scenario: ${{ inputs.performance_scenario }}
 
   check:
     if: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux && !inputs.startup_performance }}

@@ -16,6 +16,12 @@ For a populated-startup revision comparison on one disposable macOS runner, disp
 gh workflow run ci.yml --ref <candidate-branch> -f startup_performance=true -f performance_baseline=<baseline-commit>
 ```
 
+Select `-f performance_scenario=thread-open` or `-f performance_scenario=streaming` for matched
+regression qualification through the same workflow and comparator. Startup remains the default;
+separate detailed startup profiles are collected only for that scenario. Each scenario has its own
+CI run and artifact; the retained `startup-revision-comparison` directory contains the selected
+scenario's report.
+
 This runs the same maintained comparison command with recording disabled, five warmups and twenty
 measured trials per revision in balanced order. Both checkouts have separate dependencies and profiles;
 their native pins must match. Reports and failures are uploaded even when the comparison fails.
