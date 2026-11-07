@@ -1,3 +1,4 @@
+import { claudeProfileOptions, sameClaudeProfile } from '../../../features/code/common/native-profile.ts';
 /**
  * CC: Session Ops — handles session-heavy cc- commands (resume, import).
  *
@@ -5,6 +6,7 @@
  * parsing, message import, and session artifact setup plumbing.
  */
 
+import { importedSessionMetadata } from './_helpers/session-import.ts';
 import type { ActionMeta } from '@apackdev/sdk/build';
 import type { Services, Z } from '#generated/services.ts';
 import { getClaudeState, persistClaudeState, ensureSessionMarker, updateChatState } from './_helpers/thread-context.ts';
@@ -67,68 +69,6 @@ export async function action(
   return { success: !!handler, command: `cc-${name}`, text: result.text, data: result.data };
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────
-
-/**
- * Extract displayable text from a CLI transcript content array.
- * Skips tool_use / tool_result blocks; concatenates text blocks.
- */
-function extractText(content: any): string {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
-  return content
-    .filter((b: any) => b.type === 'text' && b.text)
-    .map((b: any) => b.text)
-    .join('\n');
-}
-
-/**
- * Parse a CLI session transcript and batch-import messages into a thread.
- * No per-message frontend events — caller must refresh the thread afterwards.
- */
-function importSessionMessages(
-  services: Services,
-  threadId: string,
-  transcript: any[],
-): number {
-  const messages: Array<{
-    text: string;
-    sender: 'user' | 'assistant';
-    forkable?: boolean;
-    context?: Record<string, unknown>;
-  }> = [];
-
-  for (const entry of transcript) {
-    if (entry.type === 'user' && entry.message?.role === 'user') {
-      const text = extractText(entry.message.content);
-      if (!text) continue;
-      messages.push({
-        text,
-        sender: 'user',
-        forkable: false,
-        ...(entry.uuid && { context: { cliUuid: entry.uuid } }),
-      });
-    } else if (entry.type === 'assistant') {
-      const text = extractText(entry.message?.content) || '(tool use only)';
-      messages.push({
-        text,
-        sender: 'assistant',
-        forkable: !!entry.uuid,
-        ...(entry.uuid && { context: { cliUuid: entry.uuid } }),
-      });
-    }
-  }
-
-  if (messages.length > 0) {
-    services.chat.addMessagesToThread({
-      threadId: threadId as any,
-      messages: messages as any,
-    });
-  }
-
-  return messages.length;
-}
-
 // ── Handlers ────────────────────────────────────────────────────────
 
 async function handleResume(
@@ -152,7 +92,8 @@ async function handleResume(
     || codeSettings?.defaultBaseDirectory
     || codeSettings?.baseDirectory
     || undefined;
-  const cwdOpts = effectiveCwd ? { cwd: effectiveCwd } : undefined;
+  const profile = prior?.profile ?? services.cli.claudeCode.profile();
+  const cwdOpts = { ...(effectiveCwd ? {cwd: effectiveCwd} : {}), ...claudeProfileOptions({profile}) };
 
   // No args: show session picker
   if (!identifier) {
@@ -183,18 +124,32 @@ async function handleResume(
 
   const sessionId = session.id;
 
-  // Fetch transcript for message import — use the session's own cwd bucket
-  const transcript = await services.cli.claudeCode.viewSession(sessionId, { cwd: (session as any).cwd });
+  const represented = services.repository.threadQueries.all().filter(candidate => {
+    const state = candidate.context?.claudeCode;
+    return sameClaudeProfile(state?.profile ?? services.cli.claudeCode.profile(), profile) && !state?.forkFrom && !state?.revertTo && !state?.forkPending;
+  });
+  const liveSession = (id: string) => services.cli.claudeCode.getNativeTerminal(id)?.state.sessionId
+    ?? services.cli.claudeCode.getConversation(id)?.owner.sessionId;
+  const existing = represented.find(candidate => liveSession(candidate.id) === sessionId)
+    ?? represented.find(candidate => !liveSession(candidate.id) && candidate.context?.claudeCode?.sessionId === sessionId);
+  if (existing) {
+    const text = 'Continuing the existing app conversation for this Claude Code session.';
+    services.chat.sendBlockMessage({ threadId: existing.id, text, blocks: [] });
+    services.chat.showThread(existing.id);
+    return { text, skipMessage: true };
+  }
 
-  // Determine target thread — only spawn a new one if the current thread
-  // has real conversation (not just command/system messages).
+  // Fetch transcript for message import — use the session's own cwd bucket
+  const transcript = await services.cli.claudeCode.viewSession(sessionId, { cwd: (session as any).cwd, ...claudeProfileOptions({profile}) });
+
+  // Preserve existing conversation and staged history when importing an unrepresented session.
   const existingMessages = services.repository.threadQueries.messages(threadId as any);
-  const hasRealMessages = existingMessages?.some((m: any) =>
+  const requiresNewThread = !!(prior?.forkFrom || prior?.revertTo || prior?.forkPending) || existingMessages?.some((m: any) =>
     m.sender === 'user' && !m.isCommand
   );
   let targetThreadId = threadId;
 
-  if (hasRealMessages) {
+  if (requiresNewThread) {
     const title = (session as any).title || 'Resumed session';
     const { id: newThreadId } = services.chat.createThread({
       topic: title,
@@ -208,11 +163,14 @@ async function handleResume(
   }
 
   // Import messages from transcript (batch — no per-message events)
-  const importedCount = importSessionMessages(services, targetThreadId, transcript);
+  const importedCount = services.chat.importClaudeSessionMessages({threadId: targetThreadId as any, transcript, sessionId});
 
   // Set up session state — persistClaudeState adds 'claude-code' tag
   persistClaudeState(services, targetThreadId, {
     sessionId,
+    profile,
+    historyError: undefined,
+    ...importedSessionMetadata(transcript, sessionId, (session as any).cwd),
     cwd: (session as any).cwd || '',
     sessionWorktree: false,
   });
@@ -223,7 +181,7 @@ async function handleResume(
   const sessionTitle = (session as any).title || '(untitled)';
   const confirmText = `Session resumed: **${sessionTitle}** (${importedCount} messages imported)\nSend a message to continue.`;
 
-  if (hasRealMessages) {
+  if (requiresNewThread) {
     // New thread: send confirmation there and navigate
     services.chat.sendBlockMessage({
       threadId: targetThreadId as any,
@@ -255,14 +213,16 @@ async function handleImport(
   services: Services,
   threadId?: string,
 ): Promise<{ text: string; data?: any; skipMessage?: boolean }> {
+  const selectedProfile = (threadId ? getClaudeState(services, threadId)?.profile : undefined) ?? services.cli.claudeCode.profile();
+  const profile = claudeProfileOptions({profile:selectedProfile});
   const allDirs = args.includes('all');
   const noLimit = args.includes('no-limit');
   const limit = noLimit ? undefined : DEFAULT_IMPORT_LIMIT;
 
   // List sessions — either current directory or all project directories
   const sessions = allDirs
-    ? await services.cli.claudeCode.listAllSessions(limit ? { limit } : undefined)
-    : await services.cli.claudeCode.listSessions(limit ? { limit } : undefined);
+    ? await services.cli.claudeCode.listAllSessions({ ...profile, ...(limit ? {limit} : {}) })
+    : await services.cli.claudeCode.listSessions({ ...profile, ...(limit ? {limit} : {}) });
 
   if (!sessions.length) return { text: 'No sessions found to import.' };
 
@@ -270,7 +230,8 @@ async function handleImport(
   const existingSessionIds = new Set<string>();
   for (const thread of services.repository.threadQueries.all()) {
     const sid = (thread as any)?.context?.claudeCode?.sessionId;
-    if (sid) existingSessionIds.add(sid);
+    const state = thread.context?.claudeCode;
+    if (sid && sameClaudeProfile(state?.profile ?? services.cli.claudeCode.profile(), selectedProfile)) existingSessionIds.add(sid);
   }
 
   const toImport = sessions.filter((s: any) => !existingSessionIds.has(s.id));
@@ -298,7 +259,7 @@ async function handleImport(
       // Use viewSessionByFile when we have a file path (works for cross-directory imports)
       const transcript = (session as any).file
         ? await services.cli.claudeCode.viewSessionByFile((session as any).file)
-        : await services.cli.claudeCode.viewSession(session.id, { cwd: (session as any).cwd });
+        : await services.cli.claudeCode.viewSession(session.id, { cwd: (session as any).cwd, ...profile });
 
       const prefix = dirPrefix((session as any).cwd);
       const sessionTitle = (session as any).title || `Session ${session.id.slice(0, 8)}`;
@@ -312,23 +273,13 @@ async function handleImport(
       });
 
       // Import messages
-      importSessionMessages(services, newThreadId as string, transcript);
+      services.chat.importClaudeSessionMessages({threadId: newThreadId, transcript, sessionId: session.id});
 
       // The session state with an import's defaults, written in one update
       const thread = services.repository.threadQueries.byId(newThreadId) as any;
-      const now = Date.now();
       const ccState = {
-        sessionId: session.id,
-        sessionWorktree: false,
-        cwd: (session as any).cwd || undefined,
-        chatState: 'idle',
-        model: '',
-        startedAt: now,
-        lastTurnAt: now,
-        turns: 0,
-        totalCostUsd: 0,
-        toolCallCount: 0,
-        permissionMode: 'default',
+        sessionId: session.id, profile:selectedProfile, sessionWorktree: false, cwd: (session as any).cwd || undefined,
+        chatState: 'idle', permissionMode: 'default', ...importedSessionMetadata(transcript, session.id, (session as any).cwd),
       };
 
       // Write full session state to thread context (source of truth).

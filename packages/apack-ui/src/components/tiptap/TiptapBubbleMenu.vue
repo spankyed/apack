@@ -2,7 +2,9 @@
   <BubbleMenu
     v-if="editor"
     :editor="editor"
-    :options="{ placement: 'top', offset: 8, strategy: 'absolute', inline: true }"
+    :options="menuOptions"
+    :plugin-key="menuKey"
+    :append-to="menuHost"
     :should-show="shouldShow"
     class="bubble-menu flex flex-col bg-neutral-800 border border-neutral-700 rounded-lg shadow-lg"
   >
@@ -23,6 +25,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { BubbleMenu } from '@tiptap/vue-3/menus'
 import type { Editor } from '@tiptap/vue-3'
+import { PluginKey } from '@tiptap/pm/state'
 import BubbleMenuNodeSelector from './bubble-menu/BubbleMenuNodeSelector.vue'
 import BubbleMenuToolbar from './bubble-menu/BubbleMenuToolbar.vue'
 import BubbleMenuColorSelector from './bubble-menu/BubbleMenuColorSelector.vue'
@@ -32,20 +35,59 @@ const props = defineProps<{ editor: Editor }>()
 
 const linkInput = ref<InstanceType<typeof BubbleMenuLinkInput>>()
 
+const menuKey = new PluginKey('textBubbleMenu')
+const editorElement = props.editor.view.dom
+const ownerDocument = editorElement.ownerDocument
+const menuOptions = {
+  placement: 'top' as const, offset: 8, strategy: 'fixed' as const, inline: true,
+  shift: { limiter: { fn: ({ x, y, rects }: { x: number; y: number; rects: { floating: { width: number } } }) => {
+    // Resolve at positioning time: EditorContent attaches its DOM asynchronously.
+    const boundary = editorElement.closest('form')?.getBoundingClientRect()
+    if (!boundary || boundary.width < rects.floating.width + 16) return { x, y }
+    return { x: Math.max(boundary.left + 8, Math.min(x, boundary.right - rects.floating.width - 8)), y }
+  } } },
+}
+
+// A private host preserves the menu's blur boundary while escaping editor scroll clipping.
+const menuHost = ownerDocument.createElement('div')
+let positionFrame: number | undefined
+function onAncestorScroll(event: Event) {
+  if (!(event.target instanceof Element) || !event.target.contains(editorElement) || positionFrame !== undefined) return
+  positionFrame = requestAnimationFrame(() => {
+    positionFrame = undefined
+    if (!props.editor.isDestroyed) props.editor.view.dispatch(props.editor.state.tr.setMeta(menuKey, 'updatePosition'))
+  })
+}
+
+// Reading should not leave formatting controls covering the selected text.
+// The menu's normal selection updates make it available again for the next edit.
+function onReadingWheel(event: WheelEvent) {
+  const target = event.target
+  if (!(target instanceof Element) || props.editor.isDestroyed) return
+  if (!editorElement.contains(target) && !target.contains(editorElement)) return
+  props.editor.view.dispatch(props.editor.state.tr.setMeta(menuKey, 'hide'))
+}
+
 let rightClicked = false
 
 function onContextMenu() { rightClicked = true }
 function onMouseDown() { rightClicked = false }
 
 onMounted(() => {
-  const el = props.editor.view.dom
+  ownerDocument.body.appendChild(menuHost)
+  ownerDocument.addEventListener('scroll', onAncestorScroll, true)
+  ownerDocument.addEventListener('wheel', onReadingWheel, { capture: true, passive: true })
+  const el = editorElement
   el.addEventListener('contextmenu', onContextMenu)
   el.addEventListener('mousedown', onMouseDown)
 })
 
 onBeforeUnmount(() => {
-  if (props.editor.isDestroyed) return
-  const el = props.editor.view.dom
+  ownerDocument.removeEventListener('scroll', onAncestorScroll, true)
+  ownerDocument.removeEventListener('wheel', onReadingWheel, true)
+  if (positionFrame !== undefined) cancelAnimationFrame(positionFrame)
+  menuHost.remove()
+  const el = editorElement
   el.removeEventListener('contextmenu', onContextMenu)
   el.removeEventListener('mousedown', onMouseDown)
 })
@@ -62,6 +104,7 @@ const hasColors = computed(() => {
 
 function shouldShow(props: Record<string, any>) {
   if (rightClicked) return false
+  if (!props.view.hasFocus() && !menuHost.contains(ownerDocument.activeElement)) return false
   if (props.state.selection.empty) return false
   if (props.editor.isEmpty) return false
   return !atomicNodes.some(node => props.editor.isActive(node))

@@ -278,3 +278,5 @@ export interface CodeSystemContext {
   gitRepository: GitRepository | null
   gitWatcher: GitWatcherService | null
 }
+
+export type { ClaudeUiClientEvent, ClaudeUiNoticeEvent, ClaudeUiNotices, ClaudeUiScrollEvent, ClaudeUiScrollState, ClaudeUiPanePresentation, ClaudeUiPaneEvent, ClaudePromptHostRequest, ClaudePromptHostResponse, ClaudeUiFocusEvent, ClaudeUiFocusReply, ClaudeUiNode, ClaudeUiMountState, ClaudeUiFieldEvent, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRow, ClaudePromptCompletionRequest, ClaudePromptCompletionReply } from './services/claude-code/ui-presentation.ts'

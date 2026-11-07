@@ -1,0 +1,82 @@
+name: Claude research acceptance
+
+on:
+  workflow_call:
+    inputs:
+      case:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: claude-research-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  acceptance:
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      APACK_CHAIN_CORES: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 23.11.1
+          cache: npm
+      - name: Record platform and candidate
+        run: |
+          git rev-parse HEAD
+          sw_vers
+          sysctl -n hw.memsize
+          node -p 'JSON.stringify({platform:process.platform,arch:process.arch})'
+      - name: Install dependencies
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npm ci
+      - name: Build candidate pack
+        if: inputs.case != 'native-action-keys' && inputs.case != 'native-action-contexts'
+        shell: bash
+        run: npm run build:default-setup 2>&1 | tee "$RUNNER_TEMP/claude-research-pack-build.log"
+      - name: Build matching app runtime
+        if: inputs.case != 'native-action-keys' && inputs.case != 'native-action-contexts'
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        shell: bash
+        run: npm run build:runtime -- --cores 2 2>&1 | tee "$RUNNER_TEMP/claude-research-runtime-build.log"
+      - name: Replay pinned native journey
+        env:
+          CLAUDE_RESEARCH_CASE: ${{ inputs.case }}
+        run: python3 scripts/claude-research-ci.py "$CLAUDE_RESEARCH_CASE"
+      - name: Retain actual-app evidence and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-research-${{ inputs.case }}-${{ github.sha }}
+          retention-days: 7
+          include-hidden-files: true
+          path: |
+            ${{ runner.temp }}/claude-research-*-build.log
+            ${{ runner.temp }}/claude-research-*/provenance.json
+            ${{ runner.temp }}/claude-research-*/output/**
+            ${{ runner.temp }}/claude-research-*/workspaces/**/electron-results/**
+            ${{ runner.temp }}/claude-research-*/workspaces/**/native-*-proof.json
+            ${{ runner.temp }}/claude-research-*/workspaces/**/native-*-initial.json
+            ${{ runner.temp }}/claude-research-*/workspaces/**/native-capability-onboarding.json
+            ${{ runner.temp }}/claude-research-*/workspaces/**/native-action-keys.json
+            ${{ runner.temp }}/claude-research-*/workspaces/**/native-action-app-inspection.json
+            ${{ runner.temp }}/claude-research-*/workspaces/**/native-action-app-failure.json
+            ${{ runner.temp }}/claude-research-*/workspaces/**/native-action-dialog-answer.json
+            ${{ runner.temp }}/claude-research-*/workspaces/**/native-terminal-app-evidence.json
+            ${{ runner.temp }}/claude-research-*/workspaces/**/native-*-receipts.json
+            ${{ runner.temp }}/claude-research-*/workspaces/**/native-*-caret-*.json
+            ${{ runner.temp }}/claude-research-*/workspaces/**/native-*-layout-*.json
+            ${{ runner.temp }}/claude-research-*/workspaces/**/model-calls.json
+            ${{ runner.temp }}/claude-research-*/workspaces/**/.claude/projects/**/*.jsonl
+            ${{ runner.temp }}/claude-research-*/workspaces/**/native-children.jsonl
+            ${{ runner.temp }}/claude-research-*/workspaces/**/native-exits.jsonl
+            ${{ runner.temp }}/claude-research-*/workspaces/**/native-debug.log
+            ${{ runner.temp }}/claude-research-*/workspaces/**/app-data/apack/logs/main.log
+            .apack/tests/results/**

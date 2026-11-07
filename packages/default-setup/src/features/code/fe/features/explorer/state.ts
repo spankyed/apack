@@ -529,12 +529,15 @@ export const explorerState = setup({
       const parentContext = getParentContext(self)
       const baseDirectory = parentContext?.baseDirectory || ''
 
-      // Compute ancestor directory paths between baseDirectory and the file
+      // External files can open in tabs without belonging to this project's tree.
+      const root = baseDirectory.replace(/\/+$/, '') || (baseDirectory ? '/' : '')
+      if (!root || !ev.path.startsWith(root === '/' ? root : `${root}/`)) return {}
+
       const ancestors: string[] = []
       let current = getParentDir(ev.path)
-      while (current.length >= baseDirectory.length && current !== '') {
+      while (true) {
         ancestors.push(current)
-        if (current === baseDirectory) break
+        if (current === root) break
         current = getParentDir(current)
       }
 

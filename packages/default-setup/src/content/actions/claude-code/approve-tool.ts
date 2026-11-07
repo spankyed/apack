@@ -5,7 +5,7 @@
 
 import type { ActionMeta } from '@apackdev/sdk/build';
 import type { Services, EntityId } from '#generated/services.ts';
-import { persistClaudeState, setRunning, updateClaudeState, updateChatState } from './_helpers/thread-context.ts';
+import { expirePendingControlRequest, getClaudeState, persistClaudeState, setRunning, updateClaudeState, updateChatState } from './_helpers/thread-context.ts';
 import { resolvePlanDraft } from './_helpers/plan-artifact.ts';
 
 export const meta: ActionMeta = {
@@ -30,31 +30,53 @@ export async function action(
     requestId: string;
     toolName?: string;
     originalInput?: Record<string, unknown>;
-    response?: { autoAccept?: boolean };
+    response?: { autoAccept?: boolean; choice?: string; reason?: string; plan?: string; choiceToken?: string; prefix?: string };
   };
 
   if (!threadId || !requestId) return { success: false, reason: 'missing threadId or requestId' };
 
-  const handle = (services.cli as any).claudeCode.getHandle(threadId);
-
-  // Handle post-restart: CLI process is gone but the user can still approve
-  // the pending plan/tool. Start a new turn to resume the session.
-  if (!handle) {
-    if (toolName === 'ExitPlanMode') {
-      resolvePlanDraft(services, threadId as EntityId, 'approved');
-      services.emitter.broadcastToSurface('default-setup/threads', { type: 'SET_PHASE', phase: 'Edit' });
-    }
-    persistClaudeState(services, threadId, { pendingControlRequest: undefined });
-    // Start a new turn that resumes the session — mirrors replayQueuedMessage.
-    await services.action.executeIfFound('Claude Code Chat', {
-      threadId,
-      text: 'continue',
-      phase: toolName === 'ExitPlanMode' ? 'Edit' : undefined,
-    });
-    return { success: true, resumed: true };
+  const pending = getClaudeState(services, threadId)?.pendingControlRequest;
+  if (pending?.requestId !== requestId || (toolName && pending.toolName !== toolName)) {
+    return { success: false, reason: 'approval is no longer pending' };
   }
 
-  handle.respond(requestId, { behavior: 'allow', updatedInput: originalInput ?? {} });
+  if (pending.nativeTerminal) {
+    const owner = services.cli.claudeCode.getNativeTerminal(threadId);
+    const native = pending.nativeTerminal;
+    if (!owner || owner.state.ownerId !== native.ownerId || owner.state.sessionId !== native.sessionId) {
+      expirePendingControlRequest(services, threadId, requestId);
+      return { success: false, reason: 'Native approval expired' };
+    }
+    try {
+      if (native.genericTool) await owner.answerGenericToolPermissionDialog({ decision: 'allow', id: native.dialogId, revision: native.revision, sessionId: native.sessionId, toolName: pending.toolName, choice: typeof response?.choice === 'string' ? response.choice : '', choiceToken: typeof response?.choiceToken === 'string' ? response.choiceToken : '', feedback: typeof response?.reason === 'string' ? response.reason : undefined });
+      else if (pending.toolName === 'EnterPlanMode' || pending.toolName === 'ExitPlanMode') await owner.answerPlanDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, choice: typeof response?.choice === 'string' ? response.choice : '', feedback: typeof response?.reason === 'string' ? response.reason.trim() : undefined, plan: typeof response?.plan === 'string' ? response.plan : undefined });
+      else if (pending.toolName === 'Workflow' && native.workflow) await owner.answerWorkflowDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'allow', choice: typeof response?.choice === 'string' ? response.choice : undefined, choiceToken: typeof response?.choiceToken === 'string' ? response.choiceToken : native.workflow.token, feedback: typeof response?.reason === 'string' ? response.reason.trim() : undefined });
+      else if (pending.toolName === 'WebFetch' || pending.toolName === 'Skill') await owner.answerToolPermissionDialog({ decision: 'allow', id: native.dialogId, revision: native.revision, sessionId: native.sessionId, toolName: pending.toolName, choice: typeof response?.choice === 'string' ? response.choice : '', choiceToken: typeof response?.choiceToken === 'string' ? response.choiceToken : '', feedback: typeof response?.reason === 'string' ? response.reason : undefined });
+      else if (pending.toolName === 'Bash') await owner.answerBashDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'allow', choice: typeof response?.choice === 'string' ? response.choice : undefined, choiceToken: typeof response?.choiceToken === 'string' ? response.choiceToken : undefined, prefix: typeof response?.prefix === 'string' ? response.prefix : undefined });
+      else if (['Read', 'Write', 'Edit', 'NotebookEdit'].includes(pending.toolName)) await owner.answerFileDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'allow', ...(typeof response?.choice === 'string' ? { choice: response.choice } : {}), ...(typeof response?.choiceToken === 'string' ? { choiceToken: response.choiceToken } : {}) });
+      else throw new Error('Unsupported native approval');
+    } catch {
+      expirePendingControlRequest(services, threadId, requestId);
+      return { success: false, reason: 'Native approval changed or could not be answered' };
+    }
+    if (getClaudeState(services, threadId)?.pendingControlRequest?.requestId === requestId)
+      persistClaudeState(services, threadId, { pendingControlRequest: undefined });
+    return { success: true };
+  }
+
+  const handle = (services.cli as any).claudeCode.getHandle(threadId);
+
+  if (!handle) {
+    expirePendingControlRequest(services, threadId, requestId);
+    return { success: false, reason: 'Claude Code request expired' };
+  }
+
+  try {
+    handle.respond(requestId, { behavior: 'allow', updatedInput: originalInput ?? {} });
+  } catch {
+    expirePendingControlRequest(services, threadId, requestId);
+    return { success: false, reason: 'Claude Code response could not be sent' };
+  }
 
   if (toolName === 'ExitPlanMode') {
     resolvePlanDraft(services, threadId as EntityId, 'approved');

@@ -1,3 +1,10 @@
+import { createClaudeStreamReconciler } from './stream-reconciliation.ts';
+import { projectClaudeUiLog } from './native-ui-log.ts';
+import { presentMcpElicitation } from './mcp-elicitation.ts';
+import { createClaudeNativeMessageTracker } from './native-assistant-messages.ts';
+import { projectClaudeInputReplay } from './native-input-replay.ts';
+import type { ClaudeNestedActivity } from '#features/code/be/services/claude-code/nested-activity.ts';
+import type { ClaudeConversationTurn } from '#features/code/be/services/claude-code/conversation.ts';
 /**
  * Stream consumer — fire-and-forget async function that owns the `for await`
  * loop over a Claude Code CLI handle's event stream.
@@ -27,8 +34,8 @@ import { createThinkingWriter } from './thinking-writer.ts';
 import { createPlanDraft } from './plan-artifact.ts';
 import { parseExitPlanModeInput, buildPlanApprovalContext } from './plan-approval.ts';
 import { parseAskUserQuestionInput } from './ask-user-question.ts';
-import { getClaudeState, persistClaudeState, setRunning, dequeueMessage, updateClaudeState, updateChatState, extractStaleSessionId, markSessionBroken } from './thread-context.ts';
-import { parseContextMarkdown } from './context-parser.ts';
+import { getClaudeState, persistClaudeState, cancelPendingElicitation, cancelPendingControlRequest, setRunning, dequeueMessage, updateClaudeState, updateChatState, extractStaleSessionId, markSessionBroken } from './thread-context.ts';
+import { refreshThreadContextUsage } from './context-usage.ts';
 
 /** Tools whose execution mutates files and should roll up into a diff artifact. */
 const FILE_MUTATION_TOOLS = new Set(['Write', 'Edit', 'NotebookEdit']);
@@ -54,6 +61,9 @@ export interface ConsumerContext {
   phase?: string;
   /** The app's user message entity ID — used to store the CLI's user message UUID. */
   userMessageId?: string;
+  /** Full input text, including app-injected bootstrap/reference context. */
+  submittedPrompt?: string;
+  nativeInputId?: string;
   // ── Resume diagnostics (for error logging) ──
   resumeSessionId?: string;
   sessionCwd?: string;
@@ -65,6 +75,9 @@ export interface ConsumerContext {
   forkCliUuid?: string;
   /** Whether this turn was invoked with --worktree. */
   useWorktree?: boolean;
+  persistent?: boolean;
+  costBaseline?: number;
+  activity?: ClaudeNestedActivity;
 }
 
 export interface ConsumerWriters {
@@ -74,6 +87,29 @@ export interface ConsumerWriters {
   messageId: EntityId;
 }
 
+/** Map one owned native input/autonomous turn into app writers and persistence. */
+export async function consumeConversationTurn(turn: ClaudeConversationTurn, ctx: ConsumerContext, initial?: ConsumerWriters): Promise<void> {
+  const { services, threadId } = ctx;
+  if (turn.stopped) {
+    if (initial) {
+      initial.thinking.finalise();
+      initial.toolActivity.finalise('done');
+      initial.writer.finalize(initial.writer.text || 'Claude Code stopped.');
+    }
+    return;
+  }
+  const messageId = initial?.messageId ?? services.chat.sendBlockMessage({ threadId, text: 'Thinking…', blocks: [], forkable: false }).messageId as EntityId;
+  const thinking = initial?.thinking ?? createThinkingWriter(services, messageId, { intervalMs: 250 });
+  const writers = initial ?? { messageId, thinking,
+    writer: createStreamWriter(services, messageId, { intervalMs: 80 }),
+    toolActivity: createToolActivityWriter(services, messageId, { intervalMs: 250, phase: ctx.phase, getThinkingBlock: () => thinking.buildBlock() }),
+  };
+  services.cli.claudeCode.storeHandle(threadId, turn.handle);
+  setRunning(services, threadId, true);
+  updateChatState(services, threadId, 'working');
+  await consumeStream(turn.handle, { ...ctx, persistent: true, get costBaseline() { return turn.costBaseline; }, activity: turn.activity, nativeInputId: turn.inputId }, writers);
+}
+
 /**
  * Consume the CLI event stream in the background. The chat action calls this
  * without awaiting it, so the action returns immediately while this function
@@ -81,7 +117,7 @@ export interface ConsumerWriters {
  */
 export async function consumeStream(
   handle: any,
-  ctx: ConsumerContext,
+  ctx: ConsumerContext & { activity: ClaudeNestedActivity },
   initialWriters: ConsumerWriters,
 ): Promise<void> {
   const { services, threadId, text } = ctx;
@@ -92,14 +128,26 @@ export async function consumeStream(
   // killTurn() cleared it, or after any caller stored a replacement handle.
   // When false, we must not call clearHandle / persistClaudeState / emit
   // cc.stream.completed — those belong to whoever owns the slot now.
-  const stillCurrent = () =>
-    (services.cli as any).claudeCode.getHandle(threadId) === handle;
+  const stillCurrent = () => ctx.persistent
+    ? services.cli.claudeCode.isCurrentTurn(threadId, handle)
+    : services.cli.claudeCode.getHandle(threadId) === handle;
 
   let currentMessageId: EntityId = initialWriters.messageId;
   let writer = initialWriters.writer;
   let toolActivity = initialWriters.toolActivity;
   let thinking = initialWriters.thinking;
   let currentMessageHasCliUuid = false;
+  let currentMessageCliUuid: string | undefined;
+  const reconciliation = createClaudeStreamReconciler();
+  let streamApiMessageId: string | undefined;
+  let nativeMessages = createClaudeNativeMessageTracker({ completePartial: true });
+  let nativeSessionId = ctx.resumeSessionId;
+  const nativeLogIds = new Set<string>();
+  const activity = ctx.activity;
+  let nestedToolCount = 0;
+  let nestedToolErrors = false;
+  let priorSegmentToolCount = 0;
+  let priorSegmentsHadToolErrors = false;
 
   /** Idempotent — safe to call from every finalization path. */
   const finaliseThinking = () => { if (thinking.isStreaming) thinking.finalise(); };
@@ -112,13 +160,23 @@ export async function consumeStream(
   const mutatedPathsSet = new Set<string>();
   const mutatedPaths: string[] = [];
 
+  function collectNestedAccounting(): void {
+    const nested = activity.takeAccounting();
+    nestedToolCount += nested.toolCallCount;
+    nestedToolErrors ||= nested.hadErrors;
+    for (const path of nested.mutatedPaths) {
+      if (!mutatedPathsSet.has(path)) { mutatedPathsSet.add(path); mutatedPaths.push(path); }
+    }
+  }
+
+
   // Track whether we've captured the CLI's user message UUID for this turn.
   // The first `user` event echoes the prompt with the UUID the CLI assigned.
   let userUuidTracked = false;
 
   // Extracted from the `result` line directly — survives even if handle.result
   // rejects (error subtypes like error_during_execution).
-  let resultFromLine: { sessionId: string; text: string; totalCostUsd: number; durationMs: number; subtype?: string; errors?: string[] } | undefined;
+  let resultFromLine: { sessionId: string; text: string; totalCostUsd: number; durationMs: number; subtype?: string; isError?: boolean; errors?: string[] } | undefined;
 
   /** Finalize the current message and create a new "Thinking…" placeholder. */
   function splitMessage() {
@@ -126,6 +184,8 @@ export async function consumeStream(
     finaliseThinking();
     services.chat.updateMessageState(currentMessageId as any, { forkable: currentMessageHasCliUuid } as any);
     const segmentHadErrors = toolActivity.entries.some(e => e.status === 'error');
+    priorSegmentToolCount += toolActivity.entries.length;
+    priorSegmentsHadToolErrors ||= segmentHadErrors;
     toolActivity.finalise(segmentHadErrors ? 'error' : 'done');
 
     const msg = services.chat.sendBlockMessage({ threadId, text: 'Thinking…', blocks: [], forkable: false });
@@ -140,15 +200,27 @@ export async function consumeStream(
     };
   }
 
+  const ownedElicitations = new Set<string>();
   try {
     // ─── Drain the event stream ──────────────────────────────────────────
     let eventCount = 0;
     for await (const ev of handle.events) {
+      if (!stillCurrent()) throw new Error('Claude turn was superseded');
       const line = ev as any;
       eventCount++;
 
       if (eventCount <= 5 || eventCount % 20 === 0) {
-        log.debug('stream event', { n: eventCount, type: line?.type, line });
+        log.debug('stream event', { n: eventCount, type: typeof line?.type === 'string' ? line.type.slice(0,64) : 'unknown' });
+      }
+      if (line.type === 'stream_event' && !line.parent_tool_use_id && line.event?.type === 'message_start') streamApiMessageId = typeof line.event.message?.id === 'string' ? line.event.message.id : undefined;
+      if (line.type === 'conversation_reset') { reconciliation.clear(); streamApiMessageId = undefined; }
+      const mismatch = reconciliation.observe(line);
+      if (mismatch) {
+        log.warn('Claude stream reconciliation', { kind: mismatch.kind });
+        if (mismatch.kind === 'conflict') {
+          services.chat.updateMessageState(currentMessageId, {context:{claudeStreamReconciliation:{kind:'conflict',apiMessageId:mismatch.apiMessageId}}});
+          services.chat.sendSystemMessage({threadId,text:'Claude response display is inconsistent with its completed native message. Partial output is preserved; review the native transcript before relying on it.'});
+        }
       }
 
       // Split into a new message after approval/question answer — but only
@@ -158,17 +230,23 @@ export async function consumeStream(
       const isMessageStart = line.type === 'assistant' || (line.type === 'stream_event' && (line as any).event?.type === 'message_start');
       if (splitOnNextMessageStart && isMessageStart) {
         splitOnNextMessageStart = false;
+        nativeMessages = createClaudeNativeMessageTracker({ completePartial: true });
+        currentMessageCliUuid = undefined;
         ({ currentMessageId, writer, toolActivity, thinking, currentMessageHasCliUuid } = splitMessage());
       }
 
       // First `system/init` event carries sessionId/model/cwd.
       if (line.type === 'system' && line.subtype === 'init') {
         if (line.session_id) {
+          nativeSessionId = line.session_id;
           log.debug('[stream] persisting sessionId from system/init', {
             threadId, sessionId: line.session_id, cwd: line.cwd || 'NONE',
           });
+          const nativeLaunch = await services.cli.claudeCode.getNativeLaunch(threadId);
+          if (!stillCurrent()) throw new Error('Claude turn was superseded');
           persistClaudeState(services, threadId, {
             sessionId: line.session_id,
+            nativeLaunch: nativeLaunch?.sessionId === line.session_id ? nativeLaunch : undefined,
             lastTurnAt: Date.now(),
             cwd: line.cwd || undefined,
             sessionWorktree: ctx.useWorktree ?? false,
@@ -183,6 +261,21 @@ export async function consumeStream(
             cwd: line.cwd || '',
           },
         });
+        continue;
+      }
+
+      if (line.type === 'system' && line.subtype === 'ui_log') {
+        const notice = projectClaudeUiLog(line, nativeSessionId);
+        if (notice) {
+          const key = JSON.stringify([notice.sessionId, notice.uuid]);
+          if (!nativeLogIds.has(key)) {
+            const message = services.chat.sendSystemMessage({ threadId, text: notice.text });
+            services.chat.updateMessageState(message.messageId, { text: notice.text, context: {
+              cliUuid: notice.uuid, claudeNativeLog: { uuid: notice.uuid, sessionId: notice.sessionId, plugin: notice.plugin },
+            } });
+            nativeLogIds.add(key);
+          }
+        }
         continue;
       }
 
@@ -222,28 +315,66 @@ export async function consumeStream(
       if (line.type === 'assistant') {
         // Track the CLI's message UUID so revert can use --resume-session-at.
         if (line.uuid) {
-          services.chat.updateMessageState(currentMessageId as any, {
-            context: { cliUuid: line.uuid },
-          } as any);
+          currentMessageCliUuid = line.uuid;
           currentMessageHasCliUuid = true;
         }
         const blocks = line.message?.content || [];
+        const nativeThinking = blocks.filter((block: { type?: string; thinking?: unknown }) => block?.type === 'thinking' && typeof block.thinking === 'string');
+        if (nativeThinking.length) thinking.acceptNativeMessage({
+          uuid: nativeThinking.length === 1 ? line.uuid : undefined,
+          sessionId: line.session_id || nativeSessionId,
+          apiMessageId: line.message?.id,
+          text: nativeThinking.map((block: { thinking: string }) => block.thinking).join('\n\n'),
+          signature: nativeThinking.length === 1 ? nativeThinking[0].signature : undefined,
+          parentToolUseId: line.parent_tool_use_id,
+        });
         for (const block of blocks) {
           if (block?.type === 'tool_use') {
             if (block.name === 'ExitPlanMode') continue;
 
             // Finalize thinking and hand blocks ownership to tool-activity.
             finaliseThinking();
-            thinking.stopDirectWrites();
+            const thinkingActivityOwner = toolActivity;
+            thinking.stopDirectWrites(() => thinkingActivityOwner.flush());
             writer.flush();
             const summary = block.input ? shortenInput(block.input) : '';
+            const toolId = block.id || `tu-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
             toolActivity.append({
-              id: block.id || `tu-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              id: toolId,
               tool: block.name,
               summary,
               status: 'running',
               details: { input: block.input },
             });
+            {
+              const target = toolActivity;
+              activity.register(toolId, event => {
+                const nested = event as any;
+                if (nested.type === 'system' && nested.subtype === 'task_notification' && nested.handback_report) {
+                  const reports = target.entries.find(entry => entry.id === toolId)?.handbacks ?? [];
+                  target.update(toolId, { handbacks: [...reports, { taskId: nested.task_id, ...(nested.run_id ? { runId: nested.run_id } : {}), text: nested.handback_report.text, ...(typeof nested.handback_report.warning === 'string' ? { warning: nested.handback_report.warning } : {}) }] });
+                  target.flush();
+                  return;
+                }
+                if (!Array.isArray(nested.message?.content)) return;
+                const parts: string[] = [];
+                for (const block of nested.message.content) {
+                  if (block?.type === 'text' && typeof block.text === 'string') parts.push(block.text);
+                  else if (block?.type === 'tool_use' && typeof block.name === 'string') {
+                    parts.push(`${block.name}: ${block.input && typeof block.input === 'object' ? shortenInput(block.input) : ''}`);
+                  } else if (block?.type === 'tool_result') {
+                    parts.push(`${block.is_error ? 'Tool error' : 'Tool result'}: ${extractToolResultText(block.content)}`);
+                  }
+                }
+                const content = parts.join('\n').trim();
+                if (!content) return;
+                const previous = target.entries.find(entry => entry.id === toolId)?.details?.output ?? '';
+                const output = `${previous}${previous ? '\n\n' : ''}${content}`;
+                target.update(toolId, { outputSummary: 'Subagent activity', details: { output: output.length > 65536 ? `${output.slice(0, 65536)}\n[Subagent activity truncated]` : output } });
+                // Flush late output now so teardown cannot leave a pending writer timer.
+                target.flush();
+              });
+            }
             if (FILE_MUTATION_TOOLS.has(block.name) && block.input) {
               const p = (block.input as any).file_path || (block.input as any).path;
               if (typeof p === 'string' && !mutatedPathsSet.has(p)) {
@@ -257,15 +388,25 @@ export async function consumeStream(
               recent.push({ name: block.name, summary, at: Date.now() });
               return { recentTools: recent };
             });
-          } else if (block?.type === 'text' && typeof block.text === 'string' && block.text.length > 0) {
-            // Fallback: some CLI turns deliver assistant prose via a terminal
-            // `text` content block instead of streamed `text_delta` events
-            // (observed after --resume-session-at / --fork-session, and on
-            // tool-only-then-text turns). Only harvest if nothing streamed
-            // into this message's writer yet — otherwise we'd duplicate.
-            if (!writer.text) writer.push(block.text);
           }
         }
+        const nativeText = blocks.filter((block: { type?: string; text?: unknown }) => block?.type === 'text' && typeof block.text === 'string').map((block: { text: string }) => block.text).join('\n');
+        const projected = nativeMessages.accept(writer.text, {
+          uuid: line.uuid,
+          sessionId: line.session_id || nativeSessionId,
+          apiMessageId: line.message?.id,
+          streamApiMessageId,
+          text: nativeText,
+          parentToolUseId: line.parent_tool_use_id,
+        });
+        const pendingNative = writer.text.slice(projected.rows.at(-2)?.end ?? 0);
+        if (nativeText && !projected.rows.some(row=>row.uuid===line.uuid) && projected.text === writer.text && !pendingNative.endsWith(nativeText)) {
+          services.chat.updateMessageState(currentMessageId, {context:{claudeStreamCompletedRecord:{sessionId:line.session_id || nativeSessionId,uuid:line.uuid,apiMessageId:line.message?.id,text:nativeText}}});
+        }
+        if (projected.text.length > writer.text.length) writer.push(projected.text.slice(writer.text.length));
+        if (currentMessageCliUuid || projected.rows.length) services.chat.updateMessageState(currentMessageId as any, {
+          context: { ...(currentMessageCliUuid ? { cliUuid: currentMessageCliUuid } : {}), ...(projected.rows.length ? { claudeNativeMessages: projected.rows } : {}) },
+        } as any);
         continue;
       }
 
@@ -279,32 +420,20 @@ export async function consumeStream(
       }
 
       if (line.type === 'user') {
-        // Track the CLI's user message UUID (first user event per turn).
-        // Needed for --rewind-files on revert-with-file-restore. Claude
-        // emits user events both as an input echo (uuid absent) and as
-        // a post-persistence replay (uuid required); the replay is what
-        // we need. If neither ever arrives, rewind fails later with
-        // "no CLI UUID on the reverted user message" — the diagnostics
-        // below distinguish "uuid never emitted by CLI" from "we were
-        // given no userMessageId to write onto".
-        if (!userUuidTracked) {
+        // Tool results also carry user-event UUIDs. Only the native input replay
+        // identifies the host prompt's persisted user row for file rewind.
+        if (!userUuidTracked && line.isReplay === true && !line.parent_tool_use_id && (!ctx.nativeInputId || line.uuid === ctx.nativeInputId)) {
           if (!ctx.userMessageId) {
-            log.warn('user event without userMessageId — cliUuid tracking skipped', { threadId });
-            // Set the flag to suppress log spam on every subsequent user
-            // echo — NOT because we're abandoning recovery. ctx is
-            // closed-over and invariant for this consumer invocation, so
-            // if userMessageId is undefined here it will remain undefined
-            // for the rest of the stream; no future event could have
-            // recovered it. `backfillUserCliUuids` (jsonl-backfill.ts)
-            // handles retroactive recovery at rewind time.
+            log.warn('input replay without userMessageId — cliUuid tracking skipped', { threadId });
             userUuidTracked = true;
           } else if (line.uuid) {
+            const accepted = projectClaudeInputReplay(line.message?.content, ctx.text, ctx.submittedPrompt, { uuid: line.uuid, sessionId: line.session_id || nativeSessionId });
             services.chat.updateMessageState(ctx.userMessageId as any, {
-              context: { cliUuid: line.uuid },
+              ...(accepted.text !== undefined ? { text: accepted.text } : {}),
+              context: { cliUuid: line.uuid, ...(accepted.claudeNativeUserMessage ? { claudeNativeUserMessage: accepted.claudeNativeUserMessage } : {}), ...(accepted.claudeSubmittedText !== undefined ? { claudeSubmittedText: accepted.claudeSubmittedText } : {}) },
             } as any);
             userUuidTracked = true;
           }
-          // else: input echo without uuid — silently wait for the replay.
         }
         const content = (line.message as { content?: unknown })?.content;
         if (!Array.isArray(content)) continue;
@@ -342,6 +471,21 @@ export async function consumeStream(
       if (line.type === 'control_request') {
         const req = (line as any).request ?? {};
         const requestId = (line as any).request_id ?? '';
+
+        if (req.subtype === 'elicitation') {
+          if (presentMcpElicitation(services, threadId, handle, requestId, req)) {
+            ownedElicitations.add(requestId);
+            splitOnNextMessageStart = true;
+            services.emitter.sendToSystem({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', eventType: 'cc.stream.paused', payload: { threadId, toolName: 'MCP input' } });
+          }
+          continue;
+        }
+
+        if (req.subtype === 'request_user_dialog') {
+          handle.cancelUserDialog(requestId);
+          services.chat.sendBlockMessage({ threadId, text: 'Claude Code requested a dialog that this app cannot display. The request was cancelled.', blocks: [], forkable: false });
+          continue;
+        }
 
         // Reject malformed requests missing a tool name.
         if (!req.tool_name) {
@@ -410,7 +554,7 @@ export async function consumeStream(
               { type: 'prompt', props: { content: 'Approve this plan and start implementing?' } },
               { type: 'approval', props: {
                 options: [
-                  { label: 'Yes, clear context and auto-accept edits', variant: 'primary', flags: { clearContext: true, autoAccept: true } },
+                  { label: 'Yes, start a new thread and auto-accept edits', variant: 'primary', flags: { clearContext: true, autoAccept: true } },
                   { label: 'Yes, auto-accept edits', variant: 'secondary', flags: { autoAccept: true } },
                   { label: 'Deny', variant: 'neutral', flags: { approved: false } },
                 ],
@@ -492,8 +636,10 @@ export async function consumeStream(
 
       // ─── Control cancellation (surfaced by pump) ───────────────────
       if (line.type === 'control_cancel_request') {
-        log.debug('control_cancel_request received, clearing pending state');
-        persistClaudeState(services, threadId, { pendingControlRequest: undefined });
+        if (stillCurrent()) {
+          cancelPendingElicitation(services, threadId, line.request_id);
+          cancelPendingControlRequest(services, threadId, line.request_id);
+        }
         continue;
       }
 
@@ -524,14 +670,22 @@ export async function consumeStream(
         resultFromLine = {
           sessionId: (line as any).session_id ?? '',
           text: (line as any).result ?? '',
-          totalCostUsd: (line as any).total_cost_usd || sumModelUsageCost((line as any).modelUsage),
+          totalCostUsd: Math.max(0, ((line as any).total_cost_usd || sumModelUsageCost((line as any).modelUsage)) - (ctx.costBaseline ?? 0)),
           durationMs: (line as any).duration_ms ?? 0,
           subtype: (line as any).subtype,
+          isError: (line as any).is_error === true,
           errors: (line as any).errors,
         };
+        // Native background completion can trigger another assistant turn after this result.
+        if (!ctx.persistent && (line as any).subtype === 'success' && (line as any).is_error !== true && handle.hasPendingBackgroundTasks(line)) {
+          splitOnNextMessageStart = true;
+          continue;
+        }
         break;
       }
     }
+
+    if (!stillCurrent()) throw new Error('Claude turn was superseded before finalization');
 
     // ─── Stream drained — check for silent failures ─────────────────────
     // If no events arrived, the CLI likely failed immediately (wrong binary,
@@ -558,12 +712,13 @@ export async function consumeStream(
     // subtypes) when it fails to load/resume a session. Without this guard,
     // the broken sessionId gets re-persisted at line ~540, locking the thread
     // to a permanently un-resumable session.
-    const isErrorResult = result.subtype != null && result.subtype !== 'success';
+    const isErrorResult = result.isError === true || (result.subtype != null && result.subtype !== 'success');
 
-    const hadToolErrors = toolActivity.entries.some(e => e.status === 'error');
+    collectNestedAccounting();
+    const hadToolErrors = nestedToolErrors || priorSegmentsHadToolErrors || toolActivity.entries.some(e => e.status === 'error');
 
     if (isErrorResult) {
-      const errorText = Array.isArray(result.errors) ? result.errors.join('; ') : `CLI error: ${result.subtype}`;
+      const errorText = result.errors?.length ? result.errors.join('; ') : result.text || `CLI error: ${result.subtype}`;
       log.error('CLI returned error result', {
         subtype: result.subtype,
         errors: result.errors,
@@ -575,7 +730,7 @@ export async function consumeStream(
         forkCliUuid: ctx.forkCliUuid ?? null,
       });
 
-      finalizeSessionError(services, threadId, writer, errorText, undefined, { isRevert: !!ctx.revertCliUuid });
+      finalizeSessionError(services, threadId, writer, errorText, undefined, { isHistoryChange: !!ctx.isFork });
 
       finaliseThinking();
       toolActivity.finalise('error');
@@ -612,8 +767,10 @@ export async function consumeStream(
     log.debug('stream consumer completed');
 
     // Close stdin so the CLI subprocess exits cleanly (prevents child leak).
-    try { await handle.close(); } catch (closeErr: any) {
-      log.debug('handle.close failed', { message: closeErr?.message });
+    if (!ctx.persistent) {
+      try { await handle.close(); } catch (closeErr: any) {
+        log.debug('handle.close failed', { message: closeErr?.message });
+      }
     }
 
     // Superseded by killTurn() + a new turn (e.g. user sent a new message
@@ -642,7 +799,7 @@ export async function consumeStream(
         sessionId: result.sessionId,
         costUsd: result.totalCostUsd,
         durationMs: result.durationMs,
-        toolCallCount: toolActivity.entries.length,
+        toolCallCount: priorSegmentToolCount + toolActivity.entries.length + nestedToolCount,
         mutatedFileCount: mutatedPaths.length,
         mutatedPaths,
         hadErrors: !!hadToolErrors || !!isErrorResult,
@@ -650,12 +807,13 @@ export async function consumeStream(
       },
     });
 
-    // Fire-and-forget: query /context in the background AFTER all turn
+    // Fire-and-forget: read native context in the background AFTER all turn
     // cleanup (clearHandle, setRunning, queued replay, cc.stream.completed)
     // so a concurrent new turn doesn't race with this instance for the
     // same session JSONL.
     if (!isErrorResult && result.sessionId) {
-      queryContextInBackground(services, threadId, result.sessionId, ctx.sessionCwd, log);
+      void refreshThreadContextUsage(services, threadId, { sessionId: result.sessionId, cwd: ctx.sessionCwd })
+        .catch(err => log.debug('native context summary failed (non-critical)', { message: err?.message }));
     }
 
   } catch (err: any) {
@@ -680,13 +838,16 @@ export async function consumeStream(
       return;
     }
 
+    collectNestedAccounting();
+
     // If pause-turn already ran (isRunning=false), the kill was intentional.
     // Finalize writers cleanly and skip cleanup — pause-turn handled it.
     const state = getClaudeState(services, threadId);
-    if (!state?.isRunning) {
+    const failedMcpInput = state?.pendingElicitation?.ownerPid === handle.pid && !!state?.pendingElicitation && ownedElicitations.has(state.pendingElicitation.requestId);
+    if (!state?.isRunning && !failedMcpInput) {
       log.debug('stream consumer exiting — turn was paused');
       finaliseThinking();
-      const segmentHadErrors = toolActivity.entries.some(e => e.status === 'error');
+      const segmentHadErrors = nestedToolErrors || toolActivity.entries.some(e => e.status === 'error');
       toolActivity.finalise(segmentHadErrors ? 'error' : 'done');
       if (writer.text) {
         writer.finalize(writer.text);
@@ -711,7 +872,7 @@ export async function consumeStream(
           sessionId: resultFromLine?.sessionId || state?.sessionId || '',
           costUsd: resultFromLine?.totalCostUsd ?? 0,
           durationMs: resultFromLine?.durationMs ?? 0,
-          toolCallCount: toolActivity.entries.length,
+          toolCallCount: priorSegmentToolCount + toolActivity.entries.length + nestedToolCount,
           mutatedFileCount: mutatedPaths.length,
           mutatedPaths,
           hadErrors: !!segmentHadErrors,
@@ -728,7 +889,7 @@ export async function consumeStream(
     toolActivity.finalise('error');
 
     // Session-not-found mid-stream: clear stale session and mark broken.
-    finalizeSessionError(services, threadId, writer, message, writer.text, { isRevert: !!ctx.revertCliUuid });
+    finalizeSessionError(services, threadId, writer, message, writer.text, { isHistoryChange: !!ctx.isFork });
     services.chat.updateMessageState(currentMessageId as any, { forkable: currentMessageHasCliUuid } as any);
 
     // Kill the CLI subprocess on error (it may be in a bad state).
@@ -746,6 +907,9 @@ export async function consumeStream(
       eventType: 'cc.stream.completed',
       payload: { threadId, hadErrors: true, error: message },
     });
+  } finally {
+    const pending = getClaudeState(services, threadId)?.pendingElicitation;
+    if (pending && pending.ownerPid === handle.pid && ownedElicitations.has(pending.requestId)) cancelPendingElicitation(services, threadId, pending.requestId);
   }
 }
 
@@ -762,24 +926,24 @@ export function finalizeSessionError(
   writer: ReturnType<typeof createStreamWriter>,
   errorText: string,
   prefix?: string,
-  context?: { isRevert?: boolean },
+  context?: { isHistoryChange?: boolean },
 ): void {
   const staleId = extractStaleSessionId(errorText);
-  // Distinguish "message UUID not found" (e.g. reverting past a compaction
-  // point) from "session file deleted" — the user-facing message should be
-  // specific so they understand what happened.
-  const isUuidNotFound = /No message found with message\.uuid/i.test(errorText);
   let warning: string;
-  if (staleId && context?.isRevert && isUuidNotFound) {
-    warning = '⚠️ Could not revert — the revert point no longer exists in the current session (likely due to compaction). Your conversation history is preserved. Your next message will start a fresh session.';
-  } else if (staleId && context?.isRevert) {
-    warning = '⚠️ Could not revert — the session file was deleted or moved. Your conversation history is preserved but the CLI session cannot be resumed. Your next message will start a fresh session.';
+  if (context?.isHistoryChange) {
+    warning = `Could not apply the requested history change: ${errorText} Reset or resume a session before continuing.`;
   } else if (staleId) {
     warning = '⚠️ Session expired — the conversation file was deleted or is invalid. Your next message will start a fresh session in the same project directory. Previous messages are still visible for reference.';
   } else {
     warning = `⚠️ ${errorText}`;
   }
+
   writer.finalize(prefix ? `${prefix}\n\n${warning}`.trim() : warning);
+  if (context?.isHistoryChange) {
+    persistClaudeState(services, threadId, {historyError: errorText});
+    updateChatState(services, threadId, 'error');
+    return;
+  }
   markSessionBroken(services, threadId, staleId ? `Session ${staleId} not found` : errorText);
 }
 
@@ -792,7 +956,7 @@ export function finalizeSessionError(
 export async function replayQueuedMessage(
   services: Services,
   threadId: EntityId,
-  queued: { text: string; mode?: string; phase?: string; messageId?: string; references?: any },
+  queued: { channels?: string[]; text: string; mode?: string; phase?: string; messageId?: string; references?: any },
   log: any,
 ): Promise<void> {
   log.debug('draining queued message', { threadId, textLen: queued.text?.length });
@@ -806,6 +970,7 @@ export async function replayQueuedMessage(
       text: queued.text,
       mode: queued.mode,
       phase: queued.phase,
+      channels: queued.channels,
       messageId: queued.messageId,
       references: queued.references,
     });
@@ -858,71 +1023,4 @@ function extractToolResultText(content: unknown): string {
 function stripToolUseErrorEnvelope(raw: string): string {
   const m = raw.match(/^\s*<tool_use_error>([\s\S]*?)<\/tool_use_error>\s*$/);
   return m ? m[1].trim() : raw.trim();
-}
-
-// ─── Background /context query ──────────────────────────────────────────────
-
-const CONTEXT_THRESHOLDS = [25, 50, 75, 90];
-
-/**
- * Query /context in a separate non-persisted CLI instance and update the
- * thread context directly when done. Fire-and-forget — never blocks
- * the turn completion flow.
- */
-function queryContextInBackground(
-  services: Services,
-  threadId: EntityId,
-  sessionId: string,
-  sessionCwd: string | undefined,
-  log: any,
-): void {
-  (async () => {
-    const ctxHandle = await services.cli.claudeCode.query({
-      ...(sessionCwd && { cwd: sessionCwd }),
-      prompt: '/context',
-      resume: sessionId,
-      maxTurns: 1,
-      permissionMode: 'plan',
-      noSessionPersistence: true,
-    });
-    const ctxResult = await ctxHandle.result;
-    const contextUsage = parseContextMarkdown(ctxResult.text || '');
-    if (!contextUsage) return;
-
-    // Check which thresholds are newly crossed.
-    const prev = getClaudeState(services, threadId as string);
-    const alerted: number[] = prev?.alertedThresholds ?? [];
-    const pct = contextUsage.percentage;
-    const newAlerts = CONTEXT_THRESHOLDS.filter(t => pct >= t && !alerted.includes(t));
-
-    updateClaudeState(services, threadId, (prevContent) => ({
-      contextUsage,
-      ...(newAlerts.length > 0
-        ? { alertedThresholds: [...(prevContent.alertedThresholds ?? []), ...newAlerts] }
-        : {}),
-    }));
-
-    if (newAlerts.length > 0) {
-      const highest = Math.max(...newAlerts);
-      const variant = highest >= 90 ? 'error' : highest >= 75 ? 'warning' : 'info';
-      const label = highest >= 90 ? 'Context Critical' : 'Context Usage';
-      let message = `Context window is ${contextUsage.percentage}% full (${fmtTokens(contextUsage.totalTokens)} / ${fmtTokens(contextUsage.maxTokens)} tokens).`;
-      if (highest >= 90) message += ' Consider starting a new session soon.';
-
-      services.chat.sendBlockMessage({
-        threadId: threadId as any,
-        text: message,
-        blocks: [{ type: 'note', props: { content: message, variant, label } }],
-        forkable: false,
-      });
-    }
-  })().catch(err => {
-    log.debug('/context background query failed (non-critical)', { message: err?.message });
-  });
-}
-
-function fmtTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return String(n);
 }

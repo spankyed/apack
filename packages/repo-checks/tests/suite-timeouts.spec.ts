@@ -30,6 +30,10 @@ import { repoFiles } from './_support/repo-files.ts';
  * fails on an entry whose override has gone, so the list shrinks when the reason does.
  */
 const TIMEOUT_EXCEPTIONS: Record<string, string> = {
+  'packages/default-setup/tests/features/code/be/services/claude-code/native-app-owner.spec.ts > compiled app owns native approval, idle scheduling and the next host input':
+    'Explicit opt-in native probe: waits for a one-shot cron scheduled 95 seconds ahead, then verifies autonomous completion and a second host input. The private driver bounds the owned process; ordinary suites skip this case.',
+  'packages/default-setup/tests/content/actions/claude-code/reset-chat-native.spec.ts > persists costs and session identity across native clear through compiled Chat':
+    'Explicit opt-in native probe: starts the pinned process and verifies three compiled app turns across session reset. Its 20-second abort bounds the native process; ordinary suites skip this case.',
   'packages/apack-cli/tests/build/watch-package-edit.native.spec.ts > publishes one build when a refresh rewrites what the pack builds against':
     'One bounded cold watcher build (120s), one watched rebuild and the wait for a second build that must not start are sequential.',
   'packages/apack-cli/tests/commands/default-pack-archive.integration.spec.ts > beforeAll':

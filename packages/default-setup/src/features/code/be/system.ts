@@ -206,6 +206,15 @@ export const systemMachine = setup({
      * Resolves a CLI and records where it was found, in this feature's own settings. It lives here because
      * `resolve-cli` and the stored paths are this feature's; the Settings view asks for it and is told the result.
      */
+    prepareClaudeProfileSetup: ({ reply }) => {
+      // Setup commands are only returned to the window that explicitly requested them.
+      if (!reply) return
+      void services.cli.claudeCode.prepareOwnedProfileSetup().then(
+        result => reply({type: 'CLAUDE_PROFILE_SETUP_PREPARED', result}),
+        error => reply({type: 'CLAUDE_PROFILE_SETUP_PREPARED', result: {error: error instanceof Error ? error.message : 'Claude profile setup failed'}}),
+      )
+    },
+
     testCliProvider: ({ event, reply }) => {
       const { provider } = event as { type: 'TEST_CLI_PROVIDER'; provider: string };
       // The Settings view that asked; with nobody to answer, the Settings view in every window
@@ -310,6 +319,7 @@ export const systemMachine = setup({
         },
         // Handle settings updates
         TEST_CLI_PROVIDER: { actions: 'testCliProvider' },
+        PREPARE_CLAUDE_PROFILE_SETUP: {actions: 'prepareClaudeProfileSetup'},
         FEATURE_SETTINGS_UPDATED: {
           actions: [
             'updateSettings',
