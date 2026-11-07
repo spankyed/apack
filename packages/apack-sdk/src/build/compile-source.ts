@@ -11,9 +11,6 @@ const DISALLOWED_GLOBALS = new Set([
 
 const GLOBAL_LABELS: Record<string, string> = { require: 'require()' };
 
-
-
-
 // --- esbuild Plugin ---
 
 /**
@@ -39,7 +36,6 @@ function createValidatorPlugin(): esbuild.Plugin {
 }
 
 // --- Bundling ---
-
 
 /** Render an esbuild message on one line, preserving the offending location. */
 function formatMessage(message: esbuild.Message): string {
