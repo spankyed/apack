@@ -1,5 +1,5 @@
 import { createApp, h, nextTick, ref } from 'vue'
-import { nativeTranscriptLatestTop, useNativeTranscriptViewport } from '#features/threads/fe/chat/native-transcript-viewport.ts'
+import { isAtNativeTranscriptLatest, nativeTranscriptLatestTop, useNativeTranscriptViewport } from '#features/threads/fe/chat/native-transcript-viewport.ts'
 
 it('keeps short replies readable and includes visible pending controls in the scroll target', () => {
   const viewport = document.createElement('div'), row = document.createElement('article')
@@ -9,6 +9,8 @@ it('keeps short replies readable and includes visible pending controls in the sc
   let top = 450, height = 30
   row.getBoundingClientRect = () => ({ top: 10 + top - viewport.scrollTop, height }) as DOMRect
   expect(nativeTranscriptLatestTop(viewport)).toBe(450)
+  viewport.scrollTop = 420; expect(isAtNativeTranscriptLatest(viewport)).toBe(false)
+  viewport.scrollTop = 450; expect(isAtNativeTranscriptLatest(viewport)).toBe(true)
   top = 520; expect(nativeTranscriptLatestTop(viewport)).toBe(500)
   top = 300; height = 250; expect(nativeTranscriptLatestTop(viewport)).toBe(450)
   const body = document.createElement('div'); body.dataset.chatMessageContent = ''; row.append(body)
