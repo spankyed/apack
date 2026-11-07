@@ -14,13 +14,18 @@ Current standalone Linux app journeys are exported from `src/integration/`: `dri
 (`apack-combined-everyday-drive.mjs`), `driveChildNotebookDelete` (`apack-child-notebook-drive.mjs`),
 `drivePermissionModes` (`apack-permission-modes-drive.mjs`) and `driveMcpPdf`
 (`apack-mcp-pdf-drive.mjs`), plus `driveHeldMainPolicyZero`
-(`apack-held-main-policy-drive.mjs`). They use the common owned-profile
+(`apack-held-main-policy-drive.mjs`) and `drivePromptSourceReview`
+(`apack-prompt-source-drive.mjs`). They use the common owned-profile
 Electron driver, preserve original CLI decisions and never build or choose a user profile implicitly.
 The policy journey requires the exported `held-main-policy-root.py` controller running as root
 inside the inspected offline container before the ordinary-user app driver starts. It owns only
 the ephemeral Linux managed file, accepts two fixed transitions, and records exact restoration.
 The no-prefix late-zero scope includes original stale-output isolation, restored composing,
 same-session follow-up/cost and UI Stop; MDM, other owners and full parity remain separate.
+The prompt journey installs its local release-review contribution through original CLI plugin commands.
+It verifies real clipboard soft breaks, linked references, literal append/insert/replacement, exact
+app/native submission and same-session recovery; it preserves clipboard/profile bytes and requires
+the existing owned setup and Electron clipboard helper. Agent/media/other-owner scopes are separate.
 The PDF journey exercises an ordinary MCP resource, native saved-file conversion and an exact
 original Read/model document; inline-provider admission and an inline PDF viewer are separate.
 They require the prepared owned setup, verified immutable source/pack/app inputs, a read-only pinned

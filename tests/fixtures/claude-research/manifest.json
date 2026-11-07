@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "4d3748d9baecea57268f0d4a0bd6d8542a28f757",
+  "researchCommit": "f5a9f90dc482230c72ce6a5bb78382c28b63a0ae",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -75,7 +75,7 @@
     "src/integration/apack-artifact-wheel-drive.mjs": "0df066d57d1eba35f6d4dcd60439a67ab02709a7cc376ea2dfbbfcfc37ec4ca9",
     "src/integration/apack-background.mjs": "6c1ea4fae462410b0dbc704f4b961b4006684d03bca5598d8430dfa93648583d",
     "src/integration/apack-child-caption-drive.mjs": "5875f7fffd058b8c53fb7fa431b6f552286a56e48a1fb895f07892fcb66df1df",
-    "src/integration/apack-child-composer-drive.mjs": "117337faa39fba2c8f9e0743ec92384737ad589f45389c1fa89e7fe9045d78c0",
+    "src/integration/apack-child-composer-drive.mjs": "ff1de9aaaad65d3b9382d9b5810716602777f0ae27b3615a6cc4410b1c52baef",
     "src/integration/apack-child-controls-drive.mjs": "7f4f54cde766653945e85d71cced87091ee8e361f2a53278cd537f50af60afa5",
     "src/integration/apack-child-files-drive.mjs": "9e102a47374536573e66bb5bacfb362cd6602a4021809fa0c89df138f01e4a6c",
     "src/integration/apack-child-generic-drive.mjs": "78863b1f84806f06ddfbe967d3dd62c2c26317706196a37ae99bc77a6bfc82ee",
@@ -111,6 +111,7 @@
     "src/integration/apack-plan.mjs": "7cdc46649c97aff9e8be7cf36e49decb086a2e1967cc0b4fbdb392ac66fc1a84",
     "src/integration/apack-process-status.mjs": "735d68553e3e871d8a630ea289023cbf46b22a48828a90f20a7ec05d31ab4592",
     "src/integration/apack-profile-setup-drive.mjs": "53b3f8b45998095d8c42bf00ca85267590b376a367abccec9ba58a114de03053",
+    "src/integration/apack-prompt-source-drive.mjs": "7b55f706058947bc6c16599089a68ddd81bc3c1ad6539aae09d39fff2256c149",
     "src/integration/apack-rename.mjs": "2d201cde0359a2b21c04e541fe072b73057b36d3f38a0f18ea0feb7ff3dda7b3",
     "src/integration/apack-resume-target.mjs": "435cab0fade6ffed5eb34c22c065c463d23bf896254947049fc122e1eb30057f",
     "src/integration/apack-resume.mjs": "fa7316c7c71bdd1cb584ba399dab8aed73ef4b666414423091cbf213d6f9e004",
@@ -182,12 +183,14 @@
     "src/integration/native-product-child-question.mjs": "9437824513d4dc2491ca44fcaf308fe378693461520f7217a1ce6d0f9f028038",
     "src/integration/native-refusal-owner.mjs": "880b900b5ee1b658a9c7e5150fa5ac696ceade8de8075583bd0e87e58a3b8d4e",
     "src/integration/observe-native-owner-poll.cjs": "622533c8f2dfb778ea9a547748d458b01379e16f6a858374cb8b99f8c788eac9",
+    "src/integration/owned-app-process-snapshot.mjs": "fcfabb0f925344c7e9b2718cbf2484010eb61badd6e344b9d599fbf6f295f5f1",
     "src/integration/owned-background-broker-audit.mjs": "58c9ee7e05bf427ed7573ece6db6fbb4f78cf2019c14aaff7357b45b814fa438",
     "src/integration/owned-prompt-reply-hold.mjs": "8e1b4c3ea78568b428b87cec31fe6583102292471950f739ac26f4512154c158",
     "src/integration/permission-enforcement-app-driver.mjs": "02ebba021cf32856d0e4088afd7ffe6832862228eb378f34d9309c8f1333bebc",
     "src/integration/permission-enforcement-app.mjs": "2e62678f2edf1500c4309cd99b2325ca46d65f47e5fb9f932147c8247976fe2f",
     "src/integration/probe-background-process-identity.py": "ae19ec0ceb6c806bd05b0253f455f3ae41f1695f3b71cf34d9518b23d9f9a9bd",
-    "src/integration/read-permission-preview.mjs": "10ae82b34b869bb2beb3c5f76122d5b54ba44589d3081f9a5a566364475ae823",
+    "src/integration/prompt-source-profile.mjs": "55f5e2e6a265ef423b6848525aa79a9ca33c4cae710cdd1b451ef2dd14374a35",
+    "src/integration/read-permission-preview.mjs": "84cc434728b2951981e74e5e9db6fd723a5cad04fafbb31741aea6afbf880fa5",
     "src/integration/refusal-result-driver.mjs": "59e875c7267a0901f43879fa7754d609a86c08641259ffc0c1aefe803daf397b",
     "src/integration/refusal-result.mjs": "3b8960ce5d22b689a97b5e7cbc4501c7201d6520368e58d5fa5b08e25865864e",
     "src/integration/retry-driver.mjs": "01970f6269c7dda530aad291413d76a4dceb42e3ec58e72c496c48edf3173a71",
@@ -340,6 +343,7 @@
     "src/protocol/native-prompt-broker-proof.mjs": "759719dd37124dae686913e1ea5783c3d89d8978a7226b5d1c2918dc37683195",
     "src/protocol/native-prompt-font-reset.mjs": "cb01316069589384c0d6fa77619c7a2b038a925fd15c06764f63db0483632aaa",
     "src/protocol/native-prompt-line-reset.mjs": "57ba141a7bd3bf9e36dbdd04f121d679d725aa3cde90950107f370a44d8fa828",
+    "src/protocol/native-prompt-source-review-fixture.mjs": "3fc99c986644b2b0486a221c279eab04100494f099dae50aec0c6b9ca49cc547",
     "src/protocol/native-question-gates.mjs": "a2aee2181ee04f92cf108c2201af0b52a8e02e44f7175f540e31fae5ab7e4ef2",
     "src/protocol/native-question-owner-failure.mjs": "1b6523c46ffb9a2bb0169aed341fa2aefb7288bcd6437348e7bba3bae25b6053",
     "src/protocol/native-question-tool-notice-fixture.mjs": "6bb111d211e0eaac55262af7e99bcbf3585ae3826ddfdf547f421dfd2bdd6ae0",
@@ -446,5 +450,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "69ea050072eb28b77f92d053af5c50ee15392633ecadb73480a84ebaef06ac1d"
+  "archiveSha256": "d119388f40e7fa5acb6317b764bbfa11dfdb1f23b4b48055b4f028cc63761ee6"
 }
