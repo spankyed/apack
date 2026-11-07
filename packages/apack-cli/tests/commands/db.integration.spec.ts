@@ -522,6 +522,26 @@ describe('apack db exec', () => {
       expect(await row()).toBe('object');
     });
 
+    it('checks a settings write against the packs installed now, not those it first read', async () => {
+      const dir = await appDataDir();
+      const invalid = "upsert(EARS.Entity.Settings, { id: 'Settings-app', data: { features: { 'default-setup/threads': { chat: { defaultMode: 5 } } } } })";
+      const packDir = path.join(_appDirOf(dir), 'packs', 'default-setup');
+      const err: string[] = [];
+      const refused = () => err.filter((line) => line.startsWith('Error:'));
+      async function* lines() {
+        yield `${invalid}\n`;
+        // A stream reads ahead, so the first line's answer is what says it ran
+        await vi.waitFor(() => expect(refused()).toHaveLength(1), { timeout: 30_000 });
+        // Uninstalled while the session is open: the threads feature's settings are no longer declared
+        fs.rmSync(packDir, { recursive: true });
+        yield `${invalid}\n`;
+        yield '.exit\n';
+      }
+      await dbRepl(['--write', '--data-dir', dir], { out: () => {}, err: (line) => err.push(line) }, Readable.from(lines()));
+      expect(refused(), 'the first refused, as must be a string; the second taken').toHaveLength(1);
+      expect(refused()[0]).toMatch(/must be string/);
+    });
+
     it('gives a script rows and not the admin, whether or not an app is running', async () => {
       const closed = await appDataDir();
       const open = await appDataDir();

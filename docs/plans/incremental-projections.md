@@ -1,6 +1,6 @@
 # Incremental projections
 
-Status: steps 1 and 2 built, 2026-11-06 (elmdb #83 and the apack PR above it); steps 3 to 5 planned. Builds on `database-owns-change.md`, whose seven steps are open as PRs (apack #349 to #358,
+Status: steps 1 to 4 built, 2026-11-06 (elmdb #83 and #84, apack #359 and the PR above it); step 5 planned. Builds on `database-owns-change.md`, whose seven steps are open as PRs (apack #349 to #358,
 elmdb #80 to #82). Each step below is a PR of its own, stacked on those, elmdb first where a step touches both.
 
 ## Why
@@ -88,10 +88,12 @@ Once step 2 has landed nothing reads them. `LoggedCommit.entities` and `LOG_ENTI
 types, kinds and whether it changed everything: a few dozen bytes. That also answers the review's note that the bound
 was on the number of ids rather than their size.
 
-## Step 4: the tool's settings check caches its catalog (host)
+## Step 4: the tool's settings check caches its catalog (host) — built
 
-`refuseInvalidSettings` reads and compiles the installed packs' catalog on every Settings write. It keeps the compiled
-catalog keyed by the pack builds' integrity hashes and the disabled list, and compiles again only when they change.
+Reading and compiling the installed packs' catalog costs about 72 ms a Settings write in a tool: 63 ms reading and
+verifying the pack builds, 9 ms compiling (median of 20, 2026-11-06, load 8). `refuseInvalidSettings` keeps the
+compiled catalog keyed by what it is read from (the packs directory's entries, each pack's directory, receipt and
+snapshot, and the record of which are disabled), a few stats, and reads it again only when that key moves.
 
 ## Step 5: the invariant, generated (ears)
 
