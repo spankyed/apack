@@ -807,7 +807,7 @@ const nativeChatMinHeight = computed(() => {
   if (nativeWorkspaceReading.value) {
     // Keep the composer and owner controls visible when the workspace takes priority.
     return focusedAgent.value
-      ? 'min(26rem, max(20.5rem, calc(100vh - 18rem)))'
+      ? 'min(32rem, max(25rem, calc(100vh - 14rem)))'
       : 'min(25rem, max(20rem, calc(100vh - 18rem)))'
   }
   return nativeToolsExpanded.value || focusedAgent.value
@@ -1175,7 +1175,7 @@ useNativeTranscriptViewport({
 .native-chat-shell:has([data-native-notice="refusal_fallback_prompt"]) { --composer-notice-history-reserve: 10rem; }
 /* Keep ordinary Agent workspace reading useful before a manual split adjustment. */
 .native-chat-shell[data-native-workspace-owner="agent"]:not(:has([data-native-notice], [data-native-command-panel], [data-testid="native-mcp-form"], [data-testid="native-mcp-url"])) {
-  min-height: min(26rem, max(20.5rem, calc(100vh - 18rem)));
+  min-height: min(32rem, max(25rem, calc(100vh - 14rem)));
   --agent-composer-history-reserve: 2rem;
 }
 /* Keep pending native decisions beside useful conversation space in short windows. */
@@ -1193,7 +1193,7 @@ useNativeTranscriptViewport({
     min-height: min(28rem, max(24rem, calc(100vh - 12rem)));
   }
   .native-chat-shell[data-native-workspace-owner="agent"] {
-    min-height: min(26rem, max(20.5rem, calc(100vh - 18rem)));
+    min-height: min(32rem, max(25rem, calc(100vh - 14rem)));
   }
   .chat-composer-area--background { min-height: min(12.5rem, 55%); }
   .native-chat-shell:has([data-native-notice]) { min-height: calc(100vh - 3rem); }
