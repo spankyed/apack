@@ -17,6 +17,16 @@ interface Terminal {
   info: TerminalInfo
   /** The host's session. The process is the broker's, so this holds no pty and no handle to one */
   session: TerminalSession
+  /**
+   * The connection that opened it, which is the one allowed to size it (**M2**).
+   *
+   * A pty has one `(cols, rows)`, so two windows fitting the same session to their own widths is not a race
+   * to resolve but a contradiction — last writer wins, and the other window's screen is wrong until
+   * something makes it fit again. One window owns the size; the rest draw at it. Absent when the terminal
+   * was restored or opened by something that is not a window, in which case the first window to fit it
+   * takes the size and every later one is told no.
+   */
+  sizedBy: string | undefined
 }
 
 /**
@@ -51,7 +61,7 @@ class TerminalService {
     return process.platform === 'win32' ? 'powershell.exe' : (process.env.SHELL || '/bin/bash')
   }
 
-  async create(options: TerminalCreate, handlers: TerminalHandlers): Promise<TerminalInfo> {
+  async create(options: TerminalCreate, handlers: TerminalHandlers, sizedBy?: string): Promise<TerminalInfo> {
     // Check terminal limit (0 = no limit)
     const codeSettings = featureSettings.forFeature('code').get()
     const maxTerminals = codeSettings?.maxTerminals ?? 0
@@ -78,7 +88,7 @@ class TerminalService {
     })
 
     const info: TerminalInfo = { id, title, pid: session.pid, shell, cwd, active: true, cols, rows }
-    this.terminals.set(id, { info, session })
+    this.terminals.set(id, { info, session, sizedBy })
     repository.terminalCommands.create({ id, title, shell, cwd, cols, rows })
 
     const integration = featureSettings.forFeature('code').get()
@@ -105,9 +115,20 @@ class TerminalService {
     return true
   }
 
-  async resize(id: string, cols: number, rows: number): Promise<boolean> {
+  /**
+   * Sizes a terminal, if `asked` is the connection allowed to.
+   *
+   * **A second window observes; it does not resize** (M2). It still fits its own host and still sends what
+   * it fitted — a view cannot know it is the second one — so the refusal is here, where the session is, and
+   * it is silent: nothing failed, and telling the user their other window is wider is not a diagnostic they
+   * can act on. A session with no owner takes the first fit it is given and answers to that connection from
+   * then on, which is how a restored terminal acquires one.
+   */
+  async resize(id: string, cols: number, rows: number, asked?: string): Promise<boolean> {
     const terminal = this.terminals.get(id)
     if (!terminal) return false
+    if (terminal.sizedBy === undefined) terminal.sizedBy = asked
+    else if (asked !== undefined && asked !== terminal.sizedBy) return true
 
     await terminal.session.resize(cols, rows)
     terminal.info.cols = cols
@@ -290,7 +311,8 @@ class TerminalService {
           cols: row.cols,
           rows: row.rows,
         }
-        this.terminals.set(row.id, { info, session })
+        // Restored by nobody, so the first window to fit it takes the size (M2)
+        this.terminals.set(row.id, { info, session, sizedBy: undefined })
         if (shellIntegrationEnabled) await this.injectShellIntegration(session, row.shell)
 
         logger.info(`Restored terminal ${row.title} (${row.id}) as a new shell (pid ${session.pid}); the previous process and its output are gone`)

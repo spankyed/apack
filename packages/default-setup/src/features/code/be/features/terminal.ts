@@ -146,7 +146,7 @@ export const terminalSystem = setup({
       answer(reply, { type: 'terminal.TERMINALS_LISTED', data: terminalService.list() })
     },
 
-    createTerminal: ({ event, context, reply }) => {
+    createTerminal: ({ event, context, reply, client }) => {
       const ev = event as {
         type: 'terminal.CREATE_TERMINAL';
         title?: string;
@@ -165,7 +165,7 @@ export const terminalSystem = setup({
         shell: ev.shell,
         cols: ev.cols || 80,
         rows: ev.rows || 24,
-      }, terminalHandlers).then(terminalInfo => {
+      }, terminalHandlers, client).then(terminalInfo => {
         // The two halves of what used to be one event: every window's list grows, and only the window that
         // asked opens it. A terminal's id is minted here, so nothing the asker sent could have identified it
         emitToFrontend({ type: 'terminal.CREATED', data: { terminalId: terminalInfo.id } })
@@ -207,14 +207,18 @@ export const terminalSystem = setup({
       }
     },
 
-    resizeTerminal: ({ event, reply }) => {
+    resizeTerminal: ({ event, reply, client }) => {
       const ev = event as { type: 'terminal.RESIZE_TERMINAL'; terminalId: string; cols: number; rows: number }
       try {
         const terminal = terminalService.get(ev.terminalId)
         const terminalName = terminal ? terminal.info.title : 'Terminal'
         // **Awaited, not checked for truth.** The service answers a promise now, and `if (!promise)` is
         // never true — the refusal below was dead the moment the broker owned the process.
-        void terminalService.resize(ev.terminalId, ev.cols, ev.rows)
+        // **The window that opened it owns its size** (M2): a second window's fit is ignored, because a pty
+        // has one `(cols, rows)` and two windows fitting it to their own widths is a contradiction rather
+        // than a race. `client` names the connection the message arrived on, which the API stamps and
+        // nobody can forge.
+        void terminalService.resize(ev.terminalId, ev.cols, ev.rows, client)
           .then(found => {
             if (!found) failTerminal(reply, 'resize', `${terminalName} not found`, ev.terminalId)
           })
