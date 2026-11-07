@@ -322,3 +322,8 @@ header polish and other menu/media/owner combinations remain open. Screenshots r
 
 The native IDE fixture/journey verifies original discovery, authentication and selection
 permission context. The native inline IDE chooser/reconnect, selected/opened-file context and dismissal, and enable/disable preference choices have scoped actual-app acceptance at runtime 5a6b349651 / ide-inline-app5/6/8. Cancellation guidance has separate scoped app14 acceptance at runtime85f4b89740; the original Escape/Enter comparison uses normal desktop detachment. Fullscreen leading-pill context has scoped app15 acceptance via native tui:fullscreen and original alternate-screen admission; the separate compact-footer branch is native-disabled on both pinned platforms. Other IDE variants and combined F1–F5 remain open.
+
+Agent formatting and Stop/Back recovery have scoped combined-formatting-app6 acceptance at
+runtime a61d3ee75a: exact draft/selection, caption/hint, six formatting controls, Agent return,
+Read approval, question, Pause and same-session recovery. All12 captures opened and seven
+corrupted proofs refused. Original F1–F5/final gate and other named gaps remain open.
