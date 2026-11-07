@@ -78,7 +78,7 @@ export const manifestSchema = z.object({
   clock: z.literal('Local monotonic durations; cross-process epoch alignment is approximate'),
 });
 export const trialSchema = z.object({
-  scenario: z.enum(['thread-open', 'streaming', 'search', 'populated-startup', 'terminal-open', 'terminal-resize']), index: count, warmup: z.boolean(),
+  scenario: z.enum(['thread-open', 'streaming', 'search', 'populated-startup', 'terminal-open', 'terminal-resize', 'terminal-hidden']), index: count, warmup: z.boolean(),
   outcome: z.enum(['passed', 'failed', 'incomplete', 'cancelled']), durationMs: z.number().finite().nonnegative().optional(),
   correct: z.boolean(), completion: z.enum(['view-ready', 'missing']),
   work: z.record(z.string().max(64), count),

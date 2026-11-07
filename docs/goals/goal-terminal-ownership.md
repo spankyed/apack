@@ -83,7 +83,7 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 
 - **Checkout:** `master` at `25d8a8120b`, the current one — no branch or worktree, clean tree.
   **Phase T is complete**: every track below has landed with a firing spec, or is placed with its reason
-  (T6 → Phase H, T7 → Phase P, G1 → the output pipe). **Phase G has 3 of its 6 readings**, with G1 and F5 priced.
+  (T6 → Phase H, T7 → Phase P, G1 → the output pipe). **Phase G has 4 of its 6 readings**, with G1 and F5 priced; the last two wait on one piece of new instrumentation.
   Nothing of Phases S, B, H, P or A is started.
   **Collision surface against #372**, measured 2026-11-07: one file, `features/code/fe/state.ts` (+24/-2 on
   that branch). Every other file Phase T touches is untouched there — `bus/client-events.ts`,
@@ -182,6 +182,12 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   resize does neither, xterm being canvas-drawn — so a feed-shaped completion is told by the surface that
   records the change instead of polling for it. `terminal-open` did not need it only because mounting xterm
   happens to mutate the DOM.
+- **Phase G reading 4 of 6 is taken: hidden sessions cost ~3.0 MiB of API heap and ~0.67 MiB of renderer
+  heap each**, measured over 16 accumulating terminals — so 16 idle ones are ~59 MiB of heap across the two
+  processes, which is the figure the broker changes most directly. **The Nth open does not get slower**
+  (8–11 ms at every count), so that is a property the broker must keep rather than one it fixes. Cite the
+  heap and not `rssSampledMaxBytes`, which fell 296 → 129 MiB over the same run while the heap rose
+  monotonically: it is a maximum of a shrinking process.
 - **G1 is priced and stays open, with its fix placed.** Measured with the existing `streaming` scenario,
   which already drives the writer at `intervalMs: 80`: **9,726 → 30,054 → 95,924 app write bytes** for
   **864 → 2,160 → 4,340** characters of reply, so bytes-per-character climbs 11.3 → 13.9 → 22.1. Every flush
@@ -195,12 +201,14 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   assigns G1 to. `stream-writer.ts` is untouched by #372 (checked 2026-11-07 against
   `origin/session/claude-code-integration`), but `thinking-writer.ts` (+51) and `stream-consumer.ts` (+362)
   move substantially there, so that branch's cleanup is the cheapest place for the feed.
-- **Next action: the byte-level output signal**, which two of Phase G's four remaining readings wait on
-  (sustained output responsiveness, large-history replay) and which the first-byte latency the attach
-  reading could not cover also needs. The other two need nothing new: **memory with several hidden sessions**
-  is in the process reports' RSS already, and **resize behaviour** is a write count like G1's —
-  `services/terminal.ts:145` writes an EARS row on every `resize()` call with no coalescing, which is F5 and
-  is confirmed on current source. Then Phase S.
+- **Next action: the byte-level output signal.** It is the only thing between Phase G and its gate, and it
+  pays for four things at once: **sustained output responsiveness** and **large-history replay** (the two
+  readings left), the **first-byte latency** the attach reading could not cover, and **F4** ("one bus event
+  per pty chunk; no coalescing"), which nothing today can count. It is genuinely new instrumentation, not a
+  scenario: the instrumented span names are `app.*` and `ears.*`, a terminal's output is neither, and the
+  DOM cannot see it because xterm draws to a canvas and its buffer lives in the pack's module-scoped pool.
+  Phase B needs the same signal for its own acceptance ("the presentation channel is bounded … with a firing
+  case proving a producer past it is throttled"), so it is not throwaway work. Then Phase S.
 - **A latency reading needs a quiet machine; a byte count does not.** `npm run check:idle` reported 60%
   against a 70% floor, and 0% when macOS was indexing this session's build output — `fseventsd`,
   `spotlightknowledged` and `mds` together, which is what a build leaves behind. The attach reading waited

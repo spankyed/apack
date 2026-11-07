@@ -199,13 +199,43 @@ Asking for the list again is the only way a window learns its own terminal's siz
 now ends with. That is adjacent to M2 but not the same defect: M2 is about which window's size wins, this is
 that none of them knows.
 
-### Baseline (Phase G) — the remaining three readings, not taken
+### Hidden sessions (Phase G, reading 4 of 6) — 2026-11-07
 
-Still outstanding: **sustained output responsiveness**, **large-history replay** and **memory with several
-hidden sessions**, plus the parsing-cost reading (`npm run measure:loop`). The first two need an output
-corpus and a byte-level completion signal, which the attach reading above establishes is not available from
-the DOM — so that signal is the next thing to build, and it serves the first-byte reading too. Memory needs
-nothing new: the process reports already carry `rssSampledMaxBytes`.
+`APACK_PERFORMANCE_SCENARIO=terminal-hidden`, 12 measured trials, each opening one more terminal and
+**keeping every earlier one alive** — so trial N runs with N sessions and only the newest visible, and the
+reading is a curve rather than a number. 16 terminals at the end, all passed.
+
+| sessions | backend heap | renderer heap | Nth open |
+|---|---|---|---|
+| 1 | 68.7 MiB | 40.2 MiB | 21.7 ms |
+| 4 | 77.8 MiB | 45.6 MiB | 10.1 ms |
+| 8 | 89.9 MiB | 46.0 MiB | 10.8 ms |
+| 12 | 101.9 MiB | 52.6 MiB | 9.8 ms |
+| 16 | 113.9 MiB | 50.2 MiB | 8.2 ms |
+
+**~3.0 MiB of API-process heap and ~0.67 MiB of renderer heap per idle session** (45.2 MiB and 10.0 MiB
+across 15 added sessions), so **16 idle terminals cost about 59 MiB of heap across the two processes**. That
+is the figure the broker changes most directly: today each session's pty, its reader and its xterm live in
+those two processes.
+
+**Cite the heap, not the RSS.** `rssSampledMaxBytes` fell from 296 MiB to 129 MiB across the same run while
+the heap rose monotonically — it is a per-trial maximum of a process that was shrinking from an earlier
+peak, so it says more about when the collector ran than about what a session costs. The heap figures are
+monotonic and linear, which is what a per-session cost should look like.
+
+**And the Nth open does not get slower**: 8–11 ms at every count after the warmups, against the 20.7 ms
+first-open median taken on a fresh app. So nothing in today's implementation degrades with session count,
+which is a property the broker has to keep rather than one it needs to fix.
+
+### Baseline (Phase G) — the remaining two readings, not taken
+
+Still outstanding: **sustained output responsiveness** and **large-history replay**, plus the parsing-cost
+reading (`npm run measure:loop`). Both need an output corpus and a **byte-level completion signal**, which
+the attach reading establishes is not available from the DOM — xterm draws to a canvas and its buffer is in
+the pack's module-scoped pool — and which no span records either: the instrumented names are `app.*` and
+`ears.*`, and a terminal's output is neither. So that signal is new instrumentation, it is the next thing to
+build, and it serves the first-byte latency the attach reading could not cover **and** F4's "one bus event
+per pty chunk" at the same time.
 
 The baseline is unrepeatable once Phase B moves state, and the
 [ghostty-web migration](../../deferred/xterm-to-ghostty-web.md) requires the same measurement for its own
