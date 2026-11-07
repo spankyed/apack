@@ -307,3 +307,6 @@ bundle does not establish rollout admission or actual-app acceptance of the quot
 The bundled analyzer recovers native display/onScreen and key-handler ownership on both
 pinned platforms. The research-side verifier (outside this src-only archive) refuses
 missing/ambiguous handlers and missing onScreen callbacks.
+
+The everyday-layout journey verifies compact parent reading, a bounded native session-details
+popover and retained selection/status on return. Its screenshots still require visual review.
