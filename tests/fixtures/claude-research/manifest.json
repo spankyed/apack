@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "f5a9f90dc482230c72ce6a5bb78382c28b63a0ae",
+  "researchCommit": "bcd56366a5479c22cd194a3b704cb46b508b4ec1",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -138,6 +138,7 @@
     "src/integration/apack-ui-mount.mjs": "c0b3ec8858b5b34cd734e7862867b4d21fefb89ff09e2664885002a1fd317c34",
     "src/integration/apack-ui-panes.mjs": "285cb17c025d3dc8f03fb2229d3f9cec2e4bd3767485c093dabd9d17db89a3b7",
     "src/integration/apack-ui-surface.mjs": "38db5ede5090a2b14ef5d5bb1433282c041440a43a1193dc43b2451d2760e92a",
+    "src/integration/apack-window-client-drive.mjs": "1e9608a6c46ade661f316b4cdc8b8bec6dc6d9bc1989a621e310a6b734d25008",
     "src/integration/check-native-graphics-replay.mjs": "6f6df4910dc55846ba8ab232d3776a804e0b422464513e8f2d3283e793bfce63",
     "src/integration/checkout-isolation.mjs": "19e3bc5568f2e905a3282793be6bdd596cce18e29df5ed30c6d3f680b744e2fc",
     "src/integration/child-caption-profile.mjs": "cf0f29972d801b261e0dd1003a72321fd25e473bcf30e83be41dce17b7d39412",
@@ -231,6 +232,7 @@
     "src/integration/verify-product-child-question.py": "4cf9986c97609748fe4c129e3adaa83ffc33d2b4b051bc4b76f84de8507e9fe2",
     "src/integration/verify-structured-selection.py": "eac3eae61dafe07bd5b001cfe104656da08eb58e1a7aa216ad116931204cfdfb",
     "src/integration/verify-svg-browser.mjs": "599b395b69035c39ca074cbcc57939e79405982bf892f4366b79e3a684a2d2db",
+    "src/integration/window-client-profile.mjs": "f951ea564cdb0570ca246ded55c53273626d0e28027f1204ea9504938fbaded1",
     "src/integration/workflow-app-driver.mjs": "c1435ea9b1902034e9bb4dcdef8cff9c759eacf7089432e8df8e5670844ee8f1",
     "src/integration/workflow-app.mjs": "85c3d9132e36c716c00fa69b2246e3e2fb55ab50222aedc037a5f64256433f0c",
     "src/protocol/README.md": "9b22e9e282e05348aa48d317908298226b52564f48ff82b415476fd72e34ffa4",
@@ -378,6 +380,7 @@
     "src/protocol/native-ui-engine-bridge.mjs": "614f1cf6a6a6a4162d1ad3fd43c177c481eec450c2e29fd2ea689bafb5a8925a",
     "src/protocol/native-ui-error-fixture.mjs": "12c433f3846d3e44148353ba8ea53bfdd3c2a549e3ad433e16eb0c54507774db",
     "src/protocol/native-usage.mjs": "7ceedde44fac6fccf66263bc53d329a6b4103c80aedf539fc90acc0e9abcb2e5",
+    "src/protocol/native-window-client-fixture.mjs": "3d6c88ce8e0c790fbc35afb113a0064f5ee5975cdf2a0612538616be20291f4e",
     "src/protocol/native-workflow-details-layout-proof.mjs": "5f47cb9a847b76c2863cefa85728458839512eb04c1973c80535522d6b9a6fd2",
     "src/protocol/native-workflow-editor-fixture.mjs": "5b62840e05c05c6417ef7fb55a65cbbcc646656f43ce53b260b27899cef0b3a5",
     "src/protocol/native-workflow-resume-proof.mjs": "85a55798afe5e7b733e5bd196ce341e699253ec234b660102ea4d29e2bd0bb87",
@@ -450,5 +453,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "d119388f40e7fa5acb6317b764bbfa11dfdb1f23b4b48055b4f028cc63761ee6"
+  "archiveSha256": "676eb1fe09fc24fe641510e08b372d977c9edc689fe06aed4414be3ea6483fd2"
 }
