@@ -274,3 +274,21 @@ it('retains Stop acknowledgements only in the live addressed terminal view', () 
   expect(actor.getSnapshot().context.nativeTerminalViews[identity.mountId]).toBeUndefined()
   actor.stop()
 })
+
+
+it('projects notice pending and failure feedback only into the live addressed terminal view', () => {
+  const actor = createActor(nativeState).start(), identity = { mountId: 'notice-view', threadId: 'thread' }
+  actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...identity })
+  const reply = { type: 'CLAUDE_TERMINAL_STATE' as const, ...identity, opening: false, output: [], noticeAnswer: { id: 'notice', revision: 'revision', status: 'pending' as const } }
+  actor.send({ ...reply, threadId: 'foreign' })
+  expect(actor.getSnapshot().context.nativeTerminalViews[identity.mountId]?.noticeAnswer).toBeUndefined()
+  actor.send(reply)
+  expect(actor.getSnapshot().context.nativeTerminalViews[identity.mountId]?.noticeAnswer).toEqual(reply.noticeAnswer)
+  actor.send({ ...reply, noticeAnswer: { ...reply.noticeAnswer, status: 'error', problem: 'Native notice changed' } })
+  expect(actor.getSnapshot().context.nativeTerminalViews[identity.mountId]?.noticeAnswer).toEqual({ ...reply.noticeAnswer, status: 'error', problem: 'Native notice changed' })
+  actor.send({ ...reply, noticeAnswer: undefined })
+  expect(actor.getSnapshot().context.nativeTerminalViews[identity.mountId]?.noticeAnswer).toBeUndefined()
+  actor.send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...identity }); actor.send(reply)
+  expect(actor.getSnapshot().context.nativeTerminalViews[identity.mountId]).toBeUndefined()
+  actor.stop()
+})
