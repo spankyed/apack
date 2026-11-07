@@ -4464,7 +4464,7 @@ type ServerStatus = 'error' | 'ready' | 'starting' | 'stopped';
  * The declared service selection: own services, the SDK baseline and explicitly consumed APIs.
  * The featureServices value itself stays feature-only.
  */
-type Services = typeof featureServices & Pick<HostServices, "appData" | "filesystem" | "inference" | "logger" | "onboarding" | "runHistory" | "secrets" | "settings"> & {
+type Services = typeof featureServices & Pick<HostServices, "appData" | "filesystem" | "inference" | "logger" | "onboarding" | "runHistory" | "secrets" | "settings" | "terminal"> & {
     repository: Repositories;
     emitter: PackEmitter;
 };

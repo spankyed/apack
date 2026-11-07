@@ -61,9 +61,12 @@ const OSC_PATTERNS = [
 ] as const
 /* eslint-enable no-control-regex */
 
-// Shared handler setup for terminal output/exit events (used by both create and restore)
-const setupTerminalHandlers = (terminalInfo: TerminalInfo) => {
-  terminalService.onData(terminalInfo.id, (data) => {
+/**
+ * Where a terminal's output and exit go — **given to the service before the session exists**, not registered
+ * after it returns, which is F8: whatever the shell wrote first used to have nowhere to go and was dropped.
+ */
+const terminalHandlers = {
+  onData(terminalId: string, data: string) {
     let cwdMatch: RegExpMatchArray | null = null
     for (const pattern of OSC_PATTERNS) {
       cwdMatch = data.match(pattern)
@@ -73,25 +76,25 @@ const setupTerminalHandlers = (terminalInfo: TerminalInfo) => {
     if (cwdMatch) {
       try {
         const newCwd = decodeURIComponent(cwdMatch[1])
-        const result = terminalService.updateCwd(terminalInfo.id, newCwd)
+        const result = terminalService.updateCwd(terminalId, newCwd)
         if (result) {
-          emitToFrontend({ type: 'terminal.CWD_CHANGED', data: { terminalId: terminalInfo.id, cwd: result.cwd, title: result.title } })
+          emitToFrontend({ type: 'terminal.CWD_CHANGED', data: { terminalId, cwd: result.cwd, title: result.title } })
         }
       } catch (error) {
         logger.error('Failed to parse CWD from OSC sequence', { error })
       }
     }
 
-    emitToFrontend({ type: 'terminal.OUTPUT', data: { terminalId: terminalInfo.id, data } })
-  })
+    emitToFrontend({ type: 'terminal.OUTPUT', data: { terminalId, data } })
+  },
 
-  terminalService.onExit(terminalInfo.id, () => {
+  onExit(terminalId: string) {
     try {
-      emitToFrontend({ type: 'terminal.CLOSED', data: { terminalId: terminalInfo.id } })
+      emitToFrontend({ type: 'terminal.CLOSED', data: { terminalId } })
     } catch (error) {
-      logger.error(`Error emitting CLOSED for ${terminalInfo.id}`, { error })
+      logger.error(`Error emitting CLOSED for ${terminalId}`, { error })
     }
-  })
+  },
 }
 
 /**
@@ -133,9 +136,7 @@ export const terminalSystem = setup({
         logger.info('Terminal restoration disabled by settings')
         return
       }
-      await terminalService.restoreAll((terminalInfo) => {
-        setupTerminalHandlers(terminalInfo)
-      })
+      await terminalService.restoreAll(terminalHandlers)
       logger.info('Terminal restoration complete')
     })
   },
@@ -154,25 +155,22 @@ export const terminalSystem = setup({
         cols?: number;
         rows?: number;
       }
-      try {
-        const cwd = ev.cwd || context.baseDirectory
-        const terminalInfo = terminalService.create({
-          title: ev.title,
-          cwd: cwd && cwd.trim() ? cwd : undefined,
-          shell: ev.shell,
-          cols: ev.cols || 80,
-          rows: ev.rows || 24
-        })
-
-        setupTerminalHandlers(terminalInfo)
-
+      const cwd = ev.cwd || context.baseDirectory
+      // **The answer waits for the session**, because the process is the broker's and a socket away. `reply`
+      // is bound to the delivery this handler was entered in, so it still answers the window that asked
+      // after an await — an answer a handler holds keeps working wherever it is called.
+      void terminalService.create({
+        title: ev.title,
+        cwd: cwd && cwd.trim() ? cwd : undefined,
+        shell: ev.shell,
+        cols: ev.cols || 80,
+        rows: ev.rows || 24,
+      }, terminalHandlers).then(terminalInfo => {
         // The two halves of what used to be one event: every window's list grows, and only the window that
         // asked opens it. A terminal's id is minted here, so nothing the asker sent could have identified it
         emitToFrontend({ type: 'terminal.CREATED', data: { terminalId: terminalInfo.id } })
         reply?.({ type: 'terminal.OPENED', data: terminalInfo })
-      } catch (error) {
-        failTerminal(reply, 'create', error)
-      }
+      }).catch(error => failTerminal(reply, 'create', error))
     },
 
     closeTerminal: ({ event, reply }) => {
@@ -180,10 +178,13 @@ export const terminalSystem = setup({
       try {
         const terminal = terminalService.get(ev.terminalId)
         const terminalName = terminal ? terminal.info.title : 'Terminal'
-        const success = terminalService.kill(ev.terminalId)
-        if (!success) {
-          failTerminal(reply, 'close', `${terminalName} not found`, ev.terminalId)
-        }
+        // **Awaited, not checked for truth.** The service answers a promise now, and `if (!promise)` is
+        // never true — the refusal below was dead the moment the broker owned the process.
+        void terminalService.kill(ev.terminalId)
+          .then(found => {
+            if (!found) failTerminal(reply, 'close', `${terminalName} not found`, ev.terminalId)
+          })
+          .catch(error => failTerminal(reply, 'close', error, ev.terminalId))
       } catch (error) {
         failTerminal(reply, 'close', error, ev.terminalId)
       }
@@ -194,10 +195,13 @@ export const terminalSystem = setup({
       try {
         const terminal = terminalService.get(ev.terminalId)
         const terminalName = terminal ? terminal.info.title : 'Terminal'
-        const success = terminalService.write(ev.terminalId, ev.data)
-        if (!success) {
-          failTerminal(reply, 'input', `${terminalName} not found`, ev.terminalId)
-        }
+        // **Awaited, not checked for truth.** The service answers a promise now, and `if (!promise)` is
+        // never true — the refusal below was dead the moment the broker owned the process.
+        void terminalService.write(ev.terminalId, ev.data)
+          .then(found => {
+            if (!found) failTerminal(reply, 'input', `${terminalName} not found`, ev.terminalId)
+          })
+          .catch(error => failTerminal(reply, 'input', error, ev.terminalId))
       } catch (error) {
         failTerminal(reply, 'input', error, ev.terminalId)
       }
@@ -208,10 +212,13 @@ export const terminalSystem = setup({
       try {
         const terminal = terminalService.get(ev.terminalId)
         const terminalName = terminal ? terminal.info.title : 'Terminal'
-        const success = terminalService.resize(ev.terminalId, ev.cols, ev.rows)
-        if (!success) {
-          failTerminal(reply, 'resize', `${terminalName} not found`, ev.terminalId)
-        }
+        // **Awaited, not checked for truth.** The service answers a promise now, and `if (!promise)` is
+        // never true — the refusal below was dead the moment the broker owned the process.
+        void terminalService.resize(ev.terminalId, ev.cols, ev.rows)
+          .then(found => {
+            if (!found) failTerminal(reply, 'resize', `${terminalName} not found`, ev.terminalId)
+          })
+          .catch(error => failTerminal(reply, 'resize', error, ev.terminalId))
       } catch (error) {
         failTerminal(reply, 'resize', error, ev.terminalId)
       }
@@ -269,7 +276,9 @@ export const terminalSystem = setup({
     },
 
     cleanupTerminals: () => {
-      terminalService.killAll()
+      // Fire-and-forget here, because an action cannot await; `onShutdown` is the path that must wait, and
+      // `features/hooks.ts` does
+      void terminalService.killAll()
     },
 
     updateBaseDirectory: assign({

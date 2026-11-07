@@ -5,24 +5,39 @@
 // the second: an ask with nobody to answer must produce the news and no answer at all. Swap the `reply` for
 // a broadcast and that case fails.
 //
-// The service is stubbed because creating a terminal spawns a process, and nothing here is about pty.
-import { describe, expect, it, vi } from 'vitest'
+// The host's terminal service is mocked, so no process is spawned and nothing here is about pty.
+import { describe, expect, it } from 'vitest'
+import { mockService, startApp } from '@apackdev/testing/harness'
 
-const service = vi.hoisted(() => ({
-  terminalService: {
-    create: vi.fn((options: { title?: string }) => ({ id: 't-1', title: options.title ?? 'Terminal', cwd: '/tmp' })),
-    onData: vi.fn(),
-    onExit: vi.fn(),
-    list: vi.fn(() => []),
-    updateCwd: vi.fn(),
-    close: vi.fn(),
-    write: vi.fn(),
-    resize: vi.fn(),
-  },
-}))
-vi.mock('#features/code/be/services/terminal.ts', () => service)
+/**
+ * **The host's terminal service is what gets mocked, and that is the only thing that works here.**
+ *
+ * This file used to `vi.mock('#features/code/be/services/terminal.ts')`, which never applied: `tests/setup.ts`
+ * is a setup file and imports `pack-entry.ts`, so the pack's modules are in the graph before a test file's
+ * mock registers. The mock was inert and this spec spawned a real pty on every run, passing either way.
+ * `mockService` overlays the host service the pack reaches through `services`, which is a seam a test can
+ * actually take.
+ */
+const openedWith: Array<{ cols: number; rows: number; shell?: string; cwd?: string }> = []
 
-const { startApp } = await import('@apackdev/testing/harness')
+function mockTerminalSessions() {
+  openedWith.length = 0
+  let next = 0
+  mockService('terminal', {
+    open: async (options) => {
+      openedWith.push(options)
+      next += 1
+      const id = `broker-${next}`
+      return {
+        id,
+        pid: 1000 + next,
+        write: async () => {},
+        resize: async () => {},
+        terminate: async () => {},
+      }
+    },
+  })
+}
 
 const CODE = 'default-setup/code'
 /** The connection the ask arrived on, which is what makes it a window's */
@@ -33,6 +48,7 @@ const sentToCode = (app: Awaited<ReturnType<typeof startApp>>) =>
 
 describe('creating a terminal', () => {
   it('answers the window that asked, and tells every window separately', async () => {
+    mockTerminalSessions()
     const app = await startApp({ systems: ['code'] })
     await app.connect()
 
@@ -41,12 +57,15 @@ describe('creating a terminal', () => {
     await app.settle()
 
     const types = sentToCode(app)
+    // The mock is live, which the inert `vi.mock` it replaced never was: a real session would have spawned
+    expect(openedWith, 'the pack asked the host for a session').toEqual([{ cols: 80, rows: 24, shell: expect.any(String), cwd: expect.any(String) }])
     expect(types, "the news, on which every window asks for its list again").toContain('terminal.CREATED')
     expect(types, 'and the answer, which opens it for the asker alone').toContain('terminal.OPENED')
   })
 
   // The case that tells a reply from a broadcast: with nobody asking there is news and no answer
   it('still tells every window when nobody asked, and opens it for no one', async () => {
+    mockTerminalSessions()
     const app = await startApp({ systems: ['code'] })
     await app.connect()
 

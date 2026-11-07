@@ -41,13 +41,19 @@ function brokerBinary(): string {
     if (existsSync(named)) return named;
     throw new Error(`APACK_TERMINAL_BINARY names ${named}, which does not exist`);
   }
-  // The checkout `vendor/apack-terminal` links to, as `@apackdev/ears` finds elmdb's binding
-  const checkout = path.resolve(import.meta.dirname, '..', '..', '..', '..', 'vendor', 'apack-terminal');
-  const built = path.join(checkout, 'target', 'debug', 'apack-terminal');
-  if (existsSync(built)) return built;
+  // **The checkout is found from `SHIPPED_PACKS_DIR`, not from this module's path.** This file is bundled
+  // into the API's build, so `import.meta.dirname` is `packages/api/dist` at runtime and a path relative to
+  // it resolved one directory above the checkout — which the refusal below reported exactly, and is how this
+  // was found. That variable names `packages/`, so its parent is the checkout root.
+  const packages = process.env.SHIPPED_PACKS_DIR;
+  const built = packages
+    ? path.join(path.dirname(packages), 'vendor', 'apack-terminal', 'target', 'debug', 'apack-terminal')
+    : undefined;
+  if (built && existsSync(built)) return built;
   throw new Error(
     `No terminal broker: set APACK_TERMINAL_BINARY, or run \`cargo build\` in the apack-terminal checkout `
-    + `(expected ${built}; \`npm run link:apack-terminal\` makes the link)`,
+    + `(${built ? `expected ${built}` : 'and SHIPPED_PACKS_DIR is unset, so there is no checkout to look in'}; `
+    + '`npm run link:apack-terminal` makes the link)',
   );
 }
 

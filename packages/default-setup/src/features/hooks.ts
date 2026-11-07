@@ -13,7 +13,10 @@ export const onInit = () => {};
  */
 export const onShutdown = () => {
   services.runHistory.stopActive();
-  terminalService.killAll();
+  // Fire-and-forget, because this hook is synchronous and the API runs it inside `process.on('exit')`, where
+  // no socket write completes. It is the orderly path; the broker ending a connection's sessions when the
+  // connection goes is the backstop for an app that quit, crashed or was killed.
+  void terminalService.killAll();
   clearAllSchedules();
   removeAllAdHocListeners();
   clearFlowActorRegistry();
