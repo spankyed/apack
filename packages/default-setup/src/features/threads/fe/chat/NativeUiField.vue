@@ -10,7 +10,7 @@
         <span class="truncate">{{ selectedLabel }}</span><span aria-hidden="true">⌄</span>
       </SelectTrigger>
       <SelectPortal>
-        <SelectContent position="popper" :side-offset="4" :style="fieldTheme" class="native-field z-50 max-h-[min(20rem,var(--reka-select-content-available-height))] min-w-[var(--reka-select-trigger-width)] overflow-hidden rounded-lg border border-current bg-[var(--native-field-inverse)] p-1 shadow-lg">
+        <SelectContent position="popper" :side-offset="4" :style="{ ...fieldTheme, color: 'var(--native-field-text)' }" class="native-field z-50 max-h-[min(20rem,var(--reka-select-content-available-height))] min-w-[var(--reka-select-trigger-width)] overflow-hidden rounded-lg border border-current bg-[var(--native-field-inverse)] p-1 shadow-lg">
           <SelectViewport>
             <SelectItem v-for="(option, index) in node.options" :key="option.value" :value="optionToken(index)" @select="pickToken(optionToken(index))" class="cursor-default rounded px-3 py-2 text-[13px] outline-none data-[highlighted]:bg-[var(--native-field-text)] data-[highlighted]:text-[var(--native-field-inverse)]">
               <SelectItemText>{{ option.label }}</SelectItemText>
