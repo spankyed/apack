@@ -67,14 +67,14 @@ describe('shipped manifest schema in a JSON editor', () => {
     const policy = await complete('{ "features": { "memos": { "settings": { "access": | } } } }');
     expect(policy.map(item => item.label)).toEqual(expect.arrayContaining(['"shared"', '"owner"']));
     const loading = await complete('{ "features": { "memos": { "surface": { "panel": { "load": | } } } } }');
-    expect(loading.map(item => item.label)).toContain('"lazy"');
+    expect(loading.map(item => item.label)).toContain('"eager"');
   });
 
   it('shows behavior-specific hover help for component loading', async () => {
-    const text = '{ "features": { "memos": { "surface": { "panel": { "entry": "src/panel.vue", "load": "lazy" } } } } }';
+    const text = '{ "features": { "memos": { "surface": { "panel": { "entry": "src/panel.vue", "load": "eager" } } } } }';
     const { service, document, parsed } = editor(text);
     const hover = await service.doHover(document, document.positionAt(text.indexOf('"load"') + 2), parsed);
-    expect(JSON.stringify(hover?.contents)).toContain('Load the component on demand');
+    expect(JSON.stringify(hover?.contents)).toContain('Import the component eagerly');
   });
 
   it('accepts typed and untyped entity declarations without reading their source modules', async () => {

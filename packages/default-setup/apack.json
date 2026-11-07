@@ -807,14 +807,8 @@
         "label": "Code",
         "icon": "Code2",
         "state": "src/features/code/fe/state.ts",
-        "canvas": {
-          "entry": "src/features/code/fe/canvas/canvas.vue",
-          "load": "lazy"
-        },
-        "panel": {
-          "entry": "src/features/code/fe/features/panel.vue",
-          "load": "lazy"
-        },
+        "canvas": "src/features/code/fe/canvas/canvas.vue",
+        "panel": "src/features/code/fe/features/panel.vue",
         "isPinned": false,
         "hotkeys": [
           {
@@ -1259,10 +1253,7 @@
         "label": "Flows",
         "icon": "Network",
         "state": "src/features/flows/fe/state.ts",
-        "canvas": {
-          "entry": "src/features/flows/fe/canvas/flow-canvas.vue",
-          "load": "lazy"
-        },
+        "canvas": "src/features/flows/fe/canvas/flow-canvas.vue",
         "isPinned": true,
         "options": {}
       },
@@ -1473,14 +1464,8 @@
         "label": "Brain",
         "icon": "Brain",
         "state": "src/features/brain/fe/state.ts",
-        "canvas": {
-          "entry": "src/features/brain/fe/canvas.vue",
-          "load": "lazy"
-        },
-        "panel": {
-          "entry": "src/features/brain/fe/panel.vue",
-          "load": "lazy"
-        },
+        "canvas": "src/features/brain/fe/canvas.vue",
+        "panel": "src/features/brain/fe/panel.vue",
         "fallbackPanel": {
           "label": "Inspect Mode",
           "toggle": {
@@ -1674,10 +1659,7 @@
         },
         "fe": {
           "components": {
-            "form": {
-              "entry": "src/extensions/steps/action/form.vue",
-              "load": "lazy"
-            }
+            "form": "src/extensions/steps/action/form.vue"
           },
           "colorKey": "neutral",
           "nodeConfig": {
@@ -1723,10 +1705,7 @@
         },
         "fe": {
           "components": {
-            "form": {
-              "entry": "src/extensions/steps/llm/form.vue",
-              "load": "lazy"
-            }
+            "form": "src/extensions/steps/llm/form.vue"
           },
           "colorKey": "indigo",
           "nodeConfig": {
@@ -1768,10 +1747,7 @@
         },
         "fe": {
           "components": {
-            "form": {
-              "entry": "src/extensions/steps/fire/form.vue",
-              "load": "lazy"
-            }
+            "form": "src/extensions/steps/fire/form.vue"
           },
           "colorKey": "amber",
           "nodeConfig": {
@@ -1812,10 +1788,7 @@
         },
         "fe": {
           "components": {
-            "form": {
-              "entry": "src/extensions/steps/subflow/form.vue",
-              "load": "lazy"
-            }
+            "form": "src/extensions/steps/subflow/form.vue"
           },
           "colorKey": "purple",
           "nodeConfig": {
@@ -1852,10 +1825,7 @@
         },
         "fe": {
           "components": {
-            "form": {
-              "entry": "src/extensions/steps/query/form.vue",
-              "load": "lazy"
-            }
+            "form": "src/extensions/steps/query/form.vue"
           },
           "colorKey": "cyan",
           "nodeConfig": {
@@ -1893,10 +1863,7 @@
         },
         "fe": {
           "components": {
-            "form": {
-              "entry": "src/extensions/steps/create/form.vue",
-              "load": "lazy"
-            }
+            "form": "src/extensions/steps/create/form.vue"
           },
           "colorKey": "purple",
           "nodeConfig": {
@@ -1934,10 +1901,7 @@
         },
         "fe": {
           "components": {
-            "form": {
-              "entry": "src/extensions/steps/update/form.vue",
-              "load": "lazy"
-            }
+            "form": "src/extensions/steps/update/form.vue"
           },
           "colorKey": "purple",
           "nodeConfig": {
@@ -1975,10 +1939,7 @@
         },
         "fe": {
           "components": {
-            "form": {
-              "entry": "src/extensions/steps/transform/form.vue",
-              "load": "lazy"
-            }
+            "form": "src/extensions/steps/transform/form.vue"
           },
           "colorKey": "emerald",
           "nodeConfig": {
@@ -2083,14 +2044,8 @@
         },
         "fe": {
           "components": {
-            "node": {
-              "entry": "src/extensions/steps/switch/node.vue",
-              "load": "lazy"
-            },
-            "form": {
-              "entry": "src/extensions/steps/switch/form.vue",
-              "load": "lazy"
-            }
+            "node": "src/extensions/steps/switch/node.vue",
+            "form": "src/extensions/steps/switch/form.vue"
           },
           "colorKey": "yellow",
           "nodeConfig": {
@@ -2140,10 +2095,7 @@
         },
         "fe": {
           "components": {
-            "form": {
-              "entry": "src/extensions/steps/schedule/form.vue",
-              "load": "lazy"
-            }
+            "form": "src/extensions/steps/schedule/form.vue"
           },
           "nodeConfig": {
             "icon": "Clock",
@@ -2179,10 +2131,7 @@
         },
         "fe": {
           "components": {
-            "form": {
-              "entry": "src/extensions/steps/listener/form.vue",
-              "load": "lazy"
-            }
+            "form": "src/extensions/steps/listener/form.vue"
           },
           "nodeConfig": {
             "icon": "Radio",

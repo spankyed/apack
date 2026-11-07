@@ -550,9 +550,32 @@
                 "description": "Explanatory text shown above this group's custom settings form."
               },
               "form": {
-                "type": "string",
-                "pattern": "^[^#]+$",
-                "description": "Source path of the custom settings form; its default export is a component."
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[^#]+$"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "entry": {
+                        "type": "string",
+                        "pattern": "^[^#]+$",
+                        "description": "Pack-root-relative component module, using its default export."
+                      },
+                      "load": {
+                        "type": "string",
+                        "const": "eager",
+                        "description": "Import the component eagerly with the pack; omission loads it on demand when rendered."
+                      }
+                    },
+                    "required": [
+                      "entry"
+                    ],
+                    "additionalProperties": false
+                  }
+                ],
+                "description": "Custom settings form component, loaded on demand by default."
               },
               "access": {
                 "type": "string",
@@ -638,8 +661,8 @@
                       },
                       "load": {
                         "type": "string",
-                        "const": "lazy",
-                        "description": "Load the component on demand; omission uses the normal eager component binding."
+                        "const": "eager",
+                        "description": "Import the component eagerly with the pack; omission loads it on demand when rendered."
                       }
                     },
                     "required": [
@@ -668,8 +691,8 @@
                           },
                           "load": {
                             "type": "string",
-                            "const": "lazy",
-                            "description": "Load the component on demand; omission uses the normal eager component binding."
+                            "const": "eager",
+                            "description": "Import the component eagerly with the pack; omission loads it on demand when rendered."
                           }
                         },
                         "required": [
@@ -704,8 +727,8 @@
                                 },
                                 "load": {
                                   "type": "string",
-                                  "const": "lazy",
-                                  "description": "Load the component on demand; omission uses the normal eager component binding."
+                                  "const": "eager",
+                                  "description": "Import the component eagerly with the pack; omission loads it on demand when rendered."
                                 }
                               },
                               "required": [
@@ -742,8 +765,8 @@
                       },
                       "load": {
                         "type": "string",
-                        "const": "lazy",
-                        "description": "Load the component on demand; omission uses the normal eager component binding."
+                        "const": "eager",
+                        "description": "Import the component eagerly with the pack; omission loads it on demand when rendered."
                       }
                     },
                     "required": [
@@ -770,8 +793,8 @@
                       },
                       "load": {
                         "type": "string",
-                        "const": "lazy",
-                        "description": "Load the component on demand; omission uses the normal eager component binding."
+                        "const": "eager",
+                        "description": "Import the component eagerly with the pack; omission loads it on demand when rendered."
                       }
                     },
                     "required": [
@@ -944,8 +967,8 @@
                             },
                             "load": {
                               "type": "string",
-                              "const": "lazy",
-                              "description": "Load the component on demand; omission uses the normal eager component binding."
+                              "const": "eager",
+                              "description": "Import the component eagerly with the pack; omission loads it on demand when rendered."
                             }
                           },
                           "required": [
@@ -1071,8 +1094,8 @@
                             },
                             "load": {
                               "type": "string",
-                              "const": "lazy",
-                              "description": "Load the component on demand; omission uses the normal eager component binding."
+                              "const": "eager",
+                              "description": "Import the component eagerly with the pack; omission loads it on demand when rendered."
                             }
                           },
                           "required": [
@@ -1190,9 +1213,32 @@
                 "description": "Explanatory text shown above this group's custom settings form."
               },
               "form": {
-                "type": "string",
-                "pattern": "^[^#]+$",
-                "description": "Source path of the custom settings form; its default export is a component."
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[^#]+$"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "entry": {
+                        "type": "string",
+                        "pattern": "^[^#]+$",
+                        "description": "Pack-root-relative component module, using its default export."
+                      },
+                      "load": {
+                        "type": "string",
+                        "const": "eager",
+                        "description": "Import the component eagerly with the pack; omission loads it on demand when rendered."
+                      }
+                    },
+                    "required": [
+                      "entry"
+                    ],
+                    "additionalProperties": false
+                  }
+                ],
+                "description": "Custom settings form component, loaded on demand by default."
               },
               "access": {
                 "type": "string",
@@ -1402,8 +1448,8 @@
                               },
                               "load": {
                                 "type": "string",
-                                "const": "lazy",
-                                "description": "Load the component on demand; omission uses the normal eager component binding."
+                                "const": "eager",
+                                "description": "Import the component eagerly with the pack; omission loads it on demand when rendered."
                               }
                             },
                             "required": [
@@ -1489,8 +1535,8 @@
                               },
                               "load": {
                                 "type": "string",
-                                "const": "lazy",
-                                "description": "Load the component on demand; omission uses the normal eager component binding."
+                                "const": "eager",
+                                "description": "Import the component eagerly with the pack; omission loads it on demand when rendered."
                               }
                             },
                             "required": [
@@ -1517,8 +1563,8 @@
                               },
                               "load": {
                                 "type": "string",
-                                "const": "lazy",
-                                "description": "Load the component on demand; omission uses the normal eager component binding."
+                                "const": "eager",
+                                "description": "Import the component eagerly with the pack; omission loads it on demand when rendered."
                               }
                             },
                             "required": [
@@ -1662,9 +1708,32 @@
                 "description": "Name of the lucide-vue-next icon shown in the artifact list."
               },
               "fe": {
-                "type": "string",
-                "pattern": "^[^#]+$",
-                "description": "Path to the viewer that opens it (a .vue file, taken by its default export). Without one the host shows the text viewer."
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[^#]+$"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "entry": {
+                        "type": "string",
+                        "pattern": "^[^#]+$",
+                        "description": "Pack-root-relative component module, using its default export."
+                      },
+                      "load": {
+                        "type": "string",
+                        "const": "eager",
+                        "description": "Import the component eagerly with the pack; omission loads it on demand when rendered."
+                      }
+                    },
+                    "required": [
+                      "entry"
+                    ],
+                    "additionalProperties": false
+                  }
+                ],
+                "description": "Artifact viewer, loaded on demand by default. Without one the host shows the text viewer."
               }
             },
             "required": [
@@ -1692,9 +1761,32 @@
                 "description": "Whether the chat renders it as content or as something the user acts on. Display is the default."
               },
               "fe": {
-                "type": "string",
-                "pattern": "^[^#]+$",
-                "description": "Path to the component that draws it (a .vue file, taken by its default export)."
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[^#]+$"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "entry": {
+                        "type": "string",
+                        "pattern": "^[^#]+$",
+                        "description": "Pack-root-relative component module, using its default export."
+                      },
+                      "load": {
+                        "type": "string",
+                        "const": "eager",
+                        "description": "Import the component eagerly with the pack; omission loads it on demand when rendered."
+                      }
+                    },
+                    "required": [
+                      "entry"
+                    ],
+                    "additionalProperties": false
+                  }
+                ],
+                "description": "Component that draws the block, loaded on demand by default."
               },
               "be": {
                 "type": "string",
@@ -1799,8 +1891,31 @@
                   "pattern": "^[A-Za-z_$][\\w$]*$"
                 },
                 "additionalProperties": {
-                  "type": "string",
-                  "pattern": "^[^#]+$"
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[^#]+$"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "entry": {
+                          "type": "string",
+                          "pattern": "^[^#]+$",
+                          "description": "Pack-root-relative component module, using its default export."
+                        },
+                        "load": {
+                          "type": "string",
+                          "const": "eager",
+                          "description": "Import the component eagerly with the pack; omission loads it on demand when rendered."
+                        }
+                      },
+                      "required": [
+                        "entry"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
                 },
                 "description": "Popup IDs local to this group, mapped to pack-root-relative Vue component modules."
               },
@@ -1821,8 +1936,31 @@
             "pattern": "^[A-Za-z_$][\\w$]*$"
           },
           "additionalProperties": {
-            "type": "string",
-            "pattern": "^[^#]+$"
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[^#]+$"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "entry": {
+                    "type": "string",
+                    "pattern": "^[^#]+$",
+                    "description": "Pack-root-relative component module, using its default export."
+                  },
+                  "load": {
+                    "type": "string",
+                    "const": "eager",
+                    "description": "Import the component eagerly with the pack; omission loads it on demand when rendered."
+                  }
+                },
+                "required": [
+                  "entry"
+                ],
+                "additionalProperties": false
+              }
+            ]
           },
           "description": "Named app extensions. Keys are extension names (identifiers), values are paths to Vue components."
         }

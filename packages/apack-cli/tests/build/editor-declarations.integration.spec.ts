@@ -24,7 +24,7 @@ it('builds declared editor members and step presentation, then discovers a copie
     steps: { memo: {
       node: { label: 'Memo' }, types: 'src/model.ts', dsl: { helpers: 'src/helpers.ts' },
       fe: { nodeConfig: { icon: 'Box', category: 'data' as const, connectionRules: { inputs: 1, outputs: 1 } },
-        colorKey: 'blue', components: { form: { entry: 'src/Popup.vue', load: 'lazy' as const } },
+        colorKey: 'blue', components: { form: 'src/Popup.vue' },
         layout: { hasInput: true, getHeight: 'src/layout.ts#getHeight' } },
     } },
     textEditor: { suggestions: {

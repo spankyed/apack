@@ -113,7 +113,7 @@ describe('apack pack add step in a pack without steps', () => {
         types: 'src/extensions/steps/ping/types.ts',
         fe: { colorKey: 'indigo', nodeConfig: { icon: 'Box',
           connectionRules: { inputs: -1, outputs: -1 }, category: 'logic', isImplemented: true },
-          components: { form: { entry: 'src/extensions/steps/ping/form.vue', load: 'lazy' } } },
+          components: { form: 'src/extensions/steps/ping/form.vue' } },
       },
     });
     expect(fs.existsSync(path.join(bare, 'src/extensions/steps/ping/build.ts'))).toBe(true);
@@ -135,7 +135,7 @@ describe('apack pack add step in a pack without steps', () => {
       types: 'src/extensions/steps/heart-beat/types.ts',
         fe: { colorKey: 'blue', nodeConfig: { icon: 'Radio',
           connectionRules: { inputs: 0, outputs: -1 }, category: 'trigger', isImplemented: true },
-          components: { form: { entry: 'src/extensions/steps/heart-beat/form.vue', load: 'lazy' } } },
+          components: { form: 'src/extensions/steps/heart-beat/form.vue' } },
     });
     expect(fs.existsSync(path.join(triggerPack, 'src/extensions/steps/heart-beat/trigger.ts'))).toBe(true);
     expect(fs.existsSync(path.join(triggerPack, 'src/extensions/steps/heart-beat/build.ts'))).toBe(false);

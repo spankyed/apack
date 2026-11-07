@@ -1,11 +1,11 @@
-/** A component module; loading mode changes execution, never discovery. */
-export type ComponentTarget = string | { entry: string; load?: 'lazy' };
+/** A component module, loaded on demand unless explicitly eager; discovery never executes it. */
+export type ComponentTarget = string | { entry: string; load?: 'eager' };
 
 /** Surface data known before its machine, views or predicates execute. */
 export interface SurfaceDeclaration {
   label: string;
   state: string;
-  icon?: string | { entry: string; load?: 'lazy' };
+  icon?: string | { entry: string; load?: 'eager' };
   canvas?: ComponentTarget | { routes: Record<string, ComponentTarget> };
   panel?: ComponentTarget;
   chat?: ComponentTarget;

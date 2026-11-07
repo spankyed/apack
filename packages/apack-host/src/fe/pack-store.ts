@@ -29,6 +29,12 @@ export interface FrontendSettingsBinding {
   dispose(): void;
 }
 
+/** An accepted app-slot component and the pack whose frontend owns it. */
+export interface AppExtensionFrontendBinding {
+  readonly packId: string;
+  readonly component: NonNullable<PackFERegistration['appExtensions']>[string];
+}
+
 /** The renderer's registered pack frontends */
 export interface FePackRegistry extends FePackRegistryView {
   /** Registers a pack's frontend, and returns its surfaces as registered: each at its feature's ref */
@@ -47,6 +53,7 @@ export interface FePackRegistry extends FePackRegistryView {
   /** Identity of this accepted frontend instance; replacement changes it even when components are reused. */
   frontendIdentity(packId: string): Readonly<Pick<AcceptedFrontendAdmission, 'declarationRevision' | 'registrationId' | 'buildRevision'>> | undefined;
   getAppExtension(slot: string): ReturnType<FePackRegistryView['appExtension']>;
+  appExtensionBinding(slot: string): AppExtensionFrontendBinding | undefined;
   /** Lookup of an accepted form; installed declarations remain separate from executable availability. */
   settingsForm(target: SettingsTarget): SettingsForm | undefined;
 }
@@ -172,7 +179,7 @@ function buildTables(packs: Iterable<FrontendContributions>) {
   const steps = createOwnedStepStore<StepFrontendBinding>();
   const artifacts = new Map<string, ArtifactFrontendBinding>();
   const blocks = new Map<string, BlockFrontendBinding>();
-  const appExtensions = new Map<string, SettingsForm>();
+  const appExtensions = new Map<string, AppExtensionFrontendBinding>();
   const forms = new Map<string, SettingsForm>();
   const textEditor: TextEditorExtensionsBinding[] = [];
   const editorOwners = new Map<string, string>();
@@ -202,7 +209,7 @@ function buildTables(packs: Iterable<FrontendContributions>) {
     for (const [key, value] of pack.steps) { steps.set(key, value, pack.id); }
     for (const [key, value] of pack.artifacts) artifacts.set(key, value);
     for (const [key, value] of pack.blocks) blocks.set(key, value);
-    for (const [key, value] of pack.appExtensions) appExtensions.set(key, value);
+    for (const [key, component] of pack.appExtensions) appExtensions.set(key, Object.freeze({ packId: pack.id, component }));
     for (const [id, contribution] of pack.textEditor) {
       const owner = `${pack.id}/${id}`;
       for (const name of Object.keys(contribution.extensions ?? {})) {
@@ -327,7 +334,8 @@ export function createFePackRegistry(): FePackRegistry {
     replacePackFE: (admission, registration, settings) => accept(admission, registration, settings, true),
     unregisterPackFE,
     getRegisteredSurfaces: () => [...tables.surfaces],
-    getAppExtension: key => tables.appExtensions.get(key),
+    getAppExtension: key => tables.appExtensions.get(key)?.component,
+    appExtensionBinding: key => tables.appExtensions.get(key),
     settingsForm: target => tables.forms.get(formKey(target)),
     onChanged(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
     designation: key => tables.designations.get(key),
@@ -342,6 +350,6 @@ export function createFePackRegistry(): FePackRegistry {
     textEditor: () => [...tables.textEditor],
     referenceTypes: () => new Map(tables.referenceTypes),
     referenceCategories: () => new Map(tables.referenceCategories),
-    appExtension: key => tables.appExtensions.get(key),
+    appExtension: key => tables.appExtensions.get(key)?.component,
   };
 }

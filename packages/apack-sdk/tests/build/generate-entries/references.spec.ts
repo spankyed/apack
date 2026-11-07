@@ -40,13 +40,17 @@ describe('declarative references', () => {
     expect(result.error.issues.some(issue => issue.message.includes('"first"') && issue.message.includes('"second"'))).toBe(true);
   });
 
-  it('checks custom lazy component targets without eagerly importing them', async () => {
+  it('defaults custom icons to lazy loading and honors explicit eager bindings', async () => {
     source();
     write('src/icon.vue', '<template><span>Icon</span></template>');
+    write('src/eager-icon.vue', '<template><span>Eager icon</span></template>');
     const files = await generate({ features: { memos: { references: {
-      ...references, types: { memo: { ...references.types.memo, icon: { entry: 'src/icon.vue', load: 'lazy' } } },
+      ...references, types: { memo: { ...references.types.memo, icon: { entry: 'src/icon.vue' } } },
+      categories: { memos: { ...references.categories.memos, icon: { entry: 'src/eager-icon.vue', load: 'eager' } } },
     } } } });
     expect(files['src/__generated__/references.ts']).toContain('defineAsyncComponent(() => import("../icon.vue")');
+    expect(files['src/__generated__/references.ts']).toMatch(/import __reference_\d+ from "..\/eager-icon.vue"/);
+    expect(files['src/__generated__/references.ts']).not.toContain('import("../eager-icon.vue")');
     expect(files['src/__generated__/references.ts']).not.toMatch(/import __reference_\d+ from "..\/icon.vue"/);
   });
 

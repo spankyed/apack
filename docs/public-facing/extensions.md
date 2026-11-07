@@ -192,7 +192,7 @@ without importing components or layout code. Codegen assembles the checked `Step
     "category": "logic"
   },
   "colorKey": "indigo",
-  "components": { "form": { "entry": "src/extensions/steps/my-step/form.vue", "load": "lazy" } },
+  "components": { "form": "src/extensions/steps/my-step/form.vue" },
   "layout": { "hasInput": true, "getHeight": "src/extensions/steps/my-step/layout.ts#getHeight" }
 }
 ```
@@ -200,7 +200,7 @@ without importing components or layout code. Codegen assembles the checked `Step
 | Field | Description |
 |---|---|
 | `nodeConfig` | Palette category, icon, connection rules and availability flags (below) |
-| `components?` | Optional `node` and `form` targets: a component path or `{ entry, load?: "lazy" }`. A script component may name `path#export`; Vue SFCs use their default export. `node` replaces the default canvas node; `form` replaces the default form |
+| `components?` | Optional `node` and `form` targets: a component path or `{ entry, load?: "eager" }`. Components load on demand by default; `load: "eager"` imports one with the pack. A script component may name `path#export`; Vue SFCs use their default export. `node` replaces the default canvas node; `form` replaces the default form |
 | `colorKey?` | Node style color: `purple`, `blue`, `amber`, `cyan`, `orange`, `emerald`, `indigo`, `neutral`, `red` or `yellow` |
 | `handlePrefix?` | Multi-output steps: outgoing handles are `<prefix>-0`, `<prefix>-1`, … |
 | `layout?` | Inline `hasInput`/`usesExitCount` flags and named `getHeight`/`getPorts` function references. Functions receive `(node, { exitCount })`; omitted layout uses one input and one output |
@@ -288,10 +288,7 @@ A step is declared in `apack.json` under `extensions.steps`, keyed by its type, 
           },
           "colorKey": "indigo",
           "components": {
-            "form": {
-              "entry": "src/extensions/steps/my-step/form.vue",
-              "load": "lazy"
-            }
+            "form": "src/extensions/steps/my-step/form.vue"
           }
         },
         "runtime": {
@@ -326,10 +323,7 @@ A step is declared in `apack.json` under `extensions.steps`, keyed by its type, 
           },
           "colorKey": "blue",
           "components": {
-            "form": {
-              "entry": "src/extensions/steps/my-trigger/form.vue",
-              "load": "lazy"
-            }
+            "form": "src/extensions/steps/my-trigger/form.vue"
           }
         },
         "node": {
@@ -442,7 +436,7 @@ An artifact is declared in `apack.json` under `extensions.artifacts`, keyed by i
 | Field | Required | What it is |
 |---|---|---|
 | `icon` | yes | The name of a `lucide-vue-next` export. That is the icon set the host provides every pack's frontend, so a pack names one rather than shipping a component; a name lucide doesn't export fails the pack's typecheck |
-| `fe` | no | The viewer that opens it — a `.vue` file, taken by its default export |
+| `fe` | no | The viewer component that opens it, loaded on demand. Use `{ entry, load: "eager" }` to import it with the pack |
 
 Both of an artifact's facets are frontend ones, so the backend registration carries the type alone and the
 icon set never reaches a pack's backend bundle.
@@ -537,7 +531,7 @@ facet into its runtime, so a backend process never loads a Vue component to know
 | Field | Required | What it is |
 |---|---|---|
 | `kind` | no | `display` (the default) or `input` |
-| `fe` | no | The component that draws it — a `.vue` file, taken by its default export. The host renders it |
+| `fe` | no | The component that draws it, loaded on demand. The host renders it; `{ entry, load: "eager" }` opts into eager loading |
 | `be` | no | `"path#exportName"` of its `BlockBEFacet` |
 
 The key is the type, so a pack cannot declare one twice, and a path naming no file fails the build naming
@@ -717,7 +711,7 @@ bindings still determine presentation and click behavior independently of parsin
 
 ### App extensions
 
-`extensions.appExtensions` maps a slot name to a Vue component file: `{ "welcome": "src/extensions/app/Welcome.vue" }`. The app renders one slot, `welcome`: an overlay shown to first-time users during onboarding. Slot names have one active pack owner; conflicting registrations are refused.
+`extensions.appExtensions` maps a slot name to a component target, loaded on demand by default: `{ "welcome": "src/extensions/app/Welcome.vue" }`. The app renders one slot, `welcome`: an overlay shown to first-time users during onboarding. Slot names have one active pack owner; conflicting registrations are refused.
 
 ### PackFERegistration
 
@@ -726,7 +720,7 @@ The generated FE entry (`__generated__/pack-entry-fe.ts`) default-exports a `Pac
 | Field | Source |
 |---|---|
 | `features` | Each feature with a `surface`: its generated binding from declared state/views/presentation, its `designation`, and `default: true` on the one whose `surface` sets `default`. Bindings must match the accepted declaration; startup selection follows the [declared default policy](manifest.md#features), independently of frontend delivery. Duplicate designation ownership refuses the pack |
-| `steps` / `artifacts` / `blocks` | each entry's `fe` facet, imported into the generated frontend entry (an artifact's `icon` with it) |
+| `steps` / `artifacts` / `blocks` | each entry's frontend binding; components load on demand, while an artifact's named icon is imported with the entry |
 | `textEditor` | `extensions.textEditor` |
 | `appExtensions` | `extensions.appExtensions` |
 

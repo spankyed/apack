@@ -1,0 +1,79 @@
+name: Populated startup comparison
+
+on:
+  workflow_call:
+    inputs:
+      baseline:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      APACK_CHAIN_CORES: 2
+      APACK_PERFORMANCE_MACHINE_ID: github-macos-26-startup-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.2
+          cache: npm
+      - name: Install pinned npm
+        run: npm install -g npm@11.21.1
+      - name: Pin baseline and require matching native source
+        env:
+          BASELINE_REF: ${{ inputs.baseline }}
+        run: |
+          test -n "$BASELINE_REF"
+          baseline_commit=$(git rev-parse --verify --end-of-options "$BASELINE_REF^{commit}")
+          git worktree add --detach "$RUNNER_TEMP/startup-baseline.noindex" "$baseline_commit"
+          cmp vendor/elmdb.rev "$RUNNER_TEMP/startup-baseline.noindex/vendor/elmdb.rev"
+      - uses: ./.github/actions/elmdb
+      - name: Install separate revision dependencies
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          ln -s "$GITHUB_WORKSPACE/vendor/elmdb" "$RUNNER_TEMP/startup-baseline.noindex/vendor/elmdb"
+          npm ci --no-audit --no-fund
+          npm ci --prefix "$RUNNER_TEMP/startup-baseline.noindex" --no-audit --no-fund
+      - name: Build qualification tools
+        run: npm run packages:ensure
+      - name: Compare populated startup
+        run: >-
+          node scripts/with-source.mjs tsx scripts/compare-performance-revisions.ts
+          --baseline "$RUNNER_TEMP/startup-baseline.noindex"
+          --candidate "$GITHUB_WORKSPACE"
+          --scenario populated-startup --mode disabled --trials 20
+          --output .apack/performance/startup-revision-comparison
+      - name: Profile baseline startup outside the timing comparison
+        working-directory: ${{ runner.temp }}/startup-baseline.noindex
+        env:
+          APACK_PERFORMANCE_MODE: detailed
+          APACK_PERFORMANCE_TRIALS: 1
+          APACK_PERFORMANCE_RUN_OUTPUT: ${{ github.workspace }}/.apack/performance/startup-diagnostic/baseline
+        run: node scripts/with-source.mjs tsx tests/performance/startup-run.ts
+      - name: Profile candidate startup outside the timing comparison
+        env:
+          APACK_PERFORMANCE_MODE: detailed
+          APACK_PERFORMANCE_TRIALS: 1
+          APACK_PERFORMANCE_RUN_OUTPUT: ${{ github.workspace }}/.apack/performance/startup-diagnostic/candidate
+        run: node scripts/with-source.mjs tsx tests/performance/startup-run.ts
+      - name: Preserve reports and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: startup-revision-comparison-${{ github.run_id }}
+          include-hidden-files: true
+          path: |
+            .apack/performance/startup-revision-comparison
+            .apack/performance/startup-diagnostic
+            node_modules/.cache/apack-chain/runs
+            ${{ runner.temp }}/startup-baseline.noindex/node_modules/.cache/apack-chain/runs
+          if-no-files-found: warn

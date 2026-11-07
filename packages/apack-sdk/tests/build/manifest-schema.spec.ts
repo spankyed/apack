@@ -56,6 +56,7 @@ describe('parseManifest', () => {
       { features: { memos: { description: 'Manage memos.', settings: { ...settings, form: 'src/module#value' } } } },
       { extensions: { settings: { extra: { ...settings, form: 'src/module#value' } } } },
       { extensions: { blocks: { extra: { fe: 'src/module#value' } } } },
+      { extensions: { blocks: { extra: { fe: { entry: 'src/module#value', load: 'eager' } } } } },
       { extensions: { artifacts: { extra: { icon: 'File', fe: 'src/module#value' } } } },
       { extensions: { textEditor: { editor: { popups: { extra: 'src/module#value' } } }, appExtensions: { extra: 'src/module#value' } } },
       { extensions: { dsl: { extra: { entry: 'src/module#value', targets: ['monaco'] } } } },

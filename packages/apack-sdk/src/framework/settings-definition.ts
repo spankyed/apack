@@ -1,3 +1,5 @@
+import type { ComponentTarget } from './surface-declaration.ts';
+
 /** JSON Schema draft-07 describing effective values, never sparse overrides. */
 export type SettingsSchema = Record<string, unknown>;
 
@@ -7,7 +9,7 @@ export interface SettingsDefinition {
   defaults: Record<string, unknown>;
   title?: string;
   description?: string;
-  form?: string;
+  form?: ComponentTarget;
   /** Owning packs and their dependents share access by default; owner restricts mutation. */
   access?: 'shared' | 'owner';
 }

@@ -356,7 +356,7 @@ describe('generated step registrations', () => {
       node: { label: 'Split' }, build: { compile: 'src/compiler/build.ts#compile', validate: 'src/compiler/build.ts#validate', getLabel: 'src/compiler/build.ts#getLabel' }, types: 'src/model/declared.ts',
       dsl: { helpers: 'src/dsl/helpers.ts' },
       fe: { nodeConfig: { icon: 'Split', category: 'logic', connectionRules: { inputs: 1, outputs: -1 } },
-        components: { form: { entry: 'src/views/Form.vue', load: 'lazy' } } },
+        components: { form: 'src/views/Form.vue' } },
     } } });
     expect(files['src/__generated__/step-types.ts']).toContain("export type * from '../model/declared.ts'");
     expect(files['src/__generated__/types.ts']).toContain('SplitNode');
@@ -398,8 +398,8 @@ describe('generated artifact registrations', () => {
 
     const fe = files['src/__generated__/pack-entry-fe.ts'];
     expect(fe).toContain("import { ListTodo, Network } from 'lucide-vue-next';");
-    expect(fe).toContain("import __artifactFE_0 from '../artifacts/todo.vue';");
-    expect(fe).toContain("  artifacts: [\n    { type: 'todo', fe: { icon: ListTodo, component: __artifactFE_0 } },\n    { type: 'graph', fe: { icon: Network } },\n  ],");
+    expect(fe).toContain('defineAsyncComponent(() => import("../artifacts/todo.vue").then(module => module.default))');
+    expect(fe).toContain("{ type: 'graph', fe: { icon: Network } }");
   });
 
   // Two artifacts on one icon is ordinary — default-setup's `text` and `json` share FileText
@@ -416,7 +416,7 @@ describe('generated artifact registrations', () => {
   });
 
   it('fail naming the artifact and the file for a viewer path naming nothing', async () => {
-    await expect(generate({ artifacts: { todo: { icon: 'ListTodo', fe: 'src/artifacts/missing.vue' } } })).rejects.toThrow('Artifact "todo": fe: no file at src/artifacts/missing.vue');
+    await expect(generate({ artifacts: { todo: { icon: 'ListTodo', fe: 'src/artifacts/missing.vue' } } })).rejects.toThrow('Artifact "todo": fe: no component found at src/artifacts/missing.vue');
   });
 });
 
@@ -440,8 +440,8 @@ describe('generated block registrations', () => {
     expect(be).not.toContain('Rating.vue');
 
     const fe = files['src/__generated__/pack-entry-fe.ts'];
-    expect(fe).toContain("import __blockFE_0 from '../blocks/Rating.vue';");
-    expect(fe).toContain("  blocks: [\n    { type: 'rating', fe: { component: __blockFE_0 } },\n    { type: 'approval', kind: 'input', fe: { component: __blockFE_1 } },\n  ],");
+    expect(fe).toContain('defineAsyncComponent(() => import("../blocks/Rating.vue").then(module => module.default))');
+    expect(fe).toContain("type: 'approval', kind: 'input', fe: { component: defineAsyncComponent");
     expect(fe).not.toContain('asideFacet');
   });
 
@@ -452,7 +452,7 @@ describe('generated block registrations', () => {
   });
 
   it('fail naming the block and the file for a component path naming nothing', async () => {
-    await expect(generate({ blocks: { rating: { fe: 'src/blocks/Missing.vue' } } })).rejects.toThrow('Block "rating": fe: no file at src/blocks/Missing.vue');
+    await expect(generate({ blocks: { rating: { fe: 'src/blocks/Missing.vue' } } })).rejects.toThrow('Block "rating": fe: no component found at src/blocks/Missing.vue');
   });
 
   it("fail naming the block and the export for a backend facet the module doesn't export", async () => {
@@ -468,11 +468,12 @@ it('wires declared feature and group forms without inventing a surface or import
   write('src/group.vue', '<template><div>Group</div></template>');
   const files = await generate({
     features: [{ id: 'shared', settings: { ...definition, form: 'src/feature.vue' } }],
-    extensions: { settings: { shared: { ...definition, form: 'src/group.vue' } } },
+    extensions: { settings: { shared: { ...definition, form: { entry: 'src/group.vue', load: 'eager' } } } },
   });
   const frontend = files['src/__generated__/pack-entry-fe.ts'];
-  expect(frontend).toContain("import __settingsFeature_shared from '../feature.vue'");
-  expect(frontend).toContain("import __settingsGroup_shared from '../group.vue'");
+  expect(frontend).toContain('const __settingsFeature_shared = defineAsyncComponent(() => import("../feature.vue").then(module => module.default))');
+  expect(frontend).toContain('import __settings_0 from "../group.vue"');
+  expect(frontend).toContain('const __settingsGroup_shared = __settings_0');
   expect(frontend).toContain("'shared': { settingsForm: __settingsFeature_shared }");
   expect(frontend).toContain("settingsForms: { 'shared': __settingsGroup_shared }");
   expect(frontend).not.toContain('surface:');
@@ -485,14 +486,14 @@ it('generates routed and lazy panes, named state, custom icons and fallback pred
   write('src/predicate.ts', 'throw new Error("Do not activate"); export const visible = () => true;');
   for (const view of ['list', 'detail', 'icon', 'panel', 'chat']) write(`src/${view}.vue`, '<template><div /></template>');
   const files = await generate({ features: [{ id: 'notes', surface: { label: 'Notes', state: 'src/state.ts#machine',
-    icon: { entry: 'src/icon.vue' }, canvas: { routes: { entry: 'src/list.vue', view: { entry: 'src/detail.vue', load: 'lazy' } } },
+    icon: { entry: 'src/icon.vue' }, canvas: { routes: { entry: { entry: 'src/list.vue', load: 'eager' }, view: 'src/detail.vue' } },
     panel: 'src/panel.vue', chat: 'src/chat.vue',
     fallbackPanel: { label: 'Inspect', toggle: { type: 'INSPECT' }, isShown: 'src/predicate.ts#visible' } } }] });
   const frontend = files['src/__generated__/pack-entry-fe.ts'];
   expect(frontend).toContain('import { machine as __surface_notes_0 }');
-  expect(frontend).toContain('"entry": __surface_notes_2');
+  expect(frontend).toContain('"entry": __surface_notes_1');
   expect(frontend).toContain('defineAsyncComponent(() => import("../detail.vue").then(module => module.default))');
-  expect(frontend).toContain('import { visible as __surface_notes_5 }');
+  expect(frontend).toContain('import { visible as __surface_notes_2 }');
   expect(frontend).toContain('label: "Inspect", toggle: {"type":"INSPECT"}');
   expect(files['src/__generated__/pack-entry.ts']).not.toContain('src/state');
   write('src/predicate.ts', 'export type visible = boolean;');
@@ -505,7 +506,7 @@ it('checks step component exports and callable layouts without executing their m
   write('src/presentation.ts', 'throw new Error("Must not execute"); export const Form = {}; export interface TypeOnly {} export function getHeight() { return 70; }');
   const step = { node: { label: 'Memo' }, fe: {
     nodeConfig: { icon: 'Box', category: 'data' as const, connectionRules: { inputs: 1, outputs: 1 } },
-    components: { form: { entry: 'src/presentation.ts#Form', load: 'lazy' as const } },
+    components: { form: 'src/presentation.ts#Form' },
     layout: { hasInput: false, getHeight: 'src/presentation.ts#getHeight' },
   } };
   const files = await generate({ steps: { memo: step } });

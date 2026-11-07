@@ -4,10 +4,10 @@ import path from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { readPackageInputs } from '@apackdev/host/build/package-inputs';
-import { readPackBuild } from '@apackdev/host/packs';
 import { packFixture } from '@apackdev/sdk/testing/pack-fixture';
 import * as installations from '../../src/build/compiler-installation.ts';
 import { createPackBuilder, type PackBuilder } from '../../src/build/build-process.ts';
+import { publishedViewCode } from '../_support/published-view.ts';
 import type { PackFrontendAddress } from '../../src/build/frontend-process.ts';
 import { startPackBuildWatcher } from '../../src/build/watch.ts';
 
@@ -108,13 +108,14 @@ async function response(address: PackFrontendAddress, template = false): Promise
   return text;
 }
 
+
 it('refreshes backend and live frontend together, retains failed incumbents and awaits retirement', async () => {
   const { root, entry, generation, captures } = pack;
   const addresses: PackFrontendAddress[] = [];
   await builder!.serveFrontend(address => { if (address) addresses.push(address); });
   const first = addresses[0]!;
   expect(await response(first)).toContain('GENERATION_A');
-  expect(fs.readFileSync(path.join(root, 'dist/runtime/fe.js'), 'utf8')).toContain('GENERATION_A');
+  expect(publishedViewCode(root)).toContain('GENERATION_A');
   const revision = readPackBuild(path.join(root, 'dist')).revision;
 
   const update = await nextComponentUpdate(first);
@@ -132,7 +133,7 @@ it('refreshes backend and live frontend together, retains failed incumbents and 
   const second = addresses.at(-1)!;
   expect(second.pid).not.toBe(first.pid);
   expect(await response(second)).toContain('GENERATION_B');
-  expect(fs.readFileSync(path.join(root, 'dist/runtime/fe.js'), 'utf8')).toContain('GENERATION_B_SECOND');
+  expect(publishedViewCode(root)).toContain('GENERATION_B_SECOND');
   expect(() => process.kill(first.pid, 0)).toThrow();
   // Retiring the frontend releases its compiler installation; the store keeps the entry for the next build
   const accepted = await captures.mock.results[0]!.value;

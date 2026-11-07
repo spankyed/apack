@@ -53,10 +53,7 @@
         "label": "Memos",
         "icon": "StickyNote",
         "state": "src/features/memos/fe/state.ts",
-        "canvas": {
-          "entry": "src/features/memos/fe/canvas/list.vue",
-          "load": "lazy"
-        }
+        "canvas": "src/features/memos/fe/canvas/list.vue"
       },
       "services": {
         "memoStamp": "src/features/memos/be/stamp-service.ts#memoStamp"

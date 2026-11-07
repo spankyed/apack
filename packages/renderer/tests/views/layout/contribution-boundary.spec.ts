@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { createApp, defineComponent, h, nextTick, type App } from 'vue';
+import { createApp, defineAsyncComponent, defineComponent, h, nextTick, type App, type Component } from 'vue';
 import ContributionBoundary from '@/views/layout/ContributionBoundary.vue';
 
 const runtime = vi.hoisted(() => ({ identity: {} as object | undefined, listeners: new Set<(packId: string) => void>() }));
@@ -20,13 +20,13 @@ beforeEach(() => {
 });
 afterEach(() => { app?.unmount(); app = undefined; expect(runtime.listeners.size).toBe(0); });
 
-function render(area: string, packId = 'fixture') {
+function render(area: string, packId = 'fixture', component?: Component) {
   let broken = true;
   let current = true;
   const attempts = vi.fn();
   const healthy = vi.fn();
   const errorHandler = vi.fn();
-  const View = defineComponent({ setup() {
+  const View = component ?? defineComponent({ setup() {
     attempts();
     return () => { if (broken) throw new Error('render failed'); return h('p', 'Recovered'); };
   } });
@@ -88,4 +88,19 @@ it('leaves native host failures with the host error handler', async () => {
   expect(f.errorHandler).toHaveBeenCalledOnce();
   expect(f.el.querySelector('[role="alert"]')).toBeNull();
   expect(write).not.toHaveBeenCalled();
+});
+
+it('contains a rejected component import and retries it without disturbing host controls', async () => {
+  const loader = vi.fn().mockRejectedValueOnce(new Error('component import failed'))
+    .mockResolvedValue(defineComponent({ render: () => h('p', 'Loaded on retry') }));
+  const component = defineAsyncComponent(loader);
+  expect(loader).not.toHaveBeenCalled();
+  const f = render('canvas', 'fixture', component);
+  await vi.waitFor(() => expect(f.el.querySelector('[role="alert"]')?.textContent).toContain('component import failed'));
+  f.el.querySelector<HTMLButtonElement>('#settings')!.click();
+  expect(f.healthy).toHaveBeenCalledOnce();
+  expect(f.errorHandler).not.toHaveBeenCalled();
+  f.el.querySelector<HTMLButtonElement>('[role="alert"] button')!.click();
+  await vi.waitFor(() => expect(f.el.textContent).toContain('Loaded on retry'));
+  expect(loader).toHaveBeenCalledTimes(2);
 });

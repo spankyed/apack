@@ -78,7 +78,7 @@ export async function addStep(args: string[], root: string) {
         category: isTrigger ? 'trigger' : 'logic',
         isImplemented: true,
       },
-      components: { form: { entry: `${dir}/form.vue`, load: 'lazy' } },
+      components: { form: `${dir}/form.vue` },
     },
   });
   writeManifest(root, manifest);
