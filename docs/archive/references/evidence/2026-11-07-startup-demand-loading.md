@@ -74,5 +74,22 @@ Earlier external-drive runs suffered uninterruptible filesystem waits and proces
 they are diagnostic only and excluded from the comparison. No deadline or correctness assertion was
 relaxed to obtain this result.
 
-Final application acceptance is tracked separately from performance qualification; successful timing
-trials alone do not certify the editor, pack lifecycle or native/compiler suites.
+## Final acceptance and requirement audit
+
+[Final strict acceptance](https://github.com/spankyed/apack/actions/runs/42330205259) passed all six
+jobs at `beea09ce5325c5777eed19311af70b764e7c0a34`: producers, both integration shards,
+both native shards, and app/rest. The later commits contain only this evidence and its README link;
+application and test sources are identical. The formerly failing bundled-editor typing check passed.
+Focused validation also passed 31 startup/editor/preload tests, repository lint and workflow lint.
+
+| Requirement | Implementation and evidence |
+| --- | --- |
+| On-demand Monaco and unnecessary shared UI | Host-provided memoized resource; local workers; production shared entries no longer eagerly executed; browser deferral/offline/editing check passes. |
+| Renderer/backend overlap with readiness, auth and failures preserved | Loading starts before API readiness; typed authenticated handoff replaces a stale port; per-window readiness and cleanup; startup/restart/failure tests and full app acceptance pass. |
+| Profile and simplify initial-view work | Separate validated CPU/allocation captures; fourteen view targets use existing lazy declarations; published graph excludes inactive views; pack lifecycle and app suites pass. |
+| Matched maintained qualification | Recording disabled, identical fixture/native/runtime/machine, five warmups and twenty measured per revision, observed balanced ABBA order; all fifty launches and maintained admission pass. |
+| Reviewable delivery | Ready PRs [351](https://github.com/spankyed/apack/pull/351), [350](https://github.com/spankyed/apack/pull/350), [355](https://github.com/spankyed/apack/pull/355), in dependency order; none merged by this session. |
+
+No further runtime correction was identified in the final source review. The remaining approximately
+four-second startup is not solved by this stack; the uncovered launch/module-loading intervals above
+remain an attribution limitation, rather than evidence for a speculative rewrite.
