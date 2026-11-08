@@ -174,8 +174,13 @@ interface Connection {
    * that session; one naming none is the connection's — a handshake, a spawn — and goes to whoever is
    * waiting. Without it every refusal went to `waiting.shift()`, so a dead terminal's rejected keystroke
    * could fail the unrelated `spawn` that happened to be at the head of the queue.
+   *
+   * `onMatch` runs **in the turn the frame is read**, before the promise settles. A promise settles in a
+   * microtask and readline emits every buffered line synchronously, so anything done after the `await` is
+   * done too late for a frame that arrived in the same read: a shell that dies instantly sends `spawned`
+   * and `exited` microseconds apart, and a listener registered after the await never heard the exit.
    */
-  next(accept: (event: Event) => boolean, session?: string): Promise<Event>;
+  next(accept: (event: Event) => boolean, options?: { session?: string; onMatch?: (event: Event) => void }): Promise<Event>;
 }
 
 /**
@@ -190,6 +195,13 @@ export interface BrokerOptions {
   binary: string;
   socket: string;
   env?: NodeJS.ProcessEnv;
+  /**
+   * How long the broker has to say where it is listening, and a connection to be accepted.
+   *
+   * A parameter for the reason `socketPath`'s platform is one: the bound is the subject, and a case about it
+   * must be able to reach it without waiting out a figure chosen for a loaded machine.
+   */
+  startMs?: number;
 }
 
 /**
@@ -204,7 +216,7 @@ export interface BrokerOptions {
  * would take the address and leave the first one's sessions unreachable with no error anywhere.
  */
 async function reach(options: BrokerOptions): Promise<net.Socket> {
-  const listening = await connect(options.socket).catch(() => undefined);
+  const listening = await connect(options.socket, options.startMs).catch(() => undefined);
   if (listening) return listening;
 
   // **Detached, and its handle released.** The broker outlives whoever started it by design — that is the
@@ -217,9 +229,9 @@ async function reach(options: BrokerOptions): Promise<net.Socket> {
   });
   const stderr: string[] = [];
   process_.stderr?.on('data', chunk => { stderr.push(String(chunk)); });
-  await ready(process_, stderr);
+  await ready(process_, stderr, options.startMs);
   process_.unref();
-  return connect(options.socket);
+  return connect(options.socket, options.startMs);
 }
 
 /**
@@ -232,8 +244,18 @@ async function reach(options: BrokerOptions): Promise<net.Socket> {
  */
 export async function holdBrokerSessions(options: BrokerOptions): Promise<{ close(): void }> {
   const socket = await reach(options);
-  socket.write(`${JSON.stringify({ kind: 'hello', protocol: PROTOCOL_VERSION, role: 'lifetime' })}\n`);
-  // Nothing is read: an owner receives no events, and a socket with no reader would otherwise fill
+  // **The answer is read, because a refused hold is silent otherwise.** This greeting can be refused — a
+  // broker speaking another protocol answers `failed` with `HANDSHAKE` — and a caller that only wrote would
+  // report success while the sessions it believes it owns have no owner at all, which is exactly the state
+  // this function exists to prevent. After the greeting nothing more is read: an owner receives no events,
+  // and a socket with no reader would fill.
+  const greeted = frames(socket, new Map());
+  greeted.send({ kind: 'hello', protocol: PROTOCOL_VERSION, role: 'lifetime' });
+  const greeting = await greeted.next(event => event.kind === 'hello');
+  if (greeting.kind !== 'hello' || greeting.protocol !== PROTOCOL_VERSION) {
+    socket.destroy();
+    throw new BrokerError('HANDSHAKE', `the broker speaks protocol ${greeting.kind === 'hello' ? greeting.protocol : '(none)'}; this app speaks ${PROTOCOL_VERSION}`);
+  }
   socket.resume();
   socket.on('error', () => {});
   // **The hold must not keep its process alive.** It is a backstop on the app's lifetime, not a reason for
@@ -264,9 +286,13 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
         env: Object.entries(env ?? {}),
         cwd: cwd ?? null,
       });
-      const spawned = await connection.next(event => event.kind === 'spawned');
+      // The listener is registered as the frame is read, not after the await: an `exited` in the same read
+      // would otherwise find no listener and the terminal would show as live behind a dead shell for ever
+      const spawned = await connection.next(
+        event => event.kind === 'spawned',
+        { onMatch: event => { if (event.kind === 'spawned') listeners.set(event.session, sessionListeners); } },
+      );
       if (spawned.kind !== 'spawned') throw new BrokerError('PTY', 'the broker answered no session');
-      listeners.set(spawned.session, sessionListeners);
       const id = spawned.session;
       return {
         id,
@@ -277,7 +303,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
           connection.send({ kind: 'screen', session: id, history });
           // Keyed by the session, because two of these can be outstanding and an answer must not be taken
           // for the other one's — the broker answers per request and the frames carry no call of their own
-          const answer = await connection.next(event => event.kind === 'screen' && event.session === id, id);
+          const answer = await connection.next(event => event.kind === 'screen' && event.session === id, { session: id });
           if (answer.kind !== 'screen') throw new BrokerError('PTY', 'the broker answered no screen');
           return {
             lines: answer.lines,
@@ -288,7 +314,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
         },
         async facts() {
           connection.send({ kind: 'facts', session: id });
-          const answer = await connection.next(event => event.kind === 'facts' && event.session === id, id);
+          const answer = await connection.next(event => event.kind === 'facts' && event.session === id, { session: id });
           if (answer.kind !== 'facts') throw new BrokerError('PTY', 'the broker answered no facts');
           return {
             cwd: answer.cwd,
@@ -299,7 +325,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
         },
         async search(text, history = 0) {
           connection.send({ kind: 'search', session: id, text, history });
-          const answer = await connection.next(event => event.kind === 'search' && event.session === id, id);
+          const answer = await connection.next(event => event.kind === 'search' && event.session === id, { session: id });
           if (answer.kind !== 'search') throw new BrokerError('PTY', 'the broker answered no search');
           return answer.matches;
         },
@@ -307,7 +333,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
           connection.send({ kind: 'wait', session: id, until, timeout_ms: timeoutMs });
           // **The deadline is the broker's**, so this waits for its answer rather than racing a timer of its
           // own: two deadlines would disagree, and the one that matters is the one holding the waiter
-          const answer = await connection.next(event => event.kind === 'waited' && event.session === id, id);
+          const answer = await connection.next(event => event.kind === 'waited' && event.session === id, { session: id });
           if (answer.kind !== 'waited') throw new BrokerError('PTY', 'the broker answered no wait');
           return answer.outcome;
         },
@@ -329,13 +355,32 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
   };
 }
 
+/**
+ * How long a broker has to say where it is listening, and a connection to be accepted.
+ *
+ * **A bound rather than a guess at how long starting takes.** The broker prints its line before its first
+ * accept, so the figure is slack for a loaded machine and not a measurement — what it is here for is the
+ * case that otherwise has no end: a broker that starts, stays alive and prints nothing to stdout, which is
+ * what a listening line written to stderr looks like from here. Without it the promise never settled, so the
+ * caller's own `catch` never ran: `holdTerminalSessionsForTheApp` logs a failure and carries on, and a hang
+ * is the one shape that silences it.
+ */
+const BROKER_START_MS = 10_000;
+
 /** The broker's ready line, or the reason it never came */
-function ready(process_: ChildProcess, stderr: string[]): Promise<void> {
+function ready(process_: ChildProcess, stderr: string[], startMs = BROKER_START_MS): Promise<void> {
   return new Promise((resolve, reject) => {
     const lines = createInterface({ input: process_.stdout! });
-    const fail = (why: string) => reject(new Error(`${why}${stderr.length > 0 ? `: ${stderr.join('').trim()}` : ''}`));
+    const said = (why: string) => `${why}${stderr.length > 0 ? `: ${stderr.join('').trim()}` : ''}`;
+    const deadline = setTimeout(
+      () => reject(new Error(said(`the broker did not say where it was listening within ${startMs}ms`))),
+      startMs,
+    );
+    deadline.unref();
+    const settle = (run: () => void) => { clearTimeout(deadline); run(); };
+    const fail = (why: string) => settle(() => reject(new Error(said(why))));
     lines.once('line', line => {
-      if (line.startsWith('listening ')) resolve();
+      if (line.startsWith('listening ')) settle(resolve);
       else fail(`the broker's first line was ${JSON.stringify(line)} rather than its socket`);
     });
     process_.once('error', error => fail(`the broker could not be started (${error.message})`));
@@ -343,11 +388,18 @@ function ready(process_: ChildProcess, stderr: string[]): Promise<void> {
   });
 }
 
-function connect(path: string): Promise<net.Socket> {
+function connect(path: string, startMs = BROKER_START_MS): Promise<net.Socket> {
   return new Promise((resolve, reject) => {
     const socket = net.createConnection(path);
-    socket.once('connect', () => resolve(socket));
-    socket.once('error', reject);
+    // A refused connection errors at once; one that is accepted and never completed does not, which is the
+    // same shape as the broker that prints nothing and wants the same answer
+    const deadline = setTimeout(() => {
+      socket.destroy();
+      reject(new Error(`no answer from the broker at ${path} within ${startMs}ms`));
+    }, startMs);
+    deadline.unref();
+    socket.once('connect', () => { clearTimeout(deadline); resolve(socket); });
+    socket.once('error', error => { clearTimeout(deadline); reject(error); });
   });
 }
 
@@ -357,7 +409,7 @@ function connect(path: string): Promise<net.Socket> {
  * lost behind a burst of it.
  */
 function frames(socket: net.Socket, listeners: Map<string, BrokerSessionListeners>): Connection {
-  const waiting: Array<{ accept: (event: Event) => boolean; settle: (event: Event) => void; refuse: (error: Error) => void; session?: string }> = [];
+  const waiting: Array<{ accept: (event: Event) => boolean; settle: (event: Event) => void; refuse: (error: Error) => void; session?: string; onMatch?: (event: Event) => void }> = [];
   const lines = createInterface({ input: socket });
 
   lines.on('line', line => {
@@ -393,7 +445,12 @@ function frames(socket: net.Socket, listeners: Map<string, BrokerSessionListener
       return;
     }
     const index = waiting.findIndex(one => one.accept(event));
-    if (index >= 0) waiting.splice(index, 1)[0]!.settle(event);
+    if (index >= 0) {
+      const matched = waiting.splice(index, 1)[0]!;
+      // Synchronously, so a frame later in this same read finds whatever the match set up
+      matched.onMatch?.(event);
+      matched.settle(event);
+    }
   });
 
   const ended = new Error('the broker connection ended');
@@ -401,8 +458,10 @@ function frames(socket: net.Socket, listeners: Map<string, BrokerSessionListener
 
   return {
     send(request) { socket.write(`${JSON.stringify(request)}\n`); },
-    next(accept, session) {
-      return new Promise<Event>((settle, refuse) => { waiting.push({ accept, settle, refuse, session }); });
+    next(accept, options) {
+      return new Promise<Event>((settle, refuse) => {
+        waiting.push({ accept, settle, refuse, session: options?.session, onMatch: options?.onMatch });
+      });
     },
   };
 }

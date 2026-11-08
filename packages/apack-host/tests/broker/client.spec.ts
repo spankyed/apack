@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { _whenSatisfied } from '@apackdev/sdk/testing/waiting';
-import { BrokerError, startBroker, type Broker } from '../../src/broker/client.ts';
+import { BrokerError, holdBrokerSessions, startBroker, type Broker } from '../../src/broker/client.ts';
 
 /**
  * A broker in a script: it answers the protocol from a table, so a test can say what it answers.
@@ -59,6 +59,15 @@ async function broker(script: Record<string, unknown[]>): Promise<Broker> {
     env: { ...process.env, FAKE_SCRIPT: JSON.stringify(script) },
   });
   return running;
+}
+
+/** A directory with a broker script in it, for a case that starts one itself rather than through `broker` */
+function brokerScript(body: string): { binary: string; socket: string } {
+  directory = mkdtempSync(path.join(tmpdir(), 'broker-client-'));
+  const binary = path.join(directory, 'fake-broker.cjs');
+  writeFileSync(binary, body);
+  chmodSync(binary, 0o755);
+  return { binary, socket: path.join(directory, 'b.sock') };
 }
 
 /** The two every test needs: a greeting, and a session to open */
@@ -182,6 +191,55 @@ describe('the broker client', () => {
     const session = await fake.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
 
     await expect(session.screen(20)).rejects.toThrow(/s-1 is gone/);
+  });
+
+  /**
+   * **A session's listener is registered in the turn its `spawned` frame is read.**
+   *
+   * A promise settles in a microtask and readline emits every buffered line synchronously, so a shell that
+   * dies instantly — a bad `--init-file`, `cmd /K` on a missing script — sends `spawned` and `exited`
+   * microseconds apart and both arrive in one read. Registering after the `await` was too late: the exit
+   * found no listener, `onExit` never fired, and the terminal showed as live behind a dead shell for ever.
+   * That is X2 again, on this side of the socket.
+   */
+  it('hears an exit that arrives in the same read as the session it is about', async () => {
+    const fake = await broker({
+      ...GREETS,
+      spawn: [{ kind: 'spawned', session: 's-1', pid: 7 }, { kind: 'exited', session: 's-1', code: 1 }],
+    });
+    let ended: number | null | undefined;
+
+    await fake.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit(code) { ended = code; } });
+
+    expect(ended, 'the exit arrived before the listener existed').toBe(1);
+  });
+
+  /**
+   * **A broker that starts and says nothing is reported, not awaited.** Its listening line is what says it is
+   * up; a broker that writes that to stderr, or stalls before writing it, settles neither `exit` nor `line`.
+   * The caller's own `catch` then never runs — `holdTerminalSessionsForTheApp` logs a failure and carries on,
+   * so a hang is the one shape that silences it.
+   */
+  it('gives up on a broker that starts and never says where it is listening', async () => {
+    const { binary, socket } = brokerScript(
+      // Alive, holding its stdout open, and saying nothing on it: what a listening line on stderr looks like
+      "#!/usr/bin/env node\nprocess.stderr.write('listening on the wrong stream\\n');\nsetInterval(() => {}, 1000);\n",
+    );
+
+    await expect(startBroker({ binary, socket, startMs: 300 }))
+      .rejects.toThrow(/did not say where it was listening within 300ms/);
+  });
+
+  /**
+   * **The hold reads the answer to its own greeting.** It can be refused — a broker speaking another protocol
+   * answers `failed` with `HANDSHAKE` — and a hold that only wrote reported success while the sessions it
+   * believed it owned had no owner, which is the one state this function exists to prevent.
+   */
+  it('refuses a lifetime hold the broker did not accept', async () => {
+    const { binary, socket } = brokerScript(FAKE);
+    const env = { ...process.env, FAKE_SCRIPT: JSON.stringify({ hello: [{ kind: 'hello', protocol: 99 }] }) };
+
+    await expect(holdBrokerSessions({ binary, socket, env })).rejects.toThrow(/speaks protocol 99/);
   });
 
   it('says why a broker that never listened did not start, rather than timing out', async () => {
