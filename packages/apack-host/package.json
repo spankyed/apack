@@ -69,6 +69,7 @@
     "@opentelemetry/core": "^3.0.0",
     "@opentelemetry/sdk-trace": "^3.0.0",
     "ai": "^7.0.100",
+    "apack-terminal": "file:../../vendor/apack-terminal/node",
     "fs-extra": "^11.4.0",
     "semver": "^7.8.5",
     "tar": "^7.5.22",

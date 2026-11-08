@@ -12,7 +12,9 @@
 import { describe, expect, it } from 'vitest';
 import { APP_PROCESS_ENV_VARS } from '@apackdev/sdk/env';
 import * as path from 'node:path';
-import { brokerBinaryPath, brokerEnvironment, socketPath } from '../../src/services/terminal.ts';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import { brokerEnvironment, findBrokerBinary, packagedBrokerBinary, socketPath } from '../../src/services/terminal.ts';
 
 /** Every variable the app sets on the API's process, as if this were that process */
 const asTheApiProcess = (): NodeJS.ProcessEnv => ({
@@ -111,28 +113,40 @@ describe('where the broker listens', () => {
 });
 
 /**
- * **What `cargo` calls the binary is not the same on every platform**, and looking for the wrong name
- * there finds nothing — so the caller is told to run `cargo build` in a checkout where it has been run,
- * and the terminal never starts. That is what Windows did until an end-to-end run found it; from a Mac
- * every case passed, because on a Mac the name is right.
+ * **Where the binary comes from, which is the package and not a path.** It was a path derived from
+ * `SHIPPED_PACKS_DIR` into the vendored checkout's `target/debug`, and it was wrong about the one thing a
+ * path has to get right: `cargo` writes `apack-terminal.exe` on Windows, so `existsSync` answered false and
+ * the caller got a refusal telling it to run `cargo build` in a checkout where `cargo build` had just
+ * succeeded. The terminal never started on Windows at all, and from a Mac every case passed. A package that
+ * answers for its own binary cannot be wrong about its own name, which is why there are two cases here
+ * rather than three about naming.
  */
-describe('where the broker binary is', () => {
-  const packages = path.join('C:', 'src', 'apack', 'packages');
+describe('where the broker binary comes from', () => {
+  it('is whatever the apack-terminal package ships', () => {
+    const shipped = packagedBrokerBinary();
+    expect(shipped, '`cargo xtask package` has not staged a binary in the apack-terminal checkout')
+      .toBeTruthy();
 
-  it('looks for an .exe on Windows', () => {
-    expect(brokerBinaryPath(packages, 'win32')?.endsWith('apack-terminal.exe')).toBe(true);
+    expect(findBrokerBinary()).toBe(shipped);
   });
 
-  it('looks for the extensionless name everywhere else', () => {
-    for (const platform of ['darwin', 'linux'] as const) {
-      const found = brokerBinaryPath('/home/me/apack/packages', platform) ?? '';
-      expect(found.endsWith('apack-terminal'), platform).toBe(true);
-      expect(found.endsWith('.exe'), platform).toBe(false);
+  /**
+   * The override, which is how a contributor runs a build of their own — a debug broker, with its
+   * assertions and its symbols. It refuses a path that is not there rather than falling through, because a
+   * named binary that has gone is a mistake to report and not a reason to run a different one.
+   */
+  it('takes a build named outright, and refuses one that is not there', () => {
+    const named = path.join(os.tmpdir(), `apack-broker-${process.pid}`);
+    fs.writeFileSync(named, '');
+    try {
+      process.env.APACK_TERMINAL_BINARY = named;
+      expect(findBrokerBinary()).toBe(named);
+
+      process.env.APACK_TERMINAL_BINARY = `${named}-gone`;
+      expect(() => findBrokerBinary()).toThrow(/does not exist/);
+    } finally {
+      delete process.env.APACK_TERMINAL_BINARY;
+      fs.rmSync(named, { force: true });
     }
-  });
-
-  it('finds it beside the checkout the packages directory names', () => {
-    expect(brokerBinaryPath('/home/me/apack/packages', 'linux'))
-      .toBe('/home/me/apack/vendor/apack-terminal/target/debug/apack-terminal');
   });
 })

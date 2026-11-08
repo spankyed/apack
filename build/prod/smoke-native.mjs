@@ -10,10 +10,13 @@
 //   elmdb             opens a database in a temp dir, writes its schema, closes, opens it again and reads it back
 //   @napi-rs/keyring  loads its binding, without touching the credential store
 //
-// **The terminal is not probed here, because its native half is no longer a module of this app.** A pty
-// belongs to the `apack-terminal` broker, a binary the app spawns, and a packaged app carries none yet:
-// `brokerBinary` looks in a checkout or at `APACK_TERMINAL_BINARY`. What would check it is a probe for
-// that binary, and `docs/deferred/apack-terminal-as-a-package.md` is the condition for having one.
+//   apack-terminal    runs the broker binary the package ships, and sees it bind a socket
+//
+// **The broker is a binary rather than a module, so its probe is a spawn.** A pty belongs to the
+// `apack-terminal` broker, which the app starts as a child process; what can be wrong with it is what can
+// be wrong with any binary in a release — built for another architecture, or not carried into the package
+// at all, which is what a packaged app had before that package existed. Both show up the same way: it does
+// not start.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -73,6 +76,21 @@ async function main() {
   const { Entry } = load('@napi-rs/keyring');
   if (typeof Entry !== 'function') throw new Error('@napi-rs/keyring has no Entry');
   console.log('@napi-rs/keyring: binding loaded');
+
+
+  // **Run it with no arguments, which is the whole probe.** The broker answers that with its usage and
+  // exit 2, so this needs no socket, no timing and no cleanup -- and what it proves is the thing that can
+  // be wrong in a release: a binary built for another architecture never reaches its own argument check,
+  // and one the package did not carry is not there to run. Asked of the package, not of a path, because
+  // the name carries .exe on Windows and the package is what knows that.
+  const broker = load('apack-terminal').brokerBinary();
+  if (!broker) throw new Error('the apack-terminal package carries no binary for this platform');
+  const ran = require('node:child_process').spawnSync(broker, [], { encoding: 'utf8' });
+  if (ran.error) throw new Error('apack-terminal did not run: ' + ran.error.message);
+  if (ran.status !== 2 || !/usage: apack-terminal/.test(ran.stderr || '')) {
+    throw new Error('apack-terminal answered ' + ran.status + ' and ' + JSON.stringify(ran.stderr) + ', not its usage');
+  }
+  console.log('apack-terminal: the broker binary runs');
 }
 main().catch((error) => { console.error(error?.stack ?? String(error)); process.exit(1); });
 `;

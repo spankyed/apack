@@ -1,9 +1,20 @@
 # Consume apack-terminal as a package, as elmdb is
 
-Status: deferred, and **not blocked on a release process**. This document authorizes no implementation.
-Revisit when somebody is ready to add an npm package to the
-[apack-terminal](https://github.com/spankyed/apack-terminal) repository; everything below follows from
-that one change.
+Status: **done, 2026-11-08.** The package is `node/` in the
+[apack-terminal](https://github.com/spankyed/apack-terminal) repository, staged by `cargo xtask package`
+there and installed here as `file:../../vendor/apack-terminal/node`. Everything below followed from that one
+change, as it said it would. What landed, against what this planned:
+
+| planned | what happened |
+|---|---|
+| delete `scripts/broker-protocol.ts`, the copy, the `protocol:check` leg | all three, and the two npm scripts |
+| move `brokerBinaryPath` and `brokerBinary` into the package | `brokerBinaryPath` deleted; the package answers for its own binary, and the host keeps `brokerBinary`, which is its refusal and the `APACK_TERMINAL_BINARY` override |
+| move 4 `socketPath` cases into the package | **not done, on purpose.** One broker per data dir is the *app's* policy, and the socket's name is derived from a path only the app knows — the same reason this plan keeps the `brokerEnvironment` cases here |
+| delete ~2 cases in `tests/broker/lifetime.spec.ts` | **not done.** They had never run anywhere: the suite named a path into the checkout's `target/debug`, which exists on no runner, so every case was skipped on every CI run. They run now, against the package's binary, in 65 ms. Deleting cases that have just started proving something is not a saving |
+| the `protocol:check` gate that could not fail in CI | moot, as this predicted: the check is gone rather than fixed |
+
+Also landed, which this plan listed only as "worth knowing while someone is in that repository": CI on all
+three platforms, `cargo xtask pre-push`, mutation testing, `.config/nextest.toml` and `rustfmt.toml`.
 
 ## What it is actually for
 
@@ -58,7 +69,7 @@ has not got there either.
 
 `protocol:check` is **inert in CI today**: `.github/workflows/ci.yml` never links the vendored checkouts,
 so the check prints *"not derived here"* and exits 0 — a gate that cannot fail where it matters, which is
-the shape [`CLAUDE.md`](../../CLAUDE.md) names as *a check that reports nothing may have looked at
+the shape [`CLAUDE.md`](../../../CLAUDE.md) names as *a check that reports nothing may have looked at
 nothing*. Making it fail instead of pass is a one-line change and a reasonable stopgap; it is recorded
 here rather than done because this document deletes the check outright, and fixing a thing on its way out
 is motion.

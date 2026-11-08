@@ -3,11 +3,14 @@
 // plain Node with no dependencies for the same reason: it runs before anything is installed. The checkout is
 // `APACK_TERMINAL_DIR`, or `~/Develop/Projects/apack/apack-terminal`.
 //
-// **It links a source checkout and nothing else.** elmdb's linker also refuses a checkout whose binding is not
-// built, because npm resolves a `file:` dependency through that link and an unbuilt one fails later and less
-// clearly. The broker is a binary rather than a package: nothing here resolves through the link, so what the
-// link is for is the toolchain derivation (`lib/vendored-checkouts.ts`), the janitor's budget, and builds — none
-// of which need `target/` to exist already.
+// **npm resolves through this link**, as it does through elmdb's: `@apackdev/host` and the API depend on
+// `apack-terminal` at `file:../../vendor/apack-terminal/node`, the npm package in that checkout. Unlike
+// elmdb's, this one does not refuse a checkout that has not been built — that package's `package.json` is
+// tracked, so `npm ci` resolves whether or not a binary has been staged into it, and a missing binary is a
+// legible refusal from `brokerBinary()` at the moment a terminal is asked for rather than a failure during
+// an install. `cargo xtask package` in the checkout is what stages one.
+//
+// The link also carries the toolchain derivation (`lib/vendored-checkouts.ts`) and the janitor's budget.
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';

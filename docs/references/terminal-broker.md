@@ -50,15 +50,15 @@ forgotten as its exit is reported, so a later write is refused by code rather th
 
 ## The protocol
 
-Rust is the source of truth; `protocol/protocol.ts` is generated from it with ts-rs and committed in both
-repositories. On this side it is a **recorded file**: `npm run protocol:check` re-derives it by asking ts-rs
-to generate the declarations again from the linked checkout and compares, and `npm run protocol:update`
-writes it. The check runs as part of `npm run typecheck`.
+Rust is the source of truth, and the TypeScript is generated from it with ts-rs — **inside the npm package
+the broker ships**, at `node/protocol.ts` there, where `cargo xtask check-generated` holds it to the Rust.
+`client.ts` imports those types from `apack-terminal` like any dependency's.
 
-It is a typecheck leg rather than a chain step because its source is a gitignored, machine-specific symlink —
-there is nothing in this repository for the chain's graph to order it against. On a machine with no checkout
-linked it says so on its result line and passes; a checkout that has wandered off the pin is refused, naming
-both commits.
+This repository kept a copy of that file instead, with a script that re-derived and compared it and a
+typecheck leg to run the comparison. All three are gone. The copy existed because nothing resolved through
+the `vendor/apack-terminal` link, and the check could not fail where it mattered: CI never linked a
+checkout, so it printed *not derived here* and passed — a gate that reports nothing because it looked at
+nothing. The package resolves through the link now, so there is one file and nothing watching a second.
 
 Newline-delimited JSON, because the first consumer is a Node client and a debuggable frame is worth more than
 a compact one. Every connection's first message is `hello` with a protocol number; anything else is refused

@@ -40,6 +40,9 @@ jobs:
           sw_vers
           node -p 'JSON.stringify({platform:process.platform,arch:process.arch,versions:process.versions})'
       - uses: ./.github/actions/elmdb
+      - uses: ./.github/actions/apack-terminal
+        with:
+          build: 'true'
       - name: Install dependencies
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -105,6 +108,9 @@ jobs:
       - name: Record source
         run: git rev-parse HEAD
       - uses: ./.github/actions/elmdb
+      - uses: ./.github/actions/apack-terminal
+        with:
+          build: 'true'
       # **Electron's binary is cached, so most runs never ask the CDN for it.** It comes from GitHub's release
       # CDN, whose 504 failed a strict job inside `scripts/postinstall.mjs` on 2026-11-08 — before any of this
       # repo's code ran. The retry there is what makes a refusal survivable; this is what makes it rare. Keyed

@@ -512,7 +512,7 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
     same way, and writing them unverified would be claiming X4 closed on a plausible argument, which is the
     thing this goal's rule is against. It needs a Windows session.
 - **The broker's protocol machinery is deferred work, not permanent shape**
-  ([the plan](../../deferred/apack-terminal-as-a-package.md)). The hand-carried copy, the script that
+  ([the plan](../plans/apack-terminal-as-a-package.md)). The hand-carried copy, the script that
   re-derives it and the typecheck leg are the price of apack-terminal having no npm package — elmdb is
   equally unpublished, equally vendored by symlink, and needs none of them. Giving that repository a
   package deletes 212 lines here and moves the binary lookup to the thing that owns the binary, which is

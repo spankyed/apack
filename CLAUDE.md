@@ -27,12 +27,18 @@ apack is an Electron desktop app with an actor-based architecture. Both frontend
 
 Monorepo using npm workspaces. Requires Node 24 LTS (>=24.11.0) and npm >= 11: npm 10 crashes resolving vitest 4.1, which a new pack's first install does.
 
-**Two sibling checkouts are vendored, not depended on as packages.** Each is a gitignored symlink under
-`vendor/` beside a committed `.rev` naming the commit it is pinned to, linked by its own script:
-`vendor/elmdb` (`npm run link:elmdb`) is the Rust engine `@apackdev/ears` builds against, and
-`vendor/apack-terminal` (`npm run link:apack-terminal`) is the terminal broker. The link is
+**Two sibling checkouts are vendored, each depended on as an npm package resolved through its link.** Each
+is a gitignored symlink under `vendor/` beside a committed `.rev` naming the commit it is pinned to, linked
+by its own script: `vendor/elmdb` (`npm run link:elmdb`) is the Rust engine `@apackdev/ears` builds against,
+and `vendor/apack-terminal` (`npm run link:apack-terminal`) is the terminal broker. The link is
 machine-specific, so it is ignored and the `.rev` is the shared fact; both linkers refuse a checkout that
-isn't one and a checkout that doesn't hold the pin. **Whatever reads `vendor/` derives its subject from the
+isn't one and a checkout that doesn't hold the pin. **A vendored Rust checkout that the app consumes ships
+an npm package, and the package is what knows its own build** — elmdb's `crates/elmdb-node` its napi
+binding, apack-terminal's `node/` the broker binary and the protocol's generated types — so the app resolves
+both the way it resolves any dependency, and a packaged app collects them with every other. Neither is
+published to a registry; CI clones each at its pin (`.github/actions/{elmdb,apack-terminal}`). Deriving a
+path into a checkout's build directory instead is what this replaced, and it cost a release with no terminal
+and a Windows build that could not find a binary it had just produced. **Whatever reads `vendor/` derives its subject from the
 links rather than naming a checkout** — the janitor's budget and the Linux container's Rust toolchain both do
 (`scripts/lib/vendored-checkouts.ts`), so a third sibling is covered the day it is linked, and two checkouts
 pinning different toolchains is a refusal naming both rather than a silent build with one of them.

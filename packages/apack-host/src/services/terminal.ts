@@ -4,15 +4,15 @@
 // terminal should pay nothing for one, and a broker that failed to start must fail the thing that needed it
 // rather than the boot.
 //
-// **Where the binary comes from is a development answer for now.** `APACK_TERMINAL_BINARY` names it; failing
-// that, the linked checkout's debug build, which is what a contributor has. A packaged app ships a
-// per-platform binary and resolves it from its resources — that, and the crash-restart and
-// one-broker-per-data-dir that go with it, are the composition's to own when the broker ships, and the goal
-// says so rather than leaving it to be discovered.
+// **The binary comes from the `apack-terminal` package**, which answers for its own: a packaged app resolves
+// it as it resolves every other dependency, and `APACK_TERMINAL_BINARY` overrides it for a build of your
+// own. The crash-restart and the one-broker-per-data-dir that belong beside this are still the
+// composition's to own.
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { resolveAppEnvironment, withoutAppProcessEnv } from '@apackdev/sdk/env';
 import type { TerminalListeners, TerminalService, TerminalSession } from '@apackdev/sdk/services';
 import { type Broker, holdBrokerSessions, startBroker } from '../broker/client.ts';
@@ -62,59 +62,68 @@ export function socketPath(platform: NodeJS.Platform = process.platform, dataDir
 }
 
 /**
- * Where a built broker would be, without asking whether it is there.
+ * The broker's binary, or absence.
  *
- * **Separate from the lookup because the name is the part worth checking.** `cargo` writes
- * `apack-terminal` on POSIX and `apack-terminal.exe` on Windows, and looking for the extensionless name
- * there finds nothing — so a caller is told to run `cargo build` in a checkout where it has already been
- * run, and the terminal never starts. That is what Windows did until an end-to-end run on 2026-11-08.
- * A function that throws unless the file exists cannot be asked what it was looking for.
+ * **Two answers: `APACK_TERMINAL_BINARY`, then the `apack-terminal` package.** The package is asked rather
+ * than a path derived, because the package is what knows — the binary's name differs by platform, `cargo`
+ * writing `apack-terminal.exe` on Windows, and it sits beside that package's own file wherever Node
+ * resolved it from. A path built here was wrong about exactly that: `existsSync` answered false on Windows
+ * and the caller got a refusal telling it to run `cargo build` in a checkout where `cargo build` had just
+ * succeeded, so the terminal never started there at all.
+ *
+ * The override is how a contributor runs a build of their own — a debug broker, with its assertions and its
+ * symbols — and is the reason there is no second path to guess at. It was the linked checkout's
+ * `target/debug` build, derived from `SHIPPED_PACKS_DIR`, before the package existed.
  */
-export function brokerBinaryPath(
-  packagesDir = process.env.SHIPPED_PACKS_DIR,
-  platform: NodeJS.Platform = process.platform,
-): string | undefined {
-  // The checkout is found from `SHIPPED_PACKS_DIR`, which names `packages/`, so its parent is the root
-  return packagesDir
-    ? path.join(path.dirname(packagesDir), 'vendor', 'apack-terminal', 'target', 'debug',
-      platform === 'win32' ? 'apack-terminal.exe' : 'apack-terminal')
-    : undefined;
-}
-
-/**
- * The broker's binary, refusing when there is none.
- *
- * `cargo` writes `apack-terminal` on POSIX and `apack-terminal.exe` on Windows. Looking for the
- * extensionless name there finds nothing, and what the caller gets is this function's own refusal saying
- * to run `cargo build` — in a checkout where `cargo build` has already been run. The terminal then never
- * starts at all, which is what it did on Windows until an end-to-end run on 2026-11-08.
- *
- * `platform` is an argument for the reason `socketPath`'s is: the answer is about the file's name, not
- * about where this code happens to be running, so a case can say so from either.
- */
-export function brokerBinary(
-  packagesDir = process.env.SHIPPED_PACKS_DIR,
-  platform: NodeJS.Platform = process.platform,
-): string {
+export function findBrokerBinary(): string | undefined {
   const named = process.env.APACK_TERMINAL_BINARY;
   if (named) {
     if (existsSync(named)) return named;
     throw new Error(`APACK_TERMINAL_BINARY names ${named}, which does not exist`);
   }
-  // **The checkout is found from `SHIPPED_PACKS_DIR`, not from this module's path.** This file is bundled
-  // into the API's build, so `import.meta.dirname` is `packages/api/dist` at runtime and a path relative to
-  // it resolved one directory above the checkout — which the refusal below reported exactly, and is how this
-  // was found. That variable names `packages/`, so its parent is the checkout root.
-  // Taken as an argument so that a caller which knows where `packages/` is can say so: the API has it in
-  // its environment, and Electron main computes it to *give* the API, so main would otherwise be reading a
-  // variable it sets for somebody else
-  const built = brokerBinaryPath(packagesDir, platform);
-  if (built && existsSync(built)) return built;
+  return packagedBrokerBinary();
+}
+
+/**
+ * The broker's binary, refusing when there is none.
+ *
+ * Separate from `findBrokerBinary` because a caller that must have one wants the refusal, and a caller that
+ * is asking *whether* there is one — the lifetime suite, which drives the real binary — cannot ask a
+ * function that throws.
+ */
+export function brokerBinary(): string {
+  const found = findBrokerBinary();
+  if (found) return found;
   throw new Error(
-    `No terminal broker: set APACK_TERMINAL_BINARY, or run \`cargo build\` in the apack-terminal checkout `
-    + `(${built ? `expected ${built}` : 'and SHIPPED_PACKS_DIR is unset, so there is no checkout to look in'}; `
-    + '`npm run link:apack-terminal` makes the link)',
+    'No terminal broker: run `cargo xtask package` in the apack-terminal checkout to stage its binary into '
+    + 'the apack-terminal package (`npm run link:apack-terminal` makes the link), or set '
+    + 'APACK_TERMINAL_BINARY to a build of your own',
   );
+}
+
+/**
+ * The broker the `apack-terminal` package ships, or absence.
+ *
+ * **Asked of the package rather than derived from a path**, because the package is what knows: the binary's
+ * name differs by platform — `cargo` writes `apack-terminal.exe` on Windows — and it sits beside that
+ * package's own file wherever Node resolved it from. A packaged app therefore finds it the way it finds
+ * every other dependency, with no rule of its own, which is the arrangement elmdb's binding has here.
+ *
+ * Resolved from `import.meta.url` rather than from a path of ours: this module is bundled into the API's
+ * build, so its directory at runtime is `packages/api/dist`, and Node's lookup walks up from there to the
+ * app's `node_modules` — the same place the checkout's hoisted copy is.
+ *
+ * A package that isn't installed is an absence, and anything else it throws is a real failure worth
+ * seeing rather than one more silent `undefined`.
+ */
+export function packagedBrokerBinary(): string | undefined {
+  try {
+    const shipping = createRequire(import.meta.url)('apack-terminal') as typeof import('apack-terminal');
+    return shipping.brokerBinary();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'MODULE_NOT_FOUND') return undefined;
+    throw error;
+  }
 }
 
 /**
@@ -152,9 +161,9 @@ export function brokerEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.
  * A process that never calls it loses nothing: the broker ends its sessions when the last client leaves,
  * which is what a dev run, a test and the CLI rely on.
  */
-export function holdTerminalSessions(options: { packagesDir: string }): Promise<{ close(): void }> {
+export function holdTerminalSessions(): Promise<{ close(): void }> {
   return holdBrokerSessions({
-    binary: brokerBinary(options.packagesDir),
+    binary: brokerBinary(),
     socket: socketPath(),
     env: brokerEnvironment(),
   });

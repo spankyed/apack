@@ -9,11 +9,17 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { _whenSatisfied } from '@apackdev/sdk/testing/waiting';
 import { holdBrokerSessions, startBroker, type Broker } from '../../src/broker/client.ts';
+import { findBrokerBinary } from '../../src/services/terminal.ts';
 
-const BINARY = path.join(REPO_ROOT, 'vendor', 'apack-terminal', 'target', 'debug', 'apack-terminal');
+// **Asked for the same way the app asks**, which is what makes this run where the app would: the
+// `apack-terminal` package's binary, wherever it was staged. It named a path into the checkout's
+// `target/debug` before, which exists on no CI runner, so every case here was skipped on every CI run — a
+// suite that reported nothing because it had looked at nothing.
+//
+// Empty rather than absent so the cases below need no assertion: the describe they are in does not run.
+const BINARY = findBrokerBinary() ?? '';
 
 /** Whether a pid is still running, asked of the OS rather than of the broker */
 const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
@@ -47,7 +53,7 @@ function socket(): string {
 
 const held = <T extends { close(): void | Promise<void> }>(one: T): T => { open.push(one); return one; };
 
-describe.skipIf(!fs.existsSync(BINARY))('who ends a session', () => {
+describe.skipIf(!BINARY)('who ends a session', () => {
   it('keeps a session when its client leaves and an owner holds the broker', async () => {
     const at = socket();
     held(await holdBrokerSessions({ binary: BINARY, socket: at }));

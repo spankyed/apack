@@ -89,6 +89,9 @@ jobs:
         run: npm install -g npm@11.21.1
 
       - uses: ./.github/actions/elmdb
+      - uses: ./.github/actions/apack-terminal
+        with:
+          build: 'true'
 
       - name: Install dependencies
         env:
@@ -192,6 +195,7 @@ jobs:
         run: npm install -g npm@11.21.1
 
       - uses: ./.github/actions/elmdb
+      - uses: ./.github/actions/apack-terminal
 
       # **Electron's binary is cached, so most runs never ask the CDN for it.** It comes from GitHub's release
       # CDN, whose 504 failed a strict job inside `scripts/postinstall.mjs` on 2026-11-08 — before any of this

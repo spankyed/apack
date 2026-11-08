@@ -86,13 +86,6 @@ export const TYPECHECK_LEGS: readonly Leg[] = [
   { name: 'check:specifiers', command: 'npm run check:specifiers', scope: 'repo' },
   { name: 'exports:check', command: 'npm run exports:check' },
   { name: 'schema:check', command: 'npm run schema:check' },
-  // **A leg rather than a chain step, and the reason is where its source lives.** The broker's generated
-  // protocol is re-derived by asking ts-rs to generate it again from the Rust in the linked
-  // `vendor/apack-terminal` — a gitignored, machine-specific symlink, so there is nothing in this repo for
-  // the chain's graph to order the step against and no output of `packages:ensure` it reads. 0.4s with that
-  // crate built; on a machine with no checkout linked it says so on its result line and passes.
-  { name: 'protocol:check', command: 'npm run protocol:check',
-    scope: ['apack-host'], alsoReads: ['vendor/apack-terminal.rev', 'scripts/broker-protocol.ts'] },
   { name: 'typecheck:scripts', command: 'npm run typecheck:scripts', scope: 'repo' },
   { name: 'typecheck:cli', command: 'npm run typecheck:cli' },
   { name: 'typecheck:pack', command: 'npm run typecheck:pack' },

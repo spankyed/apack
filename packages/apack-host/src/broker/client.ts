@@ -10,7 +10,10 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import * as net from 'node:net';
 import { createLogger } from '@apackdev/sdk/logger';
-import type { ErrorCode, Event, Request } from './protocol.ts';
+// The protocol's types, generated from the broker's Rust and shipped by its package — not a copy of them.
+// There was a copy here, with a script that re-derived and compared it; a package with the file in it
+// leaves nothing to carry (`apack-terminal/node/protocol.ts`, `cargo xtask check-generated` there).
+import type { ErrorCode, Event, Request } from 'apack-terminal';
 
 /** The protocol this client speaks. The broker refuses a connection that does not match. */
 export const PROTOCOL_VERSION = 1;

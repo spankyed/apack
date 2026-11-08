@@ -1,5 +1,4 @@
 import {holdTerminalSessions} from '@apackdev/host/services';
-import {shippedPacksDir} from '../app-environment.ts';
 import type {AppModule} from '../AppModule.ts';
 
 /**
@@ -14,8 +13,8 @@ import type {AppModule} from '../AppModule.ts';
  * **Registered before the API server**, so the hold exists before anything can ask for a session.
  *
  * **A failure here is logged and nothing else.** The broker binary is absent in a checkout that has not
- * built it, and refusing to start the app over a terminal would be wildly out of proportion. What is lost
- * is persistence across an API restart, not safety: with no owner the broker ends its sessions when the
+ * staged it into its package, and refusing to start the app over a terminal would be wildly out of
+ * proportion. What is lost is persistence across an API restart, not safety: with no owner the broker ends its sessions when the
  * last client leaves, which is what it has always done and is why getting this wrong cannot leave a shell
  * running after the app is gone.
  */
@@ -23,7 +22,7 @@ export function holdTerminalSessionsForTheApp(): AppModule {
   return {
     async enable() {
       try {
-        await holdTerminalSessions({packagesDir: shippedPacksDir()});
+        await holdTerminalSessions();
       } catch (error) {
         console.warn('[terminal] no session hold; a terminal will not survive an API restart', error);
       }
