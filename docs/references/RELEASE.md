@@ -89,7 +89,7 @@ Run `npm run chain` before releasing to validate changes, including migration te
 
 **Notes:**
 - ASAR is disabled — API server needs direct filesystem access to `node_modules`
-- Of the native modules, only node-pty is rebuilt for Electron's Node (`build/build.sh`); elmdb is N-API, which needs no rebuild
+- No native module is rebuilt for Electron's Node: elmdb and `@napi-rs/keyring` are N-API, and the terminal's native half is the `apack-terminal` broker, a binary of its own rather than an addon
 - Target: macOS Apple Silicon (arm64) only
 - Requires Node >= 23.0.0 and Xcode Command Line Tools
 

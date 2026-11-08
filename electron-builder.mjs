@@ -22,13 +22,6 @@ const {appId, productName, urlScheme} = metadata;
 // `apack pack test --channel beta` looks for apack-Beta-<version>-mac-arm64.zip
 export const releasePrefix = productName.replace(/ /g, '-');
 
-// Exclude prebuilds for platforms we're not targeting
-const excludePrebuilds = {
-  win32:  ['!**/node-pty/prebuilds/darwin-*'],
-  darwin: ['!**/node-pty/prebuilds/win32-*', '!**/node-pty/prebuilds/darwin-x64'],
-  linux:  ['!**/node-pty/prebuilds/darwin-*', '!**/node-pty/prebuilds/win32-*'],
-}[process.platform] ?? [];
-
 // Only include speech helpers for the target platform
 const speechResources = process.platform === 'win32'
   ? [{ from: 'native/speech/windows/SpeechHelper.ps1', to: 'native/speech/SpeechHelper.ps1', filter: ['**/*'] }]
@@ -128,7 +121,7 @@ export default /** @type import('electron-builder').Configuration */
   },
   
   // Native modules configuration
-  npmRebuild: false, // Selective rebuild in build.sh (elmdb is N-API, only node-pty needs rebuild)
+  npmRebuild: false, // Nothing to rebuild: elmdb is N-API, and the terminal's native half is the broker, a binary of its own
   nodeGypRebuild: false, // Use npmRebuild instead
   
   // Files configuration
@@ -177,8 +170,6 @@ export default /** @type import('electron-builder').Configuration */
     'packages/apack-cli/dist/package/templates/**',
     // Include API's local node_modules
     'packages/api/node_modules/**/*',
-    // Exclude platform-specific prebuilds not needed for current target
-    ...excludePrebuilds,
     // Exclude dev tool output
     '!**/node_modules/.bin',
     '!**/node_modules/@types/**',

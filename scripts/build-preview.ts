@@ -25,7 +25,6 @@ if (process.argv.includes('--help')) {
   ];
   if (process.platform === 'darwin') commands.push(['npm', ['run', 'build:speech-macos']]);
   commands.push(
-    ['npx', ['electron-rebuild', '--only', 'node-pty']],
     ['npx', ['electron-builder', 'build', '--config', 'electron-builder.mjs', '--dir', '--publish', 'never', `--${platform}`, `--${process.arch}`]],
   );
   console.log(`Building ${metadata.productName} ${metadata.version}`);

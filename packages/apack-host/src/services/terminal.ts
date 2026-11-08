@@ -62,12 +62,6 @@ export function socketPath(platform: NodeJS.Platform = process.platform, dataDir
 }
 
 /**
- * The broker binary this app runs.
- *
- * It refuses rather than guessing, naming both the variable and the build, because a missing broker is a
- * setup mistake with an exact remedy and a silent fallback to `node-pty` is the thing this phase removes.
- */
-/**
  * Where a built broker would be, without asking whether it is there.
  *
  * **Separate from the lookup because the name is the part worth checking.** `cargo` writes

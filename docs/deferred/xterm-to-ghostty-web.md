@@ -28,8 +28,9 @@ Preserve terminal interaction, session lifecycle and shell I/O while removing th
 addons. Potential gains in emulation correctness and rendering must be demonstrated locally; this plan
 does not assume a speedup or that the browser implementation inherits every native Ghostty feature.
 
-Keep `node-pty`, terminal actors/events, backend process ownership and current terminal records unless a
-specific migration blocker requires an explicitly scoped change. Agent CLI execution is a separate path.
+Keep the `apack-terminal` broker, terminal actors/events, backend process ownership and current terminal
+records unless a specific migration blocker requires an explicitly scoped change. The pty is the broker's
+and the emulator is the renderer's, so this migration replaces one side of that split and neither crosses it. Agent CLI execution is a separate path.
 Do not combine this migration with a persistence rewrite, PTY multiplexing, shell integration redesign or
 the broader fixes proposed in the [terminal integration review](../issues/ISSUE-terminal-integration-review.md).
 That review is dated investigation material; recheck its findings against current code before using them.

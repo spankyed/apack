@@ -614,4 +614,4 @@ Rules for default-setup migrations (details in `packages/apack-host/src/migratio
 
 ## Tech stack
 
-XState v5 (state machines everywhere), tRPC v11 (typed RPC), Vercel AI SDK 7 (model calls through `services.inference`: Anthropic, OpenAI, Google, Groq, Mistral, Cohere), Zod (validation), Vue Flow (node-based editor), Monaco Editor, Tiptap (rich text), xterm.js + node-pty (terminal), elmdb on LMDB (persistence), Vite (bundler), Oxlint + ESLint (linting).
+XState v5 (state machines everywhere), tRPC v11 (typed RPC), Vercel AI SDK 7 (model calls through `services.inference`: Anthropic, OpenAI, Google, Groq, Mistral, Cohere), Zod (validation), Vue Flow (node-based editor), Monaco Editor, Tiptap (rich text), xterm.js in the window and the `apack-terminal` broker for the pty (terminal), elmdb on LMDB (persistence), Vite (bundler), Oxlint + ESLint (linting).
