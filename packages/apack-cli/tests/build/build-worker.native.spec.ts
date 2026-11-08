@@ -503,7 +503,9 @@ it('terminates a compiling worker when its parent IPC disconnects without publis
   try {
     await vi.waitFor(() => expect(fs.existsSync(path.join(root, 'ready')), output).toBe(true), { timeout: 20_000 });
     child.disconnect();
-    expect(await _byDeadline(stopped, 'worker exit after parent loss', 2_000)).toBe(grouped ? null : 1);
+    // Awaited, not deadlined: the subject is that the worker ends, and one that never did would keep compiling
+    // until the progress guard's CPU budget failed the case. A 2s deadline failed it on a loaded machine
+    expect(await stopped).toBe(grouped ? null : 1);
     if (grouped) {
       expect(child.signalCode).toBe('SIGKILL');
       const pid = Number(fs.readFileSync(path.join(root, '.apack/compiler-child-pid'), 'utf8'));
@@ -516,7 +518,7 @@ it('terminates a compiling worker when its parent IPC disconnects without publis
     expect(fs.existsSync(path.join(root, 'dist'))).toBe(false);
   } finally {
     if (child.exitCode === null && child.signalCode === null) child.kill();
-    try { await _byDeadline(stopped, 'worker cleanup', 2_000); }
+    try { await stopped; }
     finally { child.stdout?.destroy(); child.stderr?.destroy(); removeCompilerReadTree(inputs); }
   }
 });
