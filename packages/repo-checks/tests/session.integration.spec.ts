@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { createSession, prepareIntegration } from '../../../scripts/session.mjs';
 import { checkoutProfile, withCheckoutProfile } from '../../../scripts/lib/dev-profile.mjs';
-import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 let dir: string;
 let repo: string;

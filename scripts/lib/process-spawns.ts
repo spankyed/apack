@@ -46,7 +46,7 @@ export const spawnCallsIn = (absFile: string): string[] =>
 /** The test-support runner for process trees (`apack-cli tests/_support/run-command.ts`), however it is imported */
 const RUN_COMMAND = /(^|\/)run-command(\.ts)?$/;
 /** Where `execFileWhileWorking` comes from: `promisify(execFile)` bounded by progress, the one a spec reaches for */
-const PROCESS_PROGRESS = /(^@apackdev\/host\/build\/process-progress|(^|\/)process-progress(\.ts)?)$/;
+const PROCESS_PROGRESS = /(^@apackdev\/sdk\/progress|(^|\/)progress(\.ts)?)$/;
 
 /**
  * The spawns a file makes without calling a `child_process` export by name: through `promisify(execFile)` — bound

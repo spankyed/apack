@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { publishedManifest } from '@apackdev/host/build/published-manifest';
 import { CONSUMER_MATRIX, PACKAGES_BUILT, REPO_ROOT, compileConsumer, installPublishedPackages, type TscVersion } from '../src/published-packages.ts';
-import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 const execFileAsync = execFileWhileWorking;
 

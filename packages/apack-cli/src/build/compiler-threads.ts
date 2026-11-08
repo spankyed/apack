@@ -5,7 +5,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import threads, { SHARE_ENV, BroadcastChannel, getEnvironmentData, setEnvironmentData, type WorkerOptions } from 'node:worker_threads';
 import { withoutCompilerFileReads, type CompilerInputObservations } from '@apackdev/host/build/compiler-inputs';
 import { formatNodeOptions, parseNodeOptions } from '@apackdev/host/build/source-resolution';
-import { answerWhileWorking, threadWork } from '@apackdev/host/build/process-progress';
+import { answerWhileWorking, threadWork } from '@apackdev/sdk/progress';
 
 /**
  * How much of its own CPU a worker may spend before it accepts the final input collection: what refuses a worker

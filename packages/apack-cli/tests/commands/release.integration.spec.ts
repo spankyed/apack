@@ -35,7 +35,7 @@ vi.mock('../../src/build/build-process.ts', () => ({
 }));
 import { buildPackArchive } from '../../src/commands/archive';
 import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
-import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 let tmp: string;
 

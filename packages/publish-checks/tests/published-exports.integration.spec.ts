@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CONSUMER_MATRIX, PACKAGES_BUILT, TSC_VERSIONS, installPublishedPackages } from '../src/published-packages.ts';
-import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 /** Every export of the packed @apackdev/ears, @apackdev/sdk and @apackdev/ui resolves to declarations for consumers. */
 let consumer: string | undefined;

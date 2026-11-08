@@ -1,6 +1,6 @@
 import { Worker } from 'node:worker_threads';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { answerWhileWorking, cpuAdded, createStallTracker, describeRefusal, execFileWhileWorking, fromNow, parseCpuTime, processWork, threadWork, treeCpuMs, watchWork, type Refusal } from '../../src/build/process-progress.ts';
+import { answerWhileWorking, cpuAdded, createStallTracker, describeRefusal, execFileWhileWorking, fromNow, parseCpuTime, processWork, threadWork, treeCpuMs, watchWork, win32Rows, type Refusal } from '../../src/progress.ts';
 
 /** A reading that adds `step` milliseconds of work each time it is taken */
 const working = (step: number) => { let total = 0; return async () => (total += step); };
@@ -145,6 +145,14 @@ describe('reading a process tree for the watchdog', () => {
 
   it('reads nothing for a group that has gone', () => {
     expect(treeCpuMs('  400     1   400   0:16.00\n', 100).size).toBe(0);
+  });
+
+  it("reads Windows's listing, in 100ns units, skipping a process with no CPU to report", () => {
+    // PowerShell's lines end in CRLF, and the System Idle Process reports an empty sum
+    expect(win32Rows('100 4 12500000\r\n101 100 30000\r\n0 0 \r\n')).toEqual([
+      { pid: 100, ppid: 4, pgid: 100, ms: 1_250 },
+      { pid: 101, ppid: 100, pgid: 101, ms: 3 },
+    ]);
   });
 
   it('counts what each process added, a new one whole and one that exited as nothing', () => {

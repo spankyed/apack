@@ -141,7 +141,7 @@ const CLOCK_BY_DESIGN: Record<string, string> = {
  */
 const CLOCKS_NOT_CONVERTED_YET: Record<string, number> = {
   'packages/apack-cli/tests/_support/watch-builds.ts': 3,
-  'packages/apack-cli/tests/build/build-worker.native.spec.ts': 13,
+  'packages/apack-cli/tests/build/build-worker.native.spec.ts': 11,
   'packages/apack-cli/tests/build/compiler-elf-libraries.native.spec.ts': 1,
   'packages/apack-cli/tests/build/compiler-installation.native.spec.ts': 2,
   'packages/apack-cli/tests/build/compiler-native-libraries.native.spec.ts': 1,
@@ -220,7 +220,7 @@ describe('a test is bounded by its progress, not a clock', () => {
       fs.writeFileSync(file, [
         "import { execFile, spawnSync } from 'node:child_process';",
         "import { promisify } from 'node:util';",
-        "import { execFileWhileWorking } from '@apackdev/host/build/process-progress';",
+        "import { execFileWhileWorking } from '@apackdev/sdk/progress';",
         'const run = promisify(execFile);',
         // clocks
         'await vi.waitFor(check, { timeout: 20_000 });',
@@ -274,8 +274,8 @@ describe('a test is bounded by its progress, not a clock', () => {
     expect(Object.keys(CLOCK_BY_DESIGN).filter((file) => !byFile.has(file))).toEqual([]);
   });
 
-  it('has 149 clocks in 54 files left to convert', () => {
+  it('has 147 clocks in 54 files left to convert', () => {
     const counts = Object.values(CLOCKS_NOT_CONVERTED_YET);
-    expect([counts.reduce((sum, count) => sum + count, 0), counts.length]).toEqual([149, 54]);
+    expect([counts.reduce((sum, count) => sum + count, 0), counts.length]).toEqual([147, 54]);
   });
 });

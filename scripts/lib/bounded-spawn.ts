@@ -27,7 +27,7 @@
  *   when the child exits however it ends, a pass included: nothing a run started outlives it.
  */
 import { spawn } from 'node:child_process';
-import { describeRefusal, processWork, watchWork } from '@apackdev/host/build/process-progress';
+import { describeRefusal, processWork, watchWork } from '../../packages/apack-sdk/src/progress.ts';
 import { IDLE_MS, ceilingEnabled, watchdogEnabled } from './step-budgets.ts';
 
 

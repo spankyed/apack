@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { expect, it, vi } from 'vitest';
 import { manageInstalledApp, installedVersion } from '../../src/app/installed-app.ts';
-import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 it.skipIf(process.platform !== 'darwin' || process.arch !== 'arm64')('installs, upgrades and removes a real zipped bundle while preserving permissions, symlinks and user data', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-install-integration-'));

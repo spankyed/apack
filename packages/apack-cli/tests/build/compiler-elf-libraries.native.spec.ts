@@ -11,7 +11,7 @@ import { parseElfLibraryCommands } from '../../src/build/compiler-elf-libraries.
 import { isElfSystemLibrary } from '../../src/build/compiler-elf-environment.ts';
 import { nativeAddonSource } from '../_support/native-addon.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
-import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 const sharedCompiler = shareCompilerInstallation();
 

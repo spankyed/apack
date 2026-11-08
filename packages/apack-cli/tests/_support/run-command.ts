@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { describeRefusal, processWork, readTreeCpuMs, watchWork, type Watch } from '@apackdev/host/build/process-progress';
+import { describeRefusal, processWork, readTreeCpuMs, watchWork, type Watch } from '@apackdev/sdk/progress';
 import { stopCompilerProcessGroup } from '../../src/build/compiler-process-group.ts';
 /**
  * How much CPU a command's tree may spend: for the one hang the idle watch can't see, a loop that spins. CPU rather
@@ -18,7 +18,7 @@ const CEILING_MS = 900_000;
  *
  * Resolves with the exit code, the combined output and stdout alone (for a caller that parses it); rejects, naming the command, when it exceeds `timeout`,
  * is cancelled through `signal`, or cannot start. A single process needs none of this: `execFileWhileWorking`
- * (`@apackdev/host/build/process-progress`) is `promisify(execFile)` bounded the same way.
+ * (`@apackdev/sdk/progress`) is `promisify(execFile)` bounded the same way.
  */
 export async function runCommand(command: string, args: string[], cwd: string,
   { signal, env, ceiling = CEILING_MS, readTree = readTreeCpuMs }: {

@@ -19,7 +19,7 @@ import { ProcessManager, broadcastEvent } from './process-manager.ts';
 import { logInfo, logError, logWarn, getLogger, logStartupBanner } from './logger.ts';
 import { getAppEnvironment } from '../../app-environment.ts';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
-import { answerWhileWorking, processWork, type WorkReading } from '@apackdev/host/build/process-progress';
+import { answerWhileWorking, processWork, type WorkReading } from '@apackdev/sdk/progress';
 
 export class ApiServer implements AppModule {
   private processManager: ProcessManager;
