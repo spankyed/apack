@@ -50,6 +50,9 @@ jobs:
       # After the install: the proof loads the CLI's compiler process source, which imports @apackdev/host
       - name: Windows compiler job ownership
         if: ${{ !inputs.test_name }}
+        # Before the packages are built, so the CLI source it loads resolves its @apackdev imports to source
+        env:
+          NODE_OPTIONS: --conditions=@apackdev/source
         run: node .github/scripts/compiler-job-proof.cjs
       - name: Build matching packages
         run: npm run packages:ensure
