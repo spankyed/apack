@@ -95,7 +95,11 @@ export const coresBusy = (before: CpuTimes, after: CpuTimes, cores: number): num
   (1 - idleFrom(before, after)) * cores;
 
 /**
- * How idle the machine must be before a timing is worth **printing**.
+ * How idle the machine must be before a *wall time* is worth printing as a latency.
+ *
+ * It guards a latency only: load stretches a wall time, and it does not move the work a run did. A measurement of work
+ * counts instructions and CPU instead (`Work`), needs no floor and is never refused; `npm run measure` asks for the floor
+ * with `--latency`, and where it can count nothing, so that wall time is all it has.
  *
  * Chosen from what actually went wrong rather than from a round number. The measurement that had to be
  * reverted was taken at roughly 0% idle, with another agent's full test suite on the box. The ones worth
@@ -221,6 +225,113 @@ export function citation(input: Parameters<typeof conditions>[0] & {
 }): string {
   const range = input.summary.min === input.summary.max ? '' : ` (${seconds(input.summary.min)}-${seconds(input.summary.max)})`;
   return `${seconds(input.summary.median)} median of ${input.summary.runs}${range}, ${conditions(input)}, ${input.on}`;
+}
+
+/**
+ * The work a run did, counted rather than timed: instructions retired, and the CPU its tree spent. Load stretches a
+ * run's wall time and leaves these alone — measured on this Mac, a fixed loop retired 19,938,301,403 instructions idle
+ * and 19,951,534,584 with the box saturated (0.07% apart) while its wall time doubled, 1.16s to 2.29s (2026-11-07) —
+ * so a question about *work*, which most measurements here are, needs no quiet machine to answer.
+ *
+ * It counts the command and every descendant it waited for, which is what rusage of children is, so a process that
+ * detaches and is never waited for is not in it. rustc-perf documents the same limit for the same counter. It does not
+ * see waiting either: a change that adds a sleep, or overlaps I/O, moves wall time and not this, which is why a
+ * question about how long something takes is `--latency`'s.
+ */
+export interface Work {
+  readonly instructions?: number;
+  readonly cpuMs?: number;
+}
+
+/**
+ * The work a wrapped run reports, and its output without that report: `/usr/bin/time -l`'s rusage block on macOS,
+ * `perf stat -x,`'s CSV on Linux, both written to stderr after the command's own output. The report is cut from what
+ * is returned, so a failure's text — what trials mode groups by — is the command's and not the wrapper's.
+ */
+export function workOf(output: string): { readonly work: Work | undefined; readonly rest: string } {
+  const lines = output.split('\n');
+  // macOS: the block opens with `<real> real <user> user <sys> sys` and runs to the end
+  let opens = -1;
+  for (let at = lines.length - 1; at >= 0 && opens === -1; at--) {
+    if (/^\s*[\d.]+ real\s+[\d.]+ user\s+[\d.]+ sys\s*$/.test(lines[at]!)) opens = at;
+  }
+  if (opens !== -1) {
+    const [, user, sys] = /([\d.]+) user\s+([\d.]+) sys/.exec(lines[opens]!)!;
+    const instructions = lines.slice(opens).map((line) => /^\s*(\d+)\s+instructions retired\s*$/.exec(line)?.[1]).find(Boolean);
+    return {
+      work: { cpuMs: Math.round((Number(user) + Number(sys)) * 1000), ...(instructions ? { instructions: Number(instructions) } : {}) },
+      rest: lines.slice(0, opens).join('\n'),
+    };
+  }
+  // Linux: one CSV line per event, `<value>,<unit>,<event>,…`, where a counter the machine lacks reads `<not supported>`
+  const reported = (line: string): RegExpExecArray | null => /^([^,]*),[^,]*,(instructions(?::u)?|task-clock),/.exec(line);
+  const value = (event: 'instructions' | 'task-clock'): number | undefined => {
+    for (const line of lines) {
+      const match = reported(line);
+      if (match && match[2]!.startsWith(event) && /^\d+(\.\d+)?$/.test(match[1]!)) return Number(match[1]);
+    }
+    return undefined;
+  };
+  const instructions = value('instructions');
+  const taskClock = value('task-clock');
+  if (instructions === undefined && taskClock === undefined) return { work: undefined, rest: output };
+  return {
+    work: { ...(instructions !== undefined ? { instructions } : {}), ...(taskClock !== undefined ? { cpuMs: Math.round(taskClock) } : {}) },
+    rest: lines.filter((line) => reported(line) === null).join('\n'),
+  };
+}
+
+/** A count in the units a person reads it in */
+const count = (n: number): string =>
+  n >= 1e9 ? `${(n / 1e9).toFixed(2)}G` : n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : String(Math.round(n));
+
+/**
+ * The work a series did, as one quotable line: instructions first, being the figure load cannot move, with the CPU
+ * time beside it. It carries no idle reading because it needs none — that is the point of counting rather than timing.
+ */
+export function workCitation(input: { readonly instructions: Summary | undefined; readonly cpu: Summary | undefined; readonly on: string }): string {
+  const parts: string[] = [];
+  if (input.instructions !== undefined) {
+    const { median, min, max, runs } = input.instructions;
+    parts.push(`${count(median)} instructions median of ${runs}${min === max ? '' : ` (${count(min)}-${count(max)})`}`);
+  }
+  if (input.cpu !== undefined) parts.push(`${seconds(input.cpu.median)} CPU`);
+  return `${parts.join(', ')}, ${input.on}`;
+}
+
+/**
+ * Whether a series' wall time can be quoted as a latency: only if the box stayed at or above the floor throughout. A
+ * busy run still prints its wall time, labelled, since the work it counted stands either way.
+ */
+export const latencyCaveat = (idles: readonly number[], floor: number): string =>
+  driftedDuring(idles, floor) ? ` — not citable as a latency: the box went below the ${percent(floor)} idle floor` : '';
+
+/** How long a latency run waits for the floor before it refuses, and how often it looks */
+export const QUIET_WAIT_MS = 10 * 60_000;
+export const QUIET_POLL_MS = 5_000;
+
+/**
+ * Waits for the machine to reach the floor, up to `QUIET_WAIT_MS`, and answers the reading that met it — a latency
+ * run's gate. Waiting rather than refusing at once, because what an agent did on a refusal was poll for itself or pass
+ * `--force`, and a forced number is the thing the floor is for. The reading, the clock and the pause are passed in.
+ */
+export async function awaitQuiet({ floor, idle, now = Date.now, pause, waitMs = QUIET_WAIT_MS, onWait }: {
+  readonly floor: number; readonly idle: () => number; readonly now?: () => number;
+  readonly pause: () => Promise<void>; readonly waitMs?: number; readonly onWait?: (idle: number) => void;
+}): Promise<number> {
+  const started = now();
+  let told = false;
+  for (;;) {
+    const reading = idle();
+    if (reading >= floor) return reading;
+    if (now() - started >= waitMs) {
+      throw new Error(`The machine stayed below the ${percent(floor)} idle floor for ${Math.round(waitMs / 60_000)} minutes `
+        + `(${percent(reading)} now), so a wall time taken now is about the machine, not the command. Measure work instead `
+        + '(without --latency), or pass --force, which the citation records.');
+    }
+    if (!told) { onWait?.(reading); told = true; }
+    await pause();
+  }
 }
 
 /**

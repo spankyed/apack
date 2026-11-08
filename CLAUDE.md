@@ -314,8 +314,10 @@ which stays **outside** the checkout so the pack cannot resolve `@apackdev/*` fr
 ## Commands
 
 **A figure in prose earns its place by sizing a choice; one a record owns is named, not copied.** A
-measurement a decision cites carries its date and conditions, as `npm run measure` prints them. Nothing holds
-prose to code: point at the record or command that derives a figure.
+measurement a decision cites carries its date and conditions, as `npm run measure` prints them: cite its
+instructions for a question about work, which load does not move and so needs no quiet machine, and a wall time from
+`--latency` for a question about how long something takes. Nothing holds prose to code: point at the record or
+command that derives a figure.
 
 **Script names say whether they write:**
 
@@ -389,10 +391,12 @@ npm run schema:check             # -w @apackdev/sdk: fails if apack.schema.json 
 npm run content-parity:check     # -w @app/default-setup: written entities against tests/content/__golden__
 npm run content-parity:update    # -w @app/default-setup: re-record them, deliberately
 
-npm run measure -- "<cmd>"       # Time a command on a quiet machine; prints a citable median with conditions
-                                 #   --runs N  --against "<B>"  --trials N  --busy N  --idle PERCENT  --force
+npm run measure -- "<cmd>"       # The work a command does (instructions, CPU) on any box, and its wall time,
+                                 # labelled when the box was busy; a citable median with conditions. --latency
+                                 # takes the machine lock and waits for a quiet box, for a question about time
+                                 #   --runs N  --against "<B>"  --trials N  --latency  --busy N  --idle PERCENT  --force
 npm run measure:loop -- "<cmd>"  # How long each process went without turning its event loop, against birpc's 60s
-npm run check:idle               # Is this machine quiet enough to measure on (exit 1 below IDLE_FLOOR)
+npm run check:idle               # Is this machine quiet enough to time a latency on (exit 1 below IDLE_FLOOR)
 npm run soak:watch               # Does an edit made during a watcher pass get picked up? Run on a loaded Mac. Exit 1
                                  # lost, 3 partial (file events stalled); -- --rounds N --max-delay SECONDS
 npm run janitor                  # Hold elmdb's Rust build caches to a budget (-- --dry to preview); janitor:install
