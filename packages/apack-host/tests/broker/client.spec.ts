@@ -26,12 +26,17 @@ const readline = require('node:readline');
 const socket = process.argv[2];
 const script = JSON.parse(process.env.FAKE_SCRIPT);
 const server = net.createServer(connection => {
-  const say = event => connection.write(JSON.stringify(event) + '\\n');
   readline.createInterface({ input: connection }).on('line', line => {
     const request = JSON.parse(line);
-    for (const event of script[request.kind] ?? []) {
-      say(typeof event === 'string' ? JSON.parse(event.replaceAll('$session', request.session ?? 's-1')) : event);
-    }
+    const answers = (script[request.kind] ?? []).map(event =>
+      typeof event === 'string' ? JSON.parse(event.replaceAll('$session', request.session ?? 's-1')) : event);
+    if (answers.length === 0) return;
+    // **One write, so a request's answers are one read.** Two writes are two syscalls that the socket
+    // coalesces or not as it pleases, which makes 'these frames arrive together' a property of the day
+    // rather than of the test: the case below whose whole subject is an exit in the same read as its
+    // spawned failed about one run in three. Frames within one chunk reach readline in order, so the
+    // bursts the other cases rely on are unaffected.
+    connection.write(answers.map(event => JSON.stringify(event) + '\\n').join(''));
   });
 });
 server.listen(socket, () => { process.stdout.write('listening ' + socket + '\\n'); });
