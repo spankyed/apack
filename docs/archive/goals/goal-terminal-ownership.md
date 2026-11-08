@@ -106,9 +106,29 @@ files under `packages/apack-cli`, checked. Earlier revisions of this section cit
 which it was; this is the first local full chain in which it passed, and it is reported rather than relied
 on, since load can push a file into a failure and never out of one.
 
-**Strict passes on current source: run 42492364059, all six jobs green**, on `d0e048a00a`, 2026-11-08
-14:57–15:47Z — `producers`, both integration shards, both native shards and `app-and-rest`. That is the
-required integrated validation for this goal.
+**Both required validations pass on one commit, `212c4ecd04`:**
+
+- **`npm run chain`, full, including `test:native`** — passed in 148.3s, 24 of 32 cached, zero failures.
+  `test:native` passed at 1742.3s in the run before it and was cached here on unchanged inputs;
+  `test:integration` at 652.3s, both `test:packaged-authoring` halves and `test:external-pack:app` likewise.
+- **Strict: run 42505707211, all six jobs green**, 2026-11-08 17:35–18:17Z.
+
+**Two things the local chain found that no CI run could.** The first was mine: the chain was run on the
+shell's default Node 23.11.1, and `assertNodeSupportsCompiler` refused it by name — *"the pack compiler needs
+Node 24.12.0 or newer"* — which is the refusal added for exactly that and its first firing in anger. The
+second was real: `spec-waits` walked `drive/` as a directory, but `drive/.gitignore` is `*`, so it collected
+every scratch driving script on the machine running it — and the guide tells you to write those. Anyone who
+had driven the app failed their own `test:unit:host` with 53 entries while CI passed the same spec, having
+none of them. It reads `repoFiles()` now, the shared population the other six checks use
+(`212c4ecd04`). A gate stricter on a developer's machine than in CI, in the direction that punishes using a
+documented workflow, is worth more than the hour it cost.
+
+**Strict 42500495061, on this same commit, failed `integration-1` and was retried once.** The case was
+`spec-durations-reporter`'s *"records a test that spent more CPU than its budget"*, which recorded nothing:
+a fixture that burns CPU gets less of it per unit wall-clock on two contended cores, so it can finish under
+its budget and be correctly omitted. Diagnosed rather than assumed — it passes locally 15 of 15 and passed
+`integration-1` in 42486473041, 42492364059 and the retry. One retry, and the terms were set before it ran:
+a second failure would have been a load-sensitivity defect in that spec to report, not a budget to raise.
 
 **It took two green runs to describe the tip, and the second is the one that counts.** 42486473041 was the
 first all-green strict (on `a238e4ff25`, 13:45–14:51Z, a cold chain, the commit before it having added a
@@ -129,7 +149,9 @@ a single recurring flake and six distinct defects call for opposite responses:
 | 42481117851 | four of six green | `app-and-rest`: two Playwright clocks are both spelled `timeout:`, and `suite-timeouts` read the nested assertion clock as the suite deadline (`2ffaf52a6d`). `integration-1`: `ROOT` and the dep-file read filter both named `vendor/elmdb` by hand, so five legs read apack-terminal's types with nothing declaring them (`a238e4ff25`) |
 | 42486473041 | all six green | — (but `cd0c0f1e7c` landed while it ran, so it did not describe the tip) |
 | 42491942672 | failed `producers` in 90s | `upload-pack: not our ref c4407661` — the same unpushed-pin failure as 42476840456, with a different commit: `cd0c0f1e7c`'s pin bump named a broker commit that was never pushed |
-| **42492364059** | **all six green, on the tip** | — |
+| 42492364059 | all six green, on `d0e048a00a` | — |
+| 42500495061 | five of six green, on `212c4ecd04` | `integration-1`: `spec-durations-reporter`'s CPU-budget case recorded nothing under two contended cores. Load flake, diagnosed, retried once |
+| **42505707211** | **all six green, on `212c4ecd04`** | — the commit the local full chain also passed on |
 
 The third is the one worth reading, because it was not infrastructure. The external pack records its package
 graph in `dist/build-inputs.json` and that graph includes `node_modules/electron`, so `readPackageInputs`
@@ -230,8 +252,9 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 
 ## Current handoff
 
-- **Complete.** Required validation passed on current source: strict 42492364059, all six jobs green on
-  `d0e048a00a` (see Validation, with the seven attempts before it and what each cost).
+- **Complete.** Both required validations passed on `212c4ecd04`: the full local chain including
+  `test:native`, and strict 42505707211, all six jobs green (see Validation, with every attempt before them
+  and what each cost).
 - **Checkout:** `session/terminal-ownership`, clean tree. Two commits after the chain run below:
   `dc87cdadcd` (every strict job installs identically) and `fc5e1362d6` (the broker fake writes a request's
   answers as one chunk, which is what made the same-read guard deterministic). Both are a workflow and a
