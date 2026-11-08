@@ -437,6 +437,18 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
     cases in the file skipped. It is the one thing standing
     between here and a green full chain, and the repo's rules say to report it rather than raise a deadline
     or narrow its input.
+  - **Adding a test to default-setup leaves `build:default-setup` cached and its sealed build stale**, so
+    `test:external-pack:fork` then fails with `Compiler startup input changed: ["authored-files"]` until
+    someone rebuilds the pack by hand. Two definitions of "the pack's inputs" disagree:
+    `chain-steps.ts:940` excludes the pack's tests on the stated premise that *"`apack pack build` never
+    reads those"*, while the build's own recorded inventory comes from `isPackInputPath`
+    (`apack-host/src/build/pack-inputs.ts`), which excludes only `.git`, `node_modules`, `dist`, `.apack`
+    and `src/__generated__` — so a pack's `tests/` are authored inputs to the recording and not to the
+    cache key. **A cache that can go stale**, which is the thing the repo's own rule names. Reproduced
+    twice today and cleared both times by `npm run build:default-setup`. Not fixed here: which side should
+    move is a real choice — teaching the chain step to declare the tests costs a 123s rebuild on every pack
+    test edit, and narrowing the recorded inventory is only honest if the compiler truly never enumerates
+    them — and this goal does not own that tooling.
   - `default-setup/tests/features/code/be/default-directory.spec.ts > closes real Git watchers when the Code
     actor stops` is load-flaky: 5–9s run alone, 55s and failing under the full pool. A live-watcher case in
     the fast half. Unrelated to the terminal.
