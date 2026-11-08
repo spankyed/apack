@@ -363,7 +363,12 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 - **L3 is dissolved**: a closed terminal's row is trashed, which is the one way a Terminal row ends. The
   annotation it replaced — `active: false` and a `closedAt` nothing read — left a row behind for every
   terminal the user had ever opened.
-- **Phase H has two requirements open, not one.** The handoff said "done except for one requirement" and
+- **Phase H's first open requirement is met: a terminal survives the API restarting** (`6d96aa1d91`),
+  driven in the real app
+  ([the record](../references/evidence/terminal-ownership.md#a-terminal-survives-the-api-restarting-phase-h--2026-11-08)).
+  **What is left of Phase H is session generations** — *"a crashed shell is a new generation whose
+  predecessor's transcript is labelled history"* — which is unbuilt, and which **T6 is waiting on**.
+- **Phase H had two requirements open, not one.** The handoff said "done except for one requirement" and
   that was wrong: beside the API restart, *"a crashed shell is a new generation whose predecessor's
   transcript is labelled history"* is unbuilt — `generation` appears nowhere in the broker, the host
   service or the pack. **T6 is waiting on that half**, not on the lifetime half, so closing the fork does

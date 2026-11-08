@@ -401,6 +401,39 @@ the pool keeps the emulator alive across a host's teardown, so a reattach with 2
 and sends no bytes. Serving history to a new emulator is the broker's bounded history, which is where one
 copy belongs and which Phase B has not built.
 
+### A terminal survives the API restarting (Phase H) — 2026-11-08
+
+**Driven in the real app**: a terminal is opened, the API is killed by the pid in its own port file, and the
+shell is still alive while the API is gone (`shellSurvivedTheApi`) and still listed once main has restarted
+it (`terminalBackAfterApi`). Before the change it was gone and the restarted API spawned a replacement,
+which its own log said in as many words — *"Restored terminal … as a new shell (pid 19614); the previous
+process and its output are gone"*.
+
+The decision is in the goal's Decisions section; what it took to make true is four changes that only work
+together, and the fourth is the one that would have been missed:
+
+- The client **connects to a broker already listening** before starting one. Without it the API takes the
+  socket from main's broker with `try_overwrite` and the first one's sessions become unreachable with no
+  error anywhere.
+- The spawn is **detached and its handle released**, since the broker outlives whoever started it.
+- `close()` **leaves** the broker rather than killing it — right before, exactly wrong now.
+- **default-setup stopped killing every terminal on shutdown.** That hook was the orderly path while the
+  broker ended a connection's sessions, and became the single thing preventing survival. Nothing failed
+  when it ran: the terminals simply came back as new shells, and the only way to see it was the API's own
+  log. A guard that is correct under one rule and silently destructive under its replacement is the shape
+  worth remembering here.
+
+**And a leak the hold made visible.** The broker ended its sessions when nobody held it and then went on
+listening for ever, so one process accumulated per app launch — 31 were running on this machine, each
+holding a socket, none holding a shell (checked: zero child processes between them). It now exits when its
+connection count reaches zero. The count is taken from the accept rather than the handshake, which is what
+makes zero safe: a caller that has connected and not yet greeted is already counted.
+
+**What the host spec is for**, beside the broker's own: neither side can prove this alone. The broker's
+suite shows that a `lifetime` connection holds its sessions; what it cannot show is that *this app's*
+client and hold ask for those roles. A client that greeted as an owner would keep every shell running after
+the app was gone, with every case on both sides still passing.
+
 ### The full chain passes, `test:native` included — 2026-11-08
 
 `npm run chain` at `2b1ae253ad`: **passed in 2451.5s (24 of 33 cached) on a 10-core budget**, evidence in
