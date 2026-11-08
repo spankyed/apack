@@ -24,6 +24,7 @@ import {
 import { backed, type ImportRule, type PackParity, packRule } from './lib/import-rules.ts';
 import { importedCallsIn } from './lib/imported-calls.ts';
 import { loadedByThePools, syncSpawnImportsIn } from './lib/process-spawns.ts';
+import { clockedDeadlines } from './lib/test-timeouts.ts';
 import { listLines, ruleRows as rowsOf, type RuleRow, ruleTable } from './lib/import-list.ts';
 
 // Re-exported so the consumers of this file keep importing from it: it is the command, and the command is the
@@ -570,6 +571,68 @@ export function findSyncSpawnsInSlowSpecs(files: readonly string[] = loadedByThe
   return problems.sort();
 }
 
+/**
+ * Source files that hold a clocked deadline on purpose, with why: the wait is not on work a busy machine slows.
+ *
+ * Three reasons qualify. A network wait (a fetch, a model's API, a remote CLI) has no CPU to read, so a stall
+ * bound cannot tell a healthy request from a hung one; a kill-grace period is about time by definition; and a
+ * wait whose other party has no process this one can read. An entry that stops applying is reported.
+ */
+const CLOCK_BY_DESIGN: Record<string, string> = {
+  'packages/apack-host/src/packs/github.ts': "a fetch from GitHub's API: network, which no CPU reading describes",
+  'packages/apack-host/src/packs/installer.ts': 'a pack download: network, which no CPU reading describes',
+  'packages/default-setup/src/features/code/be/services/gh-cli.ts': "`gh` waits on GitHub's API: network, which no CPU reading describes",
+  'packages/default-setup/src/features/code/be/services/codex/app-server.ts':
+    "a request to the codex app-server waits on the model's API, during which the server is idle by design",
+};
+
+/**
+ * Source files whose clocked deadlines predate the rule, and how many each holds.
+ *
+ * A count, not a reason: nobody has decided these are right, they are waiting to be converted. The count is exact
+ * in both directions, so converting one means lowering it here and adding one is refused.
+ */
+const CLOCKS_NOT_CONVERTED_YET: Record<string, number> = {
+  'packages/apack-cli/src/app/installed-app.ts': 2,
+  'packages/apack-cli/src/build/compiler-elf-environment.ts': 1,
+  'packages/apack-cli/src/build/compiler-pe-activation.ts': 1,
+  'packages/apack-cli/src/build/compiler-pe-environment.ts': 1,
+  'packages/apack-cli/src/build/compiler-process-group.ts': 1,
+  'packages/apack-cli/src/build/content-runtime-check.ts': 1,
+  'packages/apack-testing/src/engine/index.ts': 1,
+  'packages/apack-testing/src/index.ts': 5,
+  'packages/default-setup/src/features/code/be/utils/resolve-cli.ts': 2,
+};
+
+/**
+ * `file:line: what` for each clocked deadline in the packages' source that neither list accounts for, each listed
+ * file whose count no longer matches, and each by-design entry that no longer holds one.
+ *
+ * `clockedDeadlines` (`scripts/lib/test-timeouts.ts`) has what counts as one and what it cannot see.
+ */
+export function findClockedDeadlinesInSource(
+  files: readonly string[] = filesUnder(packageSourceDirs(repoRoot), repoRoot).filter((file) => file.endsWith('.ts')),
+  root = repoRoot, byDesign = CLOCK_BY_DESIGN, notConverted = CLOCKS_NOT_CONVERTED_YET,
+): string[] {
+  const seen = new Map<string, number>();
+  const problems = files.flatMap((file) => {
+    const found = clockedDeadlines(file, root);
+    if (found.length === 0) return [];
+    const relative = repoRelative(root, file);
+    seen.set(relative, found.length);
+    if (byDesign[relative] !== undefined || notConverted[relative] !== undefined) return [];
+    return found.map((clock) => `${relative}:${clock.line}: ${clock.what}`);
+  });
+  for (const [relative, reason] of Object.entries(byDesign)) {
+    if (!seen.has(relative)) problems.push(`${relative}: listed in CLOCK_BY_DESIGN (${reason}) but it holds no clocked deadline`);
+  }
+  for (const [relative, count] of Object.entries(notConverted)) {
+    const now = seen.get(relative) ?? 0;
+    if (now !== count) problems.push(`${relative}: CLOCKS_NOT_CONVERTED_YET says ${count}, it holds ${now} — set it to ${now}${now === 0 ? ' by removing the entry' : ''}`);
+  }
+  return problems.sort();
+}
+
 const COMPILER_RUNNERS = new Set(['captureCompilerInstallation', 'createPackBuilder']);
 const COMPILER_RUN_ALLOWED: Record<string, string> = {
   'packages/apack-cli/tests/build/compiler-runtime-copy.spec.ts': 'captures an inert file as its runtime and never runs it',
@@ -875,6 +938,12 @@ const RULE_LIST = [
     repoOnly: { kind: 'inapplicable', note: "Its subject is this repo's integration and native test pools, which no pack has" },
     find: findSyncSpawnsInSlowSpecs,
     rule: 'Start a process asynchronously in the integration and native halves — promisify(execFile) with a timeout, or runCommand (apack-cli tests/_support/run-command.ts) for a CLI or vitest process tree: a synchronous one blocks the worker, so no timeout fires and the RPC window expires',
+  },
+  {
+    id: 'findClockedDeadlinesInSource',
+    repoOnly: { kind: 'inapplicable', note: "Its subject is this repo's packages and their backlog of clocks; a pack's own waits are its author's" },
+    find: findClockedDeadlinesInSource,
+    rule: 'Bound work by its progress, not the clock: execFileWhileWorking, answerWhileWorking or workSignal (@apackdev/host/build/process-progress). A wait that is not on work a busy machine slows (network, a kill grace) goes in CLOCK_BY_DESIGN with why',
   },
   {
     id: 'findCompilerRunsInFastSpecs',
