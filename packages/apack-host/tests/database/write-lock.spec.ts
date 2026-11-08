@@ -6,7 +6,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawn, spawnSync, type ChildProcess, type StdioOptions } from 'node:child_process';
+import { spawn, type ChildProcess, type StdioOptions } from 'node:child_process';
 import { once } from 'node:events';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
@@ -21,6 +21,7 @@ const FORCED_INTERRUPTS: readonly NodeJS.Signals[] = process.platform === 'win32
   ? ['SIGINT', 'SIGTERM', 'SIGQUIT', 'SIGKILL'] : ['SIGKILL'];
 import { removeTempDirs, tempDir } from './fixtures.ts';
 import { _appDirOf } from '@apackdev/sdk/env';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 const locks: Array<{ release(): void }> = [];
 /** Every child a case spawned, so reaping one is not something a case has to remember */
@@ -133,7 +134,11 @@ async function startHolder(dir: string): Promise<ChildProcess> {
 }
 
 /** A pid no process has any more */
-const exitedPid = () => spawnSync(process.execPath, ['-e', '']).pid!;
+const exitedPid = async () => {
+  const exited = execFileWhileWorking(process.execPath, ['-e', '']);
+  await exited;
+  return exited.child.pid!;
+};
 
 describe('the database write lock', () => {
   it('stops listening for the process exiting once it is released', () => {
@@ -210,9 +215,9 @@ describe('the database write lock', () => {
     second.release(); expect(findDatabaseWriter(dir)).toBeNull();
   });
 
-  it('takes over a lock whose process has exited', () => {
+  it('takes over a lock whose process has exited', async () => {
     const dir = tempDir('write-lock-');
-    fs.writeFileSync(lockFile(dir), JSON.stringify({ pid: exitedPid(), machine: os.hostname(), what: 'a tool that died' }));
+    fs.writeFileSync(lockFile(dir), JSON.stringify({ pid: await exitedPid(), machine: os.hostname(), what: 'a tool that died' }));
     expect(findDatabaseWriter(dir)).toBeNull();
     hold(dir);
     expect(findDatabaseWriter(dir)).toBe(`apack db reset (pid ${process.pid})`);

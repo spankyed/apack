@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it } from 'vitest';
-import { spawnSync } from 'node:child_process';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { createPackCompilerInputView } from '../../src/build/compiler-inputs/index.ts';
 import { readPackageInputs } from '../../src/build/package-inputs.ts';
 import { PACK_BUILD_INPUTS_FILE, writePackBuildInputs, readPackBuildInputs, assertPackBuildInputsCurrent,
@@ -65,7 +65,7 @@ it('refuses transplanted or malformed records and preserves source-free installe
 });
 
 
-it('verifies a completed build and its current inputs without compiler or pack activation', () => {
+it('verifies a completed build and its current inputs without compiler or pack activation', async () => {
   const { root, dist } = fixture();
   const probe = `
     import fs from 'node:fs';
@@ -81,11 +81,15 @@ it('verifies a completed build and its current inputs without compiler or pack a
     assert.equal(fs.readFileSync, read);
     assert.equal(fs.statSync, stat);
   `;
-  const result = spawnSync(process.execPath, ['--conditions=@apackdev/source', '--import', 'tsx',
-    '--input-type=module', '-e', probe, root, dist], {
-    cwd: path.resolve(import.meta.dirname, '../../../..'), encoding: 'utf8', timeout: 10_000,
-    env: { ...process.env, NODE_OPTIONS: undefined },
-  });
-  expect(result.error).toBeUndefined();
-  expect(result.status, result.stderr).toBe(0);
+  let failure: { code?: unknown; stderr?: string } | undefined;
+  try {
+    await execFileWhileWorking(process.execPath, ['--conditions=@apackdev/source', '--import', 'tsx',
+      '--input-type=module', '-e', probe, root, dist], {
+      cwd: path.resolve(import.meta.dirname, '../../../..'),
+      env: { ...process.env, NODE_OPTIONS: undefined },
+    });
+  } catch (error) {
+    failure = error as { code?: unknown; stderr?: string };
+  }
+  expect(failure?.code, failure?.stderr).toBeUndefined();
 });

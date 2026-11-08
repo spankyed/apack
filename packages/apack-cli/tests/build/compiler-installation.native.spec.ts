@@ -8,7 +8,6 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { COMPILER_STORE_ENTRIES, captureCompilerInstallation, compilerStoreEntries, removeCompilerStoreDirectory, removeCompilerStoreEntry, type CompilerInstallation } from '../../src/build/compiler-installation.ts';
 import { isCompilerLocationPath } from '../../src/build/compiler-installation-inputs.ts';
 import { cliBin } from '../../src/utils.ts';
-import { _byDeadline } from '@apackdev/sdk/testing/waiting';
 import { cpuBudget } from '@apackdev/testing/vitest';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
@@ -370,11 +369,11 @@ it('keeps an owned worker in its captured compiler instead of handing off to the
   child.stderr!.on('data', chunk => { errors += chunk; });
   const closed = new Promise<number | null>((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
   try {
-    expect(await _byDeadline(closed, 'captured compiler worker', 2_000), errors).toBe(0);
+    expect(await closed, errors).toBe(0);
     expect(messages).toEqual([{ compiled: true }]);
   } finally {
     if (child.exitCode === null && child.signalCode === null) child.kill();
-    await _byDeadline(closed, 'captured compiler cleanup', 2_000);
+    await closed;
   }
 });
 

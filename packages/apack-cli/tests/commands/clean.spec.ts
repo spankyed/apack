@@ -7,11 +7,11 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanApps, cleanCompilers } from '../../src/commands/cache-clean';
 import { betaCacheDir, packagedExecutable } from '../../src/app/beta-app';
 import type { CliDirs } from '../../src/app/pack-host';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 let tmp: string;
 let dirs: CliDirs;
@@ -118,7 +118,7 @@ describe('cleanCompilers', () => {
     const abandoned = entry(store, 'dddddddddddddddd');
     fs.mkdirSync(`${used}.users`);
     fs.writeFileSync(path.join(`${used}.users`, `${process.pid}-live`), '');
-    const exited = spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8' });
+    const exited = await execFileWhileWorking(process.execPath, ['-e', 'process.stdout.write(String(process.pid))']);
     fs.mkdirSync(`${abandoned}.users`);
     fs.writeFileSync(path.join(`${abandoned}.users`, `${exited.stdout}-gone`), '');
     vi.spyOn(console, 'log').mockImplementation(() => {});

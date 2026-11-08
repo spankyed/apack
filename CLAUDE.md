@@ -263,11 +263,11 @@ Rules that pay for themselves:
   ([pipeline-lessons.md](docs/archive/references/pipeline-lessons.md#rules-that-pay-for-themselves-the-evidence)).
 - **Attribute a concurrent pipeline's cost with a CPU profile, not by timing its stages.** Per-stage wall
   clock double-counts overlap; use `node --cpu-prof` with self time per package.
-- **Start a process asynchronously in an integration or native spec.** A synchronous one blocks the worker, so
-  no case timeout fires and vitest's 60s RPC window expires. Use `execFileWhileWorking`
+- **Start a process asynchronously in a spec.** A synchronous one blocks the worker, so the progress guard
+  cannot read it and vitest's 60s RPC window expires. Use `execFileWhileWorking`
   (`@apackdev/sdk/progress`: `promisify(execFile)`'s contract, its `timeout` the CPU the process may
   spend) for one process, or `runCommand` (`packages/apack-cli/tests/_support/run-command.ts`) for a CLI or vitest
-  process tree; `check:specifiers` refuses the rest (`findSyncSpawnsInSlowSpecs`), and `suite-timeouts.spec.ts` a
+  process tree; `check:specifiers` refuses the rest (`findSyncSpawnsInSpecs`), and `suite-timeouts.spec.ts` a
   `promisify(execFile)`, whose `timeout` is the clock.
 - **A mutation check is worth more than a re-run.**
 - **But a mutation check does not redeem a test that mirrors the code.** Ask whether the code could be

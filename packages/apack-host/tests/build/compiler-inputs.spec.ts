@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { expect, it } from 'vitest';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { createCompilerFileView, assertNativeCompilerObservations } from '../../src/build/compiler-inputs/index.ts';
 
 it('attributes namespace refusals with recorded and replayed states', () => {
@@ -152,7 +152,7 @@ it('keeps source directory observations current when a fresh build publishes out
   } finally { view.dispose(); fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-it('replays pack input facts without activating a compiler or installing filesystem interception', () => {
+it('replays pack input facts without activating a compiler or installing filesystem interception', async () => {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-passive-inputs-'));
   const root = path.join(temporary, 'pack');
   fs.mkdirSync(root);
@@ -180,13 +180,17 @@ it('replays pack input facts without activating a compiler or installing filesys
       assert.equal(fs.readFileSync, read);
       assert.equal(fs.statSync, stat);
     `;
-    const result = spawnSync(process.execPath, ['--conditions=@apackdev/source', '--import', 'tsx',
-      '--input-type=module', '-e', probe, observations], {
-      cwd: path.resolve(import.meta.dirname, '../../../..'), encoding: 'utf8', timeout: 10_000,
-      env: { ...process.env, NODE_OPTIONS: undefined },
-    });
-    expect(result.error).toBeUndefined();
-    expect(result.status, result.stderr).toBe(0);
+    let failure: { code?: unknown; stderr?: string } | undefined;
+    try {
+      await execFileWhileWorking(process.execPath, ['--conditions=@apackdev/source', '--import', 'tsx',
+        '--input-type=module', '-e', probe, observations], {
+        cwd: path.resolve(import.meta.dirname, '../../../..'),
+        env: { ...process.env, NODE_OPTIONS: undefined },
+      });
+    } catch (error) {
+      failure = error as { code?: unknown; stderr?: string };
+    }
+    expect(failure?.code, failure?.stderr).toBeUndefined();
   } finally {
     view.dispose();
     fs.rmSync(temporary, { recursive: true, force: true });

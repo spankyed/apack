@@ -1,5 +1,4 @@
 import { writeInstalledPackFixture } from './runtime/build-fixture.ts';
-import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -13,6 +12,7 @@ const recordedPacks = () => readInstalledPacks();
 
 import { readHostCompatibility } from '../../src/packs/host-info.ts';
 import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 
 let root: string;
@@ -34,7 +34,11 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-const exitedPid = () => spawnSync(process.execPath, ['-e', '']).pid!;
+const exitedPid = async () => {
+  const exited = execFileWhileWorking(process.execPath, ['-e', '']);
+  await exited;
+  return exited.child.pid!;
+};
 const mkdir = (name: string) => fs.mkdirSync(path.join(packsDir, name));
 const remaining = () => fs.readdirSync(packsDir).sort();
 
@@ -43,8 +47,8 @@ function writePack(name: string, id = 'demo-pack'): void {
 }
 
 describe('recoverStagingDirs', () => {
-  it("removes staging dirs whose process is gone and keeps another process's install in progress", () => {
-    const exited = exitedPid();
+  it("removes staging dirs whose process is gone and keeps another process's install in progress", async () => {
+    const exited = await exitedPid();
     const running = process.ppid;
     mkdir('demo-pack');
     mkdir(`.demo-pack.installing-${exited}-a1B2c3`);
@@ -63,12 +67,12 @@ describe('recoverStagingDirs', () => {
     expect(remaining()).toEqual([`.other-pack.installing-${running}-d4E5f6`, `.other-pack.previous-${process.pid}-0a1b2c3d`, 'demo-pack'].sort());
   });
 
-  it('restores a pack whose install crashed between moving it aside and placing the new copy, and keeps it enabled', () => {
+  it('restores a pack whose install crashed between moving it aside and placing the new copy, and keeps it enabled', async () => {
     writePack('demo-pack');
     writeInstalledPacks([{ id: 'demo-pack', enabled: true }]);
     // The crash: the old copy moved aside, the new one never placed
-    fs.renameSync(path.join(packsDir, 'demo-pack'), path.join(packsDir, `.demo-pack.previous-${exitedPid()}-1a2b3c4d`));
-    mkdir(`.demo-pack.installing-${exitedPid()}-x1Y2z3`);
+    fs.renameSync(path.join(packsDir, 'demo-pack'), path.join(packsDir, `.demo-pack.previous-${await exitedPid()}-1a2b3c4d`));
+    mkdir(`.demo-pack.installing-${await exitedPid()}-x1Y2z3`);
 
     expect(recoverStagingDirs(packsDir)).toMatchObject({ restored: ['demo-pack'], failed: [] });
     expect(remaining()).toEqual(['demo-pack']);
@@ -94,8 +98,8 @@ describe('recoverStagingDirs', () => {
     expect(remaining()).toEqual([]);
   });
 
-  it("restores an interrupted install's copy whatever the record says about the pack", () => {
-    writePack(`.demo-pack.previous-${exitedPid()}-1a2b3c4d`);
+  it("restores an interrupted install's copy whatever the record says about the pack", async () => {
+    writePack(`.demo-pack.previous-${await exitedPid()}-1a2b3c4d`);
     writeInstalledPacks([]);
 
     expect(recoverStagingDirs(packsDir)).toMatchObject({ restored: ['demo-pack'], failed: [] });
@@ -107,8 +111,8 @@ describe('recoverStagingDirs', () => {
   it.each([
     ['there is no record of what is installed', () => {}],
     ['the record cannot be parsed', () => fs.writeFileSync(path.join(root, 'installed-packs.json'), 'not json')],
-  ])('restores every interrupted install when %s', (_how, makeRecordUnreadable) => {
-    writePack(`.demo-pack.previous-${exitedPid()}-1a2b3c4d`);
+  ])('restores every interrupted install when %s', async (_how, makeRecordUnreadable) => {
+    writePack(`.demo-pack.previous-${await exitedPid()}-1a2b3c4d`);
     makeRecordUnreadable();
 
     prepareHostDataDirs({ userDataDir: root, packsDir, version: '0.3.14' });
@@ -128,8 +132,8 @@ describe('recoverStagingDirs', () => {
 });
 
 describe('prepareHostDataDirs', () => {
-  it('logs instead of failing when staging dirs or host.json cannot be written', () => {
-    const staging = `.demo-pack.installing-${exitedPid()}-a1B2c3`;
+  it('logs instead of failing when staging dirs or host.json cannot be written', async () => {
+    const staging = `.demo-pack.installing-${await exitedPid()}-a1B2c3`;
     mkdir(staging);
     fs.writeFileSync(path.join(packsDir, staging, 'file'), '');
     fs.chmodSync(packsDir, 0o555);
@@ -147,8 +151,8 @@ describe('prepareHostDataDirs', () => {
 });
 
 
-it('restores the previous build and its ownership after interrupted candidate acceptance', () => {
-  const previous = `.demo-pack.previous-${exitedPid()}-a1b2c3`;
+it('restores the previous build and its ownership after interrupted candidate acceptance', async () => {
+  const previous = `.demo-pack.previous-${await exitedPid()}-a1b2c3`;
   writePack(previous);
   writePack('demo-pack');
   fs.writeFileSync(path.join(packsDir, 'demo-pack', 'candidate'), 'not accepted');
@@ -164,8 +168,8 @@ it('restores the previous build and its ownership after interrupted candidate ac
   expect(remaining()).toEqual(['demo-pack']);
 });
 
-it('preserves an ambiguous recovery and refuses to load its candidate', () => {
-  const pid = exitedPid();
+it('preserves an ambiguous recovery and refuses to load its candidate', async () => {
+  const pid = await exitedPid();
   const previous = [`.demo-pack.previous-${pid}-a1b2c3`, `.demo-pack.previous-${pid}-d4e5f6`];
   for (const name of previous) writePack(name);
   writePack('demo-pack');
@@ -177,8 +181,8 @@ it('preserves an ambiguous recovery and refuses to load its candidate', () => {
 });
 
 
-it('keeps an incumbent when recovery fails and never sweeps it as litter', () => {
-  const previous = `.demo-pack.previous-${exitedPid()}-a1b2c3`;
+it('keeps an incumbent when recovery fails and never sweeps it as litter', async () => {
+  const previous = `.demo-pack.previous-${await exitedPid()}-a1b2c3`;
   writePack(previous);
   writePack('demo-pack');
   fs.chmodSync(packsDir, 0o555);

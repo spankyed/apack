@@ -20,6 +20,8 @@
 // names a path under `@apackdev/source` and nothing else, so `publishedManifest` drops it and no pack can resolve
 // it. This is repo-internal test support, not something a pack author reaches for.
 
+import { fromNow, processWork, workSignal } from '../progress.ts';
+
 /**
  * How long a waiter gives up after.
  *
@@ -89,4 +91,32 @@ export function _whenSatisfied<T>(
     if (settled) stop();
     else attempt();
   });
+}
+
+/**
+ * Polls `check` until it stops throwing, and answers what it returned: `vi.waitFor` with no clock of its own.
+ *
+ * **For a wait on another process** — a watcher's build, a child's output, a file it writes. How long that takes is
+ * the machine's load, so a deadline on the clock fails healthy work on a busy machine. The bound is the vitest
+ * progress guard around the test (`@apackdev/testing`'s `vitest-progress-guard.ts`): it fails a test whose process
+ * tree does no work for `IDLE_MS`, or spends its CPU budget.
+ *
+ * A poll the guard outlived keeps trying until its file's process exits: it holds no vitest hook to stop on, since
+ * this module ships in the SDK, whose manifest does not declare vitest. Its timer is unref'd, so it holds nothing open.
+ */
+export function _settles<T>(check: () => T | Promise<T>, { interval = 50 }: { interval?: number } = {}): Promise<T> {
+  return new Promise<T>((resolve) => {
+    const attempt = async (): Promise<void> => {
+      try { resolve(await check()); } catch { setTimeout(() => { void attempt(); }, interval).unref(); }
+    };
+    void attempt();
+  });
+}
+
+/**
+ * An `AbortSignal` for work this test runs in its own process tree, which aborts when that tree stops working:
+ * `AbortSignal.timeout` with no clock. Its watch's timer is unref'd, so a signal nobody aborts holds nothing open.
+ */
+export function _workingSignal(): AbortSignal {
+  return workSignal({ work: fromNow(processWork(process.pid)) }).signal;
 }

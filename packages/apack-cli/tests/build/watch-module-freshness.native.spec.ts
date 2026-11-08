@@ -8,6 +8,7 @@ import { readPackBuild } from '@apackdev/host/packs';
 import { startTestPackBuildWatcher, WATCH_REBUILD_BUDGET_MS, type TestPackBuildWatcher } from '../_support/watch-builds.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
+import { _settles } from '@apackdev/sdk/testing/waiting';
 
 const sharedCompiler = shareCompilerInstallation();
 
@@ -41,7 +42,7 @@ it('refreshes flow modules loaded through ordinary imports on the next watched b
     });
     expect(output()).toContain('First');
     await watcher.rebuildAfter(() => { fs.writeFileSync(flow, declaration('Other')); });
-    await vi.waitFor(() => expect(publications > 0 || errors.mock.calls.length > 0).toBe(true), { timeout: 20_000 });
+    await _settles(() => expect(publications > 0 || errors.mock.calls.length > 0).toBe(true));
     expect(errors.mock.calls).toEqual([]);
     expect(output()).toContain('Other');
     expect(output()).not.toContain('First');
@@ -79,13 +80,13 @@ it('recompiles changed transitive content modules and retains the accepted build
     });
     expect(value()).toBe('first');
     await watcher.rebuildAfter(() => { fs.writeFileSync(helper, "export const label = 'other';"); });
-    await vi.waitFor(() => expect(publications > 0 || errors.mock.calls.length > 0).toBe(true), { timeout: 20_000 });
+    await _settles(() => expect(publications > 0 || errors.mock.calls.length > 0).toBe(true));
     expect(errors.mock.calls).toEqual([]);
     expect(value()).toBe('other');
     const accepted = readPackBuild(path.join(root, 'dist')).revision;
     const count = publications;
     await watcher.rebuildAfter(() => { fs.writeFileSync(helper, 'export const label = ;'); });
-    await vi.waitFor(() => expect(errors).toHaveBeenCalledWith(expect.stringContaining('Build/reload failed')), { timeout: 20_000 });
+    await _settles(() => expect(errors).toHaveBeenCalledWith(expect.stringContaining('Build/reload failed')));
     expect(publications).toBe(count);
     expect(readPackBuild(path.join(root, 'dist')).revision).toBe(accepted);
     expect(value()).toBe('other');

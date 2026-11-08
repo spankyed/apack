@@ -1,9 +1,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import os from 'node:os';
-import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { scopeOf, TYPECHECK_LEGS, type Leg } from '../../../scripts/lib/typecheck-legs.ts';
 import { GENERATE_ENTRIES, RECORDED_FILE_CHECKS } from '../../../scripts/lib/typecheck-jobs.ts';
 import { rootScripts } from '../../../scripts/lib/npm-scripts.ts';
@@ -11,7 +11,7 @@ import { PACKAGE_DIRS } from '../../../scripts/lib/workspace-deps.ts';
 import { CHAIN_STEPS } from '../../../scripts/lib/chain-steps.ts';
 import { population } from '@apackdev/sdk/testing';
 
-it('preserves the generation environment when checking its outputs in another process', () => {
+it('preserves the generation environment when checking its outputs in another process', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-typecheck-context-'));
   const pack = path.join(root, 'packages/default-setup');
   const cli = path.join(root, 'packages/apack-cli/bin');
@@ -30,9 +30,8 @@ else assert.deepEqual(context,JSON.parse(fs.readFileSync('context.json','utf8'))
     const check = RECORDED_FILE_CHECKS.find(check => check.name === 'facade:check')!;
     for (const job of [GENERATE_ENTRIES, check]) {
       const [command, ...args] = job.command.split(' ');
-      execFileSync(command!, args, { cwd: path.join(root, path.relative(REPO_ROOT, job.cwd ?? REPO_ROOT)),
-        env: { ...process.env, npm_lifecycle_event: 'typecheck', npm_lifecycle_script: 'tsx scripts/typecheck.ts' },
-        stdio: 'pipe', timeout: 2_000 });
+      await execFileWhileWorking(command!, args, { cwd: path.join(root, path.relative(REPO_ROOT, job.cwd ?? REPO_ROOT)),
+        env: { ...process.env, npm_lifecycle_event: 'typecheck', npm_lifecycle_script: 'tsx scripts/typecheck.ts' } });
     }
     expect(JSON.parse(fs.readFileSync(path.join(pack, 'context.json'), 'utf8'))).toEqual({
       event: 'typecheck', script: 'tsx scripts/typecheck.ts',

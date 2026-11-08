@@ -13,7 +13,7 @@ import { WebSocketServer } from 'ws';
 import { initTRPC } from '@trpc/server';
 import { applyWSSHandler } from '@trpc/server/adapters/ws';
 import { observable } from '@trpc/server/observable';
-import { _byDeadline, _whenSatisfied } from '@apackdev/sdk/testing/waiting';
+import { _whenSatisfied } from '@apackdev/sdk/testing/waiting';
 import { createRpcContext, type RpcContext } from '../../src/transport/context.ts';
 
 /** A connection as the adapter describes one, which is the only shape `createRpcContext` accepts */
@@ -124,13 +124,10 @@ const sawFrame = (socket: WebSocket, frames: Frame[], type: string, describe: st
     const socket = new WebSocket(`ws://127.0.0.1:${port}`);
     open = socket;
     const frames = framesOf(socket);
-    await _byDeadline(
-      new Promise<void>((resolve, reject) => {
+    await (new Promise<void>((resolve, reject) => {
         socket.addEventListener('open', () => resolve(), { once: true });
         socket.addEventListener('error', () => reject(new Error('the socket would not open')), { once: true });
-      }),
-      'the socket to open',
-    );
+      }));
 
     // One query, which is what arms the listener on the context's signal
     socket.send(JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'query', params: { path: 'look' } }));
@@ -151,7 +148,7 @@ const sawFrame = (socket: WebSocket, frames: Frame[], type: string, describe: st
     expect(seen?.aborted, 'an operation ended and this did not fire, so it is the connection\'s').toBe(false);
 
     socket.close();
-    await _byDeadline(abortFired, 'the connection signal to abort once the socket closed');
+    await abortFired;
 
     expect(seen?.aborted, 'and it fired on the close, which is what releases a claim').toBe(true);
   });

@@ -1,8 +1,9 @@
-import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import { describe, expect, it } from 'vitest';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { _whenSatisfied } from '@apackdev/sdk/testing/waiting';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 
@@ -10,17 +11,23 @@ import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 const WITH_SOURCE = path.join(REPO_ROOT, 'scripts', 'with-source.mjs');
 const PRINT_NODE_OPTIONS = ['node', '-p', 'process.env.NODE_OPTIONS'];
 
-function run(args: string[], nodeOptions?: string, extraEnv: NodeJS.ProcessEnv = {}) {
+/** The wrapper's exit code, and what it printed, whichever way it exited */
+async function run(args: string[], nodeOptions?: string, extraEnv: NodeJS.ProcessEnv = {}): Promise<{ code: unknown; stdout: string; stderr: string }> {
   const env: NodeJS.ProcessEnv = { PATH: process.env.PATH, ...extraEnv };
   if (nodeOptions !== undefined) env.NODE_OPTIONS = nodeOptions;
-  return spawnSync(process.execPath, [WITH_SOURCE, ...args], { cwd: REPO_ROOT, env, encoding: 'utf-8' });
+  try {
+    return { code: 0, ...await execFileWhileWorking(process.execPath, [WITH_SOURCE, ...args], { cwd: REPO_ROOT, env }) };
+  } catch (error) {
+    const { code, stdout, stderr } = error as { code: unknown; stdout: string; stderr: string };
+    return { code, stdout, stderr };
+  }
 }
 
 describe('with-source', () => {
-  it("appends the condition to the caller's NODE_OPTIONS", () => {
-    expect(run(PRINT_NODE_OPTIONS, '--max-old-space-size=4096').stdout.trim())
+  it("appends the condition to the caller's NODE_OPTIONS", async () => {
+    expect((await run(PRINT_NODE_OPTIONS, '--max-old-space-size=4096')).stdout.trim())
       .toBe('--max-old-space-size=4096 --conditions=@apackdev/source');
-    expect(run(PRINT_NODE_OPTIONS).stdout.trim()).toBe('--conditions=@apackdev/source');
+    expect((await run(PRINT_NODE_OPTIONS)).stdout.trim()).toBe('--conditions=@apackdev/source');
   });
 
   /**
@@ -28,30 +35,30 @@ describe('with-source', () => {
    * every drive and test script in `package.json` reads. Copied out of one and into a terminal it died with
    * `spawn playwright ENOENT`, because npm is what puts `node_modules/.bin` on PATH and nothing else did.
    */
-  it("resolves a locally installed command, with the PATH a terminal has rather than npm's", () => {
+  it("resolves a locally installed command, with the PATH a terminal has rather than npm's", async () => {
     // Node's own directory and nothing else: no `node_modules/.bin`, as a shell outside npm has
     const bare = path.dirname(process.execPath);
 
-    expect(run(['tsx', '--version'], undefined, { PATH: bare }).stdout).toMatch(/tsx/);
+    expect((await run(['tsx', '--version'], undefined, { PATH: bare })).stdout).toMatch(/tsx/);
   });
 
-  it('preserves repeated spaces in preload paths through nested wrappers', () => {
+  it('preserves repeated spaces in preload paths through nested wrappers', async () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-node-options-'));
     try {
       const preload = path.join(directory, 'pre load  file.cjs');
       fs.writeFileSync(preload, 'globalThis.preloadProbe = "PRELOADED";');
-      const result = run(['node', WITH_SOURCE, 'node', '-p', 'globalThis.preloadProbe'], '--require=' + JSON.stringify(preload));
-      expect(result.status, result.stderr).toBe(0);
+      const result = await run(['node', WITH_SOURCE, 'node', '-p', 'globalThis.preloadProbe'], '--require=' + JSON.stringify(preload));
+      expect(result.code, result.stderr).toBe(0);
       expect(result.stdout.trim()).toBe('PRELOADED');
     } finally { fs.rmSync(directory, { recursive: true, force: true }); }
   });
 
-  it('adds the condition once when nested', () => {
-    expect(run(['node', WITH_SOURCE, ...PRINT_NODE_OPTIONS]).stdout.trim()).toBe('--conditions=@apackdev/source');
+  it('adds the condition once when nested', async () => {
+    expect((await run(['node', WITH_SOURCE, ...PRINT_NODE_OPTIONS])).stdout.trim()).toBe('--conditions=@apackdev/source');
   });
 
-  it("exits with the command's code", () => {
-    expect(run(['node', '-e', 'process.exit(3)']).status).toBe(3);
+  it("exits with the command's code", async () => {
+    expect((await run(['node', '-e', 'process.exit(3)'])).code).toBe(3);
   });
 
   /**

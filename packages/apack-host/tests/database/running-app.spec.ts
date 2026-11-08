@@ -3,11 +3,11 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { afterEach, describe, expect, it } from 'vitest';
 import { appLockFile, findRunningApp, publishRunningApp } from '../../src/database/running.ts';
 import { removeTempDirs, tempDir } from './fixtures.ts';
 import { _appDirOf } from '@apackdev/sdk/env';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 afterEach(removeTempDirs);
 
@@ -22,8 +22,10 @@ function publishApi(dir: string, { port = 3001, pid = process.pid } = {}): void 
 }
 
 /** A pid no process has any more */
-function exitedPid(): number {
-  return spawnSync(process.execPath, ['-e', '']).pid!;
+async function exitedPid(): Promise<number> {
+  const exited = execFileWhileWorking(process.execPath, ['-e', '']);
+  await exited;
+  return exited.child.pid!;
 }
 
 /** What the app process publishes while it is using a data dir */
@@ -47,9 +49,9 @@ describe('findRunningApp', () => {
     expect(findRunningApp(live)?.why).toBe(`its API is running on port 3001 (pid ${process.pid})`);
   });
 
-  it("doesn't count a port file a crashed run left behind, or one it can't read", () => {
+  it("doesn't count a port file a crashed run left behind, or one it can't read", async () => {
     const crashed = context();
-    publishApi(crashed.userDataDir, { pid: exitedPid() });
+    publishApi(crashed.userDataDir, { pid: await exitedPid() });
     expect(findRunningApp(crashed)).toBeNull();
 
     for (const content of ['not json', '3001', JSON.stringify({ port: 3001 }), JSON.stringify({ port: 'x', pid: process.pid })]) {
@@ -59,13 +61,13 @@ describe('findRunningApp', () => {
     }
   });
 
-  it("counts the app's own file while its process runs, and not one a crash left", () => {
+  it("counts the app's own file while its process runs, and not one a crash left", async () => {
     const live = context();
     appLock(live.userDataDir, anApp());
     expect(findRunningApp(live)?.why).toBe(`its process is running (pid ${process.pid})`);
 
     const crashed = context();
-    appLock(crashed.userDataDir, anApp(exitedPid()));
+    appLock(crashed.userDataDir, anApp(await exitedPid()));
     expect(findRunningApp(crashed)).toBeNull();
   });
 
@@ -86,14 +88,14 @@ describe('findRunningApp', () => {
   // The window the port file cannot cover: the app is up and its API has not published a port yet, or is
   // being restarted after a crash. Without this a tool would take the write lock, and the API would then
   // refuse to come back.
-  it('answers before the API has published a port, and while a crashed one is restarting', () => {
+  it('answers before the API has published a port, and while a crashed one is restarting', async () => {
     const ctx = context();
     const stop = publishRunningApp(ctx.userDataDir);
     try {
       expect(findRunningApp(ctx)?.why).toBe(`its process is running (pid ${process.pid})`);
 
       // The API boots, then crashes: its port file names a process that has gone
-      publishApi(ctx.userDataDir, { pid: exitedPid() });
+      publishApi(ctx.userDataDir, { pid: await exitedPid() });
       expect(findRunningApp(ctx)?.why).toBe(`its process is running (pid ${process.pid})`);
     } finally {
       stop();

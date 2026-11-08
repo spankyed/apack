@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { assertSourceResolution, formatNodeOptions, parseNodeOptions, SOURCE_CONDITION, withoutSourceCondition, type ResolveFile } from '../../src/build/source-resolution.ts';
 
 const MANIFEST = {
@@ -94,15 +95,15 @@ describe('Node launch options', () => {
     expect(() => parseNodeOptions('"trailing' + String.fromCharCode(92))).toThrow('invalid escape');
   });
 
-  it.each(['--conditions', '-C', '--conditions=', '-C='])('removes %s source selectors while preserving native preload execution', flag => {
+  it.each(['--conditions', '-C', '--conditions=', '-C='])('removes %s source selectors while preserving native preload execution', async flag => {
     const dir = checkout({ built: true });
     const preload = path.join(root, 'pre load  file.cjs');
     write(preload, 'globalThis.preloadProbe = "PRELOADED";');
     const source = flag.endsWith('=') ? [flag + SOURCE_CONDITION] : [flag, SOURCE_CONDITION];
     const options = formatNodeOptions(['--require', preload, ...source, '--conditions=other  selector']);
-    const result = execFileSync(process.execPath, ['-p', 'JSON.stringify([globalThis.preloadProbe, require.resolve("@apackdev/sdk")])'], {
-      cwd: dir, env: { PATH: process.env.PATH, NODE_OPTIONS: withoutSourceCondition(options) }, encoding: 'utf8',
+    const { stdout } = await execFileWhileWorking(process.execPath, ['-p', 'JSON.stringify([globalThis.preloadProbe, require.resolve("@apackdev/sdk")])'], {
+      cwd: dir, env: { PATH: process.env.PATH, NODE_OPTIONS: withoutSourceCondition(options) },
     });
-    expect(JSON.parse(result)).toEqual(['PRELOADED', path.join(dir, 'packages/apack-sdk/dist/index.js')]);
+    expect(JSON.parse(stdout)).toEqual(['PRELOADED', path.join(dir, 'packages/apack-sdk/dist/index.js')]);
   });
 });

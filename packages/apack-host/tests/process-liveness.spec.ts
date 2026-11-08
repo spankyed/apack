@@ -4,9 +4,9 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { lockIsHeld, readApiEndpoint, recordIsStale } from '../src/process-liveness.ts';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 let dir: string;
 beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'liveness-')); });
@@ -23,12 +23,16 @@ const record = (name: string, { preBoot = false } = {}) => {
 };
 
 /** A pid no process has any more */
-const exitedPid = () => spawnSync(process.execPath, ['-e', '']).pid!;
+const exitedPid = async () => {
+  const exited = execFileWhileWorking(process.execPath, ['-e', '']);
+  await exited;
+  return exited.child.pid!;
+};
 
 describe('lockIsHeld', () => {
-  it('is held while its holder runs, and free once it has exited', () => {
+  it('is held while its holder runs, and free once it has exited', async () => {
     expect(lockIsHeld(process.pid)).toBe(true);
-    expect(lockIsHeld(exitedPid())).toBe(false);
+    expect(lockIsHeld(await exitedPid())).toBe(false);
   });
 
   // A lock is never cleared by age, because a wrong "free" means two writers. There is no file argument to
@@ -45,8 +49,8 @@ describe('recordIsStale', () => {
     expect(recordIsStale(record('fresh'), process.pid)).toBe(false);
   });
 
-  it('drops one whose writer has exited', () => {
-    expect(recordIsStale(record('crashed'), exitedPid())).toBe(true);
+  it('drops one whose writer has exited', async () => {
+    expect(recordIsStale(record('crashed'), await exitedPid())).toBe(true);
   });
 
   // Pids are recycled, so after a reboot a crashed writer's record names an unrelated live process
@@ -71,15 +75,19 @@ describe('readApiEndpoint', () => {
   const file = () => path.join(dir, 'api-port');
   const write = (content: unknown) => fs.writeFileSync(file(), typeof content === 'string' ? content : JSON.stringify(content));
   /** A process id no process has any more */
-  const exitedPid = () => spawnSync(process.execPath, ['-e', '']).pid!;
+  const exitedPid = async () => {
+    const exited = execFileWhileWorking(process.execPath, ['-e', '']);
+    await exited;
+    return exited.child.pid!;
+  };
 
   it('reads the API a running process published', () => {
     write({ port: 3001, pid: process.pid });
     expect(readApiEndpoint(file())).toEqual({ port: 3001, pid: process.pid });
   });
 
-  it('reads nothing from a file a crashed run left behind', () => {
-    write({ port: 3001, pid: exitedPid() });
+  it('reads nothing from a file a crashed run left behind', async () => {
+    write({ port: 3001, pid: await exitedPid() });
     expect(readApiEndpoint(file())).toBeNull();
   });
 

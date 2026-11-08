@@ -1,9 +1,9 @@
-import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 /** The CLI's source-mode resolve hooks add @apackdev/source only for packages in the checkout */
 const HOOKS = pathToFileURL(path.resolve(__dirname, '..', '..', 'bin', 'source-hooks.mjs')).href;
@@ -28,15 +28,15 @@ function link(target: string, from: string): void {
 }
 
 /** What @apackdev/sdk resolves to from `dir` in a Node process with the hooks registered */
-function resolveWithHooks(dir: string): string {
+async function resolveWithHooks(dir: string): Promise<string> {
   const script = [
     "import { register } from 'node:module';",
     `register(${JSON.stringify(HOOKS)}, { data: { checkout: ${JSON.stringify(pathToFileURL(checkout).href + '/')} } });`,
     "process.stdout.write(import.meta.resolve('@apackdev/sdk'));",
   ].join('\n');
-  const url = execFileSync(process.execPath, ['--input-type=module', '-e', script], {
-    cwd: dir, env: { PATH: process.env.PATH }, stdio: 'pipe',
-  }).toString();
+  const { stdout: url } = await execFileWhileWorking(process.execPath, ['--input-type=module', '-e', script], {
+    cwd: dir, env: { PATH: process.env.PATH },
+  });
   return path.relative(root, new URL(url).pathname);
 }
 
@@ -73,23 +73,23 @@ afterAll(() => {
 });
 
 describe('CLI source hooks', () => {
-  it('resolve the checkout workspace package to its source', () => {
-    expect(resolveWithHooks(checkout)).toBe('checkout/packages/apack-sdk/src/index.js');
+  it('resolve the checkout workspace package to its source', async () => {
+    expect(await resolveWithHooks(checkout)).toBe('checkout/packages/apack-sdk/src/index.js');
   });
 
-  it('resolve a linked pack to the checkout source', () => {
-    expect(resolveWithHooks(path.join(root, 'linked-pack'))).toBe('checkout/packages/apack-sdk/src/index.js');
+  it('resolve a linked pack to the checkout source', async () => {
+    expect(await resolveWithHooks(path.join(root, 'linked-pack'))).toBe('checkout/packages/apack-sdk/src/index.js');
   });
 
-  it("leave another checkout's package on its dist", () => {
-    expect(resolveWithHooks(path.join(root, 'other-linked-pack'))).toBe('other-checkout/packages/apack-sdk/dist/index.js');
+  it("leave another checkout's package on its dist", async () => {
+    expect(await resolveWithHooks(path.join(root, 'other-linked-pack'))).toBe('other-checkout/packages/apack-sdk/dist/index.js');
   });
 
-  it('leave an installed package outside the checkout on its dist', () => {
-    expect(resolveWithHooks(path.join(root, 'installed-pack'))).toBe('installed-pack/node_modules/@apackdev/sdk/dist/index.js');
+  it('leave an installed package outside the checkout on its dist', async () => {
+    expect(await resolveWithHooks(path.join(root, 'installed-pack'))).toBe('installed-pack/node_modules/@apackdev/sdk/dist/index.js');
   });
 
-  it('leave an installed package inside the checkout on its dist', () => {
-    expect(resolveWithHooks(path.join(checkout, 'tests', 'installed-pack'))).toBe('checkout/tests/installed-pack/node_modules/@apackdev/sdk/dist/index.js');
+  it('leave an installed package inside the checkout on its dist', async () => {
+    expect(await resolveWithHooks(path.join(checkout, 'tests', 'installed-pack'))).toBe('checkout/tests/installed-pack/node_modules/@apackdev/sdk/dist/index.js');
   });
 });

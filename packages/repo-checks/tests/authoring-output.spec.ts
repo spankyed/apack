@@ -1,8 +1,8 @@
-import { execFileSync, spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { REPO_ROOT, stampedRun, unitStaleReason } from '@apackdev/host/build/packages-built';
 import { CHAIN_STEPS, dependsOn } from '../../../scripts/lib/chain-steps.ts';
 
@@ -16,12 +16,26 @@ function fixture() {
   return root;
 }
 
-function run(root: string, temporary: string, command: string, args: string[] = []): string {
+async function run(root: string, temporary: string, command: string, args: string[] = []): Promise<string> {
   const caller = path.join(root, 'tests/acceptance/packaged-authoring/caller.sh');
   fs.mkdirSync(path.dirname(caller), { recursive: true });
-  return execFileSync('bash', ['-c', `source "$1"; ${command}`, caller, helper, ...args], {
-    env: { ...process.env, TMPDIR: temporary }, encoding: 'utf8',
-  }).trim();
+  const { stdout } = await execFileWhileWorking('bash', ['-c', `source "$1"; ${command}`, caller, helper, ...args], {
+    env: { ...process.env, TMPDIR: temporary },
+  });
+  return stdout.trim();
+}
+
+/** `newWorkDir` run in `root` expecting a refusal: its exit code and stderr, or code 0 when it succeeded */
+async function refusedNewWorkDir(root: string, temporary: string): Promise<{ code: unknown; stderr: string }> {
+  try {
+    await execFileWhileWorking('bash', ['-c', 'source "$1"; newWorkDir', path.join(root, 'tests/acceptance/packaged-authoring/caller.sh'), helper], {
+      env: { ...process.env, TMPDIR: temporary },
+    });
+    return { code: 0, stderr: '' };
+  } catch (error) {
+    const { code, stderr } = error as { code: unknown; stderr: string };
+    return { code, stderr };
+  }
 }
 
 const author = CHAIN_STEPS.find(step => step.name === 'test:packaged-authoring:author')!;
@@ -31,11 +45,11 @@ describe('external authoring output ownership', () => {
     expect(dependsOn(author)).toContain('build:default-setup');
   });
 
-  it('keeps one work dir per canonical checkout, replacing it read-only directories and all', () => {
+  it('keeps one work dir per canonical checkout, replacing it read-only directories and all', async () => {
     const dir = fixture(), temporary = path.join(dir, 'private-tmp');
     fs.mkdirSync(temporary);
     const root = path.join(dir, 'checkout');
-    const previous = run(root, temporary, 'newWorkDir');
+    const previous = await run(root, temporary, 'newWorkDir');
     expect(path.basename(previous)).toMatch(/^apack-authoring-[0-9a-f]{64}$/);
     expect(fs.readFileSync(path.join(previous, 'checkout'), 'utf8')).toBe(fs.realpathSync(root));
     // A work dir can hold read-only directories, as a compiler store under its HOME does
@@ -46,18 +60,18 @@ describe('external authoring output ownership', () => {
     fs.chmodSync(store, 0o555);
     const alias = path.join(dir, 'checkout-alias');
     fs.symlinkSync(root, alias, 'dir');
-    const current = run(alias, temporary, 'newWorkDir');
+    const current = await run(alias, temporary, 'newWorkDir');
     expect(current, 'the same checkout by another path is the same dir').toBe(previous);
     expect(fs.existsSync(path.join(previous, 'home'))).toBe(false);
     expect(fs.readdirSync(temporary).filter(name => name.startsWith('apack-authoring-')), 'and only one').toHaveLength(1);
   });
 
-  it('sweeps the work dirs of checkouts that are gone, and nothing else', () => {
+  it('sweeps the work dirs of checkouts that are gone, and nothing else', async () => {
     const dir = fixture(), temporary = path.join(dir, 'private-tmp');
     fs.mkdirSync(temporary);
-    const kept = run(path.join(dir, 'kept'), temporary, 'newWorkDir');
-    const gone = run(path.join(dir, 'gone'), temporary, 'newWorkDir');
-    const goneLive = run(path.join(dir, 'gone-live'), temporary, 'newWorkDir');
+    const kept = await run(path.join(dir, 'kept'), temporary, 'newWorkDir');
+    const gone = await run(path.join(dir, 'gone'), temporary, 'newWorkDir');
+    const goneLive = await run(path.join(dir, 'gone-live'), temporary, 'newWorkDir');
     fs.writeFileSync(path.join(goneLive, 'owner'), String(process.pid));
     fs.rmSync(path.join(dir, 'gone'), { recursive: true });
     fs.rmSync(path.join(dir, 'gone-live'), { recursive: true });
@@ -65,47 +79,43 @@ describe('external authoring output ownership', () => {
     const unrelated = path.join(temporary, 'apack-authoring-unrelated');
     fs.writeFileSync(file, 'preserve');
     fs.mkdirSync(unrelated);
-    run(path.join(dir, 'another'), temporary, 'newWorkDir');
+    await run(path.join(dir, 'another'), temporary, 'newWorkDir');
     expect(fs.existsSync(gone), 'its checkout gone and its owner too').toBe(false);
     for (const preserved of [kept, goneLive, file, unrelated]) expect(fs.existsSync(preserved), preserved).toBe(true);
   });
 
-  it('refuses to replace a work dir a live run of the checkout owns', () => {
+  it('refuses to replace a work dir a live run of the checkout owns', async () => {
     const dir = fixture(), temporary = path.join(dir, 'private-tmp');
     fs.mkdirSync(temporary);
     const root = path.join(dir, 'checkout');
-    const work = run(root, temporary, 'newWorkDir');
+    const work = await run(root, temporary, 'newWorkDir');
     fs.writeFileSync(path.join(work, 'owner'), String(process.pid));
     fs.writeFileSync(path.join(work, 'in-use'), 'yes');
-    const refused = spawnSync('bash', ['-c', 'source "$1"; newWorkDir', path.join(root, 'tests/acceptance/packaged-authoring/caller.sh'), helper], {
-      env: { ...process.env, TMPDIR: temporary }, encoding: 'utf8',
-    });
-    expect(refused.status).not.toBe(0);
+    const refused = await refusedNewWorkDir(root, temporary);
+    expect(refused.code).not.toBe(0);
     expect(refused.stderr).toContain(`(pid ${process.pid}) is using ${work}`);
     expect(fs.existsSync(path.join(work, 'in-use'))).toBe(true);
   });
 
   // macOS's user immutable flag makes a file no chmod lets the removal undo; Linux's needs root to set
-  it.skipIf(process.platform !== 'darwin')('refuses, naming the work dir, when it cannot replace it', () => {
+  it.skipIf(process.platform !== 'darwin')('refuses, naming the work dir, when it cannot replace it', async () => {
     const dir = fixture(), temporary = path.join(dir, 'private-tmp');
     fs.mkdirSync(temporary);
     const root = path.join(dir, 'checkout');
-    const previous = run(root, temporary, 'newWorkDir');
+    const previous = await run(root, temporary, 'newWorkDir');
     const locked = path.join(previous, 'locked');
     fs.writeFileSync(locked, 'immutable');
-    execFileSync('chflags', ['uchg', locked]);
+    await execFileWhileWorking('chflags', ['uchg', locked]);
     try {
-      const refused = spawnSync('bash', ['-c', 'source "$1"; newWorkDir', path.join(root, 'tests/acceptance/packaged-authoring/caller.sh'), helper], {
-        env: { ...process.env, TMPDIR: temporary }, encoding: 'utf8',
-      });
-      expect(refused.status).not.toBe(0);
+      const refused = await refusedNewWorkDir(root, temporary);
+      expect(refused.code).not.toBe(0);
       expect(refused.stderr).toContain(`could not remove the work dir ${previous}`);
     } finally {
-      execFileSync('chflags', ['nouchg', locked]);
+      await execFileWhileWorking('chflags', ['nouchg', locked]);
     }
   });
 
-  it('uses the machine’s compiler store, not one under the work dir’s HOME, keeping one already set', () => {
+  it('uses the machine’s compiler store, not one under the work dir’s HOME, keeping one already set', async () => {
     const dir = fixture(), home = path.join(dir, 'user-home'), work = path.join(dir, 'work');
     fs.mkdirSync(home);
     fs.mkdirSync(work);
@@ -114,14 +124,14 @@ describe('external authoring output ownership', () => {
     fs.mkdirSync(path.dirname(caller), { recursive: true });
     // The helper resolves the store with the CLI's own env-paths, from the checkout's CLI package
     fs.symlinkSync(path.join(REPO_ROOT, 'packages'), path.join(root, 'packages'), 'dir');
-    const store = (env: NodeJS.ProcessEnv) => execFileSync('bash', ['-c', 'source "$1"; useWorkDir "$2"; echo "$APACK_COMPILER_STORE|$HOME"', caller, helper, work], {
-      env: { ...process.env, HOME: home, XDG_CACHE_HOME: '', ...env }, encoding: 'utf8',
-    }).trim().split('|');
-    const [resolved, moved] = store({ APACK_COMPILER_STORE: '' });
+    const store = async (env: NodeJS.ProcessEnv) => (await execFileWhileWorking('bash', ['-c', 'source "$1"; useWorkDir "$2"; echo "$APACK_COMPILER_STORE|$HOME"', caller, helper, work], {
+      env: { ...process.env, HOME: home, XDG_CACHE_HOME: '', ...env },
+    })).stdout.trim().split('|');
+    const [resolved, moved] = await store({ APACK_COMPILER_STORE: '' });
     expect(moved).toBe(path.join(work, 'home'));
     expect(resolved.startsWith(home + path.sep), resolved).toBe(true);
     expect(resolved.endsWith(path.join('apack-cli', 'compilers'))).toBe(true);
-    expect(store({ APACK_COMPILER_STORE: '/elsewhere/compilers' })[0]).toBe('/elsewhere/compilers');
+    expect((await store({ APACK_COMPILER_STORE: '/elsewhere/compilers' }))[0]).toBe('/elsewhere/compilers');
     expect(fs.readFileSync(path.join(work, 'owner'), 'utf8').trim()).toMatch(/^\d+$/);
   });
 
@@ -136,7 +146,7 @@ describe('external authoring output ownership', () => {
       fs.mkdirSync(work);
       const archive = path.join(work, 'fixture.tgz');
       fs.writeFileSync(archive, 'fixture');
-      run(root, dir, 'WORK="$2"; ARCHIVE="$3"; PACK="$2/pack"; writeAuthoringHandoff', [work, archive]);
+      await run(root, dir, 'WORK="$2"; ARCHIVE="$3"; PACK="$2/pack"; writeAuthoringHandoff', [work, archive]);
       const handoff = path.join(root, '.apack/tests/authoring-handoff');
       const unit = { inputs: [], outputs: author.outputs!.map(output => path.join(root, output)) };
       const stamp = path.join(dir, 'successful-stamp.json');
