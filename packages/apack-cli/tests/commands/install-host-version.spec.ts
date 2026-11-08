@@ -1,5 +1,4 @@
 import { _declarationRevision } from '@apackdev/sdk/build';
-import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -10,6 +9,7 @@ import { uninstall } from '../../src/commands/pack-uninstall';
 import { publishRunningApp, findDatabaseWriter } from '@apackdev/host/database';
 import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
 import { _appDirOf } from '@apackdev/sdk/env';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 let tmp: string;
 beforeEach(() => {
@@ -87,15 +87,19 @@ describe('apack pack install', () => {
 
 // Tooling runs host code with no app bound: @apackdev/host/packs logs through @apackdev/sdk/logger, which writes to the console
 describe('the apack bin', () => {
-  it('installs a pack, printing what @apackdev/host/packs logs', () => {
+  it('installs a pack, printing what @apackdev/host/packs logs', async () => {
     const cli = path.resolve(__dirname, '..', '..', 'bin', 'apack.mjs');
-    const result = spawnSync(process.execPath, [cli, 'pack', 'install', builtPack('>=0.3.0')], {
-      cwd: tmp,
-      encoding: 'utf-8',
-      env: { ...process.env, APACK_USER_DATA_DIR: path.join(tmp, 'data'), NO_COLOR: '1', FORCE_COLOR: '0' },
-      timeout: 60_000,
-    });
-    expect(result.status, result.stderr).toBe(0);
+    let result: { code: number | null; stdout: string; stderr: string };
+    try {
+      result = { code: 0, ...await execFileWhileWorking(process.execPath, [cli, 'pack', 'install', builtPack('>=0.3.0')], {
+        cwd: tmp,
+        env: { ...process.env, APACK_USER_DATA_DIR: path.join(tmp, 'data'), NO_COLOR: '1', FORCE_COLOR: '0' },
+      }) };
+    } catch (error) {
+      const { code, stdout, stderr } = error as { code: number | null; stdout: string; stderr: string };
+      result = { code, stdout, stderr };
+    }
+    expect(result.code, result.stderr).toBe(0);
     expect(result.stdout).toContain('[pack-installer] Installed "Demo Pack" v1.0.0');
     expect(fs.existsSync(path.join(_appDirOf(path.join(tmp, 'data')), 'packs', 'demo-pack', 'apack.json'))).toBe(true);
   });

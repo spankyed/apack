@@ -2,11 +2,11 @@
 // steps are already stale.
 import { describe, expect, it } from 'vitest';
 import { criticalPath, measurementsFrom, willNotCache } from '../../../scripts/lib/step-timing.ts';
-import type { TimeoutClass } from '../../../scripts/lib/step-timeouts.ts';
+import type { BudgetClass } from '../../../scripts/lib/step-budgets.ts';
 import type { SchedulableStep } from '../../../scripts/lib/chain-schedule.ts';
 
 /** A step as the timing readers see it */
-type TimedStep = SchedulableStep & { readonly forceArgs?: readonly string[]; readonly timeout?: TimeoutClass };
+type TimedStep = SchedulableStep & { readonly forceArgs?: readonly string[]; readonly timeout?: BudgetClass };
 
 const step = (name: string, dependsOn: string[] = [], extra: Partial<TimedStep> = {}): TimedStep =>
   ({ name, dependsOn, ...extra });

@@ -73,18 +73,18 @@ test("the code system's file watcher and terminal output reach the code surface"
   await expect.poll(async () => {
     await sendToSystem(appPage, 'code', { type: 'explorer.READ_FILE', path: changed });
     return (await received(appPage, 'code', 'explorer.FILE_CONTENT')).some((event) => (event.data as { path?: string }).path === changed);
-  }, { timeout: 15_000, intervals: [1000] }).toBe(true);
+  }, { intervals: [1000] }).toBe(true);
   let writes = 0;
   // Written again on each check: the watcher starts after the base directory changes
   await expect.poll(async () => {
     fs.writeFileSync(changed, `write ${++writes}`);
     return (await received(appPage, 'code', 'explorer.FILE_CHANGED_EXTERNALLY'))
       .some((event) => JSON.stringify(event.data).includes('changed-outside.txt'));
-  }, { timeout: 20_000, intervals: [500] }).toBe(true);
+  }, { intervals: [500] }).toBe(true);
 
   await sendToSystem(appPage, 'code', { type: 'terminal.CREATE_TERMINAL', title: 'e2e surface sends', cwd: workDir });
   await expect.poll(async () => (await received(appPage, 'code', 'terminal.CREATED'))
-    .some((event) => (event.data as { title?: string }).title === 'e2e surface sends'), { timeout: 15_000 }).toBe(true);
+    .some((event) => (event.data as { title?: string }).title === 'e2e surface sends')).toBe(true);
   const terminalId = (await received(appPage, 'code', 'terminal.CREATED'))
     .map((event) => event.data as { id: string; title?: string })
     .find((terminal) => terminal.title === 'e2e surface sends')!.id;
@@ -92,7 +92,7 @@ test("the code system's file watcher and terminal output reach the code surface"
     await sendToSystem(appPage, 'code', { type: 'terminal.TERMINAL_INPUT', terminalId, data: 'echo "e2e-marker-$((6 * 7))"\r' });
     await expect.poll(async () => (await received(appPage, 'code', 'terminal.OUTPUT'))
       .filter((event) => (event.data as { terminalId: string }).terminalId === terminalId)
-      .map((event) => (event.data as { data: string }).data).join(''), { timeout: 15_000 }).toContain('e2e-marker-42');
+      .map((event) => (event.data as { data: string }).data).join('')).toContain('e2e-marker-42');
   } finally {
     await sendToSystem(appPage, 'code', { type: 'terminal.CLOSE_TERMINAL', terminalId });
   }
@@ -118,10 +118,10 @@ test("a reloaded pack's browser surface restores what its system saved, asking a
         body: JSON.stringify({ packId: 'default-setup' }),
       });
       return response.status;
-    }, { timeout: 15_000 }).toBe(200);
+    }).toBe(200);
 
     await expect.poll(async () => (await received(appPage, 'browser', 'SAVED_SESSION_READ'))
-      .some((event) => (event.savedBookmarks ?? []).some((bookmark) => bookmark.url === url)), { timeout: 15_000 }).toBe(true);
+      .some((event) => (event.savedBookmarks ?? []).some((bookmark) => bookmark.url === url))).toBe(true);
   } finally {
     await sendToSystem(appPage, 'browser', { type: 'SYNC_BOOKMARKS', bookmarks: [] });
   }

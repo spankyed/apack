@@ -1,13 +1,12 @@
 import { spawn } from 'node:child_process';
-import { createStallTracker, readTreeCpuMs } from '@apackdev/host/build/process-progress';
+import { describeRefusal, processWork, readTreeCpuMs, watchWork, type Watch } from '@apackdev/sdk/progress';
 import { stopCompilerProcessGroup } from '../../src/build/compiler-process-group.ts';
-
-/** How long a command's process tree may go without CPU or output before it counts as stalled */
-const IDLE_MS = 120_000;
-/** How long a command may run however busy it is: for the one hang the idle watch can't see, a loop that spins */
+/**
+ * How much CPU a command's tree may spend: for the one hang the idle watch can't see, a loop that spins. CPU rather
+ * than the clock wherever the tree can be read, since a busy machine stretches a command's wall time and leaves its CPU
+ * alone; the clock only where it cannot, on Windows and under `APACK_WATCHDOG=off`.
+ */
 const CEILING_MS = 900_000;
-/** How often a running command's process tree is read, which stops at the first reading still in flight */
-const READ_EVERY_MS = 5_000;
 
 /**
  * Runs a command that starts a process tree — the CLI, a nested `vitest run` — off Vitest's event loop, and
@@ -18,8 +17,8 @@ const READ_EVERY_MS = 5_000;
  * makes a command slow and never stalled. The case's own deadline still applies around it.
  *
  * Resolves with the exit code, the combined output and stdout alone (for a caller that parses it); rejects, naming the command, when it exceeds `timeout`,
- * is cancelled through `signal`, or cannot start. A single short-lived process needs none of this:
- * `promisify(execFile)` with a `timeout` is enough.
+ * is cancelled through `signal`, or cannot start. A single process needs none of this: `execFileWhileWorking`
+ * (`@apackdev/sdk/progress`) is `promisify(execFile)` bounded the same way.
  */
 export async function runCommand(command: string, args: string[], cwd: string,
   { signal, env, ceiling = CEILING_MS, readTree = readTreeCpuMs }: {
@@ -41,17 +40,15 @@ export async function runCommand(command: string, args: string[], cwd: string,
   let budget: ReturnType<typeof setTimeout> | undefined;
   let abort: (() => void) | undefined;
   let forced: Promise<void> | undefined;
-  // Windows has no process groups or `ps`, so there the ceiling is the only bound, as it is under `APACK_WATCHDOG=off`
-  const stall = grouped && process.env.APACK_WATCHDOG !== 'off' ? createStallTracker(IDLE_MS, Date.now()) : undefined;
-  let watching: ReturnType<typeof setInterval> | undefined;
-  child.stdout.on('data', chunk => { output += chunk.toString(); stdout += chunk.toString(); stall?.output(Date.now()); });
-  child.stderr.on('data', chunk => { output += chunk.toString(); stall?.output(Date.now()); });
+  let watch: Watch | undefined;
+  child.stdout.on('data', chunk => { output += chunk.toString(); stdout += chunk.toString(); watch?.output(); });
+  child.stderr.on('data', chunk => { output += chunk.toString(); watch?.output(); });
   try {
     const code = await new Promise<number>((resolve, reject) => {
       const stop = (reason: Error) => {
         if (failure) return;
         failure = reason;
-        clearInterval(watching);
+        watch?.stop();
         // Public builds drain their compiler owners on SIGTERM; escalate only after that grace period.
         child.kill('SIGTERM');
         escalation = setTimeout(() => {
@@ -62,25 +59,22 @@ export async function runCommand(command: string, args: string[], cwd: string,
         shutdown = setTimeout(() => reject(new Error(`${label}: process did not close within the 20s cleanup limit`, { cause: reason })), 20_000);
       };
       abort = () => stop(new Error(`${label}: cancelled`, { cause: signal?.reason }));
-      budget = setTimeout(() => stop(new Error(`${label}: running past the ${ceiling}ms ceiling\n${output}`)), ceiling);
-      if (stall && child.pid !== undefined) {
-        let reading = false;
-        watching = setInterval(() => {
-          if (reading) return;
-          reading = true;
-          void readTree(child.pid!).then((tree) => {
-            reading = false;
-            if (tree && stall.reading(tree, Date.now())) {
-              stop(new Error(`${label}: stalled, no CPU or output for ${IDLE_MS / 1000}s\n${output}`));
-            }
-          });
-        }, READ_EVERY_MS);
+      // Bounded by its progress and the CPU its tree spends (`watchWork`); on the clock only where the tree cannot be
+      // read — Windows has no process groups or `ps` — or the watchdog is off
+      if (grouped && process.env.APACK_WATCHDOG !== 'off' && child.pid !== undefined) {
+        watch = watchWork({
+          work: processWork(child.pid, readTree), fallbackMs: ceiling, watchesOutput: true,
+          ceilingMs: process.env.APACK_CEILING === 'off' ? undefined : ceiling,
+          onRefused: (refusal) => stop(new Error(`${label}: ${refusal.kind === 'stalled' ? 'stalled, it ' : ''}${describeRefusal(refusal)}\n${output}`)),
+        });
+      } else {
+        budget = setTimeout(() => stop(new Error(`${label}: running past the ${ceiling}ms ceiling\n${output}`)), ceiling);
       }
       signal?.addEventListener('abort', abort, { once: true });
       child.once('error', error => { failure ??= error; });
       child.once('close', code => {
         clearTimeout(budget);
-        clearInterval(watching);
+        watch?.stop();
         if (abort) signal?.removeEventListener('abort', abort);
         resolve(code ?? 1);
       });
@@ -94,7 +88,7 @@ export async function runCommand(command: string, args: string[], cwd: string,
     return { code, output, stdout };
   } finally {
     clearTimeout(budget);
-    clearInterval(watching);
+    watch?.stop();
     clearTimeout(escalation);
     clearTimeout(shutdown);
     if (abort) signal?.removeEventListener('abort', abort);

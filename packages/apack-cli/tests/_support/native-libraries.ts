@@ -2,11 +2,10 @@ import { FIXTURE_ENTITY } from '@apackdev/sdk/testing/pack-fixture';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { nativeAddonSource } from './native-addon.ts';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
-const execFileAsync = promisify(execFile);
+const execFileAsync = execFileWhileWorking;
 const COMPILE_MS = 60_000;
 
 // The fixtures the native-library proofs share: a pack beside a compiled addon whose library is placed by `mode`,

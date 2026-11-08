@@ -10,6 +10,7 @@ import { fakeSettings } from '@apackdev/sdk/testing';
 import { readPackBuild } from '@apackdev/host/packs';
 import { buildCommand } from '../../src/commands/build.ts';
 import { inspectPack } from '../../src/commands/info.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -17,7 +18,7 @@ afterEach(() => {
   roots.splice(0).forEach(root => fs.rmSync(root, { recursive: true, force: true }));
 });
 
-it('builds declared editor members and step presentation, then discovers a copied source-free build', async () => {
+it('builds declared editor members and step presentation, then discovers a copied source-free build', { meta: cpuBudget(180_000 + 60_000 + 60_000 + 20_000) }, async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-editor-declarations-'));
   roots.push(root);
   const extensions = {
@@ -86,4 +87,4 @@ export const getHeight: NonNullable<StepLayoutDescriptor['getHeight']> = node =>
   frontends.unload(manifest.id);
   expect(packs.stepBindings().get('memo')).toBeUndefined();
   expect(fs.existsSync(path.join(installed, 'src'))).toBe(false);
-}, 180_000 + 60_000 + 60_000 + 20_000);
+});

@@ -8,6 +8,7 @@ import { callCli } from '../_support/pack-builds.ts';
 import { bundlePackFE } from '../../src/build/fe-bundler.ts';
 import { createBuildOutputs } from '../../src/build/build-outputs.ts';
 import { captureCompilationInputs } from '../../src/build/compilation-inputs.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 const fixture = createFrontendResourceFixture();
 const { consumer } = fixture;
@@ -97,7 +98,7 @@ it('copies public assets from the accepted input view instead of changed live fi
   } finally { compilation.dispose(); }
 });
 
-it('rebuilds Vue styles after only an external stylesheet changes', async () => {
+it('rebuilds Vue styles after only an external stylesheet changes', { meta: cpuBudget(2 * 60_000 + 20_000) }, async () => {
   const { pack } = consumer();
   const stylesheet = path.join(fixture.root, 'outside.css');
   fs.writeFileSync(stylesheet, '.outside { color: #123456; }');
@@ -112,7 +113,7 @@ it('rebuilds Vue styles after only an external stylesheet changes', async () => 
   expect(second.code, second.output).toBe(0);
   expect(fs.readFileSync(css, 'utf8')).toContain('#654321');
   expect(fs.readFileSync(css, 'utf8')).not.toContain('#123456');
-}, 2 * 60_000 + 20_000);
+});
 
 it.each(['css-import', 'css-url', 'template'] as const)('compiles changed external %s resources with unchanged authored sources', async kind => {
   const { pack } = consumer();

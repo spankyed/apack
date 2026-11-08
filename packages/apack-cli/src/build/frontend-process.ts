@@ -12,12 +12,14 @@ import { BUILD_INPUTS_DIRECTORY_ENV, removeCompilerReadTree } from './compiler-r
 import { BUILD_INPUTS_IPC_ENV, readCompilerWatchReports } from './build-watch-inputs.ts';
 import { mergeCompilerWatchPaths, type CompilerWatchPaths } from './compiler-watch.ts';
 import { COMPILER_NATIVE_REPORT } from './compiler-native-reports.ts';
+import { fromNow, processWork, watchWork } from '@apackdev/sdk/progress';
 
 export interface PackFrontendAddress { readonly port: number; readonly pid: number }
 export interface FrontendInputUpdate { readonly paths: CompilerWatchPaths; readonly changed: boolean }
 
-// A blocked dev process must not hold the builder's replacement queue indefinitely.
-const INPUT_CHECK_TIMEOUT_MS = 5_000;
+// A blocked dev process must not hold the builder's replacement queue indefinitely: one doing no work for this
+// long is answered for as not current. A busy one is still working and is waited for.
+const INPUT_CHECK_IDLE_MS = 10_000;
 
 export interface PackFrontend {
   readonly address: PackFrontendAddress;
@@ -84,7 +86,7 @@ export async function startPackFrontend(root: string, compiler: CompilerInstalla
     if (!child.connected || child.exitCode !== null || child.signalCode !== null) { resolve(false); return; }
     const id = ++sequence;
     const finish = (current: boolean, error?: unknown) => {
-      clearTimeout(timer);
+      watch?.stop();
       signal.removeEventListener('abort', aborted);
       child.removeListener('message', response);
       child.removeListener('close', exited);
@@ -92,7 +94,8 @@ export async function startPackFrontend(root: string, compiler: CompilerInstalla
     };
     const aborted = () => finish(false, signal.reason);
     const exited = () => finish(false);
-    const timer = setTimeout(() => finish(false), INPUT_CHECK_TIMEOUT_MS);
+    const watch = child.pid === undefined ? undefined
+      : watchWork({ work: fromNow(processWork(child.pid)), idleMs: INPUT_CHECK_IDLE_MS, onRefused: () => finish(false) });
     const response = (message: unknown) => {
       if (!message || typeof message !== 'object' || !('type' in message) || message.type !== 'frontend-inputs'
         || !('id' in message) || message.id !== id) return;

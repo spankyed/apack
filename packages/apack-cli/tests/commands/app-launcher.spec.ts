@@ -1,8 +1,8 @@
-import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 const LAUNCHER = path.resolve(__dirname, '..', '..', 'bin', 'app-launcher.sh');
 
@@ -14,7 +14,7 @@ afterEach(() => {
 });
 
 describe.skipIf(process.platform === 'win32')('app-bundled apack launcher', () => {
-  it('runs the bundled CLI through the app executable as Node, via the PATH symlink', () => {
+  it('runs the bundled CLI through the app executable as Node, via the PATH symlink', async () => {
     tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-launcher-')));
     const contents = path.join(tmp, 'apack Beta.app', 'Contents');
     const executable = path.join(contents, 'MacOS', 'apack Beta');
@@ -35,7 +35,7 @@ describe.skipIf(process.platform === 'win32')('app-bundled apack launcher', () =
     fs.mkdirSync(binDir);
     fs.symlinkSync(launcher, path.join(binDir, 'apack'));
 
-    const output = execFileSync(path.join(binDir, 'apack'), ['pack', 'build', '--release'], { env: { PATH: process.env.PATH } }).toString();
+    const { stdout: output } = await execFileWhileWorking(path.join(binDir, 'apack'), ['pack', 'build', '--release'], { env: { PATH: process.env.PATH } });
 
     expect(output.trim().split('\n')).toEqual([
       'ELECTRON_RUN_AS_NODE=1',

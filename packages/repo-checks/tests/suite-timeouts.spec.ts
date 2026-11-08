@@ -1,18 +1,16 @@
-// Timeouts are per size, not per package. A unit suite with `testTimeout: 120_000` does not catch a hang,
-// it reports one as a slow pass — which is how a load-induced stall once reached a chain summary as two
-// unexplained errors instead of a timeout.
+// A test is bounded by its progress and its CPU, never by the clock: a busy machine makes a test slow and never
+// stuck, and a deadline measured on the clock failed healthy tests for the load they ran under. Every config turns
+// vitest's clock off (`testTimeout: 0`, `hookTimeout: 0`) and loads the progress guard (`@apackdev/testing`'s
+// `vitest-progress-guard.ts`), which fails a test or hook whose process tree stalls and a test that spends its CPU
+// budget. The budget is per size, not per package: a config provides its size's (`apack.testCpuMs`, `DEADLINE_FACTOR`
+// times `SIZE_MS`), and a test that needs more declares `meta: cpuBudget(ms)` with a reason listed here.
 //
-// The budget lives with `SIZE_MS` and the configs keep plain literals, deliberately: a vitest config
-// importing a constant across package layers is the thing `check:specifiers` exists to prevent. So the
-// literals are checked here — that every vitest config declares its size's deadline (`DEADLINE_FACTOR` times
-// the budget: a test that passes past its budget is reported, not failed) and that no config or single test
-// moves above the size's own limit. Both directions, because a budget tighter than the size is not a safe default: it
-// turns contention into a failure where the size had headroom, which is what it did.
-//
-// Both halves matter, and only the first was checked at first. A config states the policy; a third argument
-// to `it()` escapes it for one test, and reading configs alone saw fifteen overrides of 60s to 240s sitting
-// in small suites whose budget is 15s.
+// The configs keep plain literals, deliberately: a vitest config importing a constant across package layers is the
+// thing `check:specifiers` exists to prevent. So the literals are checked here, both directions — a budget tighter
+// than the size is not a safe default — and every test's own declaration is read from its syntax tree, since a
+// config states the policy and a test can still escape it.
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
@@ -23,19 +21,20 @@ import { constantMs, overrideKey, sizeOf, specFilesUnder, timeoutOverrides, type
 import { repoFiles } from './_support/repo-files.ts';
 
 /**
- * Tests allowed to override their size's budget, and why.
+ * Tests allowed a CPU budget above their size's, and why.
  *
- * An entry is a claim that one test genuinely needs longer than its size gives — not that the default was
+ * A reason composes its budget from the phases its test runs, and its figures are what those phases take or are
+ * bounded at on the clock. As CPU budgets, the integration half's were each found to be at least twice what its test
+ * spends (forced readings, 2026-11-07); the native half's have no such reading, and a native test whose compilers
+ * run in parallel can spend more CPU than its wall time, so a failure there at its budget is a figure to re-take.
+ *
+ * An entry is a claim that one test genuinely needs more than its size gives — not that the default was
  * once 5s and nobody revisited it, which is what the other overrides turned out to be. The check below
  * fails on an entry whose override has gone, so the list shrinks when the reason does.
  */
 const TIMEOUT_EXCEPTIONS: Record<string, string> = {
   'packages/apack-cli/tests/build/watch-package-edit.native.spec.ts > publishes one build when a refresh rewrites what the pack builds against':
     'One bounded cold watcher build (120s), one watched rebuild and the wait for a second build that must not start are sequential.',
-  'packages/apack-cli/tests/commands/default-pack-archive.integration.spec.ts > beforeAll':
-    'The real shipped-pack archive replays all captured inputs twice, stages and compresses output; its former combined case exceeded 60s in 39468282848 (67.9s). Give preparation the existing fork producer archive-operation allowance (180s); extraction/integrity assertions and cleanup retain their separate ordinary deadlines.',
-  'packages/apack-cli/tests/commands/scaffold.integration.spec.ts > beforeAll':
-    'Real CLI initialization has its own 60s operation bound; the setup hook additionally allows 20s for cancellation and awaited shutdown.',
   'packages/apack-cli/tests/build/own-declarations.integration.spec.ts > preserves owned names through authoring, compiled snapshots, source-free discovery and runtime loading':
     'One explicitly bounded cold backend/frontend build (120s) precedes snapshot checks, source-free inspection and runtime admission (20s). Its registered builder receives test cancellation and drains before inputs are deleted; all declaration/shape/provenance/activation assertions remain.',
   'packages/apack-cli/tests/build/types-bundler-determinism.integration.spec.ts > is identical from the workspace and from the packed tarballs a consumer installs':
@@ -107,10 +106,6 @@ const TIMEOUT_EXCEPTIONS: Record<string, string> = {
     "Two actual pack builds and three CLI archive/inspection commands precede source-removal/provenance assertions.",
   "packages/apack-cli/tests/build/frontend-generation.native.spec.ts > refreshes backend and live frontend together, retains failed incumbents and awaits retirement":
     "Frontend startup, refused cold replacement and repaired cold replacement are sequential; existing 2s HMR/fetch limits and retirement checks remain.",
-  "packages/apack-cli/tests/build/dependency-graph.integration.spec.ts > beforeAll":
-    "The dependency diamond setup builds four real packs in dependency order before the five assertions.",
-  "packages/apack-cli/tests/_support/facade-packs.ts > beforeAll":
-    "Shared facade setup materializes its package layout, scaffolds a step and builds dependency plus consumer before running type/completion assertions.",
   "packages/apack-cli/tests/build/build-output-swap.integration.spec.ts > rebuilds damaged %s data instead of renewing its checksums":
     "Two sequential captured builds precede checksum, facade restoration and staged-build verification; both variants exceeded the former 60s case limit.",
   "packages/apack-cli/tests/build/dependency-graph.integration.spec.ts > still fails when two independent packs declare the same entity":
@@ -160,6 +155,8 @@ function configs(): { file: string; size: Size }[] {
 }
 
 const TIMEOUT_KEYS = ['testTimeout', 'hookTimeout', 'teardownTimeout', 'timeout'];
+/** The CPU a config gives each test, which the progress guard reads (`provide: { 'apack.testCpuMs': … }`) */
+const CPU_KEY = 'apack.testCpuMs';
 
 /**
  * Where a config's timeouts are declared: its own text, and the helper it delegates to.
@@ -214,28 +211,123 @@ function declaredTimeouts(file: string): { key: string; ms: number }[] {
       const match = new RegExp(`\\b${key}\\s*:\\s*([\\d_]+)`).exec(line);
       if (match) out.push({ key, ms: Number(match[1].replace(/_/g, '')) });
     }
+    const cpu = /'apack\.testCpuMs'\s*:\s*([\d_]+)/.exec(line);
+    if (cpu) out.push({ key: CPU_KEY, ms: Number(cpu[1]!.replace(/_/g, '')) });
   }
   return out;
 }
 
-describe('a test does not quietly buy itself more time than its size allows', () => {
-  it('declares no timeout above its size budget, except where the list says why', () => {
-    const over = overrides()
+describe('a test does not quietly buy itself more CPU than its size allows', () => {
+  it('declares no CPU budget above its size budget, except where the list says why', () => {
+    const over = overrides().filter((override) => override.kind === 'cpu')
       .filter((override) => override.budget === undefined || override.ms === undefined || override.ms > override.budget)
       .filter((override) => !(overrideKey(override) in TIMEOUT_EXCEPTIONS))
       .map((override) => `${override.file}:${override.line} ${override.runner} sets ${override.ms === undefined ? 'a timeout this cannot evaluate' : `${override.ms / 1000}s`}; `
-        + (override.budget === undefined ? 'shared helper deadlines require explicit review'
+        + (override.budget === undefined ? 'a shared helper\'s budget requires explicit review'
           : `a ${override.size} target allows ${override.budget / 1000}s`));
-    expect(over, 'remove it, or add it to TIMEOUT_EXCEPTIONS with the reason it needs longer').toEqual([]);
+    expect(over, 'remove it, or add it to TIMEOUT_EXCEPTIONS with the reason it needs more').toEqual([]);
   });
 
   // A list of exceptions is honest only while each one is still an exception: an override that has gone, or
   // that now fits its size's budget, excuses nothing
   it('lists no exception whose override has gone or fits its budget', () => {
     const live = new Set(overrides()
+      .filter((override) => override.kind === 'cpu')
       .filter((override) => override.budget === undefined || override.ms === undefined || override.ms > override.budget)
       .map(overrideKey));
     expect(Object.keys(TIMEOUT_EXCEPTIONS).filter((key) => !live.has(key)), 'drop these from TIMEOUT_EXCEPTIONS').toEqual([]);
+  });
+});
+
+describe('no test is timed out by the clock', () => {
+  it('sets no timeout vitest measures on the clock, in any test or hook', () => {
+    const clocks = overrides().filter((override) => override.kind === 'clock')
+      .map((override) => `${override.file}:${override.line} ${override.runner} sets ${override.ms === undefined ? 'a timeout' : `${override.ms / 1000}s`} on the clock`);
+    expect(clocks, 'a busy machine reaches any clock: declare `meta: cpuBudget(ms)` for a test that needs more CPU, '
+      + 'and nothing for a hook, which the guard bounds by its progress').toEqual([]);
+  });
+
+  // Over a file written here, so each form the reader must refuse has a firing case of its own, and the form it
+  // must accept is shown to read as CPU rather than slipping through as neither
+  it('reads a trailing timeout and an options `timeout` as the clock, and `cpuBudget` as CPU', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'suite-timeouts-'));
+    try {
+      const file = path.join(dir, 'forms.spec.ts');
+      fs.writeFileSync(file, [
+        "it('trailing', () => {}, 5_000);",
+        "it('options', { timeout: 2 * 1_000 }, () => {});",
+        "beforeAll(() => {}, 7_000);",
+        "it('budget', { meta: cpuBudget(90_000) }, () => {});",
+        "it('plain', () => {});",
+      ].join('\n'));
+      expect(timeoutOverrides(file, dir).map(({ name, runner, kind, ms }) => ({ name: name || runner, kind, ms }))).toEqual([
+        { name: 'trailing', kind: 'clock', ms: 5_000 },
+        { name: 'options', kind: 'clock', ms: 2_000 },
+        { name: 'beforeAll', kind: 'clock', ms: 7_000 },
+        { name: 'budget', kind: 'cpu', ms: 90_000 },
+      ]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+/**
+ * Specs allowed `promisify(execFile)`, and why. It is the clock's form of `execFileWhileWorking`: its `timeout` ends
+ * a process at a wall time a busy machine reaches. An entry is a spec that cannot reach the other one.
+ */
+const CLOCKED_EXEC_ALLOWED: Record<string, string> = {
+  'packages/apack-ears/tests/engine/watch.spec.ts':
+    '`@apackdev/ears` imports no other `@apackdev` package, its tests included, and these calls set no timeout to replace.',
+};
+
+/** Every `promisify(execFile)` in one file, read from its syntax tree so a string holding the text is not one */
+function clockedExecs(absFile: string): number[] {
+  const source = ts.createSourceFile(absFile, fs.readFileSync(absFile, 'utf8'), ts.ScriptTarget.Latest, true);
+  const lines: number[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'promisify'
+      && node.arguments.length === 1 && ts.isIdentifier(node.arguments[0]!) && node.arguments[0].text === 'execFile') {
+      lines.push(source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return lines;
+}
+
+describe('a spec starts a process bounded by its progress, not the clock', () => {
+  const testFiles = (): string[] => [...new Set(UNIT_SUITES.flatMap((suite) => {
+    const tests = path.join(REPO_ROOT, 'packages', suite.dir, 'tests');
+    return fs.existsSync(tests) ? repoFiles().filter((file) => file.startsWith(`packages/${suite.dir}/tests/`) && file.endsWith('.ts')) : [];
+  }))];
+
+  it('uses execFileWhileWorking rather than promisify(execFile), except where the list says why', () => {
+    const files = testFiles();
+    expect(files.length, 'no test files derived, so this passes over nothing').toBeGreaterThan(100);
+    const found = files.filter((file) => !(file in CLOCKED_EXEC_ALLOWED))
+      .flatMap((file) => clockedExecs(path.join(REPO_ROOT, file)).map((line) => `${file}:${line}`));
+    expect(found, 'use execFileWhileWorking (@apackdev/sdk/progress), whose timeout is CPU').toEqual([]);
+  });
+
+  it('lists no exception that no longer calls it', () => {
+    expect(Object.keys(CLOCKED_EXEC_ALLOWED).filter((file) => clockedExecs(path.join(REPO_ROOT, file)).length === 0)).toEqual([]);
+  });
+
+  // Over a file written here: the call bound to a const and the one made inline are both found, a string is not
+  it('finds the call however it is written, and not in a string', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'clocked-exec-'));
+    try {
+      const file = path.join(dir, 'forms.spec.ts');
+      fs.writeFileSync(file, [
+        'const run = promisify(execFile);',
+        "await promisify(execFile)('node', []);",
+        "const text = 'promisify(execFile)';",
+      ].join('\n'));
+      expect(clockedExecs(file)).toEqual([1, 2]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
@@ -250,19 +342,29 @@ describe('a timeout written as a sum of its phases', () => {
 
   it('is left unknown once it names a value, which the budget check then requires a reason for', () => {
     expect(constantMs(expression('WATCH_REBUILD_BUDGET_MS + 20_000'))).toBeUndefined();
-    expect(constantMs(expression('timeoutMsFor("quick")'))).toBeUndefined();
+    expect(constantMs(expression('budgetMsFor("quick")'))).toBeUndefined();
   });
 });
 
 /**
- * What a config declares for its size. A vitest config declares the deadline, `DEADLINE_FACTOR` times the budget,
- * since a test that passes past its budget is reported rather than failed; Playwright's `timeout` is the budget
- * itself, the E2E suite keeping its own model.
+ * What a config declares for its size. A vitest config gives each test its size's CPU deadline, `DEADLINE_FACTOR`
+ * times the budget, since a test that spends past its budget is reported rather than failed; Playwright's `timeout`
+ * is the budget itself, the E2E suite keeping its own model.
  */
 const deadlineFor = (file: string, size: Size): number =>
   (file.endsWith('playwright.config.ts') ? 1 : DEADLINE_FACTOR) * SIZE_MS[size];
 
-describe('a suite times a test out at its size deadline', () => {
+const isPlaywright = (file: string): boolean => file.endsWith('playwright.config.ts');
+
+/** Whether a config loads the progress guard: in its own setup files, or through the helper it delegates to */
+const loadsGuard = (file: string): boolean => {
+  const own = fs.readFileSync(path.join(REPO_ROOT, file), 'utf-8');
+  const delegate = Object.entries(DELEGATES).find(([helper]) => own.includes(helper));
+  const helper = delegate === undefined ? '' : fs.readFileSync(path.join(REPO_ROOT, delegate[1]), 'utf-8');
+  return /vitest-progress-guard/.test(own) || /sibling\('vitest-progress-guard'\)/.test(helper);
+};
+
+describe('a suite bounds a test by its size, and never by the clock', () => {
   // The population, not a spot check: a config nobody derived is one whose budget nothing holds
   it('finds every test config, so none goes unchecked', () => {
     const found = configs();
@@ -278,28 +380,24 @@ describe('a suite times a test out at its size deadline', () => {
   });
 
   /**
-   * And declares it, rather than leaving the budget to whatever the runner defaults to.
+   * And declares it, rather than leaving the bound to whatever the runner defaults to.
    *
-   * A ceiling was only half the rule, and the missing half is the one that bit. Vitest defaults to 5s for a
-   * test and 10s for a hook — both *tighter* than a small target's 15s — so a config that declares nothing
-   * is not safely inside its size, it is running on a third number nobody chose. Under the chain's three
-   * lanes a 5.8s typecheck in `@apackdev/sdk` crossed the 5s default and was reported as a hang, in a suite
-   * allowed 15s; the next in line was a 4.1s lock test in `@apackdev/host` at 82% of the same default. Five
-   * of the thirteen configs were in that state, which is also why the three-lane default is safer than it
-   * was: `CLAUDE.md` credits these budgets with removing the 5s cap, and they had only reached eight configs.
-   *
-   * Equality, not a floor: the budget belongs to the size, so a suite that wants a different one is asking
-   * for a different size.
+   * Vitest defaults to a 5s clock for a test and 10s for a hook, so a config that declares nothing is running on a
+   * number nobody chose, measured on the clock. Equality, not a floor: the budget belongs to the size, so a suite
+   * that wants a different one is asking for a different size.
    */
-  const REQUIRED = (file: string): string[] => (file.endsWith('playwright.config.ts') ? ['timeout'] : ['testTimeout', 'hookTimeout']);
-
-  it.each(configs())('$file declares its $size deadline', ({ file, size }) => {
-    const deadline = deadlineFor(file, size);
+  it.each(configs().filter(({ file }) => !isPlaywright(file)))('$file gives its tests the $size CPU deadline, with the clock off', ({ file, size }) => {
     const declared = new Map(declaredTimeouts(file).map(({ key, ms }) => [key, ms]));
-    const wrong = REQUIRED(file)
-      .filter((key) => declared.get(key) !== deadline)
-      .map((key) => `${key} is ${declared.has(key) ? `${declared.get(key)!}ms` : 'not declared, so the runner default applies'}`);
-    expect(wrong, `${file} is ${size}, so it must declare ${deadline}ms`).toEqual([]);
+    const expected = new Map([['testTimeout', 0], ['hookTimeout', 0], [CPU_KEY, deadlineFor(file, size)]]);
+    const wrong = [...expected].filter(([key, ms]) => declared.get(key) !== ms)
+      .map(([key, ms]) => `${key} is ${declared.has(key) ? `${declared.get(key)!}` : 'not declared'}, not ${ms}`);
+    expect(wrong, `${file} is ${size}`).toEqual([]);
+    expect(loadsGuard(file), `${file} turns the clock off without the progress guard, which leaves a hang unbounded`).toBe(true);
+  });
+
+  it.each(configs().filter(({ file }) => isPlaywright(file)))('$file declares its $size deadline', ({ file, size }) => {
+    const declared = new Map(declaredTimeouts(file).map(({ key, ms }) => [key, ms]));
+    expect(declared.get('timeout'), `${file} is ${size}`).toBe(deadlineFor(file, size));
   });
 });
 

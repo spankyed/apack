@@ -1,9 +1,10 @@
-import { execFile } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { PACKAGES_BUILT, REPO_ROOT, installPublishedPackages } from '@app/publish-checks';
+import { cpuBudget } from '@apackdev/testing/vitest';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 /**
  * A pack's facade bundle (dist/types/pack-types.d.ts) is the same whether its @apackdev/* packages come
@@ -74,10 +75,8 @@ async function buildFacade(parent: string, name: string, modules: string, signal
   }
   fs.symlinkSync(modules, path.join(dir, 'node_modules'), 'dir');
   try {
-    await new Promise<void>((resolve, reject) => {
-      execFile(process.execPath, [CLI, 'pack', 'build'], {
-        cwd: dir, env: { ...process.env, FORCE_COLOR: '0' }, signal, timeout: 180_000, killSignal: 'SIGKILL',
-      }, (error, stdout, stderr) => error ? reject(Object.assign(error, { stdout, stderr })) : resolve());
+    await execFileWhileWorking(process.execPath, [CLI, 'pack', 'build'], {
+      cwd: dir, env: { ...process.env, FORCE_COLOR: '0' }, signal, timeout: 180_000, killSignal: 'SIGKILL',
     });
   } catch (err: any) {
     throw new Error(`apack pack build failed (${name}):\n${err.stdout ?? ''}${err.stderr ?? ''}`);
@@ -93,12 +92,12 @@ describe.skipIf(!PACKAGES_BUILT)('facade bundle determinism (needs dist: npm run
     fs.rmSync(parent, { recursive: true, force: true });
   });
 
-  it('is identical from the workspace and from the packed tarballs a consumer installs', async ({ signal }) => {
+  it('is identical from the workspace and from the packed tarballs a consumer installs', { meta: cpuBudget(60_000 + 2 * 180_000 + 20_000) }, async ({ signal }) => {
     active = buildFacade(parent, 'workspace', path.join(REPO_ROOT, 'node_modules'), signal);
     const fromWorkspace = await active;
     active = buildFacade(parent, 'packed', path.join(installPublishedPackages(), 'node_modules'), signal);
     const fromPacked = await active;
     expect(fromWorkspace).toContain('QueryBuilder');
     expect(fromPacked).toBe(fromWorkspace);
-  }, 60_000 + 2 * 180_000 + 20_000);
+  });
 });

@@ -3,15 +3,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { execFile, fork } from 'node:child_process';
-import { promisify } from 'node:util';
+import { fork } from 'node:child_process';
 import { afterEach, expect, it, vi } from 'vitest';
 import { COMPILER_STORE_ENTRIES, captureCompilerInstallation, compilerStoreEntries, removeCompilerStoreDirectory, removeCompilerStoreEntry, type CompilerInstallation } from '../../src/build/compiler-installation.ts';
 import { isCompilerLocationPath } from '../../src/build/compiler-installation-inputs.ts';
 import { cliBin } from '../../src/utils.ts';
-import { _byDeadline } from '@apackdev/sdk/testing/waiting';
+import { cpuBudget } from '@apackdev/testing/vitest';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
-const execFileAsync = promisify(execFile);
+const execFileAsync = execFileWhileWorking;
 /** What a process printed, trimmed */
 const printed = async (file: string, args: string[], options: { cwd?: string; env?: NodeJS.ProcessEnv } = {}) =>
   (await execFileAsync(file, args, { encoding: 'utf8', ...options })).stdout.trim();
@@ -73,6 +73,9 @@ function esbuildFixture() {
 }
 
 it('executes its owned runtime and refuses a damaged, aliased or missing copy', async () => {
+  // Its own store, since it damages the entry: the run's shared one holds the same runtime every other capture runs,
+  // and Linux refuses the write (ETXTBSY) while a worker from an earlier file is still running it
+  temporaryStore();
   const compiler = fixture();
   const installation = await compiler.capture();
   expect(installation.executable).not.toBe(fs.realpathSync(process.execPath));
@@ -113,7 +116,7 @@ it.skipIf(process.platform === 'win32' || !!process.versions.electron)('retains 
   expect(JSON.parse(output)).toEqual({ current: false, output: 'captured' });
 });
 
-it('owns a relative external esbuild executable and detects changed selection and bytes', async () => {
+it('owns a relative external esbuild executable and detects changed selection and bytes', { meta: cpuBudget(2 * 15_000 + 5_000) }, async () => {
   const compiler = esbuildFixture();
   fs.writeFileSync(compiler.file, compiler.bytes, { mode: 0o755 });
   const first = await compiler.capture();
@@ -130,9 +133,11 @@ it('owns a relative external esbuild executable and detects changed selection an
   fs.writeFileSync(compiler.file, compiler.bytes, { mode: 0o755 });
   expect(first.isCurrent(compiler.root, { ...compiler.options, env: {} })).toBe(false);
   expect(first.isCurrent(compiler.root, compiler.options)).toBe(true);
-}, 2 * 15_000 + 5_000);
+});
 
 it('detects damage to its captured external esbuild executable', async () => {
+  // Its own store, for the same reason as the runtime's damage case: the entry it damages is otherwise shared
+  temporaryStore();
   const compiler = esbuildFixture();
   fs.writeFileSync(compiler.file, compiler.bytes, { mode: 0o755 });
   const first = await compiler.capture();
@@ -364,11 +369,11 @@ it('keeps an owned worker in its captured compiler instead of handing off to the
   child.stderr!.on('data', chunk => { errors += chunk; });
   const closed = new Promise<number | null>((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
   try {
-    expect(await _byDeadline(closed, 'captured compiler worker', 2_000), errors).toBe(0);
+    expect(await closed, errors).toBe(0);
     expect(messages).toEqual([{ compiled: true }]);
   } finally {
     if (child.exitCode === null && child.signalCode === null) child.kill();
-    await _byDeadline(closed, 'captured compiler cleanup', 2_000);
+    await closed;
   }
 });
 

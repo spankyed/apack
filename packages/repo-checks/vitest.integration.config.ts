@@ -9,11 +9,14 @@ export default defineConfig({
   resolve: { conditions },
   ssr: { resolve: { conditions } },
   test: {
-    // Large (`SIZE_MS` × `DEADLINE_FACTOR`): these specs run `tsc` over fixture trees, which is tens of seconds of
-    // work in a handful of tests.
-    testTimeout: 120_000,
-    hookTimeout: 120_000,
-    setupFiles: ['../apack-testing/src/vitest-exit-with-parent.ts', './tests/_support/turn-event-loop.ts'],
+    // Large (`SIZE_MS` × `DEADLINE_FACTOR`, scripts/lib/unit-suites.ts): the CPU one test may spend. A test that
+    // needs more declares a reviewed `meta.cpuBudgetMs` (`suite-timeouts.spec.ts`)
+    provide: { 'apack.testCpuMs': 120_000 },
+    // Vitest's clock is off: the progress guard in setupFiles fails a test or hook whose process tree stalls, and a
+    // test that spends the CPU budget above (`vitest-progress-guard.ts`, `@apackdev/testing`)
+    testTimeout: 0,
+    hookTimeout: 0,
+    setupFiles: ['../apack-testing/src/vitest-exit-with-parent.ts', '../apack-testing/src/vitest-progress-guard.ts', './tests/_support/turn-event-loop.ts'],
     include: ['tests/**/*.integration.spec.ts'],
     exclude: ['**/node_modules/**'],
     // No worker cap here, and none in any other package either: the repo's only cap is the root

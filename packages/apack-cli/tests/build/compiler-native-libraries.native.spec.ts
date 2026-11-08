@@ -12,6 +12,9 @@ import { formatNodeOptions, parseNodeOptions } from '@apackdev/host/build/source
 import { withCompilerFileReads } from '@apackdev/host/build/compiler-inputs';
 import { nativeFixture, ordinaryNativeLoad, nativeLoad, nativeWorkerCompiler, type NativeFixture } from '../_support/native-libraries.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
+import { fromNow, processWork, workSignal } from '@apackdev/sdk/progress';
+import { _workingSignal } from '@apackdev/sdk/testing/waiting';
 
 // The native-library proofs are split by subject so the native half's shards can spread them; this one is
 // native libraries checked before addon initialization, in preloads, threads and launch search paths.
@@ -55,7 +58,7 @@ it.runIf(process.platform === 'darwin').each(['relative', 'absolute', 'transitiv
   }
 });
 
-it.runIf(process.platform === 'darwin' || process.platform === 'linux').each(['preload', 'thread'] as const)('captures native %s libraries and retains the incumbent after outside-library refusal', async site => {
+it.runIf(process.platform === 'darwin' || process.platform === 'linux').each(['preload', 'thread'] as const)('captures native %s libraries and retains the incumbent after outside-library refusal', { meta: cpuBudget(120_000 + 2 * 60_000 + 60_000) }, async site => {
   const started = performance.now();
   const checkpoint = (phase: string) => console.info(`Native ${site}: ${phase} (${Math.round(performance.now() - started)}ms)`);
   const supported = await nativeFixture('relative');
@@ -92,7 +95,8 @@ it.runIf(process.platform === 'darwin' || process.platform === 'linux').each(['p
     writeLoader(supported);
     if (site === 'preload') process.env.NODE_OPTIONS = formatNodeOptions([...parseNodeOptions(previous), '--require', preload]);
     checkpoint('initial build started');
-    await builder.build({ args: ['--skip-fe'], signal: AbortSignal.timeout(120_000) });
+    const bounded = workSignal({ work: fromNow(processWork(process.pid)), ceilingMs: 120_000, fallbackMs: 120_000 });
+    try { await builder.build({ args: ['--skip-fe'], signal: bounded.signal }); } finally { bounded.stop(); }
     checkpoint('initial build completed');
     const results = fs.readFileSync(proof, 'utf8').trim().split('\n').map(line => JSON.parse(line)) as { thread: number; value: number; libraries: string[] }[];
     for (const result of results) {
@@ -126,7 +130,7 @@ it.runIf(process.platform === 'darwin' || process.platform === 'linux').each(['p
       fs.rmSync(proof, { force: true });
       writeLoader(fixture);
       checkpoint(`refusal ${index + 1} build started`);
-      const signal = AbortSignal.timeout(60_000);
+      const signal = _workingSignal();
       await expect(builder.build({ args: ['--skip-fe'], signal })).rejects.toThrow();
       expect(signal.aborted, 'Native refusal must precede the build deadline').toBe(false);
       checkpoint(`refusal ${index + 1} build completed`);
@@ -136,9 +140,9 @@ it.runIf(process.platform === 'darwin' || process.platform === 'linux').each(['p
     }
     completed = true;
   } finally { await close(); }
-}, 120_000 + 2 * 60_000 + 60_000);
+});
 
-it.runIf(process.platform === 'darwin' || process.platform === 'linux')('retains launch-time native search paths across preload changes and compiler workers', async () => {
+it.runIf(process.platform === 'darwin' || process.platform === 'linux')('retains launch-time native search paths across preload changes and compiler workers', { meta: cpuBudget(2 * 60_000 + 60_000 + 20_000) }, async () => {
   const fixture = await nativeFixture(process.platform === 'linux' ? 'runpath' : 'relative');
   const builder = createPackBuilder(fixture.pack, { captureCompiler: sharedCompiler.capture });
   const previousOptions = process.env.NODE_OPTIONS;
@@ -190,4 +194,4 @@ it.runIf(process.platform === 'darwin' || process.platform === 'linux')('retains
     await builder.close();
     fs.rmSync(fixture.root, { recursive: true, force: true });
   }
-}, 2 * 60_000 + 60_000 + 20_000);
+});

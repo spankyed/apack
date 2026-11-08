@@ -8,6 +8,7 @@ import { packFixture } from '@apackdev/sdk/testing/pack-fixture';
 import { packDevServerConfig } from '../../src/build/fe-bundler';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { replaceDir } from '@apackdev/host/replace-dir';
+import { _workingSignal } from '@apackdev/sdk/testing/waiting';
 
 it.runIf(process.platform === 'win32')('publishes staged output while retained dev servers watch authored files', async () => {
   // Realpath'd: on macOS the temp dir is reached through a symlink, outside `server.fs.allow` otherwise
@@ -37,7 +38,7 @@ it.runIf(process.platform === 'win32')('publishes staged output while retained d
         execArgv: ['--conditions=@apackdev/source', '--import', pathToFileURL(path.join(REPO_ROOT, 'node_modules/tsx/dist/loader.mjs')).href],
       });
       children.push(child);
-      const [message] = await once(child, 'message', { signal: AbortSignal.timeout(15_000) });
+      const [message] = await once(child, 'message', { signal: _workingSignal() });
       expect(message).toBe('ready');
     }
     for (let iteration = 0; iteration < 10; iteration++) {
@@ -50,7 +51,7 @@ it.runIf(process.platform === 'win32')('publishes staged output while retained d
       replaceDir(staged, dest);
       expect(fs.readFileSync(path.join(dest, '0/0.json'), 'utf8')).toBe(JSON.stringify(iteration));
     }
-    const changed = once(server.watcher, 'change', { signal: AbortSignal.timeout(2_000) });
+    const changed = once(server.watcher, 'change', { signal: _workingSignal() });
     fs.appendFileSync(entry, '\nexport const publicationMarker = "AUTHORED_AFTER_PUBLICATION";\n');
     expect(path.normalize((await changed)[0])).toBe(entry);
     expect(await (await fetch(`${origin}/entry.ts`)).text()).toContain('AUTHORED_AFTER_PUBLICATION');

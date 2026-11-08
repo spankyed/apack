@@ -1,9 +1,9 @@
-import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { isolatedDataDir } from '@apackdev/testing/vitest';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 const PREFIX = `isolated-data-dir-spec-${process.pid}-`;
 const created: string[] = [];
@@ -20,9 +20,10 @@ afterEach(() => {
 });
 
 describe('isolatedDataDir', () => {
-  it("removes data dirs left by runs that crashed, and keeps running processes' dirs", () => {
-    const exited = spawnSync(process.execPath, ['-e', '']).pid!;
-    const stale = dirFor(exited);
+  it("removes data dirs left by runs that crashed, and keeps running processes' dirs", async () => {
+    const exited = execFileWhileWorking(process.execPath, ['-e', '']);
+    await exited;
+    const stale = dirFor(exited.child.pid!);
     const live = dirFor(process.pid);
 
     const { dir } = isolatedDataDir(PREFIX);

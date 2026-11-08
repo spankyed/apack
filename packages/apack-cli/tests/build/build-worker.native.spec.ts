@@ -5,8 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { execFile, fork, spawn, type ChildProcess } from 'node:child_process';
-import { promisify } from 'node:util';
+import { fork, spawn, type ChildProcess } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { afterEach, expect, it, vi } from 'vitest';
 import { FIXTURE_DATA, FIXTURE_ENTITY, packFixture } from '@apackdev/sdk/testing/pack-fixture';
@@ -14,7 +13,7 @@ import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { readPackBuild } from '@apackdev/host/packs';
 import { formatNodeOptions, parseNodeOptions } from '@apackdev/host/build/source-resolution';
 import { cliBin } from '../../src/utils.ts';
-import { _byDeadline } from '@apackdev/sdk/testing/waiting';
+import { _settles, _workingSignal } from '@apackdev/sdk/testing/waiting';
 
 vi.mock('../../src/build/be-bundler', async importOriginal => ({
   ...await importOriginal<typeof import('../../src/build/be-bundler')>(),
@@ -31,10 +30,12 @@ import { COMPILER_PROCESS_GROUP_ENV, stopCompilerProcessGroup } from '../../src/
 import { compilerPackageDirectory } from '../../src/build/compiler-installation.ts';
 import { compilerEnvironmentIdentity } from '../../src/build/compiler-environment.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 const roots: string[] = [];
 const sharedCompiler = shareCompilerInstallation();
-const execFileAsync = promisify(execFile);
+const execFileAsync = execFileWhileWorking;
 
 /** A process's `ps` state, or '' once it has gone (`ps` exits 1 for a pid it cannot find) */
 async function processState(pid: number): Promise<string> {
@@ -59,7 +60,7 @@ afterEach(async () => {
 async function buildFixture(root: string, options: PackBuildOptions & { signal: AbortSignal }, builderOptions: PackBuilderOptions = {}): Promise<void> {
   const builder = createPackBuilder(root, builderOptions);
   builders.push(builder);
-  const signal = AbortSignal.any([options.signal, AbortSignal.timeout(120_000)]);
+  const signal = AbortSignal.any([options.signal, _workingSignal()]);
   try { await builder.build({ ...options, signal }); }
   finally { await builder.close(); }
 }
@@ -117,7 +118,7 @@ it('captures native launch identity and authored bytes before user preload chang
   child.stderr!.on('data', chunk => { errors += chunk; });
   const closed = finished(child);
   try {
-    expect(await _byDeadline(closed, 'native launch identity', 2_000), errors).toBe(0);
+    expect(await closed, errors).toBe(0);
     // The dependency was first read after the preload changed it, so its changed bytes are the input
     expect(result).toMatchObject({ value: 'ORIGINAL', dependency: 'DEPENDENCY_CHANGED', refusal: expect.stringContaining('Compiler resolution namespace changed') });
     const identity = (result as { identity: string }).identity;
@@ -134,7 +135,7 @@ it('captures native launch identity and authored bytes before user preload chang
 });
 
 // Includes two fresh compiler installations, builds and final input/output verification.
-it('uses the captured compiler and retains unchanged build/cache identity on repeat builds', async () => {
+it('uses the captured compiler and retains unchanged build/cache identity on repeat builds', { meta: cpuBudget(360_000) }, async () => {
   const started = performance.now();
   const checkpoint = (phase: string) => {
     console.info(`Repeated worker: ${phase} (${Math.round(performance.now() - started)}ms)`);
@@ -199,9 +200,9 @@ it('uses the captured compiler and retains unchanged build/cache identity on rep
   expect(readPackBuild(path.join(root, 'dist')).revision).toBe(revision);
   expect(workspaces).toHaveLength(2);
   for (const workspace of workspaces) expect(fs.existsSync(workspace)).toBe(false);
-}, 360_000);
+});
 
-it('records external inputs read by content compiler worker threads', async ({ signal }) => {
+it('records external inputs read by content compiler worker threads', { meta: cpuBudget(120_000 + 20_000) }, async ({ signal }) => {
   const started = performance.now();
   const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-worker-input-'));
   roots.push(outside);
@@ -248,9 +249,9 @@ it('records external inputs read by content compiler worker threads', async ({ s
     fs.writeFileSync(file, modes[index]!);
   }
   console.info('Worker input verification completed', Math.round(performance.now() - started));
-}, 120_000 + 20_000);
+});
 
-it('refuses publication when a compiler worker cannot return its observations', async ({ signal }) => {
+it('refuses publication when a compiler worker cannot return its observations', { meta: cpuBudget(120_000 + 20_000) }, async ({ signal }) => {
   const root = fixture({
     'src/value.txt': 'rows',
     'src/compiler.cjs': `const {Worker} = require('node:worker_threads');
@@ -270,9 +271,9 @@ it('refuses publication when a compiler worker cannot return its observations', 
   await expect(buildFixture(root, { args: ['--skip-fe'], signal }, { captureCompiler: sharedCompiler.capture })).rejects.toThrow(/Pack build process exited/);
   expect(fs.readFileSync(marker, 'utf8')).toBe('KEEP');
   expect(fs.readdirSync(path.dirname(marker))).toEqual(['incumbent.txt']);
-}, 120_000 + 20_000);
+});
 
-it('compiles content through the captured worker and invalidates changed loader inputs', async () => {
+it('compiles content through the captured worker and invalidates changed loader inputs', { meta: cpuBudget(180_000) }, async () => {
   const root = fixture({
     'tsconfig.json': JSON.stringify({ compilerOptions: { module: 'esnext', moduleResolution: 'bundler', jsx: 'react', jsxFactory: 'h', skipLibCheck: true }, include: ['src/**/*'] }),
     'src/compiler.tsx': `import fs from 'node:fs'; const h = () => 'JSX';
@@ -348,9 +349,9 @@ it('compiles content through the captured worker and invalidates changed loader 
   const rebuilt = JSON.parse(fs.readFileSync(path.join(root, 'dist/runtime/content/rows.content.json'), 'utf8'));
   expect(rebuilt.records[0].name).toBe('OWNED:JSX:PRELOADED:IMPORTED:UPDATED');
   expect(readPackBuild(path.join(root, 'dist')).revision).not.toBe(revision);
-}, 180_000);
+});
 
-it('refuses publication when a loader-only external input changes during compilation', async () => {
+it('refuses publication when a loader-only external input changes during compilation', { meta: cpuBudget(120_000 + 20_000) }, async () => {
   const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-loader-input-'));
   roots.push(outside);
   const payload = path.join(outside, 'payload.txt');
@@ -372,17 +373,17 @@ it('refuses publication when a loader-only external input changes during compila
   child.stderr.on('data', chunk => { output += chunk; });
   const closed = finished(child);
   try {
-    expect(await _byDeadline(closed, 'loader-input build refusal', 120_000), output).toBe(1);
+    expect(await closed, output).toBe(1);
     expect(output).toContain(`Compiler resolution namespace changed during discovery: ${fs.realpathSync(payload)}`);
     expect(fs.readFileSync(payload, 'utf8')).toBe('CHANGED');
     expect(fs.existsSync(path.join(root, 'dist'))).toBe(false);
   } finally {
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
-    await _byDeadline(closed, 'loader-input build cleanup', 20_000);
+    await closed;
   }
-}, 120_000 + 20_000);
+});
 
-it('terminates pack-created background work before accepting its candidate', async ({ signal }) => {
+it('terminates pack-created background work before accepting its candidate', { meta: cpuBudget(120_000 + 20_000) }, async ({ signal }) => {
   const root = fixture({
     'src/compiler.ts': `import fs from 'node:fs'; import {spawn} from 'node:child_process';
       if (process.platform !== 'win32') {
@@ -403,9 +404,9 @@ it('terminates pack-created background work before accepting its candidate', asy
     const state = await processState(pid);
     expect(state === '' || state.startsWith('Z'), `Compiler subprocess ${pid} is still ${state}`).toBe(true);
   }
-}, 120_000 + 20_000);
+});
 
-it('refuses candidate output changed by a compiler exit handler and retains the incumbent', async ({ signal }) => {
+it('refuses candidate output changed by a compiler exit handler and retains the incumbent', { meta: cpuBudget(180_000 + 20_000) }, async ({ signal }) => {
   const root = fixture({
     'src/compiler.ts': `import fs from 'node:fs';
       process.on('exit', () => {
@@ -426,9 +427,9 @@ it('refuses candidate output changed by a compiler exit handler and retains the 
   expect(fs.readFileSync(path.join(root, 'dist/incumbent.txt'), 'utf8')).toBe('ACCEPTED');
   expect(fs.readdirSync(path.join(root, 'dist'))).toEqual(['incumbent.txt']);
   expect(fs.existsSync(path.join(root, '.apack/build'))).toBe(false);
-}, 180_000 + 20_000);
+});
 
-it('reports frontend inputs that remain available after its compiler installation is removed', async ({ signal }) => {
+it('reports frontend inputs that remain available after its compiler installation is removed', { meta: cpuBudget(120_000 + 20_000) }, async ({ signal }) => {
   const root = fixture({
     'src/pack-entry-fe.ts': 'import "./Panel.vue"; export { default } from "./__generated__/pack-entry-fe.ts";',
     'src/Panel.vue': '<script setup lang="ts">import { computed } from "vue"; const label = computed(() => "Hello");</script><template><div>{{ label }}</div></template>',
@@ -449,7 +450,7 @@ it('reports frontend inputs that remain available after its compiler installatio
     expect(inStore(file), file).toBe(false);
     expect(fs.existsSync(path.resolve(fs.realpathSync(root), file)), file).toBe(true);
   }
-}, 120_000 + 20_000);
+});
 
 function finished(child: ChildProcess, event: 'exit' | 'close' = 'close'): Promise<number | null> {
   return new Promise((resolve, reject) => { child.once('error', reject); child.once(event, resolve); });
@@ -500,22 +501,24 @@ it('terminates a compiling worker when its parent IPC disconnects without publis
   child.stdout?.on('data', chunk => { output += chunk; });
   child.stderr?.on('data', chunk => { output += chunk; });
   try {
-    await vi.waitFor(() => expect(fs.existsSync(path.join(root, 'ready')), output).toBe(true), { timeout: 20_000 });
+    await _settles(() => expect(fs.existsSync(path.join(root, 'ready')), output).toBe(true));
     child.disconnect();
-    expect(await _byDeadline(stopped, 'worker exit after parent loss', 2_000)).toBe(grouped ? null : 1);
+    // Awaited, not deadlined: the subject is that the worker ends, and one that never did would keep compiling
+    // until the progress guard's CPU budget failed the case. A 2s deadline failed it on a loaded machine
+    expect(await stopped).toBe(grouped ? null : 1);
     if (grouped) {
       expect(child.signalCode).toBe('SIGKILL');
       const pid = Number(fs.readFileSync(path.join(root, '.apack/compiler-child-pid'), 'utf8'));
-      await vi.waitFor(async () => {
+      await _settles(async () => {
         const state = await processState(pid);
         expect(state === '' || state.startsWith('Z')).toBe(true);
-      }, { timeout: 2_000 });
+      });
     }
-    await vi.waitFor(() => expect(child.stdout?.readableEnded && child.stderr?.readableEnded).toBe(true), { timeout: 2_000 });
+    await _settles(() => expect(child.stdout?.readableEnded && child.stderr?.readableEnded).toBe(true));
     expect(fs.existsSync(path.join(root, 'dist'))).toBe(false);
   } finally {
     if (child.exitCode === null && child.signalCode === null) child.kill();
-    try { await _byDeadline(stopped, 'worker cleanup', 2_000); }
+    try { await stopped; }
     finally { child.stdout?.destroy(); child.stderr?.destroy(); removeCompilerReadTree(inputs); }
   }
 });
@@ -526,7 +529,7 @@ it('refuses private worker bootstrap without a parent IPC channel', async () => 
   });
   let output = '';
   child.stderr?.on('data', chunk => { output += chunk; });
-  expect(await _byDeadline(finished(child), 'private bootstrap refusal', 2_000)).toBe(1);
+  expect(await finished(child)).toBe(1);
   expect(output).toContain('Pack build worker requires its parent IPC channel');
 });
 
@@ -535,11 +538,9 @@ it.each([
   { name: 'watch is compiling', watch: true, phase: 'compiling', release: false },
   { name: 'one-shot is compiling', watch: false, phase: 'compiling', release: false },
   { name: 'release verification is compiling', watch: false, phase: 'compiling', release: true },
-] as const)('removes its worker when the public build command is stopped while $name', async ({ watch, phase, release }) => {
+] as const)('removes its worker when the public build command is stopped while $name', { meta: cpuBudget(120_000 + 20_000 + 20_000) }, async ({ watch, phase, release }) => {
   // Shutdown removes the worker's complete file tree, unlike the IPC-only exit checks above. The compiler it ran may
   // be the machine-wide store's entry, which outlives every build by design.
-  const cleanupDeadlineMs = 20_000;
-  const startupDeadlineMs = phase === 'ready' ? 120_000 : 60_000;
   const root = fixture({
     'src/compiler.ts': `import fs from 'node:fs'; export default async function() {
       fs.writeFileSync('.apack/compiler-inputs-path', process.env.${COMPILER_INPUTS_ENV}!);
@@ -565,13 +566,13 @@ it.each([
     child.once('close', () => reject(new Error(`Watch stopped before ready: ${output}`)));
   });
   try {
-    await _byDeadline(ready, `public watcher startup (${phase})`, startupDeadlineMs);
+    await ready;
     const inputs = fs.readFileSync(path.join(root, '.apack/compiler-inputs-path'), 'utf8');
     const worker = Number(fs.readFileSync(path.join(root, '.apack/compiler-pid'), 'utf8'));
     expect(fs.existsSync(inputs)).toBe(true);
     const stored = fs.realpathSync.native(inputs).startsWith(fs.realpathSync.native(process.env.APACK_COMPILER_STORE!) + path.sep);
     child.kill('SIGTERM');
-    await _byDeadline(closed, 'public watcher shutdown', cleanupDeadlineMs);
+    await closed;
     expect(child.signalCode, output).toBe('SIGTERM');
     expect(fs.existsSync(inputs), inputs).toBe(stored);
     expect(() => process.kill(worker, 0)).toThrow();
@@ -579,6 +580,6 @@ it.each([
     if (release) expect(fs.existsSync(path.join(root, '.apack/release'))).toBe(false);
   } finally {
     if (child.exitCode === null && child.signalCode === null) child.kill();
-    await _byDeadline(closed, 'public watcher cleanup', cleanupDeadlineMs);
+    await closed;
   }
-}, 120_000 + 20_000 + 20_000);
+});

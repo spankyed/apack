@@ -3,6 +3,7 @@ import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import type { SpeechCommand, SpeechEvent } from './protocol.ts';
+import { answerWhileWorking, processWork } from '@apackdev/sdk/progress';
 
 export class SpeechHelperProcess {
   private process: ChildProcess | null = null;
@@ -71,10 +72,10 @@ export class SpeechHelperProcess {
 
       const originalOnEvent = this.onEvent;
       let settled = false;
-      let readyTimeout: ReturnType<typeof setTimeout>;
+      let answered = (): void => {};
 
       const cleanup = () => {
-        clearTimeout(readyTimeout);
+        answered();
         this.onEvent = originalOnEvent;
         this.process?.removeListener('exit', onEarlyExit);
       };
@@ -90,9 +91,12 @@ export class SpeechHelperProcess {
       const onEarlyExit = () => fail(new Error('Speech helper exited before becoming ready'));
 
       // On macOS the helper blocks on user-interactive permission dialogs (speech + microphone)
-      // whose duration is unpredictable — rely on onEarlyExit instead of a fixed timeout.
-      if (process.platform !== 'darwin') {
-        readyTimeout = setTimeout(() => fail(new Error('Speech helper did not become ready in time')), 10_000);
+      // whose duration is unpredictable — rely on onEarlyExit alone. Elsewhere a helper that is alive and not
+      // ready is waited for while it works, never for a fixed time: a slow start on a busy machine is not a hang
+      if (process.platform !== 'darwin' && this.process.pid !== undefined) {
+        const ready = new Promise<void>((settle) => { answered = settle; });
+        answerWhileWorking(ready, { work: processWork(this.process.pid), what: 'The speech helper' })
+          .catch((error: Error) => fail(new Error(`Speech helper did not become ready: ${error.message}`)));
       }
 
       this.process.on('error', (err) => {

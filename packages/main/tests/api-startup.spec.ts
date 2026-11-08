@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ApiServer } from '../src/modules/api-server/ApiServer.ts';
 import { ProcessManager } from '../src/modules/api-server/process-manager.ts';
 import { API_CONFIG } from '../src/modules/api-server/config.ts';
+import { IDLE_MS } from '@apackdev/sdk/progress';
 
 vi.mock('../src/modules/api-server/logger.ts', () => ({
   logInfo: vi.fn(), logError: vi.fn(), logWarn: vi.fn(), getLogger: vi.fn(), logStartupBanner: vi.fn(),
@@ -21,7 +22,7 @@ function server() {
     startApiServer(): Promise<void>;
     handleProcessExit(code: number | null, signal: NodeJS.Signals | null): void;
     handleServerReady(port: number): void;
-    waitForReady(timeout?: number): Promise<void>;
+    waitForReady(): Promise<void>;
     launchApiServer(apiPath: string): Promise<void>;
     cleanupOrphanedApiChildren(apiPath: string): Promise<void>;
   };
@@ -37,7 +38,7 @@ beforeEach(() => {
 });
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
-it("rejects the window's wait with the API's own error once its restarts run out, not after the ready timeout", async () => {
+it("rejects the window's wait with the API's own error once its restarts run out, not after its idle window", async () => {
   vi.spyOn(ProcessManager.prototype, 'getFatalErrors').mockReturnValue([{ message: REFUSAL }]);
   const api = server();
   const ready = api.waitForReady();
@@ -48,7 +49,8 @@ it("rejects the window's wait with the API's own error once its restarts run out
     await vi.advanceTimersByTimeAsync(API_CONFIG.RESTART_DELAY);
   }
   expect(await outcome).toBe(REFUSAL);
-  expect(API_CONFIG.RESTART_DELAY * (API_CONFIG.MAX_RESTART_ATTEMPTS + 1)).toBeLessThan(API_CONFIG.READY_TIMEOUT);
+  // Inside the window a launch doing nothing is given, so the answer is the restarts running out and not the wait
+  expect(API_CONFIG.RESTART_DELAY * (API_CONFIG.MAX_RESTART_ATTEMPTS + 1)).toBeLessThan(IDLE_MS);
 });
 
 it("resolves the window's wait when a launch after a crash becomes ready", async () => {
@@ -62,3 +64,4 @@ it("resolves the window's wait when a launch after a crash becomes ready", async
   api.handleServerReady(3000);
   expect(await outcome).toBe('ready');
 });
+

@@ -3,9 +3,9 @@ import { sealBuild } from './runtime/build-fixture.ts';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { verifyPack } from '../../src/packs/layout.ts';
 import { installPackFromLocal } from '../../src/packs/installer.ts';
 import {
@@ -85,13 +85,17 @@ describe('dev server marker', () => {
 // this file is why; falling back to the installed copy at least shows the pack.
 describe('a dev server that is no longer running', () => {
   /** A pid no process has any more */
-  const exitedPid = () => spawnSync(process.execPath, ['-e', '']).pid!;
+  const exitedPid = async () => {
+    const exited = execFileWhileWorking(process.execPath, ['-e', '']);
+    await exited;
+    return exited.child.pid!;
+  };
 
-  it('is not served from, while a live one still is', () => {
+  it('is not served from, while a live one still is', async () => {
     writeDevServerMarker(userDataDir, 'demo-pack', { port: 5199, pid: process.pid });
     expect(devServerUrl(userDataDir, 'demo-pack', '/fe.js')).toBe('http://localhost:5199/fe.js');
 
-    writeDevServerMarker(userDataDir, 'demo-pack', { port: 5199, pid: exitedPid() });
+    writeDevServerMarker(userDataDir, 'demo-pack', { port: 5199, pid: await exitedPid() });
     expect(devServerUrl(userDataDir, 'demo-pack', '/fe.js')).toBeNull();
   });
 

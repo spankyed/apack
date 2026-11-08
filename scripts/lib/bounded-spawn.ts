@@ -1,5 +1,5 @@
 /**
- * Spawning with a wall-clock budget, because a run that can hang cannot fail.
+ * Spawning with a budget, because a run that can hang cannot fail.
  *
  * Without a bound one wedged step hangs the whole run until a person kills it: a test server that never
  * returns, a build lock waited on, a compile that stops making progress. Vitest's own timeouts cannot catch
@@ -9,26 +9,38 @@
  * Two rules this enforces, and both matter:
  *
  * - **A budget is a declared class, not a multiple of a measurement**, which would make it a function of one
- *   machine. Callers pass `TIMEOUT_MS[class]` (`scripts/lib/step-timeouts.ts`), which carries no machine. A
+ *   machine. Callers pass `BUDGET_MS[class]` (`scripts/lib/step-budgets.ts`), which carries no machine. A
  *   bound longer than anyone will wait is the same as no bound, which keeps the ladder short.
  * - **A hang is no progress, not a long time.** A starved process is slow and still working, and a budget
  *   that measures the clock kills it for the machine being busy. So the watchdog below ends a run whose
  *   process tree has used no CPU and written no output for `IDLE_MS`, and the budget above it is a ceiling
  *   for the one hang the watchdog cannot see: a loop that spins.
+ * - **The ceiling counts CPU time, not the clock.** A spin is what spends CPU without end, and load or a slow
+ *   disk stretches a run's wall time without adding to its CPU, so a CPU ceiling is reached by the one and never
+ *   by the other. The clock is the bound only where the tree cannot be read — Windows, `APACK_WATCHDOG=off`, a
+ *   tree whose work is in a VM (`idleMs: false`), and from the moment `ps` fails. A tree *inside* a VM that
+ *   accounts no steal time — the Linux test container — reads the host's load as its own CPU, so it runs with
+ *   the watchdog alone (`APACK_CEILING=off`, which `test:linux` sets). What neither catches is a
+ *   loop that sleeps and prints for ever: its output is progress by the watchdog's rule, and it spends no CPU.
  * - **The process group dies, not just the child.** `npm run x` is a shell that spawns node that spawns
  *   vitest that spawns workers. Killing the child alone orphans the rest, still running. And the group dies
  *   when the child exits however it ends, a pass included: nothing a run started outlives it.
  */
 import { spawn } from 'node:child_process';
-import { createStallTracker, readTreeCpuMs } from '@apackdev/host/build/process-progress';
-import { IDLE_MS, watchdogEnabled } from './step-timeouts.ts';
+import { describeRefusal, processWork, watchWork } from '../../packages/apack-sdk/src/progress.ts';
+import { IDLE_MS, ceilingEnabled, watchdogEnabled } from './step-budgets.ts';
 
-export { cpuAdded, createStallTracker, parseCpuTime, treeCpuMs } from '@apackdev/host/build/process-progress';
+
 
 export interface BoundedResult {
   readonly code: number;
   readonly output: string;
   readonly ms: number;
+  /**
+   * The CPU its process tree spent, where the watchdog could read the tree: a lower bound, since a process that
+   * starts and exits between two readings is never seen. A reading, which decides nothing but the ceiling.
+   */
+  readonly cpuMs?: number;
   /** Set when the budget ran out, or with `stalled` when the watchdog ended it: either way it was killed */
   readonly timedOut?: true;
   /** Set when its process tree stopped working — no CPU and no output for the idle window — before the budget */
@@ -134,9 +146,6 @@ export function boundedSpawn(command: string, args: readonly string[], budgetMs:
     let timedOut: true | undefined;
     let stalled: true | undefined;
     let aborted: true | undefined;
-    const stall = idleMs === false ? undefined : createStallTracker(idleMs, Date.now());
-    child.stdout?.on('data', (d: Buffer) => { output += d.toString(); stall?.output(Date.now()); });
-    child.stderr?.on('data', (d: Buffer) => { output += d.toString(); stall?.output(Date.now()); });
 
     const killGroup = (signal: NodeJS.Signals) => {
       if (child.pid === undefined) return;
@@ -150,13 +159,14 @@ export function boundedSpawn(command: string, args: readonly string[], budgetMs:
       code: timedOut ? 124 : closed ?? 1,
       output,
       ms: Date.now() - started,
+      ...(watch !== undefined ? { cpuMs: watch.spentMs() } : {}),
       ...(timedOut ? { timedOut } : {}),
       ...(stalled ? { stalled } : {}),
       ...(aborted ? { aborted } : {}),
     });
 
     /**
-     * One ending for both ways a run is cut short, because they need the same two kills.
+     * One ending for every way a run is cut short, because they need the same two kills.
      *
      * The escalation is not unref'd, and it is what resolves: an unref'd one never fires, because the
      * process ends as soon as the child closes. A child that ignores SIGTERM would then have survived the
@@ -167,34 +177,38 @@ export function boundedSpawn(command: string, args: readonly string[], budgetMs:
       if (terminating) return;
       terminating = true;
       clearTimeout(budget);
-      clearInterval(watchdog);
+      watch?.stop();
       killGroup('SIGTERM');
       setTimeout(() => { killGroup('SIGKILL'); done(); }, GRACE_MS);
     };
 
-    const budget = setTimeout(() => { timedOut = true; terminate(); }, budgetMs);
-    budget.unref();
+    const say = (why: string) => {
+      output += why;
+      if (stream) process.stderr.write(why);
+    };
 
-    // A reading of the tree on a timer, because nothing announces that a process has stopped working. Each
-    // reading waits for the last: under load `ps` itself can be slow, and two in flight would race the last reading.
-    let inFlight = false;
-    const watchdog = idleMs === false || stall === undefined || child.pid === undefined ? undefined : setInterval(() => {
-      if (inFlight || terminating) return;
-      inFlight = true;
-      void readTreeCpuMs(child.pid!).then((now) => {
-        inFlight = false;
-        if (now === undefined || terminating) return;
-        if (stall.reading(now, Date.now())) {
-          const why = `\n[bounded] no CPU or output from its process tree for ${idleMs / 1000}s: stalled, so its process group was killed\n`;
-          output += why;
-          if (stream) process.stderr.write(why);
-          timedOut = true;
-          stalled = true;
-          terminate();
-        }
-      });
-    }, Math.min(5_000, idleMs / 4));
-    watchdog?.unref();
+    // A tree the watchdog reads is bounded by its progress and the CPU it spends (`watchWork`), and only a tree it
+    // cannot read by the clock. `APACK_CEILING=off` leaves the watchdog alone, for a VM whose CPU is not work
+    const watch = idleMs === false || child.pid === undefined ? undefined : watchWork({
+      work: processWork(child.pid), idleMs, watchesOutput: true, ceilingMs: ceilingEnabled() ? budgetMs : undefined, fallbackMs: budgetMs,
+      onRefused: (refusal) => {
+        stalled = refusal.kind === 'stalled' ? true : undefined;
+        say(`\n[bounded] ${refusal.kind === 'stalled'
+          ? `no CPU or output from its process tree for ${idleMs / 1000}s: stalled`
+          : describeRefusal(refusal)}, so its process group was killed\n`);
+        timedOut = true;
+        terminate();
+      },
+    });
+    const budget = watch !== undefined ? undefined : setTimeout(() => {
+      say(`\n[bounded] ran past its ${budgetMs / 1000}s budget on the clock, its CPU unreadable: its process group was killed\n`);
+      timedOut = true;
+      terminate();
+    }, budgetMs);
+    budget?.unref();
+    child.stdout?.on('data', (d: Buffer) => { output += d.toString(); watch?.output(); });
+    child.stderr?.on('data', (d: Buffer) => { output += d.toString(); watch?.output(); });
+
     const abort = () => { aborted = true; terminate(); };
     signal?.addEventListener('abort', abort, { once: true });
 
@@ -210,7 +224,7 @@ export function boundedSpawn(command: string, args: readonly string[], budgetMs:
 
     child.on('close', (code) => {
       clearTimeout(budget);
-      clearInterval(watchdog);
+      watch?.stop();
       signal?.removeEventListener('abort', abort);
       if (child.pid !== undefined) liveGroups.delete(child.pid);
       closed ??= code;

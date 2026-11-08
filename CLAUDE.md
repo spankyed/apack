@@ -25,7 +25,7 @@ apack is an Electron desktop app with an actor-based architecture. Both frontend
 - **Default Setup** (`packages/default-setup/`) — the pack the app ships, installed into the data dir at first boot and loaded from there like any other: features, steps, and content sources (actions, prompts, flows, notes, commands) that `apack pack build` compiles into `packages/default-setup/dist/` from `apack.json` `content.sources` (see `packages/default-setup/CLAUDE.md` and `docs/public-facing/content.md`)
 - **Repo checks** (`packages/repo-checks/`) — the specs whose subject is the repo's own tooling: the chain's graph and cache keys, the recorded spec costs, and the scripts under `scripts/`. A workspace because a spec needs one, and because `npm run spec` routes a `scripts/` change here (see `packages/repo-checks/CLAUDE.md`)
 
-Monorepo using npm workspaces. Requires Node 24 LTS (>=24.11.0) and npm >= 11: npm 10 crashes resolving vitest 4.1, which a new pack's first install does.
+Monorepo using npm workspaces. Requires Node 24 LTS (>=24.12.0) and npm >= 11. Both floors are a measured refusal rather than a preference: npm 10 crashes resolving vitest 4.1, which a new pack's first install does, and `apack pack build` cannot run on 24.11.0 at all, whose module-hook validator rejects the CommonJS load result the pack compiler's own hooks pass through — `COMPILER_NODE_FLOOR` (`packages/apack-cli/src/build/node-support.ts`) refuses it by name, and `engines.node` says the same to npm.
 
 **Two sibling checkouts are vendored, each depended on as an npm package resolved through its link.** Each
 is a gitignored symlink under `vendor/` beside a committed `.rev` naming the commit it is pinned to, linked
@@ -171,11 +171,25 @@ strict-chain dispatches remain available and are used where the execution bounda
 goal requires them; cite actual results, not an assumption that all CI runs or never runs.
 
 **CI may fail a check, never a clock.** Every kill deadline is a declared class rather than a multiple of a
-measurement (`scripts/lib/step-timeouts.ts`), and what a step costs is a reading of the machine it ran on.
-A deadline is a ceiling for a tree that spins; what ends a stuck one is `boundedSpawn`'s watchdog, which kills a
-process tree that has gone `IDLE_MS` without CPU or output, so a step slowed by a busy machine is never killed for it.
-A spec's `runCommand` is bounded the same way (`@apackdev/host/build/process-progress`).
-`APACK_WATCHDOG=off` turns it off for a run and everything the run starts.
+measurement (`scripts/lib/step-budgets.ts`), and what a step costs is a reading of the machine it ran on.
+A deadline is a ceiling for a tree that spins, so it counts the tree's CPU time, which load and a slow disk cannot
+inflate; the clock bounds only a tree that cannot be read (Windows, `APACK_WATCHDOG=off`, work inside a VM).
+Inside the Linux test container CPU time grows with the Mac's load (its VM accounts no steal time), so a ceiling
+there would be a clock: `test:linux` sets `APACK_CEILING=off` and the container runs with the watchdog alone. What
+ends a stuck one is `boundedSpawn`'s watchdog, which kills a process tree that has gone `IDLE_MS` without CPU or
+output, so a step slowed by a busy machine is never killed for it.
+A spec's `runCommand` is bounded the same way (`@apackdev/sdk/progress`), and so is a **test**:
+every vitest config turns vitest's clock off (`testTimeout: 0`, `hookTimeout: 0`) and loads the progress guard
+(`@apackdev/testing`'s `vitest-progress-guard.ts`), which fails a test or hook whose process tree stalls and a test
+that spends its CPU deadline. A test that needs more declares `meta: cpuBudget(ms)`; `suite-timeouts.spec.ts`
+refuses a timeout measured on the clock. The product follows the same rule where it waits on another process or
+thread to answer: `answerWhileWorking` (`@apackdev/sdk/progress`, with `processWork` and `threadWork`)
+waits while the other party's work keeps growing and fails only after `IDLE_MS` of none — never a fixed reply time.
+**A wall-clock deadline is refused unless it says why.** `findClockedDeadlinesInSource` (`check:specifiers`) and
+`spec-waits.spec.ts` read every clocked deadline in the packages' source and the test trees (`clockedDeadlines`,
+`scripts/lib/test-timeouts.ts`); each one is converted to a progress bound, or listed by design with its reason: a
+network wait, a kill grace, a wait on this process's own state, or a Playwright wait past the suite's declared backstop.
+`APACK_WATCHDOG=off` turns the step watchdog off for a run and everything the run starts.
 **Do not gate any of this on `process.env.CI`**: a CI-gated refusal never fires. The condition is the
 machine, which is a fact a run can check.
 
@@ -265,10 +279,12 @@ Rules that pay for themselves:
   ([pipeline-lessons.md](docs/archive/references/pipeline-lessons.md#rules-that-pay-for-themselves-the-evidence)).
 - **Attribute a concurrent pipeline's cost with a CPU profile, not by timing its stages.** Per-stage wall
   clock double-counts overlap; use `node --cpu-prof` with self time per package.
-- **Start a process asynchronously in an integration or native spec.** A synchronous one blocks the worker, so
-  no case timeout fires and vitest's 60s RPC window expires. Use `promisify(execFile)` with a timeout, or
-  `runCommand` (`packages/apack-cli/tests/_support/run-command.ts`) for a CLI or vitest process tree;
-  `check:specifiers` refuses the rest (`findSyncSpawnsInSlowSpecs`).
+- **Start a process asynchronously in a spec.** A synchronous one blocks the worker, so the progress guard
+  cannot read it and vitest's 60s RPC window expires. Use `execFileWhileWorking`
+  (`@apackdev/sdk/progress`: `promisify(execFile)`'s contract, its `timeout` the CPU the process may
+  spend) for one process, or `runCommand` (`packages/apack-cli/tests/_support/run-command.ts`) for a CLI or vitest
+  process tree; `check:specifiers` refuses the rest (`findSyncSpawnsInSpecs`), and `suite-timeouts.spec.ts` a
+  `promisify(execFile)`, whose `timeout` is the clock.
 - **A mutation check is worth more than a re-run.**
 - **But a mutation check does not redeem a test that mirrors the code.** Ask whether the code could be
   correct but different; a case every behaviour-preserving rewrite fails encodes the code. A pure re-route
@@ -292,11 +308,13 @@ Rules that pay for themselves:
   how it fails, another file, or that nothing checks it.
 - **Keep readings; do not decide with them.** A reading that informs a column needs no band, floor or machine
   field; one compared against an edge needs all of them, and the edge can usually be declared instead.
+- **A test that passes only on a quiet machine is a defect.** Prove a timing fix under `npm run stress`, which
+  runs it while busy loops hold the machine: a race that shows only under load passes on a quiet box whatever the fix did.
 - **Load inflates a duration and cannot deflate it.** Gate only on *measured faster than declared* (the
   `@slow:` marker gate); *measured slower* is only ever a report.
-- **A test's budget and its deadline are two numbers.** A vitest config declares `DEADLINE_FACTOR` times its
-  size (`scripts/lib/unit-suites.ts`): a pass past the budget is reported under the step, and only the deadline,
-  which catches a hang, fails one. Never raise a budget to get a pass.
+- **A test's budget and its deadline are two numbers, both CPU.** A vitest config gives the guard `DEADLINE_FACTOR`
+  times its size (`scripts/lib/unit-suites.ts`): a pass that spent past the budget is reported under the step, and
+  only the deadline, which catches a spin, fails one. Never raise a budget to get a pass.
 
 [`docs/archive/references/pipeline-lessons.md`](docs/archive/references/pipeline-lessons.md) has what each of these cost to
 learn.
@@ -318,8 +336,10 @@ which stays **outside** the checkout so the pack cannot resolve `@apackdev/*` fr
 ## Commands
 
 **A figure in prose earns its place by sizing a choice; one a record owns is named, not copied.** A
-measurement a decision cites carries its date and conditions, as `npm run measure` prints them. Nothing holds
-prose to code: point at the record or command that derives a figure.
+measurement a decision cites carries its date and conditions, as `npm run measure` prints them: cite its
+instructions for a question about work, which load does not move and so needs no quiet machine, and a wall time from
+`--latency` for a question about how long something takes. Nothing holds prose to code: point at the record or
+command that derives a figure.
 
 **Script names say whether they write:**
 
@@ -369,7 +389,7 @@ npm run test:unit                # The host pool and the pack pool (scripts/lib/
 npm run test:unit:host           # One pool, only the projects whose inputs changed
 npm run test:unit:pack           # The pack pool, resolving the published dist
 npm run test:integration         # Every suite's expensive half, as one vitest run at half the cores
-npm run test:native              # The native half (*.native.spec.ts), one file at a time, a 300s budget a case
+npm run test:native              # The native half (*.native.spec.ts), one file at a time, 300s of CPU a case
 npm run test:linux -- <command>  # Run a command in the Linux test container (the chain does for test:native on a Mac)
 npm run test:external-pack       # Both halves of the fixture-pack check
 npm run test:external-pack:contract  # Validate, build, typecheck, harness specs — no app
@@ -393,10 +413,14 @@ npm run schema:check             # -w @apackdev/sdk: fails if apack.schema.json 
 npm run content-parity:check     # -w @app/default-setup: written entities against tests/content/__golden__
 npm run content-parity:update    # -w @app/default-setup: re-record them, deliberately
 
-npm run measure -- "<cmd>"       # Time a command on a quiet machine; prints a citable median with conditions
-                                 #   --runs N  --against "<B>"  --trials N  --busy N  --idle PERCENT  --force
+npm run measure -- "<cmd>"       # The work a command does (instructions, CPU) on any box, and its wall time,
+                                 # labelled when the box was busy; a citable median with conditions. --latency
+                                 # takes the machine lock and waits for a quiet box, for a question about time
+                                 #   --runs N  --against "<B>"  --trials N  --latency  --busy N  --idle PERCENT  --force
 npm run measure:loop -- "<cmd>"  # How long each process went without turning its event loop, against birpc's 60s
-npm run check:idle               # Is this machine quiet enough to measure on (exit 1 below IDLE_FLOOR)
+npm run check:idle               # Is this machine quiet enough to time a latency on (exit 1 below IDLE_FLOOR)
+npm run stress -- [--runs N] [--busy K] [cmd]  # Run a command N times under K busy cores; exit 1 if any run
+                                 # failed. Default: the host unit pool, --all
 npm run soak:watch               # Does an edit made during a watcher pass get picked up? Run on a loaded Mac. Exit 1
                                  # lost, 3 partial (file events stalled); -- --rounds N --max-delay SECONDS
 npm run janitor                  # Hold every linked Rust checkout's build caches to a budget (-- --dry); janitor:install

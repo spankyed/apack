@@ -9,7 +9,7 @@ import { applyWSSHandler } from '@trpc/server/adapters/ws';
 import { defineViews, type PackRegistration } from '@apackdev/sdk/framework';
 import { createViewHost } from '@apackdev/host/views';
 import { _createTestEngine } from '@apackdev/sdk/testing';
-import { _byDeadline, _whenSatisfied } from '@apackdev/sdk/testing/waiting';
+import { _whenSatisfied } from '@apackdev/sdk/testing/waiting';
 import { createRpcContext } from '../../src/transport/context.ts';
 
 const engine = _createTestEngine({ entityTypes: ['Note'] });
@@ -64,10 +64,10 @@ async function window() {
     const frame = JSON.parse(text) as Frame;
     if (frame.result?.type === 'data' && frame.result.data?.ok) results.push(frame.result.data.value);
   });
-  await _byDeadline(new Promise<void>((resolve, reject) => {
+  await (new Promise<void>((resolve, reject) => {
     socket.addEventListener('open', () => resolve(), { once: true });
     socket.addEventListener('error', () => reject(new Error('the socket would not open')), { once: true });
-  }), 'the socket to open');
+  }));
   return {
     socket,
     results,

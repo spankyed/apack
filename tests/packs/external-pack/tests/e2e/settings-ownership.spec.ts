@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -266,8 +267,9 @@ test('accepted dependency credentials enforce shared, owner-only and reload boun
     fs.writeFileSync(path.join(dependent, 'package.json'), JSON.stringify({ name: id, type: 'module' }));
     fs.writeFileSync(path.join(dependent, 'apack.json'), JSON.stringify({ id, name: 'Settings dependent', version: '1.0.0',
       hostVersion: '>=0.3.0', data: { entities: {}, relations: {} }, features: {}, dependencies: { 'bundled-ui-fixture': `file:${companion}` } }));
-    execFileSync(process.execPath, [path.join(root, 'packages/apack-cli/bin/apack.mjs'), 'pack', 'build'], {
-      cwd: dependent, env: { ...process.env, APACK_HOST: root }, stdio: 'pipe', timeout: 180_000,
+    // Neither child takes a timeout: the test's own is the bound, and a build on a busy machine is slow, not stuck
+    await promisify(execFile)(process.execPath, [path.join(root, 'packages/apack-cli/bin/apack.mjs'), 'pack', 'build'], {
+      cwd: dependent, env: { ...process.env, APACK_HOST: root },
     });
     fs.copyFileSync(path.join(companion, 'tsconfig.json'), path.join(dependent, 'tsconfig.json'));
     fs.mkdirSync(path.join(dependent, 'tests'));
@@ -286,8 +288,8 @@ restricted.reset();
 // @ts-expect-error A schema-derived string field does not accept numbers.
 shared.set({ path: ['name'], value: 2 });
 `);
-    execFileSync(process.execPath, [path.join(root, 'node_modules/typescript/bin/tsc'), '--noEmit', '-p', dependent], {
-      cwd: dependent, stdio: 'pipe', timeout: 20_000,
+    await promisify(execFile)(process.execPath, [path.join(root, 'node_modules/typescript/bin/tsc'), '--noEmit', '-p', dependent], {
+      cwd: dependent,
     });
     const outcome = nextEvent(event => (event.type === 'PACK_INSTALL_COMPLETE' || event.type === 'PACK_INSTALL_FAILED')
       && event.packSlug === dependent);

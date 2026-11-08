@@ -4,7 +4,11 @@
 
 ```ts
 
+import type { TaskMeta } from 'vitest';
 import type { ViteUserConfig } from 'vitest/config';
+
+// @public
+export const cpuBudget: (ms: number) => Partial<TaskMeta>;
 
 // @public
 export function definePackTestConfig(options?: PackTestConfig): Promise<ViteUserConfig>;
@@ -30,6 +34,12 @@ export interface PackTestConfig {
     readonly plugins?: NonNullable<ViteUserConfig['plugins']>;
     readonly setupFiles?: readonly string[];
     readonly vue?: boolean;
+}
+
+// @public
+export interface ProgressMeta {
+    readonly cpuBudgetMs?: number;
+    cpuMs?: number;
 }
 
 // (No @packageDocumentation comment for this package)

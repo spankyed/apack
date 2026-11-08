@@ -19,6 +19,7 @@ import { ProcessManager, broadcastEvent } from './process-manager.ts';
 import { logInfo, logError, logWarn, getLogger, logStartupBanner } from './logger.ts';
 import { getAppEnvironment } from '../../app-environment.ts';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
+import { answerWhileWorking, processWork, type WorkReading } from '@apackdev/sdk/progress';
 
 export class ApiServer implements AppModule {
   private processManager: ProcessManager;
@@ -372,15 +373,22 @@ export class ApiServer implements AppModule {
     };
   }
 
-  public waitForReady(timeout = API_CONFIG.READY_TIMEOUT): Promise<void> {
-    return Promise.race([
-      this.serverReady,
-      new Promise<void>((_, reject) => {
-        setTimeout(() => {
-          reject(new Error(`API server failed to start within ${timeout}ms`));
-        }, timeout);
-      })
-    ]);
+  /**
+   * Resolves once the API is up. A launch that dies is reported by `serverReady` itself, with its own error once
+   * the restarts run out; what is bounded here is a launch that is alive and not ready, for as long as it is doing
+   * nothing. One that is starting slowly on a busy machine is working, and is waited for.
+   */
+  public waitForReady(): Promise<void> {
+    // The pid of whichever launch is current, since a restart replaces it mid-wait. A relaunch's total starting
+    // lower costs one reading's work, since the stall decision compares each reading with the one before
+    const readings = new Map<number, WorkReading>();
+    const work: WorkReading = async () => {
+      const pid = this.processManager.getPid();
+      if (pid === undefined) return undefined;
+      if (!readings.has(pid)) readings.set(pid, processWork(pid));
+      return readings.get(pid)!();
+    };
+    return answerWhileWorking(this.serverReady, { work, what: 'The API server' });
   }
 }
 

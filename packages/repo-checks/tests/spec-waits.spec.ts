@@ -17,12 +17,15 @@
 // kill deadline, which is the thing being promoted, so only a timer reaching the promise's own `resolve`
 // counts. `scripts/lib/test-timeouts.ts` has both rules, and the module's header records the regex attempts
 // that failed in both directions before it read the tree.
+import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { population } from '@apackdev/sdk/testing';
 import { UNIT_SUITES } from '../../../scripts/lib/unit-suites.ts';
-import { bareWaitKey, bareWaits, specFilesUnder, type BareWait } from '../../../scripts/lib/test-timeouts.ts';
+import { bareWaitKey, bareWaits, clockedDeadlines, specFilesUnder, type BareWait, type Clock } from '../../../scripts/lib/test-timeouts.ts';
+import { tsFilesUnder } from '../../../scripts/lib/process-spawns.ts';
 
 /**
  * Waits whose subject genuinely is elapsed time, and why each one is.
@@ -122,4 +125,106 @@ describe('a spec waits for the thing it waits for', () => {
   it('has four waits left to examine', () => {
     expect(NOT_CONVERTED_YET).toHaveLength(4);
   });
+});
+
+/**
+ * Test files that hold a clocked deadline on purpose, with why.
+ *
+ * A wait on another process has no deadline of its own: the vitest progress guard bounds the whole test by its
+ * progress, and a clock inside it fails healthy work on a busy machine. What qualifies is a wait on this process's
+ * own state, where nothing outside it is slowed by load and a quick failure beats the guard's stall window.
+ */
+const CLOCK_BY_DESIGN: Record<string, string> = {
+  'packages/apack-ears/tests/engine/rank-index.spec.ts':
+    'waits on an index building in this process, so load slows the wait and the work alike',
+  'packages/default-setup/tests/harness-app-stop.spec.ts':
+    "waits on the in-process test app's timer flow ticking, which runs on this process's own event loop",
+  // The Playwright suites: Playwright gives a test and a wait only a clock, and `definePackE2EConfig` declares the
+  // suite's two backstops (60s a test, 30s an assertion). These are the waits that genuinely outlast them
+  'tests/acceptance/pack-dev/test-pack-dev.ts':
+    "waits on a watcher's rebuild and install, which outlasts the suite's 30s assertion backstop",
+  'tests/e2e/app-integration/db-write-through-boot.spec.ts':
+    'boots the app twice over a database written between, which outlasts the suite\'s backstops',
+  'tests/packs/external-pack/tests/e2e/default-pack-fork.spec.ts':
+    "forks and rebuilds the shipped pack inside the case, which outlasts the suite's 60s test backstop",
+  'tests/packs/external-pack/tests/e2e/settings-ownership.spec.ts':
+    'builds and installs two packs inside the case, and its process diagnostic samples for a fixed 2s',
+  'tests/e2e/app-integration/attach-parity.spec.ts':
+    "a 2s `waitForEvent` is a poll tick inside a loop that rechecks every window, not a deadline on work",
+  'tests/e2e/app-integration/feature-addressing.spec.ts':
+    'the 300ms is the subject: the case asserts that no second settings update arrives',
+};
+
+
+/** Every test file the clocks are counted over: the unit suites' trees, support modules included, the E2E and pack suites and `drive/` */
+const testFiles = (): string[] => [
+  ...UNIT_SUITES.map((suite) => path.join(REPO_ROOT, 'packages', suite.dir, 'tests')),
+  path.join(REPO_ROOT, 'tests'),
+  path.join(REPO_ROOT, 'drive'),
+].flatMap((dir) => tsFilesUnder(dir)).filter((file) => !/\/(node_modules|dist|\.apack)\//.test(file));
+
+const clocksByFile = (): Map<string, Clock[]> => {
+  const byFile = new Map<string, Clock[]>();
+  for (const file of testFiles()) {
+    const found = clockedDeadlines(file, REPO_ROOT);
+    if (found.length > 0) byFile.set(found[0]!.file, found);
+  }
+  return byFile;
+};
+
+describe('a test is bounded by its progress, not a clock', () => {
+  it('reads a clock where it is one, and not where the same word is data, a handle or a switch', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'clocked-deadlines-'));
+    try {
+      const file = path.join(dir, 'case.spec.ts');
+      fs.writeFileSync(file, [
+        "import { execFile, spawnSync } from 'node:child_process';",
+        "import { promisify } from 'node:util';",
+        "import { execFileWhileWorking } from '@apackdev/sdk/progress';",
+        'const run = promisify(execFile);',
+        // clocks
+        'await vi.waitFor(check, { timeout: 20_000 });',
+        'await expect.poll(read, 5_000);',
+        "spawnSync('git', [], { timeout: 1_000 });",
+        "await run('ps', [], { timeout: 2_000 });",
+        'AbortSignal.timeout(500);',
+        'test.setTimeout(180_000);',
+        'await page.waitForTimeout(300);',
+        "await expect(page.locator('x')).toBeVisible({ timeout: 10_000 });",
+        // not clocks: CPU, a switch, data, a handle, and the runner's own (another check's subject)
+        "await execFileWhileWorking('ps', [], { timeout: 5_000 });",
+        'await vi.waitFor(check, { timeout: 0 });',
+        'expect(options).toEqual({ timeout: 5_000 });',
+        'pending.set(id, { timeout: setTimeout(fail, 5_000) });',
+        "it.skip('slow', { timeout: 9_000 }, () => {});",
+      ].join('\n'));
+      expect(clockedDeadlines(file, dir).map((clock) => clock.what)).toEqual([
+        'vi.waitFor', 'expect.poll', 'spawnSync', 'run', 'AbortSignal.timeout', 'test.setTimeout', 'page.waitForTimeout',
+        'toBeVisible',
+      ]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reads the test trees', () => {
+    population('test files', testFiles(), { atLeast: 600 });
+  });
+
+  it('has no clocked deadline that neither list accounts for', () => {
+    const unaccounted = [...clocksByFile()]
+      .filter(([file]) => CLOCK_BY_DESIGN[file] === undefined)
+      .flatMap(([, clocks]) => clocks.map((clock) => `${clock.file}:${clock.line}: ${clock.what}`));
+    expect(unaccounted, [
+      'A wait on another process takes no deadline: the progress guard bounds the test. Drop the timeout, or bound a',
+      'child process with execFileWhileWorking. A wait on this process\'s own state may keep one, in CLOCK_BY_DESIGN.',
+    ].join(' ')).toEqual([]);
+  });
+
+
+  it('lists nothing by design that no longer holds a clock', () => {
+    const byFile = clocksByFile();
+    expect(Object.keys(CLOCK_BY_DESIGN).filter((file) => !byFile.has(file))).toEqual([]);
+  });
+
 });

@@ -15,7 +15,7 @@ beforeAll(async () => {
   const root = fileURLToPath(new URL('../../../default-setup/', import.meta.url));
   output = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-default-archive-'));
   archive = await buildPackArchive(root, output);
-}, 180_000);
+});
 
 afterAll(() => { if (output) fs.rmSync(output, { recursive: true, force: true }); });
 

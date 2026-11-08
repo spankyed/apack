@@ -14,7 +14,7 @@ export async function frontendAccepted(page: Page, packId: string, previous: str
   await expect.poll(async () => {
     const current = await acceptedRuntime(page, packId);
     return current !== undefined && current !== previous;
-  }, { timeout: 30_000, message: `${packId} frontend accepted after reactivation` }).toBe(true);
+  }, { message: `${packId} frontend accepted after reactivation` }).toBe(true);
 }
 
 /**
@@ -23,7 +23,5 @@ export async function frontendAccepted(page: Page, packId: string, previous: str
  * — after the toggle answers, by however long the teardown takes on this machine.
  */
 export async function frontendUnloaded(page: Page, packId: string): Promise<void> {
-  await expect.poll(async () => await acceptedRuntime(page, packId), {
-    timeout: 30_000, message: `${packId} frontend unloaded after disabling`,
-  }).toBeUndefined();
+  await expect.poll(async () => await acceptedRuntime(page, packId), { message: `${packId} frontend unloaded after disabling` }).toBeUndefined();
 }

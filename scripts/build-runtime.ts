@@ -41,12 +41,12 @@ import { sealBuildSession } from '../build/build-metadata.ts';
  * declared `suite`. The commands themselves live in `lib/runtime-build-legs.ts`, which says why.
  */
 import { boundedSpawn } from './lib/bounded-spawn.ts';
-import { RUNTIME_BUILD_LEGS, BUILD_TIMEOUT } from './lib/runtime-build-legs.ts';
+import { RUNTIME_BUILD_LEGS, BUILD_BUDGET } from './lib/runtime-build-legs.ts';
 import { schedule } from './lib/chain-schedule.ts';
 import { box } from './lib/core-budget.ts';
 import { exitOnEpipe } from './lib/exit-on-epipe.ts';
 import { asCount, parseFlags } from './lib/measure.ts';
-import { TIMEOUT_MS, timedOutBecause } from './lib/step-timeouts.ts';
+import { BUDGET_MS, whyKilled } from './lib/step-budgets.ts';
 
 exitOnEpipe();
 
@@ -75,7 +75,7 @@ const result = await schedule({
   skip: () => false,
   async run(leg) {
     const [command, ...args] = leg.command.split(' ');
-    // `BUILD_TIMEOUT` is declared beside the legs so the chain's copy of this step reads the same one
+    // `BUILD_BUDGET` is declared beside the legs so the chain's copy of this step reads the same one
     const env = leg.heapMb === undefined ? process.env : {
       ...process.env,
       NODE_OPTIONS: [process.env.NODE_OPTIONS, `--max-old-space-size=${leg.heapMb}`].filter(Boolean).join(' '),
@@ -84,7 +84,7 @@ const result = await schedule({
     const npmCli = command === 'npm' ? process.env.npm_execpath : undefined;
     if (command === 'npm' && !npmCli) throw new Error('Run runtime builds with npm run build:runtime');
     const outcome = await boundedSpawn(npmCli ? process.execPath : command!, npmCli ? [npmCli, ...args] : args,
-      TIMEOUT_MS[BUILD_TIMEOUT].ms, { env });
+      BUDGET_MS[BUILD_BUDGET].ms, { env });
     done.set(leg.name, outcome);
     // One line as each finishes, so four concurrent bundlers are not one silence. Completion order, since
     // that is what progress is; the failures below are in declared order, which is what reading wants.
@@ -97,7 +97,7 @@ const failed = RUNTIME_BUILD_LEGS.filter((leg) => (done.get(leg.name)?.code ?? 0
 for (const leg of failed) {
   const outcome = done.get(leg.name)!;
   const why = outcome.timedOut === true
-    ? timedOutBecause({ what: leg.name, timeout: BUILD_TIMEOUT, stalled: outcome.stalled })
+    ? whyKilled({ what: leg.name, budget: BUILD_BUDGET, stalled: outcome.stalled })
     : `${leg.name} failed (exit ${outcome.code})`;
   process.stderr.write(`\n${'─'.repeat(72)}\n${why}\n${'─'.repeat(72)}\n${outcome.output}\n`);
 }

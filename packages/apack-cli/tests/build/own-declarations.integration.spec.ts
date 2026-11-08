@@ -9,6 +9,8 @@ import { createPackRegistry, readPackBuild, stagePack } from '@apackdev/host/pac
 import { loadSingleExternalPack } from '@apackdev/host/packs/runtime';
 import { createPackBuilder, type PackBuilder } from '../../src/build/build-process.ts';
 import { inspectPack } from '../../src/commands/info.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
+import { fromNow, processWork, workSignal } from '@apackdev/sdk/progress';
 
 startTestRuntime({ appVersion: '1.0.0' });
 const roots: string[] = [];
@@ -21,7 +23,7 @@ afterEach(async () => {
   delete (globalThis as Record<string, unknown>).__ownDeclarationsLoaded;
 });
 
-it('preserves owned names through authoring, compiled snapshots, source-free discovery and runtime loading', async ({ signal }) => {
+it('preserves owned names through authoring, compiled snapshots, source-free discovery and runtime loading', { meta: cpuBudget(120_000 + 20_000) }, async ({ signal }) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-own-declarations-')); roots.push(root);
   const own = <T>(value: T) => Object.fromEntries([['__proto__', value]]);
   packFixture({ at: root, nodeModules: path.join(REPO_ROOT, 'node_modules'),
@@ -37,7 +39,8 @@ it('preserves owned names through authoring, compiled snapshots, source-free dis
     } });
   vi.spyOn(process, 'cwd').mockReturnValue(root);
   builder = createPackBuilder(root);
-  await builder.build({ signal: AbortSignal.any([signal, AbortSignal.timeout(120_000)]) });
+  const bounded = workSignal({ work: fromNow(processWork(process.pid)), ceilingMs: 120_000, fallbackMs: 120_000 });
+  try { await builder.build({ signal: AbortSignal.any([signal, bounded.signal]) }); } finally { bounded.stop(); }
   await builder.close();
   const built = readPackBuild(path.join(root, 'dist'));
   expect(built.snapshot.provenance?.entities?.Note).toBe('own-declarations');
@@ -56,4 +59,4 @@ it('preserves owned names through authoring, compiled snapshots, source-free dis
   expect(Object.hasOwn(loaded.registration.services!, '__proto__')).toBe(true);
   expect(loaded.registration.services!['__proto__']).toMatchObject({ marker: 'owned service' });
   expect(fs.existsSync(path.join(installed, 'src'))).toBe(false);
-}, 120_000 + 20_000);
+});

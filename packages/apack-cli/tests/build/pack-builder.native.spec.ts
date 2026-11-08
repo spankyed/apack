@@ -3,8 +3,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { afterEach, expect, it, vi } from 'vitest';
 import * as installation from '../../src/build/compiler-installation.ts';
 import * as checkout from '../../src/build/checkout-packages.ts';
@@ -13,8 +11,11 @@ import { _declarationRevision, PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build'
 import { PACK_LAYOUT, readPackBuild, sealPackBuild } from '@apackdev/host/packs';
 import { packInputsHash } from '@apackdev/host/build/pack-inputs';
 import { createPackBuilder, type PackBuilder } from '../../src/build/build-process.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
+import { _settles } from '@apackdev/sdk/testing/waiting';
 
-const execFileAsync = promisify(execFile);
+const execFileAsync = execFileWhileWorking;
 
 function stopDescendant(pid: number) {
   try { process.kill(pid, 'SIGKILL'); }
@@ -156,7 +157,7 @@ it('drains an interrupted frontend startup before removing its compiler and writ
   fs.writeFileSync(path.join(pack, '.apack/frontend-hang'), '');
   const refused = expect(builder.serveFrontend(() => {})).rejects.toMatchObject({ name: 'AbortError' });
   const record = path.join(pack, '.apack/frontend-starting.json');
-  await vi.waitFor(() => expect(fs.existsSync(record)).toBe(true), { timeout: 5_000 });
+  await _settles(() => expect(fs.existsSync(record)).toBe(true));
   const { pid, directory } = JSON.parse(fs.readFileSync(record, 'utf8'));
   expect(fs.existsSync(directory)).toBe(true);
   expect(fs.existsSync(fileURLToPath(accepted.bin))).toBe(true);
@@ -167,7 +168,7 @@ it('drains an interrupted frontend startup before removing its compiler and writ
   expect(fs.existsSync(fileURLToPath(accepted.bin))).toBe(true);
 });
 
-it('cancels a frontend input check before retiring its compiler and workspace', async () => {
+it('cancels a frontend input check before retiring its compiler and workspace', { meta: cpuBudget(15_000 + 15_000) }, async () => {
   const { pack, builder, report } = fixture();
   await builder.build();
   const accepted = report();
@@ -177,14 +178,14 @@ it('cancels a frontend input check before retiring its compiler and workspace', 
   fs.writeFileSync(path.join(pack, '.apack/frontend-input-hang'), '');
   const refused = expect(builder.build()).rejects.toMatchObject({ name: 'AbortError' });
   // A bound on a hang: the build reaches its frontend input check after starting a worker, seconds on a two-core runner
-  await vi.waitFor(() => expect(fs.existsSync(path.join(pack, '.apack/frontend-input-requested'))).toBe(true), { timeout: 15_000 });
+  await _settles(() => expect(fs.existsSync(path.join(pack, '.apack/frontend-input-requested'))).toBe(true));
   const { pid, directory } = JSON.parse(fs.readFileSync(path.join(pack, '.apack/frontend-starting.json'), 'utf8'));
   await builder.close();
   await refused;
   expect(() => process.kill(pid, 0)).toThrow();
   expect(fs.existsSync(directory)).toBe(false);
   expect(fs.existsSync(fileURLToPath(accepted.bin))).toBe(true);
-}, 15_000 + 15_000);
+});
 
 it('refuses an unresponsive frontend freshness check and allows its later recovery', async () => {
   const { pack, builder } = fixture();
@@ -296,7 +297,7 @@ it('stops its worker before removing the compiler on close', async () => {
   const { compiler, pack, builder, report } = fixture();
   const captured = await prepareCompiler(compiler);
   const running = builder.build({ args: ['--wait'] });
-  await vi.waitFor(() => expect(fs.existsSync(path.join(pack, '.apack/built.json'))).toBe(true), { timeout: 5_000 });
+  await _settles(() => expect(fs.existsSync(path.join(pack, '.apack/built.json'))).toBe(true));
   const active = report();
   const dispose = captured.dispose;
   const disposal = vi.spyOn(captured, 'dispose').mockImplementation(async () => {
@@ -381,7 +382,7 @@ it('force-stops a compiler that ignores cancellation before releasing its inputs
   const { compiler, pack, builder, report } = fixture();
   await prepareCompiler(compiler);
   const running = builder.build({ args: ['--wait', '--ignore-term'] });
-  await vi.waitFor(() => expect(fs.existsSync(path.join(pack, '.apack/built.json'))).toBe(true), { timeout: 5_000 });
+  await _settles(() => expect(fs.existsSync(path.join(pack, '.apack/built.json'))).toBe(true));
   const active = report();
   const stopped = expect(running).rejects.toMatchObject({ name: 'AbortError' });
   await builder.close();

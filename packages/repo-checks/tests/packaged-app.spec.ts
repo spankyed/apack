@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { execFileSync, spawnSync } from 'node:child_process';
 import { afterEach, expect, it, vi } from 'vitest';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { packagedOptions, selectPackagedApp, resetTargets, startPackagedApp, verifyPackagedSigning, REPO_ROOT } from '../../../scripts/lib/packaged-app.ts';
 import { resolveBuildMetadata } from '../../../build/build-metadata.ts';
 
@@ -31,7 +31,7 @@ it('selects local previews and refuses mismatched channels and unknown arguments
   expect(() => packagedOptions(['--beta'])).toThrow();
   expect(() => selectPackagedApp({ channel: 'preview', app: path.join(root, 'missing.app') })).toThrow(/No preview app/);
 });
-it.skipIf(process.platform !== 'darwin')('limits reset to selected data and preserves builds, diagnostics and other profiles', () => {
+it.skipIf(process.platform !== 'darwin')('limits reset to selected data and preserves builds, diagnostics and other profiles', async () => {
   const { root, app } = fixture();
   const data = path.join(root, 'preview-data');
   const other = path.join(root, 'other-data');
@@ -40,7 +40,7 @@ it.skipIf(process.platform !== 'darwin')('limits reset to selected data and pres
   const selected = selectPackagedApp({ channel: 'preview', app, dataDir: data });
   expect(resetTargets(selected)).toContain(data);
   expect(() => resetTargets({ ...selected, context: { ...selected.context, userDataDir: os.homedir() } })).toThrow(/protected/);
-  execFileSync(process.execPath, ['--import', 'tsx', path.join(REPO_ROOT, 'scripts/packaged-app.ts'), 'reset', '--channel', 'preview', '--app', app, '--data-dir', data]);
+  await execFileWhileWorking(process.execPath, ['--import', 'tsx', path.join(REPO_ROOT, 'scripts/packaged-app.ts'), 'reset', '--channel', 'preview', '--app', app, '--data-dir', data]);
   expect(fs.existsSync(data)).toBe(false);
   for (const dir of [other, diagnostics, app]) expect(fs.existsSync(dir)).toBe(true);
 });
@@ -54,7 +54,7 @@ it.skipIf(process.platform === 'win32')('preserves the app exit status and captu
   expect(fs.readFileSync(log, 'utf8')).toContain('node-mode=unset');
 });
 
-it.skipIf(process.platform !== 'darwin')('collects the selected bundle and profile rather than the installed production app', () => {
+it.skipIf(process.platform !== 'darwin')('collects the selected bundle and profile rather than the installed production app', async () => {
   const { root, app } = fixture();
   const selected = selectPackagedApp({ channel: 'preview', app, dataDir: path.join(root, 'data') });
   const server = path.join(selected.appDir, 'packages/api/dist/server.js');
@@ -63,7 +63,7 @@ it.skipIf(process.platform !== 'darwin')('collects the selected bundle and profi
   fs.writeFileSync(path.join(app, 'Contents/Info.plist'), '<plist/>');
   fs.mkdirSync(selected.logsDir, { recursive: true });
   fs.writeFileSync(path.join(selected.logsDir, 'main.log'), 'preview-log');
-  const output = execFileSync(process.execPath, ['--import', 'tsx', path.join(REPO_ROOT, 'scripts/packaged-app.ts'), 'diagnostics', '--channel', 'preview', '--app', app, '--data-dir', selected.context.userDataDir], { encoding: 'utf8' });
+  const { stdout: output } = await execFileWhileWorking(process.execPath, ['--import', 'tsx', path.join(REPO_ROOT, 'scripts/packaged-app.ts'), 'diagnostics', '--channel', 'preview', '--app', app, '--data-dir', selected.context.userDataDir]);
   const out = output.trim().split('\n').at(-1)!;
   expect(out.startsWith(path.join(REPO_ROOT, 'diagnostics/preview') + path.sep)).toBe(true);
   roots.push(out);
@@ -89,17 +89,22 @@ it('reports any signing failure even if the later assessments succeed', () => {
   expect(verifyPackagedSigning(selected, () => {})).toEqual([]);
 });
 
-it.skipIf(process.platform !== 'darwin')('returns a failing exit code from the signing command when the last check succeeds', () => {
+it.skipIf(process.platform !== 'darwin')('returns a failing exit code from the signing command when the last check succeeds', async () => {
   const { root, app } = fixture();
   const bin = path.join(root, 'bin');
   fs.mkdirSync(bin);
   for (const command of ['codesign', 'xcrun', 'spctl']) {
     fs.writeFileSync(path.join(bin, command), `#!/bin/sh\nexit ${command === 'codesign' ? 1 : 0}\n`, { mode: 0o755 });
   }
-  const result = spawnSync(process.execPath, ['--import', 'tsx', path.join(REPO_ROOT, 'scripts/packaged-app.ts'), 'verify-signing', '--channel', 'preview', '--app', app], {
-    encoding: 'utf8', env: { ...process.env, PATH: bin + path.delimiter + process.env.PATH },
-  });
-  expect(result.status).toBe(1);
+  let result: { code?: unknown; stdout: string; stderr: string };
+  try {
+    result = await execFileWhileWorking(process.execPath, ['--import', 'tsx', path.join(REPO_ROOT, 'scripts/packaged-app.ts'), 'verify-signing', '--channel', 'preview', '--app', app], {
+      env: { ...process.env, PATH: bin + path.delimiter + process.env.PATH },
+    });
+  } catch (error) {
+    result = error as { code: unknown; stdout: string; stderr: string };
+  }
+  expect(result.code).toBe(1);
   expect(result.stdout).toContain('Gatekeeper');
   expect(result.stderr).toContain('Code signature');
 });

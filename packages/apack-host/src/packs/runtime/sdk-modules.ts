@@ -18,6 +18,7 @@ import * as _apackdev_sdk_helpers from '@apackdev/sdk/helpers';
 import * as _apackdev_sdk_ids from '@apackdev/sdk/ids';
 import * as _apackdev_sdk_logger from '@apackdev/sdk/logger';
 import * as _apackdev_sdk_models from '@apackdev/sdk/models';
+import * as _apackdev_sdk_progress from '@apackdev/sdk/progress';
 import * as _apackdev_sdk_repositories from '@apackdev/sdk/repositories';
 import * as _apackdev_sdk_runtime from '@apackdev/sdk/runtime';
 import * as _apackdev_sdk_services from '@apackdev/sdk/services';
@@ -48,6 +49,7 @@ export const SHARED_INSTANCE_MODULES: Readonly<Record<string, unknown>> = {
   '@apackdev/sdk/ids': _apackdev_sdk_ids,
   '@apackdev/sdk/logger': _apackdev_sdk_logger,
   '@apackdev/sdk/models': _apackdev_sdk_models,
+  '@apackdev/sdk/progress': _apackdev_sdk_progress,
   '@apackdev/sdk/repositories': _apackdev_sdk_repositories,
   '@apackdev/sdk/runtime': _apackdev_sdk_runtime,
   '@apackdev/sdk/services': _apackdev_sdk_services,

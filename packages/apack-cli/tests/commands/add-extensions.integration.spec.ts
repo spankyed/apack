@@ -13,6 +13,7 @@ import { generateEntries } from '../../src/commands/generate-entries';
 import { packRuleProblems } from '../../src/build/pack-rules.ts';
 import { callCli, typecheckPack } from '../_support/pack-builds.ts';
 import { runCommand } from '../_support/run-command.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 const BIN = path.join(REPO_ROOT, 'node_modules', '.bin');
@@ -68,7 +69,7 @@ describe('apack pack add step', () => {
     expect(form).toMatch(/'update-node': \[updates: Record<string, unknown>\];/);
   });
 
-  it('generates flow helpers for the kebab-case step that typecheck with tsc', async () => {
+  it('generates flow helpers for the kebab-case step that typecheck with tsc', { meta: cpuBudget(3 * 60_000 + 20_000) }, async () => {
     await add('step', ['my-other-step'], pack);
     const manifest = readManifest();
     manifest.extensions.steps['my-step'].dsl = { primaryField: 'label' };
@@ -91,7 +92,7 @@ describe('apack pack add step', () => {
     const tsc = await typecheckPack(pack);
     fs.rmSync(path.join(pack, 'src/flow-helpers-usage.ts'));
     expect(tsc.code, tsc.output).toBe(0);
-  }, 3 * 60_000 + 20_000);
+  });
 });
 
 describe('apack pack add step in a pack without steps', () => {
@@ -119,7 +120,7 @@ describe('apack pack add step in a pack without steps', () => {
     expect(fs.existsSync(path.join(bare, 'src/extensions/steps/ping/build.ts'))).toBe(true);
   });
 
-  it('scaffolds a hyphenated trigger with declared track metadata and checked callbacks', async () => {
+  it('scaffolds a hyphenated trigger with declared track metadata and checked callbacks', { meta: cpuBudget(3 * 60_000 + 20_000) }, async () => {
     // Its own scaffolded pack rather than the shared one: `init` is what writes the tsconfig `typecheckPack`
     // needs, and a trigger added to the shared pack would join the `NodeEntity` union another case pins
     const triggerPack = path.join(tmp, 'trigger-pack');
@@ -144,7 +145,7 @@ describe('apack pack add step in a pack without steps', () => {
       .toContain('export function heartBeat(heartBeat: string');
     const tsc = await typecheckPack(triggerPack);
     expect(tsc.code, tsc.output).toBe(0);
-  }, 3 * 60_000 + 20_000);
+  });
 
   it('refuses a step type the manifest already declares, leaving the manifest as it was', async () => {
     const bare = path.join(tmp, 'bare-pack');
@@ -155,7 +156,7 @@ describe('apack pack add step in a pack without steps', () => {
 });
 
 describe('apack pack add artifact and block', () => {
-  it('scaffolds an artifact viewer taking artifact, declared with its icon and viewer', async () => {
+  it('scaffolds an artifact viewer taking artifact, declared with its icon and viewer', { meta: cpuBudget(2 * 60_000 + 20_000) }, async () => {
     await add('artifact', ['chart'], pack);
     await add('artifact', ['table', '--icon', 'Table2'], pack);
 
@@ -167,7 +168,7 @@ describe('apack pack add artifact and block', () => {
       chart: { icon: 'FileText', fe: 'src/extensions/artifacts/viewers/chart-artifact.vue' },
       table: { icon: 'Table2', fe: 'src/extensions/artifacts/viewers/table-artifact.vue' },
     });
-  }, 2 * 60_000 + 20_000);
+  });
 
   it('refuses an artifact type the manifest already declares, leaving the manifest as it was', async () => {
     const before = readManifest();
@@ -175,7 +176,7 @@ describe('apack pack add artifact and block', () => {
     expect(readManifest()).toEqual(before);
   });
 
-  it('scaffolds display blocks taking their props and input blocks taking disabled/response, emitting submit/cancel', async () => {
+  it('scaffolds display blocks taking their props and input blocks taking disabled/response, emitting submit/cancel', { meta: cpuBudget(2 * 60_000 + 20_000) }, async () => {
     await add('block', ['rating'], pack);
     await add('block', ['color-picker', '--input'], pack);
 
@@ -191,7 +192,7 @@ describe('apack pack add artifact and block', () => {
       'rating': { fe: 'src/extensions/blocks/display/RatingBlock.vue' },
       'color-picker': { kind: 'input', fe: 'src/extensions/blocks/input/ColorPickerInput.vue' },
     });
-  }, 2 * 60_000 + 20_000);
+  });
 
   it('refuses a block type the manifest already declares, leaving the manifest as it was', async () => {
     const before = readManifest();
@@ -207,7 +208,7 @@ describe('apack pack add artifact and block', () => {
 });
 
 describe('apack pack add migration', () => {
-  it('declares each migration under its version line and the version it targets, which the pack entry registers and tsc accepts', async () => {
+  it('declares each migration under its version line and the version it targets, which the pack entry registers and tsc accepts', { meta: cpuBudget(6 * 60_000 + 20_000) }, async () => {
     for (const args of [
       ['0.2.0'], ['--version', '0.10.1'],
       // A migration targets a release, so a prerelease files under the release it belongs to.
@@ -238,9 +239,9 @@ describe('apack pack add migration', () => {
     expect(entry).toContain("    pack: [\n      { target: '0.2.0', description: \"Describe what this migration changes\", up: __migration_pack_0_2_0 },\n      { target: '0.10.1', description: \"Describe what this migration changes\", up: __migration_pack_0_10_1 },\n      { target: '0.11.0', description: \"Describe what this migration changes\", up: __migration_pack_0_11_0 },\n    ],");
     const tsc = await typecheckPack(pack);
     expect(tsc.code, tsc.output).toBe(0);
-  }, 6 * 60_000 + 20_000);
+  });
 
-  it('refuses a version it already declares on that line, leaving the manifest as it was', async () => {
+  it('refuses a version it already declares on that line, leaving the manifest as it was', { meta: cpuBudget(3 * 60_000 + 20_000) }, async () => {
     const before = read('apack.json');
     await expect(add('migration', ['0.2.0'], pack)).rejects.toThrow('Migration "0.2.0" already exists in manifest under "pack"');
     expect(read('apack.json')).toBe(before);
@@ -257,7 +258,7 @@ describe('apack pack add migration', () => {
     expect(entry).toContain("import { up as __migration_pack_0_2_0 } from '../migrations/0.2.0.ts';");
     const tsc = await typecheckPack(pack);
     expect(tsc.code, tsc.output).toBe(0);
-  }, 3 * 60_000 + 20_000);
+  });
 
   it('refuses a version that is not one a migration can target, before writing anything', async () => {
     const before = read('apack.json');

@@ -11,12 +11,12 @@
 // volume of its own, where the container builds its Linux binding. The command's exit code and output pass straight
 // through.
 import { spawn, spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PACKAGES_PREBUILT_ENV, REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { linuxTestInvocation } from './lib/linux-native-scratch.ts';
-import { CHAIN_LOCK } from './lib/chain-lock.ts';
+import { BUDGET_MS } from './lib/step-budgets.ts';
 import { oneRustToolchain, pinnedChannel, rustCheckoutsForRun, vendoredCheckouts } from './lib/vendored-checkouts.ts';
 
 const DOCKERFILE = path.join(REPO_ROOT, 'scripts', 'linux', 'Dockerfile');
@@ -109,6 +109,9 @@ const FILTERS = [
   ...['api', 'main', 'preload', 'renderer'].map(pkg => `--exclude=/packages/${pkg}/dist`),
   '--exclude=/build-manifest.json', '--exclude=/build-integrity.json',
   '--exclude=/.apack/performance',
+  // Scratch, at any depth: a test run's temp dirs and a package build's staging, which other chain steps create and
+  // remove while this copy runs, so a file in one vanishes mid-copy and rsync exits 24
+  '--exclude=.temp/',
 ];
 
 /**
@@ -232,7 +235,7 @@ refuseWithoutSpace();
 /**
  * What the chain and its pools tell a step about the run it is part of.
  *
- * `PACKAGES_PREBUILT_ENV` is the one `APACK_` variable that must not cross: it says the publishable packages
+ * Two `APACK_` variables must not cross. `APACK_CEILING` is the container's own, set below. `PACKAGES_PREBUILT_ENV` says the publishable packages
  * are already built, which is true of the Mac's tree and false of this volume by construction — the copy
  * below excludes every `packages/<pkg>/dist`, so the container builds its own. Forwarded, it makes the
  * `packages:ensure` in `sync` read that intended absence as a writer rewriting the tree mid-run, and refuse
@@ -240,8 +243,13 @@ refuseWithoutSpace();
  * it survived: the excluded paths persist, so only the first container run in a checkout is refused.
  */
 const forwarded = Object.keys(process.env)
-  .filter((key) => (key.startsWith('APACK_') && key !== PACKAGES_PREBUILT_ENV) || key === 'FORCE_COLOR');
+  .filter((key) => (key.startsWith('APACK_') && key !== PACKAGES_PREBUILT_ENV && key !== 'APACK_CEILING') || key === 'FORCE_COLOR');
 
+/** Where the volume can hold an exclusive lock: the caches, and each pack's `.apack/`, which the sync leaves alone */
+const EXCLUSIVE_LOCK_GLOBS = [
+  '/work/node_modules/.cache/*/*.lock', '/work/node_modules/.cache/*/*/*.lock',
+  '/work/.apack/*.lock', '/work/packages/*/.apack/*.lock', '/work/tests/packs/*/.apack/*.lock',
+];
 const quote = (arg: string): string => `'${arg.replace(/'/g, `'\\''`)}'`;
 /**
  * Copy, install when the lockfile differs from the one the volume last installed from, then make the platform's own
@@ -310,18 +318,11 @@ const run = [
   'fi',
   // Orphans of a container that was killed: this run holds the only slot, so none of them is live
   'rm -f /work/node_modules/.cache/apack-unit-pool/*.lock',
-  // **The chain's own, which this runner's sync phase is what creates**: a container killed mid-sync leaves a
-  // lock naming its hostname, `exclusive-lock.ts` correctly cannot resolve another machine's pid and so
-  // counts it as held, and the sync chain below refuses before the command even starts. Found on 2026-11-07
-  // with a lock from 11:11 that morning still in the volume and `test:native` having never once run since.
-  `rm -f /work/${path.relative(REPO_ROOT, CHAIN_LOCK)}`,
-  // **And every pack's build lock, which is the same class and was found the same day.** The line above
-  // once claimed the chain's was the last one left out; it was not. A container whose `build:default-setup`
-  // is killed — by its own deadline, which is how this was found — leaves `<pack>/.apack/build.lock` naming
-  // that container, and `apack pack build` *waits* on a running build rather than refusing. So the next run
-  // does not fail fast: it waits out its whole 600s budget and is killed for being slow, which reads as a
-  // machine too loaded to build and is nothing of the kind. Two runs were spent on that reading.
-  'rm -f /work/packages/*/.apack/build.lock /work/tests/packs/*/.apack/build.lock',
+  // And every lock `holdExclusiveLock` writes — the chain's, a pack build's, a package build's. Each names its holder's
+  // hostname, and a container's is never seen again, so a lock left by one stopped mid-build counts as held for ever
+  // and refuses every later run. Recognised by that format rather than listed by name, because a list is how the
+  // pack build's lock outlived the chain's being cleared; the volume is excluded from the sync, so nothing else would
+  `for f in ${EXCLUSIVE_LOCK_GLOBS.join(' ')}; do [ -f "$f" ] && grep -q '"machine"' "$f" && rm -f "$f"; done; true`,
   // Keep immutable compiler captures with this checkout's volume instead of discarding them at container exit.
   // The volume lease excludes live users; stale container hostnames/PIDs cannot hold these records forever.
   `rm -f /work/node_modules/.cache/${COMPILER_CACHE}/*.lock /work/node_modules/.cache/${COMPILER_CACHE}/*.users/*`,
@@ -333,18 +334,44 @@ const run = [
 ].join('\n');
 const script = ['set -e', run].join('\n');
 
+/**
+ * The one bound on a run as a whole, on the clock, and as generous as the longest class there is.
+ *
+ * Inside the container CPU time is not a reading of work (`APACK_CEILING`, above), so nothing in there catches a loop
+ * that spins: the watchdog sees a spin as progress. A run from the chain is bounded by the step that started it, but
+ * a direct `npm run test:linux` had nothing, so a spin ran until someone noticed. This is that bound — a backstop,
+ * the way a CI job's own time limit is, which no run that is working reaches however busy the machine is.
+ *
+ * The container is stopped by the name it was given here, not by its client: a `docker run` killed outright leaves its
+ * container running.
+ */
+const CONTAINER = `apack-linux-${process.pid}-${randomBytes(4).toString('hex')}`;
+const RUN_LIMIT_MS = BUDGET_MS.acceptance.ms;
+let ranOut = false;
+
 const child = spawn('docker', [
   // IPv4 loopback only, as on CI's Linux runners: with IPv6 up, `localhost` resolves to ::1 first here, so a
   // dev server binds where a client dialling 127.0.0.1 cannot reach it
-  'run', '--rm', '--init', ...RESOURCE_LIMITS, ...scratchArgs, '--sysctl', 'net.ipv6.conf.all.disable_ipv6=1',
+  'run', '--rm', '--init', '--name', CONTAINER, ...RESOURCE_LIMITS, ...scratchArgs, '--sysctl', 'net.ipv6.conf.all.disable_ipv6=1',
   '-v', `${REPO_ROOT}:/src:ro`, '-v', `${WORK_VOLUME}:/work`, '-v', `${NPM_CACHE_VOLUME}:/root/.npm`,
   '-v', `${ELMDB_CHECKOUT}:/elmdb-src:ro`, '-v', `${ELMDB_VOLUME}:/elmdb`, '-v', `${CARGO_REGISTRY_VOLUME}:/usr/local/cargo/registry`,
   ...gitDirMount(),
   ...forwarded.flatMap((key) => ['-e', key]),
+  // Set here and never forwarded: the VM counts the host's load as its CPU, so a ceiling in it is a clock
+  // (`ceilingEnabled`, `scripts/lib/step-budgets.ts`), whatever the Mac's own setting is
+  '-e', 'APACK_CEILING=off',
   ...(compilerStore ? ['-e', `APACK_COMPILER_STORE=${compilerStore}`] : []),
   IMAGE, 'bash', '-c', script,
 ], { stdio: 'inherit' });
 
 // Docker forwards these to the container's init, which stops the command and lets `--rm` clean up
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => child.kill(signal));
-child.on('close', (code, signal) => { process.exitCode = code ?? (signal === null ? 1 : 128); });
+const limit = setTimeout(() => {
+  ranOut = true;
+  console.error(`\ntest:linux ran past its ${RUN_LIMIT_MS / 3_600_000}h limit on the clock, which only a loop that spins reaches: stopping ${CONTAINER}`);
+  spawnSync('docker', ['stop', '--time', '10', CONTAINER], { stdio: 'ignore' });
+}, RUN_LIMIT_MS);
+child.on('close', (code, signal) => {
+  clearTimeout(limit);
+  process.exitCode = ranOut ? 124 : code ?? (signal === null ? 1 : 128);
+});

@@ -21,7 +21,7 @@ test('an open flow palette follows external step disable and re-enable', async (
       .some((node: { id: string; nodeType?: string; note?: string }) =>
         !node.id.startsWith('temp-') && node.nodeType === 'stamp' && node.note === 'stamped')))
       .toBe(true);
-  }).toPass({ timeout: 5_000 });
+  }).toPass();
   const toggle = () => appPage.evaluate(() => (window as any).applicationState.system.get('host/packs')
     .send({ type: 'UI.TOGGLE_ENABLED', packId: 'e2e-fixture' }));
   const runtime = await acceptedRuntime(appPage, 'e2e-fixture');

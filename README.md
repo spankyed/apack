@@ -31,7 +31,7 @@ itself; external packs have a separate workflow described below.
 
 Requirements:
 
-- Node.js **24 LTS (24.11.0 or newer)**; the root `package.json` declares the supported majors.
+- Node.js **24 LTS (24.12.0 or newer)**; the root `package.json` declares the supported majors. The pack compiler needs 24.12.0: older module hooks reject the CommonJS load result its own hooks pass through.
 - **npm 11 or newer** and Git.
 - Native build tools required by Electron dependencies; see [CLAUDE.md](CLAUDE.md) for repository
   setup and validation guidance, and the [Windows VM guide](docs/references/guides/windows-development-vm.md)

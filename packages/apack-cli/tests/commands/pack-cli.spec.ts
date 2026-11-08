@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { execFileSync } from 'node:child_process';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
 import { PACK_LAYOUT, sealPackBuild } from '@apackdev/host/packs';
 
@@ -161,7 +161,7 @@ describe('pack CLI: install', () => {
 
     const zipPath = path.join(tmpDir, 'pack.zip');
     try {
-      execFileSync('zip', ['-r', zipPath, '.'], { cwd: sourceDir, stdio: 'pipe' });
+      await execFileWhileWorking('zip', ['-r', zipPath, '.'], { cwd: sourceDir });
     } catch {
       console.log('zip command not available, skipping zip install test');
       return;
