@@ -32,7 +32,7 @@ removes the finding rather than fixing it, and names the construction that does.
 | T6 | test | `be/services/terminal.ts` — a shell's exit status decides whether its terminal goes with it, and `restart(id)` starts a new generation under the terminal that is already there (`features/code/be/features/terminal.ts`'s `terminal.RESTART_TERMINAL`; the panel's menu item sends it) | `default-setup/tests/features/code/be/terminal-generations.spec.ts`, six cases; driven: a shell told to `exit 139` keeps its terminal, the restart keeps its id with a new pid and reads generation 2 | the spec, mutation-checked four ways — closing on every exit, reading a signal as clean, not advancing the generation, leaving a restarted terminal marked dead. **The id is the guard**: a restart that minted a new one is what lost the pin, the group and the position, and a case asserts the same id comes back | — |
 | T8 | test | `fe/composables/useTerminalActions.ts` — `customTitle` then `title`; the cwd derivation is the backend's and was being overridden here | `tests/features/code/fe/composables/use-terminal-actions.spec.ts` | the spec: restoring the cwd basename fails the case where a create passed a title |
 | T9 | test | `fe/state.ts` — `moveTerminalToPanel` prunes the group it emptied, as the four other removals in that machine do | `tests/features/code/fe/state.spec.ts` | the spec: dropping the prune fails it |
-| G1 | open | priced, not fixed — see [the pricing](#g1-priced-what-the-throttled-writer-writes-to-ears--2026-11-07) | three streaming runs at 24, 60 and 120 chunks; `ears.write` request bytes on the app database | — | the mechanism and its cost model are measured and the review's 15 MB figure confirmed. **Still open, and in this goal's scope** — the Scope section puts it there explicitly, and the output pipe the review assigns it to is this goal's Phases B and P. What stops it closing here is a design fork nothing settles: the writer alone cannot fix it, since the 80 ms write is what updates the window, so the fix is either a delta feed with the renderer appending, or a durable write at finalize with streaming to the window only — and the second trades a crash mid-stream against the write amplification. D1-D11 settle neither, so it is recorded rather than chosen |
+| G1 | open | priced, not fixed — see [the pricing](#g1-priced-what-the-throttled-writer-writes-to-ears--2026-11-07) | three streaming runs at 24, 60 and 120 chunks; `ears.write` request bytes on the app database | — | the mechanism and its cost model are measured and the review's 15 MB figure confirmed. **Still open, in this goal's scope, and one decision from closing** — see [the decision](#g1-the-one-decision-left--2026-11-08) |
 | F5 | priced | not fixed — `services/terminal.ts:145` writes inside `resize()` | `terminal-resize` scenario: 24 resizes, 24 app writes, 2,112 bytes, 10/10 trials with min = max | — | dissolves in Phase B, whose acceptance names the guard ("a resize writes no application row"). This is its before |
 | F18 | open | found by the resize scenario, not fixed | the scenario's first attempt timed out at `cols: 80` after 24 writes had landed | — | new; recorded in the review. Adjacent to M2 and not the same defect |
 | F4 | priced | not fixed — one `broadcastToSurface` per pty chunk | `terminal-output` scenario: 64 KiB of output → 115 messages, 76,824 bytes, 10/10 trials | — | dissolves in Phase B, whose guard ("N MB of output produces at most M channel messages") now has its before: ~1,840 messages and 1.2 MB per MB |
@@ -552,6 +552,44 @@ a step that waits on a lock inside its own budget is indistinguishable from one 
 timeout message already says *"a timeout alone does not distinguish slow progress from stalled work.
 Inspect the run output before retrying or changing its budget"* — and the run output had the answer in it
 both times.
+
+### G1: the one decision left — 2026-11-08
+
+**An earlier revision of this file called G1 a fork between "a delta feed with the renderer appending" and "a
+durable write at finalize with streaming to the window only". Those are not alternatives — they are the two
+halves of one fix**, and saying otherwise read as two designs to choose between when the real question is
+narrower. What it actually needs is one decision, and the pricing above already gives both of its numbers.
+
+**The question.** Does a streamed reply reach the window as a **feed** — news patching what the window holds,
+with the durable row written on a slower clock — or does it stay as an **EARS write per flush**, which is
+what delivers it today?
+
+**Why it is a decision and not an implementation.** The two authorities disagree, and neither is this goal's
+to overrule:
+
+- `default-setup/CLAUDE.md` puts streaming tokens on a feed: *"a terminal's output and a brain run's
+  `RUN_NODE_SPAWNED`/`RUN_NODE_UPDATED` patch what a window already holds, as streaming tokens would."*
+- The code says the write **is** the channel: `threads/be/views.ts` makes each message its own view and
+  `chat.ts`'s `updateMessageState` records that *"a window showing the message sees it through the message's
+  view, the one view a streamed reply re-runs."*
+- The refactor target's one line that bears on it is a principle, not an answer: EARS stores durable
+  metadata and **not** *"a byte-stream mirror"*.
+
+**What each costs, from the model above** (`bytes ≈ flushes × final size / 2`, `flushes ≈ duration / 80 ms`),
+for the review's 40 KB reply over 60 s:
+
+| | app write bytes | what it risks |
+|---|---|---|
+| Today: a write per 80 ms flush | **15 MB** | nothing; it is what the window reads |
+| Feed, durable write at finalize only | **40 KB** | a crash mid-stream leaves the row empty, where today it holds the last 80 ms snapshot |
+| Feed, durable write every 2 s | **~0.6 MB** | at most 2 s of a reply lost to a crash |
+
+**What is already in place**, so the implementation is small either way: the threads surface already holds its
+views behind its own writes (`ViewWrites`, `@apackdev/sdk/fe`, used in `threads/fe/state.ts`), which is the
+mechanism a feed needs to patch a message the view also delivers.
+
+**Not chosen here.** Constraints say to record a fork this goal's Decisions do not settle rather than choose
+one, and D1–D11 do not reach the chat's delivery channel. This is the row that keeps the table at 52 of 58.
 
 ### The strict chain passes on the pushed state — 2026-11-08
 

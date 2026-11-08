@@ -69,7 +69,7 @@ nothing it had been assigned away to.
 
 | | |
 |---|---|
-| **G1** | **in scope and open.** Priced, its mechanism measured and the review's figure confirmed; what stops it closing is a fork D1–D11 do not settle — a delta feed with the renderer appending, or a durable write at finalize and streaming to the window only, which trades a crash mid-stream against the amplification. Recorded rather than chosen, as Constraints require |
+| **G1** | **in scope, open, and one decision from closing.** Priced, its mechanism measured and the review's 15 MB figure confirmed. What it needs is a single call — a streamed reply reaches the window as a feed with the durable row on a slower clock, or stays an EARS write per flush — on which `default-setup/CLAUDE.md` and the code as written disagree, and which D1–D11 do not reach. [The decision, with what each option costs](../../references/evidence/terminal-ownership.md#g1-the-one-decision-left--2026-11-08): 15 MB today, 40 KB at finalize only, ~0.6 MB on a 2 s clock. Recorded rather than chosen, as Constraints require |
 | G3, G6, G7 | **excluded by Scope**, under *"G2–G7 … their own goal"*: the files move substantially on #372 and most of them dissolve against the process layer rather than needing fixes |
 | F18, T10 | **not review findings.** The review held 55 rows at `98bf6a0935`; these two were found here and added to it, each with what it would cost. F18 is adjacent to M2 and not the same defect; T10's claim needs re-checking against the `pendingTabOrder` guard that already returns early |
 
