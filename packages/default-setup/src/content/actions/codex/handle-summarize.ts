@@ -54,10 +54,9 @@ export async function action(params: Record<string, any>, services: Services) {
     asideContext: 'Summarize from here',
   }).messageId as EntityId;
 
-  const thinking = createThinkingWriter(services, currentMessageId, { intervalMs: 250 });
+  const thinking = createThinkingWriter(services, currentMessageId);
   const writer = createStreamWriter(services, currentMessageId, { intervalMs: 80 });
   const toolActivity = createToolActivityWriter(services, currentMessageId, {
-    intervalMs: 250,
     getThinkingBlock: () => thinking.buildBlock(),
   });
 

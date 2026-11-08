@@ -99,10 +99,10 @@ export async function consumeConversationTurn(turn: ClaudeConversationTurn, ctx:
     return;
   }
   const messageId = initial?.messageId ?? services.chat.sendBlockMessage({ threadId, text: 'Thinking…', blocks: [], forkable: false }).messageId as EntityId;
-  const thinking = initial?.thinking ?? createThinkingWriter(services, messageId, { intervalMs: 250 });
+  const thinking = initial?.thinking ?? createThinkingWriter(services, messageId);
   const writers = initial ?? { messageId, thinking,
     writer: createStreamWriter(services, messageId, { intervalMs: 80 }),
-    toolActivity: createToolActivityWriter(services, messageId, { intervalMs: 250, phase: ctx.phase, getThinkingBlock: () => thinking.buildBlock() }),
+    toolActivity: createToolActivityWriter(services, messageId, { phase: ctx.phase, getThinkingBlock: () => thinking.buildBlock() }),
   };
   services.cli.claudeCode.storeHandle(threadId, turn.handle);
   setRunning(services, threadId, true);
@@ -180,21 +180,25 @@ export async function consumeStream(
 
   /** Finalize the current message and create a new "Thinking…" placeholder. */
   function splitMessage() {
-    writer.finalize(writer.text);
+    // The blocks reach their final state before the message is marked complete. A window drops its live view
+    // of a message on the response timestamp and falls back to the row, so the row has to already hold the
+    // finished block — and with growth written on the row interval, what it holds otherwise is up to one
+    // interval stale.
     finaliseThinking();
-    services.chat.updateMessageState(currentMessageId as any, { forkable: currentMessageHasCliUuid } as any);
     const segmentHadErrors = toolActivity.entries.some(e => e.status === 'error');
     priorSegmentToolCount += toolActivity.entries.length;
     priorSegmentsHadToolErrors ||= segmentHadErrors;
     toolActivity.finalise(segmentHadErrors ? 'error' : 'done');
+    writer.finalize(writer.text);
+    services.chat.updateMessageState(currentMessageId as any, { forkable: currentMessageHasCliUuid } as any);
 
     const msg = services.chat.sendBlockMessage({ threadId, text: 'Thinking…', blocks: [], forkable: false });
     log.debug('message split', { previousId: currentMessageId, nextId: msg.messageId });
-    const newThinking = createThinkingWriter(services, msg.messageId as EntityId, { intervalMs: 250 });
+    const newThinking = createThinkingWriter(services, msg.messageId as EntityId);
     return {
       currentMessageId: msg.messageId as EntityId,
       writer: createStreamWriter(services, msg.messageId as EntityId, { intervalMs: 80 }),
-      toolActivity: createToolActivityWriter(services, msg.messageId as EntityId, { intervalMs: 250, phase, getThinkingBlock: () => newThinking.buildBlock() }),
+      toolActivity: createToolActivityWriter(services, msg.messageId as EntityId, { phase, getThinkingBlock: () => newThinking.buildBlock() }),
       thinking: newThinking,
       currentMessageHasCliUuid: false,
     };

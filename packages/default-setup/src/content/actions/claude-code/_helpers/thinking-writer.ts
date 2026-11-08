@@ -5,7 +5,8 @@ import { isClaudeNarrationSignature } from './native-thinking.ts';
  *
  * Claude Code's extended thinking emits `thinking_delta` events as the model
  * reasons. This writer accumulates the thinking text and pushes a single
- * `thinking` block via `updateMessageState({ blocks })`.
+ * `thinking` block via `updateMessageState({ blocks })`. The block carries all of the text each time, so
+ * that growth is written on the row interval rather than per delta (see `row-interval.ts`).
  *
  * Coordination with ToolActivityWriter: both writers target the `blocks`
  * field, and `updateMessageState` replaces the entire field. The thinking
@@ -18,10 +19,11 @@ import { isClaudeNarrationSignature } from './native-thinking.ts';
 import type { Services, EntityId } from '#generated/services.ts';
 import type { ThinkingBlockProps, ClaudeNativeThinkingMessage } from './thinking-types.ts';
 import { formatDuration } from './tool-activity-label.ts';
+import { ROW_INTERVAL_MS } from './row-interval.ts';
 
 export interface ThinkingWriterOptions {
-  /** Minimum ms between `updateMessageState` calls. Default 250ms. */
-  intervalMs?: number;
+  /** Minimum ms between row writes for growing thinking text. Default {@link ROW_INTERVAL_MS}. */
+  rowIntervalMs?: number;
 }
 
 export interface ThinkingWriter {
@@ -40,7 +42,7 @@ export function createThinkingWriter(
   messageId: EntityId,
   opts: ThinkingWriterOptions = {},
 ): ThinkingWriter {
-  const intervalMs = opts.intervalMs ?? 250;
+  const rowIntervalMs = opts.rowIntervalMs ?? ROW_INTERVAL_MS;
   let buffer = '';
   const native = createClaudeNativeMessageTracker({ separator: '\n\n', completePartial: true });
   let nativeMessages: readonly ClaudeNativeThinkingMessage[] = [];
@@ -52,6 +54,7 @@ export function createThinkingWriter(
   let directWritesEnabled = true;
   let pendingTimer: ReturnType<typeof setTimeout> | null = null;
   let lastFlushAt = 0;
+  let lastWritten: string | undefined;
 
   function buildLabel(): string {
     if (state === 'streaming') return 'Thinking';
@@ -75,16 +78,24 @@ export function createThinkingWriter(
     if (!directWritesEnabled) { writeWithOwner?.(); lastFlushAt = Date.now(); return; }
     const block = buildBlock();
     if (block) {
-      services.chat.updateMessageState(messageId, { blocks: [block] as any });
+      // A block identical to the one already in the row costs a whole write and changes nothing. Both clocks
+      // can land on the same content once the owner holds this block too, and a tool patch that changed
+      // nothing visible does the same.
+      const written = JSON.stringify(block);
+      if (written !== lastWritten) {
+        lastWritten = written;
+        services.chat.updateMessageState(messageId, { blocks: [block] as any });
+      }
     }
     lastFlushAt = Date.now();
   }
 
-  function schedule(): void {
+  /** Growing text goes on the row interval — see {@link ROW_INTERVAL_MS} for why it is not the fast one. */
+  function scheduleRow(): void {
     if (!directWritesEnabled && !writeWithOwner) return;
     if (pendingTimer) return;
     const since = Date.now() - lastFlushAt;
-    const delay = Math.max(0, intervalMs - since);
+    const delay = Math.max(0, rowIntervalMs - since);
     pendingTimer = setTimeout(() => {
       pendingTimer = null;
       writeNow();
@@ -100,7 +111,7 @@ export function createThinkingWriter(
       if (state === 'done') { state = 'streaming'; if (buffer) buffer += '\n\n'; }
       segmentStartedAt ??= Date.now();
       buffer += text;
-      schedule();
+      scheduleRow();
     },
 
     acceptNativeMessage(message): void {
@@ -111,7 +122,8 @@ export function createThinkingWriter(
       }
       if (projected.rows.length > nativeMessages.length && message.uuid && message.text.trim() && isClaudeNarrationSignature(message.signature)) summaries.add(message.uuid);
       nativeMessages = projected.rows.map(row => ({ ...row, ...(summaries.has(row.uuid) ? { isSummary: true as const } : {}) }));
-      writeNow();
+      // A native message is more thinking text arriving, so it is growth like a delta, not a discrete change.
+      scheduleRow();
     },
 
     flush(): void {
