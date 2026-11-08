@@ -292,6 +292,8 @@ Rules that pay for themselves:
   how it fails, another file, or that nothing checks it.
 - **Keep readings; do not decide with them.** A reading that informs a column needs no band, floor or machine
   field; one compared against an edge needs all of them, and the edge can usually be declared instead.
+- **A test that passes only on a quiet machine is a defect.** Prove a timing fix under `npm run stress`, which
+  runs it while busy loops hold the machine: a race that shows only under load passes on a quiet box whatever the fix did.
 - **Load inflates a duration and cannot deflate it.** Gate only on *measured faster than declared* (the
   `@slow:` marker gate); *measured slower* is only ever a report.
 - **A test's budget and its deadline are two numbers, both CPU.** A vitest config gives the guard `DEADLINE_FACTOR`
@@ -401,6 +403,8 @@ npm run measure -- "<cmd>"       # The work a command does (instructions, CPU) o
                                  #   --runs N  --against "<B>"  --trials N  --latency  --busy N  --idle PERCENT  --force
 npm run measure:loop -- "<cmd>"  # How long each process went without turning its event loop, against birpc's 60s
 npm run check:idle               # Is this machine quiet enough to time a latency on (exit 1 below IDLE_FLOOR)
+npm run stress -- [--runs N] [--busy K] [cmd]  # Run a command N times under K busy cores; exit 1 if any run
+                                 # failed. Default: the host unit pool, --all
 npm run soak:watch               # Does an edit made during a watcher pass get picked up? Run on a loaded Mac. Exit 1
                                  # lost, 3 partial (file events stalled); -- --rounds N --max-delay SECONDS
 npm run janitor                  # Hold elmdb's Rust build caches to a budget (-- --dry to preview); janitor:install
