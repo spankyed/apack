@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  asNumber, citation, conditions, coresBusy, cpuTimes, driftedDuring, groupBySignature, idleFrom, IDLE_FLOOR,
+  asNumber, awaitQuiet, citation, conditions, coresBusy, cpuTimes, driftedDuring, groupBySignature, idleFrom, IDLE_FLOOR,
   pairedDelta, parseFlags, rateOf, refusesAsBusy, runOrder,
-  signatureOf, summarise, upperBound,
+  signatureOf, summarise, upperBound, workCitation, workOf,
 } from '../../../scripts/lib/measure.ts';
 
 /**
@@ -170,7 +170,7 @@ describe('the conditions a run happened under', () => {
 
   it('says when the floor was forced, and when the box moved under it', () => {
     expect(conditions({ ...quiet, forced: true })).toContain('forced');
-    expect(conditions({ ...quiet, idles: [0.92, 0.2] })).toContain('drifted');
+    expect(conditions({ ...quiet, idles: [0.92, 0.2] })).toContain('went below the 70% idle floor mid-series');
   });
 
   it('names induced load, in either mode, because only one of them used to', () => {
@@ -184,7 +184,7 @@ describe('the conditions a run happened under', () => {
    * always on is one nobody reads; the idle range says the same thing without crying wolf.
    */
   it('does not call induced load a drift', () => {
-    expect(conditions({ ...quiet, busy: 12, idles: [0.9, 0.01] })).not.toContain('drifted');
+    expect(conditions({ ...quiet, busy: 12, idles: [0.9, 0.01] })).not.toContain('went below');
   });
 
   it('refuses to describe conditions it has no samples for', () => {
@@ -325,3 +325,85 @@ describe('the arguments both measure commands take', () => {
   });
 });
 
+/** What `/usr/bin/time -l` wrote on this Mac for a command that printed `boom` to stderr and exited 3 */
+const TIME_L = [
+  'boom',
+  '        0.04 real         0.02 user         0.00 sys',
+  '            46383104  maximum resident set size',
+  '                   0  average shared memory size',
+  '                   0  average unshared data size',
+  '                   0  average unshared stack size',
+  '                2904  page reclaims',
+  '                 138  page faults',
+  '                   0  swaps',
+  '                   0  block input operations',
+  '                   0  block output operations',
+  '                   0  messages sent',
+  '                   0  messages received',
+  '                   0  signals received',
+  '                   0  voluntary context switches',
+  '                 120  involuntary context switches',
+  '           245458214  instructions retired',
+  '            96475374  cycles elapsed',
+  '            12603776  peak memory footprint',
+].join('\n');
+
+describe('the work a run did, as its wrapper reports it', () => {
+  it('reads instructions and CPU from the rusage block, and leaves the command its own output', () => {
+    const { work, rest } = workOf(TIME_L);
+    expect(work).toEqual({ instructions: 245_458_214, cpuMs: 20 });
+    expect(rest).toBe('boom');
+  });
+
+  it('leaves a failure the signature it had without the wrapper, which trials mode groups by', () => {
+    const bare = { code: 3, stderr: 'boom' };
+    expect(signatureOf({ code: 3, stderr: workOf(TIME_L).rest })).toBe(signatureOf(bare));
+  });
+
+  it('reads no work from output with no report, and leaves it whole', () => {
+    expect(workOf('just the command\nand more')).toEqual({ work: undefined, rest: 'just the command\nand more' });
+  });
+
+  it('reads CPU alone from a block whose instruction line is missing, which an older macOS writes', () => {
+    const older = TIME_L.split('\n').filter((line) => !line.includes('instructions retired')).join('\n');
+    expect(workOf(older).work).toEqual({ cpuMs: 20 });
+  });
+
+  it('reads perf stat on Linux, and nothing from a counter the machine lacks', () => {
+    const counted = 'out\n19938301403,,instructions:u,1000000,100.00,,\n1132.41,msec,task-clock,1132410000,100.00,0.998,CPUs utilized';
+    expect(workOf(counted)).toEqual({ work: { instructions: 19_938_301_403, cpuMs: 1132 }, rest: 'out' });
+    const lacking = '<not supported>,,instructions:u,0,100.00,,\n1132.41,msec,task-clock,1132410000,100.00,,';
+    expect(workOf(lacking).work).toEqual({ cpuMs: 1132 });
+  });
+});
+
+describe('what a measurement of work is quoted as', () => {
+  it('leads with instructions and their range, then CPU, and carries no idle reading because it needs none', () => {
+    expect(workCitation({ instructions: summarise([19_938_301_403, 19_951_534_584]), cpu: summarise([1_130, 1_240]), on: '2026-11-07' }))
+      .toBe('19.94G instructions median of 2 (19.94G-19.95G), 1.2s CPU, 2026-11-07');
+  });
+});
+
+describe('a latency run waiting for a quiet box', () => {
+  const clock = (readings: number[]) => {
+    let at = 0;
+    return { now: () => at, pause: async () => { at += 5_000; }, idle: () => readings.shift() ?? 0 };
+  };
+
+  it('starts at once on a quiet box', async () => {
+    const { now, pause, idle } = clock([0.9]);
+    await expect(awaitQuiet({ floor: 0.7, idle, now, pause })).resolves.toBe(0.9);
+  });
+
+  it('waits through a busy spell and answers the reading that met the floor, saying once that it waits', async () => {
+    const { now, pause, idle } = clock([0.2, 0.3, 0.8]);
+    const told: number[] = [];
+    await expect(awaitQuiet({ floor: 0.7, idle, now, pause, onWait: (reading) => told.push(reading) })).resolves.toBe(0.8);
+    expect(told).toEqual([0.2]);
+  });
+
+  it('refuses once its wait is spent, rather than waiting for ever or at once', async () => {
+    const { now, pause, idle } = clock(Array.from({ length: 200 }, () => 0.1));
+    await expect(awaitQuiet({ floor: 0.7, idle, now, pause, waitMs: 60_000 })).rejects.toThrow(/stayed below the 70% idle floor for 1 minutes/);
+  });
+});

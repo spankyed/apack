@@ -1,9 +1,9 @@
 /**
- * Whether this machine is quiet enough to measure on: `npm run check:idle`.
+ * Whether this machine is quiet enough to time a latency on: `npm run check:idle`.
  *
- * **The command it gates refuses before it runs anything, and that refusal costs a round trip.**
- * `npm run measure` and `npm run measure:loop` both check `IDLE_FLOOR` and stop; asking first is cheaper
- * than starting a five-run A/B and being told no. One floor, because there is one kind of answer left:
+ * **Only a wall time needs it.** `npm run measure` counts the work a run did, which load does not move, and asks for
+ * the floor only with `--latency` — where it waits for it rather than refusing — and `npm run measure:loop` checks it
+ * and stops. Asking first is cheaper than starting a five-run latency A/B and waiting on the box. One floor, because there is one kind of answer left:
  * every command that asks prints its reading and records nothing (`measure.ts`'s `IDLE_FLOOR` says why).
  *
  * Exits non-zero below the floor, so it composes with what it is a pre-flight for:
@@ -26,8 +26,8 @@ const idle = idleNow();
 const asPercent = (share: number): string => `${Math.round(share * 100)}%`;
 const quiet = idle >= IDLE_FLOOR;
 
-process.stdout.write(`${asPercent(idle)} idle — ${quiet ? 'quiet enough to measure on' : 'too busy to measure on'}\n`);
-process.stdout.write(`  measuring needs ${asPercent(IDLE_FLOOR)} (measure, measure:loop)\n`);
+process.stdout.write(`${asPercent(idle)} idle — ${quiet ? 'quiet enough to time a latency on' : 'too busy to time a latency on'}\n`);
+process.stdout.write(`  a latency needs ${asPercent(IDLE_FLOOR)} (measure --latency, measure:loop); work (measure) needs none\n`);
 // **The caveat belongs in the output, not only in the doc above.** A verdict shaped like a promise is what
 // talks a reader past the floor: observed 2026-10-07, this printed 84% moments after a chain run.
 process.stdout.write('  A reading of this instant, and a long command is its own load: this says whether to '
