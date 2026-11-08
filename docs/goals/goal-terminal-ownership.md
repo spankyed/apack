@@ -363,8 +363,14 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 - **L3 is dissolved**: a closed terminal's row is trashed, which is the one way a Terminal row ends. The
   annotation it replaced — `active: false` and a `closedAt` nothing read — left a row behind for every
   terminal the user had ever opened.
-- **Phase H is done except for one requirement, and that requirement rests on a fork this goal does not
-  settle.** M1, M2, M4 and M5 are closed as dissolved with guards; a second window observes without sizing
+- **Phase H has two requirements open, not one.** The handoff said "done except for one requirement" and
+  that was wrong: beside the API restart, *"a crashed shell is a new generation whose predecessor's
+  transcript is labelled history"* is unbuilt — `generation` appears nowhere in the broker, the host
+  service or the pack. **T6 is waiting on that half**, not on the lifetime half, so closing the fork does
+  not release it.
+  **The fork itself is now settled** — see the Decisions entry *"A session's lifetime is bound to a handle
+  the app holds"*, decided 2026-11-08 with the user's authorization after it had been recorded and stopped
+  on as this goal requires. M1, M2, M4 and M5 are closed as dissolved with guards; a second window observes without sizing
   the pty (`sizedBy`, the connection that opened it) and without sending it anything (attaching writes
   nothing and injects nothing); and attach, detach and termination are already distinct — a host releases its
   attachment when its view closes, and only `terminate` ends a session.
@@ -660,6 +666,34 @@ snapshot-format risk is what to weigh against it.
 settle a narrower choice by trying it — Phase S picks between two VT crates that way, which is a deliverable
 rather than an open question. An agent that reaches any other fork this document does
 not settle has found a gap in it, and should record the gap rather than choose.
+
+- **A session's lifetime is bound to a handle the app holds, not to the connection that asked for it.**
+  This settles the fork Phase H stopped at — *what ends a session when its client does not come back* —
+  which was recorded as unsettled and is now decided, with the user's authorization, on 2026-11-08.
+
+  **Spawning is not lifetime ownership, and conflating them is what made this look like a trade.** The API
+  keeps everything this goal assigns it: spawn, socket discovery, crash-restart, one broker per data dir.
+  What moves is only the **backstop** — who guarantees the shells die when the app does — and that has to be
+  a process outliving the API, which leaves Electron main. So main opens one connection and declares it the
+  **lifetime** connection; the broker ends every session when that connection closes.
+
+  **The kernel does the reaping, which is why this is not "main kills it on `will-quit`".** A descriptor
+  closes on process death however the process died — quit, crash, `SIGKILL` — so there is no shutdown
+  handler to skip and no path that has to remember. That is the same move `tree.rs` already makes one level
+  down with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, whose comment is the argument: *a kill, a disconnect and a
+  broker that crashes all reap it by the same mechanism rather than by three paths remembering to*.
+
+  **Absent a lifetime connection the broker keeps today's behaviour** — the last client leaving ends the
+  sessions. So persistence is something a caller takes responsibility for rather than something it can get
+  by accident, and the broker run standalone (its own suite, tooling, `apack pack dev`) is unchanged. A
+  wrong call here orphans nothing; it only fails to persist.
+
+  **Why not the other two.** *Keep until an explicit kill* leaves a user who quits the app with shells
+  running until they reboot. *A grace period* is a figure with no decision behind it, which this repo
+  rejects on its own terms, and an API restart slower than the grace loses the session anyway. This needs no
+  number at all. VS Code's pty host is owned by its main process for the same reasons; tmux is the opposite
+  and is the right counter-example to check against, because persistence across the app's own death is
+  tmux's product and not an editor's.
 
 ## Phases
 
