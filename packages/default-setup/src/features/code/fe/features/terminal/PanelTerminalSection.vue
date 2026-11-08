@@ -54,8 +54,19 @@
       <!-- Terminal view (left) -->
       <div class="flex-1 min-w-0">
         <TrackedContextMenuRoot v-if="activeTerminalInfo">
+          <!--
+            **The container is a child of the trigger's element, never the element itself.** `as-child` makes
+            reka-ui clone this trigger's child, and a template ref bound on the element it clones is bound for
+            the first instance of this component in the process and no later one: a remount reaches
+            `attachTerminal` with `container` undefined, returns at its own guard and draws nothing — no error,
+            no warning, a blank panel until the window is reloaded. A `SurfaceScope` replacement or this
+            section being `v-if`'d out and back is such a remount. `TerminalView.vue` was never affected
+            because its ref is a grandchild of the trigger, which is the shape this now matches.
+          -->
           <ContextMenuTrigger as-child>
-            <div ref="container" class="w-full h-full bg-[#1e1e1e]"></div>
+            <div class="w-full h-full">
+              <div ref="container" class="w-full h-full bg-[#1e1e1e]"></div>
+            </div>
           </ContextMenuTrigger>
           <ContextMenuPortal>
             <ContextMenuContent :class="MENU_CONTENT_CLASS" :side-offset="5">

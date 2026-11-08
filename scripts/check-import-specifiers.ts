@@ -549,11 +549,20 @@ export function findRawGitListings(dirs: readonly string[] = CHECKED_DIRS, root 
 const EMULATOR_OWNER = 'packages/default-setup/src/features/code/fe/utils/terminal-pool.ts';
 
 /**
- * And its own spec, which stands in for the emulator so the pool's bookkeeping can be driven without a canvas
- * or a GL context. It names the emulator because it is replacing it, which is the one other place the
- * dependency legitimately appears.
+ * And the specs that **stand in** for the emulator, so a terminal's bookkeeping and the components that draw
+ * one can be driven without a canvas or a GL context. Each names the emulator because it is replacing it,
+ * which is the one other way the dependency legitimately appears: `vi.mock` takes a literal specifier, and
+ * mocking the pool instead would turn every case here into "the component called `release()`" — the shape of
+ * a test that restates the implementation instead of observing it.
+ *
+ * A listed path that has stopped naming an emulator is reported too, so this allowance cannot outlive the
+ * stand-in it was added for.
  */
-const EMULATOR_OWNER_SPEC = 'packages/default-setup/tests/features/code/fe/utils/terminal-pool.frontend.spec.ts';
+const EMULATOR_STAND_INS = [
+  'packages/default-setup/tests/features/code/fe/utils/terminal-pool.frontend.spec.ts',
+  'packages/default-setup/tests/features/code/fe/canvas/terminal-view.frontend.spec.ts',
+  'packages/default-setup/tests/features/code/fe/features/terminal/panel-terminal-section.frontend.spec.ts',
+] as const;
 
 /**
  * `file:line: @xterm/…` for each import of the emulator outside `EMULATOR_OWNER`, and the owner itself when it
@@ -566,7 +575,7 @@ const EMULATOR_OWNER_SPEC = 'packages/default-setup/tests/features/code/fe/utils
 export function findEmulatorImports(dirs: readonly string[] = PACK_CODE_DIRS, root = repoRoot): string[] {
   const rule: Rule = (node) => (ts.isStringLiteralLike(node) && node.text.startsWith('@xterm/')
     ? [node.text] : undefined);
-  const allowed = new Set([EMULATOR_OWNER, EMULATOR_OWNER_SPEC]);
+  const allowed = new Set<string>([EMULATOR_OWNER, ...EMULATOR_STAND_INS]);
   const outside = filesUnder(dirs, root)
     .filter((file) => !allowed.has(repoRelative(root, file)))
     .flatMap((file) => findInFiles([file], root, rule));
@@ -578,9 +587,16 @@ export function findEmulatorImports(dirs: readonly string[] = PACK_CODE_DIRS, ro
   // somewhere, and everywhere else is a finding.
   const owner = path.join(root, EMULATOR_OWNER);
   const ownerStopped = fs.existsSync(owner) && findInFiles([owner], root, rule).length === 0;
+  // The same question of each stand-in, and for the same reason: an allowance for a spec that no longer
+  // replaces the emulator is an exemption nobody is using, which the next file moved into that path inherits
+  const staleStandIns = EMULATOR_STAND_INS.filter((standIn) => {
+    const file = path.join(root, standIn);
+    return fs.existsSync(file) && findInFiles([file], root, rule).length === 0;
+  });
   return [
     ...outside,
     ...(ownerStopped ? [`${EMULATOR_OWNER}: imports no emulator, so this rule has no subject`] : []),
+    ...staleStandIns.map((standIn) => `${standIn}: names no emulator, so its allowance is stale`),
   ].sort();
 }
 

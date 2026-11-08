@@ -51,7 +51,23 @@ vi.mock('@xterm/addon-fit', () => ({ FitAddon: StubAddon }))
 vi.mock('@xterm/addon-web-links', () => ({ WebLinksAddon: StubAddon }))
 vi.mock('@xterm/addon-unicode11', () => ({ Unicode11Addon: StubAddon }))
 vi.mock('@xterm/addon-clipboard', () => ({ ClipboardAddon: StubAddon }))
-vi.mock('@xterm/addon-webgl', () => ({ WebglAddon: StubAddon }))
+/**
+ * The WebGL addon, which the pool drives two ways: it hands it a context-loss handler and disposes it at
+ * teardown. A GL context cannot be lost in jsdom, so the handler is kept here for a case to fire.
+ */
+class WebglStub {
+  disposals = 0
+  loseContext: (() => void) | undefined
+  activate() {}
+  dispose() { this.disposals += 1 }
+  onContextLoss(handler: () => void) { this.loseContext = handler }
+}
+const webglAddons: WebglStub[] = []
+vi.mock('@xterm/addon-webgl', () => ({
+  WebglAddon: class WebglAddon extends WebglStub {
+    constructor() { super(); webglAddons.push(this) }
+  },
+}))
 vi.mock('@xterm/xterm/css/xterm.css', () => ({}))
 vi.mock('@apackdev/sdk/fe', () => ({ openLink: () => {} }))
 
@@ -409,5 +425,28 @@ describe('what the pool draws, and what it refuses to', () => {
     // F16: unhandled, each is a console error nobody can act on — and an unhandled rejection fails this run,
     // which is what makes this case a guard rather than a description
     expect(pasted).toEqual([])
+  })
+})
+
+describe('the renderer the pool draws with', () => {
+  /**
+   * **F10.** The browser takes a GL context back under memory pressure, on a GPU reset, or when too many
+   * are live, and xterm's addon reports the loss rather than recovering: whatever still holds it draws
+   * nothing. Disposing it is what drops xterm to its DOM renderer, which is slower and still draws.
+   */
+  it('gives up the WebGL renderer when the context is lost, and disposes that addon once', () => {
+    const entry = terminalPool.ensure(info(), () => {})
+    terminalPool.attach(entry.terminalId, host())
+    const addon = webglAddons.at(-1)!
+    expect(entry.webglAddon as unknown, 'the addon the attach loaded').toBe(addon)
+
+    addon.loseContext!()
+
+    expect(addon.disposals).toBe(1)
+    // And the entry stops naming it, so teardown does not reach an addon that is already gone: disposing
+    // one over a lost context crashes inside xterm's own addon iteration
+    expect(entry.webglAddon).toBeNull()
+    terminalPool.dispose(entry.terminalId)
+    expect(addon.disposals).toBe(1)
   })
 })

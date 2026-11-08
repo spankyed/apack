@@ -612,7 +612,9 @@ class TerminalPool {
    * the user asks for it).
    */
   disposeAll(): void {
-    for (const terminalId of [...this.entries.keys()]) this.dispose(terminalId)
+    // Taken first, because `dispose` removes from the map it would otherwise be iterating
+    const held = Array.from(this.entries.keys())
+    for (const terminalId of held) this.dispose(terminalId)
   }
 
   /**
