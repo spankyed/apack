@@ -51,6 +51,14 @@ export const IDLE_MS = 120000;
 export function parseCpuTime(text: string): number;
 
 // @public
+export function pollWhileWorking<T>(probe: () => T | undefined, input: {
+    readonly work: WorkReading;
+    readonly what: string;
+    readonly pollMs?: number;
+    readonly idleMs?: number;
+}): Promise<T>;
+
+// @public
 export interface ProcessRow {
     // (undocumented)
     readonly ms: number;

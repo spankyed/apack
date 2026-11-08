@@ -318,6 +318,29 @@ export function answerWhileWorking<T>(answer: Promise<T>, { work, what, idleMs, 
 }
 
 /**
+ * Polls `probe` until it answers, for as long as the party that will make it answer keeps working: a file another
+ * process writes, a port it opens. Rejects with `what` and why the watch gave up; never on the clock.
+ */
+export function pollWhileWorking<T>(probe: () => T | undefined, { work, what, pollMs = 100, idleMs }: {
+  readonly work: WorkReading; readonly what: string; readonly pollMs?: number; readonly idleMs?: number;
+}): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const watch = watchWork({ work, idleMs, onRefused: (refusal) => {
+      clearTimeout(timer);
+      reject(new Error(`${what}, and the process that would make it ${describeRefusal(refusal)}`));
+    } });
+    const attempt = () => {
+      let found: T | undefined;
+      try { found = probe(); } catch (error) { watch.stop(); reject(error); return; }
+      if (found !== undefined) { watch.stop(); resolve(found); return; }
+      timer = setTimeout(attempt, pollMs);
+    };
+    attempt();
+  });
+}
+
+/**
  * An `AbortSignal` that aborts when `watchWork` gives up on a process tree: for work handed a signal rather than a
  * process, such as an in-process build whose workers are this process's children. `stop` once the work is done.
  */

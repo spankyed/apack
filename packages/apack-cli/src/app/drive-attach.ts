@@ -14,7 +14,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import type { AttachedSession, AttachedSessionOptions } from '@apackdev/testing';
 import { readSession, touchSession, waitForSession, STARTED_BY_ENV, type DevSession } from '@apackdev/host/dev-session';
-import { holdExclusiveLock, type ExclusiveLock } from '@apackdev/host/exclusive-lock';
+import { processWork, type WorkReading } from '@apackdev/sdk/progress';
+import { holdExclusiveLock, readLock, type ExclusiveLock } from '@apackdev/host/exclusive-lock';
 import { dataDirInUse } from './profiles';
 import { sourceTarget } from './pack-host';
 
@@ -109,7 +110,9 @@ export async function spawnDevApp(
   let exited = false;
   child.once('exit', () => { exited = true; });
   try {
-    const session = await waitForSession(dataDir, { isAlive: () => !exited });
+    if (child.pid === undefined) throw new Error('The app did not start');
+    // For as long as the launcher works: a cold start builds the pack before the app publishes anything
+    const session = await waitForSession(dataDir, { work: processWork(child.pid), isAlive: () => !exited });
     return { session, logPath: session.logPath ?? logPath };
   } catch (error) {
     const tail = fs.existsSync(logPath) ? fs.readFileSync(logPath, 'utf-8').trimEnd().split('\n').slice(-6).join('\n') : '';
@@ -118,6 +121,18 @@ export async function spawnDevApp(
 }
 
 const spawnLockFile = (dataDir: string): string => path.join(dataDir, 'spawn.lock');
+
+/**
+ * The work of whoever holds the spawn lock: the caller that is starting the app a loser is waiting for. A lock
+ * that names nobody readable gives no reading, so the wait is bounded by its silence alone.
+ */
+const spawnHolderWork = (dataDir: string): WorkReading => {
+  const holder = readLock(spawnLockFile(dataDir))?.pid;
+  return holder === undefined ? () => Promise.resolve(undefined) : processWork(holder);
+};
+
+/** A loser's wait: for the winner's session, for as long as the winner is working to publish it */
+const waitForWinner = (dataDir: string): Promise<DevSession> => waitForSession(dataDir, { work: spawnHolderWork(dataDir) });
 
 /** Thrown by the lock's own refusal and caught here; nothing outside sees it. */
 const HELD = new Error('another spawn holds this data dir');
@@ -134,15 +149,15 @@ const HELD = new Error('another spawn holds this data dir');
  *
  * So the spawn is serialised per data dir, and **the session is re-read after acquiring**: by the time the
  * loser has the lock the winner has usually published one, and attaching to it is what the caller wanted.
- * A loser that arrives before the winner has published waits for it (`waitForSession`, whose deadline is
- * sized for a pack build) rather than queueing to spawn a second app.
+ * A loser that arrives before the winner has published waits for it (`waitForWinner`, for as long as the
+ * winner works) rather than queueing to spawn a second app.
  *
  * The loser answers `attached`, because it is: it did not start what it is talking to.
  */
 export async function spawnOrAttach(
   from: string, dataDir: string, profileArgs: readonly string[],
   // Seams, because which of the two branches a loser took is the claim and nothing else observes it
-  { spawn, waitFor = waitForSession, scope = 'app', expectedRoot, reuse = true }: {
+  { spawn, waitFor = waitForWinner, scope = 'app', expectedRoot, reuse = true }: {
     spawn?: (from: string, dataDir: string, profileArgs: readonly string[]) => Promise<AttachableApp>;
     waitFor?: (dataDir: string) => Promise<DevSession>;
     scope?: 'app' | 'pack';
