@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSyncWhileWorking } from '@apackdev/sdk/progress';
 import { parseElfInterpreter, parseElfLibraryCommands, type ElfLibraryEnvironment } from './compiler-elf-libraries.ts';
 
 export interface CompilerElfEnvironment extends ElfLibraryEnvironment {
@@ -69,7 +69,8 @@ export function captureElfLibraryEnvironment(env: NodeJS.ProcessEnv = process.en
     throw new Error(`Cannot inspect compiler ELF interpreter outside operating-system libraries: ${loader}`);
   }
   let diagnostic: string;
-  try { diagnostic = execFileSync(loader, ['--list-diagnostics'], { env, cwd, encoding: 'utf8', timeout: 5_000, maxBuffer: 1024 * 1024 }); }
+  // Bounded by the loader's progress, not the clock; `timeout` is the CPU it may spend, which only a spin reaches
+  try { diagnostic = execFileSyncWhileWorking(loader, ['--list-diagnostics'], { env, cwd, timeout: 5_000, maxBuffer: 1024 * 1024 }).stdout; }
   catch (error) {
     // execFileSync errors retain stdout; this command includes an environment dump. Never publish it.
     const failure = error as NodeJS.ErrnoException & { signal?: string };

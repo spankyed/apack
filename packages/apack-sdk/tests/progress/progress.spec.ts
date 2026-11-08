@@ -1,6 +1,6 @@
-import { Worker } from 'node:worker_threads';
+import threads, { Worker } from 'node:worker_threads';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { answerWhileWorking, cpuAdded, createStallTracker, describeRefusal, execFileWhileWorking, fromNow, parseCpuTime, processWork, threadWork, treeCpuMs, watchWork, win32Rows, type Refusal } from '../../src/progress.ts';
+import { answerWhileWorking, cpuAdded, createStallTracker, describeRefusal, execFileSyncWhileWorking, execFileWhileWorking, fromNow, parseCpuTime, processWork, threadWork, treeCpuMs, watchWork, win32Rows, type Refusal } from '../../src/progress.ts';
 
 /** A reading that adds `step` milliseconds of work each time it is taken */
 const working = (step: number) => { let total = 0; return async () => (total += step); };
@@ -238,5 +238,31 @@ describe('how a refusal reads', () => {
       .toBe('spent its 600s CPU budget: 600s of CPU in 612s of wall time, its last output 540s ago');
     expect(describeRefusal({ kind: 'ceiling', ceilingMs: 10_000, spentMs: 10_000, wallMs: 11_000, sinceOutputMs: null })).toContain('with no output at all');
     expect(describeRefusal({ kind: 'ceiling', ceilingMs: 10_000, spentMs: 10_000, wallMs: 11_000 })).not.toContain('output');
+  });
+});
+
+describe('a process run synchronously, bounded by its work', () => {
+  it('writes its stdin and answers what it printed', () => {
+    const { stdout } = execFileSyncWhileWorking(process.execPath,
+      ['-e', "process.stdin.on('data', (d) => process.stdout.write(String(d).toUpperCase()))"], { input: 'bridged' });
+    expect(stdout).toBe('BRIDGED');
+  });
+
+  it("throws on a non-zero exit with execFileSync's code, stdout and stderr", () => {
+    let failure: { code?: unknown; stdout?: string; stderr?: string } | undefined;
+    try { execFileSyncWhileWorking(process.execPath, ['-e', "process.stdout.write('out'); process.stderr.write('err'); process.exit(3)"]); }
+    catch (error) { failure = error as typeof failure; }
+    expect(failure).toMatchObject({ code: 3, stdout: 'out', stderr: 'err' });
+  });
+
+  /** The compiler proxies `Worker` to own its threads; a bridge worker must be none of them, or it is refused */
+  it('runs past a proxy a host installed on Worker', () => {
+    const original = threads.Worker;
+    threads.Worker = new Proxy(original, { construct() { throw new Error('a host thread'); } });
+    try {
+      expect(execFileSyncWhileWorking(process.execPath, ['-e', "process.stdout.write('ran')"]).stdout).toBe('ran');
+    } finally {
+      threads.Worker = original;
+    }
   });
 });

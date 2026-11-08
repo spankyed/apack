@@ -586,18 +586,12 @@ export function findSyncSpawnsInSpecs(files: readonly string[] = specModules(rep
  * bound cannot tell a healthy request from a hung one; a kill-grace period is about time by definition; and a
  * wait whose other party has no process this one can read. An entry that stops applying is reported.
  */
-const SYNCHRONOUS_ADMISSION = 'a synchronous OS query inside the native loader admission, which is synchronous throughout; it bounds a hang, and a progress bound has no event loop to read on';
 const CLOCK_BY_DESIGN: Record<string, string> = {
   'packages/apack-host/src/packs/github.ts': "a fetch from GitHub's API: network, which no CPU reading describes",
   'packages/apack-host/src/packs/installer.ts': 'a pack download: network, which no CPU reading describes',
   'packages/default-setup/src/features/code/be/services/gh-cli.ts': "`gh` waits on GitHub's API: network, which no CPU reading describes",
   'packages/default-setup/src/features/code/be/services/codex/app-server.ts':
     "a request to the codex app-server waits on the model's API, during which the server is idle by design",
-  // Synchronous by the admission they serve: a progress bound needs the event loop free to take its readings, so
-  // converting these means making the Windows and Linux loader admission (`compiler-pe-admission.ts`) async
-  'packages/apack-cli/src/build/compiler-pe-activation.ts': SYNCHRONOUS_ADMISSION,
-  'packages/apack-cli/src/build/compiler-pe-environment.ts': SYNCHRONOUS_ADMISSION,
-  'packages/apack-cli/src/build/compiler-elf-environment.ts': SYNCHRONOUS_ADMISSION,
   // The Playwright fixture: Playwright gives a wait only a clock, and each is sized as the suite's backstop
   'packages/apack-testing/src/index.ts': "the Playwright fixture's own waits, which Playwright bounds only by a clock, and a 10s `sample` diagnostic",
   'packages/apack-testing/src/engine/index.ts': "a Playwright wait in the test engine, which Playwright bounds only by a clock",
