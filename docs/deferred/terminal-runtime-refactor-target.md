@@ -1,7 +1,7 @@
 # Terminal runtime refactor target
 
 Status: **active as design, through
-[goal-terminal-ownership](../goals/goal-terminal-ownership.md)**, which owns the delivery this document
+[goal-terminal-ownership](../archive/goals/goal-terminal-ownership.md)**, which owns the delivery this document
 describes and settles the decisions it left to activation. Read the goal first: it keeps xterm.js and takes
 the [ghostty-web migration](xterm-to-ghostty-web.md) out of scope, so the order this document originally
 named — migration first, then this — is **inverted**. The reason is that both are answers to who owns a

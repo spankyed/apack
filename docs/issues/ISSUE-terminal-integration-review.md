@@ -7,7 +7,7 @@ rest stand
 **Component:** `packages/default-setup/src/features/code` — terminal (xterm.js front end, node-pty back end),
 plus the app plumbing it depends on (`packages/main`, `packages/api`, `@apackdev/host/bus`)
 
-**Delivery is owned by [goal-terminal-ownership](../goals/goal-terminal-ownership.md).** This document owns
+**Delivery is owned by [goal-terminal-ownership](../archive/goals/goal-terminal-ownership.md).** This document owns
 the findings, the root causes and decisions D1–D8; the goal owns the outcome, the execution order and
 completion, and cites those decisions rather than restating them. Its D9–D11 settle what this document left
 open. A finding's disposition and the evidence that closed it live in

@@ -27,7 +27,7 @@ const terminalFixture = (trials: number) => {
 /**
  * **First-open latency: from asking for a terminal to one the user can type into.**
  *
- * The reading Phase G of [the terminal ownership goal](../../../docs/goals/goal-terminal-ownership.md) needs
+ * The reading Phase G of [the terminal ownership goal](../../../docs/archive/goals/goal-terminal-ownership.md) needs
  * a *before* for, and the one its own Constraints single out — "a pty spawns in-process today; a broker has
  * to start first" — so a regression here is the result that has to be investigated rather than absorbed.
  *

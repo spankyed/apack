@@ -37,16 +37,73 @@ Commit usable checkpoints as you go. Do not expand or reduce scope without user 
 ```
 ````
 
+## Outcome (2026-11-08)
+
+**One owner per terminal session, and the owner is whoever claims it.** The pty left the API process for a
+broker in a pinned sibling repository (`apack-terminal`), the VT core went with it, and a session's lifetime
+stopped being the lifetime of whatever asked for one. **50 of the review's 58 findings are closed**; the
+eight that remain each carry a disposition and none needs a machine this repo lacks.
+
+21 commits here and 12 in `apack-terminal`.
+
+### Per phase
+
+| Phase | Status | Evidence |
+|---|---|---|
+| G — the gate | done | six readings taken, with G1, F4 and F5 priced and F18 found. `tests/performance/`, the manual qualification suite over built output |
+| T — independent tracks | done | S1, S2, F9, X3, X10, T1–T3, T5, T8–T9 and the two tooling tracks, each with a firing spec |
+| S — one session end to end | done | the repo, the candidate set tried as tests, the protocol derived from a client that exists |
+| B — the broker owns processes and the VT core | done | the feature imports no node-pty; F4, F5, F7, F8, L2, L3, X1, X2 dissolved with guards; ConPTY resize and exit claimed on a Windows run |
+| H — the host service owns sessions | done | M1, M2, M4, M5 dissolved; a terminal survives the API restarting; a crashed shell is a new generation whose predecessor's transcript is labelled history |
+| P — presentation | done | `TerminalAttachment`; `@xterm/*` imported by one module, enforced **both ways** so the rule cannot pass by having no subject |
+| A — agent facts | done | OSC 633 out of the VT core — facts, search and wait answering for a session nobody is drawing; reported paths treated as claims |
+
+### What remains, and why none of it is this goal's
+
+| | |
+|---|---|
+| G1 | priced and its mechanism measured; the fix is a delta feed, which the review assigns to the output pipe |
+| G3, G6, G7 | the files move substantially on #372; the goal says to verify against that branch first |
+| S4 | `openLink`'s scheme filter — the review's own negative results record that the terminal cannot reach it |
+| F17, F18, T10 | recorded with what each would cost; F18 and T10 were found during this goal rather than by the review |
+
+### Corrections to the Decisions
+
+**The one fork this goal did not settle is settled, with the user's authorization** (2026-11-08), and it is
+in Decisions as *"a session's lifetime is bound to a handle the app holds"*. What made it look like a trade
+was conflating spawning with lifetime ownership: the API keeps spawn, discovery and crash-restart, and only
+the backstop moves — to the one process whose lifetime is the app's. The kernel does the reaping, because a
+descriptor closes on process death however the process died.
+
+**Phase H had two open requirements, not one.** The handoff said otherwise for several revisions. Session
+generations were unbuilt, and T6 was waiting on that half rather than on the fork.
+
+**Three of this handoff's own claims were wrong and are corrected in place**, because each cost a session's
+time: `compiler-native-runtime` was called a deterministic blocker and is load-sensitive; the Windows list
+was given as five findings when four were already claimed; and the Windows pack-build failure was first
+read as the Node-23 one this document already records, which it is not.
+
+### Validation
+
+`npm run chain`: **32 of 33 steps pass**. The one that does not is `@apackdev/cli`'s
+`build-worker.native.spec.ts`, which no commit in this goal touches — zero files under `packages/apack-cli`,
+checked. Two of its cases fail in two different ways, one a 120s timeout in the 2-core container that
+passes in 22.5s alone. A strict dispatch was run on the finished state as the cleaner machine.
+
+**The app is proven on Windows end to end**, which is the thing this goal had never asked there, and doing
+it found two defects no Mac could have: the broker binary's `.exe`, which meant the terminal never started
+on Windows at all, and `submitFor` answering `\r\n` for PowerShell, which meant commands never ran.
+
 ## Scope and background
 
 **Outcome:** a terminal session has one owner. Processes, PTY/ConPTY, VT state and bounded I/O belong to a
 single authority; a window observes a session rather than hosting it; the pack feature keeps application
-behaviour. Every finding in the [terminal integration review](../issues/ISSUE-terminal-integration-review.md)
+behaviour. Every finding in the [terminal integration review](../../issues/ISSUE-terminal-integration-review.md)
 closes with a test in the resulting structure, or is recorded as dissolved by construction with its reason.
 
 **Why one goal rather than three plans.** The review's fixes, the
-[ghostty-web migration](../deferred/xterm-to-ghostty-web.md) and the
-[runtime refactor](../deferred/terminal-runtime-refactor-target.md) are three different answers to *who owns
+[ghostty-web migration](../../deferred/xterm-to-ghostty-web.md) and the
+[runtime refactor](../../deferred/terminal-runtime-refactor-target.md) are three different answers to *who owns
 a terminal session* — and today nobody does: the renderer's pool owns the emulator, the pack's service owns
 the pty. This goal delivers the refactor's design and the review's findings together and takes the migration
 out of scope; the refactor remains the design authority for the broker, the host service and the agent
@@ -73,7 +130,7 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   discipline rather than process ownership, and independent of everything else.
 - **node-pty-shaped Windows findings** (X1, X2 and their neighbours). Dissolved by the spine rather than
   fixed separately — but **closed on a Windows run, not a Mac one**: Phase B writes them and their
-  acceptance needs the [Windows development VM](../references/guides/windows-development-vm.md) and a
+  acceptance needs the [Windows development VM](../../references/guides/windows-development-vm.md) and a
   `compiler_windows=true` dispatch. X3 and X10 are the app's menu and hotkeys, touch no terminal plan, and
   are in Phase T with the pack-shaped remainder of X (paths, `TERM`, Enter-as-LF, the shell allow-list).
 - **Keeping sessions alive across app quit.** A lifecycle policy, not an ownership question; the refactor
@@ -157,7 +214,7 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 
 - **Phase G reading 1 of 6 is taken: terminal attach latency, median 20.7 ms (18–25, 20/20 passed).**
   Conditions, build and native identity in
-  [the evidence record](../references/evidence/terminal-ownership.md#terminal-attach-latency-phase-g-reading-1-of-6--2026-11-07).
+  [the evidence record](../../references/evidence/terminal-ownership.md#terminal-attach-latency-phase-g-reading-1-of-6--2026-11-07).
   **It changes what Phase B has to be measured against.** 20.7 ms says the renderer's half of opening a
   terminal is nearly free, so the wait a user feels is the pty spawning and the shell starting — which this
   reading does not cover, because first-byte latency is not observable from the page (xterm draws to a
@@ -222,7 +279,7 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   writes the whole accumulated text (a monotonic staircase in chunk-sized steps), and the cost follows
   **flushes × final size / 2** with **flushes ≈ duration / 80 ms**, confirmed to within 10% at all three
   sizes. That makes the review's ~15 MB for a 40 KB/60 s reply a measured result rather than an estimate.
-  [The pricing](../references/evidence/terminal-ownership.md#g1-priced-what-the-throttled-writer-writes-to-ears--2026-11-07).
+  [The pricing](../../references/evidence/terminal-ownership.md#g1-priced-what-the-throttled-writer-writes-to-ears--2026-11-07).
   **The writer cannot fix it alone** — the window renders streamed text from the view over the stored row,
   so the 80 ms write *is* the UI update and lengthening it degrades the stream. The fix is a delta feed
   beside a much less frequent durable write, which is the output pipe's payload discipline the review
@@ -365,7 +422,7 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   terminal the user had ever opened.
 - **Phase H is complete.** A terminal survives the API restarting (`6d96aa1d91`) and a crashed shell is a
   new generation whose predecessor's transcript is labelled history (`42a0532cf1`), both driven in the real
-  app ([the records](../references/evidence/terminal-ownership.md#a-terminal-survives-the-api-restarting-phase-h--2026-11-08)).
+  app ([the records](../../references/evidence/terminal-ownership.md#a-terminal-survives-the-api-restarting-phase-h--2026-11-08)).
   **T6 closes with the second**, as its own row said it would: the honest fix was restart-in-place, which
   needed the generation, and with the terminal kept there is nothing left to carry across a restart.
 - **Phase H had two requirements open, not one.** The handoff said "done except for one requirement" and
@@ -432,10 +489,10 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   module rebuilt for Electron's ABI. It is still a dependency of `packages/api` and `packages/default-setup`.
   Removing it is release configuration, which this goal put outside itself — but it is unblocked now, and
   reading 2 priced it
-  ([the record](../references/evidence/terminal-ownership.md#node-ptys-only-remaining-loader-is-its-own-health-check--2026-11-07)).
+  ([the record](../../references/evidence/terminal-ownership.md#node-ptys-only-remaining-loader-is-its-own-health-check--2026-11-07)).
 - **The seven journeys are run and recorded**, which is the acceptance clause about the complaint rather
   than the findings: all seven pass, with screenshots checked by eye
-  ([the record](../references/evidence/terminal-ownership.md#the-seven-journeys-checked-by-eye--2026-11-07)).
+  ([the record](../../references/evidence/terminal-ownership.md#the-seven-journeys-checked-by-eye--2026-11-07)).
   **F14 had no row in either table** — it lived in the review's prose and in decision 3 only, while Phase A
   closes on it — so it now has one in both. The earlier claim that every finding had a row was true of the
   rows that existed.
@@ -506,17 +563,17 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   its sync phase creates, was the one left out.
 - **The full chain passes, `test:native` included** — 2451.5s at `2b1ae253ad`, 94 native tests passed and
   nothing failed
-  ([the record](../references/evidence/terminal-ownership.md#the-full-chain-passes-testnative-included--2026-11-08)).
+  ([the record](../../references/evidence/terminal-ownership.md#the-full-chain-passes-testnative-included--2026-11-08)).
   **The strict dispatch is deliberately not run yet.** The goal asks for it *on the finished state*, and
   this state is not that one: the Phase H fork is unsettled and X4 and Phase B's Windows half are
   outstanding, so five macOS runners would be validating something that must still change. It is the first
   thing to run once those land.
 - **The app is proven on Windows end to end** — a terminal follows `cd`, a crashed shell keeps its
   terminal and restarts as generation 2 in place, and a session survives the API being killed
-  ([the record](../references/evidence/terminal-ownership.md#the-app-on-windows-end-to-end--2026-11-08)).
+  ([the record](../../references/evidence/terminal-ownership.md#the-app-on-windows-end-to-end--2026-11-08)).
   That was the last thing this goal had never asked on that platform.
 - **X4 is closed and no Windows work remains.** PowerShell and cmd are arranged, claimed on a VM run on
-  2026-11-08 ([the record](../references/evidence/terminal-ownership.md#the-windows-session--2026-11-08)).
+  2026-11-08 ([the record](../../references/evidence/terminal-ownership.md#the-windows-session--2026-11-08)).
   **Every platform finding is now closed** — X1, X2, X4, X5, X6, X7, X8, X9, X10, X11, X12, X13 — and 50 of
   the review's 58 rows are struck. The eight open ones each carry a disposition and none needs a machine
   this repo lacks: G1 is priced with its fix placed in the output pipe, G3, G6 and G7 move on #372, S4 is
@@ -620,7 +677,7 @@ renderer's copy as a fact.
 
 **D10 — the renderer keeps xterm.js, and replacing the emulator is out of this goal.** Settled. The outcome
 here is ownership; swapping emulators is the
-[ghostty-web migration](../deferred/xterm-to-ghostty-web.md), which owns its own capability matrix, its own
+[ghostty-web migration](../../deferred/xterm-to-ghostty-web.md), which owns its own capability matrix, its own
 offline packaged-WASM proof and its own stop conditions. Phase P's deliverable is the seam, built so that
 migration becomes an implementation swap behind it rather than a second rewrite of ownership. Nothing in this
 goal assumes xterm survives; nothing in it blocks on proving a replacement.
@@ -683,7 +740,7 @@ lacks a binary-compatibility guarantee for snapshot format 1", which this broker
 lineage means broker and renderer could disagree about a rendered screen, answered by **where facts come
 from** rather than by matching implementations: explicit OSC markers, with any screen-derived signal bounded
 and carrying `inferred` provenance. Reopen at the
-[ghostty-web migration](../deferred/xterm-to-ghostty-web.md), where lineage matching starts to pay and the
+[ghostty-web migration](../../deferred/xterm-to-ghostty-web.md), where lineage matching starts to pay and the
 snapshot-format risk is what to weigh against it.
 
 **No architectural decision is open**, and every phase below names its owning decision. A phase may still
@@ -888,7 +945,7 @@ for what it parses, Phase G's baseline so acceptance has a before.
    owns the pty.
 2. **F4, F5, F7, F8, L2, L3, X1 and X2 are closed as dissolved**, each naming the construction that removes
    it. No pid is persisted as a handle, and a resize writes no application row.
-3. **X1 and X2 are claimed only on a Windows run** — the [development VM](../references/guides/windows-development-vm.md)
+3. **X1 and X2 are claimed only on a Windows run** — the [development VM](../../references/guides/windows-development-vm.md)
    or a `compiler_windows=true` dispatch, never a Mac.
 4. **The presentation channel is bounded** by Phase G's declared ceiling, with a firing case proving a
    producer past it is throttled and the overload observable rather than dropped silently. **Terminal
@@ -961,7 +1018,7 @@ Phase B is where those stop being answered twice. The target shape is a non-bloc
 **Where it runs and what it is coupled to, not its quality.** It is current (1.1.0), Microsoft-maintained,
 the binding VS Code ships, and sound on POSIX. An addon in the API process cannot outlive the API, and it is
 the only module here needing an Electron ABI rebuild. Its Windows weaknesses are the X findings' subject in
-[the review](../issues/ISSUE-terminal-integration-review.md); what replaces them is an owned process tree.
+[the review](../../issues/ISSUE-terminal-integration-review.md); what replaces them is an owned process tree.
 
 ### Phase H — the host service owns sessions
 

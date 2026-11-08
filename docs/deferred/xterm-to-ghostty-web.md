@@ -4,7 +4,7 @@ Status: deferred by request. This document authorizes no implementation. Revisit
 can demonstrate that ghostty-web meets the contracts below.
 
 **This is now the follow-on, not the predecessor.**
-[goal-terminal-ownership](../goals/goal-terminal-ownership.md) decided to keep xterm.js and put emulator
+[goal-terminal-ownership](../archive/goals/goal-terminal-ownership.md) decided to keep xterm.js and put emulator
 replacement out of its scope, so the order this document originally named is inverted: ownership moves
 first, and that goal's presentation phase builds the seam this migration becomes an implementation swap
 behind. Two consequences worth knowing before activation. The pool this document calls its primary
