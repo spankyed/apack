@@ -65,7 +65,7 @@ if (!restarting) test('an externally built default fork refreshes both windows a
   const waitForReplacement = (page: typeof appPage, previous: string | undefined) => expect.poll(async () => {
     const current = await runtime(page);
     return !!current && current !== previous;
-  }, { timeout: 30_000, message: 'replacement frontend accepted in this window' }).toBe(true);
+  }, { message: 'replacement frontend accepted in this window' }).toBe(true);
   try {
     await second.waitForLoadState('domcontentloaded');
     await appPage.evaluate(() => (window as any).applicationState.system.get('host/packs')

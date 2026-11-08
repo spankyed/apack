@@ -97,7 +97,7 @@ test('pack surface renders with its own styles', async ({ appPage, app }) => {
     await app.navigate('memos');
 
     const canvas = appPage.getByTestId('memos-canvas');
-    await expect(canvas).toBeVisible({ timeout: 10_000 });
+    await expect(canvas).toBeVisible();
     await expect(canvas).toHaveCSS('padding-top', '13px');
     const style = await appPage.locator('link[data-pack-id="e2e-fixture"]').getAttribute('href');
     const buildBase = style!.replace(/runtime\/fe\.css$/, '');
@@ -123,7 +123,7 @@ test('add memo round-trip through the pack backend', async ({ appPage, app }) =>
   await appPage.getByTestId('memo-add').click();
 
   // Only rendered after the backend persists the memo and emits MEMO_ADDED
-  await expect(appPage.getByTestId('memo-list').getByText(text, { exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(appPage.getByTestId('memo-list').getByText(text, { exact: true })).toBeVisible();
 });
 
 test("renders the host's @apackdev/ui editor inside the pack", async ({ appPage, app }) => {
@@ -131,7 +131,7 @@ test("renders the host's @apackdev/ui editor inside the pack", async ({ appPage,
   await app.navigate('memos');
 
   const preview = appPage.getByTestId('memo-preview');
-  await expect(preview.locator('.ProseMirror')).toContainText('Memo preview', { timeout: 10_000 });
+  await expect(preview.locator('.ProseMirror')).toContainText('Memo preview');
   await appPage.getByTestId('memo-input').fill('typed draft');
   await expect(preview.locator('.ProseMirror')).toContainText('typed draft');
 });
@@ -141,7 +141,7 @@ test('content memos from apack.json: a markdown entry and a compiler module', as
   await app.navigate('memos');
 
   const list = appPage.getByTestId('memo-list');
-  await expect(list.getByText('Written from markdown', { exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(list.getByText('Written from markdown', { exact: true })).toBeVisible();
   await expect(list.getByText('Written by a compiler module', { exact: true })).toBeVisible();
 });
 
@@ -189,7 +189,7 @@ test("a re-enabled pack's surface gets its startup data again", async ({ appPage
   await app.waitForSurface('memos');
   await expect(await openMemoPreferences(appPage, app)).toHaveValue('Memos');
   await app.navigate('memos');
-  await expect(appPage.getByTestId('memo-list').getByText('Written from markdown', { exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(appPage.getByTestId('memo-list').getByText('Written from markdown', { exact: true })).toBeVisible();
 });
 
 test('writes through @apackdev/ears and reads back through the SDK, on the app\'s engine', async ({ appPage, app }) => {
@@ -200,7 +200,7 @@ test('writes through @apackdev/ears and reads back through the SDK, on the app\'
   await appPage.evaluate((t) => (window as any).applicationState.system.get('e2e-fixture/memos').send({ type: 'MEMOS.ADD_NOTE', text: t }), text);
   const noteFor = () => appPage.evaluate((t) => ((window as any).applicationState.system.get('e2e-fixture/memos').getSnapshot().context.notes as Array<{ text: string; note: { title: string } | null }>)
     .find((entry) => entry.text === t), text);
-  await expect.poll(noteFor, { timeout: 10_000 }).toMatchObject({ text, note: { title: text } });
+  await expect.poll(noteFor).toMatchObject({ text, note: { title: text } });
 });
 
 test('a custom feature form persists under its declared owner across a window reload', async ({ appPage, app }) => {

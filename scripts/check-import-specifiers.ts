@@ -598,28 +598,21 @@ const CLOCK_BY_DESIGN: Record<string, string> = {
   'packages/apack-cli/src/build/compiler-pe-activation.ts': SYNCHRONOUS_ADMISSION,
   'packages/apack-cli/src/build/compiler-pe-environment.ts': SYNCHRONOUS_ADMISSION,
   'packages/apack-cli/src/build/compiler-elf-environment.ts': SYNCHRONOUS_ADMISSION,
+  // The Playwright fixture: Playwright gives a wait only a clock, and each is sized as the suite's backstop
+  'packages/apack-testing/src/index.ts': "the Playwright fixture's own waits, which Playwright bounds only by a clock, and a 10s `sample` diagnostic",
+  'packages/apack-testing/src/engine/index.ts': "a Playwright wait in the test engine, which Playwright bounds only by a clock",
 };
 
-/**
- * Source files whose clocked deadlines predate the rule, and how many each holds.
- *
- * A count, not a reason: nobody has decided these are right, they are waiting to be converted. The count is exact
- * in both directions, so converting one means lowering it here and adding one is refused.
- */
-const CLOCKS_NOT_CONVERTED_YET: Record<string, number> = {
-  'packages/apack-testing/src/engine/index.ts': 1,
-  'packages/apack-testing/src/index.ts': 5,
-};
 
 /**
- * `file:line: what` for each clocked deadline in the packages' source that neither list accounts for, each listed
- * file whose count no longer matches, and each by-design entry that no longer holds one.
+ * `file:line: what` for each clocked deadline in the packages' source that `CLOCK_BY_DESIGN` does not account for,
+ * and each entry there that no longer holds one.
  *
  * `clockedDeadlines` (`scripts/lib/test-timeouts.ts`) has what counts as one and what it cannot see.
  */
 export function findClockedDeadlinesInSource(
   files: readonly string[] = filesUnder(packageSourceDirs(repoRoot), repoRoot).filter((file) => file.endsWith('.ts')),
-  root = repoRoot, byDesign = CLOCK_BY_DESIGN, notConverted = CLOCKS_NOT_CONVERTED_YET,
+  root = repoRoot, byDesign = CLOCK_BY_DESIGN,
 ): string[] {
   const seen = new Map<string, number>();
   const problems = files.flatMap((file) => {
@@ -627,15 +620,11 @@ export function findClockedDeadlinesInSource(
     if (found.length === 0) return [];
     const relative = repoRelative(root, file);
     seen.set(relative, found.length);
-    if (byDesign[relative] !== undefined || notConverted[relative] !== undefined) return [];
+    if (byDesign[relative] !== undefined) return [];
     return found.map((clock) => `${relative}:${clock.line}: ${clock.what}`);
   });
   for (const [relative, reason] of Object.entries(byDesign)) {
     if (!seen.has(relative)) problems.push(`${relative}: listed in CLOCK_BY_DESIGN (${reason}) but it holds no clocked deadline`);
-  }
-  for (const [relative, count] of Object.entries(notConverted)) {
-    const now = seen.get(relative) ?? 0;
-    if (now !== count) problems.push(`${relative}: CLOCKS_NOT_CONVERTED_YET says ${count}, it holds ${now} — set it to ${now}${now === 0 ? ' by removing the entry' : ''}`);
   }
   return problems.sort();
 }

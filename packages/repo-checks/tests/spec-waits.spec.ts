@@ -131,38 +131,22 @@ const CLOCK_BY_DESIGN: Record<string, string> = {
     'waits on an index building in this process, so load slows the wait and the work alike',
   'packages/default-setup/tests/harness-app-stop.spec.ts':
     "waits on the in-process test app's timer flow ticking, which runs on this process's own event loop",
+  // The Playwright suites: Playwright gives a test and a wait only a clock, and `definePackE2EConfig` declares the
+  // suite's two backstops (60s a test, 30s an assertion). These are the waits that genuinely outlast them
+  'tests/acceptance/pack-dev/test-pack-dev.ts':
+    "waits on a watcher's rebuild and install, which outlasts the suite's 30s assertion backstop",
+  'tests/e2e/app-integration/db-write-through-boot.spec.ts':
+    'boots the app twice over a database written between, which outlasts the suite\'s backstops',
+  'tests/packs/external-pack/tests/e2e/default-pack-fork.spec.ts':
+    "forks and rebuilds the shipped pack inside the case, which outlasts the suite's 60s test backstop",
+  'tests/packs/external-pack/tests/e2e/settings-ownership.spec.ts':
+    'builds and installs two packs inside the case, and its process diagnostic samples for a fixed 2s',
+  'tests/e2e/app-integration/attach-parity.spec.ts':
+    "a 2s `waitForEvent` is a poll tick inside a loop that rechecks every window, not a deadline on work",
+  'tests/e2e/app-integration/feature-addressing.spec.ts':
+    'the 300ms is the subject: the case asserts that no second settings update arrives',
 };
 
-/**
- * Test files whose clocked deadlines predate the check, and how many each holds.
- *
- * Exact in both directions, as `NOT_CONVERTED_YET` above is: converting one means lowering its count, and a new one
- * is refused. They wait to become waits on the thing itself, bounded by the progress guard.
- */
-const CLOCKS_NOT_CONVERTED_YET: Record<string, number> = {
-  'tests/acceptance/pack-dev/test-pack-dev.ts': 5,
-  'tests/e2e/app-integration/api-reconnect.spec.ts': 2,
-  'tests/e2e/app-integration/attach-parity.spec.ts': 1,
-  'tests/e2e/app-integration/db-cli.spec.ts': 1,
-  'tests/e2e/app-integration/db-write-through-boot.spec.ts': 2,
-  'tests/e2e/app-integration/db-writes-beside-app.spec.ts': 5,
-  'tests/e2e/app-integration/dev-reload.spec.ts': 1,
-  'tests/e2e/app-integration/feature-addressing.spec.ts': 1,
-  'tests/e2e/app-integration/import-pack-content.spec.ts': 1,
-  'tests/e2e/app-integration/settings-recovery.spec.ts': 1,
-  'tests/e2e/app-integration/surface-sends.spec.ts': 6,
-  'tests/e2e/ui/conversation-paging.spec.ts': 1,
-  'tests/e2e/ui/popout.spec.ts': 1,
-  'tests/packs/bundled-ui-pack/tests/e2e/scribbles.spec.ts': 1,
-  'tests/packs/external-pack/tests/e2e/_support/pack-frontend.ts': 2,
-  'tests/packs/external-pack/tests/e2e/default-pack-fork.spec.ts': 2,
-  'tests/packs/external-pack/tests/e2e/dev-reload.spec.ts': 1,
-  'tests/packs/external-pack/tests/e2e/memos.spec.ts': 6,
-  'tests/packs/external-pack/tests/e2e/open-while-loading.spec.ts': 2,
-  'tests/packs/external-pack/tests/e2e/settings-ownership.spec.ts': 4,
-  'tests/packs/external-pack/tests/e2e/step-palette.spec.ts': 1,
-  'tests/packs/external-pack/tests/e2e/step-services.spec.ts': 1,
-};
 
 /** Every test file the clocks are counted over: the unit suites' trees, support modules included, the E2E and pack suites and `drive/` */
 const testFiles = (): string[] => [
@@ -221,7 +205,7 @@ describe('a test is bounded by its progress, not a clock', () => {
 
   it('has no clocked deadline that neither list accounts for', () => {
     const unaccounted = [...clocksByFile()]
-      .filter(([file]) => CLOCK_BY_DESIGN[file] === undefined && CLOCKS_NOT_CONVERTED_YET[file] === undefined)
+      .filter(([file]) => CLOCK_BY_DESIGN[file] === undefined)
       .flatMap(([, clocks]) => clocks.map((clock) => `${clock.file}:${clock.line}: ${clock.what}`));
     expect(unaccounted, [
       'A wait on another process takes no deadline: the progress guard bounds the test. Drop the timeout, or bound a',
@@ -229,21 +213,10 @@ describe('a test is bounded by its progress, not a clock', () => {
     ].join(' ')).toEqual([]);
   });
 
-  it('counts each listed file exactly, so converting one lowers its count and adding one is refused', () => {
-    const byFile = clocksByFile();
-    const moved = Object.entries(CLOCKS_NOT_CONVERTED_YET)
-      .filter(([file, count]) => (byFile.get(file)?.length ?? 0) !== count)
-      .map(([file, count]) => `${file}: listed ${count}, holds ${byFile.get(file)?.length ?? 0}`);
-    expect(moved).toEqual([]);
-  });
 
   it('lists nothing by design that no longer holds a clock', () => {
     const byFile = clocksByFile();
     expect(Object.keys(CLOCK_BY_DESIGN).filter((file) => !byFile.has(file))).toEqual([]);
   });
 
-  it('has 48 clocks in 22 files left to convert', () => {
-    const counts = Object.values(CLOCKS_NOT_CONVERTED_YET);
-    expect([counts.reduce((sum, count) => sum + count, 0), counts.length]).toEqual([48, 22]);
-  });
 });

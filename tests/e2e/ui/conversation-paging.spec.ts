@@ -66,7 +66,7 @@ async function expectRows(page: Page, first: number, count: number, fixtureIndex
         return match?.[1] === String(fixtureIndex) && Number(match[2]) === first + offset
           && text.includes(`Rich end ${fixtureIndex}/${first + offset}.`) && row.getClientRects().length > 0;
       });
-  }, { first, count, fixtureIndex }, { timeout: 5000 });
+  }, { first, count, fixtureIndex });
 }
 
 function measureAnchor(row: Element, scrollToTop: boolean) {
