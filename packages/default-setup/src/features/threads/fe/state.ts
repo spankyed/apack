@@ -1,5 +1,6 @@
 import { surfaceStorage } from '@apackdev/sdk/fe'
 import { ref as featureRef } from '#generated/ref.ts'
+import { messageStreamText } from './message-text.ts';
 
 /** This surface's window storage: the prefix is its ref, so these names are scoped to it. */
 const storage = surfaceStorage(featureRef('threads'))
@@ -157,6 +158,7 @@ type ViewEvent =
   | { type: 'DETAIL.READ'; id: string; detail: ThreadDetailView | null }
   | { type: 'CHAT.READ'; threadId: string; chat: ChatPage | null }
   | { type: 'MESSAGE.READ'; id: string; message: MessageEntity | null }
+  | { type: 'MESSAGE_TEXT_APPENDED'; messageId: string; at: number; text: string; done?: true }
   | { type: 'TAB.READ'; threadId: string; tab: ThreadTabView | null }
   | { type: 'SEARCH.READ'; query: string; results: MessageSearchResult[] }
   | { type: 'VIEW.FAILED'; view: string; error: string }
@@ -331,9 +333,14 @@ function threadStore(ctx: ThreadsContext, lists: ThreadsContext['lists']): Parti
   };
 }
 
-/** The messages `ids` name, as their views last gave them */
+/** The messages `ids` name: the row each view last gave, with a streamed reply's run spliced in (G1) */
 function messagesOf(ctx: ThreadsContext, ids: string[]): Partial<MessageEntity>[] {
-  return ids.flatMap((messageId) => (ctx.messageContents[messageId] ? [ctx.messageContents[messageId]] : []));
+  return ids.flatMap((messageId) => {
+    const row = ctx.messageContents[messageId];
+    if (!row) return [];
+    const shown = messageStreamText(row.text, ctx.messageStreams[messageId]);
+    return [shown === row.text ? row : { ...row, text: shown }];
+  });
 }
 
 /** The chat's and the detail page's messages, composed again from their ids and each message's view */
@@ -557,8 +564,39 @@ const threadsState = setup({
       const { id: messageId, message } = typeOf('MESSAGE.READ', event);
       if (!context.messageViews.includes(messageId)) return {};
       const { [messageId]: _gone, ...rest } = context.messageContents;
-      const next = { ...context, messageContents: message ? { ...rest, [messageId]: message } : rest };
-      return { messageContents: next.messageContents, ...composedMessages(next) };
+      // A durable write caught the row up to the run, so the run has nothing left to add. Dropped here
+      // rather than left to grow: this is the only place that learns what the row now holds
+      const run = context.messageStreams[messageId];
+      const caughtUp = run !== undefined && (message?.text?.length ?? 0) >= run.at + run.text.length;
+      const { [messageId]: _spliced, ...streams } = context.messageStreams;
+      const next = {
+        ...context,
+        messageContents: message ? { ...rest, [messageId]: message } : rest,
+        messageStreams: caughtUp || !message ? streams : context.messageStreams,
+      };
+      return { messageContents: next.messageContents, messageStreams: next.messageStreams, ...composedMessages(next) };
+    }),
+
+    /**
+     * A streamed reply's next characters (G1): the feed beside the row, spliced by `messageStreamText`.
+     *
+     * A run is extended only where the event continues it exactly. A gap means this window missed an event,
+     * and the honest answer is to start a fresh run at the offset that just arrived — which the splice then
+     * ignores until the row reaches it, rather than showing text with a hole in it. `done` drops the run,
+     * and the writer has already written the row by then, which is why that order is its contract.
+     */
+    appendMessageText: assign(({ context, event }) => {
+      const ev = typeOf('MESSAGE_TEXT_APPENDED', event);
+      if (!context.messageViews.includes(ev.messageId)) return {};
+      const { [ev.messageId]: held, ...others } = context.messageStreams;
+      if (ev.done) {
+        const next = { ...context, messageStreams: others };
+        return { messageStreams: others, ...composedMessages(next) };
+      }
+      const continues = held !== undefined && held.at + held.text.length === ev.at;
+      const run = continues ? { at: held.at, text: held.text + ev.text } : { at: ev.at, text: ev.text };
+      const messageStreams = { ...others, [ev.messageId]: run };
+      return { messageStreams, ...composedMessages({ ...context, messageStreams }) };
     }),
     readTab: enqueueActions(({ context, event, enqueue }) => {
       const { threadId, tab } = typeOf('TAB.READ', event);
@@ -1466,6 +1504,7 @@ const threadsState = setup({
     chatMessageIds: [],
     detailMessageIds: [],
     messageContents: {},
+    messageStreams: {},
     messageViews: [],
     tabViews: [],
     tabsRead: [],
@@ -1494,6 +1533,7 @@ const threadsState = setup({
     'SEARCH.READ': { actions: 'readMessageSearch' },
     'VIEW.FAILED': { guard: ({ event }) => event.view === 'messageSearch', actions: 'endMessageSearch' },
     'MESSAGE.READ': { actions: 'readMessage' },
+    MESSAGE_TEXT_APPENDED: { actions: 'appendMessageText' },
     'TAB.READ': [
       { guard: 'tabGone', actions: 'dropThread' },
       { actions: 'readTab' },

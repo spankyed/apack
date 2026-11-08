@@ -1,7 +1,9 @@
-// The threads views, and what a streamed reply costs them. A reply streams into one message, rewriting its text every
-// flush of the stream writer; the chat page and the detail page list messages by id and read no message's content, so
-// that message's own view is the one view the stream re-runs. The rest of what a window shows — the list, the recent
-// threads, the open tab — hears nothing until the turn ends.
+// The threads views, and what a streamed reply costs them.
+//
+// **The characters do not reach a view at all** (G1): a reply streams to the windows as a feed and the row is written
+// on a slower clock, so a flush re-runs nothing and a durable write re-runs the one view that reads the message's
+// content — its own. The chat page and the detail page list messages by id and read no message's text, so the rest of
+// what a window shows (the list, the recent threads, the open tab) hears nothing until the turn ends.
 import { describe, expect, it } from 'vitest'
 import { startApp, type TestApp, type TestView } from '@apackdev/testing/harness'
 import { takeSystemErrors, testCalls } from '@apackdev/sdk/testing'
@@ -27,7 +29,13 @@ const say = (threadId: EARS.EntityId, text: string, sender: 'user' | 'assistant'
   repository.chatCommands.addMessage({ threadId, text, sender }).id as EARS.EntityId
 
 describe('a streamed reply', () => {
-  it("re-runs its message's view once per flush, and no list, page or tab", async () => {
+  /**
+   * **This case used to read "once per flush", and that was the defect** (G1). The flush rate was the write rate, so
+   * the engine stored the whole accumulated message every 80 ms — `flushes x final size / 2`, 15 MB for a 40 KB reply
+   * over a minute. The flushes now carry the characters to the windows and touch no row, which is what this asserts:
+   * sixteen of them re-run nothing at all.
+   */
+  it('re-runs no view while it streams, and only its own message when the row is written', async () => {
     const id = thread('Streaming')
     say(id, 'Question')
     const reply = say(id, '', 'assistant')
@@ -42,20 +50,22 @@ describe('a streamed reply', () => {
     }
     for (const view of Object.values(views)) await view.next()
 
-    // The writer the Claude Code chat action streams with: each flush is one write of the message's text, at most one
-    // per its 80 ms interval, so the message view's rate is the flush rate (measured: docs/archive/plans/live-queries.md, threads).
-    // That interval is past the watch scheduler's gap, so each flush is one re-run; flushing faster than a frame would be
-    // coalesced instead, which is why each flush here waits for its delivery as a window hears it, up to a frame late
-    const writer = createStreamWriter({ chat: chatService } as never, reply)
+    // A durable clock long enough that no tick lands inside the loop: what is under test is that the characters
+    // themselves write nothing, so the row must be written by `finalize` alone
+    const writer = createStreamWriter({ chat: chatService } as never, reply, { intervalMs: 80, durableMs: 600_000 })
     const FLUSHES = 16
-    for (let flush = 0; flush < FLUSHES; flush++) {
-      writer.pushImmediate('x')
-      await views.message.next()
-      await app.settle()
-    }
+    for (let flush = 0; flush < FLUSHES; flush++) writer.pushImmediate('x')
+    await app.settle()
+
+    const streaming = Object.fromEntries(Object.entries(views).map(([name, view]) => [name, view.updates.length - 1]))
+    expect(streaming, 'a flush carries characters, not a row').toEqual({ message: 0, chat: 0, detail: 0, list: 0, recent: 0, tab: 0 })
+
+    writer.finalize()
+    await views.message.next()
+    await app.settle()
 
     const reruns = Object.fromEntries(Object.entries(views).map(([name, view]) => [name, view.updates.length - 1]))
-    expect(reruns, 'one re-run per flush, and nothing else').toEqual({ message: FLUSHES, chat: 0, detail: 0, list: 0, recent: 0, tab: 0 })
+    expect(reruns, 'the row reaches the one view that reads a message s content').toEqual({ message: 1, chat: 0, detail: 0, list: 0, recent: 0, tab: 0 })
     const last = views.message.updates.at(-1)!
     expect(last.ok && last.value?.text).toBe('x'.repeat(FLUSHES))
   })

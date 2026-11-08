@@ -32,7 +32,7 @@ removes the finding rather than fixing it, and names the construction that does.
 | T6 | test | `be/services/terminal.ts` — a shell's exit status decides whether its terminal goes with it, and `restart(id)` starts a new generation under the terminal that is already there (`features/code/be/features/terminal.ts`'s `terminal.RESTART_TERMINAL`; the panel's menu item sends it) | `default-setup/tests/features/code/be/terminal-generations.spec.ts`, six cases; driven: a shell told to `exit 139` keeps its terminal, the restart keeps its id with a new pid and reads generation 2 | the spec, mutation-checked four ways — closing on every exit, reading a signal as clean, not advancing the generation, leaving a restarted terminal marked dead. **The id is the guard**: a restart that minted a new one is what lost the pin, the group and the position, and a case asserts the same id comes back | — |
 | T8 | test | `fe/composables/useTerminalActions.ts` — `customTitle` then `title`; the cwd derivation is the backend's and was being overridden here | `tests/features/code/fe/composables/use-terminal-actions.spec.ts` | the spec: restoring the cwd basename fails the case where a create passed a title |
 | T9 | test | `fe/state.ts` — `moveTerminalToPanel` prunes the group it emptied, as the four other removals in that machine do | `tests/features/code/fe/state.spec.ts` | the spec: dropping the prune fails it |
-| G1 | open | priced, not fixed — see [the pricing](#g1-priced-what-the-throttled-writer-writes-to-ears--2026-11-07) | three streaming runs at 24, 60 and 120 chunks; `ears.write` request bytes on the app database | — | the mechanism and its cost model are measured and the review's 15 MB figure confirmed. **Still open, in this goal's scope, and one decision from closing** — see [the decision](#g1-the-one-decision-left--2026-11-08) |
+| G1 | test | the characters are a feed and the row is written on a slower clock: `chat.streamMessageText` broadcasting `MESSAGE_TEXT_APPENDED` (`threads/be/services/chat.ts`, `be/types.ts`), the writer feeding on `intervalMs` and writing on `durableMs` (default 2000) and at finalize (`content/actions/claude-code/_helpers/stream-writer.ts`), and the window splicing the run onto the row (`threads/fe/message-text.ts`, read by `messagesOf` in `fe/state.ts`) | `default-setup/tests/content/actions/claude-code/_helpers/stream-writer.spec.ts` (6 cases, on fake timers); `tests/features/threads/fe/message-text.spec.ts` (6 cases over the splice); and `tests/features/threads/be/views.spec.ts` "re-runs no view while it streams, and only its own message when the row is written", which is the pricing's own case inverted | the view case is the guard: it used to read *once per flush*, which was the defect, and it now fails if a flush writes a row. Mutation-checked both new rules — putting the durable write back on the feed's clock fails it at 12 writes, and dropping the late-joiner branch of the splice fails its case | the decision behind it is [recorded](#g1-the-one-decision-left--2026-11-08); a delta the window cannot splice falls back to the row, which is bounded by `durableMs` rather than by anything this measures |
 | F5 | priced | not fixed — `services/terminal.ts:145` writes inside `resize()` | `terminal-resize` scenario: 24 resizes, 24 app writes, 2,112 bytes, 10/10 trials with min = max | — | dissolves in Phase B, whose acceptance names the guard ("a resize writes no application row"). This is its before |
 | F18 | open | found by the resize scenario, not fixed | the scenario's first attempt timed out at `cols: 80` after 24 writes had landed | — | new; recorded in the review. Adjacent to M2 and not the same defect |
 | F4 | priced | not fixed — one `broadcastToSurface` per pty chunk | `terminal-output` scenario: 64 KiB of output → 115 messages, 76,824 bytes, 10/10 trials | — | dissolves in Phase B, whose guard ("N MB of output produces at most M channel messages") now has its before: ~1,840 messages and 1.2 MB per MB |
@@ -588,8 +588,22 @@ for the review's 40 KB reply over 60 s:
 views behind its own writes (`ViewWrites`, `@apackdev/sdk/fe`, used in `threads/fe/state.ts`), which is the
 mechanism a feed needs to patch a message the view also delivers.
 
-**Not chosen here.** Constraints say to record a fork this goal's Decisions do not settle rather than choose
-one, and D1–D11 do not reach the chat's delivery channel. This is the row that keeps the table at 52 of 58.
+**Settled on the repository owner's authorization** (2026-11-08), who was shown the three options above and
+their costs and asked for the one that moves toward excellence: **the feed, with the durable write on a 2 s
+clock.** Three reasons, in the order they decided it:
+
+1. `default-setup/CLAUDE.md` already puts streaming tokens on a feed. Choosing it makes the code agree with
+   the documented architecture, rather than leaving the architecture describing something the code does not do.
+2. The refactor target's principle is that EARS stores durable metadata and not *a byte-stream mirror*. A
+   write of a growing string every 80 ms is exactly that mirror.
+3. **Finalize-only is cheaper and worse.** It is 40 KB against 0.6 MB, but a crash mid-stream leaves the row
+   empty where today it holds the last 80 ms — and a chat message is something the user comes back to. The
+   slower clock keeps that durability, and it is also what lets a window that opened mid-stream catch up,
+   since such a window has no run to splice and shows the row until the next write reaches its offset.
+
+**What it cost to implement: no call site.** All four callers pass `{ intervalMs: 80 }`, which still means the
+window's cadence; `durableMs` defaults to 2 s, so the feed rate a reader feels is unchanged and only the row's
+clock moved.
 
 ### The strict chain passes on the pushed state — 2026-11-08
 

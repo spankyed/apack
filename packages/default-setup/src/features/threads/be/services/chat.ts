@@ -1,5 +1,6 @@
 import type { Reply } from '@apackdev/sdk/events';
 import { answer } from '../answer.ts';
+import { broadcastToSurface } from '#generated/events.ts';
 import { EARS } from '#generated/ears.ts';
 import { repository } from '#generated/repository.ts';
 import type { BlockConfig, BlockResponse, MessageEntity, OutgoingThreadsEvents, ThreadCreateData, MessageReferences } from '#features/threads/be/types.ts';
@@ -235,6 +236,34 @@ export function updateMessageState(
   } catch (err) {
     logger.error(`updateMessageState failed for ${messageId}`, { error: errorMessage(err) });
   }
+}
+
+/**
+ * Sends the next characters of a streamed reply to the windows showing that message.
+ *
+ * **The feed beside the row, which is what makes a streamed reply affordable** (G1). `updateMessageState`
+ * writes the whole message, and a streamed reply used to call it every 80 ms — `flushes x final size / 2`
+ * bytes, 15 MB for a 40 KB reply over a minute, quadratic in the reply's length. So the row is written on a
+ * slower clock and the characters travel here, which is what `default-setup/CLAUDE.md` means by *a feed is
+ * news too … as streaming tokens would*.
+ *
+ * It is a broadcast because every window showing the message needs it and nobody asked for it, and it
+ * carries `at` rather than the text so far so a window can splice it onto what its view last gave it. The
+ * channel choice lives here, beside `updateMessageState`, so an action keeps calling `services.chat`.
+ */
+export function streamMessageText(params: {
+  messageId: EARS.EntityId;
+  at: number;
+  text: string;
+  done?: true;
+}): void {
+  broadcastToSurface('threads', {
+    type: 'MESSAGE_TEXT_APPENDED',
+    messageId: params.messageId,
+    at: params.at,
+    text: params.text,
+    ...(params.done ? { done: true as const } : {}),
+  });
 }
 
 /**
@@ -521,6 +550,7 @@ export const chatService = {
   sendChoiceBlock,
   sendQuestionBlock,
   updateMessageState,
+  streamMessageText,
   createMarkerMessage,
   addMessagesToThread,
   createThread,

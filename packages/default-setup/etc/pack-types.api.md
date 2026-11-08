@@ -3795,6 +3795,25 @@ type OutgoingThreadsEvents =
     type: 'SHOW_THREAD';
     threadId: EARS.EntityId;
     restore?: boolean;
+}
+/**
+ * The next characters of a streamed reply, for every window showing that message.
+ *
+ * **The feed, not the row** (G1). A streamed reply used to reach a window by writing the whole accumulated
+ * text to EARS every 80 ms, which is `flushes x final size / 2` bytes — 15 MB for a 40 KB reply over a
+ * minute, measured, and quadratic in reply length. The row is still written, on a slower clock and at the
+ * end, so a crash loses seconds rather than the reply; what arrives every 80 ms is this, the delta.
+ *
+ * `at` is the offset the delta starts at, so a window can splice it onto whatever the message's view last
+ * gave it and a window that opened mid-stream can tell it has no run to append to — it shows the row until
+ * the next durable write catches it up. `done` is the last one: the row is written before it is sent.
+ */
+ | {
+    type: 'MESSAGE_TEXT_APPENDED';
+    messageId: EARS.EntityId;
+    at: number;
+    text: string;
+    done?: true;
 } | {
     type: 'CHAT_STARTED';
     data: ChatStart;
@@ -4953,6 +4972,18 @@ interface ThreadsContext {
     detailMessageIds: string[];
     /** Each listed message as its own view last gave it */
     messageContents: Record<string, Partial<MessageEntity>>;
+    /**
+     * The characters of a streamed reply that have arrived since the message's row was last written, by
+     * message id: `at` is the offset the run starts at (G1).
+     *
+     * **The run is spliced onto the row rather than replacing it**, so the two channels cannot disagree: the
+     * row is what the view gave, the run is what has arrived since, and a window that opened mid-stream has a
+     * run starting past the end of its row and shows the row until the next durable write catches it up.
+     */
+    messageStreams: Record<string, {
+        at: number;
+        text: string;
+    }>;
     /** The messages a view is followed for */
     messageViews: string[];
     /** The open tabs a view is followed for */
@@ -5643,6 +5674,7 @@ declare const featureServices: {
         sendChoiceBlock: typeof sendChoiceBlock;
         sendQuestionBlock: typeof sendQuestionBlock;
         updateMessageState: typeof updateMessageState;
+        streamMessageText: typeof streamMessageText;
         createMarkerMessage: typeof createMarkerMessage;
         addMessagesToThread: typeof addMessagesToThread;
         createThread: typeof createThread;
@@ -6064,6 +6096,26 @@ declare function showThread(threadId: EARS.EntityId, options?: {
 }): void;
 
 declare function storeHandle(key: string, handle: CodexTurnHandle): void;
+
+/**
+ * Sends the next characters of a streamed reply to the windows showing that message.
+ *
+ * **The feed beside the row, which is what makes a streamed reply affordable** (G1). `updateMessageState`
+ * writes the whole message, and a streamed reply used to call it every 80 ms — `flushes x final size / 2`
+ * bytes, 15 MB for a 40 KB reply over a minute, quadratic in the reply's length. So the row is written on a
+ * slower clock and the characters travel here, which is what `default-setup/CLAUDE.md` means by *a feed is
+ * news too … as streaming tokens would*.
+ *
+ * It is a broadcast because every window showing the message needs it and nobody asked for it, and it
+ * carries `at` rather than the text so far so a window can splice it onto what its view last gave it. The
+ * channel choice lives here, beside `updateMessageState`, so an action keeps calling `services.chat`.
+ */
+declare function streamMessageText(params: {
+    messageId: EARS.EntityId;
+    at: number;
+    text: string;
+    done?: true;
+}): void;
 
 declare const terminalCommands: {
     /** Records a terminal the service started, under the id it took for it (`newId`) */

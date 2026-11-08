@@ -41,9 +41,10 @@ Commit usable checkpoints as you go. Do not expand or reduce scope without user 
 
 **One owner per terminal session, and the owner is whoever claims it.** The pty left the API process for a
 broker in a pinned sibling repository (`apack-terminal`), the VT core went with it, and a session's lifetime
-stopped being the lifetime of whatever asked for one. **52 of the document's 58 rows are closed.** The
-review held **55** rows at the survey commit `98bf6a0935`; F18 and T10 are rows this goal added, and of the
-53 review findings in scope, **one is open**: G1.
+stopped being the lifetime of whatever asked for one. **Every review finding in scope is closed**: the
+document holds 58 rows, of which 53 are review findings this goal had to close and 53 are closed. The review
+held **55** rows at the survey commit `98bf6a0935` — F18 and T10 are rows this goal added — and G3, G6 and
+G7 are excluded by Scope under *"G2–G7 … their own goal"*.
 
 21 commits here and 12 in `apack-terminal`.
 
@@ -59,17 +60,19 @@ review held **55** rows at the survey commit `98bf6a0935`; F18 and T10 are rows 
 | P — presentation | done | `TerminalAttachment`; `@xterm/*` imported by one module, enforced **both ways** so the rule cannot pass by having no subject |
 | A — agent facts | done | OSC 633 out of the VT core — facts, search and wait answering for a session nobody is drawing; reported paths treated as claims |
 
-### What remains, and which of it is this goal's
+### What remains, and which of it was this goal's
 
-**One row is in scope and open, and saying otherwise was this record's own error.** An earlier revision of
-this section was headed *"why none of it is this goal's"* and put G1 among the rest. The Scope section
-settles it the other way — *"G1 is in scope here because it is payload discipline rather than process
-ownership"* — and the output pipe the review assigns it to is this goal's Phases B and P, so there was
-nothing it had been assigned away to.
+**G1 was in scope and was nearly recorded as though it were not.** An earlier revision of this section was
+headed *"why none of it is this goal's"* and put G1 among the excluded rows. The Scope section settles it the
+other way — *"G1 is in scope here because it is payload discipline rather than process ownership"* — and the
+output pipe the review assigns it to is this goal's Phases B and P, so there was nothing it had been assigned
+away to. It is closed: a feed for the characters, the row on a 2 s clock, on the owner's authorization and
+with the reasoning in [the decision](../../references/evidence/terminal-ownership.md#g1-the-one-decision-left--2026-11-08).
+
+What is left is not this goal's, and each line says why rather than asserting it:
 
 | | |
 |---|---|
-| **G1** | **in scope, open, and one decision from closing.** Priced, its mechanism measured and the review's 15 MB figure confirmed. What it needs is a single call — a streamed reply reaches the window as a feed with the durable row on a slower clock, or stays an EARS write per flush — on which `default-setup/CLAUDE.md` and the code as written disagree, and which D1–D11 do not reach. [The decision, with what each option costs](../../references/evidence/terminal-ownership.md#g1-the-one-decision-left--2026-11-08): 15 MB today, 40 KB at finalize only, ~0.6 MB on a 2 s clock. Recorded rather than chosen, as Constraints require |
 | G3, G6, G7 | **excluded by Scope**, under *"G2–G7 … their own goal"*: the files move substantially on #372 and most of them dissolve against the process layer rather than needing fixes |
 | F18, T10 | **not review findings.** The review held 55 rows at `98bf6a0935`; these two were found here and added to it, each with what it would cost. F18 is adjacent to M2 and not the same defect; T10's claim needs re-checking against the `pendingTabOrder` guard that already returns early |
 
