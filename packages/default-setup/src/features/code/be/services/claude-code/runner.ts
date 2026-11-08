@@ -89,9 +89,27 @@ export interface StreamHandle {
   endInput(): void
   /** Wait for the child to exit. Resolves with the exit code. */
   done(): Promise<{ exitCode: number; signal: NodeJS.Signals | null; stderr: string }>
+  /**
+   * Wait for the child to exit for as long as it keeps working, and terminate it once it has gone silent.
+   *
+   * `exited: true` is a child that ended on its own; `exited: false` is one terminated for silence, whose
+   * stdio may still be held open by something it started. See {@link EXIT_IDLE_MS}.
+   */
+  waitForExitWhileWorking(idleMs?: number): Promise<{ exited: boolean }>
   /** Forcefully kill the child. */
   kill(signal?: NodeJS.Signals): void
 }
+
+/**
+ * How long a wait for the child to exit tolerates the child doing nothing at all.
+ *
+ * **Progress, not a clock.** Every line the child writes on stdout and every byte it writes on stderr starts
+ * this over, so a child still doing its work is never cut off, however long that work takes. What it bounds is
+ * silence: a child that has finished and holds a stdio pipe open — one grandchild of its own that inherited
+ * the pipe is enough — pins the awaiting caller for the life of the process, and the conversation that caller
+ * belongs to then reads as running until the app restarts.
+ */
+export const EXIT_IDLE_MS = 15_000
 
 // ─── Env scrubbing ───────────────────────────────────────────────────────────
 
@@ -273,9 +291,14 @@ export async function spawnStream(
   const trace = createClaudeLifecycleTrace('print', undefined, child.pid)
   trace('launch')
   child.once('spawn', () => trace('ready', {pid: child.pid}))
+  // Anything waiting on the child's progress registers here, and every byte it writes tells them. The set is
+  // empty whenever nobody is waiting, which is nearly always, so a chatty child pays nothing for it.
+  const waitingOnProgress = new Set<() => void>()
+  const madeProgress = () => { for (const notify of waitingOnProgress) notify() }
+
   // Drain throughout the process lifetime, retaining only bounded diagnostics.
   const stderrTail = createStderrTail()
-  child.stderr.on('data', c => stderrTail.append(c))
+  child.stderr.on('data', c => { stderrTail.append(c); madeProgress() })
 
   let exited = false
   let killTimer: ReturnType<typeof setTimeout> | undefined
@@ -344,9 +367,17 @@ export async function spawnStream(
     }
   }
 
+  // Every line the consumer pulls is progress by the child that wrote it, which is what bounds the wait below.
+  async function* observedLines(): AsyncGenerator<DecodedLine> {
+    for await (const line of decodeNdjson(child.stdout)) {
+      madeProgress()
+      yield line
+    }
+  }
+
   return {
     child,
-    lines: decodeNdjson(child.stdout),
+    lines: observedLines(),
     write(value: unknown): boolean {
       if (!child.stdin.writable) {
         logger.warn('write to stdin failed — not writable', { pid: child.pid })
@@ -360,6 +391,33 @@ export async function spawnStream(
     },
     done(): Promise<{ exitCode: number; signal: NodeJS.Signals | null; stderr: string }> {
       return exitPromise
+    },
+    waitForExitWhileWorking(idleMs: number = EXIT_IDLE_MS): Promise<{ exited: boolean }> {
+      return new Promise<{ exited: boolean }>(resolve => {
+        let settled = false
+        let silenceTimer: ReturnType<typeof setTimeout> | undefined
+        const finish = (result: { exited: boolean }) => {
+          if (settled) return
+          settled = true
+          waitingOnProgress.delete(restartSilence)
+          if (silenceTimer) clearTimeout(silenceTimer)
+          resolve(result)
+        }
+        const restartSilence = () => {
+          if (settled) return
+          if (silenceTimer) clearTimeout(silenceTimer)
+          silenceTimer = setTimeout(() => {
+            logger.warn('child has gone silent without exiting — terminating it', { pid: child.pid, idleMs })
+            terminate()
+            finish({ exited: false })
+          }, idleMs)
+          silenceTimer.unref()
+        }
+        waitingOnProgress.add(restartSilence)
+        // An exit settles this whichever way it went: a spawn error means there is no child to wait for.
+        exitPromise.then(() => finish({ exited: true }), () => finish({ exited: true }))
+        restartSilence()
+      })
     },
     kill(signal: NodeJS.Signals = 'SIGTERM'): void {
       terminate(signal)

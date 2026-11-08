@@ -11,7 +11,7 @@ function fixture(){
  const push=(line:DecodedLine)=>{queue.push(line);waiting?.();waiting=undefined}
  const stop=()=>{ended=true;waiting?.();waiting=undefined;finish({exitCode:0,signal:null,stderr:''})}
  const write=vi.fn((request:any)=>{push({ok:true,value:{id:request.id,value:identity}});return true})
- const handle={child:{} as any,lines:(async function*(){while(!ended){if(queue.length)yield queue.shift()!;else await new Promise<void>(resolve=>{waiting=resolve})}})(),write,endInput:vi.fn(stop),done:()=>done,kill:vi.fn(stop)}
+ const handle={child:{} as any,lines:(async function*(){while(!ended){if(queue.length)yield queue.shift()!;else await new Promise<void>(resolve=>{waiting=resolve})}})(),write,endInput:vi.fn(stop),done:()=>done,waitForExitWhileWorking:()=>done.then(()=>({exited:true})),kill:vi.fn(stop)}
  vi.mocked(spawnStream).mockReset().mockImplementation(async(_args,options)=>{options?.signal?.addEventListener('abort',stop,{once:true});push({ok:true,value:{ready:true}});return handle})
  const authority=createClaudeBackgroundStatusAuthority(parent,{cwd:'/owned',cliPath:'/pinned-claude',env:{BUN_OPTIONS:'--preload=/original.mjs'}})
  return{authority,handle,write,push,stop}

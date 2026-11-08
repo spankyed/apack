@@ -397,8 +397,15 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
       promptHosts.close()
       hostControls.close()
       stream.endInput()
-      await stream.done()
-      await pumpPromise
+      // Bounded by the child's own progress, not by a clock: a child still writing is waited on for as long
+      // as it keeps writing. A child that has gone silent without exiting is terminated, because stdin EOF
+      // is not something it has to act on — anything it started that inherited its stdio holds the pipe open,
+      // and an unbounded await here is what leaves `closeIdleConversation` hung and the conversation reading
+      // as busy for the rest of the app's run.
+      const { exited } = await stream.waitForExitWhileWorking()
+      // The pump ends when stdout does, which an exited child's closed pipes cause. One terminated for
+      // silence may have left those pipes held by something it started, so there is nothing here to wait on.
+      if (exited) await pumpPromise
     },
 
     kill(): void {
