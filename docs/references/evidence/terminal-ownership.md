@@ -401,6 +401,41 @@ the pool keeps the emulator alive across a host's teardown, so a reattach with 2
 and sends no bytes. Serving history to a new emulator is the broker's bounded history, which is where one
 copy belongs and which Phase B has not built.
 
+### The app on Windows, end to end — 2026-11-08
+
+The layer the broker's own cases cannot reach: the pack arranging the shell, its per-shell submit, and a
+session outliving the API — asked of the running app on the development VM
+(`drive/terminal-windows.ts`, 40s).
+
+```
+submit: "\r"            cwdBefore: C:\Users\apackdev    cwdAfterCd: C:\Windows
+followedCd: true        ranACommand: true
+crashedKeptItsTerminal: true   crashedMarkedExited: true
+restartedInPlace: true         secondGeneration: 2
+shellSurvivedTheApi: true      terminalBackAfterApi: true
+```
+
+**The script takes `submit` from the descriptor rather than hardcoding it**, which is what made a stale
+build visible. The first run reported `"\r\n"` and `followedCd: false` — correct reporting of a `dist/`
+copied from the Mac *before* the X4 commit, not a defect. A script that had written the expected terminator
+in itself would have passed over the shipped bug. The other six observations were genuine on that run too:
+their code was in the build, and only the two X4-dependent ones were testing what was not there.
+
+**Two defects were found by doing this that no Mac could have**, both now fixed with cases:
+
+- **The terminal never started on Windows at all.** `cargo` writes `apack-terminal.exe` there; the lookup
+  asked for the extensionless name, `existsSync` said no, and the caller got a refusal telling it to run
+  `cargo build` in a checkout where `cargo build` had just succeeded.
+- **PowerShell commands never ran.** `submitFor` answered `\r\n` for every Windows shell — right for
+  cmd.exe, which is what it was measured against. PowerShell takes the line on the carriage return and
+  reads the newline as more input, so the parser waits and the screen shows `>>`.
+
+**What it cost to get here**, since the setup is the part a future session repeats: Node 24 installed (the
+VM had 23, which npm 10 and vitest 4.1 rule out), both vendored checkouts linked with `ELMDB_DIR` and
+`APACK_TERMINAL_DIR` because the linkers default to the Mac's layout, elmdb moved to its pin and its
+binding built, and the pack's `dist/` copied from the Mac — because `apack pack build` does not run on
+Windows at all, which is recorded above and is the CLI's.
+
 ### The Windows session — 2026-11-08
 
 **X4 closed, and a defect found that only a Windows run could find.**

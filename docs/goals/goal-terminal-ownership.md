@@ -515,6 +515,10 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   this state is not that one: the Phase H fork is unsettled and X4 and Phase B's Windows half are
   outstanding, so five macOS runners would be validating something that must still change. It is the first
   thing to run once those land.
+- **The app is proven on Windows end to end** — a terminal follows `cd`, a crashed shell keeps its
+  terminal and restarts as generation 2 in place, and a session survives the API being killed
+  ([the record](../references/evidence/terminal-ownership.md#the-app-on-windows-end-to-end--2026-11-08)).
+  That was the last thing this goal had never asked on that platform.
 - **X4 is closed and no Windows work remains.** PowerShell and cmd are arranged, claimed on a VM run on
   2026-11-08 ([the record](../references/evidence/terminal-ownership.md#the-windows-session--2026-11-08)).
   **Every platform finding is now closed** — X1, X2, X4, X5, X6, X7, X8, X9, X10, X11, X12, X13 — and 50 of
