@@ -401,6 +401,41 @@ the pool keeps the emulator alive across a host's teardown, so a reattach with 2
 and sends no bytes. Serving history to a new emulator is the broker's bounded history, which is where one
 copy belongs and which Phase B has not built.
 
+### The full chain passes, `test:native` included — 2026-11-08
+
+`npm run chain` at `2b1ae253ad`: **passed in 2451.5s (24 of 33 cached) on a 10-core budget**, evidence in
+`node_modules/.cache/apack-chain/runs/2026-11-08T01-28-27Z-8961`. `test:native` ran for 2276.2s — 19 files
+passed and 4 skipped, 94 tests passed and 47 skipped, nothing failed. That is the goal's required integrated
+validation; the strict dispatch is the remaining half.
+
+**It took five attempts, and four of them failed for reasons that were not the code.** Worth recording
+because each wore a convincing disguise:
+
+1. **Interference.** A test file committed while the chain ran. The chain detected it itself — *"5 steps
+   passed, then their inputs changed"*, naming the file — and failed at `test:external-pack:fork`. The
+   inputs have to be frozen for a run's whole length, not just at its start.
+2. **A stale sealed build.** Adding that same file left `build:default-setup` cached while the pack's
+   recorded build went stale, so the fork step failed with `Compiler startup input changed:
+   ["authored-files"]`. Recorded above as a defect; cleared by rebuilding the pack.
+3. **A real finding of my own.** `identity-guard` caught a platform data dir in a spec fixture I had
+   written earlier that day. It is the one failure in the five that was a defect, and it reached the tree
+   at 16:43 while a chain reported passing at 17:47 — that run kept no `test-unit-host` evidence where the
+   run that caught it does, so the step was cached rather than green. Whether that is a cache-key gap is
+   not answerable now: the stamp that would say was cleared by the failure.
+4. **A stale lock, twice, reading as a slow machine.** The container's `build:default-setup` was killed at
+   its 600s deadline having spent the whole budget *waiting* on a `.apack/build.lock` left by the previous
+   killed run. `apack pack build` waits for a running build rather than refusing, so each run inherited the
+   last one's corpse and died the same way. It presents as "1.56x its usual 383.8s", which is exactly what
+   a loaded machine looks like — two runs were spent on that reading, one of them after the machine had
+   deliberately been quietened. Fixed in `scripts/linux-runner.ts`'s orphan cleanup under the volume lease,
+   beside the three classes already there.
+
+**The lesson the fourth one carries** is that a deadline kill says nothing about *why* a step was slow, and
+a step that waits on a lock inside its own budget is indistinguishable from one doing slow work. The
+timeout message already says *"a timeout alone does not distinguish slow progress from stalled work.
+Inspect the run output before retrying or changing its budget"* — and the run output had the answer in it
+both times.
+
 ### Phase A: facts out of the VT core — 2026-11-07
 
 **What a session reports about itself, answered without a window.** The markers D3 arranges are now read

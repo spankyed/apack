@@ -430,25 +430,15 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   rows that existed.
 - **Two things found while validating, neither this goal's to fix, both named rather than absorbed:**
   - `@apackdev/cli`'s `compiler-native-runtime.native.spec.ts > builds and archives a real pack under the
-    captured Electron runtime` fails with `AbortError: The operation was aborted`, caused by
-    `TimeoutError`, after 72s. **Pre-existing** — the file was last touched 2026-10-21 by `2f7566291b`
-    ("share captured compiler installations in a machine-wide store"), before this goal — and
-    **deterministic rather than contention**: it reproduces alone, in the same 72s, with the other six
-    cases in the file skipped. It is the one thing standing
-    between here and a green full chain, and the repo's rules say to report it rather than raise a deadline
-    or narrow its input.
-  - **Adding a test to default-setup leaves `build:default-setup` cached and its sealed build stale**, so
-    `test:external-pack:fork` then fails with `Compiler startup input changed: ["authored-files"]` until
-    someone rebuilds the pack by hand. Two definitions of "the pack's inputs" disagree:
-    `chain-steps.ts:940` excludes the pack's tests on the stated premise that *"`apack pack build` never
-    reads those"*, while the build's own recorded inventory comes from `isPackInputPath`
-    (`apack-host/src/build/pack-inputs.ts`), which excludes only `.git`, `node_modules`, `dist`, `.apack`
-    and `src/__generated__` — so a pack's `tests/` are authored inputs to the recording and not to the
-    cache key. **A cache that can go stale**, which is the thing the repo's own rule names. Reproduced
-    twice today and cleared both times by `npm run build:default-setup`. Not fixed here: which side should
-    move is a real choice — teaching the chain step to declare the tests costs a 123s rebuild on every pack
-    test edit, and narrowing the recorded inventory is only honest if the compiler truly never enumerates
-    them — and this goal does not own that tooling.
+    captured Electron runtime` **is load-sensitive, not a blocker — an earlier revision of this handoff
+    called it deterministic and that was wrong.** It passes at 73.0s
+    (`runs/2026-11-08T01-28-27Z-8961/test-native.log`); it failed twice earlier the same day with
+    `AbortError: The operation was aborted`, from the `AbortSignal.timeout(60000)` the case puts around
+    `captureCompilerInstallation`. What made it look deterministic was reproducing alone — but alone on a
+    machine that was busy, and the reading that it *is* 72s of work was the symptom. The capture is shared
+    in a machine-wide store (`2f7566291b`), and this checkout's first native run was the same day, so a
+    cold store is the likely difference; that is not established and the case's own 60s budget is the edge
+    either way. Treat a failure here as "the machine was loaded or the store was cold", not as a defect.
   - `default-setup/tests/features/code/be/default-directory.spec.ts > closes real Git watchers when the Code
     actor stops` is load-flaky: 5–9s run alone, 55s and failing under the full pool. A live-watcher case in
     the fast half. Unrelated to the terminal.
@@ -498,6 +488,13 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   its command started. The lock in the volume was from 11:11 that morning. `linux-runner.ts` already clears
   two other orphan classes under its volume lease, with the reasoning written out — the chain's own, which
   its sync phase creates, was the one left out.
+- **The full chain passes, `test:native` included** — 2451.5s at `2b1ae253ad`, 94 native tests passed and
+  nothing failed
+  ([the record](../references/evidence/terminal-ownership.md#the-full-chain-passes-testnative-included--2026-11-08)).
+  **The strict dispatch is deliberately not run yet.** The goal asks for it *on the finished state*, and
+  this state is not that one: the Phase H fork is unsettled and X4 and Phase B's Windows half are
+  outstanding, so five macOS runners would be validating something that must still change. It is the first
+  thing to run once those land.
 - **Next action: the fork above, which is the one thing a session cannot decide for itself.** Everything
   else that is left needs Windows: **X4** (Phase A's half), and **X1, X2 and ConPTY's resize and exit**
   (Phase B's), all of which the goal says are claimed on a Windows run or not at all. `command-group`'s API
