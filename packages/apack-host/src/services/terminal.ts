@@ -15,7 +15,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync } from 'node:fs';
 import { resolveAppEnvironment, withoutAppProcessEnv } from '@apackdev/sdk/env';
 import type { TerminalListeners, TerminalService, TerminalSession } from '@apackdev/sdk/services';
-import { type Broker, startBroker } from '../broker/client.ts';
+import { type Broker, holdBrokerSessions, startBroker } from '../broker/client.ts';
 
 /**
  * The longest a Unix socket path may be, conservatively.
@@ -67,7 +67,7 @@ export function socketPath(platform: NodeJS.Platform = process.platform, dataDir
  * It refuses rather than guessing, naming both the variable and the build, because a missing broker is a
  * setup mistake with an exact remedy and a silent fallback to `node-pty` is the thing this phase removes.
  */
-function brokerBinary(): string {
+function brokerBinary(packagesDir = process.env.SHIPPED_PACKS_DIR): string {
   const named = process.env.APACK_TERMINAL_BINARY;
   if (named) {
     if (existsSync(named)) return named;
@@ -77,7 +77,10 @@ function brokerBinary(): string {
   // into the API's build, so `import.meta.dirname` is `packages/api/dist` at runtime and a path relative to
   // it resolved one directory above the checkout — which the refusal below reported exactly, and is how this
   // was found. That variable names `packages/`, so its parent is the checkout root.
-  const packages = process.env.SHIPPED_PACKS_DIR;
+  // Taken as an argument so that a caller which knows where `packages/` is can say so: the API has it in
+  // its environment, and Electron main computes it to *give* the API, so main would otherwise be reading a
+  // variable it sets for somebody else
+  const packages = packagesDir;
   const built = packages
     ? path.join(path.dirname(packages), 'vendor', 'apack-terminal', 'target', 'debug', 'apack-terminal')
     : undefined;
@@ -112,6 +115,26 @@ export function brokerEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.
   };
 }
 
+/**
+ * Holds every terminal session open for as long as the calling process lives, and ends them when it dies.
+ *
+ * **Electron main calls this, and only Electron main.** A session has to outlive the API — restarting it
+ * must not take a user's shells down — so the backstop has to be held by something that outlives the API,
+ * and in the app that is the process whose lifetime *is* the app's. It is a hold and not a handler: the
+ * descriptor closes on process death however the process died, so a crash reaps the shells as a clean quit
+ * does.
+ *
+ * A process that never calls it loses nothing: the broker ends its sessions when the last client leaves,
+ * which is what a dev run, a test and the CLI rely on.
+ */
+export function holdTerminalSessions(options: { packagesDir: string }): Promise<{ close(): void }> {
+  return holdBrokerSessions({
+    binary: brokerBinary(options.packagesDir),
+    socket: socketPath(),
+    env: brokerEnvironment(),
+  });
+}
+
 /** Starts the broker the first time a session is wanted, and once per process thereafter */
 export function createTerminalService(): TerminalService & { shutdown(): Promise<void> } {
   let broker: Promise<Broker> | undefined;
@@ -138,7 +161,12 @@ export function createTerminalService(): TerminalService & { shutdown(): Promise
         terminate: () => session.kill(),
       };
     },
-    /** Ends the broker with the app. Host-only: no pack stops the process it shares with every other */
+    /**
+     * Leaves the broker. **It does not end it, and must not**: the sessions outlive this process so that
+     * restarting it does not take a user's shells down. What ends them is whoever holds them —
+     * `holdTerminalSessions` in the app, and otherwise the broker's own rule that the last client out ends
+     * them, which is what stops a dev run or a test leaving anything behind.
+     */
     async shutdown() {
       const started = broker;
       broker = undefined;

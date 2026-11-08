@@ -21,6 +21,7 @@ import {app} from 'electron';
 import {createPerformanceModule} from './modules/performance/index.ts';
 import {initializeMainLogCapture} from './modules/api-server/logger.ts';
 import {initAppEnvironment} from './app-environment.ts';
+import {holdTerminalSessionsForTheApp} from './modules/terminal-sessions.ts';
 
 
 export async function initApp(initConfig: AppInitConfig) {
@@ -42,6 +43,8 @@ export async function initApp(initConfig: AppInitConfig) {
     .init(createMediaProtocol())
     .init(createPackProtocol())   // pack:// protocol for external pack assets
     .init(splashScreen)  // Show splash screen early
+    // Before the API, so the hold on terminal sessions exists before anything can ask for one
+    .init(holdTerminalSessionsForTheApp())
     .init(apiServer)
     // After the API it reloads, and a no-op unless `npm run dev` armed it in a development build
     .init(createDevApiReloader(apiServer))

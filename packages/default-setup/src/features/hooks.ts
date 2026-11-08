@@ -1,4 +1,3 @@
-import { terminalService } from './code/be/services/terminal.ts';
 import { clearAllSchedules } from './brain/be/services/scheduler.ts';
 import { removeAllListeners as removeAllAdHocListeners } from './brain/be/services/brain.ts';
 import { clearFlowActorRegistry } from './brain/be/flow-system.ts';
@@ -13,10 +12,12 @@ export const onInit = () => {};
  */
 export const onShutdown = () => {
   services.runHistory.stopActive();
-  // Fire-and-forget, because this hook is synchronous and the API runs it inside `process.on('exit')`, where
-  // no socket write completes. It is the orderly path; the broker ending a connection's sessions when the
-  // connection goes is the backstop for an app that quit, crashed or was killed.
-  void terminalService.killAll();
+  // **This used to kill every terminal, and killing them here is now exactly wrong.** A session outlives
+  // this process on purpose: restarting the API must not take a user's shells down, which is what the whole
+  // lifetime rule is for. What ends them is the app's own hold on the broker closing, which a descriptor
+  // does on process death however the process died — and with no owner, the broker's rule that the last
+  // client leaving ends them, which is what keeps a dev run or a test from leaving anything behind.
+  // Terminals are still ended deliberately: `cleanupTerminals` is the user asking for it.
   clearAllSchedules();
   removeAllAdHocListeners();
   clearFlowActorRegistry();

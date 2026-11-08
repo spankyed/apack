@@ -178,17 +178,69 @@ interface Connection {
  * listening before its first accept, so a parent knows when to connect; retrying would turn a broker that
  * failed to start into a timeout rather than an error.
  */
-export async function startBroker(options: { binary: string; socket: string; env?: NodeJS.ProcessEnv }): Promise<Broker> {
-  const process_ = spawn(options.binary, [options.socket], { stdio: ['ignore', 'pipe', 'pipe'], env: options.env });
+/** How to reach the broker: where it listens, and the binary to start if nothing is there yet */
+export interface BrokerOptions {
+  binary: string;
+  socket: string;
+  env?: NodeJS.ProcessEnv;
+}
+
+/**
+ * **One broker per data dir, so this connects to a running one before it starts another.**
+ *
+ * Which process gets there first is not fixed and must not matter: in the app it is Electron main, which
+ * starts the broker before any window and holds its lifetime; everywhere else — a dev run, the CLI, a test
+ * — it is whoever first wants a session. Both arrive here, and the second one finds a broker listening.
+ *
+ * Starting a second would be worse than a wasted process: the broker takes its socket with
+ * `try_overwrite`, since a path a previous run left behind must not refuse the bind, so a second broker
+ * would take the address and leave the first one's sessions unreachable with no error anywhere.
+ */
+async function reach(options: BrokerOptions): Promise<net.Socket> {
+  const listening = await connect(options.socket).catch(() => undefined);
+  if (listening) return listening;
+
+  // **Detached, and its handle released.** The broker outlives whoever started it by design — that is the
+  // whole point of a session surviving an API restart — so it must not be in this process's group, where
+  // the shell's Ctrl-C would reach it, and this process must not be kept alive waiting for it.
+  const process_ = spawn(options.binary, [options.socket], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: options.env,
+    detached: true,
+  });
   const stderr: string[] = [];
   process_.stderr?.on('data', chunk => { stderr.push(String(chunk)); });
-
   await ready(process_, stderr);
-  const socket = await connect(options.socket);
+  process_.unref();
+  return connect(options.socket);
+}
+
+/**
+ * Holds the broker's sessions open for as long as this process lives.
+ *
+ * **The app's own process holds this and nothing else does.** Every session the broker owns ends when this
+ * connection closes, which a descriptor does on process death however the process died — quit, crash or
+ * kill — so there is no shutdown handler to skip. It asks for nothing and is sent nothing, so holding it
+ * costs one socket.
+ */
+export async function holdBrokerSessions(options: BrokerOptions): Promise<{ close(): void }> {
+  const socket = await reach(options);
+  socket.write(`${JSON.stringify({ kind: 'hello', protocol: PROTOCOL_VERSION, role: 'lifetime' })}\n`);
+  // Nothing is read: an owner receives no events, and a socket with no reader would otherwise fill
+  socket.resume();
+  socket.on('error', () => {});
+  // **The hold must not keep its process alive.** It is a backstop on the app's lifetime, not a reason for
+  // the app to have one: a referenced socket would stop Node exiting when everything else had finished.
+  socket.unref();
+  return { close: () => { socket.destroy(); } };
+}
+
+export async function startBroker(options: BrokerOptions): Promise<Broker> {
+  const socket = await reach(options);
   const listeners = new Map<string, BrokerSessionListeners>();
   const connection = frames(socket, listeners);
 
-  connection.send({ kind: 'hello', protocol: PROTOCOL_VERSION });
+  connection.send({ kind: 'hello', protocol: PROTOCOL_VERSION, role: 'client' });
   const greeting = await connection.next(event => event.kind === 'hello');
   if (greeting.kind === 'hello' && greeting.protocol !== PROTOCOL_VERSION) {
     throw new BrokerError('HANDSHAKE', `the broker speaks protocol ${greeting.protocol}; this app speaks ${PROTOCOL_VERSION}`);
@@ -255,10 +307,17 @@ export async function startBroker(options: { binary: string; socket: string; env
         async kill() { connection.send({ kind: 'kill', session: id }); },
       };
     },
+    /**
+     * Leaves the broker, without ending it.
+     *
+     * **This used to kill the process, and killing it is now exactly wrong**: the sessions outlive this
+     * connection on purpose, so that restarting the service that opened them does not take a user's shells
+     * down. What ends them is the owner's connection closing (`holdBrokerSessions`) — and with no owner,
+     * the broker's own rule that the last client leaving ends them, which is what keeps a dev run or a test
+     * from leaving anything behind.
+     */
     async close() {
       socket.end();
-      process_.kill();
-      await new Promise<void>(resolve => { process_.once('exit', () => resolve()); });
     },
   };
 }
