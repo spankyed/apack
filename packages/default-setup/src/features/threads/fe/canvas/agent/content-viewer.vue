@@ -1,5 +1,5 @@
 <template>
-  <div ref="viewerElement" :class="compact ? 'flex flex-col' : 'flex'" class="h-full bg-neutral-900" data-onboarding-id="agent-artifacts">
+  <div ref="viewerElement" :class="compact ? 'flex flex-col' : 'flex'" class="h-full bg-neutral-900" :style="sessionDetailsCollapsed ? { minHeight: '2rem' } : undefined" data-onboarding-id="agent-artifacts">
     <!-- Artifact List: horizontal strip (inline) or vertical sidebar (canvas) -->
     <div v-if="!sessionDetailsCollapsed" :class="compact
       ? 'overflow-x-auto border-b border-neutral-800 shrink-0'
@@ -92,6 +92,8 @@ watch(viewerElement, (element, _previous, onCleanup) => {
   onCleanup(() => observer.disconnect());
 }, { flush: 'post' });
 // A tiny workspace should offer readable session details rather than a clipped card/sidebar.
+// Keep room for its 24px trigger and padding when thread tabs consume the split;
+// the surrounding canvas can scroll the control into view instead of clipping it.
 // Other artifacts retain their existing navigation and editor lifetime.
 const sessionDetailsCollapsed = computed(() => !props.compact && props.artifacts.length === 1 && selectedArtifact.value?.type === 'claude-session' && viewerHeight.value !== undefined && viewerHeight.value < 112);
 const contentPadding = computed(() => {
