@@ -35,8 +35,27 @@ const FIRST_WAIT_MS = 20_000
  * missing, so this line is the download and not a check of one. That is also why the retry is here and not
  * around a separate command — there is no separate command.
  */
-let installed = true
-try { require.resolve('electron') } catch { installed = false }
+/**
+ * Whether this install wants the binary at all.
+ *
+ * **Nothing else in the tree downloads it.** `electron@44.9.3` ships `scripts: null` — no postinstall of its
+ * own — and no file in the package reads `ELECTRON_SKIP_BINARY_DOWNLOAD`, so the variable is inert there and
+ * installing the package fetches nothing. The download happens here and only here, because requiring the
+ * package is what triggers it. That makes the gate ours to implement, and the ecosystem's name the one to
+ * implement it under: a future Electron that honours the variable agrees with this rather than fighting it.
+ *
+ * **Why it matters more than the retry beside it.** A job that never launches the app was fetching 180MB and
+ * then failing on somebody else's gateway: on 2026-11-08 a `504` failed the strict `producers` job, which
+ * runs typechecks and builds and launches no app at all. Skipping is not an optimisation there, it is the
+ * removal of a dependency the job never had.
+ *
+ * Only `1` and `true` skip, so a `0` from a workflow expression downloads rather than silently not.
+ */
+const skip = ['1', 'true'].includes((process.env.ELECTRON_SKIP_BINARY_DOWNLOAD ?? '').toLowerCase())
+
+let installed = !skip
+if (skip) console.log("[postinstall] ELECTRON_SKIP_BINARY_DOWNLOAD is set; leaving Electron's binary alone")
+else { try { require.resolve('electron') } catch { installed = false } }
 
 if (installed) {
   for (let ask = 1; ask <= ASKS; ask += 1) {

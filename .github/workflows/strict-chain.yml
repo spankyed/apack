@@ -40,20 +40,14 @@ jobs:
           sw_vers
           node -p 'JSON.stringify({platform:process.platform,arch:process.arch,versions:process.versions})'
       - uses: ./.github/actions/elmdb
-      # **Electron's binary is cached, so most runs never ask the CDN for it.** It comes from GitHub's release
-      # CDN, whose 504 failed a strict job inside `scripts/postinstall.mjs` on 2026-11-08 — before any of this
-      # repo's code ran. The retry there is what makes a refusal survivable; this is what makes it rare. Keyed
-      # on the runner and the locked version, so a bump fetches once and every later job restores it.
-      - name: Cache Electron's binary
-        uses: actions/cache@v4
-        with:
-          path: ~/Library/Caches/electron
-          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-          restore-keys: electron-${{ runner.os }}-
-
       - name: Install dependencies
         env:
           GITHUB_TOKEN: ${{ github.token }}
+        # **This job launches no app, so it fetches no 180MB Electron binary.** `scripts/postinstall.mjs` is
+        # the only thing in the tree that downloads it, and it honours this variable because Electron 44's
+        # own package does not. A `504` from the release CDN failed this job on 2026-11-08 for a binary it
+        # never uses; nothing here can fail that way again.
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
         run: npm ci
       - name: Producers
         run: npm run chain -- --strict --all --cores 2 --job producers | tee "$RUNNER_TEMP/strict-chain.log"
@@ -125,6 +119,13 @@ jobs:
       - name: Install dependencies
         env:
           GITHUB_TOKEN: ${{ github.token }}
+        # **Only the shard running the `app` steps launches an app.** `scripts/postinstall.mjs` is
+        # the only thing in the tree that downloads it, and it honours this variable because Electron 44's
+        # own package does not. A `504` from the release CDN failed this job on 2026-11-08 for a binary it
+        # never uses; nothing here can fail that way again.
+          # `'0'` rather than `''` because an empty string is falsy in a GitHub expression, which would
+          # make the `||` pick `'1'` for every shard — and postinstall skips on `1`/`true` alone.
+          ELECTRON_SKIP_BINARY_DOWNLOAD: ${{ contains(matrix.job, 'app') && '0' || '1' }}
         run: npm ci
       - name: Receive producer outputs
         uses: actions/download-artifact@v4
