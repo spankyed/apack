@@ -30,7 +30,7 @@ import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import {
   asNumber, awaitQuiet, citation, conditions, coresBusySince, cpuNow, groupBySignature, idleNow, IDLE_FLOOR,
-  latencyCaveat, pairedDelta, parseFlags, QUIET_POLL_MS, rateOf, runOrder, startBurners, summarise, upperBound,
+  pairedDelta, parseFlags, QUIET_POLL_MS, rateOf, runOrder, startBurners, summarise, upperBound,
   workCitation, workOf, type Trial, type Work,
 } from './lib/measure.ts';
 import { boundedSpawn } from './lib/bounded-spawn.ts';
@@ -60,6 +60,33 @@ function workWrapper(): readonly string[] | undefined {
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => { setTimeout(resolve, ms); });
+
+/**
+ * A latency run's gate: the machine lock, which other chains' expensive steps queue behind rather than land in, and
+ * then a quiet box, waited for. Answers the idle reading that met the floor and how to give the lock back.
+ */
+async function holdQuietBox(floor: number): Promise<{ readonly idle: number; readonly release: () => void }> {
+  const step = { name: 'measure', expensive: true } as const;
+  const lock = expensiveSteps({
+    what: `npm run measure --latency (pid ${process.pid})`,
+    onWait: (holder) => console.log(`  waiting for another chain's expensive steps before timing:\n  ${holder}`),
+  });
+  while (!lock.admit(step)) await lock.pause();
+  const release = () => lock.leave(step);
+  try {
+    const idle = await awaitQuiet({
+      floor, idle: idleNow, pause: () => sleep(QUIET_POLL_MS),
+      onWait: (reading) => console.log(`  waiting for the box to reach ${Math.round(floor * 100)}% idle (${Math.round(reading * 100)}% now)`),
+    });
+    return { idle, release };
+  } catch (error) {
+    release();
+    throw error;
+  }
+}
+
+/** One measured run: how long, how it exited, what it said, how much of the box it used, and the work it did */
+type Run = Trial & { readonly cores: number; readonly work: Work | undefined };
 
 async function main(): Promise<void> {
   const parsed = parseFlags(process.argv.slice(2), {
@@ -93,24 +120,11 @@ async function main(): Promise<void> {
 
   const burners = new AbortController();
   startBurners(busy, burners.signal);
-  const lockStep = { name: 'measure', expensive: true } as const;
-  let lock: ReturnType<typeof expensiveSteps> | undefined;
+  let release: (() => void) | undefined;
   try {
     let started: number;
-    if (latency && !force) {
-      // Other chains' expensive steps queue behind this rather than land in it, then the box is waited for
-      lock = expensiveSteps({
-        what: `npm run measure --latency (pid ${process.pid})`,
-        onWait: (holder) => console.log(`  waiting for another chain's expensive steps before timing:\n  ${holder}`),
-      });
-      while (!lock.admit(lockStep)) await lock.pause();
-      started = await awaitQuiet({
-        floor, idle: idleNow, pause: () => sleep(QUIET_POLL_MS),
-        onWait: (idle) => console.log(`  waiting for the box to reach ${Math.round(floor * 100)}% idle (${Math.round(idle * 100)}% now)`),
-      });
-    } else {
-      started = idleNow();
-    }
+    if (latency && !force) ({ idle: started, release } = await holdQuietBox(floor));
+    else started = idleNow();
 
     const idles: number[] = [started];
     const on = new Date().toISOString().slice(0, 10);
@@ -123,7 +137,7 @@ async function main(): Promise<void> {
      * for anything worth timing is the whole box — a quiet machine reads 0% idle and says nothing about
      * whether anything *else* was competing.
      */
-    const measure = async (target: string): Promise<Trial & { readonly cores: number; readonly work: Work | undefined }> => {
+    const measure = async (target: string): Promise<Run> => {
       // The window is the spawn alone: `idleNow` below blocks for SAMPLE_MS of near-idle, and including it
       // would dilute the reading by that much of every run
       const before = cpuNow();
@@ -138,10 +152,10 @@ async function main(): Promise<void> {
     };
 
     /** Timing mode throws on failure: a failed run has no duration worth reporting. */
-    const time = async (target: string): Promise<{ readonly ms: number; readonly cores: number; readonly work: Work | undefined }> => {
-      const { ms, code, cores, work } = await measure(target);
-      if (code !== 0) throw new Error(`the command failed (exit ${code}): ${target}`);
-      return { ms, cores, work };
+    const time = async (target: string): Promise<Run> => {
+      const run = await measure(target);
+      if (run.code !== 0) throw new Error(`the command failed (exit ${run.code}): ${target}`);
+      return run;
     };
 
     if (trials !== undefined) {
@@ -163,55 +177,44 @@ async function main(): Promise<void> {
       return;
     }
 
-    const samples: Record<'a' | 'b', number[]> = { a: [], b: [] };
-    const cores: Record<'a' | 'b', number[]> = { a: [], b: [] };
-    const instructions: Record<'a' | 'b', number[]> = { a: [], b: [] };
-    const cpu: Record<'a' | 'b', number[]> = { a: [], b: [] };
-    for (const arm of runOrder(runs, against !== undefined)) {
-      const run = await time(arm === 'a' ? command : against!);
-      samples[arm].push(run.ms);
-      cores[arm].push(run.cores);
-      if (run.work?.instructions !== undefined) instructions[arm].push(run.work.instructions);
-      if (run.work?.cpuMs !== undefined) cpu[arm].push(run.work.cpuMs);
-    }
-
-    // A series is summarised only when every run reported it: a median over some of the runs is not this series'
-    const whole = (series: number[]) => (series.length === runs ? summarise(series) : undefined);
-    const work = (arm: 'a' | 'b'): string | undefined => {
-      const counted = { instructions: whole(instructions[arm]), cpu: whole(cpu[arm]) };
-      return counted.instructions === undefined && counted.cpu === undefined ? undefined : workCitation({ ...counted, on });
+    const done: Record<'a' | 'b', Run[]> = { a: [], b: [] };
+    for (const arm of runOrder(runs, against !== undefined)) done[arm].push(await time(arm === 'a' ? command : against!));
+    const ms = (arm: 'a' | 'b') => done[arm].map((run) => run.ms);
+    // A work series exists only when every run reported it: a median over some of the runs is not this series'
+    const counted = (arm: 'a' | 'b', field: keyof Work): number[] | undefined => {
+      const series = done[arm].flatMap((run) => (run.work?.[field] === undefined ? [] : [run.work[field]!]));
+      return series.length === runs ? series : undefined;
     };
-    /** The conditions are the series', not each arm's: both arms ran through the same window */
-    // Without --latency the floor gates nothing, so its one note is whether the wall time can stand as a latency
-    const timed = (series: number[]): string => (latency
-      ? citation({ ...taken(), summary: summarise(series), on })
-      : `${citation({ ...taken(), floor: 0, summary: summarise(series), on })}${latencyCaveat(idles, floor)}`);
-    const lines = (arm: 'a' | 'b', indent: string): string => [
-      ...(work(arm) === undefined ? [] : [`${indent}work     ${work(arm)}`]),
-      `${indent}latency  ${timed(samples[arm])}`,
-    ].join('\n');
+
+    const lines = (arm: 'a' | 'b', indent: string): string => {
+      const instructions = counted(arm, 'instructions');
+      const cpu = counted(arm, 'cpuMs');
+      const work = instructions === undefined && cpu === undefined ? []
+        : [`${indent}work     ${workCitation({ instructions: instructions && summarise(instructions), cpu: cpu && summarise(cpu), on })}`];
+      // The conditions are the series', not each arm's: both arms ran through the same window
+      return [...work, `${indent}latency  ${citation({ ...taken(), summary: summarise(ms(arm)), on })}`].join('\n');
+    };
 
     console.log('');
     if (against === undefined) {
       console.log(`  ${command}\n${lines('a', '  ')}`);
     } else {
-      const delta = pairedDelta(samples.a, samples.b);
       // Cores busy per arm, on `--against` only: it is the signal that says the treatment reached the thing
       // being changed, and a null wall-clock delta cannot be read without it. `coresBusy` has the case
-      const busyText = (series: number[]): string => `${summarise(series).median.toFixed(1)} cores busy`;
-      console.log(`  A  ${command}\n${lines('a', '     ')}\n     ${busyText(cores.a)}`);
-      console.log(`  B  ${against}\n${lines('b', '     ')}\n     ${busyText(cores.b)}`);
+      const busyText = (arm: 'a' | 'b'): string => `${summarise(done[arm].map((run) => run.cores)).median.toFixed(1)} cores busy`;
+      console.log(`  A  ${command}\n${lines('a', '     ')}\n     ${busyText('a')}`);
+      console.log(`  B  ${against}\n${lines('b', '     ')}\n     ${busyText('b')}`);
       // The paired difference, not the difference of the medians: pairing is why the arms interleave
       const signed = (fraction: number): string => `${fraction >= 0 ? '+' : ''}${Math.round(fraction * 1000) / 10}%`;
-      const work = instructions.a.length === runs && instructions.b.length === runs
-        ? `, instructions ${signed(pairedDelta(instructions.a, instructions.b).fraction)}` : '';
-      const sign = delta.ms >= 0 ? '+' : '';
-      console.log(`\n  B - A: ${sign}${(delta.ms / 1000).toFixed(1)}s (${signed(delta.fraction)} of A) wall${work}, paired over ${runs}`);
+      const wall = pairedDelta(ms('a'), ms('b'));
+      const [instructionsA, instructionsB] = [counted('a', 'instructions'), counted('b', 'instructions')];
+      const workDelta = instructionsA && instructionsB ? `, instructions ${signed(pairedDelta(instructionsA, instructionsB).fraction)}` : '';
+      console.log(`\n  B - A: ${wall.ms >= 0 ? '+' : ''}${(wall.ms / 1000).toFixed(1)}s (${signed(wall.fraction)} of A) wall${workDelta}, paired over ${runs}`);
     }
   } finally {
     // Whatever happened above, including a throw: the burners stop and the lock goes back before this returns
     burners.abort();
-    lock?.leave(lockStep);
+    release?.();
   }
 }
 

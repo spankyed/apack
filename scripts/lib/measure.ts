@@ -206,7 +206,8 @@ export function conditions(input: {
   }
   const caveats = [
     input.forced ? 'forced' : '',
-    driftedDuring(input.idles, input.floor) ? 'conditions drifted mid-series' : '',
+    // A wall time taken partly on a busy box is not a latency, whether the run was gated or not
+    driftedDuring(input.idles, input.floor) ? `went below the ${percent(input.floor)} idle floor mid-series` : '',
   ].filter(Boolean);
   return `${percent(low)} idle${caveats.length > 0 ? ` — ${caveats.join(', ')}` : ''}`;
 }
@@ -243,42 +244,45 @@ export interface Work {
   readonly cpuMs?: number;
 }
 
-/**
- * The work a wrapped run reports, and its output without that report: `/usr/bin/time -l`'s rusage block on macOS,
- * `perf stat -x,`'s CSV on Linux, both written to stderr after the command's own output. The report is cut from what
- * is returned, so a failure's text — what trials mode groups by — is the command's and not the wrapper's.
- */
-export function workOf(output: string): { readonly work: Work | undefined; readonly rest: string } {
-  const lines = output.split('\n');
-  // macOS: the block opens with `<real> real <user> user <sys> sys` and runs to the end
+/** `/usr/bin/time -l`'s rusage block: it opens with `<real> real <user> user <sys> sys` and runs to the end */
+function fromRusage(lines: readonly string[]): { readonly work: Work; readonly rest: string } | undefined {
   let opens = -1;
   for (let at = lines.length - 1; at >= 0 && opens === -1; at--) {
     if (/^\s*[\d.]+ real\s+[\d.]+ user\s+[\d.]+ sys\s*$/.test(lines[at]!)) opens = at;
   }
-  if (opens !== -1) {
-    const [, user, sys] = /([\d.]+) user\s+([\d.]+) sys/.exec(lines[opens]!)!;
-    const instructions = lines.slice(opens).map((line) => /^\s*(\d+)\s+instructions retired\s*$/.exec(line)?.[1]).find(Boolean);
-    return {
-      work: { cpuMs: Math.round((Number(user) + Number(sys)) * 1000), ...(instructions ? { instructions: Number(instructions) } : {}) },
-      rest: lines.slice(0, opens).join('\n'),
-    };
-  }
-  // Linux: one CSV line per event, `<value>,<unit>,<event>,…`, where a counter the machine lacks reads `<not supported>`
-  const reported = (line: string): RegExpExecArray | null => /^([^,]*),[^,]*,(instructions(?::u)?|task-clock),/.exec(line);
-  const value = (event: 'instructions' | 'task-clock'): number | undefined => {
-    for (const line of lines) {
-      const match = reported(line);
-      if (match && match[2]!.startsWith(event) && /^\d+(\.\d+)?$/.test(match[1]!)) return Number(match[1]);
-    }
-    return undefined;
-  };
-  const instructions = value('instructions');
-  const taskClock = value('task-clock');
-  if (instructions === undefined && taskClock === undefined) return { work: undefined, rest: output };
+  if (opens === -1) return undefined;
+  const [, user, sys] = /([\d.]+) user\s+([\d.]+) sys/.exec(lines[opens]!)!;
+  const instructions = lines.slice(opens).map((line) => /^\s*(\d+)\s+instructions retired\s*$/.exec(line)?.[1]).find(Boolean);
   return {
-    work: { ...(instructions !== undefined ? { instructions } : {}), ...(taskClock !== undefined ? { cpuMs: Math.round(taskClock) } : {}) },
-    rest: lines.filter((line) => reported(line) === null).join('\n'),
+    work: { cpuMs: Math.round((Number(user) + Number(sys)) * 1000), ...(instructions ? { instructions: Number(instructions) } : {}) },
+    rest: lines.slice(0, opens).join('\n'),
   };
+}
+
+/** `perf stat -x,`'s CSV: a line per event, `<value>,<unit>,<event>,…`, where a counter it lacks reads `<not supported>` */
+function fromPerf(lines: readonly string[]): { readonly work: Work; readonly rest: string } | undefined {
+  const event = (line: string) => /^([^,]*),[^,]*,(instructions(?::u)?|task-clock),/.exec(line);
+  const counted = (name: string): number | undefined => {
+    const value = lines.map(event).find((match) => match?.[2]!.startsWith(name))?.[1];
+    return value !== undefined && /^\d+(\.\d+)?$/.test(value) ? Number(value) : undefined;
+  };
+  const instructions = counted('instructions');
+  const cpuMs = counted('task-clock');
+  if (instructions === undefined && cpuMs === undefined) return undefined;
+  return {
+    work: { ...(instructions !== undefined ? { instructions } : {}), ...(cpuMs !== undefined ? { cpuMs: Math.round(cpuMs) } : {}) },
+    rest: lines.filter((line) => event(line) === null).join('\n'),
+  };
+}
+
+/**
+ * The work a wrapped run reports, and its output without that report — written to stderr after the command's own, by
+ * `/usr/bin/time -l` on macOS and `perf stat` on Linux. The report is cut from what is returned, so a failure's text,
+ * which trials mode groups by, is the command's and not the wrapper's.
+ */
+export function workOf(output: string): { readonly work: Work | undefined; readonly rest: string } {
+  const lines = output.split('\n');
+  return fromRusage(lines) ?? fromPerf(lines) ?? { work: undefined, rest: output };
 }
 
 /** A count in the units a person reads it in */
@@ -298,13 +302,6 @@ export function workCitation(input: { readonly instructions: Summary | undefined
   if (input.cpu !== undefined) parts.push(`${seconds(input.cpu.median)} CPU`);
   return `${parts.join(', ')}, ${input.on}`;
 }
-
-/**
- * Whether a series' wall time can be quoted as a latency: only if the box stayed at or above the floor throughout. A
- * busy run still prints its wall time, labelled, since the work it counted stands either way.
- */
-export const latencyCaveat = (idles: readonly number[], floor: number): string =>
-  driftedDuring(idles, floor) ? ` — not citable as a latency: the box went below the ${percent(floor)} idle floor` : '';
 
 /** How long a latency run waits for the floor before it refuses, and how often it looks */
 export const QUIET_WAIT_MS = 10 * 60_000;

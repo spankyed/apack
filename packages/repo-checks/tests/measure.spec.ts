@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   asNumber, awaitQuiet, citation, conditions, coresBusy, cpuTimes, driftedDuring, groupBySignature, idleFrom, IDLE_FLOOR,
-  latencyCaveat, pairedDelta, parseFlags, rateOf, refusesAsBusy, runOrder,
+  pairedDelta, parseFlags, rateOf, refusesAsBusy, runOrder,
   signatureOf, summarise, upperBound, workCitation, workOf,
 } from '../../../scripts/lib/measure.ts';
 
@@ -170,7 +170,7 @@ describe('the conditions a run happened under', () => {
 
   it('says when the floor was forced, and when the box moved under it', () => {
     expect(conditions({ ...quiet, forced: true })).toContain('forced');
-    expect(conditions({ ...quiet, idles: [0.92, 0.2] })).toContain('drifted');
+    expect(conditions({ ...quiet, idles: [0.92, 0.2] })).toContain('went below the 70% idle floor mid-series');
   });
 
   it('names induced load, in either mode, because only one of them used to', () => {
@@ -184,7 +184,7 @@ describe('the conditions a run happened under', () => {
    * always on is one nobody reads; the idle range says the same thing without crying wolf.
    */
   it('does not call induced load a drift', () => {
-    expect(conditions({ ...quiet, busy: 12, idles: [0.9, 0.01] })).not.toContain('drifted');
+    expect(conditions({ ...quiet, busy: 12, idles: [0.9, 0.01] })).not.toContain('went below');
   });
 
   it('refuses to describe conditions it has no samples for', () => {
@@ -381,11 +381,6 @@ describe('what a measurement of work is quoted as', () => {
   it('leads with instructions and their range, then CPU, and carries no idle reading because it needs none', () => {
     expect(workCitation({ instructions: summarise([19_938_301_403, 19_951_534_584]), cpu: summarise([1_130, 1_240]), on: '2026-11-07' }))
       .toBe('19.94G instructions median of 2 (19.94G-19.95G), 1.2s CPU, 2026-11-07');
-  });
-
-  it('labels a wall time taken below the floor, and leaves one taken above it alone', () => {
-    expect(latencyCaveat([0.92, 0.4], 0.7)).toContain('not citable as a latency');
-    expect(latencyCaveat([0.92, 0.85], 0.7)).toBe('');
   });
 });
 
