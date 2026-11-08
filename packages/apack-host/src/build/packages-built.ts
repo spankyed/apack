@@ -26,6 +26,9 @@ import { SHARED_INSTANCE_PACKAGES } from './shared-deps.ts';
 // The signal list, not a second copy of it: `exclusive-lock.ts` owns which interruptions a release has
 // to be hung on, and why `SIGBREAK` is in it. Relative, as every import inside this package is
 import { INTERRUPTS } from '../exclusive-lock.ts';
+// By path, as the chain's own runner does: this module runs before any package is built, and `@apackdev/sdk`
+// resolves to its `dist` outside a host build
+import { createStallTracker, describeRefusal, IDLE_MS, readTreeCpuMsSync } from '../../../apack-sdk/src/progress.ts';
 
 /**
  * The file whose presence says a directory is an apack checkout, not an installed package: this
@@ -288,8 +291,9 @@ const LOCK_FILE = path.join(STAMP_DIR, 'packages-build.lock');
  *  returns the moment the holder is gone. A minute against a longest-unit build of ~15s: four times what
  *  the thing being waited for costs, so a wedged holder is reported in a minute rather than held for ten.
  *  A bound nobody will wait for is the same as no bound. */
-const LOCK_WAIT_MS = 60_000;
 const LOCK_POLL_MS = 200;
+/** How often a wait reads the holder's CPU: a listing of every process is too costly for each 200ms poll */
+const HOLDER_READ_MS = 5_000;
 
 export const stampFile = (workspace: string): string => path.join(STAMP_DIR, `${workspace.replace(/[@/]/g, '-').replace(/^-/, '')}.json`);
 
@@ -1079,6 +1083,26 @@ function sleepSync(ms: number): void {
 }
 
 /**
+ * Waits, synchronously, while `holding()` and the holder `pid` keeps working, and answers why it stopped waiting:
+ * `released`, or the stall that ended it. The watch `watchWork` keeps, for a caller that cannot await: the same
+ * stall decision over the same tree readings, taken every few seconds between short polls of `holding`.
+ */
+function waitWhileHolderWorks(holding: () => boolean, pid: number, idleMs: number, pollMs = LOCK_POLL_MS): 'released' | string {
+  const tracker = createStallTracker(idleMs, Date.now());
+  let readAt = Number.NEGATIVE_INFINITY;
+  while (holding()) {
+    const now = Date.now();
+    if (now - readAt >= Math.min(HOLDER_READ_MS, idleMs / 4)) {
+      readAt = now;
+      // A tree that cannot be read adds no work, so a holder nothing can read is bounded by its silence
+      if (tracker.reading(readTreeCpuMsSync(pid) ?? new Map(), now)) return describeRefusal({ kind: 'stalled', idleMs });
+    }
+    sleepSync(pollMs);
+  }
+  return 'released';
+}
+
+/**
  * Waits for an in-flight package build to finish, and returns the build it waited for. A reader of the
  * stamps wants this rather than `runningPackageBuild` alone: a build removes each stamp before rewriting
  * it, so a reader that checks freshness mid-build sees units that look unbuilt and reports them stale,
@@ -1090,11 +1114,10 @@ function sleepSync(ms: number): void {
  * schedule: it returns as soon as the holder is gone, and a holder that outlives it leaves the caller to
  * report staleness as before, which is the pre-existing behaviour rather than a hang.
  */
-export function waitForPackageBuild({ timeoutMs = LOCK_WAIT_MS, pollMs = LOCK_POLL_MS }: { timeoutMs?: number; pollMs?: number } = {}): LockHolder | undefined {
+export function waitForPackageBuild({ idleMs = IDLE_MS, pollMs = LOCK_POLL_MS }: { idleMs?: number; pollMs?: number } = {}): LockHolder | undefined {
   const waitedFor = runningPackageBuild();
   if (!waitedFor) return undefined;
-  const deadline = Date.now() + timeoutMs;
-  while (runningPackageBuild() && Date.now() < deadline) sleepSync(pollMs);
+  waitWhileHolderWorks(() => runningPackageBuild() !== undefined, waitedFor.pid, idleMs, pollMs);
   return waitedFor;
 }
 
@@ -1192,8 +1215,8 @@ const intentFromEnv = (): BuildIntent => (process.env[BUILD_INTENT_ENV] === 'fre
  */
 export interface BuildLockOptions {
   readonly intent?: BuildIntent;
-  /** How long a `freshness` fix waits. Injectable so a test can bound it: the default outlasts any suite. */
-  readonly timeoutMs?: number;
+  /** How long a `freshness` fix waits on a holder doing no work. Injectable so a test can shorten it */
+  readonly idleMs?: number;
 }
 
 export interface StampedBuildOptions extends BuildLockOptions {
@@ -1203,7 +1226,7 @@ export interface StampedBuildOptions extends BuildLockOptions {
 
 export async function withBuildLock<T>(label: string, run: () => T | Promise<T>, file = LOCK_FILE, options: BuildLockOptions = {}): Promise<T> {
   const intent = options.intent ?? intentFromEnv();
-  const waitMs = options.timeoutMs ?? LOCK_WAIT_MS;
+  const idleMs = options.idleMs ?? IDLE_MS;
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const pending = `${file}.${process.pid}`;
   /**
@@ -1233,7 +1256,8 @@ export async function withBuildLock<T>(label: string, run: () => T | Promise<T>,
   for (const signal of INTERRUPTS) process.once(signal, onInterrupt);
   fs.writeFileSync(pending, JSON.stringify({ pid: process.pid, label, startedAt: new Date().toISOString() }));
   try {
-    const deadline = Date.now() + waitMs;
+    // Why a `freshness` fix stopped waiting on a live holder: `released`, or the stall that ended the wait
+    let waited: string | undefined;
     // Counted separately from the loop: a `freshness` fix goes round it many times without taking anything
     // over, and taking over twice is what means the lock is not being released rather than merely held.
     for (let takeovers = 0; ; ) {
@@ -1244,14 +1268,19 @@ export async function withBuildLock<T>(label: string, run: () => T | Promise<T>,
         if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
         const holder = readLock(file);
         const live = holder !== null && holderIsRunning(holder);
-        if (live && intent === 'freshness' && Date.now() < deadline) {
-          sleepSync(LOCK_POLL_MS);
-          continue;
+        // A `freshness` fix waits for as long as the holder works: a holder that stalled is reported
+        if (live && intent === 'freshness' && waited === undefined) {
+          waited = waitWhileHolderWorks(() => {
+            const now = readLock(file);
+            return now !== null && now.pid === holder.pid && holderIsRunning(now);
+          }, holder.pid, idleMs);
+          // Released: the next holder, if one took it meanwhile, is waited for the same way
+          if (waited === 'released') { waited = undefined; continue; }
         }
         if (takeovers > 0 || holder === null || live) {
           const who = describeHolder(holder);
-          const waited = intent === 'freshness' ? ` after waiting ${Math.round(waitMs / 1000)}s` : '';
-          throw new Error(`another package build holds ${repoRelative(file)}${waited}: ${who}. Wait for it to finish, then run this again.`);
+          const after = waited !== undefined && waited !== 'released' ? ` after waiting while it ${waited}` : '';
+          throw new Error(`another package build holds ${repoRelative(file)}${after}: ${who}. Wait for it to finish, then run this again.`);
         }
         takeovers++;
         fs.rmSync(file, { force: true });
@@ -1427,7 +1456,7 @@ function buildOnePackage(workspace: string): void {
  * 2026-09-24, next to a flag nothing set, and the pair read as working.
  *
  * The wait is one of the four for a reason found in review: a case that injects the other three still took the
- * repo's real build lock, and would sit behind a concurrent `packages:build` for `LOCK_WAIT_MS` before any
+ * repo's real build lock, and would sit behind a concurrent `packages:build` for as long as it worked before any
  * injected answer was consulted — the shared state the seam exists to keep out of a unit test.
  */
 export interface EnsurePackagesOptions {

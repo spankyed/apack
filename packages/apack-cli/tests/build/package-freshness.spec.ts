@@ -1011,10 +1011,11 @@ describe('the build lock', () => {
     await expect(withBuildLock('@apackdev/sdk', () => 'never', file, { intent: 'command' })).rejects.toThrow(/another package build holds/);
     expect(Date.now() - started, 'a command waited instead of failing at once').toBeLessThan(500);
 
-    // The wait is bounded, and says it waited — a holder that never goes is reported, not waited on forever
+    // The wait is bounded by the holder's work, and says so: this process holds it and is blocked in the wait, so
+    // it does no work, which is what a wedged holder looks like — reported, not waited on forever
     const waited = Date.now();
-    await expect(withBuildLock('@apackdev/sdk', () => 'never', file, { intent: 'freshness', timeoutMs: 1_000 }))
-      .rejects.toThrow(/after waiting 1s/);
+    await expect(withBuildLock('@apackdev/sdk', () => 'never', file, { intent: 'freshness', idleMs: 1_000 }))
+      .rejects.toThrow(/after waiting while it did no work for 1(\.0)?s/);
     expect(Date.now() - waited, 'a freshness fix gave up without waiting').toBeGreaterThanOrEqual(900);
   });
 

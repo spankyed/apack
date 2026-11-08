@@ -5,7 +5,7 @@
 //
 // Node-only: it lists processes with `ps`, or PowerShell on Windows. The chain's own runner imports this file by path,
 // since it runs before any package is built and `@apackdev/sdk` resolves to `dist` outside a host build.
-import { execFile, type ChildProcess, type ExecFileOptions } from 'node:child_process';
+import { execFile, execFileSync, type ChildProcess, type ExecFileOptions } from 'node:child_process';
 
 /**
  * How long a process tree may go without CPU or output before whatever watches it ends it as stalled: one number
@@ -126,17 +126,36 @@ let latest: { readonly at: number; readonly rows: Promise<ProcessRow[] | undefin
 function listProcesses(): Promise<ProcessRow[] | undefined> {
   const at = realNow();
   if (latest !== undefined && at - latest.at < LISTING_REUSE_MS) return latest.rows;
-  const win32 = process.platform === 'win32';
-  const [file, args] = win32
-    ? ['powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', WIN32_PROCESSES]]
-    : ['ps', ['-A', '-o', 'pid=,ppid=,pgid=,time=']];
   const rows = new Promise<ProcessRow[] | undefined>((resolve) => {
-    execFile(file, args, { maxBuffer: 16 * 1024 * 1024, windowsHide: true }, (error, stdout) => {
-      resolve(error ? undefined : win32 ? win32Rows(stdout) : psRows(stdout));
+    execFile(LISTING.file, [...LISTING.args], LISTING.options, (error, stdout) => {
+      resolve(error ? undefined : LISTING.parse(stdout));
     });
   });
   latest = { at, rows };
   return rows;
+}
+
+/** How this platform lists every process, and how the listing reads */
+const LISTING: {
+  readonly file: string; readonly args: readonly string[]; readonly parse: (listing: string) => ProcessRow[];
+  readonly options: { readonly maxBuffer: number; readonly windowsHide: boolean; readonly encoding: 'utf8' };
+} = {
+  ...(process.platform === 'win32'
+    ? { file: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-Command', WIN32_PROCESSES], parse: win32Rows }
+    : { file: 'ps', args: ['-A', '-o', 'pid=,ppid=,pgid=,time='], parse: psRows }),
+  options: { maxBuffer: 16 * 1024 * 1024, windowsHide: true, encoding: 'utf8' },
+};
+
+/**
+ * One reading of the tree's CPU taken synchronously, for a caller that cannot await: a wait inside a synchronous
+ * function, which then decides with `createStallTracker` as `watchWork` does. Nothing where no listing could be taken.
+ */
+export function readTreeCpuMsSync(leader: number): Map<number, number> | undefined {
+  try {
+    return treeOf(LISTING.parse(execFileSync(LISTING.file, [...LISTING.args], LISTING.options)), leader);
+  } catch {
+    return undefined;
+  }
 }
 
 /** One reading of the tree's CPU, or nothing when no listing could be taken */

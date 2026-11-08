@@ -77,6 +77,9 @@ export function processWork(pid: number, read?: typeof readTreeCpuMs): WorkReadi
 export const readTreeCpuMs: (leader: number) => Promise<Map<number, number> | undefined>;
 
 // @public
+export function readTreeCpuMsSync(leader: number): Map<number, number> | undefined;
+
+// @public
 export type Refusal = {
     readonly kind: 'stalled';
     readonly idleMs: number;
