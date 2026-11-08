@@ -1,6 +1,6 @@
 # Three defects a review of #379 found that are not terminal findings
 
-Status: **two of three closed**; the third is `explorer/state.ts`'s comment, still present at line 232. Found reviewing `session/terminal-ownership` (#379) on 2026-11-08,
+Status: **all three closed.** Found reviewing `session/terminal-ownership` (#379) on 2026-11-08,
 confirmed or relayed as noted. They are here rather than in
 [the terminal integration review](ISSUE-terminal-integration-review.md) because none of them is a row in it:
 that document's subject is the terminal, and these are a tab-group prune, a test-runner's toolchain lookup
@@ -39,10 +39,13 @@ derives the toolchain from the checkouts a run actually has, so `ELMDB_CHECKOUT`
 `APACK_LINUX_ELMDB_ROOT` — answers when no `vendor/` entry does. The refusal is kept for the case it was
 written for, two checkouts pinning different channels, and names both.
 
-## 3. A comment asserts the opposite of what the code does
+## 3. A comment asserts the opposite of what the code does — **closed**
 
-`features/code/fe/features/explorer/state.ts`: "Pinned tabs are kept by `removeTabs`" is false — the
+`features/code/fe/features/explorer/state.ts`: "Pinned tabs are kept by `removeTabs`" was false — the
 `|| tab.isPinned` exemption is gone from `utils/tab-management.ts`. The behaviour change reads as intended;
-the comment does not.
+the comment did not.
 
-**Relayed, not confirmed.**
+**Confirmed and fixed.** `removeTabs` exempts nothing on purpose, and says why where it is written: pinning
+is about where a tab sits, not about outliving what it shows, and every caller of it is a subject that is
+gone — so an exemption left a permanent ghost pointing at nothing. The comment at the call site says that
+now instead of the opposite. Nothing else in the repo repeated the claim.
