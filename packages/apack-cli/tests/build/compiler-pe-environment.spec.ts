@@ -1,15 +1,15 @@
 import fs from 'node:fs';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { readPeLoaderMetadata } from '../../src/build/compiler-pe-environment.ts';
-import { PE_HELPER_CPU_MS } from '../../src/build/compiler-pe-activation.ts';
+import { PE_HELPER_TIMEOUT_MS } from '../../src/build/compiler-pe-activation.ts';
 
 const query = vi.hoisted(() => vi.fn());
-vi.mock('@apackdev/sdk/progress', () => ({ execFileSyncWhileWorking: query }));
+vi.mock('node:child_process', () => ({ execFileSync: query }));
 
 const library = 'C:\\capture\\' + 'nësted\\'.repeat(30) + 'value.dll';
 const metadata = { libraries: [library], safeSearch: true, devOverride: false, knownDlls: ['kernel32.dll'] };
 beforeEach(() => {
-  query.mockReset().mockReturnValue({ stdout: JSON.stringify(metadata), stderr: '' });
+  query.mockReset().mockReturnValue(JSON.stringify(metadata));
   vi.spyOn(fs, 'statSync').mockReturnValue({ isFile: () => true } as fs.Stats);
 });
 afterEach(() => vi.restoreAllMocks());
@@ -19,7 +19,7 @@ it('retains full module paths from the bounded OS query', () => {
   expect(readPeLoaderMetadata('C:\\Windows\\System32', 123)).toEqual(metadata);
   expect(query).toHaveBeenCalledWith('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
     ['-NoProfile', '-NonInteractive', '-File', expect.stringMatching(/\\bin\\compiler-pe-process\.ps1$/)],
-    expect.objectContaining({ input: JSON.stringify({ pid: 123, environment: false }), timeout: PE_HELPER_CPU_MS }));
+    expect.objectContaining({ input: JSON.stringify({ pid: 123, environment: false }), timeout: PE_HELPER_TIMEOUT_MS, windowsHide: true }));
 });
 
 it('refuses module paths that identify a directory instead of a complete image filename', () => {

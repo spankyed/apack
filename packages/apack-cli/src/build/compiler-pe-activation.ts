@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { win32 as path } from 'node:path';
 import { createHash } from 'node:crypto';
-import { execFileSyncWhileWorking } from '@apackdev/sdk/progress';
+import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { parsePeLibraryMetadata } from './compiler-pe-libraries.ts';
 import { pePath } from './compiler-pe-paths.ts';
@@ -9,11 +9,11 @@ import { cliPackageDirectory } from './tool-identity.ts';
 import { withoutCompilerFileReads } from '@apackdev/host/build/compiler-inputs';
 
 /**
- * The CPU a Windows metadata helper may spend: PowerShell starting and compiling the helper's C# with `Add-Type`,
- * which a cold hosted runner spends seconds on. Only a helper that spins reaches it. One that is merely slow on a
- * busy machine is waited for (`execFileSyncWhileWorking`), and one that stops working is ended for that.
+ * How long a Windows metadata helper may run before it counts as hung. Each call starts PowerShell and compiles
+ * the helper's C# with `Add-Type`, a cost set by the machine rather than the query: a cold hosted runner passes
+ * five seconds. So this bounds a hang and asserts nothing about speed.
  */
-export const PE_HELPER_CPU_MS = 60_000;
+export const PE_HELPER_TIMEOUT_MS = 60_000;
 
 export interface CompilerPeActivationInput {
   readonly file: string;
@@ -83,9 +83,9 @@ export function readPeActivationContext(image: string, { systemDirectory, applic
     const payload = JSON.stringify({ image, application, resource, configuration, inputs, manifests: manifests.map(item => item.bytes.toString('base64')),
       external: external?.toString('base64') }).replace(/[\u007f-\uffff]/g, value => '\\u' + value.charCodeAt(0).toString(16).padStart(4, '0'));
     const owner = cliPackageDirectory(typeof __filename === 'string' ? pathToFileURL(__filename).href : import.meta.url);
-    const text = execFileSyncWhileWorking(path.join(systemDirectory, 'WindowsPowerShell/v1.0/powershell.exe'),
+    const text = execFileSync(path.join(systemDirectory, 'WindowsPowerShell/v1.0/powershell.exe'),
       ['-NoProfile', '-NonInteractive', '-File', path.join(owner, 'bin/compiler-pe-context.ps1')],
-      { input: payload, timeout: PE_HELPER_CPU_MS, maxBuffer: 1024 * 1024 }).stdout;
+      { input: payload, encoding: 'utf8', timeout: PE_HELPER_TIMEOUT_MS, maxBuffer: 1024 * 1024, windowsHide: true });
     const value = JSON.parse(text.replace(/^\ufeff/, '')) as CompilerPeActivationContext & { error?: number };
     if (typeof value.error === 'number') {
       if (!Array.isArray(value.inputs) || value.inputs.some(item => !isActivationInput(item))) {

@@ -586,12 +586,19 @@ export function findSyncSpawnsInSpecs(files: readonly string[] = specModules(rep
  * bound cannot tell a healthy request from a hung one; a kill-grace period is about time by definition; and a
  * wait whose other party has no process this one can read. An entry that stops applying is reported.
  */
+const PRE_ADMISSION_SPAWN = 'a Windows loader query made before admission verifies the process, where a worker thread would load DLLs into it; only a synchronous spawn loads none';
 const CLOCK_BY_DESIGN: Record<string, string> = {
   'packages/apack-host/src/packs/github.ts': "a fetch from GitHub's API: network, which no CPU reading describes",
   'packages/apack-host/src/packs/installer.ts': 'a pack download: network, which no CPU reading describes',
   'packages/default-setup/src/features/code/be/services/gh-cli.ts': "`gh` waits on GitHub's API: network, which no CPU reading describes",
   'packages/default-setup/src/features/code/be/services/codex/app-server.ts':
     "a request to the codex app-server waits on the model's API, during which the server is idle by design",
+  // The Windows loader queries run before admission has verified the process, so they may load nothing into it. A
+  // synchronous spawn loads nothing; the progress bridge (`execFileSyncWhileWorking`) starts a worker thread, whose
+  // DLL loads a planted `.local` override redirected and ran — `compiler-pe-libraries.native.spec.ts`'s
+  // pre-initialization refusal case caught it on Windows CI
+  'packages/apack-cli/src/build/compiler-pe-activation.ts': PRE_ADMISSION_SPAWN,
+  'packages/apack-cli/src/build/compiler-pe-environment.ts': PRE_ADMISSION_SPAWN,
   // The Playwright fixture: Playwright gives a wait only a clock, and each is sized as the suite's backstop
   'packages/apack-testing/src/index.ts': "the Playwright fixture's own waits, which Playwright bounds only by a clock, and a 10s `sample` diagnostic",
   'packages/apack-testing/src/engine/index.ts': "a Playwright wait in the test engine, which Playwright bounds only by a clock",

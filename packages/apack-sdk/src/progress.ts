@@ -448,6 +448,10 @@ export type ExecFileSyncWhileWorkingOptions = Omit<ExecFileWhileWorkingOptions, 
  *
  * **The worker is the platform's own**, reached past any proxy a host installed on `Worker` (a proxied class keeps
  * its constructor on its prototype), with no `execArgv`: it runs no preload, and is no thread of the caller's.
+ *
+ * **Not before a process is trusted to load code.** Starting a thread loads libraries into this process, and on
+ * Windows those loads follow DLL redirection: a planted `.local` override ran this way before the compiler's native
+ * admission had refused it. Code that runs before that admission spawns synchronously instead.
  */
 export function execFileSyncWhileWorking(file: string, args: readonly string[], options: ExecFileSyncWhileWorkingOptions = {}): { stdout: string; stderr: string } {
   const { timeout, input, ...rest } = options;

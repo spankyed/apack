@@ -1,13 +1,13 @@
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { win32 as path } from 'node:path';
-import { execFileSyncWhileWorking } from '@apackdev/sdk/progress';
+import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { cliPackageDirectory } from './tool-identity.ts';
 import { parsePeApiSets, type PeApiSet } from './compiler-pe-api-sets.ts';
 import { parsePeLibraryMetadata, readPeSection } from './compiler-pe-libraries.ts';
 import { pePath, type CompilerPeSystemPaths } from './compiler-pe-paths.ts';
-import { PE_HELPER_CPU_MS, readPeActivationContext, type CompilerPeActivationContext } from './compiler-pe-activation.ts';
+import { PE_HELPER_TIMEOUT_MS, readPeActivationContext, type CompilerPeActivationContext } from './compiler-pe-activation.ts';
 
 export interface CompilerPeEnvironment extends CompilerPeSystemPaths {
   readonly safeSearch: boolean;
@@ -42,9 +42,9 @@ export function readPeLoaderMetadata(systemDirectory?: string, pid = process.pid
     : fs.realpathSync.native(String.raw`\\?\GLOBALROOT\SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe`);
   let metadata: { libraries: string[]; safeSearch: boolean; devOverride: boolean; knownDlls: string[]; environment: NodeJS.ProcessEnv | null };
   try {
-    const text = execFileSyncWhileWorking(executable,
+    const text = execFileSync(executable,
       ['-NoProfile', '-NonInteractive', '-File', path.join(owner, 'bin/compiler-pe-process.ps1')],
-      { input: JSON.stringify({ pid, environment }), timeout: PE_HELPER_CPU_MS, maxBuffer: 1024 * 1024 }).stdout;
+      { input: JSON.stringify({ pid, environment }), encoding: 'utf8', timeout: PE_HELPER_TIMEOUT_MS, maxBuffer: 1024 * 1024, windowsHide: true });
     metadata = JSON.parse(text.replace(/^\ufeff/, ''));
     if (typeof metadata.safeSearch !== 'boolean' || typeof metadata.devOverride !== 'boolean' || !Array.isArray(metadata.knownDlls)
       || metadata.knownDlls.some(name => typeof name !== 'string' || path.basename(name) !== name)
