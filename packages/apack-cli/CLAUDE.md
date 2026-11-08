@@ -374,8 +374,8 @@ its progress, stops its process group and names it when it fails. An in-process 
 test's own tree rather than `AbortSignal.timeout`. `check:specifiers` refuses a synchronous spawn there.
 
 Real watcher integration edits use `tests/_support/watch-builds.ts`: wait at most 20s for a rebuild
-request, bound its compiler operation at 60s, then retain the original 20s notification/output checks.
-Initial capture keeps its 120s bound and cleanup has its own 20s bound. `rebuildAfter` does not replace assertions; preflight refusals
+request, bound the build it starts at 120s, then retain the original 20s notification/output checks.
+Cleanup has its own 20s bound. `rebuildAfter` does not replace assertions; preflight refusals
 before a builder is invoked keep their direct notification check. Compose case budgets from these
 phases; do not time the whole compilation as a missing-event wait.
 

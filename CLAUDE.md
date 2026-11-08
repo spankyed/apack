@@ -169,6 +169,10 @@ that spends its CPU deadline. A test that needs more declares `meta: cpuBudget(m
 refuses a timeout measured on the clock. The product follows the same rule where it waits on another process or
 thread to answer: `answerWhileWorking` (`@apackdev/host/build/process-progress`, with `processWork` and `threadWork`)
 waits while the other party's work keeps growing and fails only after `IDLE_MS` of none — never a fixed reply time.
+**A new wall-clock deadline is refused, and the old ones are a counted backlog.** `findClockedDeadlinesInSource`
+(`check:specifiers`) and `spec-waits.spec.ts` read every clocked deadline in the packages' source and the test trees
+(`clockedDeadlines`, `scripts/lib/test-timeouts.ts`); each file is either converted, listed by design with why (a
+network wait, a kill grace, a wait on this process's own state), or counted in a backlog that may only fall.
 `APACK_WATCHDOG=off` turns the step watchdog off for a run and everything the run starts.
 **Do not gate any of this on `process.env.CI`**: a CI-gated refusal never fires. The condition is the
 machine, which is a fact a run can check.
