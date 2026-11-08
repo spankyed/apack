@@ -68,7 +68,7 @@ globalThis.requestAnimationFrame ??= ((callback: FrameRequestCallback) => {
   return 0
 }) as typeof requestAnimationFrame
 
-const { terminalPool } = await import('#features/code/fe/utils/terminal-pool.ts')
+const { terminalPool, findScroller } = await import('#features/code/fe/utils/terminal-pool.ts')
 const { terminalEventBus } = await import('#features/code/fe/utils/terminal-events.ts')
 
 let next = 0
@@ -225,6 +225,60 @@ describe('one session, one host', () => {
     expect(Object.keys(attachment).sort()).toEqual(
       ['clear', 'focus', 'followOutput', 'paste', 'refit', 'release', 'selectAll', 'selection', 'terminalId'],
     )
+  })
+})
+
+/**
+ * Which element the pool scrolls, which it finds by what the element **is**.
+ *
+ * It used to ask for `.xterm-viewport`, and that is the one dependence the ghostty-web plan's capability
+ * matrix names — *without depending on xterm DOM classes*. These cases are over plain DOM, because the rule
+ * is: jsdom computes `overflow-y` from the inline style, which is all the rule reads.
+ */
+describe('the element the pool scrolls', () => {
+  const styled = (overflow: string) => {
+    const element = document.createElement('div')
+    element.style.overflowY = overflow
+    return element
+  }
+
+  it('finds the root itself when the root is what scrolls', () => {
+    const root = styled('scroll')
+    expect(findScroller(root)).toBe(root)
+  })
+
+  it('finds a descendant that scrolls under a root that does not', () => {
+    const root = styled('visible')
+    const screen = styled('visible')
+    const viewport = styled('auto')
+    root.append(screen, viewport)
+    expect(findScroller(root)).toBe(viewport)
+  })
+
+  it('finds one nested deeper than a direct child', () => {
+    const root = styled('visible')
+    const middle = styled('visible')
+    const viewport = styled('scroll')
+    middle.append(viewport)
+    root.append(middle)
+    expect(findScroller(root)).toBe(viewport)
+  })
+
+  // What makes it a rule rather than a lucky query: nothing is named, so nothing scrolling is nothing found
+  it('finds nothing when nothing scrolls, whatever anything is called', () => {
+    const root = styled('visible')
+    const named = document.createElement('div')
+    named.className = 'xterm-viewport'
+    root.append(named)
+    expect(findScroller(root)).toBeNull()
+  })
+
+  it('takes the first in document order, so one emulator gives one answer', () => {
+    const root = styled('visible')
+    const first = styled('scroll')
+    const second = styled('scroll')
+    root.append(first, second)
+    expect(findScroller(root)).toBe(first)
   })
 })
 

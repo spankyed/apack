@@ -47,7 +47,14 @@ const THEME = {
   brightWhite: '#e5e5e5'
 } as const
 
-export interface PoolEntry {
+/**
+ * One session's emulator and the bookkeeping that outlives a host.
+ *
+ * **Not exported**, which is what makes this module's public surface emulator-agnostic: it names `Terminal`,
+ * `FitAddon` and `WebglAddon`, and a host that could hold one would be coupled to xterm through a type even
+ * while calling nothing on it. What a host gets is a `TerminalAttachment`.
+ */
+interface PoolEntry {
   terminalId: string
   /**
    * The pty this entry's buffer was written by. A restored terminal keeps its id and gets a **new**
@@ -65,13 +72,16 @@ export interface PoolEntry {
   isShowingLoadingContent: boolean
   // Scroll state lives here (not in TerminalView.vue) so it survives the
   // unmount/remount that happens on every tab switch. `wrapper.remove()` in
-  // detach() also resets .xterm-viewport.scrollTop in Chromium, so on every
-  // attach we re-drive the DOM scroll position ourselves rather than relying
-  // on xterm's scrollToBottom() — which is a no-op when ydisp === ybase.
+  // detach() also resets the scrolling element's scrollTop in Chromium, so on
+  // every attach we re-drive the DOM scroll position ourselves rather than
+  // relying on the emulator's own scroll-to-bottom, which xterm makes a no-op
+  // when ydisp === ybase.
   pinnedToBottom: boolean
   savedScrollFraction: number | null
   webglLoaded: boolean
   webglAddon: WebglAddon | null
+  /** The emulator's scrolling element once found, re-derived if the emulator rebuilds its DOM */
+  scroller: HTMLElement | null
 }
 
 /**
@@ -146,6 +156,22 @@ export interface TerminalAttachmentHandlers {
   onSelectionChange?(hasSelection: boolean): void
   /** Whether the session is following its output, which a host draws a scroll control from */
   onFollowingChange?(following: boolean): void
+}
+
+/**
+ * The first element at or under `root` that scrolls vertically, depth-first so the search stops at it.
+ *
+ * Exported for its own cases: it is the whole of `getViewport`'s rule, it takes and returns nothing but DOM,
+ * and the pool's own specs stand in for the emulator with an element that scrolls nothing.
+ */
+export function findScroller(root: HTMLElement): HTMLElement | null {
+  const overflow = getComputedStyle(root).overflowY
+  if (overflow === 'scroll' || overflow === 'auto') return root
+  for (const child of root.children) {
+    const found = findScroller(child as HTMLElement)
+    if (found) return found
+  }
+  return null
 }
 
 class TerminalPool {
@@ -270,7 +296,8 @@ class TerminalPool {
       pinnedToBottom: true,
       savedScrollFraction: null,
       webglLoaded: false,
-      webglAddon: null
+      webglAddon: null,
+      scroller: null
     }
 
     // Shift+Enter inserts a newline instead of executing. Wired once here
@@ -515,8 +542,24 @@ class TerminalPool {
     })
   }
 
+  /**
+   * The element the emulator scrolls, found by what it **is** rather than by what it is called.
+   *
+   * A scroller is an element whose computed `overflow-y` scrolls, which is true of whichever emulator draws
+   * here; a class name is true of one of them. That matters because this file is the seam the emulator is
+   * replaceable behind (the goal's D10), and the replacement's own capability matrix asks for exactly this —
+   * *observe scroll position and restore pinned/unpinned state without depending on xterm DOM classes*.
+   *
+   * Cached per entry, because this is read on every scroll event and `getComputedStyle` resolves style. The
+   * cache is checked against the emulator's own root rather than `isConnected`, so it survives the detached
+   * spell between two hosts — a re-parent is the pool's normal lifecycle, not a rebuild.
+   */
   private getViewport(entry: PoolEntry): HTMLElement | null {
-    return entry.term.element?.querySelector('.xterm-viewport') as HTMLElement | null
+    const root = entry.term.element
+    if (!root) return null
+    if (entry.scroller && root.contains(entry.scroller)) return entry.scroller
+    entry.scroller = findScroller(root)
+    return entry.scroller
   }
 
   /** Find a pool entry whose wrapper contains the given DOM element. */
