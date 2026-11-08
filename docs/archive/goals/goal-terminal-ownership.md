@@ -85,16 +85,18 @@ read as the Node-23 one this document already records, which it is not.
 
 ### Validation
 
-`npm run chain`: **32 of 33 steps pass**. The one that does not is `@apackdev/cli`'s
-`build-worker.native.spec.ts`, which no commit in this goal touches — zero files under `packages/apack-cli`,
-checked. Two of its cases fail in two different ways, one a 120s timeout in the 2-core container that
-passes in 22.5s alone.
+**Both required halves pass.** `npm run chain` at `2b1ae253ad`, 2451.5s, `test:native` among its steps
+([the record](../../references/evidence/terminal-ownership.md#the-full-chain-passes-testnative-included--2026-11-08)),
+and the strict dispatch on the pushed state, run **42450951226**, all six macOS jobs green
+([the record](../../references/evidence/terminal-ownership.md#the-strict-chain-passes-on-the-pushed-state--2026-11-08)).
 
-**The strict gate is not met, and the reason is worth writing down.** A dispatch was made and it validated
-nothing: `gh workflow run --ref master` names the *remote* branch, and this work is 86 commits that were
-never pushed, so run 42449685691 ran against `5b2ad4cbed` — a commit predating the whole goal. A green
-result there would have been a false pass, and reading it as one is the trap. Strict needs the commits
-pushed, which is the repository owner's call and not this goal's to make.
+**Strict is what settled the one file this Mac could not pass.** `@apackdev/cli`'s
+`build-worker.native.spec.ts` failed here across five runs in three different cases, never the same one
+twice, in code no commit of this goal touches — zero files under `packages/apack-cli`, checked. On a
+disposable macOS runner it ran in 404.8s and passed, which is the arbitration the goal reserved strict for.
+
+**An earlier dispatch validated nothing**, and the reason is in the record above: `--ref master` names the
+*remote* branch, so it ran against a commit predating the goal.
 
 **The app is proven on Windows end to end**, which is the thing this goal had never asked there, and doing
 it found two defects no Mac could have: the broker binary's `.exe`, which meant the terminal never started
@@ -587,10 +589,9 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 - **The full chain passes, `test:native` included** — 2451.5s at `2b1ae253ad`, 94 native tests passed and
   nothing failed
   ([the record](../../references/evidence/terminal-ownership.md#the-full-chain-passes-testnative-included--2026-11-08)).
-  **The strict dispatch is deliberately not run yet.** The goal asks for it *on the finished state*, and
-  this state is not that one: the Phase H fork is unsettled and X4 and Phase B's Windows half are
-  outstanding, so five macOS runners would be validating something that must still change. It is the first
-  thing to run once those land.
+  **The strict dispatch waited for the finished state**, as the goal asks, and ran once the Phase H fork,
+  X4 and Phase B's Windows half had landed and the commits were pushed: run 42450951226, green
+  ([the record](../../references/evidence/terminal-ownership.md#the-strict-chain-passes-on-the-pushed-state--2026-11-08)).
 - **The app is proven on Windows end to end** — a terminal follows `cd`, a crashed shell keeps its
   terminal and restarts as generation 2 in place, and a session survives the API being killed
   ([the record](../../references/evidence/terminal-ownership.md#the-app-on-windows-end-to-end--2026-11-08)).

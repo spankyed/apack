@@ -553,6 +553,24 @@ timeout message already says *"a timeout alone does not distinguish slow progres
 Inspect the run output before retrying or changing its budget"* — and the run output had the answer in it
 both times.
 
+### The strict chain passes on the pushed state — 2026-11-08
+
+`gh workflow run ci.yml --ref session/terminal-ownership -f strict_chain=true`, run **42450951226**:
+**success**, all six jobs green — `producers`, `integration-1`, `integration-2`, `native-1`, `native-2`
+and `app-and-rest`, each on its own disposable macOS runner with two cores. `test:native --all` ran on
+both native shards, 1027.2s and 1071.6s.
+
+**It is the arbiter for the one file the local chain could not pass**, which is what the goal reserved it
+for. `@apackdev/cli`'s `build-worker.native.spec.ts` failed on this Mac across five runs in three
+different cases, never the same one twice, in code this goal does not touch; on native-2 it ran in 404.8s
+and passed, reported as a slow-tail outlier rather than a failure. Load in a 2-core container, not a
+defect.
+
+**The dispatch before it validated nothing.** `gh workflow run --ref master` names the *remote* branch,
+and the work was 86 commits that had not been pushed, so run 42449685691 ran against `5b2ad4cbed` — a
+commit predating the whole goal. A green result there would have been a false pass, and reading it as one
+is the trap: `--ref` is a ref on the remote, never the local branch of the same name.
+
 ### Phase A: facts out of the VT core — 2026-11-07
 
 **What a session reports about itself, answered without a window.** The markers D3 arranges are now read
