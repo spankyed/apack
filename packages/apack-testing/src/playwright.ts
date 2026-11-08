@@ -37,6 +37,9 @@ export function definePackE2EConfig(options: PlaywrightTestConfig = {}): Playwri
     testDir: 'tests/e2e',
     // The large budget: an E2E test that takes longer is hung, not slow
     timeout: 60_000,
+    // The one backstop for an assertion's wait: a spec states what it waits for and never how long, and an app on a
+    // busy machine answers late rather than not at all. Playwright gives a wait only a clock, so this is its bound
+    expect: { timeout: 30_000 },
     workers: e2eWorkers(),
     // Generated run output stays outside the authored input scope.
     outputDir: '.apack/tests/results',

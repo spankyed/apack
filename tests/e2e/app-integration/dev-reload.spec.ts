@@ -71,5 +71,5 @@ test('a rebuilt built-in pack reloads with the content the rebuild changed', asy
   expect(response.status, await response.text()).toBe(200);
 
   // The reload re-applies the content, and the library's views carry the change to the tree
-  await expect.poll(() => libraryDocuments(appPage), { timeout: 15_000 }).toContain(REBUILT_DOCUMENT);
+  await expect.poll(() => libraryDocuments(appPage)).toContain(REBUILT_DOCUMENT);
 });

@@ -27,8 +27,8 @@ test('subscribes to the bus again once the API it lost is restarted', async ({ a
   // Only the app under test's own API child: never a broad kill
   process.kill(crashed, 'SIGKILL');
 
-  await expect.poll(async () => (await shell(appPage)).busSubscribed, { timeout: 10_000 }).toBe(false);
-  await expect.poll(async () => (await shell(appPage)).busSubscribed, { timeout: 30_000 }).toBe(true);
+  await expect.poll(async () => (await shell(appPage)).busSubscribed).toBe(false);
+  await expect.poll(async () => (await shell(appPage)).busSubscribed).toBe(true);
   expect(apiPid(mainPid), 'main started a new API process').not.toBe(crashed);
   expect((await shell(appPage)).failed, 'the window never fell to the error page').toBe(false);
 });

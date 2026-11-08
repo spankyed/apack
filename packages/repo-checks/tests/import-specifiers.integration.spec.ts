@@ -704,14 +704,14 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
     return findSyncSpawnsInSpecs([path.join(root, 'src', 'slow.integration.spec.ts')], root, {});
   },
   findClockedDeadlinesInSource: () => {
-    // A clock through promisify(execFile), a CPU ceiling that is not one, a listed file whose count moved and a
+    // A clock through promisify(execFile), a CPU ceiling that is not one, an unlisted AbortSignal.timeout and a
     // by-design entry with nothing left: each its own finding except the CPU ceiling
     write('clocked.ts', "import { execFile } from 'node:child_process'; import { promisify } from 'node:util';"
       + " const run = promisify(execFile); await run('ps', [], { timeout: 5_000 });");
     write('working.ts', "import { execFileWhileWorking } from './progress.ts'; await execFileWhileWorking('ps', [], { timeout: 5_000 });");
-    write('backlog.ts', 'AbortSignal.timeout(1_000); AbortSignal.timeout(2_000);');
-    const found = findClockedDeadlinesInSource(['clocked.ts', 'working.ts', 'backlog.ts'].map((file) => path.join(root, 'src', file)),
-      root, { 'src/gone.ts': 'network' }, { 'src/backlog.ts': 1 });
+    write('signal.ts', 'AbortSignal.timeout(1_000);');
+    const found = findClockedDeadlinesInSource(['clocked.ts', 'working.ts', 'signal.ts'].map((file) => path.join(root, 'src', file)),
+      root, { 'src/gone.ts': 'network' });
     return found.length === 3 && !found.some((line) => line.includes('working')) ? found : [];
   },
   findCompilerRunsInFastSpecs: () => {

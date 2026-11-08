@@ -28,7 +28,7 @@ test('a write from apack db exec shows in the running app, without a restart', a
     write(id).set('name', ${JSON.stringify(CHANGED_DOCUMENT)}); return id;`;
   await apackDb(dataDir!, 'exec', code);
 
-  await expect.poll(() => libraryDocuments(appPage), { timeout: 15_000 }).toContain(CHANGED_DOCUMENT);
+  await expect.poll(() => libraryDocuments(appPage)).toContain(CHANGED_DOCUMENT);
   expect(await libraryDocuments(appPage)).not.toContain(WRITTEN_DOCUMENT);
 });
 
@@ -62,7 +62,7 @@ test('a tool killed right after committing is heard, with nothing committed in t
   const killed = await apackDb(dataDir!, 'script', script).then(() => null, (error: { signal?: string }) => error);
   expect(killed?.signal, 'the tool died as soon as it had committed').toBe('SIGKILL');
 
-  await expect.poll(() => libraryDocuments(appPage), { timeout: 15_000 }).toContain('Chat commands from a killed tool');
+  await expect.poll(() => libraryDocuments(appPage)).toContain('Chat commands from a killed tool');
 });
 
 test('a reset from apack db starts the running app over, and it goes on working', async ({ app, appPage, electronApp }) => {
@@ -76,7 +76,7 @@ test('a reset from apack db starts the running app over, and it goes on working'
   const { stdout } = await apackDb(dataDir, 'reset', '--force', '--keep-keys');
   expect(stdout).toContain('running apack starts over');
 
-  await expect.poll(async () => (await apackDb(dataDir, 'query', nameCount('Claude Code commands'))).stdout.trim(), { timeout: 15_000 }).toBe('1');
+  await expect.poll(async () => (await apackDb(dataDir, 'query', nameCount('Claude Code commands'))).stdout.trim()).toBe('1');
   expect((await apackDb(dataDir, 'query', nameCount('Renamed before the reset'))).stdout.trim()).toBe('0');
   expect(await app.getState()).toEqual(expect.objectContaining({ running: 'connected' }));
 
@@ -86,7 +86,7 @@ test('a reset from apack db starts the running app over, and it goes on working'
       .applicationState?.system?.get('default-setup/library')?.send({ type: 'CREATE_FOLDER', name: 'Made after the reset' });
   });
   const folders = "return query(EARS.Entity.Collection).where('name', 'Made after the reset').count()";
-  await expect.poll(async () => (await apackDb(dataDir, 'query', folders)).stdout.trim(), { timeout: 15_000 }).toBe('1');
+  await expect.poll(async () => (await apackDb(dataDir, 'query', folders)).stdout.trim()).toBe('1');
 });
 
 /** Creates two notes through the CLI, the first's text linking to the second, as a tool writes past any repository */
@@ -101,5 +101,5 @@ test('a note a tool writes gets its references in the running app', async ({ app
   const dataDir = (await electronApp.evaluate(() => process.env.APACK_USER_DATA_DIR))!;
   const source = JSON.parse((await apackDb(dataDir, 'exec', linkedNotes, '-o', 'json')).stdout) as string;
   const references = `return findRelations({ source: ${JSON.stringify(source)}, kind: 'references' }).length`;
-  await expect.poll(async () => (await apackDb(dataDir, 'query', references)).stdout.trim(), { timeout: 15_000 }).toBe('1');
+  await expect.poll(async () => (await apackDb(dataDir, 'query', references)).stdout.trim()).toBe('1');
 });

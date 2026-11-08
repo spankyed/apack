@@ -78,7 +78,6 @@ test('previews a compiled content directory by its content.json and imports the 
     const waitForStatus = (status: string) => appPage.waitForFunction(
       (s) => ['error', s].includes((window as any).applicationState.system.get('host/settings').getSnapshot().context.packContentImport.status),
       status,
-      { timeout: 20_000 },
     );
 
     await send({ type: 'PACK_CONTENT.PREVIEW', directory });

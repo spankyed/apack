@@ -44,11 +44,11 @@ try {
   // The watcher subscribes before its own initial publication to close the build/subscription race.
   await waitForPhase('[watch] Watching build inputs', BUILD_TIMEOUT_MS, 'watcher initial publication');
   const session = JSON.parse(fs.readFileSync(sessionFile(userDataDir), 'utf8'));
-  browser = await chromium.connectOverCDP(`http://127.0.0.1:${session.debugPort}`, { timeout: 15_000 });
+  browser = await chromium.connectOverCDP(`http://127.0.0.1:${session.debugPort}`);
   const page = browser.contexts()[0]!.pages().find(page => page.url().includes('/renderer/dist/index.html'))!;
   expect(page, 'the app renderer is available over its development session').toBeTruthy();
   const runtime = () => page.evaluate(() => (window as any).applicationState?.getSnapshot().context.acceptedPackRuntimes['e2e-fixture']);
-  await expect.poll(runtime, { timeout: 30_000 }).toBeTruthy();
+  await expect.poll(runtime).toBeTruthy();
   const previous = await runtime();
   const manifest = JSON.parse(original);
   manifest.features.memos.settings.defaults.listTitle = 'CLI rebuild memos';
@@ -63,7 +63,7 @@ try {
   await expect.poll(async () => {
     const current = await runtime();
     return !!current && current !== previous;
-  }, { timeout: 30_000, message: 'installed rebuild accepted by the running frontend' }).toBe(true);
+  }, { message: 'installed rebuild accepted by the running frontend' }).toBe(true);
   expect(JSON.parse(fs.readFileSync(installed, 'utf8')).features.memos.settings.defaults.listTitle).toBe('CLI rebuild memos');
   console.log('PASS: source pack dev initially installs, watches a manifest edit, and delivers a new accepted runtime');
 } finally {
