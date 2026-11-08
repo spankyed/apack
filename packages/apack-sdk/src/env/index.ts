@@ -167,3 +167,49 @@ export function _inferElectronAppEnv(input: {
 export function getAppVersion(): string {
   return boundHost().appVersion;
 }
+
+/**
+ * The variables the app sets on a process it starts: its identity, its paths, its port and its token.
+ *
+ * The list is the declaration and {@link AppProcessEnv} is derived from it, so the construction that sets them
+ * (`getEnvironment`, `@app/main`'s api-server module) cannot add one the list does not name and cannot omit one
+ * it does — the record it builds is typed by this, and either direction fails the typecheck.
+ *
+ * That is what makes a strip at the other end safe. Everything the API starts inherits its environment, so
+ * every name here reaches an agent child and everything that child's own tools spawn, and each one is the app
+ * talking to itself: `ELECTRON_RUN_AS_NODE=1` breaks any Electron app launched from there, `NODE_ENV=production`
+ * changes what an `npm install` does, `APACK_USER_DATA_DIR` and `SHIPPED_PACKS_DIR` say where the user's data is,
+ * and the token is app-process-level access to it.
+ */
+export const APP_PROCESS_ENV_VARS = [
+  'NODE_ENV',
+  'API_PORT',
+  'APACK_API_TOKEN',
+  'APACK_STARTUP_ID',
+  'APACK_LOG_DIR',
+  'SHIPPED_PACKS_DIR',
+  'APACK_ENV',
+  'APACK_APP_MANIFEST',
+  'APACK_USER_DATA_DIR',
+  'ELECTRON_RUN_AS_NODE',
+] as const;
+
+/** A complete record of {@link APP_PROCESS_ENV_VARS}: what the app sets when it starts a process. */
+export type AppProcessEnv = Record<(typeof APP_PROCESS_ENV_VARS)[number], string | undefined>;
+
+/**
+ * `env` without the variables the app set on its own process.
+ *
+ * **What the app spawns for the user must not inherit the app's identity.** The parent object is left
+ * unchanged; the result is a fresh copy.
+ *
+ * **Derived, not written**, which is the whole point: {@link APP_PROCESS_ENV_VARS} is the same declaration the
+ * construction that sets them is typed by, so a variable added there is stripped here without anyone
+ * remembering to add it. A hand-written deny-list is the shape that rots — the one this replaces named two of
+ * the ten.
+ */
+export function withoutAppProcessEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const clean: NodeJS.ProcessEnv = { ...env };
+  for (const name of APP_PROCESS_ENV_VARS) delete clean[name];
+  return clean;
+}

@@ -26,6 +26,8 @@ import type { Readable, Writable } from 'stream'
 import { resolveForService } from '../../utils/resolve-cli.ts'
 import { createLogger } from '@apackdev/sdk/logger'
 
+import { agentChildEnvironment } from '../shell-environment.ts'
+
 import { createClaudeLifecycleTrace } from './lifecycle-trace.ts'
 import { createStderrTail } from './stderr-tail.ts'
 import { decodeNdjson, encodeNdjsonLine, type DecodedLine } from './ndjson.ts'
@@ -44,9 +46,9 @@ const logger = createLogger('claude-code-runner')
 export interface ExecOnceOptions {
   cwd?: string
   /**
-   * Merge overrides into the inherited child environment. ANTHROPIC_API_KEY
-   * and NODE_ENV are always removed, including explicit overrides. Native
-   * file checkpointing defaults on only when its environment switch is unset.
+   * Merge overrides into the child environment, which is this process's minus everything the app set on it.
+   * ANTHROPIC_API_KEY is always removed, including an explicit override. Native file checkpointing defaults
+   * on only when its environment switch is unset.
    */
   env?: NodeJS.ProcessEnv
   /** Bytes piped to stdin. Pass `undefined` to leave stdin closed. */
@@ -67,9 +69,9 @@ export interface ExecOnceResult {
 export interface SpawnStreamOptions {
   cwd?: string
   /**
-   * Merge overrides into the inherited child environment. ANTHROPIC_API_KEY
-   * and NODE_ENV are always removed, including explicit overrides. Native
-   * file checkpointing defaults on only when its environment switch is unset.
+   * Merge overrides into the child environment, which is this process's minus everything the app set on it.
+   * ANTHROPIC_API_KEY is always removed, including an explicit override. Native file checkpointing defaults
+   * on only when its environment switch is unset.
    */
   env?: NodeJS.ProcessEnv
   signal?: AbortSignal
@@ -105,19 +107,23 @@ export interface StreamHandle {
  * subprocess we spawn would try to authenticate with that key and
  * fail with "Invalid API key · Fix external API key".
  *
- * Caller overrides are merged into the inherited environment before scrubbing.
- * ANTHROPIC_API_KEY and NODE_ENV are always removed; an explicit override does
- * not bypass that policy. Other native switches pass through, with checkpointing
- * defaulted below only when unset. The parent and override objects stay unchanged.
+ * **Everything the app set on its own process is stripped first** (`agentChildEnvironment`): this child, and
+ * every program its Bash tool spawns, would otherwise inherit `ELECTRON_RUN_AS_NODE=1`, `APACK_API_TOKEN`,
+ * `APACK_USER_DATA_DIR`, `SHIPPED_PACKS_DIR`, `API_PORT` and the rest. The strip is derived from the same
+ * declaration the construction in `@app/main` is typed by, so a variable added there is stripped here; it
+ * covers `NODE_ENV`, which is why no delete below names it.
+ *
+ * Caller overrides are merged after that strip, so an override can set any of them deliberately.
+ * ANTHROPIC_API_KEY is removed last and an explicit override does not bypass it. Other native switches pass
+ * through, with checkpointing defaulted below only when unset. The parent and override objects stay unchanged.
  *
  * Exported for direct unit testing — testing via the real `spawn()` path
  * would require mocking `child_process`, which is needlessly heavy for a
  * pure function.
  */
 export function buildChildEnv(override?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, ...override }
+  const env: NodeJS.ProcessEnv = { ...agentChildEnvironment(process.env), ...override }
   delete env.ANTHROPIC_API_KEY
-  delete env.NODE_ENV
 
   // Let the CLI and explicit caller environment own deferred tool discovery.
   // Current native ToolSearch can load ExitPlanMode before its approval request.
