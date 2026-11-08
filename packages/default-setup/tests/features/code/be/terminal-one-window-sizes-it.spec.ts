@@ -9,26 +9,13 @@
 // the way in, and nobody can forge it — so the system can tell one window's fit from another's without the
 // windows having to say who they are.
 import { describe, expect, it } from 'vitest'
-import { mockService, resetTestData, startApp } from '@apackdev/testing/harness'
+import { resetTestData, startApp } from '@apackdev/testing/harness'
+import { recordingBroker } from './_support/terminal-broker.ts'
 
-/** Every resize the host's terminal service was asked for */
-function recordingSessions() {
-  const resized: Array<{ cols: number; rows: number }> = []
-  let next = 0
-  mockService('terminal', {
-    open: async () => {
-      next += 1
-      return {
-        id: `broker-${next}`,
-        pid: 1000 + next,
-        write: async () => {},
-        resize: async (cols: number, rows: number) => { resized.push({ cols, rows }) },
-        terminate: async () => {},
-      }
-    },
-  })
-  return resized
-}
+/** The sizes that reached the pty, without the session they reached — one terminal per case here */
+const sizes = (broker: ReturnType<typeof recordingBroker>) =>
+  broker.resized.map(({ cols, rows }) => ({ cols, rows }))
+
 
 const CODE = 'default-setup/code'
 /** Two connections: the API mints one per WebSocket, so two windows are two of these */
@@ -37,7 +24,7 @@ const OBSERVER = 'c-observer'
 
 describe('which window sizes a terminal', () => {
   it('takes the fit of the window that opened it, and ignores a second window\'s', async () => {
-    const resized = recordingSessions()
+    const broker = recordingBroker()
     const app = await startApp({ systems: ['code'] })
     await app.connect()
 
@@ -54,13 +41,13 @@ describe('which window sizes a terminal', () => {
       { sender: CODE, client: OBSERVER })
     await app.settle()
 
-    expect(resized, "the observer's fit never reached the pty").toEqual([{ cols: 120, rows: 40 }])
+    expect(sizes(broker), "the observer's fit never reached the pty").toEqual([{ cols: 120, rows: 40 }])
     await app.stop()
     resetTestData()
   })
 
   it('lets the owner keep sizing it after the observer has tried', async () => {
-    const resized = recordingSessions()
+    const broker = recordingBroker()
     const app = await startApp({ systems: ['code'] })
     await app.connect()
 
@@ -78,7 +65,7 @@ describe('which window sizes a terminal', () => {
 
     // A refusal that stuck would leave the owner unable to resize its own terminal after any observer fit,
     // which is the shape a naive "first writer wins" takes
-    expect(resized).toEqual([{ cols: 100, rows: 30 }])
+    expect(sizes(broker)).toEqual([{ cols: 100, rows: 30 }])
     await app.stop()
     resetTestData()
   })
@@ -86,7 +73,7 @@ describe('which window sizes a terminal', () => {
   it('gives a terminal nobody opened to the first window that fits it', async () => {
     // A restored terminal has no owner: the window that opened it is from a previous run. The first fit
     // takes it, which is what makes a restored terminal usable at all rather than stuck at its stored size
-    const resized = recordingSessions()
+    const broker = recordingBroker()
     const app = await startApp({ systems: ['code'] })
     await app.connect()
 
@@ -107,7 +94,7 @@ describe('which window sizes a terminal', () => {
       { sender: CODE, client: OWNER })
     await app.settle()
 
-    expect(resized, 'the first window to fit it took it, and the other was ignored')
+    expect(sizes(broker), 'the first window to fit it took it, and the other was ignored')
       .toEqual([{ cols: 90, rows: 25 }])
     await app.stop()
     resetTestData()

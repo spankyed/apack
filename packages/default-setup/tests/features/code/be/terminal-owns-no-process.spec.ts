@@ -2,38 +2,10 @@
 // finding is undone, which is what makes `dissolved` mean anything rather than being a claim about structure
 // (the terminal ownership goal's D6 and its acceptance table).
 import { describe, expect, it } from 'vitest'
-import { mockService, resetTestData, startApp } from '@apackdev/testing/harness'
+import { resetTestData, startApp } from '@apackdev/testing/harness'
+import { recordingBroker } from './_support/terminal-broker.ts'
 import { repository } from '#generated/repository.ts'
 
-/** What the host's terminal service was asked for, and what it was asked to do with each session */
-function recordingSessions() {
-  const opened: Array<{ cols: number; rows: number; listenersGivenAtOpen: boolean }> = []
-  const resized: Array<{ cols: number; rows: number }> = []
-  const terminated: string[] = []
-  let emit: ((data: string) => void) | undefined
-
-  mockService('terminal', {
-    open: async (options, listeners) => {
-      // The listeners arrive *with* the open, which is F8: there is no window in which output has nowhere
-      // to go. A service that registered them afterwards would hand this `undefined`
-      opened.push({ cols: options.cols, rows: options.rows, listenersGivenAtOpen: typeof listeners?.onOutput === 'function' })
-      emit = listeners.onOutput
-      return {
-        id: `broker-${opened.length}`,
-        pid: 4242,
-        write: async () => {},
-        resize: async (cols: number, rows: number) => { resized.push({ cols, rows }) },
-        // **A signal, as the broker's kill is.** `portable-pty` sends SIGHUP and reports a signal death as a
-        // non-zero code; Windows is `TerminateProcess(…, 127)`. A double that exits 0 here would let the
-        // service decide a close by reading the code — which is exactly the thing that cannot work, so the
-        // case below would pass while the app marked every closed terminal crashed.
-        terminate: async () => { terminated.push(`broker-${opened.length}`); listeners.onExit(1) },
-      }
-    },
-  })
-
-  return { opened, resized, terminated, writeFromTheShell: (data: string) => emit?.(data) }
-}
 
 const CODE = 'default-setup/code'
 const WINDOW = 'c-main'
@@ -48,7 +20,7 @@ async function openATerminal(app: Awaited<ReturnType<typeof startApp>>) {
 
 describe('what the broker owning the process removes', () => {
   it('declares no pid on a Terminal row, so nothing persisted can be killed by one (F7)', async () => {
-    const sessions = recordingSessions()
+    const broker = recordingBroker({ pidBase: 4242 })
     const app = await startApp({ systems: ['code'] })
     await app.connect()
     const id = await openATerminal(app)
@@ -58,12 +30,12 @@ describe('what the broker owning the process removes', () => {
     // Not "the field is undefined": the attribute must not be *on the row at all*, which is what a later
     // `restoreAll` reaching for one would need. `restoreAll` used to kill it and its process group
     expect(Object.keys(row as object)).not.toContain('pid')
-    expect(sessions.opened).toHaveLength(1)
+    expect(broker.opened).toHaveLength(1)
     await app.stop()
   })
 
   it('writes no row when a terminal is resized (F5)', async () => {
-    recordingSessions()
+    recordingBroker({ pidBase: 4242 })
     const app = await startApp({ systems: ['code'] })
     await app.connect()
     const id = await openATerminal(app)
@@ -82,15 +54,15 @@ describe('what the broker owning the process removes', () => {
   })
 
   it('hands the output listener to the service at open, so a first byte cannot be dropped (F8)', async () => {
-    const sessions = recordingSessions()
+    const broker = recordingBroker({ pidBase: 4242 })
     const app = await startApp({ systems: ['code'] })
     await app.connect()
     await openATerminal(app)
 
-    expect(sessions.opened[0]?.listenersGivenAtOpen, 'the listeners came with the open').toBe(true)
+    expect(broker.opened[0]?.listenersGivenAtOpen, 'the listeners came with the open').toBe(true)
 
     // What a shell writes immediately reaches the surface, with no registration step in between
-    sessions.writeFromTheShell('a prompt, written at once')
+    broker.emit('broker-1', 'a prompt, written at once')
     await app.settle()
     const output = app.emitted('code').filter(event => event.type === 'terminal.OUTPUT')
     expect(output.map(event => (event as unknown as { data: { data: string } }).data.data)).toContain('a prompt, written at once')
@@ -110,23 +82,23 @@ describe('what the broker owning the process removes', () => {
    * change and the guard is somewhere else.
    */
   it('ends no session when the systems stop, which is what an API restart does', async () => {
-    const sessions = recordingSessions()
+    const broker = recordingBroker({ pidBase: 4242 })
     const app = await startApp({ systems: ['code'] })
     await app.connect()
     const id = await openATerminal(app)
-    expect(sessions.opened).toHaveLength(1)
+    expect(broker.opened).toHaveLength(1)
 
     // What `backendActor?.stop()` does in the API's SIGTERM handler, and what a pack reload does to its systems
     await app.stop()
 
-    expect(sessions.terminated, 'stopping the systems ended a user s shell').toEqual([])
+    expect(broker.terminated, 'stopping the systems ended a user s shell').toEqual([])
     expect(repository.terminalQueries.all().map(row => row.id), 'the row stays, so the next boot restores it')
       .toEqual([id])
     resetTestData()
   })
 
   it('leaves no row behind when every terminal is killed (L2, L3)', async () => {
-    recordingSessions()
+    recordingBroker({ pidBase: 4242 })
     const app = await startApp({ systems: ['code'] })
     await app.connect()
     await openATerminal(app)

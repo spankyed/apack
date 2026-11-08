@@ -13,7 +13,8 @@
 // says which edit would give it one: everything `restoreAll` does per terminal is inside a `try`, and what
 // is left outside is a settings read and a query.
 import { describe, expect, it } from 'vitest'
-import { mockService, resetTestData, startApp, takeSystemErrors } from '@apackdev/testing/harness'
+import { resetTestData, startApp, takeSystemErrors } from '@apackdev/testing/harness'
+import { recordingBroker } from './_support/terminal-broker.ts'
 import { repository } from '#generated/repository.ts'
 import { EARS, newId } from '#generated/ears.ts'
 import { defaultShell } from '#features/code/be/services/known-shells.ts'
@@ -23,21 +24,8 @@ const WINDOW = 'c-main'
 
 describe('a restore that fails', () => {
   it('reports it and leaves the system able to open a terminal', async () => {
-    // A row to restore, and a host service that refuses the first open and allows the rest
-    let opens = 0
-    mockService('terminal', {
-      open: async () => {
-        opens += 1
-        if (opens === 1) throw new Error('the broker would not start')
-        return {
-          id: `broker-${opens}`,
-          pid: 3000 + opens,
-          write: async () => {},
-          resize: async () => {},
-          terminate: async () => {},
-        }
-      },
-    })
+    // A row to restore, and a broker that refuses the first open and allows the rest
+    recordingBroker({ pidBase: 3000 }).refuseOpen(1)
     const id = newId(EARS.Entity.Terminal)
     repository.terminalCommands.create({ id, title: 'from last time', shell: defaultShell(), cwd: process.cwd(), cols: 80, rows: 24 })
 

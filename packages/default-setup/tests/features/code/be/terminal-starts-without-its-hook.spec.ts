@@ -11,30 +11,12 @@
 // facts and nothing else.
 import { describe, expect, it } from 'vitest'
 import { mockService, resetTestData, startApp } from '@apackdev/testing/harness'
+import { recordingBroker } from './_support/terminal-broker.ts'
 
-/** What the host's terminal service was asked to start, including how the shell was to be launched */
-function recordingSessions() {
-  const opened: Array<{ args?: readonly string[]; env?: Readonly<Record<string, string>> }> = []
-  let next = 0
-  mockService('terminal', {
-    open: async (options) => {
-      opened.push({ args: options.args, env: options.env })
-      next += 1
-      return {
-        id: `broker-${next}`,
-        pid: 3000 + next,
-        write: async () => {},
-        resize: async () => {},
-        terminate: async () => {},
-      }
-    },
-  })
-  return opened
-}
 
 describe('a shell whose integration could not be written', () => {
   it('still starts, carrying no arrangement', async () => {
-    const opened = recordingSessions()
+    const broker = recordingBroker({ pidBase: 3000 })
     mockService('filesystem', {
       writeFile: async () => { throw new Error('read-only file system') },
     })
@@ -44,12 +26,12 @@ describe('a shell whose integration could not be written', () => {
     const { terminalService } = await import('#features/code/be/services/terminal.ts')
     const terminal = await terminalService.create({ cols: 80, rows: 24 }, { onData: () => {}, onExit: () => {}, onCrashed: () => {} })
 
-    expect(terminal.id, 'the terminal opened').toBeTruthy()
-    expect(opened, 'the shell was started').toHaveLength(1)
+    expect(terminal.id, 'the terminal broker.opened').toBeTruthy()
+    expect(broker.opened, 'the shell was started').toHaveLength(1)
     // Not "the arrangement it would have had": a hook pointing at a file that was never written is worse
     // than none, since the shell would fail to start reading it
-    expect(opened[0]!.args, 'no launch arguments, because the file they name is not there').toBeUndefined()
-    expect(opened[0]!.env, 'and nothing pointed at the directory').toBeUndefined()
+    expect(broker.opened[0]!.options.args, 'no launch arguments, because the file they name is not there').toBeUndefined()
+    expect(broker.opened[0]!.options.env, 'and nothing pointed at the directory').toBeUndefined()
 
     await app.stop()
     resetTestData()
@@ -58,7 +40,7 @@ describe('a shell whose integration could not be written', () => {
   it('starts with its arrangement when the write succeeds', async () => {
     // The refusal has to be about the failure and not about this path: the same open with a working
     // filesystem must carry the arrangement, or the case above would pass with the feature switched off
-    const opened = recordingSessions()
+    const broker = recordingBroker({ pidBase: 3000 })
     const written: string[] = []
     mockService('filesystem', {
       writeFile: async (file: string) => { written.push(file) },
@@ -70,7 +52,8 @@ describe('a shell whose integration could not be written', () => {
     await terminalService.create({ cols: 80, rows: 24 }, { onData: () => {}, onExit: () => {}, onCrashed: () => {} })
 
     expect(written, 'the rc file was written').not.toHaveLength(0)
-    const arranged = (opened[0]!.args?.length ?? 0) > 0 || Object.keys(opened[0]!.env ?? {}).length > 0
+    const arranged = (broker.opened[0]!.options.args?.length ?? 0) > 0
+      || Object.keys(broker.opened[0]!.options.env ?? {}).length > 0
     expect(arranged, 'and the shell was told how to read it').toBe(true)
 
     await app.stop()

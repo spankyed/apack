@@ -6,29 +6,9 @@
 // away takes the error with it. That is why a crash keeps the terminal and starts a new generation under
 // it rather than removing it, which is what Phase H asks for and what T6's restart-in-place needs.
 import { describe, expect, it, vi } from 'vitest'
-import { mockService, resetTestData, startApp } from '@apackdev/testing/harness'
+import { resetTestData, startApp } from '@apackdev/testing/harness'
+import { recordingBroker } from './_support/terminal-broker.ts'
 
-/** The sessions the host handed out, and the way to end one as a shell ending would */
-function recordingSessions() {
-  const ended: Array<(code: number | null) => void> = []
-  const opened: Array<{ pid: number }> = []
-  let next = 0
-  mockService('terminal', {
-    open: async (_options, listeners) => {
-      next += 1
-      ended.push(listeners.onExit)
-      const session = { id: `broker-${next}`, pid: 5000 + next }
-      opened.push(session)
-      return {
-        ...session,
-        write: async () => {},
-        resize: async () => {},
-        terminate: async () => {},
-      }
-    },
-  })
-  return { ended, opened }
-}
 
 const handlers = () => ({ onData: vi.fn(), onExit: vi.fn(), onCrashed: vi.fn() })
 
@@ -42,20 +22,20 @@ const handlers = () => ({ onData: vi.fn(), onExit: vi.fn(), onCrashed: vi.fn() }
 const only = <T extends { id: string }>(list: readonly T[], id: string) => list.filter(one => one.id === id)
 
 async function aTerminal() {
-  const sessions = recordingSessions()
+  const broker = recordingBroker({ pidBase: 5000 })
   const app = await startApp({ systems: ['code'] })
   await app.connect()
   const { terminalService } = await import('#features/code/be/services/terminal.ts')
   const told = handlers()
   const info = await terminalService.create({ cols: 80, rows: 24 }, told)
-  return { sessions, app, terminalService, told, info }
+  return { broker, app, terminalService, told, info }
 }
 
 describe('a shell ending under its terminal', () => {
   it('takes the terminal with it when the user ended it', async () => {
-    const { sessions, app, terminalService, told, info } = await aTerminal()
+    const { broker, app, terminalService, told, info } = await aTerminal()
 
-    sessions.ended[0]!(0)
+    broker.endShell('broker-1', 0)
 
     expect(only(terminalService.list(), info.id), 'a clean exit closes the terminal').toEqual([])
     expect(told.onExit).toHaveBeenCalledWith(info.id, 0)
@@ -65,9 +45,9 @@ describe('a shell ending under its terminal', () => {
   })
 
   it('leaves the terminal, marked, when the shell died badly', async () => {
-    const { sessions, app, terminalService, told, info } = await aTerminal()
+    const { broker, app, terminalService, told, info } = await aTerminal()
 
-    sessions.ended[0]!(139)
+    broker.endShell('broker-1', 139)
 
     const [kept] = only(terminalService.list(), info.id)
     expect(kept?.id, 'the terminal is still there to be read').toBe(info.id)
@@ -81,9 +61,9 @@ describe('a shell ending under its terminal', () => {
 
   /** A signal leaves no status at all, and that is not the same as succeeding */
   it('treats a shell killed by a signal as a crash', async () => {
-    const { sessions, app, terminalService, told, info } = await aTerminal()
+    const { broker, app, terminalService, told, info } = await aTerminal()
 
-    sessions.ended[0]!(null)
+    broker.endShell('broker-1', null)
 
     expect(only(terminalService.list(), info.id)).toHaveLength(1)
     expect(told.onCrashed).toHaveBeenCalledWith(info.id, null)
@@ -99,10 +79,10 @@ describe('restarting a terminal', () => {
    * the user restarted it to read.
    */
   it('keeps the terminal and starts a new generation under it', async () => {
-    const { sessions, app, terminalService, told, info } = await aTerminal()
+    const { broker, app, terminalService, told, info } = await aTerminal()
     expect(info.generation, 'the first shell is the first generation').toBe(1)
 
-    sessions.ended[0]!(139)
+    broker.endShell('broker-1', 139)
     const restarted = await terminalService.restart(info.id, told)
 
     expect(restarted?.id, 'the same terminal').toBe(info.id)
@@ -115,15 +95,31 @@ describe('restarting a terminal', () => {
     resetTestData()
   })
 
-  it('restarts a shell that is still running, ending the old one first', async () => {
+  /**
+   * **A restart ends the old shell, and that ending must reach nobody.**
+   *
+   * The old session's `onExit` arrives while the terminal already names the new one, so the generation
+   * token is what drops it (`exited`, which returns when `terminal.opening` has moved on). Without that,
+   * the exit falls through to `ended`, where a kill's non-zero status and no `closing` flag mean **crash**
+   * — so the terminal the user has just restarted is marked dead under them, and its row keeps an
+   * `exited` code.
+   *
+   * It asserts `onCrashed` for that reason: `onExit` alone passes with the guard removed, because the
+   * status of a kill never reads as a close. That is also why the double's `terminate` has to fire an exit
+   * at all (`_support/terminal-broker.ts`) — against one that ends nothing, neither assertion can fail.
+   */
+  it('restarts a shell that is still running, and the old one ending reaches nobody', async () => {
     const { app, terminalService, told, info } = await aTerminal()
 
     const restarted = await terminalService.restart(info.id, told)
 
     expect(restarted?.generation).toBe(2)
     expect(restarted?.pid).not.toBe(info.pid)
-    // The old session ending must not be read as the terminal closing — it was replaced, not lost
-    expect(told.onExit).not.toHaveBeenCalled()
+    expect(told.onExit, 'the replaced session read as the terminal closing').not.toHaveBeenCalled()
+    expect(told.onCrashed, 'the replaced session read as a crash, so a live terminal was marked dead')
+      .not.toHaveBeenCalled()
+    expect(restarted?.exited, 'the restarted terminal carries an exit status').toBeUndefined()
+    expect(restarted?.active, 'the restarted terminal is not active').toBe(true)
     await app.stop()
     resetTestData()
   })

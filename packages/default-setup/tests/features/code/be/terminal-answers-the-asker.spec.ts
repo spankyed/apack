@@ -7,7 +7,8 @@
 //
 // The host's terminal service is mocked, so no process is spawned and nothing here is about pty.
 import { describe, expect, it } from 'vitest'
-import { mockService, startApp } from '@apackdev/testing/harness'
+import { startApp } from '@apackdev/testing/harness'
+import { recordingBroker } from './_support/terminal-broker.ts'
 
 /**
  * **The host's terminal service is what gets mocked, and that is the only thing that works here.**
@@ -18,25 +19,10 @@ import { mockService, startApp } from '@apackdev/testing/harness'
  * `mockService` overlays the host service the pack reaches through `services`, which is a seam a test can
  * actually take.
  */
-const openedWith: Array<{ cols: number; rows: number; shell?: string; cwd?: string }> = []
+let broker: ReturnType<typeof recordingBroker>
 
 function mockTerminalSessions() {
-  openedWith.length = 0
-  let next = 0
-  mockService('terminal', {
-    open: async (options) => {
-      openedWith.push(options)
-      next += 1
-      const id = `broker-${next}`
-      return {
-        id,
-        pid: 1000 + next,
-        write: async () => {},
-        resize: async () => {},
-        terminate: async () => {},
-      }
-    },
-  })
+  broker = recordingBroker()
 }
 
 const CODE = 'default-setup/code'
@@ -58,7 +44,8 @@ describe('creating a terminal', () => {
 
     const types = sentToCode(app)
     // The mock is live, which the inert `vi.mock` it replaced never was: a real session would have spawned
-    expect(openedWith, 'the pack asked the host for a session').toEqual([{ cols: 80, rows: 24, shell: expect.any(String), cwd: expect.any(String) }])
+    expect(broker.opened.map(({ options }) => options), 'the pack asked the host for a session')
+      .toEqual([{ cols: 80, rows: 24, shell: expect.any(String), cwd: expect.any(String) }])
     expect(types, "the news, on which every window asks for its list again").toContain('terminal.CREATED')
     expect(types, 'and the answer, which opens it for the asker alone').toContain('terminal.OPENED')
   })
