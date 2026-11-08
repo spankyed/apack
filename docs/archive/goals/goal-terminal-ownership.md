@@ -114,6 +114,8 @@ summarised.** Three runs, none of them a verdict on this source:
 | 42463568897 | failed `integration-2` | a `504` from GitHub's release CDN, twice, inside `scripts/postinstall.mjs` — before any of this repo's code ran |
 | 42471364665 | failed `producers` | the same `504` |
 | 42472092232 | five of six green, failed `app-and-rest` | **ours**: `test:external-pack:app` refused with *"Pack build package inputs changed"* |
+| 42476840456 | failed `producers` in 90s | `upload-pack: not our ref 5588170a` — the pinned broker commit was never pushed, so CI could not clone it |
+| 42477376127 | failed `producers` | `error: no such command: xtask` — the alias that defines it is untracked in the broker repo |
 
 The third is the one worth reading, because it was not infrastructure. The external pack records its package
 graph in `dist/build-inputs.json` and that graph includes `node_modules/electron`, so `readPackageInputs`
@@ -129,10 +131,24 @@ What two earlier strict runs proved is still on the record and still true of wha
 ([the record](../../references/evidence/terminal-ownership.md#the-strict-chain-passes-on-the-pushed-state--2026-11-08)),
 and **42456276453**, all six green on the G1 commit — but neither describes this source.
 
-**The remaining dispatch is blocked on a decision this goal does not settle.** Re-running strict means
-pushing `session/terminal-ownership`, and pushing is the user's call rather than this goal's; the fix for
-42472092232 is committed and unpushed. That is the whole of what stands between this source and a strict
-result: no source change is outstanding.
+**The last two are one defect each, and neither is in this repo's source.** The broker became an npm
+dependency resolved through `vendor/apack-terminal`, which CI clones at `vendor/apack-terminal.rev`; the
+pin named a commit that existed only in the sibling checkout, so every strict run would have failed
+identically and no local run could have caught it — `npm run chain` resolves the link, which has the commit.
+Pushing the broker's seven commits fixed that, and the clone step passed on the next run.
+
+What it then hit is the same shape one layer in: `cargo xtask` is a cargo alias, its only definition is
+`.cargo/config.toml`, and that file is **untracked** in the broker checkout — the one untracked
+non-ignored file there. CI's clone therefore has no alias, which fails `cargo xtask package` here and
+`check-generated`, `package` and `pre-push` in the broker's own `ci.yml` and `mutants.yml`. The file's own
+header already diagnoses it: every document there says to run `cargo xtask pre-push`, and locally it had
+only ever been run as `cargo run -p xtask --`, so nothing had exercised the spelling that was written down.
+
+**Each run has failed one step later than the last, and the remaining step is not this goal's to take.**
+Committing a file this goal did not write into a second repository, and committing a `vendor/*.rev` bump
+that is an uncommitted edit in this tree beside other in-flight changes, are both the user's call; a
+strict dispatch before them fails on the alias whichever pin it carries. Recorded here rather than chosen,
+per the rule above. **No source change in this repo is outstanding behind it.**
 
 **An earlier dispatch validated nothing**, and the reason is in the record above: `--ref master` names the
 *remote* branch, so it ran against a commit predating the goal. Two later runs were cancelled deliberately
