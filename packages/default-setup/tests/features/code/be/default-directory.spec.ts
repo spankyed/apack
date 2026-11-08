@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { getTestSettings, startApp } from '@apackdev/testing/harness';
 
 const dirs: string[] = [];
@@ -29,7 +29,7 @@ const explorerDirectory = () => (app!.system('code').getSnapshot().context as { 
 describe("the code explorer's directory", () => {
   it('closes real Git watchers when the Code actor stops', async () => {
     const directory = tempDir();
-    execFileSync('git', ['init', '--quiet', directory]);
+    await execFileWhileWorking('git', ['init', '--quiet', directory]);
     app = await startApp({ systems: ['code', 'host/settings'] });
     await setCodeSetting('defaultBaseDirectory', directory);
     const watcher = app.system('code').getSnapshot().context.gitWatcher;

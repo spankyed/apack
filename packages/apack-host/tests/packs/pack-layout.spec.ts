@@ -4,7 +4,6 @@ import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   PACK_LAYOUT, PACK_LAYOUT_VERSION,
@@ -21,6 +20,7 @@ import {
 } from '../../src/packs/layout.ts';
 import { installPack, installPackFromGitHub, installPackFromLocal, installPackFromUrl, uninstallPack } from '../../src/packs/installer.ts';
 import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { packBuildRevision, readPackAsset } from '../../src/packs/assets.ts';
 
 let tmp: string;
@@ -826,10 +826,10 @@ describe('installPackFromLocal (pack layout path)', () => {
 
 describe('installPackFromLocal (checksums)', () => {
   /** The built pack zipped up, or null where `zip` isn't installed. */
-  function zippedPack(): string | null {
+  async function zippedPack(): Promise<string | null> {
     const zipPath = path.join(tmp, 'pack.zip');
     try {
-      execFileSync('zip', ['-r', zipPath, '.'], { cwd: builtPack(), stdio: 'pipe' });
+      await execFileWhileWorking('zip', ['-r', zipPath, '.'], { cwd: builtPack() });
     } catch {
       return null;
     }
@@ -837,7 +837,7 @@ describe('installPackFromLocal (checksums)', () => {
   }
 
   it('refuses a .zip whose checksum does not match, unpacking nothing', async () => {
-    const zipPath = zippedPack();
+    const zipPath = await zippedPack();
     if (!zipPath) return;
     const packsDir = path.join(tmp, 'packs');
 
@@ -846,7 +846,7 @@ describe('installPackFromLocal (checksums)', () => {
   });
 
   it('installs a .zip whose checksum matches', async () => {
-    const zipPath = zippedPack();
+    const zipPath = await zippedPack();
     if (!zipPath) return;
     const packsDir = path.join(tmp, 'packs');
 

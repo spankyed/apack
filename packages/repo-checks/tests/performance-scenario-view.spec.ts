@@ -1,6 +1,6 @@
-import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { installViewCompletion } from '../../../tests/performance/_support/view-completion.ts';
 import type { PerformanceViewCompletion, PerformanceViewDelivery, PerformanceWindow } from '../../../tests/performance/_support/window.ts';
 
@@ -90,7 +90,9 @@ it('preserves a dispatch rejection even when its thrown value is undefined', asy
   expect(vi.getTimerCount()).toBe(0);
 });
 
-it('serializes the helper under the tsx loader without capturing transpiler globals', () => {
+it('serializes the helper under the tsx loader without capturing transpiler globals', async () => {
+  // The child's progress watchdog runs on timers, which the fake ones would never fire
+  vi.useRealTimers();
   const script = `
     import { runInNewContext } from 'node:vm';
     import { installViewCompletion } from './tests/performance/_support/view-completion.ts';
@@ -106,7 +108,7 @@ it('serializes the helper under the tsx loader without capturing transpiler glob
       dispatch: () => receive({}), errors: [] });
     if (cleaned !== 2) throw Error('Serialized completion did not release resources');
   `;
-  expect(() => execFileSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', script], {
-    cwd: path.resolve(import.meta.dirname, '../../..'), timeout: 10_000,
-  })).not.toThrow();
+  await expect(execFileWhileWorking(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', script], {
+    cwd: path.resolve(import.meta.dirname, '../../..'),
+  })).resolves.toBeDefined();
 });

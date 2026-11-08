@@ -140,38 +140,6 @@ const CLOCK_BY_DESIGN: Record<string, string> = {
  * is refused. They wait to become waits on the thing itself, bounded by the progress guard.
  */
 const CLOCKS_NOT_CONVERTED_YET: Record<string, number> = {
-  'packages/apack-cli/tests/_support/watch-builds.ts': 3,
-  'packages/apack-cli/tests/build/build-worker.native.spec.ts': 11,
-  'packages/apack-cli/tests/build/compiler-elf-libraries.native.spec.ts': 1,
-  'packages/apack-cli/tests/build/compiler-installation.native.spec.ts': 2,
-  'packages/apack-cli/tests/build/compiler-native-libraries.native.spec.ts': 1,
-  'packages/apack-cli/tests/build/compiler-native-vite.native.spec.ts': 10,
-  'packages/apack-cli/tests/build/compiler-pe-libraries.native.spec.ts': 7,
-  'packages/apack-cli/tests/build/compiler-watch.native.spec.ts': 1,
-  'packages/apack-cli/tests/build/compiler-worker-inputs.spec.ts': 2,
-  'packages/apack-cli/tests/build/fe-bundler-dev-server.native.spec.ts': 2,
-  'packages/apack-cli/tests/build/frontend-generation.native.spec.ts': 2,
-  'packages/apack-cli/tests/build/frontend-globs.native.spec.ts': 2,
-  'packages/apack-cli/tests/build/frontend-resources-watch.native.spec.ts': 6,
-  'packages/apack-cli/tests/build/frontend-watch.native.spec.ts': 11,
-  'packages/apack-cli/tests/build/frontend-workers.native.spec.ts': 4,
-  'packages/apack-cli/tests/build/input-subscriptions.native.spec.ts': 2,
-  'packages/apack-cli/tests/build/pack-builder.native.spec.ts': 4,
-  'packages/apack-cli/tests/build/package-inputs-watch.native.spec.ts': 1,
-  'packages/apack-cli/tests/build/watch-external-types.native.spec.ts': 3,
-  'packages/apack-cli/tests/build/watch-module-freshness.native.spec.ts': 3,
-  'packages/apack-cli/tests/build/watch-package-edit.native.spec.ts': 1,
-  'packages/apack-cli/tests/build/watch-publication.native.spec.ts': 7,
-  'packages/apack-cli/tests/build/watch-worker-inputs.native.spec.ts': 2,
-  'packages/apack-cli/tests/commands/db.integration.spec.ts': 1,
-  'packages/apack-cli/tests/commands/dev-build.integration.spec.ts': 2,
-  'packages/apack-cli/tests/commands/install-host-version.spec.ts': 1,
-  'packages/apack-host/tests/build/compiler-inputs.spec.ts': 1,
-  'packages/apack-host/tests/build/pack-build-inputs.spec.ts': 1,
-  'packages/api/tests/transport/context.spec.ts': 2,
-  'packages/api/tests/transport/views.spec.ts': 1,
-  'packages/repo-checks/tests/performance-scenario-view.spec.ts': 1,
-  'packages/repo-checks/tests/typecheck-legs.spec.ts': 1,
   'tests/acceptance/pack-dev/test-pack-dev.ts': 5,
   'tests/e2e/app-integration/api-reconnect.spec.ts': 2,
   'tests/e2e/app-integration/attach-parity.spec.ts': 1,
@@ -274,8 +242,8 @@ describe('a test is bounded by its progress, not a clock', () => {
     expect(Object.keys(CLOCK_BY_DESIGN).filter((file) => !byFile.has(file))).toEqual([]);
   });
 
-  it('has 147 clocks in 54 files left to convert', () => {
+  it('has 48 clocks in 22 files left to convert', () => {
     const counts = Object.values(CLOCKS_NOT_CONVERTED_YET);
-    expect([counts.reduce((sum, count) => sum + count, 0), counts.length]).toEqual([147, 54]);
+    expect([counts.reduce((sum, count) => sum + count, 0), counts.length]).toEqual([48, 22]);
   });
 });

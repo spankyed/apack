@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -6,6 +5,7 @@ import * as path from 'node:path';
 import { Readable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ensureBetaApp, packagedExecutable, pickBetaRelease } from '../../src/app/beta-app';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 const asset = (name: string) => ({ name, browser_download_url: `https://example.test/${encodeURIComponent(name)}` });
 const zipName = (version: string) => `apack-Beta-${version}-mac-arm64.zip`;
@@ -52,7 +52,7 @@ describe.skipIf(process.platform !== 'darwin' || process.arch !== 'arm64')('ensu
     return Readable.from([files[name]]);
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-beta-app-'));
     // A minimal app bundle, zipped the way electron-builder's mac zip target does
     const bundle = path.join(tmp, 'bundle');
@@ -61,7 +61,7 @@ describe.skipIf(process.platform !== 'darwin' || process.arch !== 'arm64')('ensu
     fs.writeFileSync(executable, '#!/bin/sh\n');
     fs.chmodSync(executable, 0o755);
     const zipPath = path.join(tmp, 'app.zip');
-    execFileSync('ditto', ['-c', '-k', path.join(bundle, 'apack Beta.app'), '--keepParent', zipPath]);
+    await execFileWhileWorking('ditto', ['-c', '-k', path.join(bundle, 'apack Beta.app'), '--keepParent', zipPath]);
     zip = fs.readFileSync(zipPath);
     const sha = createHash('sha256').update(zip).digest('hex');
     files = {

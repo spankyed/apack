@@ -11,10 +11,10 @@
 // underscore-prefixed in a repo where `_` means @internal and host-only; it was reverted; then the exclusion was
 // added. `chain-inputs.spec.ts` does not catch a deletion of it, because `typecheck` declares `templates` among
 // its inputs either way.
-import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { repoFiles } from './_support/repo-files.ts';
 
@@ -52,13 +52,13 @@ const ignorePatterns = (script: string): string[] =>
  * A non-zero exit is what a finding looks like, so the output is read either way and only an unparseable one
  * fails here.
  */
-function reportedFiles(args: readonly string[]): string[] {
+async function reportedFiles(args: readonly string[]): Promise<string[]> {
   let stdout = '';
   try {
-    stdout = execFileSync(path.join(REPO_ROOT, 'node_modules', '.bin', 'oxlint'), [...args, '-f', 'json'],
-      { cwd: REPO_ROOT, stdio: 'pipe', maxBuffer: 32 * 1024 * 1024 }).toString();
+    ({ stdout } = await execFileWhileWorking(path.join(REPO_ROOT, 'node_modules', '.bin', 'oxlint'), [...args, '-f', 'json'],
+      { cwd: REPO_ROOT }));
   } catch (error) {
-    stdout = String((error as { stdout?: Buffer }).stdout ?? '');
+    stdout = (error as { stdout?: string }).stdout ?? '';
   }
   const parsed = JSON.parse(stdout) as { diagnostics?: { filename?: string }[] };
   return (parsed.diagnostics ?? []).map((diagnostic) => diagnostic.filename ?? '');
@@ -72,8 +72,8 @@ describe("the lint gate's scaffold exclusion", () => {
    * repo is the gate's business to fail on, not this one's, and a case that demanded a clean tree would fail for
    * a reason that has nothing to do with what it is named after.
    */
-  it('reports nothing in the scaffold templates', () => {
-    expect(underTemplates(reportedFiles(oxlintArgs('lint:check')))).toEqual([]);
+  it('reports nothing in the scaffold templates', async () => {
+    expect(underTemplates(await reportedFiles(oxlintArgs('lint:check')))).toEqual([]);
   });
 
   /**
@@ -82,12 +82,12 @@ describe("the lint gate's scaffold exclusion", () => {
    * true of a pattern that excludes the wrong directory, of a linter that reads nothing, and of a scaffold with
    * nothing to report.
    */
-  it('reports them once that exclusion is dropped, which is what makes it load-bearing', () => {
+  it('reports them once that exclusion is dropped, which is what makes it load-bearing', async () => {
     const kept = oxlintArgs('lint:check').filter((arg, index, args) =>
       !(arg.startsWith(TEMPLATES) && args[index - 1] === '--ignore-pattern') && !(args[index + 1]?.startsWith(TEMPLATES) && arg === '--ignore-pattern'));
     expect(kept, 'no argument was dropped, so this ran the unmutated gate and proves nothing')
       .not.toEqual(oxlintArgs('lint:check'));
-    expect(underTemplates(reportedFiles(kept)),
+    expect(underTemplates(await reportedFiles(kept)),
       'the scaffold templates offend no lint rule, so excluding them protects nothing').not.toEqual([]);
   });
 
@@ -116,9 +116,9 @@ describe('a lint disable that names a rule nothing enables', () => {
   const DISABLE = /\/[/*]\s*(?:es|ox)lint-disable(?:-next-line|-line)?\s+([^\n*]+)/g;
 
   /** The rules oxlint runs, which is the `correctness` category and nothing else, from oxlint's own listing */
-  function correctnessRules(): Set<string> {
-    const listing = execFileSync(path.join(REPO_ROOT, 'node_modules', '.bin', 'oxlint'), ['--rules'],
-      { cwd: REPO_ROOT, stdio: 'pipe', maxBuffer: 8 * 1024 * 1024 }).toString();
+  async function correctnessRules(): Promise<Set<string>> {
+    const { stdout: listing } = await execFileWhileWorking(path.join(REPO_ROOT, 'node_modules', '.bin', 'oxlint'), ['--rules'],
+      { cwd: REPO_ROOT });
     const rules = new Set<string>();
     let category = '';
     for (const line of listing.split('\n')) {
@@ -133,8 +133,8 @@ describe('a lint disable that names a rule nothing enables', () => {
   }
 
   /** The workspaces whose own `lint:check` runs eslint as well, where a non-oxlint rule can still be real */
-  function eslintDirs(): string[] {
-    const workspaces = execFileSync('npm', ['query', '.workspace'], { cwd: REPO_ROOT, stdio: 'pipe', maxBuffer: 32 * 1024 * 1024 }).toString();
+  async function eslintDirs(): Promise<string[]> {
+    const { stdout: workspaces } = await execFileWhileWorking('npm', ['query', '.workspace'], { cwd: REPO_ROOT });
     return (JSON.parse(workspaces) as { location?: string; pkgid?: string }[])
       .map(({ location }) => location ?? '')
       .filter((location) => location !== '' && /(^|\s)eslint(\s|$)/.test(
@@ -142,9 +142,9 @@ describe('a lint disable that names a rule nothing enables', () => {
           .scripts?.['lint:check'] ?? ''));
   }
 
-  it('is not there — every one names a rule its file is actually linted for', () => {
-    const enabled = correctnessRules();
-    const alsoEslint = eslintDirs();
+  it('is not there — every one names a rule its file is actually linted for', async () => {
+    const enabled = await correctnessRules();
+    const alsoEslint = await eslintDirs();
     expect(alsoEslint, 'no workspace runs eslint, so the exception below would hide nothing').not.toEqual([]);
 
     const files = repoFiles().filter((file) => /\.(ts|tsx|vue|mts|cts|mjs|cjs|js)$/.test(file));

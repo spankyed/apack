@@ -9,7 +9,6 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { cliBin } from '../../src/utils.ts';
 import { COMPILER_INPUTS_ENV, readCompilerInstallationInputs } from '../../src/build/compiler-installation-inputs.ts';
 import { withCompilerFileReads } from '@apackdev/host/build/compiler-inputs';
-import { _byDeadline } from '@apackdev/sdk/testing/waiting';
 import { compilerStartupOptions, compilerStartupLoader } from '../../src/build/compiler-startup-options.ts';
 import { parseNodeOptions } from '@apackdev/host/build/source-resolution';
 
@@ -85,11 +84,11 @@ it.each([false, true])('refuses an uncaptured worker with parent IPC (unrelated 
   try {
     // A bound on a hang, not a speed check: the refusal is the first thing the worker does, but reaching it
     // is a cold CLI start from source, which a loaded small runner can take seconds over
-    expect(await _byDeadline(closed, 'uncaptured worker refusal', 10_000)).toBe(1);
+    expect(await closed).toBe(1);
     expect(errors).toContain('Pack build worker requires captured compiler inputs');
     expect(fs.existsSync(path.join(root, 'dist'))).toBe(false);
   } finally {
     if (child.exitCode === null && child.signalCode === null) child.kill();
-    await _byDeadline(closed, 'uncaptured worker cleanup', 2_000);
+    await closed;
   }
 });

@@ -14,6 +14,7 @@ import { nativeFixture, ordinaryNativeLoad, nativeLoad, nativeWorkerCompiler, ty
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
 import { fromNow, processWork, workSignal } from '@apackdev/sdk/progress';
+import { _workingSignal } from '@apackdev/sdk/testing/waiting';
 
 // The native-library proofs are split by subject so the native half's shards can spread them; this one is
 // native libraries checked before addon initialization, in preloads, threads and launch search paths.
@@ -129,7 +130,7 @@ it.runIf(process.platform === 'darwin' || process.platform === 'linux').each(['p
       fs.rmSync(proof, { force: true });
       writeLoader(fixture);
       checkpoint(`refusal ${index + 1} build started`);
-      const signal = AbortSignal.timeout(60_000);
+      const signal = _workingSignal();
       await expect(builder.build({ args: ['--skip-fe'], signal })).rejects.toThrow();
       expect(signal.aborted, 'Native refusal must precede the build deadline').toBe(false);
       checkpoint(`refusal ${index + 1} build completed`);

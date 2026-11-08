@@ -11,6 +11,7 @@ import { createPackBuilder, type PackBuilder } from '../../src/build/build-proce
 import type { PackFrontendAddress } from '../../src/build/frontend-process.ts';
 import { startPackBuildWatcher } from '../../src/build/watch.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
+import { _workingSignal } from '@apackdev/sdk/testing/waiting';
 
 let builder: PackBuilder | undefined;
 let temporary: string | undefined;
@@ -80,7 +81,7 @@ function fixture() {
  * which is when a browser re-imports them. Connected before the edit, so the message cannot be missed.
  */
 async function nextComponentUpdate(address: PackFrontendAddress): Promise<{ readonly received: Promise<void> }> {
-  const client = await (await fetch(`http://localhost:${address.port}/@vite/client`, { signal: AbortSignal.timeout(2_000) })).text();
+  const client = await (await fetch(`http://localhost:${address.port}/@vite/client`, { signal: _workingSignal() })).text();
   const token = /const wsToken = "([^"]+)"/.exec(client)?.[1];
   if (!token) throw new Error('The Vite client names no HMR token');
   const socket = new WebSocket(`ws://localhost:${address.port}/?token=${token}`, 'vite-hmr');
@@ -103,7 +104,7 @@ async function response(address: PackFrontendAddress, template = false): Promise
   // file, and the template module is compiled from what that read cached
   if (template) await response(address);
   const suffix = template ? '?vue&type=template&id=generation' : '';
-  const result = await fetch(`http://localhost:${address.port}/src/View.vue${suffix}`, { signal: AbortSignal.timeout(2_000) });
+  const result = await fetch(`http://localhost:${address.port}/src/View.vue${suffix}`, { signal: _workingSignal() });
   const text = await result.text();
   if (!result.ok) throw new Error(text);
   return text;

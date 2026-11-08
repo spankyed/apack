@@ -11,11 +11,11 @@
 // `BUILD_UNITS` gets the same treatment at the bottom of this file, and used to be excused from it here on
 // the grounds that it "covers five packages whose builds read their own trees". That was not true: a build
 // script imports modules, and three units were missing the one their staging is derived from.
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { BUILD_UNITS, covers, excludedBySuffix, fingerprintUnit, inputFiles, NOT_A_BUILD_INPUT, REPO_ROOT, repoRelative, type TreeReader } from '@apackdev/host/build/packages-built';
 import { PUBLISH_TREE } from '@apackdev/host/build/published-manifest';
 import { CHAIN_STEPS, dependsOn, suiteInputs, SUITE_READS, WORKSPACE_PARTS, type ChainStep } from '../../../scripts/lib/chain-steps.ts';
@@ -646,9 +646,12 @@ describe("a suite's half declares the config that runs it", () => {
 });
 
 describe('a gitignored input belongs to someone', () => {
-  const ignoredRoots = execFileSync('git', ['ls-files', '--others', '--ignored', '--exclude-standard', '--directory'],
-    { cwd: REPO_ROOT, maxBuffer: 64 * 1024 * 1024 })
-    .toString().split('\n').filter(Boolean).map((entry) => entry.replace(/\/$/, ''));
+  let ignoredRoots: readonly string[] = [];
+  beforeAll(async () => {
+    const { stdout } = await execFileWhileWorking('git', ['ls-files', '--others', '--ignored', '--exclude-standard', '--directory'],
+      { cwd: REPO_ROOT });
+    ignoredRoots = stdout.split('\n').filter(Boolean).map((entry) => entry.replace(/\/$/, ''));
+  });
   const isIgnored = (file: string): boolean => ignoredRoots.some((root) => file === root || file.startsWith(`${root}/`));
 
   const byName = new Map(CHAIN_STEPS.map((step) => [step.name, step]));

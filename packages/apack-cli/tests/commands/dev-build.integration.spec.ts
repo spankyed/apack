@@ -25,9 +25,8 @@ vi.mock('../../src/commands/build', () => ({
 }));
 import { build } from '../../src/commands/build';
 import { dev } from '../../src/commands/dev';
+import { _settles } from '@apackdev/sdk/testing/waiting';
 
-/** A ceiling for a child process starting or exiting on a machine with two cores and other suites running: a wait ends as soon as it's met */
-const SETTLES_MS = 60_000;
 
 it('builds with a fresh compiler before attempting to reuse the host', async () => {
   fixture.root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-dev-build-'));
@@ -82,7 +81,7 @@ it('cancels its build child and disables inherited input reporting without an ob
     vi.stubEnv(BUILD_INPUTS_IPC_ENV, '1');
     running = runPackBuild(root, { signal: controller.signal });
     void running.catch(() => {});
-    await vi.waitFor(() => expect(fs.existsSync(ready)).toBe(true), { timeout: SETTLES_MS });
+    await _settles(() => expect(fs.existsSync(ready)).toBe(true));
     const { pid, reporting, cacheDisabled } = JSON.parse(fs.readFileSync(ready, 'utf8'));
     expect(reporting).toBe('0');
     expect(cacheDisabled).toBe('1');
@@ -90,7 +89,7 @@ it('cancels its build child and disables inherited input reporting without an ob
     controller.abort();
     await stopped;
     expect(dispose).toHaveBeenCalledOnce();
-    await vi.waitFor(() => expect(() => process.kill(pid, 0)).toThrow(), { timeout: SETTLES_MS });
+    await _settles(() => expect(() => process.kill(pid, 0)).toThrow());
   } finally {
     controller.abort();
     await running?.catch(() => {});

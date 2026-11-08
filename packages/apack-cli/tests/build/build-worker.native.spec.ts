@@ -13,7 +13,7 @@ import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { readPackBuild } from '@apackdev/host/packs';
 import { formatNodeOptions, parseNodeOptions } from '@apackdev/host/build/source-resolution';
 import { cliBin } from '../../src/utils.ts';
-import { _byDeadline } from '@apackdev/sdk/testing/waiting';
+import { _settles, _workingSignal } from '@apackdev/sdk/testing/waiting';
 
 vi.mock('../../src/build/be-bundler', async importOriginal => ({
   ...await importOriginal<typeof import('../../src/build/be-bundler')>(),
@@ -60,7 +60,7 @@ afterEach(async () => {
 async function buildFixture(root: string, options: PackBuildOptions & { signal: AbortSignal }, builderOptions: PackBuilderOptions = {}): Promise<void> {
   const builder = createPackBuilder(root, builderOptions);
   builders.push(builder);
-  const signal = AbortSignal.any([options.signal, AbortSignal.timeout(120_000)]);
+  const signal = AbortSignal.any([options.signal, _workingSignal()]);
   try { await builder.build({ ...options, signal }); }
   finally { await builder.close(); }
 }
@@ -118,7 +118,7 @@ it('captures native launch identity and authored bytes before user preload chang
   child.stderr!.on('data', chunk => { errors += chunk; });
   const closed = finished(child);
   try {
-    expect(await _byDeadline(closed, 'native launch identity', 2_000), errors).toBe(0);
+    expect(await closed, errors).toBe(0);
     // The dependency was first read after the preload changed it, so its changed bytes are the input
     expect(result).toMatchObject({ value: 'ORIGINAL', dependency: 'DEPENDENCY_CHANGED', refusal: expect.stringContaining('Compiler resolution namespace changed') });
     const identity = (result as { identity: string }).identity;
@@ -373,13 +373,13 @@ it('refuses publication when a loader-only external input changes during compila
   child.stderr.on('data', chunk => { output += chunk; });
   const closed = finished(child);
   try {
-    expect(await _byDeadline(closed, 'loader-input build refusal', 120_000), output).toBe(1);
+    expect(await closed, output).toBe(1);
     expect(output).toContain(`Compiler resolution namespace changed during discovery: ${fs.realpathSync(payload)}`);
     expect(fs.readFileSync(payload, 'utf8')).toBe('CHANGED');
     expect(fs.existsSync(path.join(root, 'dist'))).toBe(false);
   } finally {
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
-    await _byDeadline(closed, 'loader-input build cleanup', 20_000);
+    await closed;
   }
 });
 
@@ -501,7 +501,7 @@ it('terminates a compiling worker when its parent IPC disconnects without publis
   child.stdout?.on('data', chunk => { output += chunk; });
   child.stderr?.on('data', chunk => { output += chunk; });
   try {
-    await vi.waitFor(() => expect(fs.existsSync(path.join(root, 'ready')), output).toBe(true), { timeout: 20_000 });
+    await _settles(() => expect(fs.existsSync(path.join(root, 'ready')), output).toBe(true));
     child.disconnect();
     // Awaited, not deadlined: the subject is that the worker ends, and one that never did would keep compiling
     // until the progress guard's CPU budget failed the case. A 2s deadline failed it on a loaded machine
@@ -509,12 +509,12 @@ it('terminates a compiling worker when its parent IPC disconnects without publis
     if (grouped) {
       expect(child.signalCode).toBe('SIGKILL');
       const pid = Number(fs.readFileSync(path.join(root, '.apack/compiler-child-pid'), 'utf8'));
-      await vi.waitFor(async () => {
+      await _settles(async () => {
         const state = await processState(pid);
         expect(state === '' || state.startsWith('Z')).toBe(true);
-      }, { timeout: 2_000 });
+      });
     }
-    await vi.waitFor(() => expect(child.stdout?.readableEnded && child.stderr?.readableEnded).toBe(true), { timeout: 2_000 });
+    await _settles(() => expect(child.stdout?.readableEnded && child.stderr?.readableEnded).toBe(true));
     expect(fs.existsSync(path.join(root, 'dist'))).toBe(false);
   } finally {
     if (child.exitCode === null && child.signalCode === null) child.kill();
@@ -529,7 +529,7 @@ it('refuses private worker bootstrap without a parent IPC channel', async () => 
   });
   let output = '';
   child.stderr?.on('data', chunk => { output += chunk; });
-  expect(await _byDeadline(finished(child), 'private bootstrap refusal', 2_000)).toBe(1);
+  expect(await finished(child)).toBe(1);
   expect(output).toContain('Pack build worker requires its parent IPC channel');
 });
 
@@ -541,8 +541,6 @@ it.each([
 ] as const)('removes its worker when the public build command is stopped while $name', { meta: cpuBudget(120_000 + 20_000 + 20_000) }, async ({ watch, phase, release }) => {
   // Shutdown removes the worker's complete file tree, unlike the IPC-only exit checks above. The compiler it ran may
   // be the machine-wide store's entry, which outlives every build by design.
-  const cleanupDeadlineMs = 20_000;
-  const startupDeadlineMs = phase === 'ready' ? 120_000 : 60_000;
   const root = fixture({
     'src/compiler.ts': `import fs from 'node:fs'; export default async function() {
       fs.writeFileSync('.apack/compiler-inputs-path', process.env.${COMPILER_INPUTS_ENV}!);
@@ -568,13 +566,13 @@ it.each([
     child.once('close', () => reject(new Error(`Watch stopped before ready: ${output}`)));
   });
   try {
-    await _byDeadline(ready, `public watcher startup (${phase})`, startupDeadlineMs);
+    await ready;
     const inputs = fs.readFileSync(path.join(root, '.apack/compiler-inputs-path'), 'utf8');
     const worker = Number(fs.readFileSync(path.join(root, '.apack/compiler-pid'), 'utf8'));
     expect(fs.existsSync(inputs)).toBe(true);
     const stored = fs.realpathSync.native(inputs).startsWith(fs.realpathSync.native(process.env.APACK_COMPILER_STORE!) + path.sep);
     child.kill('SIGTERM');
-    await _byDeadline(closed, 'public watcher shutdown', cleanupDeadlineMs);
+    await closed;
     expect(child.signalCode, output).toBe('SIGTERM');
     expect(fs.existsSync(inputs), inputs).toBe(stored);
     expect(() => process.kill(worker, 0)).toThrow();
@@ -582,6 +580,6 @@ it.each([
     if (release) expect(fs.existsSync(path.join(root, '.apack/release'))).toBe(false);
   } finally {
     if (child.exitCode === null && child.signalCode === null) child.kill();
-    await _byDeadline(closed, 'public watcher cleanup', cleanupDeadlineMs);
+    await closed;
   }
 });

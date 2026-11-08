@@ -23,7 +23,7 @@ import {
 } from './lib/import-source-conditions.ts';
 import { backed, type ImportRule, type PackParity, packRule } from './lib/import-rules.ts';
 import { importedCallsIn } from './lib/imported-calls.ts';
-import { loadedByThePools, syncSpawnImportsIn } from './lib/process-spawns.ts';
+import { loadedByThePools, syncSpawnImportsIn, tsFilesUnder } from './lib/process-spawns.ts';
 import { clockedDeadlines } from './lib/test-timeouts.ts';
 import { listLines, ruleRows as rowsOf, type RuleRow, ruleTable } from './lib/import-list.ts';
 
@@ -537,23 +537,31 @@ export function findSchemeRegistrations(dirs: readonly string[] = CHECKED_DIRS, 
 }
 
 /**
- * Modules the integration and native pools load that start a synchronous process on purpose, with why.
+ * Test modules that start a synchronous process on purpose, with why.
  *
  * An entry that stops applying is reported, so the list cannot outlive its reasons.
  */
+/** Every module under the packages' `tests/` trees, support modules included: where a spawn in a spec hides */
+const specModules = (root: string): string[] => fs.readdirSync(path.join(root, 'packages'))
+  .flatMap((dir) => tsFilesUnder(path.join(root, 'packages', dir, 'tests')))
+  .filter((file) => !file.includes(`${path.sep}node_modules${path.sep}`));
+
 const SYNC_SPAWN_ALLOWED: Record<string, string> = {
+  'packages/apack-host/tests/build/source-resolution.spec.ts':
+    "builds the `ResolveFile` `assertSourceResolution` calls, which is synchronous: a resolver that answered later would test a different function",
   'packages/repo-checks/tests/_support/repo-files.ts':
     '`git ls-files` takes milliseconds, and many fast specs read the repo\'s files synchronously at module and describe time',
 };
 
 /**
- * `file: execFileSync, spawnSync` for each module the integration or native pools load that imports a synchronous
- * `child_process` export, and each `SYNC_SPAWN_ALLOWED` entry that no longer does.
+ * `file: execFileSync, spawnSync` for each test module, in every half, that imports a synchronous `child_process`
+ * export, and each `SYNC_SPAWN_ALLOWED` entry that no longer does.
  *
- * A synchronous process blocks the vitest worker for as long as it runs, so the case's own timeout cannot fire and
- * vitest's fixed 60s RPC window expires, failing as an anonymous timeout rather than naming the slow command.
+ * A synchronous process blocks the vitest worker for as long as it runs: the progress guard cannot take a reading,
+ * so nothing bounds a hang but vitest's fixed 60s RPC window, which fails it as an anonymous timeout rather than
+ * naming the command.
  */
-export function findSyncSpawnsInSlowSpecs(files: readonly string[] = loadedByThePools(repoRoot), root = repoRoot,
+export function findSyncSpawnsInSpecs(files: readonly string[] = specModules(repoRoot), root = repoRoot,
   allowed = SYNC_SPAWN_ALLOWED): string[] {
   const applied = new Set<string>();
   const problems = files.flatMap((file) => {
@@ -933,10 +941,10 @@ const RULE_LIST = [
     rule: "Ask repoFiles() what files this repo has, not git ls-files directly: the index holds a file deleted and not staged, and omits one written and not staged",
   },
   {
-    id: 'findSyncSpawnsInSlowSpecs',
-    repoOnly: { kind: 'inapplicable', note: "Its subject is this repo's integration and native test pools, which no pack has" },
-    find: findSyncSpawnsInSlowSpecs,
-    rule: 'Start a process asynchronously in the integration and native halves — promisify(execFile) with a timeout, or runCommand (apack-cli tests/_support/run-command.ts) for a CLI or vitest process tree: a synchronous one blocks the worker, so no timeout fires and the RPC window expires',
+    id: 'findSyncSpawnsInSpecs',
+    repoOnly: { kind: 'inapplicable', note: "Its subject is this repo's packages' test trees; a pack's tests are its author's" },
+    find: findSyncSpawnsInSpecs,
+    rule: 'Start a process asynchronously in a spec — execFileWhileWorking (@apackdev/sdk/progress), or runCommand (apack-cli tests/_support/run-command.ts) for a CLI or vitest process tree: a synchronous one blocks the worker, so the progress guard cannot read it and a hang ends as an anonymous RPC timeout',
   },
   {
     id: 'findClockedDeadlinesInSource',

@@ -6,6 +6,7 @@ import { startTestPackBuildWatcher, WATCH_REBUILD_BUDGET_MS, type TestPackBuildW
 import { runtimePack, vueRuntimePack } from '../_support/frontend-pack.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
+import { _settles } from '@apackdev/sdk/testing/waiting';
 
 const sharedCompiler = shareCompilerInstallation();
 
@@ -51,7 +52,7 @@ it.each([
     watcher = await starting;
     expect(fs.readFileSync(frontend, 'utf8')).toContain('BEFORE');
     await watcher.rebuildAfter(() => { fs.writeFileSync(helper, "export const marker = 'AFTERX';"); });
-    await vi.waitFor(() => expect(publications > 0 || errors.mock.calls.length > 0).toBe(true), { timeout: 20_000 });
+    await _settles(() => expect(publications > 0 || errors.mock.calls.length > 0).toBe(true));
     expect(errors.mock.calls).toEqual([]);
     expect(fs.readFileSync(frontend, 'utf8')).toContain('AFTERX');
     expect(fs.readFileSync(frontend, 'utf8')).not.toContain('BEFORE');

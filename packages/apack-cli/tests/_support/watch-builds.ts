@@ -1,12 +1,15 @@
-import { expect, vi } from 'vitest';
+import { expect } from 'vitest';
 import { createPackBuilder, type PackBuilderOptions } from '../../src/build/build-process.ts';
 import { startPackBuildWatcher, type WatchOptions } from '../../src/build/watch.ts';
+import { _settles, _workingSignal } from '@apackdev/sdk/testing/waiting';
 
-const REQUEST_TIMEOUT_MS = 20_000;
+// What a rebuild may cost, which sizes a case's CPU budget (`cpuBudget`): no wait here has a clock of its own, and
+// a watcher or build that stops working is ended by the progress guard and `_workingSignal`
+const REQUEST_CPU_MS = 20_000;
 // Every request runs a fresh compiler worker through verified publication.
-const BUILD_TIMEOUT_MS = 120_000;
-/** Request, compilation and the caller's existing 20s notification check. */
-export const WATCH_REBUILD_BUDGET_MS = REQUEST_TIMEOUT_MS + BUILD_TIMEOUT_MS + 20_000;
+const BUILD_CPU_MS = 120_000;
+/** Request, compilation and the caller's own notification check. */
+export const WATCH_REBUILD_BUDGET_MS = REQUEST_CPU_MS + BUILD_CPU_MS + 20_000;
 
 export type TestPackBuildWatcher = Awaited<ReturnType<typeof startPackBuildWatcher>> & {
   rebuildAfter(edit: () => void): Promise<void>;
@@ -19,12 +22,12 @@ export async function startTestPackBuildWatcher(root: string,
   const build = builder.build.bind(builder);
   const builds: Promise<{ interrupted: boolean; error?: unknown }>[] = [];
   builder.build = input => {
-    const deadline = AbortSignal.timeout(BUILD_TIMEOUT_MS);
+    const deadline = _workingSignal();
     const signal = input?.signal ? AbortSignal.any([input.signal, deadline]) : deadline;
     const running = build({ ...input, signal });
     builds.push(running.then(() => ({ interrupted: false }), error => ({
       interrupted: signal.aborted,
-      error: deadline.aborted ? new Error(`Pack build for "${root}" exceeded ${BUILD_TIMEOUT_MS}ms`, { cause: error }) : error,
+      error: deadline.aborted ? new Error(`Pack build for "${root}" was stopped: ${String(deadline.reason)}`, { cause: error }) : error,
     })));
     return running;
   };
@@ -35,21 +38,14 @@ export async function startTestPackBuildWatcher(root: string,
     let closing: Promise<void> | undefined;
     return {
       done,
+      // Awaited with no deadline of its own: a cleanup that stops working is the progress guard's to end
       close() {
-        return closing ??= (async () => {
-          let result: PromiseSettledResult<void> | undefined;
-          void watcher.close().finally(() => done).then(
-            value => { result = { status: 'fulfilled', value }; },
-            reason => { result = { status: 'rejected', reason }; },
-          );
-          await vi.waitFor(() => expect(result, 'watcher cleanup did not settle').toBeDefined(), { timeout: 20_000 });
-          if (result?.status === 'rejected') throw result.reason;
-        })();
+        return closing ??= watcher.close().finally(() => done).then(() => undefined);
       },
       async rebuildAfter(edit) {
         const before = builds.length;
         edit();
-        await vi.waitFor(() => expect(builds.length, 'watch request did not start a rebuild').toBeGreaterThan(before), { timeout: REQUEST_TIMEOUT_MS });
+        await _settles(() => expect(builds.length, 'watch request did not start a rebuild').toBeGreaterThan(before));
         const result = await builds[before]!;
         if (result.interrupted) throw result.error;
       },

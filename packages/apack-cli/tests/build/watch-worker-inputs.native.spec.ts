@@ -8,6 +8,7 @@ import { createPackBuilder, type PackBuilder } from '../../src/build/build-proce
 import { readPackBuild } from '@apackdev/host/packs';
 import { startPackBuildWatcher } from '../../src/build/watch.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
+import { _settles } from '@apackdev/sdk/testing/waiting';
 
 it('rebuilds for worker inputs and repairs missing external reads without authored edits', { meta: cpuBudget(120_000 + 2 * 60_000 + 20_000) }, async () => {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-watch-worker-'));
@@ -44,13 +45,13 @@ it('rebuilds for worker inputs and repairs missing external reads without author
     expect(output()).toBe('FIRST');
     const accepted = readPackBuild(path.join(root, 'dist')).revision;
     fs.writeFileSync(selected, 'future/value.txt');
-    await vi.waitFor(() => expect(errors).toHaveBeenCalledWith(expect.stringContaining('Build/reload failed')), { timeout: 60_000 });
+    await _settles(() => expect(errors).toHaveBeenCalledWith(expect.stringContaining('Build/reload failed')));
     expect(publications).toBe(0);
     expect(readPackBuild(path.join(root, 'dist')).revision).toBe(accepted);
     expect(output()).toBe('FIRST');
     fs.mkdirSync(path.join(temporary, 'future'));
     fs.writeFileSync(path.join(temporary, 'future/value.txt'), 'SECOND');
-    await vi.waitFor(() => expect(publications).toBe(1), { timeout: 60_000 });
+    await _settles(() => expect(publications).toBe(1));
     expect(output()).toBe('SECOND');
   } finally {
     await Promise.all([watcher?.close(), builder?.close()]);

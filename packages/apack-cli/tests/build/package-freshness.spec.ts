@@ -1,10 +1,10 @@
-import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { INTERRUPTS } from '@apackdev/host/exclusive-lock';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { ABSENT, ALLOW_UNBUILT, BUILD_UNITS, packageBuildState, buildScriptFor, changedInputs, CHECKOUT_MARKER, covers, declaredPaths, diffableStamp, ensurePackagesBuilt, fingerprintInputs, fingerprintUnit, fingerprintWithDigests, freshnessSweep, inputFiles, outputDigests, INPUTS_CHANGED, PACKAGES_PREBUILT_ENV, packageWriter, PackagesWentStale, repoRelative, NOT_A_BUILD_INPUT, REPO_ROOT, staleMessage, stampRecord, stampedBuild, stampedRun, stampedRunAll, stampFile, unbuiltRefusal, unitStaleReason, withBuildLock, type BuildIntent, type BuildUnit, type StaleUnit } from '@apackdev/host/build/packages-built';
 
 /**
@@ -1034,7 +1034,9 @@ describe('the build lock', () => {
 
   it('takes over a lock whose process is gone — a killed build must not block the next one', async () => {
     const file = lockFile();
-    const dead = spawnSync(process.execPath, ['-e', '']).pid;
+    const exited = execFileWhileWorking(process.execPath, ['-e', '']);
+    await exited;
+    const dead = exited.child.pid!;
     fs.writeFileSync(file, JSON.stringify({ pid: dead, label: '@apackdev/sdk', startedAt: new Date().toISOString() }));
     await expect(withBuildLock('@apackdev/ui', () => 'ok', file)).resolves.toBe('ok');
   });

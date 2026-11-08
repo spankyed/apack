@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it } from 'vitest';
-import { _byDeadline } from '@apackdev/sdk/testing/waiting';
 import { createInputSubscriptions, type InputSubscription } from '../../src/build/input-subscriptions.ts';
 
 const SAVES = 300;
@@ -40,7 +39,7 @@ it.runIf(process.platform === 'darwin')('sees every save while watcher passes ho
     let attempt = 0;
     const live = new Promise<void>(resolve => { onEvent = () => { if ([...seen].some(file => file.startsWith('live-'))) resolve(); }; });
     const proving = setInterval(() => fs.writeFileSync(path.join(watched, `live-${attempt++}`), ''), 200);
-    try { await _byDeadline(live, 'the first file event'); } finally { clearInterval(proving); }
+    try { await live; } finally { clearInterval(proving); }
 
     const names = Array.from({ length: SAVES }, (_, index) => `save-${index}`);
     const allSeen = new Promise<void>(resolve => { onEvent = () => { if (names.every(name => seen.has(name))) resolve(); }; });
@@ -49,7 +48,7 @@ it.runIf(process.platform === 'darwin')('sees every save while watcher passes ho
       fs.writeFileSync(path.join(watched, name), '');
       await yieldToEvents();
     }
-    await _byDeadline(allSeen, 'every save').catch(() => {});
+    await allSeen.catch(() => {});
     expect(names.filter(name => !seen.has(name))).toEqual([]);
   } finally { held.close(); }
 });

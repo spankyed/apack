@@ -16,7 +16,7 @@ import { compilerPackageDirectory, type CompilerInstallation } from '../../src/b
 import { startPackFrontend, type PackFrontend } from '../../src/build/frontend-process.ts';
 import { nativeAddonSource } from '../_support/native-addon.ts';
 import { createWindowsPublisherPolicyFixture } from '../_support/windows-publisher-policy.ts';
-import { _byDeadline } from '@apackdev/sdk/testing/waiting';
+import { _settles, _workingSignal } from '@apackdev/sdk/testing/waiting';
 import { parsePeLibraryMetadata } from '../../src/build/compiler-pe-libraries.ts';
 import { assertCapturedPeLibraries } from '../../src/build/compiler-pe-admission.ts';
 import { BUILD_INPUTS_DIRECTORY_ENV } from '../../src/build/compiler-read-tree.ts';
@@ -879,7 +879,7 @@ it.runIf(process.platform === 'win32').each([
     const view = `http://localhost:${frontend.address.port}/src/View.vue`;
     expect(await (await fetch(view)).text()).toContain('PE_BEFORE');
     fs.writeFileSync(path.join(pack, 'src/View.vue'), '<template>PE_AFTER</template>');
-    await vi.waitFor(async () => expect(await (await fetch(view)).text()).toContain('PE_AFTER'), { timeout: 2_000 });
+    await _settles(async () => expect(await (await fetch(view)).text()).toContain('PE_AFTER'));
     const outside = path.join(root, 'outside');
     fs.mkdirSync(outside);
     const selected = path.join(outside, 'apack_value.dll');
@@ -1120,16 +1120,16 @@ it.runIf(process.platform === 'win32')('repairs a failed Vite assembly context t
     const url = `http://localhost:${addresses[0]!.port}/src/View.vue`;
     // A bound on a hang, not a speed check: the first request is a cold Vite transform, which a loaded two-core
     // runner can take seconds over
-    const served = { signal: AbortSignal.timeout(30_000) };
+    const served = { signal: _workingSignal() };
     expect(await (await fetch(url, served)).text()).toContain('ASSEMBLY_WATCH');
     fs.rmSync(dllMarker);
     builds.mockClear(); configure('repair');
-    await vi.waitFor(() => expect(builds).toHaveBeenCalled(), { timeout: 20_000 });
+    await _settles(() => expect(builds).toHaveBeenCalled());
     await expect(builds.mock.results[0]!.value).rejects.toThrow('Pack frontend exited before readiness');
     checkpoint('missing assembly refused');
     expect(addresses).toHaveLength(1);
     expect(fs.existsSync(dllMarker)).toBe(false);
-    expect(await (await fetch(url, { signal: AbortSignal.timeout(30_000) })).text()).toContain('ASSEMBLY_WATCH');
+    expect(await (await fetch(url, { signal: _workingSignal() })).text()).toContain('ASSEMBLY_WATCH');
     const repair = path.join(path.dirname(addon), 'repair', assembly);
     const repairedManifest = path.join(repair, assembly + '.manifest');
     expect(createCompilerWatchMatcher(observed)(repairedManifest, 'rename'), 'Failed context lost its new repair subscription').toBe(true);
@@ -1140,14 +1140,13 @@ it.runIf(process.platform === 'win32')('repairs a failed Vite assembly context t
     // The refusal's two edits (the marker removed, the configuration rewritten) can reach the watcher as separate
     // events, and one landing mid-build queues another refused build. The repair is asserted to start a build of its
     // own, so it lands on an idle watcher: a build that keeps starting another would leave this waiting and fail.
-    await _byDeadline((async () => { while (inFlight.size > 0) await Promise.allSettled(inFlight); })(),
-      'refused builds to settle before the repair', 60_000);
+    await (async () => { while (inFlight.size > 0) await Promise.allSettled(inFlight); })();
     builds.mockClear();
     fs.mkdirSync(path.dirname(repair), { recursive: true });
     fs.renameSync(staged, repair);
-    await vi.waitFor(() => expect(builds).toHaveBeenCalled(), { timeout: 20_000 });
+    await _settles(() => expect(builds).toHaveBeenCalled());
     await expect(builds.mock.results[0]!.value).resolves.toBeUndefined();
-    await vi.waitFor(() => expect(publications).toHaveBeenCalledTimes(1), { timeout: 2_000 });
+    await _settles(() => expect(publications).toHaveBeenCalledTimes(1));
     checkpoint('repair published');
     expect(addresses).toHaveLength(2);
     expect(() => process.kill(addresses[0]!.pid, 0)).toThrow();
