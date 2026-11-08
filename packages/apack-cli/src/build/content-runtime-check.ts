@@ -5,8 +5,10 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
+import { describeRefusal, processWork, watchWork } from '@apackdev/sdk/progress';
 
-const LOAD_TIMEOUT_MS = 60_000;
+/** The CPU the load may spend: loading a bundle is short, and only one that spins reaches this */
+const LOAD_CPU_MS = 60_000;
 /**
  * Optional @apackdev/sdk peers every dependent's unit tests have: @apackdev/testing/harness compiles
  * content with @apackdev/sdk/build, which needs them (the scaffold installs typescript; @apackdev/testing's
@@ -80,7 +82,7 @@ export async function checkContentRuntimeLoads(
     }
     const check = JSON.stringify([`data:text/javascript,${encodeURIComponent(BLOCK_OPTIONAL_PEERS_HOOK)}`, pathToFileURL(bundleFile).href, blocked]);
 
-    const { code, output } = await new Promise<{ code: number | null; output: string }>((resolve, reject) => {
+    const { code, output, ended } = await new Promise<{ code: number | null; output: string; ended?: string }>((resolve, reject) => {
       const child = spawn(process.execPath, args, {
         cwd: packDir,
         // Test the published runtime independently of compiler initialization. Replaying compiler
@@ -93,15 +95,20 @@ export async function checkContentRuntimeLoads(
           APACK_CONTENT_RUNTIME_CHECK: check,
         },
         stdio: ['ignore', 'ignore', 'pipe'],
-        timeout: LOAD_TIMEOUT_MS,
+      });
+      // Bounded by its progress: ended when it stalls or spins, never because the machine is busy
+      let ended: string | undefined;
+      const watch = child.pid === undefined ? undefined : watchWork({
+        work: processWork(child.pid), ceilingMs: LOAD_CPU_MS, fallbackMs: LOAD_CPU_MS,
+        onRefused: (refusal) => { ended = describeRefusal(refusal); child.kill('SIGKILL'); },
       });
       let output = '';
       child.stderr.on('data', (chunk: Buffer) => { output += chunk.toString(); });
-      child.on('error', reject);
-      child.on('close', (exitCode) => resolve({ code: exitCode, output }));
+      child.on('error', (error) => { watch?.stop(); reject(error); });
+      child.on('close', (exitCode) => { watch?.stop(); resolve({ code: exitCode, output, ended }); });
     });
     if (code === 0) return { success: true };
-    const reason = output.trim() || `the load exited with code ${code} (timed out after ${LOAD_TIMEOUT_MS / 1000}s?)`;
+    const reason = output.trim() || (ended === undefined ? `the load exited with code ${code}` : `the load was ended: it ${ended}`);
     return {
       success: false,
       error: `${path.relative(packDir, bundleFile)} doesn't load outside the app. Packs depending on this one load it in their unit tests with only @apackdev/sdk installed, so repositories and content writers can't use native modules or @apackdev/sdk's optional peers (${blocked.join(', ')}).\n${reason}`,

@@ -2,15 +2,16 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { replaceDir, stagingDirName } from '@apackdev/host/replace-dir';
-import { execFile, execFileSync } from 'node:child_process';
-import { promisify } from 'node:util';
+import { execFileSync } from 'node:child_process';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import semver from 'semver';
 import { PRODUCT_NAMES, type PublishedAppChannel } from './channels';
 import type { AppChannel } from '@apackdev/sdk/env';
 import { downloadVerified, listAppReleases, type Download, type Release } from './app-releases.ts';
 import { holdExclusiveLock } from '@apackdev/host/exclusive-lock';
 
-const execFileAsync = promisify(execFile);
+// `timeout` is CPU: the app quitting on a busy machine is slow, not stuck
+const execFileAsync = execFileWhileWorking;
 
 /** The release this channel wants, and the two assets it needs, or why there is none */
 export interface AppRelease {
