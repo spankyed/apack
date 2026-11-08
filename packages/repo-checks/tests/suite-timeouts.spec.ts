@@ -205,7 +205,8 @@ function timeoutSources(file: string): string[] {
 function declaredTimeouts(file: string): { key: string; ms: number }[] {
   const out: { key: string; ms: number }[] = [];
   for (const raw of timeoutSources(file).join('\n').split('\n')) {
-    const line = raw.trim();
+    // A Playwright config's `expect: { timeout }` bounds an assertion's wait, not the test, so it is no test timeout
+    const line = raw.trim().replace(/\bexpect\s*:\s*\{[^}]*\}/g, '');
     if (line.startsWith('//') || line.startsWith('*')) continue;
     for (const key of TIMEOUT_KEYS) {
       const match = new RegExp(`\\b${key}\\s*:\\s*([\\d_]+)`).exec(line);
