@@ -88,7 +88,13 @@ read as the Node-23 one this document already records, which it is not.
 `npm run chain`: **32 of 33 steps pass**. The one that does not is `@apackdev/cli`'s
 `build-worker.native.spec.ts`, which no commit in this goal touches — zero files under `packages/apack-cli`,
 checked. Two of its cases fail in two different ways, one a 120s timeout in the 2-core container that
-passes in 22.5s alone. A strict dispatch was run on the finished state as the cleaner machine.
+passes in 22.5s alone.
+
+**The strict gate is not met, and the reason is worth writing down.** A dispatch was made and it validated
+nothing: `gh workflow run --ref master` names the *remote* branch, and this work is 86 commits that were
+never pushed, so run 42449685691 ran against `5b2ad4cbed` — a commit predating the whole goal. A green
+result there would have been a false pass, and reading it as one is the trap. Strict needs the commits
+pushed, which is the repository owner's call and not this goal's to make.
 
 **The app is proven on Windows end to end**, which is the thing this goal had never asked there, and doing
 it found two defects no Mac could have: the broker binary's `.exe`, which meant the terminal never started
