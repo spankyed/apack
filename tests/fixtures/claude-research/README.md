@@ -348,3 +348,8 @@ composer draft survive native preview/cancel; one Save and exact keyboard-replac
 retain original journal/accounting and owned restoration/shutdown. All five captures opened;
 five corruptions plus actual app2/app3 refused. Other owner/policy/window/editor and cold
 startup cases, original combined F1–F5 and repository readiness remain open.
+
+Compact workspace tab/details reachability has scoped shell-layout-client-app7 acceptance
+on pack runtimeff3196e46e. Local canvas scrolling exposes full tab rows and details trigger;
+open/close retains the draft and native identity. Six captures opened; four corruptions
+and three earlier narrower/failed proofs refused. Broader UI-12 and F1–F5 remain open.
