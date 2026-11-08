@@ -17,7 +17,7 @@ import * as path from 'node:path';
 import { PACKAGES_PREBUILT_ENV, REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { linuxTestInvocation } from './lib/linux-native-scratch.ts';
 import { CHAIN_LOCK } from './lib/chain-lock.ts';
-import { oneRustToolchain, pinnedChannel, rustCheckoutsIn, vendoredCheckouts } from './lib/vendored-checkouts.ts';
+import { oneRustToolchain, pinnedChannel, rustCheckoutsForRun, vendoredCheckouts } from './lib/vendored-checkouts.ts';
 
 const DOCKERFILE = path.join(REPO_ROOT, 'scripts', 'linux', 'Dockerfile');
 const short = (text: string | Buffer): string => createHash('sha256').update(text).digest('hex').slice(0, 12);
@@ -41,10 +41,7 @@ const VENDOR_ELMDB = (() => {
  */
 const RUST_TOOLCHAIN = (() => {
   try {
-    const checkouts = [
-      ELMDB_CHECKOUT,
-      ...rustCheckoutsIn(vendoredCheckouts(REPO_ROOT)).filter((dir) => dir !== VENDOR_ELMDB),
-    ];
+    const checkouts = rustCheckoutsForRun(ELMDB_CHECKOUT, VENDOR_ELMDB, vendoredCheckouts(REPO_ROOT));
     return oneRustToolchain(checkouts.map((dir) => ({ path: dir, channel: pinnedChannel(dir) })));
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);

@@ -42,6 +42,30 @@ export function rustCheckoutsIn(vendored: readonly VendoredCheckout[]): string[]
   return rust.map((entry) => entry.path);
 }
 
+/**
+ * Every Rust checkout one container run has to build: the native source that run selected, and every other Rust
+ * checkout linked under `vendor/`.
+ *
+ * **It cannot fail for want of a link, because the caller already has a checkout.** `rustCheckoutsIn` refuses an
+ * empty `vendor/` — right for the janitor, whose only source *is* `vendor/` — and asking it for the *others*
+ * made a run refuse when nothing else was linked, although the source it was given was present. That is how
+ * `test:linux` came to refuse the documented frozen-checkout qualification, where `APACK_LINUX_ELMDB_ROOT`
+ * names the source and no link need exist at all.
+ *
+ * `vendorElmdb` is the link the native source stands in for: a frozen copy replaces the developer's link rather
+ * than joining it, so the two are never weighed against each other for a toolchain.
+ */
+export function rustCheckoutsForRun(
+  nativeSource: string,
+  vendorElmdb: string | undefined,
+  vendored: readonly VendoredCheckout[],
+): string[] {
+  const others = vendored
+    .filter((entry) => entry.isRustCheckout && entry.path !== nativeSource && entry.path !== vendorElmdb)
+    .map((entry) => entry.path);
+  return [nativeSource, ...others];
+}
+
 /** What `vendor/` holds: every link that resolves to a directory, and whether that directory is a Rust checkout */
 export function vendoredCheckouts(repoRoot: string): VendoredCheckout[] {
   const vendor = path.join(repoRoot, 'vendor');
