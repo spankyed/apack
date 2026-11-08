@@ -106,8 +106,13 @@ files under `packages/apack-cli`, checked. Earlier revisions of this section cit
 which it was; this is the first local full chain in which it passed, and it is reported rather than relied
 on, since load can push a file into a failure and never out of one.
 
-**Strict has not passed on the finished state, and what stopped each attempt is recorded rather than
-summarised.** Three runs, none of them a verdict on this source:
+**Strict passes on the finished state: run 42486473041, all six jobs green**, on `a238e4ff25`, 2026-11-08
+13:45–14:51Z — `producers`, both integration shards, both native shards and `app-and-rest`. It is a **cold**
+chain: the run before it added a declared input to every step (below), so nothing was cached. That is the
+required integrated validation for this goal, and it is the first all-green strict on a finished state.
+
+**Six attempts preceded it, and no two failed for the same reason** — which is the part worth keeping, since
+a single recurring flake and six distinct defects call for opposite responses:
 
 | run | outcome | cause |
 |---|---|---|
@@ -116,6 +121,8 @@ summarised.** Three runs, none of them a verdict on this source:
 | 42472092232 | five of six green, failed `app-and-rest` | **ours**: `test:external-pack:app` refused with *"Pack build package inputs changed"* |
 | 42476840456 | failed `producers` in 90s | `upload-pack: not our ref 5588170a` — the pinned broker commit was never pushed, so CI could not clone it |
 | 42477376127 | failed `producers` | `error: no such command: xtask` — the alias that defines it is untracked in the broker repo |
+| 42481117851 | four of six green | `app-and-rest`: two Playwright clocks are both spelled `timeout:`, and `suite-timeouts` read the nested assertion clock as the suite deadline (`2ffaf52a6d`). `integration-1`: `ROOT` and the dep-file read filter both named `vendor/elmdb` by hand, so five legs read apack-terminal's types with nothing declaring them (`a238e4ff25`) |
+| **42486473041** | **all six green** | — |
 
 The third is the one worth reading, because it was not infrastructure. The external pack records its package
 graph in `dist/build-inputs.json` and that graph includes `node_modules/electron`, so `readPackageInputs`
@@ -144,11 +151,17 @@ non-ignored file there. CI's clone therefore has no alias, which fails `cargo xt
 header already diagnoses it: every document there says to run `cargo xtask pre-push`, and locally it had
 only ever been run as `cargo run -p xtask --`, so nothing had exercised the spelling that was written down.
 
-**Each run has failed one step later than the last, and the remaining step is not this goal's to take.**
-Committing a file this goal did not write into a second repository, and committing a `vendor/*.rev` bump
-that is an uncommitted edit in this tree beside other in-flight changes, are both the user's call; a
-strict dispatch before them fails on the alias whichever pin it carries. Recorded here rather than chosen,
-per the rule above. **No source change in this repo is outstanding behind it.**
+**The last two were one defect each, and both were a check naming a thing where the rule says derive.** The
+deadline one is ordinary: two clocks share a spelling and a line-based reader took the inner one. The vendor
+one is worth reading twice, because **no local run could have found it**: a vendored checkout is a link to a
+sibling *outside* the checkout here, so a compiler's reads of it resolve outside the repo and are dropped as
+`..`; in CI each is a clone *inside* `vendor/`, so they are not. The local full chain recorded above was never
+evidence either way about it. `ROOT` now derives its pins from the tracked `vendor/*.rev`, which read the same
+in both places, and the guard is that the pins travel together — mutation-confirmed by writing a checkout's
+name back into `ROOT`, which names the steps left behind.
+
+**Two commits and a push were the user's to authorize, and were**: the broker's seven commits plus its
+untracked `xtask` alias, and the pin bump to the commit carrying it.
 
 **An earlier dispatch validated nothing**, and the reason is in the record above: `--ref master` names the
 *remote* branch, so it ran against a commit predating the goal. Two later runs were cancelled deliberately
@@ -202,10 +215,8 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 
 ## Current handoff
 
-- **Blocked, and on one thing only:** strict needs a push of `session/terminal-ownership` to be
-  re-dispatched, and the goal does not settle whether to push. The fix it needs is committed
-  (`dc87cdadcd`), the tree is clean, and no source work is outstanding — see Validation for the three
-  attempts and why only the third was ours. Recorded here rather than chosen.
+- **Complete.** Required validation passed: strict 42486473041, all six jobs green on `a238e4ff25`
+  (see Validation, with the six attempts before it and what each cost).
 - **Checkout:** `session/terminal-ownership`, clean tree. Two commits after the chain run below:
   `dc87cdadcd` (every strict job installs identically) and `fc5e1362d6` (the broker fake writes a request's
   answers as one chunk, which is what made the same-read guard deterministic). Both are a workflow and a
