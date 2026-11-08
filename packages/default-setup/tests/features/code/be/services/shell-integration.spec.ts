@@ -56,11 +56,41 @@ describe('starting a shell so that it reports itself', () => {
     expect(integrationFor('/bin/sh', DIR, posix, noEnv)).toBeUndefined()
   })
 
-  it('answers nothing on Windows, because X4 is claimed on a Windows run or not at all', () => {
-    // PowerShell takes `-NoExit -Command` and cmd takes `/K`, and both would plainly work. Writing them here
-    // unverified would be claiming X4 closed on the strength of a plausible argument, which is what this
-    // goal's rule about Windows is against. Until a Windows run proves it, a Windows terminal is unchanged
-    expect(integrationFor('powershell.exe', 'C:\\data', 'win32', noEnv)).toBeUndefined()
-    expect(integrationFor('cmd.exe', 'C:\\data', 'win32', noEnv)).toBeUndefined()
+  it('points PowerShell at a file it dot-sources, which is X4', () => {
+    const arranged = integrationFor('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', 'C:\\data\\si', 'win32')
+
+    expect(arranged?.args).toEqual(['-NoExit', '-Command', ". 'C:\\data\\si\\apack.ps1'"])
+    expect(arranged?.files[0]?.at).toBe('apack.ps1')
+    // The prompt is the hook, so the markers have to be in what it writes
+    expect(arranged?.files[0]?.contents).toContain('633;P;Cwd=')
+    expect(arranged?.files[0]?.contents).toContain('function Global:prompt')
+    // **And the user's own prompt is still drawn.** Both halves, because either alone is satisfied by a
+    // script that loses it: the capture without the call replaces their prompt, and the call without the
+    // capture invokes nothing. A single mention of the name is matched twice over and proves neither.
+    expect(arranged?.files[0]?.contents, 'theirs is captured').toContain('$Global:__apackPrompt = $function:prompt')
+    expect(arranged?.files[0]?.contents, 'and theirs is called').toContain('& $Global:__apackPrompt')
+  })
+
+  it('points cmd at a batch file with /K', () => {
+    const arranged = integrationFor('cmd.exe', 'C:\\data\\si', 'win32')
+
+    expect(arranged?.args).toEqual(['/K', 'C:\\data\\si\\apack.cmd'])
+    expect(arranged?.files[0]?.at).toBe('apack.cmd')
+    expect(arranged?.files[0]?.contents).toContain('633;P;Cwd=$P')
+  })
+
+  /**
+   * **cmd is told the directory and not the status, which is the honest answer.** `PROMPT` has no code for
+   * the last exit code, so there is no `D` marker to write — and writing `D;0` would report every command
+   * as having succeeded, which is worse than reporting nothing.
+   */
+  it('emits no status marker for cmd, rather than a wrong one', () => {
+    expect(integrationFor('cmd.exe', 'C:\\data\\si', 'win32')?.files[0]?.contents).not.toContain('633;D')
+    expect(integrationFor('powershell.exe', 'C:\\data\\si', 'win32')?.files[0]?.contents, 'where PowerShell has one').toContain('633;D;')
+  })
+
+  it('arranges nothing for a Windows shell that reaches a POSIX one through a launcher', () => {
+    expect(integrationFor('wsl.exe', 'C:\\data\\si', 'win32')).toBeUndefined()
+    expect(integrationFor('bash.exe', 'C:\\data\\si', 'win32')).toBeUndefined()
   })
 })

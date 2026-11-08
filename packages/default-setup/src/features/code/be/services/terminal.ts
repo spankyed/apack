@@ -82,7 +82,7 @@ class TerminalService {
       onExit: (code) => this.ended(id, code, handlers),
     })
 
-    const info: TerminalInfo = { id, title, pid: session.pid, shell, cwd, active: true, generation: 1, cols, rows, submit: submitFor() }
+    const info: TerminalInfo = { id, title, pid: session.pid, shell, cwd, active: true, generation: 1, cols, rows, submit: submitFor(shell) }
     this.terminals.set(id, { info, session, sizedBy })
     repository.terminalCommands.create({ id, title, shell, cwd, cols, rows })
 
@@ -369,7 +369,7 @@ class TerminalService {
           active: true,
           cols: row.cols,
           rows: row.rows,
-          submit: submitFor(),
+          submit: submitFor(shell),
         }
         // Restored by nobody, so the first window to fit it takes the size (M2)
         this.terminals.set(row.id, { info, session, sizedBy: undefined })

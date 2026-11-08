@@ -113,8 +113,35 @@ describe('what submits a line', () => {
   it('is a line feed on POSIX and a carriage return and line feed on Windows', () => {
     // Measured through a real ConPTY on 2026-11-07, not assumed: `\n` is echoed and never runs, `\r` alone
     // does not get that far, `\r\n` both echoes and runs
-    expect(submitFor('darwin')).toBe('\n')
-    expect(submitFor('linux')).toBe('\n')
-    expect(submitFor('win32')).toBe('\r\n')
+    expect(submitFor(undefined, 'darwin')).toBe('\n')
+    expect(submitFor(undefined, 'linux')).toBe('\n')
+    expect(submitFor('cmd.exe', 'win32')).toBe('\r\n')
+  })
+})
+
+/**
+ * **What submits a line is the shell's, not the platform's** — measured on Windows, 2026-11-08.
+ *
+ * `\r\n` was measured against `cmd.exe` and is right there. PowerShell takes the line on the carriage
+ * return and then reads the newline as more input, which opens its continuation prompt: the command never
+ * runs, and the screen shows `>>` with no sign of what was typed. From the user's side that is a terminal
+ * ignoring their keystroke, which is X6 wearing a different hat.
+ */
+describe('what ends a typed line, per shell', () => {
+  it('takes a bare carriage return for PowerShell', () => {
+    expect(submitFor('powershell.exe', 'win32')).toBe('\r')
+    expect(submitFor('pwsh.exe', 'win32')).toBe('\r')
+    expect(submitFor('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', 'win32')).toBe('\r')
+  })
+
+  it('keeps CRLF for every other Windows shell', () => {
+    expect(submitFor('cmd.exe', 'win32')).toBe('\r\n')
+    expect(submitFor('bash.exe', 'win32')).toBe('\r\n')
+    expect(submitFor(undefined, 'win32'), 'and for a shell nobody named').toBe('\r\n')
+  })
+
+  it('is a newline everywhere else, whatever the shell', () => {
+    expect(submitFor('powershell.exe', 'darwin'), 'the path matters, not the name').toBe('\n')
+    expect(submitFor('/bin/zsh', 'linux')).toBe('\n')
   })
 })

@@ -136,6 +136,12 @@ export function directoryToStart(cwd: string | undefined): { cwd: string; refuse
  * It belongs to the session rather than to the window, which is why it is computed here and carried on the
  * descriptor: a window has no idea which shell is on the other end.
  */
-export function submitFor(platform: NodeJS.Platform = process.platform): string {
-  return platform === 'win32' ? '\r\n' : '\n';
+export function submitFor(shell?: string, platform: NodeJS.Platform = process.platform): string {
+  if (platform !== 'win32') return '\n';
+  // **PowerShell takes a bare carriage return, and `\r\n` is wrong for it** — measured on Windows,
+  // 2026-11-08. The trailing newline opens its continuation prompt: the line is taken, the parser then
+  // waits for more, and the command never runs. The screen shows `>>` and nothing else, which reads like
+  // the terminal having ignored the keystroke.
+  const name = path.win32.basename(shell ?? '').toLowerCase();
+  return name.startsWith('powershell') || name.startsWith('pwsh') ? '\r' : '\r\n';
 }

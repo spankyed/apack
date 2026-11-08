@@ -18,6 +18,31 @@
 import * as path from 'path'
 import { resolveAppEnvironment } from '@apackdev/sdk/env'
 
+/**
+ * What a Windows shell is told to do, as **OSC 633** — VS Code's set, which is what Phase A asks for.
+ *
+ * The prompt is where all of it goes, because a prompt hook is the one thing both shells have: it runs
+ * after each command and before the next line is read, which is exactly the boundary the markers describe.
+ *
+ * **cmd reports no status, and says nothing rather than saying zero.** `PROMPT` has no code for the last
+ * exit code, so there is no `D` marker — a caller is told the directory and the prompt boundaries and is
+ * left not knowing how the last command ended, which is true. `$e` is the escape character `PROMPT`
+ * understands and `$e\` is ST, which terminates an OSC string where a shell that can write BEL uses that.
+ */
+const OSC633 = {
+  powershell: '$Global:__apackPrompt = $function:prompt\r\n'
+    + 'function Global:prompt {\r\n'
+    + '  $status = $LASTEXITCODE\r\n'
+    + '  if ($null -eq $status) { $status = 0 }\r\n'
+    + '  $e = [char]27\r\n'
+    + '  $bel = [char]7\r\n'
+    + '  $theirs = if ($Global:__apackPrompt) { & $Global:__apackPrompt } else { "PS $($PWD.Path)> " }\r\n'
+    + '  "$e]633;D;$status$bel" + "$e]633;P;Cwd=$($PWD.Path)$bel" + "$e]633;A$bel" + $theirs + "$e]633;B$bel"\r\n'
+    + '}\r\n',
+  cmd: '@echo off\r\n'
+    + 'prompt $e]633;P;Cwd=$P$e\\$e]633;A$e\\$P$G$e]633;B$e\\\r\n',
+}
+
 /** The marker the app reads a working directory from, which is what OSC 7 is for */
 const OSC7 = {
   bash: '__apack_osc7(){ printf "\\033]7;file://%s%s\\007" "${HOSTNAME:-$(hostname)}" "$PWD"; }; '
@@ -52,11 +77,10 @@ export function integrationDirectory(userDataDir = resolveAppEnvironment().userD
  * How to start `shell` so that it reports its working directory, or `undefined` for a shell this does not
  * know how to arrange.
  *
- * **Windows answers `undefined` deliberately.** PowerShell takes `-NoExit -Command` and cmd takes `/K`, and
- * both would work the same way — but this goal says a Windows claim is made on a Windows run or not at all,
- * and the run that proved the broker there happened before this existed. Writing the flags here unverified
- * would be claiming **X4** closed on the strength of a plausible argument, which is the thing the rule is
- * against. X4 stays open and this returns nothing there, so a Windows terminal is exactly as it was.
+ * **Windows is arranged the same way, and it is claimed on a Windows run** — 2026-11-08, on the development
+ * VM: PowerShell started with these arguments emits the markers and the broker reads them back as facts
+ * (`apack-terminal`'s `a_windows_shell_reports_itself_when_started_with_an_integration_file`). That is X4,
+ * which was shell integration being inert there whatever the setting said.
  */
 export function integrationFor(
   shell: string,
@@ -64,8 +88,30 @@ export function integrationFor(
   platform: NodeJS.Platform = process.platform,
   env: NodeJS.ProcessEnv = process.env,
 ): ShellIntegration | undefined {
-  if (platform === 'win32') return undefined
-  const name = path.basename(shell).toLowerCase()
+  const name = (platform === 'win32' ? path.win32.basename(shell) : path.basename(shell)).toLowerCase()
+
+  if (platform === 'win32') {
+    // **A file, as every other shell gets, rather than the script inlined into an argument.** Both forms
+    // work; one of them puts a program through argv quoting on the platform whose quoting is the reason
+    // this feature had no Windows branch for so long
+    if (name.startsWith('powershell') || name.startsWith('pwsh')) {
+      return {
+        args: ['-NoExit', '-Command', `. '${path.win32.join(directory, 'apack.ps1')}'`],
+        env: {},
+        files: [{ at: 'apack.ps1', contents: OSC633.powershell }],
+      }
+    }
+    if (name.startsWith('cmd')) {
+      return {
+        args: ['/K', path.win32.join(directory, 'apack.cmd')],
+        env: {},
+        files: [{ at: 'apack.cmd', contents: OSC633.cmd }],
+      }
+    }
+    // bash.exe and wsl.exe reach a POSIX shell through a Windows launcher, and what they need there is not
+    // what the branches below write for a shell this process can see
+    return undefined
+  }
 
   if (name.includes('bash')) {
     const file = path.join(directory, 'apack.bash')
