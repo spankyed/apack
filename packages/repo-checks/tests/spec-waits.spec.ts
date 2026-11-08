@@ -25,7 +25,7 @@ import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { population } from '@apackdev/sdk/testing';
 import { UNIT_SUITES } from '../../../scripts/lib/unit-suites.ts';
 import { bareWaitKey, bareWaits, clockedDeadlines, specFilesUnder, type BareWait, type Clock } from '../../../scripts/lib/test-timeouts.ts';
-import { tsFilesUnder } from '../../../scripts/lib/process-spawns.ts';
+import { repoFiles } from './_support/repo-files.ts';
 
 /**
  * Waits whose subject genuinely is elapsed time, and why each one is.
@@ -157,11 +157,25 @@ const CLOCK_BY_DESIGN: Record<string, string> = {
 
 
 /** Every test file the clocks are counted over: the unit suites' trees, support modules included, the E2E and pack suites and `drive/` */
-const testFiles = (): string[] => [
-  ...UNIT_SUITES.map((suite) => path.join(REPO_ROOT, 'packages', suite.dir, 'tests')),
-  path.join(REPO_ROOT, 'tests'),
-  path.join(REPO_ROOT, 'drive'),
-].flatMap((dir) => tsFilesUnder(dir)).filter((file) => !/\/(node_modules|dist|\.apack)\//.test(file));
+/**
+ * The files this gate reads: the working tree as it would be committed, under the three trees that hold tests.
+ *
+ * **Through `repoFiles`, because `drive/` is gitignored whole** (`drive/.gitignore` is `*`). A walk of the
+ * directory sweeps in every scratch driving script on the machine running it, and those are exactly what the
+ * guide tells you to write there — so this gate failed for anyone who had driven the app, with 53 entries in
+ * one case, while CI saw none of them and passed. A clock in a file nobody commits is not a clock this repo
+ * has. The tracked harness under `drive/` is still read, which is what naming the directory was for.
+ */
+const TEST_TREES = [
+  ...UNIT_SUITES.map((suite) => path.join('packages', suite.dir, 'tests')),
+  'tests',
+  'drive',
+];
+
+const testFiles = (): string[] => repoFiles()
+  .filter((file) => file.endsWith('.ts') && TEST_TREES.some((tree) => file.startsWith(`${tree}/`)))
+  .filter((file) => !/(^|\/)(node_modules|dist|\.apack)\//.test(file))
+  .map((file) => path.join(REPO_ROOT, file));
 
 const clocksByFile = (): Map<string, Clock[]> => {
   const byFile = new Map<string, Clock[]>();
