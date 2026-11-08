@@ -1,6 +1,6 @@
 # Three defects a review of #379 found that are not terminal findings
 
-Status: **one of three closed**. Found reviewing `session/terminal-ownership` (#379) on 2026-11-08,
+Status: **two of three closed**; the third is `explorer/state.ts`'s comment, still present at line 232. Found reviewing `session/terminal-ownership` (#379) on 2026-11-08,
 confirmed or relayed as noted. They are here rather than in
 [the terminal integration review](ISSUE-terminal-integration-review.md) because none of them is a row in it:
 that document's subject is the terminal, and these are a tab-group prune, a test-runner's toolchain lookup
@@ -26,7 +26,7 @@ and the parameter is required so no site can forget it — including `persistCod
 loss to storage and made it survive the next launch. `finalizeRestoreState` had the rule right and kept its
 own copy of it; it shares this one now. Two firing cases past the settle, where the existing cases stopped.
 
-## 2. `test:linux` refuses to start without a `vendor/` link
+## 2. `test:linux` refuses to start without a `vendor/` link — **closed**
 
 `scripts/linux-runner.ts`: `rustCheckoutsIn(vendoredCheckouts(REPO_ROOT))` throws when no `vendor/` entry
 holds a `Cargo.toml`, and the surrounding IIFE turns that into `process.exit(1)`. The toolchain used to come
@@ -34,7 +34,10 @@ from `ELMDB_CHECKOUT`, which honours `APACK_LINUX_ELMDB_ROOT`. On a machine runn
 frozen-checkout qualification (`tests/performance/README.md`) without a link, the runner now refuses with
 "Run `npm run link:elmdb`" although the native source it was pointed at is present.
 
-**Relayed, not confirmed.**
+**Closed** by `41c5631d9e`: `rustCheckoutsForRun(ELMDB_CHECKOUT, VENDOR_ELMDB, vendoredCheckouts(REPO_ROOT))`
+derives the toolchain from the checkouts a run actually has, so `ELMDB_CHECKOUT` — which honours
+`APACK_LINUX_ELMDB_ROOT` — answers when no `vendor/` entry does. The refusal is kept for the case it was
+written for, two checkouts pinning different channels, and names both.
 
 ## 3. A comment asserts the opposite of what the code does
 
