@@ -1092,19 +1092,20 @@ function sleepSync(ms: number): void {
 }
 
 /**
- * Waits, synchronously, while `holding()` and the holder `pid` keeps working, and answers why it stopped waiting:
- * `released`, or the stall that ended it. The watch `watchWork` keeps, for a caller that cannot await: the same
- * stall decision over the same tree readings, taken every few seconds between short polls of `holding`.
+ * Waits, synchronously, while `holder()` names a process and that process keeps working, and answers why it stopped
+ * waiting: `released`, or the stall that ended it. The watch `watchWork` keeps, for a caller that cannot await: the
+ * same stall decision over the same tree readings, taken every few seconds between short polls of `holder`. A new
+ * holder is watched from its own start, so a waiter never charges one holder's silence to the next.
  */
-function waitWhileHolderWorks(holding: () => boolean, pid: number, idleMs: number, pollMs = LOCK_POLL_MS): 'released' | string {
-  const tracker = createStallTracker(idleMs, Date.now());
-  let readAt = Number.NEGATIVE_INFINITY;
-  while (holding()) {
+function waitWhileHolderWorks(holder: () => number | undefined, idleMs: number, pollMs = LOCK_POLL_MS): 'released' | string {
+  let watching: { pid: number; tracker: ReturnType<typeof createStallTracker>; readAt: number } | undefined;
+  for (let pid = holder(); pid !== undefined; pid = holder()) {
     const now = Date.now();
-    if (now - readAt >= Math.min(HOLDER_READ_MS, idleMs / 4)) {
-      readAt = now;
+    if (watching?.pid !== pid) watching = { pid, tracker: createStallTracker(idleMs, now), readAt: Number.NEGATIVE_INFINITY };
+    if (now - watching.readAt >= Math.min(HOLDER_READ_MS, idleMs / 4)) {
+      watching.readAt = now;
       // A tree that cannot be read adds no work, so a holder nothing can read is bounded by its silence
-      if (tracker.reading(readTreeCpuMsSync(pid) ?? new Map(), now)) return describeRefusal({ kind: 'stalled', idleMs });
+      if (watching.tracker.reading(readTreeCpuMsSync(pid) ?? new Map(), now)) return describeRefusal({ kind: 'stalled', idleMs });
     }
     sleepSync(pollMs);
   }
@@ -1123,10 +1124,12 @@ function waitWhileHolderWorks(holding: () => boolean, pid: number, idleMs: numbe
  * schedule: it returns as soon as the holder is gone, and a holder that outlives it leaves the caller to
  * report staleness as before, which is the pre-existing behaviour rather than a hang.
  */
-export function waitForPackageBuild({ idleMs = HOLDER_IDLE_MS, pollMs = LOCK_POLL_MS }: { idleMs?: number; pollMs?: number } = {}): LockHolder | undefined {
-  const waitedFor = runningPackageBuild();
+export function waitForPackageBuild({ idleMs = HOLDER_IDLE_MS, pollMs = LOCK_POLL_MS, file = LOCK_FILE }:
+{ idleMs?: number; pollMs?: number; file?: string } = {}): LockHolder | undefined {
+  const waitedFor = runningPackageBuild(file);
   if (!waitedFor) return undefined;
-  waitWhileHolderWorks(() => runningPackageBuild() !== undefined, waitedFor.pid, idleMs, pollMs);
+  // Whoever holds it now: a build that hands the lock to another is followed, not mistaken for a stall
+  waitWhileHolderWorks(() => runningPackageBuild(file)?.pid, idleMs, pollMs);
   return waitedFor;
 }
 
@@ -1279,10 +1282,11 @@ export async function withBuildLock<T>(label: string, run: () => T | Promise<T>,
         const live = holder !== null && holderIsRunning(holder);
         // A `freshness` fix waits for as long as the holder works: a holder that stalled is reported
         if (live && intent === 'freshness' && waited === undefined) {
+          // Only this holder: one that gives way ends the wait, so the link is tried again before anyone else waits
           waited = waitWhileHolderWorks(() => {
             const now = readLock(file);
-            return now !== null && now.pid === holder.pid && holderIsRunning(now);
-          }, holder.pid, idleMs);
+            return now !== null && now.pid === holder.pid && holderIsRunning(now) ? now.pid : undefined;
+          }, idleMs);
           // Released: the next holder, if one took it meanwhile, is waited for the same way
           if (waited === 'released') { waited = undefined; continue; }
         }

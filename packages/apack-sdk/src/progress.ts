@@ -6,7 +6,6 @@
 // Node-only: it lists processes with `ps`, or PowerShell on Windows. The chain's own runner imports this file by path,
 // since it runs before any package is built and `@apackdev/sdk` resolves to `dist` outside a host build.
 import { execFile, execFileSync, type ChildProcess, type ExecFileOptions } from 'node:child_process';
-import threads, { MessageChannel, receiveMessageOnPort } from 'node:worker_threads';
 
 /**
  * How long a process tree may go without CPU or output before whatever watches it ends it as stalled: one number
@@ -148,12 +147,19 @@ const LISTING: {
 };
 
 /**
+ * How long one synchronous listing may take. It is the reading itself, so no progress can bound it, and a caller
+ * blocked on it cannot be interrupted: a `ps` or PowerShell that hangs would hang that caller for good. Generous,
+ * since a listing takes well under a second, and a listing that runs out reads as no reading.
+ */
+const SYNC_LISTING_TIMEOUT_MS = 30_000;
+
+/**
  * One reading of the tree's CPU taken synchronously, for a caller that cannot await: a wait inside a synchronous
  * function, which then decides with `createStallTracker` as `watchWork` does. Nothing where no listing could be taken.
  */
 export function readTreeCpuMsSync(leader: number): Map<number, number> | undefined {
   try {
-    return treeOf(LISTING.parse(execFileSync(LISTING.file, [...LISTING.args], LISTING.options)), leader);
+    return treeOf(LISTING.parse(execFileSync(LISTING.file, [...LISTING.args], { ...LISTING.options, timeout: SYNC_LISTING_TIMEOUT_MS })), leader);
   } catch {
     return undefined;
   }
@@ -409,97 +415,3 @@ export function execFileWhileWorking(file: string, args: readonly string[], opti
   return Object.assign(done, { child });
 }
 
-/**
- * What runs a bridged process, in a worker of its own: only builtins, so it loads nothing of the code that started
- * it. It starts the process, feeds its stdin, reports its pid and its end through `state`, and kills it when the
- * waiting thread raises the kill flag. `state` is `[done, pid, kill]`.
- */
-const BRIDGE_WORKER = `
-const { workerData } = require('node:worker_threads');
-const { execFile } = require('node:child_process');
-const { file, args, options, input, state, port } = workerData;
-const answer = (message) => { port.postMessage(message); Atomics.store(state, 0, 1); Atomics.notify(state, 0); };
-try {
-  const kill = setInterval(() => { if (Atomics.load(state, 2) === 1) child.kill('SIGKILL'); }, 20);
-  const child = execFile(file, args, options, (error, stdout, stderr) => {
-    clearInterval(kill);
-    answer({ stdout: String(stdout), stderr: String(stderr),
-      failed: error ? { message: error.message, code: error.code, signal: error.signal } : undefined });
-  });
-  Atomics.store(state, 1, child.pid ?? -1);
-  if (input !== undefined) child.stdin.end(input);
-} catch (error) {
-  // Thrown before the process existed: answered at once, or the waiting thread would wait on nothing
-  answer({ stdout: '', stderr: '', failed: { message: String(error && error.message || error), code: error && error.code } });
-}
-`;
-
-/** What `execFileSyncWhileWorking` takes: `execFileWhileWorking`'s options, and the text to write to its stdin */
-export type ExecFileSyncWhileWorkingOptions = Omit<ExecFileWhileWorkingOptions, 'signal'> & { readonly input?: string };
-
-/**
- * `execFileSync`, bounded by the process's progress rather than the clock: for a caller that must answer
- * synchronously — a module hook, a `--require` preload — and so cannot await `execFileWhileWorking`.
- *
- * The process runs from a worker thread while this one blocks, waking every few seconds to read the process tree's
- * CPU (`readTreeCpuMsSync`) and take `watchWork`'s decision: ended after `IDLE_MS` with no work, or past `timeout`
- * of CPU, and where its CPU cannot be read, past `timeout` on the clock. It answers `{ stdout, stderr }`, and throws
- * on a non-zero exit with `code`, `signal`, `stdout` and `stderr` as `execFileSync`'s error carries them.
- *
- * **The worker is the platform's own**, reached past any proxy a host installed on `Worker` (a proxied class keeps
- * its constructor on its prototype), with no `execArgv`: it runs no preload, and is no thread of the caller's.
- *
- * **Not before a process is trusted to load code.** Starting a thread loads libraries into this process, and on
- * Windows those loads follow DLL redirection: a planted `.local` override ran this way before the compiler's native
- * admission had refused it. Code that runs before that admission spawns synchronously instead.
- */
-export function execFileSyncWhileWorking(file: string, args: readonly string[], options: ExecFileSyncWhileWorkingOptions = {}): { stdout: string; stderr: string } {
-  const { timeout, input, ...rest } = options;
-  const state = new Int32Array(new SharedArrayBuffer(12));
-  const { port1, port2 } = new MessageChannel();
-  const PlatformWorker = threads.Worker.prototype.constructor as typeof threads.Worker;
-  const worker = new PlatformWorker(BRIDGE_WORKER, {
-    eval: true, execArgv: [],
-    workerData: { file, args: [...args], input, state, port: port2,
-      options: { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true, ...rest, env: rest.env ?? process.env } },
-    transferList: [port2],
-  });
-  const started = Date.now();
-  const tracker = createStallTracker(IDLE_MS, started);
-  let last = new Map<number, number>();
-  let spent = 0;
-  let unreadableSince: number | undefined;
-  let why: string | undefined;
-  while (Atomics.wait(state, 0, 0, Math.min(5_000, IDLE_MS / 4)) === 'timed-out') {
-    const pid = Atomics.load(state, 1);
-    const now = Date.now();
-    // A worker that never started the process has nothing to read and nothing to kill: its silence is the bound
-    if (pid === 0 && now - started >= IDLE_MS) {
-      void worker.terminate();
-      throw new Error(`${file} ${args.join(' ')} was never started: its worker did nothing for ${Math.round(IDLE_MS / 1000)}s`);
-    }
-    if (why !== undefined || pid <= 0) continue;
-    const tree = readTreeCpuMsSync(pid);
-    if (tree === undefined) unreadableSince ??= now;
-    else { spent += cpuAdded(last, tree); last = tree; }
-    const refusal: Refusal | undefined =
-      timeout !== undefined && unreadableSince !== undefined && now - unreadableSince >= timeout ? { kind: 'clock', fallbackMs: timeout }
-        : tracker.reading(tree ?? last, now) ? { kind: 'stalled', idleMs: IDLE_MS }
-          : timeout !== undefined && spent >= timeout ? { kind: 'ceiling', ceilingMs: timeout, spentMs: spent, wallMs: now - started }
-            : undefined;
-    if (refusal !== undefined) {
-      why = describeRefusal(refusal);
-      Atomics.store(state, 2, 1);
-    }
-  }
-  const answer = receiveMessageOnPort(port1)?.message as
-    { stdout: string; stderr: string; failed?: { message: string; code?: unknown; signal?: unknown } } | undefined;
-  port1.close();
-  void worker.terminate();
-  if (answer === undefined) throw new Error(`${file} ${args.join(' ')} ended without an answer`);
-  if (answer.failed !== undefined) {
-    const message = why === undefined ? answer.failed.message : `${file} ${args.join(' ')} was ended: it ${why}\n${answer.failed.message}`;
-    throw Object.assign(new Error(message), { code: answer.failed.code, signal: answer.failed.signal, stdout: answer.stdout, stderr: answer.stderr });
-  }
-  return { stdout: answer.stdout, stderr: answer.stderr };
-}

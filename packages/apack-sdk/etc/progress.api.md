@@ -28,17 +28,6 @@ export function createStallTracker(idleMs: number, startedAt: number): {
 export function describeRefusal(refusal: Refusal): string;
 
 // @public
-export function execFileSyncWhileWorking(file: string, args: readonly string[], options?: ExecFileSyncWhileWorkingOptions): {
-    stdout: string;
-    stderr: string;
-};
-
-// @public
-export type ExecFileSyncWhileWorkingOptions = Omit<ExecFileWhileWorkingOptions, 'signal'> & {
-    readonly input?: string;
-};
-
-// @public
 export function execFileWhileWorking(file: string, args: readonly string[], options?: ExecFileWhileWorkingOptions): Promise<{
     stdout: string;
     stderr: string;

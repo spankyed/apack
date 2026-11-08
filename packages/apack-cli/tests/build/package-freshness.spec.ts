@@ -1,3 +1,4 @@
+import { spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -5,7 +6,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { INTERRUPTS } from '@apackdev/host/exclusive-lock';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
-import { ABSENT, ALLOW_UNBUILT, BUILD_UNITS, packageBuildState, buildScriptFor, changedInputs, CHECKOUT_MARKER, covers, declaredPaths, diffableStamp, ensurePackagesBuilt, fingerprintInputs, fingerprintUnit, fingerprintWithDigests, freshnessSweep, inputFiles, outputDigests, INPUTS_CHANGED, PACKAGES_PREBUILT_ENV, packageWriter, PackagesWentStale, repoRelative, NOT_A_BUILD_INPUT, REPO_ROOT, staleMessage, stampRecord, stampedBuild, stampedRun, stampedRunAll, stampFile, unbuiltRefusal, unitStaleReason, withBuildLock, type BuildIntent, type BuildUnit, type StaleUnit } from '@apackdev/host/build/packages-built';
+import { ABSENT, ALLOW_UNBUILT, BUILD_UNITS, packageBuildState, buildScriptFor, changedInputs, CHECKOUT_MARKER, covers, declaredPaths, diffableStamp, ensurePackagesBuilt, fingerprintInputs, fingerprintUnit, fingerprintWithDigests, freshnessSweep, inputFiles, outputDigests, INPUTS_CHANGED, PACKAGES_PREBUILT_ENV, packageWriter, PackagesWentStale, repoRelative, NOT_A_BUILD_INPUT, REPO_ROOT, staleMessage, stampRecord, stampedBuild, stampedRun, stampedRunAll, stampFile, unbuiltRefusal, unitStaleReason, waitForPackageBuild, withBuildLock, type BuildIntent, type BuildUnit, type StaleUnit } from '@apackdev/host/build/packages-built';
 
 /**
  * The freshness rule behind `npm test -w @apackdev/cli`'s pretest (@apackdev/host/build/packages-built):
@@ -994,6 +995,47 @@ describe('the build lock on the way out', () => {
 
     expect(listeners()).toEqual(before);
     expect(fs.existsSync(file), 'and the lock itself is gone').toBe(false);
+  });
+});
+
+describe('waiting for a build in flight', () => {
+  const lockFile = () => path.join(tempDir(), 'packages-build.lock');
+  const hold = (file: string, pid: number, label = '@apackdev/other') =>
+    fs.writeFileSync(file, JSON.stringify({ pid, label, startedAt: new Date().toISOString() }));
+  // Holders the cases start, given the lock file's path, and ended after each case
+  const holders: ChildProcess[] = [];
+  afterEach(() => { for (const holder of holders.splice(0)) holder.kill('SIGKILL'); });
+  const holder = (script: string, file: string): number => {
+    const child = spawn(process.execPath, ['-e', script, file], { stdio: 'ignore' });
+    holders.push(child);
+    return child.pid!;
+  };
+
+  it('gives up on a holder that does no work', () => {
+    const file = lockFile();
+    // This process holds it, and does no work while it waits: what a wedged holder looks like
+    hold(file, process.pid);
+    const started = Date.now();
+    expect(waitForPackageBuild({ file, idleMs: 1_000 })?.pid).toBe(process.pid);
+    expect(Date.now() - started, 'it gave up without waiting').toBeGreaterThanOrEqual(900);
+  });
+
+  it('ends the wait when the holder releases, however idle it was', () => {
+    const file = lockFile();
+    hold(file, holder("setTimeout(() => require('node:fs').rmSync(process.argv[1]), 1000)", file));
+    const started = Date.now();
+    waitForPackageBuild({ file, idleMs: 10_000 });
+    expect(Date.now() - started, 'it waited out the stall window rather than the release').toBeLessThan(8_000);
+  });
+
+  /** The firing case for following the holder: one that hands the lock on is no stall, and its successor works */
+  it('follows a holder that hands the lock to a busy successor', () => {
+    const file = lockFile();
+    const busy = holder("const end = Date.now() + 6000; while (Date.now() < end) {} require('node:fs').rmSync(process.argv[1])", file);
+    hold(file, holder(`setTimeout(() => require('node:fs').writeFileSync(process.argv[1], JSON.stringify({ pid: ${busy}, label: 'next', startedAt: new Date().toISOString() })), 1000)`, file));
+    const started = Date.now();
+    waitForPackageBuild({ file, idleMs: 4_000 });
+    expect(Date.now() - started, 'the busy successor was charged its idle predecessor\'s silence').toBeGreaterThanOrEqual(5_000);
   });
 });
 

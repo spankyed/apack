@@ -139,7 +139,7 @@ Three things follow.
   and a check that runs as a spec file loads runs whenever the scheduler happened to start it. Door 5
   reported that instead of waiting until 2026-10-08, which failed a chain run about the race rather than
   the code — two pool steps each ensure the packages, so one can build while the other's first spec loads.
-  What is still named is a holder that outlasted the bound, which is a wedge rather than a queue.
+  What is still named is a holder that stopped working while it held the lock, which is a wedge rather than a queue.
 
 One path is deliberately not in the table twice. `npm run dev` reaches door 3, because its
 dev launcher runs the built-in pack's watcher with `apack pack build --watch`, whose builds ensure —
