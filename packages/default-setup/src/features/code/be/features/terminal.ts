@@ -351,11 +351,22 @@ export const terminalSystem = setup({
         // empty list for ever. Restoring is best-effort — what it restores is a convenience, and the
         // previous run's processes are gone either way — so a failure is reported and the system goes on.
         //
-        // **Nothing fires this branch today**, and the edit that would is in `restoreAll`: everything it
-        // does per terminal is inside a `try`, so an open that fails is already survived
-        // (`terminal-survives-a-failed-restore.spec.ts` is that case). What is left outside is the settings
-        // read and the query — move either inside the loop's `try`, or add an `await` after it, and the
-        // actor can reject again.
+        // **Nothing fires this branch today, and all three ways in are closed** — checked 2026-11-08, so
+        // the next reader need not re-derive it. Everything `restoreAll` does per terminal is inside a
+        // `try`, so an open that fails is already survived (`terminal-survives-a-failed-restore.spec.ts` is
+        // that case) and cannot reach here. What sits outside that `try`:
+        //
+        // - **a bad row cannot do it.** `directoryFor`/`shellFor` would throw on a non-string, and a row is
+        //   data (S3) — but the engine refuses one: a `Terminal` whose `cwd` is a number is rejected with
+        //   *Terminal.cwd is a string: it got a number*, for every writer, `apack db exec` included.
+        // - **the settings read cannot be made to throw from a test.** The unit harness binds the app's own
+        //   settings store rather than an overridable mock, deliberately, so `mockService('settings', …)`
+        //   does not reach `handle.get()`.
+        // - **the query would need the engine itself to fail.**
+        //
+        // So this is an assertion rather than a gate, and the edit that would change that is still in
+        // `restoreAll`: move the settings read or the query inside the loop's `try`, or add an `await` after
+        // either, and the actor can reject again.
         onError: {
           target: 'idle',
           actions: [

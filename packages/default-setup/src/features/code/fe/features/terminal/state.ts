@@ -14,7 +14,22 @@ export interface TerminalInfo {
   shell?: string
   cwd: string
   active: boolean
+  /**
+   * The session's size **when this was published**, which is a starting point and not a live reading.
+   *
+   * **A pty has one size and it is whatever a window last fitted**, so the live value lives where the
+   * session does: the service keeps it current and `restart` re-opens the shell at it. What a window holds
+   * is the snapshot it was last listed or opened with, and its one consumer wants exactly that — the pool
+   * builds the emulator at this size and `fitAddon.fit()` replaces it on the next frame, so it is the width
+   * a replayed screen is first drawn at and nothing more.
+   *
+   * It is spelled out because it reads as live and is not: a drive scenario waited on it for the size a
+   * window had just fitted and timed out at the creation size, with every resize having landed correctly
+   * (F18). Nothing is missing — a window that wants the size it fitted computed it, and the pty's own is
+   * the broker's to answer.
+   */
   cols: number
+  /** The session's rows when this was published; see `cols` */
   rows: number
   /**
    * What ends a typed line for this session's shell — X6.
