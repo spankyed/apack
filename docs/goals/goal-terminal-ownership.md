@@ -450,6 +450,15 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
     in a machine-wide store (`2f7566291b`), and this checkout's first native run was the same day, so a
     cold store is the likely difference; that is not established and the case's own 60s budget is the edge
     either way. Treat a failure here as "the machine was loaded or the store was cold", not as a defect.
+  - **`apack pack build` cannot run on Windows at all**, found while setting the app up end to end on the
+    VM (2026-11-08). Codegen writes all 23 generated files and then the bundle fails:
+    `ERR_INVALID_RETURN_PROPERTY_VALUE` — *"Expected a string, an ArrayBuffer, or a TypedArray to be
+    returned for the `source` from the `load` hook but got undefined"* — from the CLI's captured compiler.
+    **Not the Node-23 failure this handoff already records**, which is the easy thing to assume: the
+    captured runtime is `C:\tools\node24\node.exe` and reports `v24.11.0`, and clearing the whole
+    compiler store changed nothing. It is the CLI's, not this goal's, and nothing anywhere records it. The
+    terminal work was verified past it by copying the pack's built `dist/` from the Mac, which is bundled
+    JavaScript and content and so carries across.
   - `default-setup/tests/features/code/be/default-directory.spec.ts > closes real Git watchers when the Code
     actor stops` is load-flaky: 5–9s run alone, 55s and failing under the full pool. A live-watcher case in
     the fast half. Unrelated to the terminal.
