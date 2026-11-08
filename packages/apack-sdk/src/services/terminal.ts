@@ -29,6 +29,16 @@ export interface TerminalSession {
   readonly id: string;
   /** The process id, for a diagnostic. Not a handle: nothing addresses a session by it */
   readonly pid: number;
+  /**
+   * How many lines of scrollback this session has, which is the host's number and not the window's.
+   *
+   * **One number, answered by whatever owns the session.** A window's emulator holds whatever it was sent
+   * while attached; the host holds this whether or not a window is drawing, and it is what a reattaching
+   * window is given. Drawing more than this would be drawing lines that cannot survive a reattach — which
+   * is what two independent constants produced, 10,000 in the window against 1,000 in the host, so closing
+   * and reopening a window silently lost nine tenths of it.
+   */
+  readonly scrollback: number;
   /** Bytes the user typed */
   write(data: string): Promise<void>;
   /** The viewport changed. One size per session, because a pty has one */

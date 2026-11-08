@@ -510,6 +510,7 @@ export interface TerminalSession {
     readonly id: string;
     readonly pid: number;
     resize(cols: number, rows: number): Promise<void>;
+    readonly scrollback: number;
     terminate(): Promise<void>;
     write(data: string): Promise<void>;
 }

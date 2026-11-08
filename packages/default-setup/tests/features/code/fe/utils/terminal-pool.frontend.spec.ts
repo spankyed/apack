@@ -16,11 +16,15 @@ const pasted: string[] = []
 const written: string[] = []
 let focused = 0
 
+/** What the pool built each emulator with, so a case can assert a bound it derives rather than pins */
+const builtWith: Array<Record<string, unknown>> = []
+
 vi.mock('@xterm/xterm', () => ({
   Terminal: class {
     element = document.createElement('div')
     cols = 80
     rows = 24
+    constructor(options: Record<string, unknown> = {}) { builtWith.push(options) }
     unicode = { activeVersion: '6' }
     loadAddon() {}
     open(host: HTMLElement) { host.appendChild(this.element) }
@@ -448,5 +452,21 @@ describe('the renderer the pool draws with', () => {
     expect(entry.webglAddon).toBeNull()
     terminalPool.dispose(entry.terminalId)
     expect(addon.disposals).toBe(1)
+  })
+})
+
+describe('the scrollback the emulator is built with', () => {
+  /**
+   * **One number, and it is the host's.** The pool pinned 10,000 while the broker kept 1,000, so a window
+   * that stayed open showed nine tenths more than any reattach could reproduce — the broker is what answers
+   * a screen read once no window holds the bytes. `TerminalInfo.scrollback` carries the broker's own, from
+   * its handshake, and this asserts the pool uses it rather than a constant of its own.
+   */
+  it('comes from the session rather than a number of the pool s own', () => {
+    const info = { id: 't-scroll', title: 't', cwd: '/tmp', cols: 80, rows: 24, scrollback: 1_234 } as never
+
+    terminalPool.ensure(info, () => {})
+
+    expect(builtWith.at(-1)?.scrollback, 'the pool built the emulator with a bound of its own').toBe(1_234)
   })
 })

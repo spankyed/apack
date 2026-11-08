@@ -32,6 +32,15 @@ export interface TerminalInfo {
   /** The session's rows when this was published; see `cols` */
   rows: number
   /**
+   * How far back this session can be scrolled, which is the host's number and not this window's.
+   *
+   * Unlike `cols` this is not a starting point: it is the bound the pool builds the emulator with, and
+   * exceeding it would draw lines that cannot survive a reattach — the host is what answers a screen read
+   * when no window holds the bytes. It was pinned here as 10,000 against the broker's 1,000, so closing and
+   * reopening a window silently lost nine tenths of the scrollback.
+   */
+  scrollback: number
+  /**
    * What ends a typed line for this session's shell — X6.
    *
    * A window cannot know which shell is on the other end, and it matters: typed into a Windows console,

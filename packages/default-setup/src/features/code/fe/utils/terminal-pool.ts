@@ -259,7 +259,10 @@ class TerminalPool {
       cursorBlink: true,
       cursorStyle: 'bar',
       allowProposedApi: true,
-      scrollback: 10_000,
+      // **The host's number, not one pinned here.** The emulator must not hold more than the session does:
+      // a window drawing 10,000 lines against a broker keeping 1,000 showed nine tenths that no reattach
+      // could reproduce. `info.scrollback` comes from the broker's handshake.
+      scrollback: info.scrollback,
       cols: info.cols || 80,
       rows: info.rows || 24,
       theme: { ...THEME }

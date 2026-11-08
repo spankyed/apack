@@ -4683,6 +4683,14 @@ interface TerminalInfo {
     cols: number;
     rows: number;
     /**
+     * How far back this session can be scrolled: the host's number, from the broker's handshake.
+     *
+     * The window derives its emulator's bound from this and never pins its own. Exceeding it would draw lines
+     * no reattach could reproduce — the broker is what answers a screen read when no window holds the bytes —
+     * and 10,000 pinned in the pool against the broker's 1,000 is exactly what that looked like.
+     */
+    scrollback: number;
+    /**
      * What ends a typed line for *this* shell — X6.
      *
      * A window running a command has to end it the way the shell it is running in expects, and only the

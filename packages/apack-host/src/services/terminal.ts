@@ -186,10 +186,13 @@ export function createTerminalService(): TerminalService & { shutdown(): Promise
 
   return {
     async open(options, listeners: TerminalListeners): Promise<TerminalSession> {
-      const session = await (await running()).open(options, listeners);
+      const held = await running();
+      const session = await held.open(options, listeners);
       return {
         id: session.id,
         pid: session.pid,
+        // The broker's own, from its handshake, rather than a number this process also keeps
+        scrollback: held.history,
         write: (data) => session.write(data),
         resize: (cols, rows) => session.resize(cols, rows),
         terminate: () => session.kill(),

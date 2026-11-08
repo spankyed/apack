@@ -49,7 +49,9 @@ export interface CodeSurfaceHarness {
 
 /** A terminal, with the fields a host reads */
 export const terminalInfo = (id: string, fields: Partial<TerminalInfo> = {}): TerminalInfo => ({
-  id, title: 'zsh', pid: 4242, shell: '/bin/zsh', cwd: '/tmp', active: true, cols: 80, rows: 24, submit: '\n',
+  id, title: 'zsh', pid: 4242, shell: '/bin/zsh', cwd: '/tmp', active: true, cols: 80, rows: 24,
+  // The host's number, as a session carries it; a case that cares about the bound passes its own
+  scrollback: 1_000, submit: '\n',
   ...fields,
 })
 

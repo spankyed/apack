@@ -166,6 +166,17 @@ export interface BrokerSessionOptions {
 export interface Broker {
   open(options: BrokerSessionOptions, listeners: BrokerSessionListeners): Promise<BrokerSession>;
   close(): Promise<void>;
+  /**
+   * How many lines of scrollback the broker keeps per session, from its handshake.
+   *
+   * **The one scrollback number, and it is the broker's because the broker is what answers for it.** An
+   * emulator in this window holds whatever it was sent while attached; the broker holds this for every
+   * session whether or not a window is drawing one, and a `screen` read is what a reattaching window gets.
+   * Showing more than this would be showing lines that cannot survive a reattach, which is what two
+   * independent constants produced — 10,000 in the pool against 1,000 in the broker, so closing and
+   * reopening a window silently lost nine tenths of it.
+   */
+  readonly history: number;
 }
 
 interface Connection {
@@ -277,8 +288,10 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
   if (greeting.kind === 'hello' && greeting.protocol !== PROTOCOL_VERSION) {
     throw new BrokerError('HANDSHAKE', `the broker speaks protocol ${greeting.protocol}; this app speaks ${PROTOCOL_VERSION}`);
   }
+  const history = greeting.kind === 'hello' ? greeting.history : 0;
 
   return {
+    history,
     async open({ cols, rows, shell, args, env, cwd }, sessionListeners) {
       connection.send({
         kind: 'spawn',
@@ -300,7 +313,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
       return {
         id,
         pid: spawned.pid,
-        async write(data) { connection.send({ kind: 'write', session: id, data }); },
+        async write(text) { connection.send({ kind: 'write', session: id, text }); },
         async resize(cols_, rows_) { connection.send({ kind: 'resize', session: id, cols: cols_, rows: rows_ }); },
         async screen(history = 0) {
           connection.send({ kind: 'screen', session: id, history });
@@ -421,7 +434,7 @@ function frames(socket: net.Socket, listeners: Map<string, BrokerSessionListener
     try { event = JSON.parse(line) as Event; } catch { return; }
 
     if (event.kind === 'output') {
-      listeners.get(event.session)?.onOutput(event.data);
+      listeners.get(event.session)?.onOutput(event.text);
       return;
     }
     if (event.kind === 'exited') {

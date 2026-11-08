@@ -105,7 +105,8 @@ class TerminalService {
       onExit: (code) => this.exited(id, opening, code, handlers),
     })
 
-    const info: TerminalInfo = { id, title, pid: session.pid, shell, cwd, active: true, generation: 1, cols, rows, submit: submitFor(shell) }
+    const info: TerminalInfo = { id, title, pid: session.pid, shell, cwd, active: true, generation: 1, cols, rows,
+      scrollback: session.scrollback, submit: submitFor(shell) }
     this.terminals.set(id, { info, session, sizedBy, opening })
     repository.terminalCommands.create({ id, title, shell, cwd, cols, rows })
 
@@ -399,6 +400,9 @@ class TerminalService {
           active: true,
           cols: row.cols,
           rows: row.rows,
+          // The session's own, not the row's: a row records where a terminal started, and the scrollback is
+          // the host's answer for the session running now
+          scrollback: session.scrollback,
           submit: submitFor(shell),
         }
         // Restored by nobody, so the first window to fit it takes the size (M2)
