@@ -35,12 +35,12 @@ export async function startTestPackBuildWatcher(root: string,
     const watcher = await startPackBuildWatcher(root, { ...options, builder });
     const done = watcher.done.finally(() => builder.close());
     void done.catch(() => {});
-    let closing: Promise<unknown> | undefined;
+    let closing: Promise<void> | undefined;
     return {
       done,
       // Awaited with no deadline of its own: a cleanup that stops working is the progress guard's to end
       close() {
-        return closing ??= watcher.close().finally(() => done);
+        return closing ??= watcher.close().finally(() => done).then(() => undefined);
       },
       async rebuildAfter(edit) {
         const before = builds.length;
