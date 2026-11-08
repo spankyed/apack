@@ -106,10 +106,15 @@ files under `packages/apack-cli`, checked. Earlier revisions of this section cit
 which it was; this is the first local full chain in which it passed, and it is reported rather than relied
 on, since load can push a file into a failure and never out of one.
 
-**Strict passes on the finished state: run 42486473041, all six jobs green**, on `a238e4ff25`, 2026-11-08
-13:45–14:51Z — `producers`, both integration shards, both native shards and `app-and-rest`. It is a **cold**
-chain: the run before it added a declared input to every step (below), so nothing was cached. That is the
-required integrated validation for this goal, and it is the first all-green strict on a finished state.
+**Strict passes on current source: run 42492364059, all six jobs green**, on `d0e048a00a`, 2026-11-08
+14:57–15:47Z — `producers`, both integration shards, both native shards and `app-and-rest`. That is the
+required integrated validation for this goal.
+
+**It took two green runs to describe the tip, and the second is the one that counts.** 42486473041 was the
+first all-green strict (on `a238e4ff25`, 13:45–14:51Z, a cold chain, the commit before it having added a
+declared input to every step); while it ran, `cd0c0f1e7c` landed in the tree — a source change to the
+terminal's scrollback — so that run never saw it, and a pass on a commit the tip has moved past is not a
+pass on current source. 42492364059 covers both.
 
 **Six attempts preceded it, and no two failed for the same reason** — which is the part worth keeping, since
 a single recurring flake and six distinct defects call for opposite responses:
@@ -122,7 +127,9 @@ a single recurring flake and six distinct defects call for opposite responses:
 | 42476840456 | failed `producers` in 90s | `upload-pack: not our ref 5588170a` — the pinned broker commit was never pushed, so CI could not clone it |
 | 42477376127 | failed `producers` | `error: no such command: xtask` — the alias that defines it is untracked in the broker repo |
 | 42481117851 | four of six green | `app-and-rest`: two Playwright clocks are both spelled `timeout:`, and `suite-timeouts` read the nested assertion clock as the suite deadline (`2ffaf52a6d`). `integration-1`: `ROOT` and the dep-file read filter both named `vendor/elmdb` by hand, so five legs read apack-terminal's types with nothing declaring them (`a238e4ff25`) |
-| **42486473041** | **all six green** | — |
+| 42486473041 | all six green | — (but `cd0c0f1e7c` landed while it ran, so it did not describe the tip) |
+| 42491942672 | failed `producers` in 90s | `upload-pack: not our ref c4407661` — the same unpushed-pin failure as 42476840456, with a different commit: `cd0c0f1e7c`'s pin bump named a broker commit that was never pushed |
+| **42492364059** | **all six green, on the tip** | — |
 
 The third is the one worth reading, because it was not infrastructure. The external pack records its package
 graph in `dist/build-inputs.json` and that graph includes `node_modules/electron`, so `readPackageInputs`
@@ -162,6 +169,14 @@ name back into `ROOT`, which names the steps left behind.
 
 **Two commits and a push were the user's to authorize, and were**: the broker's seven commits plus its
 untracked `xtask` alias, and the pin bump to the commit carrying it.
+
+**One gap this goal found and did not close, because it is nobody's finding yet and recurs.** A
+`vendor/*.rev` bump can be committed here naming a broker commit that was never pushed, and nothing says so
+until a CI job dies ninety seconds in — it happened twice in one day, with different commits (42476840456,
+42491942672). `npm run link:apack-terminal` checks that the *local* checkout holds the pin, which is exactly
+why it passes in both cases; nothing checks the pin is **fetchable**. One `git ls-remote <url> <rev>` at link
+time would make it a local error naming the unpushed commit. Recorded rather than built: it is outside this
+goal's scope.
 
 **An earlier dispatch validated nothing**, and the reason is in the record above: `--ref master` names the
 *remote* branch, so it ran against a commit predating the goal. Two later runs were cancelled deliberately
@@ -215,8 +230,8 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 
 ## Current handoff
 
-- **Complete.** Required validation passed: strict 42486473041, all six jobs green on `a238e4ff25`
-  (see Validation, with the six attempts before it and what each cost).
+- **Complete.** Required validation passed on current source: strict 42492364059, all six jobs green on
+  `d0e048a00a` (see Validation, with the seven attempts before it and what each cost).
 - **Checkout:** `session/terminal-ownership`, clean tree. Two commits after the chain run below:
   `dc87cdadcd` (every strict job installs identically) and `fc5e1362d6` (the broker fake writes a request's
   answers as one chunk, which is what made the same-read guard deterministic). Both are a workflow and a
