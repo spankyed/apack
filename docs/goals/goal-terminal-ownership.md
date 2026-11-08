@@ -397,22 +397,43 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   goes through had to stop being inert first: eleven hardcoded paths whose remedy was `$SHELL`, the value
   that had just failed them, changed no outcome. The answer is derived from `/etc/shells` and the user's own
   shell, which is what `chsh` validates against.
-- **What is left of Phase A, with what each needs.** None of it is blocked on the fork above.
-  - **D3, launch-time shell integration.** `injectShellIntegration` types into the user's interactive shell:
-    it echoes, races startup, needs a branch per shell and has none for PowerShell or cmd (X4). Replace it
-    with `--init-file`, a `ZDOTDIR` over a temporary directory that sources the user's, `XDG_DATA_DIRS` and
-    `-NoExit`, shipping the rc scripts as app assets. **F14 is the reason this is not cosmetic**: exactly one
-    line in this repo ever writes `enableShellIntegration`, and it writes `false`, so the three shell
-    branches, the OSC 7/633/1337 parsing, `updateCwd` and `CWD_CHANGED` have in all likelihood never run for
-    any user. A default that looks defensive is unfinished.
-  - **Facts out of the VT core**, which is what the markers are for: prompt and command boundaries, exit
-    status, search and wait-for-state, parsed where the screen is (`apack-terminal/src/screen.rs`) and
-    carried over the protocol. The bounded screen read is already there and already answers for a session
-    nobody is drawing (`Request::Screen`, `BrokerSession.screen`).
-  - **Reaching a pack.** `services.terminal` exposes no `screen` yet, deliberately: it would be an export
-    with no caller, and the consumer Phase A is designed against — #372's native adapter — is on another
-    branch. Add it with the caller.
-  - **Reported paths and titles as untrusted metadata**, and no status rule shipped.
+- **Phase A is done except X4, and every one of its "done when" clauses is met.** F13 and F14 are closed, a
+  hidden session answers a bounded screen read **and a wait**, reported paths and titles are treated as
+  untrusted metadata, and no status rule is shipped.
+  - **D3 landed, and the default with it** (`eb3e9b3fb1`, `d1115149ef`). Shell integration is arranged when
+    the shell starts — bash `--init-file`, zsh `ZDOTDIR`, fish `XDG_DATA_DIRS`, each sourcing the user's own
+    configuration first so an integrated shell is not one with no configuration. **Flipping the default was
+    the rest of F14**, not an extra: the mechanism being sound changes nothing for a user while the one line
+    that ever wrote `enableShellIntegration` writes `false`. Driven: before the flip a terminal told to
+    `cd /tmp` still reported `/Users/spankyed`; after it, `/tmp`, with the tab retitled.
+  - **Facts, search and wait come out of the VT core** (`apack-terminal` at `4623a2a`): OSC 633 as Phase A
+    requires, scanned in its own pass because the grid drops the sequences it is reading, with state carried
+    across chunk boundaries. Nothing polls — a wait's condition is checked where the bytes land.
+  - **`services.terminal` still exposes none of it**, which is the handoff's own earlier judgement kept: the
+    consumer is #372's native adapter, on another branch, and an export with no caller is one nobody has had
+    to make answer a real question. Add it with the caller.
+  - **X4 is the only thing left of this phase.** `integrationFor` answers `undefined` on win32 on purpose,
+    so a Windows terminal is exactly as it was; PowerShell `-NoExit -Command` and cmd `/K` would work the
+    same way, and writing them unverified would be claiming X4 closed on a plausible argument, which is the
+    thing this goal's rule is against. It needs a Windows session.
+- **The seven journeys are run and recorded**, which is the acceptance clause about the complaint rather
+  than the findings: all seven pass, with screenshots checked by eye
+  ([the record](../references/evidence/terminal-ownership.md#the-seven-journeys-checked-by-eye--2026-11-07)).
+  **F14 had no row in either table** — it lived in the review's prose and in decision 3 only, while Phase A
+  closes on it — so it now has one in both. The earlier claim that every finding had a row was true of the
+  rows that existed.
+- **Two things found while validating, neither this goal's to fix, both named rather than absorbed:**
+  - `@apackdev/cli`'s `compiler-native-runtime.native.spec.ts > builds and archives a real pack under the
+    captured Electron runtime` fails with `AbortError: The operation was aborted`, caused by
+    `TimeoutError`, after 72s. **Pre-existing** — the file was last touched 2026-10-21 by `2f7566291b`
+    ("share captured compiler installations in a machine-wide store"), before this goal — and
+    **deterministic rather than contention**: it reproduces alone, in the same 72s, with the other six
+    cases in the file skipped. It is the one thing standing
+    between here and a green full chain, and the repo's rules say to report it rather than raise a deadline
+    or narrow its input.
+  - `default-setup/tests/features/code/be/default-directory.spec.ts > closes real Git watchers when the Code
+    actor stops` is load-flaky: 5–9s run alone, 55s and failing under the full pool. A live-watcher case in
+    the fast half. Unrelated to the terminal.
 - **The evidence table is complete**: every one of the review's findings has a row, which is what the goal
   made it the completion criterion for. Writing the last nineteen is what found the two below.
 - **A guard can stop having a subject without failing**, and this goal did it to itself. S1 stripped the
@@ -459,10 +480,10 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   its command started. The lock in the volume was from 11:11 that morning. `linux-runner.ts` already clears
   two other orphan classes under its volume lease, with the reasoning written out — the chain's own, which
   its sync phase creates, was the one left out.
-- **Next action: settle the fork above, then Phase A.** What is left of Phase B needs Windows and a Mac cannot give it:
-  **X1, X2 and ConPTY's resize and exit**, which the goal already says are claimed on a Windows run or not
-  at all. `command-group`'s API is retired so that change is a wiring job rather than a question. **X1, X2 and ConPTY need a Windows run** and
-  cannot be claimed here, which the goal already says. Then Phases P and A.
+- **Next action: the fork above, which is the one thing a session cannot decide for itself.** Everything
+  else that is left needs Windows: **X4** (Phase A's half), and **X1, X2 and ConPTY's resize and exit**
+  (Phase B's), all of which the goal says are claimed on a Windows run or not at all. `command-group`'s API
+  is retired, so that part is a wiring job rather than a question. Phase P is untouched.
 - **What Phase S deliberately does not have yet**, and should not before Phase B: a second client, bounded
   history and backpressure, reattach, and `command-group` in the spawn path — the probe proved the API, and
   `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` needs a Windows run. One connection's sessions live as long as the

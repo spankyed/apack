@@ -435,7 +435,7 @@ npm run test:explorer                 # Playwright's UI mode: its test explorer,
                                       # orthogonal, and `--debug` is a third thing (the Inspector)
 ```
 
-This suite takes no screenshots — looking at the app is `drive/`'s job, and `npm run dev:drive` saves to `drive/screenshots/`. The `app` fixture provides `navigate(surfaceId)`, `screenshot(name)`, `sendEvent(event)`, `getState()`, `getContext()`, `waitForState(check)`, and `waitForSurface(surfaceId)`.
+This suite takes no screenshots — looking at the app is `drive/`'s job, and `npm run dev:drive` saves to `.apack/drive/screenshots/`, its reports to `.apack/drive/results/`. The `app` fixture provides `navigate(surfaceId)`, `screenshot(name)`, `sendEvent(event)`, `getState()`, `getContext()`, `waitForState(check)`, and `waitForSurface(surfaceId)`.
 
 The fixture is `@apackdev/testing` (`packages/apack-testing/src/index.ts`), which every spec imports directly, as a pack's own do. It launches Electron, finds the main window via `window.applicationState`, bypasses onboarding, and provides the `AppDriver` API. External packs share the same fixture — `apack pack init-tests` scaffolds tests in a pack repo, then `apack pack test` runs them in a local checkout (`--app`) or a downloaded apack Beta (`--channel beta`). Set `PACK_DIR=/path/to/pack` to sync/build a pack and wait for its surfaces.
 

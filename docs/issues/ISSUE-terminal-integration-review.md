@@ -135,6 +135,7 @@ rather than set by hand here, so the two cannot disagree about what is done.
 | **G6** | Medium | `handle.close()` is awaited without a timeout; a held stdio pipe pins the thread `isRunning` | `claude-code/query.ts:244-248` |
 | **S4** | Medium | `openLink` and the in-app tab path apply no scheme filter; only the external branch does | `apack-sdk/src/fe/navigation.ts:32-35` |
 | **F13** ✔ | Low | The shell allow-list is inert on the default path | `be/services/terminal.ts:276` |
+| **F14** ✔ | Medium | Shell integration is typed into the running shell, and its default has only ever been written `false` | `be/services/terminal.ts:334-344`, `apack.json` `features.code.settings` |
 | **F15** ✔ | Low | Focus is stolen on every attach | `TerminalView.vue:202`, `PanelTerminalSection.vue:316` |
 | **F16** ✔ | Low | Unhandled clipboard promise rejections | `terminal-pool.ts:194,200` |
 | **F17** | Low | Module-scope `document` listener is never removed | `terminal-pool.ts:355` |

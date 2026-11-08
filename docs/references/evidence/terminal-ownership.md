@@ -83,7 +83,8 @@ removes the finding rather than fixing it, and names the construction that does.
 | G7 | open | not attempted | — | — | unbounded stderr per streaming agent child; `runner.ts` moves on #372, as G2 does |
 | S4 | open | not attempted | — | — | `openLink`'s scheme filter is the SDK's navigation, and the review's own negative results record that the terminal cannot reach it: xterm's link addon matches `https?` only and the external branch already filters. It is in this document because it was found here, not because this feature can trigger it |
 | X1, X2 | dissolved, **claimed on a Windows run** | `apack-terminal/src/tree.rs` — a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` held for the session's lifetime, so the kill *is* the close and a `kill`, a disconnect and a broker that crashes all reap the tree by one mechanism | `apack-terminal/tests/broker.rs` "killing a session takes the whole tree with it", run on the Windows VM 2026-11-07 | **reproduced before it was fixed** — *the grandchild 2944 outlived the session it belonged to* — and mutation-checked there: holding no job puts the case straight back. `command-group`, retired in this repo for exactly this moment, turned out not to apply and is deleted: it wraps `std::process::Command` and `portable-pty` spawns the child itself, so the job is assigned to the pid afterwards | — |
-| X4 | open | not attempted | — | — | Windows: shell integration is inert even when enabled. D3's launch-time injection is what turns this from a dead end into a supported platform, and it is Phase A's |
+| F14 | test | shell integration is arranged when the shell starts, not typed into it afterwards (`be/services/shell-integration.ts`: bash `--init-file`, zsh `ZDOTDIR`, fish `XDG_DATA_DIRS`, each sourcing the user's own configuration first), and **the default is now on** (`apack.json` `features.code.settings`) | `default-setup/tests/features/code/be/services/shell-integration.spec.ts`, six cases; driven: a terminal told to `cd /tmp` reports `/tmp` and retitles itself (`.apack/drive/results/terminal-journeys.json`, `followedCd`) | the drive run is the guard that matters, because the unit cases pass whatever the default says: before the flip the same run answered `/Users/spankyed` for both `cwdBeforeCd` and `followedCd`, which is what *never ran for anybody* looks like from outside. Mutation-checked three ways | X4 is the Windows half and stays open |
+| X4 | open | not attempted | — | — | Windows: shell integration is inert even when enabled. **D3 has landed and this is now the only thing standing between Windows and the capability**: `integrationFor` answers `undefined` on win32 on purpose, so a Windows terminal is exactly as it was. What it needs is PowerShell `-NoExit -Command` and cmd `/K` written and **run on Windows** — the mechanism is proven on POSIX and the goal admits a Windows claim only on the strength of a Windows run |
 | X5 | dissolved | `be/utils/osc-cwd.ts` — one reader for all three sequences, which strips the slash a `file://` URL puts before a drive letter and spells the result the path's own way | `default-setup/tests/features/code/be/utils/osc-cwd.spec.ts`, six cases | **the guard**, and it needs no Windows machine: the path's own shape says what it is, so a case asserts `/C:/work` reads as `C:\work` while running on a Mac. Mutation-checked — keeping the leading slash fails two. With the restore path checking its directory (S3) the symptom had only got quieter: the terminal came back in the user's home rather than where they were | — |
 | X6 | dissolved | `TerminalInfo.submit` carries what ends a line for *this* session's shell, computed where the shell is chosen (`submitFor`), and both run-script paths use it | `default-setup/tests/features/code/be/services/known-shells.spec.ts` "what submits a line"; `apack-terminal/tests/broker.rs`'s keystroke case requires the text **twice**, once echoed and once from the command that ran | **measured rather than asserted**, on Windows 2026-11-07: `\n` is echoed and never runs, `\r` alone does not get that far, `\r\n` both echoes and runs. That is also how the broker's keystroke case was found to be passing on the echo alone. A window cannot know which shell is on the other end, which is why this is on the descriptor rather than in the window | — |
 | X7, X8 | dissolved | `fe/utils/terminal-name.ts` — one function where there were two copies, splitting on either separator and naming a drive root by its drive | `default-setup/tests/features/code/fe/utils/terminal-name.spec.ts`, six cases | **the guard**: `C:\Users\someone\project` must name `project` and `C:\` must name `C:`, neither of which needs Windows to assert. Mutation-checked — splitting on `/` alone fails. The two copies were already drifting, one saying `terminal.title` where the other said `terminalInfo.title` | — |
@@ -399,6 +400,78 @@ replays, because nothing keeps a copy to replay from. The common case is unaffec
 the pool keeps the emulator alive across a host's teardown, so a reattach with 256 KiB of history is 5.55 ms
 and sends no bytes. Serving history to a new emulator is the broker's bounded history, which is where one
 copy belongs and which Phase B has not built.
+
+### Phase A: facts out of the VT core — 2026-11-07
+
+**What a session reports about itself, answered without a window.** The markers D3 arranges are now read
+where the screen is (`apack-terminal/src/markers.rs`, at `4623a2a`), and three reads answer over the
+protocol: `facts` (working directory, command line, whether one is running, the status the last one ended
+with), `search` and `wait` (until idle, until text appears, until the process ends).
+
+- **The scanner is its own pass, because the grid drops what it is reading.** `alacritty_terminal`
+  implements the OSC codes a terminal acts on — a title, a colour, the clipboard — and ignores the rest,
+  which is correct: a sequence it has no behaviour for must not disturb the screen. Shell integration *is*
+  those ignored sequences, so they are taken from the same bytes before the grid sees them, and the stream
+  reaches the grid untouched.
+- **OSC 633**, VS Code's set, as Phase A requires: its rc scripts are readable, other tools emit it, and
+  inventing sequences buys nothing and loses interop. OSC 7 and iTerm2's 1337 are read too, for a user whose
+  own configuration already emits one.
+- **Nothing polls.** A wait's condition is checked where the bytes land, so a caller pays a condition check
+  per read rather than a request per tick. A session ending settles every wait on it, since nothing is
+  coming; three things race to end one and a `settled` flag makes the answer exactly one.
+- **Driven through a real socket in the real binary**: `apack-terminal/tests/broker.rs` has five cases for
+  this, including a hidden session answering facts the shell stated, a search over its history, a wait that
+  is answered when the command finishes, one that reaches its deadline, and a session ending settling both
+  kinds at once. `tests/markers.rs` feeds every stream at every byte boundary and demands the same markers.
+
+**`services.terminal` exposes none of it, deliberately.** The consumer Phase A is designed against — #372's
+native adapter — is on another branch, and an export with no caller is one nobody has had to make answer a
+real question. The capability is proven where it lives.
+
+**A reported path is a claim, not a measurement.** The sequence is written by whatever is in the pty, which
+need not be the shell and need not be honest, so `cwdFromOsc` refuses a claim longer than Linux's
+`PATH_MAX` — the largest of the three platforms' ordinary limits, so nothing a shell can legitimately sit in
+is refused — and refuses one carrying a control character rather than stripping it: stripping changes which
+directory a path names, and refusing leaves the terminal where it was, which is the failure that loses
+nothing. Decoding no longer throws either; a program emitting `%zz` from a prompt hook had the app log an
+error on every prompt.
+
+**One mutation did not fire, and the line it did not reach is gone.** A payload clear in the scanner's
+overrun state was unreachable — entering that state already clears — and it was papering over the real
+flaw, which was that an escape that turned out not to terminate put the scanner back to *collecting* the
+tail of a string it had given up on. That is its own state now, and the mutation fires.
+
+### The seven journeys, checked by eye — 2026-11-07
+
+The goal asks for the complaint to be answered and not only the findings: *"super buggy in general,
+especially in the FE UX"*. All seven named journeys run, as `drive/terminal-journeys.ts`
+(`npm run dev:drive -- --fresh --rm drive/terminal-journeys.ts`); screenshots in
+`.apack/drive/screenshots/journey-*.png`, observations in `.apack/drive/results/terminal-journeys.json`.
+`drive/` is scratch by design — three files tracked, nothing gates on a driving script — so this record is
+the durable half.
+
+| the journey | what it showed |
+|---|---|
+| open a terminal and run a build | 40 lines of build output, drawn |
+| scroll back during output | the viewport stayed where it was put while 4,000 lines arrived |
+| drag the divider mid-command | the pane resized while a loop kept printing; the command was still running after |
+| switch tabs and come back | the surface's `activeFilePath` moved and came back, the shell behind the tab still ran a command, and the screenshot shows `marker-before-switching` still in the scrollback — the xterm was kept, not rebuilt |
+| run `vim`, quit it, keep working | vim drew its empty-buffer column, `:q!` gave the shell back, and the shell ran a command afterwards |
+| kill a terminal with a child process running | `childrenLeftRunning: []` — the child's pid is gone, asked of the OS rather than of the app |
+| restart the app and find the terminal where it was | `buildTerminalSurvivedReload: true` |
+
+Beside them: the shell inherits nothing of the app's identity (`shellInheritedNothingOfTheApps`), a terminal
+follows `cd` (`followedCd`), and the app's log holds no terminal or broker error for the whole run
+(`terminalErrors: []`).
+
+**What the screen is, is not assertable from the page, and that is a fact about the app.** xterm draws to
+three canvases and leaves no text in the DOM — probed 2026-11-07, `.xterm-rows` is absent and
+`document.body.textContent` never carries a terminal's output. So a journey's screen is checked by eye from
+its screenshot, and what a script can assert is the surface's own state and what the shell *did* — which
+these ask by having it write a file and reading that file from outside the terminal. It is also D9's premise
+shown rather than argued: the renderer's copy is pixels, so the authority has to be the broker's parse. A
+first attempt asserted on `.xterm-rows` and reported five confident `false`s, which is exactly the shape
+*"a check that reports nothing may have looked at nothing"* warns about.
 
 ### Baseline (Phase G) — superseded
 
