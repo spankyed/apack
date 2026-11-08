@@ -67,7 +67,41 @@ export function socketPath(platform: NodeJS.Platform = process.platform, dataDir
  * It refuses rather than guessing, naming both the variable and the build, because a missing broker is a
  * setup mistake with an exact remedy and a silent fallback to `node-pty` is the thing this phase removes.
  */
-function brokerBinary(packagesDir = process.env.SHIPPED_PACKS_DIR): string {
+/**
+ * Where a built broker would be, without asking whether it is there.
+ *
+ * **Separate from the lookup because the name is the part worth checking.** `cargo` writes
+ * `apack-terminal` on POSIX and `apack-terminal.exe` on Windows, and looking for the extensionless name
+ * there finds nothing — so a caller is told to run `cargo build` in a checkout where it has already been
+ * run, and the terminal never starts. That is what Windows did until an end-to-end run on 2026-11-08.
+ * A function that throws unless the file exists cannot be asked what it was looking for.
+ */
+export function brokerBinaryPath(
+  packagesDir = process.env.SHIPPED_PACKS_DIR,
+  platform: NodeJS.Platform = process.platform,
+): string | undefined {
+  // The checkout is found from `SHIPPED_PACKS_DIR`, which names `packages/`, so its parent is the root
+  return packagesDir
+    ? path.join(path.dirname(packagesDir), 'vendor', 'apack-terminal', 'target', 'debug',
+      platform === 'win32' ? 'apack-terminal.exe' : 'apack-terminal')
+    : undefined;
+}
+
+/**
+ * The broker's binary, refusing when there is none.
+ *
+ * `cargo` writes `apack-terminal` on POSIX and `apack-terminal.exe` on Windows. Looking for the
+ * extensionless name there finds nothing, and what the caller gets is this function's own refusal saying
+ * to run `cargo build` — in a checkout where `cargo build` has already been run. The terminal then never
+ * starts at all, which is what it did on Windows until an end-to-end run on 2026-11-08.
+ *
+ * `platform` is an argument for the reason `socketPath`'s is: the answer is about the file's name, not
+ * about where this code happens to be running, so a case can say so from either.
+ */
+export function brokerBinary(
+  packagesDir = process.env.SHIPPED_PACKS_DIR,
+  platform: NodeJS.Platform = process.platform,
+): string {
   const named = process.env.APACK_TERMINAL_BINARY;
   if (named) {
     if (existsSync(named)) return named;
@@ -80,10 +114,7 @@ function brokerBinary(packagesDir = process.env.SHIPPED_PACKS_DIR): string {
   // Taken as an argument so that a caller which knows where `packages/` is can say so: the API has it in
   // its environment, and Electron main computes it to *give* the API, so main would otherwise be reading a
   // variable it sets for somebody else
-  const packages = packagesDir;
-  const built = packages
-    ? path.join(path.dirname(packages), 'vendor', 'apack-terminal', 'target', 'debug', 'apack-terminal')
-    : undefined;
+  const built = brokerBinaryPath(packagesDir, platform);
   if (built && existsSync(built)) return built;
   throw new Error(
     `No terminal broker: set APACK_TERMINAL_BINARY, or run \`cargo build\` in the apack-terminal checkout `

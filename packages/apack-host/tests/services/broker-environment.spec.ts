@@ -11,7 +11,8 @@
 // ten again.
 import { describe, expect, it } from 'vitest';
 import { APP_PROCESS_ENV_VARS } from '@apackdev/sdk/env';
-import { brokerEnvironment, socketPath } from '../../src/services/terminal.ts';
+import * as path from 'node:path';
+import { brokerBinaryPath, brokerEnvironment, socketPath } from '../../src/services/terminal.ts';
 
 /** Every variable the app sets on the API's process, as if this were that process */
 const asTheApiProcess = (): NodeJS.ProcessEnv => ({
@@ -108,3 +109,30 @@ describe('where the broker listens', () => {
     expect(socketPath('darwin', DATA_DIR)).not.toBe(socketPath('darwin', `${DATA_DIR}-other`));
   });
 });
+
+/**
+ * **What `cargo` calls the binary is not the same on every platform**, and looking for the wrong name
+ * there finds nothing — so the caller is told to run `cargo build` in a checkout where it has been run,
+ * and the terminal never starts. That is what Windows did until an end-to-end run found it; from a Mac
+ * every case passed, because on a Mac the name is right.
+ */
+describe('where the broker binary is', () => {
+  const packages = path.join('C:', 'src', 'apack', 'packages');
+
+  it('looks for an .exe on Windows', () => {
+    expect(brokerBinaryPath(packages, 'win32')?.endsWith('apack-terminal.exe')).toBe(true);
+  });
+
+  it('looks for the extensionless name everywhere else', () => {
+    for (const platform of ['darwin', 'linux'] as const) {
+      const found = brokerBinaryPath('/home/me/apack/packages', platform) ?? '';
+      expect(found.endsWith('apack-terminal'), platform).toBe(true);
+      expect(found.endsWith('.exe'), platform).toBe(false);
+    }
+  });
+
+  it('finds it beside the checkout the packages directory names', () => {
+    expect(brokerBinaryPath('/home/me/apack/packages', 'linux'))
+      .toBe('/home/me/apack/vendor/apack-terminal/target/debug/apack-terminal');
+  });
+})
