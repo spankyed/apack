@@ -38,6 +38,14 @@ const BARE_WAIT_BY_DESIGN: Record<string, string> = {
   'packages/apack-cli/tests/build/watch-package-edit.native.spec.ts > publishes one build when a refresh rewrites what the pack builds against':
     'the subject is a second build that must not start, so there is no event to await; load can only cause a false '
     + 'pass here, never a false failure',
+  'packages/apack-host/tests/broker/lifetime.spec.ts > keeps a session when its client leaves and an owner holds the broker':
+    'the subject is a session that must *not* end, and attach is absent from the broker client, so a second '
+    + 'client cannot ask about a session it did not open and there is no event that says "still here". Load '
+    + 'can only make this pass falsely, never fail falsely',
+  'packages/apack-host/tests/broker/lifetime.spec.ts > reaped':
+    'the case it serves closes the only client, so no connection remains for an event to arrive on and the '
+    + "OS is the only witness left. Its sibling, where a client is still connected, awaits the broker's own "
+    + '`onExit` instead',
   'packages/apack-host/tests/bus/reply.spec.ts > after':
     "a delay inside the handler under test — a backend system's work is I/O, so it awaits before it answers, "
     + 'which is what makes the delivery scope load-bearing. The cases await the answer',

@@ -10,6 +10,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
+import { _whenSatisfied } from '@apackdev/sdk/testing/waiting';
 import { holdBrokerSessions, startBroker, type Broker } from '../../src/broker/client.ts';
 
 const BINARY = path.join(REPO_ROOT, 'vendor', 'apack-terminal', 'target', 'debug', 'apack-terminal');
@@ -54,6 +55,11 @@ describe.skipIf(!fs.existsSync(BINARY))('who ends a session', () => {
 
     const session = await client.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
     await client.close();
+
+    // **Nothing to await, so the wait is bare and listed as such.** The subject is a session that must
+    // *not* end, and attach is deliberately absent from this client — a second one cannot ask about a
+    // session it did not open — so there is no event that says "still here". Load can only make this pass
+    // falsely, never fail falsely, which is the shape `BARE_WAIT_BY_DESIGN` is for.
     await new Promise(settle => setTimeout(settle, 500));
 
     expect(alive(session.pid), 'the shell outlived the client that opened it').toBe(true);
@@ -67,11 +73,26 @@ describe.skipIf(!fs.existsSync(BINARY))('who ends a session', () => {
     const at = socket();
     const hold = await holdBrokerSessions({ binary: BINARY, socket: at });
     const client = held(await startBroker({ binary: BINARY, socket: at })) as Broker;
-    const session = await client.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
+    let ended: number | null | undefined;
+    let notify = () => {};
+    const session = await client.open(
+      { cols: 80, rows: 24 },
+      { onOutput() {}, onExit(code) { ended = code; notify(); } },
+    );
 
     hold.close();
 
-    expect(await reaped(session.pid), 'the shell outlived the app that owned it').toBe(true);
+    // The client is still connected, so the session ending is an event it hears — await that rather than
+    // the OS forgetting a pid, which is the same fact arriving later and through a worse witness
+    await _whenSatisfied(
+      (tell) => { notify = tell; return () => { notify = () => {}; }; },
+      () => (ended !== undefined ? { ended } : undefined),
+      'the session to end when its owner let go',
+      10_000,
+    );
+
+    expect(ended, 'the broker reported the session ending').not.toBeUndefined();
+    expect(alive(session.pid), 'the shell outlived the app that owned it').toBe(false);
   });
 
   /**
