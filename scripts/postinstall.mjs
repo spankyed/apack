@@ -5,21 +5,26 @@ const require = createRequire(import.meta.url)
 /**
  * How many times the Electron binary is asked for, and how long between asks.
  *
- * **The shape is `@electron/get`'s own**, which retries a cache write three times at a flat two seconds —
- * and this repo's `writePrivateFile`, which retries a rename on three named Windows errors. Both name the
- * transient condition and rethrow everything else. **This cannot**: `electron/index.js` spawns `install.js`
- * with inherited stdio and throws one fixed message whatever happened, so the `504` that prompted this never
- * reaches the `catch`. A 404 for a yanked version arrives identically. That is the whole reason the count is
- * small and the wait flat: an unnameable condition earns one more ask, not a schedule.
+ * **Sized from what the outage actually did, not from a guess about gateways.** On 2026-11-08 a `504` for
+ * `electron-v44.9.3-darwin-arm64.zip` failed a strict job twice, five minutes apart, and `curl` answered 504
+ * in 83ms from a developer's machine — then the artifact returned `200` about **three minutes** later. So the
+ * refusal was neither instant-clearing nor permanent, and a schedule measured in seconds cannot survive one:
+ * an earlier revision of this file waited 18s in total and would have failed today exactly as it did.
  *
- * **And it is the smaller half of the fix.** The cache in `ci.yml` and `strict-chain.yml` is what the
- * ecosystem actually does and what the evidence supports: on 2026-11-08 a sustained `504` for this artifact
- * failed the same job twice, five minutes apart, and `curl` answered 504 in 83ms from a developer's machine
- * — an outage no retry survives. This covers the single refusal that clears, which is cheap to cover and has
- * not been observed here.
+ * **The shape is what projects hitting this converge on**: run Electron's own installer again, a handful of
+ * times, with a growing pause spanning minutes — `electron/install.js` is idempotent, so asking again is the
+ * whole mechanism. 20s doubling to 80s is ~3m20s of patience, which covers the one outage this repo has
+ * measured with room over it.
+ *
+ * **It is still the smaller half.** The cache in `ci.yml` and `strict-chain.yml` is what the ecosystem does
+ * first and what a warm run needs none of this for. And the condition cannot be named — `electron/index.js`
+ * spawns `install.js` with inherited stdio and throws one fixed message whatever happened, so a 404 for a
+ * yanked version is indistinguishable from a 504 here. That is the cost of the patience: a genuinely absent
+ * version takes the full schedule to report. Jobs that never launch Electron should not pay it at all, which
+ * is what `ELECTRON_SKIP_BINARY_DOWNLOAD` is for and is not wired up here.
  */
-const ASKS = 2
-const WAIT_MS = 2_000
+const ASKS = 5
+const FIRST_WAIT_MS = 20_000
 
 /**
  * Electron fetches its binary the first time its path is resolved, not at install. Resolve it here, once, so
@@ -44,9 +49,10 @@ if (installed) {
         console.error(`[postinstall] Electron's binary did not arrive in ${ASKS} asks; this is the last error`)
         throw error
       }
+      const wait = FIRST_WAIT_MS * ask
       console.warn(`[postinstall] Electron's binary did not arrive (ask ${ask} of ${ASKS}): ${error instanceof Error ? error.message : String(error)}`)
-      console.warn(`[postinstall] asking again in ${WAIT_MS}ms`)
-      await new Promise(settle => setTimeout(settle, WAIT_MS))
+      console.warn(`[postinstall] asking again in ${Math.round(wait / 1000)}s`)
+      await new Promise(settle => setTimeout(settle, wait))
     }
   }
 }
