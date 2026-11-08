@@ -74,6 +74,9 @@ function esbuildFixture() {
 }
 
 it('executes its owned runtime and refuses a damaged, aliased or missing copy', async () => {
+  // Its own store, since it damages the entry: the run's shared one holds the same runtime every other capture runs,
+  // and Linux refuses the write (ETXTBSY) while a worker from an earlier file is still running it
+  temporaryStore();
   const compiler = fixture();
   const installation = await compiler.capture();
   expect(installation.executable).not.toBe(fs.realpathSync(process.execPath));
@@ -134,6 +137,8 @@ it('owns a relative external esbuild executable and detects changed selection an
 });
 
 it('detects damage to its captured external esbuild executable', async () => {
+  // Its own store, for the same reason as the runtime's damage case: the entry it damages is otherwise shared
+  temporaryStore();
   const compiler = esbuildFixture();
   fs.writeFileSync(compiler.file, compiler.bytes, { mode: 0o755 });
   const first = await compiler.capture();
