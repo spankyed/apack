@@ -60,6 +60,7 @@ export function pollWhileWorking<T>(probe: () => T | undefined, input: {
 
 // @public
 export interface ProcessRow {
+    readonly createdAt?: number;
     // (undocumented)
     readonly ms: number;
     // (undocumented)
@@ -99,6 +100,9 @@ export function threadWork(worker: object): WorkReading;
 
 // @public
 export function treeCpuMs(listing: string, leader: number): Map<number, number>;
+
+// @public
+export function treeCpuMsFrom(rows: readonly ProcessRow[], leader: number): Map<number, number>;
 
 // @public
 export interface Watch {

@@ -1,6 +1,6 @@
 import { Worker } from 'node:worker_threads';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { answerWhileWorking, cpuAdded, createStallTracker, describeRefusal, execFileWhileWorking, fromNow, parseCpuTime, processWork, threadWork, treeCpuMs, watchWork, win32Rows, type Refusal } from '../../src/progress.ts';
+import { answerWhileWorking, cpuAdded, createStallTracker, describeRefusal, execFileWhileWorking, fromNow, parseCpuTime, processWork, threadWork, treeCpuMs, treeCpuMsFrom, watchWork, win32Rows, type Refusal } from '../../src/progress.ts';
 
 /** A reading that adds `step` milliseconds of work each time it is taken */
 const working = (step: number) => { let total = 0; return async () => (total += step); };
@@ -149,10 +149,20 @@ describe('reading a process tree for the watchdog', () => {
 
   it("reads Windows's listing, in 100ns units, skipping a process with no CPU to report", () => {
     // PowerShell's lines end in CRLF, and the System Idle Process reports an empty sum
-    expect(win32Rows('100 4 12500000\r\n101 100 30000\r\n0 0 \r\n')).toEqual([
-      { pid: 100, ppid: 4, pgid: 100, ms: 1_250 },
-      { pid: 101, ppid: 100, pgid: 101, ms: 3 },
+    expect(win32Rows('100 4 12500000 900\r\n101 100 30000 950\r\n0 0  0\r\n')).toEqual([
+      { pid: 100, ppid: 4, pgid: 100, ms: 1_250, createdAt: 900 },
+      { pid: 101, ppid: 100, pgid: 101, ms: 3, createdAt: 950 },
     ]);
+  });
+
+  /**
+   * Windows keeps a process's parent id after its parent exits, and reuses ids: a service started by some long-gone
+   * process 100 names 100 as its parent, and once this tree's leader is a new 100 it would read as a child, adding a
+   * stranger's lifetime of CPU at once. A process older than the one its parent id names is not its child.
+   */
+  it('counts no process its parent could not have started', () => {
+    const rows = win32Rows('100 4 10000000 5000\r\n101 100 20000000 6000\r\n200 100 9990000000 1000\r\n');
+    expect(treeCpuMsFrom(rows, 100)).toEqual(new Map([[100, 1_000], [101, 2_000]]));
   });
 
   it('counts what each process added, a new one whole and one that exited as nothing', () => {
