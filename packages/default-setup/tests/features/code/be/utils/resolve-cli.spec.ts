@@ -4,8 +4,8 @@ import { describe, expect, it, vi } from 'vitest'
 
 const execFileMock = vi.hoisted(() => vi.fn())
 
-vi.mock('child_process', () => ({
-  execFile: execFileMock,
+vi.mock('@apackdev/sdk/progress', () => ({
+  execFileWhileWorking: execFileMock,
 }))
 
 vi.mock('fs', () => ({
@@ -25,9 +25,7 @@ describe('resolveCliPath', () => {
     ['gh', 'gh'],
   ] as const)('falls back to the %s executable name', async (provider, executable) => {
     vi.resetModules()
-    execFileMock.mockImplementation((_cmd, _args, _opts, callback) => {
-      callback(Object.assign(new Error('not found'), { code: 'ENOENT' }))
-    })
+    execFileMock.mockRejectedValue(Object.assign(new Error('not found'), { code: 'ENOENT' }))
 
     const { resolveCliPath } = await import('#features/code/be/utils/resolve-cli.ts')
 

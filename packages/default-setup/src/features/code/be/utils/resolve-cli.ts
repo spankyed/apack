@@ -2,13 +2,11 @@ import { featureSettings } from '#generated/settings.ts';
 // Finds the CLIs the code feature runs (Claude Code, Codex, Copilot, gh): a path the user set in the code
 // surface's settings (`cliPaths`), known install locations, then PATH.
 
-import { execFile } from 'child_process'
-import { promisify } from 'util'
+import { execFileWhileWorking } from '@apackdev/sdk/progress'
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 
-const execFileAsync = promisify(execFile)
 
 export type CliName = 'copilot' | 'claude-code' | 'codex' | 'gh'
 
@@ -95,7 +93,8 @@ async function isExecutable(cmd: string): Promise<boolean> {
   }
 
   try {
-    await execFileAsync(cmd, ['--version'], { timeout: 2000 })
+    // `timeout` is CPU: a `--version` that is slow only because the machine is busy still answers
+    await execFileWhileWorking(cmd, ['--version'], { timeout: 2000 })
     return true
   } catch {
     return false
@@ -138,7 +137,7 @@ export async function resolveCliPath(
     }
   }
 
-  // 3. Slow check: bare command via PATH (execFile with 2s timeout)
+  // 3. Slow check: bare command via PATH (`--version`, at most 2s of CPU)
   const bareCmd = effective && !path.isAbsolute(effective) ? effective : CLI_COMMANDS[cli]
   if (await isExecutable(bareCmd)) {
     resolvedCache.set(cacheKey, bareCmd)
@@ -170,7 +169,7 @@ export async function testCli(
   clearCliPathCache()
   try {
     const resolved = await resolveCliPath(cli, storedPath)
-    await execFileAsync(resolved, ['--version'], { timeout: 10000 })
+    await execFileWhileWorking(resolved, ['--version'], { timeout: 10000 })
     return { success: true, resolvedPath: resolved }
   } catch (err: any) {
     return { success: false, error: err.message || 'Command failed' }

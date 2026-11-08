@@ -11,6 +11,7 @@
 import { spawn, type ChildProcess } from 'child_process'
 import { createInterface, type Interface } from 'readline'
 import { createLogger } from '@apackdev/sdk/logger'
+import { answerWhileWorking, processWork } from '@apackdev/sdk/progress'
 import { resolveForService } from '../../utils/resolve-cli.ts'
 import type {
   ServerStatus,
@@ -34,7 +35,8 @@ const logger = createLogger('codex-app-server')
 interface PendingRequest {
   resolve: (result: any) => void
   reject: (error: Error) => void
-  timeout: ReturnType<typeof setTimeout>
+  /** A request's own deadline, which the handshake has none of: it is bounded by the server's progress */
+  timeout?: ReturnType<typeof setTimeout>
 }
 
 // ─── App-Server Client ──────────────────────────────────────────────────────
@@ -50,7 +52,6 @@ export class CodexAppServer {
   private _stopping = false
   private _initResolve: ((result: any) => void) | null = null
   private _initReject: ((err: Error) => void) | null = null
-  private _initTimeout: ReturnType<typeof setTimeout> | null = null
 
   get status(): ServerStatus { return this._status }
   get error(): string | undefined { return this._error }
@@ -133,8 +134,15 @@ export class CodexAppServer {
       }
     })
 
-    // Initialize handshake
-    await this._initialize()
+    // The handshake waits for as long as the server is working to answer it, and no longer than it goes without
+    const pid = this.process.pid
+    const handshake = this._initialize()
+    try {
+      await (pid === undefined ? handshake : answerWhileWorking(handshake, { work: processWork(pid), what: 'The codex app-server' }))
+    } catch (error) {
+      await this.stop()
+      throw error
+    }
   }
 
   async stop(): Promise<void> {
@@ -317,27 +325,17 @@ export class CodexAppServer {
   private async _initialize(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       this._initResolve = () => {
-        if (this._initTimeout) clearTimeout(this._initTimeout)
         this._initResolve = null
         this._initReject = null
-        this._initTimeout = null
         this._status = 'ready'
         logger.info('App-server ready')
         resolve()
       }
       this._initReject = (err) => {
-        if (this._initTimeout) clearTimeout(this._initTimeout)
         this._initResolve = null
         this._initReject = null
-        this._initTimeout = null
         reject(err)
       }
-      this._initTimeout = setTimeout(() => {
-        if (this._initReject) {
-          this._initReject(new Error('App-server initialization timed out (15s)'))
-        }
-        this.stop()
-      }, 15_000)
 
       // Send initialize request
       const id = this._nextId()
@@ -350,10 +348,6 @@ export class CodexAppServer {
         reject: (err: Error) => {
           this._initReject?.(err)
         },
-        timeout: setTimeout(() => {
-          this.pending.delete(id)
-          this._initReject?.(new Error('Initialize request timed out'))
-        }, 15_000),
       })
 
       this._write({

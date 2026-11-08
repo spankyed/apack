@@ -601,7 +601,6 @@ const CLOCKS_NOT_CONVERTED_YET: Record<string, number> = {
   'packages/apack-cli/src/build/content-runtime-check.ts': 1,
   'packages/apack-testing/src/engine/index.ts': 1,
   'packages/apack-testing/src/index.ts': 5,
-  'packages/default-setup/src/features/code/be/utils/resolve-cli.ts': 2,
 };
 
 /**
@@ -943,7 +942,7 @@ const RULE_LIST = [
     id: 'findClockedDeadlinesInSource',
     repoOnly: { kind: 'inapplicable', note: "Its subject is this repo's packages and their backlog of clocks; a pack's own waits are its author's" },
     find: findClockedDeadlinesInSource,
-    rule: 'Bound work by its progress, not the clock: execFileWhileWorking, answerWhileWorking or workSignal (@apackdev/host/build/process-progress). A wait that is not on work a busy machine slows (network, a kill grace) goes in CLOCK_BY_DESIGN with why',
+    rule: 'Bound work by its progress, not the clock: execFileWhileWorking, answerWhileWorking or workSignal (@apackdev/sdk/progress). A wait that is not on work a busy machine slows (network, a kill grace) goes in CLOCK_BY_DESIGN with why',
   },
   {
     id: 'findCompilerRunsInFastSpecs',
