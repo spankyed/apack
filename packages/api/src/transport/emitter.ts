@@ -73,8 +73,10 @@ class RootEventEmitter extends EventEmitter implements RootEvents {
     //
     // **Size and target, never content.** The bus's rule is that no part of a payload reaches a record, and
     // an outgoing terminal event is a screenful of what the user typed and what their shell answered. The
-    // attributes are computed inside `_recordPerformance`'s guard, so an idle app serialises nothing on a
-    // path that runs per streamed token, and `encodeJsonSafely` is what measures it because it cannot throw
+    // attributes are a thunk the recording implementation calls only while it is recording, so an app that
+    // is not serialises nothing on a path that runs per streamed token — a *bound* execution is not a
+    // recording one, and development and test bind one always. `encodeJsonSafely` measures it because it
+    // cannot throw
     // — a size that failed to compute must not take the message with it.
     _recordPerformance('app.surface.send', () => ({
       'app.event': message.event.type,

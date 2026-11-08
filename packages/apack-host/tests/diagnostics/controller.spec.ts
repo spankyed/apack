@@ -55,3 +55,23 @@ it('restores browser callback context after return, throw and asynchronous sched
   await manager.with(scope, async () => { await Promise.resolve(); expect(manager.active()).toBe(ROOT_CONTEXT); });
   expect(manager.active()).toBe(ROOT_CONTEXT);
 });
+
+/**
+ * **An attribute costs nothing while nothing records.** `app.surface.send` sizes the message it is about, so
+ * its thunk serialises an event — on a path that runs per streamed token and per terminal frame. A *bound*
+ * execution is not a recording one, and development and test bind one always, so evaluating the thunk at the
+ * call meant every such run paid for a measurement nobody collected.
+ */
+it('calls an observation s attributes only while it is recording', () => {
+  const controller = createPerformanceController(() => new BrowserRecordingContext());
+  const attributes = vi.fn(() => ({ 'app.bytes': 7 }));
+
+  controller.execution.record('app.surface.send', attributes);
+  expect(attributes, 'an idle app computed an attribute it then discarded').not.toHaveBeenCalled();
+
+  controller.start('lightweight');
+  controller.execution.record('app.surface.send', attributes);
+  expect(attributes, 'a recording run must still get its attributes').toHaveBeenCalledTimes(1);
+
+  controller.stop();
+});

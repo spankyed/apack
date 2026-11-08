@@ -210,7 +210,7 @@ export interface PerformanceExecution {
     capture(): PerformanceCarrier;
     // (undocumented)
     carryEvent(event: object, carrier: unknown): void;
-    record(name: string, attributes?: Record<string, string | number | boolean>): void;
+    record(name: string, attributes?: () => Record<string, string | number | boolean>): void;
     // (undocumented)
     withCarrier<T>(carrier: unknown, fn: () => T): T;
     // (undocumented)

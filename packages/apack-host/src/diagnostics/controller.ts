@@ -30,7 +30,12 @@ export function createPerformanceController(contextManager: () => ContextManager
     withEvent: (event, fn) => recording ? recording.withEvent(event, fn) : fn(),
     // An observation with a size rather than a duration is a span that begins and ends at once; the session
     // already bounds, filters and counts these, so there is nothing else for an instant to need.
-    record: (name, attributes) => { recording?.begin(name, attributes)?.end(); },
+    // Asked before the thunk is called, because computing an attribute can cost more than the observation
+    // is worth: `app.surface.send` serialises the message to size it, on a path that runs per streamed token
+    record: (name, attributes) => {
+      if (!recording?.isRecording()) return;
+      recording.begin(name, attributes?.())?.end();
+    },
   };
   return {
     execution,

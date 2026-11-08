@@ -32,7 +32,7 @@ export interface PerformanceExecution {
    * chunk became. **Attributes only, and never a payload**: what is being counted at a send is often an
    * event whose content is a keystroke, and no part of it may reach a record (the bus's rule).
    */
-  record(name: string, attributes?: Record<string, string | number | boolean>): void;
+  record(name: string, attributes?: () => Record<string, string | number | boolean>): void;
 }
 
 /** @internal The currently bound process/window resource, absent when recording is unavailable. */
@@ -45,12 +45,13 @@ export function _performanceExecution(): PerformanceExecution | undefined {
 /**
  * @internal Record an observation when something is recording, and do nothing at all when not.
  *
- * `attributes` is a thunk rather than a value because the callers are hot paths: an idle app must not
- * serialise a message or allocate an object to decide it is not recording.
+ * **The thunk is passed on rather than called here.** The callers are hot paths — one of them serialises the
+ * message to measure it, per streamed token — and whether anything is recording is the implementation's
+ * question, not this function's: a bound execution is not a recording one, so calling it here charged every
+ * development run and every test for a measurement nobody collected.
  */
 export function _recordPerformance(name: string, attributes: () => Record<string, string | number | boolean>): void {
-  const execution = _performanceExecution();
-  if (execution) execution.record(name, attributes());
+  _performanceExecution()?.record(name, attributes);
 }
 
 /** @internal Use an explicit cause when supplied; otherwise capture the current execution. */
