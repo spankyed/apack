@@ -502,7 +502,12 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
     The file was last modified 2026-11-03. **Two different cases fail in two different ways**, which is
     why it reads as one flaky file rather than one bad assertion:
     - *"removes its worker when the public build command is stopped while 'watch is ready'"* times out at
-      120s inside the chain's 2-core container, twice. Run alone on the same machine it passes in 22.5s.
+      120s inside the chain's 2-core container, twice. Run alone in that same container it passes in 22.5s.
+      **It is sitting exactly on its own declared edge**: the case sets
+      `startupDeadlineMs = phase === 'ready' ? 120_000 : 60_000` and died at 120,079 ms, while its three
+      sibling phases take the 60s budget and finish in about 8.7s. So what is tight is the wait for a
+      *watcher* to become ready, not the work — and the number is the case's own, which this goal does not
+      raise to obtain a pass.
     - *"refuses publication when a loader-only external input changes during compilation"* fails an
       assertion — it expects `Compiler resolution namespace changed…` and gets a Node
       `ExperimentalWarning`. That one failed on the alone run and passed in the chain.
