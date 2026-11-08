@@ -29,7 +29,7 @@ removes the finding rather than fixing it, and names the construction that does.
 | T2 | test | `fe/utils/tab-management.ts` — `removeTabs` no longer exempts a pinned tab; every caller is a subject that is gone, and none is a user closing a tab | `tests/features/code/fe/utils/tab-management.spec.ts` | the spec: restoring the exemption fails two cases. `isPinned` elsewhere governs placement and drag-drop only, so nothing else relied on it |
 | T3 | test | `fe/state.ts` — settling a restore writes nothing to storage, keeps the metadata of a path that has not arrived, and prunes groups against what is still expected | `tests/features/code/fe/state.spec.ts`, four cases | the spec: restoring the persist, the metadata clear or the open-files-only prune fails three cases. The every-startup `console.info` now fires only when something is outstanding |
 | T5 | test | `fe/features/terminal/state.ts` — a terminal routed to the panel expands it, which covers every panel open rather than the one menu item | `tests/features/code/fe/features/terminal/panel-terminal.spec.ts` | the spec, plus the three assertions in `terminal-opens-for-the-asker.spec.ts` that name the panel update's shape |
-| T6 | open | not attempted | — | — | its honest fix is restart-in-place, which needs the session generation **Phase H** delivers ("a crashed shell is a new generation whose predecessor's transcript is labelled history"). Carrying a tab's pin, group and position across a kill-then-create is a hack Phase H deletes — the shape T7 was excluded for. Closes there, `dissolved`, with the generation as its guard |
+| T6 | test | `be/services/terminal.ts` — a shell's exit status decides whether its terminal goes with it, and `restart(id)` starts a new generation under the terminal that is already there (`features/code/be/features/terminal.ts`'s `terminal.RESTART_TERMINAL`; the panel's menu item sends it) | `default-setup/tests/features/code/be/terminal-generations.spec.ts`, six cases; driven: a shell told to `exit 139` keeps its terminal, the restart keeps its id with a new pid and reads generation 2 | the spec, mutation-checked four ways — closing on every exit, reading a signal as clean, not advancing the generation, leaving a restarted terminal marked dead. **The id is the guard**: a restart that minted a new one is what lost the pin, the group and the position, and a case asserts the same id comes back | — |
 | T8 | test | `fe/composables/useTerminalActions.ts` — `customTitle` then `title`; the cwd derivation is the backend's and was being overridden here | `tests/features/code/fe/composables/use-terminal-actions.spec.ts` | the spec: restoring the cwd basename fails the case where a create passed a title |
 | T9 | test | `fe/state.ts` — `moveTerminalToPanel` prunes the group it emptied, as the four other removals in that machine do | `tests/features/code/fe/state.spec.ts` | the spec: dropping the prune fails it |
 | G1 | open | priced, not fixed — see [the pricing](#g1-priced-what-the-throttled-writer-writes-to-ears--2026-11-07) | three streaming runs at 24, 60 and 120 chunks; `ears.write` request bytes on the app database | — | the mechanism and its cost model are measured and the review's 15 MB figure confirmed. The fix is a delta feed beside a less frequent durable write, which is the output pipe's payload discipline the review assigns it to — the writer alone cannot fix it, since the 80 ms write is what updates the window |
@@ -400,6 +400,29 @@ replays, because nothing keeps a copy to replay from. The common case is unaffec
 the pool keeps the emulator alive across a host's teardown, so a reattach with 256 KiB of history is 5.55 ms
 and sends no bytes. Serving history to a new emulator is the broker's bounded history, which is where one
 copy belongs and which Phase B has not built.
+
+### A crashed shell is a new generation (Phase H, T6) — 2026-11-08
+
+**The exit status is the whole of the decision.** `exit`, `logout` and Ctrl-D all end a shell with 0 and all
+mean *close this*; a segfault, an OOM kill and a `set -e` script failing do not, and the terminal is where
+the reason is written — so removing the window takes the one thing the user needs. A clean exit closes the
+terminal as before; anything else keeps it, marked, with the screen intact and a line saying the shell ended
+and with what.
+
+**T6 closes with it rather than beside it.** "Restart Terminal" was close-then-create, which minted a new
+id — and the id is what every tab, pin, group and position is keyed by, so all of them went, along with the
+transcript of the shell that had just failed. With the terminal kept and a generation started under it, the
+frontend has nothing to carry across: the fix is the absence of the thing that broke it.
+
+**One seam per boundary, wherever the news arrives from.** A crash draws the line, so a restart after one
+takes the new pid quietly; restarting a shell that was still running draws its own. Without that the next
+terminal list would find a pid it did not know and write a second seam below whatever the new shell had
+printed — a line about a death, placed after the life that followed it. The pid-keyed seam already existed
+for a restored terminal; what it lacked was anything telling it a boundary had already been accounted for.
+
+Driven, and checked by eye: `.apack/drive/screenshots/journey-11-after-restarting-in-place.png` shows
+`— the shell ended with status 139 — nothing below this line is from it —` with a fresh prompt under it and
+the tab still in place.
 
 ### A terminal survives the API restarting (Phase H) — 2026-11-08
 

@@ -142,7 +142,7 @@ rather than set by hand here, so the two cannot disagree about what is done.
 | **F18** | Medium | Nothing tells a surface its terminal was resized, so its `TerminalInfo` keeps the size the terminal was created with; only asking for the list again reveals the real one | `be/features/terminal.ts` `resizeTerminal` (answers only on failure), `fe/features/terminal/state.ts` (`terminals`) |
 | **F1** ✔ | Low | `detach` does not verify attachment ownership (see Corrections) | `terminal-pool.ts:260-272` |
 | **F2** ✔ | Medium | The panel scroll-jacks during output | `PanelTerminalSection.vue:296` |
-| **T6** | Low | "Restart Terminal" loses the tab's pin, group and position | `fe/canvas/canvas.vue:277-285` |
+| **T6** ✔ | Low | "Restart Terminal" loses the tab's pin, group and position | `fe/canvas/canvas.vue:277-285` |
 | **T7** ✔ | Low | The panel's attach watcher never tears down when its terminal disappears | `PanelTerminalSection.vue:545-559` |
 | **T8** ✔ | Low | The panel list discards the terminal's title in favour of the cwd basename | `fe/composables/useTerminalActions.ts:34` |
 | **T9** ✔ | Low | `moveTerminalToPanel` leaves an emptied tab group rendered | `fe/state.ts:869-885` |
