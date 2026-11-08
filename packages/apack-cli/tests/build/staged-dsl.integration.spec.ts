@@ -9,13 +9,14 @@ import { build } from '../../src/commands/build';
 import { PACK_LAYOUT, readPackBuild, stagedFileHashes } from '@apackdev/host/packs';
 import { readPackBuildInputs } from '@apackdev/host/build/pack-build-inputs';
 import { packagesBuiltOrRefuse, REPO_ROOT } from '@apackdev/host/build/packages-built';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 packagesBuiltOrRefuse('npm run packages:ensure');
 let root: string;
 afterEach(() => { if (root) fs.rmSync(root, { recursive: true, force: true }); });
 
 describe('staged DSL definitions', () => {
-  it('preserves a verified build on a later failure, then publishes and reuses the current definitions with its frontend', async () => {
+  it('preserves a verified build on a later failure, then publishes and reuses the current definitions with its frontend', { meta: cpuBudget(5 * 60_000 + 20_000) }, async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-staged-dsl-'));
     const dir = path.join(root, 'dist');
     fs.mkdirSync(dir);
@@ -73,5 +74,5 @@ describe('staged DSL definitions', () => {
       expect(fs.existsSync(definitions)).toBe(false);
       expect(fs.readFileSync(path.join(dir, PACK_LAYOUT.feEntry), 'utf8')).not.toContain('after: true');
     } finally { process.chdir(cwd); }
-  }, 5 * 60_000 + 20_000);
+  });
 });

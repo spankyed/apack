@@ -342,8 +342,9 @@ Three suites, split by what a spec costs and needs:
   `npm run test:native`) — specs that execute a captured native compiler runtime or hold live filesystem
   watchers: the compiler native/ELF/PE library specs, `build-worker`, the `watch-*` specs and the watcher
   cases of the frontend and package-input specs. Its own run so the gate can schedule it beside integration.
-  It runs one file at a time, and a case gets a 300s budget (the `enormous` size), failed at twice it, since each composes cold captures,
-  builds and watcher cycles; a case needing longer still declares a reviewed per-test budget.
+  It runs one file at a time, and a case gets 300s of CPU as its budget (the `enormous` size), failed at twice it, since each composes
+  cold captures, builds and watcher cycles; a case needing more declares a reviewed `meta: cpuBudget(ms)`. In the Linux
+  container the guard judges only the stall, its CPU readings including the host's load (`APACK_CEILING=off`).
   A native case whose subject is not the compiler installation shares one per file
   (`tests/_support/shared-compiler.ts`, passed to `createPackBuilder` as `captureCompiler`); a case about
   capture, the captured runtime, an esbuild override or an installation's removal captures its own.
@@ -394,7 +395,7 @@ can reach one from a change to what it checks. `repo-check-boundary.spec.ts` the
 back.
 
 **Which half a spec is in is a decision, declared by its filename**, and nothing re-derives it. What the
-integration half buys is a 60s per-test budget instead of 15s (each failed only at twice it, `DEADLINE_FACTOR`), a worker pool capped at half the cores, and
+integration half buys is 60s of CPU per test instead of 15s (each failed only at twice it, `DEADLINE_FACTOR`), a worker pool capped at half the cores, and
 separation from the per-change loop — so what belongs there is a spec that needs one of those, which in this
 package means the ones that spawn compilers.
 

@@ -15,11 +15,14 @@ export default defineConfig({
   test: {
     // From process start, since tsx reads it as it loads: its disk cache is outside a build's captured inputs
     env: { TSX_DISABLE_CACHE: '1' },
-    // Enormous (`SIZE_MS` × `DEADLINE_FACTOR`): a native case composes cold compiler captures, builds and watcher cycles. A case
-    // that needs longer still declares a reviewed per-test budget.
-    testTimeout: 600_000,
-    hookTimeout: 600_000,
-    setupFiles: ['../apack-testing/src/vitest-exit-with-parent.ts', './tests/_support/turn-event-loop.ts', './tests/_support/compiler-store.ts'],
+    // Enormous (`SIZE_MS` × `DEADLINE_FACTOR`, scripts/lib/unit-suites.ts): the CPU one test may spend. A test that
+    // needs more declares a reviewed `meta.cpuBudgetMs` (`suite-timeouts.spec.ts`)
+    provide: { 'apack.testCpuMs': 600_000 },
+    // Vitest's clock is off: the progress guard in setupFiles fails a test or hook whose process tree stalls, and a
+    // test that spends the CPU budget above (`vitest-progress-guard.ts`, `@apackdev/testing`)
+    testTimeout: 0,
+    hookTimeout: 0,
+    setupFiles: ['../apack-testing/src/vitest-exit-with-parent.ts', '../apack-testing/src/vitest-progress-guard.ts', './tests/_support/turn-event-loop.ts', './tests/_support/compiler-store.ts'],
     globalSetup: ['./tests/_support/compiler-store-run.ts'],
     include: ['tests/**/*.native.spec.ts'],
     exclude: ['**/node_modules/**'],

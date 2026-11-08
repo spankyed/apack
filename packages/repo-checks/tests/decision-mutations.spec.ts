@@ -232,7 +232,7 @@ const MUTATIONS: readonly Mutation[] = [
     // meaningful thing to give a step. `suite` dropping under `quick` breaks it.
     why: 'the ladder climbs, so a class is slower than the one below it',
     in: 'step-timeouts',
-    from: '  suite: { ms: 600_000 },',
+    from: '  suite: { ms: 1_200_000 },',
     to: '  suite: { ms: 30_000 },',
     call: (lib) => {
       const ms = lib.TIMEOUT_CLASSES.map((className) => lib.TIMEOUT_MS[className].ms);
@@ -359,8 +359,20 @@ describe('every decision these modules make is one something can see', () => {
    * there. Rewriting them is what lets the module under test have imports at all — it had none, and that
    * looked like a property of the module when it was a property of this spec.
    */
-  const absolute = (body: string): string =>
-    body.replace(/from '\.\/([\w.-]+)'/g, (_, file: string) => `from '${pathToFileURL(path.join(REPO_ROOT, 'scripts', 'lib', file)).href}'`);
+  // A copy in a temporary directory resolves nothing by name, so its imports are made absolute: its neighbours by
+  // path, and `@apackdev/host`'s subpaths through that package's exports map, every entry of which names source
+  const hostExports = (JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'packages/apack-host/package.json'), 'utf8')) as {
+    exports: Record<string, string | { '@apackdev/source'?: string; default?: string }>;
+  }).exports;
+  const hostEntry = (subpath: string): string => {
+    const entry = hostExports[`./${subpath}`];
+    const target = typeof entry === 'string' ? entry : entry?.['@apackdev/source'] ?? entry?.default;
+    if (target === undefined) throw new Error(`@apackdev/host has no export ./${subpath}, which a mutated module imports`);
+    return pathToFileURL(path.join(REPO_ROOT, 'packages/apack-host', target)).href;
+  };
+  const absolute = (body: string): string => body
+    .replace(/from '\.\/([\w.-]+)'/g, (_, file: string) => `from '${pathToFileURL(path.join(REPO_ROOT, 'scripts', 'lib', file)).href}'`)
+    .replace(/from '@apackdev\/host\/([\w./-]+)'/g, (_, subpath: string) => `from '${hostEntry(subpath)}'`);
 
   it.each(MUTATIONS)('finds the line for: $why', ({ from, in: where }) => {
     const source = sources.get(where)!;

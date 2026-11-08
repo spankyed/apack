@@ -156,10 +156,20 @@ goal requires them; cite actual results, not an assumption that all CI runs or n
 
 **CI may fail a check, never a clock.** Every kill deadline is a declared class rather than a multiple of a
 measurement (`scripts/lib/step-timeouts.ts`), and what a step costs is a reading of the machine it ran on.
-A deadline is a ceiling for a tree that spins; what ends a stuck one is `boundedSpawn`'s watchdog, which kills a
-process tree that has gone `IDLE_MS` without CPU or output, so a step slowed by a busy machine is never killed for it.
-A spec's `runCommand` is bounded the same way (`@apackdev/host/build/process-progress`).
-`APACK_WATCHDOG=off` turns it off for a run and everything the run starts.
+A deadline is a ceiling for a tree that spins, so it counts the tree's CPU time, which load and a slow disk cannot
+inflate; the clock bounds only a tree that cannot be read (Windows, `APACK_WATCHDOG=off`, work inside a VM).
+Inside the Linux test container CPU time grows with the Mac's load (its VM accounts no steal time), so a ceiling
+there would be a clock: `test:linux` sets `APACK_CEILING=off` and the container runs with the watchdog alone. What
+ends a stuck one is `boundedSpawn`'s watchdog, which kills a process tree that has gone `IDLE_MS` without CPU or
+output, so a step slowed by a busy machine is never killed for it.
+A spec's `runCommand` is bounded the same way (`@apackdev/host/build/process-progress`), and so is a **test**:
+every vitest config turns vitest's clock off (`testTimeout: 0`, `hookTimeout: 0`) and loads the progress guard
+(`@apackdev/testing`'s `vitest-progress-guard.ts`), which fails a test or hook whose process tree stalls and a test
+that spends its CPU deadline. A test that needs more declares `meta: cpuBudget(ms)`; `suite-timeouts.spec.ts`
+refuses a timeout measured on the clock. The product follows the same rule where it waits on another process or
+thread to answer: `answerWhileWorking` (`@apackdev/host/build/process-progress`, with `processWork` and `threadWork`)
+waits while the other party's work keeps growing and fails only after `IDLE_MS` of none — never a fixed reply time.
+`APACK_WATCHDOG=off` turns the step watchdog off for a run and everything the run starts.
 **Do not gate any of this on `process.env.CI`**: a CI-gated refusal never fires. The condition is the
 machine, which is a fact a run can check.
 
@@ -278,9 +288,9 @@ Rules that pay for themselves:
   field; one compared against an edge needs all of them, and the edge can usually be declared instead.
 - **Load inflates a duration and cannot deflate it.** Gate only on *measured faster than declared* (the
   `@slow:` marker gate); *measured slower* is only ever a report.
-- **A test's budget and its deadline are two numbers.** A vitest config declares `DEADLINE_FACTOR` times its
-  size (`scripts/lib/unit-suites.ts`): a pass past the budget is reported under the step, and only the deadline,
-  which catches a hang, fails one. Never raise a budget to get a pass.
+- **A test's budget and its deadline are two numbers, both CPU.** A vitest config gives the guard `DEADLINE_FACTOR`
+  times its size (`scripts/lib/unit-suites.ts`): a pass that spent past the budget is reported under the step, and
+  only the deadline, which catches a spin, fails one. Never raise a budget to get a pass.
 
 [`docs/archive/references/pipeline-lessons.md`](docs/archive/references/pipeline-lessons.md) has what each of these cost to
 learn.
@@ -353,7 +363,7 @@ npm run test:unit                # The host pool and the pack pool (scripts/lib/
 npm run test:unit:host           # One pool, only the projects whose inputs changed
 npm run test:unit:pack           # The pack pool, resolving the published dist
 npm run test:integration         # Every suite's expensive half, as one vitest run at half the cores
-npm run test:native              # The native half (*.native.spec.ts), one file at a time, a 300s budget a case
+npm run test:native              # The native half (*.native.spec.ts), one file at a time, 300s of CPU a case
 npm run test:linux -- <command>  # Run a command in the Linux test container (the chain does for test:native on a Mac)
 npm run test:external-pack       # Both halves of the fixture-pack check
 npm run test:external-pack:contract  # Validate, build, typecheck, harness specs — no app

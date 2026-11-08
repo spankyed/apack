@@ -5,6 +5,9 @@ import { boundedSpawn, type BoundedResult } from './lib/bounded-spawn.ts';
 import { TIMEOUT_MS } from './lib/step-timeouts.ts';
 import { performanceQualificationCommand, performanceRevisionOptions } from './lib/performance-qualification.ts';
 
+/** How long one scenario's pair of runs may take on the clock: a qualification's own limit, not a CPU class */
+const SCENARIO_WALL_MS = 900_000;
+
 packagesBuiltOrRefuse('npm run packages:ensure');
 const { coordinatePerformanceRevisions, readPerformanceRevisionComparison } = await import('@apackdev/testing/performance');
 const root = path.resolve(import.meta.dirname, '..');
@@ -27,7 +30,7 @@ for (const own of new Set(Object.values(options.roots))) {
 for (const scenario of options.scenarios) {
   const output = path.join(options.output, scenario); mkdirSync(output);
   const abort = new AbortController();
-  const deadline = Date.now() + TIMEOUT_MS.scenario.ms;
+  const deadline = Date.now() + SCENARIO_WALL_MS;
   const workers: Partial<Record<'A' | 'B', BoundedResult>> = {};
   let evidenceFailed = false;
   const jobs = variants.map(variant => {

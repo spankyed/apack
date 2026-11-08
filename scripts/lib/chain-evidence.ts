@@ -76,6 +76,8 @@ export interface EvidenceResult {
   readonly code: number;
   readonly ms: number;
   readonly output: string;
+  /** What its process tree spent, where it could be read (`BoundedResult.cpuMs`) */
+  readonly cpuMs?: number;
   readonly timedOut?: true;
 }
 
@@ -98,7 +100,8 @@ const DEADLINE_WORDS = new RegExp([
 export function evidenceHeader(label: string, result: EvidenceResult): string {
   const ended = result.timedOut === true ? 'timed out' : `exit ${result.code}`;
   const deadlines = deadlinesNote(result);
-  return `# ${label} — ${ended} after ${(result.ms / 1000).toFixed(1)}s${deadlines ? `, ${deadlines}` : ''}`;
+  const cpu = result.cpuMs === undefined ? '' : ` (${(result.cpuMs / 1000).toFixed(1)}s CPU)`;
+  return `# ${label} — ${ended} after ${(result.ms / 1000).toFixed(1)}s${cpu}${deadlines ? `, ${deadlines}` : ''}`;
 }
 
 /**

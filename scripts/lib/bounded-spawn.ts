@@ -1,5 +1,5 @@
 /**
- * Spawning with a wall-clock budget, because a run that can hang cannot fail.
+ * Spawning with a budget, because a run that can hang cannot fail.
  *
  * Without a bound one wedged step hangs the whole run until a person kills it: a test server that never
  * returns, a build lock waited on, a compile that stops making progress. Vitest's own timeouts cannot catch
@@ -15,20 +15,43 @@
  *   that measures the clock kills it for the machine being busy. So the watchdog below ends a run whose
  *   process tree has used no CPU and written no output for `IDLE_MS`, and the budget above it is a ceiling
  *   for the one hang the watchdog cannot see: a loop that spins.
+ * - **The ceiling counts CPU time, not the clock.** A spin is what spends CPU without end, and load or a slow
+ *   disk stretches a run's wall time without adding to its CPU, so a CPU ceiling is reached by the one and never
+ *   by the other. The clock is the bound only where the tree cannot be read — Windows, `APACK_WATCHDOG=off`, a
+ *   tree whose work is in a VM (`idleMs: false`), and from the moment `ps` fails. A tree *inside* a VM that
+ *   accounts no steal time — the Linux test container — reads the host's load as its own CPU, so it runs with
+ *   the watchdog alone (`APACK_CEILING=off`, which `test:linux` sets). What neither catches is a
+ *   loop that sleeps and prints for ever: its output is progress by the watchdog's rule, and it spends no CPU.
  * - **The process group dies, not just the child.** `npm run x` is a shell that spawns node that spawns
  *   vitest that spawns workers. Killing the child alone orphans the rest, still running. And the group dies
  *   when the child exits however it ends, a pass included: nothing a run started outlives it.
  */
 import { spawn } from 'node:child_process';
 import { createStallTracker, readTreeCpuMs } from '@apackdev/host/build/process-progress';
-import { IDLE_MS, watchdogEnabled } from './step-timeouts.ts';
+import { IDLE_MS, ceilingEnabled, watchdogEnabled } from './step-timeouts.ts';
 
 export { cpuAdded, createStallTracker, parseCpuTime, treeCpuMs } from '@apackdev/host/build/process-progress';
+
+/**
+ * What a run killed at its CPU ceiling says of itself, so that one line tells a spin from anything else: the
+ * wall time beside the CPU says how much of the run was spent working, and the last output how long it has been
+ * doing it silently. A spin reads near one core of CPU per second of wall and no recent output.
+ */
+export function spentLine({ budgetMs, wallMs, cpuMs, sinceOutputMs }: { budgetMs: number; wallMs: number; cpuMs: number; sinceOutputMs: number | undefined }): string {
+  const s = (ms: number) => `${Math.round(ms / 1000)}s`;
+  const quiet = sinceOutputMs === undefined ? 'no output at all' : `last output ${s(sinceOutputMs)} ago`;
+  return `spent its ${s(budgetMs)} CPU budget: ${s(cpuMs)} of CPU in ${s(wallMs)} of wall time, ${quiet}. Its process group was killed`;
+}
 
 export interface BoundedResult {
   readonly code: number;
   readonly output: string;
   readonly ms: number;
+  /**
+   * The CPU its process tree spent, where the watchdog could read the tree: a lower bound, since a process that
+   * starts and exits between two readings is never seen. A reading, which decides nothing but the ceiling.
+   */
+  readonly cpuMs?: number;
   /** Set when the budget ran out, or with `stalled` when the watchdog ended it: either way it was killed */
   readonly timedOut?: true;
   /** Set when its process tree stopped working — no CPU and no output for the idle window — before the budget */
@@ -150,6 +173,7 @@ export function boundedSpawn(command: string, args: readonly string[], budgetMs:
       code: timedOut ? 124 : closed ?? 1,
       output,
       ms: Date.now() - started,
+      ...(stall !== undefined ? { cpuMs: stall.spentMs } : {}),
       ...(timedOut ? { timedOut } : {}),
       ...(stalled ? { stalled } : {}),
       ...(aborted ? { aborted } : {}),
@@ -172,8 +196,24 @@ export function boundedSpawn(command: string, args: readonly string[], budgetMs:
       setTimeout(() => { killGroup('SIGKILL'); done(); }, GRACE_MS);
     };
 
-    const budget = setTimeout(() => { timedOut = true; terminate(); }, budgetMs);
-    budget.unref();
+    const say = (why: string) => {
+      output += why;
+      if (stream) process.stderr.write(why);
+    };
+
+    // A tree the watchdog reads is bounded by the CPU it spends, and only a tree it cannot read by the clock
+    const watched = stall !== undefined && child.pid !== undefined;
+    const ceiling = ceilingEnabled();
+    let budget: ReturnType<typeof setTimeout> | undefined;
+    const startClock = () => {
+      budget ??= setTimeout(() => {
+        say(`\n[bounded] ran past its ${budgetMs / 1000}s budget by the clock, its CPU unreadable: its process group was killed\n`);
+        timedOut = true;
+        terminate();
+      }, budgetMs);
+      budget.unref();
+    };
+    if (!watched) startClock();
 
     // A reading of the tree on a timer, because nothing announces that a process has stopped working. Each
     // reading waits for the last: under load `ps` itself can be slow, and two in flight would race the last reading.
@@ -183,13 +223,18 @@ export function boundedSpawn(command: string, args: readonly string[], budgetMs:
       inFlight = true;
       void readTreeCpuMs(child.pid!).then((now) => {
         inFlight = false;
-        if (now === undefined || terminating) return;
-        if (stall.reading(now, Date.now())) {
-          const why = `\n[bounded] no CPU or output from its process tree for ${idleMs / 1000}s: stalled, so its process group was killed\n`;
-          output += why;
-          if (stream) process.stderr.write(why);
+        if (terminating) return;
+        // `ps` failing leaves the CPU unknowable, so from then the clock is the bound rather than nothing
+        if (now === undefined) { startClock(); return; }
+        const at = Date.now();
+        if (stall.reading(now, at)) {
+          say(`\n[bounded] no CPU or output from its process tree for ${idleMs / 1000}s: stalled, so its process group was killed\n`);
           timedOut = true;
           stalled = true;
+          terminate();
+        } else if (ceiling && stall.spentMs >= budgetMs) {
+          say(`\n[bounded] ${spentLine({ budgetMs, wallMs: at - started, cpuMs: stall.spentMs, sinceOutputMs: stall.lastOutputAt === undefined ? undefined : at - stall.lastOutputAt })}\n`);
+          timedOut = true;
           terminate();
         }
       });

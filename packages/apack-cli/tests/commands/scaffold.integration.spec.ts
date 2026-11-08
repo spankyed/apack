@@ -10,6 +10,7 @@ import { typecheckPack } from '../_support/pack-builds';
 import { runCommand } from '../_support/run-command.ts';
 
 import { COMMANDS, type Command } from '../../src/command-tree.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 /**
  * The scaffold an outside author starts from must build, typecheck and pack as
@@ -48,7 +49,7 @@ beforeAll(async () => {
   initOutput = init.output;
   pack = path.join(tmp, 'demo-pack');
   fs.symlinkSync(path.join(REPO_ROOT, 'node_modules'), path.join(pack, 'node_modules'), 'dir');
-}, 60_000 + 20_000);
+});
 
 afterAll(async () => {
   // A failed shutdown preserves the fixture rather than deleting files beneath a live toolchain.
@@ -81,7 +82,7 @@ describe('apack pack init → add feature → build → tsc → pack', () => {
     expect(result.output).toMatch(/must start with a lowercase letter and contain only letters and digits/);
   });
 
-  it('adds a feature, builds, typechecks and packs a verified archive', async () => {
+  it('adds a feature, builds, typechecks and packs a verified archive', { meta: cpuBudget(5 * 60_000 + (180_000 + 120_000) + 20_000) }, async () => {
     // produces: the feature the build below compiles
     expect((await callCli(pack, 'add', ['feature', 'notes', '--description', 'Manage notes.', '--label', 'Notes', '--designation', 'notebook'])).code).toBe(0);
     const manifest = JSON.parse(fs.readFileSync(path.join(pack, 'apack.json'), 'utf-8'));
@@ -119,7 +120,7 @@ describe('apack pack init → add feature → build → tsc → pack', () => {
       expect(guide, `Missing public build path ${file}`).toContain('`' + file + '`');
     }
 
-  }, 5 * 60_000 + (180_000 + 120_000) + 20_000);
+  });
 
   /**
    * The facade round trip through the **scripts the scaffold writes**, on a pack scaffolded the way an author
@@ -130,7 +131,7 @@ describe('apack pack init → add feature → build → tsc → pack', () => {
    * build — is `tests/commands/facade-report.integration.spec.ts`, so this runs on the pack the case above
    * built: the cases here share one pack in declaration order.
    */
-  it('records the facade dependents compile against, and then reports it up to date', async () => {
+  it('records the facade dependents compile against, and then reports it up to date', { meta: cpuBudget(3 * 60_000 + 20_000) }, async () => {
     const report = path.join(pack, 'etc', 'pack-types.api.md');
     // Nothing is recorded before the first update: there is no report to be stale against
     expect(fs.existsSync(report)).toBe(false);
@@ -145,7 +146,7 @@ describe('apack pack init → add feature → build → tsc → pack', () => {
     const checked = await callCli(pack, 'facade-report');
     expect(checked.code, checked.output).toBe(0);
     expect(checked.output).toContain('is up to date');
-  }, 3 * 60_000 + 20_000);
+  });
 
   /**
    * Every file the scaffold ships that names a command — both workflows and the README — held to the scripts
@@ -225,7 +226,7 @@ describe('apack pack init → add feature → build → tsc → pack', () => {
     expect(offenders, 'these name a script or command the scaffold does not provide').toEqual([]);
   });
 
-  it('adds a step (declared, shipped in build/steps.build.mjs) and a service that build', async () => {
+  it('adds a step (declared, shipped in build/steps.build.mjs) and a service that build', { meta: cpuBudget(3 * 60_000 + (180_000 + 120_000) + 20_000) }, async () => {
     // produces: the step whose manifest entry and bundled build facet are asserted below
     expect((await callCli(pack, 'add', ['step', 'ping'])).code).toBe(0);
     // produces: the service whose manifest and generated files are asserted below
@@ -253,9 +254,9 @@ describe('apack pack init → add feature → build → tsc → pack', () => {
     // typecheck: as above
     const tsc = await typecheckPack(pack);
     expect(tsc.code, tsc.output).toBe(0);
-  }, 3 * 60_000 + (180_000 + 120_000) + 20_000);
+  });
 
-  it('regenerates entries when a source file codegen reads changes, not only the manifest', async () => {
+  it('regenerates entries when a source file codegen reads changes, not only the manifest', { meta: cpuBudget(2 * 60_000 + 20_000) }, async () => {
     const servicePath = path.join(pack, 'src', 'extensions', 'services', 'cache.ts');
     fs.writeFileSync(servicePath, 'export const cacheService = {};\n');
 
@@ -267,9 +268,9 @@ describe('apack pack init → add feature → build → tsc → pack', () => {
     expect(fs.readFileSync(path.join(pack, 'src', '__generated__', 'services.ts'), 'utf-8')).toMatch(/import \{ cacheService as __service_cache \}/);
     // process: the stdout a second, unchanged run prints is the assertion
     expect((await run('node', [CLI, 'pack', 'generate-entries'], pack)).output).toMatch(/inputs unchanged/);
-  }, 2 * 60_000 + 20_000);
+  });
 
-  it('keeps unit tests runnable after init-tests adds Playwright specs', async () => {
+  it('keeps unit tests runnable after init-tests adds Playwright specs', { meta: cpuBudget(2 * 60_000 + 20_000) }, async () => {
     // produces: the Playwright specs the vitest run below picks up
     expect((await callCli(pack, 'init-tests')).code).toBe(0);
     expect(fs.existsSync(path.join(pack, 'tests', 'e2e', 'smoke.spec.ts'))).toBe(true);
@@ -286,9 +287,9 @@ describe('apack pack init → add feature → build → tsc → pack', () => {
     const unitOutput = unit.output.replace(/\x1b\[[0-9;]*m/g, '');
     expect(unitOutput).toMatch(/Tests\s+\d+ passed/);
     expect(unitOutput).not.toMatch(/failed/);
-  }, 2 * 60_000 + 20_000);
+  });
 
-  it('refuses to build, pack or generate entries for a manifest the installer would reject', async () => {
+  it('refuses to build, pack or generate entries for a manifest the installer would reject', { meta: cpuBudget(3 * 60_000 + 20_000) }, async () => {
     const manifestPath = path.join(pack, 'apack.json');
     const original = fs.readFileSync(manifestPath, 'utf-8');
     const manifest = JSON.parse(original);
@@ -305,9 +306,9 @@ describe('apack pack init → add feature → build → tsc → pack', () => {
     } finally {
       fs.writeFileSync(manifestPath, original);
     }
-  }, 3 * 60_000 + 20_000);
+  });
 
-  it('fails the build on an unresolvable dependency', async () => {
+  it('fails the build on an unresolvable dependency', { meta: cpuBudget(2 * 60_000 + 20_000) }, async () => {
     const manifestPath = path.join(pack, 'apack.json');
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
     manifest.dependencies = { 'nonexistent-pack': '*' };
@@ -329,5 +330,5 @@ describe('apack pack init → add feature → build → tsc → pack', () => {
       'Compiler startup input changed: ["authored-files"]',
       'Compiler startup input changed: ["file","apack.json"]',
     ]).toContain(packed.output.trim());
-  }, 2 * 60_000 + 20_000);
+  });
 });

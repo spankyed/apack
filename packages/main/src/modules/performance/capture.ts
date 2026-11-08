@@ -1,5 +1,6 @@
 import { createPerformanceProfiles, type PerformanceProfileTransport } from '@apackdev/host/diagnostics/node';
 import type { _RendererPerformanceResources } from '@apackdev/sdk/runtime';
+import { answerWhileWorking, processWork } from '@apackdev/host/build/process-progress';
 
 const METRICS = {
   TaskDuration: 'seconds', ScriptDuration: 'seconds', LayoutDuration: 'seconds', RecalcStyleDuration: 'seconds',
@@ -12,13 +13,10 @@ export function createRendererCapture(transport: PerformanceProfileTransport & {
   let before = new Map<string, number>();
   let profiles: ReturnType<typeof createPerformanceProfiles> | undefined;
   let stopping: Promise<_RendererPerformanceResources> | undefined;
+  // The renderer answers a diagnostic when it can, so it is waited for while its process works, not for a fixed
+  // time: one busy rendering on a loaded machine is late, not stuck
   async function post(method: string, parameters?: object): Promise<unknown> {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    try {
-      return await Promise.race([transport.post(method, parameters), new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(Error('Renderer diagnostic timeout')), 5000); timer.unref();
-      })]);
-    } finally { clearTimeout(timer); }
+    return answerWhileWorking(Promise.resolve(transport.post(method, parameters)), { work: processWork(transport.pid), what: 'The renderer diagnostic' });
   }
   async function metrics() {
     const response = await post('Performance.getMetrics') as { metrics?: Array<{ name: string; value: number }> };

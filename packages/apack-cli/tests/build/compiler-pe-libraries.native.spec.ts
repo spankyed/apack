@@ -32,11 +32,12 @@ import { compilerStartupOptions, COMPILER_NODE_OPTIONS_ENV } from '../../src/bui
 import { COMPILER_INPUTS_ENV } from '../../src/build/compiler-installation-inputs.ts';
 import { spawnCompilerWorker } from '../../src/build/compiler-process.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 const sharedCompiler = shareCompilerInstallation();
 const execFileAsync = promisify(execFile);
 
-it.runIf(process.platform === 'win32')('reads Windows loader state concurrently across owned threads without native corruption', async () => {
+it.runIf(process.platform === 'win32')('reads Windows loader state concurrently across owned threads without native corruption', { meta: cpuBudget(15_000) }, async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-pe-report-'));
   onTestFinished(() => fs.rmSync(root, { recursive: true, force: true }));
   const probe = path.join(root, 'report.mjs');
@@ -58,7 +59,7 @@ it.runIf(process.platform === 'win32')('reads Windows loader state concurrently 
     cwd: REPO_ROOT, env: { ...process.env, NODE_OPTIONS: '' }, timeout: 10_000, windowsHide: true,
   }).catch(error => { throw new Error(`Report child exited ${error.code}: ${error.stdout} ${error.stderr}`); });
   expect(result.stdout).toContain('REPORT_THREADS_COMPLETE');
-}, 15_000);
+});
 
 it.runIf(process.platform === 'win32')('reads live native PATH despite replaced and thread-local JavaScript environments', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-pe-environment-'));
@@ -329,7 +330,7 @@ int wmain(void) {
   completed = true;
 });
 
-it.runIf(process.platform === 'win32')('refuses Node .local overrides through the captured compiler runtime before initialization', async ({ onTestFinished }) => {
+it.runIf(process.platform === 'win32')('refuses Node .local overrides through the captured compiler runtime before initialization', { meta: cpuBudget(120_000) }, async ({ onTestFinished }) => {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-node-local-')));
   let completed = false;
   try {
@@ -384,7 +385,7 @@ it.runIf(process.platform === 'win32')('refuses Node .local overrides through th
     if (completed) fs.rmSync(root, { recursive: true, force: true });
     else console.error(`Retained Node .local runtime: ${root}`);
   }
-}, 120_000);
+});
 
 it.runIf(process.platform === 'win32').each([
   ['Node', 'application'],
@@ -905,7 +906,7 @@ it.runIf(process.platform === 'win32').each([
 });
 
 it.runIf(process.platform === 'win32').each(['preload', 'thread', 'preload-and-thread', 'preload-and-module'] as const)(
-  'captures PE %s inputs and preserves publication after outside-library refusal', async site => {
+  'captures PE %s inputs and preserves publication after outside-library refusal', { meta: cpuBudget(120_000) }, async site => {
     const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-pe-publication-')));
     const pack = path.join(root, 'pack');
     const previousOptions = process.env.NODE_OPTIONS;
@@ -1035,10 +1036,9 @@ require('node:worker_threads').parentPort.postMessage('NATIVE');`)}, {eval:true}
       finally { fs.rmSync(root, { recursive: true, force: true }); }
     }
   },
-  120_000,
 );
 
-it.runIf(process.platform === 'win32')('repairs a failed Vite assembly context through newly discovered watch inputs', async () => {
+it.runIf(process.platform === 'win32')('repairs a failed Vite assembly context through newly discovered watch inputs', { meta: cpuBudget(120_000 + 4 * 60_000 + 20_000) }, async () => {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-pe-watch-')));
   const pack = path.join(root, 'pack'), native = path.join(root, 'native'), preloadRoot = path.join(root, 'preload');
   const previous = process.env.NODE_OPTIONS;
@@ -1157,4 +1157,4 @@ it.runIf(process.platform === 'win32')('repairs a failed Vite assembly context t
     completed = true;
   } catch (error) { console.info('PE assembly watch refusals:', errors.mock.calls); throw error; }
   finally { await close(); }
-}, 120_000 + 4 * 60_000 + 20_000);
+});

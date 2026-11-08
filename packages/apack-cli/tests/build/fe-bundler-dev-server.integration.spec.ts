@@ -50,7 +50,7 @@ beforeAll(async () => {
   await server.listen();
   const address = server.httpServer!.address();
   origin = `http://localhost:${typeof address === 'object' && address !== null ? address.port : 0}`;
-}, 60_000);
+});
 
 afterAll(async () => { await server?.close(); });
 

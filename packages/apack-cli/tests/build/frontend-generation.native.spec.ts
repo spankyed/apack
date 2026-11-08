@@ -10,6 +10,7 @@ import * as installations from '../../src/build/compiler-installation.ts';
 import { createPackBuilder, type PackBuilder } from '../../src/build/build-process.ts';
 import type { PackFrontendAddress } from '../../src/build/frontend-process.ts';
 import { startPackBuildWatcher } from '../../src/build/watch.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 let builder: PackBuilder | undefined;
 let temporary: string | undefined;
@@ -26,7 +27,7 @@ beforeEach(async () => {
   });
   // The subject is replacement of an already published generation.
   await builder!.build();
-}, 60_000 + 180_000);
+});
 afterEach(async () => {
   await watcher?.close();
   await builder?.close();
@@ -108,7 +109,7 @@ async function response(address: PackFrontendAddress, template = false): Promise
   return text;
 }
 
-it('refreshes backend and live frontend together, retains failed incumbents and awaits retirement', async () => {
+it('refreshes backend and live frontend together, retains failed incumbents and awaits retirement', { meta: cpuBudget(60_000 + 2 * 180_000 + 20_000 + 20_000) }, async () => {
   const { root, entry, generation, captures } = pack;
   const addresses: PackFrontendAddress[] = [];
   await builder!.serveFrontend(address => { if (address) addresses.push(address); });
@@ -149,4 +150,4 @@ it('refreshes backend and live frontend together, retains failed incumbents and 
   }
   expect(workspaces.length).toBeGreaterThanOrEqual(3);
   for (const workspace of workspaces) expect(fs.existsSync(workspace)).toBe(false);
-}, 60_000 + 2 * 180_000 + 20_000 + 20_000);
+});

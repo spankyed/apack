@@ -9,13 +9,16 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { holdExclusiveLock, readLock, type ExclusiveLock } from '@apackdev/host/exclusive-lock';
-import { TIMEOUT_MS } from './step-timeouts.ts';
 
 /** Under the home directory, since no checkout owns it and `TMPDIR` differs between two shells on one machine */
 export const MACHINE_LOCK = path.join(os.homedir(), '.cache', 'apack', 'expensive-steps.lock');
 
-/** How long a chain waits for a holder that looks alive: as long as the longest step it could be running */
-export const MACHINE_WAIT_MS = TIMEOUT_MS.acceptance.ms;
+/**
+ * How long a chain waits for a holder that looks alive before it gives up and names who holds it, on the clock: two
+ * hours. Declared here rather than taken from a step class, because a class is a budget of CPU and this is how long a
+ * person is kept waiting. A holder that is working is not ended by this, only no longer waited for.
+ */
+export const MACHINE_WAIT_MS = 7_200_000;
 /**
  * How long a chain waits on a lock nothing can resolve: unreadable, naming another machine (macOS's hostname moves with the
  * network) or naming this process, which holds none. Not at once, because `wx` makes the file before it writes it

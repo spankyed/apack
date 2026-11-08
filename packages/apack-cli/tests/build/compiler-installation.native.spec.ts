@@ -10,6 +10,7 @@ import { COMPILER_STORE_ENTRIES, captureCompilerInstallation, compilerStoreEntri
 import { isCompilerLocationPath } from '../../src/build/compiler-installation-inputs.ts';
 import { cliBin } from '../../src/utils.ts';
 import { _byDeadline } from '@apackdev/sdk/testing/waiting';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 const execFileAsync = promisify(execFile);
 /** What a process printed, trimmed */
@@ -113,7 +114,7 @@ it.skipIf(process.platform === 'win32' || !!process.versions.electron)('retains 
   expect(JSON.parse(output)).toEqual({ current: false, output: 'captured' });
 });
 
-it('owns a relative external esbuild executable and detects changed selection and bytes', async () => {
+it('owns a relative external esbuild executable and detects changed selection and bytes', { meta: cpuBudget(2 * 15_000 + 5_000) }, async () => {
   const compiler = esbuildFixture();
   fs.writeFileSync(compiler.file, compiler.bytes, { mode: 0o755 });
   const first = await compiler.capture();
@@ -130,7 +131,7 @@ it('owns a relative external esbuild executable and detects changed selection an
   fs.writeFileSync(compiler.file, compiler.bytes, { mode: 0o755 });
   expect(first.isCurrent(compiler.root, { ...compiler.options, env: {} })).toBe(false);
   expect(first.isCurrent(compiler.root, compiler.options)).toBe(true);
-}, 2 * 15_000 + 5_000);
+});
 
 it('detects damage to its captured external esbuild executable', async () => {
   const compiler = esbuildFixture();

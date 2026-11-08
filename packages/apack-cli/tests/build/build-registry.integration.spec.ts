@@ -10,6 +10,7 @@ import { stepRegistry } from '@apackdev/sdk/steps';
 import { createPackRegistry } from '@apackdev/host/packs';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { build } from '../../src/commands/build';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 const bound = createPackRegistry();
 const roots: string[] = [];
@@ -67,7 +68,7 @@ async function compiledContent(root: string): Promise<string> {
 }
 
 describe('a build', () => {
-  it('compiles flows against the steps it loaded, and leaves the bound registry untouched', async () => {
+  it('compiles flows against the steps it loaded, and leaves the bound registry untouched', { meta: cpuBudget(2 * 60_000 + 20_000) }, async () => {
     const root = pack('note');
     expect(await compiledContent(root), 'the flow compiled using its loaded step definitions')
       .toMatch(/flows: 1/);
@@ -78,7 +79,7 @@ describe('a build', () => {
     const receipt = fs.readFileSync(path.join(root, 'dist', PACK_LAYOUT.integrity), 'utf8');
     await expect(build(['--skip-fe'], root)).rejects.toThrow('missing required runtime/fe.js');
     expect(fs.readFileSync(path.join(root, 'dist', PACK_LAYOUT.integrity), 'utf8')).toBe(receipt);
-  }, 2 * 60_000 + 20_000);
+  });
 
   it('refuses a flow that names an undeclared step', async () => {
     const root = pack('no-such-step');

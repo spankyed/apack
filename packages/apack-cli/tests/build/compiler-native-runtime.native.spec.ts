@@ -14,6 +14,7 @@ import { assertCapturedMachOLibraries, captureMachOLibraryEnvironment } from '..
 import { spawnCompilerWorker } from '../../src/build/compiler-process.ts';
 import { readCompilerRuntimeInputs } from '../../src/build/compiler-runtime.ts';
 import { nativeFixture } from '../_support/native-libraries.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 // The native-library proofs are split by subject so the native half's shards can spread them; this one is
 // the captured Electron runtime, runtime-linked Mach-O libraries and default-fallback lookup.
@@ -23,7 +24,7 @@ const execFileAsync = promisify(execFile);
 const electronRuntimes: Array<[string, string | undefined]> = [['captured', undefined]];
 if (process.env.APACK_TEST_SIGNED_ELECTRON) electronRuntimes.push(['strictly signed captured', process.env.APACK_TEST_SIGNED_ELECTRON]);
 
-it.runIf(process.platform === 'darwin').each(electronRuntimes)('uses the %s Electron runtime through the shared compiler launcher', async (_label, executable) => {
+it.runIf(process.platform === 'darwin').each(electronRuntimes)('uses the %s Electron runtime through the shared compiler launcher', { meta: cpuBudget(2 * 60_000) }, async (_label, executable) => {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-electron-runtime-')));
   try {
     const require = createRequire(import.meta.url);
@@ -83,9 +84,9 @@ console.log(JSON.stringify({...output,stored:installation.executable.startsWith(
     // The captured runtime is the store's shared copy, kept for the next capture rather than retired with this one
     expect(result.stored).toBe(true);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
-}, 2 * 60_000);
+});
 
-it.runIf(process.platform === 'darwin' || process.platform === 'linux').each(electronRuntimes)('builds and archives a real pack under the %s Electron runtime', async (_label, executable) => {
+it.runIf(process.platform === 'darwin' || process.platform === 'linux').each(electronRuntimes)('builds and archives a real pack under the %s Electron runtime', { meta: cpuBudget(60_000 + 60_000 + (180_000 + 120_000) + 60_000 + 60_000) }, async (_label, executable) => {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-electron-pack-')));
   const require = createRequire(import.meta.url);
   const electron = executable ?? (require('electron') as string);
@@ -168,7 +169,7 @@ it.runIf(process.platform === 'darwin' || process.platform === 'linux').each(ele
   console.log('Electron pack compilation accepted', JSON.stringify({ runtime, revision: built.revision }));
   completed = true;
 // Four command bounds, followed by output verification and owned process disposal.
-}, 60_000 + 60_000 + (180_000 + 120_000) + 60_000 + 60_000);
+});
 
 it.runIf(process.platform === 'darwin')('refuses outside runtime-linked Mach-O constructors and accepts contained runtime libraries', async () => {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-macho-runtime-')));

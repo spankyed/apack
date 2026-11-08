@@ -11,7 +11,6 @@ export const API_CONFIG = {
   RESTART_DELAY: 2000,
   SHUTDOWN_TIMEOUT: 5000,
   SUCCESS_CHECK_DELAY: 5000,
-  READY_TIMEOUT: 60000,
 } as const;
 
 // API Server Events

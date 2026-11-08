@@ -5,12 +5,13 @@ import { afterEach, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { preparePack, packageJson, tsconfig } from '../_support/pack-builds.ts';
 import { runCommand } from '../_support/run-command.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 const roots: string[] = [];
 afterEach(() => roots.splice(0).forEach(root => fs.rmSync(root, { recursive: true, force: true })));
 
 // Four CLI commands, each bounded at 60s and run off the worker's event loop, then verification and cleanup
-it('refuses skipped generation after a packaged helper chunk changes at the same CLI version', async () => {
+it('refuses skipped generation after a packaged helper chunk changes at the same CLI version', { meta: cpuBudget(4 * 60_000 + 20_000) }, async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-packaged-tool-'));
   roots.push(root);
   const cli = path.join(root, 'cli');
@@ -56,4 +57,4 @@ it('refuses skipped generation after a packaged helper chunk changes at the same
   expect(rebuilt.code, rebuilt.output).toBe(0);
   expect(rebuilt.output).not.toContain('inputs unchanged');
   expect(fs.readFileSync(path.join(pack, 'src/__generated__/ears.ts'))).toEqual(generated);
-}, 4 * 60_000 + 20_000);
+});

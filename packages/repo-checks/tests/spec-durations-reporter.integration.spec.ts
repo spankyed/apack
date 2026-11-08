@@ -258,16 +258,21 @@ it('attributes qualified subprojects to their confirmed workspace without hiding
   expect(() => durationsOf(report, [{ workspace, dir: 'fixture', kind: 'pack' }])).toThrow('none of the');
 });
 
-it('records a test that passed past its budget, and only that one, against the budget the deadline implies', async () => {
+it('records a test that spent more CPU than its budget, against its own where it declares one', async () => {
   const root = path.join(temp, 'over-budget'); fs.mkdirSync(root);
   fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: '@fixture/over-budget', type: 'module' }));
   linkVitest(root);
-  // A deadline of 400ms is a budget of 200ms: the slow test passes inside the one and past the other
+  // A CPU deadline of 400ms is a budget of 200ms: 'costly' spends past it, 'declared' spends the same inside its own
+  // 1s deadline, and 'waits' takes longer than either on the clock while spending nothing — the case a duration
+  // would have named
+  const burn = 'const end = Date.now() + 300; while (Date.now() < end) {}';
   fs.writeFileSync(path.join(root, 'timing.spec.ts'), `import { it } from 'vitest';
-    it('slow', () => new Promise((resolve) => setTimeout(resolve, 300)));
-    it('quick', () => {});`);
-  fs.writeFileSync(path.join(root, 'vitest.config.ts'),
-    `export default { cacheDir: ${JSON.stringify(path.join(root, '.cache'))}, test: { include: ['timing.spec.ts'], testTimeout: ${2 * DEADLINE_FACTOR * 100} } };`);
+    it('costly', () => { ${burn} });
+    it('declared', { meta: { cpuBudgetMs: 1_000 } }, () => { ${burn} });
+    it('waits', () => new Promise((resolve) => setTimeout(resolve, 600)));`);
+  fs.writeFileSync(path.join(root, 'vitest.config.ts'), `export default { cacheDir: ${JSON.stringify(path.join(root, '.cache'))}, test: {
+    include: ['timing.spec.ts'], testTimeout: 0, hookTimeout: 0, provide: { 'apack.testCpuMs': ${2 * DEADLINE_FACTOR * 100} },
+    setupFiles: [${JSON.stringify(path.join(REPO_ROOT, 'packages/apack-testing/src/vitest-progress-guard.ts'))}] } };`);
   const out = path.join(root, 'durations.json');
   const child = boundedSpawn(process.execPath, [path.join(REPO_ROOT, 'node_modules/vitest/vitest.mjs'), 'run',
     '--config', path.join(root, 'vitest.config.ts'),
@@ -277,6 +282,6 @@ it('records a test that passed past its budget, and only that one, against the b
   const result = await child;
   expect(result.code, result.output).toBe(0);
   const [module] = readReportedRun(out)!.modules;
-  expect(module.overBudget).toEqual([{ name: 'slow', ms: expect.any(Number), budgetMs: 200 }]);
-  expect(module.overBudget[0].ms).toBeGreaterThan(200);
+  expect(module.overBudget).toEqual([{ name: 'costly', cpuMs: expect.any(Number), budgetMs: 200 }]);
+  expect(module.overBudget[0].cpuMs).toBeGreaterThan(200);
 });

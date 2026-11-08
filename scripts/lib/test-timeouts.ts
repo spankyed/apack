@@ -33,6 +33,12 @@ export interface TimeoutOverride {
   /** Milliseconds, or `undefined` where the argument is not a literal this can evaluate */
   readonly ms: number | undefined;
   readonly line: number;
+  /**
+   * What the number bounds. `cpu` is a test's `meta: cpuBudget(ms)`, the CPU it may spend before the progress guard
+   * fails it (`@apackdev/testing`'s `vitest-progress-guard.ts`). `clock` is a timeout vitest measures on the clock —
+   * a trailing argument, or `timeout` in a test's options — which a busy machine reaches, so the rule refuses one.
+   */
+  readonly kind: 'cpu' | 'clock';
 }
 
 /** How an override is named in the exceptions list, and in anything a person has to read */
@@ -75,16 +81,34 @@ export function timeoutOverrides(absFile: string, repoRoot: string): TimeoutOver
       let head: ts.Node = node.expression;
       while (ts.isPropertyAccessExpression(head) || ts.isCallExpression(head)) head = head.expression;
       if (ts.isIdentifier(head) && RUNNERS.has(head.text)) {
-        const argument = node.arguments[HOOKS.has(head.text) ? 1 : 2];
-        if (argument) {
-          const first = node.arguments[0];
-          found.push({
-            file: path.relative(repoRoot, absFile),
-            runner: head.text,
-            name: first && ts.isStringLiteralLike(first) ? first.text : '',
-            ms: ts.isSpreadElement(argument) ? undefined : constantMs(argument),
-            line: source.getLineAndCharacterOfPosition(argument.getStart(source)).line + 1,
-          });
+        const first = node.arguments[0];
+        const record = (at: ts.Node, kind: TimeoutOverride['kind'], ms: number | undefined) => found.push({
+          file: path.relative(repoRoot, absFile),
+          runner: head.text,
+          name: first && ts.isStringLiteralLike(first) ? first.text : '',
+          ms,
+          line: source.getLineAndCharacterOfPosition(at.getStart(source)).line + 1,
+          kind,
+        });
+        const isFunction = (candidate: ts.Node) => ts.isArrowFunction(candidate) || ts.isFunctionExpression(candidate);
+        // A trailing timeout: whatever sits after the function, which a test's options object never does
+        const trailing = node.arguments[HOOKS.has(head.text) ? 1 : 2];
+        if (trailing && !isFunction(trailing) && !ts.isObjectLiteralExpression(trailing)) {
+          record(trailing, 'clock', ts.isSpreadElement(trailing) ? undefined : constantMs(trailing));
+        }
+        // A test's options, the second argument: `timeout` there is the same clock, `meta.cpuBudgetMs` is CPU
+        const options = HOOKS.has(head.text) ? undefined : node.arguments[1];
+        if (options && ts.isObjectLiteralExpression(options)) {
+          for (const property of options.properties) {
+            if (!ts.isPropertyAssignment(property) || !ts.isIdentifier(property.name)) continue;
+            if (property.name.text === 'timeout') record(property.initializer, 'clock', constantMs(property.initializer));
+            // `meta: cpuBudget(ms)`, `@apackdev/testing/vitest`'s helper and the one way a test declares it
+            const meta = property.name.text === 'meta' ? property.initializer : undefined;
+            if (meta && ts.isCallExpression(meta) && ts.isIdentifier(meta.expression) && meta.expression.text === 'cpuBudget') {
+              const [ms] = meta.arguments;
+              record(ms ?? meta, 'cpu', ms === undefined || ts.isSpreadElement(ms) ? undefined : constantMs(ms));
+            }
+          }
         }
       }
     }

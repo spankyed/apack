@@ -10,11 +10,14 @@ export default defineConfig({
   ssr: { resolve: { conditions } },
   test: {
     // A worker exits when its vitest does, rather than running on orphaned
-    setupFiles: ['../apack-testing/src/vitest-exit-with-parent.ts'],
-    // Small (`SIZE_MS` × `DEADLINE_FACTOR`, scripts/lib/unit-suites.ts). A budget belongs to the size, not to each
-    // test that trips over vitest's 5s default.
-    testTimeout: 30_000,
-    hookTimeout: 30_000,
+    setupFiles: ['../apack-testing/src/vitest-exit-with-parent.ts', '../apack-testing/src/vitest-progress-guard.ts'],
+    // Small (`SIZE_MS` × `DEADLINE_FACTOR`, scripts/lib/unit-suites.ts): the CPU one test may spend. A test that
+    // needs more declares a reviewed `meta.cpuBudgetMs` (`suite-timeouts.spec.ts`)
+    provide: { 'apack.testCpuMs': 30_000 },
+    // Vitest's clock is off: the progress guard in setupFiles fails a test or hook whose process tree stalls, and a
+    // test that spends the CPU budget above (`vitest-progress-guard.ts`, `@apackdev/testing`)
+    testTimeout: 0,
+    hookTimeout: 0,
     // The fast half. The specs that spawn a compiler are `*.integration.spec.ts` and run from
     // `vitest.integration.config.ts`, which gives them 60s and half the cores.
     include: ['tests/**/*.spec.ts'],

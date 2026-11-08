@@ -16,6 +16,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { packagesBuiltOrRefuse, REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { PACK_LAYOUT } from '@apackdev/host/packs';
 import { buildPack, callCli, packageJson, preparePack, tsconfig } from '../_support/pack-builds';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 /** Skips without built packages, and refuses rather than reading a stale `dist` */
 const PACKAGES_BUILT = packagesBuiltOrRefuse('npm run packages:build (or npm test -w @apackdev/cli, which builds them)');
@@ -99,7 +100,7 @@ describe.skipIf(!PACKAGES_BUILT)('apack pack facade-report', () => {
     expect(output).toContain('is up to date');
   });
 
-  it('checks the verified current build without changing generated files', async () => {
+  it('checks the verified current build without changing generated files', { meta: cpuBudget(60_000 + 20_000) }, async () => {
     // Recording the report adds an authored input; publish that state before inspecting it passively.
     await buildPack(pack, ID);
     const directory = path.join(pack, 'src/__generated__');
@@ -110,7 +111,7 @@ describe.skipIf(!PACKAGES_BUILT)('apack pack facade-report', () => {
     expect(output).toContain('is up to date');
     expect(fs.readdirSync(directory)).toEqual(before);
     expect(fs.readFileSync(path.join(pack, '.apack/generate-entries.json'), 'utf8')).toBe(stamp);
-  }, 60_000 + 20_000);
+  });
 
   it('refuses edited generated files on the skip path without updating the report', async () => {
     const entry = path.join(pack, 'src/__generated__/pack-types.ts');

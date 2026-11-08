@@ -12,6 +12,7 @@ import { formatNodeOptions, parseNodeOptions } from '@apackdev/host/build/source
 import { withCompilerFileReads } from '@apackdev/host/build/compiler-inputs';
 import { nativeFixture, ordinaryNativeLoad, nativeLoad, nativeWorkerCompiler, type NativeFixture } from '../_support/native-libraries.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 // The native-library proofs are split by subject so the native half's shards can spread them; this one is
 // native libraries checked before addon initialization, in preloads, threads and launch search paths.
@@ -55,7 +56,7 @@ it.runIf(process.platform === 'darwin').each(['relative', 'absolute', 'transitiv
   }
 });
 
-it.runIf(process.platform === 'darwin' || process.platform === 'linux').each(['preload', 'thread'] as const)('captures native %s libraries and retains the incumbent after outside-library refusal', async site => {
+it.runIf(process.platform === 'darwin' || process.platform === 'linux').each(['preload', 'thread'] as const)('captures native %s libraries and retains the incumbent after outside-library refusal', { meta: cpuBudget(120_000 + 2 * 60_000 + 60_000) }, async site => {
   const started = performance.now();
   const checkpoint = (phase: string) => console.info(`Native ${site}: ${phase} (${Math.round(performance.now() - started)}ms)`);
   const supported = await nativeFixture('relative');
@@ -136,9 +137,9 @@ it.runIf(process.platform === 'darwin' || process.platform === 'linux').each(['p
     }
     completed = true;
   } finally { await close(); }
-}, 120_000 + 2 * 60_000 + 60_000);
+});
 
-it.runIf(process.platform === 'darwin' || process.platform === 'linux')('retains launch-time native search paths across preload changes and compiler workers', async () => {
+it.runIf(process.platform === 'darwin' || process.platform === 'linux')('retains launch-time native search paths across preload changes and compiler workers', { meta: cpuBudget(2 * 60_000 + 60_000 + 20_000) }, async () => {
   const fixture = await nativeFixture(process.platform === 'linux' ? 'runpath' : 'relative');
   const builder = createPackBuilder(fixture.pack, { captureCompiler: sharedCompiler.capture });
   const previousOptions = process.env.NODE_OPTIONS;
@@ -190,4 +191,4 @@ it.runIf(process.platform === 'darwin' || process.platform === 'linux')('retains
     await builder.close();
     fs.rmSync(fixture.root, { recursive: true, force: true });
   }
-}, 2 * 60_000 + 60_000 + 20_000);
+});

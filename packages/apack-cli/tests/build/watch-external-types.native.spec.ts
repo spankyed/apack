@@ -7,8 +7,9 @@ import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { readPackBuild } from '@apackdev/host/packs';
 import { startTestPackBuildWatcher, WATCH_REBUILD_BUDGET_MS, type TestPackBuildWatcher } from '../_support/watch-builds.ts';
 import { tsconfig } from '../_support/pack-builds.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
-it('rebuilds external contracts and recovers a retargeted missing input without an authored edit', async ({ signal }) => {
+it('rebuilds external contracts and recovers a retargeted missing input without an authored edit', { meta: cpuBudget(120_000 + 3 * WATCH_REBUILD_BUDGET_MS + 20_000) }, async ({ signal }) => {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-watch-external-types-'));
   const root = path.join(temporary, 'pack');
   const parent = path.join(temporary, 'base.json');
@@ -77,4 +78,4 @@ export default { spec, machine: setup({ types: spec.types }).createMachine({ id:
     fs.rmSync(temporary, { recursive: true, force: true });
   }
 // Four compiler attempts share this scenario; individual rebuild waits remain bounded above.
-}, 120_000 + 3 * WATCH_REBUILD_BUDGET_MS + 20_000);
+});

@@ -6,12 +6,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { buildPack, preparePack, packageJson, tsconfig, CLI } from '../_support/pack-builds.ts';
 import { runCommand } from '../_support/run-command.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 let root: string | undefined;
 afterEach(() => { if (root) fs.rmSync(root, { recursive: true, force: true }); root = undefined; });
 
 describe('external pack offline inspection', () => {
-  it('reports authentic compiled content and cached dependency provenance after producer source removal', async () => {
+  it('reports authentic compiled content and cached dependency provenance after producer source removal', { meta: cpuBudget(5 * 60_000 + 20_000) }, async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-info-external-'));
     const producerManifest = { id: 'info-provider', name: 'Info provider', version: '1.0.0',
       data: { entities: { InfoMemo: {} } }, lifecycle: { onInit: 'src/hooks.ts#onInit' },
@@ -54,5 +55,5 @@ describe('external pack offline inspection', () => {
     expect(report.dependencies).toEqual(JSON.parse(cached.stdout).dependencies);
     expect(fs.readFileSync(record)).toEqual(recorded);
     expect(inspected.output + cached.output + doctor.output).not.toContain('Inspection activated');
-  }, 5 * 60_000 + 20_000);
+  });
 });

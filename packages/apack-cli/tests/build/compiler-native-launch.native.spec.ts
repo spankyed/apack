@@ -13,6 +13,7 @@ import type { CompilerInstallation } from '../../src/build/compiler-installation
 import { startPackFrontend, type PackFrontend } from '../../src/build/frontend-process.ts';
 import { nativeFixture, nativeLoad } from '../_support/native-libraries.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 // The native-library proofs are split by subject so the native half's shards can spread them; this one is
 // outside launch overrides: OS libraries, the DYLD_* variables and the selected image suffix.
@@ -21,7 +22,7 @@ const sharedCompiler = shareCompilerInstallation();
 const execFileAsync = promisify(execFile);
 const PROBE_MS = 60_000;
 
-it.runIf(process.platform === 'darwin')('admits OS libraries and refuses outside launch overrides before build or frontend launch', async () => {
+it.runIf(process.platform === 'darwin')('admits OS libraries and refuses outside launch overrides before build or frontend launch', { meta: cpuBudget(120_000 + 60_000 + 20_000) }, async () => {
   const fixture = await nativeFixture('relative');
   const builder = createPackBuilder(fixture.pack, { captureCompiler: sharedCompiler.capture });
   const previous = process.env.DYLD_INSERT_LIBRARIES;
@@ -66,10 +67,10 @@ __attribute__((constructor)) static void initialize(void) {
     await builder.close();
     fs.rmSync(fixture.root, { recursive: true, force: true });
   }
-}, 120_000 + 60_000 + 20_000);
+});
 
 it.runIf(process.platform === 'darwin').each(['DYLD_FALLBACK_LIBRARY_PATH', 'DYLD_FRAMEWORK_PATH', 'DYLD_FALLBACK_FRAMEWORK_PATH'] as const)(
-  'refuses external %s before native initialization after preload mutation', async variable => {
+  'refuses external %s before native initialization after preload mutation', { meta: cpuBudget(2 * 60_000 + 60_000 + 20_000) }, async variable => {
     const framework = variable !== 'DYLD_FALLBACK_LIBRARY_PATH';
     const fixture = await nativeFixture(framework ? 'framework' : 'fallback');
     const builder = createPackBuilder(fixture.pack, { captureCompiler: sharedCompiler.capture });
@@ -117,7 +118,7 @@ it.runIf(process.platform === 'darwin').each(['DYLD_FALLBACK_LIBRARY_PATH', 'DYL
       await builder.close();
       fs.rmSync(fixture.root, { recursive: true, force: true });
     }
-  }, 2 * 60_000 + 60_000 + 20_000,
+  },
 );
 
 it.runIf(process.platform === 'darwin').each(['DYLD_VERSIONED_LIBRARY_PATH', 'DYLD_VERSIONED_FRAMEWORK_PATH'] as const)(
@@ -161,7 +162,7 @@ it.runIf(process.platform === 'darwin').each(['DYLD_VERSIONED_LIBRARY_PATH', 'DY
   },
 );
 
-it.runIf(process.platform === 'darwin')('captures the selected native image suffix and refuses its later transitive escape', async () => {
+it.runIf(process.platform === 'darwin')('captures the selected native image suffix and refuses its later transitive escape', { meta: cpuBudget(2 * 60_000 + 90_000 + 30_000) }, async () => {
   const fixture = await nativeFixture('relative');
   const builder = createPackBuilder(fixture.pack, { captureCompiler: sharedCompiler.capture });
   const previousOptions = process.env.NODE_OPTIONS;
@@ -216,4 +217,4 @@ it.runIf(process.platform === 'darwin')('captures the selected native image suff
     await builder.close();
     fs.rmSync(fixture.root, { recursive: true, force: true });
   }
-}, 2 * 60_000 + 90_000 + 30_000);
+});

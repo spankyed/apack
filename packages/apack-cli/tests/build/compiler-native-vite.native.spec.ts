@@ -13,6 +13,7 @@ import { startPackBuildWatcher } from '../../src/build/watch.ts';
 import { createCompilerWatchMatcher, mergeCompilerWatchPaths, type CompilerWatchPaths } from '../../src/build/compiler-watch.ts';
 import { nativeFixture, nativeLoad } from '../_support/native-libraries.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 /** A ceiling for what's on its way on a machine with two cores and a build running: a wait ends as soon as it's met, and a dev server transforms a view in its own time */
 const SETTLES_MS = 60_000;
@@ -22,7 +23,7 @@ const SETTLES_MS = 60_000;
 
 const sharedCompiler = shareCompilerInstallation();
 
-it('tracks retained Vite ESM preload and loader inputs without freezing Vue sources', async () => {
+it('tracks retained Vite ESM preload and loader inputs without freezing Vue sources', { meta: cpuBudget(120_000) }, async () => {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-vite-esm-inputs-')));
   const pack = path.join(root, 'pack');
   const previous = process.env.NODE_OPTIONS;
@@ -170,7 +171,7 @@ it('tracks retained Vite ESM preload and loader inputs without freezing Vue sour
     try { await frontend?.close(); }
     finally { await compiler?.dispose(); fs.rmSync(root, { recursive: true, force: true }); }
   }
-}, 120_000);
+});
 
 it('retains independent captured Vite owners through replacement and close', async () => {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-vite-owners-')));
@@ -211,7 +212,7 @@ it('retains independent captured Vite owners through replacement and close', asy
   }
 });
 
-it.runIf(process.platform === 'darwin')('watches external Vite native changes and repairs a failed generation through newly discovered inputs', async ({ onTestFinished }) => {
+it.runIf(process.platform === 'darwin')('watches external Vite native changes and repairs a failed generation through newly discovered inputs', { meta: cpuBudget(300_000) }, async ({ onTestFinished }) => {
   const fixture = await nativeFixture('relative');
   const builder = createPackBuilder(fixture.pack, { captureCompiler: sharedCompiler.capture });
   const previous = process.env.NODE_OPTIONS;
@@ -305,7 +306,7 @@ it.runIf(process.platform === 'darwin')('watches external Vite native changes an
     console.info('Native watch refusals:', errors.mock.calls);
     throw error;
   } finally { await close(); }
-}, 300_000);
+});
 
 it.runIf(process.platform === 'darwin').each(['preload', 'thread'] as const)(
   'owns retained Vite native %s inputs while authored Vue sources stay live', async site => {
