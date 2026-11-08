@@ -107,6 +107,7 @@
     "db:clear-settings": "node scripts/db-dev.mjs clear-settings",
     "check:idle": "tsx scripts/check-idle.ts",
     "measure": "tsx scripts/measure.ts",
+    "stress": "tsx scripts/stress.ts",
     "janitor": "node --disable-warning=ExperimentalWarning scripts/janitor.ts",
     "janitor:install": "node --disable-warning=ExperimentalWarning scripts/janitor.ts --install",
     "test:linux": "tsx scripts/linux-runner.ts",
