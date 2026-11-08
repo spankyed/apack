@@ -243,11 +243,17 @@ describe('the stamp protocol', () => {
     // fixture: editing a real `build:package` to test it makes that unit stale, and a stale unit used to stop
     // this file running at all.
     const inlinesHost = (workspace: string) => buildScriptFor(workspace) === 'scripts/bundle-package.ts';
+    // A listed file in a package's own tree is that package's source, and so an input of its own build
+    const packageDirs = new Map(fs.readdirSync(path.join(REPO_ROOT, 'packages')).flatMap((dir) => {
+      const manifest = path.join(REPO_ROOT, 'packages', dir, 'package.json');
+      return fs.existsSync(manifest) ? [[JSON.parse(fs.readFileSync(manifest, 'utf8')).name as string, dir] as const] : [];
+    }));
+    const ownSource = (workspace: string, rule: string) => rule.startsWith(`packages/${packageDirs.get(workspace)}/`);
     const offences = Object.keys(BUILD_UNITS).flatMap((workspace) => {
       if (inlinesHost(workspace)) return [];
       const resolved = new Set(BUILD_UNITS[workspace].inputs.flatMap((input) => inputFiles(input)));
       return Object.keys(NOT_A_BUILD_INPUT)
-        .filter((rule) => resolved.has(rule))
+        .filter((rule) => resolved.has(rule) && !ownSource(workspace, rule))
         .map((rule) => `${workspace} watches ${rule} — ${NOT_A_BUILD_INPUT[rule]}`);
     });
     expect(offences).toEqual([]);

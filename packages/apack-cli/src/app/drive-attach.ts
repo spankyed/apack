@@ -110,9 +110,10 @@ export async function spawnDevApp(
   let exited = false;
   child.once('exit', () => { exited = true; });
   try {
-    if (child.pid === undefined) throw new Error('The app did not start');
-    // For as long as the launcher works: a cold start builds the pack before the app publishes anything
-    const session = await waitForSession(dataDir, { work: processWork(child.pid), isAlive: () => !exited });
+    // For as long as the launcher works: a cold start builds the pack before the app publishes anything. One with
+    // no pid cannot be read, so its wait is bounded by silence alone, as every unreadable party's is
+    const work: WorkReading = child.pid === undefined ? () => Promise.resolve(undefined) : processWork(child.pid);
+    const session = await waitForSession(dataDir, { work, isAlive: () => !exited });
     return { session, logPath: session.logPath ?? logPath };
   } catch (error) {
     const tail = fs.existsSync(logPath) ? fs.readFileSync(logPath, 'utf-8').trimEnd().split('\n').slice(-6).join('\n') : '';

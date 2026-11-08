@@ -258,6 +258,9 @@ export const NOT_A_BUILD_INPUT: Record<string, string> = {
     + 'it decides when a build may start, never what one writes',
   'packages/apack-host/src/process-liveness.ts': 'whether the process named by a lock is still there, which '
     + 'is the lock above asking its one question',
+  // Still the SDK's own source: a listed file is no input of any other unit, and an ordinary one of its own package
+  'packages/apack-sdk/src/progress.ts': 'how long a wait on the lock lasts — its holder\'s progress — which decides '
+    + 'when a build may start, never what one writes',
 };
 
 /**
