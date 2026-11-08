@@ -506,11 +506,17 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   this state is not that one: the Phase H fork is unsettled and X4 and Phase B's Windows half are
   outstanding, so five macOS runners would be validating something that must still change. It is the first
   thing to run once those land.
-- **Next action: the fork above, which is the one thing a session cannot decide for itself.** Everything
-  else that is left needs Windows: **X4** (Phase A's half), and **X1, X2 and ConPTY's resize and exit**
-  (Phase B's), all of which the goal says are claimed on a Windows run or not at all. `command-group`'s API
-  is retired, so that part is a wiring job rather than a question. **Phases G, T, S, P and A are done**,
-  Phase B is done but for its Windows half, and Phase H is done but for the fork.
+- **Next action: X4, and it is the only thing left that needs Windows.** **X1, X2, X6, X9, X11, X13 and
+  ConPTY's resize and exit are already claimed on a Windows run** — `apack-terminal`'s `tests/broker.rs`
+  passes there in full at `b942f2c` — so Phase B's `portable-pty` validation is complete and the list of
+  Windows work is one finding, not five. Two revisions of this handoff said otherwise after it had stopped
+  being true, which is what a "remaining" column costs when the thing it names gets done somewhere else.
+  **Every other phase is done**: G, T, S, P, A and H, with the session-lifetime fork settled in Decisions.
+- **The seven lifetime and exit cases now run on Windows too** (`apack-terminal` `1298882`). They were
+  `#[cfg(unix)]` and none of them reached the POSIX-only helper that gates its neighbours — so the two rules
+  with the most to say on that platform, the Job Object's interaction with who ends a session and a broker
+  exiting by closing a named pipe, were the ones not being asked there. Whatever Windows session takes X4
+  gets them for free.
 - **What Phase S deliberately does not have yet**, and should not before Phase B: a second client, bounded
   history and backpressure, reattach, and `command-group` in the spawn path — the probe proved the API, and
   `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` needs a Windows run. One connection's sessions live as long as the
