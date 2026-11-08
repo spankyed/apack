@@ -41,8 +41,9 @@ Commit usable checkpoints as you go. Do not expand or reduce scope without user 
 
 **One owner per terminal session, and the owner is whoever claims it.** The pty left the API process for a
 broker in a pinned sibling repository (`apack-terminal`), the VT core went with it, and a session's lifetime
-stopped being the lifetime of whatever asked for one. **50 of the review's 58 findings are closed**; the
-eight that remain each carry a disposition and none needs a machine this repo lacks.
+stopped being the lifetime of whatever asked for one. **52 of the document's 58 rows are closed.** The
+review held **55** rows at the survey commit `98bf6a0935`; F18 and T10 are rows this goal added, and of the
+53 review findings in scope, **one is open**: G1.
 
 21 commits here and 12 in `apack-terminal`.
 
@@ -58,14 +59,19 @@ eight that remain each carry a disposition and none needs a machine this repo la
 | P — presentation | done | `TerminalAttachment`; `@xterm/*` imported by one module, enforced **both ways** so the rule cannot pass by having no subject |
 | A — agent facts | done | OSC 633 out of the VT core — facts, search and wait answering for a session nobody is drawing; reported paths treated as claims |
 
-### What remains, and why none of it is this goal's
+### What remains, and which of it is this goal's
+
+**One row is in scope and open, and saying otherwise was this record's own error.** An earlier revision of
+this section was headed *"why none of it is this goal's"* and put G1 among the rest. The Scope section
+settles it the other way — *"G1 is in scope here because it is payload discipline rather than process
+ownership"* — and the output pipe the review assigns it to is this goal's Phases B and P, so there was
+nothing it had been assigned away to.
 
 | | |
 |---|---|
-| G1 | priced and its mechanism measured; the fix is a delta feed, which the review assigns to the output pipe |
-| G3, G6, G7 | the files move substantially on #372; the goal says to verify against that branch first |
-| S4 | `openLink`'s scheme filter — the review's own negative results record that the terminal cannot reach it |
-| F17, F18, T10 | recorded with what each would cost; F18 and T10 were found during this goal rather than by the review |
+| **G1** | **in scope and open.** Priced, its mechanism measured and the review's figure confirmed; what stops it closing is a fork D1–D11 do not settle — a delta feed with the renderer appending, or a durable write at finalize and streaming to the window only, which trades a crash mid-stream against the amplification. Recorded rather than chosen, as Constraints require |
+| G3, G6, G7 | **excluded by Scope**, under *"G2–G7 … their own goal"*: the files move substantially on #372 and most of them dissolve against the process layer rather than needing fixes |
+| F18, T10 | **not review findings.** The review held 55 rows at `98bf6a0935`; these two were found here and added to it, each with what it would cost. F18 is adjacent to M2 and not the same defect; T10's claim needs re-checking against the `pendingTabOrder` guard that already returns early |
 
 ### Corrections to the Decisions
 

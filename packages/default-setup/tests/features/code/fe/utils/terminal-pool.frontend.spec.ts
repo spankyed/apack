@@ -81,6 +81,11 @@ const host = () => {
   document.body.appendChild(element)
   return element
 }
+/** Every session any case here could have made. The pool is a module singleton, so a case about its
+ *  lifetime has to start from an empty one. */
+const drain = () => {
+  for (let i = 1; i <= next; i += 1) terminalPool.dispose(`t-${i}`)
+}
 
 beforeEach(() => {
   onDataHandlers.length = 0
@@ -290,6 +295,48 @@ describe('what the pool draws, and what it refuses to', () => {
     // them. Sent as input, that trailing newline runs the command
     expect(pasted).toEqual(['rm -rf /\n'])
     expect(sent, 'a paste must not arrive as keystrokes').toEqual([])
+  })
+
+  /**
+   * **F17**: the `apack:paste` listener was registered at module scope and never removed, so every reload of
+   * this pack's frontend left another one behind holding a pool whose emulators had been disposed. The leak's
+   * only observable is the registration itself, which is why this case watches `document` rather than a
+   * getter written for it — and why it fails on the old code, where neither call is ever made.
+   */
+  it('takes its paste listener back with the last session, and installs one per pool rather than per module', () => {
+    drain()
+    const added: string[] = []
+    const removed: string[] = []
+    const add = document.addEventListener.bind(document)
+    const remove = document.removeEventListener.bind(document)
+    vi.spyOn(document, 'addEventListener').mockImplementation(((type: string, ...rest: never[]) => {
+      if (type === 'apack:paste') added.push(type)
+      return add(type as keyof DocumentEventMap, ...(rest as never[]))
+    }) as typeof document.addEventListener)
+    vi.spyOn(document, 'removeEventListener').mockImplementation(((type: string, ...rest: never[]) => {
+      if (type === 'apack:paste') removed.push(type)
+      return remove(type as keyof DocumentEventMap, ...(rest as never[]))
+    }) as typeof document.removeEventListener)
+
+    const first = info()
+    const second = info()
+    terminalPool.ensure(first, () => {})
+    terminalPool.ensure(second, () => {})
+
+    expect(added.length, 'one listener for the pool, not one per session').toBe(1)
+    expect(removed, 'the pool still has sessions').toEqual([])
+
+    terminalPool.dispose((first as unknown as { id: string }).id)
+    expect(removed, 'a session went, but the pool still has one').toEqual([])
+
+    terminalPool.dispose((second as unknown as { id: string }).id)
+    expect(removed.length, 'the last session went and the listener stayed').toBe(1)
+
+    // And it comes back for the next session, so taking it back is not a one-way door
+    terminalPool.ensure(info(), () => {})
+    expect(added.length).toBe(2)
+
+    vi.restoreAllMocks()
   })
 
   it('swallows a clipboard the window may not read', async () => {

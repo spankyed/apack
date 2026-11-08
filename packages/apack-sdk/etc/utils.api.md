@@ -348,6 +348,9 @@ export function stripInternalFields<T extends object>(items: T[]): Record<string
 // @public
 export function stripMediaRefs(markdown: string): string;
 
+// @public
+export function summarizeUrl(url: string): string;
+
 // @public (undocumented)
 export function toDisplayName(str: string): string;
 
@@ -362,6 +365,9 @@ export function toSlug(name: string): string;
 
 // @public (undocumented)
 export function uniqueFilename(name: string, existingNames: Set<string>): string;
+
+// @public
+export function webUrlProblem(url: string): string | undefined;
 
 // @public (undocumented)
 export function writeExportFile(dir: string, filename: string, content: string): string;

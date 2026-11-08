@@ -224,6 +224,7 @@ class TerminalPool {
       this.markRestart(existing, info.pid)
       return existing
     }
+    this.listenForPaste()
 
     const term = new Terminal({
       fontFamily: 'JetBrains Mono, Cascadia Code, Fira Code, Menlo, monospace',
@@ -550,16 +551,37 @@ class TerminalPool {
 
     try { entry.term.dispose() } catch (e) { console.error('[terminalPool] term.dispose failed:', e) }
     this.entries.delete(terminalId)
+    if (this.entries.size === 0) this.stopListeningForPaste()
+  }
+
+  /**
+   * A paste the window delivered as an event, pasted through the emulator rather than sent as input.
+   *
+   * **The listener is the pool's, and its lifetime is the pool's sessions** — installed with the first and
+   * taken back with the last. Registered at module scope instead it was never removed, so each reload of this
+   * pack's frontend left another one behind holding a pool whose emulators were disposed. A module singleton
+   * has no owner to remove it, and its sessions are the only lifetime it has to offer.
+   */
+  private paste: EventListener | null = null
+
+  private listenForPaste(): void {
+    if (this.paste) return
+    this.paste = ((event: CustomEvent<{ text: string }>) => {
+      const el = event.target as HTMLElement
+      const entry = this.findByElement(el)
+      if (!entry) return
+      event.preventDefault()
+      el.focus()
+      entry.term.paste(event.detail.text)
+    }) as EventListener
+    document.addEventListener('apack:paste', this.paste)
+  }
+
+  private stopListeningForPaste(): void {
+    if (!this.paste) return
+    document.removeEventListener('apack:paste', this.paste)
+    this.paste = null
   }
 }
 
 export const terminalPool = new TerminalPool()
-
-document.addEventListener('apack:paste', ((e: CustomEvent<{ text: string }>) => {
-  const el = e.target as HTMLElement
-  const entry = terminalPool.findByElement(el)
-  if (!entry) return
-  e.preventDefault()
-  el.focus()
-  entry.term.paste(e.detail.text)
-}) as EventListener)
