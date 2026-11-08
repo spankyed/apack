@@ -42,7 +42,7 @@ describe('a shell whose integration could not be written', () => {
     await app.connect()
 
     const { terminalService } = await import('#features/code/be/services/terminal.ts')
-    const terminal = await terminalService.create({ cols: 80, rows: 24 }, { onData: () => {}, onExit: () => {} })
+    const terminal = await terminalService.create({ cols: 80, rows: 24 }, { onData: () => {}, onExit: () => {}, onCrashed: () => {} })
 
     expect(terminal.id, 'the terminal opened').toBeTruthy()
     expect(opened, 'the shell was started').toHaveLength(1)
@@ -67,7 +67,7 @@ describe('a shell whose integration could not be written', () => {
     await app.connect()
 
     const { terminalService } = await import('#features/code/be/services/terminal.ts')
-    await terminalService.create({ cols: 80, rows: 24 }, { onData: () => {}, onExit: () => {} })
+    await terminalService.create({ cols: 80, rows: 24 }, { onData: () => {}, onExit: () => {}, onCrashed: () => {} })
 
     expect(written, 'the rc file was written').not.toHaveLength(0)
     const arranged = (opened[0]!.args?.length ?? 0) > 0 || Object.keys(opened[0]!.env ?? {}).length > 0

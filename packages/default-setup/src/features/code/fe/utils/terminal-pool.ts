@@ -55,6 +55,8 @@ export interface PoolEntry {
    * cannot say whether what is on screen came from the shell that is answering now. The pid can.
    */
   pid: number
+  /** Whether this generation's death has already been written on the screen, so it is written once */
+  exitNoted?: boolean
   term: Terminal
   fitAddon: FitAddon
   wrapper: HTMLDivElement
@@ -81,6 +83,17 @@ export interface PoolEntry {
  * this line nothing distinguishes a shell that has been running all along from one that started a second
  * ago in the same directory.
  */
+/**
+ * What a shell that died badly leaves on the screen.
+ *
+ * **The terminal stays open for this line.** A shell that exits 0 closes its terminal, and a user who typed
+ * `exit` wants it gone; a shell that segfaults, is OOM-killed or fails under `set -e` leaves the reason on
+ * the screen above, and closing the window takes the one thing they need with it.
+ */
+const exitedNotice = (code: number | null) =>
+  `\r\n\x1b[31m── the shell ended ${code === null ? 'without a status (a signal)' : `with status ${code}`}`
+  + ` — nothing below this line is from it ──\x1b[0m\r\n`
+
 const restartedNotice = (pid: number) =>
   `\r\n\x1b[90m── new shell (pid ${pid}) — the previous session ended; nothing above is from this one ──\x1b[0m\r\n`
 
@@ -142,10 +155,45 @@ class TerminalPool {
     return this.entries.get(terminalId)
   }
 
+  /**
+   * Says on the screen that the shell behind this terminal has gone.
+   *
+   * Written once per death: a second `CRASHED` for the same terminal is the same news arriving twice, and
+   * two lines would read as two shells having died.
+   */
+  noteExit(terminalId: string, code: number | null): void {
+    const entry = this.entries.get(terminalId)
+    if (!entry || entry.exitNoted) return
+    entry.exitNoted = true
+    entry.term.write(exitedNotice(code))
+  }
+
+  /**
+   * A new generation is running under this terminal.
+   *
+   * **One seam per boundary, wherever the news arrives from.** A crash already drew the line, so this takes
+   * the new pid quietly; a restart of a shell that was still running has drawn nothing, so it draws. Without
+   * taking the pid, the next list to arrive would find a pid it did not know and write a second seam below
+   * whatever the new shell had printed by then — a line about a death, placed after the life that followed
+   * it.
+   */
+  noteRestart(terminalId: string, pid: number): void {
+    const entry = this.entries.get(terminalId)
+    if (!entry) return
+    if (entry.exitNoted) {
+      entry.pid = pid
+      entry.exitNoted = false
+      return
+    }
+    this.markRestart(entry, pid)
+  }
+
   /** Marks the seam when an entry's pty has been replaced, and records the one answering now. */
   private markRestart(entry: PoolEntry, pid: number): void {
     if (pid === entry.pid) return
     entry.pid = pid
+    // A new shell is running, so the death above has been accounted for and the next one is news again
+    entry.exitNoted = false
     entry.term.write(restartedNotice(pid))
   }
 

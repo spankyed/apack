@@ -65,6 +65,7 @@ export interface CodeTerminalContext {
 export type Event =
   | { type: 'terminal.CREATE'; title?: string; cwd?: string; target?: 'tab'; command?: string }
   | { type: 'terminal.CLOSE'; terminalId: string }
+  | { type: 'terminal.RESTART'; terminalId: string }
   | { type: 'terminal.INPUT'; terminalId: string; data: string }
   | { type: 'terminal.RESIZE'; terminalId: string; cols: number; rows: number }
   | { type: 'terminal.RENAME'; terminalId: string; customTitle: string }
@@ -75,6 +76,8 @@ export type Event =
   | { type: 'terminal.CREATED'; data: { terminalId: string } }
   | { type: 'terminal.OPENED'; data: TerminalInfo }
   | { type: 'terminal.CLOSED'; data: { terminalId: string } }
+  | { type: 'terminal.CRASHED'; data: { terminalId: string; code: number | null } }
+  | { type: 'terminal.RESTARTED'; data: TerminalInfo }
   | { type: 'terminal.RENAMED'; data: { terminalId: string; customTitle: string } }
   | { type: 'terminal.CWD_CHANGED'; data: { terminalId: string; cwd: string; title?: string } }
   | { type: 'terminal.OUTPUT'; data: { terminalId: string; data: string } }
@@ -114,6 +117,11 @@ export const terminalState = setup({
     closeTerminal: ({ event }) => {
       const ev = event as { type: 'terminal.CLOSE'; terminalId: string }
       sendToSystem('code', { type: 'terminal.CLOSE_TERMINAL', terminalId: ev.terminalId })
+    },
+
+    restartTerminal: ({ event }) => {
+      const ev = event as { type: 'terminal.RESTART'; terminalId: string }
+      sendToSystem('code', { type: 'terminal.RESTART_TERMINAL', terminalId: ev.terminalId })
     },
 
     sendTerminalInput: ({ event }) => {
@@ -221,6 +229,41 @@ export const terminalState = setup({
       terminals: ({ context, event }) => {
         const ev = event as { type: 'terminal.CLOSED'; data: { terminalId: string } }
         return context.terminals.filter(t => t.id !== ev.data.terminalId)
+      }
+    }),
+
+    /**
+     * A shell died badly and its terminal stays.
+     *
+     * **Removing it is what used to happen and is what loses the error.** A shell that exits 0 still sends
+     * `terminal.CLOSED` and the terminal still goes; this is the other case, where the screen holds the
+     * reason the user now wants to read.
+     */
+    markTerminalCrashed: assign({
+      terminals: ({ context, event }) => {
+        const ev = event as { type: 'terminal.CRASHED'; data: { terminalId: string; code: number | null } }
+        return context.terminals.map(one =>
+          one.id === ev.data.terminalId ? { ...one, active: false, exited: { code: ev.data.code } } : one)
+      }
+    }),
+
+    /** Says on the screen that the shell has gone, where the user is already looking */
+    noteCrashOnScreen: ({ event }) => {
+      const ev = event as { type: 'terminal.CRASHED'; data: { terminalId: string; code: number | null } }
+      terminalPool.noteExit(ev.data.terminalId, ev.data.code)
+    },
+
+    /** Tells the window's emulator which process is answering now, so one boundary draws one seam */
+    noteRestartOnScreen: ({ event }) => {
+      const ev = event as { type: 'terminal.RESTARTED'; data: TerminalInfo }
+      terminalPool.noteRestart(ev.data.id, ev.data.pid)
+    },
+
+    /** A new shell under a terminal that was already there: its descriptor is replaced, its place is not */
+    takeRestartedTerminal: assign({
+      terminals: ({ context, event }) => {
+        const ev = event as { type: 'terminal.RESTARTED'; data: TerminalInfo }
+        return context.terminals.map(one => one.id === ev.data.id ? ev.data : one)
       }
     }),
 
@@ -451,6 +494,9 @@ export const terminalState = setup({
     'terminal.CLOSE': {
       actions: 'closeTerminal'
     },
+    'terminal.RESTART': {
+      actions: 'restartTerminal'
+    },
     'terminal.INPUT': {
       actions: 'sendTerminalInput'
     },
@@ -483,6 +529,12 @@ export const terminalState = setup({
     },
     'terminal.CLOSED': {
       actions: 'handleTerminalClosed'
+    },
+    'terminal.CRASHED': {
+      actions: ['markTerminalCrashed', 'noteCrashOnScreen']
+    },
+    'terminal.RESTARTED': {
+      actions: ['takeRestartedTerminal', 'noteRestartOnScreen']
     },
     'terminal.RENAMED': {
       actions: 'updateTerminalTitle'

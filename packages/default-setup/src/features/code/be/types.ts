@@ -204,6 +204,17 @@ export interface TerminalInfo {
   shell?: string
   cwd: string
   active: boolean
+  /**
+   * How many shells this terminal has had, counting from one.
+   *
+   * **A terminal is not its shell.** Its id, its tab and its place in that tab outlive the process behind
+   * it, so a shell that crashed and one the user restarted both leave the terminal where it was and start
+   * a new generation under it. The window tells one generation from the next by the pid and writes the
+   * seam; this is what says how many there have been, for a window that was not watching.
+   */
+  generation: number
+  /** The shell ended and the terminal was kept. Absent while one is running */
+  exited?: { code: number | null }
   cols: number
   rows: number
   /**

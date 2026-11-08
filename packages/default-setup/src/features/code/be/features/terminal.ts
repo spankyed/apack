@@ -34,6 +34,7 @@ export type Event =
       rows?: number;
     }
   | { type: 'terminal.CLOSE_TERMINAL'; terminalId: string }
+  | { type: 'terminal.RESTART_TERMINAL'; terminalId: string }
   | { type: 'terminal.TERMINAL_INPUT'; terminalId: string; data: string }
   | { type: 'terminal.RESIZE_TERMINAL'; terminalId: string; cols: number; rows: number }
   | { type: 'terminal.RENAME_TERMINAL'; terminalId: string; customTitle: string }
@@ -45,6 +46,7 @@ export type Event =
 
 /** A terminal's news, for every window showing the code surface: what its process did, never a listing */
 type TerminalNewsType = 'terminal.CWD_CHANGED' | 'terminal.OUTPUT' | 'terminal.CLOSED' | 'terminal.CREATED'
+  | 'terminal.CRASHED' | 'terminal.RESTARTED'
 type TerminalNews = Extract<OutgoingTerminalEvents, { type: TerminalNewsType }>
 
 /** Tell every window showing the code surface what a terminal did */
@@ -97,6 +99,16 @@ const terminalHandlers = {
       emitToFrontend({ type: 'terminal.CLOSED', data: { terminalId } })
     } catch (error) {
       logger.error(`Error emitting CLOSED for ${terminalId}`, { error })
+    }
+  },
+
+  // **News, not an answer**: a shell dying is something that happened, which every window showing this
+  // terminal has to hear. Nobody asked, so there is nothing to correlate it against
+  onCrashed(terminalId: string, code: number | null) {
+    try {
+      emitToFrontend({ type: 'terminal.CRASHED', data: { terminalId, code } })
+    } catch (error) {
+      logger.error(`Error emitting CRASHED for ${terminalId}`, { error })
     }
   },
 }
@@ -175,6 +187,20 @@ export const terminalSystem = setup({
         emitToFrontend({ type: 'terminal.CREATED', data: { terminalId: terminalInfo.id } })
         reply?.({ type: 'terminal.OPENED', data: terminalInfo })
       }).catch(error => failTerminal(reply, 'create', error))
+    },
+
+    restartTerminal: ({ event, reply }) => {
+      const ev = event as { type: 'terminal.RESTART_TERMINAL'; terminalId: string }
+      void terminalService.restart(ev.terminalId, terminalHandlers).then(info => {
+        if (!info) {
+          failTerminal(reply, 'restart', new Error(`No terminal ${ev.terminalId}`))
+          return
+        }
+        // Every window showing this terminal has a new shell under it; the one that asked hears it too,
+        // which is why this is news rather than a reply — a restart is not private to the window that
+        // clicked it
+        emitToFrontend({ type: 'terminal.RESTARTED', data: info })
+      }).catch(error => failTerminal(reply, 'restart', error))
     },
 
     closeTerminal: ({ event, reply }) => {
@@ -363,6 +389,9 @@ export const terminalSystem = setup({
         },
         'terminal.CLOSE_TERMINAL': {
           actions: 'closeTerminal'
+        },
+        'terminal.RESTART_TERMINAL': {
+          actions: 'restartTerminal'
         },
         'terminal.REFRESH_LIST': {
           actions: 'listTerminals'

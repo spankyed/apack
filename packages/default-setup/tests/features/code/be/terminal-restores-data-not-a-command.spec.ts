@@ -49,7 +49,7 @@ describe('restoring a terminal from a row', () => {
     writeATerminalRow('/tmp/payload.sh', '/tmp')
 
     const { terminalService } = await import('#features/code/be/services/terminal.ts')
-    await terminalService.restoreAll({ onData: () => {}, onExit: () => {} })
+    await terminalService.restoreAll({ onData: () => {}, onExit: () => {}, onCrashed: () => {} })
 
     expect(opened, 'a stored string was spawned as an executable').toHaveLength(1)
     expect(opened[0]!.shell, 'the row named it and the machine does not start it').not.toBe('/tmp/payload.sh')
@@ -65,7 +65,7 @@ describe('restoring a terminal from a row', () => {
     writeATerminalRow(defaultShell(), '/tmp/this-directory-does-not-exist-apack')
 
     const { terminalService } = await import('#features/code/be/services/terminal.ts')
-    await terminalService.restoreAll({ onData: () => {}, onExit: () => {} })
+    await terminalService.restoreAll({ onData: () => {}, onExit: () => {}, onCrashed: () => {} })
 
     expect(opened[0]!.cwd).not.toBe('/tmp/this-directory-does-not-exist-apack')
     await app.stop()
@@ -81,7 +81,7 @@ describe('restoring a terminal from a row', () => {
     writeATerminalRow(defaultShell(), process.cwd())
 
     const { terminalService } = await import('#features/code/be/services/terminal.ts')
-    await terminalService.restoreAll({ onData: () => {}, onExit: () => {} })
+    await terminalService.restoreAll({ onData: () => {}, onExit: () => {}, onCrashed: () => {} })
 
     expect(opened[0]).toEqual({ shell: defaultShell(), cwd: process.cwd() })
     await app.stop()

@@ -38,7 +38,17 @@ interface Terminal {
  */
 export interface TerminalHandlers {
   onData(terminalId: string, data: string): void
+  /** The shell ended and the terminal is gone with it */
   onExit(terminalId: string, exitCode: number): void
+  /**
+   * The shell ended badly and the terminal was **kept**, so the user can see what it said and start it
+   * again where it was.
+   *
+   * A shell that exits 0 is a user closing their terminal, and closing it is what they asked for. A shell
+   * that dies of a signal or a non-zero status is a crash, and taking the window away takes the error
+   * message with it — which is the one thing the user needs.
+   */
+  onCrashed(terminalId: string, exitCode: number | null): void
 }
 
 class TerminalService {
@@ -69,18 +79,77 @@ class TerminalService {
       cols, rows, shell, cwd, args: integration?.args, env: integration?.env,
     }, {
       onOutput: (data) => handlers.onData(id, data),
-      onExit: (code) => {
-        this.terminals.delete(id)
-        try { repository.terminalCommands.markClosed(id as EARS.EntityId) } catch (error) { logger.error(`Could not close ${id}`, { error }) }
-        handlers.onExit(id, code ?? 0)
-      },
+      onExit: (code) => this.ended(id, code, handlers),
     })
 
-    const info: TerminalInfo = { id, title, pid: session.pid, shell, cwd, active: true, cols, rows, submit: submitFor() }
+    const info: TerminalInfo = { id, title, pid: session.pid, shell, cwd, active: true, generation: 1, cols, rows, submit: submitFor() }
     this.terminals.set(id, { info, session, sizedBy })
     repository.terminalCommands.create({ id, title, shell, cwd, cols, rows })
 
     return info
+  }
+
+  /**
+   * What a session ending means for the terminal above it.
+   *
+   * **The status decides, because only the status says whether the user meant it.** `exit`, `logout` and
+   * Ctrl-D all end a shell with 0 and all mean "close this"; a segfault, an OOM kill and a `set -e` script
+   * failing do not, and the terminal is where the reason is written. So a clean end removes the terminal
+   * and anything else keeps it, with its shell marked gone and its transcript intact.
+   */
+  private ended(id: string, code: number | null, handlers: TerminalHandlers): void {
+    const terminal = this.terminals.get(id)
+    if (code === 0) {
+      this.terminals.delete(id)
+      try { repository.terminalCommands.markClosed(id as EARS.EntityId) } catch (error) { logger.error(`Could not close ${id}`, { error }) }
+      handlers.onExit(id, 0)
+      return
+    }
+    if (!terminal) return
+    terminal.info.active = false
+    terminal.info.exited = { code }
+    handlers.onCrashed(id, code)
+  }
+
+  /**
+   * Starts a new shell under a terminal that already exists, keeping everything about it that is not the
+   * process: its id, its title, its place in whatever tab holds it, and the transcript of what came before.
+   *
+   * **This is what a restart has to be.** Closing a terminal and creating another produces a terminal with
+   * a different id, so the window has no way to know it is the same one — the pin, the group and the
+   * position go with the old id, and the output of the shell that just failed goes with it too, which is
+   * usually the thing the user restarted it to read.
+   */
+  async restart(id: string, handlers: TerminalHandlers): Promise<TerminalInfo | null> {
+    const terminal = this.terminals.get(id)
+    if (!terminal) return null
+
+    // Whatever is there is ended first, and its own exit must not be read as the terminal closing: the
+    // session is replaced below, so the handler would be reporting the death of a shell nobody has yet
+    // been told started
+    if (terminal.info.active) {
+      terminal.info.active = false
+      await terminal.session.terminate().catch((error: unknown) => logger.warn(`Could not end ${id} before restarting it`, { error }))
+    }
+
+    const { shell, cwd, cols, rows } = terminal.info
+    const integration = await this.arrangeIntegration(this.shellFor(shell))
+    const session = await services.terminal.open({
+      cols, rows, shell, cwd, args: integration?.args, env: integration?.env,
+    }, {
+      onOutput: (data) => handlers.onData(id, data),
+      onExit: (code) => this.ended(id, code, handlers),
+    })
+
+    terminal.session = session
+    terminal.info = {
+      ...terminal.info,
+      pid: session.pid,
+      active: true,
+      generation: terminal.info.generation + 1,
+      exited: undefined,
+    }
+    return terminal.info
   }
 
   get(id: string): Terminal | undefined {
@@ -293,6 +362,9 @@ class TerminalService {
           customTitle: row.customTitle,
           pid: session.pid,
           shell,
+          // A restored terminal is a new shell in the old one's directory, so it is a first generation: the
+          // process the previous run had is gone and nothing of its transcript survived the app closing
+          generation: 1,
           cwd,
           active: true,
           cols: row.cols,

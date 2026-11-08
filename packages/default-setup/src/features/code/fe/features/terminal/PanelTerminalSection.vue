@@ -323,14 +323,15 @@ const killPanelTerminal = () => {
   terminalActor.send({ type: 'terminal.CLOSE', terminalId: panelTerminalId.value })
 }
 
+/**
+ * **Restart in place — T6.** Closing and creating produced a terminal with a *different id*, so everything
+ * attached to the old one went with it: its pin, its group, its position in the tab strip, and the output
+ * of the shell that just failed, which is usually what the user restarted it to read. The backend keeps the
+ * terminal and starts a new generation under it, so there is nothing here to carry across.
+ */
 const restartPanelTerminal = () => {
-  const info = activeTerminalInfo.value
-  if (!info || !panelTerminalId.value) return
-  // `terminal.CREATE` carries no shell — the event the child sends the system has only title and cwd — so the
-  // restarted terminal takes the default shell, as it always has. Passing `info.shell` here only looked otherwise.
-  const { cwd } = info
-  terminalActor.send({ type: 'terminal.CLOSE', terminalId: panelTerminalId.value })
-  terminalActor.send({ type: 'terminal.CREATE', cwd })
+  if (!panelTerminalId.value) return
+  terminalActor.send({ type: 'terminal.RESTART', terminalId: panelTerminalId.value })
 }
 
 // Actions

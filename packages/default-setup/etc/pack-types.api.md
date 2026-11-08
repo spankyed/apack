@@ -2318,6 +2318,11 @@ type IncomingTerminalEvents = {
 } | {
     type: 'terminal.CLOSE_TERMINAL';
     terminalId: string;
+}
+/** Start a new shell under a terminal that already exists, keeping its id and everything attached to it */
+ | {
+    type: 'terminal.RESTART_TERMINAL';
+    terminalId: string;
 } | {
     type: 'terminal.TERMINAL_INPUT';
     terminalId: string;
@@ -3720,6 +3725,22 @@ type OutgoingTerminalEvents =
     data: {
         terminalId: string;
     };
+}
+/**
+ * The shell ended badly and **the terminal was kept**, so the user can read what it said and start it
+ * again where it was. A shell that exits 0 is a user closing their terminal and sends `CLOSED` instead.
+ */
+ | {
+    type: 'terminal.CRASHED';
+    data: {
+        terminalId: string;
+        code: number | null;
+    };
+}
+/** A new shell is running under a terminal that was already there; `generation` says how many it has had */
+ | {
+    type: 'terminal.RESTARTED';
+    data: TerminalInfo;
 } | {
     type: 'terminal.RENAMED';
     data: {
@@ -4627,6 +4648,19 @@ interface TerminalInfo {
     shell?: string;
     cwd: string;
     active: boolean;
+    /**
+     * How many shells this terminal has had, counting from one.
+     *
+     * **A terminal is not its shell.** Its id, its tab and its place in that tab outlive the process behind
+     * it, so a shell that crashed and one the user restarted both leave the terminal where it was and start
+     * a new generation under it. The window tells one generation from the next by the pid and writes the
+     * seam; this is what says how many there have been, for a window that was not watching.
+     */
+    generation: number;
+    /** The shell ended and the terminal was kept. Absent while one is running */
+    exited?: {
+        code: number | null;
+    };
     cols: number;
     rows: number;
     /**

@@ -186,6 +186,8 @@ export type OutgoingPullRequestEvents =
 export type IncomingTerminalEvents =
   | { type: 'terminal.CREATE_TERMINAL'; title?: string; cwd?: string; shell?: string; cols?: number; rows?: number }
   | { type: 'terminal.CLOSE_TERMINAL'; terminalId: string }
+  /** Start a new shell under a terminal that already exists, keeping its id and everything attached to it */
+  | { type: 'terminal.RESTART_TERMINAL'; terminalId: string }
   | { type: 'terminal.TERMINAL_INPUT'; terminalId: string; data: string }
   | { type: 'terminal.RESIZE_TERMINAL'; terminalId: string; cols: number; rows: number }
   | { type: 'terminal.RENAME_TERMINAL'; terminalId: string; customTitle: string }
@@ -210,6 +212,13 @@ export type OutgoingTerminalEvents =
   | { type: 'terminal.OUTPUT'; data: { terminalId: string; data: string } }
   | { type: 'terminal.INITIAL_OUTPUT'; data: { terminalId: string; data: string } }
   | { type: 'terminal.CLOSED'; data: { terminalId: string } }
+  /**
+   * The shell ended badly and **the terminal was kept**, so the user can read what it said and start it
+   * again where it was. A shell that exits 0 is a user closing their terminal and sends `CLOSED` instead.
+   */
+  | { type: 'terminal.CRASHED'; data: { terminalId: string; code: number | null } }
+  /** A new shell is running under a terminal that was already there; `generation` says how many it has had */
+  | { type: 'terminal.RESTARTED'; data: TerminalInfo }
   | { type: 'terminal.RENAMED'; data: { terminalId: string; customTitle: string } }
   | { type: 'terminal.CWD_CHANGED'; data: { terminalId: string; cwd: string; title?: string } }
   | { type: 'terminal.ERROR'; data: { message: string; terminalId?: string } }
