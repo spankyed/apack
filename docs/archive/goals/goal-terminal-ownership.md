@@ -106,12 +106,33 @@ files under `packages/apack-cli`, checked. Earlier revisions of this section cit
 which it was; this is the first local full chain in which it passed, and it is reported rather than relied
 on, since load can push a file into a failure and never out of one.
 
-**Strict on the finished state is run 42463568897, and is not yet a result.** Its producers job is green and
-its five dependents are queued behind four earlier CI runs, each wanting five macOS runners. What two earlier
-strict runs proved is still on the record and still true of what they ran — **42450951226**, all six jobs
-green on the state before S4, F17 and G1 ([the record](../../references/evidence/terminal-ownership.md#the-strict-chain-passes-on-the-pushed-state--2026-11-08)),
-and **42456276453**, all six green on the G1 commit — but neither describes this source, and this line is
-what replaces them when 42463568897 lands.
+**Strict has not passed on the finished state, and what stopped each attempt is recorded rather than
+summarised.** Three runs, none of them a verdict on this source:
+
+| run | outcome | cause |
+|---|---|---|
+| 42463568897 | failed `integration-2` | a `504` from GitHub's release CDN, twice, inside `scripts/postinstall.mjs` — before any of this repo's code ran |
+| 42471364665 | failed `producers` | the same `504` |
+| 42472092232 | five of six green, failed `app-and-rest` | **ours**: `test:external-pack:app` refused with *"Pack build package inputs changed"* |
+
+The third is the one worth reading, because it was not infrastructure. The external pack records its package
+graph in `dist/build-inputs.json` and that graph includes `node_modules/electron`, so `readPackageInputs`
+hashes that package's files; `producers` builds the pack the consumers unpack and test. Skipping Electron's
+download in `producers` alone — added in `acd70b964c` against the two `504`s above — changed the hash, and
+every E2E case in that job refused. Fixed in `dc87cdadcd`: no strict job skips the download, the reason is
+recorded beside both installs, and `producers` gained the Electron cache the consumers already had, which is
+what it needed against the CDN anyway. `ci.yml`'s `check` keeps the skip, being the one job that builds and
+consumes its own pack.
+
+What two earlier strict runs proved is still on the record and still true of what they ran —
+**42450951226**, all six jobs green on the state before S4, F17 and G1
+([the record](../../references/evidence/terminal-ownership.md#the-strict-chain-passes-on-the-pushed-state--2026-11-08)),
+and **42456276453**, all six green on the G1 commit — but neither describes this source.
+
+**The remaining dispatch is blocked on a decision this goal does not settle.** Re-running strict means
+pushing `session/terminal-ownership`, and pushing is the user's call rather than this goal's; the fix for
+42472092232 is committed and unpushed. That is the whole of what stands between this source and a strict
+result: no source change is outstanding.
 
 **An earlier dispatch validated nothing**, and the reason is in the record above: `--ref master` names the
 *remote* branch, so it ran against a commit predating the goal. Two later runs were cancelled deliberately
@@ -165,7 +186,14 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 
 ## Current handoff
 
-- **Checkout:** `master` at `6e0c629fec`, the current one — no branch or worktree, clean tree.
+- **Blocked, and on one thing only:** strict needs a push of `session/terminal-ownership` to be
+  re-dispatched, and the goal does not settle whether to push. The fix it needs is committed
+  (`dc87cdadcd`), the tree is clean, and no source work is outstanding — see Validation for the three
+  attempts and why only the third was ours. Recorded here rather than chosen.
+- **Checkout:** `session/terminal-ownership`, clean tree. Two commits after the chain run below:
+  `dc87cdadcd` (every strict job installs identically) and `fc5e1362d6` (the broker fake writes a request's
+  answers as one chunk, which is what made the same-read guard deterministic). Both are a workflow and a
+  test; neither moves a chain step's inputs.
   **Phase T is complete**: every track below has landed with a firing spec, or is placed with its reason
   (T6 → Phase H, T7 → Phase P, G1 → the output pipe). **Phase G's six readings are complete**, with G1, F4 and F5 priced and F18 found.
   **Phase S is complete and Phase B is begun**: the terminal feature owns no pty, F4, F5, F7, F8 and L2 are closed with guards, and X1 is dissolved on POSIX. Phases P and A are not started.
