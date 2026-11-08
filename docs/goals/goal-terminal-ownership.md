@@ -440,25 +440,21 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   closes on it — so it now has one in both. The earlier claim that every finding had a row was true of the
   rows that existed.
 - **Two things found while validating, neither this goal's to fix, both named rather than absorbed:**
-  - `@apackdev/cli`'s `compiler-native-runtime.native.spec.ts > builds and archives a real pack under the
-    captured Electron runtime` **is load-sensitive, not a blocker — an earlier revision of this handoff
-    called it deterministic and that was wrong.** It passes at 73.0s
-    (`runs/2026-11-08T01-28-27Z-8961/test-native.log`); it failed twice earlier the same day with
-    `AbortError: The operation was aborted`, from the `AbortSignal.timeout(60000)` the case puts around
-    `captureCompilerInstallation`. What made it look deterministic was reproducing alone — but alone on a
-    machine that was busy, and the reading that it *is* 72s of work was the symptom. The capture is shared
-    in a machine-wide store (`2f7566291b`), and this checkout's first native run was the same day, so a
-    cold store is the likely difference; that is not established and the case's own 60s budget is the edge
-    either way. Treat a failure here as "the machine was loaded or the store was cold", not as a defect.
-  - **`apack pack build` cannot run on Windows at all**, found while setting the app up end to end on the
-    VM (2026-11-08). Codegen writes all 23 generated files and then the bundle fails:
-    `ERR_INVALID_RETURN_PROPERTY_VALUE` — *"Expected a string, an ArrayBuffer, or a TypedArray to be
-    returned for the `source` from the `load` hook but got undefined"* — from the CLI's captured compiler.
-    **Not the Node-23 failure this handoff already records**, which is the easy thing to assume: the
-    captured runtime is `C:\tools\node24\node.exe` and reports `v24.11.0`, and clearing the whole
-    compiler store changed nothing. It is the CLI's, not this goal's, and nothing anywhere records it. The
-    terminal work was verified past it by copying the pack's built `dist/` from the Mac, which is bundled
-    JavaScript and content and so carries across.
+  - **`@apackdev/cli`'s `build-worker.native.spec.ts` is what stands between here and a green full chain**,
+    and nothing in this goal touches `packages/apack-cli` — checked, zero files across every commit here.
+    The file was last modified 2026-11-03. **Two different cases fail in two different ways**, which is
+    why it reads as one flaky file rather than one bad assertion:
+    - *"removes its worker when the public build command is stopped while 'watch is ready'"* times out at
+      120s inside the chain's 2-core container, twice. Run alone on the same machine it passes in 22.5s.
+    - *"refuses publication when a loader-only external input changes during compilation"* fails an
+      assertion — it expects `Compiler resolution namespace changed…` and gets a Node
+      `ExperimentalWarning`. That one failed on the alone run and passed in the chain.
+    **32 of 33 chain steps pass**, every typecheck, both unit pools, integration, smoke and the external
+    pack suites among them. The next diagnostic is the strict run on disposable macOS runners, which is a
+    cleaner machine than either and so separates load from defect; it is dispatched.
+  - `@apackdev/cli`'s `compiler-native-runtime.native.spec.ts` is **load-sensitive and not a blocker** —
+    an earlier revision of this handoff called it deterministic and that was wrong. It passes at 73.0s; its
+    failures came from the `AbortSignal.timeout(60000)` the case puts around `captureCompilerInstallation`.
   - `default-setup/tests/features/code/be/default-directory.spec.ts > closes real Git watchers when the Code
     actor stops` is load-flaky: 5–9s run alone, 55s and failing under the full pool. A live-watcher case in
     the fast half. Unrelated to the terminal.
