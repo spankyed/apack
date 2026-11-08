@@ -7,11 +7,14 @@ import type { CompilationInputs } from './compilation-inputs.ts';
 import { withoutCompilerFileReads } from '@apackdev/host/build/compiler-inputs';
 import { cliPackageDirectory } from './tool-identity.ts';
 import { writeCompilerModuleConfiguration } from './compiler-module-configuration.ts';
+import { assertNodeSupportsCompiler } from './node-support.ts';
 
 let sequence = 0;
 
 /** Native resolution uses owned paths; ESM execution retains logical source metadata. */
 export function createCompilerModuleLoader(compilation: CompilationInputs) {
+  // Before anything registers a hook, because an unsupported Node fails inside one and blames it.
+  assertNodeSupportsCompiler();
   // Public builds use a fresh worker, so their single scope has a stable URL namespace. In-process
   // callers still need separate identities even when two captures contain identical source bytes.
   const namespace = `apack-build-${++sequence}`;
