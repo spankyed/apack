@@ -5,17 +5,21 @@ const require = createRequire(import.meta.url)
 /**
  * How many times the Electron binary is asked for, and how long between asks.
  *
- * **A transient refusal must not fail an install.** The binary comes from GitHub's release CDN, and on
- * 2026-11-08 a `504 Gateway Time-out` for it failed a strict job inside this script — before a line of the
- * repo's own code ran, and after 90 minutes of queueing for the runner. One ask is a coin flip on somebody
- * else's availability; the retries are what make the install depend on the CDN *eventually* answering rather
- * than answering first time.
+ * **The shape is `@electron/get`'s own**, which retries a cache write three times at a flat two seconds —
+ * and this repo's `writePrivateFile`, which retries a rename on three named Windows errors. Both name the
+ * transient condition and rethrow everything else. **This cannot**: `electron/index.js` spawns `install.js`
+ * with inherited stdio and throws one fixed message whatever happened, so the `504` that prompted this never
+ * reaches the `catch`. A 404 for a yanked version arrives identically. That is the whole reason the count is
+ * small and the wait flat: an unnameable condition earns one more ask, not a schedule.
  *
- * The backoff is linear and short because the failure it is for is a gateway refusing, which clears in
- * seconds or not at all — a long one would turn a genuine outage into a job that looks hung.
+ * **And it is the smaller half of the fix.** The cache in `ci.yml` and `strict-chain.yml` is what the
+ * ecosystem actually does and what the evidence supports: on 2026-11-08 a sustained `504` for this artifact
+ * failed the same job twice, five minutes apart, and `curl` answered 504 in 83ms from a developer's machine
+ * — an outage no retry survives. This covers the single refusal that clears, which is cheap to cover and has
+ * not been observed here.
  */
-const ASKS = 4
-const BACKOFF_MS = 3_000
+const ASKS = 2
+const WAIT_MS = 2_000
 
 /**
  * Electron fetches its binary the first time its path is resolved, not at install. Resolve it here, once, so
@@ -40,10 +44,9 @@ if (installed) {
         console.error(`[postinstall] Electron's binary did not arrive in ${ASKS} asks; this is the last error`)
         throw error
       }
-      const wait = BACKOFF_MS * ask
       console.warn(`[postinstall] Electron's binary did not arrive (ask ${ask} of ${ASKS}): ${error instanceof Error ? error.message : String(error)}`)
-      console.warn(`[postinstall] asking again in ${wait}ms`)
-      await new Promise(settle => setTimeout(settle, wait))
+      console.warn(`[postinstall] asking again in ${WAIT_MS}ms`)
+      await new Promise(settle => setTimeout(settle, WAIT_MS))
     }
   }
 }
