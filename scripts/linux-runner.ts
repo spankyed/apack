@@ -313,12 +313,18 @@ const run = [
   'fi',
   // Orphans of a container that was killed: this run holds the only slot, so none of them is live
   'rm -f /work/node_modules/.cache/apack-unit-pool/*.lock',
-  // **The chain's own, which this runner's sync phase is what creates.** It was the one lock class left out
-  // of this cleanup, and it wedged every later run for good: a container killed mid-sync leaves a lock
-  // naming its hostname, `exclusive-lock.ts` correctly cannot resolve another machine's pid and so counts it
-  // as held, and the sync chain below refuses before the command even starts. Found on 2026-11-07 with a
-  // lock from 11:11 that morning still in the volume and `test:native` having never once run since.
+  // **The chain's own, which this runner's sync phase is what creates**: a container killed mid-sync leaves a
+  // lock naming its hostname, `exclusive-lock.ts` correctly cannot resolve another machine's pid and so
+  // counts it as held, and the sync chain below refuses before the command even starts. Found on 2026-11-07
+  // with a lock from 11:11 that morning still in the volume and `test:native` having never once run since.
   `rm -f /work/${path.relative(REPO_ROOT, CHAIN_LOCK)}`,
+  // **And every pack's build lock, which is the same class and was found the same day.** The line above
+  // once claimed the chain's was the last one left out; it was not. A container whose `build:default-setup`
+  // is killed — by its own deadline, which is how this was found — leaves `<pack>/.apack/build.lock` naming
+  // that container, and `apack pack build` *waits* on a running build rather than refusing. So the next run
+  // does not fail fast: it waits out its whole 600s budget and is killed for being slow, which reads as a
+  // machine too loaded to build and is nothing of the kind. Two runs were spent on that reading.
+  'rm -f /work/packages/*/.apack/build.lock /work/tests/packs/*/.apack/build.lock',
   // Keep immutable compiler captures with this checkout's volume instead of discarding them at container exit.
   // The volume lease excludes live users; stale container hostnames/PIDs cannot hold these records forever.
   `rm -f /work/node_modules/.cache/${COMPILER_CACHE}/*.lock /work/node_modules/.cache/${COMPILER_CACHE}/*.users/*`,
