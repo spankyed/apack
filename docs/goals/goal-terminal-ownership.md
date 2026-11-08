@@ -416,6 +416,12 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
     so a Windows terminal is exactly as it was; PowerShell `-NoExit -Command` and cmd `/K` would work the
     same way, and writing them unverified would be claiming X4 closed on a plausible argument, which is the
     thing this goal's rule is against. It needs a Windows session.
+- **node-pty is down to one loader, and it is its own health check.** Nothing in the app imports it; the
+  only `require` left is `build/prod/smoke-native.mjs`, which spawns a shell through it to prove the native
+  module rebuilt for Electron's ABI. It is still a dependency of `packages/api` and `packages/default-setup`.
+  Removing it is release configuration, which this goal put outside itself — but it is unblocked now, and
+  reading 2 priced it
+  ([the record](../references/evidence/terminal-ownership.md#node-ptys-only-remaining-loader-is-its-own-health-check--2026-11-07)).
 - **The seven journeys are run and recorded**, which is the acceptance clause about the complaint rather
   than the findings: all seven pass, with screenshots checked by eye
   ([the record](../references/evidence/terminal-ownership.md#the-seven-journeys-checked-by-eye--2026-11-07)).
@@ -483,7 +489,8 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 - **Next action: the fork above, which is the one thing a session cannot decide for itself.** Everything
   else that is left needs Windows: **X4** (Phase A's half), and **X1, X2 and ConPTY's resize and exit**
   (Phase B's), all of which the goal says are claimed on a Windows run or not at all. `command-group`'s API
-  is retired, so that part is a wiring job rather than a question. Phase P is untouched.
+  is retired, so that part is a wiring job rather than a question. **Phases G, T, S, P and A are done**,
+  Phase B is done but for its Windows half, and Phase H is done but for the fork.
 - **What Phase S deliberately does not have yet**, and should not before Phase B: a second client, bounded
   history and backpressure, reattach, and `command-group` in the spawn path — the probe proved the API, and
   `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` needs a Windows run. One connection's sessions live as long as the

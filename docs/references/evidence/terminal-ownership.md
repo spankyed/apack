@@ -441,6 +441,27 @@ overrun state was unreachable — entering that state already clears — and it 
 flaw, which was that an escape that turned out not to terminate put the scanner back to *collecting* the
 tail of a string it had given up on. That is its own state now, and the mutation fires.
 
+### node-pty's only remaining loader is its own health check — 2026-11-07
+
+**Nothing in the app imports `node-pty` any more.** Checked by the AST rather than by grepping for the
+name: the only `import`/`require` of it anywhere under `packages/` is in `repo-checks`' fixtures, which
+exist to offend `findNodePtyImports` and must keep it. It is still a dependency of `packages/api` and
+`packages/default-setup`.
+
+**The one thing that still loads it is `build/prod/smoke-native.mjs`**, which spawns a shell through it to
+prove the native module rebuilt correctly for Electron's ABI — so the dependency's last consumer is the
+check that the dependency is healthy. That is circular rather than wrong, and it is the state Phase B was
+supposed to reach: *"what disqualifies node-pty"* in the review is where it runs and what it is coupled to,
+and neither is true of anything the app does now.
+
+**Not removed here, deliberately.** What a package ships is release configuration, which this goal put
+outside itself when it recorded the packaging findings in reading 2 rather than changing them — and that
+reading is also what says the removal is worth taking: 264 KiB of JavaScript and 136 KiB of native binding
+in every package, plus the **26 MB of Windows debug symbols** and **2.3 MB of `OpenConsole.exe`** that ship
+by omission beside it. The guard against it coming back already exists both ways (`check:specifiers`
+refuses the import in pack code, and `apack pack build` refuses a bundle carrying it), so what is left is a
+dependency line and the smoke test that reads it, taken together or not at all.
+
 ### The seven journeys, checked by eye — 2026-11-07
 
 The goal asks for the complaint to be answered and not only the findings: *"super buggy in general,
