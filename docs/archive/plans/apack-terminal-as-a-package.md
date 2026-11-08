@@ -16,6 +16,16 @@ change, as it said it would. What landed, against what this planned:
 Also landed, which this plan listed only as "worth knowing while someone is in that repository": CI on all
 three platforms, `cargo xtask pre-push`, mutation testing, `.config/nextest.toml` and `rustfmt.toml`.
 
+**All of it green at `3c1e4bd`**, and its first three runs were worth the trouble — every failure was in the
+tooling rather than the broker, and none of them was reachable from a developer's machine:
+
+| what failed | why it was invisible locally |
+|---|---|
+| `cargo xtask` was not a command — no `.cargo/config.toml` alias | it had only ever been run as `cargo run -p xtask --`, so the spelling every document here prescribes was the one thing never exercised |
+| every `tests` job raced on the generated protocol | `[profile.ci]`'s only setting was `fail-fast = false`, and nextest does not merge a profile's overrides with the default's, so the single-thread group never applied where CI selected it. One profile now, with `--no-fail-fast` as a flag |
+| the alternate-screen case waited 10s for a switch that never came | it drives `less`, which reads terminfo before using the alternate screen; a developer's run inherits their terminal's `TERM` and CI has none. It declares `TERM` now |
+| that case and the keystroke case spawned the platform default shell | so they depended on which shell the account points at and what it does with a profile it has never seen. Their subject is the pty round trip, so they name a shell |
+
 ## What it is actually for
 
 The broker's protocol is generated from its Rust by `ts-rs` and then **hand-carried into this repo**: a
