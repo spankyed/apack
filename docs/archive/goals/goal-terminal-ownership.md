@@ -94,18 +94,28 @@ read as the Node-23 one this document already records, which it is not.
 
 ### Validation
 
-**Both required halves pass.** `npm run chain` at `2b1ae253ad`, 2451.5s, `test:native` among its steps
-([the record](../../references/evidence/terminal-ownership.md#the-full-chain-passes-testnative-included--2026-11-08)),
-and the strict dispatch on the pushed state, run **42450951226**, all six macOS jobs green
-([the record](../../references/evidence/terminal-ownership.md#the-strict-chain-passes-on-the-pushed-state--2026-11-08)).
+**The chain passes on the finished source.** `npm run chain` at `6096ba2baf` — the last commit that changes
+source; `50ef3a458e` on top of it is this document — **passed in 2938.2s, 12 of 33 cached, 21 steps run**,
+evidence in `node_modules/.cache/apack-chain/runs/2026-11-08T08-35-33Z-20927`. `test:native` is among them:
+**19 files passed, 4 skipped**, in the Linux container. A document committed after a run cannot invalidate it,
+because no chain step declares `docs/` and `fingerprintUnit` skips every `CLAUDE.md`.
 
-**Strict is what settled the one file this Mac could not pass.** `@apackdev/cli`'s
-`build-worker.native.spec.ts` failed here across five runs in three different cases, never the same one
-twice, in code no commit of this goal touches — zero files under `packages/apack-cli`, checked. On a
-disposable macOS runner it ran in 404.8s and passed, which is the arbitration the goal reserved strict for.
+**And `build-worker.native.spec.ts` passed here**, at 175.2s. It is the file that failed on this Mac across
+five runs in three different cases, never the same one twice, in code no commit of this goal touches — zero
+files under `packages/apack-cli`, checked. Earlier revisions of this section cited strict as its arbiter,
+which it was; this is the first local full chain in which it passed, and it is reported rather than relied
+on, since load can push a file into a failure and never out of one.
+
+**Strict on the finished state is run 42463568897, and is not yet a result.** Its producers job is green and
+its five dependents are queued behind four earlier CI runs, each wanting five macOS runners. What two earlier
+strict runs proved is still on the record and still true of what they ran — **42450951226**, all six jobs
+green on the state before S4, F17 and G1 ([the record](../../references/evidence/terminal-ownership.md#the-strict-chain-passes-on-the-pushed-state--2026-11-08)),
+and **42456276453**, all six green on the G1 commit — but neither describes this source, and this line is
+what replaces them when 42463568897 lands.
 
 **An earlier dispatch validated nothing**, and the reason is in the record above: `--ref master` names the
-*remote* branch, so it ran against a commit predating the goal.
+*remote* branch, so it ran against a commit predating the goal. Two later runs were cancelled deliberately
+rather than left to finish, each because the commit it described had been superseded while it queued.
 
 **The app is proven on Windows end to end**, which is the thing this goal had never asked there, and doing
 it found two defects no Mac could have: the broker binary's `.exe`, which meant the terminal never started
