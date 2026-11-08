@@ -35,19 +35,12 @@ export async function startTestPackBuildWatcher(root: string,
     const watcher = await startPackBuildWatcher(root, { ...options, builder });
     const done = watcher.done.finally(() => builder.close());
     void done.catch(() => {});
-    let closing: Promise<void> | undefined;
+    let closing: Promise<unknown> | undefined;
     return {
       done,
+      // Awaited with no deadline of its own: a cleanup that stops working is the progress guard's to end
       close() {
-        return closing ??= (async () => {
-          let result: PromiseSettledResult<void> | undefined;
-          void watcher.close().finally(() => done).then(
-            value => { result = { status: 'fulfilled', value }; },
-            reason => { result = { status: 'rejected', reason }; },
-          );
-          await _settles(() => expect(result, 'watcher cleanup did not settle').toBeDefined());
-          if (result?.status === 'rejected') throw result.reason;
-        })();
+        return closing ??= watcher.close().finally(() => done);
       },
       async rebuildAfter(edit) {
         const before = builds.length;
