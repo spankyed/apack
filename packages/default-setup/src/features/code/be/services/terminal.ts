@@ -27,6 +27,26 @@ interface Terminal {
    * takes the size and every later one is told no.
    */
   sizedBy: string | undefined
+  /**
+   * Set when something asked for this terminal to end, so the exit that follows is a close.
+   *
+   * **The exit code cannot carry the intent.** The broker's kill is a signal — `portable-pty` sends SIGHUP
+   * and reports a signal death as a non-zero code, and Windows is `TerminateProcess(…, 127)` — so a
+   * terminal the user closed arrives here looking exactly like a shell that died on its own. Asking the
+   * code was reading the consequence; this is the request.
+   */
+  closing?: true
+  /**
+   * Which open this terminal's exits must come from.
+   *
+   * **A terminal outlives its shells, so an exit has to say which one it was.** Every session's `onExit` is
+   * a closure over the terminal's id, so a restart leaves two of them pointing at one terminal; the first
+   * one's exit, arriving after the replacement, would describe a generation the window has already been
+   * told started — marking a fresh terminal crashed, or trashing the row the restart just rebuilt. A
+   * restart claims the terminal with a new token before it ends the old shell, so the old closure is
+   * already stale when its exit lands.
+   */
+  opening: number
 }
 
 /**
@@ -53,6 +73,8 @@ export interface TerminalHandlers {
 
 class TerminalService {
   private terminals: Map<string, Terminal> = new Map()
+  /** Hands out `Terminal.opening` tokens; monotonic per process, and only ever compared for equality */
+  private openings = 0
 
   async create(options: TerminalCreate, handlers: TerminalHandlers, sizedBy?: string): Promise<TerminalInfo> {
     // Check terminal limit (0 = no limit)
@@ -75,15 +97,16 @@ class TerminalService {
     const integration = await this.arrangeIntegration(shell)
 
     // The handlers are bound to the id before the session exists, so no byte can arrive with nowhere to go
+    const opening = ++this.openings
     const session = await services.terminal.open({
       cols, rows, shell, cwd, args: integration?.args, env: integration?.env,
     }, {
       onOutput: (data) => handlers.onData(id, data),
-      onExit: (code) => this.ended(id, code, handlers),
+      onExit: (code) => this.exited(id, opening, code, handlers),
     })
 
     const info: TerminalInfo = { id, title, pid: session.pid, shell, cwd, active: true, generation: 1, cols, rows, submit: submitFor(shell) }
-    this.terminals.set(id, { info, session, sizedBy })
+    this.terminals.set(id, { info, session, sizedBy, opening })
     repository.terminalCommands.create({ id, title, shell, cwd, cols, rows })
 
     return info
@@ -92,17 +115,30 @@ class TerminalService {
   /**
    * What a session ending means for the terminal above it.
    *
-   * **The status decides, because only the status says whether the user meant it.** `exit`, `logout` and
-   * Ctrl-D all end a shell with 0 and all mean "close this"; a segfault, an OOM kill and a `set -e` script
-   * failing do not, and the terminal is where the reason is written. So a clean end removes the terminal
-   * and anything else keeps it, with its shell marked gone and its transcript intact.
+   * **A requested end is a close; otherwise the status decides.** `exit`, `logout` and Ctrl-D all end a
+   * shell with 0 and all mean "close this"; a segfault, an OOM kill and a `set -e` script failing do not,
+   * and the terminal is where the reason is written. So a clean end removes the terminal and anything else
+   * keeps it, with its shell marked gone and its transcript intact.
+   *
+   * **`closing` is why the code alone is not enough.** `kill` ends the session through the broker, which
+   * kills by signal, so the exit it produces is non-zero and would otherwise take the crash branch: the
+   * terminal the user just closed would stay in the list marked `[shell exited]` and its row would never be
+   * trashed. The intent is recorded where it is known rather than inferred from the exit.
    */
+  private exited(id: string, opening: number, code: number | null, handlers: TerminalHandlers): void {
+    const terminal = this.terminals.get(id)
+    // A shell this terminal has already replaced. Absent entirely is a different case — a shell that died
+    // inside its own `open()`, before the terminal was recorded — which `ended` answers.
+    if (terminal && terminal.opening !== opening) return
+    this.ended(id, code, handlers)
+  }
+
   private ended(id: string, code: number | null, handlers: TerminalHandlers): void {
     const terminal = this.terminals.get(id)
-    if (code === 0) {
+    if (code === 0 || terminal?.closing) {
       this.terminals.delete(id)
       try { repository.terminalCommands.markClosed(id as EARS.EntityId) } catch (error) { logger.error(`Could not close ${id}`, { error }) }
-      handlers.onExit(id, 0)
+      handlers.onExit(id, code ?? 0)
       return
     }
     if (!terminal) return
@@ -127,6 +163,10 @@ class TerminalService {
     // Whatever is there is ended first, and its own exit must not be read as the terminal closing: the
     // session is replaced below, so the handler would be reporting the death of a shell nobody has yet
     // been told started
+    // Claimed before the old shell is ended, so its exit — which arrives whenever the broker gets to it,
+    // possibly inside the `await`s below — is already somebody else's and is ignored
+    const opening = ++this.openings
+    terminal.opening = opening
     if (terminal.info.active) {
       terminal.info.active = false
       await terminal.session.terminate().catch((error: unknown) => logger.warn(`Could not end ${id} before restarting it`, { error }))
@@ -138,7 +178,7 @@ class TerminalService {
       cols, rows, shell, cwd, args: integration?.args, env: integration?.env,
     }, {
       onOutput: (data) => handlers.onData(id, data),
-      onExit: (code) => this.ended(id, code, handlers),
+      onExit: (code) => this.exited(id, opening, code, handlers),
     })
 
     terminal.session = session
@@ -235,6 +275,8 @@ class TerminalService {
     const terminal = this.terminals.get(id)
     if (!terminal) return false
 
+    // Before the ask, because the exit can arrive inside `terminate()` and has to find the intent already set
+    terminal.closing = true
     try {
       await terminal.session.terminate()
       return true
@@ -251,18 +293,6 @@ class TerminalService {
    * Ends every terminal, and **marks every row closed**, which it did not: a run that quit left its rows
    * active, so the next boot restored terminals that had never been open (L2).
    */
-  async killAll(): Promise<void> {
-    const open = [...this.terminals.entries()]
-    this.terminals.clear()
-    await Promise.all(open.map(async ([id, terminal]) => {
-      try {
-        await terminal.session.terminate()
-      } catch (error) {
-        logger.error(`Error killing terminal ${id}`, { error })
-      }
-      try { repository.terminalCommands.markClosed(id as EARS.EntityId) } catch (error) { logger.error(`Could not close ${id}`, { error }) }
-    }))
-  }
 
   /**
    * The shell to start, and a line in the log when it is not the one asked for.
@@ -344,15 +374,15 @@ class TerminalService {
       const cwd = this.directoryFor(row.cwd)
       try {
         const integration = await this.arrangeIntegration(shell)
+        // **The same decision as every other session's**, rather than a second copy of it: a restored
+        // terminal whose shell dies keeps its screen and reports the crash, where this used to delete the
+        // terminal and report a clean exit 0 — losing the error, and only for terminals that came from a row
+        const opening = ++this.openings
         const session = await services.terminal.open(
           { cols: row.cols, rows: row.rows, shell, cwd, args: integration?.args, env: integration?.env },
           {
             onOutput: (data) => handlers.onData(row.id, data),
-            onExit: (code) => {
-              this.terminals.delete(row.id)
-              try { repository.terminalCommands.markClosed(row.id) } catch (error) { logger.error(`Could not close ${row.id}`, { error }) }
-              handlers.onExit(row.id, code ?? 0)
-            },
+            onExit: (code) => this.exited(row.id, opening, code, handlers),
           },
         )
 
@@ -372,7 +402,7 @@ class TerminalService {
           submit: submitFor(shell),
         }
         // Restored by nobody, so the first window to fit it takes the size (M2)
-        this.terminals.set(row.id, { info, session, sizedBy: undefined })
+        this.terminals.set(row.id, { info, session, sizedBy: undefined, opening })
 
         logger.info(`Restored terminal ${row.title} (${row.id}) as a new shell (pid ${session.pid}); the previous process and its output are gone`)
       } catch (error) {

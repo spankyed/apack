@@ -167,8 +167,15 @@ export interface Broker {
 
 interface Connection {
   send(request: Request): void;
-  /** Resolves with the first event the predicate accepts, or rejects with a `Failed` that names no session */
-  next(accept: (event: Event) => boolean): Promise<Event>;
+  /**
+   * Resolves with the first event the predicate accepts.
+   *
+   * `session` is whose refusals are this call's. A `failed` frame naming a session belongs to a call about
+   * that session; one naming none is the connection's — a handshake, a spawn — and goes to whoever is
+   * waiting. Without it every refusal went to `waiting.shift()`, so a dead terminal's rejected keystroke
+   * could fail the unrelated `spawn` that happened to be at the head of the queue.
+   */
+  next(accept: (event: Event) => boolean, session?: string): Promise<Event>;
 }
 
 /**
@@ -270,7 +277,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
           connection.send({ kind: 'screen', session: id, history });
           // Keyed by the session, because two of these can be outstanding and an answer must not be taken
           // for the other one's — the broker answers per request and the frames carry no call of their own
-          const answer = await connection.next(event => event.kind === 'screen' && event.session === id);
+          const answer = await connection.next(event => event.kind === 'screen' && event.session === id, id);
           if (answer.kind !== 'screen') throw new BrokerError('PTY', 'the broker answered no screen');
           return {
             lines: answer.lines,
@@ -281,7 +288,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
         },
         async facts() {
           connection.send({ kind: 'facts', session: id });
-          const answer = await connection.next(event => event.kind === 'facts' && event.session === id);
+          const answer = await connection.next(event => event.kind === 'facts' && event.session === id, id);
           if (answer.kind !== 'facts') throw new BrokerError('PTY', 'the broker answered no facts');
           return {
             cwd: answer.cwd,
@@ -292,7 +299,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
         },
         async search(text, history = 0) {
           connection.send({ kind: 'search', session: id, text, history });
-          const answer = await connection.next(event => event.kind === 'search' && event.session === id);
+          const answer = await connection.next(event => event.kind === 'search' && event.session === id, id);
           if (answer.kind !== 'search') throw new BrokerError('PTY', 'the broker answered no search');
           return answer.matches;
         },
@@ -300,7 +307,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
           connection.send({ kind: 'wait', session: id, until, timeout_ms: timeoutMs });
           // **The deadline is the broker's**, so this waits for its answer rather than racing a timer of its
           // own: two deadlines would disagree, and the one that matters is the one holding the waiter
-          const answer = await connection.next(event => event.kind === 'waited' && event.session === id);
+          const answer = await connection.next(event => event.kind === 'waited' && event.session === id, id);
           if (answer.kind !== 'waited') throw new BrokerError('PTY', 'the broker answered no wait');
           return answer.outcome;
         },
@@ -350,7 +357,7 @@ function connect(path: string): Promise<net.Socket> {
  * lost behind a burst of it.
  */
 function frames(socket: net.Socket, listeners: Map<string, BrokerSessionListeners>): Connection {
-  const waiting: Array<{ accept: (event: Event) => boolean; settle: (event: Event) => void; refuse: (error: Error) => void }> = [];
+  const waiting: Array<{ accept: (event: Event) => boolean; settle: (event: Event) => void; refuse: (error: Error) => void; session?: string }> = [];
   const lines = createInterface({ input: socket });
 
   lines.on('line', line => {
@@ -374,9 +381,15 @@ function frames(socket: net.Socket, listeners: Map<string, BrokerSessionListener
     }
     if (event.kind === 'failed') {
       const error = new BrokerError(event.code, event.message, event.session ?? undefined);
-      // A refusal with no session is this connection's: whoever is waiting hears it
-      const next = waiting.shift();
-      if (next) next.refuse(error);
+      // **Matched, as an answer is.** A refusal naming a session is the answer to a call about that session,
+      // and `write`, `resize` and `kill` wait for nothing — so a refusal of one of those has no caller, and
+      // reporting it is all there is to do. Shifting the queue instead rejected whoever happened to be at
+      // its head, which is a call about another session being told it failed.
+      const index = event.session == null
+        ? (waiting.length > 0 ? 0 : -1)
+        : waiting.findIndex(one => one.session === event.session);
+      if (index >= 0) { waiting.splice(index, 1)[0]!.refuse(error); return; }
+      logger.warn(`the broker refused ${event.code}, which no call was waiting for`, { session: event.session, message: event.message });
       return;
     }
     const index = waiting.findIndex(one => one.accept(event));
@@ -388,8 +401,8 @@ function frames(socket: net.Socket, listeners: Map<string, BrokerSessionListener
 
   return {
     send(request) { socket.write(`${JSON.stringify(request)}\n`); },
-    next(accept) {
-      return new Promise<Event>((settle, refuse) => { waiting.push({ accept, settle, refuse }); });
+    next(accept, session) {
+      return new Promise<Event>((settle, refuse) => { waiting.push({ accept, settle, refuse, session }); });
     },
   };
 }

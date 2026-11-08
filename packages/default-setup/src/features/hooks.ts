@@ -12,12 +12,12 @@ export const onInit = () => {};
  */
 export const onShutdown = () => {
   services.runHistory.stopActive();
-  // **This used to kill every terminal, and killing them here is now exactly wrong.** A session outlives
-  // this process on purpose: restarting the API must not take a user's shells down, which is what the whole
-  // lifetime rule is for. What ends them is the app's own hold on the broker closing, which a descriptor
-  // does on process death however the process died — and with no owner, the broker's rule that the last
-  // client leaving ends them, which is what keeps a dev run or a test from leaving anything behind.
-  // Terminals are still ended deliberately: `cleanupTerminals` is the user asking for it.
+  // **Nothing here ends a terminal, and nothing in this process may.** A session outlives the API on
+  // purpose: restarting it must not take a user's shells down, which is the whole of the lifetime rule.
+  // What ends them is the app's own hold on the broker closing — a descriptor closes on process death
+  // however the process died — and, with no owner holding it, the broker's own rule that the last client
+  // leaving ends them, which is what keeps a dev run or a test from leaving a shell behind. The only
+  // deliberate end is the user closing a terminal, which is `terminalService.kill`.
   clearAllSchedules();
   removeAllAdHocListeners();
   clearFlowActorRegistry();

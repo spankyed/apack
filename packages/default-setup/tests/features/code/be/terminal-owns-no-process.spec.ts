@@ -9,6 +9,7 @@ import { repository } from '#generated/repository.ts'
 function recordingSessions() {
   const opened: Array<{ cols: number; rows: number; listenersGivenAtOpen: boolean }> = []
   const resized: Array<{ cols: number; rows: number }> = []
+  const terminated: string[] = []
   let emit: ((data: string) => void) | undefined
 
   mockService('terminal', {
@@ -22,12 +23,16 @@ function recordingSessions() {
         pid: 4242,
         write: async () => {},
         resize: async (cols: number, rows: number) => { resized.push({ cols, rows }) },
-        terminate: async () => {},
+        // **A signal, as the broker's kill is.** `portable-pty` sends SIGHUP and reports a signal death as a
+        // non-zero code; Windows is `TerminateProcess(…, 127)`. A double that exits 0 here would let the
+        // service decide a close by reading the code — which is exactly the thing that cannot work, so the
+        // case below would pass while the app marked every closed terminal crashed.
+        terminate: async () => { terminated.push(`broker-${opened.length}`); listeners.onExit(1) },
       }
     },
   })
 
-  return { opened, resized, writeFromTheShell: (data: string) => emit?.(data) }
+  return { opened, resized, terminated, writeFromTheShell: (data: string) => emit?.(data) }
 }
 
 const CODE = 'default-setup/code'
@@ -92,6 +97,34 @@ describe('what the broker owning the process removes', () => {
     await app.stop()
   })
 
+  /**
+   * **Nothing in this process may end a session when it stops.** A session outlives the API on purpose, so
+   * the app's hold on the broker closing is what ends one — and that hold is Electron main's, not this
+   * process's. The broker's own suite proves a session survives a client leaving; this is the half above it,
+   * that the app does not ask for the kill anyway.
+   *
+   * **What it reaches is `onShutdown`**, which is what the harness and the API both run on the way out, and
+   * a `kill` there fails this case. What it does **not** reach is a machine's `exit` action: XState 5 runs no
+   * exit action on `actor.stop()` — measured, with a two-state machine — so such an action is dead code on
+   * this path rather than a hazard this case would catch. If a future XState runs them, this case does not
+   * change and the guard is somewhere else.
+   */
+  it('ends no session when the systems stop, which is what an API restart does', async () => {
+    const sessions = recordingSessions()
+    const app = await startApp({ systems: ['code'] })
+    await app.connect()
+    const id = await openATerminal(app)
+    expect(sessions.opened).toHaveLength(1)
+
+    // What `backendActor?.stop()` does in the API's SIGTERM handler, and what a pack reload does to its systems
+    await app.stop()
+
+    expect(sessions.terminated, 'stopping the systems ended a user s shell').toEqual([])
+    expect(repository.terminalQueries.all().map(row => row.id), 'the row stays, so the next boot restores it')
+      .toEqual([id])
+    resetTestData()
+  })
+
   it('leaves no row behind when every terminal is killed (L2, L3)', async () => {
     recordingSessions()
     const app = await startApp({ systems: ['code'] })
@@ -100,7 +133,9 @@ describe('what the broker owning the process removes', () => {
     expect(repository.terminalQueries.all()).toHaveLength(1)
 
     const { terminalService } = await import('#features/code/be/services/terminal.ts')
-    await terminalService.killAll()
+    // Through the door the user has: there is no kill-everything operation, because the app ending the
+    // sessions is the broker's job and not this process's
+    for (const terminal of terminalService.list()) await terminalService.kill(terminal.id)
 
     // L2: a run that quit used to leave its rows open, so the next boot restored terminals that were never
     // open. L3: and the rows themselves never went anywhere — a closed one was annotated, not removed, so a

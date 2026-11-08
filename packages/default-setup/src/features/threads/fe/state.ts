@@ -473,6 +473,9 @@ const threadsState = setup({
       enqueue.assign({
         messageViews: listed,
         messageContents: Object.fromEntries(listed.flatMap(messageId => (context.messageContents[messageId] ? [[messageId, context.messageContents[messageId]]] : []))),
+        // A streamed run is pruned with the row it splices onto; a window that stops listing a message holds
+        // neither, and nothing accumulates across a long session
+        messageStreams: Object.fromEntries(listed.flatMap(messageId => (context.messageStreams[messageId] ? [[messageId, context.messageStreams[messageId]]] : []))),
       });
     }),
     /**
@@ -587,12 +590,17 @@ const threadsState = setup({
      */
     appendMessageText: assign(({ context, event }) => {
       const ev = typeOf('MESSAGE_TEXT_APPENDED', event);
-      if (!context.messageViews.includes(ev.messageId)) return {};
       const { [ev.messageId]: held, ...others } = context.messageStreams;
+      // **`done` is taken whether or not this window is still following the message.** A run held from when
+      // it was followed has to end with the stream it belongs to: dropping the event with the guard below
+      // left the run in place, and a `finalize` that *replaced* the text — the warning a failed turn ends
+      // with — was then spliced away by the abandoned partial reply, with the error never shown.
       if (ev.done) {
+        if (!held) return {};
         const next = { ...context, messageStreams: others };
         return { messageStreams: others, ...composedMessages(next) };
       }
+      if (!context.messageViews.includes(ev.messageId)) return {};
       const continues = held !== undefined && held.at + held.text.length === ev.at;
       const run = continues ? { at: held.at, text: held.text + ev.text } : { at: ev.at, text: ev.text };
       const messageStreams = { ...others, [ev.messageId]: run };

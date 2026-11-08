@@ -150,6 +150,40 @@ describe('the broker client', () => {
     });
   });
 
+  /**
+   * **A refusal is matched, as an answer is.** A call about a session filters the answer it waits for by that
+   * session; the refusal path used to reject `waiting.shift()` instead — whoever was at the head of the
+   * queue. So a refusal about another terminal failed this caller, and this caller's real answer then
+   * matched no waiter and hung until the socket closed.
+   */
+  it('lets a refusal about another session pass, and still answers the call that asked', async () => {
+    const fake = await broker({
+      ...OPENS,
+      // The refusal names a session nobody here waits on — a `write` to a dead terminal is where one comes
+      // from, and writes wait for nothing — and it arrives *first*, so a client that shifted the queue would
+      // have rejected the caller below before its answer landed
+      screen: [
+        { kind: 'failed', session: 's-2', code: 'NO_SUCH_SESSION', message: 's-2 is gone' },
+        { kind: 'screen', session: 's-1', lines: ['mine'], cursor_row: 0, cursor_column: 4, alt_screen: false },
+      ],
+    });
+    const session = await fake.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
+
+    const screen = await session.screen(20);
+
+    expect(screen.lines, 'another session s refusal rejected this call').toEqual(['mine']);
+  });
+
+  it('refuses the call a refusal names, so a caller hears its own failure', async () => {
+    const fake = await broker({
+      ...OPENS,
+      screen: [{ kind: 'failed', session: 's-1', code: 'NO_SUCH_SESSION', message: 's-1 is gone' }],
+    });
+    const session = await fake.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
+
+    await expect(session.screen(20)).rejects.toThrow(/s-1 is gone/);
+  });
+
   it('says why a broker that never listened did not start, rather than timing out', async () => {
     directory = mkdtempSync(path.join(tmpdir(), 'broker-client-'));
     const binary = path.join(directory, 'silent.cjs');

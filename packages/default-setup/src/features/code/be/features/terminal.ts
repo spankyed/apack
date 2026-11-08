@@ -309,12 +309,6 @@ export const terminalSystem = setup({
       }
     },
 
-    cleanupTerminals: () => {
-      // Fire-and-forget here, because an action cannot await; `onShutdown` is the path that must wait, and
-      // `features/hooks.ts` does
-      void terminalService.killAll()
-    },
-
     updateBaseDirectory: assign({
       baseDirectory: ({ event }) => {
         const ev = event as { type: 'terminal.UPDATE_BASE_DIRECTORY'; path: string }
@@ -328,7 +322,6 @@ export const terminalSystem = setup({
   context: ({ input }: { input?: { baseDirectory: string | null } }) => ({
     baseDirectory: input?.baseDirectory || null
   }),
-  exit: 'cleanupTerminals',
   // Stateless handlers safe during initialization
   on: {
     'terminal.TERMINAL_INPUT': {
