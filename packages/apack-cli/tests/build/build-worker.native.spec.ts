@@ -5,8 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { execFile, fork, spawn, type ChildProcess } from 'node:child_process';
-import { promisify } from 'node:util';
+import { fork, spawn, type ChildProcess } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { afterEach, expect, it, vi } from 'vitest';
 import { FIXTURE_DATA, FIXTURE_ENTITY, packFixture } from '@apackdev/sdk/testing/pack-fixture';
@@ -32,10 +31,11 @@ import { compilerPackageDirectory } from '../../src/build/compiler-installation.
 import { compilerEnvironmentIdentity } from '../../src/build/compiler-environment.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
+import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
 
 const roots: string[] = [];
 const sharedCompiler = shareCompilerInstallation();
-const execFileAsync = promisify(execFile);
+const execFileAsync = execFileWhileWorking;
 
 /** A process's `ps` state, or '' once it has gone (`ps` exits 1 for a pid it cannot find) */
 async function processState(pid: number): Promise<string> {

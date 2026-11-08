@@ -1,8 +1,6 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { createRequire } from 'node:module';
 import { expect, it, onTestFinished, vi } from 'vitest';
 import { FIXTURE_DATA, FIXTURE_ENTITY, packFixture } from '@apackdev/sdk/testing/pack-fixture';
@@ -33,9 +31,10 @@ import { COMPILER_INPUTS_ENV } from '../../src/build/compiler-installation-input
 import { spawnCompilerWorker } from '../../src/build/compiler-process.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
+import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
 
 const sharedCompiler = shareCompilerInstallation();
-const execFileAsync = promisify(execFile);
+const execFileAsync = execFileWhileWorking;
 
 it.runIf(process.platform === 'win32')('reads Windows loader state concurrently across owned threads without native corruption', { meta: cpuBudget(15_000) }, async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-pe-report-'));
@@ -55,7 +54,7 @@ it.runIf(process.platform === 'win32')('reads Windows loader state concurrently 
     if (!process.report.excludeEnv) throw new Error('Report policy was not restored');
     if (done) { await done; console.log('REPORT_THREADS_COMPLETE'); }
   `);
-  const result = await promisify(execFile)(process.execPath, ['--conditions=@apackdev/source', '--import', 'tsx', probe], {
+  const result = await execFileWhileWorking(process.execPath, ['--conditions=@apackdev/source', '--import', 'tsx', probe], {
     cwd: REPO_ROOT, env: { ...process.env, NODE_OPTIONS: '' }, timeout: 10_000, windowsHide: true,
   }).catch(error => { throw new Error(`Report child exited ${error.code}: ${error.stdout} ${error.stderr}`); });
   expect(result.stdout).toContain('REPORT_THREADS_COMPLETE');
@@ -93,7 +92,7 @@ it.runIf(process.platform === 'win32')('reads live native PATH despite replaced 
       await done; console.log('NATIVE_PATH_COMPLETE');
     }
   `);
-  const result = await promisify(execFile)(process.execPath, ['--conditions=@apackdev/source', '--import', 'tsx', probe], {
+  const result = await execFileWhileWorking(process.execPath, ['--conditions=@apackdev/source', '--import', 'tsx', probe], {
     cwd: REPO_ROOT, env: { ...process.env, NODE_OPTIONS: '' }, timeout: 25_000, windowsHide: true,
   }).catch(error => { throw new Error(`Native environment child exited ${error.code}: ${error.stdout} ${error.stderr}`); });
   expect(result.stdout).toContain('NATIVE_PATH_COMPLETE');
@@ -363,7 +362,7 @@ it.runIf(process.platform === 'win32')('refuses Node .local overrides through th
     }`);
     const cli = path.join(compilerPackageDirectory(), 'dist/cli.js');
     const stop = new AbortController();
-    const request = promisify(execFile)(executable, [cli, 'pack', 'build'], {
+    const request = execFileWhileWorking(executable, [cli, 'pack', 'build'], {
       cwd: pack, env: { ...environment, NODE_OPTIONS: formatNodeOptions(['--require', preload]) },
       encoding: 'utf8', signal: stop.signal, maxBuffer: 1024 * 1024,
     });

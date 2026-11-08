@@ -1,6 +1,4 @@
 import { _declarationRevision } from '@apackdev/sdk/build';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -37,6 +35,7 @@ vi.mock('../../src/build/build-process.ts', () => ({
 }));
 import { buildPackArchive } from '../../src/commands/archive';
 import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
+import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
 
 let tmp: string;
 
@@ -254,7 +253,7 @@ describe('publishRelease', () => {
   });
 });
 
-const execFileAsync = promisify(execFile);
+const execFileAsync = execFileWhileWorking;
 const git = async (cwd: string, ...args: string[]) =>
   (await execFileAsync('git', args, { cwd, encoding: 'utf8', timeout: 60_000 })).stdout.trim();
 

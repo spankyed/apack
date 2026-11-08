@@ -1,8 +1,6 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { expect, it, vi } from 'vitest';
 import { packFixture } from '@apackdev/sdk/testing/pack-fixture';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
@@ -13,10 +11,11 @@ import { parseElfLibraryCommands } from '../../src/build/compiler-elf-libraries.
 import { isElfSystemLibrary } from '../../src/build/compiler-elf-environment.ts';
 import { nativeAddonSource } from '../_support/native-addon.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
+import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
 
 const sharedCompiler = shareCompilerInstallation();
 
-const execFileAsync = promisify(execFile);
+const execFileAsync = execFileWhileWorking;
 const compile = (args: string[]) => execFileAsync('cc', args, { timeout: 15_000 });
 
 it.runIf(process.platform === 'linux')('owns retained ELF libraries, preserves Vue updates and refuses absolute outside dependencies', async () => {

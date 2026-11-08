@@ -45,11 +45,14 @@ export const spawnCallsIn = (absFile: string): string[] =>
 
 /** The test-support runner for process trees (`apack-cli tests/_support/run-command.ts`), however it is imported */
 const RUN_COMMAND = /(^|\/)run-command(\.ts)?$/;
+/** Where `execFileWhileWorking` comes from: `promisify(execFile)` bounded by progress, the one a spec reaches for */
+const PROCESS_PROGRESS = /(^@apackdev\/host\/build\/process-progress|(^|\/)process-progress(\.ts)?)$/;
 
 /**
  * The spawns a file makes without calling a `child_process` export by name: through `promisify(execFile)` — bound
- * to a const or called inline — and through `runCommand`. Both are how the integration and native halves start a
- * process, since a synchronous call is refused there, so a count that missed them would read as no spawning.
+ * to a const or called inline — through `execFileWhileWorking`, its progress-bounded form, called by its name or a
+ * const bound to it, and through `runCommand`. They are how the integration and native halves start a process,
+ * since a synchronous call is refused there, so a count that missed them would read as no spawning.
  */
 function indirectSpawnCallsIn(absFile: string): string[] {
   const source = ts.createSourceFile(absFile, fs.readFileSync(absFile, 'utf-8'), ts.ScriptTarget.Latest, true);
@@ -63,6 +66,7 @@ function indirectSpawnCallsIn(absFile: string): string[] {
     for (const element of bindings.elements) {
       if (CHILD_PROCESS.has(specifier)) fromChildProcess.add(element.name.text);
       else if (RUN_COMMAND.test(specifier) && (element.propertyName ?? element.name).text === 'runCommand') runners.add(element.name.text);
+      else if (PROCESS_PROGRESS.test(specifier) && (element.propertyName ?? element.name).text === 'execFileWhileWorking') runners.add(element.name.text);
     }
   }
   const promisified = (node: ts.Node): boolean => ts.isCallExpression(node)
@@ -71,7 +75,8 @@ function indirectSpawnCallsIn(absFile: string): string[] {
   const bound = new Set<string>();
   const calls: string[] = [];
   const visit = (node: ts.Node): void => {
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer !== undefined && promisified(node.initializer)) {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer !== undefined
+      && (promisified(node.initializer) || (ts.isIdentifier(node.initializer) && runners.has(node.initializer.text)))) {
       bound.add(node.name.text);
     }
     if (ts.isCallExpression(node)) {

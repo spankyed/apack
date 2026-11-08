@@ -3,8 +3,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { afterEach, expect, it, vi } from 'vitest';
 import * as installation from '../../src/build/compiler-installation.ts';
 import * as checkout from '../../src/build/checkout-packages.ts';
@@ -14,8 +12,9 @@ import { PACK_LAYOUT, readPackBuild, sealPackBuild } from '@apackdev/host/packs'
 import { packInputsHash } from '@apackdev/host/build/pack-inputs';
 import { createPackBuilder, type PackBuilder } from '../../src/build/build-process.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
+import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
 
-const execFileAsync = promisify(execFile);
+const execFileAsync = execFileWhileWorking;
 
 function stopDescendant(pid: number) {
   try { process.kill(pid, 'SIGKILL'); }

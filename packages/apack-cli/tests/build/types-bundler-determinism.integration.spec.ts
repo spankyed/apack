@@ -1,10 +1,10 @@
-import { execFile } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { PACKAGES_BUILT, REPO_ROOT, installPublishedPackages } from '@app/publish-checks';
 import { cpuBudget } from '@apackdev/testing/vitest';
+import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
 
 /**
  * A pack's facade bundle (dist/types/pack-types.d.ts) is the same whether its @apackdev/* packages come
@@ -75,10 +75,8 @@ async function buildFacade(parent: string, name: string, modules: string, signal
   }
   fs.symlinkSync(modules, path.join(dir, 'node_modules'), 'dir');
   try {
-    await new Promise<void>((resolve, reject) => {
-      execFile(process.execPath, [CLI, 'pack', 'build'], {
-        cwd: dir, env: { ...process.env, FORCE_COLOR: '0' }, signal, timeout: 180_000, killSignal: 'SIGKILL',
-      }, (error, stdout, stderr) => error ? reject(Object.assign(error, { stdout, stderr })) : resolve());
+    await execFileWhileWorking(process.execPath, [CLI, 'pack', 'build'], {
+      cwd: dir, env: { ...process.env, FORCE_COLOR: '0' }, signal, timeout: 180_000, killSignal: 'SIGKILL',
     });
   } catch (err: any) {
     throw new Error(`apack pack build failed (${name}):\n${err.stdout ?? ''}${err.stderr ?? ''}`);

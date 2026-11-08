@@ -19,8 +19,8 @@ const READ_EVERY_MS = 5_000;
  * makes a command slow and never stalled. The case's own deadline still applies around it.
  *
  * Resolves with the exit code, the combined output and stdout alone (for a caller that parses it); rejects, naming the command, when it exceeds `timeout`,
- * is cancelled through `signal`, or cannot start. A single short-lived process needs none of this:
- * `promisify(execFile)` with a `timeout` is enough.
+ * is cancelled through `signal`, or cannot start. A single process needs none of this: `execFileWhileWorking`
+ * (`@apackdev/host/build/process-progress`) is `promisify(execFile)` bounded the same way.
  */
 export async function runCommand(command: string, args: string[], cwd: string,
   { signal, env, ceiling = CEILING_MS, readTree = readTreeCpuMs }: {

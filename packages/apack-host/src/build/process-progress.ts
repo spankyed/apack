@@ -2,7 +2,7 @@
 // its progress rather than a clock (`scripts/lib/bounded-spawn.ts`, `apack-cli/tests/_support/run-command.ts`). A starved
 // process is slow and still working, and a budget that measures the clock kills it for the machine being busy, which is
 // why the ceiling counts CPU time where a tree can be read.
-import { execFile } from 'node:child_process';
+import { execFile, type ChildProcess, type ExecFileOptions } from 'node:child_process';
 
 /**
  * How long a process tree may go without CPU or output before whatever watches it ends it as stalled: one number
@@ -145,51 +145,123 @@ export function threadWork(worker: object): WorkReading {
 }
 
 /**
+ * Watches another party's work and says when it should be given up on: when its work stops growing for `idleMs` —
+ * the stall decision the watchdog makes (`createStallTracker`) — or when it has spent `ceilingMs` of CPU since the
+ * watch began, which only a loop that spins reaches. The one decision behind `answerWhileWorking` and
+ * `execFileWhileWorking`, and anything else that would otherwise end a process on a fixed time.
+ *
+ * A reading that cannot be taken repeats the last one that could, so it adds no work: a party nothing can read is
+ * still bounded, by `idleMs` of silence, and a reading that fails between two good ones cannot pass off the whole
+ * total as new work. Where readings cannot be taken at all — Windows has no `ps` — `fallbackMs`, if given, is the
+ * bound on the clock from the first reading that failed, which is the only bound that is then honest.
+ */
+export function watchWork({ work, idleMs = IDLE_MS, ceilingMs, fallbackMs, onRefused }: {
+  readonly work: WorkReading; readonly idleMs?: number; readonly ceilingMs?: number; readonly fallbackMs?: number;
+  readonly onRefused: (why: string) => void;
+}): { stop(): void } {
+  const tracker = createStallTracker(idleMs, Date.now());
+  let lastTotal: number | undefined;
+  // The first reading is where the watch began: what the party did before it is not what the ceiling is about
+  let firstTotal: number | undefined;
+  let reading = false;
+  let done = false;
+  let clock: ReturnType<typeof setTimeout> | undefined;
+  const stop = () => {
+    done = true;
+    clearInterval(timer);
+    clearTimeout(clock);
+  };
+  const refuse = (why: string) => {
+    if (done) return;
+    stop();
+    onRefused(why);
+  };
+  const timer = setInterval(() => {
+    if (reading || done) return;
+    reading = true;
+    // A reader that throws has given no reading, which is the same as one that cannot be taken
+    void work().catch(() => undefined).then((total) => {
+      reading = false;
+      if (done) return;
+      if (total === undefined && fallbackMs !== undefined && clock === undefined) {
+        clock = setTimeout(() => refuse(`ran past ${fallbackMs / 1000}s on the clock, its work unreadable`), fallbackMs);
+        clock.unref?.();
+      }
+      lastTotal = total ?? lastTotal;
+      firstTotal ??= lastTotal;
+      const spent = (lastTotal ?? 0) - (firstTotal ?? 0);
+      if (tracker.reading(new Map([[0, lastTotal ?? 0]]), Date.now())) refuse(`did no work for ${idleMs / 1000}s`);
+      else if (ceilingMs !== undefined && spent >= ceilingMs) refuse(`spent ${Math.round(spent / 1000)}s of CPU`);
+    });
+  }, Math.min(5_000, idleMs / 4));
+  timer.unref?.();
+  return { stop };
+}
+
+/**
  * Waits for another process or thread to answer for as long as it is working, rather than for a fixed time.
  *
  * A party that is busy answers late and never fails to, so a deadline on the clock refuses it for the load it ran
  * under: a compiler worker given two seconds to accept a request missed them at a load of 40. So the wait ends only
- * when the party goes `idleMs` without adding work — the stall decision the watchdog makes (`createStallTracker`) —
- * or when the answer arrives, whichever is first.
- *
- * A reading that cannot be taken repeats the last one that could, so it adds no work: a party nothing can read is
- * still bounded, by `idleMs` of silence, and a reading that fails between two good ones cannot pass off the whole
- * total as new work. `ceilingMs` is the other hang, a party that keeps spending CPU and never answers: the wait is
- * refused once the party has spent that much since it began.
+ * when `watchWork` gives up on the party, or when the answer arrives, whichever is first.
  */
-export function answerWhileWorking<T>(answer: Promise<T>, { work, what, idleMs = IDLE_MS, ceilingMs }: {
+export function answerWhileWorking<T>(answer: Promise<T>, { work, what, idleMs, ceilingMs }: {
   readonly work: WorkReading; readonly what: string; readonly idleMs?: number; readonly ceilingMs?: number;
 }): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const tracker = createStallTracker(idleMs, Date.now());
-    let lastTotal: number | undefined;
-    // The first reading is where the wait began: what the party did before it is not what the ceiling is about
-    let firstTotal: number | undefined;
-    let reading = false;
-    let done = false;
-    const refuse = (why: string) => {
-      done = true;
-      clearInterval(timer);
-      reject(new Error(`${what} did not answer, and ${why}`));
-    };
-    const timer = setInterval(() => {
-      if (reading || done) return;
-      reading = true;
-      // A reader that throws has given no reading, which is the same as one that cannot be taken
-      void work().catch(() => undefined).then((total) => {
-        reading = false;
-        if (done) return;
-        lastTotal = total ?? lastTotal;
-        firstTotal ??= lastTotal;
-        const spent = (lastTotal ?? 0) - (firstTotal ?? 0);
-        if (tracker.reading(new Map([[0, lastTotal ?? 0]]), Date.now())) refuse(`did no work for ${idleMs / 1000}s`);
-        else if (ceilingMs !== undefined && spent >= ceilingMs) refuse(`spent ${Math.round(spent / 1000)}s of CPU trying`);
-      });
-    }, Math.min(5_000, idleMs / 4));
-    timer.unref?.();
+    const watch = watchWork({ work, idleMs, ceilingMs, onRefused: (why) => reject(new Error(`${what} did not answer, and ${why}${why.startsWith('spent') ? ' trying' : ''}`)) });
     answer.then(
-      (value) => { if (!done) { done = true; clearInterval(timer); resolve(value); } },
-      (error: unknown) => { if (!done) { done = true; clearInterval(timer); reject(error); } },
+      (value) => { watch.stop(); resolve(value); },
+      (error: unknown) => { watch.stop(); reject(error); },
     );
   });
+}
+
+/**
+ * An `AbortSignal` that aborts when `watchWork` gives up on a process tree: for work handed a signal rather than a
+ * process, such as an in-process build whose workers are this process's children. `stop` once the work is done.
+ */
+export function workSignal(options: Omit<Parameters<typeof watchWork>[0], 'onRefused'>): { signal: AbortSignal; stop(): void } {
+  const controller = new AbortController();
+  const watch = watchWork({ ...options, onRefused: (why) => controller.abort(new Error(`The work ${why}`)) });
+  return { signal: controller.signal, stop: () => watch.stop() };
+}
+
+/** What `execFileWhileWorking` takes: `execFile`'s options, with `timeout` the CPU its process tree may spend */
+export type ExecFileWhileWorkingOptions = Omit<ExecFileOptions, 'timeout'> & {
+  /** The CPU the process tree may spend, in milliseconds, and the bound on the clock where its CPU cannot be read */
+  readonly timeout?: number;
+  /** How its output is decoded: always to text, as `promisify(execFile)` with a string encoding answers */
+  readonly encoding?: BufferEncoding;
+};
+
+/**
+ * `promisify(execFile)`, bounded by the process's progress rather than the clock: it resolves with `stdout` and
+ * `stderr` and rejects on a non-zero exit as that does, and `timeout` is the CPU its tree may spend. The process is
+ * ended when it goes `IDLE_MS` without working, or past `timeout` of CPU, and where its CPU cannot be read, past
+ * `timeout` on the clock. A process that is only slow on a busy machine is never ended for it.
+ */
+export function execFileWhileWorking(file: string, args: readonly string[], options: ExecFileWhileWorkingOptions = {}): Promise<{ stdout: string; stderr: string }> & { child: ChildProcess } {
+  const { timeout, signal, ...rest } = options;
+  const ended = new AbortController();
+  let why: string | undefined;
+  let watch: { stop(): void } | undefined;
+  let settle!: { resolve(value: { stdout: string; stderr: string }): void; reject(error: unknown): void };
+  const done = new Promise<{ stdout: string; stderr: string }>((resolve, reject) => { settle = { resolve, reject }; });
+  const child = execFile(file, [...args], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...rest,
+    signal: signal === undefined ? ended.signal : AbortSignal.any([signal, ended.signal]) }, (error, stdout, stderr) => {
+    watch?.stop();
+    if (error) {
+      if (why !== undefined) error.message = `${file} ${args.join(' ')} was ended: it ${why}\n${error.message}`;
+      settle.reject(Object.assign(error, { stdout, stderr }));
+    } else settle.resolve({ stdout: String(stdout), stderr: String(stderr) });
+  });
+  if (child.pid !== undefined) {
+    watch = watchWork({
+      work: processWork(child.pid), ceilingMs: timeout, fallbackMs: timeout,
+      onRefused: (reason) => { why = reason; ended.abort(new Error(reason)); },
+    });
+  }
+  // The child too, as `promisify(execFile)`'s promise carries it, for a caller that waits on its close
+  return Object.assign(done, { child });
 }

@@ -1,7 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { expect, it } from 'vitest';
 import { packFixture } from '@apackdev/sdk/testing/pack-fixture';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
@@ -14,12 +12,13 @@ import { startPackFrontend, type PackFrontend } from '../../src/build/frontend-p
 import { nativeFixture, nativeLoad } from '../_support/native-libraries.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
+import { execFileWhileWorking, processWork, workSignal } from '@apackdev/host/build/process-progress';
 
 // The native-library proofs are split by subject so the native half's shards can spread them; this one is
 // outside launch overrides: OS libraries, the DYLD_* variables and the selected image suffix.
 
 const sharedCompiler = shareCompilerInstallation();
-const execFileAsync = promisify(execFile);
+const execFileAsync = execFileWhileWorking;
 const PROBE_MS = 60_000;
 
 it.runIf(process.platform === 'darwin')('admits OS libraries and refuses outside launch overrides before build or frontend launch', { meta: cpuBudget(120_000 + 60_000 + 20_000) }, async () => {
@@ -40,7 +39,8 @@ __attribute__((constructor)) static void initialize(void) {
       files: { 'src/pack-entry-fe.ts': 'export const surfaces = [];',
         'tsconfig.json': JSON.stringify({ compilerOptions: { module: 'esnext', moduleResolution: 'bundler', skipLibCheck: true } }) } });
     process.env.DYLD_INSERT_LIBRARIES = '/usr/lib/libSystem.B.dylib';
-    await builder.build({ args: ['--skip-fe'], signal: AbortSignal.timeout(120_000) });
+    const bounded = workSignal({ work: processWork(process.pid), ceilingMs: 120_000, fallbackMs: 120_000 });
+    try { await builder.build({ args: ['--skip-fe'], signal: bounded.signal }); } finally { bounded.stop(); }
     checkpoint('OS baseline built');
     const output = path.join(fixture.pack, 'dist');
     const revision = readPackBuild(output).revision;
