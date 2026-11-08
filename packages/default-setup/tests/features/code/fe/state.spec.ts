@@ -12,12 +12,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createActor } from 'xstate'
 
 vi.mock('#generated/events.ts', () => ({ sendToSystem: vi.fn(), broadcastToSurface: vi.fn(), sendToSurface: vi.fn() }))
-vi.mock('#features/code/fe/utils/terminal-pool.ts', () => ({ terminalPool: { dispose: vi.fn(), syncProcesses: vi.fn() } }))
+vi.mock('#features/code/fe/utils/terminal-pool.ts', () => ({
+  terminalPool: { dispose: vi.fn(), syncProcesses: vi.fn(), disposeAll: vi.fn() },
+}))
 vi.mock('#features/code/fe/utils/terminal-events.ts', () => ({
   terminalEventBus: { emit: vi.fn(), clearOutput: vi.fn(), prunePersistedOutputs: vi.fn() },
 }))
 
 const codeState = (await import('#features/code/fe/state.ts')).default
+const { terminalPool } = await import('#features/code/fe/utils/terminal-pool.ts')
 
 const TABS_KEY = 'default-setup/code:open-tabs'
 const GROUPS_KEY = 'default-setup/code:tab-groups'
@@ -198,5 +201,35 @@ describe('which window keeps the layout', () => {
     aWindowWithATab()
 
     expect(storedTabs().tabs.map(tab => tab.path)).toContain('/src/b.ts')
+  })
+})
+
+/**
+ * **Who owns the terminal pool**, which is a module singleton and so has nothing else that could.
+ *
+ * A component releases its terminal on unmount and deliberately does not dispose it, so a remount draws the
+ * same emulator again. That is right while this bundle is alive and a leak once it is not: the shell
+ * replaces this pack's frontend by importing a fresh module with a fresh pool, and the last one's xterm
+ * instances, DOM and GL contexts stay in the window with nothing left that could reach them.
+ *
+ * A child actor and not an `exit` action, because **XState 5 runs no `exit` action on `actor.stop()`** — an
+ * exit here would read as cleanup and be dead code. An invoked actor's cleanup does run.
+ */
+describe('the terminal pool the code surface holds', () => {
+  it('is left alone while the surface is running', () => {
+    const actor = started()
+    actor.send({ type: 'ADD_TAB', tab: { path: '/src/a.ts' } } as never)
+
+    expect(terminalPool.disposeAll, 'a running surface disposed the emulators it is drawing with')
+      .not.toHaveBeenCalled()
+  })
+
+  it('is disposed when the surface stops, which is when the shell replaces this frontend', () => {
+    const actor = started()
+
+    actor.stop()
+
+    expect(terminalPool.disposeAll, 'the stopped surface left its emulators in the window')
+      .toHaveBeenCalledTimes(1)
   })
 })

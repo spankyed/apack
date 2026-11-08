@@ -13,6 +13,15 @@ if (typeof globalThis.localStorage === 'undefined') {
   // (e.g. terminalEventBus.prunePersistedOutputs), so window must exist or
   // those paths silently no-op.
   globalThis.window ??= globalThis as unknown as Window & typeof globalThis;
+  // And a surface may *listen* on it: the threads surface follows the pointer for as long as it runs, in a
+  // child actor. Node's global is not an EventTarget, so without these the invoke throws as the surface
+  // starts and every other child of it is lost with the actor — which is how four specs failed at once.
+  // Recording nothing: a spec that cares about the listeners spies on them (or runs in jsdom, where this
+  // branch is not taken at all).
+  const events = new EventTarget();
+  globalThis.window.addEventListener ??= events.addEventListener.bind(events);
+  globalThis.window.removeEventListener ??= events.removeEventListener.bind(events);
+  globalThis.window.dispatchEvent ??= events.dispatchEvent.bind(events);
   globalThis.localStorage = {
     get length() { return store.size; },
     getItem: (k: string) => store.get(k) ?? null,

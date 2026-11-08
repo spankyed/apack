@@ -3,7 +3,7 @@ import { ref as featureRef } from '#generated/ref.ts'
 
 /** This surface's window storage: the prefix is its ref, so these names are scoped to it. */
 const storage = surfaceStorage(featureRef('code'))
-import { setup, type ActorRefFrom, type AnyActorRef, assign, enqueueActions } from 'xstate';
+import { setup, type ActorRefFrom, type AnyActorRef, assign, enqueueActions, fromCallback } from 'xstate';
 
 import breadcrumb from '@apackdev/sdk/fe';
 import { type HotkeyEvent, type HotkeysMap, createHotkeyProcessor } from '@apackdev/sdk/fe';
@@ -26,6 +26,7 @@ import { searchState } from './features/search/state.ts';
 import { commitState } from './features/commit/state.ts';
 import { pullRequestState } from './features/pull-request/state.ts';
 import { terminalState, type TerminalInfo } from './features/terminal/state.ts';
+import { terminalPool } from './utils/terminal-pool.ts';
 import { actionsState } from './features/actions/state.ts';
 import { promptsState } from './features/prompts/state.ts';
 import type { KeyboardShortcut } from '@apackdev/sdk/types';
@@ -324,7 +325,23 @@ const codeState = setup({
     pullRequestState,
     terminalState,
     actionsState,
-    promptsState
+    promptsState,
+    /**
+     * **The owner of the terminal pool, which is a module singleton and so has no other.**
+     *
+     * A component releases its terminal on unmount and deliberately does not dispose it, so a remount draws
+     * the same emulator again. That is right while this bundle is alive and a leak once it is not: the shell
+     * replaces this pack's frontend by importing a fresh module, whose pool is fresh, and the last one's
+     * xterm instances, DOM and GL contexts stay alive in the window with nothing left that could reach them.
+     *
+     * A child actor rather than an `exit` action, because **XState 5 runs no `exit` action on
+     * `actor.stop()`** — an exit here would be dead code that read as cleanup. An invoked actor's cleanup
+     * does run, which is why this repo's rule is that a concern owning a listener or a resource is a child.
+     *
+     * It ends no shell: a session lives in the broker and outlives the window that drew it, so this disposes
+     * the drawing and never the terminal.
+     */
+    poolOwner: fromCallback(() => () => terminalPool.disposeAll()),
   },
   actions: {
     spawnFeatureActors: enqueueActions(({ enqueue }) => {
@@ -1293,6 +1310,9 @@ const codeState = setup({
 }).createMachine({
   id,
   initial: 'canvas',
+  // Invoked at the root, so it is running for exactly as long as this surface is and its cleanup is what
+  // the shell stopping this actor runs
+  invoke: { src: 'poolOwner', id: 'poolOwner' },
   entry: ['spawnFeatureActors', 'restorePersistedTabs'],
   context: {
     // Until the shell says otherwise, this is the window that keeps the layout: a surface started with no

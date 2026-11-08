@@ -47,10 +47,18 @@ export const id = 'threads' as const;
 /** How many messages a page of the chat holds, and how many more each `LOAD_MORE_MESSAGES` asks for */
 const MESSAGE_PAGE_SIZE = 50;
 
-// Module-level mouse position tracker (read when hotkey fires)
+/**
+ * Where the pointer was, for the one thing that needs it: a hotkey carries no coordinates, so the quick
+ * prompt opens at the last position the pointer was seen (`quickPromptCursor`).
+ *
+ * **The listener is owned by `pointerTracker` below, not installed here.** Added at module scope it was
+ * never removed, so every replacement of this pack's frontend left another one behind writing into a module
+ * nothing could still reach — and it touched `window` at *import*, which is why a pure helper of this file
+ * had to be split out before a test could import it. Two numbers at module scope are fine; a listener is
+ * not, and this repo's rule is that a concern owning one is a child actor.
+ */
 let mouseX = 0;
 let mouseY = 0;
-window.addEventListener('mousemove', (e) => { mouseX = e.clientX; mouseY = e.clientY; }, { passive: true });
 
 
 function getInitialView(): 'list' | 'kanban' | 'dashboard' {
@@ -390,6 +398,17 @@ const chatStateOverrideTimer = (threadId: string) => `clear-expired-override-${t
 const threadsState = setup({
   types: { context: {} as ThreadsContext, events: {} as ThreadEvents },
   actors: {
+    /**
+     * Follows the pointer for as long as this surface runs, and takes its listener back when it stops.
+     *
+     * It sends nothing: a transition per pointer move would be thousands of them for a value read once.
+     * What it owns is the listener's *lifetime* — the leak was never the two numbers.
+     */
+    pointerTracker: fromCallback(() => {
+      const follow = (event: MouseEvent) => { mouseX = event.clientX; mouseY = event.clientY; };
+      window.addEventListener('mousemove', follow, { passive: true });
+      return () => window.removeEventListener('mousemove', follow);
+    }),
     clearNewThreadFlag: fromCallback<AnyEventObject, { id: string }>(({ input, sendBack }) => {
       const ANIMATION_DURATION = 1000;
       const timer = setTimeout(() => sendBack({ type: 'CLEAR_NEW_THREAD_FLAG', id: input.id }), ANIMATION_DURATION);
@@ -1466,6 +1485,8 @@ const threadsState = setup({
 }).createMachine({
   id,
   initial: getInitialView(),
+  // At the root, so it runs for exactly as long as this surface does and its cleanup is what stopping it runs
+  invoke: { src: 'pointerTracker', id: 'pointerTracker' },
   context: () => ({
     // Thread management (normalized)
     threadMap: {} as Record<string, ThreadListItem>,

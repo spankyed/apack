@@ -598,12 +598,31 @@ class TerminalPool {
   }
 
   /**
+   * Every emulator this pool is holding, disposed.
+   *
+   * **For the end of the frontend that holds the pool, which is the only lifetime a module singleton has.**
+   * A component releases its terminal on unmount and deliberately does not dispose it, so a remount draws
+   * the same emulator again — right while this bundle is alive, and a leak once it is not: a reload imports
+   * a fresh module with a fresh pool, and the last one's xterm instances, DOM and GL contexts are kept alive
+   * by the window with nothing left that could reach them.
+   *
+   * The code surface's machine calls this as it stops, which is when the shell replaces this pack's
+   * frontend. **It ends no shell**: a session lives in the broker and survives the window that drew it, so
+   * what this disposes is the drawing and never the terminal (`services.terminal`'s `kill` is that, and only
+   * the user asks for it).
+   */
+  disposeAll(): void {
+    for (const terminalId of [...this.entries.keys()]) this.dispose(terminalId)
+  }
+
+  /**
    * A paste the window delivered as an event, pasted through the emulator rather than sent as input.
    *
    * **The listener is the pool's, and its lifetime is the pool's sessions** — installed with the first and
    * taken back with the last. Registered at module scope instead it was never removed, so each reload of this
-   * pack's frontend left another one behind holding a pool whose emulators were disposed. A module singleton
-   * has no owner to remove it, and its sessions are the only lifetime it has to offer.
+   * pack's frontend left another one behind holding a pool whose emulators were disposed. The pool itself is
+   * owned by the code surface's machine, which disposes it as it stops (`poolOwner`, `fe/state.ts`); within
+   * that, its sessions are the only lifetime this listener has to offer.
    */
   private paste: EventListener | null = null
 
