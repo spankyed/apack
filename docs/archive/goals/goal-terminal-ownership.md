@@ -503,10 +503,16 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   closes on it — so it now has one in both. The earlier claim that every finding had a row was true of the
   rows that existed.
 - **Two things found while validating, neither this goal's to fix, both named rather than absorbed:**
-  - **`@apackdev/cli`'s `build-worker.native.spec.ts` is what stands between here and a green full chain**,
-    and nothing in this goal touches `packages/apack-cli` — checked, zero files across every commit here.
-    The file was last modified 2026-11-03. **Two different cases fail in two different ways**, which is
-    why it reads as one flaky file rather than one bad assertion:
+  - **`@apackdev/cli`'s native suite is what stands between here and a green full chain**, and nothing in
+    this goal touches `packages/apack-cli` — checked, zero files across every commit here.
+    **Three distinct cases have failed across five runs, never the same one twice running**, which is what
+    makes it a flaky suite on this machine rather than a defect anything here introduced:
+    `compiler-native-runtime > builds and archives a real pack under the captured Electron runtime`, and
+    two in `build-worker.native.spec.ts`. Every one of them involves a captured compiler runtime or a
+    watcher becoming ready — the two things in that suite that wait on something slow — and every one has
+    passed on some run. **Local reruns stopped here**, as the repo's own rule says to when a failure recurs
+    without a diagnosis; the strict run on disposable macOS runners is the cleaner machine and the arbiter.
+    Two of the three cases in detail:
     - *"removes its worker when the public build command is stopped while 'watch is ready'"* times out at
       120s inside the chain's 2-core container, twice. Run alone in that same container it passes in 22.5s.
       **It is sitting exactly on its own declared edge**: the case sets
