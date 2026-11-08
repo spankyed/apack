@@ -297,6 +297,12 @@ const LOCK_FILE = path.join(STAMP_DIR, 'packages-build.lock');
 const LOCK_POLL_MS = 200;
 /** How often a wait reads the holder's CPU: a listing of every process is too costly for each 200ms poll */
 const HOLDER_READ_MS = 5_000;
+/**
+ * How long a holder may do no work before a waiter gives up on it: half the watchdog's window, because the waiter
+ * itself does no work while it waits. A run bounded by `IDLE_MS` — every chain step — would otherwise see its own
+ * tree idle for as long as the wait, and kill the waiter at the moment it was about to give up and report.
+ */
+const HOLDER_IDLE_MS = IDLE_MS / 2;
 
 export const stampFile = (workspace: string): string => path.join(STAMP_DIR, `${workspace.replace(/[@/]/g, '-').replace(/^-/, '')}.json`);
 
@@ -1117,7 +1123,7 @@ function waitWhileHolderWorks(holding: () => boolean, pid: number, idleMs: numbe
  * schedule: it returns as soon as the holder is gone, and a holder that outlives it leaves the caller to
  * report staleness as before, which is the pre-existing behaviour rather than a hang.
  */
-export function waitForPackageBuild({ idleMs = IDLE_MS, pollMs = LOCK_POLL_MS }: { idleMs?: number; pollMs?: number } = {}): LockHolder | undefined {
+export function waitForPackageBuild({ idleMs = HOLDER_IDLE_MS, pollMs = LOCK_POLL_MS }: { idleMs?: number; pollMs?: number } = {}): LockHolder | undefined {
   const waitedFor = runningPackageBuild();
   if (!waitedFor) return undefined;
   waitWhileHolderWorks(() => runningPackageBuild() !== undefined, waitedFor.pid, idleMs, pollMs);
@@ -1229,7 +1235,7 @@ export interface StampedBuildOptions extends BuildLockOptions {
 
 export async function withBuildLock<T>(label: string, run: () => T | Promise<T>, file = LOCK_FILE, options: BuildLockOptions = {}): Promise<T> {
   const intent = options.intent ?? intentFromEnv();
-  const idleMs = options.idleMs ?? IDLE_MS;
+  const idleMs = options.idleMs ?? HOLDER_IDLE_MS;
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const pending = `${file}.${process.pid}`;
   /**
