@@ -10,7 +10,7 @@ import { loadSingleExternalPack } from '@apackdev/host/packs/runtime';
 import { createPackBuilder, type PackBuilder } from '../../src/build/build-process.ts';
 import { inspectPack } from '../../src/commands/info.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
-import { processWork, workSignal } from '@apackdev/host/build/process-progress';
+import { fromNow, processWork, workSignal } from '@apackdev/host/build/process-progress';
 
 startTestRuntime({ appVersion: '1.0.0' });
 const roots: string[] = [];
@@ -39,7 +39,7 @@ it('preserves owned names through authoring, compiled snapshots, source-free dis
     } });
   vi.spyOn(process, 'cwd').mockReturnValue(root);
   builder = createPackBuilder(root);
-  const bounded = workSignal({ work: processWork(process.pid), ceilingMs: 120_000, fallbackMs: 120_000 });
+  const bounded = workSignal({ work: fromNow(processWork(process.pid)), ceilingMs: 120_000, fallbackMs: 120_000 });
   try { await builder.build({ signal: AbortSignal.any([signal, bounded.signal]) }); } finally { bounded.stop(); }
   await builder.close();
   const built = readPackBuild(path.join(root, 'dist'));

@@ -63,30 +63,18 @@ export function cpuAdded(before: ReadonlyMap<number, number>, after: ReadonlyMap
 
 /**
  * Whether a tree has stalled, from its readings and its output, with the times given rather than read: the
- * watchdog's whole decision, so it is tested over made-up readings and no clock.
- *
- * It also keeps what the tree has spent, which is what a ceiling measures: a busy machine or a slow disk
- * stretches a run's wall time and leaves its CPU time where it was, so a CPU ceiling is reached by a loop that
- * spins and never by a run that is slow. `spentMs` is a lower bound — a process that starts and exits between
- * two readings is never seen — which errs toward leaving a run alone.
+ * watchdog's whole decision, so it is tested over made-up readings and no clock. What a tree has spent is
+ * `watchWork`'s, which owns the one definition of it.
  */
 export function createStallTracker(idleMs: number, startedAt: number) {
   let last: ReadonlyMap<number, number> | undefined;
   let work = 0;
-  let spent = 0;
   let progressAt = startedAt;
-  let outputAt: number | undefined;
   return {
-    output(at: number): void { progressAt = at; outputAt = at; },
-    /** The CPU the tree has spent since it started, as far as the readings saw */
-    get spentMs(): number { return spent; },
-    /** When the tree last wrote output, or nothing if it never has */
-    get lastOutputAt(): number | undefined { return outputAt; },
+    output(at: number): void { progressAt = at; },
     /** Records a reading and answers whether the tree has now gone `idleMs` without progress */
     reading(now: ReadonlyMap<number, number>, at: number): boolean {
-      // The first reading counts whole toward what was spent, its processes having started with the tree;
-      // toward progress it is only the baseline, so a tree has to keep working to count as working
-      spent += cpuAdded(last ?? new Map(), now);
+      // The first reading is only the baseline, so a tree has to keep working to count as working
       if (last !== undefined) work += cpuAdded(last, now);
       last = now;
       if (work >= PROGRESS_CPU_MS) {
@@ -106,8 +94,23 @@ export const readTreeCpuMs = (leader: number): Promise<Map<number, number> | und
   });
 });
 
-/** How much work a party has done in all, in milliseconds of CPU, or nothing where it cannot be read */
+/**
+ * How much work a party has done since the reading began, in milliseconds of CPU, or nothing where it cannot be
+ * read. Where it begins is the reading's to say: `processWork` over a child just spawned counts from its start, and
+ * `fromNow` makes any reading count from its first, for a party that was running before anyone watched it.
+ */
 export type WorkReading = () => Promise<number | undefined>;
+
+/** A reading that counts from its own first value: what a party does under the watch, not over its lifetime */
+export function fromNow(work: WorkReading): WorkReading {
+  let first: number | undefined;
+  return async () => {
+    const total = await work();
+    if (total === undefined) return undefined;
+    first ??= total;
+    return total - first;
+  };
+}
 
 /**
  * A process tree's work, from the readings the watchdog takes: what each process in it added, summed over every
@@ -132,7 +135,8 @@ export function processWork(pid: number, read: typeof readTreeCpuMs = readTreeCp
  */
 export function threadWork(worker: object): WorkReading {
   const usage = (worker as { cpuUsage?: () => Promise<{ user: number; system: number }> }).cpuUsage?.bind(worker);
-  return async () => {
+  // A thread's usage is its lifetime's, and it was running before the watch
+  return fromNow(async () => {
     if (usage === undefined) return undefined;
     try {
       const { user, system } = await usage();
@@ -141,61 +145,106 @@ export function threadWork(worker: object): WorkReading {
       // A thread that has exited has no usage to read, and its exit is what its waiter hears instead
       return undefined;
     }
-  };
+  });
+}
+
+/** Why a watch gave up on the party it watched, for the caller to word: `describeRefusal` is the common wording */
+export type Refusal =
+  | { readonly kind: 'stalled'; readonly idleMs: number }
+  | { readonly kind: 'ceiling'; readonly ceilingMs: number; readonly spentMs: number; readonly wallMs: number;
+      /** How long since the party's last output: `null` if it never wrote any, absent where output is not watched */
+      readonly sinceOutputMs?: number | null }
+  | { readonly kind: 'clock'; readonly fallbackMs: number };
+
+/** Whole seconds, and tenths below ten, where a whole second would round a short bound to nothing */
+const seconds = (ms: number): string => `${ms < 10_000 ? Math.round(ms / 100) / 10 : Math.round(ms / 1000)}s`;
+
+/**
+ * A refusal as the end of a sentence about the party — "it did no work for 120s". A ceiling says what was spent
+ * against how long it took, so a spin reads as one at a glance: CPU close to its wall time and no recent output.
+ */
+export function describeRefusal(refusal: Refusal): string {
+  switch (refusal.kind) {
+    case 'stalled': return `did no work for ${seconds(refusal.idleMs)}`;
+    case 'clock': return `ran past ${seconds(refusal.fallbackMs)} on the clock, its work unreadable`;
+    case 'ceiling': {
+      const quiet = refusal.sinceOutputMs === undefined ? ''
+        : refusal.sinceOutputMs === null ? ', with no output at all' : `, its last output ${seconds(refusal.sinceOutputMs)} ago`;
+      return `spent its ${seconds(refusal.ceilingMs)} CPU budget: ${seconds(refusal.spentMs)} of CPU in ${seconds(refusal.wallMs)} of wall time${quiet}`;
+    }
+  }
+}
+
+/** The time and timers a watch runs on: the process's own, unless a caller holds the real ones apart from fakes */
+export interface WatchClock {
+  now(): number;
+  every(run: () => void, ms: number): ReturnType<typeof setInterval>;
+  stopEvery(timer: ReturnType<typeof setInterval>): void;
+}
+
+const processClock: WatchClock = { now: () => Date.now(), every: (run, ms) => setInterval(run, ms), stopEvery: (timer) => clearInterval(timer) };
+
+/** A running watch: stop it when the work is done, and tell it when the party writes output, which is progress too */
+export interface Watch {
+  stop(): void;
+  output(): void;
+  /** What the party has spent, as its reading counts it: a lower bound, a short-lived process being unseen */
+  spentMs(): number;
 }
 
 /**
  * Watches another party's work and says when it should be given up on: when its work stops growing for `idleMs` —
- * the stall decision the watchdog makes (`createStallTracker`) — or when it has spent `ceilingMs` of CPU since the
- * watch began, which only a loop that spins reaches. The one decision behind `answerWhileWorking` and
- * `execFileWhileWorking`, and anything else that would otherwise end a process on a fixed time.
+ * the stall decision (`createStallTracker`) — or when it has spent `ceilingMs` of CPU since the watch began, which
+ * only a loop that spins reaches. Every bound in the repo that would otherwise end work on a fixed time is one of
+ * these: `boundedSpawn`'s, `runCommand`'s, the vitest progress guard's, and the waits below.
  *
- * A reading that cannot be taken repeats the last one that could, so it adds no work: a party nothing can read is
- * still bounded, by `idleMs` of silence, and a reading that fails between two good ones cannot pass off the whole
- * total as new work. Where readings cannot be taken at all — Windows has no `ps` — `fallbackMs`, if given, is the
- * bound on the clock from the first reading that failed, which is the only bound that is then honest.
+ * Spent is the reading's own count (`WorkReading`), so a party watched after it started is held to what it does
+ * under the watch by a reading that says so (`fromNow`). A reading that cannot be taken repeats the last
+ * one that could, so it adds no work: a party nothing can read is still bounded by `idleMs` of silence, and a
+ * failed reading between two good ones cannot pass off the whole total as new work. Where readings cannot be taken
+ * at all — Windows has no `ps` — `fallbackMs` is the bound on the clock from the first one that failed.
  */
-export function watchWork({ work, idleMs = IDLE_MS, ceilingMs, fallbackMs, onRefused }: {
+export function watchWork({ work, idleMs = IDLE_MS, ceilingMs, fallbackMs, onRefused, watchesOutput = false, clock = processClock }: {
   readonly work: WorkReading; readonly idleMs?: number; readonly ceilingMs?: number; readonly fallbackMs?: number;
-  readonly onRefused: (why: string) => void;
-}): { stop(): void } {
-  const tracker = createStallTracker(idleMs, Date.now());
+  readonly onRefused: (refusal: Refusal) => void;
+  /** Whether the caller reports the party's output (`output()`), so a refusal can say how long it has been silent */
+  readonly watchesOutput?: boolean;
+  readonly clock?: WatchClock;
+}): Watch {
+  const startedAt = clock.now();
+  const tracker = createStallTracker(idleMs, startedAt);
   let lastTotal: number | undefined;
-  // The first reading is where the watch began: what the party did before it is not what the ceiling is about
-  let firstTotal: number | undefined;
+  let outputAt: number | null = null;
+  let unreadableSince: number | undefined;
   let reading = false;
   let done = false;
-  let clock: ReturnType<typeof setTimeout> | undefined;
-  const stop = () => {
-    done = true;
-    clearInterval(timer);
-    clearTimeout(clock);
-  };
-  const refuse = (why: string) => {
-    if (done) return;
-    stop();
-    onRefused(why);
-  };
-  const timer = setInterval(() => {
+  const spentMs = () => lastTotal ?? 0;
+  const stop = () => { done = true; clock.stopEvery(timer); };
+  const refuse = (refusal: Refusal) => { stop(); onRefused(refusal); };
+  const timer = clock.every(() => {
     if (reading || done) return;
     reading = true;
     // A reader that throws has given no reading, which is the same as one that cannot be taken
     void work().catch(() => undefined).then((total) => {
       reading = false;
       if (done) return;
-      if (total === undefined && fallbackMs !== undefined && clock === undefined) {
-        clock = setTimeout(() => refuse(`ran past ${fallbackMs / 1000}s on the clock, its work unreadable`), fallbackMs);
-        clock.unref?.();
-      }
+      const at = clock.now();
+      if (total === undefined) unreadableSince ??= at;
       lastTotal = total ?? lastTotal;
-      firstTotal ??= lastTotal;
-      const spent = (lastTotal ?? 0) - (firstTotal ?? 0);
-      if (tracker.reading(new Map([[0, lastTotal ?? 0]]), Date.now())) refuse(`did no work for ${idleMs / 1000}s`);
-      else if (ceilingMs !== undefined && spent >= ceilingMs) refuse(`spent ${Math.round(spent / 1000)}s of CPU`);
+      if (fallbackMs !== undefined && unreadableSince !== undefined && at - unreadableSince >= fallbackMs) refuse({ kind: 'clock', fallbackMs });
+      else if (tracker.reading(new Map([[0, lastTotal ?? 0]]), at)) refuse({ kind: 'stalled', idleMs });
+      else if (ceilingMs !== undefined && spentMs() >= ceilingMs) {
+        refuse({ kind: 'ceiling', ceilingMs, spentMs: spentMs(), wallMs: at - startedAt,
+          ...(watchesOutput ? { sinceOutputMs: outputAt === null ? null : at - outputAt } : {}) });
+      }
     });
   }, Math.min(5_000, idleMs / 4));
-  timer.unref?.();
-  return { stop };
+  (timer as { unref?: () => void }).unref?.();
+  return {
+    stop,
+    output: () => { outputAt = clock.now(); tracker.output(outputAt); },
+    spentMs,
+  };
 }
 
 /**
@@ -209,7 +258,7 @@ export function answerWhileWorking<T>(answer: Promise<T>, { work, what, idleMs, 
   readonly work: WorkReading; readonly what: string; readonly idleMs?: number; readonly ceilingMs?: number;
 }): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const watch = watchWork({ work, idleMs, ceilingMs, onRefused: (why) => reject(new Error(`${what} did not answer, and ${why}${why.startsWith('spent') ? ' trying' : ''}`)) });
+    const watch = watchWork({ work, idleMs, ceilingMs, onRefused: (refusal) => reject(new Error(`${what} did not answer, and ${describeRefusal(refusal)}`)) });
     answer.then(
       (value) => { watch.stop(); resolve(value); },
       (error: unknown) => { watch.stop(); reject(error); },
@@ -223,7 +272,7 @@ export function answerWhileWorking<T>(answer: Promise<T>, { work, what, idleMs, 
  */
 export function workSignal(options: Omit<Parameters<typeof watchWork>[0], 'onRefused'>): { signal: AbortSignal; stop(): void } {
   const controller = new AbortController();
-  const watch = watchWork({ ...options, onRefused: (why) => controller.abort(new Error(`The work ${why}`)) });
+  const watch = watchWork({ ...options, onRefused: (refusal) => controller.abort(new Error(`The work ${describeRefusal(refusal)}`)) });
   return { signal: controller.signal, stop: () => watch.stop() };
 }
 
@@ -245,7 +294,7 @@ export function execFileWhileWorking(file: string, args: readonly string[], opti
   const { timeout, signal, ...rest } = options;
   const ended = new AbortController();
   let why: string | undefined;
-  let watch: { stop(): void } | undefined;
+  let watch: Watch | undefined;
   let settle!: { resolve(value: { stdout: string; stderr: string }): void; reject(error: unknown): void };
   const done = new Promise<{ stdout: string; stderr: string }>((resolve, reject) => { settle = { resolve, reject }; });
   const child = execFile(file, [...args], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...rest,
@@ -259,7 +308,7 @@ export function execFileWhileWorking(file: string, args: readonly string[], opti
   if (child.pid !== undefined) {
     watch = watchWork({
       work: processWork(child.pid), ceilingMs: timeout, fallbackMs: timeout,
-      onRefused: (reason) => { why = reason; ended.abort(new Error(reason)); },
+      onRefused: (refusal) => { why = describeRefusal(refusal); ended.abort(new Error(why)); },
     });
   }
   // The child too, as `promisify(execFile)`'s promise carries it, for a caller that waits on its close

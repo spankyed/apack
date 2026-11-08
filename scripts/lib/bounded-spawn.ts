@@ -9,7 +9,7 @@
  * Two rules this enforces, and both matter:
  *
  * - **A budget is a declared class, not a multiple of a measurement**, which would make it a function of one
- *   machine. Callers pass `TIMEOUT_MS[class]` (`scripts/lib/step-timeouts.ts`), which carries no machine. A
+ *   machine. Callers pass `BUDGET_MS[class]` (`scripts/lib/step-budgets.ts`), which carries no machine. A
  *   bound longer than anyone will wait is the same as no bound, which keeps the ladder short.
  * - **A hang is no progress, not a long time.** A starved process is slow and still working, and a budget
  *   that measures the clock kills it for the machine being busy. So the watchdog below ends a run whose
@@ -27,21 +27,10 @@
  *   when the child exits however it ends, a pass included: nothing a run started outlives it.
  */
 import { spawn } from 'node:child_process';
-import { createStallTracker, readTreeCpuMs } from '@apackdev/host/build/process-progress';
-import { IDLE_MS, ceilingEnabled, watchdogEnabled } from './step-timeouts.ts';
+import { describeRefusal, processWork, watchWork } from '@apackdev/host/build/process-progress';
+import { IDLE_MS, ceilingEnabled, watchdogEnabled } from './step-budgets.ts';
 
-export { cpuAdded, createStallTracker, parseCpuTime, treeCpuMs } from '@apackdev/host/build/process-progress';
 
-/**
- * What a run killed at its CPU ceiling says of itself, so that one line tells a spin from anything else: the
- * wall time beside the CPU says how much of the run was spent working, and the last output how long it has been
- * doing it silently. A spin reads near one core of CPU per second of wall and no recent output.
- */
-export function spentLine({ budgetMs, wallMs, cpuMs, sinceOutputMs }: { budgetMs: number; wallMs: number; cpuMs: number; sinceOutputMs: number | undefined }): string {
-  const s = (ms: number) => `${Math.round(ms / 1000)}s`;
-  const quiet = sinceOutputMs === undefined ? 'no output at all' : `last output ${s(sinceOutputMs)} ago`;
-  return `spent its ${s(budgetMs)} CPU budget: ${s(cpuMs)} of CPU in ${s(wallMs)} of wall time, ${quiet}. Its process group was killed`;
-}
 
 export interface BoundedResult {
   readonly code: number;
@@ -157,9 +146,6 @@ export function boundedSpawn(command: string, args: readonly string[], budgetMs:
     let timedOut: true | undefined;
     let stalled: true | undefined;
     let aborted: true | undefined;
-    const stall = idleMs === false ? undefined : createStallTracker(idleMs, Date.now());
-    child.stdout?.on('data', (d: Buffer) => { output += d.toString(); stall?.output(Date.now()); });
-    child.stderr?.on('data', (d: Buffer) => { output += d.toString(); stall?.output(Date.now()); });
 
     const killGroup = (signal: NodeJS.Signals) => {
       if (child.pid === undefined) return;
@@ -173,14 +159,14 @@ export function boundedSpawn(command: string, args: readonly string[], budgetMs:
       code: timedOut ? 124 : closed ?? 1,
       output,
       ms: Date.now() - started,
-      ...(stall !== undefined ? { cpuMs: stall.spentMs } : {}),
+      ...(watch !== undefined ? { cpuMs: watch.spentMs() } : {}),
       ...(timedOut ? { timedOut } : {}),
       ...(stalled ? { stalled } : {}),
       ...(aborted ? { aborted } : {}),
     });
 
     /**
-     * One ending for both ways a run is cut short, because they need the same two kills.
+     * One ending for every way a run is cut short, because they need the same two kills.
      *
      * The escalation is not unref'd, and it is what resolves: an unref'd one never fires, because the
      * process ends as soon as the child closes. A child that ignores SIGTERM would then have survived the
@@ -191,7 +177,7 @@ export function boundedSpawn(command: string, args: readonly string[], budgetMs:
       if (terminating) return;
       terminating = true;
       clearTimeout(budget);
-      clearInterval(watchdog);
+      watch?.stop();
       killGroup('SIGTERM');
       setTimeout(() => { killGroup('SIGKILL'); done(); }, GRACE_MS);
     };
@@ -201,45 +187,28 @@ export function boundedSpawn(command: string, args: readonly string[], budgetMs:
       if (stream) process.stderr.write(why);
     };
 
-    // A tree the watchdog reads is bounded by the CPU it spends, and only a tree it cannot read by the clock
-    const watched = stall !== undefined && child.pid !== undefined;
-    const ceiling = ceilingEnabled();
-    let budget: ReturnType<typeof setTimeout> | undefined;
-    const startClock = () => {
-      budget ??= setTimeout(() => {
-        say(`\n[bounded] ran past its ${budgetMs / 1000}s budget by the clock, its CPU unreadable: its process group was killed\n`);
+    // A tree the watchdog reads is bounded by its progress and the CPU it spends (`watchWork`), and only a tree it
+    // cannot read by the clock. `APACK_CEILING=off` leaves the watchdog alone, for a VM whose CPU is not work
+    const watch = idleMs === false || child.pid === undefined ? undefined : watchWork({
+      work: processWork(child.pid), idleMs, watchesOutput: true, ceilingMs: ceilingEnabled() ? budgetMs : undefined, fallbackMs: budgetMs,
+      onRefused: (refusal) => {
+        stalled = refusal.kind === 'stalled' ? true : undefined;
+        say(`\n[bounded] ${refusal.kind === 'stalled'
+          ? `no CPU or output from its process tree for ${idleMs / 1000}s: stalled`
+          : describeRefusal(refusal)}, so its process group was killed\n`);
         timedOut = true;
         terminate();
-      }, budgetMs);
-      budget.unref();
-    };
-    if (!watched) startClock();
+      },
+    });
+    const budget = watch !== undefined ? undefined : setTimeout(() => {
+      say(`\n[bounded] ran past its ${budgetMs / 1000}s budget on the clock, its CPU unreadable: its process group was killed\n`);
+      timedOut = true;
+      terminate();
+    }, budgetMs);
+    budget?.unref();
+    child.stdout?.on('data', (d: Buffer) => { output += d.toString(); watch?.output(); });
+    child.stderr?.on('data', (d: Buffer) => { output += d.toString(); watch?.output(); });
 
-    // A reading of the tree on a timer, because nothing announces that a process has stopped working. Each
-    // reading waits for the last: under load `ps` itself can be slow, and two in flight would race the last reading.
-    let inFlight = false;
-    const watchdog = idleMs === false || stall === undefined || child.pid === undefined ? undefined : setInterval(() => {
-      if (inFlight || terminating) return;
-      inFlight = true;
-      void readTreeCpuMs(child.pid!).then((now) => {
-        inFlight = false;
-        if (terminating) return;
-        // `ps` failing leaves the CPU unknowable, so from then the clock is the bound rather than nothing
-        if (now === undefined) { startClock(); return; }
-        const at = Date.now();
-        if (stall.reading(now, at)) {
-          say(`\n[bounded] no CPU or output from its process tree for ${idleMs / 1000}s: stalled, so its process group was killed\n`);
-          timedOut = true;
-          stalled = true;
-          terminate();
-        } else if (ceiling && stall.spentMs >= budgetMs) {
-          say(`\n[bounded] ${spentLine({ budgetMs, wallMs: at - started, cpuMs: stall.spentMs, sinceOutputMs: stall.lastOutputAt === undefined ? undefined : at - stall.lastOutputAt })}\n`);
-          timedOut = true;
-          terminate();
-        }
-      });
-    }, Math.min(5_000, idleMs / 4));
-    watchdog?.unref();
     const abort = () => { aborted = true; terminate(); };
     signal?.addEventListener('abort', abort, { once: true });
 
@@ -255,7 +224,7 @@ export function boundedSpawn(command: string, args: readonly string[], budgetMs:
 
     child.on('close', (code) => {
       clearTimeout(budget);
-      clearInterval(watchdog);
+      watch?.stop();
       signal?.removeEventListener('abort', abort);
       if (child.pid !== undefined) liveGroups.delete(child.pid);
       closed ??= code;

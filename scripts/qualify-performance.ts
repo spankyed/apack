@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { packagesBuiltOrRefuse } from '@apackdev/host/build/packages-built';
 import { boundedSpawn } from './lib/bounded-spawn.ts';
-import { TIMEOUT_MS } from './lib/step-timeouts.ts';
+import { BUDGET_MS } from './lib/step-budgets.ts';
 import { performanceQualificationCommand, performanceQualificationOptions } from './lib/performance-qualification.ts';
 
 // Explicit manual qualification. Ordinary CI never launches this or gates on its timing budget.
@@ -18,7 +18,7 @@ for (const scenario of options.scenarios) {
   mkdirSync(output);
   const command = performanceQualificationCommand(scenario, output, options, process.env);
   console.log(`Qualifying ${scenario}: ${options.mode} versus ${options.comparison}; evidence: ${output}`);
-  const result = await boundedSpawn(process.execPath, command.args, TIMEOUT_MS.scenario.ms, { cwd: root, env: command.env, stream: true });
+  const result = await boundedSpawn(process.execPath, command.args, BUDGET_MS.scenario.ms, { cwd: root, env: command.env, stream: true });
   writeFileSync(path.join(output, 'invocation.json'), JSON.stringify({ code: result.code, durationMs: result.ms,
     timedOut: result.timedOut ?? false, aborted: result.aborted ?? false, command: [process.execPath, ...command.args] }, null, 2));
   if (result.code !== 0) throw Error(`Qualification process failed; evidence: ${output}`);

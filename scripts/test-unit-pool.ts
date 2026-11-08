@@ -22,7 +22,7 @@ import { DIAGNOSTIC_RUN_ENV, holdPoolLock, poolWorkers, POOLS, poolStampFor, poo
 import type { ReportedRun } from './lib/spec-durations-reporter.ts';
 import { boundedSpawn } from './lib/bounded-spawn.ts';
 import { CHAIN_STEPS, poolStepName } from './lib/chain-steps.ts';
-import { timeoutMsFor, timedOutBecause } from './lib/step-timeouts.ts';
+import { budgetMsFor, whyKilled } from './lib/step-budgets.ts';
 import { exitOnEpipe } from './lib/exit-on-epipe.ts';
 import { asDuration, durationsOf, halfTotal, markedSpecs, trendOf, placementOf, pruneDurationCache, slowestFiles, tailBar, uncheckedNote, UNMARKED_NOTE, writeDurations } from './lib/spec-durations.ts';
 import { readReportedRun, SPEC_DURATIONS_FILE } from './lib/spec-durations-reporter.ts';
@@ -164,10 +164,10 @@ async function main(): Promise<void> {
   // to rebuild them. Without this, editing anything a published package is built from — this repo's own
   // package.json included — fails a dozen specs at that guard rather than running them, and the pool
   // quietly collects 162 fewer tests. It is a stat and a return when nothing is stale.
-  const prepared = await boundedSpawn('npm', ['run', preparation.name], timeoutMsFor(preparation.timeout), { stream: true });
+  const prepared = await boundedSpawn('npm', ['run', preparation.name], budgetMsFor(preparation.budget), { stream: true });
   if (prepared.code !== 0) {
     throw new Error(prepared.timedOut
-      ? timedOutBecause({ what: preparation.name, timeout: preparation.timeout, stalled: prepared.stalled })
+      ? whyKilled({ what: preparation.name, budget: preparation.budget, stalled: prepared.stalled })
       : `${preparation.name} failed (exit ${prepared.code})`);
   }
   // One run of this pool at a time, from here on: everything below stamps the projects it runs, and two runs
@@ -224,12 +224,12 @@ async function main(): Promise<void> {
       covered.map((suite) => ({ label: `${suite.dir} (${half}, ${provenance})`, unit: poolUnitFor(suite, kind, provenance, workers), stamp: poolStampFor(suite, half, provenance) })),
       async () => {
         const reportFile = path.join(reports, `${covered.map((suite) => suite.dir).join('+')}.json`);
-        const { code, timedOut, stalled } = await boundedSpawn(command, [...args], timeoutMsFor(step.timeout),
+        const { code, timedOut, stalled } = await boundedSpawn(command, [...args], budgetMsFor(step.budget),
           { stream: true, env: { ...process.env, [SPEC_DURATIONS_FILE]: reportFile } });
         if (code !== 0) {
           // No recorded cost: the chain reports one for the whole step, and this run may cover only part of it
           throw new Error(timedOut
-            ? timedOutBecause({ what: poolStepName(kind), timeout: step.timeout, stalled })
+            ? whyKilled({ what: poolStepName(kind), budget: step.budget, stalled })
             : `${kind} pool failed (exit ${code})`);
         }
         // Only what the run reported may be stamped: a `--project` filter matching nothing is dropped

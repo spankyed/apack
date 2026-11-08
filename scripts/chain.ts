@@ -47,7 +47,7 @@ import { CHAIN_WAIT_MS, ChainLockHeld, chainInvocation, holdChainLock } from './
 import { expensiveSteps, MachineLockRefused } from './lib/machine-lock.ts';
 import { deadlinesNote } from './lib/chain-evidence.ts';
 import type { ExclusiveLock } from '@apackdev/host/exclusive-lock';
-import { timeoutMsFor, timedOutBecause, type TimeoutClass } from './lib/step-timeouts.ts';
+import { budgetMsFor, whyKilled, type BudgetClass } from './lib/step-budgets.ts';
 import { box } from './lib/core-budget.ts';
 import { compilerTestsRunHere } from '@apackdev/host/build/compiler-test-host';
 import { readStepSeconds, recordStepDurations, withRecordedSeconds } from './lib/step-durations.ts';
@@ -211,7 +211,7 @@ function whatMoved(
  * the two unit pools did exactly that. Only steps that declare them get any, because most steps' commands
  * would reject an argument they do not know.
  */
-async function run(step: string, timeout: TimeoutClass, force: readonly string[] = [], env: NodeJS.ProcessEnv = process.env): Promise<Result> {
+async function run(step: string, budget: BudgetClass, force: readonly string[] = [], env: NodeJS.ProcessEnv = process.env): Promise<Result> {
   const args = ['run', step];
   // npm forwards what follows `--` to the script's own command, which is how this chain was given `--all`
   const direct = force.length === 0 ? args : [...args, '--', ...force];
@@ -219,7 +219,7 @@ async function run(step: string, timeout: TimeoutClass, force: readonly string[]
   const withForce = inLinuxContainer(step) ? ['run', 'test:linux', '--', 'npm', ...direct] : direct;
   // Explicit feedback limits may shorten the declared work class's ceiling. A step in the container does its
   // work in the VM, where its process tree here cannot see it, so only the ceiling bounds it.
-  const { code, output, ms, cpuMs, timedOut, stalled } = await boundedSpawn('npm', withForce, timeoutMsFor(timeout),
+  const { code, output, ms, cpuMs, timedOut, stalled } = await boundedSpawn('npm', withForce, budgetMsFor(budget),
     { env, ...(withForce === direct ? {} : { idleMs: false as const }) });
   const result = { step, ms, code, output, cpuMs, timedOut, stalled };
   // Here rather than where a step's result is read, because this is the one place a step's bytes exist and
@@ -282,11 +282,11 @@ class StepFailed extends Error {
 async function runAndStamp(step: ChainStep, all: boolean, budget: number, extra: readonly string[] = []): Promise<Result> {
   const force = [...all ? step.forceArgs ?? [] : [], ...extra];
   // A shard of a step passed part of it, which is not the step: it records nothing, as the pool beneath it does
-  if (step.neverCachedBecause !== undefined || extra.length > 0) return run(step.name, step.timeout, force, envFor(step, budget));
+  if (step.neverCachedBecause !== undefined || extra.length > 0) return run(step.name, step.budget, force, envFor(step, budget));
   let result: Result | undefined;
   try {
     await stampedRun(step.name, unitFor(step, budget), stampFor(step.name), async () => {
-      result = await run(step.name, step.timeout, force, envFor(step, budget));
+      result = await run(step.name, step.budget, force, envFor(step, budget));
       if (result.code !== 0) throw new StepFailed(result);
     });
   } catch (err) {
@@ -608,7 +608,7 @@ async function main(): Promise<void> {
   if (failed) {
     const step = steps.find((s) => s.name === failed.step)!;
     const why = failed.timedOut
-      ? timedOutBecause({ what: step.name, timeout: step.timeout, seconds: recorded.get(step.name), stalled: failed.stalled })
+      ? whyKilled({ what: step.name, budget: step.budget, seconds: recorded.get(step.name), stalled: failed.stalled })
       : `${step.name} failed (exit ${failed.code})${howLong(recorded.get(step.name), failed.ms, budget)}`;
     console.log(`\n${'='.repeat(72)}\n${why}\n${'='.repeat(72)}\n${failed.output}`);
     const left = evidence?.keepFiles(step.name, keptOnFailure(step)) ?? [];

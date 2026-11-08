@@ -14,8 +14,8 @@
  */
 import { packagesBuiltOrRefuse } from '@apackdev/host/build/packages-built';
 import { boundedSpawn } from './lib/bounded-spawn.ts';
-import { API_CHECK_TIMEOUT, API_REPORT_PACKAGES, apiCheckCommand } from './lib/api-report-packages.ts';
-import { TIMEOUT_MS, timedOutBecause } from './lib/step-timeouts.ts';
+import { API_CHECK_BUDGET, API_REPORT_PACKAGES, apiCheckCommand } from './lib/api-report-packages.ts';
+import { BUDGET_MS, whyKilled } from './lib/step-budgets.ts';
 import { exitOnEpipe } from './lib/exit-on-epipe.ts';
 
 exitOnEpipe();
@@ -38,7 +38,7 @@ packagesBuiltOrRefuse('npm run packages:build');
 
 const outcomes = await Promise.all(API_REPORT_PACKAGES.map(async (pkg) => {
   const [command, ...args] = apiCheckCommand(pkg).split(' ');
-  const outcome = await boundedSpawn(command!, args, TIMEOUT_MS[API_CHECK_TIMEOUT].ms);
+  const outcome = await boundedSpawn(command!, args, BUDGET_MS[API_CHECK_BUDGET].ms);
   // One line as each finishes, so three concurrent compilers are not one silence
   process.stdout.write(`  ${outcome.code === 0 ? 'ok  ' : 'FAIL'} ${pkg.padEnd(16)} ${(outcome.ms / 1000).toFixed(1)}s\n`);
   return { pkg, outcome };
@@ -48,7 +48,7 @@ const outcomes = await Promise.all(API_REPORT_PACKAGES.map(async (pkg) => {
 const failed = outcomes.filter(({ outcome }) => outcome.code !== 0);
 for (const { pkg, outcome } of failed) {
   const why = outcome.timedOut === true
-    ? timedOutBecause({ what: pkg, timeout: API_CHECK_TIMEOUT, stalled: outcome.stalled })
+    ? whyKilled({ what: pkg, budget: API_CHECK_BUDGET, stalled: outcome.stalled })
     : `${pkg} failed (exit ${outcome.code})`;
   process.stderr.write(`\n${'─'.repeat(72)}\n${why}\n${'─'.repeat(72)}\n${outcome.output}\n`);
 }

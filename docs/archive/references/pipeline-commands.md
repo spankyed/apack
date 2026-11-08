@@ -7,7 +7,7 @@ work. Read it when you are about to change one of these commands, or when a flag
 Each pool uses the aggregate deadline declared by its owning chain step. Complete compiler/runtime
 integration uses `acceptance`; ordinary unit pools retain `suite`. The strict workflow's envelope also
 includes preparation and app checks. Individual test, operation, event and cleanup limits remain
-independent. [Timeout classes](../../../scripts/lib/step-timeouts.ts) own the allowances; diagnostic batch
+independent. [Timeout classes](../../../scripts/lib/step-budgets.ts) own the allowances; diagnostic batch
 cutoffs do not change them or establish a normal acceptance result.
 
 It is here rather than there because the guide is loaded into every session and this is consulted when

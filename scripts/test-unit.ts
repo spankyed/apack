@@ -18,7 +18,7 @@
  */
 import * as os from 'node:os';
 import { boundedSpawn } from './lib/bounded-spawn.ts';
-import { TIMEOUT_MS, timedOutBecause } from './lib/step-timeouts.ts';
+import { BUDGET_MS, whyKilled } from './lib/step-budgets.ts';
 import { UNIT_SUITES } from './lib/unit-suites.ts';
 import { poolDurationLines, type Pool as PoolKind } from './lib/unit-pool.ts';
 import { exitOnEpipe } from './lib/exit-on-epipe.ts';
@@ -65,8 +65,8 @@ async function run(pool: Pool): Promise<Result> {
   // `suite` is five minutes, and the slowest pool is ~22s alone — so this says wedged rather than slow.
   // It was `budgetFor(75)`, which reached the same number through a measurement nobody took.
   const { code, output, ms, timedOut } = await boundedSpawn('npx',
-    ['tsx', 'scripts/test-unit-pool.ts', pool.kind, '--all'], TIMEOUT_MS.suite.ms);
-  const why = timedOut ? timedOutBecause({ what: pool.label, timeout: 'suite' }) : undefined;
+    ['tsx', 'scripts/test-unit-pool.ts', pool.kind, '--all'], BUDGET_MS.suite.ms);
+  const why = timedOut ? whyKilled({ what: pool.label, budget: 'suite' }) : undefined;
   return { pool: pool.label, code, ms, output, ...(why === undefined ? {} : { why }) };
 }
 

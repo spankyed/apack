@@ -31,24 +31,24 @@
 import { boundedSpawn } from './lib/bounded-spawn.ts';
 // The ladder's own machine, for the kill message: without it this path cannot tell this box from a slower
 // one, which is the whole reason the machine is a separate argument from the cost
-import { TIMEOUT_CLASSES, timedOutBecause, timeoutMsFor, type TimeoutClass } from './lib/step-timeouts.ts';
+import { BUDGET_CLASSES, whyKilled, budgetMsFor, type BudgetClass } from './lib/step-budgets.ts';
 
 const [className, command, ...args] = process.argv.slice(2);
 
 if (!command || className === undefined) {
-  process.stderr.write(`usage: tsx scripts/bounded.ts <${TIMEOUT_CLASSES.join('|')}> <command> [args...]\n`);
+  process.stderr.write(`usage: tsx scripts/bounded.ts <${BUDGET_CLASSES.join('|')}> <command> [args...]\n`);
   process.exitCode = 2;
 } else {
   // Refuses an unknown class rather than defaulting to one: a budget is a ceiling, so a confident wrong
-  // answer is the permissive one (`step-timeouts.ts`, after `sizeOf`)
-  const budgetMs = timeoutMsFor(className);
+  // answer is the permissive one (`step-budgets.ts`, after `sizeOf`)
+  const budgetMs = budgetMsFor(className);
   const { code, timedOut, stalled } = await boundedSpawn(command, args, budgetMs, { stream: true });
   if (timedOut) {
     // Its own line on stderr: the command's own output ended mid-sentence, so say why. This path has a class
     // and an argv and no step record, so it reports no recorded cost.
-    process.stderr.write(`\n${timedOutBecause({
+    process.stderr.write(`\n${whyKilled({
       what: `${command} ${args.join(' ')}`,
-      timeout: className as TimeoutClass,
+      budget: className as BudgetClass,
       stalled,
     })}\n`);
   }

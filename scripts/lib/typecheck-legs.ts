@@ -9,12 +9,12 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { rootScripts } from './npm-scripts.ts';
-import type { TimeoutClass } from './step-timeouts.ts';
+import type { BudgetClass } from './step-budgets.ts';
 import { PACKAGE_DIRS } from './workspace-deps.ts';
 
 /**
  * How long any leg may run before its process group is killed — one compiler or one walk in one process,
- * which is what `quick` names (`step-timeouts.ts`).
+ * which is what `quick` names (`step-budgets.ts`).
  *
  * Declared once here rather than on each `Leg`, where eighteen entries would hold the same value and
  * `SIZE_MS`' doc has the argument against that. Read by the runner (`scripts/typecheck.ts`) and by the
@@ -22,7 +22,7 @@ import { PACKAGE_DIRS } from './workspace-deps.ts';
  * two cannot disagree, which they could when each named the class itself. A leg that ever wants longer is
  * what adds the field.
  */
-export const LEG_TIMEOUT: TimeoutClass = 'quick';
+export const LEG_BUDGET: BudgetClass = 'quick';
 
 export interface Leg {
   /** What `npm run` calls it, and what a failure is reported as */

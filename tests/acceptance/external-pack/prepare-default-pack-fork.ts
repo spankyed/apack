@@ -6,7 +6,7 @@ import { readPackBuild } from '@apackdev/host/packs';
 import { sha256File } from '@apackdev/host/packs/assets';
 import { readPackBuildInputs, assertPackBuildInputsCurrent } from '@apackdev/host/build/pack-build-inputs';
 import { boundedSpawn } from '../../../scripts/lib/bounded-spawn.ts';
-import { timeoutMsFor } from '../../../scripts/lib/step-timeouts.ts';
+import { budgetMsFor } from '../../../scripts/lib/step-budgets.ts';
 
 const root = fs.realpathSync.native(fileURLToPath(new URL('../../..', import.meta.url)));
 const source = path.join(root, 'packages/default-setup');
@@ -15,7 +15,7 @@ const remedy = 'Run npm run test:external-pack:fork to prepare the default fork.
 
 // Shares of the bound on `test:external-pack:fork`, the step that runs this, so the phases fit inside it by
 // construction. Each is a ceiling for a phase that spins: one that stops working is ended sooner, as stalled.
-const FORK_STEP_MS = timeoutMsFor('scenario');
+const FORK_STEP_MS = budgetMsFor('scenario');
 export const DEFAULT_FORK_BUDGET_MS = {
   build: 0.5 * FORK_STEP_MS,
   // Two input replays plus archive staging/verification.

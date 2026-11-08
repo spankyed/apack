@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createBuildSession, readBuildManifest } from '../build/build-metadata.ts';
 import { boundedSpawn } from './lib/bounded-spawn.ts';
-import { TIMEOUT_MS } from './lib/step-timeouts.ts';
+import { BUDGET_MS } from './lib/step-budgets.ts';
 import { previewEnvironment, previewVersion } from './lib/preview-build.ts';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -32,7 +32,7 @@ if (process.argv.includes('--help')) {
   for (const [command, args] of commands) {
     console.log(`\n${command} ${args.join(' ')}`);
     const invocation = command === 'npm' ? [npmCli, ...args] : [npmCli, 'exec', '--', ...args];
-    const result = await boundedSpawn(process.execPath, invocation, TIMEOUT_MS.scenario.ms, { cwd: root, env, stream: true });
+    const result = await boundedSpawn(process.execPath, invocation, BUDGET_MS.scenario.ms, { cwd: root, env, stream: true });
     if (result.code !== 0) throw new Error(`${command} ${args.join(' ')} failed${result.timedOut ? ' (timed out)' : ''}`);
   }
   console.log('\nPreview built in dist/preview. It keeps its own data in apack-preview.');
