@@ -31,7 +31,7 @@ import { compilerPackageDirectory } from '../../src/build/compiler-installation.
 import { compilerEnvironmentIdentity } from '../../src/build/compiler-environment.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
-import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 const roots: string[] = [];
 const sharedCompiler = shareCompilerInstallation();

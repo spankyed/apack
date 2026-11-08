@@ -12,7 +12,7 @@ import { PACK_LAYOUT, readPackBuild, sealPackBuild } from '@apackdev/host/packs'
 import { packInputsHash } from '@apackdev/host/build/pack-inputs';
 import { createPackBuilder, type PackBuilder } from '../../src/build/build-process.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
-import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 const execFileAsync = execFileWhileWorking;
 

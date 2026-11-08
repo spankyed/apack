@@ -13,7 +13,7 @@ import { withCompilerFileReads } from '@apackdev/host/build/compiler-inputs';
 import { nativeFixture, ordinaryNativeLoad, nativeLoad, nativeWorkerCompiler, type NativeFixture } from '../_support/native-libraries.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
-import { fromNow, processWork, workSignal } from '@apackdev/host/build/process-progress';
+import { fromNow, processWork, workSignal } from '@apackdev/sdk/progress';
 
 // The native-library proofs are split by subject so the native half's shards can spread them; this one is
 // native libraries checked before addon initialization, in preloads, threads and launch search paths.

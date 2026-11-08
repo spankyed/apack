@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ApiServer } from '../src/modules/api-server/ApiServer.ts';
 import { ProcessManager } from '../src/modules/api-server/process-manager.ts';
 import { API_CONFIG } from '../src/modules/api-server/config.ts';
-import { IDLE_MS } from '@apackdev/host/build/process-progress';
+import { IDLE_MS } from '@apackdev/sdk/progress';
 
 vi.mock('../src/modules/api-server/logger.ts', () => ({
   logInfo: vi.fn(), logError: vi.fn(), logWarn: vi.fn(), getLogger: vi.fn(), logStartupBanner: vi.fn(),

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { nativeAddonSource } from './native-addon.ts';
-import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 const execFileAsync = execFileWhileWorking;
 const COMPILE_MS = 60_000;

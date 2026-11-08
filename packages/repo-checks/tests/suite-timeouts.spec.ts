@@ -307,7 +307,7 @@ describe('a spec starts a process bounded by its progress, not the clock', () =>
     expect(files.length, 'no test files derived, so this passes over nothing').toBeGreaterThan(100);
     const found = files.filter((file) => !(file in CLOCKED_EXEC_ALLOWED))
       .flatMap((file) => clockedExecs(path.join(REPO_ROOT, file)).map((line) => `${file}:${line}`));
-    expect(found, 'use execFileWhileWorking (@apackdev/host/build/process-progress), whose timeout is CPU').toEqual([]);
+    expect(found, 'use execFileWhileWorking (@apackdev/sdk/progress), whose timeout is CPU').toEqual([]);
   });
 
   it('lists no exception that no longer calls it', () => {

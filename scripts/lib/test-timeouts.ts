@@ -218,7 +218,7 @@ export function bareWaits(absFile: string, repoRoot: string): BareWait[] {
  * A deadline measured on the clock, for work whose duration depends on how busy the machine is.
  *
  * A busy machine reaches such a deadline while the work is still making progress, and the failure reads like a
- * hang. What bounds work instead is its progress (`@apackdev/host/build/process-progress`: a stall window over the
+ * hang. What bounds work instead is its progress (`@apackdev/sdk/progress`: a stall window over the
  * CPU a process tree spends, a CPU ceiling) or, in a spec, the vitest progress guard around the whole test.
  *
  * Five shapes, each a position in a call that the tree can name:

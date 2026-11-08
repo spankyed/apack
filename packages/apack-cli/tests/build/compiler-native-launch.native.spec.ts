@@ -12,7 +12,7 @@ import { startPackFrontend, type PackFrontend } from '../../src/build/frontend-p
 import { nativeFixture, nativeLoad } from '../_support/native-libraries.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
-import { execFileWhileWorking, fromNow, processWork, workSignal } from '@apackdev/host/build/process-progress';
+import { execFileWhileWorking, fromNow, processWork, workSignal } from '@apackdev/sdk/progress';
 
 // The native-library proofs are split by subject so the native half's shards can spread them; this one is
 // outside launch overrides: OS libraries, the DYLD_* variables and the selected image suffix.

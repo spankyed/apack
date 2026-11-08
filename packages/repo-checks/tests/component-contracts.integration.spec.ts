@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { componentContracts } from '../../../scripts/component-contracts.ts';
-import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 const execFileAsync = execFileWhileWorking;
 

@@ -3,7 +3,7 @@ import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import type { SpeechCommand, SpeechEvent } from './protocol.ts';
-import { answerWhileWorking, processWork } from '@apackdev/host/build/process-progress';
+import { answerWhileWorking, processWork } from '@apackdev/sdk/progress';
 
 export class SpeechHelperProcess {
   private process: ChildProcess | null = null;

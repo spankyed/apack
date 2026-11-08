@@ -13,7 +13,7 @@ import { spawnCompilerWorker } from '../../src/build/compiler-process.ts';
 import { readCompilerRuntimeInputs } from '../../src/build/compiler-runtime.ts';
 import { nativeFixture } from '../_support/native-libraries.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
-import { execFileWhileWorking, processWork, watchWork } from '@apackdev/host/build/process-progress';
+import { execFileWhileWorking, processWork, watchWork } from '@apackdev/sdk/progress';
 
 // The native-library proofs are split by subject so the native half's shards can spread them; this one is
 // the captured Electron runtime, runtime-linked Mach-O libraries and default-fallback lookup.

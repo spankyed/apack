@@ -32,7 +32,7 @@
 // measurement. `sizeOf` (`scripts/lib/test-timeouts.ts`) is the same rule for tests: it reads the config
 // filename, the half and suite membership — never a duration — and refuses a file it cannot classify.
 
-import { IDLE_MS } from '@apackdev/host/build/process-progress';
+import { IDLE_MS } from '../../packages/apack-sdk/src/progress.ts';
 
 /**
  * Which common rung a step's *kind of work* puts it on, as something a check can run:

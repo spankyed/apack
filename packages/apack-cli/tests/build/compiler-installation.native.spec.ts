@@ -10,7 +10,7 @@ import { isCompilerLocationPath } from '../../src/build/compiler-installation-in
 import { cliBin } from '../../src/utils.ts';
 import { _byDeadline } from '@apackdev/sdk/testing/waiting';
 import { cpuBudget } from '@apackdev/testing/vitest';
-import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 const execFileAsync = execFileWhileWorking;
 /** What a process printed, trimmed */

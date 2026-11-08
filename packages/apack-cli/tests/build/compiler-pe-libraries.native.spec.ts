@@ -31,7 +31,7 @@ import { COMPILER_INPUTS_ENV } from '../../src/build/compiler-installation-input
 import { spawnCompilerWorker } from '../../src/build/compiler-process.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
-import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 const sharedCompiler = shareCompilerInstallation();
 const execFileAsync = execFileWhileWorking;

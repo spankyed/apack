@@ -368,7 +368,7 @@ frontend watcher counts neither new bytes in a file the build never read nor a p
 change, since their events can arrive long after the signature that already includes them. Frontend replacement retains retiring subscriptions until asynchronous disposal settles.
 
 Integration and native specs start processes asynchronously: `execFileWhileWorking`
-(`@apackdev/host/build/process-progress`, `promisify(execFile)`'s contract with `timeout` read as CPU) for one
+(`@apackdev/sdk/progress`, `promisify(execFile)`'s contract with `timeout` read as CPU) for one
 process, `runCommand` (`tests/_support/run-command.ts`) for the CLI or a nested vitest, which bounds each command by
 its progress, stops its process group and names it when it fails. An in-process build takes a `workSignal` over the
 test's own tree rather than `AbortSignal.timeout`. `check:specifiers` refuses a synchronous spawn there.

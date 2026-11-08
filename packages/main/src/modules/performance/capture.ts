@@ -1,6 +1,6 @@
 import { createPerformanceProfiles, type PerformanceProfileTransport } from '@apackdev/host/diagnostics/node';
 import type { _RendererPerformanceResources } from '@apackdev/sdk/runtime';
-import { answerWhileWorking, processWork } from '@apackdev/host/build/process-progress';
+import { answerWhileWorking, processWork } from '@apackdev/sdk/progress';
 
 const METRICS = {
   TaskDuration: 'seconds', ScriptDuration: 'seconds', LayoutDuration: 'seconds', RecalcStyleDuration: 'seconds',

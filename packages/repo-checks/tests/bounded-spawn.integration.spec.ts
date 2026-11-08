@@ -94,7 +94,7 @@ while [ ! -s ${JSON.stringify(pidFile)} ]; do sleep 0.05; done`],
 
 /**
  * The watchdog over real processes. What it decides is `createStallTracker`'s, tested without a clock in
- * `@apackdev/host`'s `process-progress.spec.ts`; these are what only a real tree shows: reading it, its output reaching the
+ * `@apackdev/sdk`'s `progress.spec.ts`; these are what only a real tree shows: reading it, its output reaching the
  * tracker, a descendant outside the group, the flag, and a spinning tree reaching its budget.
  */
 describe('a bounded spawn that stops making progress', () => {

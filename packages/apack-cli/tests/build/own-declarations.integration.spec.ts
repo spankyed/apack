@@ -10,7 +10,7 @@ import { loadSingleExternalPack } from '@apackdev/host/packs/runtime';
 import { createPackBuilder, type PackBuilder } from '../../src/build/build-process.ts';
 import { inspectPack } from '../../src/commands/info.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
-import { fromNow, processWork, workSignal } from '@apackdev/host/build/process-progress';
+import { fromNow, processWork, workSignal } from '@apackdev/sdk/progress';
 
 startTestRuntime({ appVersion: '1.0.0' });
 const roots: string[] = [];

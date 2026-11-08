@@ -17,7 +17,7 @@
  * reports that one, and the step that started the pool bounds it by its process tree.
  */
 import { aroundAll, aroundEach, expect, inject } from 'vitest';
-import { IDLE_MS, cpuAdded, describeRefusal, readTreeCpuMs, watchWork, type Watch, type WatchClock, type WorkReading } from '@apackdev/host/build/process-progress';
+import { IDLE_MS, cpuAdded, describeRefusal, readTreeCpuMs, watchWork, type Watch, type WatchClock, type WorkReading } from '@apackdev/sdk/progress';
 // What a config provides and a test declares to it are typed with the package's vitest entry, which packs import
 import type { ProgressMeta } from './vitest.ts';
 

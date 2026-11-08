@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { PACKAGES_BUILT, REPO_ROOT, installPublishedPackages } from '@app/publish-checks';
 import { cpuBudget } from '@apackdev/testing/vitest';
-import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 /**
  * A pack's facade bundle (dist/types/pack-types.d.ts) is the same whether its @apackdev/* packages come

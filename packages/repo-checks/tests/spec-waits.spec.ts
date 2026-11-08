@@ -220,7 +220,7 @@ describe('a test is bounded by its progress, not a clock', () => {
       fs.writeFileSync(file, [
         "import { execFile, spawnSync } from 'node:child_process';",
         "import { promisify } from 'node:util';",
-        "import { execFileWhileWorking } from '@apackdev/host/build/process-progress';",
+        "import { execFileWhileWorking } from '@apackdev/sdk/progress';",
         'const run = promisify(execFile);',
         // clocks
         'await vi.waitFor(check, { timeout: 20_000 });',

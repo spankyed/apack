@@ -23,7 +23,7 @@ import { mintProfile, openProfile } from '../../src/app/profiles';
 import type { CliDirs } from '../../src/app/pack-host';
 import { _declarationRevision, PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
 import { sealPackBuild, PACK_LAYOUT } from '@apackdev/host/packs';
-import { execFileWhileWorking } from '@apackdev/host/build/process-progress';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 // `--profile` resolves a name through the CLI's own data dir, which is the real one on this machine.
 // Pointing it at a temp tree is the only way to test the lookup without reading whatever profiles the

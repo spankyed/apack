@@ -162,12 +162,12 @@ Inside the Linux test container CPU time grows with the Mac's load (its VM accou
 there would be a clock: `test:linux` sets `APACK_CEILING=off` and the container runs with the watchdog alone. What
 ends a stuck one is `boundedSpawn`'s watchdog, which kills a process tree that has gone `IDLE_MS` without CPU or
 output, so a step slowed by a busy machine is never killed for it.
-A spec's `runCommand` is bounded the same way (`@apackdev/host/build/process-progress`), and so is a **test**:
+A spec's `runCommand` is bounded the same way (`@apackdev/sdk/progress`), and so is a **test**:
 every vitest config turns vitest's clock off (`testTimeout: 0`, `hookTimeout: 0`) and loads the progress guard
 (`@apackdev/testing`'s `vitest-progress-guard.ts`), which fails a test or hook whose process tree stalls and a test
 that spends its CPU deadline. A test that needs more declares `meta: cpuBudget(ms)`; `suite-timeouts.spec.ts`
 refuses a timeout measured on the clock. The product follows the same rule where it waits on another process or
-thread to answer: `answerWhileWorking` (`@apackdev/host/build/process-progress`, with `processWork` and `threadWork`)
+thread to answer: `answerWhileWorking` (`@apackdev/sdk/progress`, with `processWork` and `threadWork`)
 waits while the other party's work keeps growing and fails only after `IDLE_MS` of none — never a fixed reply time.
 **A new wall-clock deadline is refused, and the old ones are a counted backlog.** `findClockedDeadlinesInSource`
 (`check:specifiers`) and `spec-waits.spec.ts` read every clocked deadline in the packages' source and the test trees
@@ -265,7 +265,7 @@ Rules that pay for themselves:
   clock double-counts overlap; use `node --cpu-prof` with self time per package.
 - **Start a process asynchronously in an integration or native spec.** A synchronous one blocks the worker, so
   no case timeout fires and vitest's 60s RPC window expires. Use `execFileWhileWorking`
-  (`@apackdev/host/build/process-progress`: `promisify(execFile)`'s contract, its `timeout` the CPU the process may
+  (`@apackdev/sdk/progress`: `promisify(execFile)`'s contract, its `timeout` the CPU the process may
   spend) for one process, or `runCommand` (`packages/apack-cli/tests/_support/run-command.ts`) for a CLI or vitest
   process tree; `check:specifiers` refuses the rest (`findSyncSpawnsInSlowSpecs`), and `suite-timeouts.spec.ts` a
   `promisify(execFile)`, whose `timeout` is the clock.
