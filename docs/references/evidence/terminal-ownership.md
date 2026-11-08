@@ -84,7 +84,7 @@ removes the finding rather than fixing it, and names the construction that does.
 | S4 | open | not attempted | — | — | `openLink`'s scheme filter is the SDK's navigation, and the review's own negative results record that the terminal cannot reach it: xterm's link addon matches `https?` only and the external branch already filters. It is in this document because it was found here, not because this feature can trigger it |
 | X1, X2 | dissolved, **claimed on a Windows run** | `apack-terminal/src/tree.rs` — a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` held for the session's lifetime, so the kill *is* the close and a `kill`, a disconnect and a broker that crashes all reap the tree by one mechanism | `apack-terminal/tests/broker.rs` "killing a session takes the whole tree with it", run on the Windows VM 2026-11-07 | **reproduced before it was fixed** — *the grandchild 2944 outlived the session it belonged to* — and mutation-checked there: holding no job puts the case straight back. `command-group`, retired in this repo for exactly this moment, turned out not to apply and is deleted: it wraps `std::process::Command` and `portable-pty` spawns the child itself, so the job is assigned to the pid afterwards | — |
 | F14 | test | shell integration is arranged when the shell starts, not typed into it afterwards (`be/services/shell-integration.ts`: bash `--init-file`, zsh `ZDOTDIR`, fish `XDG_DATA_DIRS`, each sourcing the user's own configuration first), and **the default is now on** (`apack.json` `features.code.settings`) | `default-setup/tests/features/code/be/services/shell-integration.spec.ts`, six cases; driven: a terminal told to `cd /tmp` reports `/tmp` and retitles itself (`.apack/drive/results/terminal-journeys.json`, `followedCd`) | the drive run is the guard that matters, because the unit cases pass whatever the default says: before the flip the same run answered `/Users/spankyed` for both `cwdBeforeCd` and `followedCd`, which is what *never ran for anybody* looks like from outside. Mutation-checked three ways | X4 is the Windows half and stays open |
-| X4 | open | not attempted | — | — | Windows: shell integration is inert even when enabled. **D3 has landed and this is now the only thing standing between Windows and the capability**: `integrationFor` answers `undefined` on win32 on purpose, so a Windows terminal is exactly as it was. What it needs is PowerShell `-NoExit -Command` and cmd `/K` written and **run on Windows** — the mechanism is proven on POSIX and the goal admits a Windows claim only on the strength of a Windows run |
+| X4 | test, **claimed on a Windows run** | `be/services/shell-integration.ts` — PowerShell is started `-NoExit -Command ". '<file>'"` and cmd `/K <file>`, pointed at a file as every other shell is rather than having a script put through argv quoting on the platform whose quoting is why this had no branch | `default-setup/tests/features/code/be/services/shell-integration.spec.ts`, four Windows cases; and `apack-terminal/tests/broker.rs`'s `a_windows_shell_reports_itself_when_started_with_an_integration_file`, **run on the VM 2026-11-08**: PowerShell emits OSC 633 and the broker reads the directory back after a `cd` | the broker case is the half a Mac cannot assert — whether the shell really emits the sequences. The pack half takes `platform` as an argument, which is X5's design and is why it needs no Windows machine. Mutation-checked four ways; one did not fire until the assertion asked for both halves of keeping the user's own prompt | cmd reports no status: `PROMPT` has no code for the last exit code, so no `D` marker is written rather than a `D;0` that would call every command a success |
 | X5 | dissolved | `be/utils/osc-cwd.ts` — one reader for all three sequences, which strips the slash a `file://` URL puts before a drive letter and spells the result the path's own way | `default-setup/tests/features/code/be/utils/osc-cwd.spec.ts`, six cases | **the guard**, and it needs no Windows machine: the path's own shape says what it is, so a case asserts `/C:/work` reads as `C:\work` while running on a Mac. Mutation-checked — keeping the leading slash fails two. With the restore path checking its directory (S3) the symptom had only got quieter: the terminal came back in the user's home rather than where they were | — |
 | X6 | dissolved | `TerminalInfo.submit` carries what ends a line for *this* session's shell, computed where the shell is chosen (`submitFor`), and both run-script paths use it | `default-setup/tests/features/code/be/services/known-shells.spec.ts` "what submits a line"; `apack-terminal/tests/broker.rs`'s keystroke case requires the text **twice**, once echoed and once from the command that ran | **measured rather than asserted**, on Windows 2026-11-07: `\n` is echoed and never runs, `\r` alone does not get that far, `\r\n` both echoes and runs. That is also how the broker's keystroke case was found to be passing on the echo alone. A window cannot know which shell is on the other end, which is why this is on the descriptor rather than in the window | — |
 | X7, X8 | dissolved | `fe/utils/terminal-name.ts` — one function where there were two copies, splitting on either separator and naming a drive root by its drive | `default-setup/tests/features/code/fe/utils/terminal-name.spec.ts`, six cases | **the guard**: `C:\Users\someone\project` must name `project` and `C:\` must name `C:`, neither of which needs Windows to assert. Mutation-checked — splitting on `/` alone fails. The two copies were already drifting, one saying `terminal.title` where the other said `terminalInfo.title` | — |
@@ -400,6 +400,32 @@ replays, because nothing keeps a copy to replay from. The common case is unaffec
 the pool keeps the emulator alive across a host's teardown, so a reattach with 256 KiB of history is 5.55 ms
 and sends no bytes. Serving history to a new emulator is the broker's bounded history, which is where one
 copy belongs and which Phase B has not built.
+
+### The Windows session — 2026-11-08
+
+**X4 closed, and a defect found that only a Windows run could find.**
+
+- **Shell integration works on Windows.** PowerShell started with `-NoExit -Command ". '<file>'"` emits
+  OSC 633 and the broker reads it back as facts, the directory following a `cd`. The case lives in the
+  broker's suite rather than against the app, because that is where the markers are parsed and because a
+  Windows run reaches it without an Electron build.
+- **All 19 Windows-eligible broker cases pass, including the seven lifetime and exit cases** that had
+  never run there. They had been `#[cfg(unix)]` for no reason — none of them reaches the POSIX-only helper
+  that gates its neighbours — and they are the two rules with the most to say on that platform: the Job
+  Object's interaction with who ends a session, and a broker exiting by closing a **named pipe**.
+- **What ends a typed line belongs to the shell, not the platform.** `submitFor` answered `\r\n` for every
+  Windows shell, measured against cmd.exe and right there. PowerShell takes the line on the carriage return
+  and reads the newline as *more input*, opening its continuation prompt: the command never runs and the
+  screen shows `>>` with no sign of what was typed. From the user's side that is a terminal ignoring a
+  keystroke — X6 wearing a different hat, and invisible from a Mac.
+
+**What the harness cost, because it is the reusable lesson.** A scratch PowerShell driver failed three
+times for reasons that were all its own: a `ReadLineAsync` that timed out stayed pending and ate the next
+line, so the driver reported nothing arriving while the data went to a task nobody held; PowerShell bound
+`-Command` out of the driver's own argument array, launching the shell with arguments nobody chose and
+*not failing*; and quoting through bash, ssh and PowerShell mangled the rest. The Rust harness already ran
+on Windows and took one attempt. **Reach for the harness that already runs there**, rather than building a
+second one in the shell you are debugging.
 
 ### A crashed shell is a new generation (Phase H, T6) — 2026-11-08
 

@@ -122,7 +122,7 @@ rather than set by hand here, so the two cannot disagree about what is done.
 | **F10** ✔ | Medium | No WebGL context-loss recovery | absent |
 | **F11** ✔ | Medium | Clear doesn't survive a restart | `fe/canvas/TerminalView.vue:133` |
 | **F12** ✔ | Medium | Paste bypasses bracketed paste in two of three paths | `TerminalView.vue:125`, `terminal-pool.ts:201` |
-| **X4** | Medium | Windows: shell integration is inert even when enabled | `be/services/terminal.ts:334-344` |
+| **X4** ✔ | Medium | Windows: shell integration is inert even when enabled | `be/services/terminal.ts:334-344` |
 | **X5** ✔ | Medium | Windows: an OSC 7 URL decodes to an unusable path, which is persisted and respawned from | `be/features/terminal.ts:49,66` |
 | **X6** ✔ | Medium | Windows: the run-script path sends LF, which does not submit a line | `fe/features/terminal/state.ts:290` |
 | **X9** ✔ | Medium | Windows: `resize`/`write` have no error handling; ConPTY throws for ~1 s after exit | `be/services/terminal.ts:145-165` |

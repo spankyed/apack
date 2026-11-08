@@ -506,12 +506,16 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   this state is not that one: the Phase H fork is unsettled and X4 and Phase B's Windows half are
   outstanding, so five macOS runners would be validating something that must still change. It is the first
   thing to run once those land.
-- **Next action: X4, and it is the only thing left that needs Windows.** **X1, X2, X6, X9, X11, X13 and
-  ConPTY's resize and exit are already claimed on a Windows run** — `apack-terminal`'s `tests/broker.rs`
-  passes there in full at `b942f2c` — so Phase B's `portable-pty` validation is complete and the list of
-  Windows work is one finding, not five. Two revisions of this handoff said otherwise after it had stopped
-  being true, which is what a "remaining" column costs when the thing it names gets done somewhere else.
-  **Every other phase is done**: G, T, S, P, A and H, with the session-lifetime fork settled in Decisions.
+- **X4 is closed and no Windows work remains.** PowerShell and cmd are arranged, claimed on a VM run on
+  2026-11-08 ([the record](../references/evidence/terminal-ownership.md#the-windows-session--2026-11-08)).
+  **Every platform finding is now closed** — X1, X2, X4, X5, X6, X7, X8, X9, X10, X11, X12, X13 — and 50 of
+  the review's 58 rows are struck. The eight open ones each carry a disposition and none needs a machine
+  this repo lacks: G1 is priced with its fix placed in the output pipe, G3, G6 and G7 move on #372, S4 is
+  not reachable from the terminal, and F17, F18 and T10 are recorded.
+- **The Windows run found one thing a Mac could not.** `submitFor` answered `\r\n` for every Windows shell,
+  which is right for cmd.exe and wrong for PowerShell: the trailing newline opens its continuation prompt,
+  so the command never runs and the screen shows `>>` with no sign of what was typed. What ends a typed
+  line is the shell's, not the platform's, and it takes a shell now.
 - **The seven lifetime and exit cases now run on Windows too** (`apack-terminal` `1298882`). They were
   `#[cfg(unix)]` and none of them reached the POSIX-only helper that gates its neighbours — so the two rules
   with the most to say on that platform, the Job Object's interaction with who ends a session and a broker
