@@ -73,6 +73,62 @@ describe('settling a restore that did not finish', () => {
     expect(contextOf(actor).tabGroups.map(group => group.id)).toEqual(['g-1'])
   })
 
+  /**
+   * **T10's guard, which is why that row dissolves rather than being fixed.**
+   *
+   * The claim was that every per-tab save persists a list without the tabs still arriving. It does not:
+   * `saveTabsAction` returns early while the order is still pending, and the save fires naturally on the
+   * last arrival, because that is when `addTab` clears it. What made the claim look true is the *settled*
+   * case above — a save after the settle wrote a pruned group list — and that is a different defect.
+   */
+  it('persists nothing while the restore is still arriving, so a partial list is never written', () => {
+    seedTwoTabs()
+    const actor = started()
+
+    // One of the two arrives; the other is still expected, so the batch is in flight
+    actor.send({ type: 'ADD_TAB', tab: { path: '/src/a.ts' } } as never)
+
+    expect(storedTabs().tabs.map(tab => tab.path), 'a save mid-restore wrote the list it had so far')
+      .toEqual(['/src/a.ts', 'terminal:t-1'])
+  })
+
+  /**
+   * **The settle is not the end of the restore, and the prunes have to know that.**
+   *
+   * Settling clears `pendingTabOrder` — the order has been applied — while `pendingPersistedMetadata` still
+   * holds the tabs that have not arrived. Every prune keyed on the order alone therefore started firing
+   * again with tabs still coming, and a prune that counts only *open* tabs removes the group of one that is
+   * still expected. So the arrival of the tab with no group dropped the other tab's group.
+   */
+  it('keeps a still-expected tab s group when another tab arrives after the settle', () => {
+    seedTwoTabs()
+    const actor = started()
+    actor.send({ type: 'RESTORE_PERSISTED_TABS_SETTLED' })
+
+    // `/src/a.ts` arrives late; `terminal:t-1` is still expected, and `g-1` is its group
+    actor.send({ type: 'ADD_TAB', tab: { path: '/src/a.ts' } } as never)
+
+    expect(contextOf(actor).tabGroups.map(group => group.id), 'the group of a tab still coming was pruned')
+      .toEqual(['g-1'])
+  })
+
+  /**
+   * And the same arrival persists, so the loss would outlive the session: `persistCodeTabs` prunes the
+   * groups it writes, and the per-tab save resumes once the order is cleared. That is what made this
+   * permanent rather than a wrong screen until the next launch.
+   */
+  it('leaves a still-expected tab s group in storage when another tab arrives after the settle', () => {
+    seedTwoTabs()
+    const actor = started()
+    actor.send({ type: 'RESTORE_PERSISTED_TABS_SETTLED' })
+
+    actor.send({ type: 'ADD_TAB', tab: { path: '/src/a.ts' } } as never)
+
+    const stored = JSON.parse(localStorage.getItem(GROUPS_KEY) ?? '[]') as Array<{ id: string }>
+    expect(stored.map(group => group.id), 'storage lost the group, so the next launch has nothing to restore it from')
+      .toEqual(['g-1'])
+  })
+
   it('stops waiting, so a restore settles exactly once', () => {
     seedTwoTabs()
     const actor = started()

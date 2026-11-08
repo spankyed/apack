@@ -228,11 +228,24 @@ function groupIdsForOpenTabs(openFiles: (OpenFile | TerminalTab | ActionTab | Pr
   )
 }
 
+/**
+ * The groups still named by a tab: one that is open, **or one a restore is still expecting**.
+ *
+ * `stillExpected` is required rather than optional because forgetting it is the whole defect. A restore
+ * arrives tab by tab, so between the first arrival and the last there are open tabs and expected ones, and a
+ * prune that counts only the open ones removes the group of a tab that is still coming. That tab then
+ * hydrates naming a group nothing holds and loses its name, its colour and its place — and because
+ * `persistCodeTabs` prunes too, the loss is written to storage and survives the next launch.
+ */
 function pruneEmptyTabGroups(
   openFiles: (OpenFile | TerminalTab | ActionTab | PromptTab)[],
-  tabGroups: TabGroup[]
+  tabGroups: TabGroup[],
+  stillExpected: CodeContext['pendingPersistedMetadata']
 ): TabGroup[] {
   const groupIds = groupIdsForOpenTabs(openFiles)
+  for (const metadata of stillExpected?.values() ?? []) {
+    if (metadata.groupId) groupIds.add(metadata.groupId)
+  }
   return tabGroups.filter(group => groupIds.has(group.id))
 }
 
@@ -259,7 +272,7 @@ function prunePersistedTabGroups(
  */
 function persistCodeTabs(context: CodeContext): void {
   if (!context.ownsAppLayout) return
-  const tabGroups = pruneEmptyTabGroups(context.openFiles, context.tabGroups)
+  const tabGroups = pruneEmptyTabGroups(context.openFiles, context.tabGroups, context.pendingPersistedMetadata)
   saveOpenTabs(context.openFiles, context.activeFilePath, context.panelTerminalId, context.panelTerminalExpanded)
   saveTabGroups(storage, 'tab-groups', tabGroups)
 }
@@ -286,10 +299,6 @@ function finalizeRestoreState(context: CodeContext): Partial<CodeContext> {
   const stillExpected = new Map(
     [...(context.pendingPersistedMetadata ?? [])].filter(([path]) => !openPaths.has(path))
   )
-  const accountedFor = [
-    ...context.openFiles.map(file => ({ groupId: 'groupId' in file ? file.groupId : undefined })),
-    ...[...stillExpected.values()].map(metadata => ({ groupId: metadata.groupId })),
-  ]
   const activeFilePath = context.activeFilePath && openPaths.has(context.activeFilePath)
     ? context.activeFilePath
     : context.openFiles[0]?.path ?? null
@@ -298,7 +307,7 @@ function finalizeRestoreState(context: CodeContext): Partial<CodeContext> {
     pendingTabOrder: undefined,
     pendingPersistedMetadata: stillExpected.size > 0 ? stillExpected : undefined,
     pendingTerminalTabIds: undefined,
-    tabGroups: prunePersistedTabGroups(context.tabGroups, accountedFor),
+    tabGroups: pruneEmptyTabGroups(context.openFiles, context.tabGroups, stillExpected),
     activeFilePath,
   }
 }
@@ -436,7 +445,7 @@ const codeState = setup({
       }
 
       const tabGroups = pendingTabOrder === undefined
-        ? pruneEmptyTabGroups(openFiles, context.tabGroups)
+        ? pruneEmptyTabGroups(openFiles, context.tabGroups, pendingPersistedMetadata)
         : context.tabGroups
 
       return {
@@ -474,7 +483,7 @@ const codeState = setup({
       }
 
       if (updates.tabsRestored && updates.pendingTabOrder === undefined) {
-        updates.tabGroups = pruneEmptyTabGroups(updates.openFiles, updates.tabGroups)
+        updates.tabGroups = pruneEmptyTabGroups(updates.openFiles, updates.tabGroups, updates.pendingPersistedMetadata)
       }
 
       return updates
@@ -917,7 +926,7 @@ const codeState = setup({
         openFiles: newOpenFiles,
         activeFilePath: newActiveFilePath,
         // The group the moved tab was the last member of, which every other removal here prunes
-        tabGroups: pruneEmptyTabGroups(newOpenFiles, context.tabGroups),
+        tabGroups: pruneEmptyTabGroups(newOpenFiles, context.tabGroups, context.pendingPersistedMetadata),
         panelTerminalId: terminalId,
         panelTerminalExpanded: true
       }

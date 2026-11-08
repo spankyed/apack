@@ -1,7 +1,7 @@
 # Three defects a review of #379 found that are not terminal findings
 
-Status: open. Found reviewing `session/terminal-ownership` (#379) on 2026-11-08, confirmed or relayed as
-noted. They are here rather than in
+Status: **one of three closed**. Found reviewing `session/terminal-ownership` (#379) on 2026-11-08,
+confirmed or relayed as noted. They are here rather than in
 [the terminal integration review](ISSUE-terminal-integration-review.md) because none of them is a row in it:
 that document's subject is the terminal, and these are a tab-group prune, a test-runner's toolchain lookup
 and a stale comment. The goal that closed the review's rows is
@@ -12,7 +12,7 @@ a crash, an exit attributed to a replaced shell), the streamed-reply `done` even
 costing every development run and test a serialisation, and the two that reached review rows — F15's flag
 outliving its click and F17's remaining residual, which that row now records.
 
-## 1. A late tab re-arms the prune that drops another late tab's group
+## 1. A late tab re-arms the prune that drops another late tab's group — **closed**
 
 `features/code/fe/state.ts`, `finalizeRestoreState`. It keeps `pendingPersistedMetadata` and the groups of
 tabs that missed the deadline, but sets `pendingTabOrder: undefined` — and the prunes in `addTab` and
@@ -21,8 +21,10 @@ tabs that missed the deadline, but sets `pendingTabOrder: undefined` — and the
 hydrates with a `groupId` naming a group that no longer exists, losing its name and colour, and appends at
 the end rather than its persisted slot.
 
-**Relayed, not confirmed.** `tests/.../fe/state.spec.ts` asserts the state right after the settle, which is
-before either late arrival.
+**Confirmed and fixed.** Every `pruneEmptyTabGroups` call now takes the tabs a restore is still expecting,
+and the parameter is required so no site can forget it — including `persistCodeTabs`, which is what wrote the
+loss to storage and made it survive the next launch. `finalizeRestoreState` had the rule right and kept its
+own copy of it; it shares this one now. Two firing cases past the settle, where the existing cases stopped.
 
 ## 2. `test:linux` refuses to start without a `vendor/` link
 
