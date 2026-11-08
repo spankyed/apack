@@ -386,6 +386,15 @@ const killAllTerminals = () => {
 }
 
 const selectTerminal = (terminalId: string) => {
+  // **Already drawn here, so the click is answered now** rather than armed for an attach that will not
+  // happen: the watch below skips `attachTerminal` when the attachment already names this terminal, so a
+  // flag set here would survive the click and be spent by the next attach — a panel re-open, an actor
+  // replacement, a reconnect — which is the F15 defect the flag exists to prevent. Arming it only where an
+  // attach is certain is what keeps the request from outliving the turn it was made in.
+  if (attachment?.terminalId === terminalId) {
+    attachment.focus()
+    return
+  }
   // The selection is what attaches, a tick later, so the request is recorded rather than acted on here
   focusOnAttach = true
   codeActor.send({ type: 'SELECT_PANEL_TERMINAL', terminalId })
