@@ -78,7 +78,11 @@ describe("what the broker's shells inherit", () => {
 // *expected a named pipe path*, which is what the broker's own suite got on its first Windows run instead
 // of a broker.
 describe('where the broker listens', () => {
-  const DATA_DIR = '/Users/someone/Library/Application Support/apack/profiles/.ephemeral/12345-abcdefghij';
+  // Long enough to make the point about the 104-byte limit, and **not a platform data dir**: naming one
+  // here would be this repo deriving an app path outside `@apackdev/sdk/env`, which `identity-guard`
+  // refuses in a spec as readily as in source. What `socketPath` takes is any string; what it must not do
+  // is put it in the address.
+  const DATA_DIR = '/Users/someone/a-deeply-nested-synced-folder/apack/profiles/.ephemeral/12345-abcdefghij';
 
   it('is a named pipe on Windows, where a path is refused', () => {
     const socket = socketPath('win32', DATA_DIR);
