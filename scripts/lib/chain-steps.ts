@@ -368,9 +368,15 @@ export function orderedSteps(given: readonly ChainStep[] = CHAIN_STEPS): readonl
  */
 /**
  * The files every step really does read: the installed toolchain, because a dependency moving changes what any of
- * them do, by the records that pin it — the lockfile, and the elmdb commit `vendor/elmdb` links (`vendor/elmdb.rev`),
- * which `@apackdev/ears` builds against and loads. Like the lockfile for `node_modules`, the pin stands for what it
- * names: a change to the elmdb checkout not yet pinned is no input.
+ * them do, by the records that pin it — the lockfile, and every vendored checkout's commit (`vendor/*.rev`).
+ * Like the lockfile for `node_modules`, a pin stands for what it names: a change to a vendored checkout not yet
+ * pinned is no input.
+ *
+ * **Derived from the pins rather than naming a checkout**, so a third sibling is declared the day its `.rev` is
+ * committed — which is the rule the guide states for everything that reads `vendor/`. The `.rev` files are tracked,
+ * where the links beside them are not, so this reads the same here as in CI; naming `vendor/elmdb.rev` alone left
+ * every leg that compiles against `apack-terminal` with nothing to re-run it, and only CI could see that, since a
+ * sibling checkout's reads resolve outside the repo entirely.
  *
  * **`package.json` is not here**, and that is the point. Hashing the whole manifest to key on each step's
  * command would turn an edit to one script into a full chain. A unit carries its own `command`
@@ -380,7 +386,11 @@ export function orderedSteps(given: readonly ChainStep[] = CHAIN_STEPS): readonl
  * changes `EVERY_WORKSPACE`, which changes the declared path list, which `fingerprintUnit` hashes. And
  * each workspace's own manifest is already an input through `WORKSPACE_PARTS`.
  */
-const ROOT = ['package-lock.json', 'vendor/elmdb.rev'];
+const VENDOR_PINS = fs.existsSync(path.join(REPO_ROOT, 'vendor'))
+  ? fs.readdirSync(path.join(REPO_ROOT, 'vendor')).filter((name) => name.endsWith('.rev')).sort()
+    .map((name) => `vendor/${name}`)
+  : [];
+const ROOT = ['package-lock.json', ...VENDOR_PINS];
 
 /**
  * The root vitest config a run of one half uses — which projects it pools is an input to every suite in it.

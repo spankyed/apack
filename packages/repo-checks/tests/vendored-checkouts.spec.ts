@@ -3,7 +3,12 @@
 // nothing about it), and the Linux container's image, which built that checkout under elmdb's toolchain
 // without saying so. Both derive their subject now, and each case here mutates that subject rather than
 // describing it.
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { REPO_ROOT } from '@apackdev/host/build/packages-built';
+import { CHAIN_STEPS } from '../../../scripts/lib/chain-steps.ts';
+import { readsOf } from '../../../scripts/lib/dep-files.ts';
 import {
   type PinnedToolchain, type VendoredCheckout, oneRustToolchain, rustCheckoutsForRun, rustCheckoutsIn,
 } from '../../../scripts/lib/vendored-checkouts.ts';
@@ -99,4 +104,52 @@ describe('oneRustToolchain', () => {
   it('refuses an empty set rather than answering a default nobody pinned', () => {
     expect(() => oneRustToolchain([])).toThrow(/link:elmdb/);
   });
+});
+
+/**
+ * The third thing that resolved `vendor/elmdb` by name, and the one only CI could catch.
+ *
+ * A vendored checkout is a dependency: its reads are dropped from a dep file because the pin beside it is what
+ * every step declares instead. Both halves named elmdb, so when `apack-terminal` became the second checkout no
+ * leg re-ran on its commit and five legs read two files nothing declared. Locally neither half can fail — a
+ * sibling checkout's reads resolve outside the repo and are dropped as `..` — so these ask the declaration and
+ * the filter directly, over a pin that is not elmdb's.
+ */
+describe('every vendored checkout is covered, not the one that was there first', () => {
+  const pins = fs.readdirSync(path.join(REPO_ROOT, 'vendor')).filter((name) => name.endsWith('.rev')).sort();
+
+  it('has a pin for something other than elmdb, or these cases describe nothing', () => {
+    expect(pins.length, 'vendor/ holds one pin, so nothing here distinguishes derived from named').toBeGreaterThan(1);
+  });
+
+  /**
+   * The pins travel together, which is what a derivation gives and a written name cannot.
+   *
+   * Not "every step declares them": `packages:ensure` declares the lockfile and no pin, naming the five
+   * packages it builds instead, and two earlier spellings of this case reported it as a defect when it is the
+   * documented difference between a scope and `ROOT`. What is actually in question is whether a step that
+   * cares about one checkout cares about all of them — so the population is the steps declaring any pin, and
+   * the edit that fires this is the one that regressed: writing a checkout's name in `ROOT` again, which
+   * covers the one that was there first and no other.
+   */
+  it('declares either every pin or none, in each step that declares one', () => {
+    const declaring = CHAIN_STEPS.filter((step) => pins.some((pin) => step.inputs.includes(`vendor/${pin}`)));
+    expect(declaring.length, 'no step declares any pin, so this compares nothing').toBeGreaterThan(1);
+    const partial = declaring
+      .filter((step) => !pins.every((pin) => step.inputs.includes(`vendor/${pin}`)))
+      .map((step) => `${step.name} declares only ${pins.filter((pin) => step.inputs.includes(`vendor/${pin}`)).join(', ')}`);
+    expect(partial, 'a step reading one vendored checkout reads the commits of all of them').toEqual([]);
+  });
+
+  it.each(pins)('drops a read inside the checkout vendor/%s pins, the pin standing for it', (pin) => {
+    const checkout = `vendor/${pin.replace(/\.rev$/, '')}`;
+    const read = [...new Set(depFiles().flatMap((name) => readsOf(name) ?? []))]
+      .filter((file) => file.startsWith(`${checkout}/`));
+    expect(read, `${checkout} is a dependency; its pin is what steps declare`).toEqual([]);
+  });
+
+  function depFiles(): string[] {
+    const dir = path.join(REPO_ROOT, 'node_modules', '.cache', 'apack-typecheck');
+    return fs.existsSync(dir) ? fs.readdirSync(dir).filter((name) => name.endsWith('.tsbuildinfo')) : [];
+  }
 });
