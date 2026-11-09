@@ -14,6 +14,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 import { boundedSpawn } from './lib/bounded-spawn.ts';
 import { asNumber, BURNER_CEILING_MS, startBurners } from './lib/measure.ts';
 
@@ -25,7 +26,7 @@ const TAIL_LINES = 40;
  * the end of its output when none does, with terminal colours removed.
  */
 function failureOf(output: string): string[] {
-  const lines = output.replace(/\x1b\[[0-9;]*m/g, '').split('\n');
+  const lines = stripVTControlCharacters(output).split('\n');
   const named = lines.filter((line) => /(^| )(FAIL|×) |Error:|AssertionError|stalled|CPU budget|failed \(exit/.test(line));
   return (named.length > 0 ? [...new Set(named)] : lines.slice(-TAIL_LINES)).slice(0, TAIL_LINES);
 }
