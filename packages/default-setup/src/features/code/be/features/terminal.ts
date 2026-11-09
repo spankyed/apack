@@ -70,10 +70,17 @@ const OSC_PATTERNS = [
  */
 const terminalHandlers = {
   onData(terminalId: string, data: string) {
+    // **Almost no chunk carries a marker, and one `indexOf` says so.** Every pattern below begins `ESC ]`,
+    // so a chunk without those two bytes cannot match any of them — and without this the loop ran all three
+    // non-anchored regexes over the whole of every chunk the pty wrote, which is the highest-frequency feed
+    // the app has, to find nothing. It matters more than it reads: shell integration is on by default now,
+    // so this runs for every terminal rather than for the few that had it switched on.
     let cwdMatch: RegExpMatchArray | null = null
-    for (const pattern of OSC_PATTERNS) {
-      cwdMatch = data.match(pattern)
-      if (cwdMatch) break
+    if (data.includes('\x1b]')) {
+      for (const pattern of OSC_PATTERNS) {
+        cwdMatch = data.match(pattern)
+        if (cwdMatch) break
+      }
     }
 
     if (cwdMatch) {

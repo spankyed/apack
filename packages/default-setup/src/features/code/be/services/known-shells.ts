@@ -61,7 +61,25 @@ export function defaultShell(platform: NodeJS.Platform = process.platform, env =
 }
 
 /** Every shell `/etc/shells` lists, ignoring comments and blank lines. Empty when there is no such file. */
+/**
+ * The shells this machine lists, read once.
+ *
+ * **It is a machine fact, and it was being read per question.** `shellIsKnown` asks on every create,
+ * restart, adopt and restored row, so a boot restoring terminals read and parsed the file once per
+ * terminal. Memoised by path, so the specs' own file is still answered for — they pass `file` — and a
+ * caller that wants the real one unmemoised has `readListedShells`.
+ */
+const listed = new Map<string, string[]>();
 export function listedShells(file = ETC_SHELLS): string[] {
+  const held = listed.get(file);
+  if (held) return held;
+  const shells = readListedShells(file);
+  listed.set(file, shells);
+  return shells;
+}
+
+/** The file as it is now. `listedShells` is this, remembered */
+export function readListedShells(file = ETC_SHELLS): string[] {
   let text: string;
   try { text = fs.readFileSync(file, 'utf8'); } catch { return []; }
   return text.split('\n')

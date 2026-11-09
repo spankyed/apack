@@ -196,10 +196,6 @@ export function findScroller(root: HTMLElement): HTMLElement | null {
 class TerminalPool {
   private entries = new Map<string, PoolEntry>()
 
-  get(terminalId: string): PoolEntry | undefined {
-    return this.entries.get(terminalId)
-  }
-
   /**
    * Says on the screen that the shell behind this terminal has gone.
    *
