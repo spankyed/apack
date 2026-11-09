@@ -150,3 +150,50 @@ describe('what a streamed reply writes', () => {
     expect(feed.at(-1)).toEqual({ at: 'the short final answer'.length, text: '', done: true });
   });
 });
+
+describe('the last word is said once', () => {
+  /**
+   * **A turn's owner finalises as a backstop, so a second call must do nothing.**
+   *
+   * Every exit from the stream consumer now passes through one `finally` that releases the turn's
+   * writers. A path that finalised with text of its own — a warning replacing the reply, a paused turn's
+   * partial — is followed by that backstop, and before this guard the row was written twice and `done`
+   * emitted twice. `thinking-writer.finalise` and the codex consumer's wrapper already guarded; this one
+   * did not.
+   */
+  it('writes the row once when finalised twice', () => {
+    const { writes, feed, services } = recorder();
+    const writer = createStreamWriter(services, 'm-1' as never, { intervalMs: 80, durableMs: 2000 });
+
+    writer.push('the answer');
+    writer.finalize('a warning instead');
+    const afterFirst = writes.length;
+    const doneCount = feed.filter(one => one.done).length;
+
+    writer.finalize();
+
+    expect(writes).toHaveLength(afterFirst);
+    expect(feed.filter(one => one.done)).toHaveLength(doneCount);
+    expect(writer.text).toBe('a warning instead');
+  });
+
+  /**
+   * And the backstop still disarms an armed timer, which is the other half of what it is for: nothing
+   * disposed a writer, so a turn that ended without finalising left a timer that wrote the row up to a
+   * durable interval later — onto a message something else had already marked complete.
+   */
+  it('disarms a pending write even when it has already finalised', () => {
+    const { writes, services } = recorder();
+    const writer = createStreamWriter(services, 'm-1' as never, { intervalMs: 80, durableMs: 2000 });
+
+    writer.finalize('done early');
+    const after = writes.length;
+
+    // A push after finalising arms the durable timer again; the backstop's clear is what stops it landing
+    writer.push('late');
+    writer.finalize();
+    vi.advanceTimersByTime(5000);
+
+    expect(writes).toHaveLength(after);
+  });
+});

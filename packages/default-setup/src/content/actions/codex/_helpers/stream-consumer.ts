@@ -43,6 +43,7 @@ interface ConsumerHandlers {
   onNotification(method: string, params: any): void;
   onApproval(method: string, requestId: number, params: any): void;
   onCrash?(error: string): void;
+  onUnregistered?(): void;
 }
 
 /**
@@ -536,7 +537,11 @@ export function createStreamConsumer(
     });
   }
 
-  return { handlers: { onNotification, onApproval, onCrash }, finalize };
+  // **`onUnregistered` is the release, and it is why `finalize` is idempotent.** `killTurn` interrupts the
+  // turn and unregisters, so `turn/completed` never arrives and nothing else would finalise — the message
+  // was left with a stale tail and no `responseTimestamp`. A turn that ends through a notification
+  // finalises there and this does nothing
+  return { handlers: { onNotification, onApproval, onCrash, onUnregistered: finalize }, finalize };
 }
 
 export async function replayQueuedMessage(

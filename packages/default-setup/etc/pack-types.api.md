@@ -835,6 +835,15 @@ interface ConsumerHandlers {
     onApproval(method: string, requestId: number, params: any): void;
     /** Called when the app-server process exits unexpectedly. Consumer should clean up thread state. */
     onCrash?(error: string): void;
+    /**
+     * Called when this consumer is unregistered, so what a turn was holding is released.
+     *
+     * **Unregistering is one of the ways a turn ends, and the only one with no notification.** `killTurn`
+     * interrupts the turn and unregisters, so `turn/completed` never arrives and the consumer's own
+     * `finalize` never runs — which left the assistant message with a stale tail and no
+     * `responseTimestamp`. A consumer's writers have a lifetime, so the registration owns their release.
+     */
+    onUnregistered?(): void;
 }
 
 interface ContextReference {
@@ -5887,6 +5896,7 @@ declare const chatQueries: {
     /** A message's blocks, assembled from their rows: what an export carries and `messageById` folds in */
     readonly blocksOf: (messageId: EARS.EntityId) => BlockConfig[];
     readonly entryDetails: (blockId: EARS.EntityId) => Record<string, ToolActivityEntry["details"]>;
+    /** One message, whole; `null` once it is gone */
     readonly messageById: (messageId: EARS.EntityId) => MessageEntity | null;
 };
 
@@ -6524,15 +6534,8 @@ declare const threadQueries: {
     readonly allUnfiltered: () => ThreadEntity[];
     /** The first thread holding the role, e.g. the onboarding birth thread */
     readonly idByRole: (role: EARS.RoleKind) => EARS.EntityId | undefined;
-    readonly messages: (threadId: EARS.EntityId) => ({
-        id: `${string}-${string}` & {
-            readonly __entity?: "Message" | undefined;
-        };
-    } & Pick<MessageEntity & _apackdev_ears.BaseEntity & {
-        id: `${string}-${string}` & {
-            readonly __entity?: "Message" | undefined;
-        };
-    }, "compacted" | "isCommand" | "sender" | "text" | "timestamp">)[];
+    /** A thread's messages, assembled — the one reader, so nothing here picks its own fields */
+    readonly messages: (threadId: EARS.EntityId) => MessageEntity[];
     /** The threads this one links to, by kind, then the threads that block it, as `blocked by` */
     readonly linkedThreads: (threadId: EARS.EntityId) => Array<{
         relation: ThreadLinkRelation;

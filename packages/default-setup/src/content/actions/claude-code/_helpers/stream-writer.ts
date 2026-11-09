@@ -80,6 +80,8 @@ export function createStreamWriter(
   let lastWriteAt = 0;
   let feedTimer: ReturnType<typeof setTimeout> | null = null;
   let writeTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Whether this writer has already said its last word */
+  let finalized = false;
 
   const clear = (timer: ReturnType<typeof setTimeout> | null) => {
     if (timer) clearTimeout(timer);
@@ -128,9 +130,21 @@ export function createStreamWriter(
       feedNow();
       schedule();
     },
+    /**
+     * The last word: the row, then `done`.
+     *
+     * **Idempotent, because a turn's owner calls it as a backstop.** Every exit from the stream consumer
+     * passes through one `finally` that releases the turn's writers, so a path that finalised with its own
+     * text — a warning replacing the reply, the partial text of a paused turn — is followed by that
+     * backstop, and the second call must do nothing. `thinking-writer.finalise` and the codex consumer's
+     * own wrapper already guard this way; this one did not, and two calls wrote the row twice and emitted
+     * `done` twice.
+     */
     finalize(text?: string): void {
       feedTimer = clear(feedTimer);
       writeTimer = clear(writeTimer);
+      if (finalized) return;
+      finalized = true;
       // Replacement text can be shorter than what the windows hold, so the run they are splicing is no
       // longer a run of this message. The row is the answer, and `done` is what tells them to read it.
       const replaced = text !== undefined && text !== buffer;

@@ -85,6 +85,15 @@ export interface ConsumerHandlers {
   onApproval(method: string, requestId: number, params: any): void
   /** Called when the app-server process exits unexpectedly. Consumer should clean up thread state. */
   onCrash?(error: string): void
+  /**
+   * Called when this consumer is unregistered, so what a turn was holding is released.
+   *
+   * **Unregistering is one of the ways a turn ends, and the only one with no notification.** `killTurn`
+   * interrupts the turn and unregisters, so `turn/completed` never arrives and the consumer's own
+   * `finalize` never runs — which left the assistant message with a stale tail and no
+   * `responseTimestamp`. A consumer's writers have a lifetime, so the registration owns their release.
+   */
+  onUnregistered?(): void
 }
 
 // ─── Turn handle (stored per app thread for pause/abort) ────────────────────

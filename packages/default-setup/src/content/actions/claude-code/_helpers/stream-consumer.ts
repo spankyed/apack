@@ -104,6 +104,40 @@ export async function consumeStream(
   /** Idempotent — safe to call from every finalization path. */
   const finaliseThinking = () => { if (thinking.isStreaming) thinking.finalise(); };
 
+  /**
+   * Finalises whatever this turn is holding, once — and it is called from one `finally`, so **every** way
+   * out of the stream passes through it.
+   *
+   * **A writer's lifetime was bound to nothing.** Three of them lived in these bindings and were finalised
+   * by convention at a dozen call sites, and the ones that mattered most were missed: the superseded
+   * branch below returns without finalising the stream writer, and it is reached by every `killTurn`
+   * caller — the user stopping a turn, a denied permission, a new message while parked on a prompt, revert
+   * and summarize. What that left was a message marked complete with a tail up to a commit old, and a
+   * writer whose timer fired afterwards and wrote the row again with no `responseTimestamp`.
+   *
+   * So the turn owns them and the `finally` releases them, which is this repo's shape for anything with a
+   * lifetime — `dev-hold.ts`'s one cleanup promise, `holdExclusiveLock`, the shutdown hooks. The explicit
+   * finalise calls stay where they are, because they pass text this cannot know (a warning replacing the
+   * reply, a paused turn's partial); this guarantees that *something* finalised, and every writer's
+   * finalise is idempotent so the backstop is free.
+   *
+   * It reads the bindings rather than closing over their values, because `splitMessage` replaces all three
+   * mid-stream and the ones to release are whichever are current.
+   */
+  let released = false;
+  const releaseWriters = () => {
+    if (released) return;
+    released = true;
+    try {
+      finaliseThinking();
+      toolActivity.finalise(toolActivity.entries.some(e => e.status === 'error') ? 'error' : 'done');
+      writer.finalize();
+    } catch (releaseErr: any) {
+      // A release that throws must not replace whatever ended the turn
+      log.warn('releasing the turn\'s writers failed', { error: releaseErr?.message ?? String(releaseErr) });
+    }
+  };
+
   // Set by the control_request handler after a user-interactive flow.
   // The next `message_start` will split into a new message.
   let splitOnNextMessageStart = false;
@@ -745,6 +779,10 @@ export async function consumeStream(
       eventType: 'cc.stream.completed',
       payload: { threadId, hadErrors: true, error: message },
     });
+  } finally {
+    // Every way out of this stream passes here: the drain returning, the catch, and the early returns
+    // inside both. What a path finalised itself this does not do again
+    releaseWriters();
   }
 }
 
