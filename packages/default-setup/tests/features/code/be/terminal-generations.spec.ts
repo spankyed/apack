@@ -8,6 +8,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { resetTestData, startApp } from '@apackdev/testing/harness'
 import { recordingBroker } from './_support/terminal-broker.ts'
+import { repository } from '#generated/repository.ts'
 
 
 const handlers = () => ({ onData: vi.fn(), onExit: vi.fn(), onCrashed: vi.fn() })
@@ -128,6 +129,87 @@ describe('restarting a terminal', () => {
     const { app, terminalService, told } = await aTerminal()
 
     expect(await terminalService.restart('Terminal-not-a-real-one', told)).toBeNull()
+    await app.stop()
+    resetTestData()
+  })
+})
+
+// **A terminal is closed in three places or it is not closed at all**: this process forgets it, its row goes
+// to the trash, and every window is told. The cases below are the paths where one of the three used to be
+// skipped, and each of them left a terminal the user could not get rid of.
+describe('closing a terminal whose shell has already gone', () => {
+  it('completes the close itself, there being no exit left to wait for', async () => {
+    const { broker, app, terminalService, told, info } = await aTerminal()
+    broker.endShell('broker-1', 139)
+    expect(only(terminalService.list(), info.id), 'kept, so the user can read what it said').toHaveLength(1)
+
+    const closed = await terminalService.kill(info.id, told)
+
+    // The broker forgot this session when it exited and the client dropped its listener with it, so a kill
+    // sent now is answered by nobody: a close that waited for that answer would never arrive
+    expect(closed).toBe(true)
+    expect(only(terminalService.list(), info.id), 'so the close finishes here').toEqual([])
+    expect(told.onExit, 'every window is told, or they go on drawing it').toHaveBeenCalledWith(info.id, 139)
+    expect(repository.terminalQueries.all().map(row => row.id),
+      'and the row goes too, or the next boot restores a terminal that was closed').not.toContain(info.id)
+    await app.stop()
+    resetTestData()
+  })
+
+  it('refuses a write to it, rather than reporting one that landed nowhere', async () => {
+    const { broker, app, terminalService, told, info } = await aTerminal()
+    broker.endShell('broker-1', 139)
+
+    expect(await terminalService.write(info.id, 'ls\n'), 'there is no pty on the other end').toBe(false)
+    expect(told.onExit).not.toHaveBeenCalled()
+    await app.stop()
+    resetTestData()
+  })
+})
+
+describe('a close the broker refuses', () => {
+  it('still tells every window, having forgotten the terminal here', async () => {
+    const { broker, app, terminalService, told, info } = await aTerminal()
+    broker.refuseTerminate('broker-1')
+
+    const closed = await terminalService.kill(info.id, told)
+
+    expect(closed, 'the asker hears that it failed').toBe(false)
+    expect(only(terminalService.list(), info.id), 'the terminal is gone from here').toEqual([])
+    // Forgetting it here while every window still draws it is the same wedge from the other side: the next
+    // write to that terminal answers "not found" and nothing can close it, because there is nothing left to
+    // close
+    expect(told.onExit, 'so the windows have to hear it as well').toHaveBeenCalledWith(info.id, 0)
+    await app.stop()
+    resetTestData()
+  })
+})
+
+describe('a restart that cannot start a shell', () => {
+  it('reports the terminal dead instead of leaving it looking live', async () => {
+    const { broker, app, terminalService, told, info } = await aTerminal()
+    broker.refuseOpen(2)
+
+    await expect(terminalService.restart(info.id, told)).rejects.toThrow()
+
+    // The old shell was ended before the reopen was attempted, so there is nothing running under this
+    // terminal. A state that still said otherwise is what made every window draw it as live
+    const [kept] = only(terminalService.list(), info.id)
+    expect(kept?.active).toBe(false)
+    expect(kept?.exited).toEqual({ code: null })
+    expect(told.onCrashed, 'a rejection reaches the asker alone, so the rest are told this way')
+      .toHaveBeenCalledWith(info.id, null)
+    await app.stop()
+    resetTestData()
+  })
+
+  it('leaves a terminal that can still be closed', async () => {
+    const { broker, app, terminalService, told, info } = await aTerminal()
+    broker.refuseOpen(2)
+    await expect(terminalService.restart(info.id, told)).rejects.toThrow()
+
+    expect(await terminalService.kill(info.id, told)).toBe(true)
+    expect(only(terminalService.list(), info.id)).toEqual([])
     await app.stop()
     resetTestData()
   })

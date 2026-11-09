@@ -210,7 +210,7 @@ export const terminalSystem = setup({
         const terminalName = terminal ? terminal.info.title : 'Terminal'
         // **Awaited, not checked for truth.** The service answers a promise now, and `if (!promise)` is
         // never true — the refusal below was dead the moment the broker owned the process.
-        void terminalService.kill(ev.terminalId)
+        void terminalService.kill(ev.terminalId, terminalHandlers)
           .then(found => {
             if (!found) failTerminal(reply, 'close', `${terminalName} not found`, ev.terminalId)
           })

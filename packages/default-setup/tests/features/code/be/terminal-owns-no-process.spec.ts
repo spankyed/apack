@@ -107,7 +107,9 @@ describe('what the broker owning the process removes', () => {
     const { terminalService } = await import('#features/code/be/services/terminal.ts')
     // Through the door the user has: there is no kill-everything operation, because the app ending the
     // sessions is the broker's job and not this process's
-    for (const terminal of terminalService.list()) await terminalService.kill(terminal.id)
+    // What the windows hear is another spec's subject; this one is about the rows
+    const told = { onData: () => {}, onExit: () => {}, onCrashed: () => {} }
+    for (const terminal of terminalService.list()) await terminalService.kill(terminal.id, told)
 
     // L2: a run that quit used to leave its rows open, so the next boot restored terminals that were never
     // open. L3: and the rows themselves never went anywhere — a closed one was annotated, not removed, so a

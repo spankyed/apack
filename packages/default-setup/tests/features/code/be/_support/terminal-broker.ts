@@ -51,6 +51,14 @@ export interface RecordingBroker {
   emit(id: string, data: string): void
   /** Refuses the nth open (1-based), as a broker that would not start */
   refuseOpen(nth: number, why?: string): void
+  /**
+   * Refuses to end a session, as a broker that has gone or lost the socket does.
+   *
+   * **The refusal matters because no exit follows it.** A `terminate` that rejects ends nothing and
+   * reports nothing, so whatever the service does about the terminal it is closing, it does without a
+   * second chance — there is no later `onExit` to finish the job.
+   */
+  refuseTerminate(id: string, why?: string): void
 }
 
 /**
@@ -64,6 +72,7 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
   const terminated: string[] = []
   const listening = new Map<string, TerminalListeners>()
   const refusals = new Map<number, string>()
+  const refusedTerminations = new Map<string, string>()
   let next = 0
 
   mockService('terminal', {
@@ -83,7 +92,14 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
         // A signal, as the broker's kill is. A double exiting 0 here would let the service decide a close
         // by reading the code — which is the one thing that cannot work, so a case would pass while the app
         // marked every closed terminal crashed
-        terminate: async () => { terminated.push(id); listening.get(id)?.onExit(1) },
+        terminate: async () => {
+          const refusal = refusedTerminations.get(id)
+          // Nothing is recorded and no exit is delivered: a refused kill ended nothing, and the caller has
+          // only this rejection to act on
+          if (refusal !== undefined) throw new Error(refusal)
+          terminated.push(id)
+          listening.get(id)?.onExit(1)
+        },
       }
     },
   })
@@ -98,5 +114,6 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
     endShell: (id, code) => listenersFor(id).onExit(code),
     emit: (id, data) => listenersFor(id).onOutput(data),
     refuseOpen: (nth, why = 'the broker would not start') => { refusals.set(nth, why) },
+    refuseTerminate: (id, why = 'the broker would not end the session') => { refusedTerminations.set(id, why) },
   }
 }
