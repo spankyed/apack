@@ -1,11 +1,10 @@
-import {execFile} from 'node:child_process'
-import {promisify} from 'node:util'
+import {execFileWhileWorking} from '@apackdev/sdk/progress'
 import {mkdtemp, rm, readFile, writeFile, symlink} from 'node:fs/promises'
 import {createHash,randomUUID} from 'node:crypto'
 import {join} from 'node:path'
 import {tmpdir} from 'node:os'
 import {claimClaudeBackgroundCheckpoint} from '#features/code/be/services/claude-code/background-observer-checkpoint.ts'
-const exec=promisify(execFile),parent='24be904a-3c35-4981-9793-cbe7a6c19d46'
+const exec=execFileWhileWorking,parent='24be904a-3c35-4981-9793-cbe7a6c19d46'
 const temporary=process.platform==='darwin'?'/private/tmp':tmpdir()
 const owned:string[]=[]
 function scope(){const profile='/owned-test/'+randomUUID();const key=createHash('sha256').update(JSON.stringify([profile,parent])).digest('hex');const index=join(temporary,'apack-claude-background-'+process.getuid?.(),key);owned.push(index);return {profile,parentSessionId:parent,index}}

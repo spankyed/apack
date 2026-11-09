@@ -1,7 +1,7 @@
 import { claudeTerminalStatusRuntime } from '#features/code/be/services/claude-code/terminal-status-runtime.ts'
 import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, realpath, symlink } from 'node:fs/promises'
 import { join } from 'node:path'
-import { execFileSync } from 'node:child_process'
+import { execFileWhileWorking } from '@apackdev/sdk/progress'
 import { prepareClaudeOwnedChildUi, prepareClaudeOwnedProfile, prepareClaudeOwnedProfileSetup } from '#features/code/be/services/claude-code/owned-profile.ts'
 
 const test = it.skipIf(process.platform === 'win32')
@@ -19,8 +19,8 @@ test('uses original JSON argv syntax for spaced paths and passes unrelated self-
   const profile = await prepareClaudeOwnedProfile({userDataDir: join(root, "app's profile with spaces")})
   const settings = JSON.parse(await readFile(join(profile.configDir, 'settings.json'), 'utf8'))
   expect(JSON.parse(settings.processWrapper)).toEqual([profile.launcher])
-  const output = execFileSync(profile.launcher, [process.execPath, '-e', 'console.log(JSON.stringify({pid:process.pid,bun:process.env.BUN_OPTIONS,electron:process.env.ELECTRON_RUN_AS_NODE}))'],
-    {encoding: 'utf8', timeout: 10000, env: {...process.env, CLAUDE_CONFIG_DIR: profile.configDir, BUN_OPTIONS: 'original-options', ELECTRON_RUN_AS_NODE: undefined}})
+  const { stdout: output } = await execFileWhileWorking(profile.launcher, [process.execPath, '-e', 'console.log(JSON.stringify({pid:process.pid,bun:process.env.BUN_OPTIONS,electron:process.env.ELECTRON_RUN_AS_NODE}))'],
+    {timeout: 10000, env: {...process.env, CLAUDE_CONFIG_DIR: profile.configDir, BUN_OPTIONS: 'original-options', ELECTRON_RUN_AS_NODE: undefined}})
   expect(JSON.parse(output)).toMatchObject({bun: 'original-options'})
   expect(JSON.parse(output)).not.toHaveProperty('electron')
   expect(await prepareClaudeOwnedProfile({userDataDir: join(root, "app's profile with spaces")})).toEqual(profile)
@@ -56,8 +56,8 @@ test('boots only a matching app child, retains its PID and reaps retired bootstr
   await writeFile(join(observer, 'child-helper-template.mjs'), claudeTerminalStatusRuntime + '\nglobalThis.childHelperStarted=true;', {mode: 0o600})
   const code = 'const marker=process.env.BUN_OPTIONS.split("--preload=").at(-1); import(require("node:url").pathToFileURL(marker).href).then(()=>console.log(JSON.stringify({pid:process.pid,sessionId:globalThis.childUiStarted,helper:globalThis.childHelperStarted,bun:process.env.BUN_OPTIONS})));'
   for (const originalBunOptions of ['original-options', undefined]) {
-    const output = execFileSync(profile.launcher, [process.execPath, '-e', code, '--', '--session-id', sessionId, '--plugin-dir', plugin],
-      {encoding: 'utf8', timeout: 10000, env: {...process.env, CLAUDE_CONFIG_DIR: profile.configDir, CLAUDE_CODE_SESSION_KIND: 'bg', CLAUDE_BG_RENDEZVOUS_SOCK: '/owned/rendezvous', BUN_OPTIONS: originalBunOptions}})
+    const { stdout: output } = await execFileWhileWorking(profile.launcher, [process.execPath, '-e', code, '--', '--session-id', sessionId, '--plugin-dir', plugin],
+      {timeout: 10000, env: {...process.env, CLAUDE_CONFIG_DIR: profile.configDir, CLAUDE_CODE_SESSION_KIND: 'bg', CLAUDE_BG_RENDEZVOUS_SOCK: '/owned/rendezvous', BUN_OPTIONS: originalBunOptions}})
     const receipt = JSON.parse(output)
     expect(receipt).toMatchObject({sessionId, helper:true})
     expect(receipt.bun).toBe(originalBunOptions)
@@ -79,7 +79,8 @@ test('runs native onboarding with spaced paths and the owned credential selector
  const root=await directory('cc-owned-profile-'), executable=join(root,"native cli's setup")
  await writeFile(executable,"#!/bin/sh\nprintf '%s\\n' \"$CLAUDE_CONFIG_DIR\" \"${CLAUDE_SECURESTORAGE_CONFIG_DIR-unset}\" \"$#\"\n",{mode:0o700})
  const prepared=await prepareClaudeOwnedProfileSetup({userDataDir:join(root,"app's profile"),cwd:'/selected/project',cliPath:executable,env:{CLAUDE_SECURESTORAGE_CONFIG_DIR:undefined}})
- const output=execFileSync('/bin/sh',['-c',prepared.command],{encoding:'utf8',timeout:10000,env:{...process.env,CLAUDE_CONFIG_DIR:'/wrong/profile',CLAUDE_SECURESTORAGE_CONFIG_DIR:'/wrong/credentials'}}).trim().split('\n')
+ const { stdout: ran }=await execFileWhileWorking('/bin/sh',['-c',prepared.command],{timeout:10000,env:{...process.env,CLAUDE_CONFIG_DIR:'/wrong/profile',CLAUDE_SECURESTORAGE_CONFIG_DIR:'/wrong/credentials'}})
+ const output=ran.trim().split('\n')
  expect(output).toEqual([join(root,"app's profile",'claude-code-profile','config'),'unset','0'])
  expect(prepared.cwd).toBe('/selected/project')
 })

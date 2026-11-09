@@ -1,3 +1,4 @@
+import { cpuBudget } from '@apackdev/testing/vitest'
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import http from 'node:http'
@@ -306,7 +307,7 @@ it('does not replay a queued helper result across a policy transition',async()=>
  expect(bridge!.projection.mainStatus).toBeUndefined()
 })
 
-it('stamps a real helper at spawn rather than after a policy change before stdin completion',async()=>{
+it('stamps a real helper at spawn rather than after a policy change before stdin completion', { meta: cpuBudget(10000) }, async()=>{
  let nativePid:number|undefined
  const helper="process.stdin.on('data',()=>{});process.stdin.on('end',()=>process.stdout.write('late pre-policy helper'))"
  bridge=await createClaudeTerminalBridge({ backgroundAuthority: () => ({identify: async () => {throw Error("No child in this fixture")},close: async () => {}}),sessionId:session,settings:{effective:{statusLine:{type:'command',command:helper}},sources:[]},ownsProcess:async pid=>pid===nativePid,changed(){},enter(){}})
@@ -324,7 +325,7 @@ it('stamps a real helper at spawn rather than after a policy change before stdin
   expect(JSON.parse(stdout)).toEqual({code:0,output:'late pre-policy helper'});expect(stderr).toBe('')
   expect(bridge.projection.mainStatus).toBeUndefined()
  }finally{if(child.exitCode===null)child.kill('SIGTERM');await done}
-},10000)
+})
 
 it('does not let a late plugin poll roll back policy after native owner handoff',async()=>{
  await create()
@@ -471,7 +472,7 @@ it('refuses a queued old-policy result even when the new command matches',async(
  await request('/poll',{sessionId:session,agents:[],statusCommand:'next main',policy:{allowManagedHooksOnly:true,disableAllHooks:false},hooksDisabled:false})
  expect(bridge!.projection.mainStatus).toBeUndefined()
 })
-it('captures original helper policy at spawn before the bridge policy poll',async()=>{
+it('captures original helper policy at spawn before the bridge policy poll', { meta: cpuBudget(10000) }, async()=>{
  let nativePid:number|undefined
  const helper="process.stdin.on('data',()=>{});process.stdin.on('end',()=>process.stdout.write('fresh managed helper'))"
  bridge=await createClaudeTerminalBridge({ backgroundAuthority: () => ({identify: async () => {throw Error("No child in this fixture")},close: async () => {}}),sessionId:session,settings:{effective:{statusLine:{type:'command',command:helper}},sources:[]},ownsProcess:async pid=>pid===nativePid,changed(){},enter(){}})
@@ -484,7 +485,7 @@ it('captures original helper policy at spawn before the bridge policy poll',asyn
  expect(code).toBe(0);expect(stderr).toBe('');expect(bridge.projection.mainStatus).toBeUndefined()
  await request('/poll',{sessionId:session,agents:[],statusCommand:helper,policy:{allowManagedHooksOnly:true,disableAllHooks:false},hooksDisabled:false})
  expect(bridge.projection.mainStatus).toBe('fresh managed helper')
-},10000)
+})
 
 it('admits only current-policy native notifications and preserves the epoch across unrelated helper changes', async () => {
   await create()

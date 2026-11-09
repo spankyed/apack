@@ -7,6 +7,7 @@
  * and fail with "Invalid API key · Fix external API key".
  */
 
+import { cpuBudget } from '@apackdev/testing/vitest'
 import { getEventListeners, once } from 'node:events'
 import { tmpdir } from 'node:os'
 import { buildChildEnv, spawnStream } from '#features/code/be/services/claude-code/runner.ts'
@@ -58,7 +59,7 @@ describe('buildChildEnv', () => {
 describe('spawnStream termination', () => {
   const ignoringChild = `process.on('SIGTERM', () => {}); process.on('SIGINT', () => {}); console.log(JSON.stringify({ready:true})); setInterval(() => {}, 1000)`
 
-  it.each(['abort', 'kill'] as const)('settles a child that ignores SIGTERM after %s', async source => {
+  it.each(['abort', 'kill'] as const)('settles a child that ignores SIGTERM after %s', { meta: cpuBudget(5000) }, async source => {
     const controller = new AbortController()
     const handle = await spawnStream(['-e', ignoringChild], { cliPath: process.execPath, cwd: tmpdir(), signal: controller.signal })
     let deadline: ReturnType<typeof setTimeout> | undefined
@@ -76,7 +77,7 @@ describe('spawnStream termination', () => {
       handle.child.kill('SIGKILL')
       await handle.done()
     }
-  }, 5000)
+  })
 
   it('removes the abort listener when the child exits normally', async () => {
     const controller = new AbortController()
@@ -97,7 +98,7 @@ describe('waitForExitWhileWorking', () => {
     await expect(handle.waitForExitWhileWorking(5000)).resolves.toEqual({ exited: true })
   })
 
-  it('terminates a child that has gone silent without exiting', async () => {
+  it('terminates a child that has gone silent without exiting', { meta: cpuBudget(10_000) }, async () => {
     const handle = await spawnStream(['-e', silentAfterReady], { cliPath: process.execPath, cwd: tmpdir() })
     try {
       await handle.lines[Symbol.asyncIterator]().next()
@@ -109,9 +110,9 @@ describe('waitForExitWhileWorking', () => {
       handle.child.kill('SIGKILL')
       await handle.done()
     }
-  }, 10_000)
+  })
 
-  it('keeps waiting on a child that is still writing, past the silence window', async () => {
+  it('keeps waiting on a child that is still writing, past the silence window', { meta: cpuBudget(10_000) }, async () => {
     // The distinguishing case: the wait outlives its own window several times over because the child keeps
     // producing. A clocked deadline would have terminated this child at the first crossing.
     const handle = await spawnStream(['-e', chattyChild], { cliPath: process.execPath, cwd: tmpdir() })
@@ -125,11 +126,11 @@ describe('waitForExitWhileWorking', () => {
       handle.child.kill('SIGKILL')
       await handle.done()
     }
-  }, 10_000)
+  })
 })
 
 describe('spawnStream input failure', () => {
-  it('settles a live child after its input pipe fails', async () => {
+  it('settles a live child after its input pipe fails', { meta: cpuBudget(5000) }, async () => {
     const child = `require('node:fs').closeSync(0); console.log(JSON.stringify({ready:true})); setInterval(() => {}, 1000)`
     const handle = await spawnStream(['-e', child], { cliPath: process.execPath, cwd: tmpdir() })
     let deadline: ReturnType<typeof setTimeout> | undefined
@@ -151,7 +152,7 @@ describe('spawnStream input failure', () => {
       handle.child.kill('SIGKILL')
       await handle.done()
     }
-  }, 5000)
+  })
 })
 
  it('retains bounded stderr including final writes before close', async () => {
