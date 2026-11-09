@@ -134,7 +134,7 @@ export async function consumeStream(
     return {
       currentMessageId: msg.messageId as EntityId,
       writer: createStreamWriter(services, msg.messageId as EntityId, { intervalMs: 80 }),
-      toolActivity: createToolActivityWriter(services, msg.messageId as EntityId, { intervalMs: 250, phase, getThinkingBlock: () => newThinking.buildBlock() }),
+      toolActivity: createToolActivityWriter(services, msg.messageId as EntityId, { intervalMs: 250, phase }),
       thinking: newThinking,
       currentMessageHasCliUuid: false,
     };
@@ -234,7 +234,6 @@ export async function consumeStream(
 
             // Finalize thinking and hand blocks ownership to tool-activity.
             finaliseThinking();
-            thinking.stopDirectWrites();
             writer.flush();
             const summary = block.input ? shortenInput(block.input) : '';
             toolActivity.append({

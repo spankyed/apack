@@ -9,23 +9,20 @@
  *
  * The writer owns the canonical copy of the block's `entries` array and
  * `state`. Call `append`, `update`, and `finalise`; the writer recomputes
- * the collapsed label on each change and pushes the whole block object
- * via `services.chat.updateMessageState(messageId, { blocks: [ourBlock] })`.
+ * the collapsed label on each change and writes its own block's row via
+ * `services.chat.updateMessageBlock`.
  *
- * Ownership model: the streaming assistant message only ever has ONE
- * entry in its `blocks` array — this writer's tool-activity block. The
- * `onPermissionRequest` flow in chat.ts creates approval blocks as
- * separate sibling messages (`sendApprovalBlock` → `sendBlockMessage`),
- * not into the streaming message's block array, so the writer can safely
- * emit `{ blocks: [ourBlock] }` wholesale without clobbering anything.
+ * **Ownership is the row.** This writer owns the message's `tool-activity` block and nothing else: it holds
+ * that row's id from its first write, so a flush costs its own entries and never another block's bytes. The
+ * `onPermissionRequest` flow in chat.ts puts approval blocks on separate sibling messages
+ * (`sendApprovalBlock` → `sendBlockMessage`) rather than on the streaming one, so this writer's block is the
+ * only one here besides the thinking writer's — which owns its own row and is never written from here.
  *
- * Coexistence with `StreamWriter`: they touch different fields of the
- * same message (`text` vs `blocks`). Both call `updateMessageState` with
- * only the field they own; the backend's update merges by key so they
- * don't clobber each other.
+ * Coexistence with `StreamWriter`: they write different things about the same message, its `text` and this
+ * block's row, so neither can clobber the other.
  *
- * One compromise flagged in the design doc: `MessageEntity` stores `text`
- * and `blocks` as separate fields and `message.vue` renders the Tiptap text
+ * One compromise flagged in the design doc: a message's `text` and its blocks are separate, and
+ * `message.vue` renders the Tiptap text
  * first, then `<InteractionContainer>` below. So the activity block visually
  * lands below the prose of the turn, not interleaved between "prose-before"
  * and "prose-after" the tool calls. True inline interleaving would require a
@@ -42,8 +39,6 @@ export interface ToolActivityWriterOptions {
   intervalMs?: number;
   /** Current phase — drives the streaming label ("Planning…" vs "Working…"). */
   phase?: string;
-  /** Optional getter for the thinking block — included in every `blocks` write so both blocks coexist. */
-  getThinkingBlock?: () => { type: string; props: any } | null;
 }
 
 export interface ToolActivityWriter {
@@ -84,6 +79,8 @@ export function createToolActivityWriter(
   let lastFlushAt = 0;
   /** Once true, we've pushed at least one block — finalise(0-entries) should clear. */
   let hasWrittenOnce = false;
+  /** This block's own row, from the first write; every write after it is that row by id */
+  let blockId: EntityId | undefined;
   /** Optional artifact ref attached via setArtifactRef (Phase C). */
   let artifactRef: { artifactId: string; label: string } | undefined;
 
@@ -102,17 +99,11 @@ export function createToolActivityWriter(
       clearTimeout(pendingTimer);
       pendingTimer = null;
     }
-    // Cast through `any` at the service boundary because the default-setup
-    // generated defs haven't been rebuilt yet to include the new
-    // 'tool-activity' BlockType variant. Once `npm run build:api` runs, this
-    // cast is purely cosmetic — the runtime shape is already correct.
     const block = {
       type: 'tool-activity',
-      props: buildBlockProps() as unknown as Record<string, unknown>,
+      props: buildBlockProps() as unknown as Record<string, any>,
     };
-    const thinkingBlock = opts.getThinkingBlock?.() ?? null;
-    const blocks = thinkingBlock ? [thinkingBlock, block] : [block];
-    services.chat.updateMessageState(messageId, { blocks: blocks as any });
+    blockId = services.chat.updateMessageBlock(messageId, block, blockId);
     hasWrittenOnce = true;
     lastFlushAt = Date.now();
   };
@@ -165,11 +156,10 @@ export function createToolActivityWriter(
       if (entries.length === 0) {
         // No tools actually ran. Preserve the thinking block if present;
         // otherwise clear the blocks array if we had written before.
-        const thinkingBlock = opts.getThinkingBlock?.() ?? null;
-        if (thinkingBlock) {
-          services.chat.updateMessageState(messageId, { blocks: [thinkingBlock] as any });
-        } else if (hasWrittenOnce) {
-          services.chat.updateMessageState(messageId, { blocks: [] as any });
+        if (hasWrittenOnce) {
+          // Removed rather than written: the thinking block is its own row and is not this writer's to rewrite
+          services.chat.removeMessageBlock(messageId, 'tool-activity');
+          blockId = undefined;
         }
         return;
       }

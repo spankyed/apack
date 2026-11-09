@@ -13,6 +13,30 @@ export interface BlockConfig {
   props: Record<string, any>;
 }
 
+/**
+ * One of a message's blocks, as a row of its own.
+ *
+ * **A block is a record two writers mutate independently, so it is a row and not a field.** It was a field —
+ * `Message.blocks`, the whole array — and an attribute is written whole, so a write to any block carried every
+ * other block's bytes. With a thinking block growing through a turn and a tool-activity block written every
+ * 250ms, what reached storage was the accumulated thinking text once per tool event: measured at 170x what the
+ * turn left behind. The two writers also had to carry each other's block to avoid deleting it, which is the
+ * coordination that no longer exists.
+ *
+ * The position is on the edge rather than here (`has_block`'s `info.index`), being a fact about the membership
+ * and not about the block.
+ *
+ * **Four things in this feature are called a block, and only two are this one.** `BlockConfig` is this row's
+ * `type` and `props` as a caller passes them and as a message's assembled `blocks` hand them back; `Block` and
+ * `has_block` are this entity and its edge. The `BLOCKS` relation kind is unrelated — one *thread* blocking
+ * another — and `blockResponse` is what the user sent back from an interactive block. Nothing may be
+ * find-and-replaced across them.
+ */
+export interface BlockEntity {
+  type: string;
+  props: Record<string, any>;
+}
+
 // Tool-activity block — collapsible group of Claude Code tool calls within one turn.
 // Replaces the prior per-tool `> 🔧 name` blockquote spam with a single compact
 // group that shows a live status label while streaming and freezes to a summary

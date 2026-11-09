@@ -283,7 +283,7 @@ export async function action(
 
   const writer = createStreamWriter(services, currentMessageId, { intervalMs: 80 });
   const thinking = createThinkingWriter(services, currentMessageId, { intervalMs: 250 });
-  const toolActivity = createToolActivityWriter(services, currentMessageId, { intervalMs: 250, phase, getThinkingBlock: () => thinking.buildBlock() });
+  const toolActivity = createToolActivityWriter(services, currentMessageId, { intervalMs: 250, phase });
 
   // Upsert the thread's claude-session artifact (type marker only).
   ensureSessionMarker(services, threadId);

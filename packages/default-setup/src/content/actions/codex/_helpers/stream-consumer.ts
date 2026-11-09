@@ -145,7 +145,6 @@ export function createStreamConsumer(
           case 'commandExecution':
             toolCallCount++;
             finaliseThinking();
-            thinking.stopDirectWrites();
             writer.flush();
             commandOutputBuffers.set(item.id, { output: '', command: item.command, cwd: item.cwd });
             toolActivity.append({
@@ -160,7 +159,6 @@ export function createStreamConsumer(
           case 'fileChange':
             toolCallCount++;
             finaliseThinking();
-            thinking.stopDirectWrites();
             writer.flush();
             toolActivity.append({
               id: item.id,
@@ -173,7 +171,6 @@ export function createStreamConsumer(
           case 'mcpToolCall':
             toolCallCount++;
             finaliseThinking();
-            thinking.stopDirectWrites();
             writer.flush();
             toolActivity.append({
               id: item.id,

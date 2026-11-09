@@ -226,7 +226,7 @@ export function updateMessageBlockResponse(
  */
 export function updateMessageState(
   messageId: EARS.EntityId,
-  updates: Partial<Pick<MessageEntity, 'text' | 'blocks' | 'blockResponse' | 'responseTimestamp' | 'status' | 'context' | 'forkable' | 'compacted'>>
+  updates: Partial<Pick<MessageEntity, 'text' | 'blockResponse' | 'responseTimestamp' | 'status' | 'context' | 'forkable' | 'compacted'>>
 ): void {
   try {
     repository.chatCommands.updateMessageState({
@@ -235,6 +235,40 @@ export function updateMessageState(
     });
   } catch (err) {
     logger.error(`updateMessageState failed for ${messageId}`, { error: errorMessage(err) });
+  }
+}
+
+/**
+ * Writes one of a message's blocks, and answers the row it wrote.
+ *
+ * **A block is a row, so a write costs that block and nothing else.** It was a field — the whole `blocks`
+ * array — and since an attribute is written whole, a 250ms tool-activity flush carried the accumulated
+ * thinking text with it, at 170x what a turn left behind. It also meant each writer had to pass the other's
+ * block or delete it, which is the coordination that no longer exists.
+ *
+ * Pass the `blockId` a previous write answered and this is one row by id, with no walk for the type. The
+ * first write of a turn has none and creates the row.
+ */
+export function updateMessageBlock(messageId: EARS.EntityId, block: BlockConfig, blockId?: EARS.EntityId): EARS.EntityId | undefined {
+  try {
+    return repository.chatCommands.writeMessageBlock({ messageId, block, blockId });
+  } catch (err) {
+    logger.error(`updateMessageBlock failed for ${messageId}`, { error: errorMessage(err) });
+    return undefined;
+  }
+}
+
+/**
+ * Removes a message's block of that type.
+ *
+ * What a writer calls when its block should no longer be there — a tool-activity writer finalising with no
+ * entries. It used to be written as a rewrite of the *surviving* blocks, so removing one rewrote the other.
+ */
+export function removeMessageBlock(messageId: EARS.EntityId, type: string): void {
+  try {
+    repository.chatCommands.removeMessageBlock({ messageId, type });
+  } catch (err) {
+    logger.error(`removeMessageBlock failed for ${messageId}`, { error: errorMessage(err) });
   }
 }
 
@@ -586,6 +620,8 @@ export const chatService = {
   sendChoiceBlock,
   sendQuestionBlock,
   updateMessageState,
+  updateMessageBlock,
+  removeMessageBlock,
   streamMessageText,
   streamMessageBlockText,
   createMarkerMessage,

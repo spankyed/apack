@@ -25,6 +25,7 @@
       "forked_from": {},
       "compacts": {},
       "blocks": {},
+      "has_block": {},
       "duplicates": {}
     },
     "roles": [
@@ -37,6 +38,7 @@
       "entities": {
         "Thread": { "shape": "src/features/threads/be/types.ts#ThreadShape", "shortCode": "THR", "indexes": ["pinned"] },
         "Message": { "shape": "src/features/threads/be/types.ts#MessageEntity", "indexes": ["status"], "search": { "fields": { "text": 1 } }, "substrings": ["text"] },
+        "Block": { "shape": "src/features/threads/be/types.ts#BlockEntity", "indexes": ["type"] },
         "Artifact": { "shape": "src/features/threads/be/types.ts#ArtifactEntity" }
       },
       "designation": "threads",

@@ -230,6 +230,30 @@ interface BlockConfig {
 }
 
 /**
+ * One of a message's blocks, as a row of its own.
+ *
+ * **A block is a record two writers mutate independently, so it is a row and not a field.** It was a field —
+ * `Message.blocks`, the whole array — and an attribute is written whole, so a write to any block carried every
+ * other block's bytes. With a thinking block growing through a turn and a tool-activity block written every
+ * 250ms, what reached storage was the accumulated thinking text once per tool event: measured at 170x what the
+ * turn left behind. The two writers also had to carry each other's block to avoid deleting it, which is the
+ * coordination that no longer exists.
+ *
+ * The position is on the edge rather than here (`has_block`'s `info.index`), being a fact about the membership
+ * and not about the block.
+ *
+ * **Four things in this feature are called a block, and only two are this one.** `BlockConfig` is this row's
+ * `type` and `props` as a caller passes them and as a message's assembled `blocks` hand them back; `Block` and
+ * `has_block` are this entity and its edge. The `BLOCKS` relation kind is unrelated — one *thread* blocking
+ * another — and `blockResponse` is what the user sent back from an interactive block. Nothing may be
+ * find-and-replaced across them.
+ */
+interface BlockEntity {
+    type: string;
+    props: Record<string, any>;
+}
+
+/**
  * Block-based interaction helpers for creating composable messages
  *
  * These helpers make it easy to create messages using reusable blocks that can be
@@ -1135,6 +1159,8 @@ declare namespace EARS {
         type Thread = typeof Thread;
         const Message = "Message";
         type Message = typeof Message;
+        const Block = "Block";
+        type Block = typeof Block;
         const Artifact = "Artifact";
         type Artifact = typeof Artifact;
         const Terminal = "Terminal";
@@ -1162,7 +1188,7 @@ declare namespace EARS {
         const Collection = "Collection";
         type Collection = typeof Collection;
     }
-    type Entity = Entity.Thread | Entity.Message | Entity.Artifact | Entity.Terminal | Entity.Note | Entity.BrowserTab | Entity.BrowserBookmark | Entity.SearchIndex | Entity.IndexedDoc | Entity.Flow | Entity.Node | Entity.Action | Entity.Prompt | Entity.Document | Entity.Collection;
+    type Entity = Entity.Thread | Entity.Message | Entity.Block | Entity.Artifact | Entity.Terminal | Entity.Note | Entity.BrowserTab | Entity.BrowserBookmark | Entity.SearchIndex | Entity.IndexedDoc | Entity.Flow | Entity.Node | Entity.Action | Entity.Prompt | Entity.Document | Entity.Collection;
     type EntityId<E extends string = string> = _apackdev_ears.EARS.EntityId<E>;
     type RelationId = _apackdev_ears.EARS.RelationId;
     namespace RelKind {
@@ -1178,6 +1204,8 @@ declare namespace EARS {
         type COMPACTS = typeof COMPACTS;
         const BLOCKS = "blocks";
         type BLOCKS = typeof BLOCKS;
+        const HAS_BLOCK = "has_block";
+        type HAS_BLOCK = typeof HAS_BLOCK;
         const DUPLICATES = "duplicates";
         type DUPLICATES = typeof DUPLICATES;
         const CONTAINS = "contains";
@@ -1190,7 +1218,7 @@ declare namespace EARS {
         type PARENT_OF = typeof PARENT_OF;
     }
     /** Every relation kind this pack may link with: its own, its dependencies' and the SDK's */
-    const RELATION_KINDS: readonly ["has", "relates_to", "references", "forked_from", "compacts", "blocks", "duplicates", "contains", "transitions_to", "instance_of", "parent_of"];
+    const RELATION_KINDS: readonly ["has", "relates_to", "references", "forked_from", "compacts", "blocks", "has_block", "duplicates", "contains", "transitions_to", "instance_of", "parent_of"];
     type RelKind = (typeof RELATION_KINDS)[number];
     /** The relation kinds declared `weighted`, whose links take a weight: its own and its dependencies' */
     const WEIGHTED_KINDS: readonly [];
@@ -3886,6 +3914,7 @@ type OwnEntityShapes = {
         shortCode: ShortCode<'THR'>;
     };
     'Message': MessageEntity;
+    'Block': BlockEntity;
     'Artifact': ArtifactEntity;
     'Terminal': TerminalEntity;
     'Note': NoteEntity;
@@ -5605,6 +5634,28 @@ declare const chatCommands: {
         sender: string;
         timestamp: number;
     };
+    /** Creates a message's blocks as rows, in the order given: what a message's creation and an import write */
+    readonly writeMessageBlocks: (params: {
+        messageId: EARS.EntityId;
+        blocks: readonly BlockConfig[];
+    }) => void;
+    /**
+     * Writes one of a message's blocks, by its type, and answers its row id.
+     *
+     * **The hot path of a streamed turn.** A caller that holds the id from a previous write passes it and the
+     * write is one row by id, with no walk: that is what makes a 250ms flush cost its own block and nothing
+     * else. Without one the block of that type is found, or created at the end.
+     */
+    readonly writeMessageBlock: (params: {
+        messageId: EARS.EntityId;
+        block: BlockConfig;
+        blockId?: EARS.EntityId;
+    }) => EARS.EntityId;
+    /** Removes a message's block of that type; absence is not an error, the caller asking for it to be gone */
+    readonly removeMessageBlock: (params: {
+        messageId: EARS.EntityId;
+        type: string;
+    }) => void;
     readonly createThreadFromMessage: (text: string) => {
         threadId: EARS.EntityId;
         threadData: ReturnType<typeof threadCommands.create>;
@@ -5620,7 +5671,7 @@ declare const chatCommands: {
     };
     readonly updateMessageState: (params: {
         messageId: EARS.EntityId;
-        updates: Partial<Pick<MessageEntity, "blockResponse" | "blocks" | "compacted" | "context" | "forkable" | "responseTimestamp" | "status" | "text">>;
+        updates: Partial<Pick<MessageEntity, "blockResponse" | "compacted" | "context" | "forkable" | "responseTimestamp" | "status" | "text">>;
     }) => {
         messageId: EARS.EntityId;
         updatedAt: number;
@@ -5698,6 +5749,8 @@ declare const chatQueries: {
      * and each pinned one's; and the threads settings
      */
     readonly chatStart: () => ChatStart;
+    /** A message's blocks, assembled from their rows: what an export carries and `messageById` folds in */
+    readonly blocksOf: (messageId: EARS.EntityId) => BlockConfig[];
     readonly messageById: (messageId: EARS.EntityId) => MessageEntity | null;
 };
 
@@ -5760,6 +5813,8 @@ declare const featureServices: {
         sendChoiceBlock: typeof sendChoiceBlock;
         sendQuestionBlock: typeof sendQuestionBlock;
         updateMessageState: typeof updateMessageState;
+        updateMessageBlock: typeof updateMessageBlock;
+        removeMessageBlock: typeof removeMessageBlock;
         streamMessageText: typeof streamMessageText;
         streamMessageBlockText: typeof streamMessageBlockText;
         createMarkerMessage: typeof createMarkerMessage;
@@ -6090,6 +6145,14 @@ declare const promptQueries: {
 declare function registerSchedule(key: string, cronExpression: string, callback: () => void): void;
 
 /**
+ * Removes a message's block of that type.
+ *
+ * What a writer calls when its block should no longer be there — a tool-activity writer finalising with no
+ * entries. It used to be written as a rewrite of the *surviving* blocks, so removing one rewrote the other.
+ */
+declare function removeMessageBlock(messageId: EARS.EntityId, type: string): void;
+
+/**
  * Resolve all message reference types (images, files, notes, threads,
  * library docs/folders) into prompt-ready content for the Claude Code CLI.
  *
@@ -6375,6 +6438,19 @@ declare function update(artifactId: EARS.EntityId, options: UpdateArtifactOption
 declare function updateChatState(threadId: EARS.EntityId, chatState: string): void;
 
 /**
+ * Writes one of a message's blocks, and answers the row it wrote.
+ *
+ * **A block is a row, so a write costs that block and nothing else.** It was a field — the whole `blocks`
+ * array — and since an attribute is written whole, a 250ms tool-activity flush carried the accumulated
+ * thinking text with it, at 170x what a turn left behind. It also meant each writer had to pass the other's
+ * block or delete it, which is the coordination that no longer exists.
+ *
+ * Pass the `blockId` a previous write answered and this is one row by id, with no walk for the type. The
+ * first write of a turn has none and creates the row.
+ */
+declare function updateMessageBlock(messageId: EARS.EntityId, block: BlockConfig, blockId?: EARS.EntityId): EARS.EntityId | undefined;
+
+/**
  * Update message state with any mutable fields
  * Main interface for ad hoc message state updates (text, blocks, blockResponse, responseTimestamp): a window showing
  * the message sees it through the message's view, the one view a streamed reply re-runs
@@ -6392,7 +6468,7 @@ declare function updateChatState(threadId: EARS.EntityId, chatState: string): vo
  *   text: 'Updated message content'
  * });
  */
-declare function updateMessageState(messageId: EARS.EntityId, updates: Partial<Pick<MessageEntity, 'blockResponse' | 'blocks' | 'compacted' | 'context' | 'forkable' | 'responseTimestamp' | 'status' | 'text'>>): void;
+declare function updateMessageState(messageId: EARS.EntityId, updates: Partial<Pick<MessageEntity, 'blockResponse' | 'compacted' | 'context' | 'forkable' | 'responseTimestamp' | 'status' | 'text'>>): void;
 
 /** Parse a Codex JSONL file into an array of entries. */
 declare function viewByFile(filePath: string, opts?: {

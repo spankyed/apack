@@ -20,7 +20,8 @@ function recorder() {
   const feed: Feed[] = [];
   const services = {
     chat: {
-      updateMessageState: (_id: unknown, updates: unknown) => { writes.push(JSON.stringify(updates)); },
+      updateMessageBlock: (_id: unknown, block: unknown) => { writes.push(JSON.stringify(block)); return 'block-one'; },
+      removeMessageBlock: () => {},
       streamMessageBlockText: (params: Feed & { messageId: unknown }) => {
         feed.push({ block: params.block, at: params.at, text: params.text, ...(params.done ? { done: true as const } : {}) });
       },
@@ -35,8 +36,8 @@ const writerOn = (services: Services) => createThinkingWriter(services, 'message
 const windowText = (row: string, feed: Feed[]) =>
   feed.filter(one => !one.done).reduce((text, one) => text.slice(0, one.at) + one.text, row);
 
-/** The content of a recorded row write. */
-const contentOf = (write: string) => JSON.parse(write).blocks[0].props.content as string;
+/** The content of a recorded row write — the block itself now, a block being a row rather than a field. */
+const contentOf = (write: string) => JSON.parse(write).props.content as string;
 
 beforeEach(() => { vi.useFakeTimers(); });
 afterEach(() => { vi.useRealTimers(); });

@@ -306,6 +306,7 @@ export const threadCommands = {
     // 1. Delete all messages linked to this thread
     const messages = query.ids(id).out(EARS.RelKind.CONTAINS, EARS.Entity.Message).ids();
     for (const messageId of messages) {
+      discardBlocks(messageId, 'destroy');
       write(messageId).destroy();
     }
 
@@ -415,7 +416,57 @@ function getThreadArtifacts(threadId: EARS.EntityId): ArtifactItem[] {
     .sort((a, b) => b.metadata.createdAt - a.metadata.createdAt);
 }
 
-const messagePickFields = ["id", "text", "sender", "timestamp", "blocks", "blockResponse", "responseTimestamp", "forkable", "references", "isCommand", "command", "context", "autoHide", "asUser", "asideText", "asideContext", "status", "compacted"] as const;
+/**
+ * A message's blocks, in the order its edges record.
+ *
+ * One relation walk per message. The chat and detail pages list message *ids* and each message is its own view,
+ * so this runs for the one message that changed rather than for a page of them.
+ */
+function blocksOf(messageId: EARS.EntityId): BlockConfig[] {
+  return query.ids(messageId).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block)
+    .map((edge) => ({ edge, row: query.ids(edge.target).pickOne(['type', 'props'] as const) }))
+    .filter((held): held is { edge: typeof held.edge; row: NonNullable<typeof held.row> } => held.row !== null)
+    .sort((a, b) => indexOf(a.edge.info) - indexOf(b.edge.info))
+    .map(({ row }) => ({ type: row.type as string, props: (row.props ?? {}) as Record<string, any> }));
+}
+
+/** The position an edge records; an edge written before one was recorded sorts last rather than first */
+const indexOf = (info: unknown): number =>
+  typeof info === 'object' && info !== null && typeof (info as { index?: unknown }).index === 'number'
+    ? (info as { index: number }).index
+    : Number.MAX_SAFE_INTEGER;
+
+/** Creates a message's blocks as rows, each edge recording its position */
+function createBlocks(messageId: EARS.EntityId, blocks: readonly BlockConfig[]): void {
+  blocks.forEach((block, index) => {
+    const blockId = create(EARS.Entity.Block, { type: block.type, props: block.props }).id();
+    write(messageId).link(EARS.RelKind.HAS_BLOCK, blockId, { info: { index } });
+  });
+}
+
+/**
+ * Discards a message's blocks the way the message itself is being discarded.
+ *
+ * **EARS cascades nothing, so an owner's children are the owner's to discard** — the shape `flowRepository`'s
+ * `deleteFlow` uses for its nodes and `collectionRepository` for a folder's children. Without this a deleted
+ * message leaves rows no message reaches. `trash()` is the soft one reads skip, `destroy()` the hard one, and
+ * which a block gets is whichever its message got.
+ */
+function discardBlocks(messageId: EARS.EntityId, how: 'trash' | 'destroy'): void {
+  for (const edge of query.ids(messageId).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block)) {
+    if (how === 'trash') write(edge.target).trash();
+    else write(edge.target).destroy();
+  }
+}
+
+/** The message's block of that type, or absence; the type is what a streaming writer owns one by */
+function blockIdOfType(messageId: EARS.EntityId, type: string): EARS.EntityId | undefined {
+  return query.ids(messageId).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block)
+    .map((edge) => edge.target)
+    .find((id) => query.ids(id).pickOne(['type'] as const)?.type === type);
+}
+
+const messagePickFields = ["id", "text", "sender", "timestamp", "blockResponse", "responseTimestamp", "forkable", "references", "isCommand", "command", "context", "autoHide", "asUser", "asideText", "asideContext", "status", "compacted"] as const;
 
 function getThreadFields(threadId: EARS.EntityId): AgentThreadData | null {
   const thread = query.ids(threadId)
@@ -589,16 +640,22 @@ export const chatQueries = {
     };
   },
 
+  /** A message's blocks, assembled from their rows: what an export carries and `messageById` folds in */
+  blocksOf: (messageId: EARS.EntityId): BlockConfig[] => blocksOf(messageId),
+
   messageById: (messageId: EARS.EntityId): MessageEntity | null => {
     const message = query.ids(messageId).pickOne([
-      'id', 'text', 'sender', 'timestamp', 'blocks', 'blockResponse',
+      'id', 'text', 'sender', 'timestamp', 'blockResponse',
       'responseTimestamp', 'createdAt', 'updatedAt', 'autoHide', 'asUser', 'asideText', 'asideContext',
       'forkable', 'references', 'isCommand', 'command', 'status', 'context', 'compacted'
     ] as const);
 
     if (!message) return null;
 
-    return { ...message, entityType: EARS.Entity.Message } as MessageEntity;
+    // Assembled here rather than stored: `blocks` is what a window reads, and the rows behind it are what the
+    // writers mutate one at a time. Keeping the delivered shape is what left the frontend's splice untouched
+    const blocks = blocksOf(messageId);
+    return { ...message, entityType: EARS.Entity.Message, ...(blocks.length > 0 && { blocks }) } as MessageEntity;
   }
 } as const;
 
@@ -670,7 +727,6 @@ export const chatCommands = {
     const timestamp = Date.now();
     const messageTx = create(EARS.Entity.Message, { text: text.trim(), timestamp, sender, createdAt: timestamp });
 
-    if (blocks) messageTx.set('blocks', blocks);
     if (forkable !== undefined) messageTx.set('forkable', forkable);
     if (references) messageTx.set('references', references);
     if (isCommand) messageTx.set('isCommand', isCommand);
@@ -686,6 +742,8 @@ export const chatCommands = {
 
     const messageId = messageTx.link(EARS.RelKind.CONTAINS, threadId).id();
 
+    if (blocks) createBlocks(messageId, blocks);
+
     write(threadId).link(EARS.RelKind.CONTAINS, messageId);
     write(threadId).set('lastMessageTimestamp', timestamp);
 
@@ -694,6 +752,46 @@ export const chatCommands = {
     if (!skipRelink) relinkQueuedToEnd(threadId, messageId);
 
     return { id: messageId, threadId, text: text.trim(), sender, timestamp };
+  },
+
+  /** Creates a message's blocks as rows, in the order given: what a message's creation and an import write */
+  writeMessageBlocks: (params: { messageId: EARS.EntityId; blocks: readonly BlockConfig[] }): void => {
+    createBlocks(params.messageId, params.blocks);
+  },
+
+  /**
+   * Writes one of a message's blocks, by its type, and answers its row id.
+   *
+   * **The hot path of a streamed turn.** A caller that holds the id from a previous write passes it and the
+   * write is one row by id, with no walk: that is what makes a 250ms flush cost its own block and nothing
+   * else. Without one the block of that type is found, or created at the end.
+   */
+  writeMessageBlock: (params: {
+    messageId: EARS.EntityId;
+    block: BlockConfig;
+    blockId?: EARS.EntityId;
+  }): EARS.EntityId => {
+    const { messageId, block, blockId } = params;
+
+    const held = blockId ?? blockIdOfType(messageId, block.type);
+    if (held) {
+      write(held).setMany({ type: block.type, props: block.props });
+      return held;
+    }
+
+    const index = query.ids(messageId).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block).length;
+    const created = create(EARS.Entity.Block, { type: block.type, props: block.props }).id();
+    write(messageId).link(EARS.RelKind.HAS_BLOCK, created, { info: { index } });
+    return created;
+  },
+
+  /** Removes a message's block of that type; absence is not an error, the caller asking for it to be gone */
+  removeMessageBlock: (params: { messageId: EARS.EntityId; type: string }): void => {
+    const { messageId, type } = params;
+    const held = blockIdOfType(messageId, type);
+    if (!held) return;
+    write(messageId).unlink(EARS.RelKind.HAS_BLOCK, held);
+    write(held).destroy();
   },
 
   createThreadFromMessage: (text: string): {
@@ -732,11 +830,12 @@ export const chatCommands = {
       .set('responseTimestamp', now);
 
     let updatedBlocks: BlockConfig[] | undefined;
-    const storedBlocks = query.ids(messageId).pickOne(['blocks'])?.blocks;
+    // Assembled from the rows: `blocks` is not an attribute, and a pick naming it answered `undefined`
+    const storedBlocks = blocksOf(messageId);
 
-    if (Array.isArray(storedBlocks) && response.buttonId) {
+    if (storedBlocks.length > 0 && response.buttonId) {
       let buttonToggled = false;
-      const newBlocks = (storedBlocks as BlockConfig[]).map((block: BlockConfig) => {
+      const newBlocks = storedBlocks.map((block: BlockConfig) => {
         if (block.type === 'button-group') {
           const updatedButtons = block.props.buttons.map((button: any) => {
             if (button.toggleStates && button.id === response.buttonId) {
@@ -752,7 +851,10 @@ export const chatCommands = {
 
       if (buttonToggled) {
         updatedBlocks = newBlocks;
-        write(messageId).set('blocks', newBlocks);
+        // Only the block that holds the button is written; its neighbours' rows are untouched
+        for (const block of newBlocks.filter((one) => one.type === 'button-group')) {
+          chatCommands.writeMessageBlock({ messageId, block });
+        }
       }
     }
 
@@ -766,7 +868,7 @@ export const chatCommands = {
 
   updateMessageState: (params: {
     messageId: EARS.EntityId;
-    updates: Partial<Pick<MessageEntity, 'text' | 'blocks' | 'blockResponse' | 'responseTimestamp' | 'forkable' | 'status' | 'context' | 'compacted'>>;
+    updates: Partial<Pick<MessageEntity, 'text' | 'blockResponse' | 'responseTimestamp' | 'forkable' | 'status' | 'context' | 'compacted'>>;
   }): {
     messageId: EARS.EntityId;
     updatedAt: number;
@@ -917,7 +1019,10 @@ export const chatCommands = {
     // "undoing" their message. The message text is prefilled into the chat
     // input so they can re-send or edit it.
     const toDelete = nonDeleted.slice(targetIndex).flatMap((msg) => msg.id ? [msg.id as EARS.EntityId] : []);
-    for (const messageId of toDelete) write(messageId).trash();
+    for (const messageId of toDelete) {
+      discardBlocks(messageId, 'trash');
+      write(messageId).trash();
+    }
     const deletedIds: string[] = toDelete;
 
     return { deletedCount: deletedIds.length, deletedIds };

@@ -24,7 +24,7 @@ export function exportThreads(outputDir: string): { filePath: string; threadCoun
   for (const thread of threads) {
     // Full message data; a link reaches no message in the trash
     const messages = (query.ids(thread.id)
-      .out(EARS.RelKind.CONTAINS, EARS.Entity.Message).pick(['id', 'text', 'sender', 'timestamp', 'blocks', 'blockResponse', 'responseTimestamp', 'forkable', 'references', 'isCommand', 'command'] as const) ?? []) as Partial<MessageEntity>[]
+      .out(EARS.RelKind.CONTAINS, EARS.Entity.Message).pick(['id', 'text', 'sender', 'timestamp', 'blockResponse', 'responseTimestamp', 'forkable', 'references', 'isCommand', 'command'] as const) ?? []) as Partial<MessageEntity>[]
 
     const linkedThreads = repository.threadQueries.linkedThreads(thread.id)
 
@@ -38,7 +38,9 @@ export function exportThreads(outputDir: string): { filePath: string; threadCoun
         timestamp: msg.timestamp || 0,
       }
       if (msg.responseTimestamp) exported.responseTimestamp = msg.responseTimestamp
-      if (msg.blocks) exported.blocks = msg.blocks
+      // Read per message: blocks are rows of their own, so a bulk pick of the message cannot carry them
+      const blocks = msg.id ? repository.chatQueries.blocksOf(msg.id as EARS.EntityId) : []
+      if (blocks.length > 0) exported.blocks = blocks
       if (msg.blockResponse !== undefined) exported.blockResponse = msg.blockResponse
       if (msg.forkable !== undefined) exported.forkable = msg.forkable
       if (msg.isCommand) exported.isCommand = msg.isCommand

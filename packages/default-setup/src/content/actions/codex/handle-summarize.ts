@@ -58,7 +58,6 @@ export async function action(params: Record<string, any>, services: Services) {
   const writer = createStreamWriter(services, currentMessageId, { intervalMs: 80 });
   const toolActivity = createToolActivityWriter(services, currentMessageId, {
     intervalMs: 250,
-    getThinkingBlock: () => thinking.buildBlock(),
   });
 
   persistCodexState(services, threadId, {
