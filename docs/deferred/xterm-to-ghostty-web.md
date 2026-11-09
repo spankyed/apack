@@ -1,7 +1,23 @@
 # Migrate the embedded terminal from xterm.js to ghostty-web
 
-Status: deferred by request. This document authorizes no implementation. Revisit when a compatibility spike
-can demonstrate that ghostty-web meets the contracts below.
+Status: **superseded by [goal-one-vt-core](../goals/goal-one-vt-core.md)**, which owns this work and
+authorizes its first phase. This document authorizes no implementation.
+
+Two of its premises have since changed, which is why the goal restates the work rather than activating this
+plan. **Its central open question is answered**: `libghostty-vt` 1.0 shipped on 2026-11-06 with a stable C
+ABI, so the one engine the last section calls unpurchasable is purchasable, and the broker is in scope after
+all. **And its target package is the wrong artifact**: `ghostty-web` carries its own Ghostty-derived parser
+and its README says it will consume a native WebAssembly distribution once one exists — which now exists,
+published per release by upstream. Taking the package would leave this repository with three parsers.
+
+**Nothing here is a live input.** What was worth keeping — the capability matrix, the packaged-WebAssembly
+proof, the renderer's initialization and lifetime checklist and the acceptance corpus — is written into the
+goal's own phases, so the goal is the whole of what an executor reads. This document is kept for its
+reasoning and its dates.
+
+What is stale beyond the two premises above: the host-facing seam the plan says needs building was built by
+the ownership goal (`TerminalAttachment`), and the historical replay its Phase 1 guards against was deleted
+(F3, F6, F11), so the DA/DSR suppression it requires has no subject.
 
 **This is now the follow-on, not the predecessor.**
 [goal-terminal-ownership](../archive/goals/goal-terminal-ownership.md) decided to keep xterm.js and put emulator
