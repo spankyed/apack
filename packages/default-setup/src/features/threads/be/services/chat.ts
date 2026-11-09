@@ -277,6 +277,30 @@ export function appendMessageBlockText(blockId: EARS.EntityId, at: number, text:
 }
 
 /**
+ * Appends the next characters of a message's own text, and folds when there are enough segments.
+ *
+ * The durable half of a streamed reply. The feed (`streamMessageText`) carries the characters to the
+ * windows as they arrive; this commits them, so the interval decides how often a turn commits rather than
+ * how much of the reply is written again.
+ */
+export function appendMessageText(messageId: EARS.EntityId, at: number, text: string): void {
+  try {
+    repository.chatCommands.appendMessageText({ messageId, at, text });
+  } catch (err) {
+    logger.error(`appendMessageText failed for ${messageId}`, { error: errorMessage(err) });
+  }
+}
+
+/** Folds a message's text segments into its own field, so a search finds the whole of it again */
+export function foldMessageText(messageId: EARS.EntityId): void {
+  try {
+    repository.chatCommands.foldMessageText({ messageId });
+  } catch (err) {
+    logger.error(`foldMessageText failed for ${messageId}`, { error: errorMessage(err) });
+  }
+}
+
+/**
  * Writes one of a block's tool entries, and answers its row.
  *
  * **The entries' half of what the segments did for the text.** An entry used to be a member of the
@@ -677,6 +701,8 @@ export const chatService = {
   updateMessageState,
   updateMessageBlock,
   appendMessageBlockText,
+  appendMessageText,
+  foldMessageText,
   updateMessageToolEntry,
   compactMessageBlock,
   removeMessageBlock,

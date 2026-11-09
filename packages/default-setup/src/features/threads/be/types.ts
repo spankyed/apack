@@ -59,6 +59,24 @@ export interface BlockTextEntity {
 }
 
 /**
+ * The next characters of a message's own text, from the offset they start at.
+ *
+ * **The last growing thing in a turn that was stored whole.** A message's `text` is one attribute, so
+ * every durable commit rewrote the whole reply and the cost grew with the turn — the shape `BlockText`
+ * removed for a block's text and `ToolEntry` for its tool calls. This is the same move for the message,
+ * and it is what lets the row's commit rate join the blocks' instead of being eight times slower to
+ * afford the rewrite.
+ *
+ * `Message.text` stays the authoritative field — it is the one the text index reads — holding the
+ * compacted prefix, with these carrying the tail. So `.search` is behind by at most one fold for a message
+ * still streaming, where it used to be behind by one commit; a finished message is indexed whole.
+ */
+export interface MessageTextEntity {
+  at: number;
+  text: string;
+}
+
+/**
  * One tool call as the activity block lists it, as a row of its own.
  *
  * **An entry is patched, not appended to** — `running` to `ok`, `denied` or `error`, with its output

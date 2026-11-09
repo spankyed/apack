@@ -24,6 +24,7 @@
  */
 
 import type { Services, EntityId } from '#generated/services.ts';
+import { ROW_INTERVAL_MS } from './row-interval.ts';
 
 export interface StreamWriterOptions {
   /**
@@ -44,11 +45,13 @@ export interface StreamWriterOptions {
   /**
    * How often the row is committed.
    *
-   * This is not a frame rate: it is how much a crash loses and how stale the row is for a window that
-   * joined mid-turn. **Unlike the block writers', this one still rewrites the whole field** — a message's
-   * `text` is one attribute, so a commit costs the reply so far and the cost grows with the turn, which is
-   * why this is seconds where the blocks' is a quarter of one (`ROW_INTERVAL_MS`). Appending it the way a
-   * block's text is appended is what would let these two converge.
+   * **The blocks' interval, now that this appends too.** It was seconds where the blocks' was a quarter of
+   * one, for one reason: a commit rewrote the whole reply, so eight times as many cost eight times as
+   * much. The text is appended now, so the two converge on `ROW_INTERVAL_MS` and there is one answer to
+   * how often a turn commits.
+   *
+   * It is not a frame rate — that is `intervalMs` above. This is how much a crash loses, and how stale the
+   * row is for a window that joined mid-turn and is shown it until a commit reaches the feed's offset.
    */
   durableMs?: number;
 }
@@ -72,7 +75,7 @@ export function createStreamWriter(
   opts: StreamWriterOptions = {},
 ): StreamWriter {
   const intervalMs = opts.intervalMs ?? 80;
-  const durableMs = opts.durableMs ?? 2000;
+  const durableMs = opts.durableMs ?? ROW_INTERVAL_MS;
   let buffer = '';
   /** How much of `buffer` the windows have been sent. The feed's offsets are contiguous from 0 */
   let fedUpTo = 0;
@@ -82,6 +85,8 @@ export function createStreamWriter(
   let writeTimer: ReturnType<typeof setTimeout> | null = null;
   /** Whether this writer has already said its last word */
   let finalized = false;
+  /** How much of `buffer` the row holds, as its own text plus the segments appended to it */
+  let rowUpTo = 0;
 
   const clear = (timer: ReturnType<typeof setTimeout> | null) => {
     if (timer) clearTimeout(timer);
@@ -100,10 +105,19 @@ export function createStreamWriter(
   };
 
   /** Writes the row. Durability only — no window waits for this, which is what makes its clock slow */
+  /**
+   * Commits what has grown since the last commit, by appending it.
+   *
+   * **The whole reply was written again on every commit**, so what reached storage grew with the turn —
+   * `flushes x final size / 2`. A segment is written once, which is why this interval can be the blocks'
+   * rather than eight times slower to afford the rewrite.
+   */
   const writeNow = () => {
     writeTimer = clear(writeTimer);
     lastWriteAt = Date.now();
-    services.chat.updateMessageState(messageId, { text: buffer });
+    if (buffer.length <= rowUpTo) return;
+    services.chat.appendMessageText(messageId, rowUpTo, buffer.slice(rowUpTo));
+    rowUpTo = buffer.length;
   };
 
   const after = (since: number, every: number) => Math.max(0, every - (Date.now() - since));
@@ -149,10 +163,13 @@ export function createStreamWriter(
       // longer a run of this message. The row is the answer, and `done` is what tells them to read it.
       const replaced = text !== undefined && text !== buffer;
       if (text !== undefined) buffer = text;
+      // The whole text, which is what folds the segments in: `Message.text` is the field the index reads,
+      // so a tail still in segments is a tail no search finds
       services.chat.updateMessageState(messageId, {
         text: buffer,
         responseTimestamp: Date.now(),
       });
+      rowUpTo = buffer.length;
       lastWriteAt = Date.now();
       // The row is written first, because `done` is what makes a window fall back to it
       const at = replaced ? buffer.length : fedUpTo;

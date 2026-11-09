@@ -24,18 +24,21 @@ function recorder() {
   const writes: Write[] = [];
   const feed: Feed[] = [];
   const shared = recordTurnWrites();
+  const chat = (shared.services as unknown as { chat: Record<string, (...args: never[]) => unknown> }).chat;
   const services = {
     chat: {
+      ...chat,
+      // Kept beside the shared recorder's accounting, because these cases read the whole-field writes
       updateMessageState: (id: unknown, updates: Write) => {
-        writes.push({ ...updates });
-        (shared.services as unknown as { chat: { updateMessageState(id: unknown, u: Write): void } }).chat.updateMessageState(id, updates);
+        if (updates.text !== undefined) writes.push({ ...updates });
+        (chat.updateMessageState as unknown as (i: unknown, u: Write) => void)(id, updates);
       },
       streamMessageText: (params: { messageId: unknown; at: number; text: string; done?: true }) => {
         feed.push({ at: params.at, text: params.text, ...(params.done ? { done: true as const } : {}) });
       },
     },
   };
-  return { writes, feed, written: shared.written, kept: shared.kept, services: services as never };
+  return { writes, feed, written: shared.written, kept: shared.kept, messageText: shared.messageText, services: services as never };
 }
 
 /** The bytes a run of writes asks the engine to store, which is the figure G1 was priced in */
@@ -79,7 +82,7 @@ describe('what a streamed reply writes', () => {
     // The old model over the same run: 120 flushes x 12,960/2 = 777,600 bytes
     expect(writtenBytes(writes), 'the row is still being written').toBeGreaterThan(0);
     // The shared bound, in the terms every writer is held in: what reached storage against what it keeps
-    expect(written()).toBeLessThanOrEqual(kept() * 8);
+    expect(written()).toBeLessThanOrEqual(kept() * 4);
     expect(writtenBytes(writes)).toBeLessThan(reply * 8);
     expect(writes.length, 'one write per durable tick plus the final one').toBeLessThanOrEqual(8);
   });
@@ -110,6 +113,7 @@ describe('what a streamed reply writes', () => {
       chat: {
         updateMessageState: (_id: unknown, updates: { responseTimestamp?: number }) =>
           order.push(updates.responseTimestamp ? 'final write' : 'write'),
+        appendMessageText: () => order.push('append'),
         streamMessageText: (params: { done?: true }) => order.push(params.done ? 'done' : 'feed'),
       },
     } as never;

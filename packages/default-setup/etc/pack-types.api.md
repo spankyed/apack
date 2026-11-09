@@ -1193,6 +1193,8 @@ declare namespace EARS {
         type Block = typeof Block;
         const BlockText = "BlockText";
         type BlockText = typeof BlockText;
+        const MessageText = "MessageText";
+        type MessageText = typeof MessageText;
         const ToolEntry = "ToolEntry";
         type ToolEntry = typeof ToolEntry;
         const Artifact = "Artifact";
@@ -1222,7 +1224,7 @@ declare namespace EARS {
         const Collection = "Collection";
         type Collection = typeof Collection;
     }
-    type Entity = Entity.Thread | Entity.Message | Entity.Block | Entity.BlockText | Entity.ToolEntry | Entity.Artifact | Entity.Terminal | Entity.Note | Entity.BrowserTab | Entity.BrowserBookmark | Entity.SearchIndex | Entity.IndexedDoc | Entity.Flow | Entity.Node | Entity.Action | Entity.Prompt | Entity.Document | Entity.Collection;
+    type Entity = Entity.Thread | Entity.Message | Entity.Block | Entity.BlockText | Entity.MessageText | Entity.ToolEntry | Entity.Artifact | Entity.Terminal | Entity.Note | Entity.BrowserTab | Entity.BrowserBookmark | Entity.SearchIndex | Entity.IndexedDoc | Entity.Flow | Entity.Node | Entity.Action | Entity.Prompt | Entity.Document | Entity.Collection;
     type EntityId<E extends string = string> = _apackdev_ears.EARS.EntityId<E>;
     type RelationId = _apackdev_ears.EARS.RelationId;
     namespace RelKind {
@@ -1242,6 +1244,8 @@ declare namespace EARS {
         type HAS_BLOCK = typeof HAS_BLOCK;
         const HAS_TEXT = "has_text";
         type HAS_TEXT = typeof HAS_TEXT;
+        const HAS_MESSAGE_TEXT = "has_message_text";
+        type HAS_MESSAGE_TEXT = typeof HAS_MESSAGE_TEXT;
         const HAS_ENTRY = "has_entry";
         type HAS_ENTRY = typeof HAS_ENTRY;
         const DUPLICATES = "duplicates";
@@ -1256,7 +1260,7 @@ declare namespace EARS {
         type PARENT_OF = typeof PARENT_OF;
     }
     /** Every relation kind this pack may link with: its own, its dependencies' and the SDK's */
-    const RELATION_KINDS: readonly ["has", "relates_to", "references", "forked_from", "compacts", "blocks", "has_block", "has_text", "has_entry", "duplicates", "contains", "transitions_to", "instance_of", "parent_of"];
+    const RELATION_KINDS: readonly ["has", "relates_to", "references", "forked_from", "compacts", "blocks", "has_block", "has_text", "has_message_text", "has_entry", "duplicates", "contains", "transitions_to", "instance_of", "parent_of"];
     type RelKind = (typeof RELATION_KINDS)[number];
     /** The relation kinds declared `weighted`, whose links take a weight: its own and its dependencies' */
     const WEIGHTED_KINDS: readonly [];
@@ -2809,6 +2813,24 @@ interface MessageSearchResult {
     clippedEnd: boolean;
 }
 
+/**
+ * The next characters of a message's own text, from the offset they start at.
+ *
+ * **The last growing thing in a turn that was stored whole.** A message's `text` is one attribute, so
+ * every durable commit rewrote the whole reply and the cost grew with the turn — the shape `BlockText`
+ * removed for a block's text and `ToolEntry` for its tool calls. This is the same move for the message,
+ * and it is what lets the row's commit rate join the blocks' instead of being eight times slower to
+ * afford the rewrite.
+ *
+ * `Message.text` stays the authoritative field — it is the one the text index reads — holding the
+ * compacted prefix, with these carrying the tail. So `.search` is behind by at most one fold for a message
+ * still streaming, where it used to be behind by one commit; a finished message is indexed whole.
+ */
+interface MessageTextEntity {
+    at: number;
+    text: string;
+}
+
 /** What the flows surface starts from that isn't a row: the models a node may name */
 interface ModelCatalog {
     models: ModelCatalogEntry[];
@@ -3954,6 +3976,7 @@ type OwnEntityShapes = {
     'Message': MessageEntity;
     'Block': BlockEntity;
     'BlockText': BlockTextEntity;
+    'MessageText': MessageTextEntity;
     'ToolEntry': ToolEntryEntity;
     'Artifact': ArtifactEntity;
     'Terminal': TerminalEntity;
@@ -5627,6 +5650,15 @@ declare function addMessagesToThread(params: {
  */
 declare function appendMessageBlockText(blockId: EARS.EntityId, at: number, text: string): void;
 
+/**
+ * Appends the next characters of a message's own text, and folds when there are enough segments.
+ *
+ * The durable half of a streamed reply. The feed (`streamMessageText`) carries the characters to the
+ * windows as they arrive; this commits them, so the interval decides how often a turn commits rather than
+ * how much of the reply is written again.
+ */
+declare function appendMessageText(messageId: EARS.EntityId, at: number, text: string): void;
+
 declare const brainCommands: {
     /** An event a flow run heard, with its payload as the node's attributes */
     readonly createEventRunNode: (eventNode: {
@@ -5757,6 +5789,41 @@ declare const chatCommands: {
         at: number;
         text: string;
     }) => void;
+    /**
+     * Appends the next characters of a message's own text.
+     *
+     * **The same shape as a block's text, for the last field that was written whole.** `Message.text` keeps
+     * the compacted prefix and this is what follows it, spliced by offset exactly as a window splices the
+     * feed.
+     *
+     * It folds at `TEXT_SEGMENTS_BEFORE_COMPACTION`, and that fold is not an optimisation — it is what keeps
+     * the text searchable. `Message.text` is what the text index reads, so a tail living in segments is a
+     * tail no search finds, and a turn can end without its writer being finalised. The size trigger bounds
+     * that to one fold's worth; `foldMessageText` is the rest of the answer.
+     */
+    readonly appendMessageText: (params: {
+        messageId: EARS.EntityId;
+        at: number;
+        text: string;
+    }) => void;
+    /**
+     * Folds a message's text segments into its own field and removes them.
+     *
+     * **What makes the text searchable again**, so it is called when a turn's writer finalises and by the
+     * sweep at boot for a turn that ended without one.
+     */
+    readonly foldMessageText: (params: {
+        messageId: EARS.EntityId;
+    }) => void;
+    /**
+     * Folds every message that still holds text segments, and answers how many it folded.
+     *
+     * **Nothing streams at boot, so a message holding segments at boot was left unfolded** — which is the
+     * marker, and why this needs no `'streaming'` status to find them by. A turn interrupted by a kill
+     * finalises through its owner, and one interrupted by the process ending cannot, so this is that case's
+     * repair: without it the tail stays out of the text index for good.
+     */
+    readonly foldStrandedMessageText: () => number;
     /**
      * Writes one of a block's tool entries, and answers its row.
      *
@@ -5969,6 +6036,8 @@ declare const featureServices: {
         updateMessageState: typeof updateMessageState;
         updateMessageBlock: typeof updateMessageBlock;
         appendMessageBlockText: typeof appendMessageBlockText;
+        appendMessageText: typeof appendMessageText;
+        foldMessageText: typeof foldMessageText;
         updateMessageToolEntry: typeof updateMessageToolEntry;
         compactMessageBlock: typeof compactMessageBlock;
         removeMessageBlock: typeof removeMessageBlock;
@@ -6132,6 +6201,9 @@ declare const flowsQueries: {
     /** A flow's nodes and edges, or `null` for a flow that doesn't exist */
     readonly graph: (flowId: EARS.EntityId) => FlowExtendedData | null;
 };
+
+/** Folds a message's text segments into its own field, so a search finds the whole of it again */
+declare function foldMessageText(messageId: EARS.EntityId): void;
 
 declare function getHandle(key: string): CodexTurnHandle | undefined;
 

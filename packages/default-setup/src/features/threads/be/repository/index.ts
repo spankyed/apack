@@ -304,6 +304,7 @@ export const threadCommands = {
     const messages = query.ids(id).out(EARS.RelKind.CONTAINS, EARS.Entity.Message).ids();
     for (const messageId of messages) {
       discardBlocks(messageId, 'destroy');
+      discardMessageText(messageId);
       write(messageId).destroy();
     }
 
@@ -682,6 +683,19 @@ function createBlocks(messageId: EARS.EntityId, blocks: readonly BlockConfig[]):
  * message leaves rows no message reaches. `trash()` is the soft one reads skip, `destroy()` the hard one, and
  * which a block gets is whichever its message got.
  */
+/**
+ * A message's text segments go outright with it, whichever way it goes.
+ *
+ * They are a turn's working state and never the user's, as a block's are — and a trashed message reads
+ * through `assembledMessage`, which would otherwise splice rows nothing reaches.
+ */
+function discardMessageText(messageId: EARS.EntityId): void {
+  for (const segment of textOf([messageId]).get(messageId) ?? []) {
+    write(messageId).unlink(EARS.RelKind.HAS_MESSAGE_TEXT, segment.id);
+    write(segment.id).destroy();
+  }
+}
+
 function discardBlocks(messageId: EARS.EntityId, how: 'trash' | 'destroy'): void {
   for (const edge of query.ids(messageId).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block)) {
     // A segment is a block's working state and is never the user's, so it goes outright either way: a
@@ -724,8 +738,45 @@ const messagePickFields = ["id", "text", "sender", "timestamp", "blockResponse",
 function messageOf(messageId: EARS.EntityId): MessageEntity | null {
   const row = query.ids(messageId).pickOne(messagePickFields);
   if (!row) return null;
-  const blocks = blocksOf(messageId);
-  return { ...row, entityType: EARS.Entity.Message, ...(blocks.length > 0 && { blocks }) } as MessageEntity;
+  return assembledMessage(row as Partial<MessageEntity>, blocksOf(messageId), textOf([messageId]).get(messageId) ?? []);
+}
+
+/** A row's fields with its children folded in: the blocks it holds and the text appended since its prefix */
+function assembledMessage(
+  row: Partial<MessageEntity>,
+  blocks: BlockConfig[],
+  segments: ReadonlyArray<{ id: EARS.EntityId; at: number; text: string }>,
+): MessageEntity {
+  const text = segments.reduce(
+    (held, segment) => held.slice(0, segment.at) + segment.text,
+    typeof row.text === 'string' ? row.text : '',
+  );
+  return {
+    ...row,
+    entityType: EARS.Entity.Message,
+    ...(segments.length > 0 && { text }),
+    ...(blocks.length > 0 && { blocks }),
+  } as MessageEntity;
+}
+
+/** These messages' text segments in offset order, in two reads however many messages there are */
+function textOf(messageIds: readonly EARS.EntityId[]): Map<EARS.EntityId, Array<{ id: EARS.EntityId; at: number; text: string }>> {
+  const held = new Map<EARS.EntityId, Array<{ id: EARS.EntityId; at: number; text: string }>>();
+  if (messageIds.length === 0) return held;
+
+  const edges = query.ids(messageIds).outEdges(EARS.RelKind.HAS_MESSAGE_TEXT, EARS.Entity.MessageText);
+  if (edges.length === 0) return held;
+
+  const rows = rowsByIdOf(edges.map((edge) => edge.target), ['at', 'text'] as const);
+  for (const edge of edges) {
+    const row = rows.get(edge.target);
+    if (!row) continue;
+    const mine = held.get(edge.source) ?? [];
+    mine.push({ id: edge.target, at: row.at as number, text: row.text as string });
+    held.set(edge.source, mine);
+  }
+  for (const mine of held.values()) mine.sort((a, b) => a.at - b.at);
+  return held;
 }
 
 /**
@@ -737,13 +788,15 @@ function messageOf(messageId: EARS.EntityId): MessageEntity | null {
  */
 function messagesOfThread(threadId: EARS.EntityId): MessageEntity[] {
   const rows = (query.ids(threadId).out(EARS.RelKind.CONTAINS, EARS.Entity.Message).pick(messagePickFields) ?? []) as Partial<MessageEntity>[];
-  const children = childrenOfMessages(rows.flatMap((row) => (row.id ? [row.id as EARS.EntityId] : [])));
+  const ids = rows.flatMap((row) => (row.id ? [row.id as EARS.EntityId] : []));
+  const children = childrenOfMessages(ids);
+  const text = textOf(ids);
   return rows
-    .map((row) => ({
-      ...row,
-      entityType: EARS.Entity.Message,
-      ...(children.get(row.id as EARS.EntityId)?.length ? { blocks: children.get(row.id as EARS.EntityId) } : {}),
-    }) as MessageEntity)
+    .map((row) => assembledMessage(
+      row,
+      children.get(row.id as EARS.EntityId) ?? [],
+      text.get(row.id as EARS.EntityId) ?? [],
+    ))
     .sort((a, b) => {
       if (a.status === 'queued' && b.status !== 'queued') return 1;
       if (b.status === 'queued' && a.status !== 'queued') return -1;
@@ -1048,6 +1101,74 @@ export const chatCommands = {
   },
 
   /**
+   * Appends the next characters of a message's own text.
+   *
+   * **The same shape as a block's text, for the last field that was written whole.** `Message.text` keeps
+   * the compacted prefix and this is what follows it, spliced by offset exactly as a window splices the
+   * feed.
+   *
+   * It folds at `TEXT_SEGMENTS_BEFORE_COMPACTION`, and that fold is not an optimisation — it is what keeps
+   * the text searchable. `Message.text` is what the text index reads, so a tail living in segments is a
+   * tail no search finds, and a turn can end without its writer being finalised. The size trigger bounds
+   * that to one fold's worth; `foldMessageText` is the rest of the answer.
+   */
+  appendMessageText: (params: { messageId: EARS.EntityId; at: number; text: string }): void => {
+    const { messageId, at, text } = params;
+    if (!text) return;
+    if (!query.ids(messageId).ofType(EARS.Entity.Message).first()) {
+      throw new RepositoryError(`Message ${messageId} not found`, RepositoryErrorCode.NOT_FOUND);
+    }
+
+    const segment = create(EARS.Entity.MessageText, { at, text }).id();
+    write(messageId).link(EARS.RelKind.HAS_MESSAGE_TEXT, segment);
+
+    if ((textOf([messageId]).get(messageId) ?? []).length >= TEXT_SEGMENTS_BEFORE_COMPACTION) {
+      chatCommands.foldMessageText({ messageId });
+    }
+  },
+
+  /**
+   * Folds a message's text segments into its own field and removes them.
+   *
+   * **What makes the text searchable again**, so it is called when a turn's writer finalises and by the
+   * sweep at boot for a turn that ended without one.
+   */
+  foldMessageText: (params: { messageId: EARS.EntityId }): void => {
+    const { messageId } = params;
+    const segments = textOf([messageId]).get(messageId) ?? [];
+    if (segments.length === 0) return;
+
+    const row = query.ids(messageId).pickOne(['text'] as const);
+    const text = segments.reduce(
+      (held, segment) => held.slice(0, segment.at) + segment.text,
+      typeof row?.text === 'string' ? row.text : '',
+    );
+    write(messageId).set('text', text);
+    for (const segment of segments) {
+      write(messageId).unlink(EARS.RelKind.HAS_MESSAGE_TEXT, segment.id);
+      write(segment.id).destroy();
+    }
+  },
+
+  /**
+   * Folds every message that still holds text segments, and answers how many it folded.
+   *
+   * **Nothing streams at boot, so a message holding segments at boot was left unfolded** — which is the
+   * marker, and why this needs no `'streaming'` status to find them by. A turn interrupted by a kill
+   * finalises through its owner, and one interrupted by the process ending cannot, so this is that case's
+   * repair: without it the tail stays out of the text index for good.
+   */
+  foldStrandedMessageText: (): number => {
+    const stranded = [...new Set(
+      query(EARS.Entity.MessageText).ids()
+        .flatMap((segment) => query.ids(segment).inEdges(EARS.RelKind.HAS_MESSAGE_TEXT, EARS.Entity.Message))
+        .map((edge) => edge.source),
+    )];
+    for (const messageId of stranded) chatCommands.foldMessageText({ messageId });
+    return stranded.length;
+  },
+
+  /**
    * Writes one of a block's tool entries, and answers its row.
    *
    * **The same shape as `writeMessageBlock`, one level down**: pass the row id a previous write answered
@@ -1257,6 +1378,12 @@ export const chatCommands = {
       throw new RepositoryError(`Message ${messageId} not found`, RepositoryErrorCode.NOT_FOUND);
     }
 
+    // **A write of the whole text is the fold**, so the segments go with it — they hold a tail this value
+    // already carries, and left behind they would splice over it. The same rule as `writeMessageBlock`'s
+    // whole-block write dropping a block's own segments; asking for the fold separately wrote the text
+    // twice, which is what made a streamed reply cost 2.8x where it now costs 1.84x
+    if (updates.text !== undefined) discardMessageText(messageId);
+
     const now = Date.now();
     write(messageId).setMany(updates);
 
@@ -1397,6 +1524,7 @@ export const chatCommands = {
     const toDelete = nonDeleted.slice(targetIndex).flatMap((msg) => msg.id ? [msg.id as EARS.EntityId] : []);
     for (const messageId of toDelete) {
       discardBlocks(messageId, 'trash');
+      discardMessageText(messageId);
       write(messageId).trash();
     }
     const deletedIds: string[] = toDelete;

@@ -27,6 +27,7 @@
       "blocks": {},
       "has_block": {},
       "has_text": {},
+      "has_message_text": {},
       "has_entry": {},
       "duplicates": {}
     },
@@ -42,6 +43,7 @@
         "Message": { "shape": "src/features/threads/be/types.ts#MessageEntity", "indexes": ["status"], "search": { "fields": { "text": 1 } } },
         "Block": { "shape": "src/features/threads/be/types.ts#BlockEntity", "indexes": ["type"] },
         "BlockText": { "shape": "src/features/threads/be/types.ts#BlockTextEntity" },
+        "MessageText": { "shape": "src/features/threads/be/types.ts#MessageTextEntity" },
         "ToolEntry": { "shape": "src/features/threads/be/types.ts#ToolEntryEntity" },
         "Artifact": { "shape": "src/features/threads/be/types.ts#ArtifactEntity" }
       },

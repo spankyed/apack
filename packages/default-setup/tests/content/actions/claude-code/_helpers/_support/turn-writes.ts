@@ -21,6 +21,8 @@ export interface TurnWrites {
   kept(): number;
   /** What the block's text holds after the nth write, assembled as a read assembles it */
   rowAfter(nth: number): string;
+  /** What a message's own text holds: its field with the segments appended to it */
+  messageText(): string;
   /** Each write as it was recorded, for a case about which call happened when */
   readonly writes: readonly string[];
 }
@@ -32,6 +34,8 @@ export function recordTurnWrites(): TurnWrites {
   const rows: string[] = [];
   /** A block's row by its type: its last whole write, plus the entries hanging off it */
   const blocks = new Map<string, string>();
+  /** A message's own text as the row holds it: its field plus the segments appended to it */
+  let messageText = '';
   const entries = new Map<string, Map<string, string>>();
   let text = '';
 
@@ -51,8 +55,22 @@ export function recordTurnWrites(): TurnWrites {
         writes.push(bytes);
         sizes.push({ block: 'text', bytes: bytes.length });
         blocks.set('text', bytes);
+        messageText = updates.text;
       },
       streamMessageText: () => {},
+      // A message's own text: appended as a block's is, and folded into the row when the turn ends
+      appendMessageText: (_id: unknown, at: number, appended: string) => {
+        const bytes = JSON.stringify({ at, text: appended });
+        writes.push(bytes);
+        sizes.push({ block: 'text', bytes: bytes.length });
+        messageText = messageText.slice(0, at) + appended;
+      },
+      foldMessageText: () => {
+        const folded = JSON.stringify({ text: messageText });
+        writes.push(folded);
+        sizes.push({ block: 'text', bytes: folded.length });
+        blocks.set('text', folded);
+      },
       updateMessageBlock: (_id: unknown, block: { type: string; props: { content?: string } }) => {
         const bytes = JSON.stringify(block);
         writes.push(bytes);
@@ -106,5 +124,6 @@ export function recordTurnWrites(): TurnWrites {
     kept: () => [...blocks.values()].reduce((total, row) => total + row.length, 0)
       + [...entries.values()].flatMap((held) => [...held.values()]).reduce((total, row) => total + row.length, 0),
     rowAfter: (nth: number) => rows[nth] as string,
+    messageText: () => messageText,
   };
 }
