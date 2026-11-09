@@ -202,6 +202,26 @@ side is declared in one place and asserted (required outcome 4).
 
 ### Open decisions
 
+**O4 — `HISTORY_LINES` cannot be expressed as the core's `max_lines`, and the contract is yours to set.**
+Measured and then read out of the core's source 2026-11-09; the detail and the quotations are in
+[evidence](../references/evidence/one-vt-core.md). The core's line limit is a page-granular *heuristic*
+that never prunes the page holding the active area, so rows held ranged 749 to 1,997 and did not move when
+the ask went from 1,000 to 3,000. It offers a ceiling in whole pages and no floor above one page.
+
+The broker advertises `HISTORY_LINES` to the window in its handshake precisely so a window never draws
+lines a reattach cannot reproduce. That needs a floor, which is the thing the core does not give.
+
+| | what it keeps | what it gives up |
+|---|---|---|
+| **bound memory instead, in bytes** | the broker's actual intent — `HISTORY_LINES`' own doc calls it "a ceiling on memory per session" — and the dimension the core enforces tightly | a line count is no longer promised: wide content yields fewer rows than narrow, so the handshake figure becomes advisory |
+| **cap the read at `HISTORY_LINES`** | the window never sees more than it was promised | nothing about the floor: a session holding 749 still under-delivers against a promised 1,000 |
+| **advertise the floor** — one page's rows | a number that is always honoured | a much smaller advertised scrollback than today, and one that varies with the column count |
+
+`a_session_keeps_its_declared_scrollback_and_not_more` stays red until this is decided. It was not
+loosened, because the assertion is right about the contract as it currently stands.
+
+Blocks Phase B's exit and nothing else; `pre-push` cannot be green before it.
+
 **O3 — Phase R's premise is wrong as written, and the choice is yours.** Measured 2026-11-09, after 0b.
 
 D2 says the renderer takes upstream's WebAssembly module rather than `ghostty-web`, and the plan sizes

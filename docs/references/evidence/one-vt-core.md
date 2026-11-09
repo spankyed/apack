@@ -375,6 +375,44 @@ an allocator budget that an unlimited byte ceiling does not disable. Capping the
 would fix the over-hold and leave the under-hold, which is the half that breaks the promise.
 
 
+### The scrollback bound explained, from the core's own source
+
+Fetched `libghostty-vt-1.0.0.tar.gz` and checked it against the signed `SHA256SUMS`. The behaviour is
+documented and deliberate, so this is a contract mismatch rather than a defect to report upstream.
+
+`PageList.init`'s own doc:
+
+> `max_lines` is the maximum number of physical rows retained as scrollback, excluding the active area.
+> **It is a page-granular heuristic**: at least one standard page worth of rows is permitted and only
+> complete historical pages are removed.
+
+And `Limits.enforce`, which is what `setScrollbackMaxLines` reaches:
+
+```zig
+// The page containing the active top may also contain history. Keep
+// that boundary page whole even if its history exceeds the heuristic.
+if (first == pagelist.getTopLeft(.active).node) break;
+```
+
+So eviction removes whole historical pages and **never the page holding the active area's top**. A page
+holds on the order of a thousand rows at 20 columns, so for this broker's figure the limit can barely
+bind: measured across five volumes, the rows held ranged **749 to 1,997 and were identical for
+`max_lines` of 1,000, 2,000 and 3,000** — the ask is not what decides it. `max_lines` is a heuristic by
+name and by implementation.
+
+**What this means is not that the core is wrong; it is that `HISTORY_LINES` cannot be expressed as
+`max_lines`.** The broker advertises that number to the window in its handshake so a window never draws
+lines a reattach cannot reproduce, which needs a *floor*. The core offers a page-granular ceiling and no
+floor above one page.
+
+Worth noting against the broker's own words: `HISTORY_LINES`' doc says it "is a ceiling on memory per
+session: 1,000 lines of 80 columns is about 80k cells, and a cell is wider than a byte." The intent was
+always memory, and `max_size` is the dimension the core enforces tightly — its doc says it is "always
+rounded down to the nearest terminal page size, otherwise we would always slightly exceed max_size". So
+the broker's intent and the core's tight dimension are the same one, and it is not the one the figure is
+written in.
+
+
 ### What is not done
 
 The both-parsers diff harness, which is the rest of Phase 0a. The link is not yet proven: nothing has been
