@@ -586,18 +586,22 @@ export function findSyncSpawnsInSpecs(files: readonly string[] = specModules(rep
  * bound cannot tell a healthy request from a hung one; a kill-grace period is about time by definition; and a
  * wait whose other party has no process this one can read. An entry that stops applying is reported.
  */
-const SYNCHRONOUS_ADMISSION = 'a synchronous OS query inside the native loader admission, which is synchronous throughout; it bounds a hang, and a progress bound has no event loop to read on';
+const PRE_ADMISSION_SPAWN = 'a native loader query made before admission verifies the process, where a thread would load libraries into it; only a synchronous spawn loads none';
 const CLOCK_BY_DESIGN: Record<string, string> = {
   'packages/apack-host/src/packs/github.ts': "a fetch from GitHub's API: network, which no CPU reading describes",
   'packages/apack-host/src/packs/installer.ts': 'a pack download: network, which no CPU reading describes',
   'packages/default-setup/src/features/code/be/services/gh-cli.ts': "`gh` waits on GitHub's API: network, which no CPU reading describes",
   'packages/default-setup/src/features/code/be/services/codex/app-server.ts':
     "a request to the codex app-server waits on the model's API, during which the server is idle by design",
-  // Synchronous by the admission they serve: a progress bound needs the event loop free to take its readings, so
-  // converting these means making the Windows and Linux loader admission (`compiler-pe-admission.ts`) async
-  'packages/apack-cli/src/build/compiler-pe-activation.ts': SYNCHRONOUS_ADMISSION,
-  'packages/apack-cli/src/build/compiler-pe-environment.ts': SYNCHRONOUS_ADMISSION,
-  'packages/apack-cli/src/build/compiler-elf-environment.ts': SYNCHRONOUS_ADMISSION,
+  // The native loader queries run before admission has verified the process, so they may load nothing into it. A
+  // synchronous spawn loads nothing; a worker thread does. Bounding them by progress meant starting one from the
+  // synchronous admission, and on Windows its DLL loads followed a planted `.local` override, which ran —
+  // `compiler-pe-libraries.native.spec.ts`'s pre-initialization refusal case caught it on Windows CI
+  'packages/apack-cli/src/build/compiler-pe-activation.ts': PRE_ADMISSION_SPAWN,
+  'packages/apack-cli/src/build/compiler-pe-environment.ts': PRE_ADMISSION_SPAWN,
+  'packages/apack-cli/src/build/compiler-elf-environment.ts': PRE_ADMISSION_SPAWN,
+  'packages/apack-sdk/src/progress.ts':
+    'the synchronous process listing is the reading itself, so no progress can bound it, and its caller cannot be interrupted',
   // The Playwright fixture: Playwright gives a wait only a clock, and each is sized as the suite's backstop
   'packages/apack-testing/src/index.ts': "the Playwright fixture's own waits, which Playwright bounds only by a clock, and a 10s `sample` diagnostic",
   'packages/apack-testing/src/engine/index.ts': "a Playwright wait in the test engine, which Playwright bounds only by a clock",

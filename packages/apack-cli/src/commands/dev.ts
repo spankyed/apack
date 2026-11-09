@@ -347,10 +347,12 @@ async function session(args: string[], hooks: SessionHooks, target: 'app' | 'pac
    * A launch with no debug port publishes nothing. That is the honest answer rather than a record with a
    * hole in it: the file means "attachable", and a `test` or packaged context is not.
    */
-  async function publish(launchedAt: number): Promise<void> {
+  async function publish(launchedAt: number, spawned: ChildProcess): Promise<void> {
     if (app.kind !== 'source' || debugPortArgs(place).length === 0) return;
     try {
-      const debugPort = await readDevToolsPort(userDataDir, { after: launchedAt });
+      if (spawned.pid === undefined) return;
+      // For as long as the app is working to start: it writes the port once Chromium is up
+      const debugPort = await readDevToolsPort(userDataDir, { after: launchedAt, work: processWork(spawned.pid) });
       hold.holdsSession(publishSession({
         host: { kind: 'source', root: app.root },
         env: 'development',
@@ -484,7 +486,7 @@ async function session(args: string[], hooks: SessionHooks, target: 'app' | 'pac
       // Published only for an app this command holds, and after its API is up so the session carries the
       // port a driver needs. An app that was already here has a session of its own or is not attachable,
       // and either way is not this command's to describe.
-      await publish(launchedAt);
+      await publish(launchedAt, spawned);
       endWith(spawned);
     }
   }

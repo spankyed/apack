@@ -51,7 +51,16 @@ export const IDLE_MS = 120000;
 export function parseCpuTime(text: string): number;
 
 // @public
+export function pollWhileWorking<T>(probe: () => T | undefined, input: {
+    readonly work: WorkReading;
+    readonly what: string;
+    readonly pollMs?: number;
+    readonly idleMs?: number;
+}): Promise<T>;
+
+// @public
 export interface ProcessRow {
+    readonly createdAt?: number;
     // (undocumented)
     readonly ms: number;
     // (undocumented)
@@ -67,6 +76,9 @@ export function processWork(pid: number, read?: typeof readTreeCpuMs): WorkReadi
 
 // @public
 export const readTreeCpuMs: (leader: number) => Promise<Map<number, number> | undefined>;
+
+// @public
+export function readTreeCpuMsSync(leader: number): Map<number, number> | undefined;
 
 // @public
 export type Refusal = {
@@ -88,6 +100,9 @@ export function threadWork(worker: object): WorkReading;
 
 // @public
 export function treeCpuMs(listing: string, leader: number): Map<number, number>;
+
+// @public
+export function treeCpuMsFrom(rows: readonly ProcessRow[], leader: number): Map<number, number>;
 
 // @public
 export interface Watch {

@@ -178,28 +178,31 @@ describe('the debug port for a launch', () => {
     }
   };
 
+  /** A launcher whose tree does no work: the reading a stalled app gives, so a wait ends on its stall window */
+  const idle = () => Promise.resolve(0);
+
   it('is the one written since the launch', async () => {
     writePort(51873);
-    expect(await readDevToolsPort(dataDir, { after: Date.now() - 1_000, timeoutMs: 500 })).toBe(51873);
+    expect(await readDevToolsPort(dataDir, { after: Date.now() - 1_000, work: idle, idleMs: 500 })).toBe(51873);
   });
 
   /** The firing case: a file from a previous run of the same data dir is not an answer. */
   it('is not one a previous run left behind', async () => {
     writePort(58009, 10 * 60_000);
-    await expect(readDevToolsPort(dataDir, { after: Date.now(), timeoutMs: 300 }))
+    await expect(readDevToolsPort(dataDir, { after: Date.now(), work: idle, idleMs: 300 }))
       .rejects.toThrow(/No debug port appeared/);
   });
 
   it('waits for one that is not there yet, rather than giving up', async () => {
     setTimeout(() => writePort(44444), 120);
-    expect(await readDevToolsPort(dataDir, { after: Date.now(), timeoutMs: 3_000 })).toBe(44444);
+    expect(await readDevToolsPort(dataDir, { after: Date.now(), work: idle, idleMs: 3_000 })).toBe(44444);
   });
 
   /** A first line still being written reads as NaN, which is "not yet" and not a failure. */
   it('does not read a half-written file as a port', async () => {
     fs.writeFileSync(portFile(), '');
     setTimeout(() => writePort(45455), 120);
-    expect(await readDevToolsPort(dataDir, { after: Date.now() - 1_000, timeoutMs: 3_000 })).toBe(45455);
+    expect(await readDevToolsPort(dataDir, { after: Date.now() - 1_000, work: idle, idleMs: 3_000 })).toBe(45455);
   });
 });
 

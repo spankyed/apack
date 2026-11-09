@@ -5,7 +5,7 @@
 //
 // Node-only: it lists processes with `ps`, or PowerShell on Windows. The chain's own runner imports this file by path,
 // since it runs before any package is built and `@apackdev/sdk` resolves to `dist` outside a host build.
-import { execFile, type ChildProcess, type ExecFileOptions } from 'node:child_process';
+import { execFile, execFileSync, type ChildProcess, type ExecFileOptions } from 'node:child_process';
 
 /**
  * How long a process tree may go without CPU or output before whatever watches it ends it as stalled: one number
@@ -30,7 +30,14 @@ export function parseCpuTime(text: string): number {
 }
 
 /** One process in a listing of every process: its parent, its group and the CPU it has spent */
-export interface ProcessRow { readonly pid: number; readonly ppid: number; readonly pgid: number; readonly ms: number }
+export interface ProcessRow {
+  readonly pid: number; readonly ppid: number; readonly pgid: number; readonly ms: number;
+  /**
+   * When the process was created, where the listing says: Windows keeps a process's parent id after the parent
+   * exits and reuses ids freely, so a parent id names the parent only for a process created after it
+   */
+  readonly createdAt?: number;
+}
 
 /** The rows of `ps -A -o pid=,ppid=,pgid=,time=` */
 const psRows = (listing: string): ProcessRow[] => listing.trim().split('\n').map((line) => line.trim().split(/\s+/))
@@ -38,12 +45,14 @@ const psRows = (listing: string): ProcessRow[] => listing.trim().split('\n').map
   .map(([pid, ppid, pgid, time]) => ({ pid: Number(pid), ppid: Number(ppid), pgid: Number(pgid), ms: parseCpuTime(time!) }));
 
 /**
- * The rows of `WIN32_PROCESSES`: `pid ppid cpu`, the CPU in the 100ns units Windows counts in. Windows has no
- * process groups, so each process is its own, and a tree is its root and the root's descendants.
+ * The rows of `WIN32_PROCESSES`: `pid ppid cpu created`, the CPU in the 100ns units Windows counts in and the
+ * creation time as a Windows file time. Windows has no process groups, so each process is its own, and a tree is
+ * its root and the root's descendants.
  */
 export const win32Rows = (listing: string): ProcessRow[] => listing.trim().split(/\r?\n/).map((line) => line.trim().split(/\s+/))
-  .filter((row) => row.length === 3 && row.every((field) => /^\d+$/.test(field)))
-  .map(([pid, ppid, cpu]) => ({ pid: Number(pid), ppid: Number(ppid), pgid: Number(pid), ms: Math.round(Number(cpu) / 10_000) }));
+  .filter((row) => row.length === 4 && row.every((field) => /^\d+$/.test(field)))
+  .map(([pid, ppid, cpu, created]) => ({ pid: Number(pid), ppid: Number(ppid), pgid: Number(pid),
+    ms: Math.round(Number(cpu) / 10_000), createdAt: Number(created) }));
 
 /**
  * The CPU time of each process in the tree rooted at `leader`'s process group, from one `ps` listing
@@ -54,16 +63,24 @@ export const win32Rows = (listing: string): ProcessRow[] => listing.trim().split
  * A process reparented to init on its parent's exit is outside both, and the group-kill reaches it anyway.
  */
 export function treeCpuMs(listing: string, leader: number): Map<number, number> {
-  return treeOf(psRows(listing), leader);
+  return treeCpuMsFrom(psRows(listing), leader);
 }
 
-function treeOf(rows: readonly ProcessRow[], leader: number): Map<number, number> {
+/** The CPU of each process in `leader`'s tree, from rows any platform's listing parsed to */
+export function treeCpuMsFrom(rows: readonly ProcessRow[], leader: number): Map<number, number> {
   // The leader itself too, for a root that leads no group of its own: a vitest worker, which its pool started
   const members = new Set(rows.filter((row) => row.pgid === leader || row.pid === leader).map((row) => row.pid));
+  const created = new Map(rows.map((row) => [row.pid, row.createdAt]));
+  // A child is one its parent could have started: created after it. A process older than the one its parent id
+  // names had a different parent, whose id was reused — counting it would add a stranger's whole lifetime of CPU
+  const childOf = (row: ProcessRow): boolean => {
+    const parent = created.get(row.ppid);
+    return parent === undefined || row.createdAt === undefined || row.createdAt >= parent;
+  };
   for (let grew = true; grew;) {
     grew = false;
     for (const row of rows) {
-      if (!members.has(row.pid) && members.has(row.ppid)) { members.add(row.pid); grew = true; }
+      if (!members.has(row.pid) && members.has(row.ppid) && childOf(row)) { members.add(row.pid); grew = true; }
     }
   }
   return new Map(rows.filter((row) => members.has(row.pid)).map((row) => [row.pid, row.ms]));
@@ -108,8 +125,8 @@ export function createStallTracker(idleMs: number, startedAt: number) {
   };
 }
 
-/** Every process's id, parent and CPU on Windows, which has no `ps`: one line each, `pid ppid cpu` */
-const WIN32_PROCESSES = 'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.ParentProcessId) $($_.UserModeTime + $_.KernelModeTime)" }';
+/** Every process's id, parent, CPU and creation on Windows, which has no `ps`: one line each, `pid ppid cpu created` */
+const WIN32_PROCESSES = 'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.ParentProcessId) $($_.UserModeTime + $_.KernelModeTime) $(if ($_.CreationDate) { $_.CreationDate.ToFileTimeUtc() } else { 0 })" }';
 
 /**
  * How long one listing of every process answers every reading taken in this process. A listing describes the whole
@@ -126,23 +143,49 @@ let latest: { readonly at: number; readonly rows: Promise<ProcessRow[] | undefin
 function listProcesses(): Promise<ProcessRow[] | undefined> {
   const at = realNow();
   if (latest !== undefined && at - latest.at < LISTING_REUSE_MS) return latest.rows;
-  const win32 = process.platform === 'win32';
-  const [file, args] = win32
-    ? ['powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', WIN32_PROCESSES]]
-    : ['ps', ['-A', '-o', 'pid=,ppid=,pgid=,time=']];
   const rows = new Promise<ProcessRow[] | undefined>((resolve) => {
-    execFile(file, args, { maxBuffer: 16 * 1024 * 1024, windowsHide: true }, (error, stdout) => {
-      resolve(error ? undefined : win32 ? win32Rows(stdout) : psRows(stdout));
+    execFile(LISTING.file, [...LISTING.args], LISTING.options, (error, stdout) => {
+      resolve(error ? undefined : LISTING.parse(stdout));
     });
   });
   latest = { at, rows };
   return rows;
 }
 
+/** How this platform lists every process, and how the listing reads */
+const LISTING: {
+  readonly file: string; readonly args: readonly string[]; readonly parse: (listing: string) => ProcessRow[];
+  readonly options: { readonly maxBuffer: number; readonly windowsHide: boolean; readonly encoding: 'utf8' };
+} = {
+  ...(process.platform === 'win32'
+    ? { file: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-Command', WIN32_PROCESSES], parse: win32Rows }
+    : { file: 'ps', args: ['-A', '-o', 'pid=,ppid=,pgid=,time='], parse: psRows }),
+  options: { maxBuffer: 16 * 1024 * 1024, windowsHide: true, encoding: 'utf8' },
+};
+
+/**
+ * How long one synchronous listing may take. It is the reading itself, so no progress can bound it, and a caller
+ * blocked on it cannot be interrupted: a `ps` or PowerShell that hangs would hang that caller for good. Generous,
+ * since a listing takes well under a second, and a listing that runs out reads as no reading.
+ */
+const SYNC_LISTING_TIMEOUT_MS = 30_000;
+
+/**
+ * One reading of the tree's CPU taken synchronously, for a caller that cannot await: a wait inside a synchronous
+ * function, which then decides with `createStallTracker` as `watchWork` does. Nothing where no listing could be taken.
+ */
+export function readTreeCpuMsSync(leader: number): Map<number, number> | undefined {
+  try {
+    return treeCpuMsFrom(LISTING.parse(execFileSync(LISTING.file, [...LISTING.args], { ...LISTING.options, timeout: SYNC_LISTING_TIMEOUT_MS })), leader);
+  } catch {
+    return undefined;
+  }
+}
+
 /** One reading of the tree's CPU, or nothing when no listing could be taken */
 export const readTreeCpuMs = async (leader: number): Promise<Map<number, number> | undefined> => {
   const rows = await listProcesses();
-  return rows === undefined ? undefined : treeOf(rows, leader);
+  return rows === undefined ? undefined : treeCpuMsFrom(rows, leader);
 };
 
 /**
@@ -318,6 +361,29 @@ export function answerWhileWorking<T>(answer: Promise<T>, { work, what, idleMs, 
 }
 
 /**
+ * Polls `probe` until it answers, for as long as the party that will make it answer keeps working: a file another
+ * process writes, a port it opens. Rejects with `what` and why the watch gave up; never on the clock.
+ */
+export function pollWhileWorking<T>(probe: () => T | undefined, { work, what, pollMs = 100, idleMs }: {
+  readonly work: WorkReading; readonly what: string; readonly pollMs?: number; readonly idleMs?: number;
+}): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const watch = watchWork({ work, idleMs, onRefused: (refusal) => {
+      clearTimeout(timer);
+      reject(new Error(`${what}, and the process that would make it ${describeRefusal(refusal)}`));
+    } });
+    const attempt = () => {
+      let found: T | undefined;
+      try { found = probe(); } catch (error) { watch.stop(); reject(error); return; }
+      if (found !== undefined) { watch.stop(); resolve(found); return; }
+      timer = setTimeout(attempt, pollMs);
+    };
+    attempt();
+  });
+}
+
+/**
  * An `AbortSignal` that aborts when `watchWork` gives up on a process tree: for work handed a signal rather than a
  * process, such as an in-process build whose workers are this process's children. `stop` once the work is done.
  */
@@ -365,3 +431,4 @@ export function execFileWhileWorking(file: string, args: readonly string[], opti
   // The child too, as `promisify(execFile)`'s promise carries it, for a caller that waits on its close
   return Object.assign(done, { child });
 }
+
