@@ -559,6 +559,13 @@ export type OutgoingThreadsEvents =
    * the next durable write catches it up. `done` is the last one: the row is written before it is sent.
    */
   | { type: 'MESSAGE_TEXT_APPENDED'; messageId: EARS.EntityId; at: number; text: string; done?: true }
+  /**
+   * The next characters of a growing block, the same feed for the field that grows rather than changes.
+   *
+   * `block` names which of the message's blocks the run belongs to, since a message holds several. A
+   * block's label, state and re-projected lists are rewrites and travel on the row; this carries growth.
+   */
+  | { type: 'MESSAGE_BLOCK_TEXT_APPENDED'; messageId: EARS.EntityId; block: string; at: number; text: string; done?: true }
   | { type: 'CHAT_STARTED'; data: ChatStart }
   | { type: 'THREAD_CHAT_ERROR'; threadId: string; error: string }
   | { type: 'THREADS_EXPORTED'; filePath: string; threadCount: number }

@@ -1,6 +1,6 @@
 import { surfaceStorage } from '@apackdev/sdk/fe'
 import { ref as featureRef } from '#generated/ref.ts'
-import { messageStreamText } from './message-text.ts';
+import { blockRunCaughtUp, messageStreamBlocks, messageStreamText } from './message-text.ts';
 
 /** This surface's window storage: the prefix is its ref, so these names are scoped to it. */
 const storage = surfaceStorage(featureRef('threads'))
@@ -167,6 +167,7 @@ type ViewEvent =
   | { type: 'CHAT.READ'; threadId: string; chat: ChatPage | null }
   | { type: 'MESSAGE.READ'; id: string; message: MessageEntity | null }
   | { type: 'MESSAGE_TEXT_APPENDED'; messageId: string; at: number; text: string; done?: true }
+  | { type: 'MESSAGE_BLOCK_TEXT_APPENDED'; messageId: string; block: string; at: number; text: string; done?: true }
   | { type: 'TAB.READ'; threadId: string; tab: ThreadTabView | null }
   | { type: 'SEARCH.READ'; query: string; results: MessageSearchResult[] }
   | { type: 'VIEW.FAILED'; view: string; error: string }
@@ -347,7 +348,9 @@ function messagesOf(ctx: ThreadsContext, ids: string[]): Partial<MessageEntity>[
     const row = ctx.messageContents[messageId];
     if (!row) return [];
     const shown = messageStreamText(row.text, ctx.messageStreams[messageId]);
-    return [shown === row.text ? row : { ...row, text: shown }];
+    const blocks = messageStreamBlocks(row.blocks, ctx.messageBlockStreams[messageId]);
+    if (shown === row.text && blocks === row.blocks) return [row];
+    return [{ ...row, ...(shown === row.text ? {} : { text: shown }), ...(blocks === row.blocks ? {} : { blocks }) }];
   });
 }
 
@@ -495,6 +498,7 @@ const threadsState = setup({
         // A streamed run is pruned with the row it splices onto; a window that stops listing a message holds
         // neither, and nothing accumulates across a long session
         messageStreams: Object.fromEntries(listed.flatMap(messageId => (context.messageStreams[messageId] ? [[messageId, context.messageStreams[messageId]]] : []))),
+        messageBlockStreams: Object.fromEntries(listed.flatMap(messageId => (context.messageBlockStreams[messageId] ? [[messageId, context.messageBlockStreams[messageId]]] : []))),
       });
     }),
     /**
@@ -591,12 +595,21 @@ const threadsState = setup({
       const run = context.messageStreams[messageId];
       const caughtUp = run !== undefined && (message?.text?.length ?? 0) >= run.at + run.text.length;
       const { [messageId]: _spliced, ...streams } = context.messageStreams;
+      const blockRun = context.messageBlockStreams[messageId];
+      const blockCaughtUp = blockRunCaughtUp(message?.blocks, blockRun);
+      const { [messageId]: _splicedBlock, ...blockStreams } = context.messageBlockStreams;
       const next = {
         ...context,
         messageContents: message ? { ...rest, [messageId]: message } : rest,
         messageStreams: caughtUp || !message ? streams : context.messageStreams,
+        messageBlockStreams: blockCaughtUp || !message ? blockStreams : context.messageBlockStreams,
       };
-      return { messageContents: next.messageContents, messageStreams: next.messageStreams, ...composedMessages(next) };
+      return {
+        messageContents: next.messageContents,
+        messageStreams: next.messageStreams,
+        messageBlockStreams: next.messageBlockStreams,
+        ...composedMessages(next),
+      };
     }),
 
     /**
@@ -625,6 +638,32 @@ const threadsState = setup({
       const messageStreams = { ...others, [ev.messageId]: run };
       return { messageStreams, ...composedMessages({ ...context, messageStreams }) };
     }),
+    /**
+     * The same rule as the text's run, for a block that grows.
+     *
+     * A run only continues when the delta starts exactly where the last one ended **and names the same
+     * block**: a message holds several, and two blocks' runs under one message id would otherwise splice
+     * each other's characters into whichever block arrived last.
+     */
+    appendMessageBlockText: assign(({ context, event }) => {
+      const ev = typeOf('MESSAGE_BLOCK_TEXT_APPENDED', event);
+      const { [ev.messageId]: held, ...others } = context.messageBlockStreams;
+      // Taken whether or not this window still follows the message, as the text's `done` is: a run left in
+      // place would splice itself over whatever the row says next, and the writer has written the row by now
+      if (ev.done) {
+        if (!held) return {};
+        const next = { ...context, messageBlockStreams: others };
+        return { messageBlockStreams: others, ...composedMessages(next) };
+      }
+      if (!context.messageViews.includes(ev.messageId)) return {};
+      const continues = held !== undefined && held.block === ev.block && held.at + held.text.length === ev.at;
+      const run = continues
+        ? { block: ev.block, at: held.at, text: held.text + ev.text }
+        : { block: ev.block, at: ev.at, text: ev.text };
+      const messageBlockStreams = { ...others, [ev.messageId]: run };
+      return { messageBlockStreams, ...composedMessages({ ...context, messageBlockStreams }) };
+    }),
+
     readTab: enqueueActions(({ context, event, enqueue }) => {
       const { threadId, tab } = typeOf('TAB.READ', event);
       if (!tab || !context.tabs.some(t => t.id === threadId)) return;
@@ -1534,6 +1573,7 @@ const threadsState = setup({
     detailMessageIds: [],
     messageContents: {},
     messageStreams: {},
+    messageBlockStreams: {},
     messageViews: [],
     tabViews: [],
     tabsRead: [],
@@ -1563,6 +1603,7 @@ const threadsState = setup({
     'VIEW.FAILED': { guard: ({ event }) => event.view === 'messageSearch', actions: 'endMessageSearch' },
     'MESSAGE.READ': { actions: 'readMessage' },
     MESSAGE_TEXT_APPENDED: { actions: 'appendMessageText' },
+    MESSAGE_BLOCK_TEXT_APPENDED: { actions: 'appendMessageBlockText' },
     'TAB.READ': [
       { guard: 'tabGone', actions: 'dropThread' },
       { actions: 'readTab' },

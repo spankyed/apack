@@ -267,6 +267,42 @@ export function streamMessageText(params: {
 }
 
 /**
+ * Sends the next characters of a growing **block** to the windows showing that message.
+ *
+ * **The same split as `streamMessageText`, for the one field that grows rather than changes.** A block is
+ * written with `updateMessageState({ blocks })`, which replaces the whole field — so a thinking block that
+ * grows for three minutes was rewritten in full on every flush, and what reached storage was a multiple of
+ * what the user was left with. The multiple grew with the turn, which is what makes it the same defect G1
+ * names for text and not a slower version of it.
+ *
+ * So the characters travel here and the row is written on the durable clock. `block` names the block's type
+ * — one of a message's blocks is a `thinking` block, one a `tool-activity` block — because a message holds
+ * several and a window has to know which one a run belongs to. Everything else is the text feed's contract:
+ * `at` is the offset so a window splices onto what its view last gave it, a run that starts past the end of
+ * what the window holds is a stream it joined late and is ignored until the row catches up, and `done`
+ * drops the run after the row has been written.
+ *
+ * **What this channel cannot carry is a change.** A block's label, its state and a re-projected list are
+ * rewrites, not appends, and they go on the row. This is for growth alone.
+ */
+export function streamMessageBlockText(params: {
+  messageId: EARS.EntityId;
+  block: string;
+  at: number;
+  text: string;
+  done?: true;
+}): void {
+  broadcastToSurface('threads', {
+    type: 'MESSAGE_BLOCK_TEXT_APPENDED',
+    messageId: params.messageId,
+    block: params.block,
+    at: params.at,
+    text: params.text,
+    ...(params.done ? { done: true as const } : {}),
+  });
+}
+
+/**
  * Create a marker message that compacts eligible prior messages in a thread.
  * The repository determines which messages are eligible (excludes markers and already-compacted).
  */
@@ -551,6 +587,7 @@ export const chatService = {
   sendQuestionBlock,
   updateMessageState,
   streamMessageText,
+  streamMessageBlockText,
   createMarkerMessage,
   addMessagesToThread,
   createThread,

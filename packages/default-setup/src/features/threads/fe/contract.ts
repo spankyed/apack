@@ -89,6 +89,8 @@ export interface ThreadsContext {
    * run starting past the end of its row and shows the row until the next durable write catches it up.
    */
   messageStreams: Record<string, { at: number; text: string }>;
+  /** A growing block's run, per message: which block it belongs to, from where, and what has arrived */
+  messageBlockStreams: Record<string, { block: string; at: number; text: string }>;
   /** The messages a view is followed for */
   messageViews: string[];
   /** The open tabs a view is followed for */

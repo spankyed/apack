@@ -3832,6 +3832,20 @@ type OutgoingThreadsEvents =
     at: number;
     text: string;
     done?: true;
+}
+/**
+ * The next characters of a growing block, the same feed for the field that grows rather than changes.
+ *
+ * `block` names which of the message's blocks the run belongs to, since a message holds several. A
+ * block's label, state and re-projected lists are rewrites and travel on the row; this carries growth.
+ */
+ | {
+    type: 'MESSAGE_BLOCK_TEXT_APPENDED';
+    messageId: EARS.EntityId;
+    block: string;
+    at: number;
+    text: string;
+    done?: true;
 } | {
     type: 'CHAT_STARTED';
     data: ChatStart;
@@ -5010,6 +5024,12 @@ interface ThreadsContext {
         at: number;
         text: string;
     }>;
+    /** A growing block's run, per message: which block it belongs to, from where, and what has arrived */
+    messageBlockStreams: Record<string, {
+        block: string;
+        at: number;
+        text: string;
+    }>;
     /** The messages a view is followed for */
     messageViews: string[];
     /** The open tabs a view is followed for */
@@ -5701,6 +5721,7 @@ declare const featureServices: {
         sendQuestionBlock: typeof sendQuestionBlock;
         updateMessageState: typeof updateMessageState;
         streamMessageText: typeof streamMessageText;
+        streamMessageBlockText: typeof streamMessageBlockText;
         createMarkerMessage: typeof createMarkerMessage;
         addMessagesToThread: typeof addMessagesToThread;
         createThread: typeof createThread;
@@ -6122,6 +6143,33 @@ declare function showThread(threadId: EARS.EntityId, options?: {
 }): void;
 
 declare function storeHandle(key: string, handle: CodexTurnHandle): void;
+
+/**
+ * Sends the next characters of a growing **block** to the windows showing that message.
+ *
+ * **The same split as `streamMessageText`, for the one field that grows rather than changes.** A block is
+ * written with `updateMessageState({ blocks })`, which replaces the whole field — so a thinking block that
+ * grows for three minutes was rewritten in full on every flush, and what reached storage was a multiple of
+ * what the user was left with. The multiple grew with the turn, which is what makes it the same defect G1
+ * names for text and not a slower version of it.
+ *
+ * So the characters travel here and the row is written on the durable clock. `block` names the block's type
+ * — one of a message's blocks is a `thinking` block, one a `tool-activity` block — because a message holds
+ * several and a window has to know which one a run belongs to. Everything else is the text feed's contract:
+ * `at` is the offset so a window splices onto what its view last gave it, a run that starts past the end of
+ * what the window holds is a stream it joined late and is ignored until the row catches up, and `done`
+ * drops the run after the row has been written.
+ *
+ * **What this channel cannot carry is a change.** A block's label, its state and a re-projected list are
+ * rewrites, not appends, and they go on the row. This is for growth alone.
+ */
+declare function streamMessageBlockText(params: {
+    messageId: EARS.EntityId;
+    block: string;
+    at: number;
+    text: string;
+    done?: true;
+}): void;
 
 /**
  * Sends the next characters of a streamed reply to the windows showing that message.
