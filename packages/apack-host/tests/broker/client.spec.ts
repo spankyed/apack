@@ -275,6 +275,38 @@ describe('the broker client', () => {
       command: 'cargo test',
       running: true,
       exitStatus: null,
+      // A broker that answers no foreground says so as `null`, never as a missing field: a caller reading
+      // `facts.foreground?.name` cannot tell those apart, and one reading `'foreground' in facts` would
+      // get a different answer on Windows than on a shell this broker could not measure
+      foreground: null,
+    });
+  });
+
+  it('reports what the kernel says is running, beside what the shell claimed', async () => {
+    // The case the measurement exists for: a shell with no integration installed claims nothing at all,
+    // so every other field here is empty and `foreground` is the only answer to "what is this doing"
+    const fake = await broker({
+      ...OPENS,
+      facts: [
+        {
+          kind: 'facts',
+          session: 's-1',
+          cwd: null,
+          command: null,
+          running: false,
+          exit_status: null,
+          foreground: { pid: 4321, name: 'vim' },
+        },
+      ],
+    });
+    const session = await fake.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
+
+    expect(await session.facts()).toEqual({
+      cwd: null,
+      command: null,
+      running: false,
+      exitStatus: null,
+      foreground: { pid: 4321, name: 'vim' },
     });
   });
 

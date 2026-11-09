@@ -56,6 +56,23 @@ export interface BrokerFacts {
   /** The status the last finished command reported. `null` when none has, and when a shell reported a finish
    * without one: a shell that says nothing about how a command ended is not saying it succeeded */
   readonly exitStatus: number | null;
+  /**
+   * **What is running in the pty, measured rather than claimed** — the one field here that is not a report
+   * of what some program said.
+   *
+   * It is what a caller asks when the claims are empty, which for a shell with no integration installed is
+   * always: whether anything is running, and what to put in a tab. `null` on Windows, which has no
+   * foreground process group at all.
+   */
+  readonly foreground: BrokerForeground | null;
+}
+
+/** The process group reading a session's pty, as the OS reports it */
+export interface BrokerForeground {
+  /** The process group leader */
+  readonly pid: number;
+  /** Its name, or `null` when it ended between being named and being looked up */
+  readonly name: string | null;
 }
 
 /** Where a search found what it was asked for */
@@ -382,6 +399,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
             command: answer.command,
             running: answer.running,
             exitStatus: answer.exit_status,
+            foreground: answer.foreground ?? null,
           };
         },
         async search(text, history = 0) {
