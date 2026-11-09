@@ -36,6 +36,19 @@ import { tsFilesUnder } from '../../../scripts/lib/process-spawns.ts';
  * allowed to pass; a poll of something with no event to offer; and a race whose timer *is* the answer.
  */
 const BARE_WAIT_BY_DESIGN: Record<string, string> = {
+  // Examined: both of this file's sleeps prove a *negative* — that a schedule stopped with its app does not tick
+  // into the next test — and a negative cannot be polled for, there being no condition to await. The elapsed time
+  // is the subject, which its header says too. Its one clocked wait was on a positive condition and is now a poll
+  'packages/default-setup/tests/harness-app-stop.spec.ts > wait':
+    'the wait is the assertion: it proves a stopped schedule does not tick, so shortening it removes the check',
+  'packages/apack-host/tests/broker/lifetime.spec.ts > keeps a session when its client leaves and an owner holds the broker':
+    'the subject is a session that must *not* end, and attach is absent from the broker client, so a second '
+    + 'client cannot ask about a session it did not open and there is no event that says "still here". Load '
+    + 'can only make this pass falsely, never fail falsely',
+  'packages/apack-host/tests/broker/lifetime.spec.ts > reaped':
+    'the case it serves closes the only client, so no connection remains for an event to arrive on and the '
+    + "OS is the only witness left. Its sibling, where a client is still connected, awaits the broker's own "
+    + '`onExit` instead',
   'packages/apack-cli/tests/build/frontend-watch.native.spec.ts > fileEventsDelivered':
     'what the cases assert is that an event changes nothing, and an event that has no effect has nothing to await',
   'packages/apack-cli/tests/build/watch-package-edit.native.spec.ts > publishes one build when a refresh rewrites what the pack builds against':
@@ -127,10 +140,6 @@ describe('a spec waits for the thing it waits for', () => {
  * own state, where nothing outside it is slowed by load and a quick failure beats the guard's stall window.
  */
 const CLOCK_BY_DESIGN: Record<string, string> = {
-  'packages/apack-ears/tests/engine/rank-index.spec.ts':
-    'waits on an index building in this process, so load slows the wait and the work alike',
-  'packages/default-setup/tests/harness-app-stop.spec.ts':
-    "waits on the in-process test app's timer flow ticking, which runs on this process's own event loop",
   // The native Claude suites: `it.skipIf(!executable||!workspace||!endpoint)`, so these run only where someone
   // has a real `claude` binary and an HTTP endpoint for it. Their waits are on that binary starting and
   // answering over the network, which is the class the rule already admits — not on work this machine's load
