@@ -78,7 +78,9 @@ it('reads file pixels in the live terminal owner and projects them without givin
   const directory=await mkdtemp(join(tmpdir(),'claude-owner-image-')),path=join(directory,'frame.rgba'),pixels=Buffer.from([255,128,0,255])
   await writeFile(path,pixels)
   let data!: (text:string)=>void
-  const write=vi.fn(),pause=vi.fn(),resume=vi.fn()
+  // Promises, because that is what the contract answers: a double returning `undefined` is one the
+  // caller is entitled to `await`
+  const write=vi.fn(async()=>{}),pause=vi.fn(async()=>{}),resume=vi.fn(async()=>{})
   native.open.mockImplementation(async (_options, listeners) => { data = listeners.onOutput; return nativeSession(listeners, {write, pause, resume}) })
   native.uiRequest.mockResolvedValue({tree:{type:'NativeImageReference',props:{imageId:7,columns:2,rows:1,alt:'Cover'}}})
   const prepared=await prepareClaudeNativeTerminal({sessionId:'11111111-1111-1111-1111-111111111111',cwd:directory,cliPath:process.execPath,permissionMode:'default',settings:{effective:{},sources:[]}})

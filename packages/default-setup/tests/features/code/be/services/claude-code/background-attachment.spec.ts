@@ -14,7 +14,7 @@ import {openBackgroundAttachment} from '#features/code/be/services/claude-code/b
 const f = vi.hoisted(() => {
   vi.resetModules()
   return {
-    query:vi.fn(),open:vi.fn(),write:vi.fn(),resize:vi.fn(),signal:vi.fn(),terminate:vi.fn(),
+    query:vi.fn(),open:vi.fn(),write:vi.fn(async()=>{}),resize:vi.fn(async()=>{}),signal:vi.fn(),terminate:vi.fn(async()=>{}),
     output:undefined as undefined|((text:string)=>void),
     exit:undefined as undefined|((code:number|null,signal:string|null)=>void),
   }
