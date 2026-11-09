@@ -48,6 +48,105 @@ function counted<T>(read: () => T): { answer: T; reads: number } {
   return { answer, reads: testCalls().stop().totals.read.calls }
 }
 
+/** A message with `tools` tool entries on its activity block, as a streamed turn leaves one */
+function withToolActivity(threadId: EARS.EntityId, tools: number): EARS.EntityId {
+  const { id } = repository.chatCommands.addMessage({
+    threadId, text: 'working', sender: 'assistant', skipRelink: true,
+    blocks: [{ type: 'tool-activity', props: { state: 'done' } }],
+  })
+  const blockId = query.ids(id).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block)[0]!.target
+  for (let tool = 0; tool < tools; tool++) {
+    repository.chatCommands.writeToolEntry({
+      blockId,
+      entry: { id: `tool-${tool}`, tool: 'Read', summary: `file-${tool}.ts`, status: 'ok' },
+    })
+  }
+  return id
+}
+
+describe('what reading one message costs as its blocks grow', () => {
+  /**
+   * **A message's own read must not grow with what its blocks hold.**
+   *
+   * A block is a row and its growing parts are rows under it, which is what made a streamed turn write what
+   * it keeps. A read assembles them — so this is the direction that bought it, and the one nothing was
+   * watching: `messageById` is on the hot path, every message in an opened thread runs it, and tool entries
+   * are the part of a turn that there are most of.
+   */
+  it('reads a message in the same crossings however many entries it holds', async () => {
+    const threadId = repository.threadCommands.create({ topic: 'Turn', instructions: '' }).id as EARS.EntityId
+    const sizes = [0, 5, 40] as const
+    const ids = sizes.map((tools) => withToolActivity(threadId, tools))
+    await startApp({ systems: ['threads'] })
+
+    const reads = ids.map((id, at) => {
+      const read = counted(() => repository.chatQueries.messageById(id))
+      expect(read.answer?.blocks?.[0]?.props.entries ?? [], `${sizes[at]} entries assembled`).toHaveLength(sizes[at]!)
+      return read.reads
+    })
+
+    // **Constant in what the blocks hold, which is the property.** `query.ids` and `outEdges` both take the
+    // whole set, so a message costs two edge walks and two row reads whatever its blocks hold. Asking per
+    // child made it `5 + entries` — 45 crossings for one message of forty tools, on the read every message
+    // in an opened thread runs.
+    //
+    // Five and forty entries must cost the same; none costs one less, there being no child row to read, and
+    // that is a difference between having children and not rather than growth with the data
+    const [none, few, many] = reads as [number, number, number]
+    expect(many, `the crossings grew with the entries: ${reads.join(', ')}`).toBe(few)
+    expect(none).toBeLessThanOrEqual(few)
+  })
+
+  /**
+   * **A thread's messages cost the same however many there are.**
+   *
+   * This is the read the one reader made batched, and the direction that would regress silently: four
+   * field lists became one, and the one assembles children, so asking per message would have made reading
+   * a thread linear in its messages and linear again in their blocks. Asserted as the property — ten
+   * messages and forty cost the same — rather than as a figure.
+   */
+  it('reads a thread of messages in the same crossings however many it holds', async () => {
+    const small = repository.threadCommands.create({ topic: 'Ten', instructions: '' }).id as EARS.EntityId
+    const large = repository.threadCommands.create({ topic: 'Forty', instructions: '' }).id as EARS.EntityId
+    for (let n = 0; n < 10; n++) withToolActivity(small, 2)
+    for (let n = 0; n < 40; n++) withToolActivity(large, 2)
+    await startApp({ systems: ['threads'] })
+
+    const ten = counted(() => repository.threadQueries.messages(small))
+    const forty = counted(() => repository.threadQueries.messages(large))
+
+    expect(ten.answer).toHaveLength(10)
+    expect(forty.answer).toHaveLength(40)
+    expect(forty.answer[0]?.blocks?.[0]?.props.entries ?? []).toHaveLength(2)
+    expect(forty.reads, `the crossings grew with the messages: ${ten.reads} then ${forty.reads}`).toBe(ten.reads)
+    // Six for ten messages and six for forty, measured: one edge walk, one batched read of the rows, and
+    // the two pairs `childrenOf` makes for every block of every message at once
+    expect(forty.reads).toBeLessThan(10)
+  })
+
+  /**
+   * And a finished turn's block is one row again, so the children cost nothing once it is over.
+   *
+   * They exist to make a turn's writes cost what they write. After it, a read assembles them and the thread
+   * keeps them for ever — forty rows a message, for a message nobody will write again.
+   */
+  it('reads a compacted block without its children', async () => {
+    const threadId = repository.threadCommands.create({ topic: 'Turn', instructions: '' }).id as EARS.EntityId
+    const messageId = withToolActivity(threadId, 40)
+    const blockId = query.ids(messageId).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block)[0]!.target
+    await startApp({ systems: ['threads'] })
+
+    const before = counted(() => repository.chatQueries.messageById(messageId))
+    repository.chatCommands.compactMessageBlock({ blockId })
+    const after = counted(() => repository.chatQueries.messageById(messageId))
+
+    // The same answer, from fewer rows: the entries are the block's own now
+    expect(after.answer?.blocks?.[0]?.props.entries).toEqual(before.answer?.blocks?.[0]?.props.entries)
+    expect(query.ids(blockId).outEdges(EARS.RelKind.HAS_ENTRY, EARS.Entity.ToolEntry)).toEqual([])
+    expect(after.reads).toBeLessThan(before.reads)
+  })
+})
+
 describe('what a view costs as the data grows', () => {
   for (const size of SIZES) {
     it(`reads as much at ×${size}: the chat page, the list, both searches`, async () => {

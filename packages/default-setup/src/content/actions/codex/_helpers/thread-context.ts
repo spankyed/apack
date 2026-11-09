@@ -181,6 +181,23 @@ export function killTurn(services: Services, threadId: string): void {
     try { (services.codex as any).interruptTurn(prior.threadId, prior.turnId)?.catch?.(() => {}); } catch { /* best effort */ }
   }
 
+  // Invalidate queued message. **Before the unregister**, which releases the consumer: its release runs
+  // the consumer's own finalise, and that one replays whatever is queued — so leaving this until after
+  // would start a turn this kill then tears the handle and the flags out from under
+  const queued = dequeueMessage(services, threadId);
+  if (queued?.messageId) {
+    services.chat.updateMessageState(queued.messageId as any, { status: 'cancelled' } as any);
+  }
+
+  // The mid-turn flags, for the same reason: the released consumer reads `activeMessageId` to decide
+  // whether it still owns the thread, so clearing it first leaves it finalising its writers and nothing else
+  persistCodexState(services, threadId, {
+    isRunning: false,
+    turnId: undefined,
+    activeMessageId: undefined,
+    pendingApproval: undefined,
+  });
+
   // Unregister consumer so stale notifications don't route
   if (prior?.threadId) {
     try { (services.codex as any).unregisterConsumer(prior.threadId); } catch { /* ok */ }
@@ -201,17 +218,4 @@ export function killTurn(services: Services, threadId: string): void {
       asideText: `Cancelled — ${prior.pendingApproval?.summary || 'tool request'}`,
     } as any);
   }
-
-  // Invalidate queued message
-  const queued = dequeueMessage(services, threadId);
-  if (queued?.messageId) {
-    services.chat.updateMessageState(queued.messageId as any, { status: 'cancelled' } as any);
-  }
-
-  persistCodexState(services, threadId, {
-    isRunning: false,
-    turnId: undefined,
-    activeMessageId: undefined,
-    pendingApproval: undefined,
-  });
 }

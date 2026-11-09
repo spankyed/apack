@@ -11,22 +11,34 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EntityId, Services } from '#generated/services.ts';
 import { createThinkingWriter } from '../../../../../src/content/actions/claude-code/_helpers/thinking-writer.ts';
-import { ROW_INTERVAL_MS, THINKING_BLOCK } from '../../../../../src/content/actions/claude-code/_helpers/row-interval.ts';
+import { recordTurnWrites } from './_support/turn-writes.ts';
+import { ROW_INTERVAL_MS } from '../../../../../src/content/actions/claude-code/_helpers/row-interval.ts';
 
-type Feed = { block: string; at: number; text: string; done?: true };
+type Feed = { blockId: string; at: number; text: string; done?: true };
 
+/** The row the recorder gives a thinking block, which is what the feed names */
+const BLOCK_ROW = 'row-thinking';
+
+/**
+ * The shared recorder, with this block's text feed beside it.
+ *
+ * It had its own copy of the store modelling — a block write replacing the row's text, an append splicing
+ * onto it — which is the duplication `_support/turn-writes.ts` exists to end. The feed stays local because
+ * it is this block's own channel and no other writer has one.
+ */
 function recorder() {
-  const writes: string[] = [];
   const feed: Feed[] = [];
+  const shared = recordTurnWrites();
+  const chat = (shared.services as unknown as { chat: Record<string, (...args: never[]) => unknown> }).chat;
   const services = {
     chat: {
-      updateMessageState: (_id: unknown, updates: unknown) => { writes.push(JSON.stringify(updates)); },
+      ...chat,
       streamMessageBlockText: (params: Feed & { messageId: unknown }) => {
-        feed.push({ block: params.block, at: params.at, text: params.text, ...(params.done ? { done: true as const } : {}) });
+        feed.push({ blockId: params.blockId, at: params.at, text: params.text, ...(params.done ? { done: true as const } : {}) });
       },
     },
   } as unknown as Services;
-  return { services, writes, feed };
+  return { services, feed, writes: shared.writes, written: shared.written, kept: shared.kept, rowAfter: shared.rowAfter };
 }
 
 const writerOn = (services: Services) => createThinkingWriter(services, 'message-one' as EntityId);
@@ -35,8 +47,6 @@ const writerOn = (services: Services) => createThinkingWriter(services, 'message
 const windowText = (row: string, feed: Feed[]) =>
   feed.filter(one => !one.done).reduce((text, one) => text.slice(0, one.at) + one.text, row);
 
-/** The content of a recorded row write. */
-const contentOf = (write: string) => JSON.parse(write).blocks[0].props.content as string;
 
 beforeEach(() => { vi.useFakeTimers(); });
 afterEach(() => { vi.useRealTimers(); });
@@ -44,7 +54,7 @@ afterEach(() => { vi.useRealTimers(); });
 describe('what a growing thinking block costs', () => {
   /**
    * **The block appearing is written at once.** It is the discrete change the user is waiting for, and a run
-   * cannot splice onto a block the row has not got — a window matches a run to a block by type and ignores
+   * cannot splice onto a block the row has not got — a window matches a run to a block by its row and ignores
    * one it cannot see. So the first content is a row write and everything after it is growth.
    */
   it('writes the block as soon as there is one, and feeds what follows', () => {
@@ -57,7 +67,7 @@ describe('what a growing thinking block costs', () => {
 
     writer.push(' about it');
     expect(writes).toHaveLength(1);
-    expect(feed).toEqual([{ block: THINKING_BLOCK, at: 8, text: ' about it' }]);
+    expect(feed).toEqual([{ blockId: BLOCK_ROW, at: 8, text: ' about it' }]);
   });
 
   /**
@@ -66,14 +76,14 @@ describe('what a growing thinking block costs', () => {
    * between the two is text the user never sees or sees twice, and neither channel can detect it alone.
    */
   it('continues the feed from exactly where the row left off', () => {
-    const { services, writes, feed } = recorder();
+    const { services, rowAfter, feed } = recorder();
     const writer = writerOn(services);
 
     writer.push('one ');
     writer.push('two ');
     writer.push('three');
 
-    const row = contentOf(writes[0]);
+    const row = rowAfter(0);
     expect(row).toBe('one ');
     expect(feed[0].at).toBe(row.length);
     expect(windowText(row, feed)).toBe('one two three');
@@ -81,7 +91,7 @@ describe('what a growing thinking block costs', () => {
 
   /** The row still collects it, on the durable clock, so a crash loses seconds of a turn rather than all. */
   it('writes the row on the durable interval while it grows', async () => {
-    const { services, writes } = recorder();
+    const { services, writes, rowAfter } = recorder();
     const writer = writerOn(services);
 
     writer.push('Thinking');
@@ -91,7 +101,9 @@ describe('what a growing thinking block costs', () => {
 
     await vi.advanceTimersByTimeAsync(ROW_INTERVAL_MS);
     expect(writes).toHaveLength(2);
-    expect(writes[1]).toContain('Thinking more');
+    // An append, not a rewrite: the row holds the growth and the write carried only the new characters
+    expect(rowAfter(1)).toBe('Thinking more');
+    expect(writes[1]).toBe(JSON.stringify({ at: 8, text: ' more' }));
   });
 
   /**
@@ -108,7 +120,7 @@ describe('what a growing thinking block costs', () => {
     writer.finalise();
 
     expect(writes.at(-1)).toContain('Thought for');
-    expect(feed.at(-1)).toEqual({ block: THINKING_BLOCK, at: 0, text: '', done: true });
+    expect(feed.at(-1)).toEqual({ blockId: BLOCK_ROW, at: 0, text: '', done: true });
   });
 
   /**
@@ -119,14 +131,18 @@ describe('what a growing thinking block costs', () => {
    * A bound derived from `ROW_INTERVAL_MS` could not catch the interval being lowered again, since it would
    * scale by the same factor as the writes — so this one is absolute and holds whatever the clock is set to.
    *
-   * **Measured on this fixture**: 36KB of thinking over three minutes writes 1.68MB, which is 47x. On a
-   * quarter-second row it was 13MB, so the durable interval is worth 7.7x — and what the feed buys is not
-   * that figure but the right to charge it: the growth reaches the windows as it arrives, so the row can be
-   * slow without the block looking stuck. The 47x that remains is the row carrying the whole block ninety
-   * times, and only storing the block's text as a delta would reduce it further.
+   * **Measured on this fixture**: 36KB of thinking over three minutes writes 87,805 bytes, which is 2.44x.
+   * It wrote 1.68MB — 47x — while a flush carried the whole block. What removed that is the text being
+   * appended from an offset rather than rewritten; what is left is the text once, plus one whole-text write
+   * per compaction (`TEXT_SEGMENTS_BEFORE_COMPACTION`), which is what the bound is over.
+   *
+   * **And this is now the interval the app runs.** It read 2.06x while `ROW_INTERVAL_MS` was 2000 and every
+   * caller passed 250, so the figure described a configuration nothing used — the spec measured the default
+   * and the product overrode it. 2.44x against 2.06x is the whole difference eight times as many commits
+   * makes, which is the appending's doing: the old shape priced the same change at 13MB against 1.68MB.
    */
   it('writes a bounded multiple of what the turn leaves behind', async () => {
-    const AMPLIFICATION = 60;
+    const AMPLIFICATION = 4;
     const { services, writes } = recorder();
     const writer = writerOn(services);
     const ticks = 720, growth = 50;

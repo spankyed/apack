@@ -5,18 +5,19 @@
  * reasons. This writer accumulates the thinking text and pushes a single
  * `thinking` block via `updateMessageState({ blocks })`.
  *
- * Coordination with ToolActivityWriter: both writers target the `blocks`
- * field, and `updateMessageState` replaces the entire field. The thinking
- * writer writes directly to `blocks` until tool-activity starts, at which
- * point `stopDirectWrites()` is called and the tool-activity writer takes
- * over — it includes the thinking block via the `getThinkingBlock` callback
- * passed at construction time.
+ * **It owns its block's row for the whole turn.** A block is an entity, so this writer writes the `thinking`
+ * row and the tool-activity writer writes its own; neither carries the other's and neither has to stop. It
+ * holds the row's id from the first write, so every flush after it is one row by id.
+ *
+ * **And the text is appended rather than rewritten.** Growth goes to the row as a segment from the offset it
+ * starts at — the same `(at, text)` the feed sends the windows — so the interval decides how often the turn
+ * commits rather than how much of it is written again.
  */
 
 import type { Services, EntityId } from '#generated/services.ts';
 import type { ThinkingBlockProps } from './thinking-types.ts';
-import { formatDuration } from './tool-activity-label.ts';
-import { ROW_INTERVAL_MS, THINKING_BLOCK } from './row-interval.ts';
+import { formatDuration } from './duration.ts';
+import { ROW_INTERVAL_MS } from './row-interval.ts';
 
 export interface ThinkingWriterOptions {
   /** Minimum ms between durable `updateMessageState` calls. Default {@link ROW_INTERVAL_MS}. */
@@ -27,7 +28,6 @@ export interface ThinkingWriter {
   push(text: string): void;
   flush(): void;
   finalise(): void;
-  stopDirectWrites(): void;
   buildBlock(): { type: string; props: ThinkingBlockProps } | null;
   readonly hasContent: boolean;
   readonly isStreaming: boolean;
@@ -43,31 +43,32 @@ export function createThinkingWriter(
   let firstPushAt = 0;
   let finalisedAt = 0;
   let state: 'streaming' | 'done' = 'streaming';
-  let directWritesEnabled = true;
   let pendingTimer: ReturnType<typeof setTimeout> | null = null;
   let lastFlushAt = 0;
   /** How much of `buffer` the windows have been sent. The feed's offsets are contiguous from 0 */
   let fedUpTo = 0;
-  /** Whether a durable write has put a thinking block in the row for a run to splice onto */
-  let rowHasBlock = false;
+  /** The block's own row, from the first durable write; a run can only splice onto a block the row holds */
+  let blockId: EntityId | undefined;
+  /** How much of `buffer` the row holds, as its own text plus the segments appended to it */
+  let rowUpTo = 0;
 
   /**
    * Sends the characters the windows have not been sent — the block's half of G1's feed.
    *
    * **A run can only splice onto a block the row already holds**, since a window matches a run to a block
-   * by type and ignores one it cannot see. So nothing is fed before the first durable write, and that write
-   * is immediate rather than on the interval: a block appearing is a discrete change the user is waiting
-   * for, where its growth is not.
+   * by that row's id and ignores one it cannot see. So nothing is fed before the first durable write, and
+   * that write is immediate rather than on the interval: a block appearing is a discrete change the user is
+   * waiting for, where its growth is not. It is also what makes the id available to name here.
    *
    * The buffer here only ever grows — `push` appends and a finished writer takes no more text — so there is
    * no rewrite this channel could be asked to carry.
    */
   function feed(): void {
-    if (!rowHasBlock || fedUpTo >= buffer.length) return;
+    if (!blockId || fedUpTo >= buffer.length) return;
     const at = fedUpTo;
     const text = buffer.slice(at);
     fedUpTo = buffer.length;
-    services.chat.streamMessageBlockText({ messageId, block: THINKING_BLOCK, at, text });
+    services.chat.streamMessageBlockText({ messageId, blockId, at, text });
   }
 
   function buildLabel(): string {
@@ -84,25 +85,41 @@ export function createThinkingWriter(
     };
   }
 
+  /**
+   * Commits what has grown since the last flush.
+   *
+   * **Growth is appended; everything else is a write of the block.** A segment is written once and never
+   * rewritten, which is what stops a turn's cost growing with it — writing the whole block on every flush
+   * cost 47.9x the text the turn left behind. A write of the block is for what is not growth: the block
+   * appearing, and the label and state changing when it finishes, which are rewrites no append can carry.
+   * That write also replaces the text, so it is what folds the segments back in.
+   */
   function writeNow(): void {
     if (pendingTimer) {
       clearTimeout(pendingTimer);
       pendingTimer = null;
     }
-    if (!directWritesEnabled || !buffer) return;
-    const block = buildBlock();
-    if (block) {
-      services.chat.updateMessageState(messageId, { blocks: [block] as any });
-      // The row now holds everything the buffer does, so nothing up to here is the feed's to send
-      rowHasBlock = true;
-      fedUpTo = buffer.length;
+    if (!buffer) return;
+
+    if (blockId && state === 'streaming') {
+      if (buffer.length > rowUpTo) {
+        services.chat.appendMessageBlockText(blockId, rowUpTo, buffer.slice(rowUpTo));
+        rowUpTo = buffer.length;
+      }
+    } else {
+      const block = buildBlock();
+      if (block) {
+        blockId = services.chat.updateMessageBlock(messageId, block, blockId);
+        rowUpTo = buffer.length;
+      }
     }
+    // The row now holds everything the buffer does, so nothing up to here is the feed's to send
+    fedUpTo = buffer.length;
     lastFlushAt = Date.now();
   }
 
   /** The durable write's clock. The feed has none: growth goes out as it arrives. */
   function schedule(): void {
-    if (!directWritesEnabled) return;
     if (pendingTimer) return;
     const since = Date.now() - lastFlushAt;
     const delay = Math.max(0, intervalMs - since);
@@ -122,21 +139,13 @@ export function createThinkingWriter(
       buffer += text;
       // The first content is the block appearing, which is written at once; everything after it is growth,
       // which the feed carries while the row collects it on the durable interval
-      if (!rowHasBlock) { writeNow(); return; }
+      if (!blockId) { writeNow(); return; }
       feed();
       schedule();
     },
 
     flush(): void {
       writeNow();
-    },
-
-    stopDirectWrites(): void {
-      directWritesEnabled = false;
-      if (pendingTimer) {
-        clearTimeout(pendingTimer);
-        pendingTimer = null;
-      }
     },
 
     finalise(): void {
@@ -146,9 +155,11 @@ export function createThinkingWriter(
       // The row first, then the run is dropped. A window drops its run on `done` and falls back to the row,
       // so the row has to be the finished one by then — the text feed's contract, for the same reason. The
       // label and state change here too, which are rewrites and only the row can carry them
+      // No compaction after it: the write above carries the whole text, and a whole-block write is what
+      // folds the segments in. Asking for one as well wrote the text twice
       writeNow();
-      if (rowHasBlock) {
-        services.chat.streamMessageBlockText({ messageId, block: THINKING_BLOCK, at: 0, text: '', done: true });
+      if (blockId) {
+        services.chat.streamMessageBlockText({ messageId, blockId, at: 0, text: '', done: true });
       }
     },
 

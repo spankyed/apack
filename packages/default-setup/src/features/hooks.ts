@@ -3,7 +3,22 @@ import { removeAllListeners as removeAllAdHocListeners } from './brain/be/servic
 import { clearFlowActorRegistry } from './brain/be/flow-system.ts';
 import { services } from '#generated/services.ts';
 
-export const onInit = () => {};
+/**
+ * The pack's backend started.
+ *
+ * **A turn's text can be left unfolded, and only a boot can know it was.** A streamed reply's growth is
+ * appended to child rows and folded into `Message.text` — the field the text index reads — when its writer
+ * finalises. A turn's owner releases its writers on every exit from the stream, so a kill folds; what
+ * cannot is the process ending mid-turn, where there is no exit to pass through.
+ *
+ * Nothing streams at boot, so a message still holding text segments here was left that way, which is the
+ * marker and why this needs no `'streaming'` status to find them by. Without it that tail stays out of the
+ * index for good.
+ */
+export const onInit = () => {
+  const folded = services.repository.chatCommands.foldStrandedMessageText();
+  if (folded > 0) services.logger.info('folded the text of messages a turn left unfinished', { messages: folded });
+};
 
 /**
  * The pack's backend stopped (the app exiting or unloading the pack, a test app stopping): its stopped actors never
