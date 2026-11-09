@@ -18,6 +18,10 @@ export function nativeResourceFiles(entry: ToolActivityEntry): NativeResourceFil
   for (const value of result.contents) {
     if (!value || typeof value !== 'object') continue
     const { blobSavedTo: path, uri } = value as Record<string, unknown>
+    // Control characters are what this rejects, not something that reached the pattern by accident:
+    // `blobSavedTo` is a path an MCP tool claimed, and one carrying a NUL or an escape is not a path this
+    // app will open. The rule is for the other case, so it is turned off for this line alone.
+    // eslint-disable-next-line no-control-regex
     if (typeof path !== 'string' || typeof uri !== 'string' || !uri || uri.length > 4096 || path.length > 4096 || !path.startsWith('/') || /[\u0000-\u001f\u007f\\]/.test(path)) continue
     const segments = path.split('/')
     if (segments.some(part => part === '.' || part === '..')) continue

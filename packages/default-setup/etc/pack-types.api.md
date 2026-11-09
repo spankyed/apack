@@ -4242,9 +4242,9 @@ interface EventListenerEntity {
 interface ExecOnceOptions {
     cwd?: string;
     /**
-     * Merge overrides into the inherited child environment. ANTHROPIC_API_KEY
-     * and NODE_ENV are always removed, including explicit overrides. Native
-     * file checkpointing defaults on only when its environment switch is unset.
+     * Merge overrides into the child environment, which is this process's minus everything the app set on it.
+     * ANTHROPIC_API_KEY is always removed, including an explicit override. Native file checkpointing defaults
+     * on only when its environment switch is unset.
      */
     env?: NodeJS.ProcessEnv;
     /** Bytes piped to stdin. Pass `undefined` to leave stdin closed. */
@@ -7589,9 +7589,9 @@ type Simplify<T> = {
 interface SpawnStreamOptions {
     cwd?: string;
     /**
-     * Merge overrides into the inherited child environment. ANTHROPIC_API_KEY
-     * and NODE_ENV are always removed, including explicit overrides. Native
-     * file checkpointing defaults on only when its environment switch is unset.
+     * Merge overrides into the child environment, which is this process's minus everything the app set on it.
+     * ANTHROPIC_API_KEY is always removed, including an explicit override. Native file checkpointing defaults
+     * on only when its environment switch is unset.
      */
     env?: NodeJS.ProcessEnv;
     signal?: AbortSignal;
