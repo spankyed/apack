@@ -934,7 +934,15 @@ function searchMessages(text: string, limit = 20): MessageSearchResult[] {
     const threadId = threadOf.get(id);
     if (!threadId) continue;
     if (results.length === limit) break;
-    const marks = (highlights?.text ?? []).map(([, s, e]) => [s, e] as [number, number]);
+    // **Only the first element's, because the marks are offsets into one string.** A highlight is
+    // `[element, start, end]`, where `element` says which member of a list-valued field it is in;
+    // `Message.text` is a single string, so every tuple carries 0 and dropping it is correct. It is
+    // filtered rather than discarded because the day `text` becomes a list — or a list field joins the
+    // index — every element's offsets would be flattened against one string and mark the wrong
+    // characters, which reads as a mis-highlighted snippet rather than as an error.
+    const marks = (highlights?.text ?? [])
+      .filter(([element]) => element === 0)
+      .map(([, s, e]) => [s, e] as [number, number]);
     results.push({
       messageId: id, threadId, topic: topics.get(threadId) ?? '', sender: row.sender, timestamp: row.timestamp,
       ...snippetOf(row.text ?? '', marks),
