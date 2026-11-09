@@ -101,28 +101,36 @@ this one's:
 ## Current handoff
 
 - **Checkout:** this repository on `master`; the broker in a worktree of `apack-terminal` at
-  `vt-core/conformance`, branched from `93b7de9`, which is what `vendor/apack-terminal.rev` pins. The main
-  broker checkout stays detached at that pin so the monorepo's `vendor/` link does not drift under local
-  work.
-- **Phase 0a passes.** Ten conformance cases on `vt-core/conformance` (`897c01c`): the grids agree over all
-  eight streams whole and byte-by-byte, the new wrapper is self-consistent at every byte boundary, and the
-  three differences found are each decided — device attributes (the core is right), the disjoint
-  shell-integration families (take the union), and where payload decoding lives.
-- **Phase 0b passes for the delivery route.** A pack's WebAssembly module reaches the window and
-  instantiates from the revision the app installed, over `pack://`, both streaming and buffered
-  (`tests/packs/external-pack/tests/e2e/wasm-asset.spec.ts`). Three of its four risks were answered by
-  reading; the fourth needed `application/wasm` in the protocol's MIME table. **An imported module is the
-  wrong mechanism** — a Vite library build inlines it as base64, 99.1% of the bundle — and the route that
-  works needed no build change, `<pack>/public/` already being copied into the frontend's output.
-- **Next deliverable:** Phase B, which depends on 0a's result (in hand) and on O2. Phase R depends on 0b's
-  route (in hand) and not on B.
-- **Not exercised:** a *packaged* bundle. The run is a built app from this checkout; why that answers the
-  route is argued in evidence, and the residual is named there rather than waved away.
-- **Proven:** the release and its commit; that upstream publishes six files and none is a Windows or Linux
-  library; that a verified archive unpacks to the layout the `-sys` crate expects and that a build with
-  `GHOSTTY_VT_RS_SYS_PREBUILT_DIR` set fetches nothing; and the grid, reply and facts results above.
-- **Known unresolved:** O2. D4 was corrected by measurement and D5 three times; `search`, primary-screen
-  reflow and all of Windows are named in evidence as outside what 0a covered.
+  `vt-core/conformance`, branched from `93b7de9`. The main broker checkout stays detached at that pin so
+  the monorepo's `vendor/` link does not drift under local work. `vendor/apack-terminal.rev` has **not**
+  been moved: the branch is not mergeable while O4 is open.
+- **Phase 0a passes.** Ten conformance cases. The grids agree over all eight streams whole and
+  byte-by-byte, the wrapper is self-consistent at every byte boundary, and three differences are decided:
+  device attributes (the core is right), the disjoint shell-integration families (take the union), and
+  where payload decoding lives.
+- **Phase 0b passes.** A pack's WebAssembly module instantiates in the app from the installed revision over
+  `pack://`, streaming and buffered. An imported module is the wrong mechanism; a public asset is the
+  right one and needed no build change.
+- **Phase B is written and one case is red.** `screen.rs` is the core, `alacritty_terminal` is gone, and
+  the eight snapshots recorded from the old parser pass unchanged — which is the evidence that nothing
+  observable moved. `search` stays ours. ~110 cases pass; `a_session_keeps_its_declared_scrollback_and_not_more`
+  does not, and is left red because the assertion is right about the contract as it stands.
+- **Phase R has not started**, and should not until O3 is answered: its premise in D2 is wrong as written.
+- **Phase A has not started**, depending on B and R.
+
+**Four decisions block the rest, and three of them are the user's.** None is a thing to work around:
+
+| | blocks | what it needs |
+|---|---|---|
+| **O1** | — | answered in Phase 0a |
+| **O2** | Phase B's exit on Windows | the Windows VM, and a library built from the signed tarballs since no archive exists from anyone |
+| **O3** | Phase R | a decision: `libghostty-vt` is a parser, not a widget, so D2 as written means writing a terminal renderer |
+| **O4** | Phase B's exit | a decision: the broker's advertised scrollback contract, which this core cannot keep as written |
+
+**O4 is the one that stops `pre-push` going green**, and there is no configuration that avoids it: the
+core's floor is one page's rows, a page is a fixed number of *bytes*, so the rows it holds fall as content
+widens. A promise of a fixed line count is therefore unkeepable with this core for arbitrary content, which
+is why it is a contract question rather than a tuning one.
 
 ## Decisions
 
