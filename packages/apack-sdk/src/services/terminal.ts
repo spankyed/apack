@@ -27,8 +27,14 @@ export interface TerminalListeners {
 export interface TerminalSession {
   /** The host's id for the session; a pack never invents one */
   readonly id: string;
-  /** The process id, for a diagnostic. Not a handle: nothing addresses a session by it */
-  readonly pid: number;
+  /**
+   * The process id, for a diagnostic — **`null` when the host did not say**.
+   *
+   * Not a handle: nothing addresses a session by it, which is the whole of why a session has an `id`. It is
+   * answered for a session the host just started and not for one it took up again after a restart, and a
+   * number invented to fill that gap would tell a window that the shell it is drawing had been replaced.
+   */
+  readonly pid: number | null;
   /**
    * How many lines of scrollback this session has, which is the host's number and not the window's.
    *
@@ -74,4 +80,17 @@ export interface TerminalService {
     },
     listeners: TerminalListeners,
   ): Promise<TerminalSession>;
+  /**
+   * Takes up a session that is already running, by the id it was given when it started.
+   *
+   * **What a restarted service needs and cannot otherwise have.** A session outlives the process that opened
+   * it on purpose; without this it outlives it *unreachably* — no listeners, no handle, and a fresh shell
+   * started beside it for the same terminal, repeated on every restart until the app quits.
+   *
+   * Refuses when no session has that id, which is the ordinary case after a full app restart: every session
+   * ends with the app, so every id a caller stored is stale. That refusal is how a caller tells a session
+   * that survived from one that did not, so it is the signal to start a shell rather than an error to
+   * report.
+   */
+  adopt(id: string, listeners: TerminalListeners): Promise<TerminalSession>;
 }

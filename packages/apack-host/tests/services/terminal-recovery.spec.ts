@@ -68,7 +68,7 @@ describe.skipIf(!BINARY)('after the broker it was holding died', () => {
     // asserted first and why it is worth writing down. The shell's pid is the OS's, so it is the one of the
     // two that says a new process answered; that the call returned at all is the rest of the proof, since
     // the socket the service was holding is gone and a request written to it would be answered by nobody.
-    expect(alive(next.pid), 'the next session named a shell that is not running').toBe(true);
+    expect(alive(next.pid!), 'the next session named a shell that is not running').toBe(true);
     expect(next.pid, 'the next session is the dead broker and not a fresh one').not.toBe(first.pid);
     expect(exits, 'the session the dead broker held was reported exited').toEqual([null]);
   });

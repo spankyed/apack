@@ -3,6 +3,7 @@ import { featureSettings } from '#generated/settings.ts';
 import { newId } from '#generated/ears.ts';
 import * as path from 'path'
 import type { TerminalInfo, TerminalCreate } from '../types.ts'
+import type { TerminalEntity } from '../repository/index.ts'
 import { EARS } from '#generated/ears.ts'
 import { repository } from '#generated/repository.ts';
 import { createLogger } from '@apackdev/sdk/logger';
@@ -111,6 +112,23 @@ export interface AcceptedGrid {
   changed: boolean
 }
 
+/**
+ * What closing a terminal did.
+ *
+ * **A boolean cannot say it.** Its caller reads a falsy answer as "no such terminal" and tells the user so,
+ * which is true of exactly one of these: a broker that refuses to end a session is not a terminal that was
+ * never there, and a close that completed here is not a failure at all.
+ */
+export type TerminalClose =
+  /** The broker was asked to end the shell. The exit it sends back is what completes the close */
+  | 'ending'
+  /** The shell had already gone, so there was no exit to wait for and the close completed here */
+  | 'closed'
+  /** The broker would not end it. The terminal is closed here anyway, its session being unreachable */
+  | 'refused'
+  /** There is no such terminal */
+  | 'unknown'
+
 export interface TerminalHandlers {
   onData(terminalId: string, data: string): void
   /** The shell ended and the terminal is gone with it */
@@ -167,7 +185,7 @@ class TerminalService {
       sizedBy,
     }
     this.terminals.set(id, terminal)
-    repository.terminalCommands.create({ id, title, shell, cwd, cols, rows })
+    repository.terminalCommands.create({ id, title, shell, cwd, cols, rows, session: session.id })
 
     return published(terminal)
   }
@@ -257,6 +275,10 @@ class TerminalService {
 
       terminal.state = { kind: 'live', session, opening }
       terminal.info = { ...terminal.info, pid: session.pid, generation: terminal.info.generation + 1 }
+      // The row must name the session that is running now. A stored id pointing at the shell this just
+      // replaced is the one case offering it cannot survive: the broker would answer for it, and a restart
+      // of this process would take up a session no terminal is showing
+      repository.terminalCommands.recordSession(id as EARS.EntityId, session.id)
       return published(terminal)
     } catch (error) {
       // The state is already right — this terminal has no shell — but a rejection alone tells no window.
@@ -372,9 +394,9 @@ class TerminalService {
    * the shell died. What this replaced reached for a pid and a process group, which is F7, and could not do
    * it at all on Windows, which is X1.
    */
-  async kill(id: string, handlers: TerminalHandlers): Promise<boolean> {
+  async kill(id: string, handlers: TerminalHandlers): Promise<TerminalClose> {
     const terminal = this.terminals.get(id)
-    if (!terminal) return false
+    if (!terminal) return 'unknown'
 
     // **A shell that has already gone leaves no exit to wait for**, so this is where its terminal closes.
     // The broker forgets a session when it exits and the client drops its listener with it, so asking the
@@ -383,7 +405,7 @@ class TerminalService {
     // user finally dismissing it.
     if (terminal.state.kind === 'exited') {
       this.removed(id, terminal.state.code, handlers)
-      return true
+      return 'closed'
     }
 
     // Before the ask, because the exit can arrive inside `terminate()` and has to find the intent already set
@@ -391,14 +413,14 @@ class TerminalService {
     terminal.state = { kind: 'closing', session, opening }
     try {
       await session.terminate()
-      return true
+      return 'ending'
     } catch (error) {
       logger.error('Error killing terminal', { error })
       // The session is gone whatever the broker answered; a row left active would outlive it (L2), and a
       // window that was never told would go on drawing a terminal this process has forgotten. The broker
       // answered nothing, so there is no status to carry.
       this.removed(id, null, handlers)
-      return false
+      return 'refused'
     }
   }
 
@@ -462,19 +484,68 @@ class TerminalService {
   }
 
   /**
-   * Opens a fresh shell for every row the last run left active, in the directory it was in.
+   * Takes up the session a row names, if the broker still has it, and says whether it did.
    *
-   * **"Restore" is the record, not the session**, and that was true before this change too: the previous
-   * process and its output are gone. What changed is that it no longer reaches for the pid the row stored —
-   * it used to check whether that process was alive and SIGKILL it and its group, which is **F7**, and which
-   * could kill a pid the OS had since given to something else. The broker owns the processes a run leaves
-   * behind, so there is nothing here to clean up.
+   * A refusal is the ordinary case rather than a failure: a full app restart ends every session, so every id
+   * a row carries is then stale, and the caller starts a shell instead. That is why this offers the id
+   * rather than checking first — there is nothing to check it against that the broker would not answer
+   * better.
+   */
+  private async adopt(row: TerminalEntity, session: string, handlers: TerminalHandlers): Promise<boolean> {
+    const shell = this.shellFor(row.shell)
+    const opening = ++this.openings
+    try {
+      const taken = await services.terminal.adopt(session, {
+        onOutput: (data) => handlers.onData(row.id, data),
+        onExit: (code) => this.exited(row.id, opening, code, handlers),
+      })
+      const info: Terminal['info'] = {
+        id: row.id,
+        title: row.title,
+        customTitle: row.customTitle,
+        // The broker answers a pid for a spawn and not for this, and absent is the honest answer: the shell
+        // is the one any window watching was already watching, so there is no boundary for a pid to mark
+        pid: taken.pid,
+        shell,
+        // The row records no count, so this starts at one whether the session survived or not. Nothing reads
+        // it as a boundary — the pid does that, and an adopted session has none to read
+        generation: 1,
+        cwd: this.directoryFor(row.cwd),
+        cols: row.cols,
+        rows: row.rows,
+        scrollback: taken.scrollback,
+        submit: submitFor(shell),
+      }
+      // Sized by nobody, as any restore is: the first window to fit it takes the size (M2)
+      this.terminals.set(row.id, { info, state: { kind: 'live', session: taken, opening }, sizedBy: undefined })
+      logger.info(`Took up session ${session} again for terminal ${row.title} (${row.id}); its shell and its output survived`)
+      return true
+    } catch (error) {
+      logger.info(`Session ${session} for terminal ${row.id} is gone; starting a shell instead`, { error })
+      return false
+    }
+  }
+
+  /**
+   * Brings back every terminal the last run left: the session itself where it is still running, and
+   * otherwise a fresh shell in the directory it was in.
+   *
+   * **Two different things are called restoring, and only one of them loses anything.** Electron main holds
+   * the broker's sessions for the life of the app, so a restart of *this* process — a dev reload, a
+   * crash-restart — leaves every shell running with its output intact, and those are taken up again. A
+   * restart of the *app* ends them with the hold, and what comes back there is the record: a new shell in
+   * the old one's directory, the previous process and its output gone.
+   *
+   * Either way nothing here reaches for a pid. A row carrying one was checked for liveness and SIGKILLed
+   * with its group, which is **F7** — and which could name a process the OS had since given to something
+   * else. The broker owns the processes a run leaves behind.
    */
   async restoreAll(handlers: TerminalHandlers): Promise<void> {
     const persisted = repository.terminalQueries.all()
 
     for (const row of persisted) {
       if (this.terminals.has(row.id)) continue
+      // Asked rather than assumed: a stored id is a name, and offering a stale one costs one refused request
       // **A row is data** (S3): the database console writes one, `apack db exec` writes one, and a backup
       // import replaces the whole store without looking at a row. So a stored shell and a stored directory
       // go through the same check a created one does, rather than straight to a spawn.

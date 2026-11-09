@@ -15,7 +15,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolveAppEnvironment, withoutAppProcessEnv } from '@apackdev/sdk/env';
 import type { TerminalListeners, TerminalService, TerminalSession } from '@apackdev/sdk/services';
-import { type Broker, holdBrokerSessions, startBroker } from '../broker/client.ts';
+import { type Broker, type BrokerSession, holdBrokerSessions, startBroker } from '../broker/client.ts';
 
 /**
  * The longest a Unix socket path may be, conservatively.
@@ -169,6 +169,24 @@ export function holdTerminalSessions(): Promise<{ close(): void }> {
   });
 }
 
+/**
+ * A broker session as a pack holds it.
+ *
+ * One mapping for both ways of coming to hold a session, because what a pack may do with one does not
+ * depend on whether this process started it.
+ */
+function expose(held: Broker, session: BrokerSession): TerminalSession {
+  return {
+    id: session.id,
+    pid: session.pid,
+    // The broker's own, from its handshake, rather than a number this process also keeps
+    scrollback: held.history,
+    write: (data) => session.write(data),
+    resize: (cols, rows) => session.resize(cols, rows),
+    terminate: () => session.kill(),
+  };
+}
+
 /** Starts the broker the first time a session is wanted, and once per process thereafter */
 export function createTerminalService(): TerminalService & { shutdown(): Promise<void> } {
   let broker: Promise<Broker> | undefined;
@@ -202,16 +220,11 @@ export function createTerminalService(): TerminalService & { shutdown(): Promise
   return {
     async open(options, listeners: TerminalListeners): Promise<TerminalSession> {
       const held = await running();
-      const session = await held.open(options, listeners);
-      return {
-        id: session.id,
-        pid: session.pid,
-        // The broker's own, from its handshake, rather than a number this process also keeps
-        scrollback: held.history,
-        write: (data) => session.write(data),
-        resize: (cols, rows) => session.resize(cols, rows),
-        terminate: () => session.kill(),
-      };
+      return expose(held, await held.open(options, listeners));
+    },
+    async adopt(id, listeners: TerminalListeners): Promise<TerminalSession> {
+      const held = await running();
+      return expose(held, await held.adopt(id, listeners));
     },
     /**
      * Leaves the broker. **It does not end it, and must not**: the sessions outlive this process so that

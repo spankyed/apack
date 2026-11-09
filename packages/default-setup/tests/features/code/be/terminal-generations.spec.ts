@@ -147,7 +147,7 @@ describe('closing a terminal whose shell has already gone', () => {
 
     // The broker forgot this session when it exited and the client dropped its listener with it, so a kill
     // sent now is answered by nobody: a close that waited for that answer would never arrive
-    expect(closed).toBe(true)
+    expect(closed, 'completed here rather than asked of the broker').toBe('closed')
     expect(only(terminalService.list(), info.id), 'so the close finishes here').toEqual([])
     expect(told.onExit, 'every window is told, or they go on drawing it').toHaveBeenCalledWith(info.id, 139)
     expect(repository.terminalQueries.all().map(row => row.id),
@@ -174,7 +174,7 @@ describe('a close the broker refuses', () => {
 
     const closed = await terminalService.kill(info.id, told)
 
-    expect(closed, 'the asker hears that it failed').toBe(false)
+    expect(closed, 'the asker hears what happened, not that it was never there').toBe('refused')
     expect(only(terminalService.list(), info.id), 'the terminal is gone from here').toEqual([])
     // Forgetting it here while every window still draws it is the same wedge from the other side: the next
     // write to that terminal answers "not found" and nothing can close it, because there is nothing left to
@@ -208,7 +208,7 @@ describe('a restart that cannot start a shell', () => {
     broker.refuseOpen(2)
     await expect(terminalService.restart(info.id, told)).rejects.toThrow()
 
-    expect(await terminalService.kill(info.id, told)).toBe(true)
+    expect(await terminalService.kill(info.id, told)).toBe('closed')
     expect(only(terminalService.list(), info.id)).toEqual([])
     await app.stop()
     resetTestData()

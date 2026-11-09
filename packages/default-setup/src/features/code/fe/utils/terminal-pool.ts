@@ -72,9 +72,17 @@ interface PoolEntry {
    * process (`restoreAll` in the backend's terminal service spawns one and calls `updatePid`), so the id
    * cannot say whether what is on screen came from the shell that is answering now. The pid can.
    */
-  pid: number
+  pid: number | null
   /** Whether this generation's death has already been written on the screen, so it is written once */
   exitNoted?: boolean
+  /**
+   * Set while a grid the host accepted is being applied, so the feed that reports what this window *fitted*
+   * stays quiet.
+   *
+   * Applying is not fitting. The emulator raises its own `resize` either way, and reporting this one would
+   * send the host back the very grid it had just sent — two windows handing one size to each other.
+   */
+  applying?: boolean
   term: Terminal
   fitAddon: FitAddon
   wrapper: HTMLDivElement
@@ -214,24 +222,56 @@ class TerminalPool {
    * whatever the new shell had printed by then — a line about a death, placed after the life that followed
    * it.
    */
-  noteRestart(terminalId: string, pid: number): void {
+  noteRestart(terminalId: string, pid: number | null): void {
     const entry = this.entries.get(terminalId)
-    if (!entry) return
-    if (entry.exitNoted) {
-      entry.pid = pid
-      entry.exitNoted = false
-      return
-    }
-    this.markRestart(entry, pid)
+    if (entry) this.markRestart(entry, pid)
   }
 
-  /** Marks the seam when an entry's pty has been replaced, and records the one answering now. */
-  private markRestart(entry: PoolEntry, pid: number): void {
+  /**
+   * Marks the seam when an entry's pty has been replaced, and records the one answering now.
+   *
+   * **The one-seam rule lives here and not in its callers**, because the news reaches this screen by two
+   * routes and only one of them is `terminal.RESTARTED`. `restoreAll` broadcasts nothing, so after a backend
+   * restart a replaced pty is learnt from a refreshed list instead — `syncProcesses`, straight into here —
+   * and a window that had already drawn the crash line would draw a restart line under it for the same
+   * death. The same holds for any window that missed a broadcast: a surface starting, a reconnect, an
+   * explicit refresh.
+   */
+  private markRestart(entry: PoolEntry, pid: number | null): void {
     if (pid === entry.pid) return
+    // **An unknown pid on either side cannot tell one shell from another, so it draws nothing.** The host
+    // answers none for a session it took up again rather than started, and that is the case where there is
+    // certainly no boundary: the shell is the one whose output is already on this screen. Taking the value
+    // quietly is what keeps the next real change a boundary again.
+    if (pid === null || entry.pid === null) {
+      entry.pid = pid
+      return
+    }
+    // A crash already drew the line for this boundary, so the new pid is taken quietly; a restart of a shell
+    // that was still running has drawn nothing, so it draws. Either way a new shell is running, which makes
+    // the next death news again
+    const drawn = entry.exitNoted === true
     entry.pid = pid
-    // A new shell is running, so the death above has been accounted for and the next one is news again
     entry.exitNoted = false
-    entry.term.write(restartedNotice(pid))
+    if (!drawn) entry.term.write(restartedNotice(pid))
+  }
+
+  /**
+   * Draws this terminal at the grid its pty is actually running at.
+   *
+   * **A window renders the accepted grid rather than the one it fitted** (M2). A pty has one `(cols, rows)`,
+   * so one window owns the size and the rest are told what is in force — and a window that is told and does
+   * nothing with it goes on drawing at a width nothing agreed to, which is the whole symptom the refusal
+   * exists to remove. Storing the number without applying it leaves the contract half-kept.
+   *
+   * Nothing is reported back: see `applying`.
+   */
+  applyGrid(terminalId: string, cols: number, rows: number): void {
+    const entry = this.entries.get(terminalId)
+    if (!entry || cols < 1 || rows < 1) return
+    if (entry.term.cols === cols && entry.term.rows === rows) return
+    entry.applying = true
+    try { entry.term.resize(cols, rows) } finally { entry.applying = false }
   }
 
   /**
@@ -403,12 +443,12 @@ class TerminalPool {
     let settling: ReturnType<typeof setTimeout> | undefined
     let toldAt = 0
     const tell = () => {
-      if (released) return
+      if (released || entry.applying) return
       toldAt = Date.now()
       handlers.onResize?.({ cols: term.cols, rows: term.rows })
     }
     const tellSettled = () => {
-      if (released || settling) return
+      if (released || settling || entry.applying) return
       const since = Date.now() - toldAt
       if (since >= RESIZE_SETTLE_MS) { tell(); return }
       settling = setTimeout(() => { settling = undefined; tell() }, RESIZE_SETTLE_MS - since)

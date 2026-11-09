@@ -200,7 +200,15 @@ export interface TerminalInfo {
   id: EARS.EntityId
   title: string
   customTitle?: string // User-defined custom name, takes precedence over default
-  pid: number
+  /**
+   * The shell's process id, for a diagnostic — **`null` when it is not known**.
+   *
+   * A window tells one generation from the next by it, which is what draws the seam between a dead shell's
+   * output and its replacement's. It is unknown for a session the service took up again rather than started
+   * (the broker answers a pid only for a spawn), and that case is precisely the one where there is no
+   * boundary to draw: the shell is the one the window was already watching.
+   */
+  pid: number | null
   shell?: string
   cwd: string
   active: boolean

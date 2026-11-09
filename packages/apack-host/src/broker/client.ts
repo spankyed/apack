@@ -10,6 +10,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import * as net from 'node:net';
 import { createLogger } from '@apackdev/sdk/logger';
+import { holdExclusiveLockWaiting, type ExclusiveLock } from '../exclusive-lock.ts';
 // The protocol's types, generated from the broker's Rust and shipped by its package — not a copy of them.
 // There was a copy here, with a script that re-derived and compared it; a package with the file in it
 // leaves nothing to carry (`apack-terminal/node/protocol.ts`, `cargo xtask check-generated` there).
@@ -110,7 +111,16 @@ export type BrokerWaitOutcome =
 /** One session's feed and the operations on it */
 export interface BrokerSession {
   readonly id: string;
-  readonly pid: number;
+  /**
+   * The process id, for a diagnostic — **`null` when the broker did not say**.
+   *
+   * It is answered by the frame that spawns a session and by nothing else, so a session taken up with
+   * `adopt` has none. Nothing addresses a session by it (that is `id`'s job, and a pid reused by the OS is
+   * exactly what F7 was), so absence costs a window only the one thing the number is for: telling the shell
+   * answering now from the one whose output is above it on screen. An adopted session is the shell the
+   * window already knows, so there is nothing there to tell apart.
+   */
+  readonly pid: number | null;
   write(data: string): Promise<void>;
   resize(cols: number, rows: number): Promise<void>;
   /**
@@ -182,6 +192,15 @@ export interface BrokerSessionOptions {
 
 export interface Broker {
   open(options: BrokerSessionOptions, listeners: BrokerSessionListeners): Promise<BrokerSession>;
+  /**
+   * Takes up a session this process did not start, by its id.
+   *
+   * What a restarted service needs and cannot otherwise have: the sessions outlive it on purpose, and
+   * without this they outlive it *unreachably* — no listener, no handle, and a fresh shell spawned beside
+   * each. Refuses `NO_SUCH_SESSION` for an id that names nothing, which is how a caller tells a session that
+   * survived from one that did not.
+   */
+  adopt(id: string, listeners: BrokerSessionListeners): Promise<BrokerSession>;
   close(): Promise<void>;
   /**
    * Runs when the connection ended without `close()` — the broker is gone, and its sessions with it.
@@ -232,6 +251,16 @@ interface Connection {
    * before it signals, so a deliberate replacement is not counted as a crash.
    */
   leave(): void;
+  /**
+   * Tears this connection down, for one that must not be left open.
+   *
+   * **Not `leave`.** Leaving is a graceful half-close meaning *this client chose to go*, and it keeps the
+   * reader attached; a refused handshake is not a departure but a connection that was never usable. The
+   * broker counts connections **from the accept rather than the handshake** and exits only at zero, so one
+   * left open keeps it alive for ever — and a caller that retries adds another each time, which is the
+   * stray-broker leak the lifetime hold exists to prevent.
+   */
+  destroy(): void;
 }
 
 /**
@@ -275,10 +304,72 @@ export interface BrokerOptions {
  */
 const STDERR_CHUNKS_KEPT = 50;
 
+/**
+ * The starts this process has in flight, by socket.
+ *
+ * **The file lock cannot serve this half.** `holdExclusiveLock` is deliberately not re-entrant — a second
+ * take in one process is refused naming that same pid — so two callers here would both be told no and both
+ * fall through to connecting, which is the race again with an extra step. Electron main holding the lifetime
+ * connection while the API opens its first session is exactly two callers in one process when they share
+ * one, and a test that drives both is another. So in-process callers wait on one start, and the lock keeps
+ * *processes* apart.
+ */
+const starting = new Map<string, Promise<void>>();
+
 async function reach(options: BrokerOptions): Promise<net.Socket> {
   const listening = await connect(options.socket, options.startMs).catch(() => undefined);
   if (listening) return listening;
 
+  let pending = starting.get(options.socket);
+  if (!pending) {
+    pending = ensureListening(options).finally(() => { starting.delete(options.socket); });
+    starting.set(options.socket, pending);
+  }
+  await pending;
+  return connect(options.socket, options.startMs);
+}
+
+/**
+ * Makes sure a broker is listening on this socket, starting one if nothing is.
+ *
+ * **Starting one is exclusive, and that is not an optimisation.** The broker binds its socket with
+ * `try_overwrite`, so a second one takes the address and leaves the first one's sessions unreachable with no
+ * error anywhere. Finding nothing listening and then spawning is a check followed by an act, and the gap
+ * between them is a whole broker startup — so the lock is held across the spawn *and* the wait, not merely
+ * around the spawn. Processes reach here together routinely: Electron main takes its lifetime hold while the
+ * API server starts in the same tick (`ModuleRunner` calls every module's `enable` eagerly and chains only
+ * the awaiting), and every dev API reload is another.
+ *
+ * Keyed on the socket, so suites with a socket each never wait on one another.
+ */
+async function ensureListening(options: BrokerOptions): Promise<void> {
+  let lock: ExclusiveLock;
+  try {
+    lock = await holdExclusiveLockWaiting({
+      file: `${options.socket}.start.lock`,
+      what: 'starting the terminal broker',
+      waitMs: options.startMs ?? BROKER_START_MS,
+      refuse: (holder) => new Error(`another process is starting the terminal broker (${holder})`),
+    });
+  } catch {
+    // Waited out rather than refused: whoever holds it has had a full startup window, so whatever is on
+    // that socket now is what the caller should connect to. Throwing here would report a failure to start
+    // where there is one running.
+    return;
+  }
+
+  try {
+    // The winner may be the second to arrive, in which case another process has already started one
+    const started = await connect(options.socket, options.startMs).catch(() => undefined);
+    // The probe is not the caller's socket — each caller connects for itself once this resolves
+    if (started) { started.destroy(); return; }
+    await start(options);
+  } finally {
+    lock.release();
+  }
+}
+
+async function start(options: BrokerOptions): Promise<void> {
   // **Detached, and its handle released.** The broker outlives whoever started it by design — that is the
   // whole point of a session surviving an API restart — so it must not be in this process's group, where
   // the shell's Ctrl-C would reach it, and this process must not be kept alive waiting for it.
@@ -294,7 +385,19 @@ async function reach(options: BrokerOptions): Promise<net.Socket> {
     // broker that writes to stderr for an hour must not be kept in memory for the sake of its first line
     if (stderr.length > STDERR_CHUNKS_KEPT) stderr.splice(0, stderr.length - STDERR_CHUNKS_KEPT);
   });
-  await ready(process_, stderr, options.startMs);
+  try {
+    await ready(process_, stderr, options.startMs);
+  } catch (error) {
+    // **A broker that never reported listening is this function's to clean up.** It was spawned detached and
+    // its handle is dropped here, so nothing else can reach it again: left running it holds the socket path
+    // the next attempt will try to bind, and its pipes would keep this process alive with nobody reading
+    // them. The caller retries, so each abandoned child would otherwise be a permanent one.
+    process_.stdout?.destroy();
+    process_.stderr?.destroy();
+    process_.kill();
+    process_.unref();
+    throw error;
+  }
 
   // **The handle is kept, so a broker that dies leaves a cause and not only a consequence.** `unref` stops
   // it holding this process open; it does not stop this process hearing about it. Without this the sole
@@ -305,8 +408,25 @@ async function reach(options: BrokerOptions): Promise<net.Socket> {
     const said = stderr.join('').trim();
     logger.warn(`the broker exited (${signal ?? `status ${code}`})${said ? `: ${said}` : ''}`);
   });
+  // **The pipes are released too, and `unref` on the child does not do it.** `ChildProcess.unref` releases
+  // the process handle; `stdout` and `stderr` are separate libuv handles, and a flowing one holds the event
+  // loop open on its own. The stderr listener above stays subscribed, because it is read whenever the broker
+  // ends — unreferenced, so a short-lived process that happened to win the start still exits on its own.
+  // `ready` resolving is the broker's own word that it is listening, so there is nothing to confirm here:
+  // whoever asked for this connects for itself
   process_.unref();
-  return connect(options.socket, options.startMs);
+  unrefPipe(process_.stdout);
+  unrefPipe(process_.stderr);
+}
+
+/**
+ * Releases a child's pipe from the event loop.
+ *
+ * A piped `stdio` is a socket, which is what carries `unref` — `Readable`, the type the child exposes it as,
+ * does not say so. Asked for rather than asserted, so a stream that is genuinely not one is left alone.
+ */
+function unrefPipe(stream: unknown): void {
+  (stream as { unref?: () => void } | null)?.unref?.();
 }
 
 /**
@@ -326,9 +446,18 @@ export async function holdBrokerSessions(options: BrokerOptions): Promise<{ clos
   // and a socket with no reader would fill.
   const greeted = frames(socket, new Map());
   greeted.send({ kind: 'hello', protocol: PROTOCOL_VERSION, role: 'lifetime' });
-  const greeting = await greeted.next(event => event.kind === 'hello');
+  // **Torn down on every way out, not only on a version mismatch.** A broker speaking another protocol
+  // answers `failed` rather than `hello`, which rejects this await instead of reaching the check below — so
+  // a `destroy` on that branch alone leaves the commonest refusal holding a connection open for ever
+  let greeting: Event;
+  try {
+    greeting = await greeted.next(event => event.kind === 'hello');
+  } catch (error) {
+    greeted.destroy();
+    throw error;
+  }
   if (greeting.kind !== 'hello' || greeting.protocol !== PROTOCOL_VERSION) {
-    socket.destroy();
+    greeted.destroy();
     throw new BrokerError('HANDSHAKE', `the broker speaks protocol ${greeting.kind === 'hello' ? greeting.protocol : '(none)'}; this app speaks ${PROTOCOL_VERSION}`);
   }
   socket.resume();
@@ -346,11 +475,72 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
   const connection = frames(socket, listeners, () => { for (const listener of gone) listener(); });
 
   connection.send({ kind: 'hello', protocol: PROTOCOL_VERSION, role: 'client' });
-  const greeting = await connection.next(event => event.kind === 'hello');
-  if (greeting.kind === 'hello' && greeting.protocol !== PROTOCOL_VERSION) {
-    throw new BrokerError('HANDSHAKE', `the broker speaks protocol ${greeting.protocol}; this app speaks ${PROTOCOL_VERSION}`);
+  // As in `holdBrokerSessions`: a refusal rejects the await rather than arriving as a `hello`, and either
+  // way this connection is unusable and must not be left counted
+  let greeting: Event;
+  try {
+    greeting = await connection.next(event => event.kind === 'hello');
+    if (greeting.kind === 'hello' && greeting.protocol !== PROTOCOL_VERSION) {
+      throw new BrokerError('HANDSHAKE', `the broker speaks protocol ${greeting.protocol}; this app speaks ${PROTOCOL_VERSION}`);
+    }
+  } catch (error) {
+    connection.destroy();
+    throw error;
   }
   const history = greeting.kind === 'hello' ? greeting.history : 0;
+
+  /**
+   * One session as its holder operates it, over this connection.
+   *
+   * Shared by `open` and `adopt` because what you can do with a session has nothing to do with how you came
+   * to hold it: a copy per route is two places for a request kind to be forgotten.
+   */
+  const sessionHandle = (id: string, pid: number | null): BrokerSession => ({
+      id,
+      pid,
+      async write(text) { connection.send({ kind: 'write', session: id, text }); },
+      async resize(cols_, rows_) { connection.send({ kind: 'resize', session: id, cols: cols_, rows: rows_ }); },
+      async screen(history = 0) {
+        connection.send({ kind: 'screen', session: id, history });
+        // Keyed by the session, because two of these can be outstanding and an answer must not be taken
+        // for the other one's — the broker answers per request and the frames carry no call of their own
+        const answer = await connection.next(event => event.kind === 'screen' && event.session === id, { session: id });
+        if (answer.kind !== 'screen') throw new BrokerError('PTY', 'the broker answered no screen');
+        return {
+          lines: answer.lines,
+          cursorRow: answer.cursor_row,
+          cursorColumn: answer.cursor_column,
+          altScreen: answer.alt_screen,
+        };
+      },
+      async facts() {
+        connection.send({ kind: 'facts', session: id });
+        const answer = await connection.next(event => event.kind === 'facts' && event.session === id, { session: id });
+        if (answer.kind !== 'facts') throw new BrokerError('PTY', 'the broker answered no facts');
+        return {
+          cwd: answer.cwd,
+          command: answer.command,
+          running: answer.running,
+          exitStatus: answer.exit_status,
+          foreground: answer.foreground ?? null,
+        };
+      },
+      async search(text, history = 0) {
+        connection.send({ kind: 'search', session: id, text, history });
+        const answer = await connection.next(event => event.kind === 'search' && event.session === id, { session: id });
+        if (answer.kind !== 'search') throw new BrokerError('PTY', 'the broker answered no search');
+        return answer.matches;
+      },
+      async wait(until, timeoutMs) {
+        connection.send({ kind: 'wait', session: id, until, timeout_ms: timeoutMs });
+        // **The deadline is the broker's**, so this waits for its answer rather than racing a timer of its
+        // own: two deadlines would disagree, and the one that matters is the one holding the waiter
+        const answer = await connection.next(event => event.kind === 'waited' && event.session === id, { session: id });
+        if (answer.kind !== 'waited') throw new BrokerError('PTY', 'the broker answered no wait');
+        return answer.outcome;
+      },
+      async kill() { connection.send({ kind: 'kill', session: id }); },
+  });
 
   return {
     history,
@@ -371,53 +561,35 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
         { onMatch: event => { if (event.kind === 'spawned') listeners.set(event.session, sessionListeners); } },
       );
       if (spawned.kind !== 'spawned') throw new BrokerError('PTY', 'the broker answered no session');
-      const id = spawned.session;
-      return {
-        id,
-        pid: spawned.pid,
-        async write(text) { connection.send({ kind: 'write', session: id, text }); },
-        async resize(cols_, rows_) { connection.send({ kind: 'resize', session: id, cols: cols_, rows: rows_ }); },
-        async screen(history = 0) {
-          connection.send({ kind: 'screen', session: id, history });
-          // Keyed by the session, because two of these can be outstanding and an answer must not be taken
-          // for the other one's — the broker answers per request and the frames carry no call of their own
-          const answer = await connection.next(event => event.kind === 'screen' && event.session === id, { session: id });
-          if (answer.kind !== 'screen') throw new BrokerError('PTY', 'the broker answered no screen');
-          return {
-            lines: answer.lines,
-            cursorRow: answer.cursor_row,
-            cursorColumn: answer.cursor_column,
-            altScreen: answer.alt_screen,
-          };
-        },
-        async facts() {
-          connection.send({ kind: 'facts', session: id });
-          const answer = await connection.next(event => event.kind === 'facts' && event.session === id, { session: id });
-          if (answer.kind !== 'facts') throw new BrokerError('PTY', 'the broker answered no facts');
-          return {
-            cwd: answer.cwd,
-            command: answer.command,
-            running: answer.running,
-            exitStatus: answer.exit_status,
-            foreground: answer.foreground ?? null,
-          };
-        },
-        async search(text, history = 0) {
-          connection.send({ kind: 'search', session: id, text, history });
-          const answer = await connection.next(event => event.kind === 'search' && event.session === id, { session: id });
-          if (answer.kind !== 'search') throw new BrokerError('PTY', 'the broker answered no search');
-          return answer.matches;
-        },
-        async wait(until, timeoutMs) {
-          connection.send({ kind: 'wait', session: id, until, timeout_ms: timeoutMs });
-          // **The deadline is the broker's**, so this waits for its answer rather than racing a timer of its
-          // own: two deadlines would disagree, and the one that matters is the one holding the waiter
-          const answer = await connection.next(event => event.kind === 'waited' && event.session === id, { session: id });
-          if (answer.kind !== 'waited') throw new BrokerError('PTY', 'the broker answered no wait');
-          return answer.outcome;
-        },
-        async kill() { connection.send({ kind: 'kill', session: id }); },
-      };
+      return sessionHandle(spawned.session, spawned.pid);
+    },
+    /**
+     * Takes up a session this process did not start.
+     *
+     * **One feed slot is what makes this possible at all.** The broker writes every event to whichever
+     * client greeted last, so a surviving session's output already arrives on this connection — what a
+     * restarted process lacks is nothing but the mapping from session id to listener, which `open` would
+     * have made from the `spawned` frame it never saw. There is no attach request to send and none is
+     * needed.
+     *
+     * **The session is asked after before it is claimed**, because the id came from outside this process and
+     * may name a session that is gone — a full app restart ends them all, so after one every stored id is
+     * stale. A broker that has no such session refuses with `NO_SUCH_SESSION` and the listener is never
+     * registered, which is the caller's signal to start a shell instead. Registered on the frame as it is
+     * read, for the same reason `open` does it there.
+     */
+    async adopt(id, sessionListeners) {
+      connection.send({ kind: 'facts', session: id });
+      const answer = await connection.next(
+        event => event.kind === 'facts' && event.session === id,
+        { session: id, onMatch: () => { listeners.set(id, sessionListeners); } },
+      );
+      if (answer.kind !== 'facts') throw new BrokerError('PTY', 'the broker answered no facts');
+      // **No pid, because the broker does not answer one for a session it did not just spawn.** It is a
+      // diagnostic the window uses to tell one shell from the next, and an adopted session *is* the shell
+      // the window already knows — so saying nothing is the true answer, and inventing one would draw a
+      // seam across a session that never ended.
+      return sessionHandle(id, null);
     },
     /**
      * Leaves the broker, without ending it.
@@ -457,7 +629,11 @@ function ready(process_: ChildProcess, stderr: string[], startMs = BROKER_START_
       startMs,
     );
     deadline.unref();
-    const settle = (run: () => void) => { clearTimeout(deadline); run(); };
+    // **The reader is closed however this ends.** `createInterface` puts the child's stdout into flowing
+    // mode, which is a referenced handle that outlives this promise: left open it keeps the process alive
+    // after everything else has finished, which is what made the deliberate `socket.unref()` in
+    // `holdBrokerSessions` buy nothing in whichever process won the start.
+    const settle = (run: () => void) => { clearTimeout(deadline); lines.close(); run(); };
     const fail = (why: string) => settle(() => reject(new Error(said(why))));
     lines.once('line', line => {
       if (line.startsWith('listening ')) settle(resolve);
@@ -492,6 +668,10 @@ function frames(socket: net.Socket, listeners: Map<string, BrokerSessionListener
   let leaving = false;
   const waiting: Array<{ accept: (event: Event) => boolean; settle: (event: Event) => void; refuse: (error: Error) => void; session?: string; onMatch?: (event: Event) => void }> = [];
   const lines = createInterface({ input: socket });
+  // An abandoned socket still raises `error` — an `ECONNRESET` from a broker that hung up on a refused
+  // handshake is the case — and an unhandled one on a `net.Socket` ends the process. What a connection does
+  // about a failure it reports through `close`, which refuses every waiter below
+  socket.on('error', () => {});
 
   lines.on('line', line => {
     if (line.trim() === '') return;
@@ -521,8 +701,25 @@ function frames(socket: net.Socket, listeners: Map<string, BrokerSessionListener
       const index = event.session == null
         ? (waiting.length > 0 ? 0 : -1)
         : waiting.findIndex(one => one.session === event.session);
-      if (index >= 0) { waiting.splice(index, 1)[0]!.refuse(error); return; }
-      logger.warn(`the broker refused ${event.code}, which no call was waiting for`, { session: event.session, message: event.message });
+      if (index >= 0) waiting.splice(index, 1)[0]!.refuse(error);
+      else if (event.code !== 'NO_SUCH_SESSION') {
+        logger.warn(`the broker refused ${event.code}, which no call was waiting for`, { session: event.session, message: event.message });
+      }
+
+      // **`NO_SUCH_SESSION` is the broker saying this app's record is stale, which is news whoever asked.**
+      // The app keeps its own account of which sessions are live, and that account can be wrong — a frame
+      // missed, a broker replaced, a bug not yet found — in which case every later call about that session
+      // is refused the same way for ever and the terminal above it can never be closed. Reporting it as the
+      // session's end puts the app back in step on the next thing it tries, so a divergence costs one
+      // refused request instead of wedging.
+      //
+      // Delivered exactly as an `exited` frame is, because that is what it means and the app already models
+      // it: `null` is the honest code, the session having ended without this process seeing a status.
+      if (event.code === 'NO_SUCH_SESSION' && event.session != null) {
+        const listener = listeners.get(event.session);
+        listeners.delete(event.session);
+        listener?.onExit(null);
+      }
       return;
     }
     const index = waiting.findIndex(one => one.accept(event));
@@ -566,6 +763,13 @@ function frames(socket: net.Socket, listeners: Map<string, BrokerSessionListener
     leave() {
       leaving = true;
       socket.end();
+    },
+    destroy() {
+      // `leaving` first, so the close this causes reports no sessions gone: a connection that never greeted
+      // holds none, and synthesising an exit for each would be inventing news
+      leaving = true;
+      lines.close();
+      socket.destroy();
     },
   };
 }

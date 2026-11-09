@@ -142,6 +142,14 @@
                 />
               </div>
               <span v-else class="flex-1 min-w-0 truncate">{{ getTerminalDisplayName(terminal) }}</span>
+              <!-- **A terminal whose shell died is kept so its last output can be read**, which only works
+                   if the list says so: drawn like a live one, it invites typing that goes nowhere and gives
+                   no reason for the screen having stopped. -->
+              <span
+                v-if="terminal.exited"
+                class="flex-shrink-0 text-[10px] uppercase tracking-wide text-amber-500/80"
+                :title="exitedTitle(terminal)"
+              >exited</span>
               <button
                 v-if="renamingTerminalId !== terminal.id"
                 @click.stop="handleCloseTerminal(terminal)"
@@ -280,9 +288,22 @@ let attachment: TerminalAttachment | null = null
 /** Set by `selectTerminal`, read by the attach it causes: whether this attach is a user's request (F15) */
 let focusOnAttach = false
 
+/** What a terminal whose shell has gone says when you hover it */
+const exitedTitle = (terminal: TerminalInfo) => terminal.exited?.code == null
+  ? 'The shell ended without a status (a signal)'
+  : `The shell ended with status ${terminal.exited.code}`
+
 const attachTerminal = (terminalId: string) => {
   const info = terminals.value.find((t: TerminalInfo) => t.id === terminalId)
-  if (!container.value || !info) return
+  if (!container.value || !info) {
+    // **The request dies with the attach it was made for.** `selectTerminal` arms the flag because the
+    // selection is what attaches, a tick later — and in that tick the panel can collapse, the host can be
+    // replaced, or this terminal can leave the list, any of which lands here. A flag left armed is spent by
+    // whatever attaches next — a re-open, a remount, a reconnect-driven list — stealing focus from whatever
+    // the user is typing in, which is the defect it exists to prevent (F15).
+    focusOnAttach = false
+    return
+  }
 
   terminalPool.ensure(info, data => {
     terminalActor?.send({ type: 'terminal.INPUT', terminalId, data })
@@ -308,6 +329,9 @@ const detachTerminal = () => {
   attachment?.release()
   attachment = null
   hasSelection.value = false
+  // Letting go ends any outstanding request to focus, for the same reason the guard above does: the attach
+  // it was armed for is not going to happen, and the next one is somebody else's
+  focusOnAttach = false
 }
 
 // Context menu actions

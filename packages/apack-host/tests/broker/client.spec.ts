@@ -7,7 +7,7 @@
 //
 // The fake is a Node process on purpose: `startBroker` spawns a binary and waits for its ready line, so a
 // stand-in has to be something spawnable that prints one.
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -74,6 +74,66 @@ function brokerScript(body: string): { binary: string; socket: string } {
   chmodSync(binary, 0o755);
   return { binary, socket: path.join(directory, 'b.sock') };
 }
+
+
+/**
+ * A broker that records every process that got as far as starting, so a case can count how many there were.
+ *
+ * Appended to rather than written, because the question is how many processes reached that line: a file one
+ * of them overwrote would answer "one" however many there had been.
+ */
+const COUNTING = FAKE.replace(
+  'const server = net.createServer',
+  "require('node:fs').appendFileSync(process.env.FAKE_PIDS, process.pid + '\\n');\nconst server = net.createServer",
+);
+
+/**
+ * A broker that exits when its last connection goes, **counted from the accept** as the real one does.
+ *
+ * That is what makes an un-greeted connection a leak rather than an untidiness: the broker cannot tell a
+ * socket nobody will ever greet on from one about to, so it waits for ever.
+ */
+const COUNTS_CONNECTIONS = `#!/usr/bin/env node
+const fs = require('node:fs');
+const net = require('node:net');
+const readline = require('node:readline');
+let open = 0;
+const server = net.createServer(connection => {
+  open += 1;
+  connection.on('close', () => { open -= 1; if (open === 0) process.exit(0); });
+  readline.createInterface({ input: connection }).on('line', () => {
+    connection.write(JSON.stringify({ kind: 'hello', protocol: 99 }) + '\\n');
+  });
+});
+server.listen(process.argv[2], () => {
+  fs.appendFileSync(process.env.FAKE_PIDS, process.pid + '\\n');
+  process.stdout.write('listening ' + process.argv[2] + '\\n');
+});
+`;
+
+/** Signal 0 asks after a pid without touching it; the pid came from the process that wrote it */
+const alive = (pid: number) => {
+  try { process.kill(pid, 0); return true; } catch { return false; }
+};
+
+/**
+ * Waits until a process is gone.
+ *
+ * Polled against a deadline rather than subscribed to: nothing emits an event when *another* process exits,
+ * which is the case `_whenSatisfied`'s own header says to poll for. One loop, not a stack of sleeps.
+ */
+async function untilGone(pid: number, deadlineMs = 5_000): Promise<void> {
+  const until = Date.now() + deadlineMs;
+  while (Date.now() < until) {
+    if (!alive(pid)) return;
+    await new Promise(resolve => { setTimeout(resolve, 25); });
+  }
+  throw new Error(`the broker (${pid}) was still running ${deadlineMs}ms after it should have gone`);
+}
+
+/** The pid of the one broker a case started, read from where the script recorded it */
+const recordedPids = (file: string) =>
+  readFileSync(file, 'utf8').split('\n').filter(Boolean).map(Number);
 
 /** The two every test needs: a greeting, and a session to open */
 const GREETS = { hello: [{ kind: 'hello', protocol: 1 }] };
@@ -245,6 +305,63 @@ describe('the broker client', () => {
     const env = { ...process.env, FAKE_SCRIPT: JSON.stringify({ hello: [{ kind: 'hello', protocol: 99 }] }) };
 
     await expect(holdBrokerSessions({ binary, socket, env })).rejects.toThrow(/speaks protocol 99/);
+  });
+
+
+  /**
+   * **Two callers finding nothing listening must not both start one.**
+   *
+   * The broker binds with `try_overwrite`, so a second takes the address and leaves the first one's sessions
+   * unreachable with no error anywhere. The window is a whole startup — long enough that this is reached by
+   * ordinary means rather than by bad luck: Electron main takes its lifetime hold while the API server
+   * starts in the same tick, and every dev API reload is another.
+   */
+  it('starts one broker when two callers find none', async () => {
+    const { binary, socket } = brokerScript(COUNTING);
+    const pids = path.join(directory!, 'pids');
+    writeFileSync(pids, '');
+    const env = { ...process.env, FAKE_SCRIPT: JSON.stringify(GREETS), FAKE_PIDS: pids };
+
+    const [first, second] = await Promise.all([
+      startBroker({ binary, socket, env }),
+      startBroker({ binary, socket, env }),
+    ]);
+    try {
+      expect(recordedPids(pids), 'both callers spawned a broker, and the second took the first one\'s address')
+        .toHaveLength(1);
+    } finally {
+      await first.close();
+      await second.close();
+    }
+  });
+
+  it('kills a broker that never reported listening, rather than leaving it holding the socket', async () => {
+    const { binary, socket } = brokerScript(`#!/usr/bin/env node
+require('node:fs').appendFileSync(process.env.FAKE_PIDS, process.pid + '\\n');
+setInterval(() => {}, 1_000);
+`);
+    const pids = path.join(directory!, 'pids');
+    writeFileSync(pids, '');
+
+    await expect(startBroker({ binary, socket, startMs: 400, env: { ...process.env, FAKE_PIDS: pids } }))
+      .rejects.toThrow(/did not say where it was listening/);
+
+    // Spawned detached and its handle dropped on the way out, so nothing can reach it again: left running it
+    // holds the socket path the next attempt will try to bind, and its pipes keep this process alive
+    await untilGone(recordedPids(pids)[0]!);
+  });
+
+  it('leaves no connection behind when a handshake is refused, so the broker can still exit', async () => {
+    const { binary, socket } = brokerScript(COUNTS_CONNECTIONS);
+    const pids = path.join(directory!, 'pids');
+    writeFileSync(pids, '');
+
+    await expect(holdBrokerSessions({ binary, socket, env: { ...process.env, FAKE_PIDS: pids } }))
+      .rejects.toThrow(/speaks protocol 99/);
+
+    // The refusal arrives as a `failed` frame, which rejects the await rather than reaching the version
+    // check — so a teardown on that branch alone leaves the commonest refusal holding a connection for ever
+    await untilGone(recordedPids(pids)[0]!);
   });
 
   it('says why a broker that never listened did not start, rather than timing out', async () => {

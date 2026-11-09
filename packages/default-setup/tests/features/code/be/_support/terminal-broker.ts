@@ -49,6 +49,10 @@ export interface RecordingBroker {
   endShell(id: string, code: number | null): void
   /** Bytes arriving from a session's shell */
   emit(id: string, data: string): void
+  /** The sessions the broker still has: opened and not yet ended */
+  readonly live: readonly string[]
+  /** The sessions `adopt()` was asked for, in order, whether or not the broker still had them */
+  readonly adopted: readonly string[]
   /** Refuses the nth open (1-based), as a broker that would not start */
   refuseOpen(nth: number, why?: string): void
   /**
@@ -73,6 +77,8 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
   const listening = new Map<string, TerminalListeners>()
   const refusals = new Map<number, string>()
   const refusedTerminations = new Map<string, string>()
+  const live = new Set<string>()
+  const adopted: string[] = []
   let next = 0
 
   mockService('terminal', {
@@ -83,6 +89,7 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
       const id = `broker-${next}`
       const pid = pidBase + next
       listening.set(id, listeners)
+      live.add(id)
       opened.push({ id, pid, options, listenersGivenAtOpen: typeof listeners?.onOutput === 'function' })
       return {
         id,
@@ -102,6 +109,32 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
         },
       }
     },
+
+    /**
+     * Takes up a session the broker still has, as a restarted service does.
+     *
+     * **Refuses an id it does not know**, which is the case that matters: a full app restart ends every
+     * session, so a stored id is stale far more often than not, and a double that answered for any id would
+     * let the fall-back to a fresh shell go untested.
+     */
+    adopt: async (id: string, listeners: TerminalListeners) => {
+      adopted.push(id)
+      if (!live.has(id)) throw new Error(`no session ${id}`)
+      listening.set(id, listeners)
+      return {
+        id,
+        // As the broker does: a pid is answered for a spawn and for nothing else
+        pid: null,
+        write: async (data: string) => { written.push({ id, data }) },
+        resize: async (cols: number, rows: number) => { resized.push({ id, cols, rows }) },
+        terminate: async () => {
+          const refusal = refusedTerminations.get(id)
+          if (refusal !== undefined) throw new Error(refusal)
+          terminated.push(id)
+          listening.get(id)?.onExit(1)
+        },
+      }
+    },
   })
 
   const listenersFor = (id: string): TerminalListeners => {
@@ -110,8 +143,13 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
     return found
   }
   return {
-    opened, resized, written, terminated,
-    endShell: (id, code) => listenersFor(id).onExit(code),
+    opened, resized, written, terminated, adopted,
+    get live() { return [...live] },
+    endShell: (id, code) => {
+      // The broker forgets a session as it exits, which is what makes its id refuse an adoption afterwards
+      live.delete(id)
+      listenersFor(id).onExit(code)
+    },
     emit: (id, data) => listenersFor(id).onOutput(data),
     refuseOpen: (nth, why = 'the broker would not start') => { refusals.set(nth, why) },
     refuseTerminate: (id, why = 'the broker would not end the session') => { refusedTerminations.set(id, why) },

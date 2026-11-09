@@ -13,16 +13,35 @@ export interface TerminalEntity {
   title: string
   customTitle?: string
   /**
-   * **No pid.** A row used to carry the process id its session had, and `restoreAll` reached for it on the
-   * next boot — checking whether that process was alive and killing it and its group, which is F7, and
-   * which could name a process the OS had since given to something else. The broker owns the processes a run
-   * leaves behind, so nothing persisted addresses one. The live descriptor still carries a pid, because the
-   * renderer tells a new shell from the previous one by it; that is a diagnostic, not a handle.
+   * **No pid, and `session` is not one.** A row used to carry the process id its session had, and
+   * `restoreAll` reached for it on the next boot — checking whether that process was alive and killing it
+   * and its group, which is F7, and which could name a process the OS had since given to something else.
+   *
+   * A broker session id is the opposite kind of name. The broker owns that namespace and never reissues an
+   * id, so a stale one names nothing rather than something else: offering it costs one request refused with
+   * `NO_SUCH_SESSION`, where offering a stale pid cost a stranger's process its life. What is forbidden here
+   * is a persisted handle that can be *mistaken* for a live one, not a persisted name.
+   *
+   * The live descriptor still carries a pid, because the renderer tells a new shell from the previous one by
+   * it; that is a diagnostic, not a handle.
    */
   shell: string
   cwd: string
   cols: number
   rows: number
+  /**
+   * The broker session this terminal's shell is running in, while one is.
+   *
+   * **What makes a shell survivable rather than merely surviving.** Sessions outlive the API on purpose, so
+   * that restarting it does not take a user's shells down — but a restarted API that cannot name them again
+   * leaves them running and unreachable, and spawns a fresh shell beside each. The id is the only thing it
+   * needs: the broker's feed is one slot, so output for a session already arrives on whatever connection
+   * greeted last.
+   *
+   * Absent for a row written before its session started, and stale after a full app restart, which ends
+   * every session — so it is offered to the broker rather than trusted (see `shell`).
+   */
+  session?: string
   createdAt: number
   updatedAt: number
 }
@@ -44,10 +63,26 @@ export const terminalQueries = {
 
 export const terminalCommands = {
   /** Records a terminal the service started, under the id it took for it (`newId`) */
-  create: (terminal: Pick<TerminalEntity, 'title' | 'shell' | 'cwd' | 'cols' | 'rows'> & { id: EARS.EntityId<'Terminal'> }): EARS.EntityId => {
+  create: (terminal: Pick<TerminalEntity, 'title' | 'shell' | 'cwd' | 'cols' | 'rows' | 'session'> & { id: EARS.EntityId<'Terminal'> }): EARS.EntityId => {
     return create(EARS.Entity.Terminal, terminal).id()
   },
-  
+
+  /**
+   * Records the broker session this terminal's shell is running in.
+   *
+   * Written whenever the shell is replaced, because a stored id that names the *previous* session is the one
+   * case the offer-and-fall-back rule cannot save: the broker would answer for it and this process would
+   * take up a session no terminal is showing.
+   */
+  recordSession: (id: EARS.EntityId, session: string): void => {
+    if (!query.ids(id).exists()) {
+      logger.error(`Terminal ${id} not found`)
+      return
+    }
+
+    write(id).setMany({ session })
+  },
+
   
   rename: (id: EARS.EntityId, customTitle: string): void => {
     if (!query.ids(id).exists()) {

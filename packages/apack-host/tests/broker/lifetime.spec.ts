@@ -68,7 +68,7 @@ describe.skipIf(!BINARY)('who ends a session', () => {
     // falsely, never fail falsely, which is the shape `BARE_WAIT_BY_DESIGN` is for.
     await new Promise(settle => setTimeout(settle, 500));
 
-    expect(alive(session.pid), 'the shell outlived the client that opened it').toBe(true);
+    expect(alive(session.pid!), 'the shell outlived the client that opened it').toBe(true);
   });
 
   /**
@@ -98,7 +98,7 @@ describe.skipIf(!BINARY)('who ends a session', () => {
     );
 
     expect(ended, 'the broker reported the session ending').not.toBeUndefined();
-    expect(alive(session.pid), 'the shell outlived the app that owned it').toBe(false);
+    expect(alive(session.pid!), 'the shell outlived the app that owned it').toBe(false);
   });
 
   /**
@@ -112,6 +112,6 @@ describe.skipIf(!BINARY)('who ends a session', () => {
 
     await client.close();
 
-    expect(await reaped(session.pid), 'a client with no owner left its shell running').toBe(true);
+    expect(await reaped(session.pid!), 'a client with no owner left its shell running').toBe(true);
   });
 });

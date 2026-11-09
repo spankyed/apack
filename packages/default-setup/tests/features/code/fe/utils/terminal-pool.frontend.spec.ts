@@ -14,6 +14,9 @@ const onDataHandlers: Array<(data: string) => void> = []
 const keyHandlers: Array<(event: KeyboardEvent) => boolean> = []
 const pasted: string[] = []
 const written: string[] = []
+/** Every grid the emulator was resized to, and the handlers it would raise its own `resize` to */
+const resizedTo: Array<{ cols: number; rows: number }> = []
+const onResizeHandlers: Array<(size: { cols: number; rows: number }) => void> = []
 let focused = 0
 
 /** What the pool built each emulator with, so a case can assert a bound it derives rather than pins */
@@ -31,7 +34,10 @@ vi.mock('@xterm/xterm', () => ({
     write(data: string, done?: () => void) { written.push(data); done?.() }
     paste(data: string) { pasted.push(data) }
     onData(handler: (data: string) => void) { onDataHandlers.push(handler); return { dispose() {} } }
-    onResize() { return { dispose() {} } }
+    onResize(handler: (size: { cols: number; rows: number }) => void) {
+      onResizeHandlers.push(handler)
+      return { dispose() {} }
+    }
     onWriteParsed() { return { dispose() {} } }
     onSelectionChange() { return { dispose() {} } }
     attachCustomKeyEventHandler(handler: (event: KeyboardEvent) => boolean) { keyHandlers.push(handler) }
@@ -41,7 +47,14 @@ vi.mock('@xterm/xterm', () => ({
     focus() { focused += 1 }
     scrollToBottom() {}
     dispose() {}
-    resize() {}
+    // As xterm's does: the grid changes and the emulator raises its own `resize` for it, which is the feed
+    // the pool reports what this window fitted through
+    resize(cols: number, rows: number) {
+      this.cols = cols
+      this.rows = rows
+      resizedTo.push({ cols, rows })
+      for (const handler of onResizeHandlers) handler({ cols, rows })
+    }
   },
 }))
 class StubAddon {
@@ -112,6 +125,8 @@ beforeEach(() => {
   keyHandlers.length = 0
   pasted.length = 0
   written.length = 0
+  resizedTo.length = 0
+  onResizeHandlers.length = 0
   focused = 0
 })
 
@@ -364,6 +379,48 @@ describe('what the pool draws, and what it refuses to', () => {
 
     expect(written.join(''), 'nothing told the user the shell under this buffer is a different one')
       .toContain(`new shell (pid ${terminal.pid + 1})`)
+  })
+
+  it('draws one seam for one death, however the new shell is learnt', () => {
+    const terminal = info() as unknown as { id: string; pid: number }
+    terminalPool.ensure(terminal as never, () => {})
+    terminalPool.noteExit(terminal.id, 139)
+    written.length = 0
+
+    // The crash drew its line already. `restoreAll` broadcasts nothing, so after a backend restart the
+    // replaced pty reaches this window through a refreshed list rather than `terminal.RESTARTED` — which
+    // lands in `markRestart`, where the one-seam rule has to hold too. Any window that merely missed the
+    // broadcast gets here the same way: a surface starting, a reconnect, an explicit refresh.
+    terminalPool.syncProcesses([{ ...terminal, pid: terminal.pid + 1 } as never])
+
+    expect(written.join(''), 'one death reported twice, once as an exit and again as a restart')
+      .not.toContain('new shell')
+  })
+
+  // **M2's other half.** One window owns a pty's size and the rest are told what is in force — which buys
+  // nothing until the window that was told draws at it.
+  it('draws at the grid the host accepted, not the one it fitted', () => {
+    const terminal = info() as unknown as { id: string }
+    terminalPool.ensure(terminal as never, () => {})
+
+    terminalPool.applyGrid(terminal.id, 90, 25)
+
+    expect(resizedTo, 'the window kept drawing at whatever it had fitted for itself')
+      .toEqual([{ cols: 90, rows: 25 }])
+  })
+
+  it('reports nothing back when it applies one, so two windows cannot trade a size', () => {
+    const terminal = info() as unknown as { id: string }
+    terminalPool.ensure(terminal as never, () => {})
+    const fitted: Array<{ cols: number; rows: number }> = []
+    terminalPool.attach(terminal.id, host(), { onResize: (size) => fitted.push(size) })
+    fitted.length = 0
+
+    terminalPool.applyGrid(terminal.id, 90, 25)
+
+    // The emulator raises its own `resize` either way, and that feed is how this window says what it fitted.
+    // Reporting a grid the host just sent would send it straight back
+    expect(fitted, 'the accepted grid was reported back as something this window had fitted').toEqual([])
   })
 
   it('says nothing when the process is the one the buffer came from', () => {

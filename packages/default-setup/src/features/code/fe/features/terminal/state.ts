@@ -291,6 +291,11 @@ export const terminalState = setup({
      */
     updateTerminalGrid: assign(({ context, event }) => {
       const ev = event as { type: 'terminal.RESIZED'; data: { terminalId: string; cols: number; rows: number } }
+      // **The grid in force, which this window renders rather than whatever it fitted for itself** (M2).
+      // It arrives two ways and both end here: broadcast when the size moved, and replied to this window
+      // alone when its own fit was refused — which is the case that matters, since that window is the one
+      // drawing at a size the pty is not running at.
+      terminalPool.applyGrid(ev.data.terminalId, ev.data.cols, ev.data.rows)
       return {
         terminals: context.terminals.map(terminal => terminal.id === ev.data.terminalId
           ? { ...terminal, cols: ev.data.cols, rows: ev.data.rows }

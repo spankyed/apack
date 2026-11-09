@@ -211,8 +211,14 @@ export const terminalSystem = setup({
         // **Awaited, not checked for truth.** The service answers a promise now, and `if (!promise)` is
         // never true — the refusal below was dead the moment the broker owned the process.
         void terminalService.kill(ev.terminalId, terminalHandlers)
-          .then(found => {
-            if (!found) failTerminal(reply, 'close', `${terminalName} not found`, ev.terminalId)
+          .then(outcome => {
+            // Only one of these is a terminal that was not there. A broker that would not end the session
+            // closed the terminal all the same, so the user is told what happened rather than that they
+            // asked about something that does not exist
+            if (outcome === 'unknown') failTerminal(reply, 'close', `${terminalName} not found`, ev.terminalId)
+            else if (outcome === 'refused') {
+              failTerminal(reply, 'close', `The broker would not end ${terminalName}; it is closed here`, ev.terminalId)
+            }
           })
           .catch(error => failTerminal(reply, 'close', error, ev.terminalId))
       } catch (error) {

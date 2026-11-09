@@ -47,7 +47,7 @@ const runtime: HostRuntime = {
     },
     secrets: { status: unused, list: unused, select: unused, rename: unused, delete: unused },
     filesystem: { writeFile: unused, readFile: unused, exists: unused, mkdir: unused, readDir: unused, remove: unused, rename: unused, stat: unused },
-    terminal: { open: unused },
+    terminal: { open: unused, adopt: unused },
     settings: {
       get: unused, set: unused, reset: unused, getAll: unused, getSnapshot: unused, getOverrides: unused,
       enterRecovery: unused, getRecovery: unused, recover: unused,
