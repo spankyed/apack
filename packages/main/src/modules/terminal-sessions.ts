@@ -10,6 +10,13 @@ import type {AppModule} from '../AppModule.ts';
  * purpose: a descriptor closes on process death however the process died, so a crash or a kill reaps the
  * shells exactly as a clean quit does, and there is no path that has to remember to.
  *
+ * **The `will-quit` release below is an ordering, not the guarantee.** The kernel is still what makes the
+ * shells die, and a run where this handler never fires loses nothing. What it buys is that a clean quit ends
+ * them at a known point instead of whenever the process is reaped, and that the hold is releasable at all
+ * rather than a one-way door. `will-quit` and not `before-quit`: the API server cancels termination in
+ * `before-quit` until its process has stopped, so releasing there would end every session while the API was
+ * still running and have it broadcast a crash to windows that are already closing.
+ *
  * **Registered before the API server**, so the hold exists before anything can ask for a session.
  *
  * **A failure here is logged and nothing else.** The broker binary is absent in a checkout that has not
@@ -20,9 +27,17 @@ import type {AppModule} from '../AppModule.ts';
  */
 export function holdTerminalSessionsForTheApp(): AppModule {
   return {
-    async enable() {
+    async enable({app}) {
       try {
-        await holdTerminalSessions();
+        const held = await holdTerminalSessions();
+        app.once('will-quit', () => {
+          try {
+            held.close();
+          } catch (error) {
+            // The socket may already be gone, which is the same outcome by another route
+            console.warn('[terminal] the session hold would not close', error);
+          }
+        });
       } catch (error) {
         console.warn('[terminal] no session hold; a terminal will not survive an API restart', error);
       }
