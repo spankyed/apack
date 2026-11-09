@@ -1,3 +1,4 @@
+import { cpuBudget } from '@apackdev/testing/vitest'
 import { ChildProcess } from 'node:child_process'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -60,7 +61,7 @@ describe('Claude process input and abort lifecycle', () => {
     }
   })
 
-  it('eventually kills an aborted child that ignores SIGTERM', async () => {
+  it('eventually kills an aborted child that ignores SIGTERM', { meta: cpuBudget(7000) }, async () => {
     const root = await mkdtemp(join(tmpdir(), 'claude-once-abort-'))
     const ready = join(root, 'ready')
     const controller = new AbortController()
@@ -84,5 +85,5 @@ describe('Claude process input and abort lifecycle', () => {
       await result.catch(() => {})
       await rm(root, { recursive: true, force: true })
     }
-  }, 7000)
+  })
 })

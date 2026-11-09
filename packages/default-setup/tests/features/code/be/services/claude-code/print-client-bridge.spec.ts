@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { execFileWhileWorking } from '@apackdev/sdk/progress'
 import { createServer, type Server } from 'node:http'
 import { once } from 'node:events'
 import { readFile } from 'node:fs/promises'
@@ -32,7 +32,12 @@ it('requires an owned native palette for ordinary print drawings and parses its 
     await expect(bridge.projection.event({ client_id: site.client_id, id: 'unused', sequence: 1, event: { kind: 'resize', columns: 5, rows: 1 } })).resolves.toEqual({ handled: false })
     expect(bridge.bunOptions).toMatch(/^--preload=user-module.mjs --preload=file:/)
     const generated = createClaudePrintClientRuntime({ socketPath: '/tmp/owned', token: 'private', epoch: 'process' })
-    const parsed=spawnSync(process.execPath,['--check','--input-type=module'],{input:generated,encoding:'utf8'});expect(parsed.stderr).toBe('');expect(parsed.status).toBe(0)
+    // `--check` reads the module on stdin, so the source is written to the child rather than passed as an
+    // `input` option, which only the synchronous spawns take. A non-zero exit rejects here, so resolving is
+    // the status assertion and `stderr` is the one left to make
+    const parsed=execFileWhileWorking(process.execPath,['--check','--input-type=module'],{timeout:10000})
+    parsed.child.stdin!.end(generated)
+    await expect(parsed).resolves.toMatchObject({stderr:''})
   } finally { await bridge.close() }
 })
 it('refuses a native channel outside the owned launcher ancestry', async () => {

@@ -1,6 +1,6 @@
+import { execFileWhileWorking } from '@apackdev/sdk/progress'
 import { constants } from 'node:fs'
 import { open, lstat, unlink } from 'node:fs/promises'
-import { execFile } from 'node:child_process'
 import type { ClaudeTerminalImageFileFormat } from './terminal-image-file.ts'
 
 // Pinned Darwin arm64 stat64 ABI (sys/stat.h): st_size at96. POSIX allocation is page-rounded.
@@ -36,11 +36,14 @@ export async function readClaudeTerminalSharedImage(name: string, image: ClaudeT
   const length = image.width * image.height * (image.format === 'rgb' ? 3 : 4)
   if (process.platform === 'darwin') {
     if (process.arch !== 'arm64' || name.length > 30) throw new Error('Unsupported Darwin shared image boundary')
-    const encoded = await new Promise<Buffer>((resolve, reject) => {
-      execFile('/usr/bin/osascript', ['-l', 'JavaScript', '-e', darwinReader, name, String(length)], { encoding: 'buffer', timeout: 3500, maxBuffer: Math.ceil(length / 3) * 4 + 64, killSignal: 'SIGKILL', signal }, (error, stdout) => { if (error) reject(error); else resolve(stdout) })
-    })
+    // Bounded by what the reader spends, not by 3.5s of wall clock: this encodes up to 64MiB of pixels to
+    // base64, so the clock was a size limit wearing a deadline's clothes — a big image on a busy machine
+    // was killed for being big. The payload is ASCII either way, so it arrives as text
+    const { stdout } = await execFileWhileWorking('/usr/bin/osascript',
+      ['-l', 'JavaScript', '-e', darwinReader, name, String(length)],
+      { timeout: 3500, maxBuffer: Math.ceil(length / 3) * 4 + 64, killSignal: 'SIGKILL', signal })
     signal?.throwIfAborted()
-    const text = encoded.toString('ascii').trim(), pixels = Buffer.from(text, 'base64')
+    const text = stdout.trim(), pixels = Buffer.from(text, 'base64')
     if (pixels.length !== length || pixels.toString('base64') !== text) throw new Error('Invalid shared image delivery')
     return pixels
   }

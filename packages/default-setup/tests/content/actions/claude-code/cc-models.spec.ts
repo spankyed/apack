@@ -1,3 +1,4 @@
+import { cpuBudget } from '@apackdev/testing/vitest'
 import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -51,7 +52,7 @@ describe('native model catalog command', () => {
  });
 });
 
-it.skipIf(!process.env.CLAUDE_CATALOG_TEST_BINARY)('presents the actual native catalog and closes fresh discovery with no model request or settings write', async () => {
+it.skipIf(!process.env.CLAUDE_CATALOG_TEST_BINARY)('presents the actual native catalog and closes fresh discovery with no model request or settings write', { meta: cpuBudget(15000) }, async () => {
  const root=await mkdtemp(join(tmpdir(),'native-catalog-app-')); let requests=0;
  const server=createServer((_req,res)=>{requests++;res.writeHead(503);res.end('unexpected model call');});
  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -70,7 +71,7 @@ it.skipIf(!process.env.CLAUDE_CATALOG_TEST_BINARY)('presents the actual native c
   const fresh=await getModels(options); expect(fresh).toEqual(native);
   expect(requests).toBe(0); expect(await readFile(settings,'utf8')).toBe(before);
  } finally {await handle?.close(); await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve())); await rm(root,{recursive:true,force:true});}
-},15000);
+});
 
 it('reads the current terminal catalog without a discovery process', async () => {
  const f=setup();

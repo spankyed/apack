@@ -1,3 +1,4 @@
+import { cpuBudget } from '@apackdev/testing/vitest'
 import {writeFile} from 'node:fs/promises';
 import {readFileSync} from 'node:fs';
 import {join,resolve} from 'node:path';
@@ -14,7 +15,7 @@ import type {StreamLine,QueryOptions,ResultLine} from '#features/code/be/service
 import {chatService} from '#features/threads/be/services/chat.ts';
 vi.mock('../../../../src/content/actions/claude-code/_helpers/context-usage.ts',()=>({refreshThreadContextUsage:vi.fn(async()=>{})}));
 const executable=process.env.CLAUDE_RESEARCH_EXECUTABLE,workspace=process.env.CLAUDE_RESEARCH_WORKSPACE,endpoint=process.env.CLAUDE_RESEARCH_MODEL_URL;
-it.skipIf(!executable||!workspace||!endpoint)('persists costs and session identity across native clear through compiled Chat',async()=>{
+it.skipIf(!executable||!workspace||!endpoint)('persists costs and session identity across native clear through compiled Chat', { meta: cpuBudget(20000) }, async()=>{
  expect(process.env.HOME).toBe(workspace);expect(new URL(endpoint!).hostname).toBe('127.0.0.1');
  const cwd=join(workspace!,'project');
  const {id}=repository.threadCommands.create({topic:'Native compiled clear',instructions:'',tags:[]});
@@ -59,4 +60,4 @@ it.skipIf(!executable||!workspace||!endpoint)('persists costs and session identi
   const reset=projected.find(event=>event.type==='conversation_reset')!;
   await writeFile(join(workspace!,'compiled-reset-evidence.json'),JSON.stringify({evidence:'apack-native-conversation-reset',owner:true,compiledFlow:true,sameOwner:true,firstSessionId:sessions[0],nextSessionId:sessions[2],resetSessionId:reset.sessionId,newConversationId:reset.newConversationId,clearInputId:terminal[1].user_message_uuid,clearResults:1,events:projected,turns:totals.map((totalCostUsd,index)=>({totalCostUsd,chargedCostUsd:costs[index]-(costs[index-1]??0)})),expectedCost:totals[0]+totals[2],chargedCost:costs[2],costAccountingMatches:Math.abs(costs[2]-totals[0]-totals[2])<1e-12,appMessagesPreserved:true,closed:true,qualification:'Actual compiled Chat and completion actions/flow with real native query and source retained owner. Persisted app cost/session state verified; no renderer or other reset/child variants.'},null,2));
  }finally{store.killAllHandles();}
-},20000);
+});

@@ -1,3 +1,4 @@
+import { cpuBudget } from '@apackdev/testing/vitest'
 import { readFileSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -17,7 +18,7 @@ const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE;
 const endpoint = process.env.CLAUDE_RESEARCH_MODEL_URL;
 
 // Explicit private native probe only; normal suites never launch a user's configured Claude.
-it.skipIf(!executable || !workspace || !endpoint)('compiled app owns native approval, idle scheduling and the next host input', async () => {
+it.skipIf(!executable || !workspace || !endpoint)('compiled app owns native approval, idle scheduling and the next host input', { meta: cpuBudget(150000) }, async () => {
   expect(process.env.HOME).toBe(workspace);
   for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN']) expect(process.env[key]).toBeUndefined();
   const url = new URL(endpoint!);
@@ -113,4 +114,4 @@ it.skipIf(!executable || !workspace || !endpoint)('compiled app owns native appr
       canonicalUserMappings: true, idleUiDidNotCreateMessage: true, exactCostAccounting: true, nativeCumulativeCosts: results.map(result => result.total_cost_usd),
       appTotalCostUsd: state()!.totalCostUsd, closed: true }, null, 2));
   } finally { store.killAllHandles(); }
-}, 150000);
+});

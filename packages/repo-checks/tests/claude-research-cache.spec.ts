@@ -1,11 +1,11 @@
-import { execFileSync } from 'node:child_process';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import * as path from 'node:path';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { expect, it } from 'vitest';
 
-it('bounds replay storage and refuses concurrent, foreign and symlinked deletion', () => {
+it('bounds replay storage and refuses concurrent, foreign and symlinked deletion', async () => {
   const script = path.join(REPO_ROOT, 'scripts', 'claude-research-ci.py');
-  const output = execFileSync('python3', ['-B', '-c', String.raw`
+  const { stdout: output } = await execFileWhileWorking('python3', ['-B', '-c', String.raw`
 import importlib.util, os, tempfile, sys
 from pathlib import Path
 spec = importlib.util.spec_from_file_location('replay', sys.argv[1])
@@ -44,6 +44,6 @@ with tempfile.TemporaryDirectory() as temporary:
     refused('symlinked')
     assert (outside / 'keep').read_text() == 'safe'
 print('bounded storage verified')
-`, script], { encoding: 'utf8' });
+`, script], {});
   expect(output.trim()).toBe('bounded storage verified');
 });
