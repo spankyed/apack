@@ -100,13 +100,17 @@ this one's:
 
 ## Current handoff
 
-- **Checkout:** `master` at `30eb9ff664`. No branch for this goal yet; no source committed.
-- **Next deliverable:** Phase 0a — `libghostty-vt` behind a Cargo feature in the broker's own repository,
-  with the existing `insta` corpus driven through both parsers and diffed. It depends on nothing in this
-  repository and touches no production path.
-- **Proven:** nothing yet. The facts in Scope are documentary, from upstream's release notes and packaging
-  guide; every one of them is to be re-checked against the release actually selected.
-- **Known unresolved:** the three open decisions below. None blocks Phase 0a.
+- **Checkout:** this repository on `master`; the broker in a worktree of `apack-terminal` at
+  `vt-core/conformance`, branched from `93b7de9`, which is what `vendor/apack-terminal.rev` pins. The main
+  broker checkout stays detached at that pin so the monorepo's `vendor/` link does not drift under local
+  work.
+- **Next deliverable:** the rest of Phase 0a — the both-parsers diff harness. The release is pinned and O1
+  is answered ([evidence](../references/evidence/one-vt-core.md)); nothing has yet been compiled against
+  `libghostty-vt.a`, so the link itself is unproven.
+- **Proven:** the release and its commit, that upstream publishes six files and none is a Windows or Linux
+  library, that the community archives are built from the release commit, and that a verified archive
+  unpacks to the layout the `-sys` crate's prebuilt directory expects.
+- **Known unresolved:** O2. D4 and D5 were corrected by the above in the same change.
 
 ## Decisions
 
@@ -132,9 +136,9 @@ answer to "Zig or prebuilts", and it is neither of the two options as they were 
 | Target | Where its binary comes from |
 |---|---|
 | `aarch64-apple-darwin` | upstream's Apple XCFramework |
-| `x86_64-pc-windows-msvc` | upstream's Windows zip — `lib/ghostty-vt-static.lib` |
-| `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu` | a published per-target archive, verified by its pinned SHA-256 |
 | `wasm32` (the renderer) | upstream's WebAssembly module |
+| `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu` | a published per-target archive, verified by its pinned SHA-256 |
+| `x86_64-pc-windows-msvc` | **nothing is published, by anyone** — we produce it (see below) |
 
 The `-sys` crates document the mechanism this needs: an environment variable naming an already-unpacked
 archive, so `build.rs` neither downloads nor compiles — the hatch a Nix build uses to fetch and verify
@@ -142,11 +146,14 @@ outside its sandbox. We fetch and verify in one place of our own and point the b
 
 Three consequences worth stating, because each is a rule rather than a detail:
 
-- **Zig enters the build only if we ever build from source, so we never do.** Upstream requires an exact
-  Zig major.minor per release and warns that a populated `ZIG_GLOBAL_CACHE_DIR` can crash the build. A
-  target with no published binary is therefore **not a supported target** until one exists, rather than a
-  target we compile ourselves. Upstream also publishes signed source and dependency tarballs that build
-  with no internet access, which is the escape hatch if that rule ever has to be broken — not the plan.
+- **Zig never enters the app's build. It does enter ours, once per release, for Windows.** Measured
+  2026-11-09: upstream publishes six files for `1.0.0` and not one is a Windows or Linux library, so the
+  earlier rule — *a target with no published binary is not a supported target* — would disqualify Windows,
+  which the broker must run on. What saves it is that upstream publishes a signed **dependency tarball**, so
+  a source build needs no internet access: a Windows artifact is built hermetically, out of band, and
+  published like any other file. Zig's major and minor must match the release exactly (`1.0.0` wants
+  0.17.0), and `ZIG_GLOBAL_CACHE_DIR` must be a fresh empty directory. The rule that survives is the one
+  that mattered: **no toolchain and no network inside the app's build**, whoever produced the binary.
 - **The pin is a pair.** The generated bindings and the binary must come from the same upstream commit; the
   `-sys` crate enforces this by having no prebuilt for any target when the commits differ. This repository
   already knows that shape: it is `vendor/*.rev` beside a checkout, and the lesson that a pin can name
@@ -160,6 +167,12 @@ core's state. `markers.rs` loses its hand-rolled scanning and keeps its state ma
 every field is a claim some program made, except `foreground`, which is measured. Nobody should size this
 work as "500 lines go away".
 
+Measured 2026-11-09 and smaller than that first implied: `1.0.0` exposes a typed payload accessor for the
+window title alone, so `markers.rs` **keeps its payload parsing** for the reported directory and the
+progress value. What it gains is that it no longer finds the sequences itself — OSC 133 arrives as cell and
+row state on the screen model, and a raw sequence is reachable by writing up to an OSC boundary. Evidence:
+[one-vt-core.md](../references/evidence/one-vt-core.md).
+
 **D6 — The protocol stays ours.** `ts-rs` generates the app's TypeScript from the broker's Rust types. A
 core handle's shape must not reach the wire, or the app's contract starts tracking a third party's struct
 layout. The mapping lives at the edge, and `BrokerScreen` keeps its current fields.
@@ -172,15 +185,14 @@ side is declared in one place and asserted (required outcome 4).
 
 ### Open decisions
 
-**O1 — Does the core answer every fact `markers.rs` currently derives?** Specifically OSC 133's command
-boundaries, OSC 7's working directory and OSC 9;4's progress. Phase 0a answers it; it decides how much of
-`markers.rs` survives and nothing before Phase B depends on the answer.
-
-**O2 — Which release, and does its Windows static library link against the broker's MSVC build?** Upstream
-builds the library with the GNU ABI and states that MSVC programs link it through the import library, with
-CI covering that; a static MSVC link is reported working by at least one shipping consumer. This is a fact
-to establish on the [Windows VM](../references/guides/windows-development-vm.md), not to infer. It blocks
-Phase B on Windows and nothing else.
+**O2 — Does a Windows library we build link against the broker's MSVC build?** The release is settled —
+`1.0.0`, tag `vt-1.0.0`, commit `0fa3d577a5614150ff8e2c152de5fb9d5c6d2dec` — and O1 is answered in
+evidence. What remains is Windows, and it is now two questions rather than one, because nothing is
+published for it: we build the library from the signed source and dependency tarballs, then link it. Upstream
+builds with the GNU ABI and states MSVC programs link through the import library, with CI covering that, and
+one shipping consumer reports a static MSVC link working. Establish both on the
+[Windows VM](../references/guides/windows-development-vm.md) rather than inferring either. Blocks Phase B on
+Windows and nothing else.
 
 ## Phases
 
