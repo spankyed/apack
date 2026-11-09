@@ -26,6 +26,8 @@ import type { Readable, Writable } from 'stream'
 import { resolveForService } from '../../utils/resolve-cli.ts'
 import { createLogger } from '@apackdev/sdk/logger'
 
+import { agentChildEnvironment } from '../shell-environment.ts'
+
 import { createClaudeLifecycleTrace } from './lifecycle-trace.ts'
 import { createStderrTail } from './stderr-tail.ts'
 import { decodeNdjson, encodeNdjsonLine, type DecodedLine } from './ndjson.ts'
@@ -44,9 +46,9 @@ const logger = createLogger('claude-code-runner')
 export interface ExecOnceOptions {
   cwd?: string
   /**
-   * Merge overrides into the inherited child environment. ANTHROPIC_API_KEY
-   * and NODE_ENV are always removed, including explicit overrides. Native
-   * file checkpointing defaults on only when its environment switch is unset.
+   * Merge overrides into the child environment, which is this process's minus everything the app set on it.
+   * ANTHROPIC_API_KEY is always removed, including an explicit override. Native file checkpointing defaults
+   * on only when its environment switch is unset.
    */
   env?: NodeJS.ProcessEnv
   /** Bytes piped to stdin. Pass `undefined` to leave stdin closed. */
@@ -67,9 +69,9 @@ export interface ExecOnceResult {
 export interface SpawnStreamOptions {
   cwd?: string
   /**
-   * Merge overrides into the inherited child environment. ANTHROPIC_API_KEY
-   * and NODE_ENV are always removed, including explicit overrides. Native
-   * file checkpointing defaults on only when its environment switch is unset.
+   * Merge overrides into the child environment, which is this process's minus everything the app set on it.
+   * ANTHROPIC_API_KEY is always removed, including an explicit override. Native file checkpointing defaults
+   * on only when its environment switch is unset.
    */
   env?: NodeJS.ProcessEnv
   signal?: AbortSignal
@@ -87,9 +89,27 @@ export interface StreamHandle {
   endInput(): void
   /** Wait for the child to exit. Resolves with the exit code. */
   done(): Promise<{ exitCode: number; signal: NodeJS.Signals | null; stderr: string }>
+  /**
+   * Wait for the child to exit for as long as it keeps working, and terminate it once it has gone silent.
+   *
+   * `exited: true` is a child that ended on its own; `exited: false` is one terminated for silence, whose
+   * stdio may still be held open by something it started. See {@link EXIT_IDLE_MS}.
+   */
+  waitForExitWhileWorking(idleMs?: number): Promise<{ exited: boolean }>
   /** Forcefully kill the child. */
   kill(signal?: NodeJS.Signals): void
 }
+
+/**
+ * How long a wait for the child to exit tolerates the child doing nothing at all.
+ *
+ * **Progress, not a clock.** Every line the child writes on stdout and every byte it writes on stderr starts
+ * this over, so a child still doing its work is never cut off, however long that work takes. What it bounds is
+ * silence: a child that has finished and holds a stdio pipe open — one grandchild of its own that inherited
+ * the pipe is enough — pins the awaiting caller for the life of the process, and the conversation that caller
+ * belongs to then reads as running until the app restarts.
+ */
+export const EXIT_IDLE_MS = 15_000
 
 // ─── Env scrubbing ───────────────────────────────────────────────────────────
 
@@ -105,19 +125,23 @@ export interface StreamHandle {
  * subprocess we spawn would try to authenticate with that key and
  * fail with "Invalid API key · Fix external API key".
  *
- * Caller overrides are merged into the inherited environment before scrubbing.
- * ANTHROPIC_API_KEY and NODE_ENV are always removed; an explicit override does
- * not bypass that policy. Other native switches pass through, with checkpointing
- * defaulted below only when unset. The parent and override objects stay unchanged.
+ * **Everything the app set on its own process is stripped first** (`agentChildEnvironment`): this child, and
+ * every program its Bash tool spawns, would otherwise inherit `ELECTRON_RUN_AS_NODE=1`, `APACK_API_TOKEN`,
+ * `APACK_USER_DATA_DIR`, `SHIPPED_PACKS_DIR`, `API_PORT` and the rest. The strip is derived from the same
+ * declaration the construction in `@app/main` is typed by, so a variable added there is stripped here; it
+ * covers `NODE_ENV`, which is why no delete below names it.
+ *
+ * Caller overrides are merged after that strip, so an override can set any of them deliberately.
+ * ANTHROPIC_API_KEY is removed last and an explicit override does not bypass it. Other native switches pass
+ * through, with checkpointing defaulted below only when unset. The parent and override objects stay unchanged.
  *
  * Exported for direct unit testing — testing via the real `spawn()` path
  * would require mocking `child_process`, which is needlessly heavy for a
  * pure function.
  */
 export function buildChildEnv(override?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, ...override }
+  const env: NodeJS.ProcessEnv = { ...agentChildEnvironment(process.env), ...override }
   delete env.ANTHROPIC_API_KEY
-  delete env.NODE_ENV
 
   // Let the CLI and explicit caller environment own deferred tool discovery.
   // Current native ToolSearch can load ExitPlanMode before its approval request.
@@ -267,9 +291,14 @@ export async function spawnStream(
   const trace = createClaudeLifecycleTrace('print', undefined, child.pid)
   trace('launch')
   child.once('spawn', () => trace('ready', {pid: child.pid}))
+  // Anything waiting on the child's progress registers here, and every byte it writes tells them. The set is
+  // empty whenever nobody is waiting, which is nearly always, so a chatty child pays nothing for it.
+  const waitingOnProgress = new Set<() => void>()
+  const madeProgress = () => { for (const notify of waitingOnProgress) notify() }
+
   // Drain throughout the process lifetime, retaining only bounded diagnostics.
   const stderrTail = createStderrTail()
-  child.stderr.on('data', c => stderrTail.append(c))
+  child.stderr.on('data', c => { stderrTail.append(c); madeProgress() })
 
   let exited = false
   let killTimer: ReturnType<typeof setTimeout> | undefined
@@ -338,9 +367,17 @@ export async function spawnStream(
     }
   }
 
+  // Every line the consumer pulls is progress by the child that wrote it, which is what bounds the wait below.
+  async function* observedLines(): AsyncGenerator<DecodedLine> {
+    for await (const line of decodeNdjson(child.stdout)) {
+      madeProgress()
+      yield line
+    }
+  }
+
   return {
     child,
-    lines: decodeNdjson(child.stdout),
+    lines: observedLines(),
     write(value: unknown): boolean {
       if (!child.stdin.writable) {
         logger.warn('write to stdin failed — not writable', { pid: child.pid })
@@ -354,6 +391,33 @@ export async function spawnStream(
     },
     done(): Promise<{ exitCode: number; signal: NodeJS.Signals | null; stderr: string }> {
       return exitPromise
+    },
+    waitForExitWhileWorking(idleMs: number = EXIT_IDLE_MS): Promise<{ exited: boolean }> {
+      return new Promise<{ exited: boolean }>(resolve => {
+        let settled = false
+        let silenceTimer: ReturnType<typeof setTimeout> | undefined
+        const finish = (result: { exited: boolean }) => {
+          if (settled) return
+          settled = true
+          waitingOnProgress.delete(restartSilence)
+          if (silenceTimer) clearTimeout(silenceTimer)
+          resolve(result)
+        }
+        const restartSilence = () => {
+          if (settled) return
+          if (silenceTimer) clearTimeout(silenceTimer)
+          silenceTimer = setTimeout(() => {
+            logger.warn('child has gone silent without exiting — terminating it', { pid: child.pid, idleMs })
+            terminate()
+            finish({ exited: false })
+          }, idleMs)
+          silenceTimer.unref()
+        }
+        waitingOnProgress.add(restartSilence)
+        // An exit settles this whichever way it went: a spawn error means there is no child to wait for.
+        exitPromise.then(() => finish({ exited: true }), () => finish({ exited: true }))
+        restartSilence()
+      })
     },
     kill(signal: NodeJS.Signals = 'SIGTERM'): void {
       terminate(signal)

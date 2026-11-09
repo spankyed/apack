@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {getAppEnvironment, shippedPacksDir} from '../../app-environment.ts';
+import type {AppProcessEnv} from '@apackdev/sdk/env';
 
 // API Server Configuration
 export const API_CONFIG = {
@@ -92,8 +93,11 @@ export const getEnvironment = (port: number, options: { apiToken: string; startu
     env[pathKey] = existing.join(path.delimiter);
   }
 
-  return {
-    ...env,
+  // Typed by AppProcessEnv, which is derived from APP_PROCESS_ENV_VARS: a variable added here without being
+  // named there, or named there and not set here, fails the typecheck. Everything the API starts inherits
+  // these, and the strip the pack applies to an agent child reads that same declaration — so this record is
+  // also the list of what a process started for the user must not inherit.
+  const appProcessEnv: AppProcessEnv = {
     NODE_ENV: app.isPackaged ? 'production' : 'development',
     API_PORT: port.toString(),
     // Clients must present it: the API refuses connections and requests without it
@@ -107,6 +111,8 @@ export const getEnvironment = (port: number, options: { apiToken: string; startu
     APACK_USER_DATA_DIR: getAppEnvironment().userDataDir,
     ELECTRON_RUN_AS_NODE: '1',
   };
+
+  return { ...env, ...appProcessEnv };
 };
 
 // Node Executable Configuration

@@ -144,17 +144,28 @@ describe('finaliseNoResult', () => {
 // stays writable during the turn and closes only after the CLI has
 // emitted its terminal `result` line. These tests pin down that timing.
 
-/** Build a fake StreamHandle backed by a manual line queue. */
-function makeMockStream() {
+/**
+ * Build a fake StreamHandle backed by a manual line queue.
+ *
+ * `ignoresEof` makes the child the one `close()` has to survive: stdin EOF is not something a child has to
+ * act on, and anything it started that inherited its stdio holds the pipes open after it would have exited.
+ * Such a child never ends the line stream and never resolves `done()`.
+ */
+function makeMockStream({ ignoresEof = false, idleMs = 20 }: { ignoresEof?: boolean; idleMs?: number } = {}) {
   const writes: unknown[] = []
   let endInputCalls = 0
   let killed = false
+  let terminatedForSilence = false
 
   // Queue of lines to feed into the pump. `null` marks end-of-stream.
   const queue: Array<DecodedLine | null> = []
   const waiters: Array<(v: IteratorResult<DecodedLine>) => void> = []
 
+  /** Whatever is waiting on the child's progress, told by every line delivered. */
+  const waitingOnProgress = new Set<() => void>()
+
   const pushLine = (line: DecodedLine | null) => {
+    for (const notify of waitingOnProgress) notify()
     const waiter = waiters.shift()
     if (waiter) {
       if (line === null) waiter({ value: undefined as unknown as DecodedLine, done: true })
@@ -193,6 +204,7 @@ function makeMockStream() {
     },
     endInput() {
       endInputCalls++
+      if (ignoresEof) return
       // Simulate the CLI's reaction to EOF: flush any queued lines then end.
       // (In the tests below we preload the queue before the consumer drains.)
       pushLine(null)
@@ -200,6 +212,28 @@ function makeMockStream() {
     },
     done() {
       return exitPromise
+    },
+    // The real handle's semantics: wait while the child keeps writing, give up only on silence.
+    waitForExitWhileWorking() {
+      return new Promise<{ exited: boolean }>(resolve => {
+        let settled = false
+        let silenceTimer: ReturnType<typeof setTimeout> | undefined
+        const finish = (result: { exited: boolean }) => {
+          if (settled) return
+          settled = true
+          waitingOnProgress.delete(restartSilence)
+          if (silenceTimer) clearTimeout(silenceTimer)
+          resolve(result)
+        }
+        const restartSilence = () => {
+          if (settled) return
+          if (silenceTimer) clearTimeout(silenceTimer)
+          silenceTimer = setTimeout(() => { terminatedForSilence = true; killed = true; finish({ exited: false }) }, idleMs)
+        }
+        waitingOnProgress.add(restartSilence)
+        void exitPromise.then(() => finish({ exited: true }))
+        restartSilence()
+      })
     },
     kill() {
       killed = true
@@ -211,6 +245,8 @@ function makeMockStream() {
     writes,
     get endInputCalls() { return endInputCalls },
     get killed() { return killed },
+    /** Set only by the silence bound, so it is distinct from the kills the control channel makes. */
+    get terminatedForSilence() { return terminatedForSilence },
     /** Enqueue a well-formed decoded line for the pump to consume. */
     pushEvent(line: unknown) {
       pushLine({ ok: true, value: line })
@@ -1206,6 +1242,40 @@ describe('query cold initialization lifecycle', () => {
     await closed
     expect(mock.endInputCalls).toBe(1)
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('settles even when the child never acts on stdin EOF, and terminates it', async () => {
+    // A child that holds its stdio open after EOF — its own grandchild inheriting the pipes is enough — used
+    // to pin this await for the life of the process, with `closeIdleConversation` waiting on it and the
+    // conversation reading as busy until the app restarted. The wait is the child's progress now, so silence
+    // ends it; the pump is deliberately not awaited after that, because those pipes may still be held.
+    const mock = makeMockStream({ ignoresEof: true })
+    vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)
+    const handle = await query({})
+
+    await expect(handle.close()).resolves.toBeUndefined()
+
+    expect(mock.endInputCalls).toBe(1)
+    expect(mock.terminatedForSilence).toBe(true)
+  })
+
+  it('waits as long as the child keeps working, however long that is', async () => {
+    // The bound is progress, not elapsed time: a child still writing is waited on past the silence window,
+    // here for four times its length. A clocked deadline would have given up at the first crossing.
+    vi.useFakeTimers()
+    const mock = makeMockStream({ ignoresEof: true, idleMs: 30 })
+    vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)
+    const handle = await query({})
+    const closed = handle.close()
+    for (let beat = 0; beat < 6; beat++) {
+      await vi.advanceTimersByTimeAsync(20)
+      mock.pushEvent({ type: 'system', subtype: 'ui_invalidate' })
+    }
+    expect(mock.terminatedForSilence).toBe(false)
+
+    mock.forceExit()
+    await closed
+    vi.useRealTimers()
   })
 
 })

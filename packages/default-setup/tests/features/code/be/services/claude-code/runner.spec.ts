@@ -87,6 +87,47 @@ describe('spawnStream termination', () => {
   })
 })
 
+describe('waitForExitWhileWorking', () => {
+  // A real child, because what is under test is whether its own output reaches the wait.
+  const silentAfterReady = `console.log(JSON.stringify({ready:true})); setInterval(() => {}, 1000)`
+  const chattyChild = `console.log(JSON.stringify({ready:true})); setInterval(() => console.log(JSON.stringify({beat:true})), 20)`
+
+  it('resolves exited when the child ends on its own', async () => {
+    const handle = await spawnStream(['-e', 'console.log(JSON.stringify({ready:true}))'], { cliPath: process.execPath, cwd: tmpdir() })
+    await expect(handle.waitForExitWhileWorking(5000)).resolves.toEqual({ exited: true })
+  })
+
+  it('terminates a child that has gone silent without exiting', async () => {
+    const handle = await spawnStream(['-e', silentAfterReady], { cliPath: process.execPath, cwd: tmpdir() })
+    try {
+      await handle.lines[Symbol.asyncIterator]().next()
+
+      await expect(handle.waitForExitWhileWorking(200)).resolves.toEqual({ exited: false })
+
+      expect((await handle.done()).signal).toBeTruthy()
+    } finally {
+      handle.child.kill('SIGKILL')
+      await handle.done()
+    }
+  }, 10_000)
+
+  it('keeps waiting on a child that is still writing, past the silence window', async () => {
+    // The distinguishing case: the wait outlives its own window several times over because the child keeps
+    // producing. A clocked deadline would have terminated this child at the first crossing.
+    const handle = await spawnStream(['-e', chattyChild], { cliPath: process.execPath, cwd: tmpdir() })
+    const reader = handle.lines[Symbol.asyncIterator]()
+    try {
+      const waiting = handle.waitForExitWhileWorking(150)
+      for (let beat = 0; beat < 20; beat++) await reader.next()
+
+      expect(await Promise.race([waiting, Promise.resolve('still waiting')])).toBe('still waiting')
+    } finally {
+      handle.child.kill('SIGKILL')
+      await handle.done()
+    }
+  }, 10_000)
+})
+
 describe('spawnStream input failure', () => {
   it('settles a live child after its input pipe fails', async () => {
     const child = `require('node:fs').closeSync(0); console.log(JSON.stringify({ready:true})); setInterval(() => {}, 1000)`
