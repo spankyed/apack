@@ -4677,16 +4677,35 @@ interface TerminalEntity {
     title: string;
     customTitle?: string;
     /**
-     * **No pid.** A row used to carry the process id its session had, and `restoreAll` reached for it on the
-     * next boot — checking whether that process was alive and killing it and its group, which is F7, and
-     * which could name a process the OS had since given to something else. The broker owns the processes a run
-     * leaves behind, so nothing persisted addresses one. The live descriptor still carries a pid, because the
-     * renderer tells a new shell from the previous one by it; that is a diagnostic, not a handle.
+     * **No pid, and `session` is not one.** A row used to carry the process id its session had, and
+     * `restoreAll` reached for it on the next boot — checking whether that process was alive and killing it
+     * and its group, which is F7, and which could name a process the OS had since given to something else.
+     *
+     * A broker session id is the opposite kind of name. The broker owns that namespace and never reissues an
+     * id, so a stale one names nothing rather than something else: offering it costs one request refused with
+     * `NO_SUCH_SESSION`, where offering a stale pid cost a stranger's process its life. What is forbidden here
+     * is a persisted handle that can be *mistaken* for a live one, not a persisted name.
+     *
+     * The live descriptor still carries a pid, because the renderer tells a new shell from the previous one by
+     * it; that is a diagnostic, not a handle.
      */
     shell: string;
     cwd: string;
     cols: number;
     rows: number;
+    /**
+     * The broker session this terminal's shell is running in, while one is.
+     *
+     * **What makes a shell survivable rather than merely surviving.** Sessions outlive the API on purpose, so
+     * that restarting it does not take a user's shells down — but a restarted API that cannot name them again
+     * leaves them running and unreachable, and spawns a fresh shell beside each. The id is the only thing it
+     * needs: the broker's feed is one slot, so output for a session already arrives on whatever connection
+     * greeted last.
+     *
+     * Absent for a row written before its session started, and stale after a full app restart, which ends
+     * every session — so it is offered to the broker rather than trusted (see `shell`).
+     */
+    session?: string;
     createdAt: number;
     updatedAt: number;
 }
@@ -4695,7 +4714,15 @@ interface TerminalInfo {
     id: EARS.EntityId;
     title: string;
     customTitle?: string;
-    pid: number;
+    /**
+     * The shell's process id, for a diagnostic — **`null` when it is not known**.
+     *
+     * A window tells one generation from the next by it, which is what draws the seam between a dead shell's
+     * output and its replacement's. It is unknown for a session the service took up again rather than started
+     * (the broker answers a pid only for a spawn), and that case is precisely the one where there is no
+     * boundary to draw: the shell is the one the window was already watching.
+     */
+    pid: number | null;
     shell?: string;
     cwd: string;
     active: boolean;
@@ -4712,7 +4739,20 @@ interface TerminalInfo {
     exited?: {
         code: number | null;
     };
+    /**
+     * The session's size **when this was published**, which is a starting point and not a live reading.
+     *
+     * **A pty has one size and it is whatever a window last fitted**, so the live value lives where the
+     * session does: the service keeps it current and `restart` re-opens the shell at it. What a window holds
+     * is the snapshot it was last listed or opened with, and its one consumer wants exactly that — the pool
+     * builds the emulator at this size, so it is the width a replayed screen is first drawn at.
+     *
+     * It is spelled out because it reads as live and is not: a drive scenario waited on it for the size a
+     * window had just fitted and timed out at the creation size, with every resize having landed correctly
+     * (F18). A window that wants the size it fitted computed it, and the pty's own is the broker's to answer.
+     */
     cols: number;
+    /** The session's rows when this was published; see `cols` */
     rows: number;
     /**
      * How far back this session can be scrolled: the host's number, from the broker's handshake.
@@ -6193,9 +6233,17 @@ declare function streamMessageText(params: {
 
 declare const terminalCommands: {
     /** Records a terminal the service started, under the id it took for it (`newId`) */
-    create: (terminal: Pick<TerminalEntity, "cols" | "cwd" | "rows" | "shell" | "title"> & {
+    create: (terminal: Pick<TerminalEntity, "cols" | "cwd" | "rows" | "session" | "shell" | "title"> & {
         id: EARS.EntityId<"Terminal">;
     }) => EARS.EntityId;
+    /**
+     * Records the broker session this terminal's shell is running in.
+     *
+     * Written whenever the shell is replaced, because a stored id that names the *previous* session is the one
+     * case the offer-and-fall-back rule cannot save: the broker would answer for it and this process would
+     * take up a session no terminal is showing.
+     */
+    recordSession: (id: EARS.EntityId, session: string) => void;
     rename: (id: EARS.EntityId, customTitle: string) => void;
     updateCwd: (id: EARS.EntityId, cwd: string, title?: string) => void;
     /**
