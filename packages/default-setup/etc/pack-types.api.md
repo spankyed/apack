@@ -5744,9 +5744,13 @@ declare function clearHandle(key: string): void;
 
 /** Queries an answer reads, beside the ones the sync does */
 declare const codeIndexAnswers: {
-    /** A symbol and where it is now, read by parsing its file: no row holds a position, so a line moving writes nothing */
+    /**
+     * A symbol, its name within its file (`Class.method`), and where it is now, read by parsing its file: no row holds a
+     * position, so a line moving writes nothing
+     */
     locate: (id: EARS.EntityId) => Promise<{
         symbol: CodeSymbolEntity;
+        local: string;
         location: {
             path: string;
             line: number;
