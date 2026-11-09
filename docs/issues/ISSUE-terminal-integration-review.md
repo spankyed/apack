@@ -1,8 +1,8 @@
 # Issue: Terminal integration — review findings and path forward
 
 **Date:** 2026-10-01 — findings re-verified against the tree 2026-11-07
-**Status:** Open. Decisions D1–D8 below are settled and D9–D11 live in the goal; T4 and M3 are fixed, the
-rest stand
+**Status:** Open. Decisions D1–D8 below are settled and D9–D11 live in the goal; T4, M3, G3, G6 and G7 are
+struck, the rest stand
 **Severity:** Critical — one finding writes user credentials to disk in plaintext; two more can lose work
 **Component:** `packages/default-setup/src/features/code` — terminal (xterm.js front end, node-pty back end),
 plus the app plumbing it depends on (`packages/main`, `packages/api`, `@apackdev/host/bus`)
@@ -130,9 +130,9 @@ rather than set by hand here, so the two cannot disagree about what is done.
 | **X11** ✔ | Medium | Linux: the `$SHELL`-missing fallback is a hardcoded `/bin/bash` | `be/services/terminal.ts:48` |
 | **X12** ✔ | Medium | Windows: `pwsh.exe`/`bash.exe`/`wsl.exe` are silently replaced by PowerShell 5.1 | `be/services/terminal.ts:25-37` |
 | **G2** ✔ | Medium | `ELECTRON_RUN_AS_NODE=1` is handed to every agent child and everything its Bash tool spawns | `claude-code/runner.ts:117-121` |
-| **G3** | Medium | `onShutdown` kills ptys but not in-flight agent children | `src/features/hooks.ts:12-17` |
+| ~~**G3**~~ | ~~Medium~~ | **Dissolved.** What `killAllHandles()` ends is the conversation and native-terminal model `session/claude-code-integration` introduces; master's handle store holds query handles alone, and those die with the exiting process — the only moment the hook runs | `src/features/hooks.ts` |
 | **G4** ✔ | Medium | "Open in terminal" hands the resumed CLI an env the agent runner exists to scrub | `be/services/terminal.ts:38-45` |
-| **G6** | Medium | `handle.close()` is awaited without a timeout; a held stdio pipe pins the thread `isRunning` | `claude-code/query.ts:244-248` |
+| ~~**G6**~~ | ~~Medium~~ | **Fixed.** The close is bounded by the child's own progress rather than a clock; a child gone silent without exiting is terminated, and a real exit failure still throws | `claude-code/query.ts` |
 | **S4** ✔ | Medium | `openLink` and the in-app tab path apply no scheme filter; only the external branch does | `apack-sdk/src/fe/navigation.ts:32-35` |
 | **F13** ✔ | Low | The shell allow-list is inert on the default path | `be/services/terminal.ts:276` |
 | **F14** ✔ | Medium | Shell integration is typed into the running shell, and its default has only ever been written `false` | `be/services/terminal.ts:334-344`, `apack.json` `features.code.settings` |
@@ -152,7 +152,7 @@ rather than set by hand here, so the two cannot disagree about what is done.
 | **X7** ✔ | Low | Windows: three FE paths split cwd on `/`, so the whole path becomes the name | `useTerminalActions.ts:34`, `fe/state.ts:155` |
 | **X8** ✔ | Low | Windows: a terminal at a drive root is titled "root" | `be/services/terminal.ts:80` |
 | **X13** ✔ | Low | Windows: `name: 'xterm-256color'` is inert and the pty inherits no `TERM` | `be/services/terminal.ts:87-93` |
-| **G7** | Low | Unbounded stderr accumulation per streaming agent child | `claude-code/runner.ts:274-275` |
+| ~~**G7**~~ | ~~Low~~ | **Fixed.** The stderr kept for a post-mortem is a bounded tail, and the bytes that fall off are counted rather than hidden | `claude-code/stderr-tail.ts` |
 
 ### S2 — keystrokes on disk (verified against the live log)
 
