@@ -247,13 +247,45 @@ settled by reading the tree.
 
 `npm run spec` on the protocol's suite: 13 cases green.
 
+### The asset route works, and an imported module is the wrong mechanism
+
+Measured on `tests/packs/external-pack` rather than the shipping pack — the same `apack pack build`, no
+risk to default-setup — with upstream's `ghostty-vt-1.0.0-small.wasm`, 844,279 bytes, verified against the
+signed `SHA256SUMS`.
+
+**An `import … from './x.wasm?url'` does not produce an asset.** The pack's frontend phase is a Vite
+*library* build, which has no asset base, so Vite inlines it as a base64 data URL:
+
+| | bundle |
+|---|---|
+| the module imported | **1,135,834 bytes**, of which a 1,125,737-character `data:application/wasm;base64,…` string — 99.1% of the bundle |
+| `assetsInlineLimit: 0` | **byte-identical.** Library mode ignores it, which is Vite's documented behaviour, so this is not a one-option fix |
+| the module as a public asset | **10,039 bytes** |
+
+So an inlined module is never a `pack://` request at all, every window parses it as JavaScript source, and
+the `application/wasm` entry above would never apply to it.
+
+**The route that works needs no build change**, because the mechanism is already there:
+`fe-bundler.ts`'s `captured-public-files` plugin copies `<pack>/public/` into the frontend's output
+directory. `public/ghostty-vt.wasm` therefore lands at `dist/runtime/ghostty-vt.wasm` at its original
+844,279 bytes, and `integrity.json` records it as `dad8e14ce8da57db3864…` — **which is upstream's own
+published checksum for that file**, so the receipt independently confirms it travelled unmodified through
+compilation and sealing.
+
+That closes the pipeline to the protocol boundary: public asset → `dist/runtime/` → the receipt →
+the installer places what the receipt lists → `pack://<id>/builds/<revision>/runtime/ghostty-vt.wasm`,
+served as `application/wasm`. `packages/main/tests/pack-protocol.spec.ts` now carries a case for the last
+hop with bytes a text path would mangle, since every existing case there reads a string.
+
+The fixture was restored: no 828 KB binary is committed, and the probe import is gone.
+
 ### What 0b still owes
 
-The two halves that cannot be read off the tree: whether the pack's frontend build **emits** a `.wasm`
-into `dist/runtime/` with a URL that resolves under `pack://` — the bundler is Vite, so an asset import is
-the likely mechanism and may need no build change at all — and the **packaged, offline initialization**,
-which is the exit condition and the only part that can still fail. Plus the eleven-row capability matrix,
-which needs the module loaded to answer honestly.
+**Instantiation in the packaged app, offline, and the capability matrix.** Everything above is the delivery
+route; nothing has yet called `WebAssembly.instantiate` on a module fetched over `pack://` inside a
+packaged build, and the eleven-row matrix needs a loaded module to answer honestly. That is the phase's
+exit condition and the only part that can still fail — and it now has a known-good route to fail on rather
+than four unknowns.
 
 
 ### What is not done
