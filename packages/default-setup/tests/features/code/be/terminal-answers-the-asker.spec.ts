@@ -6,21 +6,18 @@
 // a broadcast and that case fails.
 //
 // The service is stubbed because creating a terminal spawns a process, and nothing here is about pty.
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const service = vi.hoisted(() => ({
-  terminalService: {
-    create: vi.fn((options: { title?: string }) => ({ id: 't-1', title: options.title ?? 'Terminal', cwd: '/tmp' })),
-    onData: vi.fn(),
-    onExit: vi.fn(),
-    list: vi.fn(() => []),
-    updateCwd: vi.fn(),
-    close: vi.fn(),
-    write: vi.fn(),
-    resize: vi.fn(),
-  },
-}))
-vi.mock('#features/code/be/services/terminal.ts', () => service)
+import { terminalService } from '#features/code/be/services/terminal.ts'
+
+beforeEach(() => {
+  vi.spyOn(terminalService, 'create').mockImplementation(options => ({ id: 'terminal-1', title: options.title ?? 'Terminal', cwd: '/tmp', pid: 1, active: true, cols: 80, rows: 24 }))
+  vi.spyOn(terminalService, 'onData').mockImplementation(() => {})
+  vi.spyOn(terminalService, 'onExit').mockImplementation(() => {})
+  vi.spyOn(terminalService, 'restoreAll').mockResolvedValue(undefined)
+  vi.spyOn(terminalService, 'list').mockReturnValue([])
+})
+afterEach(() => vi.restoreAllMocks())
 
 const { startApp } = await import('@apackdev/testing/harness')
 

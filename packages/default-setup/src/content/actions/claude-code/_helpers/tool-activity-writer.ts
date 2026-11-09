@@ -1,11 +1,10 @@
 /**
  * Throttled writer for the `tool-activity` block on a streaming chat message.
  *
- * Claude Code can emit 20+ tool_use / tool_progress events in a few seconds;
- * we don't want to hit `updateMessageState` 20+ times per second because the
- * frontend rebuilds the blocks array wholesale on every update. This helper
- * coalesces writes into ~250ms batches (mirroring `createStreamWriter`'s
- * pattern for text deltas).
+ * Claude Code can emit 20+ tool_use / tool_progress events in a few seconds, and a write replaces the whole
+ * `blocks` field, so every one of them would re-send every entry gathered so far. A tool appearing is written
+ * straight away, because that is what the user is waiting to see; a patch to an entry already on screen waits
+ * for the row interval (see `row-interval.ts`).
  *
  * The writer owns the canonical copy of the block's `entries` array and
  * `state`. Call `append`, `update`, and `finalise`; the writer recomputes
@@ -36,10 +35,11 @@
 import type { Services, EntityId } from '#generated/services.ts';
 import { computeLabel } from './tool-activity-label.ts';
 import type { ToolActivityEntry, ToolActivityBlockProps } from './tool-activity-types.ts';
+import { ROW_INTERVAL_MS } from './row-interval.ts';
 
 export interface ToolActivityWriterOptions {
-  /** Minimum ms between `updateMessageState` calls. Default 250ms. */
-  intervalMs?: number;
+  /** Minimum ms between row writes for a patch to an entry already shown. Default {@link ROW_INTERVAL_MS}. */
+  rowIntervalMs?: number;
   /** Current phase — drives the streaming label ("Planning…" vs "Working…"). */
   phase?: string;
   /** Optional getter for the thinking block — included in every `blocks` write so both blocks coexist. */
@@ -75,7 +75,7 @@ export function createToolActivityWriter(
   messageId: EntityId,
   opts: ToolActivityWriterOptions = {},
 ): ToolActivityWriter {
-  const intervalMs = opts.intervalMs ?? 250;
+  const rowIntervalMs = opts.rowIntervalMs ?? ROW_INTERVAL_MS;
   const entries: ToolActivityEntry[] = [];
   const startedAt = Date.now();
 
@@ -84,6 +84,8 @@ export function createToolActivityWriter(
   let lastFlushAt = 0;
   /** Once true, we've pushed at least one block — finalise(0-entries) should clear. */
   let hasWrittenOnce = false;
+  /** What the last write put in the row, so an identical one can be skipped. */
+  let lastWritten: string | undefined;
   /** Optional artifact ref attached via setArtifactRef (Phase C). */
   let artifactRef: { artifactId: string; label: string } | undefined;
 
@@ -112,15 +114,23 @@ export function createToolActivityWriter(
     };
     const thinkingBlock = opts.getThinkingBlock?.() ?? null;
     const blocks = thinkingBlock ? [thinkingBlock, block] : [block];
-    services.chat.updateMessageState(messageId, { blocks: blocks as any });
+    // Blocks identical to the row's current ones cost a full write and change nothing. Once the thinking
+    // block rides along here, both writers' clocks can land on the same content, and a patch that moved
+    // nothing visible does too.
+    const written = JSON.stringify(blocks);
+    if (written !== lastWritten) {
+      lastWritten = written;
+      services.chat.updateMessageState(messageId, { blocks: blocks as any });
+    }
     hasWrittenOnce = true;
     lastFlushAt = Date.now();
   };
 
-  const schedule = (): void => {
+  /** A patch to something already on screen goes on the row interval — see {@link ROW_INTERVAL_MS}. */
+  const scheduleRow = (): void => {
     if (pendingTimer) return;
     const since = Date.now() - lastFlushAt;
-    const delay = Math.max(0, intervalMs - since);
+    const delay = Math.max(0, rowIntervalMs - since);
     pendingTimer = setTimeout(() => {
       pendingTimer = null;
       writeNow();
@@ -137,14 +147,16 @@ export function createToolActivityWriter(
       // inside a replayed `assistant` line after a permission pause.
       if (entries.some(e => e.id === entry.id)) return;
       entries.push(entry);
-      schedule();
+      // A tool appearing is the discrete change the user is waiting on, so it is written straight away;
+      // batching it behind the row interval is what would make the block look stuck.
+      writeNow();
     },
 
     update(id: string, patch: Partial<ToolActivityEntry>): void {
       const idx = entries.findIndex(e => e.id === id);
       if (idx === -1) return;
       entries[idx] = { ...entries[idx], ...patch, details: { ...entries[idx].details, ...patch.details } };
-      schedule();
+      scheduleRow();
     },
 
     flush(): void {

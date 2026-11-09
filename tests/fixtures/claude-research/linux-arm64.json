@@ -1,0 +1,8 @@
+{
+  "version": "2.1.302",
+  "platform": "linux-arm64",
+  "url": "https://registry.npmjs.org/@anthropic-ai/claude-code-linux-arm64/-/claude-code-linux-arm64-2.1.302.tgz",
+  "integrity": "sha512-eRgp1cK2oSC7vK1/Dha9EsfSxNb6b/LyduzBxRW02c0X+C6xtyAzeGMmRobQSNuTazRxsr/Cf2/l4Sf/LMgxCA==",
+  "tarballSha256": "8a3be117b2d679bba24ec14fc64906280c6a993944a036a70c4b675f5ada5e33",
+  "binarySha256": "2bd4f4e5ed5cb09955b490098f745321cb5491e7ea8c752ba1e3bb010cdadb10"
+}

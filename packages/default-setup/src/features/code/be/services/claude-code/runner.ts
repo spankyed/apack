@@ -26,11 +26,16 @@ import type { Readable, Writable } from 'stream'
 import { resolveForService } from '../../utils/resolve-cli.ts'
 import { createLogger } from '@apackdev/sdk/logger'
 
+import { agentChildEnvironment } from '../shell-environment.ts'
+
+import { createClaudeLifecycleTrace } from './lifecycle-trace.ts'
+import { createStderrTail } from './stderr-tail.ts'
 import { decodeNdjson, encodeNdjsonLine, type DecodedLine } from './ndjson.ts'
 import {
   ClaudeAbortError,
   ClaudeCliNotFoundError,
   ClaudeExitError,
+  ClaudeInputError,
   ClaudeTimeoutError,
 } from './errors.ts'
 
@@ -41,11 +46,9 @@ const logger = createLogger('claude-code-runner')
 export interface ExecOnceOptions {
   cwd?: string
   /**
-   * Override the env passed to the child. Defaults to a copy of `process.env`
-   * with `ANTHROPIC_API_KEY` removed so the CLI uses its own stored auth
-   * (`claude auth login`) instead of an env-var key meant for the server's
-   * LLM client. Pass an explicit object if you want no scrubbing — the
-   * helper assumes you know what you're doing and does not post-process it.
+   * Merge overrides into the child environment, which is this process's minus everything the app set on it.
+   * ANTHROPIC_API_KEY is always removed, including an explicit override. Native file checkpointing defaults
+   * on only when its environment switch is unset.
    */
   env?: NodeJS.ProcessEnv
   /** Bytes piped to stdin. Pass `undefined` to leave stdin closed. */
@@ -66,11 +69,9 @@ export interface ExecOnceResult {
 export interface SpawnStreamOptions {
   cwd?: string
   /**
-   * Override the env passed to the child. Defaults to a copy of `process.env`
-   * with `ANTHROPIC_API_KEY` removed so the CLI uses its own stored auth
-   * (`claude auth login`) instead of an env-var key meant for the server's
-   * LLM client. Pass an explicit object if you want no scrubbing — the
-   * helper assumes you know what you're doing and does not post-process it.
+   * Merge overrides into the child environment, which is this process's minus everything the app set on it.
+   * ANTHROPIC_API_KEY is always removed, including an explicit override. Native file checkpointing defaults
+   * on only when its environment switch is unset.
    */
   env?: NodeJS.ProcessEnv
   signal?: AbortSignal
@@ -88,9 +89,27 @@ export interface StreamHandle {
   endInput(): void
   /** Wait for the child to exit. Resolves with the exit code. */
   done(): Promise<{ exitCode: number; signal: NodeJS.Signals | null; stderr: string }>
+  /**
+   * Wait for the child to exit for as long as it keeps working, and terminate it once it has gone silent.
+   *
+   * `exited: true` is a child that ended on its own; `exited: false` is one terminated for silence, whose
+   * stdio may still be held open by something it started. See {@link EXIT_IDLE_MS}.
+   */
+  waitForExitWhileWorking(idleMs?: number): Promise<{ exited: boolean }>
   /** Forcefully kill the child. */
   kill(signal?: NodeJS.Signals): void
 }
+
+/**
+ * How long a wait for the child to exit tolerates the child doing nothing at all.
+ *
+ * **Progress, not a clock.** Every line the child writes on stdout and every byte it writes on stderr starts
+ * this over, so a child still doing its work is never cut off, however long that work takes. What it bounds is
+ * silence: a child that has finished and holds a stdio pipe open — one grandchild of its own that inherited
+ * the pipe is enough — pins the awaiting caller for the life of the process, and the conversation that caller
+ * belongs to then reads as running until the app restarts.
+ */
+export const EXIT_IDLE_MS = 15_000
 
 // ─── Env scrubbing ───────────────────────────────────────────────────────────
 
@@ -106,44 +125,26 @@ export interface StreamHandle {
  * subprocess we spawn would try to authenticate with that key and
  * fail with "Invalid API key · Fix external API key".
  *
- * If the caller explicitly passes an `env` override, we assume they know
- * what they're doing (e.g. an integration test or a truly external key)
- * and leave it untouched.
+ * **Everything the app set on its own process is stripped first** (`agentChildEnvironment`): this child, and
+ * every program its Bash tool spawns, would otherwise inherit `ELECTRON_RUN_AS_NODE=1`, `APACK_API_TOKEN`,
+ * `APACK_USER_DATA_DIR`, `SHIPPED_PACKS_DIR`, `API_PORT` and the rest. The strip is derived from the same
+ * declaration the construction in `@app/main` is typed by, so a variable added there is stripped here; it
+ * covers `NODE_ENV`, which is why no delete below names it.
+ *
+ * Caller overrides are merged after that strip, so an override can set any of them deliberately.
+ * ANTHROPIC_API_KEY is removed last and an explicit override does not bypass it. Other native switches pass
+ * through, with checkpointing defaulted below only when unset. The parent and override objects stay unchanged.
  *
  * Exported for direct unit testing — testing via the real `spawn()` path
  * would require mocking `child_process`, which is needlessly heavy for a
  * pure function.
  */
 export function buildChildEnv(override?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, ...override }
+  const env: NodeJS.ProcessEnv = { ...agentChildEnvironment(process.env), ...override }
   delete env.ANTHROPIC_API_KEY
-  delete env.NODE_ENV
 
-  // Disable the CLI's tool-search / deferred-tool feature. Claude Code's
-  // tool-search mode ships enabled by default — see leaked source at
-  //   packages/claude-code/src/utils/toolSearch.ts:197
-  //     `return 'tst' // default: always defer MCP and shouldDefer tools`
-  // — and it hides every tool tagged `shouldDefer: true` from Claude's
-  // initial tool list until ToolSearchTool has already emitted a prior
-  // `tool_reference` block discovering it. On the first turn of a fresh
-  // plan-mode session no such prior discoveries exist, so `ExitPlanMode`
-  // (which has `shouldDefer: true` at
-  //   packages/claude-code/src/tools/ExitPlanModeTool/ExitPlanModeV2Tool.ts:166
-  // ) never appears in Claude's tools list. Claude reads the plan-mode
-  // system reminder telling it to call ExitPlanMode but can't, falls
-  // back to prose — "Would you like me to proceed with the
-  // implementation?" — and bypasses our plan-approval flow in chat.ts's
-  // onPermissionRequest closure entirely.
-  //
-  // apack doesn't have the monster MCP tool counts tool search was
-  // designed to optimise, so the feature is pure downside for us.
-  // Setting `ENABLE_TOOL_SEARCH=0` hits the `isEnvDefinedFalsy` branch
-  // at `toolSearch.ts:196` → forces mode to `'standard'` → makes
-  // `useToolSearch = false` at `claude.ts:1120` → the `!useToolSearch`
-  // path at `claude.ts:1168-1171` includes every tool (ExitPlanMode,
-  // NotebookEdit, LSPTool, …) in Claude's effective tools list from
-  // turn 1. Plan approval flow then works on the first try.
-  env.ENABLE_TOOL_SEARCH = '0'
+  // Let the CLI and explicit caller environment own deferred tool discovery.
+  // Current native ToolSearch can load ExitPlanMode before its approval request.
 
   // Enable Claude Code's file-history checkpointing in SDK / non-interactive
   // mode. Without this, `fileHistoryEnabled()` in
@@ -191,7 +192,7 @@ export async function execOnce(
     }
 
     const timer = setTimeout(() => {
-      child?.kill('SIGKILL')
+      if (child?.pid !== undefined) child.kill('SIGKILL')
       settle(() => reject(new ClaudeTimeoutError(timeoutMs, args)))
     }, timeoutMs)
 
@@ -209,15 +210,15 @@ export async function execOnce(
     }
 
     const onAbort = () => {
-      child.kill('SIGTERM')
+      if (child.pid !== undefined) child.kill('SIGTERM')
+      // Aborting settles the call and clears its timeout, so termination needs
+      // its own bound when the child ignores SIGTERM.
+      const abortKillTimer = setTimeout(() => {
+        if (child.pid !== undefined && child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
+      }, 1000)
+      abortKillTimer.unref()
+      child.once('close', () => clearTimeout(abortKillTimer))
       settle(() => reject(new ClaudeAbortError(opts.signal?.reason)))
-    }
-    if (opts.signal) {
-      if (opts.signal.aborted) {
-        onAbort()
-        return
-      }
-      opts.signal.addEventListener('abort', onAbort, { once: true })
     }
 
     child.stdout?.on('data', c => chunksOut.push(c))
@@ -235,6 +236,22 @@ export async function execOnce(
       }
     })
 
+    child.stdin?.on('error', err => {
+      if (settled) return
+      if (child.pid !== undefined) child.kill('SIGKILL')
+      settle(() => reject(new ClaudeInputError(err)))
+    })
+
+    // Install process/pipe listeners before an already-aborted signal can
+    // settle this call; spawn errors and late pipe errors still need listeners.
+    if (opts.signal) {
+      if (opts.signal.aborted) {
+        onAbort()
+        return
+      }
+      opts.signal.addEventListener('abort', onAbort, { once: true })
+    }
+
     if (opts.input !== undefined && child.stdin) {
       child.stdin.end(opts.input)
     } else {
@@ -248,7 +265,8 @@ export async function execOnce(
  *
  * The caller drives the lifecycle: write stdin turns, iterate `lines`, then
  * call `endInput()` and `await done()`. If `signal` aborts, the child is
- * SIGTERM'd and `done()` rejects with `ClaudeAbortError`.
+ * sent SIGTERM, with SIGKILL after one second if it has not exited. `done()`
+ * reports the observed exit so the query layer can classify cancellation.
  */
 export async function spawnStream(
   args: readonly string[],
@@ -270,50 +288,96 @@ export async function spawnStream(
     throw wrapSpawnError(err, cliPath)
   }
 
-  // Collect stderr lazily for post-mortem on exit.
-  const stderrChunks: Buffer[] = []
-  child.stderr.on('data', c => stderrChunks.push(c))
+  const trace = createClaudeLifecycleTrace('print', undefined, child.pid)
+  trace('launch')
+  child.once('spawn', () => trace('ready', {pid: child.pid}))
+  // Anything waiting on the child's progress registers here, and every byte it writes tells them. The set is
+  // empty whenever nobody is waiting, which is nearly always, so a chatty child pays nothing for it.
+  const waitingOnProgress = new Set<() => void>()
+  const madeProgress = () => { for (const notify of waitingOnProgress) notify() }
 
-  // Swallow expected pipe errors that occur when the child is killed mid-write.
-  // Without this listener the error becomes an uncaughtException and crashes the server.
-  child.stdin.on('error', (err: NodeJS.ErrnoException) => {
-    const expected = ['EPIPE', 'ECONNRESET', 'ERR_STREAM_DESTROYED'];
-    if (expected.includes(err.code ?? '')) {
-      logger.warn('stdin write error after child exit (expected during kill)', { code: err.code, pid: child.pid })
-    } else {
-      logger.error('unexpected stdin error', { err, pid: child.pid })
+  // Drain throughout the process lifetime, retaining only bounded diagnostics.
+  const stderrTail = createStderrTail()
+  child.stderr.on('data', c => { stderrTail.append(c); madeProgress() })
+
+  let exited = false
+  let killTimer: ReturnType<typeof setTimeout> | undefined
+  const clearKillTimer = () => {
+    if (killTimer) clearTimeout(killTimer)
+    killTimer = undefined
+  }
+  const terminate = (signal: NodeJS.Signals = 'SIGTERM') => {
+    // A failed spawn can still be awaiting its error event, with no child PID.
+    if (exited || child.pid === undefined) return
+    trace('cancel_requested')
+    child.kill(signal)
+    // A successful signal send does not prove that the child exited.
+    if (signal !== 'SIGKILL' && !killTimer) {
+      killTimer = setTimeout(() => {
+        killTimer = undefined
+        if (!exited) child.kill('SIGKILL')
+      }, 1000)
+      killTimer.unref()
     }
+  }
+  // A broken input pipe makes this bidirectional process unusable even if it keeps
+  // stdout open. Termination lets the query/owner settle pending turns on exit.
+  child.stdin.on('error', (err: NodeJS.ErrnoException) => {
+    if (exited) {
+      logger.warn('stdin write error after child exit', { code: err.code, pid: child.pid })
+      return
+    }
+    logger.error('stdin failed while child was alive; terminating process', { code: err.code, pid: child.pid })
+    terminate()
   })
+
+  const onAbort = () => terminate()
+  const cleanup = () => {
+    exited = true
+    clearKillTimer()
+    opts.signal?.removeEventListener('abort', onAbort)
+  }
+  child.once('exit', cleanup)
 
   // One-shot promise that resolves on exit. Cached so multiple `done()`
   // calls are idempotent.
   const exitPromise = new Promise<{ exitCode: number; signal: NodeJS.Signals | null; stderr: string }>(
     (resolve, reject) => {
-      child.once('error', err => reject(wrapSpawnError(err, cliPath)))
+      child.once('error', err => { trace('exit', {outcome:'error'}); cleanup(); reject(wrapSpawnError(err, cliPath)) })
       child.once('close', (code, sig) => {
+        trace('exit', {outcome: code === 0 ? 'ok' : sig ? 'cancelled' : 'error', code: code ?? undefined, discardedBytes: stderrTail.discardedBytes})
+        cleanup()
         resolve({
           exitCode: code ?? -1,
           signal: sig,
-          stderr: Buffer.concat(stderrChunks).toString('utf8'),
+          stderr: stderrTail.text(),
         })
       })
     },
   )
 
-  // Honour external abort by SIGTERM'ing the child. The exit handler above
+  // Honour external abort with bounded termination. The exit handler above
   // turns that into a normal resolve with a non-zero exit code; callers of
   // `done()` can classify it themselves.
   if (opts.signal) {
     if (opts.signal.aborted) {
-      child.kill('SIGTERM')
+      onAbort()
     } else {
-      opts.signal.addEventListener('abort', () => child.kill('SIGTERM'), { once: true })
+      opts.signal.addEventListener('abort', onAbort, { once: true })
+    }
+  }
+
+  // Every line the consumer pulls is progress by the child that wrote it, which is what bounds the wait below.
+  async function* observedLines(): AsyncGenerator<DecodedLine> {
+    for await (const line of decodeNdjson(child.stdout)) {
+      madeProgress()
+      yield line
     }
   }
 
   return {
     child,
-    lines: decodeNdjson(child.stdout),
+    lines: observedLines(),
     write(value: unknown): boolean {
       if (!child.stdin.writable) {
         logger.warn('write to stdin failed — not writable', { pid: child.pid })
@@ -328,8 +392,35 @@ export async function spawnStream(
     done(): Promise<{ exitCode: number; signal: NodeJS.Signals | null; stderr: string }> {
       return exitPromise
     },
+    waitForExitWhileWorking(idleMs: number = EXIT_IDLE_MS): Promise<{ exited: boolean }> {
+      return new Promise<{ exited: boolean }>(resolve => {
+        let settled = false
+        let silenceTimer: ReturnType<typeof setTimeout> | undefined
+        const finish = (result: { exited: boolean }) => {
+          if (settled) return
+          settled = true
+          waitingOnProgress.delete(restartSilence)
+          if (silenceTimer) clearTimeout(silenceTimer)
+          resolve(result)
+        }
+        const restartSilence = () => {
+          if (settled) return
+          if (silenceTimer) clearTimeout(silenceTimer)
+          silenceTimer = setTimeout(() => {
+            logger.warn('child has gone silent without exiting — terminating it', { pid: child.pid, idleMs })
+            terminate()
+            finish({ exited: false })
+          }, idleMs)
+          silenceTimer.unref()
+        }
+        waitingOnProgress.add(restartSilence)
+        // An exit settles this whichever way it went: a spawn error means there is no child to wait for.
+        exitPromise.then(() => finish({ exited: true }), () => finish({ exited: true }))
+        restartSilence()
+      })
+    },
     kill(signal: NodeJS.Signals = 'SIGTERM'): void {
-      child.kill(signal)
+      terminate(signal)
     },
   }
 }

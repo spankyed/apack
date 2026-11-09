@@ -1,0 +1,206 @@
+import { readFile, readdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { stripVTControlCharacters as _stripVTControlCharacters } from 'node:util'
+import { pathToFileURL } from 'node:url'
+import { test, expect } from '@apackdev/testing'
+const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
+test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
+test('keeps native status, submissions and history available under managed-only hooks', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
+  test.setTimeout(90000)
+  expect(process.env.HOME).toBe(workspace)
+  const { restriction, transition } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
+  const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
+  const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
+  await app.waitForSurface('default-setup/threads'); await app.navigate('default-setup/threads')
+  await app.navigate('host/settings')
+  await appPage.evaluate(() => { const settings = (window as any).applicationState.system.get('host/settings'); settings.send({ type: 'TAB.SELECT', tab: 'general' }); settings.send({ type: 'GENERAL_NAV.SELECT', item: 'secrets' }) })
+  const provider = appPage.getByText('Claude Code CLI', { exact: true }).locator('..').locator('..').locator('..')
+  await provider.getByPlaceholder('Path override (auto-detected if empty)').fill(launcher!)
+  await appPage.waitForTimeout(700)
+  await app.navigate('default-setup/threads')
+  await appPage.evaluate(cwd => { const actor = (window as any).applicationState.system.get('default-setup/threads'); actor.send({ type: 'NEW_THREAD_IN_PROJECT', directory: cwd }); actor.send({ type: 'VIEW_DASHBOARD' }); actor.send({ type: 'SET_MODE', mode: 'Claude Code' }); actor.send({ type: 'SET_PHASE', phase: 'Edit' }) }, workspace!)
+  const card = appPage.locator('[data-onboarding-id="agent-chat-input"]')
+  await card.locator('[contenteditable="true"]').fill('Seed this private native interface session.')
+  await card.getByRole('button', { name: 'Send', exact: true }).click()
+  const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
+  await expect.poll(async () => (await context()).turns).toBe(1)
+  const sessionId = (await context()).sessionId; expect(sessionId).toBeTruthy()
+  const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
+  await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
+  await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
+  const input = section.locator('textarea.xterm-helper-textarea')
+  let theme = false, security = false, navigated = false, trusted = false
+  await expect.poll(async () => {
+    const current = await context(), native = current.native
+    const text = native?.output?.map((chunk: any) => chunk.text).join('') ?? ''
+    const screen = recognizeOnboardingPrompt(text, workspace)
+    if (screen === 'theme' && !theme) { theme = true; await input.press('Enter') }
+    else if (screen === 'security-notes' && theme && !security) { security = true; await input.press('Enter') }
+    else if (screen === 'workspace-trust' && !navigated) { navigated = true; await input.press('ArrowDown') }
+    else if (screen === 'workspace-trust-selected' && navigated && !trusted) { trusted = true; await input.press('Enter') }
+    return native?.state?.status === 'live' && (restriction ? native.state.mainStatus === undefined : native.state.mainStatus?.includes('AppNativeMain ' + sessionId))
+  }, { timeout: 25000, intervals: [250] }).toBe(true)
+  await expect(card).toBeHidden()
+  const main = section.getByTestId('native-main-status')
+  if (restriction) await expect(main).toHaveCount(0)
+  else {
+    await expect(main).toContainText('AppNativeMain ' + sessionId)
+    await expect(main).toContainText('Second native status line')
+    await expect(main.locator('span').first()).toHaveCSS('color', 'rgb(74, 222, 128)')
+  }
+  const boundNativePid = (await context()).native.state.nativePid
+  await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
+  const status = card.getByTestId('composer-native-status')
+  if (restriction) await expect(status).toHaveCount(0)
+  else await expect(status).toContainText('AppNativeMain ' + sessionId)
+  await appPage.setViewportSize({ width: 680, height: 600 })
+  await appPage.screenshot({ path: testInfo.outputPath('apack-managed-composer-status.png') })
+  const ownerIdentity = { pid: (await context()).native.state.pid, ownerId: (await context()).native.state.ownerId }
+  const policyFile = join(workspace!, 'policy/managed-settings.json')
+  const policy = transition ? JSON.parse(await readFile(policyFile, 'utf8')) : undefined
+  async function policyEnabled(enabled: boolean) {
+    await writeFile(policyFile, JSON.stringify({ ...policy, ...(enabled ? {} : { disableAllHooks: true }) }))
+    if (enabled) await expect(status).toContainText('AppNativeMain ' + sessionId, { timeout: 10000 })
+    else await expect(status).toHaveCount(0, { timeout: 10000 })
+    const current = await context()
+    expect(current.native.state.pid).toBe(ownerIdentity.pid); expect(current.native.state.ownerId).toBe(ownerIdentity.ownerId); expect(current.native.state.sessionId).toBe(sessionId)
+  }
+  if(process.env.CLAUDE_RESEARCH_HELD_HELPER==='1'){
+    const kind=process.env.CLAUDE_RESEARCH_HELD_HELPER_KIND==='subagent'?'subagent':'main',subagent=kind==='subagent'
+    let taskId:string|undefined
+    const observerPath=JSON.parse(await readFile(join(workspace!,'native-observer-path.json'),'utf8')).path
+    const generations=async()=>JSON.parse(await readFile(observerPath,'utf8')).generations
+    const before=await generations(),draft='Keep this draft across a managed helper transition.'
+    const samples:string[]=[];
+    await appPage.evaluate(()=>{const actor=(window as any).applicationState.system.get('default-setup/threads');(window as any).__heldHelperSamples=[];(window as any).__heldHelperSubscription=actor.subscribe((snapshot:any)=>{for(const view of Object.values(snapshot.context.nativeTerminalViews) as any[])(window as any).__heldHelperSamples.push([view.state?.mainStatus??'',...(view.state?.tasks??[]).map((task:any)=>task.statusText??'')].join(' | '))})})
+    const composer=card.locator('[contenteditable="true"]');await composer.fill(draft)
+    await writeFile(join(workspace!,'held-helper-arm'),'armed')
+    if(subagent){await composer.fill('Review the project with a background worker.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect(composer).toHaveText('');await composer.fill(draft);await expect.poll(async()=>(await context()).native.state.tasks.some((task:any)=>task.status==='running')).toBe(true);taskId=(await context()).native.state.tasks.find((task:any)=>task.status==='running').id;await appPage.getByRole('button',{name:/^Native tools/}).first().click()}
+    const started=async()=>JSON.parse(await readFile(join(workspace!,'held-helper-started.json'),'utf8').catch(()=>'{}'))
+    await expect.poll(async()=>(await started()).pid,{timeout:10000}).toBeGreaterThan(0)
+    await writeFile(policyFile,JSON.stringify({...policy,allowManagedHooksOnly:true}))
+    await expect.poll(async()=>(await generations())[kind]!==before[kind],{timeout:10000}).toBe(true)
+    const restricted=await generations();await writeFile(join(workspace!,'held-helper-release'),'release')
+    const posts=async()=>(await readFile(join(workspace!,'held-helper-native-posts.jsonl'),'utf8').catch(()=>'')).split('\n').filter(Boolean).map(line=>JSON.parse(line))
+    await expect.poll(async()=>(await posts()).some(row=>row.generation===before[kind]&&(row.stdout.includes('STALE_HELD_HELPER')||row.signal==='aborted'||row.signal==='SIGTERM'))).toBe(true)
+    const raw=(await posts()).find(row=>row.generation===before[kind]&&(row.stdout.includes('STALE_HELD_HELPER')||row.signal==='aborted'||row.signal==='SIGTERM'));expect(raw.generation).toBe(before[kind]);expect(raw.stdout.includes('STALE_HELD_HELPER')||raw.signal==='aborted'||raw.signal==='SIGTERM').toBe(true)
+    await expect.poll(async()=>{const native=(await context()).native.state,text=subagent?(native.tasks.find((task:any)=>task.id===taskId)?.statusText??''):(native.mainStatus??'');samples.push(text);expect(text).not.toContain('STALE_HELD_HELPER');return text.includes(subagent?'AppNativeAgent running':'AppNativeMain '+sessionId)}).toBe(true)
+    if(subagent){expect((await started()).taskIds).toContain(taskId);expect(raw.tasks.some((task:any)=>task.id===taskId&&task.status==='running')).toBe(true);await expect(appPage.locator('[data-native-agent-id="'+taskId+'"]')).toContainText('AppNativeAgent running')}
+    await expect(status).not.toContainText('STALE_HELD_HELPER');await expect(composer).toHaveText(draft)
+    for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await expect(status).toContainText('AppNativeMain '+sessionId);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await appPage.screenshot({path:testInfo.outputPath('native-held-helper-'+kind+'-'+size.width+'.png')})}
+    await writeFile(policyFile,JSON.stringify({...policy,allowManagedHooksOnly:false}));await expect.poll(async()=>(await generations())[kind]!==restricted[kind]).toBe(true)
+    await expect(status).toContainText('AppNativeMain '+sessionId);await expect(composer).toHaveText(draft)
+    if(subagent)await expect.poll(async()=>(await context()).native.state.tasks.find((task:any)=>task.id===taskId)?.statusText,{timeout:10000}).toContain('AppNativeAgent running')
+    expect((await context()).native.state.nativePid).toBe(boundNativePid)
+    samples.push(...await appPage.evaluate(()=>{(window as any).__heldHelperSubscription.unsubscribe();return (window as any).__heldHelperSamples}));expect(samples.every(text=>!text.includes('STALE_HELD_HELPER'))).toBe(true)
+    await writeFile(join(workspace!,'native-held-helper-proof.json'),JSON.stringify({started:await started(),finished:JSON.parse(await readFile(join(workspace!,'held-helper-finished.json'),'utf8').catch(()=>'null')),before,restricted,restored:await generations(),samples,raw,kind,taskId}))
+    if(subagent){await writeFile(join(workspace!,'native-pending-duration-release'),'release');await expect.poll(async()=>(await context()).native.state.tasks.some((task:any)=>task.id===taskId&&task.status==='completed'),{timeout:20000}).toBe(true)}
+    await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
+    const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
+    await composer.fill('Continue after the held native helper.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
+    await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativeHeldHelper:true,...(subagent?{nativeHeldSubagentHelper:true}:{}),nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));return
+  }
+  let nativePolicySameCommandEpochs=false,nativePolicyClientRetirement=false,nativePolicyDrawingRestoration=false
+  if(transition){
+    const readClient=async()=>JSON.parse(await readFile(join(workspace!,'native-policy-client.json'),'utf8'))
+    const observerPath=JSON.parse(await readFile(join(workspace!,'native-observer-path.json'),'utf8')).path
+    const generations=async()=>JSON.parse(await readFile(observerPath,'utf8')).generations
+    const client=card.locator('[data-native-client]').first(),notice=appPage.locator('[data-native-placement="InfoNotice"]').filter({hasText:'Policy notice:'}).first()
+    await expect(client).toContainText('Policy Client ticks=')
+    const tools=card.getByRole('button',{name:'Session tools',exact:true});if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
+    await client.focus();await client.press('p');await expect.poll(async()=> (await readClient()).key).toBe('p')
+    await expect(notice).toHaveCount(1)
+    const oldToken=await client.getAttribute('data-native-client'),before=await generations()
+    await writeFile(policyFile,JSON.stringify({...policy,allowManagedHooksOnly:true}))
+    await expect(client).toHaveCount(0,{timeout:10000})
+    await expect(notice).toHaveCount(0,{timeout:10000})
+    await expect(appPage.locator('[data-native-placement="InfoNotice"]').filter({hasText:'Debug mode enabled'}).first()).toBeAttached()
+    await expect.poll(async()=> (await generations()).main!==before.main&&(await generations()).subagent!==before.subagent).toBe(true)
+    await expect(status).toContainText('AppNativeMain '+sessionId,{timeout:10000})
+    const stopped=await readClient();await appPage.waitForTimeout(350);expect((await readClient()).posts).toBe(stopped.posts)
+    const restricted=await generations()
+    await writeFile(policyFile,JSON.stringify({...policy,allowManagedHooksOnly:false}))
+    await expect(client).toContainText('Policy Client ticks=',{timeout:10000})
+    await expect(notice).toHaveCount(1,{timeout:10000})
+    expect(await client.getAttribute('data-native-client')).not.toBe(oldToken)
+    await expect.poll(async()=> (await generations()).main!==restricted.main&&(await generations()).subagent!==restricted.subagent).toBe(true)
+    if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
+    await client.focus();await client.press('r');await expect.poll(async()=> (await readClient()).key).toBe('r')
+    await appPage.evaluate(token=>{const actor=(window as any).applicationState.system.get('default-setup/threads'),context=actor.getSnapshot().context;const[mountId]=Object.entries(context.nativeUiViews).find(([,view]:any)=>view.threadId===context.currentThread.id)!;actor.send({type:'CLAUDE_UI_CLIENT',mountId,threadId:context.currentThread.id,id:token,sequence:1000000,event:{kind:'key',key:'x'}})},oldToken)
+    await appPage.waitForTimeout(350);expect((await readClient()).key).toBe('r')
+    const resumed=await readClient();await expect.poll(async()=>(await readClient()).ticks).toBeGreaterThan(resumed.ticks)
+    await writeFile(join(workspace!,'native-policy-epoch-evidence.json'),JSON.stringify({before,restricted,restored:await generations(),stopped,oldToken,freshToken:await client.getAttribute('data-native-client'),fresh:await readClient()}))
+    nativePolicySameCommandEpochs=true;nativePolicyClientRetirement=true;nativePolicyDrawingRestoration=true
+    await appPage.screenshot({path:testInfo.outputPath('apack-managed-ui-restored.png')})
+    if(await tools.getAttribute('aria-expanded')==='true')await tools.click()
+  }
+  if (transition) {
+    await policyEnabled(false)
+    await appPage.screenshot({ path: testInfo.outputPath('apack-managed-policy-disabled.png') })
+    await policyEnabled(true)
+    await appPage.screenshot({ path: testInfo.outputPath('apack-managed-policy-restored.png') })
+  }
+  const composer = card.locator('[contenteditable="true"]')
+  await composer.fill('NativeManagedParentFixture')
+  await card.getByRole('button', { name: 'Send', exact: true }).click()
+  await expect(composer).toHaveText('', { timeout: 15000 })
+  await expect.poll(async () => (await context()).native.state.tasks.some((task: any) => task.status === 'running' && (restriction ? task.statusText === undefined : task.statusText?.startsWith('AppNativeAgent running'))), { timeout: 20000 }).toBe(true)
+  await appPage.getByRole('button', { name: /^Native tools/ }).first().click()
+  const nativeAgentId = (await context()).native.state.tasks.find((task: any) => task.status === 'running').id
+  const agentRow = appPage.locator(`[data-native-agent-id="${nativeAgentId}"]`)
+  if (restriction) { await expect(agentRow).not.toContainText('AppNativeAgent'); await expect(agentRow).not.toContainText('ForbiddenUserHelper') }
+  else await expect(agentRow).toContainText('AppNativeAgent running')
+  await appPage.setViewportSize({ width: 680, height: 900 })
+  await agentRow.scrollIntoViewIfNeeded()
+  await expect(agentRow).toBeInViewport()
+  await appPage.screenshot({ path: testInfo.outputPath('apack-managed-agent-status.png') })
+  if (transition) {
+    await policyEnabled(false)
+    await expect(agentRow).not.toContainText('AppNativeAgent', { timeout: 10000 })
+    expect((await context()).native.state.tasks.some((task: any) => task.id === nativeAgentId && task.status === 'running' && task.statusText === undefined)).toBe(true)
+    await appPage.screenshot({ path: testInfo.outputPath('apack-managed-agent-policy-disabled.png') })
+    await policyEnabled(true)
+    await expect(agentRow).toContainText('AppNativeAgent running', { timeout: 10000 })
+    const restoredStatus = agentRow.getByText(/AppNativeAgent running/).first()
+    await restoredStatus.scrollIntoViewIfNeeded()
+    await expect(restoredStatus).toBeInViewport({ratio:0.99})
+    await appPage.screenshot({ path: testInfo.outputPath('apack-managed-agent-policy-restored.png') })
+  }
+
+  await expect.poll(async () => (await context()).native.state.tasks.some((task: any) => task.status === 'completed'), { timeout: 20000 }).toBe(true)
+  await expect.poll(async () => (await context()).native.state.busy).toBe(false)
+  if (restriction) expect((await context()).native.state.tasks.every((task: any) => task.statusText === undefined)).toBe(true)
+  else await expect(agentRow).toContainText('AppNativeAgent completed')
+  await composer.fill('NativePauseFixture')
+  await card.getByRole('button', { name: 'Send', exact: true }).click()
+  await expect(composer).toHaveText('', { timeout: 15000 })
+  await expect.poll(async () => readFile(join(workspace!, 'native-pause-ready.json'), 'utf8').catch(error => { if (error.code === 'ENOENT') return ''; throw error })).toBe(JSON.stringify({ ready: true }))
+  await writeFile(join(workspace!, 'native-pause-before.json'), JSON.stringify((await context()).native.state, null, 2))
+  await card.getByTitle('Pause agent work', { exact: true }).click()
+  await expect.poll(async () => (await context()).native.state.status).toMatch(/^(exited|error)$/)
+  const stopped = await context()
+  expect(stopped.native.state.mainStatus).toBeUndefined(); expect(stopped.native.state.tasks).toEqual([])
+  let journal: any[] = []
+  for (const bucket of await readdir(join(workspace!, '.claude/projects'))) {
+    try { journal = (await readFile(join(workspace!, '.claude/projects', bucket, sessionId + '.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line)); break } catch (error: any) { if (error.code !== 'ENOENT') throw error }
+  }
+  const accepted = journal.find(row => row.type === 'user' && row.message?.content === 'NativeManagedParentFixture')
+  expect(accepted?.uuid).toBeTruthy()
+  await expect.poll(async () => (await context()).messages.filter((message: any) => message.context?.cliUuid === accepted.uuid).length).toBe(1)
+  const nativeCost = journal.filter(row => row.type === 'cost-state').at(-1).totalCostUSD
+  await expect.poll(async () => (await context()).claude.totalCostUsd).toBe(nativeCost)
+  await composer.fill('Continue after managed native work.')
+  await card.getByRole('button', { name: 'Send', exact: true }).click()
+  await expect.poll(async () => (await context()).messages.filter((message: any) => message.sender === 'assistant' && message.text === 'Fixture completed.').length).toBe(2)
+  expect((await context()).sessionId).toBe(sessionId)
+  let resumedCost = 0
+  await expect.poll(async () => {
+    const text = await readFile(join(workspace!, 'native-print-results.jsonl'), 'utf8').catch(error => { if (error.code === 'ENOENT') return ''; throw error })
+    const result = text.split('\n').slice(0, -1).map(line => JSON.parse(line)).at(-1)
+    if (result?.sessionId !== sessionId || result.totalCostUsd <= nativeCost) return false
+    resumedCost = result.totalCostUsd
+    return (await context()).claude.totalCostUsd === resumedCost
+  }).toBe(true)
+  expect(errors).toEqual([])
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeManagedPolicy: true, nativeRestrictionMode: restriction, nativePolicyTransitions: !!transition, nativePolicySameCommandEpochs,nativePolicyClientRetirement,nativePolicyDrawingRestoration, normalComposerNativeStatus: true, nativeAgentToolRowStatus: true, normalComposerReceipt: true, nativePausedWhileWorking: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedPrintCostSynchronized: true, resumedCost, nativeCost, sessionId, boundNativePid, browserErrors: errors }, null, 2))
+})

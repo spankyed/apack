@@ -16,6 +16,8 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import ts from 'typescript';
+import { population } from '@apackdev/sdk/testing';
 import { BUILD_UNITS, covers, excludedBySuffix, fingerprintUnit, inputFiles, NOT_A_BUILD_INPUT, REPO_ROOT, repoRelative, type TreeReader } from '@apackdev/host/build/packages-built';
 import { PUBLISH_TREE } from '@apackdev/host/build/published-manifest';
 import { CHAIN_STEPS, dependsOn, suiteInputs, SUITE_READS, WORKSPACE_PARTS, type ChainStep } from '../../../scripts/lib/chain-steps.ts';
@@ -29,6 +31,7 @@ import { repoFiles } from './_support/repo-files.ts';
 
 /** Tracked code no chain step reads, and why. An entry that stops applying is reported, not ignored. */
 const NOT_A_CHAIN_INPUT: Record<string, string> = {
+  'tests/fixtures/claude-research/linux-app.sh': 'used only by explicitly invoked original-Claude Linux acceptance, outside the chain',
   // The production packaging and release path. The chain builds the app (`build:runtime`) and never packages,
   // signs or releases it, so none of this runs in any step — listed per file rather than as a `build/`
   // prefix so that something chain-relevant landing there has to be noticed.
@@ -83,6 +86,22 @@ const coveredBy = (steps: readonly Pick<ChainStep, 'inputs' | 'excludeSuffixes'>
 
 
 describe('the chain reads every source file', () => {
+  it('covers every declaration-program root in pack build and facade freshness', () => {
+    const directory = path.join(REPO_ROOT, 'packages/default-setup');
+    const read = ts.readConfigFile(path.join(directory, 'tsconfig.json'), ts.sys.readFile);
+    expect(read.error).toBeUndefined();
+    const config = ts.parseJsonConfigFileContent(read.config, ts.sys, directory);
+    expect(config.errors).toEqual([]);
+    population('pack declaration roots', config.fileNames, { atLeast: 100 });
+    for (const name of ['build:default-setup', 'facade:check']) {
+      const step = CHAIN_STEPS.find(step => step.name === name)!;
+      const covered = coveredBy([step]);
+      const missing = config.fileNames.map(file => path.relative(REPO_ROOT, file).split(path.sep).join('/'))
+        .filter(file => !covered.has(file));
+      expect(missing, `${name} must invalidate when a captured declaration root changes`).toEqual([]);
+    }
+  });
+
   it('has no tracked code that no step names', () => {
     const covered = coveredBy(CHAIN_STEPS);
     const missing = trackedCode().filter((file) => !covered.has(file) && !(file in NOT_A_CHAIN_INPUT));

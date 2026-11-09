@@ -9,6 +9,7 @@ import type { TerminalInfo, TerminalCreate } from '../types.ts'
 import { EARS } from '#generated/ears.ts'
 import { repository } from '#generated/repository.ts';
 import { createLogger } from '@apackdev/sdk/logger';
+import { agentChildEnvironment } from './shell-environment.ts';
 
 const logger = createLogger('terminal');
 
@@ -34,13 +35,20 @@ class TerminalService {
     'powershell.exe',
     'cmd.exe'
   ]
-  private readonly BLOCKED_ENV_VARS = [
+  /**
+   * Dynamic-loader variables, which a shell this app starts must not inherit: they make every program run
+   * from that shell load code chosen by whoever set them.
+   *
+   * What the app set on its own process is stripped separately and is **not** listed here — it is derived
+   * from the declaration that names it (`agentChildEnvironment`), because a hand-written list is the shape
+   * that rots: this one named two of those ten, and a user's shell was inheriting the app's data directory,
+   * its shipped-packs directory, its port and its API token, where any command they type can read them out.
+   */
+  private readonly BLOCKED_LOADER_VARS = [
     'LD_PRELOAD',
     'LD_LIBRARY_PATH',
     'DYLD_INSERT_LIBRARIES',
     'DYLD_LIBRARY_PATH',
-    'ELECTRON_RUN_AS_NODE',
-    'NODE_ENV',
   ]
 
   private get defaultShell(): string {
@@ -315,10 +323,10 @@ class TerminalService {
   }
 
   private sanitizeEnvironment(env: { [key: string]: string }): { [key: string]: string } {
-    const sanitized = { ...env }
+    const sanitized = agentChildEnvironment(env) as { [key: string]: string }
 
     // Remove dangerous environment variables
-    for (const blocked of this.BLOCKED_ENV_VARS) {
+    for (const blocked of this.BLOCKED_LOADER_VARS) {
       delete sanitized[blocked]
     }
 

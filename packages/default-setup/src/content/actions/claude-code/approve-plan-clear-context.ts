@@ -3,14 +3,13 @@
  * creates a fresh thread, injects the plan as the first user message,
  * switches the frontend, and fires a new chat query with acceptEdits.
  *
- * This mirrors what claude-code's REPL does for "Yes, clear context
- * and auto-accept edits": clearConversation() + re-inject plan as
- * initialMessage in a new session.
+ * apack owns the fresh-thread transition and preserves the approved plan
+ * as the new session's initial user message.
  */
 
 import type { ActionMeta } from '@apackdev/sdk/build';
 import type { Services, EntityId } from '#generated/services.ts';
-import { persistClaudeState, ensureSessionMarker, updateChatState } from './_helpers/thread-context.ts';
+import { getClaudeState, persistClaudeState, ensureSessionMarker, updateChatState } from './_helpers/thread-context.ts';
 import { resolvePlanDraft, type PlanArtifactContent } from './_helpers/plan-artifact.ts';
 
 export const meta: ActionMeta = {
@@ -19,6 +18,7 @@ export const meta: ActionMeta = {
   category: 'claude-code',
   input: {
     threadId: { type: 'string', description: 'Current thread ID', required: true },
+    requestId: { type: 'string', description: 'Pending ExitPlanMode request ID', required: true },
     response: { type: 'object', description: 'User response from the approval block', required: false },
   },
 };
@@ -27,10 +27,14 @@ export async function action(
   params: Record<string, any>,
   services: Services,
 ) {
-  const { threadId } = params as { threadId: string };
+  const { threadId, requestId } = params as { threadId: string; requestId: string };
   const log = services.logger;
 
-  if (!threadId) return { success: false, reason: 'missing threadId' };
+  if (!threadId || !requestId) return { success: false, reason: 'missing threadId or requestId' };
+  const pending = getClaudeState(services, threadId)?.pendingControlRequest;
+  if (pending?.requestId !== requestId || pending.toolName !== 'ExitPlanMode') {
+    return { success: false, reason: 'plan approval is no longer pending' };
+  }
 
   // 1. Read plan content from draft artifact
   const artifacts = services.repository.chatQueries.threadArtifacts(threadId as EntityId) as Array<{
@@ -42,7 +46,9 @@ export async function action(
   const draft = artifacts.find(
     a => a.type === 'plan' && (a.content as Partial<PlanArtifactContent>)?.status === 'draft',
   );
-  const planContent = (draft?.content as Partial<PlanArtifactContent>)?.notes || '';
+  const notes = (draft?.content as Partial<PlanArtifactContent>)?.notes;
+  const planContent = typeof notes === 'string' ? notes : '';
+  if (!planContent.trim()) return { success: false, reason: 'plan content is unavailable' };
   const planTitle = draft?.title || 'Implementation';
   const planPrompt = `Implement the following plan:\n\n${planContent}`;
 
