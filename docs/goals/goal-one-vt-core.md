@@ -108,9 +108,10 @@ this one's:
   is answered ([evidence](../references/evidence/one-vt-core.md)); nothing has yet been compiled against
   `libghostty-vt.a`, so the link itself is unproven.
 - **Proven:** the release and its commit, that upstream publishes six files and none is a Windows or Linux
-  library, that the community archives are built from the release commit, and that a verified archive
-  unpacks to the layout the `-sys` crate's prebuilt directory expects.
-- **Known unresolved:** O2. D4 and D5 were corrected by the above in the same change.
+  library, that the community archives are built from the release commit, that a verified archive unpacks
+  to the layout the `-sys` crate's prebuilt directory expects, and that every `Facts` field has a
+  first-class source in the C API.
+- **Known unresolved:** O2. D4 and D5 were both corrected by measurement rather than left standing.
 
 ## Decisions
 
@@ -167,11 +168,13 @@ core's state. `markers.rs` loses its hand-rolled scanning and keeps its state ma
 every field is a claim some program made, except `foreground`, which is measured. Nobody should size this
 work as "500 lines go away".
 
-Measured 2026-11-09 and smaller than that first implied: `1.0.0` exposes a typed payload accessor for the
-window title alone, so `markers.rs` **keeps its payload parsing** for the reported directory and the
-progress value. What it gains is that it no longer finds the sequences itself — OSC 133 arrives as cell and
-row state on the screen model, and a raw sequence is reachable by writing up to an OSC boundary. Evidence:
-[one-vt-core.md](../references/evidence/one-vt-core.md).
+Measured 2026-11-09, and larger than a first reading of the OSC parser suggested: `markers.rs` loses its
+scanning **and** its payload parsing. The core answers every fact through the terminal rather than the
+parser — `OPT_PWD_CHANGED` for the reported directory, `OPT_SEMANTIC_PROMPT` for a command and the status
+it finished with, `OPT_PROGRESS_REPORT` for OSC 9;4, `DATA_CURSOR_AT_PROMPT` beside them. What survives is
+the part worth keeping: the state machine, and the contract that every field is a claim some program made
+except `foreground`, which the broker measures and the core has no business answering. Evidence, including
+why the first reading was wrong: [one-vt-core.md](../references/evidence/one-vt-core.md).
 
 **D6 — The protocol stays ours.** `ts-rs` generates the app's TypeScript from the broker's Rust types. A
 core handle's shape must not reach the wire, or the app's contract starts tracking a third party's struct

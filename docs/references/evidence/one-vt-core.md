@@ -82,31 +82,54 @@ LICENSE-ghostty
 So D4's mechanism — fetch and verify in one place, point the build at an unpacked archive, never download or
 compile inside it — is available for every target that has an archive at all.
 
-### O1 answered: mixed, and the shape is better than the question assumed
+### O1 answered: yes, for every fact the broker derives
 
-Read from `1.0.0`'s own headers. All three sequences are **recognised**: `osc.h` declares 29 command types
-including `SEMANTIC_PROMPT` (OSC 133), `REPORT_PWD` (OSC 7) and `CONEMU_PROGRESS_REPORT` (OSC 9;4), beside
-`PROGRAM_STATUS`.
+**Corrected the same day it was first written, and the cause is worth recording.** The first answer here
+said no payload accessor existed for the reported directory or the progress value, and concluded "mixed".
+That was wrong, and it was wrong because the sweep that produced it ended in `head -20`: the matches are
+listed by filename, `terminal.h` sorts last, and the file that holds the answer was cut off. This repo
+states the trap — *a check that reports nothing may have looked at nothing* — and the check in question was
+my own grep. Both re-reads below are counted rather than truncated.
 
-**Typed payload accessors are another matter.** `ghostty_osc_command_data` takes a `GhosttyOscCommandData`
-whose whole enum is `CHANGE_WINDOW_TITLE_STR` and three `UNKNOWN_*` members. There is no accessor for a
-prompt's kind, a reported directory or a progress value, and a sweep of all 34 headers finds none elsewhere.
-Taken alone that would leave `markers.rs` nothing to move onto.
+`terminal.h` declares **44 read keys** (`ghostty_terminal_get`) and **50 options**
+(`ghostty_terminal_set`). The ones this broker needs:
 
-Two mechanisms make it reachable anyway, and they are why the answer is "mixed" rather than "no":
+| What `screen.rs` or `markers.rs` holds | The core's source |
+|---|---|
+| `Snapshot.cursor_row` / `cursor_column` | `DATA_CURSOR_X`, `DATA_CURSOR_Y` |
+| `Snapshot.alt_screen` | `DATA_ACTIVE_SCREEN` |
+| the grid and its history | `screen.h`'s row and cell reads; `DATA_TOTAL_ROWS`, `DATA_SCROLLBACK_ROWS` |
+| `Facts.cwd` | `OPT_PWD_CHANGED` (callback), `DATA_PWD` |
+| `Facts.command`, `Facts.exit_status` | `OPT_SEMANTIC_PROMPT` (OSC 133, carrying a finished command's status) |
+| `Facts.running` | the same callback, with `DATA_CURSOR_AT_PROMPT` beside it |
+| `take_replies()` | `OPT_WRITE_PTY`, with `OPT_DEVICE_ATTRIBUTES` and `OPT_ENQUIRY` |
+| the scrollback ceiling | `OPT_SCROLLBACK_MAX_LINES`, `OPT_SCROLLBACK_MAX_BYTES` |
+| the advertised terminal | `OPT_TERMINFO_NAME` |
+| OSC 9;4 progress | `OPT_PROGRESS_REPORT` |
 
-- **OSC 133 is applied to the model, not just parsed.** `screen.h` carries `GHOSTTY_CELL_SEMANTIC_{OUTPUT,
-  INPUT,PROMPT}` per cell "from OSC 133", and `GhosttyRowSemanticPrompt` per row — `NONE`, `PROMPT`,
-  `PROMPT_CONTINUATION`. Command boundaries are therefore readable as terminal *state*, which is a better
-  source than the sequence: it is what the terminal did with the marker rather than what some program sent.
-- **The raw sequence is reachable by boundary.** `ghostty_terminal_vt_write_until` takes boundary flags
-  including `BOUNDARY_OSC_START` and `BOUNDARY_OSC_END`, and `GHOSTTY_TERMINAL_STRING_KIND_OSC` names the
-  string kind, so a caller can write up to a sequence and take its bytes.
+**What the OSC parser alone does not give you, which is what misled the first read.**
+`ghostty_osc_command_data` takes a `GhosttyOscCommandData` whose entire enum is `CHANGE_WINDOW_TITLE_STR`
+and three `UNKNOWN_*` members, and `osc.h` says so for the one case it matters most:
 
-**Consequence for D5**, which said `markers.rs` "loses its hand-rolled scanning and keeps its state
-machine": the scanning does go, and the state machine does stay — but so does the **payload parsing** for
-cwd and progress, over a sequence the core delimits instead of one `markers.rs` finds for itself. That is a
-smaller collapse than D5 implied and it should say so.
+> The OSC parser only identifies this command. To receive the report's contents, use a terminal with
+> `GHOSTTY_TERMINAL_OPT_PROGRAM_STATUS` instead.
+
+So the sequences are recognised by the parser and **answered by the terminal**. Reading the parser and
+concluding the payloads were unreachable was reading the wrong half of the API.
+
+**Two further mechanisms, worth knowing even though the options above cover the broker's needs.** OSC 133
+is applied to the model, not merely parsed: `screen.h` carries `GHOSTTY_CELL_SEMANTIC_{OUTPUT,INPUT,
+PROMPT}` per cell and `GhosttyRowSemanticPrompt` per row, so prompt boundaries are readable as terminal
+state rather than re-derived from bytes. And a raw sequence is reachable by writing up to a boundary —
+`ghostty_terminal_vt_write_until` with `BOUNDARY_OSC_START`/`BOUNDARY_OSC_END`, and
+`STRING_KIND_OSC` naming what was found — which is the escape hatch for a sequence the core has no typed
+answer for.
+
+**What this means for D5.** The collapse is larger than its first correction claimed: `markers.rs` loses
+its scanning **and** its payload parsing. What it keeps is what was always the valuable part — the state
+machine, and the contract that every field is a claim some program made rather than a measurement, except
+`foreground`, which the broker measures for itself and the core has no business answering.
+
 
 ### What is not done
 
