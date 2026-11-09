@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { request as httpRequest, type ClientRequest } from 'node:http'
-import { isClaudeNativeDescendant } from './native-process-ownership.ts'
+import { isDescendantOfOurChild } from './native-process-ownership.ts'
 import { createClaudePrintClientRuntime } from './print-client-runtime.ts'
 import type { ClaudePromptHostFill } from './ui-prompt-host.ts'
 import type { ClaudeUiRender, ClaudeUiRenderResult, ClaudeUiPress, ClaudeUiInput, ClaudeUiSelect, ClaudeUiClientInput } from './ui-controls.ts'
@@ -50,7 +50,7 @@ export async function prepareClaudePrintClients(options: { bunOptions?: string; 
             const result = JSON.parse(Buffer.concat(chunks).toString()) as { id?: unknown; pid?: unknown; epoch?: unknown; result?: unknown; error?: unknown }
             if (closed || options.currentPid() !== launcherPid || result.id !== id || result.epoch !== config.epoch) throw Error('Print Client reply outlived its owner')
             if (operation === 'hello') {
-              if (typeof result.pid !== 'number' || !await isClaudeNativeDescendant(result.pid, launcherPid) || closed || options.currentPid() !== launcherPid) throw Error('Print Client process is outside the owned launcher')
+              if (typeof result.pid !== 'number' || !await isDescendantOfOurChild(result.pid, launcherPid) || closed || options.currentPid() !== launcherPid) throw Error('Print Client process is outside the owned launcher')
               nativePid = result.pid
             } else if (result.pid !== nativePid) throw Error('Print Client reply came from another process')
             if (response.statusCode !== 200) throw Error(typeof result.error === 'string' ? result.error : 'Print Client request failed')

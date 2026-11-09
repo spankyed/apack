@@ -114,6 +114,20 @@ export const EXIT_IDLE_MS = 15_000
 // ─── Env scrubbing ───────────────────────────────────────────────────────────
 
 /**
+ * Names the CLI must not see, whichever way it is started.
+ *
+ * **One declaration, because the two halves of keeping a name out would otherwise disagree.** A child this
+ * process spawns gets an environment built here, where a delete is enough; a session the host's terminal
+ * starts *inherits* the host's environment, so leaving a name out of the overrides leaves it inherited and
+ * the request has to say `unset` instead. Both read this list.
+ *
+ * `ANTHROPIC_API_KEY` is the one on it: the CLI authenticates as whoever the user signed in as, and the API
+ * can genuinely be carrying a key — it auto-loads `packages/api/.env` — which would make the CLI
+ * authenticate as the app.
+ */
+export const DENIED_TO_A_CHILD = ['ANTHROPIC_API_KEY'] as const;
+
+/**
  * Build the environment for a spawned Claude CLI child process.
  *
  * The API server auto-loads `packages/api/.env` via `dotenv/config`, so a
@@ -145,7 +159,7 @@ export function buildChildEnv(override?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   // from what the construction that sets them declares, so it cannot fall behind it; `NODE_ENV` is one of
   // the ten, which is why the hand-written delete below no longer names it.
   const env: NodeJS.ProcessEnv = { ...agentChildEnvironment(process.env), ...override }
-  delete env.ANTHROPIC_API_KEY
+  for (const name of DENIED_TO_A_CHILD) delete env[name]
 
   // Let the CLI and explicit caller environment own deferred tool discovery.
   // Current native ToolSearch can load ExitPlanMode before its approval request.

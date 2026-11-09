@@ -101,8 +101,8 @@ export async function consumeConversationTurn(turn: ClaudeConversationTurn, ctx:
   const messageId = initial?.messageId ?? services.chat.sendBlockMessage({ threadId, text: 'Thinking…', blocks: [], forkable: false }).messageId as EntityId;
   const thinking = initial?.thinking ?? createThinkingWriter(services, messageId);
   const writers = initial ?? { messageId, thinking,
-    writer: createStreamWriter(services, messageId, { intervalMs: 80 }),
-    toolActivity: createToolActivityWriter(services, messageId, { phase: ctx.phase, getThinkingBlock: () => thinking.buildBlock() }),
+    writer: createStreamWriter(services, messageId),
+    toolActivity: createToolActivityWriter(services, messageId, { phase: ctx.phase }),
   };
   services.cli.claudeCode.storeHandle(threadId, turn.handle);
   setRunning(services, threadId, true);

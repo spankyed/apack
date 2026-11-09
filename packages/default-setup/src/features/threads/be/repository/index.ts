@@ -832,9 +832,15 @@ function textOf(messageIds: readonly EARS.EntityId[]): Map<EARS.EntityId, Array<
  * What orders them is what the CLI said — a message's own timestamp, and within one session and one instant
  * the order it reported — and queue placement stays separate from it.
  */
-function orderClaudeSessionMessages(threadId: EARS.EntityId, messages: Partial<MessageEntity>[]) {
+function isRestoredClaudeThread(threadId: EARS.EntityId): boolean {
   const thread = threadQueries.byId(threadId);
-  if (!thread?.context?.claudeCode || !thread.tags?.includes('imported') && !thread.context.claudeCode.nativeLaunch) return messages;
+  if (!thread?.context?.claudeCode) return false;
+  // Truthiness, not `=== true`: `nativeLaunch` is the launch itself — a record of the session and its cwd
+  return thread.tags?.includes('imported') === true || Boolean(thread.context.claudeCode.nativeLaunch);
+}
+
+function orderClaudeSessionMessages(threadId: EARS.EntityId, messages: Partial<MessageEntity>[]) {
+  if (!isRestoredClaudeThread(threadId)) return messages;
   const native = (message: Partial<MessageEntity>) => message.context?.claudeTerminalMessage as { sessionId?: string; timestamp?: number; order?: number } | undefined;
   return messages.sort((a, b) => {
     const left = native(a), right = native(b);
@@ -883,6 +889,23 @@ function getThreadFields(threadId: EARS.EntityId): AgentThreadData | null {
  * while a message streams.
  */
 function lastPage(threadId: EARS.EntityId, limit: number) {
+  // **A restored session is ordered before it is windowed, which costs reading all of it.** The window below
+  // is taken from the end of the `contains` relation, and for an imported or natively launched thread that
+  // order is whatever the walk wrote — so windowing first takes the wrong *messages*, not merely the right
+  // ones in the wrong order. Only such a thread pays for this; every other keeps the page.
+  if (isRestoredClaudeThread(threadId)) {
+    const all = orderClaudeSessionMessages(
+      threadId,
+      (query.ids(threadId).out(EARS.RelKind.CONTAINS, EARS.Entity.Message)
+        .pick(['status', 'timestamp', 'context'] as const) ?? []) as Partial<MessageEntity>[],
+    ) as Array<{ id: EARS.EntityId; status?: MessageEntity['status'] }>;
+    const others = all.filter(m => m.status !== 'queued');
+    return {
+      page: others.slice(Math.max(0, others.length - limit)),
+      queued: all.filter(m => m.status === 'queued'),
+      hasMore: others.length > limit,
+    };
+  }
   for (let n = limit + 4; ; n *= 2) {
     const window = (query.ids(threadId).out(EARS.RelKind.CONTAINS, EARS.Entity.Message)
       .reverse().limit(n).pick(['status'] as const) ?? []) as Array<{ id: EARS.EntityId; status?: MessageEntity['status'] }>;
@@ -1034,6 +1057,10 @@ export const chatQueries = {
     };
   },
 
+  /** Whether that message is in that thread, without reading anything about it */
+  hasMessageInThread: (messageId: EARS.EntityId, threadId: EARS.EntityId): boolean =>
+    query.ids(messageId).out(EARS.RelKind.CONTAINS, EARS.Entity.Thread).ids().includes(threadId),
+
   /** A message's blocks, assembled from their rows: what an export carries and `messageById` folds in */
   blocksOf: (messageId: EARS.EntityId): StoredBlock[] => blocksOf(messageId),
   entryDetails: (blockId: EARS.EntityId): Record<string, ToolActivityEntry['details']> => entryDetailsOf(blockId),
@@ -1107,6 +1134,14 @@ export const chatCommands = {
     asideText?: string;
     compacted?: boolean;
     context?: Record<string, unknown>;
+    /**
+     * When the message happened, where a new one happens now.
+     *
+     * **A restored session's messages carry the CLI's own time**, not the time this process wrote them: an
+     * import walks a transcript in whatever order it reads it, and the chat is ordered by this
+     * (`orderClaudeSessionMessages`). Absent means now, which is every message a user sends.
+     */
+    timestamp?: number;
     skipRelink?: boolean;
   }): {
     id: EARS.EntityId;
@@ -1117,7 +1152,7 @@ export const chatCommands = {
     /** The blocks as rows, for a caller that describes the message it just added */
     blocks?: StoredBlock[];
   } => {
-    const { threadId, text, sender, blocks, forkable, references, isCommand, command, autoHide, asUser, asideContext, blockResponse, responseTimestamp, asideText, compacted, context, skipRelink } = params;
+    const { threadId, text, sender, blocks, forkable, references, isCommand, command, autoHide, asUser, asideContext, blockResponse, responseTimestamp, asideText, compacted, context, timestamp: happenedAt, skipRelink } = params;
 
     const thread = query.ids(threadId).first();
     if (!thread) {
@@ -1132,7 +1167,7 @@ export const chatCommands = {
       );
     }
 
-    const timestamp = Date.now();
+    const timestamp = happenedAt ?? Date.now();
     const messageTx = create(EARS.Entity.Message, { text: text.trim(), timestamp, sender, createdAt: timestamp });
 
     if (forkable !== undefined) messageTx.set('forkable', forkable);

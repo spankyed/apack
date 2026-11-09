@@ -15,7 +15,7 @@ describe('background continuation action consumer', () => {
   it('maps only the input replay UUID when tool-result user events arrive first', async () => {
     const { id } = repository.threadCommands.create({ topic: 'Replay identity', instructions: '', tags: [] });
     const update = vi.fn();
-    mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageState: update, sendBlockMessage: vi.fn() });
+    mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageBlock: (messageId: EntityId, block: Parameters<typeof repository.chatCommands.writeMessageBlock>[0]['block'], blockId?: EntityId) => repository.chatCommands.writeMessageBlock({ messageId, block, blockId }), appendMessageBlockText: (blockId: EntityId, at: number, text: string) => repository.chatCommands.appendMessageBlockText({ blockId, at, text }), updateMessageState: update, sendBlockMessage: vi.fn() });
     mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
     mockService<Services, 'emitter'>('emitter', { sendToSystem: vi.fn(), broadcastToSurface: vi.fn() });
     const lines = [
@@ -32,7 +32,7 @@ describe('background continuation action consumer', () => {
     const thinking = createThinkingWriter(services, messageId);
     await consumeStream(handle, { services, activity: createClaudeNestedActivity(), threadId: id, text: 'Host prompt', userMessageId: 'app-user' }, {
       messageId, writer: createStreamWriter(services, messageId), thinking,
-      toolActivity: createToolActivityWriter(services, messageId, { getThinkingBlock: () => thinking.buildBlock() }),
+      toolActivity: createToolActivityWriter(services, messageId, {}),
     });
     const mapped = update.mock.calls.filter(([target, patch]) => target === 'app-user' && patch.context?.cliUuid);
     expect(mapped).toEqual([['app-user', { context: { cliUuid: 'host-input' } }]]);
@@ -41,7 +41,7 @@ describe('background continuation action consumer', () => {
   it('keeps nested prose, thinking, tools and UUIDs out of the parent while retaining launching-tool details', async () => {
     const { id } = repository.threadCommands.create({ topic: 'Nested Agent', instructions: '', tags: [] });
     const update = vi.fn(), emit = vi.fn();
-    mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageState: update });
+    mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageBlock: (messageId: EntityId, block: Parameters<typeof repository.chatCommands.writeMessageBlock>[0]['block'], blockId?: EntityId) => repository.chatCommands.writeMessageBlock({ messageId, block, blockId }), appendMessageBlockText: (blockId: EntityId, at: number, text: string) => repository.chatCommands.appendMessageBlockText({ blockId, at, text }), updateMessageState: update });
     mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
     mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToSurface: vi.fn() });
     const activity = createClaudeNestedActivity();
@@ -66,7 +66,7 @@ describe('background continuation action consumer', () => {
     mockService<Services, 'cli'>('cli', { claudeCode: { getHandle: vi.fn(() => handle), clearHandle: vi.fn() } as never });
     const messageId = 'nested-parent' as EntityId;
     const thinking = createThinkingWriter(services, messageId);
-    const tools = createToolActivityWriter(services, messageId, { getThinkingBlock: () => thinking.buildBlock() });
+    const tools = createToolActivityWriter(services, messageId, {});
     const writer = createStreamWriter(services, messageId);
     await consumeStream(handle, { services, activity, threadId: id, text: 'Host' }, { messageId, thinking, toolActivity: tools, writer });
     expect(writer.text).toBe('Parent response only');
@@ -85,14 +85,14 @@ describe('background continuation action consumer', () => {
   it('retains late child details on the launching message and accounts changes once in a later result', async () => {
     const { id } = repository.threadCommands.create({ topic: 'Cross-turn child', instructions: '', tags: [] });
     const update = vi.fn(), emit = vi.fn();
-    mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageState: update });
+    mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageBlock: (messageId: EntityId, block: Parameters<typeof repository.chatCommands.writeMessageBlock>[0]['block'], blockId?: EntityId) => repository.chatCommands.writeMessageBlock({ messageId, block, blockId }), appendMessageBlockText: (blockId: EntityId, at: number, text: string) => repository.chatCommands.appendMessageBlockText({ blockId, at, text }), updateMessageState: update });
     mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
     mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToSurface: vi.fn() });
     mockService<Services, 'cli'>('cli', { claudeCode: { isCurrentTurn: vi.fn(() => true), clearHandle: vi.fn() } as never });
     const activity = createClaudeNestedActivity();
     const run = async (messageId: EntityId, lines: unknown[], costBaseline: number) => {
       const thinking = createThinkingWriter(services, messageId);
-      const tools = createToolActivityWriter(services, messageId, { getThinkingBlock: () => thinking.buildBlock() });
+      const tools = createToolActivityWriter(services, messageId, {});
       const writer = createStreamWriter(services, messageId);
       const handle = { events: (async function* () { yield* lines; })(), hasPendingBackgroundTasks: () => true, close: vi.fn() };
       await consumeStream(handle, { services, threadId: id, text: 'Host', persistent: true, activity, costBaseline }, { messageId, thinking, toolActivity: tools, writer });
@@ -132,7 +132,7 @@ describe('background continuation action consumer', () => {
     const { id } = repository.threadCommands.create({ topic: 'Background', instructions: '', tags: [] });
     repository.threadCommands.update(id, { context: { claudeCode: { isRunning: true } } });
     const update = vi.fn();
-    mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageState: update,
+    mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageBlock: (messageId: EntityId, block: Parameters<typeof repository.chatCommands.writeMessageBlock>[0]['block'], blockId?: EntityId) => repository.chatCommands.writeMessageBlock({ messageId, block, blockId }), appendMessageBlockText: (blockId: EntityId, at: number, text: string) => repository.chatCommands.appendMessageBlockText({ blockId, at, text }), updateMessageState: update,
       sendBlockMessage: vi.fn(() => ({ messageId: 'after-background' } as never)) });
     mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
     const emit = vi.fn();
@@ -155,7 +155,7 @@ describe('background continuation action consumer', () => {
     const thinking = createThinkingWriter(services, messageId);
     await consumeStream(handle, { services, activity: createClaudeNestedActivity(), threadId: id, text: 'Fixture' }, {
       messageId, writer: createStreamWriter(services, messageId), thinking,
-      toolActivity: createToolActivityWriter(services, messageId, { getThinkingBlock: () => thinking.buildBlock() }),
+      toolActivity: createToolActivityWriter(services, messageId, {}),
     });
     expect(update).toHaveBeenCalledWith('initial-message', expect.objectContaining({ text: 'Initial response' }));
     expect(update).toHaveBeenCalledWith('after-background', expect.objectContaining({ text: 'Background follow-up' }));
@@ -171,7 +171,7 @@ describe('background continuation action consumer', () => {
     const emit = vi.fn();
     mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToSurface: vi.fn() });
     mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
-    mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageState: vi.fn() });
+    mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageBlock: (messageId: EntityId, block: Parameters<typeof repository.chatCommands.writeMessageBlock>[0]['block'], blockId?: EntityId) => repository.chatCommands.writeMessageBlock({ messageId, block, blockId }), appendMessageBlockText: (blockId: EntityId, at: number, text: string) => repository.chatCommands.appendMessageBlockText({ blockId, at, text }), updateMessageState: vi.fn() });
     let current: object | undefined;
     const handle = { events: (async function* () {
       yield { type: 'result', subtype: 'success', session_id: 'old-session', total_cost_usd: 1 };
@@ -184,7 +184,7 @@ describe('background continuation action consumer', () => {
     const thinking = createThinkingWriter(services, messageId);
     await consumeStream(handle, { services, activity: createClaudeNestedActivity(), threadId: id, text: 'Superseded input' }, {
       messageId, thinking, writer: createStreamWriter(services, messageId),
-      toolActivity: createToolActivityWriter(services, messageId, { getThinkingBlock: () => thinking.buildBlock() }),
+      toolActivity: createToolActivityWriter(services, messageId, {}),
     });
     expect(repository.threadQueries.byId(id)?.context?.claudeCode).toMatchObject({ sessionId: 'replacement-session', isRunning: true });
     expect(emit).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ eventType: 'cc.stream.completed' }));
@@ -197,7 +197,7 @@ describe('background continuation action consumer', () => {
 it('cancels an unsupported generic dialog without sending tool denial, pausing or opening UI input', async () => {
   const { id } = repository.threadCommands.create({ topic: 'Unsupported native dialog', instructions: '', tags: [] });
   const sendBlockMessage = vi.fn(), emit = vi.fn();
-  mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageState: vi.fn(), sendBlockMessage });
+  mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageBlock: (messageId: EntityId, block: Parameters<typeof repository.chatCommands.writeMessageBlock>[0]['block'], blockId?: EntityId) => repository.chatCommands.writeMessageBlock({ messageId, block, blockId }), appendMessageBlockText: (blockId: EntityId, at: number, text: string) => repository.chatCommands.appendMessageBlockText({ blockId, at, text }), updateMessageState: vi.fn(), sendBlockMessage });
   mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
   mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToSurface: vi.fn() });
   const cancelUserDialog = vi.fn(), respond = vi.fn();
@@ -212,7 +212,7 @@ it('cancels an unsupported generic dialog without sending tool denial, pausing o
   const thinking = createThinkingWriter(services, messageId);
   await consumeStream(handle, { services, activity: createClaudeNestedActivity(), threadId: id, text: 'Fixture' }, {
     messageId, writer: createStreamWriter(services, messageId), thinking,
-    toolActivity: createToolActivityWriter(services, messageId, { getThinkingBlock: () => thinking.buildBlock() }),
+    toolActivity: createToolActivityWriter(services, messageId, {}),
   });
   expect(cancelUserDialog).toHaveBeenCalledWith('native-dialog');
   expect(respond).not.toHaveBeenCalled();
@@ -225,7 +225,7 @@ it('cancels an unsupported generic dialog without sending tool denial, pausing o
 it('marks a success/is_error result as failed while preserving refusal detail and turn cost', async () => {
   const { id } = repository.threadCommands.create({ topic: 'Native refusal result', instructions: '', tags: [] });
   const update = vi.fn(), emit = vi.fn();
-  mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageState: update, sendBlockMessage: vi.fn() });
+  mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageBlock: (messageId: EntityId, block: Parameters<typeof repository.chatCommands.writeMessageBlock>[0]['block'], blockId?: EntityId) => repository.chatCommands.writeMessageBlock({ messageId, block, blockId }), appendMessageBlockText: (blockId: EntityId, at: number, text: string) => repository.chatCommands.appendMessageBlockText({ blockId, at, text }), updateMessageState: update, sendBlockMessage: vi.fn() });
   mockService<Services, 'threads'>('threads', { updateChatState: vi.fn() });
   mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
   mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToSurface: vi.fn() });
@@ -237,7 +237,7 @@ it('marks a success/is_error result as failed while preserving refusal detail an
   const writer = createStreamWriter(services, messageId);
   await consumeStream(handle, { services, activity: createClaudeNestedActivity(), threadId: id, text: 'Fixture' }, {
     messageId, writer, thinking,
-    toolActivity: createToolActivityWriter(services, messageId, { getThinkingBlock: () => thinking.buildBlock() }),
+    toolActivity: createToolActivityWriter(services, messageId, {}),
   });
   expect(writer.text).toContain('API Error: fixed native refusal');
   expect(repository.threadQueries.byId(id)?.context?.claudeCode?.sessionId).toBeUndefined();
@@ -249,7 +249,7 @@ it('marks a success/is_error result as failed while preserving refusal detail an
 it('uses the owner baseline updated during a reset when emitting completion cost', async () => {
   const { id } = repository.threadCommands.create({ topic: 'Reset cost', instructions: '', tags: [] })
   const emit = vi.fn()
-  mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageState: vi.fn() })
+  mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageBlock: (messageId: EntityId, block: Parameters<typeof repository.chatCommands.writeMessageBlock>[0]['block'], blockId?: EntityId) => repository.chatCommands.writeMessageBlock({ messageId, block, blockId }), appendMessageBlockText: (blockId: EntityId, at: number, text: string) => repository.chatCommands.appendMessageBlockText({ blockId, at, text }), updateMessageState: vi.fn() })
   mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() })
   mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToSurface: vi.fn() })
   mockService<Services, 'cli'>('cli', { claudeCode: { storeHandle: vi.fn(), isCurrentTurn: () => true, clearHandle: vi.fn() } as never })
@@ -266,7 +266,7 @@ it('uses the owner baseline updated during a reset when emitting completion cost
   const thinking = createThinkingWriter(services, messageId)
   await consumeConversationTurn(turn, { services, threadId: id, text: '/clear' }, {
     messageId, thinking, writer: createStreamWriter(services, messageId),
-    toolActivity: createToolActivityWriter(services, messageId, { getThinkingBlock: () => thinking.buildBlock() }),
+    toolActivity: createToolActivityWriter(services, messageId, {}),
   })
   expect(emit).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ eventType: 'cc.stream.completed', payload: expect.objectContaining({ sessionId: 'new-session', costUsd: 0.5 }) }))
   activity.close()

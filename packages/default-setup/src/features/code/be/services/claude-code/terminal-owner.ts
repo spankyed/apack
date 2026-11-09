@@ -16,7 +16,6 @@ import { ClaudeNativeTaskResultSchema } from './terminal-tasks.ts'
 import { ClaudeNativePlanDialogsSchema, type ClaudeNativePlanDialog, type ClaudeNativePlanDialogResponse } from './terminal-dialogs.ts'
 import { ClaudeNativeBashDialogsSchema, type ClaudeNativeBashDialog, type ClaudeNativeBashDialogResponse } from './terminal-dialogs.ts'
 import { ClaudeNativeQuestionRenderSchema, type ClaudeNativeQuestionRender, type ClaudeNativeQuestionRenderRequest, type ClaudeNativeQuestionHoldRequest, ClaudeNativeQuestionDialogsSchema, type ClaudeNativeQuestionDialog, type ClaudeNativeQuestionDialogResponse, ClaudeNativeFileDialogsSchema, type ClaudeNativeFileDialog, type ClaudeNativeFileDialogResponse } from './terminal-dialogs.ts'
-import { isClaudeNativeDescendant } from './native-process-ownership.ts'
 import { PermissionModeSchema } from './types.ts'
 import { createClaudeNativeJournalReader, type ClaudeNativeJournalBatch } from './terminal-journal.ts'
 import { parseClaudeNativeContinuation, type ClaudeNativeContinuation } from './terminal-session.ts'
@@ -30,7 +29,7 @@ import { createClaudeLifecycleTrace } from './lifecycle-trace.ts'
 import { randomUUID } from 'node:crypto'
 import { stripVTControlCharacters } from 'node:util'
 import { resolveForService } from '../../utils/resolve-cli.ts'
-import { buildChildEnv } from './runner.ts'
+import { buildChildEnv, DENIED_TO_A_CHILD } from './runner.ts'
 import { createClaudeTerminalBridge } from './terminal-bridge.ts'
 import type { PermissionMode } from './types.ts'
 import { ClaudeMcpStatusSchema, type ClaudeMcpStatus, ClaudeModelCatalogSchema, type ClaudeModelCatalog, type ClaudeSettings } from './host-controls.ts'
@@ -141,7 +140,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   let resolveDone!: () => void
   const done = new Promise<void>(resolve => { resolveDone = resolve })
   const changed = () => { for (const listener of listeners) { try { listener() } catch { /* isolate views */ } } }
-  const bridge = await createClaudeTerminalBridge({ sessionId: options.sessionId, backgroundProfile:resolveAppEnvironment().userDataDir, backgroundChildUiLaunch:{configDir:env.CLAUDE_CONFIG_DIR,secureStorageConfigDir:env.CLAUDE_SECURESTORAGE_CONFIG_DIR,executable,cwd:options.cwd,searchPath:env.PATH}, backgroundObserver, backgroundAuthority: parentSessionId => createClaudeBackgroundStatusAuthority(parentSessionId, {cwd: options.cwd, cliPath: executable, env}), backgroundTarget: () => continuation ? {parentSessionId: continuation.sessionId, sessionId: continuation.continuedInSessionId, cwd: options.cwd} : undefined, ...(options.permissionMode === 'plan' && options.prePlanMode ? {restorePlan: {sessionId: options.sessionId, mode: options.prePlanMode}} : {}), settings: options.settings, bunOptions: env.BUN_OPTIONS, ownsProcess: pid => isClaudeNativeDescendant(pid, terminal?.pid ?? undefined), changed,
+  const bridge = await createClaudeTerminalBridge({ sessionId: options.sessionId, backgroundProfile:resolveAppEnvironment().userDataDir, backgroundChildUiLaunch:{configDir:env.CLAUDE_CONFIG_DIR,secureStorageConfigDir:env.CLAUDE_SECURESTORAGE_CONFIG_DIR,executable,cwd:options.cwd,searchPath:env.PATH}, backgroundObserver, backgroundAuthority: parentSessionId => createClaudeBackgroundStatusAuthority(parentSessionId, {cwd: options.cwd, cliPath: executable, env}), backgroundTarget: () => continuation ? {parentSessionId: continuation.sessionId, sessionId: continuation.continuedInSessionId, cwd: options.cwd} : undefined, ...(options.permissionMode === 'plan' && options.prePlanMode ? {restorePlan: {sessionId: options.sessionId, mode: options.prePlanMode}} : {}), settings: options.settings, bunOptions: env.BUN_OPTIONS, ownsProcess: async pid => (terminal ? terminal.owns(pid).catch(() => false) : false), changed,
     pasteImage(path) { if (closed || !terminal) throw new Error('Native terminal closed'); bestEffort(terminal.write('\x1b[200~' + path + '\x1b[201~')) },
     enter() { if (closed || !terminal) throw new Error('Native terminal closed'); bestEffort(terminal.write('\r')) } })
   const imageCache = createClaudeTerminalImageCache()
@@ -269,6 +268,10 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
           shell: executable,
           args,
           env: terminalEnv,
+          // **A session inherits the host's environment, so `env` cannot say what must be absent.** The CLI
+          // authenticates as whoever the user signed in as, and a key the app happens to carry — the API
+          // auto-loads `packages/api/.env` — would make it authenticate as the app instead
+          unset: DENIED_TO_A_CHILD,
           cwd: options.cwd,
         },
         {
