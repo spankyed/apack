@@ -12,10 +12,6 @@
       <button type="button" class="shrink-0 px-2 py-1 text-neutral-400" @click="actor.send({type: 'DISMISS_CLAUDE_PROFILE_SETUP_ERROR'})">Dismiss</button>
     </div>
     <div v-else-if="pendingClaudeProfileSetup" role="status" class="shrink-0 border-b border-neutral-800 p-4 text-sm text-neutral-400">Preparing Claude profile…</div>
-    <div v-else-if="terminalError && !terminalErrorDismissed" role="alert" class="flex shrink-0 items-start gap-3 border-b border-amber-500/20 bg-amber-500/5 p-4 text-sm text-neutral-200">
-      <p class="min-w-0 flex-1 break-words">{{ terminalError }}</p>
-      <button type="button" class="shrink-0 px-2 py-1 text-neutral-400" @click="terminalErrorDismissed = true">Dismiss</button>
-    </div>
     <!-- Drop overlay -->
     <div
       v-if="isDraggingOver"
@@ -122,9 +118,6 @@ const terminalActor = panelChild(actor, 'terminal')
 
 // State selectors
 const pendingClaudeProfileSetup = useSelector(actor, state => state.context.pendingClaudeProfileSetup)
-const terminalError = useSelector(terminalActor!, state => state.context.terminalError)
-const terminalErrorDismissed = ref(false)
-watch(terminalError, () => { terminalErrorDismissed.value = false })
 const claudeProfileSetupError = useSelector(actor, state => state.context.claudeProfileSetupError)
 const openFiles = useSelector(actor, (state) => state.context.openFiles)
 const activeFilePath = useSelector(actor, (state) => state.context.activeFilePath)

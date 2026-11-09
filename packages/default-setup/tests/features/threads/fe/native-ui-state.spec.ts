@@ -138,7 +138,7 @@ it('resumes active native UI and terminal views on subscription startup without 
   actor.send(mount); actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', threadId: 'thread', mountId: 'terminal' })
   actor.send({ type: 'CLAUDE_UI_STATE', mountId: 'view', threadId: 'thread', resumeKey, attachmentId: 'native', state: { status: 'live', tree: { kind: 'text', text: 'current' } } })
   sent.mockClear()
-  actor.send({ type: 'SURFACE_STARTED' })
+  actor.send({ type: 'SURFACE_STARTED', ownsAppLayout: true })
   expect(sent).toHaveBeenCalledWith(expect.objectContaining({ event: { ...mount, resumeKey } }))
   expect(sent).toHaveBeenCalledWith(expect.objectContaining({ event: { type: 'CLAUDE_TERMINAL_MOUNT', threadId: 'thread', mountId: 'terminal' } }))
   expect(actor.getSnapshot().context.nativeUiViews.view?.attachmentId).toBe('native')
@@ -159,7 +159,7 @@ it('defers replaced-actor cleanup to accepted startup data and drains it once', 
   queueClaudeUiRetirement(release); queueClaudeUiRetirement(release)
   const actor = createActor(nativeState).start()
   expect(sent.mock.calls.filter(([message]) => message.event.type === 'CLAUDE_UI_UNMOUNT')).toHaveLength(0)
-  const startup = { type: 'SURFACE_STARTED' as const }
+  const startup = { type: 'SURFACE_STARTED' as const, ownsAppLayout: true }
   actor.send(startup)
   expect(sent.mock.calls.filter(([message]) => message.event.type === 'CLAUDE_UI_UNMOUNT').map(([message]) => message.event)).toEqual([{ type: 'CLAUDE_UI_UNMOUNT', ...release }])
   actor.send(startup)
