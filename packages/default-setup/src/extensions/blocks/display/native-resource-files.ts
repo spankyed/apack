@@ -1,15 +1,25 @@
 import type { ToolActivityEntry } from '#features/threads/be/types.ts'
 
+/** The row as a block's props carry it: no `details`, which a window fetches for a block it has open */
+type ShownEntry = Omit<ToolActivityEntry, 'details'>
+
 export interface NativeResourceFile {
   path: string
   uri: string
   label: string
 }
 
-/** Only original completed resource results identify files in their own native session. */
-export function nativeResourceFiles(entry: ToolActivityEntry): NativeResourceFile[] {
+/**
+ * Only original completed resource results identify files in their own native session.
+ *
+ * **The details are a parameter because a block's props do not hold them.** A tool's whole output would be
+ * re-read on every re-run of the message's view, so it is fetched for a block the user has open
+ * (`entryDetails`) — and reading it off the entry answered `undefined` for every row, so no saved resource
+ * ever offered a button.
+ */
+export function nativeResourceFiles(entry: ShownEntry, details: ToolActivityEntry['details']): NativeResourceFile[] {
   const session = entry.nativeResult?.sessionId
-  const text = entry.details?.output
+  const text = details?.output
   if (entry.tool !== 'ReadMcpResourceTool' || entry.status !== 'ok' || !session || !/^[a-f0-9-]{36}$/i.test(session) || typeof text !== 'string' || text.length > 65536) return []
   let result: unknown
   try { result = JSON.parse(text) } catch { return [] }
