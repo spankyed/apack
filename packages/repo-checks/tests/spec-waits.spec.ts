@@ -140,8 +140,6 @@ describe('a spec waits for the thing it waits for', () => {
  * own state, where nothing outside it is slowed by load and a quick failure beats the guard's stall window.
  */
 const CLOCK_BY_DESIGN: Record<string, string> = {
-  'packages/apack-ears/tests/engine/rank-index.spec.ts':
-    'waits on an index building in this process, so load slows the wait and the work alike',
   // The Playwright suites: Playwright gives a test and a wait only a clock, and `definePackE2EConfig` declares the
   // suite's two backstops (60s a test, 30s an assertion). These are the waits that genuinely outlast them
   'tests/acceptance/pack-dev/test-pack-dev.ts':
