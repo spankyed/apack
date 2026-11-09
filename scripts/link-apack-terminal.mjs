@@ -29,7 +29,14 @@ export function apackTerminalCheckout(env = process.env) {
  * @param {string} root @param {string} [checkout]
  */
 export function linkApackTerminal(root, checkout = apackTerminalCheckout()) {
-  const rev = fs.readFileSync(path.join(root, 'vendor', 'apack-terminal.rev'), 'utf8').trim();
+  const revFile = path.join(root, 'vendor', 'apack-terminal.rev');
+  // Named, because the bare read threw `ENOENT` at an absolute path — which says a file is
+  // missing and not that this checkout declares no apack-terminal pin, and sent one investigation
+  // looking at the linker instead of at the tree that had never had the pin.
+  if (!fs.existsSync(revFile)) {
+    throw new Error(`${root} declares no apack-terminal pin: vendor/apack-terminal.rev is missing`);
+  }
+  const rev = fs.readFileSync(revFile, 'utf8').trim();
   const manifest = path.join(checkout, 'Cargo.toml');
   if (!fs.existsSync(manifest) || !/^name\s*=\s*"apack-terminal"$/m.test(fs.readFileSync(manifest, 'utf8'))) {
     throw new Error(`${checkout} isn't an apack-terminal checkout (no Cargo.toml naming apack-terminal). Clone it there, or set APACK_TERMINAL_DIR`);

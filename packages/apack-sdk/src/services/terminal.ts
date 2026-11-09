@@ -23,6 +23,23 @@ export interface TerminalListeners {
   onExit(code: number | null): void;
 }
 
+/**
+ * What a session's shell has said about itself. Every field is a claim the program in the pty made.
+ *
+ * `cwd` is decoded but not shaped to the reading platform: an OSC 7 URL gives `/C:/Users/...` on Windows,
+ * which nothing there can open, which is what `cwdAsReported` is for.
+ */
+export interface TerminalFacts {
+  /** The working directory the shell last reported, or `null` if it has reported none */
+  readonly cwd: string | null;
+  /** The command line the shell last said it was about to run */
+  readonly command: string | null;
+  /** Between a command starting and finishing, which is a busy session told from one at a prompt */
+  readonly running: boolean;
+  /** The status the last finished command reported; `null` when none has, or it reported none */
+  readonly exitStatus: number | null;
+}
+
 /** One session, as its owner holds it */
 export interface TerminalSession {
   /** The host's id for the session; a pack never invents one */
@@ -49,6 +66,15 @@ export interface TerminalSession {
   write(data: string): Promise<void>;
   /** The viewport changed. One size per session, because a pty has one */
   resize(cols: number, rows: number): Promise<void>;
+  /**
+   * What the shell has reported about itself, as the host parsed it.
+   *
+   * **The markers are read where the bytes arrive, so nothing here reads them twice.** A shell's working
+   * directory and command boundaries come from control sequences in its output, and the host already parses
+   * them as it reads — including a sequence split across two reads, which a consumer watching chunks cannot
+   * see. Asking is one round trip; parsing again is a second parser for one fact, and the copy that breaks.
+   */
+  facts(): Promise<TerminalFacts>;
   /** Ends the session and its process tree. Explicit termination, as distinct from a view closing */
   terminate(): Promise<void>;
 }
