@@ -30,6 +30,8 @@ it('serves modules and styles with their actual MIME type', () => {
   expect(MIME_TYPES['.css']).toBe('text/css');
   expect(MIME_TYPES['.svg']).toBe('image/svg+xml');
   expect(MIME_TYPES['.woff2']).toBe('font/woff2');
+  // `instantiateStreaming` refuses anything else, so a pack shipping a WebAssembly module depends on this
+  expect(MIME_TYPES['.wasm']).toBe('application/wasm');
 });
 
 describe('accepted installed asset delivery', () => {

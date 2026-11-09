@@ -233,6 +233,29 @@ they agree once it is decoded.
   and no Windows archive exists to link — which is O2.
 
 
+## 2026-11-09 — Phase 0b: three of the four static risks are answered, one needed a line
+
+Read before building anything, because each of these fails for a different reason and three of them are
+settled by reading the tree.
+
+| Risk the phase named | Answer |
+|---|---|
+| **Does the pack layout carry a non-code binary at all?** | **Yes, unchanged.** `listPackFiles` (`apack-host/src/packs/assets.ts`) walks the layout's sections and filters by nothing — no extension list anywhere — so `integrity.json` hashes a `.wasm` like any other file and `verifyPack` accepts it. Nothing to change |
+| **Does `pack://` serve it with a type the browser accepts?** | **No, and it needed one line.** `MIME_TYPES` had no `.wasm`, so it fell to `application/octet-stream`, which `WebAssembly.instantiateStreaming` refuses outright. Added `application/wasm` with the reason, and the existing spec asserts it |
+| **Does the content security policy admit WebAssembly?** | **There is no policy.** No `Content-Security-Policy` header, no `http-equiv` meta, nothing in the renderer or in main. So the phase's stop rule — *if the CSP needs widening, stop and report* — has no subject, and the biggest risk 0b carried does not exist. Worth knowing on its own terms: an Electron app that loads pack-authored frontend code ships no CSP |
+| **Does the installer place it?** | Follows from the first: placement copies what the receipt lists |
+
+`npm run spec` on the protocol's suite: 13 cases green.
+
+### What 0b still owes
+
+The two halves that cannot be read off the tree: whether the pack's frontend build **emits** a `.wasm`
+into `dist/runtime/` with a URL that resolves under `pack://` — the bundler is Vite, so an asset import is
+the likely mechanism and may need no build change at all — and the **packaged, offline initialization**,
+which is the exit condition and the only part that can still fail. Plus the eleven-row capability matrix,
+which needs the module loaded to answer honestly.
+
+
 ### What is not done
 
 The both-parsers diff harness, which is the rest of Phase 0a. The link is not yet proven: nothing has been

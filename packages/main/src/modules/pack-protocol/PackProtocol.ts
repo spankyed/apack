@@ -33,6 +33,11 @@ export const MIME_TYPES: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.woff2': 'font/woff2',
+  // **`application/wasm` is a requirement, not a nicety.** `WebAssembly.instantiateStreaming` refuses a
+  // response with any other type and the fallback is reading the whole module into an `ArrayBuffer` first,
+  // which works and is slower. Without this a `.wasm` served from a pack falls to
+  // `application/octet-stream` below and the streaming path cannot be used at all.
+  '.wasm': 'application/wasm',
 };
 
 
