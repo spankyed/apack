@@ -8,8 +8,15 @@
 // It runs a probe in the app's own executable as Node (ELECTRON_RUN_AS_NODE=1, as the app starts its API),
 // resolving each module from packages/api as the API does:
 //   elmdb             opens a database in a temp dir, writes its schema, closes, opens it again and reads it back
-//   node-pty          spawns a shell and waits for it to exit
 //   @napi-rs/keyring  loads its binding, without touching the credential store
+//
+//   apack-terminal    runs the broker binary the package ships, and sees it bind a socket
+//
+// **The broker is a binary rather than a module, so its probe is a spawn.** A pty belongs to the
+// `apack-terminal` broker, which the app starts as a child process; what can be wrong with it is what can
+// be wrong with any binary in a release — built for another architecture, or not carried into the package
+// at all, which is what a packaged app had before that package existed. Both show up the same way: it does
+// not start.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -65,29 +72,25 @@ async function main() {
   if (!read?.types?.Smoke) throw new Error('elmdb read back the schema ' + JSON.stringify(read) + ' after reopening');
   console.log('elmdb: wrote, closed, reopened and read back');
 
-  const pty = load('node-pty');
-  const [shell, args] = process.platform === 'win32'
-    ? ['cmd.exe', ['/d', '/c', 'echo apack-native-probe']]
-    : ['/bin/sh', ['-c', 'printf apack-native-probe']];
-  const terminal = pty.spawn(shell, args, { cols: 80, rows: 24 });
-  let output = '', exitListener;
-  const dataListener = terminal.onData(data => { output += data; });
-  try {
-    const exit = await new Promise(resolve => { exitListener = terminal.onExit(resolve); });
-    if (exit.exitCode !== 0) throw new Error('node-pty: the shell exited ' + JSON.stringify(exit));
-    assert(output.includes('apack-native-probe'), 'PTY must deliver actual shell output');
-  } finally {
-    dataListener.dispose();
-    exitListener?.dispose();
-    // ConPTY's reader worker outlives natural shell exit until the owning terminal is closed.
-    // Verified output also ensures node-pty has completed its deferred readiness handshake.
-    if (process.platform === 'win32') terminal.kill();
-  }
-  console.log('node-pty: spawned a shell, which exited 0');
 
   const { Entry } = load('@napi-rs/keyring');
   if (typeof Entry !== 'function') throw new Error('@napi-rs/keyring has no Entry');
   console.log('@napi-rs/keyring: binding loaded');
+
+
+  // **Run it with no arguments, which is the whole probe.** The broker answers that with its usage and
+  // exit 2, so this needs no socket, no timing and no cleanup -- and what it proves is the thing that can
+  // be wrong in a release: a binary built for another architecture never reaches its own argument check,
+  // and one the package did not carry is not there to run. Asked of the package, not of a path, because
+  // the name carries .exe on Windows and the package is what knows that.
+  const broker = load('apack-terminal').brokerBinary();
+  if (!broker) throw new Error('the apack-terminal package carries no binary for this platform');
+  const ran = require('node:child_process').spawnSync(broker, [], { encoding: 'utf8' });
+  if (ran.error) throw new Error('apack-terminal did not run: ' + ran.error.message);
+  if (ran.status !== 2 || !/usage: apack-terminal/.test(ran.stderr || '')) {
+    throw new Error('apack-terminal answered ' + ran.status + ' and ' + JSON.stringify(ran.stderr) + ', not its usage');
+  }
+  console.log('apack-terminal: the broker binary runs');
 }
 main().catch((error) => { console.error(error?.stack ?? String(error)); process.exit(1); });
 `;

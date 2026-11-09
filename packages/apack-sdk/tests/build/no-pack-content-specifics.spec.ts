@@ -11,6 +11,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { population } from '@apackdev/sdk/testing';
 
 const SRC = path.resolve(import.meta.dirname, '../../src');
 const SCANNED = ['build', 'content'];
@@ -24,10 +25,19 @@ const ALLOWED: Record<string, string> = {
   'framework/declaration-schema.ts:(e.g. "notes", "calendarEvents")': 'an example feature id',
 };
 
+/**
+ * **Refuses an empty walk.** Every case here filters this for offenders and asserts the result is empty,
+ * which passes for nothing when the walk itself found no files — a moved package or a renamed source
+ * directory would read as the rule holding.
+ */
 function sourceFiles(dir: string): string[] {
+  return [...population(`sdk build sources under ${dir}`, _sourceFiles(dir))];
+}
+
+function _sourceFiles(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const file = path.join(dir, entry.name);
-    return entry.isDirectory() ? sourceFiles(file) : entry.name.endsWith('.ts') ? [file] : [];
+    return entry.isDirectory() ? _sourceFiles(file) : entry.name.endsWith('.ts') ? [file] : [];
   });
 }
 

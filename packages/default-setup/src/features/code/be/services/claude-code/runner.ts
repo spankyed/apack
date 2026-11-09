@@ -31,6 +31,7 @@ import { agentChildEnvironment } from '../shell-environment.ts'
 import { createClaudeLifecycleTrace } from './lifecycle-trace.ts'
 import { createStderrTail } from './stderr-tail.ts'
 import { decodeNdjson, encodeNdjsonLine, type DecodedLine } from './ndjson.ts'
+import { agentChildEnvironment } from '../shell-environment.ts'
 import {
   ClaudeAbortError,
   ClaudeCliNotFoundError,
@@ -140,6 +141,10 @@ export const EXIT_IDLE_MS = 15_000
  * pure function.
  */
 export function buildChildEnv(override?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  // **The app's own variables go first** (G2): this child, and everything its Bash tool spawns, inherited
+  // `ELECTRON_RUN_AS_NODE=1`, `APACK_USER_DATA_DIR`, `SHIPPED_PACKS_DIR` and `API_PORT`. The strip is derived
+  // from what the construction that sets them declares, so it cannot fall behind it; `NODE_ENV` is one of
+  // the ten, which is why the hand-written delete below no longer names it.
   const env: NodeJS.ProcessEnv = { ...agentChildEnvironment(process.env), ...override }
   delete env.ANTHROPIC_API_KEY
 

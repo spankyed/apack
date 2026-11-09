@@ -216,10 +216,11 @@ export const depFileNames = (): string[] => (fs.existsSync(DEP_FILE_DIR)
  * Paths in any `node_modules` are dropped, which is the one thing here that is a judgement rather than a
  * reading: they are dependencies, overwhelmingly TypeScript's own `lib.*.d.ts`, and the chain already
  * covers one moving through `package-lock.json` in every step's inputs. **Any** `node_modules`, not a
- * leading one — a package can have its own, and 8401 of the reads recorded here are inside one. Paths in the elmdb
- * checkout (`vendor/elmdb/`) are dropped for the same reason: a dependency, which `vendor/elmdb.rev` covers in every
- * step's inputs. Locally it is a link to a checkout outside the repo, whose reads resolve outside it anyway; in CI it
- * is a clone of the pinned commit inside it.
+ * leading one — a package can have its own, and 8401 of the reads recorded here are inside one. Paths in **any**
+ * vendored checkout (`vendor/<name>/`) are dropped for the same reason: a dependency, which that checkout's
+ * `vendor/<name>.rev` covers in every step's inputs. Locally each is a link to a checkout outside the repo, whose
+ * reads resolve outside it anyway; in CI each is a clone of the pinned commit inside it — which is why a checkout
+ * named here rather than derived is a failure only CI can see, and `vendor/apack-terminal` was.
  *
  * **The paths come back lowercased on a case-insensitive filesystem**, which is TypeScript's doing and
  * not something to correct here: it records `baseform.vue` for `BaseForm.vue`. A caller comparing these
@@ -234,7 +235,7 @@ export function readsOf(name: string): readonly string[] | undefined {
   if (info?.fileNames === undefined || info.fileNames.length === 0) return undefined;
   return info.fileNames
     .map((file) => path.relative(REPO_ROOT, path.resolve(DEP_FILE_DIR, file)))
-    .filter((file) => !file.startsWith('..') && !/(^|\/)node_modules\//.test(file) && !file.startsWith('vendor/elmdb/'))
+    .filter((file) => !file.startsWith('..') && !/(^|\/)node_modules\//.test(file) && !/^vendor\/[^/]+\//.test(file))
     .sort();
 }
 

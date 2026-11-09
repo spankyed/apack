@@ -1,6 +1,5 @@
 import { clearClaudeUiViews } from './threads/be/claude-ui.ts';
 import { killAllHandles } from './code/be/services/claude-code/handle-store.ts';
-import { terminalService } from './code/be/services/terminal.ts';
 import { clearAllSchedules } from './brain/be/services/scheduler.ts';
 import { removeAllListeners as removeAllAdHocListeners } from './brain/be/services/brain.ts';
 import { clearFlowActorRegistry } from './brain/be/flow-system.ts';
@@ -15,7 +14,15 @@ export const onInit = () => {};
  */
 export const onShutdown = () => {
   services.runHistory.stopActive();
-  terminalService.killAll();
+  // **Nothing here ends a terminal, and nothing in this process may.** A session outlives the API on
+  // purpose: restarting it must not take a user's shells down, which is the whole of the lifetime rule.
+  // What ends them is the app's own hold on the broker closing — a descriptor closes on process death
+  // however the process died — and, with no owner holding it, the broker's own rule that the last client
+  // leaving ends them, which is what keeps a dev run or a test from leaving a shell behind. The only
+  // deliberate end is the user closing a terminal, which is `terminalService.kill`.
+  //
+  // The Claude Code integration's own children are a different matter: a handle is this process's, so a
+  // handle left running is leaked rather than persisted, and the views it fed have nobody to reach.
   clearClaudeUiViews();
   killAllHandles();
   clearAllSchedules();

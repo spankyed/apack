@@ -10,6 +10,10 @@ import { createOnboarding } from './onboarding.ts';
 import { HOST } from '../refs.ts';
 import { createLogger } from '@apackdev/sdk/logger';
 import { filesystem } from './filesystem.ts';
+import { createTerminalService, holdTerminalSessions } from './terminal.ts';
+
+/** The app's own process holds every terminal session open; see the function's own note for why it is here */
+export { holdTerminalSessions };
 import { createSettingsService } from './settings.ts';
 import { createSettingsStore } from '../features/settings/be/store.ts';
 
@@ -142,6 +146,7 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
       inference,
       secrets,
       filesystem,
+      terminal: createTerminalService(),
       // All owners use the accepted declaration catalog.
       settings,
     },

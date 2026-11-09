@@ -70,7 +70,16 @@ export function templateFiles(): string[] {
     throw new Error(`No templates at ${root}. A published @apackdev/cli ships them beside bin/ and dist/; `
       + 'a build that dropped them scaffolds nothing.');
   }
-  return walk(root).sort();
+  const found = walk(root).sort();
+  // A root that is there and empty is the same failure as one that is missing, and worse for the checks over
+  // this: three of `scaffold-templates.spec.ts`'s cases assert that a *derived* set is empty — no `.d.ts`
+  // template, none unreferenced, none missing — and all three pass for free when the set they filtered was
+  // empty. So it is refused here rather than in each caller, as `repoFiles` is.
+  if (found.length === 0) {
+    throw new Error(`No templates under ${root}, which exists. A published @apackdev/cli ships them beside `
+      + 'bin/ and dist/; a build that dropped them scaffolds nothing.');
+  }
+  return found;
 }
 
 /**

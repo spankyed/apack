@@ -5,12 +5,14 @@ import { createTraceSession, type RecordingMode } from './session.ts';
 import { PROFILE_BYTES } from './profiles.ts';
 
 export const APPLICATION_SPAN_NAMES = new Set([
-  'app.thread.open', 'app.reply.stream', 'app.search', 'app.startup',
+  'app.thread.open', 'app.terminal.open', 'app.terminal.resize', 'app.reply.stream', 'app.search', 'app.startup',
   'app.dispatch', 'app.view.read', 'app.view.deliver', 'app.view.ready', 'app.index.admission',
+  'app.surface.send',
 ]);
 export const APPLICATION_SPAN_ATTRIBUTES = new Set([
   'app.scenario', 'app.fixture', 'app.generation', 'app.delivery', 'app.commit',
   'app.result_count', 'app.chunk', 'app.process', 'app.coalesced_commits', 'app.unattributed_commits', 'app.dropped_causes',
+  'app.event', 'app.target', 'app.bytes',
 ]);
 
 type Session = ReturnType<typeof createTraceSession>;
@@ -26,6 +28,14 @@ export function createPerformanceController(contextManager: () => ContextManager
     withCarrier: (carrier, fn) => recording ? recording.withCarrier(carrier, fn) : fn(),
     carryEvent: (event, carrier) => recording?.carryEvent(event, carrier),
     withEvent: (event, fn) => recording ? recording.withEvent(event, fn) : fn(),
+    // An observation with a size rather than a duration is a span that begins and ends at once; the session
+    // already bounds, filters and counts these, so there is nothing else for an instant to need.
+    // Asked before the thunk is called, because computing an attribute can cost more than the observation
+    // is worth: `app.surface.send` serialises the message to size it, on a path that runs per streamed token
+    record: (name, attributes) => {
+      if (!recording?.isRecording()) return;
+      recording.begin(name, attributes?.())?.end();
+    },
   };
   return {
     execution,

@@ -42,6 +42,7 @@ jobs:
           test -f "$(dirname "$(command -v node)")/../include/node/node_api.h"
           cc --version
       - uses: ./.github/actions/elmdb
+      - uses: ./.github/actions/apack-terminal
       - name: Install dependencies
         env:
           GITHUB_TOKEN: ${{ github.token }}

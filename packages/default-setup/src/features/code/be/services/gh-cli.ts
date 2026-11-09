@@ -4,14 +4,23 @@ import https from 'https'
 import { resolveForService } from '../utils/resolve-cli.ts'
 import { createLogger } from '@apackdev/sdk/logger'
 import type { GhPullRequest, GhPRComment, GhReviewThread } from '../types.ts'
+import { agentChildEnvironment } from './shell-environment.ts'
 
 const logger = createLogger('gh-cli')
 
 const execFileAsync = promisify(execFile)
 
-/** Build env for gh CLI calls, stripping token env vars so gh uses its native keyring auth */
+/**
+ * Build env for gh CLI calls.
+ *
+ * Two strips, for two reasons. `GITHUB_TOKEN`/`GH_TOKEN` go so that `gh` uses its own keyring auth rather
+ * than whatever the app inherited. The app's own variables go because `gh` runs aliases and hooks, so this
+ * is a process that reaches arbitrary code on the user's behalf — and `APACK_API_TOKEN` is app-level access
+ * to their data. Derived from the declaration (`agentChildEnvironment`), so a variable added to what the
+ * app sets is stripped without anyone remembering.
+ */
 function ghEnv(): NodeJS.ProcessEnv {
-  const env = { ...process.env }
+  const env = agentChildEnvironment(process.env)
   delete env.GITHUB_TOKEN
   delete env.GH_TOKEN
   return env

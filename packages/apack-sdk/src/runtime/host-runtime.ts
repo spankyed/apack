@@ -11,6 +11,7 @@ import type { RunHistory } from '../services/run-history.ts';
 import type { InferenceService } from '../services/inference.ts';
 import type { SecretsService } from '../services/secrets.ts';
 import type { FilesystemService } from '../services/filesystem.ts';
+import type { TerminalService } from '../services/terminal.ts';
 import type { SettingsAdmin } from '../services/settings.ts';
 import type { PackRegistryView } from './packs-view.ts';
 
@@ -31,6 +32,8 @@ export interface HostRuntimeServices {
   secrets: SecretsService;
   /** Files and folders on the user's disk */
   filesystem: FilesystemService;
+  /** Terminal sessions, which the broker owns rather than this process */
+  terminal: TerminalService;
   /** The app's settings: the one row, its defaults and its one writer */
   settings: SettingsAdmin;
 }

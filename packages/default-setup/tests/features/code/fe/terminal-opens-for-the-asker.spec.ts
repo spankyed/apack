@@ -33,7 +33,7 @@ vi.mock('#features/code/fe/utils/terminal-events.ts', () => ({
 
 const { terminalState } = await import('#features/code/fe/features/terminal/state.ts');
 
-const aTerminal = (id: string) => ({ id, title: id, cwd: '/tmp' }) as never;
+const aTerminal = (id: string) => ({ id, title: id, cwd: '/tmp', submit: '\n' }) as never;
 
 const terminals = (actor: ReturnType<typeof createActor>) =>
   (actor.getSnapshot().context as { terminals: Array<{ id: string }> }).terminals.map((t) => t.id);
@@ -80,7 +80,7 @@ it('opens the terminal for the window that asked', () => {
 
   actor.send(answerTo(createCall(0), { type: 'terminal.OPENED', data: aTerminal('t-1') }));
 
-  expect(parent.updateParentState).toHaveBeenCalledWith(expect.anything(), { panelTerminalId: 't-1' });
+  expect(parent.updateParentState).toHaveBeenCalledWith(expect.anything(), { panelTerminalId: 't-1', panelTerminalExpanded: true });
   // The command this window typed is run in the terminal this window asked for, and nowhere else
   expect(sendToSystem).toHaveBeenCalledWith('code', expect.objectContaining({ type: 'terminal.TERMINAL_INPUT', terminalId: 't-1', data: 'echo hi\n' }));
 });
@@ -138,7 +138,7 @@ it('opens two terminals asked for together the way each was asked for', () => {
   expect(sendToSystem).toHaveBeenCalledWith('code', expect.objectContaining({ terminalId: 't-test', data: 'test\n' }));
   // And the targets likewise: the tab was the second ask's, the panel the first's
   expect(parent.addTabToParent).toHaveBeenCalledTimes(1);
-  expect(parent.updateParentState).toHaveBeenCalledWith(expect.anything(), { panelTerminalId: 't-build' });
+  expect(parent.updateParentState).toHaveBeenCalledWith(expect.anything(), { panelTerminalId: 't-build', panelTerminalExpanded: true });
 });
 
 /**
@@ -174,7 +174,7 @@ it('opens a terminal it has no record of asking for into the panel, with no comm
 
   actor.send(answerTo('c-another-ask', { type: 'terminal.OPENED', data: aTerminal('t-stray') }));
 
-  expect(parent.updateParentState, 'the panel, not the tab the other ask wanted').toHaveBeenCalledWith(expect.anything(), { panelTerminalId: 't-stray' });
+  expect(parent.updateParentState, 'the panel, not the tab the other ask wanted').toHaveBeenCalledWith(expect.anything(), { panelTerminalId: 't-stray', panelTerminalExpanded: true });
   expect(parent.addTabToParent).not.toHaveBeenCalled();
   expect(sendToSystem.mock.calls.filter(([, e]) => (e as { type: string }).type === 'terminal.TERMINAL_INPUT'), 'and no command').toEqual([]);
   expect(pendingOpens(actor), "the outstanding ask is still outstanding").toEqual([createCall(0)]);

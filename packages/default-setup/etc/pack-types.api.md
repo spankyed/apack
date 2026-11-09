@@ -3551,6 +3551,15 @@ type CodeConnectedData = {
 };
 
 type CodeContext = {
+    /**
+     * Whether this window is the one that keeps the app's layout (M5).
+     *
+     * Every window has its own copy of the window storage but they share its names, so two windows showing
+     * this surface kept their tabs under one key: each restored the other's and each rewrote them. The shell
+     * answers it on `SURFACE_STARTED` — the same fact it records the last-open surface by — and a popout
+     * reads the layout and writes none. Defaults true, since a window that was never told is the only one.
+     */
+    ownsAppLayout: boolean;
     baseDirectory: string;
     openFiles: (OpenFile | TerminalTab | ActionTab | PromptTab)[];
     activeFilePath: string | null;
@@ -3603,11 +3612,18 @@ type CodeInboxEvent = {
 } | {
     type: 'UPDATE_STATE';
     updates: Partial<CodeContext>;
-} | {
+}
+/**
+ * Open a terminal. Every field is optional because the surface's own senders pass `cwd` alone, and
+ * `target` is the literal the child acts on rather than any string: it routes `'tab'` to a tab and
+ * anything absent to the panel.
+ */
+ | {
     type: 'terminal.CREATE';
-    target: string;
-    command: string;
+    title?: string;
     cwd?: string;
+    target?: 'tab';
+    command?: string;
 } | {
     type: 'explorer.SET_BASE_DIRECTORY';
     path: string;
@@ -5295,6 +5311,11 @@ type IncomingTerminalEvents = {
 } | {
     type: 'terminal.CLOSE_TERMINAL';
     terminalId: string;
+}
+/** Start a new shell under a terminal that already exists, keeping its id and everything attached to it */
+ | {
+    type: 'terminal.RESTART_TERMINAL';
+    terminalId: string;
 } | {
     type: 'terminal.TERMINAL_INPUT';
     terminalId: string;
@@ -6703,16 +6724,43 @@ type OutgoingTerminalEvents =
         data: string;
     };
 } | {
-    type: 'terminal.INITIAL_OUTPUT';
-    data: {
-        terminalId: string;
-        data: string;
-    };
-} | {
     type: 'terminal.CLOSED';
     data: {
         terminalId: string;
     };
+}
+/**
+ * The shell ended badly and **the terminal was kept**, so the user can read what it said and start it
+ * again where it was. A shell that exits 0 is a user closing their terminal and sends `CLOSED` instead.
+ */
+ | {
+    type: 'terminal.CRASHED';
+    data: {
+        terminalId: string;
+        code: number | null;
+    };
+}
+/**
+ * The grid the pty is actually running at, which is **not** necessarily the one a window asked for.
+ *
+ * A pty has one `(cols, rows)` and the window that opened it owns them (M2), so a second window's fit is
+ * refused — and a window that is never told renders at a grid nothing agreed to. This carries the accepted
+ * one, so no window has to assume its own request took effect: broadcast when the grid moved, since every
+ * window showing the terminal needs it, and replied to the asker when its request was refused, which is
+ * news to nobody else.
+ */
+ | {
+    type: 'terminal.RESIZED';
+    data: {
+        terminalId: string;
+        cols: number;
+        rows: number;
+    };
+}
+/** A new shell is running under a terminal that was already there; `generation` says how many it has had */
+ | {
+    type: 'terminal.RESTARTED';
+    data: TerminalInfo;
 } | {
     type: 'terminal.RENAMED';
     data: {
@@ -6811,6 +6859,39 @@ type OutgoingThreadsEvents = {
     type: 'SHOW_THREAD';
     threadId: EARS.EntityId;
     restore?: boolean;
+}
+/**
+ * The next characters of a streamed reply, for every window showing that message.
+ *
+ * **The feed, not the row** (G1). A streamed reply used to reach a window by writing the whole accumulated
+ * text to EARS every 80 ms, which is `flushes x final size / 2` bytes — 15 MB for a 40 KB reply over a
+ * minute, measured, and quadratic in reply length. The row is still written, on a slower clock and at the
+ * end, so a crash loses seconds rather than the reply; what arrives every 80 ms is this, the delta.
+ *
+ * `at` is the offset the delta starts at, so a window can splice it onto whatever the message's view last
+ * gave it and a window that opened mid-stream can tell it has no run to append to — it shows the row until
+ * the next durable write catches it up. `done` is the last one: the row is written before it is sent.
+ */
+ | {
+    type: 'MESSAGE_TEXT_APPENDED';
+    messageId: EARS.EntityId;
+    at: number;
+    text: string;
+    done?: true;
+}
+/**
+ * The next characters of a growing block, the same feed for the field that grows rather than changes.
+ *
+ * `block` names which of the message's blocks the run belongs to, since a message holds several. A
+ * block's label, state and re-projected lists are rewrites and travel on the row; this carries growth.
+ */
+ | {
+    type: 'MESSAGE_BLOCK_TEXT_APPENDED';
+    messageId: EARS.EntityId;
+    block: string;
+    at: number;
+    text: string;
+    done?: true;
 } | {
     type: 'CHAT_STARTED';
     data: ChatStart;
@@ -7525,7 +7606,7 @@ type ServerStatus = 'error' | 'ready' | 'starting' | 'stopped';
  * The declared service selection: own services, the SDK baseline and explicitly consumed APIs.
  * The featureServices value itself stays feature-only.
  */
-type Services = typeof featureServices & Pick<HostServices, "appData" | "filesystem" | "inference" | "logger" | "onboarding" | "runHistory" | "secrets" | "settings"> & {
+type Services = typeof featureServices & Pick<HostServices, "appData" | "filesystem" | "inference" | "logger" | "onboarding" | "runHistory" | "secrets" | "settings" | "terminal"> & {
     repository: Repositories;
     emitter: PackEmitter;
 };
@@ -7690,27 +7771,100 @@ interface TerminalEntity {
     entityType: EARS.Entity.Terminal;
     title: string;
     customTitle?: string;
-    pid: number;
+    /**
+     * **No pid, and `session` is not one.** A row used to carry the process id its session had, and
+     * `restoreAll` reached for it on the next boot — checking whether that process was alive and killing it
+     * and its group, which is F7, and which could name a process the OS had since given to something else.
+     *
+     * A broker session id is the opposite kind of name. The broker owns that namespace and never reissues an
+     * id, so a stale one names nothing rather than something else: offering it costs one request refused with
+     * `NO_SUCH_SESSION`, where offering a stale pid cost a stranger's process its life. What is forbidden here
+     * is a persisted handle that can be *mistaken* for a live one, not a persisted name.
+     *
+     * The live descriptor still carries a pid, because the renderer tells a new shell from the previous one by
+     * it; that is a diagnostic, not a handle.
+     */
     shell: string;
     cwd: string;
-    active: boolean;
     cols: number;
     rows: number;
+    /**
+     * The broker session this terminal's shell is running in, while one is.
+     *
+     * **What makes a shell survivable rather than merely surviving.** Sessions outlive the API on purpose, so
+     * that restarting it does not take a user's shells down — but a restarted API that cannot name them again
+     * leaves them running and unreachable, and spawns a fresh shell beside each. The id is the only thing it
+     * needs: the broker's feed is one slot, so output for a session already arrives on whatever connection
+     * greeted last.
+     *
+     * Absent for a row written before its session started, and stale after a full app restart, which ends
+     * every session — so it is offered to the broker rather than trusted (see `shell`).
+     */
+    session?: string;
     createdAt: number;
     updatedAt: number;
-    closedAt?: number;
 }
 
 interface TerminalInfo {
     id: EARS.EntityId;
     title: string;
     customTitle?: string;
-    pid: number;
+    /**
+     * The shell's process id, for a diagnostic — **`null` when it is not known**.
+     *
+     * A window tells one generation from the next by it, which is what draws the seam between a dead shell's
+     * output and its replacement's. It is unknown for a session the service took up again rather than started
+     * (the broker answers a pid only for a spawn), and that case is precisely the one where there is no
+     * boundary to draw: the shell is the one the window was already watching.
+     */
+    pid: number | null;
     shell?: string;
     cwd: string;
     active: boolean;
+    /**
+     * How many shells this terminal has had, counting from one.
+     *
+     * **A terminal is not its shell.** Its id, its tab and its place in that tab outlive the process behind
+     * it, so a shell that crashed and one the user restarted both leave the terminal where it was and start
+     * a new generation under it. The window tells one generation from the next by the pid and writes the
+     * seam; this is what says how many there have been, for a window that was not watching.
+     */
+    generation: number;
+    /** The shell ended and the terminal was kept. Absent while one is running */
+    exited?: {
+        code: number | null;
+    };
+    /**
+     * The session's size **when this was published**, which is a starting point and not a live reading.
+     *
+     * **A pty has one size and it is whatever a window last fitted**, so the live value lives where the
+     * session does: the service keeps it current and `restart` re-opens the shell at it. What a window holds
+     * is the snapshot it was last listed or opened with, and its one consumer wants exactly that — the pool
+     * builds the emulator at this size, so it is the width a replayed screen is first drawn at.
+     *
+     * It is spelled out because it reads as live and is not: a drive scenario waited on it for the size a
+     * window had just fitted and timed out at the creation size, with every resize having landed correctly
+     * (F18). A window that wants the size it fitted computed it, and the pty's own is the broker's to answer.
+     */
     cols: number;
+    /** The session's rows when this was published; see `cols` */
     rows: number;
+    /**
+     * How far back this session can be scrolled: the host's number, from the broker's handshake.
+     *
+     * The window derives its emulator's bound from this and never pins its own. Exceeding it would draw lines
+     * no reattach could reproduce — the broker is what answers a screen read when no window holds the bytes —
+     * and 10,000 pinned in the pool against the broker's 1,000 is exactly what that looked like.
+     */
+    scrollback: number;
+    /**
+     * What ends a typed line for *this* shell — X6.
+     *
+     * A window running a command has to end it the way the shell it is running in expects, and only the
+     * backend knows which shell that is. Typed into a Windows console, `\n` is echoed and never runs: the
+     * command sits on screen looking typed, and nothing happens. Measured on Windows rather than assumed.
+     */
+    submit: string;
 }
 
 interface TerminalTab extends OpenFile {
@@ -8024,6 +8178,24 @@ interface ThreadsContext {
     detailMessageIds: string[];
     /** Each listed message as its own view last gave it */
     messageContents: Record<string, Partial<MessageEntity>>;
+    /**
+     * The characters of a streamed reply that have arrived since the message's row was last written, by
+     * message id: `at` is the offset the run starts at (G1).
+     *
+     * **The run is spliced onto the row rather than replacing it**, so the two channels cannot disagree: the
+     * row is what the view gave, the run is what has arrived since, and a window that opened mid-stream has a
+     * run starting past the end of its row and shows the row until the next durable write catches it up.
+     */
+    messageStreams: Record<string, {
+        at: number;
+        text: string;
+    }>;
+    /** A growing block's run, per message: which block it belongs to, from where, and what has arrived */
+    messageBlockStreams: Record<string, {
+        block: string;
+        at: number;
+        text: string;
+    }>;
     /** The messages a view is followed for */
     messageViews: string[];
     /** The open tabs a view is followed for */
@@ -9799,6 +9971,8 @@ declare const featureServices: {
         sendChoiceBlock: typeof sendChoiceBlock;
         sendQuestionBlock: typeof sendQuestionBlock;
         updateMessageState: typeof updateMessageState;
+        streamMessageText: typeof streamMessageText;
+        streamMessageBlockText: typeof streamMessageBlockText;
         createMarkerMessage: typeof createMarkerMessage;
         addMessagesToThread: typeof addMessagesToThread;
         importClaudeSessionMessages: typeof importClaudeSessionMessages;
@@ -10615,17 +10789,77 @@ declare function showThread(threadId: EARS.EntityId, options?: {
 
 declare function storeHandle(key: string, handle: CodexTurnHandle): void;
 
+/**
+ * Sends the next characters of a growing **block** to the windows showing that message.
+ *
+ * **The same split as `streamMessageText`, for the one field that grows rather than changes.** A block is
+ * written with `updateMessageState({ blocks })`, which replaces the whole field — so a thinking block that
+ * grows for three minutes was rewritten in full on every flush, and what reached storage was a multiple of
+ * what the user was left with. The multiple grew with the turn, which is what makes it the same defect G1
+ * names for text and not a slower version of it.
+ *
+ * So the characters travel here and the row is written on the durable clock. `block` names the block's type
+ * — one of a message's blocks is a `thinking` block, one a `tool-activity` block — because a message holds
+ * several and a window has to know which one a run belongs to. Everything else is the text feed's contract:
+ * `at` is the offset so a window splices onto what its view last gave it, a run that starts past the end of
+ * what the window holds is a stream it joined late and is ignored until the row catches up, and `done`
+ * drops the run after the row has been written.
+ *
+ * **What this channel cannot carry is a change.** A block's label, its state and a re-projected list are
+ * rewrites, not appends, and they go on the row. This is for growth alone.
+ */
+declare function streamMessageBlockText(params: {
+    messageId: EARS.EntityId;
+    block: string;
+    at: number;
+    text: string;
+    done?: true;
+}): void;
+
+/**
+ * Sends the next characters of a streamed reply to the windows showing that message.
+ *
+ * **The feed beside the row, which is what makes a streamed reply affordable** (G1). `updateMessageState`
+ * writes the whole message, and a streamed reply used to call it every 80 ms — `flushes x final size / 2`
+ * bytes, 15 MB for a 40 KB reply over a minute, quadratic in the reply's length. So the row is written on a
+ * slower clock and the characters travel here, which is what `default-setup/CLAUDE.md` means by *a feed is
+ * news too … as streaming tokens would*.
+ *
+ * It is a broadcast because every window showing the message needs it and nobody asked for it, and it
+ * carries `at` rather than the text so far so a window can splice it onto what its view last gave it. The
+ * channel choice lives here, beside `updateMessageState`, so an action keeps calling `services.chat`.
+ */
+declare function streamMessageText(params: {
+    messageId: EARS.EntityId;
+    at: number;
+    text: string;
+    done?: true;
+}): void;
+
 declare const terminalCommands: {
     /** Records a terminal the service started, under the id it took for it (`newId`) */
-    create: (terminal: Pick<TerminalEntity, "cols" | "cwd" | "pid" | "rows" | "shell" | "title"> & {
+    create: (terminal: Pick<TerminalEntity, "cols" | "cwd" | "rows" | "session" | "shell" | "title"> & {
         id: EARS.EntityId<"Terminal">;
     }) => EARS.EntityId;
-    resize: (id: EARS.EntityId, cols: number, rows: number) => void;
+    /**
+     * Records the broker session this terminal's shell is running in.
+     *
+     * Written whenever the shell is replaced, because a stored id that names the *previous* session is the one
+     * case the offer-and-fall-back rule cannot save: the broker would answer for it and this process would
+     * take up a session no terminal is showing.
+     */
+    recordSession: (id: EARS.EntityId, session: string) => void;
     rename: (id: EARS.EntityId, customTitle: string) => void;
     updateCwd: (id: EARS.EntityId, cwd: string, title?: string) => void;
-    updatePid: (id: EARS.EntityId, pid: number) => void;
+    /**
+     * The terminal is gone, so its row goes to the trash — **the one way a Terminal row ends** (L3).
+     *
+     * It used to set `active: false` and a `closedAt` nothing ever read, leaving a row behind for every
+     * terminal the user had ever opened; beside it sat an unreached `delete` that did the trashing. Nothing
+     * reads a closed terminal: `restoreAll` opens what the query answers, and that is the whole of what a row
+     * is for. So there is one path, and it removes the record rather than annotating it.
+     */
     markClosed: (id: EARS.EntityId) => void;
-    delete: (id: EARS.EntityId) => void;
 };
 
 declare const terminalPlacement: z.ZodObject<{
@@ -10640,8 +10874,12 @@ declare const terminalPlacement: z.ZodObject<{
 
 declare const terminalQueries: {
     byId: (id: EARS.EntityId) => TerminalEntity | undefined;
+    /**
+     * The terminals there are — which is every row, because **a closed one leaves none** (L3). A query leaves
+     * out the trash, and `markClosed` puts a row there, so there is no `active` attribute to filter on and no
+     * second record of whether a terminal exists.
+     */
     all: () => TerminalEntity[];
-    active: () => TerminalEntity[];
 };
 
 declare const threadCommands: {

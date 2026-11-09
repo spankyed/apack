@@ -4,6 +4,7 @@ import { encodeJsonSafely } from './encoder.ts';
 import type { Message } from '@apackdev/sdk/events';
 import type { LogEvent } from '@apackdev/sdk/logger';
 import type { RootEvents } from '@apackdev/sdk/runtime';
+import { _recordPerformance } from '@apackdev/sdk/runtime';
 
 /**
  * Writes one log event to `app-events.log`, and cannot fail the call that logged it.
@@ -65,6 +66,23 @@ class RootEventEmitter extends EventEmitter implements RootEvents {
   }
 
   emitOutgoing(message: Message) {
+    // **What every client receives passes through here**, which makes it the one place a reading can count
+    // the app's outgoing traffic: how many messages a producer became, and how many bytes each carried. A
+    // terminal's output is the case that needs it — it is a feed, so there is no view to correlate against
+    // and nothing else records it.
+    //
+    // **Size and target, never content.** The bus's rule is that no part of a payload reaches a record, and
+    // an outgoing terminal event is a screenful of what the user typed and what their shell answered. The
+    // attributes are a thunk the recording implementation calls only while it is recording, so an app that
+    // is not serialises nothing on a path that runs per streamed token — a *bound* execution is not a
+    // recording one, and development and test bind one always. `encodeJsonSafely` measures it because it
+    // cannot throw
+    // — a size that failed to compute must not take the message with it.
+    _recordPerformance('app.surface.send', () => ({
+      'app.event': message.event.type,
+      'app.target': message.to,
+      'app.bytes': Buffer.byteLength(encodeJsonSafely(message.event, () => '')),
+    }));
     this.emit('outgoing', message);
   }
 

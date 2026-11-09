@@ -6,7 +6,7 @@ import { readPackBuild } from '@apackdev/host/packs';
 import { WATCH_REBUILD_BUDGET_MS, type TestPackBuildWatcher } from '../_support/watch-builds.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
-import { _settles } from '@apackdev/sdk/testing/waiting';
+import { settles } from '@apackdev/sdk/testing/waiting';
 
 const sharedCompiler = shareCompilerInstallation();
 
@@ -42,20 +42,20 @@ describe('CSS dependency watching', () => {
       fs.writeFileSync(replacement, '.theme { color: #654321; }');
       fs.renameSync(replacement, leaf);
     });
-    await _settles(() => expect(publications > 0 || errors.mock.calls.length > 0).toBe(true));
+    await settles(() => expect(publications > 0 || errors.mock.calls.length > 0).toBe(true));
     expect(errors.mock.calls).toEqual([]);
     expect(css()).toContain('#654321');
     const accepted = readPackBuild(path.join(pack, 'dist')).revision;
     const count = publications;
     await watcher.rebuildAfter(() => { fs.writeFileSync(stylesheet, '@import "./future/theme.css";'); });
-    await _settles(() => expect(errors).toHaveBeenCalledWith(expect.stringContaining('Build/reload failed')));
+    await settles(() => expect(errors).toHaveBeenCalledWith(expect.stringContaining('Build/reload failed')));
     expect(publications).toBe(count);
     expect(readPackBuild(path.join(pack, 'dist')).revision).toBe(accepted);
     await watcher.rebuildAfter(() => {
       fs.mkdirSync(path.join(fixture.root, 'future'));
       fs.writeFileSync(path.join(fixture.root, 'future/theme.css'), '.theme { color: #abcdef; }');
     });
-    await _settles(() => expect(publications).toBeGreaterThan(count));
+    await settles(() => expect(publications).toBeGreaterThan(count));
     expect(css()).toContain('#abcdef');
   });
 });
@@ -83,7 +83,7 @@ it.each(['css-url', 'template'] as const)('watches an external %s asset in a sep
     expect(readFrontendOutput(pack, '.svg')).toContain('BEFORE');
     if (kind === 'template') expect(fs.existsSync(path.join(pack, '.apack/reads.json'))).toBe(false);
     await watcher.rebuildAfter(() => { fs.writeFileSync(asset, '<svg xmlns="http://www.w3.org/2000/svg"><text>AFTERX</text></svg>'); });
-    await _settles(() => expect(publications > 0 || errors.mock.calls.length > 0).toBe(true));
+    await settles(() => expect(publications > 0 || errors.mock.calls.length > 0).toBe(true));
     expect(errors.mock.calls).toEqual([]);
     expect(readFrontendOutput(pack, '.svg')).toContain('AFTERX');
     expect(readFrontendOutput(pack, '.svg')).not.toContain('BEFORE');
@@ -113,7 +113,7 @@ it('watches initially empty external Tailwind content through nested directory l
       fs.mkdirSync(path.join(sources, 'nested'));
       fs.writeFileSync(path.join(sources, 'nested/page.html'), '<div class="text-orange-500" />');
     });
-    await _settles(() => expect(publications > 0 || errors.mock.calls.length > 0).toBe(true));
+    await settles(() => expect(publications > 0 || errors.mock.calls.length > 0).toBe(true));
     expect(errors.mock.calls).toEqual([]);
     expect(readFrontendOutput(pack, '.css')).toContain('.text-orange-500');
     const count = publications;
@@ -122,7 +122,7 @@ it('watches initially empty external Tailwind content through nested directory l
       fs.symlinkSync(authored, replacement, 'dir');
       fs.renameSync(replacement, path.join(content, 'linked'));
     });
-    await _settles(() => {
+    await settles(() => {
       expect(publications).toBeGreaterThan(count);
       expect(readFrontendOutput(pack, '.css')).toContain('.text-indigo-500');
     });

@@ -322,11 +322,17 @@ function declaredTimeouts(file: string): { key: string; ms: number }[] {
     // A Playwright config's `expect: { timeout }` bounds an assertion's wait, not the test, so it is no test timeout
     const line = raw.trim().replace(/\bexpect\s*:\s*\{[^}]*\}/g, '');
     if (line.startsWith('//') || line.startsWith('*')) continue;
+    // **A nested clock is a different clock.** Playwright's `expect: { timeout }` bounds one assertion;
+    // `timeout` bounds the whole test, and only the second is the deadline a size declares. Both are
+    // spelled `timeout:`, and this reader is line-based, so the inner one matched the outer key and the
+    // Map built from these pairs kept whichever came last — reporting the E2E helper's 60s backstop as
+    // the 30s assertion clock. Dropping the inner scope first is what keeps the two apart.
+    const scoped = line.replace(/\bexpect\s*:\s*\{[^}]*\}/g, '');
     for (const key of TIMEOUT_KEYS) {
-      const match = new RegExp(`\\b${key}\\s*:\\s*([\\d_]+)`).exec(line);
+      const match = new RegExp(`\\b${key}\\s*:\\s*([\\d_]+)`).exec(scoped);
       if (match) out.push({ key, ms: Number(match[1].replace(/_/g, '')) });
     }
-    const cpu = /'apack\.testCpuMs'\s*:\s*([\d_]+)/.exec(line);
+    const cpu = /'apack\.testCpuMs'\s*:\s*([\d_]+)/.exec(scoped);
     if (cpu) out.push({ key: CPU_KEY, ms: Number(cpu[1]!.replace(/_/g, '')) });
   }
   return out;

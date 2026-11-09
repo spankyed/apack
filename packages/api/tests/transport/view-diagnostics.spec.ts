@@ -7,7 +7,7 @@ afterEach(stopFeTestRuntime);
 it('owns a receipt sequence per subscription and preserves the original view value', () => {
   let current: PerformanceCarrier | undefined;
   startFeTestRuntime({ diagnostics: {
-    capture: () => current ?? {}, carryEvent() {}, withEvent: (_event, fn) => fn(),
+    capture: () => current ?? {}, carryEvent() {}, withEvent: (_event, fn) => fn(), record() {},
     withCarrier(carrier, fn) {
       const previous = current; current = carrier as PerformanceCarrier | undefined;
       try { return fn(); } finally { current = previous; }
@@ -30,7 +30,7 @@ it('owns a receipt sequence per subscription and preserves the original view val
 });
 it('preserves a subscription error and restores the prior execution context', () => {
   let current: unknown;
-  startFeTestRuntime({ diagnostics: { capture: () => ({}), carryEvent() {}, withEvent: (_event, fn) => fn(),
+  startFeTestRuntime({ diagnostics: { capture: () => ({}), carryEvent() {}, withEvent: (_event, fn) => fn(), record() {},
     withCarrier(carrier, fn) { const previous = current; current = carrier; try { return fn(); } finally { current = previous; } },
   } });
   const observation = createViewSubscriptionDiagnostics({ traceparent: 'request' });

@@ -6,6 +6,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gitIn, pinWarnings } from './lib/vendor-pin.mjs';
 
 /** The elmdb checkout the link points at @param {NodeJS.ProcessEnv} [env] */
 export function elmdbCheckout(env = process.env) {
@@ -39,14 +40,17 @@ export function linkElmdb(root, checkout = elmdbCheckout()) {
   // A junction on Windows, which needs neither elevation nor Developer Mode as a directory symlink does; Node reads
   // either as a symbolic link, so the replacement above holds for both
   fs.symlinkSync(checkout, link, process.platform === 'win32' ? 'junction' : 'dir');
-  return { link, checkout, rev };
+  // Reported rather than refused, and after the link is in place: what they describe costs a CI run or a
+  // local one testing the wrong code, never this command (`lib/vendor-pin.mjs`)
+  return { link, checkout, rev, warnings: pinWarnings({ name: 'elmdb', rev, checkout, run: gitIn(checkout) }) };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   try {
-    const { link, checkout, rev } = linkElmdb(root);
+    const { link, checkout, rev, warnings } = linkElmdb(root);
     console.log(`${path.relative(root, link)} → ${checkout} (pinned ${rev.slice(0, 12)})`);
+    for (const warning of warnings) console.warn(`\n! ${warning}`);
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
     process.exit(1);

@@ -71,9 +71,8 @@ export function sharedInstanceExports(pkg: string, fromFile: string): Record<str
  * Packages the host resolves for a pack, because neither the bundle nor the installed pack can carry them.
  *
  * Two shapes, both discovered the same way — the failure names the file it could not find:
- * - a **native binding**. `node-pty` requires `build/Release/pty.node`; `chokidar` optionally requires
- *   `fsevents`, whose binary is the same story. A `.node` is compiled machine code, so esbuild has no loader
- *   for one and the only answer is to resolve it at run time.
+ * - a **native binding**. `chokidar` optionally requires `fsevents`, whose binary is a `.node`: compiled
+ *   machine code, which esbuild has no loader for, so the only answer is to resolve it at run time.
  * - a **shipped executable**. `@vscode/ripgrep` computes `rgPath` from its own `__dirname`, which inside a
  *   bundle is the bundle's directory and not the package's.
  *
@@ -88,7 +87,7 @@ export function sharedInstanceExports(pkg: string, fromFile: string): Record<str
  * a question about that pack rather than about this list. `fsevents` is the counter-example: chokidar
  * requires it in a try/catch and falls back to polling, so a pack runs without it either way.
  */
-export const HOST_RESOLVED_BINARIES = ['node-pty', 'fsevents', '@vscode/ripgrep'] as const;
+export const HOST_RESOLVED_BINARIES = ['fsevents', '@vscode/ripgrep'] as const;
 
 export interface SharedDep {
   globalKey?: string;

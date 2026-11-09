@@ -4,16 +4,29 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { HostRuntime } from '@apackdev/sdk/runtime';
+import { population } from '@apackdev/sdk/testing';
 import ts from 'typescript';
 
 const HOST_ROOT = path.resolve(__dirname, '..');
 const SRC = path.join(HOST_ROOT, 'src');
 const RUNTIME = path.join(SRC, 'packs', 'runtime');
 
+/**
+ * **Refuses an empty walk**, because every case here asserts that a *derived* set is empty — no transport
+ * import, no Vue in `src/fe`, no folder named for a layer — and that shape passes for nothing when the walk
+ * it filtered found no files. A moved package, a renamed `src`, or a `dir` that is not there would otherwise
+ * read as nine boundaries holding.
+ *
+ * Guarded here rather than at the nine call sites: one walk, one place it can be wrong.
+ */
 function sourceFiles(dir: string): string[] {
+  return [...population(`source files under ${path.relative(HOST_ROOT, dir) || 'src'}`, walk(dir))];
+}
+
+function walk(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) return sourceFiles(full);
+    if (entry.isDirectory()) return walk(full);
     return /\.(ts|mts|cts|js|mjs|cjs)$/.test(entry.name) ? [full] : [];
   });
 }
@@ -54,7 +67,7 @@ function runtimeClosure(entry: string): Set<string> {
 }
 
 /** The services the app implements, each in `src/services/<kebab-case key>.ts`; the type checks the list is complete */
-const HOST_SERVICE_KEYS = ['appData', 'onboarding', 'runHistory', 'inference', 'secrets', 'filesystem', 'settings'] as const satisfies readonly (keyof HostRuntime['services'])[];
+const HOST_SERVICE_KEYS = ['appData', 'onboarding', 'runHistory', 'inference', 'secrets', 'filesystem', 'terminal', 'settings'] as const satisfies readonly (keyof HostRuntime['services'])[];
 type MissingServiceKey = Exclude<keyof HostRuntime['services'], (typeof HOST_SERVICE_KEYS)[number]>;
 const serviceKeysComplete: [MissingServiceKey] extends [never] ? true : MissingServiceKey = true;
 const kebab = (key: string) => key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);

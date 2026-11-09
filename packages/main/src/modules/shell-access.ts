@@ -8,25 +8,19 @@ import {shell} from 'electron';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import {URL} from 'node:url';
-
-/** Schemes the user's browser is asked to open. Anything else reaches another program: a mail client, a custom handler */
-const WEB_SCHEMES = new Set(['http:', 'https:']);
+import {summarizeUrl, webUrlProblem} from '@apackdev/sdk/utils/pure';
 
 /**
- * Why `url` isn't a link to open in the user's browser, or undefined when it is. `http:` stays allowed beside
- * `https:`: the terminal links what a dev server prints, and that is the address it prints.
+ * Why `url` isn't a link to open in the user's browser, or undefined when it is.
+ *
+ * The scheme and credential rules are shared with the in-app tab (`webUrlProblem`), because the same
+ * untrusted text reaches both doors and a rule written twice is a rule one door loses (S4). What is this
+ * door's alone is the help host, which addresses an article inside the app and not a site.
  */
 export function externalUrlProblem(url: string): string | undefined {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return 'it is not a URL';
-  }
-  if (!WEB_SCHEMES.has(parsed.protocol)) return `its scheme is ${parsed.protocol}, and only http and https open in a browser`;
-  if (parsed.hostname === 'help.apack.invalid') return 'it addresses an internal help article';
-  // "https://apple.com@evil.example" is a link to evil.example, read as one to apple.com
-  if (parsed.username || parsed.password) return 'it carries credentials, which hide the host it opens';
+  const problem = webUrlProblem(url);
+  if (problem) return problem;
+  if (new URL(url).hostname === 'help.apack.invalid') return 'it addresses an internal help article';
   return undefined;
 }
 
@@ -49,7 +43,7 @@ export async function openablePathProblem(filePath: string): Promise<string | un
 export async function openExternalUrl(url: string): Promise<void> {
   const problem = externalUrlProblem(url);
   if (problem) {
-    console.warn(`[shell] Refused to open "${summarize(url)}": ${problem}`);
+    console.warn(`[shell] Refused to open "${summarizeUrl(url)}": ${problem}`);
     return;
   }
   await shell.openExternal(url);
@@ -66,12 +60,3 @@ export async function openFilePath(filePath: string): Promise<void> {
   if (failure) throw new Error(failure);
 }
 
-/** A URL as a log line names it: its origin and path, without a query that may carry a token */
-function summarize(url: string): string {
-  try {
-    const {origin, pathname} = new URL(url);
-    return `${origin}${pathname}`;
-  } catch {
-    return url.slice(0, 80);
-  }
-}

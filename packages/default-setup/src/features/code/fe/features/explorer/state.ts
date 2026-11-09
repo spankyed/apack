@@ -228,8 +228,10 @@ export const explorerState = setup({
     handleCodeError: ({ event, self }) => {
       const ev = event as { type: 'explorer.CODE_ERROR'; data: { message: string; code?: string; path?: string } }
 
-      // A tab restored from storage whose file has since gone: drop the tab rather
-      // than leave one that can never load. Pinned tabs are kept by removeTabs.
+      // A tab restored from storage whose file has since gone: drop the tab rather than leave one that can
+      // never load. A pinned one goes too — `removeTabs` exempts nothing, deliberately, because pinning is
+      // about where a tab sits and not about outliving what it shows, and every caller of it is a subject
+      // that is gone.
       if (ev.data.code === 'NOT_FOUND' && ev.data.path) {
         const parentContext = getParentContext(self)
         const openFiles = parentContext?.openFiles ?? []

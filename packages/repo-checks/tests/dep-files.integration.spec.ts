@@ -9,6 +9,7 @@ import { PACKAGE_DIRS } from '../../../scripts/lib/workspace-deps.ts';
 import { UNIT_SUITES, unitStepName } from '../../../scripts/lib/unit-suites.ts';
 import { depFileNames, pruneOrphanDepFiles, readsOf, sourceOf, untrustworthy } from '../../../scripts/lib/dep-files.ts';
 import * as buildReads from '../../../scripts/lib/build-reads.ts';
+import { evidenceOrRefuse } from './_support/evidence.ts';
 import { population } from '@apackdev/sdk/testing';
 
 /**
@@ -19,8 +20,10 @@ import { population } from '@apackdev/sdk/testing';
  * repo compares a declaration against another declaration — the module graph, the manifest — and this one
  * compares it against an observation, which is the only one of them that can catch a read nobody modelled.
  *
- * It is evidence-dependent by nature: a dep file exists only where the leg has run. A fresh clone has
- * none, and the cases below say so rather than passing over an empty set.
+ * It is evidence-dependent by nature: a dep file exists only where the leg has run. A fresh clone has none,
+ * and every case that reads one then skips naming the run that would have left it, rather than reporting a
+ * defect nobody's change caused. Inside a chain run it refuses instead, since that is the run which both
+ * produces the evidence and is the gate — `_support/evidence.ts` has the whole of that split.
  */
 const tsVersion = (JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'node_modules/typescript/package.json'), 'utf-8')) as { version: string }).version;
 
@@ -55,9 +58,35 @@ const coverageOf = (step: { inputs: readonly string[]; excludes?: readonly strin
   };
 };
 
-/** No dep file means no typecheck has run here, which is missing evidence rather than a finding about coverage */
-const NO_EVIDENCE = 'no dep file in node_modules/.cache/tsbuildinfo: run npm run typecheck once, '
-  + 'then this can check what the compiler read. An empty run is not a passing one.';
+/** Where the renderer's leg leaves its build infos, and which of them are there */
+const RENDERER_TMP = path.join(REPO_ROOT, 'packages/renderer/node_modules/.tmp');
+const rendererBuildInfos = (): string[] => (fs.existsSync(RENDERER_TMP)
+  ? fs.readdirSync(RENDERER_TMP).filter((file) => file.endsWith('.tsbuildinfo'))
+  : []);
+
+/**
+ * The three observations this file reads, each named with the run that writes it.
+ *
+ * No dep file means no typecheck has run here, which is missing evidence rather than a finding about
+ * coverage — and the same of a pack nothing has built and of the renderer's build infos. Evaluated once at
+ * module scope so a refusal names its cause once rather than per case.
+ */
+const DEP_FILES = evidenceOrRefuse({
+  what: 'dep file in node_modules/.cache/tsbuildinfo',
+  from: 'npm run typecheck',
+  present: depFileNames().length > 0,
+});
+const BUILD_RECORDS = evidenceOrRefuse({
+  what: 'pack with a .apack/reads.json',
+  from: 'npm run build:default-setup',
+  present: buildReads.packsWithReads().length > 0,
+});
+/** The renderer's leg writes these instead of a dep file, which is the fact its own case is about */
+const RENDERER_INFOS = evidenceOrRefuse({
+  what: 'build info in packages/renderer/node_modules/.tmp',
+  from: 'npm run typecheck:renderer',
+  present: rendererBuildInfos().length > 0,
+});
 
 describe('the compiler says what it read', () => {
   /**
@@ -68,8 +97,8 @@ describe('the compiler says what it read', () => {
    * referenced configs do the compiling. Asserting the list keeps that honest in both directions — a leg
    * quietly losing its dep file shows up here, and so does one gaining it.
    */
-  it('says which legs it can speak for, so the gate is not wider than its evidence', () => {
-    if (depFileNames().length === 0) expect.fail(NO_EVIDENCE);
+  it('says which legs it can speak for, so the gate is not wider than its evidence', (ctx) => {
+    DEP_FILES.orSkip(ctx);
     const owners = new Set(depFileNames()
       .map((file) => PACKAGE_DIRS.find((dir) => file === dir)
         ?? PACKAGE_DIRS.filter((dir) => file.startsWith(`${dir}-`)).sort((a, b) => b.length - a.length)[0])
@@ -83,9 +112,9 @@ describe('the compiler says what it read', () => {
       .toEqual(['typecheck:renderer']);
   });
 
-  it('finds dep files to read, or says plainly that there is no evidence here', () => {
+  it('reads dep files with reads in them, or says which run would have left them', (ctx) => {
+    DEP_FILES.orSkip(ctx);
     const found = depFileNames();
-    if (found.length === 0) expect.fail(NO_EVIDENCE);
     population('dep files', found, { atLeast: 10 });
     expect(found.flatMap((name) => readsOf(name) ?? []).length, 'every dep file is empty of repo files')
       .toBeGreaterThan(100);
@@ -129,7 +158,8 @@ describe('the compiler says what it read', () => {
    * stopped declaring `tsBuildInfoFile`, or wrote it somewhere new, would quietly loosen the gate above
    * rather than fail here.
    */
-  it('traces every dep file to the tsconfig that named it', () => {
+  it('traces every dep file to the tsconfig that named it', (ctx) => {
+    DEP_FILES.orSkip(ctx);
     const placed = depFileNames().map((depFile) => ({ depFile, source: sourceOf(depFile) }));
     expect(placed.length, 'no dep files, so this would pass over nothing').toBeGreaterThan(10);
     expect(placed.filter(({ source }) => source === undefined).map(({ depFile }) => depFile),
@@ -213,7 +243,8 @@ describe('the compiler says what it read', () => {
     expect(covering('apack-sdk').map((leg) => leg.name)).not.toContain(ENSURE);
   });
 
-  it('leaves nothing a leg read outside what that leg declares', () => {
+  it('leaves nothing a leg read outside what that leg declares', (ctx) => {
+    DEP_FILES.orSkip(ctx);
     const missing = depFileNames().flatMap((depFile) => {
       const reads = readsOf(depFile) ?? [];
       const legs = covering(depFile);
@@ -247,13 +278,15 @@ describe('a dep file is checked against itself before it is believed', () => {
    * to an exact version and carry their own copy, so a check against the repo's called their dep files
    * untrustworthy — the check being coarser than its subject rather than a finding about the files.
    */
-  it('trusts one written by the compiler its own workspace resolves', () => {
+  it('trusts one written by the compiler its own workspace resolves', (ctx) => {
+    DEP_FILES.orSkip(ctx);
     for (const name of depFileNames()) {
       expect(readsOf(name), `${name} is refused, so something it was written by has moved`).toBeDefined();
     }
   });
 
-  it('is asked against a version, and says so when that version is not the one', () => {
+  it('is asked against a version, and says so when that version is not the one', (ctx) => {
+    DEP_FILES.orSkip(ctx);
     const [name] = depFileNames();
     expect(untrustworthy(name!, { version: tsVersion })).toBeNull();
   });
@@ -266,7 +299,8 @@ describe('a dep file is checked against itself before it is believed', () => {
    * silence. The check belongs in the reader for the reason `CLAUDE.md` gives about reset hatches: one
    * that a caller has to invoke is one a caller will forget.
    */
-  it('reads nothing out of a dep file it would not trust', () => {
+  it('reads nothing out of a dep file it would not trust', (ctx) => {
+    DEP_FILES.orSkip(ctx);
     const [name] = depFileNames();
     expect(readsOf(name!), 'the fixture is unreadable, so the case below proves nothing').toBeDefined();
 
@@ -282,13 +316,15 @@ describe('a dep file is checked against itself before it is believed', () => {
     expect(readsOf(name!), 'the fixture was not restored').toBeDefined();
   });
 
-  it('refuses one written by another compiler, naming the version', () => {
+  it('refuses one written by another compiler, naming the version', (ctx) => {
+    DEP_FILES.orSkip(ctx);
     const [name] = depFileNames();
     expect(untrustworthy(name!, { version: '0.0.0-not-installed' }))
       .toMatch(/written by TypeScript .*, and 0\.0\.0-not-installed is installed/);
   });
 
-  it('refuses one recorded under different options, naming which moved', () => {
+  it('refuses one recorded under different options, naming which moved', (ctx) => {
+    DEP_FILES.orSkip(ctx);
     const [name] = depFileNames();
     expect(untrustworthy(name!, { version: tsVersion, options: { strict: 'not-what-it-ran-with' } }))
       .toMatch(/different options \(strict\)/);
@@ -309,13 +345,10 @@ describe('a dep file is checked against itself before it is believed', () => {
    * that directory would buy a leg's worth of silence rather than a leg's worth of evidence. If these
    * ever grow a `fileNames`, this case fails and the gate can widen.
    */
-  it('finds no program recorded in the renderer build infos, which is why its leg is uncovered', () => {
-    const dir = path.join(REPO_ROOT, 'packages/renderer/node_modules/.tmp');
-    const found = fs.existsSync(dir) ? fs.readdirSync(dir).filter((file) => file.endsWith('.tsbuildinfo')) : [];
-    expect(found.length, 'the renderer writes no build info here any more; this case has lost its subject')
-      .toBeGreaterThan(0);
-    for (const file of found) {
-      const info = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf-8')) as { fileNames?: unknown };
+  it('finds no program recorded in the renderer build infos, which is why its leg is uncovered', (ctx) => {
+    RENDERER_INFOS.orSkip(ctx);
+    for (const file of population('renderer build infos', rendererBuildInfos())) {
+      const info = JSON.parse(fs.readFileSync(path.join(RENDERER_TMP, file), 'utf-8')) as { fileNames?: unknown };
       expect(info.fileNames, `${file} now records a program; the reader could read it`).toBeUndefined();
     }
   });
@@ -371,13 +404,9 @@ describe('apack pack build says what it read', () => {
     }];
   });
 
-  it('finds a build record to read, or says plainly that there is no evidence here', () => {
-    const found = buildReads.packsWithReads();
-    if (found.length === 0) {
-      expect.fail('no pack has a .apack/reads.json: run npm run build:default-setup once, then this can check what '
-        + 'the build read. An empty run is not a passing one.');
-    }
-    for (const packDir of found) {
+  it('reads a build record with reads in it, or says which run would have left one', (ctx) => {
+    BUILD_RECORDS.orSkip(ctx);
+    for (const packDir of population('built packs', buildReads.packsWithReads())) {
       expect(buildReads.readsOf(packDir), `${buildReads.untrustworthy(packDir)}`).toBeDefined();
     }
     expect(readsByPack().flatMap(({ files }) => files).length, 'every record is empty of files')
@@ -394,7 +423,8 @@ describe('apack pack build says what it read', () => {
    * Whether a record is here at all is the case above's question, and one record answers this one: every
    * pack is built by `apack pack build`, so each records all nine phases its manifest asks for.
    */
-  it('says which phases it can speak for, so a dropped capture is not a quiet one', () => {
+  it('says which phases it can speak for, so a dropped capture is not a quiet one', (ctx) => {
+    BUILD_RECORDS.orSkip(ctx);
     const built = buildReads.packsWithReads();
     const phases = new Set(built.flatMap((packDir) => Object.keys(buildReads.readsOf(packDir)?.phases ?? {})));
     expect([...phases].sort(), 'a phase gone from here is a bundler that stopped reporting; a new one is a '
@@ -409,7 +439,8 @@ describe('apack pack build says what it read', () => {
    * is whether whole trees are *enough*, which only an observation can answer. A build reading a file its
    * step does not declare is a step reporting `cached` over work that changed.
    */
-  it('leaves nothing a build read outside what the step building that pack declares', () => {
+  it('leaves nothing a build read outside what the step building that pack declares', (ctx) => {
+    BUILD_RECORDS.orSkip(ctx);
     const missing = readsByPack().flatMap(({ packDir, files }) => {
       const step = building(packDir);
       if (step === undefined) return [`${packDir} was built and no step declares its dist, so nothing re-runs on what it read`];
@@ -434,7 +465,8 @@ describe('apack pack build says what it read', () => {
    * recorded reads are mixed-case, so that order would drop them and the gate would look at less while
    * reporting the same nothing. The filesystem is handed in because no real one here can be the one at risk.
    */
-  it('keeps a mixed-case read where the filesystem is case-sensitive', () => {
+  it('keeps a mixed-case read where the filesystem is case-sensitive', (ctx) => {
+    BUILD_RECORDS.orSkip(ctx);
     // From the records rather than written out: a path chosen by hand goes all-lowercase without anyone
     // noticing, and then the case passes whatever the order is — which is what the first version of it did.
     // **The step comes from the same record as the file**, because the two have to be about one pack: naming
@@ -479,14 +511,16 @@ describe('a build record is checked against itself before it is believed', () =>
     expect(buildReads.untrustworthy('packages/api')).toMatch(/has not been built in this checkout/);
   });
 
-  it('refuses one written by another bundler, naming which and both versions', () => {
+  it('refuses one written by another bundler, naming which and both versions', (ctx) => {
+    BUILD_RECORDS.orSkip(ctx);
     const packDir = built();
     expect(buildReads.readsOf(packDir), 'the fixture is unreadable, so this case proves nothing').toBeDefined();
     expect(buildReads.untrustworthy(packDir, () => '0.0.0-not-installed'))
       .toMatch(/bundled by \w+ [\d.]+, and 0\.0\.0-not-installed is installed/);
   });
 
-  it('refuses one whose bundler is not installed at all', () => {
+  it('refuses one whose bundler is not installed at all', (ctx) => {
+    BUILD_RECORDS.orSkip(ctx);
     expect(buildReads.untrustworthy(built(), () => undefined)).toMatch(/and nothing is installed/);
   });
 
@@ -494,7 +528,8 @@ describe('a build record is checked against itself before it is believed', () =>
    * And the reader applies it, rather than leaving it to whoever remembers — the half that was missing on
    * the dep-file side until a case went looking for it.
    */
-  it('reads nothing out of a record it would not trust', () => {
+  it('reads nothing out of a record it would not trust', (ctx) => {
+    BUILD_RECORDS.orSkip(ctx);
     const packDir = built();
     const file = path.join(REPO_ROOT, packDir, '.apack', 'reads.json');
     const original = fs.readFileSync(file, 'utf-8');
@@ -552,7 +587,8 @@ describe('what has looked at a step at all', () => {
     };
   };
 
-  it('has looked at most of them, so the list below is a remainder and not the whole table', () => {
+  it('has looked at most of them, so the list below is a remainder and not the whole table', (ctx) => {
+    DEP_FILES.orSkip(ctx);
     const { byDepFile, byGraph, byNothing } = observation();
     expect(byDepFile.length, 'no step is covered by a dep file').toBeGreaterThan(10);
     expect(byGraph.length, 'no step is covered by the module graph').toBeGreaterThan(2);
@@ -596,7 +632,8 @@ describe('what has looked at a step at all', () => {
    * this step in the observed column while observing 2.5s of its 57s. A step reading as verified over 4% of
    * its work is worse than one honestly listed here.
    */
-  it('names the steps nothing verifies per-step', () => {
+  it('names the steps nothing verifies per-step', (ctx) => {
+    DEP_FILES.orSkip(ctx);
     expect(observation().byNothing,
       'a step here is one whose declared inputs nothing checks against what it touched. Add to this list '
       + 'only a step no tool can report on, and take one out when something can').toEqual([

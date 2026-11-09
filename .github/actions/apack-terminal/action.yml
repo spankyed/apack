@@ -1,0 +1,36 @@
+# apack-terminal at the commit apack pins (vendor/apack-terminal.rev), cloned into vendor/apack-terminal
+# before `npm ci` resolves @apackdev/host's and the API's `file:` dependency through it. Locally that path is
+# a link to a checkout (`npm run link:apack-terminal`); CI can't reach one, so it fetches the pinned commit.
+#
+# **The clone is always needed, the build only where a terminal has to work.** `npm ci` needs the package's
+# `package.json` to be there, which is the clone; the binary is a Rust release build, which is minutes, and a
+# job that neither packages the app nor starts a broker needs none. So `build` defaults to false and the jobs
+# that need one say so — rather than every job paying for it, or the dependency being optional, which is how
+# a release ships with no terminal.
+name: apack-terminal
+description: Clone apack-terminal at the pinned commit into vendor/apack-terminal, and optionally stage its npm package
+inputs:
+  build:
+    description: Build the broker for release and stage it into its npm package. Needed wherever a terminal has to work.
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - name: Clone apack-terminal at the pinned commit
+      shell: bash
+      run: |
+        rev=$(tr -d '[:space:]' < vendor/apack-terminal.rev)
+        git init -q vendor/apack-terminal
+        git -C vendor/apack-terminal fetch -q --depth 1 https://github.com/spankyed/apack-terminal.git "$rev"
+        git -C vendor/apack-terminal checkout -q FETCH_HEAD
+    - if: inputs.build == 'true'
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: vendor/apack-terminal
+    - name: Stage the broker into its npm package
+      if: inputs.build == 'true'
+      shell: bash
+      working-directory: vendor/apack-terminal
+      run: |
+        rustup show active-toolchain
+        cargo xtask package

@@ -1,7 +1,8 @@
 // Keeps this machine's rebuildable build caches inside a budget: `npm run janitor` once, `npm run janitor:install` to
 // have launchd run it every hour. `--dry` says what it would remove and removes nothing.
 //
-// Its reach is the elmdb checkout `vendor/elmdb` links to and every worktree of it, which is where the disk went:
+// Its reach is every Rust checkout linked under `vendor/` and every worktree of each, derived rather than named
+// (`lib/vendored-checkouts.ts`), so a sibling is covered the day it is linked. That is where the disk went:
 // rustc's incremental sessions accumulate one directory per compilation unit, and a unit whose features or flags
 // change starts another without removing the last — 270 of them, 11 GB, in two days of one checkout. What it may
 // remove, and when, is `lib/janitor-policy.ts`. Every removal in a Rust target holds that profile's `.cargo-lock`,
@@ -13,9 +14,8 @@ import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import {
-  type IncrementalUnit, limitsFor, planIncrementalEviction, planTmpRemoval,
-} from './lib/janitor-policy.ts';
+import { type IncrementalUnit, limitsFor, planIncrementalEviction, planTmpRemoval } from './lib/janitor-policy.ts';
+import { rustCheckoutsIn, vendoredCheckouts } from './lib/vendored-checkouts.ts';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..');
 const LABEL = 'dev.apack.janitor';
@@ -39,15 +39,18 @@ function freeBytes(): number {
 
 const run = (command: string, args: string[], cwd?: string) => spawnSync(command, args, { cwd, encoding: 'utf8' });
 
-/** The elmdb checkout `vendor/elmdb` links to, and its worktrees */
-function elmdbCheckouts(): string[] {
-  let main: string;
-  try { main = fs.realpathSync(path.join(REPO_ROOT, 'vendor', 'elmdb')); } catch { return []; }
+/** A checkout and every worktree of it, each of which builds into a target directory of its own */
+function worktreesOf(main: string): string[] {
   const listed = run('git', ['-C', main, 'worktree', 'list', '--porcelain']);
   const worktrees = listed.status === 0
     ? listed.stdout.split('\n').filter((line) => line.startsWith('worktree ')).map((line) => line.slice('worktree '.length))
     : [main];
   return [...new Set(worktrees)].filter((dir) => fs.existsSync(dir));
+}
+
+/** Every Rust checkout linked under `vendor/`, worktrees included */
+function rustCheckouts(): string[] {
+  return [...new Set(rustCheckoutsIn(vendoredCheckouts(REPO_ROOT)).flatMap(worktreesOf))];
 }
 
 /** A target's profile directories: those cargo locks, `target/debug` and `target/<triple>/debug` alike */
@@ -173,9 +176,24 @@ else {
   const before = freeBytes();
   const limits = limitsFor(before);
   say(`--- ${new Date().toISOString()}${dry ? ' (dry)' : ''}: ${gb(before)} free`);
-  const checkouts = elmdbCheckouts();
-  sweepRust(checkouts, limits.incrementalBudgetBytes, limits.sweepDays);
-  sweepTestTmp(checkouts);
+  // **A refusal is reported into the log this writes, not thrown past it.** `rustCheckoutsIn` refuses an
+  // empty `vendor/` on purpose, and thrown from here that refusal escaped before `writeLog()` — the only
+  // thing that trims the log to `LOG_LINES`. So an hourly launchd run with no link appended a stack trace to
+  // the one file this script exists to keep bounded, for ever, and swept nothing while doing it.
+  let checkouts: string[] = [];
+  let refused: unknown;
+  try {
+    checkouts = rustCheckouts();
+  } catch (error) {
+    refused = error;
+  }
+  if (refused === undefined) {
+    sweepRust(checkouts, limits.incrementalBudgetBytes, limits.sweepDays);
+    sweepTestTmp(checkouts);
+  } else {
+    say(`swept nothing: ${refused instanceof Error ? refused.message : String(refused)}`);
+  }
   say(`${gb(freeBytes())} free`);
   if (!dry) writeLog();
+  if (refused !== undefined) process.exit(1);
 }

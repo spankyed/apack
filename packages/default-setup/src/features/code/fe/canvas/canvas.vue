@@ -289,14 +289,20 @@ const selectFile = (path: string) => {
 const killTerminal = (path: string) => actor.send({ type: 'KILL_TERMINAL', path })
 const moveToPanel = (path: string) => actor.send({ type: 'MOVE_TERMINAL_TO_PANEL', path })
 
+/**
+ * Starts a new shell under this terminal, as the panel's menu does.
+ *
+ * **A restart is one event, and closing-then-creating is not it** (T6). Killing the terminal and creating
+ * another produced a different id, so this tab was removed and a new one appended at the end — losing the
+ * terminal's place, and, since pinned tabs are no longer exempt from removal, losing a pinned tab outright.
+ * It also silently downgraded the shell: `terminal.CREATE` carries only a title and a cwd, so a zsh terminal
+ * came back as the platform default. `terminal.RESTART` keeps the id, the tab, its position and the
+ * transcript of what came before, and re-opens the shell the terminal already had.
+ */
 const restartTerminal = (path: string) => {
   const file = openFiles.value.find(f => f.path === path) as any
   if (!file?.isTerminal) return
-  // `terminal.CREATE` carries no shell — the child forwards only title and cwd to the system — so reopening takes
-  // the default shell, as it always has
-  const { cwd } = file.terminalInfo
-  actor.send({ type: 'KILL_TERMINAL', path })
-  terminalActor?.send({ type: 'terminal.CREATE', cwd, target: 'tab' })
+  terminalActor?.send({ type: 'terminal.RESTART', terminalId: file.terminalInfo.id })
 }
 
 const closeFile = (path: string) => actor.send({ type: 'CLOSE_TAB', path })

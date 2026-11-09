@@ -368,9 +368,15 @@ export function orderedSteps(given: readonly ChainStep[] = CHAIN_STEPS): readonl
  */
 /**
  * The files every step really does read: the installed toolchain, because a dependency moving changes what any of
- * them do, by the records that pin it — the lockfile, and the elmdb commit `vendor/elmdb` links (`vendor/elmdb.rev`),
- * which `@apackdev/ears` builds against and loads. Like the lockfile for `node_modules`, the pin stands for what it
- * names: a change to the elmdb checkout not yet pinned is no input.
+ * them do, by the records that pin it — the lockfile, and every vendored checkout's commit (`vendor/*.rev`).
+ * Like the lockfile for `node_modules`, a pin stands for what it names: a change to a vendored checkout not yet
+ * pinned is no input.
+ *
+ * **Derived from the pins rather than naming a checkout**, so a third sibling is declared the day its `.rev` is
+ * committed — which is the rule the guide states for everything that reads `vendor/`. The `.rev` files are tracked,
+ * where the links beside them are not, so this reads the same here as in CI; naming `vendor/elmdb.rev` alone left
+ * every leg that compiles against `apack-terminal` with nothing to re-run it, and only CI could see that, since a
+ * sibling checkout's reads resolve outside the repo entirely.
  *
  * **`package.json` is not here**, and that is the point. Hashing the whole manifest to key on each step's
  * command would turn an edit to one script into a full chain. A unit carries its own `command`
@@ -380,7 +386,11 @@ export function orderedSteps(given: readonly ChainStep[] = CHAIN_STEPS): readonl
  * changes `EVERY_WORKSPACE`, which changes the declared path list, which `fingerprintUnit` hashes. And
  * each workspace's own manifest is already an input through `WORKSPACE_PARTS`.
  */
-const ROOT = ['package-lock.json', 'vendor/elmdb.rev'];
+const VENDOR_PINS = fs.existsSync(path.join(REPO_ROOT, 'vendor'))
+  ? fs.readdirSync(path.join(REPO_ROOT, 'vendor')).filter((name) => name.endsWith('.rev')).sort()
+    .map((name) => `vendor/${name}`)
+  : [];
+const ROOT = ['package-lock.json', ...VENDOR_PINS];
 
 /**
  * The root vitest config a run of one half uses — which projects it pools is an input to every suite in it.
@@ -556,6 +566,24 @@ const APP_RUNNER = ['scripts/build-runtime.ts', 'scripts/lib/runtime-build-legs.
   'scripts/lib/chain-schedule.ts', 'scripts/lib/exit-on-epipe.ts', 'scripts/lib/measure.ts'];
 
 /**
+ * What every vitest config loads into every test file, whichever suite it belongs to.
+ *
+ * **They are the runner, not a dependency, which is why they were missing.** Each config names them by a
+ * relative path (`../apack-testing/src/…`) rather than importing `@apackdev/testing`, so they reach no
+ * package manifest — and `suiteInputs` derives a suite's dependency sources from what its workspace
+ * *declares*. Measured: nine of the thirteen unit suites did not cover this guard, and the four that did
+ * covered it by accident, through declaring `@apackdev/testing` for other reasons. So an edit to the thing
+ * that bounds every test in the repo — the guard that fails a stalled process tree or a spent CPU budget —
+ * left nine suites' projects fresh and their last pass standing.
+ *
+ * One list with two readers: `SUITE_RUNNER` puts them in every project's cache key, and
+ * `suite-reads.spec.ts` holds every suite to covering them. `suite-timeouts.spec.ts` asks the other half,
+ * that each config loads them at all, so between the three a config and its cache key cannot disagree.
+ */
+export const SUITE_SETUP_FILES = ['packages/apack-testing/src/vitest-exit-with-parent.ts',
+  'packages/apack-testing/src/vitest-progress-guard.ts'];
+
+/**
  * What *runs* a unit suite, as against what the suite reads — and an input to every project all the same.
  *
  * These decide what runs and how: the runner picks which projects a pool runs, `unit-suites.ts` says which
@@ -574,7 +602,7 @@ const SOURCE_RUNNER = ['scripts/with-source.mjs', 'packages/apack-host/src/build
 const SUITE_RUNNER = ['scripts/test-unit-pool.ts', 'scripts/lib/unit-pool.ts', 'scripts/lib/unit-suites.ts',
   'scripts/lib/exit-on-epipe.ts', ...SOURCE_RUNNER, 'scripts/lib/spec-durations.ts',
   'scripts/lib/spec-durations-reporter.ts', 'scripts/lib/over-budget.ts', 'scripts/lib/test-timeouts.ts',
-  'scripts/lib/spec-halves.ts', 'scripts/lib/chain-only.ts', ...BOUNDED_RUNNER];
+  'scripts/lib/spec-halves.ts', 'scripts/lib/chain-only.ts', ...SUITE_SETUP_FILES, ...BOUNDED_RUNNER];
 /**
  * What `build:default-setup` writes. `src/__generated__` is under the `src` it also reads, so it has to be declared:
  * `fingerprintUnit` excludes a unit's own output from its own fingerprint, and that is what stops the step
@@ -726,7 +754,12 @@ export function suiteInputs(suite: UnitSuite, half: Half): string[] {
     // A suite's half runs under one root config, so which projects that config pools is an input to it
     ...rootConfigFor(suite, half),
     // The native pool's Docker scratch policy is part of both the outer and per-project verdict.
-    ...(half === 'native' ? ['scripts/linux-runner.ts', 'scripts/lib/linux-native-scratch.ts', 'scripts/linux/Dockerfile'] : []),
+    // `vendored-checkouts.ts` is one of the runner's own modules and belongs here with them: it decides
+    // which Rust toolchain the image installs, and the toolchain is part of the image tag — so an edit to it
+    // changes the container this suite runs in, and without the declaration the step reports itself cached.
+    ...(half === 'native'
+      ? ['scripts/linux-runner.ts', 'scripts/lib/linux-native-scratch.ts', 'scripts/lib/vendored-checkouts.ts', 'scripts/linux/Dockerfile']
+      : []),
     ...SUITE_RUNNER,
     ...suiteWorkspace(suite.dir),
     ...workspaceDeps(suite.dir).flatMap(dependencySource),

@@ -24,7 +24,7 @@ import type { CliDirs } from '../../src/app/pack-host';
 import { _declarationRevision, PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
 import { sealPackBuild, PACK_LAYOUT } from '@apackdev/host/packs';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
-import { _settles } from '@apackdev/sdk/testing/waiting';
+import { settles } from '@apackdev/sdk/testing/waiting';
 
 // `--profile` resolves a name through the CLI's own data dir, which is the real one on this machine.
 // Pointing it at a temp tree is the only way to test the lookup without reading whatever profiles the
@@ -532,7 +532,7 @@ describe('apack db exec', () => {
       async function* lines() {
         yield `${invalid}\n`;
         // A stream reads ahead, so the first line's answer is what says it ran
-        await _settles(() => expect(refused()).toHaveLength(1));
+        await settles(() => expect(refused()).toHaveLength(1));
         // Uninstalled while the session is open: the threads feature's settings are no longer declared
         fs.rmSync(packDir, { recursive: true });
         yield `${invalid}\n`;

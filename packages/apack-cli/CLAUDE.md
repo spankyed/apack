@@ -130,8 +130,11 @@ interrupted exit. Its synchronous test runners and later publishing phases keep 
 `build/compiler-installation.ts` copies bytes supplied by the host's normalized package-input graph,
 preserves physical module/link resolution and executable bits, verifies the copy and makes its inputs
 read-only. **The copy lives in a machine-wide store, one entry per input** (`compilerStoreRoot`:
-`<cliDirs cache>/compilers`, `APACK_COMPILER_STORE` overrides it), keyed by the source graph, the runtime's
-contents and the esbuild selection. Every build and process with the same inputs reuses that entry, verified
+`<cliDirs cache>/compilers`, `APACK_COMPILER_STORE` overrides it), keyed by the capturing checkout's
+directory, the source graph, the runtime's contents and the esbuild selection. The directory is part of it
+because `capturedPathIn` files every source under its *absolute* path and the replay resolves it there, so an
+entry only ever serves the checkout that made it: keyed on contents alone, two worktrees sharing one
+`package-lock.json` agreed on a key and the second replayed a tree holding the first one's paths. Every build and process with the same inputs reuses that entry, verified
 exactly as a fresh capture is, so the runtime and compiler executables keep one path and macOS assesses them
 once rather than per build. A damaged entry is captured again under a cross-process lock. Each holder marks its
 entry in use (`<entry>.users/<pid>-…`) until it disposes the installation, and a capture that adds an entry prunes

@@ -1,7 +1,7 @@
 # Terminal runtime refactor target
 
 Status: **active as design, through
-[goal-terminal-ownership](../goals/goal-terminal-ownership.md)**, which owns the delivery this document
+[goal-terminal-ownership](../archive/goals/goal-terminal-ownership.md)**, which owns the delivery this document
 describes and settles the decisions it left to activation. Read the goal first: it keeps xterm.js and takes
 the [ghostty-web migration](xterm-to-ghostty-web.md) out of scope, so the order this document originally
 named — migration first, then this — is **inverted**. The reason is that both are answers to who owns a
@@ -467,7 +467,7 @@ surface as actionable UI outcomes.
 
 | Option | Benefit | Limitation | Recommendation |
 |---|---|---|---|
-| TypeScript host with node-pty and browser Ghostty | Lowest change cost; enough for many review fixes | Headless state/detection still need a reliable owner; API lifetime remains process lifetime unless another host is introduced | Keep as the delivered baseline while proving the target |
+| TypeScript host with node-pty and browser Ghostty | Lowest change cost; enough for many review fixes | Headless state/detection still need a reliable owner; API lifetime remains process lifetime unless another host is introduced | Not taken: the Rust broker below was built instead, and node-pty is gone from the tree |
 | Separate Node PTY host | Can preserve sessions across API restarts without Rust | Still needs headless VT, native platform handling and bounded protocols | Valid cheaper alternative if it meets the same contracts; compare during the spike |
 | Rust native addon inside API | Efficient native access | Shares API crash/lifetime boundary; cannot supply the main persistence guarantee | Useful for bindings, insufficient as final runtime ownership |
 | Rust broker plus upstream Ghostty core | Headless state, independent lifetime and native handle ownership | Native release/FFI costs; browser state handoff must be proven | Preferred long-term target |

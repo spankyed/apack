@@ -12,7 +12,7 @@ import { isElfSystemLibrary } from '../../src/build/compiler-elf-environment.ts'
 import { nativeAddonSource } from '../_support/native-addon.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
-import { _settles } from '@apackdev/sdk/testing/waiting';
+import { settles } from '@apackdev/sdk/testing/waiting';
 
 const sharedCompiler = shareCompilerInstallation();
 
@@ -80,7 +80,7 @@ it.runIf(process.platform === 'linux')('owns retained ELF libraries, preserves V
     const view = `http://localhost:${frontend.address.port}/src/View.vue`;
     expect(await (await fetch(view)).text()).toContain('ELF_BEFORE');
     fs.writeFileSync(path.join(pack, 'src/View.vue'), '<template>ELF_AFTER</template>');
-    await _settles(async () => expect(await (await fetch(view)).text()).toContain('ELF_AFTER'));
+    await settles(async () => expect(await (await fetch(view)).text()).toContain('ELF_AFTER'));
     expect(await frontend.isCurrent(signal)).toBe(true);
     const outside = path.join(root, 'outside/liboutside.so');
     await buildLibrary(outside, 22, outside);

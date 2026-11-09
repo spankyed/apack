@@ -1,220 +1,54 @@
-import { surfaceStorage } from '@apackdev/sdk/fe'
-import { ref as featureRef } from '#generated/ref.ts'
-
-/** This surface's window storage: the prefix is its ref, so these names are scoped to it. */
-const storage = surfaceStorage(featureRef('code'))
 type TerminalOutputHandler = (terminalId: string, data: string) => void
 
+/**
+ * Fan-out for a terminal's output: the system broadcasts it, this hands it to whoever is drawing.
+ *
+ * **It keeps no copy, and deleting the one it kept is the point.** It used to hold every terminal's whole
+ * output as a string, concatenated on each chunk — which is quadratic in the output's length, on the
+ * renderer's main thread (F3) — and persist it to window storage on a 500 ms debounce, up to a megabyte per
+ * terminal per burst, synchronously (F6). Those were a second and third copy of a scrollback the emulator
+ * already holds, and the goal that removed them says to delete rather than repair: a cheaper buffer here
+ * would still be a copy nothing needs.
+ *
+ * **Where the scrollback lives now.** In the emulator, which the pool keeps alive across a host's teardown —
+ * measured: a reattach with 256 KiB of history takes 5.55 ms and the backend sends not one message, because
+ * nothing is replayed. What a *fresh* emulator shows is therefore a fresh screen, and history for that case
+ * is the broker's bounded history to serve, which is where a terminal's scrollback belongs: one copy, in the
+ * process that owns the session.
+ */
 class TerminalEventBus {
   private handlers = new Map<string, Set<TerminalOutputHandler>>()
-  private outputs = new Map<string, string>()
-  /** One name per terminal under this stem; `storage.names()` sweeps them without knowing the prefix. */
-  private readonly OUTPUT_STEM = 'terminal-output:'
-  private readonly USE_LOCAL_STORAGE = true // Can be made configurable
-  private readonly MAX_OUTPUT_LENGTH = 1000000 // 1MB limit per terminal
-  private saveTimers = new Map<string, NodeJS.Timeout>()
-  private readonly SAVE_DEBOUNCE_MS = 500 // Debounce storage writes
-  
-  constructor() {
-    // Load any persisted outputs from this surface's storage on startup
-    if (this.USE_LOCAL_STORAGE && typeof window !== 'undefined') {
-      this.loadFromLocalStorage()
-    }
-  }
-  
-  private loadFromLocalStorage() {
-    try {
-      // Find this surface's terminal output names
-      for (const name of storage.names()) {
-        if (name.startsWith(this.OUTPUT_STEM)) {
-          const terminalId = name.substring(this.OUTPUT_STEM.length)
-          const output = storage.get(name)
-          if (output) {
-            this.outputs.set(terminalId, output)
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to load terminal outputs from storage:', e)
-    }
-  }
-  
-  private saveToLocalStorage(terminalId: string, output: string) {
-    if (!this.USE_LOCAL_STORAGE || typeof window === 'undefined') return
 
-    // Clear existing timer for this terminal
-    const existingTimer = this.saveTimers.get(terminalId)
-    if (existingTimer) {
-      clearTimeout(existingTimer)
-    }
-
-    // Set new debounced save
-    const timer = setTimeout(() => {
-      try {
-        storage.set(this.OUTPUT_STEM + terminalId, output)
-        this.saveTimers.delete(terminalId)
-      } catch (e) {
-        // Handle quota exceeded or other errors
-        console.warn('Failed to save terminal output to storage:', e)
-
-        // If quota exceeded, try to clear orphaned entries first
-        if (e instanceof Error && e.name === 'QuotaExceededError') {
-          this.reclaimQuota(terminalId)
-          // Retry once after clearing
-          try {
-            storage.set(this.OUTPUT_STEM + terminalId, output)
-          } catch (retryError) {
-            console.error('Failed to save even after reclaiming quota:', retryError)
-          }
-        }
-      }
-    }, this.SAVE_DEBOUNCE_MS)
-
-    this.saveTimers.set(terminalId, timer)
-  }
-  
-  private removeFromLocalStorage(terminalId: string) {
-    if (!this.USE_LOCAL_STORAGE || typeof window === 'undefined') return
-    
-    try {
-      storage.remove(this.OUTPUT_STEM + terminalId)
-    } catch (e) {
-      console.warn('Failed to remove terminal output from storage:', e)
-    }
-  }
-  
   subscribe(terminalId: string, handler: TerminalOutputHandler) {
-    if (!this.handlers.has(terminalId)) {
-      this.handlers.set(terminalId, new Set())
+    let handlers = this.handlers.get(terminalId)
+    if (!handlers) {
+      handlers = new Set()
+      this.handlers.set(terminalId, handlers)
     }
-    this.handlers.get(terminalId)!.add(handler)
-    
-    // Return unsubscribe function
+    handlers.add(handler)
+
     return () => {
-      const handlers = this.handlers.get(terminalId)
-      if (handlers) {
-        handlers.delete(handler)
-        if (handlers.size === 0) {
-          this.handlers.delete(terminalId)
-        }
-      }
+      const live = this.handlers.get(terminalId)
+      if (!live) return
+      live.delete(handler)
+      if (live.size === 0) this.handlers.delete(terminalId)
     }
   }
-  
+
+  /** Hands `data` to this terminal's subscribers, and keeps none of it */
   emit(terminalId: string, data: string) {
-    // Store the output efficiently
-    const existingOutput = this.outputs.get(terminalId)
-    let currentOutput: string
-    
-    if (existingOutput) {
-      // Use array join for better performance with large strings
-      currentOutput = existingOutput + data
-    } else {
-      currentOutput = data
-    }
-    
-    // Apply size limit with circular buffer behavior. Trim on a newline
-    // boundary so we never split an ANSI escape sequence mid-bytes, which
-    // would silently corrupt replay colors/cursor/etc. on the next app
-    // start. Falls back to the raw cut only in the degenerate case where
-    // no newline appears in the keep window (e.g. a single very long line).
-    if (currentOutput.length > this.MAX_OUTPUT_LENGTH) {
-      const keepLength = Math.floor(this.MAX_OUTPUT_LENGTH * 0.9)
-      const cut = currentOutput.length - keepLength
-      const nl = currentOutput.indexOf('\n', cut)
-      currentOutput = nl >= 0 ? currentOutput.slice(nl + 1) : currentOutput.slice(cut)
-    }
-    
-    this.outputs.set(terminalId, currentOutput)
-    this.saveToLocalStorage(terminalId, currentOutput) // Now debounced
-    
-    // Notify all handlers
     const handlers = this.handlers.get(terminalId)
-    if (handlers) {
-      handlers.forEach(handler => handler(terminalId, data))
-    }
+    if (!handlers) return
+    for (const handler of handlers) handler(terminalId, data)
   }
-  
-  getOutput(terminalId: string): string {
-    return this.outputs.get(terminalId) || ''
-  }
-  
+
+  /** Forgets a terminal's subscribers. There is no output to forget */
   clearOutput(terminalId: string) {
-    // Cancel any pending saves
-    const timer = this.saveTimers.get(terminalId)
-    if (timer) {
-      clearTimeout(timer)
-      this.saveTimers.delete(terminalId)
-    }
-    
-    this.outputs.delete(terminalId)
-    this.removeFromLocalStorage(terminalId)
+    this.handlers.delete(terminalId)
   }
-  
+
   clearAll() {
-    // Cancel all pending saves
-    for (const timer of this.saveTimers.values()) {
-      clearTimeout(timer)
-    }
-    this.saveTimers.clear()
-    
-    // Clear all outputs
-    for (const terminalId of this.outputs.keys()) {
-      this.removeFromLocalStorage(terminalId)
-    }
-    this.outputs.clear()
-  }
-
-  prunePersistedOutputs(liveTerminalIds: Iterable<string>) {
-    if (!this.USE_LOCAL_STORAGE || typeof window === 'undefined') return
-
-    try {
-      const liveIds = new Set(liveTerminalIds)
-      const prefix = this.OUTPUT_STEM
-      const staleKeys: string[] = []
-
-      for (const key of storage.names()) {
-        if (!key || !key.startsWith(prefix)) continue
-        const id = key.substring(prefix.length)
-        if (!liveIds.has(id)) staleKeys.push(key)
-      }
-
-      for (const key of staleKeys) {
-        storage.remove(key)
-      }
-    } catch (e) {
-      console.warn('Failed to prune stale terminal output cache:', e)
-    }
-  }
-  
-  /**
-   * Reclaim storage quota without destroying active terminal scrollback.
-   * Drops only entries whose terminal id isn't known to this session — those
-   * are stale from prior runs (terminal was killed or app was closed without
-   * cleanup). The currently-writing terminal (`activeId`) and every entry in
-   * `this.outputs` are preserved. We do not fall back to deleting live
-   * entries; if this isn't enough to recover quota, the save simply fails
-   * and is logged by the caller — better than silently losing scrollback.
-   */
-  private reclaimQuota(activeId: string) {
-    try {
-      const prefix = this.OUTPUT_STEM
-      const liveIds = new Set<string>(this.outputs.keys())
-      liveIds.add(activeId)
-
-      const orphanKeys: string[] = []
-      for (const key of storage.names()) {
-        if (!key || !key.startsWith(prefix)) continue
-        const id = key.substring(prefix.length)
-        if (!liveIds.has(id)) orphanKeys.push(key)
-      }
-
-      for (const key of orphanKeys) {
-        storage.remove(key)
-      }
-    } catch (e) {
-      console.error('Failed to reclaim storage quota:', e)
-    }
+    this.handlers.clear()
   }
 }
 

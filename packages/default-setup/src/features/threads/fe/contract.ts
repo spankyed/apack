@@ -83,6 +83,17 @@ export interface ThreadsContext {
   detailMessageIds: string[];
   /** Each listed message as its own view last gave it */
   messageContents: Record<string, Partial<MessageEntity>>;
+  /**
+   * The characters of a streamed reply that have arrived since the message's row was last written, by
+   * message id: `at` is the offset the run starts at (G1).
+   *
+   * **The run is spliced onto the row rather than replacing it**, so the two channels cannot disagree: the
+   * row is what the view gave, the run is what has arrived since, and a window that opened mid-stream has a
+   * run starting past the end of its row and shows the row until the next durable write catches it up.
+   */
+  messageStreams: Record<string, { at: number; text: string }>;
+  /** A growing block's run, per message: which block it belongs to, from where, and what has arrived */
+  messageBlockStreams: Record<string, { block: string; at: number; text: string }>;
   /** The messages a view is followed for */
   messageViews: string[];
   /** The open tabs a view is followed for */

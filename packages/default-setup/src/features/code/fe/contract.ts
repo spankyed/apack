@@ -82,6 +82,15 @@ export interface PromptTab {
 }
 
 export type CodeContext = {
+  /**
+   * Whether this window is the one that keeps the app's layout (M5).
+   *
+   * Every window has its own copy of the window storage but they share its names, so two windows showing
+   * this surface kept their tabs under one key: each restored the other's and each rewrote them. The shell
+   * answers it on `SURFACE_STARTED` — the same fact it records the last-open surface by — and a popout
+   * reads the layout and writes none. Defaults true, since a window that was never told is the only one.
+   */
+  ownsAppLayout: boolean
   baseDirectory: string
   openFiles: (OpenFile | TerminalTab | ActionTab | PromptTab)[]
   activeFilePath: string | null
@@ -122,7 +131,12 @@ export type CodeContext = {
 export type CodeInboxEvent =
   | {type: 'OPEN_CLAUDE_PROFILE_SETUP'}
   | { type: 'UPDATE_STATE'; updates: Partial<CodeContext> }
-  | { type: 'terminal.CREATE'; target: string; command: string; cwd?: string }
+  /**
+   * Open a terminal. Every field is optional because the surface's own senders pass `cwd` alone, and
+   * `target` is the literal the child acts on rather than any string: it routes `'tab'` to a tab and
+   * anything absent to the panel.
+   */
+  | { type: 'terminal.CREATE'; title?: string; cwd?: string; target?: 'tab'; command?: string }
   | { type: 'explorer.SET_BASE_DIRECTORY'; path: string }
   | { type: 'explorer.OPEN_FILE'; path: string }
   | { type: 'codeActions.OPEN_ACTION'; actionId: EARS.EntityId }

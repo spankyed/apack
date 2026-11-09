@@ -54,8 +54,19 @@
       <!-- Terminal view (left) -->
       <div class="flex-1 min-w-0">
         <TrackedContextMenuRoot v-if="activeTerminalInfo">
+          <!--
+            **The container is a child of the trigger's element, never the element itself.** `as-child` makes
+            reka-ui clone this trigger's child, and a template ref bound on the element it clones is bound for
+            the first instance of this component in the process and no later one: a remount reaches
+            `attachTerminal` with `container` undefined, returns at its own guard and draws nothing — no error,
+            no warning, a blank panel until the window is reloaded. A `SurfaceScope` replacement or this
+            section being `v-if`'d out and back is such a remount. `TerminalView.vue` was never affected
+            because its ref is a grandchild of the trigger, which is the shape this now matches.
+          -->
           <ContextMenuTrigger as-child>
-            <div ref="container" class="w-full h-full bg-[#1e1e1e]"></div>
+            <div class="w-full h-full">
+              <div ref="container" class="w-full h-full bg-[#1e1e1e]"></div>
+            </div>
           </ContextMenuTrigger>
           <ContextMenuPortal>
             <ContextMenuContent :class="MENU_CONTENT_CLASS" :side-offset="5">
@@ -131,6 +142,14 @@
                 />
               </div>
               <span v-else class="flex-1 min-w-0 truncate">{{ getTerminalDisplayName(terminal) }}</span>
+              <!-- **A terminal whose shell died is kept so its last output can be read**, which only works
+                   if the list says so: drawn like a live one, it invites typing that goes nowhere and gives
+                   no reason for the screen having stopped. -->
+              <span
+                v-if="terminal.exited"
+                class="flex-shrink-0 text-[10px] uppercase tracking-wide text-amber-500/80"
+                :title="exitedTitle(terminal)"
+              >exited</span>
               <button
                 v-if="renamingTerminalId !== terminal.id"
                 @click.stop="handleCloseTerminal(terminal)"
@@ -214,14 +233,13 @@ import { MENU_ITEM_CLASS, MENU_ITEM_DANGER_CLASS, MENU_CONTENT_CLASS, MENU_SEPAR
 import type { CodeState } from '#features/code/fe/state.ts'
 import type { TerminalInfo } from './state.ts'
 import { terminalPool } from '#features/code/fe/utils/terminal-pool.ts'
+import { terminalNameFor } from '#features/code/fe/utils/terminal-name.ts'
 import { useTerminalActions } from '#features/code/fe/composables/useTerminalActions.ts'
 import RunScriptPopover from './RunScriptPopover.vue'
 import ContextMenuPopup from '@apackdev/ui/design/ContextMenuPopup'
 import { useSectionVisibilityMenu } from '#features/code/fe/composables/useSectionVisibilityMenu.ts'
 import type { TerminalScript } from '#generated/types.ts'
-import type { Terminal } from '@xterm/xterm'
-import type { FitAddon } from '@xterm/addon-fit'
-import type { IDisposable } from '@xterm/xterm'
+import type { TerminalAttachment } from '#features/code/fe/utils/terminal-pool.ts'
 import { codeChild } from '../children.ts';
 
 const props = withDefaults(defineProps<{ height?: number }>(), { height: 256 })
@@ -262,121 +280,102 @@ const listWidth = ref(125)
 const MIN_LIST_WIDTH = 80
 const MAX_LIST_WIDTH = 300
 
-// Terminal rendering
+// Terminal rendering. **The whole of this host's reach into the terminal is its attachment**: the pool owns
+// the emulator, its listeners and its size observer, so nothing here holds an emulator type.
 const hasSelection = ref(false)
-let term: Terminal | null = null
-let fitAddon: FitAddon | null = null
-let resizeObserver: ResizeObserver | null = null
-let attachedTerminalId: string | null = null  // tracks which terminal is actually attached to the DOM
-const viewDisposables: IDisposable[] = []
+let attachment: TerminalAttachment | null = null
+
+/** Set by `selectTerminal`, read by the attach it causes: whether this attach is a user's request (F15) */
+let focusOnAttach = false
+
+/** What a terminal whose shell has gone says when you hover it */
+const exitedTitle = (terminal: TerminalInfo) => terminal.exited?.code == null
+  ? 'The shell ended without a status (a signal)'
+  : `The shell ended with status ${terminal.exited.code}`
 
 const attachTerminal = (terminalId: string) => {
   const info = terminals.value.find((t: TerminalInfo) => t.id === terminalId)
-  if (!container.value || !info) return
+  if (!container.value || !info) {
+    // **The request dies with the attach it was made for.** `selectTerminal` arms the flag because the
+    // selection is what attaches, a tick later — and in that tick the panel can collapse, the host can be
+    // replaced, or this terminal can leave the list, any of which lands here. A flag left armed is spent by
+    // whatever attaches next — a re-open, a remount, a reconnect-driven list — stealing focus from whatever
+    // the user is typing in, which is the defect it exists to prevent (F15).
+    focusOnAttach = false
+    return
+  }
 
-  const sendInput = (data: string) => {
+  terminalPool.ensure(info, data => {
     terminalActor?.send({ type: 'terminal.INPUT', terminalId, data })
+  })
+  attachment = terminalPool.attach(terminalId, container.value, {
+    onResize: ({ cols, rows }) => {
+      terminalActor?.send({ type: 'terminal.RESIZE', terminalId, cols, rows })
+    },
+    onSelectionChange: has => { hasSelection.value = has },
+  })
+
+  // **Focused only when the user asked for this terminal** (F15). An attach happens on mount too — a panel
+  // re-open, an actor replacement, a reconnect — none of which is a request, and taking focus from what they
+  // were typing in is the defect. `selectTerminal` is the request, and sets the flag this reads.
+  if (focusOnAttach) {
+    focusOnAttach = false
+    attachment?.focus()
   }
-
-  const entry = terminalPool.ensure(info, sendInput)
-  terminalPool.attach(terminalId, container.value)
-  attachedTerminalId = terminalId
-
-  term = entry.term
-  fitAddon = entry.fitAddon
-
-  // Defer fit to next frame so the browser has laid out the re-attached wrapper
-  requestAnimationFrame(() => {
-    fitAddon?.fit()
-    sendResize(terminalId)
-    terminalPool.syncViewport(terminalId)
-  })
-
-  viewDisposables.push(term.onWriteParsed(() => {
-    term?.scrollToBottom()
-  }))
-
-  viewDisposables.push(term.onResize(({ cols, rows }) => {
-    terminalActor?.send({ type: 'terminal.RESIZE', terminalId, cols, rows })
-  }))
-
-  viewDisposables.push(term.onSelectionChange(() => {
-    hasSelection.value = !!term?.getSelection()
-  }))
-
-  resizeObserver = new ResizeObserver(() => {
-    requestAnimationFrame(() => {
-      fitAddon?.fit()
-      if (attachedTerminalId) terminalPool.syncViewport(attachedTerminalId)
-    })
-  })
-  resizeObserver.observe(container.value)
-
-  term.focus()
 }
 
-const detachTerminal = () => {
-  resizeObserver?.disconnect()
-  resizeObserver = null
-  for (const d of viewDisposables) {
-    try { d.dispose() } catch { /* ignore */ }
-  }
-  viewDisposables.length = 0
-  if (attachedTerminalId) {
-    terminalPool.detach(attachedTerminalId)
-    attachedTerminalId = null
-  }
+/**
+ * Lets go of whatever this host is drawing.
+ *
+ * `handingOver` says an attach for the terminal the user asked for follows in this same turn — a switch from
+ * one terminal to another — in which case the request to focus is still that attach's and must survive.
+ * Clearing it unconditionally made the flag dead for the one case it exists for: every switch detaches
+ * first, so clicking a terminal while another was drawn here cleared the request before the attach could
+ * spend it, and the user's keystrokes went on reaching the list button they had clicked.
+ */
+const detachTerminal = ({ handingOver = false } = {}) => {
+  // Releasing is also how a host another has taken over from detaches nothing (F1)
+  attachment?.release()
+  attachment = null
   hasSelection.value = false
-  term = null
-  fitAddon = null
-}
-
-const sendResize = (terminalId: string) => {
-  if (!term) return
-  terminalActor?.send({
-    type: 'terminal.RESIZE',
-    terminalId,
-    cols: term.cols,
-    rows: term.rows
-  })
+  // Letting go ends any outstanding request to focus, for the same reason the guard above does: the attach
+  // it was armed for is not going to happen, and the next one is somebody else's
+  if (!handingOver) focusOnAttach = false
 }
 
 // Context menu actions
 const copySelection = () => {
-  if (!term) return
-  const selection = term.getSelection()
-  if (selection) navigator.clipboard.writeText(selection)
+  const selection = attachment?.selection()
+  // A clipboard the window may not write rejects; unhandled, that is a console error nobody can act on (F16)
+  if (selection) void navigator.clipboard.writeText(selection).catch(() => {})
 }
 
-const pasteClipboard = async () => {
-  if (!term || !panelTerminalId.value) return
-  const text = await navigator.clipboard.readText()
-  if (text) {
-    terminalActor?.send({ type: 'terminal.INPUT', terminalId: panelTerminalId.value, data: text })
-  }
+const pasteClipboard = () => {
+  // **Through the emulator, not as input** (F12). This host sent the text as a keystroke, so a pasted
+  // newline ran the command and no application ever saw the bracketed-paste markers it had asked for.
+  void navigator.clipboard.readText().then(text => {
+    if (text) attachment?.paste(text)
+  }).catch(() => {})
 }
 
-const selectAll = () => {
-  term?.selectAll()
-}
+const selectAll = () => attachment?.selectAll()
 
-const clearTerminal = () => {
-  term?.clear()
-}
+const clearTerminal = () => attachment?.clear()
 
 const killPanelTerminal = () => {
   if (!panelTerminalId.value) return
   terminalActor.send({ type: 'terminal.CLOSE', terminalId: panelTerminalId.value })
 }
 
+/**
+ * **Restart in place — T6.** Closing and creating produced a terminal with a *different id*, so everything
+ * attached to the old one went with it: its pin, its group, its position in the tab strip, and the output
+ * of the shell that just failed, which is usually what the user restarted it to read. The backend keeps the
+ * terminal and starts a new generation under it, so there is nothing here to carry across.
+ */
 const restartPanelTerminal = () => {
-  const info = activeTerminalInfo.value
-  if (!info || !panelTerminalId.value) return
-  // `terminal.CREATE` carries no shell — the event the child sends the system has only title and cwd — so the
-  // restarted terminal takes the default shell, as it always has. Passing `info.shell` here only looked otherwise.
-  const { cwd } = info
-  terminalActor.send({ type: 'terminal.CLOSE', terminalId: panelTerminalId.value })
-  terminalActor.send({ type: 'terminal.CREATE', cwd })
+  if (!panelTerminalId.value) return
+  terminalActor.send({ type: 'terminal.RESTART', terminalId: panelTerminalId.value })
 }
 
 // Actions
@@ -396,7 +395,9 @@ const runScript = (script: TerminalScript) => {
   const hasPanel = panelTerminalId.value && terminals.value.some((t: TerminalInfo) => t.id === panelTerminalId.value)
   if (hasPanel) {
     // Reuse existing panel terminal
-    terminalActor?.send({ type: 'terminal.INPUT', terminalId: panelTerminalId.value!, data: script.command + '\n' })
+    // Ended the way this shell ends a line (X6), which the descriptor carries because a window cannot know
+    const submit = terminals.value.find((t: TerminalInfo) => t.id === panelTerminalId.value)?.submit ?? '\n'
+    terminalActor?.send({ type: 'terminal.INPUT', terminalId: panelTerminalId.value!, data: script.command + submit })
   } else {
     // No panel terminal — create a new one
     terminalActor?.send({ type: 'terminal.CREATE', title: script.label, command: script.command })
@@ -429,6 +430,17 @@ const killAllTerminals = () => {
 }
 
 const selectTerminal = (terminalId: string) => {
+  // **Already drawn here, so the click is answered now** rather than armed for an attach that will not
+  // happen: the watch below skips `attachTerminal` when the attachment already names this terminal, so a
+  // flag set here would survive the click and be spent by the next attach — a panel re-open, an actor
+  // replacement, a reconnect — which is the F15 defect the flag exists to prevent. Arming it only where an
+  // attach is certain is what keeps the request from outliving the turn it was made in.
+  if (attachment?.terminalId === terminalId) {
+    attachment.focus()
+    return
+  }
+  // The selection is what attaches, a tick later, so the request is recorded rather than acted on here
+  focusOnAttach = true
   codeActor.send({ type: 'SELECT_PANEL_TERMINAL', terminalId })
 }
 
@@ -460,7 +472,9 @@ const startListResize = (e: MouseEvent) => {
     if (!rafPending) {
       rafPending = true
       requestAnimationFrame(() => {
-        fitAddon?.fit()
+        // Driven frame by frame while the divider is dragged; the size observer would catch up a layout
+        // pass behind, which is visible on a drag and nowhere else
+        attachment?.refit()
         rafPending = false
       })
     }
@@ -486,7 +500,7 @@ const renameInput = ref<HTMLInputElement[]>([])
 
 const startRename = (terminal: TerminalInfo) => {
   renamingTerminalId.value = terminal.id
-  renameValue.value = terminal.customTitle || terminal.cwd.split('/').filter(Boolean).pop() || terminal.title
+  renameValue.value = terminal.customTitle || terminalNameFor(terminal.cwd) || terminal.title
 }
 
 // Focus the rename input when it appears + click-outside to dismiss
@@ -535,7 +549,7 @@ onMounted(() => {
   const expanded = isExpanded.value
   const termId = panelTerminalId.value
   const info = activeTerminalInfo.value
-  if (expanded && termId && info && !attachedTerminalId) {
+  if (expanded && termId && info && !attachment) {
     attachTerminal(termId)
   }
 })
@@ -543,16 +557,20 @@ onMounted(() => {
 // Watch expand/collapse, panelTerminalId, and activeTerminalInfo (for when terminals list arrives after expand)
 watch([isExpanded, panelTerminalId, activeTerminalInfo], async ([expanded, termId, info]) => {
   if (expanded && termId && info) {
-    // Detach old terminal if switching
-    if (attachedTerminalId && attachedTerminalId !== termId) {
-      detachTerminal()
+    // Detach old terminal if switching, handing the pending focus request to the attach below
+    if (attachment && attachment.terminalId !== termId) {
+      detachTerminal({ handingOver: true })
     }
-    // Only attach if not already attached to this terminal
-    if (attachedTerminalId !== termId) {
+    // Only attach if not already attached to this terminal — the attachment names the one it holds
+    if (attachment?.terminalId !== termId) {
       await nextTick()
       attachTerminal(termId)
     }
-  } else if (!expanded || !termId) {
+  } else {
+    // **Anything else means there is nothing to draw**, the panel collapsed, no terminal selected, *and* a
+    // terminal that is gone from the list while still selected — which is the case this used to miss (T7):
+    // `expanded` and `termId` were both truthy, so neither branch ran and this host held an attachment to a
+    // session that no longer exists.
     detachTerminal()
   }
 })

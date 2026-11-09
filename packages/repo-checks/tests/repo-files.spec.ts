@@ -10,6 +10,19 @@ import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { repoFiles } from './_support/repo-files.ts';
 
 describe('repoFiles', () => {
+  /**
+   * The refusal, which is what the six checks built on this get for free.
+   *
+   * Each of them asserts that a *derived* set is empty — no spec outside this package imports repo tooling,
+   * no tracked file names a platform data dir — and that shape passes for nothing when the population it
+   * filtered was empty. The guard lives in `repoFiles` rather than in each caller, so this is the case that
+   * holds it: a pattern matching no file is a failure with a name, not six green checks over nothing.
+   */
+  it('refuses a population with nothing in it, rather than handing back none', () => {
+    expect(() => repoFiles('*.not-an-extension-this-repo-has'))
+      .toThrow(/passed? for the wrong reason|wrong reason/);
+  });
+
   it('is not empty, so everything below is about something', () => {
     expect(repoFiles().length).toBeGreaterThan(100);
   });

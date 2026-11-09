@@ -12,6 +12,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { BUILD_UNITS, publishedTreeDirs } from '@apackdev/host/build/packages-built';
 import { declaredPathFields, manifestPaths, missingPublishedPaths, type Manifest } from '@apackdev/host/build/published-manifest';
+import { population } from '@apackdev/sdk/testing';
 import { describe, expect, it } from 'vitest';
 import { PACKAGES_BUILT, PACKED_PACKAGES, workspacePackList } from '../src/published-packages.ts';
 
@@ -26,14 +27,14 @@ import { PACKAGES_BUILT, PACKED_PACKAGES, workspacePackList } from '../src/publi
  *
  * It reads the staged and generated trees npm publishes, not the workspace packages they are derived from.
  */
-const TREES = publishedTreeDirs();
+const TREES = Object.fromEntries(population('the published trees', Object.entries(publishedTreeDirs())));
 
 const manifestOf = (dir: string) => JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')) as Manifest;
 
 /** Packing costs ~0.3s a package, and four cases ask about the same five tarballs */
 const packed = new Map<string, Set<string>>();
 const filesOf = (dir: string): Set<string> => {
-  const known = packed.get(dir) ?? workspacePackList(dir);
+  const known = packed.get(dir) ?? new Set(population(`${dir}'s packed files`, [...workspacePackList(dir)]));
   packed.set(dir, known);
   return known;
 };

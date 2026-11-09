@@ -200,12 +200,60 @@ export interface TerminalInfo {
   id: EARS.EntityId
   title: string
   customTitle?: string // User-defined custom name, takes precedence over default
-  pid: number
+  /**
+   * The shell's process id, for a diagnostic — **`null` when it is not known**.
+   *
+   * A window tells one generation from the next by it, which is what draws the seam between a dead shell's
+   * output and its replacement's. It is unknown for a session the service took up again rather than started
+   * (the broker answers a pid only for a spawn), and that case is precisely the one where there is no
+   * boundary to draw: the shell is the one the window was already watching.
+   */
+  pid: number | null
   shell?: string
   cwd: string
   active: boolean
+  /**
+   * How many shells this terminal has had, counting from one.
+   *
+   * **A terminal is not its shell.** Its id, its tab and its place in that tab outlive the process behind
+   * it, so a shell that crashed and one the user restarted both leave the terminal where it was and start
+   * a new generation under it. The window tells one generation from the next by the pid and writes the
+   * seam; this is what says how many there have been, for a window that was not watching.
+   */
+  generation: number
+  /** The shell ended and the terminal was kept. Absent while one is running */
+  exited?: { code: number | null }
+  /**
+   * The session's size **when this was published**, which is a starting point and not a live reading.
+   *
+   * **A pty has one size and it is whatever a window last fitted**, so the live value lives where the
+   * session does: the service keeps it current and `restart` re-opens the shell at it. What a window holds
+   * is the snapshot it was last listed or opened with, and its one consumer wants exactly that — the pool
+   * builds the emulator at this size, so it is the width a replayed screen is first drawn at.
+   *
+   * It is spelled out because it reads as live and is not: a drive scenario waited on it for the size a
+   * window had just fitted and timed out at the creation size, with every resize having landed correctly
+   * (F18). A window that wants the size it fitted computed it, and the pty's own is the broker's to answer.
+   */
   cols: number
+  /** The session's rows when this was published; see `cols` */
   rows: number
+  /**
+   * How far back this session can be scrolled: the host's number, from the broker's handshake.
+   *
+   * The window derives its emulator's bound from this and never pins its own. Exceeding it would draw lines
+   * no reattach could reproduce — the broker is what answers a screen read when no window holds the bytes —
+   * and 10,000 pinned in the pool against the broker's 1,000 is exactly what that looked like.
+   */
+  scrollback: number
+  /**
+   * What ends a typed line for *this* shell — X6.
+   *
+   * A window running a command has to end it the way the shell it is running in expects, and only the
+   * backend knows which shell that is. Typed into a Windows console, `\n` is echoed and never runs: the
+   * command sits on screen looking typed, and nothing happens. Measured on Windows rather than assumed.
+   */
+  submit: string
 }
 
 export interface TerminalOutput {

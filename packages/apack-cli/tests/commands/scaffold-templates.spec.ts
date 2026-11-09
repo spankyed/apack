@@ -5,6 +5,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { population } from '@apackdev/sdk/testing';
 import { renderTemplate, templateFiles, templatesRoot } from '../../src/templates.ts';
 
 const SRC = path.join(import.meta.dirname, '..', '..', 'src');
@@ -13,7 +14,9 @@ const SRC = path.join(import.meta.dirname, '..', '..', 'src');
 function rendered(): { name: string; from: string }[] {
   const walk = (dir: string): string[] => fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
     entry.isDirectory() ? walk(path.join(dir, entry.name)) : [path.join(dir, entry.name)]);
-  return walk(SRC).filter((file) => file.endsWith('.ts')).flatMap((file) =>
+  // The walk is held, not the calls: a source tree with no `.ts` in it makes the "every name a call site
+  // renders exists" case vacuous, where zero calls is a real answer this would then refuse.
+  return population('CLI sources', walk(SRC).filter((file) => file.endsWith('.ts'))).flatMap((file) =>
     [...fs.readFileSync(file, 'utf-8').matchAll(/renderTemplate\(\s*'([^']+)'/g)]
       .map((match) => ({ name: match[1] as string, from: path.relative(SRC, file) })));
 }

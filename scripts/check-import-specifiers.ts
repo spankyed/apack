@@ -473,6 +473,24 @@ export function findElmdbImports(rules = ELMDB_RULES, root = repoRoot): string[]
   });
 }
 
+/**
+ * `file:line: node-pty` for each pack file that imports the native pty binding.
+ *
+ * **A pack does not own a process.** It asks `services.terminal` for a session; the pty is the broker's, in a
+ * process of its own, which is what makes a session's lifetime independent of the API's and what gives the
+ * Windows half an owned process tree. An addon loaded inside a pack puts a pty back in the API process, and
+ * takes the Electron-ABI rebuild back with it.
+ *
+ * The shape is `APP_ONLY_EXPORTS`' — the list that keeps `@apackdev/ears/lmdb` out of pack code — applied to
+ * the one native module left. It is a rule over pack sources rather than a layer rule, because `node-pty` is
+ * a third-party dependency and no layer table has a row for one.
+ */
+export function findNodePtyImports(dirs: readonly string[] = PACK_CODE_DIRS, root = repoRoot): string[] {
+  const rule: Rule = (node) => (ts.isStringLiteralLike(node)
+    && (node.text === 'node-pty' || node.text.startsWith('node-pty/')) ? [node.text] : undefined);
+  return findInFiles(filesUnder(dirs, root), root, rule).sort();
+}
+
 /** The one module that asks git what files this repo has; every other caller goes through it */
 const REPO_FILES_READER = 'packages/repo-checks/tests/_support/repo-files.ts';
 
@@ -518,6 +536,69 @@ export function findRawGitListings(dirs: readonly string[] = CHECKED_DIRS, root 
     }
   }
   return problems.sort();
+}
+
+/**
+ * The one module in the code surface that reaches its terminal emulator.
+ *
+ * Every host that draws a terminal holds a `TerminalAttachment` from this module and no emulator type, which
+ * is what makes replacing xterm an implementation swap behind one file. Two hosts reached it directly before,
+ * each wiring its own listeners, and the two halves of that were F1 and F2 in the terminal review: a detach
+ * that tore the wrapper out of whichever host held it, and one host scrolling on every write while the other
+ * honoured where the user had scrolled back to.
+ */
+const EMULATOR_OWNER = 'packages/default-setup/src/features/code/fe/utils/terminal-pool.ts';
+
+/**
+ * And the specs that **stand in** for the emulator, so a terminal's bookkeeping and the components that draw
+ * one can be driven without a canvas or a GL context. Each names the emulator because it is replacing it,
+ * which is the one other way the dependency legitimately appears: `vi.mock` takes a literal specifier, and
+ * mocking the pool instead would turn every case here into "the component called `release()`" — the shape of
+ * a test that restates the implementation instead of observing it.
+ *
+ * A listed path that has stopped naming an emulator is reported too, so this allowance cannot outlive the
+ * stand-in it was added for.
+ */
+const EMULATOR_STAND_INS = [
+  'packages/default-setup/tests/features/code/fe/utils/terminal-pool.frontend.spec.ts',
+  'packages/default-setup/tests/features/code/fe/canvas/terminal-view.frontend.spec.ts',
+  'packages/default-setup/tests/features/code/fe/features/terminal/panel-terminal-section.frontend.spec.ts',
+] as const;
+
+/**
+ * `file:line: @xterm/…` for each import of the emulator outside `EMULATOR_OWNER`, and the owner itself when it
+ * has stopped importing one.
+ *
+ * **The second half is the check having a subject.** A rule that only ever reports the absence of something
+ * passes just as happily when the thing it is about has been renamed out from under it, so the owner is
+ * derived from the same constant and asserted to be an importer.
+ */
+export function findEmulatorImports(dirs: readonly string[] = PACK_CODE_DIRS, root = repoRoot): string[] {
+  const rule: Rule = (node) => (ts.isStringLiteralLike(node) && node.text.startsWith('@xterm/')
+    ? [node.text] : undefined);
+  const allowed = new Set<string>([EMULATOR_OWNER, ...EMULATOR_STAND_INS]);
+  const outside = filesUnder(dirs, root)
+    .filter((file) => !allowed.has(repoRelative(root, file)))
+    .flatMap((file) => findInFiles([file], root, rule));
+
+  // **Asked of the owner on disk, not of the population.** The rule runs over whatever directories it is
+  // given — a fixture tree in a spec, a pack's `src` in a sweep — and in none of those does the owner exist,
+  // so deriving the subject from the files walked would report every one of them as having no subject. An
+  // owner that has been deleted outright is caught by the other half instead: the emulator's imports move
+  // somewhere, and everywhere else is a finding.
+  const owner = path.join(root, EMULATOR_OWNER);
+  const ownerStopped = fs.existsSync(owner) && findInFiles([owner], root, rule).length === 0;
+  // The same question of each stand-in, and for the same reason: an allowance for a spec that no longer
+  // replaces the emulator is an exemption nobody is using, which the next file moved into that path inherits
+  const staleStandIns = EMULATOR_STAND_INS.filter((standIn) => {
+    const file = path.join(root, standIn);
+    return fs.existsSync(file) && findInFiles([file], root, rule).length === 0;
+  });
+  return [
+    ...outside,
+    ...(ownerStopped ? [`${EMULATOR_OWNER}: imports no emulator, so this rule has no subject`] : []),
+    ...staleStandIns.map((standIn) => `${standIn}: names no emulator, so its allowance is stale`),
+  ].sort();
 }
 
 /** The one module that hands Electron its custom schemes' privileges */
@@ -918,6 +999,20 @@ const RULE_LIST = [
     repoOnly: { kind: 'covered', by: 'elmdb-imports', note: "What is left here is the API, the host and the engine's own root" },
     find: findElmdbImports,
     rule: "Only @apackdev/ears/lmdb loads elmdb: the host and the API open the database through it, the engine's root and packs never load it",
+  },
+  {
+    id: 'findNodePtyImports',
+    over: PACK_CODE_DIRS,
+    repoOnly: { kind: 'inapplicable', note: "The pack-facing half is the pack bundle's own check: `apack pack build` refuses a bundle importing a native binding it cannot ship" },
+    find: findNodePtyImports,
+    rule: 'A pack asks services.terminal for a session and never loads node-pty: the pty belongs to the broker, in a process of its own, which is what makes a session outlive the API and what owns a process tree on Windows',
+  },
+  {
+    id: 'findEmulatorImports',
+    over: PACK_CODE_DIRS,
+    repoOnly: { kind: 'inapplicable', note: "Its subject is the code surface's own seam to xterm.js, which is this pack's choice of emulator and not a contract any other pack is held to" },
+    find: findEmulatorImports,
+    rule: "Only the code surface's terminal pool imports @xterm/*: a host that draws a terminal holds a TerminalAttachment, so replacing the emulator is a swap behind one module rather than a second rewrite of ownership",
   },
   {
     id: 'findSchemeRegistrations',

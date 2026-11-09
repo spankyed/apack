@@ -385,6 +385,24 @@ For a result that will be cited, retain:
 - Whether the run used a clean baseline or a retained development environment.
 - What remains unproven: other platforms, concurrency/lifetime paths, or the broad/final gate.
 
+**A session's worth of that, 2026-11-07**, recorded because the guide asks for it and because what the
+machine *had* is itself a finding:
+
+| | |
+|---|---|
+| Subject | the terminal broker (`apack-terminal`), at `b942f2c`; the monorepo was not built or run there |
+| Toolchain found | Rust **1.99.1** already installed and matching the pin; Node 23.11.1 and npm 10.9.2, both **below** what this repo needs — unused, because the broker needs neither |
+| Shells found | `powershell.exe`, `cmd.exe` and `wsl.exe` in System32; **`pwsh.exe` and `bash.exe` absent**; `ComSpec` is `cmd.exe`, which is what a default-program pty spawns |
+| What passed | `cargo test --test broker` 12 of 12, `--test parser` 4 of 4; `channel.rs` and `candidates.rs` are POSIX-only, each saying why in its header |
+| What it closed | X1, X2, X9, X12, and X6 by measurement |
+| What remains unproven there | the Electron app itself has never been launched on this machine; the channel's bounds over a named pipe; and this is a retained environment, not a clean snapshot |
+
+**Three defects came out of it that no POSIX run could have found**, which is the argument for the machine
+better than any general one: a session emitted ConPTY's cursor-position request and stopped because nothing
+answered it; a shell's exit was inferred from an EOF a ConPTY never gives, so an exited shell was never
+reported; and `\n` typed into a console is echoed without running, which is why a run-script path that sent
+it looked like it worked.
+
 VM execution is real Windows evidence and is the preferred investigation path. A long-lived machine
 can still accumulate state that masks undeclared dependencies. Use a clean snapshot or a fresh runner
 to verify that concern once the fix converges. The existing goal still requires its final committed-source

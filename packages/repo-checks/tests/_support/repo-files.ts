@@ -25,8 +25,21 @@ import * as path from 'node:path';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 
 export function repoFiles(...patterns: string[]): string[] {
-  return execFileSync('git', ['ls-files', '-co', '--exclude-standard', ...patterns],
+  const found = execFileSync('git', ['ls-files', '-co', '--exclude-standard', ...patterns],
     { cwd: REPO_ROOT, maxBuffer: 64 * 1024 * 1024 })
     .toString().split('\n')
     .filter((file) => file !== '' && fs.existsSync(path.join(REPO_ROOT, file)));
+  // **Empty is refused here rather than by each caller**, because every check built on this asserts that a
+  // *derived* set is empty — "no spec outside this package imports repo tooling", "no tracked file names a
+  // platform data dir" — and that shape passes for free when the population it filtered was empty. There is
+  // no caller for which zero is an answer: the bare call is the whole working tree, and every pattern names
+  // something this repo has (its Markdown, its `packages`, its Playwright and pack configs). So a wrong cwd,
+  // a git that printed nothing, or a pattern that has stopped matching is a failure with a name instead of
+  // six green checks that looked at nothing. `population()` is the same guard at the other end; this is the
+  // one place that serves all of them.
+  if (found.length === 0) {
+    throw new Error(`repoFiles(${patterns.map((p) => `'${p}'`).join(', ')}): git listed no file that exists — `
+      + 'anything asserted over this population would pass for the wrong reason');
+  }
+  return found;
 }

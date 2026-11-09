@@ -40,9 +40,31 @@ jobs:
           sw_vers
           node -p 'JSON.stringify({platform:process.platform,arch:process.arch,versions:process.versions})'
       - uses: ./.github/actions/elmdb
+      - uses: ./.github/actions/apack-terminal
+        with:
+          build: 'true'
+      # **Electron's binary is cached, so most runs never ask the CDN for it.** It comes from GitHub's release
+      # CDN, whose 504 failed a strict job inside `scripts/postinstall.mjs` on 2026-11-08 — before any of this
+      # repo's code ran. The retry there is what makes a refusal survivable; this is what makes it rare. Keyed
+      # on the runner and the locked version, so a bump fetches once and every later job restores it.
+      - name: Cache Electron's binary
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/electron
+          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-${{ runner.os }}-
+
       - name: Install dependencies
         env:
           GITHUB_TOKEN: ${{ github.token }}
+        # **Every strict job installs identically, and that is not a preference.** A pack records its package
+        # graph in `dist/build-inputs.json`, and `tests/packs/external-pack`'s graph includes
+        # `node_modules/electron` — so `readPackageInputs` hashes that package's files. `producers` builds the
+        # pack and the consumers unpack and test it, which means an install that differs between them changes
+        # the hash and every case refuses with *"Pack build package inputs changed; rebuild the complete
+        # pack"*. Skipping the download here did exactly that on 2026-11-08 (run 42472092232, app-and-rest).
+        # `ELECTRON_SKIP_BINARY_DOWNLOAD` is therefore only safe where one job builds and consumes its own
+        # pack, which is `ci.yml`'s `check`.
         run: npm ci
       - name: Producers
         run: npm run chain -- --strict --all --cores 2 --job producers | tee "$RUNNER_TEMP/strict-chain.log"
@@ -100,9 +122,31 @@ jobs:
       - name: Record source
         run: git rev-parse HEAD
       - uses: ./.github/actions/elmdb
+      - uses: ./.github/actions/apack-terminal
+        with:
+          build: 'true'
+      # **Electron's binary is cached, so most runs never ask the CDN for it.** It comes from GitHub's release
+      # CDN, whose 504 failed a strict job inside `scripts/postinstall.mjs` on 2026-11-08 — before any of this
+      # repo's code ran. The retry there is what makes a refusal survivable; this is what makes it rare. Keyed
+      # on the runner and the locked version, so a bump fetches once and every later job restores it.
+      - name: Cache Electron's binary
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/electron
+          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-${{ runner.os }}-
+
       - name: Install dependencies
         env:
           GITHUB_TOKEN: ${{ github.token }}
+        # **Every strict job installs identically, and that is not a preference.** A pack records its package
+        # graph in `dist/build-inputs.json`, and `tests/packs/external-pack`'s graph includes
+        # `node_modules/electron` — so `readPackageInputs` hashes that package's files. `producers` builds the
+        # pack and the consumers unpack and test it, which means an install that differs between them changes
+        # the hash and every case refuses with *"Pack build package inputs changed; rebuild the complete
+        # pack"*. Skipping the download here did exactly that on 2026-11-08 (run 42472092232, app-and-rest).
+        # `ELECTRON_SKIP_BINARY_DOWNLOAD` is therefore only safe where one job builds and consumes its own
+        # pack, which is `ci.yml`'s `check`.
         run: npm ci
       - name: Receive producer outputs
         uses: actions/download-artifact@v4

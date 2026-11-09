@@ -10,7 +10,7 @@ it('carries diagnostic context on the envelope without changing business event d
   const messages: Message[] = [];
   const diagnostics: PerformanceExecution = {
     capture: () => ({ traceparent: '00-11111111111111111111111111111111-2222222222222222-01' }),
-    withCarrier: (_carrier, fn) => fn(), carryEvent() {}, withEvent: (_event, fn) => fn(),
+    withCarrier: (_carrier, fn) => fn(), carryEvent() {}, withEvent: (_event, fn) => fn(), record() {},
   };
   startFeTestRuntime({ diagnostics, client: { send: message => messages.push(message) } });
   const event = { type: 'PING', value: 'business data' };
@@ -45,7 +45,7 @@ it('restores explicitly carried event causes and clears missing inbound context'
     try { return fn(); } finally { current = previous; }
   };
   startFeTestRuntime({ diagnostics: { capture: () => ({}), withCarrier: within,
-    carryEvent: (event, carrier) => { causes.set(event, carrier); }, withEvent: (event, fn) => within(causes.get(event), fn) } });
+    carryEvent: (event, carrier) => { causes.set(event, carrier); }, withEvent: (event, fn) => within(causes.get(event), fn), record() {} } });
   const cause = { traceparent: 'explicit cause' };
   const event = { type: 'PING' };
   _withPerformanceCarrier(cause, () => {

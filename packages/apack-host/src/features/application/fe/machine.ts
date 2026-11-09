@@ -259,7 +259,7 @@ export function createShellMachine({ packs, catalog, client, packFrontends, stor
           ...(activeSurface ? { activeSurface } : {}) });
         if (newSurfaces.length > 0) {
           // Visibility is the host's (AppState, sent on each connection); unset shows the surface
-          for (const surface of newSurfaces) spawnSurfaceActor(enqueue, surface);
+          for (const surface of newSurfaces) spawnSurfaceActor(enqueue, surface, context.ownsLastActiveSurface);
           const added = new Set<string>(newSurfaces.map((p) => p.id));
           // A pack claiming the app's default is how this window learns what it is. It opens it only while
           // nothing else has decided what is shown, so a window the user has navigated, or one the host told
@@ -627,7 +627,7 @@ export function createShellMachine({ packs, catalog, client, packFrontends, stor
         });
       }),
       spawnSurfaceActors: enqueueActions(({ enqueue, context }) => {
-        for (const surface of context.surfaces) spawnSurfaceActor(enqueue, surface);
+        for (const surface of context.surfaces) spawnSurfaceActor(enqueue, surface, context.ownsLastActiveSurface);
       }),
 
       resizePanel: assign(({ context, event }) => {

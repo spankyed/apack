@@ -1,10 +1,13 @@
-// An agent child is spawned from the API process's environment, so what the app set on itself is inherited by
-// that child and by everything its own tools run — unless it is stripped.
+// An agent child is spawned from the API process's environment, so what the app set on itself is inherited
+// by that child and by everything its Bash tool runs — unless it is stripped (G2).
 //
-// **Three call sites, one strip.** The claude-code runner, the codex runner and the terminal's shell each
-// spawn a process for the user, and each had its own hand-written deny-list naming two of the app's ten
-// variables. The cases below take their subject from the declaration rather than writing the names out, which
-// is the only reason they fail when a variable is added to what the app sets and a spawn is left behind.
+// **The terminal's half is not here any more.** It was, written for the `spawn` this pack used to do, and
+// the broker taking that over left it with no caller at all: a shell inherited all ten variables again for
+// the length of that change. It lives where the spawn does now (`@apackdev/host`'s `brokerEnvironment`),
+// and what is left here is the one spawn this pack still makes.
+//
+// **The two runners are that spawn's call sites**, and they read `process.env` themselves rather than taking
+// one, so their cases set the app's variables on this process and assert none of them reaches the child.
 import { describe, expect, it } from 'vitest'
 import { APP_PROCESS_ENV_VARS } from '@apackdev/sdk/env'
 import { agentChildEnvironment } from '#features/code/be/services/shell-environment.ts'
@@ -15,7 +18,7 @@ import { buildCodexEnv } from '#features/code/be/services/codex/runner.ts'
 const appsOwnEnvironment = () =>
   Object.fromEntries(APP_PROCESS_ENV_VARS.map(name => [name, `set-by-the-app-${name}`]))
 
-describe('the environment a process this pack starts for the user is given', () => {
+describe('the environment an agent child is spawned with', () => {
   it('keeps none of the variables the app set on its own process', () => {
     // The subject is the declaration the construction in `@app/main` is typed by, so a variable added there
     // arrives here: a strip written out by hand instead of derived leaves the new one behind.
@@ -26,6 +29,27 @@ describe('the environment a process this pack starts for the user is given', () 
 
     expect(Object.keys(child).filter(name => name in appsOwn)).toEqual([])
     expect(child).toMatchObject({ HOME: '/Users/someone', PATH: '/usr/bin' })
+  })
+
+  it('keeps no loader that would run code of someone else\'s choosing in the child', () => {
+    const child = agentChildEnvironment({
+      LD_PRELOAD: '/tmp/x.so',
+      LD_LIBRARY_PATH: '/tmp',
+      DYLD_INSERT_LIBRARIES: '/tmp/x.dylib',
+      DYLD_LIBRARY_PATH: '/tmp',
+      PATH: '/usr/bin',
+    })
+
+    expect(Object.keys(child).filter(name => /^(LD|DYLD)_/.test(name))).toEqual([])
+  })
+
+  it('claims to be no terminal, because it is not one', () => {
+    // `TERM_PROGRAM` and `COLORTERM` belong to a shell in a pty, which the broker starts. An agent child
+    // reads stdout as a pipe, and telling it there is a truecolor terminal on the other end is a lie that
+    // some CLIs act on
+    const child = agentChildEnvironment({ PATH: '/usr/bin' })
+    expect(child.TERM_PROGRAM).toBeUndefined()
+    expect(child.COLORTERM).toBeUndefined()
   })
 
   it('leaves the environment it was given untouched', () => {
@@ -39,15 +63,13 @@ describe('the environment a process this pack starts for the user is given', () 
   })
 })
 
-describe('the environment an agent child is spawned with', () => {
-  // These are the call sites. `buildChildEnv` and `buildCodexEnv` read `process.env` themselves, so each case
-  // sets the app's variables on this process and asserts none of them reaches the child.
+describe('the call sites that spawn an agent child', () => {
   const callSites = [
     ['claude-code', buildChildEnv],
     ['codex', buildCodexEnv],
   ] as const
 
-  it.each(callSites)('keeps none of them in the %s child', (_name, buildEnv) => {
+  it.each(callSites)('keeps none of the app\'s variables in the %s child', (_name, buildEnv) => {
     const appsOwn = appsOwnEnvironment()
     const restore = new Map(APP_PROCESS_ENV_VARS.map(name => [name, process.env[name]]))
     Object.assign(process.env, appsOwn)

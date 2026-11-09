@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import ts from 'typescript';
+import { population } from '@apackdev/sdk/testing';
 import { describe, expect, it } from 'vitest';
 import { packagesBuiltOrRefuse, REPO_ROOT } from '@apackdev/host/build/packages-built';
 
@@ -46,8 +47,11 @@ const isRelativeTs = (specifier: string): boolean => /^\.{1,2}\//.test(specifier
 describe.skipIf(!PACKAGES_BUILT)('published JS', () => {
   it.each(OUTPUTS)('has no relative .ts specifier in %s', (output) => {
     const dir = path.join(REPO_ROOT, output);
-    const offenders = fs.readdirSync(dir, { recursive: true, encoding: 'utf-8' })
-      .filter((file) => /\.(js|mjs|cjs)$/.test(file))
+    // The JS is the population, not the listing: this case asserts a derived set is empty, so a tree that
+    // built no JS at all would satisfy it rather than report it.
+    const js = population(`${output}'s published JS`, fs.readdirSync(dir, { recursive: true, encoding: 'utf-8' })
+      .filter((file) => /\.(js|mjs|cjs)$/.test(file)));
+    const offenders = js
       .filter((file) => ownSpecifiers(fs.readFileSync(path.join(dir, file), 'utf-8'), file).some(isRelativeTs));
     expect(offenders).toEqual([]);
   });

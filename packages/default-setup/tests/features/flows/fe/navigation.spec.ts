@@ -197,7 +197,7 @@ it('labels its breadcrumb from what the list view read', () => {
 
 it('asks for the model catalog as it starts, and takes what it is answered', () => {
   const actor = start();
-  actor.send({ type: 'SURFACE_STARTED' });
+  actor.send({ type: 'SURFACE_STARTED', ownsAppLayout: true });
   expect(sendToSystem).toHaveBeenCalledWith('flows', { type: 'GET_MODEL_CATALOG' });
   actor.send({ type: 'MODEL_CATALOG_READ', data: { models: [{ id: 'anthropic:claude' }] } } as never);
   expect(context(actor).models).toEqual([{ id: 'anthropic:claude' }]);

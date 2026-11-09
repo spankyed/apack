@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { population } from '@apackdev/sdk/testing';
 import { describe, expect, it } from 'vitest';
 import { packagesBuiltOrRefuse, REPO_ROOT } from '@apackdev/host/build/packages-built';
 
@@ -18,8 +19,9 @@ describe.skipIf(!PACKAGES_BUILT)('@apackdev/ui dist', () => {
   });
 
   it('ships CSS with no relative @import left to resolve', () => {
-    const unresolved = walk(UI_DIST)
-      .filter((file) => file.endsWith('.css'))
+    // The CSS is the population. The other two cases here anchor on a file that must be present, so an empty
+    // walk fails them; this one filters, and would pass over a build that emitted no stylesheet.
+    const unresolved = population('@apackdev/ui\'s published CSS', walk(UI_DIST).filter((file) => file.endsWith('.css')))
       .filter((file) => /@import\s+(url\()?["']\.{1,2}\//.test(fs.readFileSync(file, 'utf-8')))
       .map((file) => path.relative(UI_DIST, file));
     expect(unresolved).toEqual([]);

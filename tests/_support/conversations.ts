@@ -47,7 +47,20 @@ export function searchFixture() {
 /** A fresh conversation per trial keeps input size constant as replies are persisted. */
 export function streamingFixture(trials: number) {
   const template = threadFixture().data.threads[0]!;
-  const script = { intervalMs: 25, chunks: Array.from({ length: 24 }, (_, index) => `Stream segment ${String(index).padStart(2, '0')} is deterministic. `) };
+  // How many chunks the fixture CLI emits. 24 is the shape the scenario's completion and backlog
+  // assertions were written against, and everything that reads the count derives it from the script. A
+  // larger count prices how the throttled writer's cost grows with reply length (G1 in the terminal
+  // integration review), and changes the fixture's sha256 and its `scriptedChunks` distribution, so two
+  // sizes are recorded as two corpora rather than one.
+  // 64 is `streamingBacklog`'s bound on progress points (`@apackdev/testing/performance`), which keeps a raw
+  // trial small. Past it the scenario still streams and persists correctly and then rejects the trial with
+  // `backlog-progress-data`, which reads as a defect rather than as a count nobody can record — so refuse
+  // it here, where the number is set.
+  const chunkCount = Number(process.env.APACK_PERFORMANCE_STREAM_CHUNKS ?? 24);
+  if (!Number.isInteger(chunkCount) || chunkCount < 1 || chunkCount > 64) {
+    throw new Error(`APACK_PERFORMANCE_STREAM_CHUNKS must be 1-64 (streamingBacklog records at most 64 progress points); got ${process.env.APACK_PERFORMANCE_STREAM_CHUNKS}`);
+  }
+  const script = { intervalMs: 25, chunks: Array.from({ length: chunkCount }, (_, index) => `Stream segment ${String(index).padStart(2, '0')} is deterministic. `) };
   const data = { version: 2, threads: Array.from({ length: trials }, (_, index) => ({
     ...template, id: `Thread-stream-${index}`, topic: `Streaming fixture ${index}`, messages: template.messages.slice(0, 20),
   })) };

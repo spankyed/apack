@@ -305,7 +305,7 @@ export interface HelpTarget {
 }
 
 // @internal
-export const _HOST_SERVICE_NAMES: readonly ["logger", "emitter", "repository", "settings", "onboarding", "appData", "runHistory", "inference", "secrets", "filesystem"];
+export const _HOST_SERVICE_NAMES: readonly ["logger", "emitter", "repository", "settings", "onboarding", "appData", "runHistory", "inference", "secrets", "filesystem", "terminal"];
 
 // @public
 export const LIFECYCLE_HOOK_NAMES: readonly ["onInit", "onShutdown"];
