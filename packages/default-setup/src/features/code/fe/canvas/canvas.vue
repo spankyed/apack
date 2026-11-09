@@ -104,11 +104,11 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import FileEditor from '#features/code/fe/canvas/FileEditor.vue'
 import QuickOpenPalette from '#features/code/fe/canvas/QuickOpenPalette.vue'
 import { reorderTabs } from '../utils/tab-management.ts'
-import { codeChild } from '../features/children.ts';
+import { panelChild } from '../features/children.ts';
 
 const actor: CodeState = useSurface()
-const explorerActor = codeChild(actor, 'explorer')
-const terminalActor = codeChild(actor, 'terminal')
+const explorerActor = panelChild(actor, 'explorer')
+const terminalActor = panelChild(actor, 'terminal')
 
 // State selectors
 const openFiles = useSelector(actor, (state) => state.context.openFiles)

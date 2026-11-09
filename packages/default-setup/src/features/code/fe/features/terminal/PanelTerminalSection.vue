@@ -240,13 +240,13 @@ import ContextMenuPopup from '@apackdev/ui/design/ContextMenuPopup'
 import { useSectionVisibilityMenu } from '#features/code/fe/composables/useSectionVisibilityMenu.ts'
 import type { TerminalScript } from '#generated/types.ts'
 import type { TerminalAttachment } from '#features/code/fe/utils/terminal-pool.ts'
-import { codeChild } from '../children.ts';
+import { panelChild } from '../children.ts';
 
 const props = withDefaults(defineProps<{ height?: number }>(), { height: 256 })
 
 // Actors
 const codeActor: CodeState = useSurface()
-const terminalActor = codeChild(codeActor, 'terminal')!
+const terminalActor = panelChild(codeActor, 'terminal')!
 
 // State selectors
 const panelTerminalId = useSelector(codeActor, (state) => state.context.panelTerminalId)

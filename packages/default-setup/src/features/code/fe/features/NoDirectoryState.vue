@@ -47,10 +47,10 @@ import { useSurface } from '@apackdev/sdk/fe'
 import { FolderOpen } from 'lucide-vue-next'
 import type { CodeState } from '#features/code/fe/state.ts'
 import { useProjectActions } from './explorer/composables/useProjectActions.ts'
-import { codeChild } from './children.ts';
+import { panelChild } from './children.ts';
 
 const codeActor: CodeState = useSurface()
-const explorerActor = codeChild(codeActor, 'explorer')!
+const explorerActor = panelChild(codeActor, 'explorer')!
 
 const { allProjects } = useProjectActions()
 
