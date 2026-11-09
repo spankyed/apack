@@ -169,6 +169,15 @@ export interface BrokerSession {
   /** Reads it again, and sends what arrived while it was not being read */
   resume(): Promise<void>;
   /**
+   * Whether `pid` is this session's own process or something it started.
+   *
+   * **The same walk the broker refuses a `pid` scope with**, so what a caller reads and what it would have
+   * been refused cannot disagree. A caller that walked the parent chain itself would be a second
+   * implementation of the broker's own invariant — and on Windows it answers nothing, where this refuses
+   * with a code a caller can tell from `false`.
+   */
+  owns(pid: number): Promise<boolean>;
+  /**
    * Sends a signal to this session's process, its process group, or one process inside its tree.
    *
    * `kill()` ends a session and its tree, which is all a terminal needs. This is for a holder driving a
@@ -251,6 +260,11 @@ export interface BrokerSessionOptions {
   args?: readonly string[];
   /** Added to the environment the broker runs in, which already has the app's own identity stripped out */
   env?: Readonly<Record<string, string>>;
+  /**
+   * Taken out of it, which `env` cannot express: a session inherits the broker's environment, so adding
+   * entries cannot make a name absent. Applied after `env`, so absence is what a caller asking for both gets.
+   */
+  unset?: readonly string[];
   cwd?: string;
 }
 
@@ -656,6 +670,18 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
       async resize(cols_, rows_) { connection.send({ kind: 'resize', session: id, cols: cols_, rows: rows_ }); },
       async pause() { connection.send({ kind: 'pause', session: id }); },
       async resume() { connection.send({ kind: 'resume', session: id }); },
+      async owns(pid) {
+        connection.send({ kind: 'owns', session: id, pid });
+        // **Keyed by the pid as well as the session**, because a session can have more than one of these
+        // outstanding: the frames carry no call, and an answer taken for another pid's is a claim admitted
+        // or refused wrongly
+        const answer = await connection.next(
+          event => event.kind === 'owns' && event.session === id && event.pid === pid,
+          { session: id },
+        );
+        if (answer.kind !== 'owns') throw new BrokerError('PTY', 'the broker answered no ownership');
+        return answer.owned;
+      },
       async signal(signal, scope) { connection.send({ kind: 'signal', session: id, signal, scope }); },
       async screen(history = 0) {
         connection.send({ kind: 'screen', session: id, history });
@@ -701,7 +727,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
 
   return {
     history,
-    async open({ cols, rows, shell, args, env, cwd }, sessionListeners) {
+    async open({ cols, rows, shell, args, env, unset, cwd }, sessionListeners) {
       connection.send({
         kind: 'spawn',
         cols,
@@ -709,6 +735,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
         shell: shell ?? null,
         args: [...args ?? []],
         env: Object.entries(env ?? {}),
+        unset: [...unset ?? []],
         cwd: cwd ?? null,
       });
       // Registered as the frame is read, so an `exited` in the same read is not lost; delivered once this
