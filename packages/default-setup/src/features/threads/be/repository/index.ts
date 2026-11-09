@@ -48,11 +48,8 @@ export const threadQueries = {
   idByRole: (role: EARS.RoleKind): EARS.EntityId | undefined =>
     query.all().withRole(role).first(),
 
-  // Get thread messages
-  messages: (threadId: EARS.EntityId) => 
-    query.ids(threadId)
-      .out(EARS.RelKind.CONTAINS, EARS.Entity.Message)
-      .pick(["text", "sender", "timestamp", "compacted", "isCommand"] as const),
+  /** A thread's messages, assembled — the one reader, so nothing here picks its own fields */
+  messages: (threadId: EARS.EntityId) => messagesOfThread(threadId),
   
   /** The threads this one links to, by kind, then the threads that block it, as `blocked by` */
   linkedThreads: (threadId: EARS.EntityId): Array<{ relation: ThreadLinkRelation } & Pick<ThreadEntity, 'id' | 'shortCode' | 'topic' | 'status' | 'timestamp'>> => {
@@ -423,7 +420,34 @@ function getThreadArtifacts(threadId: EARS.EntityId): ArtifactItem[] {
  * so this runs for the one message that changed rather than for a page of them.
  */
 function blocksOf(messageId: EARS.EntityId): BlockConfig[] {
-  return blockRowsOf(messageId).map(({ type, props }) => ({ type, props }));
+  return childrenOfMessages([messageId]).get(messageId) ?? [];
+}
+
+/**
+ * Every one of these messages' blocks, assembled, in four reads however many messages there are.
+ *
+ * `query.ids` and `outEdges` both take the whole set, so a thread's messages cost one edge walk, one
+ * batched read of the block rows, and `childrenOf`'s own pair for every block at once. Asking per message
+ * is what made reading a thread linear in its messages and then linear again in their children.
+ */
+function childrenOfMessages(messageIds: readonly EARS.EntityId[]): Map<EARS.EntityId, BlockConfig[]> {
+  const blocks = new Map<EARS.EntityId, BlockConfig[]>();
+  if (messageIds.length === 0) return blocks;
+
+  const edges = query.ids(messageIds).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block);
+  if (edges.length === 0) return blocks;
+
+  const rows = rowsByIdOf(edges.map((edge) => edge.target), ['type', 'props'] as const);
+  const parts = childrenOf(edges.map((edge) => edge.target));
+
+  for (const edge of [...edges].sort((a, b) => indexOf(a.info) - indexOf(b.info))) {
+    const row = rows.get(edge.target);
+    if (!row) continue;
+    const held = blocks.get(edge.source) ?? [];
+    held.push({ type: row.type as string, props: assembled(parts, edge.target, (row.props ?? {}) as Record<string, any>) });
+    blocks.set(edge.source, held);
+  }
+  return blocks;
 }
 
 /**
@@ -681,7 +705,51 @@ function blockIdOfType(messageId: EARS.EntityId, type: string): EARS.EntityId | 
     .find((id) => query.ids(id).pickOne(['type'] as const)?.type === type);
 }
 
-const messagePickFields = ["id", "text", "sender", "timestamp", "blockResponse", "responseTimestamp", "forkable", "references", "isCommand", "command", "context", "autoHide", "asUser", "asideText", "asideContext", "status", "compacted"] as const;
+/**
+ * **Every field a message is read with, and the one list there is.**
+ *
+ * There were four — this one, `threadQueries.messages`', `export-threads`' own, and `messageById`'s — and
+ * nothing said which was authoritative. Each had drifted: the export's lacked `context` and `compacted`,
+ * `threadQueries.messages`' lacked `id`. A reader that wants fewer fields still costs the same read, since
+ * a `pick` reads the row either way, so there was nothing to buy by differing.
+ *
+ * It matters more now that a message is assembled rather than read: `text` and `blocks` come from child
+ * rows, so a caller that picks its own fields gets a row with neither, and **truncated text does not
+ * crash** — it reaches a title, a recap, a transcript or a fork copy as if it were whole. One list and one
+ * reader is what makes that impossible rather than caught.
+ */
+const messagePickFields = ["id", "text", "sender", "timestamp", "blockResponse", "responseTimestamp", "createdAt", "updatedAt", "forkable", "references", "isCommand", "command", "context", "autoHide", "asUser", "asideText", "asideContext", "status", "compacted"] as const;
+
+/** One message, assembled: its row's fields with its children folded in */
+function messageOf(messageId: EARS.EntityId): MessageEntity | null {
+  const row = query.ids(messageId).pickOne(messagePickFields);
+  if (!row) return null;
+  const blocks = blocksOf(messageId);
+  return { ...row, entityType: EARS.Entity.Message, ...(blocks.length > 0 && { blocks }) } as MessageEntity;
+}
+
+/**
+ * A thread's messages, assembled, in the order the chat shows them: queued last.
+ *
+ * One relation walk and one batched read of the rows, then the children for all of them at once — so a
+ * thread of a hundred messages costs a constant number of crossings rather than one read per message
+ * (`tests/features/threads/be/query-work.spec.ts`).
+ */
+function messagesOfThread(threadId: EARS.EntityId): MessageEntity[] {
+  const rows = (query.ids(threadId).out(EARS.RelKind.CONTAINS, EARS.Entity.Message).pick(messagePickFields) ?? []) as Partial<MessageEntity>[];
+  const children = childrenOfMessages(rows.flatMap((row) => (row.id ? [row.id as EARS.EntityId] : [])));
+  return rows
+    .map((row) => ({
+      ...row,
+      entityType: EARS.Entity.Message,
+      ...(children.get(row.id as EARS.EntityId)?.length ? { blocks: children.get(row.id as EARS.EntityId) } : {}),
+    }) as MessageEntity)
+    .sort((a, b) => {
+      if (a.status === 'queued' && b.status !== 'queued') return 1;
+      if (b.status === 'queued' && a.status !== 'queued') return -1;
+      return 0;
+    });
+}
 
 function getThreadFields(threadId: EARS.EntityId): AgentThreadData | null {
   const thread = query.ids(threadId)
@@ -691,15 +759,7 @@ function getThreadFields(threadId: EARS.EntityId): AgentThreadData | null {
   return thread[0] as AgentThreadData | null;
 }
 
-function getAllThreadMessages(threadId: EARS.EntityId): Partial<MessageEntity>[] {
-  return (query.ids(threadId)
-    .out(EARS.RelKind.CONTAINS, EARS.Entity.Message).pick(messagePickFields) ?? [])
-    .sort((a, b) => {
-      if (a.status === 'queued' && b.status !== 'queued') return 1;
-      if (b.status === 'queued' && a.status !== 'queued') return -1;
-      return 0;
-    }) as Partial<MessageEntity>[];
-}
+
 
 /**
  * A thread's last `limit` messages that aren't queued, chronological, then its queued ones, each with its status alone,
@@ -805,7 +865,7 @@ export const chatQueries = {
 
     return {
       ...thread,
-      messages: getAllThreadMessages(threadId),
+      messages: messagesOfThread(threadId),
       artifacts: getThreadArtifacts(threadId) as any as ArtifactEntity[],
     };
   },
@@ -859,20 +919,8 @@ export const chatQueries = {
   blocksOf: (messageId: EARS.EntityId): BlockConfig[] => blocksOf(messageId),
   entryDetails: (blockId: EARS.EntityId): Record<string, ToolActivityEntry['details']> => entryDetailsOf(blockId),
 
-  messageById: (messageId: EARS.EntityId): MessageEntity | null => {
-    const message = query.ids(messageId).pickOne([
-      'id', 'text', 'sender', 'timestamp', 'blockResponse',
-      'responseTimestamp', 'createdAt', 'updatedAt', 'autoHide', 'asUser', 'asideText', 'asideContext',
-      'forkable', 'references', 'isCommand', 'command', 'status', 'context', 'compacted'
-    ] as const);
-
-    if (!message) return null;
-
-    // Assembled here rather than stored: `blocks` is what a window reads, and the rows behind it are what the
-    // writers mutate one at a time. Keeping the delivered shape is what left the frontend's splice untouched
-    const blocks = blocksOf(messageId);
-    return { ...message, entityType: EARS.Entity.Message, ...(blocks.length > 0 && { blocks }) } as MessageEntity;
-  }
+  /** One message, whole; `null` once it is gone */
+  messageById: (messageId: EARS.EntityId): MessageEntity | null => messageOf(messageId)
 } as const;
 
 /**

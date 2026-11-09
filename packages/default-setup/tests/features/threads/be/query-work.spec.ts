@@ -98,6 +98,33 @@ describe('what reading one message costs as its blocks grow', () => {
   })
 
   /**
+   * **A thread's messages cost the same however many there are.**
+   *
+   * This is the read the one reader made batched, and the direction that would regress silently: four
+   * field lists became one, and the one assembles children, so asking per message would have made reading
+   * a thread linear in its messages and linear again in their blocks. Asserted as the property — ten
+   * messages and forty cost the same — rather than as a figure.
+   */
+  it('reads a thread of messages in the same crossings however many it holds', async () => {
+    const small = repository.threadCommands.create({ topic: 'Ten', instructions: '' }).id as EARS.EntityId
+    const large = repository.threadCommands.create({ topic: 'Forty', instructions: '' }).id as EARS.EntityId
+    for (let n = 0; n < 10; n++) withToolActivity(small, 2)
+    for (let n = 0; n < 40; n++) withToolActivity(large, 2)
+    await startApp({ systems: ['threads'] })
+
+    const ten = counted(() => repository.threadQueries.messages(small))
+    const forty = counted(() => repository.threadQueries.messages(large))
+
+    expect(ten.answer).toHaveLength(10)
+    expect(forty.answer).toHaveLength(40)
+    expect(forty.answer[0]?.blocks?.[0]?.props.entries ?? []).toHaveLength(2)
+    expect(forty.reads, `the crossings grew with the messages: ${ten.reads} then ${forty.reads}`).toBe(ten.reads)
+    // Six for ten messages and six for forty, measured: one edge walk, one batched read of the rows, and
+    // the two pairs `childrenOf` makes for every block of every message at once
+    expect(forty.reads).toBeLessThan(10)
+  })
+
+  /**
    * And a finished turn's block is one row again, so the children cost nothing once it is over.
    *
    * They exist to make a turn's writes cost what they write. After it, a read assembles them and the thread
