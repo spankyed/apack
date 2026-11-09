@@ -240,24 +240,81 @@ const playwrightSpecs = (): string[] => repoFiles()
  * **The bound is the test timeout, not the assertion one.** A per-call `timeout` — `expect.poll(fn, { … })`,
  * `toBeHidden({ … })` — *overrides* the config's `expect.timeout` for that call, so a 40s poll under a 30s
  * assertion default is legal and does what it says. Nothing overrides the test timeout: Playwright ends the
- * test there, so a wait at or past it can never complete, and the number is a claim nothing honours.
+ * test there, so a wait at or past it can never complete, and its number is a claim nothing honours — the
+ * failure arrives as "test timeout exceeded", which names no condition, instead of the poll's own message
+ * naming what it was waiting for.
  *
- * Measured when this was written: comparing against the assertion backstop instead reported ten waits, nine
- * of which were correct Playwright. The one that was real — a 60s poll inside a 60s test — is the shape this
- * is for, and was already carrying a by-design entry for "outlasts the suite's backstops".
+ * **And the bound is per test, because `test.setTimeout(n)` raises it.** Reading the config's figure alone
+ * is what the first version of this did, and its single finding was a false positive: a 60s poll inside a
+ * case that had already declared 180s. An exception table then carried a plausible reason for a defect that
+ * was not one, which is the dead text this repo refuses — so the budget is read from the enclosing test.
  *
- * `test.setTimeout` is excluded: raising a test's own budget is exactly what it is for.
+ * **What it does not catch**, so nobody over-trusts it: a wait *under* the budget can still lose to whatever
+ * the test does around it — 55s of polling after 10s of setup in a 60s test dies at the setup's expense.
+ * That needs the time the rest of the test takes, which no reader of the source has. What is unambiguous is
+ * a wait given the whole budget or more, and that is what this reports.
  */
-const BACKSTOP_BY_DESIGN: Record<string, string> = {
-  // The one the check found on its first run, and `spec-waits` already carried the same knowledge for it
-  // under "outlasts the suite's backstops": the case boots the app twice over a database written between,
-  // so the poll is the whole test and the two numbers meeting is the author's intent rather than an error.
-  // It is here rather than shortened because shortening it would fail the case on a cold machine, which is
-  // the failure this repo refuses to buy with a guess about duration.
-  'tests/e2e/app-integration/db-write-through-boot.spec.ts':
-    'the poll is the whole test: two app boots over a database written between them',
-};
 
+/** Each `test(...)` in a Playwright spec: the lines it spans, and the budget it declares for itself */
+function testsIn(absFile: string): { from: number; to: number; budget?: number }[] {
+  const source = ts.createSourceFile(absFile, fs.readFileSync(absFile, 'utf-8'), ts.ScriptTarget.Latest, true);
+  const lineOf = (node: ts.Node): number => source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+  const found: { from: number; to: number; budget?: number }[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      let head: ts.Node = node.expression;
+      while (ts.isPropertyAccessExpression(head) || ts.isCallExpression(head)) head = head.expression;
+      if (ts.isIdentifier(head) && head.text === 'test' && node.arguments.length >= 2) {
+        let budget: number | undefined;
+        const findBudget = (inner: ts.Node): void => {
+          if (ts.isCallExpression(inner) && dottedName(inner.expression) === 'test.setTimeout'
+            && inner.arguments[0] !== undefined && ts.isNumericLiteral(inner.arguments[0])) {
+            budget = Number(inner.arguments[0].text.replace(/_/g, ''));
+          }
+          ts.forEachChild(inner, findBudget);
+        };
+        ts.forEachChild(node, findBudget);
+        found.push({ from: lineOf(node), to: source.getLineAndCharacterOfPosition(node.getEnd()).line + 1, budget });
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
+}
+
+/** `a.b.c` for a callee written that way, else undefined */
+function dottedName(node: ts.Expression): string | undefined {
+  const parts: string[] = [];
+  let at: ts.Expression = node;
+  while (ts.isPropertyAccessExpression(at)) { parts.unshift(at.name.text); at = at.expression; }
+  if (!ts.isIdentifier(at)) return undefined;
+  parts.unshift(at.text);
+  return parts.join('.');
+}
+
+/** Every wait in a Playwright spec that is given its whole test's budget or more */
+function waitsPastTheirTest(file: string, configBound: number): string[] {
+  const absFile = path.join(REPO_ROOT, file);
+  const tests = testsIn(absFile);
+  return clockedDeadlines(absFile, REPO_ROOT)
+    .filter((clock) => clock.what !== 'test.setTimeout' && clock.ms !== undefined)
+    .flatMap((clock) => {
+      const owner = tests.find((one) => clock.line >= one.from && clock.line <= one.to);
+      const bound = owner?.budget ?? configBound;
+      return clock.ms! >= bound
+        ? [`${clock.file}:${clock.line}: ${clock.what} waits ${clock.ms}ms inside a ${bound}ms test`]
+        : [];
+    });
+}
+
+/**
+ * Empty, and the check has a firing case instead of entries.
+ *
+ * The table this replaced held one, for a wait that turned out to be correct. An exception excusing a
+ * non-defect is worse than no table: it reads as coverage and nothing ever revisits it.
+ */
+const BACKSTOP_BY_DESIGN: Record<string, string> = {};
 /** The timeout values a config declares, ignoring commented-out lines */
 function declaredTimeouts(file: string): { key: string; ms: number }[] {
   const out: { key: string; ms: number }[] = [];
@@ -519,12 +576,12 @@ describe('a file takes the budget of the target it runs in', () => {
   });
 });
 
-describe('a Playwright wait fits inside the backstop its suite declares', () => {
+describe('a Playwright wait fits inside the test it runs in', () => {
   it('reads the backstops from the helper that declares them', () => {
     const { test, assertion } = playwrightBackstops();
     expect(test).toBeGreaterThan(0);
     expect(assertion).toBeGreaterThan(0);
-    // The assertion backstop is the tighter of the two, which is what makes it the bound a wait must fit
+    // The assertion default is the tighter of the two; a per-call timeout overrides it, so it is not the bound
     expect(assertion).toBeLessThanOrEqual(test);
   });
 
@@ -533,23 +590,57 @@ describe('a Playwright wait fits inside the backstop its suite declares', () => 
   });
 
   it('declares no wait that cannot finish inside its test', () => {
-    const { test: bound } = playwrightBackstops();
+    const { test: configBound } = playwrightBackstops();
     const over = playwrightSpecs()
       .filter((file) => BACKSTOP_BY_DESIGN[file] === undefined)
-      .flatMap((file) => clockedDeadlines(path.join(REPO_ROOT, file), REPO_ROOT))
-      .filter((clock) => clock.what !== 'test.setTimeout' && clock.ms !== undefined && clock.ms >= bound)
-      .map((clock) => `${clock.file}:${clock.line}: ${clock.what} waits ${clock.ms}ms inside a ${bound}ms test`);
+      .flatMap((file) => waitsPastTheirTest(file, configBound));
     expect(over, [
-      'Playwright ends the test at its timeout, so a wait that long can never finish: shorten it, raise the',
-      "test's own budget with test.setTimeout, or record the file in BACKSTOP_BY_DESIGN with why.",
+      'Playwright ends the test at its timeout, so a wait that long can never finish and its failure names no',
+      "condition: shorten it, or raise that test's own budget with test.setTimeout.",
     ].join(' ')).toEqual([]);
   });
 
-  it('lists nothing by design that now finishes inside its test', () => {
-    const { test: bound } = playwrightBackstops();
-    const waiting = new Set(playwrightSpecs()
-      .filter((file) => clockedDeadlines(path.join(REPO_ROOT, file), REPO_ROOT)
-        .some((clock) => clock.what !== 'test.setTimeout' && clock.ms !== undefined && clock.ms >= bound)));
-    expect(Object.keys(BACKSTOP_BY_DESIGN).filter((file) => !waiting.has(file))).toEqual([]);
+  /**
+   * The firing case, because the table above is empty and nothing in this repo trips the rule today.
+   *
+   * Three files, one rule each way: a wait given its test's whole budget is reported; the same wait under a
+   * `test.setTimeout` that raises the budget past it is not — which is the false positive the first version
+   * of this check produced; and a wait comfortably inside the config's own budget is not.
+   */
+  it('reports a wait past its test, and not one the test gave itself room for', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'playwright-backstops-'));
+    try {
+      const write = (name: string, body: string): string => {
+        fs.writeFileSync(path.join(dir, name), body);
+        return path.relative(REPO_ROOT, path.join(dir, name));
+      };
+      const past = write('past.spec.ts',
+        "import { test, expect } from '@playwright/test';\n"
+        + "test('waits for its whole test', async () => {\n"
+        + '  await expect.poll(() => true, { timeout: 60_000 }).toBe(true);\n'
+        + '});\n');
+      const roomy = write('roomy.spec.ts',
+        "import { test, expect } from '@playwright/test';\n"
+        + "test('gave itself room first', async () => {\n"
+        + '  test.setTimeout(180_000);\n'
+        + '  await expect.poll(() => true, { timeout: 60_000 }).toBe(true);\n'
+        + '});\n');
+      const inside = write('inside.spec.ts',
+        "import { test, expect } from '@playwright/test';\n"
+        + "test('waits for part of its test', async () => {\n"
+        + '  await expect.poll(() => true, { timeout: 5_000 }).toBe(true);\n'
+        + '});\n');
+
+      expect(waitsPastTheirTest(past, 60_000)).toHaveLength(1);
+      expect(waitsPastTheirTest(past, 60_000)[0]).toContain('60000ms inside a 60000ms test');
+      expect(waitsPastTheirTest(roomy, 60_000)).toEqual([]);
+      expect(waitsPastTheirTest(inside, 60_000)).toEqual([]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('lists nothing by design, so there is no entry to go stale', () => {
+    expect(Object.keys(BACKSTOP_BY_DESIGN)).toEqual([]);
   });
 });
