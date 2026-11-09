@@ -12,7 +12,8 @@ export const useItems = (query: Readonly<Ref<string>>) => {
   const view = useView('code', 'symbols', () => query.value ? { text: query.value, limit: LIMIT } : null)
   return computed((): ReferenceItem[] => (view.data ?? []).map(symbol => ({
     id: symbol.id,
-    shortCode: symbol.kind,
+    // Shown beside the name, since names repeat across files and checkouts
+    shortCode: symbol.path,
     label: symbol.name,
     type: 'symbol' as const,
   })))

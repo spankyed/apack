@@ -260,11 +260,15 @@ export const codeIndexAnswers = {
     const project = symbol && codeIndexQueries.projectOf(symbol.project);
     if (!symbol || !file || !project) return null;
     const absolute = path.join(project.root, file.path);
-    const extraction = extractFile(file.path, await fs.readFile(absolute, 'utf8'));
-    if (!extraction.ok) return null;
+    // A file can go from disk before the index notices: that is a symbol not found, not a failure
+    const source = await fs.readFile(absolute, 'utf8').catch(() => null);
+    const extraction = source === null ? null : extractFile(file.path, source);
+    if (!extraction?.ok) return null;
+    // A file edited since the index last read it may no longer hold the symbol, which is then not found either
     const definition = extraction.definitions.find(candidate => symbolIdOf(symbol.project, file.path, candidate) === symbol.id);
+    if (!definition) return null;
     // An editor's columns count from 1, a syntax tree's from 0
-    return { symbol, local: symbol.qualifiedName.slice(file.path.length + 1), location: { path: absolute, line: definition?.line ?? 1, column: (definition?.column ?? 0) + 1 } };
+    return { symbol, local: symbol.qualifiedName.slice(file.path.length + 1), location: { path: absolute, line: definition.line, column: definition.column + 1 } };
   },
 
   /** What calls, refers to or extends a symbol, tests after the rest, beside what that can't see */

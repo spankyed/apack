@@ -938,6 +938,7 @@ type Contract$8 = {
 };
 
 type Contract$9 = {
+    opens: 'CodeSymbol';
     state: CodeContext;
     inbox: SurfaceInbox<{
         pack: CodeInboxEvent;
