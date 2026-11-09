@@ -96,15 +96,23 @@ export function messageStreamBlocks<T extends GrowingBlock>(
 }
 
 /**
- * Has a durable write caught the row up to everything the run has delivered?
+ * Has a durable write caught `held` up to everything the run has delivered?
  *
- * The run is dropped when it has, so it cannot grow for the life of the message — the same reasoning as the
- * text's, and asked at the same place, since reading the message is the only thing that learns what the row
- * now holds.
+ * The run is dropped when it has, so it cannot grow for the life of the message — and it is asked where the
+ * message is read, since that is the only thing that learns what the row now holds.
+ *
+ * **One rule for both runs.** A message's own text and a block's text are two feeds with two targets, and
+ * this arithmetic is the whole of what "caught up" means for either; it was stated inline for the text and
+ * again inside the block's reader, so the two could drift apart while reading as one idea.
  */
+export function runCaughtUp(held: string | undefined, run: { at: number; text: string } | undefined): boolean {
+  if (!run) return false;
+  return (held?.length ?? 0) >= run.at + run.text.length;
+}
+
+/** The same question for the block a run names, whose text is a prop of it */
 export function blockRunCaughtUp<T extends GrowingBlock>(blocks: T[] | undefined, run: BlockRun | undefined): boolean {
   if (!run) return false;
   const held = blocks?.find(block => block.id === run.blockId);
-  const content = typeof held?.props.content === 'string' ? held.props.content : '';
-  return content.length >= run.at + run.text.length;
+  return runCaughtUp(typeof held?.props.content === 'string' ? held.props.content : '', run);
 }

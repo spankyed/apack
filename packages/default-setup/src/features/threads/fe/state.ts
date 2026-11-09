@@ -1,6 +1,6 @@
 import { surfaceStorage } from '@apackdev/sdk/fe'
 import { ref as featureRef } from '#generated/ref.ts'
-import { blockRunCaughtUp, finishedRun, messageStreamBlocks, messageStreamText } from './message-text.ts';
+import { blockRunCaughtUp, finishedRun, messageStreamBlocks, messageStreamText, runCaughtUp } from './message-text.ts';
 
 /** This surface's window storage: the prefix is its ref, so these names are scoped to it. */
 const storage = surfaceStorage(featureRef('threads'))
@@ -593,7 +593,7 @@ const threadsState = setup({
       // A durable write caught the row up to the run, so the run has nothing left to add. Dropped here
       // rather than left to grow: this is the only place that learns what the row now holds
       const run = context.messageStreams[messageId];
-      const caughtUp = run !== undefined && (message?.text?.length ?? 0) >= run.at + run.text.length;
+      const caughtUp = runCaughtUp(message?.text, run);
       const { [messageId]: _spliced, ...streams } = context.messageStreams;
       const blockRun = context.messageBlockStreams[messageId];
       const blockCaughtUp = blockRunCaughtUp(message?.blocks, blockRun);
