@@ -41,11 +41,46 @@ function sanitizePanelTerminalId(tabs: PersistedTab[], panelTerminalId: string |
   return getTerminalTabIds(tabs).has(panelTerminalId) ? null : panelTerminalId
 }
 
+/**
+ * The rows for tabs a restore is still waiting for, taken back out of storage.
+ *
+ * **Storage is the authority for a tab that has not arrived, because nothing else holds its row.** The
+ * surface keeps a path, an order and the three fields a late arrival is hydrated from — not the tab's
+ * `type`, nor the `terminalId`, `actionId` or `promptId` that say what it *is* — so a row cannot be rebuilt
+ * from what the restore has in hand. What can be done is to leave the stored one alone, which is what this
+ * is: a read of the key about to be written, keeping the rows whose tabs are still coming.
+ *
+ * Each kept row goes back at the position it was stored at, clamped, rather than on the end. Appending is
+ * what cost a late tab its slot once already, and the live tabs during a restore were themselves placed by
+ * that same persisted order, so the index is the right one to insert against.
+ */
+function withUnarrived(live: PersistedTab[], stillExpected: ReadonlySet<string>): PersistedTab[] {
+  if (stillExpected.size === 0) return live
+  const kept = loadPersistedTabs().tabs
+    .filter(tab => stillExpected.has(tab.path))
+    .sort((left, right) => left.order - right.order)
+  if (kept.length === 0) return live
+
+  const merged = [...live]
+  for (const tab of kept) merged.splice(Math.min(tab.order, merged.length), 0, tab)
+  // Renumbered over the merge, so no two rows claim one position for the next restore to place against
+  return merged.map((tab, order) => ({ ...tab, order }))
+}
+
 export function saveOpenTabs(
   openFiles: (OpenFile | TerminalTab | ActionTab | PromptTab)[],
   activeFilePath: string | null,
   panelTerminalId: string | null = null,
-  panelTerminalExpanded: boolean = false
+  panelTerminalExpanded: boolean = false,
+  /**
+   * Paths a restore is still waiting for, which this write must not drop.
+   *
+   * A save made while a restore is in flight knows only the tabs that have arrived. Most saves are skipped
+   * for exactly that reason, but a close, a group deletion and a killed terminal are *forced* — the user did
+   * something and it has to survive a relaunch — so those arrive here with a partial list, and writing it as
+   * given is how closing one tab in the seconds a restore takes emptied the whole stored layout.
+   */
+  stillExpected: ReadonlySet<string> = new Set()
 ): void {
   try {
     const tabs: PersistedTab[] = openFiles
@@ -99,9 +134,10 @@ export function saveOpenTabs(
         }
       })
 
-    const sanitizedPanelTerminalId = sanitizePanelTerminalId(tabs, panelTerminalId)
+    const kept = withUnarrived(tabs, stillExpected)
+    const sanitizedPanelTerminalId = sanitizePanelTerminalId(kept, panelTerminalId)
     const payload: PersistedTabState = {
-      tabs,
+      tabs: kept,
       activeFilePath,
       panelTerminalId: sanitizedPanelTerminalId,
       panelTerminalExpanded: sanitizedPanelTerminalId ? panelTerminalExpanded : false,

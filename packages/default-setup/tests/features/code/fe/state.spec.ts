@@ -96,6 +96,29 @@ describe('settling a restore that did not finish', () => {
   })
 
   /**
+   * **A close is forced past the mid-restore guard, and it took the unarrived tabs with it.**
+   *
+   * `saveTabsAction` returns early while a restore is in flight, which is the case above. `CLOSE_TAB`,
+   * `CLOSE_ACTIVE_TAB`, `DELETE_GROUP` and `KILL_TERMINAL` go through `forceSaveTabsAction` instead, which
+   * has to write — the user closed something and that must survive a relaunch — and wrote the open tabs
+   * alone. So closing one tab in the seconds a restore takes persisted a list without every tab still on its
+   * way, and the next launch had nothing left to ask for. The restore window is not a moment: the backend
+   * spawns restored shells one at a time, and closing a tab you did not want back is a thing people do
+   * exactly then.
+   */
+  it('keeps what has not arrived when a close forces a save mid-restore', () => {
+    seedTwoTabs()
+    const actor = started()
+
+    // One of the two arrives; the terminal is still expected, so the batch is in flight
+    actor.send({ type: 'ADD_TAB', tab: { path: '/src/a.ts' } } as never)
+    actor.send({ type: 'CLOSE_TAB', path: '/src/a.ts' } as never)
+
+    expect(storedTabs().tabs.map(tab => tab.path), 'the close wrote a list without the tab still arriving')
+      .toEqual(['terminal:t-1'])
+  })
+
+  /**
    * **The settle is not the end of the restore, and the prunes have to know that.**
    *
    * Settling clears `pendingTabOrder` — the order has been applied — while `pendingPersistedMetadata` still

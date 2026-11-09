@@ -273,9 +273,25 @@ function prunePersistedTabGroups(
  */
 function persistCodeTabs(context: CodeContext): void {
   if (!context.ownsAppLayout) return
+  const stillExpected = unarrivedPaths(context)
   const tabGroups = pruneEmptyTabGroups(context.openFiles, context.tabGroups, context.pendingPersistedMetadata)
-  saveOpenTabs(context.openFiles, context.activeFilePath, context.panelTerminalId, context.panelTerminalExpanded)
+  saveOpenTabs(context.openFiles, context.activeFilePath, context.panelTerminalId, context.panelTerminalExpanded, stillExpected)
   saveTabGroups(storage, 'tab-groups', tabGroups)
+}
+
+/**
+ * The paths a restore is still waiting for: expected, and not yet open.
+ *
+ * **One notion of "still expected" for both halves of a save.** The groups are pruned against the same
+ * record (`pendingPersistedMetadata`, which the restore fills for every persisted tab), so the tab list and
+ * the group list cannot disagree about which tabs are still coming — a disagreement being how a group came
+ * to be removed from under a tab that then arrived.
+ */
+function unarrivedPaths(context: CodeContext): ReadonlySet<string> {
+  const expected = context.pendingPersistedMetadata
+  if (!expected || expected.size === 0) return new Set()
+  const open = new Set(context.openFiles.map(file => file.path))
+  return new Set([...expected.keys()].filter(path => !open.has(path)))
 }
 
 /**
