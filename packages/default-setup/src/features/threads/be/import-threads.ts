@@ -123,7 +123,6 @@ export function importThreads(importDir: string): ImportResult {
         const messageTx = create(EARS.Entity.Message, { text: msg.text, timestamp: msg.timestamp, sender: msg.sender, createdAt: msg.timestamp })
 
         if (msg.responseTimestamp) messageTx.set('responseTimestamp', msg.responseTimestamp)
-        if (msg.blocks) messageTx.set('blocks', msg.blocks)
         if (msg.blockResponse !== undefined) messageTx.set('blockResponse', msg.blockResponse)
         if (msg.forkable !== undefined) messageTx.set('forkable', msg.forkable)
         if (msg.isCommand) messageTx.set('isCommand', msg.isCommand)
@@ -135,6 +134,9 @@ export function importThreads(importDir: string): ImportResult {
           .id()
 
         write(newThreadId).link(EARS.RelKind.CONTAINS, messageId)
+
+        // Rows of their own, so they are written once the message has an id
+        if (msg.blocks) repository.chatCommands.writeMessageBlocks({ messageId, blocks: msg.blocks })
 
         // Restore media in message text
         if (hasMedia) {

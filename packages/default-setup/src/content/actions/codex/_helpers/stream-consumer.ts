@@ -43,6 +43,7 @@ interface ConsumerHandlers {
   onNotification(method: string, params: any): void;
   onApproval(method: string, requestId: number, params: any): void;
   onCrash?(error: string): void;
+  onUnregistered?(): void;
 }
 
 /**
@@ -75,8 +76,16 @@ export function createStreamConsumer(
   // Plan mode state — accumulate plan text from item/plan/delta
   let planText = '';
 
+  /**
+   * Drops the `Thinking…` placeholder, once, and **only while the reply is still empty**.
+   *
+   * A write of `text` replaces the field and drops the segments the stream writer has appended to it,
+   * while the writer goes on counting from the offset it thinks the row holds — so clearing after any
+   * reply text has arrived loses it and puts the rest at an offset the row no longer has. Whole-field
+   * writes used to heal that by rewriting everything; appends do not.
+   */
   const clearPlaceholder = () => {
-    if (!placeholderCleared) {
+    if (!placeholderCleared && !writer.text) {
       placeholderCleared = true;
       services.chat.updateMessageState(messageId as any, { text: '' });
     }
@@ -145,7 +154,6 @@ export function createStreamConsumer(
           case 'commandExecution':
             toolCallCount++;
             finaliseThinking();
-            thinking.stopDirectWrites();
             writer.flush();
             commandOutputBuffers.set(item.id, { output: '', command: item.command, cwd: item.cwd });
             toolActivity.append({
@@ -160,7 +168,6 @@ export function createStreamConsumer(
           case 'fileChange':
             toolCallCount++;
             finaliseThinking();
-            thinking.stopDirectWrites();
             writer.flush();
             toolActivity.append({
               id: item.id,
@@ -173,7 +180,6 @@ export function createStreamConsumer(
           case 'mcpToolCall':
             toolCallCount++;
             finaliseThinking();
-            thinking.stopDirectWrites();
             writer.flush();
             toolActivity.append({
               id: item.id,
@@ -429,7 +435,9 @@ export function createStreamConsumer(
 
     // Finalize writers — plan text was already streamed to the message
     finaliseThinking();
-    writer.finalize(writer.text);
+    // `|| undefined` so an empty buffer reaches the writer's guard as "nothing to say" rather than as an
+    // explicit empty reply: a turn that produced no prose would otherwise blank the `Thinking…` placeholder
+    writer.finalize(writer.text || undefined);
     toolActivity.finalise('done');
     services.chat.updateMessageState(messageId as any, { forkable: true } as any);
 
@@ -498,7 +506,9 @@ export function createStreamConsumer(
 
     // Always finalize writers (safe even if superseded)
     finaliseThinking();
-    writer.finalize(writer.text);
+    // `|| undefined` so an empty buffer reaches the writer's guard as "nothing to say" rather than as an
+    // explicit empty reply: a turn that produced no prose would otherwise blank the `Thinking…` placeholder
+    writer.finalize(writer.text || undefined);
     toolActivity.finalise(hadErrors ? 'error' : 'done');
     services.chat.updateMessageState(messageId as any, { forkable: true } as any);
 
@@ -539,7 +549,11 @@ export function createStreamConsumer(
     });
   }
 
-  return { handlers: { onNotification, onApproval, onCrash }, finalize };
+  // **`onUnregistered` is the release, and it is why `finalize` is idempotent.** `killTurn` interrupts the
+  // turn and unregisters, so `turn/completed` never arrives and nothing else would finalise — the message
+  // was left with a stale tail and no `responseTimestamp`. A turn that ends through a notification
+  // finalises there and this does nothing
+  return { handlers: { onNotification, onApproval, onCrash, onUnregistered: finalize }, finalize };
 }
 
 export async function replayQueuedMessage(

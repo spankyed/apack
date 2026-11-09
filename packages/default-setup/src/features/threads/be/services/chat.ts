@@ -3,7 +3,7 @@ import { answer } from '../answer.ts';
 import { broadcastToSurface } from '#generated/events.ts';
 import { EARS } from '#generated/ears.ts';
 import { repository } from '#generated/repository.ts';
-import type { BlockConfig, BlockResponse, MessageEntity, OutgoingThreadsEvents, ThreadCreateData, MessageReferences } from '#features/threads/be/types.ts';
+import type { BlockConfig, BlockResponse, MessageEntity, OutgoingThreadsEvents, ThreadCreateData, MessageReferences, ToolActivityEntry } from '#features/threads/be/types.ts';
 
 import { readMediaBuffer } from '@apackdev/sdk/utils';
 import * as threadsService from './threads.ts';
@@ -63,7 +63,8 @@ function createBlockMessage(options: BlockMessageOptions): {
     text: result.text,
     sender: result.sender as 'user' | 'assistant' | 'system',
     timestamp: result.timestamp,
-    blocks,
+    // The rows `addMessage` created, not the configs passed in: a block is addressed by its row
+    blocks: result.blocks,
     createdAt: result.timestamp,
     updatedAt: result.timestamp,
     ...(forkable === false && { forkable }),
@@ -226,7 +227,7 @@ export function updateMessageBlockResponse(
  */
 export function updateMessageState(
   messageId: EARS.EntityId,
-  updates: Partial<Pick<MessageEntity, 'text' | 'blocks' | 'blockResponse' | 'responseTimestamp' | 'status' | 'context' | 'forkable' | 'compacted'>>
+  updates: Partial<Pick<MessageEntity, 'text' | 'blockResponse' | 'responseTimestamp' | 'status' | 'context' | 'forkable' | 'compacted'>>
 ): void {
   try {
     repository.chatCommands.updateMessageState({
@@ -235,6 +236,110 @@ export function updateMessageState(
     });
   } catch (err) {
     logger.error(`updateMessageState failed for ${messageId}`, { error: errorMessage(err) });
+  }
+}
+
+/**
+ * Writes one of a message's blocks, and answers the row it wrote.
+ *
+ * **A block is a row, so a write costs that block and nothing else.** It was a field — the whole `blocks`
+ * array — and since an attribute is written whole, a 250ms tool-activity flush carried the accumulated
+ * thinking text with it, at 170x what a turn left behind. It also meant each writer had to pass the other's
+ * block or delete it, which is the coordination that no longer exists.
+ *
+ * Pass the `blockId` a previous write answered and this is one row by id, with no walk for the type. The
+ * first write of a turn has none and creates the row.
+ */
+export function updateMessageBlock(messageId: EARS.EntityId, block: BlockConfig, blockId?: EARS.EntityId): EARS.EntityId | undefined {
+  try {
+    return repository.chatCommands.writeMessageBlock({ messageId, block, blockId });
+  } catch (err) {
+    logger.error(`updateMessageBlock failed for ${messageId}`, { error: errorMessage(err) });
+    return undefined;
+  }
+}
+
+/**
+ * Appends the next characters of a block's text to its row.
+ *
+ * **The durable half of a growing block, and the reason its interval is still worth having.** The feed
+ * (`streamMessageBlockText`) carries growth to the windows as it arrives; this commits it, batched, so the
+ * interval now decides how often a turn commits rather than how much of it is rewritten. A whole-text write
+ * per flush is what made a turn cost 47.9x the text it left behind.
+ *
+ * `at` is where these characters start, so the row is spliced exactly as a window splices the feed.
+ */
+export function appendMessageBlockText(blockId: EARS.EntityId, at: number, text: string): void {
+  try {
+    repository.chatCommands.appendMessageBlockText({ blockId, at, text });
+  } catch (err) {
+    logger.error(`appendMessageBlockText failed for ${blockId}`, { error: errorMessage(err) });
+  }
+}
+
+/**
+ * Appends the next characters of a message's own text, and folds when there are enough segments.
+ *
+ * The durable half of a streamed reply. The feed (`streamMessageText`) carries the characters to the
+ * windows as they arrive; this commits them, so the interval decides how often a turn commits rather than
+ * how much of the reply is written again.
+ */
+export function appendMessageText(messageId: EARS.EntityId, at: number, text: string): void {
+  try {
+    repository.chatCommands.appendMessageText({ messageId, at, text });
+  } catch (err) {
+    logger.error(`appendMessageText failed for ${messageId}`, { error: errorMessage(err) });
+  }
+}
+
+/**
+ * Writes one of a block's tool entries, and answers its row.
+ *
+ * **The entries' half of what the segments did for the text.** An entry used to be a member of the
+ * block's `props.entries`, written whole on every flush — and `details.output` holds the untruncated tool
+ * result, so one read of a large file was written again once per later tool event. Writing the entry
+ * alone costs that entry.
+ *
+ * Pass the row id a previous write answered and it is one row by id, with no walk for the entry.
+ */
+export function updateMessageToolEntry(
+  blockId: EARS.EntityId,
+  entry: ToolActivityEntry,
+  entryRowId?: EARS.EntityId,
+): EARS.EntityId | undefined {
+  try {
+    return repository.chatCommands.writeToolEntry({ blockId, entry, entryRowId });
+  } catch (err) {
+    logger.error(`updateMessageToolEntry failed for ${blockId}`, { error: errorMessage(err) });
+    return undefined;
+  }
+}
+
+/**
+ * Folds a block's children into it, so a finished block is one row again.
+ *
+ * The segments and entry rows under a block make a *turn's* writes cost what they write; once the turn is
+ * over they are only cost, to every read of that message and to the store for as long as the thread lives.
+ */
+export function compactMessageBlock(blockId: EARS.EntityId): void {
+  try {
+    repository.chatCommands.compactMessageBlock({ blockId });
+  } catch (err) {
+    logger.error(`compactMessageBlock failed for ${blockId}`, { error: errorMessage(err) });
+  }
+}
+
+/**
+ * Removes a message's block of that type.
+ *
+ * What a writer calls when its block should no longer be there — a tool-activity writer finalising with no
+ * entries. It used to be written as a rewrite of the *surviving* blocks, so removing one rewrote the other.
+ */
+export function removeMessageBlock(messageId: EARS.EntityId, type: string): void {
+  try {
+    repository.chatCommands.removeMessageBlock({ messageId, type });
+  } catch (err) {
+    logger.error(`removeMessageBlock failed for ${messageId}`, { error: errorMessage(err) });
   }
 }
 
@@ -287,7 +392,7 @@ export function streamMessageText(params: {
  */
 export function streamMessageBlockText(params: {
   messageId: EARS.EntityId;
-  block: string;
+  blockId: EARS.EntityId;
   at: number;
   text: string;
   done?: true;
@@ -295,7 +400,7 @@ export function streamMessageBlockText(params: {
   broadcastToSurface('threads', {
     type: 'MESSAGE_BLOCK_TEXT_APPENDED',
     messageId: params.messageId,
-    block: params.block,
+    blockId: params.blockId,
     at: params.at,
     text: params.text,
     ...(params.done ? { done: true as const } : {}),
@@ -586,6 +691,12 @@ export const chatService = {
   sendChoiceBlock,
   sendQuestionBlock,
   updateMessageState,
+  updateMessageBlock,
+  appendMessageBlockText,
+  appendMessageText,
+  updateMessageToolEntry,
+  compactMessageBlock,
+  removeMessageBlock,
   streamMessageText,
   streamMessageBlockText,
   createMarkerMessage,

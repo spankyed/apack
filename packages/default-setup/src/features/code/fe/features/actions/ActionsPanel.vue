@@ -255,11 +255,11 @@ import { MENU_CONTENT_CLASS, MENU_ITEM_CLASS } from '../explorer/constants.ts'
 import { useInfiniteScroll } from '@apackdev/ui/composables/useInfiniteScroll'
 import Button from '@apackdev/ui/design/button'
 import uFuzzy from '@leeoniya/ufuzzy'
-import { codeChild } from '../children.ts';
+import { panelChild } from '../children.ts';
 
 // The code surface's actor, and its codeActions child for tab management
 const codeActor: CodeState = useSurface()
-const codeActionsActor = codeChild(codeActor, 'codeActions')!
+const codeActionsActor = panelChild(codeActor, 'codeActions')!
 
 // The actions, as the actions feature's list view reads them: this panel's own page of it, a page more each time it's
 // read to the end and all of it while searching

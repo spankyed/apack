@@ -54,12 +54,9 @@ export async function action(params: Record<string, any>, services: Services) {
     asideContext: 'Summarize from here',
   }).messageId as EntityId;
 
-  const thinking = createThinkingWriter(services, currentMessageId, { intervalMs: 250 });
-  const writer = createStreamWriter(services, currentMessageId, { intervalMs: 80 });
-  const toolActivity = createToolActivityWriter(services, currentMessageId, {
-    intervalMs: 250,
-    getThinkingBlock: () => thinking.buildBlock(),
-  });
+  const thinking = createThinkingWriter(services, currentMessageId);
+  const writer = createStreamWriter(services, currentMessageId);
+  const toolActivity = createToolActivityWriter(services, currentMessageId, {});
 
   persistCodexState(services, threadId, {
     activeMessageId: currentMessageId as string,
@@ -76,10 +73,12 @@ export async function action(params: Record<string, any>, services: Services) {
     await (services.codex as any).compactThread(state.threadId);
     return { success: true, revert, compacting: true };
   } catch (error: any) {
+    // The writer first: unregistering releases the consumer, whose own finalise would otherwise claim its
+    // last word with an empty buffer and leave this message with no error on it
+    writer.finalize(`⚠️ Codex summarize failed — ${error?.message || 'unknown error'}.`);
     try { (services.codex as any).unregisterConsumer(state.threadId); } catch { /* ok */ }
     persistCodexState(services, threadId, { activeMessageId: undefined, isRunning: false });
     updateChatState(services, threadId as EntityId, 'error');
-    writer.finalize(`⚠️ Codex summarize failed — ${error?.message || 'unknown error'}.`);
     return { success: false, error: error?.message, revert };
   }
 }

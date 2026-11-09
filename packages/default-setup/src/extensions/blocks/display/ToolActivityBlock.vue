@@ -60,12 +60,12 @@
 
         <!-- Summaries -->
         <div class="flex-1 min-w-0">
-          <JsonHoverPopup :value="entry.details?.input" :label="entry.tool" width="trigger">
+          <JsonHoverPopup :value="detailsFor(entry)?.input" :label="entry.tool" width="trigger">
             <div class="text-neutral-400 truncate font-mono text-left" dir="rtl">{{ entry.summary }}</div>
           </JsonHoverPopup>
           <JsonHoverPopup
             v-if="entry.outputSummary && entry.status !== 'running'"
-            :value="entry.details?.output || entry.details?.error"
+            :value="detailsFor(entry)?.output || detailsFor(entry)?.error"
             :label="`${entry.tool} output`"
             width="trigger"
           >
@@ -87,6 +87,7 @@
 
 <script setup lang="ts">
 import { sendToSurface } from '#generated/events.ts'
+import { useView } from '#generated/fe.ts'
 import { ref, computed, watch, nextTick } from 'vue'
 import { ChevronRight, Wrench, Check, Loader2, X, AlertCircle, ArrowRight } from 'lucide-vue-next'
 import JsonHoverPopup from '@apackdev/ui/components/JsonHoverPopup'
@@ -99,7 +100,6 @@ interface ToolActivityEntry {
   status: 'running' | 'ok' | 'denied' | 'error'
   durationMs?: number
   outputSummary?: string
-  details?: { input?: unknown; output?: string; error?: string }
 }
 
 interface ArtifactRef {
@@ -109,7 +109,16 @@ interface ArtifactRef {
 
 interface Props {
   entries: ToolActivityEntry[]
-  label: string
+  /**
+   * The block's own row, which is what its entries' details are asked for by.
+   *
+   * Optional because a block assembled without entries carries none — and because the details are a
+   * separate read, a block drawn before that read answers shows its summaries and no hover content, which
+   * is the same thing it shows for an entry that has no details at all.
+   */
+  blockId?: string
+  /** Derived from the entries, so the backend stores none and this component computes it below */
+  label?: string
   state: 'streaming' | 'done' | 'error'
   defaultOpen?: boolean
   artifactRef?: ArtifactRef
@@ -170,6 +179,16 @@ function onListScroll(e: Event) {
 // honest even if the backend writer lags. The backend-provided `label`
 // from props is the source of truth; we only override if it's missing.
 const label = computed(() => props.label || computeLabel(props.entries, props.state, props.phase))
+
+/**
+ * The entries' full details, read only while this block is open.
+ *
+ * `null` arguments leave the view idle, so a collapsed block — which is every block while a turn streams,
+ * `defaultOpen` being false — subscribes to nothing and the backend reads no tool output for it. What the
+ * row itself draws is `outputSummary`, which its entries carry.
+ */
+const details = useView('threads', 'entryDetails', () => (isOpen.value && props.blockId ? { blockId: props.blockId } : null))
+const detailsFor = (entry: ToolActivityEntry) => details.data?.[entry.id]
 
 
 // While streaming: last running entry. When done: last entry overall.

@@ -29,7 +29,9 @@ const server = net.createServer(connection => {
   readline.createInterface({ input: connection }).on('line', line => {
     const request = JSON.parse(line);
     const answers = (script[request.kind] ?? []).map(event =>
-      typeof event === 'string' ? JSON.parse(event.replaceAll('$session', request.session ?? 's-1')) : event);
+      typeof event === 'string'
+        ? JSON.parse(event.replaceAll('$session', request.session ?? 's-1').replaceAll('$pid', String(request.pid ?? 0)))
+        : event);
     if (answers.length === 0) return;
     // **One write, so a request's answers are one read.** Two writes are two syscalls that the socket
     // coalesces or not as it pleases, which makes 'these frames arrive together' a property of the day
@@ -244,6 +246,22 @@ describe('the broker client', () => {
       { kind: 'signal', session: 's-1', signal: 'SIGTERM', scope: { kind: 'pid', pid: 4243 } },
       { kind: 'signal', session: 's-1', signal: 'SIGKILL', scope: { kind: 'group' } },
     ]);
+  });
+
+  it('asks whether a pid is inside a session, and takes only the answer about that pid', async () => {
+    // **The pid is the correlation.** The session cannot be: a caller admitting several claims has more
+    // than one of these outstanding, so the first frame here is an answer about a pid nobody asked about
+    const fake = await broker({
+      ...OPENS,
+      owns: [
+        '{"kind":"owns","session":"$session","pid":999,"owned":true}',
+        '{"kind":"owns","session":"$session","pid":$pid,"owned":false}',
+      ],
+    });
+    const session = await fake.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
+
+    // `true` is what a client that read the first frame would answer, which is a claim admitted wrongly
+    await expect(session.owns(4243)).resolves.toBe(false);
   });
 
   it('reports a session killed by a signal as that signal and no code', async () => {

@@ -297,11 +297,13 @@ class TerminalPool {
   }
 
   /**
-   * Returns an existing entry or constructs a new one. Pass `sendInput` as the
-   * callback to forward xterm's onData (user input + synthesized responses
-   * from live queries) to the backend pty. The callback is wired only AFTER
-   * any replay from terminalEventBus has been fully parsed, so
-   * synthesized responses during the replay are dropped.
+   * Returns an existing entry or constructs a new one.
+   *
+   * `sendInput` is what the emulator sends the pty: the user's keystrokes, and the replies it makes on their
+   * behalf to a query a program in the pty asked (DA, DSR, a cursor position). It is wired as the entry is
+   * built, because **nothing is replayed into a new emulator** — the byte log and its window storage are gone
+   * (F3, F6, F11), so there is no historical write whose replies would have to be held back, and a
+   * parse boundary to wire it after would be a boundary in nothing.
    */
   ensure(info: TerminalInfo, sendInput: (data: string) => void): PoolEntry {
     const existing = this.entries.get(info.id)
@@ -402,9 +404,9 @@ class TerminalPool {
       return true
     })
 
-    // Subscribe to pty output for this terminal. This happens BEFORE the replay
-    // so writes are queued in order behind it (xterm processes writes
-    // FIFO, so cbReplay fires before any live data is parsed).
+    // **Subscribed before the banner is written, so the first live byte is ordered behind it.** The emulator
+    // parses writes FIFO, and the subscriber clears the banner on the first byte it delivers: subscribing
+    // after the banner would let output that arrived in between be cleared along with it.
     const unsubscribe = terminalEventBus.subscribe(info.id, (_id, data) => {
       if (entry.isShowingLoadingContent) {
         term.clear()
@@ -609,10 +611,10 @@ class TerminalPool {
   /**
    * Force the native scrollbar to match the desired viewport position after
    * attach/fit. Uses term.write('', cb) as the wait primitive so the callback
-   * fires only after every queued xterm write has been fully parsed — this
-   * handles a large replay that may still be parsing when we'd otherwise race.
-   * Reading scrollHeight synchronously forces layout, so the viewport spacer
-   * is up to date when we write scrollTop.
+   * fires only after every queued write has been fully parsed — a burst of live output can still be
+   * parsing when a host attaches, and positioning the viewport against a buffer that is still growing
+   * lands it somewhere the next parsed chunk moves. Reading scrollHeight synchronously forces layout, so
+   * the viewport spacer is up to date when we write scrollTop.
    *
    * We write scrollTop directly (rather than calling term.scrollToBottom())
    * because xterm's scrollToBottom is a no-op when ydisp === ybase — always

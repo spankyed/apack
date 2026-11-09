@@ -13,7 +13,7 @@ import { spawnCompilerWorker } from '../../src/build/compiler-process.ts';
 import { readCompilerRuntimeInputs } from '../../src/build/compiler-runtime.ts';
 import { nativeFixture } from '../_support/native-libraries.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
-import { execFileWhileWorking, processWork, watchWork } from '@apackdev/sdk/progress';
+import { describeRefusal, execFileWhileWorking, processWork, watchWork } from '@apackdev/sdk/progress';
 
 // The native-library proofs are split by subject so the native half's shards can spread them; this one is
 // the captured Electron runtime, runtime-linked Mach-O libraries and default-fallback lookup.
@@ -118,7 +118,7 @@ it.runIf(process.platform === 'darwin' || process.platform === 'linux').each(ele
     }, root);
     const watch = child.pid === undefined ? undefined : watchWork({
       work: processWork(child.pid), ceilingMs: timeoutMs, fallbackMs: timeoutMs,
-      onRefused: (why) => ended.abort(new Error(`pack ${args[0]} ${why}`)),
+      onRefused: (refusal) => ended.abort(new Error(`pack ${args[0]} ${describeRefusal(refusal)}`)),
     });
     let output = '';
     child.stdout!.on('data', bytes => { output += bytes; });

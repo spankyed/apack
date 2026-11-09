@@ -83,7 +83,7 @@ import { useSelector } from '@xstate/vue'
 import { type CodeState } from '#features/code/fe/state.ts'
 import { isAnyMenuOpen, useSurface } from '@apackdev/sdk/fe'
 import BaseDirectoryMenu from '#features/code/fe/features/explorer/components/BaseDirectoryMenu.vue'
-import { codeChild } from './children.ts';
+import { panelChild } from './children.ts';
 import {
   FolderOpen,
   Search,
@@ -104,9 +104,9 @@ defineEmits<{
 }>()
 
 const actor: CodeState = useSurface()
-const explorerActor = codeChild(actor, 'explorer')!
-const terminalActor = codeChild(actor, 'terminal')!
-const commitActor = codeChild(actor, 'commit')!
+const explorerActor = panelChild(actor, 'explorer')!
+const terminalActor = panelChild(actor, 'terminal')!
+const commitActor = panelChild(actor, 'commit')!
 
 const changeCount = useSelector(commitActor, (state) => state.context.gitStatus?.length ?? 0)
 

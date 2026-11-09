@@ -211,9 +211,14 @@ docs point at `npm ci` when both files must stay in sync.
 3. **This repo's elmdb action downloads instead of compiling**, and the shared fact becomes the release it
    names. The broker keeps compiling, deliberately: one checkout built from source still exercises the
    container's toolchain derivation and the janitor, so nothing rots unnoticed between the two halves.
-4. **The broker's per-platform packages, then the same switch.** Under the artifact step a release asset is
-   just a file and `brokerBinary()` already knows how to want one, so the package split is work the registry
-   needs and the artifact step does not.
+4. **The broker's per-platform packages, then the same switch — after
+   [goal-one-vt-core](../goals/goal-one-vt-core.md), not before** (its D8, settled 2026-11-09). That goal
+   gives the broker a pinned per-target binary dependency of its own on the same four triples, so packaging
+   it first means building this matrix twice and the second time is the one with a native artifact in it.
+   Steps 1 to 3 are unaffected and run beside it; the broker staying vendored and compiled throughout is
+   what step 3 wants anyway. Under the artifact step a release asset is just a file and `brokerBinary()`
+   already knows how to want one, so the package split is work the registry needs and the artifact step does
+   not.
 5. **The registry**, once the loop has held and both matrices build on release. Each sibling repository
    releases itself: changesets covers the five `@apackdev` packages and must not be extended to these two,
    which would tie their versions to the app's.

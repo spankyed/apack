@@ -102,12 +102,12 @@ import { FolderOpen, FolderPlus, RefreshCw, AlertCircle, X } from 'lucide-vue-ne
 import { useExplorerSelection } from './composables/useExplorerSelection.ts'
 import { useExplorerDragDrop } from './composables/useExplorerDragDrop.ts'
 import type { FileInfo } from './state.ts'
-import { codeChild } from '../children.ts';
+import { panelChild } from '../children.ts';
 
 // Get actors
 const codeActor: CodeState = useSurface()
-const explorerActor = codeChild(codeActor, 'explorer')!
-const terminalActor = codeChild(codeActor, 'terminal')!
+const explorerActor = panelChild(codeActor, 'explorer')!
+const terminalActor = panelChild(codeActor, 'terminal')!
 
 // State selectors
 const baseDirectory = useSelector(codeActor, (state) => state.context.baseDirectory)

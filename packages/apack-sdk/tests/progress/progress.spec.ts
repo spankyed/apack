@@ -230,6 +230,25 @@ describe('what a watch says it spent, which a ceiling measures', () => {
     watch.stop();
   });
 
+  /** The container's VM counts host load as guest CPU, so there a ceiling is a clock; a stall still means a stall */
+  it('applies no ceiling under APACK_CEILING=off, and still ends a party that stops working', async () => {
+    vi.stubEnv('APACK_CEILING', 'off');
+    try {
+      let refused: Refusal | undefined;
+      let total = 0;
+      const spinning = watchWork({ work: async () => (total += 2_000), idleMs: IDLE, ceilingMs: 5_000, onRefused: (refusal) => { refused = refusal; } });
+      await vi.advanceTimersByTimeAsync(6 * (IDLE / 4));
+      expect(refused, 'a ceiling fired under APACK_CEILING=off').toBeUndefined();
+      spinning.stop();
+      const idle = watchWork({ work: async () => 0, idleMs: IDLE, ceilingMs: 5_000, onRefused: (refusal) => { refused = refusal; } });
+      await vi.advanceTimersByTimeAsync(IDLE + IDLE / 4);
+      expect(refused).toMatchObject({ kind: 'stalled' });
+      idle.stop();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('refuses at its ceiling with what it spent against how long it took, and how long since its output', async () => {
     let refused: Refusal | undefined;
     let total = 0;

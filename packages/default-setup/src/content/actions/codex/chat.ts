@@ -112,9 +112,9 @@ export async function action(params: Record<string, any>, services: Services, _z
   // ─── Placeholder message + writers ──────────────────────────────────
   const currentMessageId = services.chat.sendBlockMessage({ threadId, text: 'Thinking…', blocks: [], forkable: false }).messageId;
   services.chat.updateMessageState(currentMessageId as any, { context: { agent: 'Codex' } } as any);
-  const thinking = createThinkingWriter(services, currentMessageId, { intervalMs: 250 });
-  const writer = createStreamWriter(services, currentMessageId, { intervalMs: 80 });
-  const toolActivity = createToolActivityWriter(services, currentMessageId, { intervalMs: 250, getThinkingBlock: () => thinking.buildBlock() });
+  const thinking = createThinkingWriter(services, currentMessageId);
+  const writer = createStreamWriter(services, currentMessageId);
+  const toolActivity = createToolActivityWriter(services, currentMessageId, {});
 
   ensureSessionMarker(services, threadId);
   persistCodexState(services, threadId, { startedAt: prior?.startedAt ?? Date.now(), sessionError: undefined, ...(effectiveModel && { model: effectiveModel }) });
@@ -231,14 +231,16 @@ export async function action(params: Record<string, any>, services: Services, _z
   } catch (err: any) {
     const message = err?.message || 'Codex query failed to start';
     log.error('[codex] chat failed', { message, stack: err?.stack });
+    // The writers first: unregistering releases the consumer, whose own finalise would otherwise claim the
+    // stream writer's last word with its empty buffer and leave this message with no error on it
+    toolActivity.finalise('error');
+    writer.finalize(`⚠️ ${message}`);
     // Clean up consumer if it was registered
     if (activeThreadId) {
       try { codex.unregisterConsumer(activeThreadId); } catch { /* may not exist */ }
     }
-    toolActivity.finalise('error');
     setRunning(services, threadId, false);
     updateChatState(services, threadId, 'idle');
-    writer.finalize(`⚠️ ${message}`);
     return { success: false, error: message, messageId: currentMessageId };
   }
 }

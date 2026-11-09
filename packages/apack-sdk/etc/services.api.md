@@ -510,6 +510,7 @@ export interface TerminalService {
         shell?: string;
         args?: readonly string[];
         env?: Readonly<Record<string, string>>;
+        unset?: readonly string[];
         cwd?: string;
     }, listeners: TerminalListeners): Promise<TerminalSession>;
 }
@@ -518,6 +519,7 @@ export interface TerminalService {
 export interface TerminalSession {
     facts(): Promise<TerminalFacts>;
     readonly id: string;
+    owns(pid: number): Promise<boolean>;
     pause(): Promise<void>;
     readonly pid: number | null;
     resize(cols: number, rows: number): Promise<void>;

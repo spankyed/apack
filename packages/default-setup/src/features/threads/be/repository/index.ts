@@ -7,7 +7,7 @@ import { RepositoryError, RepositoryErrorCode } from '@apackdev/sdk/repositories
 import { wouldCreateCycle } from '@apackdev/sdk/ears';
 import { createLogger } from '@apackdev/sdk/logger';
 import type {
-  ThreadEntity, MessageEntity, ArtifactEntity, BlockConfig, MessageReferences,
+  ThreadEntity, MessageEntity, ArtifactEntity, BlockConfig, StoredBlock, MessageReferences, ToolActivityEntry,
   ThreadCreateData,
   ThreadExtendedData,
   ThreadExtended,
@@ -48,11 +48,8 @@ export const threadQueries = {
   idByRole: (role: EARS.RoleKind): EARS.EntityId | undefined =>
     query.all().withRole(role).first(),
 
-  // Get thread messages
-  messages: (threadId: EARS.EntityId) => 
-    query.ids(threadId)
-      .out(EARS.RelKind.CONTAINS, EARS.Entity.Message)
-      .pick(["text", "sender", "timestamp", "compacted", "isCommand"] as const),
+  /** A thread's messages, assembled — the one reader, so nothing here picks its own fields */
+  messages: (threadId: EARS.EntityId) => messagesOfThread(threadId),
   
   /** The threads this one links to, by kind, then the threads that block it, as `blocked by` */
   linkedThreads: (threadId: EARS.EntityId): Array<{ relation: ThreadLinkRelation } & Pick<ThreadEntity, 'id' | 'shortCode' | 'topic' | 'status' | 'timestamp'>> => {
@@ -306,6 +303,8 @@ export const threadCommands = {
     // 1. Delete all messages linked to this thread
     const messages = query.ids(id).out(EARS.RelKind.CONTAINS, EARS.Entity.Message).ids();
     for (const messageId of messages) {
+      discardBlocks(messageId, 'destroy');
+      discardMessageText(messageId);
       write(messageId).destroy();
     }
 
@@ -415,7 +414,433 @@ function getThreadArtifacts(threadId: EARS.EntityId): ArtifactItem[] {
     .sort((a, b) => b.metadata.createdAt - a.metadata.createdAt);
 }
 
-const messagePickFields = ["id", "text", "sender", "timestamp", "blocks", "blockResponse", "responseTimestamp", "forkable", "references", "isCommand", "command", "context", "autoHide", "asUser", "asideText", "asideContext", "status", "compacted"] as const;
+/**
+ * A message's blocks, in the order its edges record, each with the row it came from.
+ *
+ * One relation walk per message. The chat and detail pages list message *ids* and each message is its own view,
+ * so this runs for the one message that changed rather than for a page of them.
+ *
+ * **Every read carries the id**, because a type does not address a block: a message may hold two of one type.
+ * This was two functions, one with ids for the callers that could not assume otherwise and one without, and
+ * the plain one was the trap — a caller that wrote a block back by type reached the first of its type.
+ */
+function blocksOf(messageId: EARS.EntityId): StoredBlock[] {
+  return childrenOfMessages([messageId]).get(messageId) ?? [];
+}
+
+/**
+ * Every one of these messages' blocks, assembled, in four reads however many messages there are.
+ *
+ * `query.ids` and `outEdges` both take the whole set, so a thread's messages cost one edge walk, one
+ * batched read of the block rows, and `childrenOf`'s own pair for every block at once. Asking per message
+ * is what made reading a thread linear in its messages and then linear again in their children.
+ */
+function childrenOfMessages(messageIds: readonly EARS.EntityId[]): Map<EARS.EntityId, StoredBlock[]> {
+  const blocks = new Map<EARS.EntityId, StoredBlock[]>();
+  if (messageIds.length === 0) return blocks;
+
+  const edges = query.ids(messageIds).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block);
+  if (edges.length === 0) return blocks;
+
+  const rows = rowsByIdOf(edges.map((edge) => edge.target), ['type', 'props'] as const);
+  const parts = childrenOf(edges.map((edge) => edge.target));
+
+  for (const edge of [...edges].sort((a, b) => indexOf(a.info) - indexOf(b.info))) {
+    const row = rows.get(edge.target);
+    if (!row) continue;
+    const held = blocks.get(edge.source) ?? [];
+    held.push({ id: edge.target, type: row.type as string, props: assembled(parts, edge.target, (row.props ?? {}) as Record<string, any>) });
+    blocks.set(edge.source, held);
+  }
+  return blocks;
+}
+
+/**
+ * Rows by id, in one read of the engine rather than one per id.
+ *
+ * **`query.ids` takes the whole list**, which is the difference between a message's read costing what it
+ * holds and costing a constant. Asking per id made reading a message with forty tool entries 45 crossings
+ * where it is now the same handful as a message with none (`tests/features/threads/be/query-work.spec.ts`).
+ */
+function rowsByIdOf<const F extends readonly string[]>(ids: readonly EARS.EntityId[], fields: F): Map<EARS.EntityId, Record<string, any>> {
+  if (ids.length === 0) return new Map();
+  const rows = query.ids(ids).pick(fields as never) as unknown as Array<Record<string, any>> | null;
+  return new Map((rows ?? []).map((row) => [row.id as EARS.EntityId, row]));
+}
+
+/**
+ * How many segments a block carries before its text is folded back into it.
+ *
+ * **Not for the crossings, which are constant.** A read of a message costs two edge walks and two row
+ * reads whatever its blocks hold (`childrenOf`), so segments cost it nothing in reads of the engine — an
+ * earlier version of this comment justified the fold by a quadratic that the batching removed. What it
+ * bounds is what a read *assembles*: a view re-runs on every append, so without a fold a three-minute turn
+ * concatenates ninety segments ninety times. Folding at a count bounds that, and bounds the rows a turn
+ * holds open, at one whole-text write per fold.
+ *
+ * At 32, a turn of ninety appends writes about 2.4x its text and no read of it assembles more than 32
+ * segments. The figure is a balance rather than a measurement, so it needs no record of conditions; what
+ * it must not become is a per-caller knob, which would make what a block costs depend on who wrote it.
+ *
+ * **The entries have no equivalent, and that is a decision rather than an omission.** A segment is a few
+ * hundred characters of text that accretes, so folding thirty of them is a small write. An entry carries
+ * `details.output`, the untruncated tool result, and arrives whole — so folding entries mid-turn would
+ * write every output again, which is the amplification the rows removed. They fold once, when the block
+ * stops growing (`compactMessageBlock`).
+ */
+const TEXT_SEGMENTS_BEFORE_COMPACTION = 32;
+
+/**
+ * Every block's growing children, read for all of them at once.
+ *
+ * **Four reads for a message however many blocks it has and however much they hold** — two edge walks and
+ * two row reads — because `query.ids` and `outEdges` both take the whole set. Per block and per child it
+ * was one read each, which put a message's cost on the hot path at what its turn happened to produce.
+ */
+interface BlockChildren {
+  readonly segments: Map<EARS.EntityId, Array<{ id: EARS.EntityId; at: number; text: string }>>;
+  readonly entries: Map<EARS.EntityId, Array<{ id: EARS.EntityId; entry: ToolActivityEntry }>>;
+}
+
+/**
+ * What an entry contributes to its block's props: the fields the collapsed row draws, and **not** `details`.
+ *
+ * `details.output` is the whole tool result — a `Read` of a large file is that file — and it is revealed on
+ * hover, inside a block the user has opened. Carried in the props it was read on every re-run of the
+ * message's view, which re-runs on every append while a turn streams, so a window paid for every tool's
+ * full output to draw rows showing a 120-character summary of each. That is a different axis from the
+ * crossings this file's neighbour bounded: one read, and all of it.
+ *
+ * `entryDetails` serves them instead, to the window that has the block open. EARS holds one value per
+ * attribute and `pick` reads the ones it names, so leaving `details` out of this list is what stops it
+ * being read — and `BLOCK_DETAILS` is where it goes once the entry rows are folded away.
+ */
+const TOOL_ENTRY_FIELDS = ['entryId', 'tool', 'summary', 'status', 'durationMs', 'outputSummary'] as const;
+
+/**
+ * The attribute a compacted block keeps its entries' details under, by entry id.
+ *
+ * **A separate attribute rather than a field of `props`**, which is what lets a finished block stay one row
+ * without putting the turn's whole output back into every read of it: a message's read picks `type` and
+ * `props`, so this is not loaded, and the hover's own read names it alone.
+ */
+const BLOCK_DETAILS = 'entryDetails';
+
+function childrenOf(blockIds: readonly EARS.EntityId[]): BlockChildren {
+  const segments = new Map<EARS.EntityId, Array<{ id: EARS.EntityId; at: number; text: string }>>();
+  const entries = new Map<EARS.EntityId, Array<{ id: EARS.EntityId; entry: ToolActivityEntry }>>();
+  if (blockIds.length === 0) return { segments, entries };
+
+  const textEdges = query.ids(blockIds).outEdges(EARS.RelKind.HAS_TEXT, EARS.Entity.BlockText);
+  const entryEdges = query.ids(blockIds).outEdges(EARS.RelKind.HAS_ENTRY, EARS.Entity.ToolEntry);
+
+  const textRows = rowsByIdOf(textEdges.map((edge) => edge.target), ['at', 'text'] as const);
+  const entryRows = rowsByIdOf(entryEdges.map((edge) => edge.target), TOOL_ENTRY_FIELDS);
+
+  for (const edge of textEdges) {
+    const row = textRows.get(edge.target);
+    if (!row) continue;
+    const held = segments.get(edge.source) ?? [];
+    held.push({ id: edge.target, at: row.at as number, text: row.text as string });
+    segments.set(edge.source, held);
+  }
+  for (const edge of entryEdges) {
+    const row = entryRows.get(edge.target);
+    if (!row) continue;
+    const held = entries.get(edge.source) ?? [];
+    held.push({ id: edge.target, entry: toolEntryOf(row), index: indexOf(edge.info) } as never);
+    entries.set(edge.source, held);
+  }
+
+  for (const held of segments.values()) held.sort((a, b) => a.at - b.at);
+  for (const held of entries.values()) {
+    held.sort((a, b) => ((a as never as { index: number }).index) - ((b as never as { index: number }).index));
+  }
+  return { segments, entries };
+}
+
+/**
+ * A block's stored props with its children folded in: text segments spliced onto the compacted prefix, and
+ * entry rows as the list its component draws.
+ *
+ * **A block's growing parts are children, and they assemble into the two prop names the components read.**
+ * Naming `content` and `entries` here is the contract rather than a leak: there are two kinds of growing
+ * part and they are genuinely different — text spliced by offset, entries ordered by their edge — so a
+ * generic part mechanism invented for two cases would be machinery standing in for a decision.
+ */
+function assembled(parts: BlockChildren, blockId: EARS.EntityId, props: Record<string, any>): Record<string, any> {
+  let held = props;
+
+  const segments = parts.segments.get(blockId) ?? [];
+  if (segments.length > 0) {
+    const content = segments.reduce(
+      (text, segment) => text.slice(0, segment.at) + segment.text,
+      typeof held.content === 'string' ? held.content : '',
+    );
+    held = { ...held, content };
+  }
+
+  const entries = parts.entries.get(blockId) ?? [];
+  // `blockId` beside them because the entries no longer carry their `details`: it is what the component
+  // names to ask for them (`entryDetails`), and only a block with entries has anything to ask about
+  if (entries.length > 0) held = { ...held, entries: entries.map(({ entry }) => entry), blockId };
+
+  return held;
+}
+
+/** An entry as its block's props carry it: the stored row under the `id` its component and the CLI use */
+const toolEntryOf = (row: Record<string, unknown>): ToolActivityEntry => {
+  const { entryId, ...rest } = row as { entryId: string } & Record<string, unknown>;
+  return { ...rest, id: entryId } as unknown as ToolActivityEntry;
+};
+
+/** One block's text segments in offset order, each with its row */
+const segmentsOf = (blockId: EARS.EntityId) => childrenOf([blockId]).segments.get(blockId) ?? [];
+
+/** One block's tool entries in edge order, each with its row */
+const entriesOf = (blockId: EARS.EntityId) => childrenOf([blockId]).entries.get(blockId) ?? [];
+
+/** Folds a block's segments into its own text and removes them; the block then reads as it always did */
+function compactBlockText(blockId: EARS.EntityId): void {
+  const parts = childrenOf([blockId]);
+  if ((parts.segments.get(blockId) ?? []).length === 0) return;
+  const props = (query.ids(blockId).pickOne(['props'] as const)?.props ?? {}) as Record<string, any>;
+  write(blockId).set('props', assembled(parts, blockId, props));
+  const segments = parts.segments.get(blockId) ?? [];
+  for (const segment of segments) {
+    write(blockId).unlink(EARS.RelKind.HAS_TEXT, segment.id);
+    write(segment.id).destroy();
+  }
+}
+
+/**
+ * The full details of a block's tool entries, by the entry id its component draws them under.
+ *
+ * **Both places they can be**, because a block is compacted when its writer finishes: the live entry rows
+ * while a turn runs, and `BLOCK_DETAILS` on the block itself once those rows have been folded away. A read
+ * that knew only the rows would answer nothing for every finished turn, which is most of a thread.
+ */
+/**
+ * The details carried inside a block's entries, and the props with them removed — or nothing when there are
+ * none to move.
+ *
+ * The inverse of what `blocksForCopy` does, so one shape travels between databases: the entries carry their
+ * own details in an export file or a fork, and a stored block keeps them under `entryDetails`.
+ */
+function detailsWithin(props: Record<string, any>): { props: Record<string, any>; byEntry: Record<string, ToolActivityEntry['details']> } | undefined {
+  const entries = props.entries as Array<{ id: string; details?: ToolActivityEntry['details'] }> | undefined;
+  if (!Array.isArray(entries) || !entries.some((entry) => entry?.details)) return undefined;
+  const byEntry: Record<string, ToolActivityEntry['details']> = {};
+  const stripped = entries.map(({ details, ...rest }) => {
+    if (details) byEntry[rest.id] = details;
+    return rest;
+  });
+  return { props: { ...props, entries: stripped }, byEntry };
+}
+
+function entryDetailsOf(blockId: EARS.EntityId): Record<string, ToolActivityEntry['details']> {
+  const folded = (query.ids(blockId).pickOne([BLOCK_DETAILS] as const)?.[BLOCK_DETAILS] ?? {}) as Record<string, ToolActivityEntry['details']>;
+  const live = rowsByIdOf(
+    query.ids(blockId).outEdges(EARS.RelKind.HAS_ENTRY, EARS.Entity.ToolEntry).map((edge) => edge.target),
+    ['entryId', 'details'] as const,
+  );
+  const held: Record<string, ToolActivityEntry['details']> = { ...folded };
+  for (const row of live.values()) {
+    if (row.entryId !== undefined) held[row.entryId as string] = row.details as ToolActivityEntry['details'];
+  }
+  return held;
+}
+
+/** The message's block of that type, or absence; the type is what a streaming writer owns one by */
+
+/** The position an edge records; an edge written before one was recorded sorts last rather than first */
+const indexOf = (info: unknown): number =>
+  typeof info === 'object' && info !== null && typeof (info as { index?: unknown }).index === 'number'
+    ? (info as { index: number }).index
+    : Number.MAX_SAFE_INTEGER;
+
+/** Creates a message's blocks as rows, each edge recording its position */
+/** Creates a message's blocks, and answers them as a read would — with the rows they were created as */
+function createBlocks(messageId: EARS.EntityId, blocks: readonly BlockConfig[]): StoredBlock[] {
+  // Past whatever the message already holds, by the rule every other block write uses: `writeMessageBlocks`
+  // is a public command and may be given a message that has blocks, where a position taken from the array
+  // index is one a block already has
+  const from = nextIndexOf(query.ids(messageId).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block));
+  return blocks.map((block, index) => {
+    const blockId: EARS.EntityId = create(EARS.Entity.Block, { type: block.type, props: block.props }).id();
+    write(messageId).link(EARS.RelKind.HAS_BLOCK, blockId, { info: { index: from + index } });
+    // **`props.blockId` names the block's own row, so a copied block must not keep the one it came from.**
+    // A fork and an import both pass a read message's blocks straight back in, and that value is what the
+    // component asks `entryDetails` for — a row in the thread it was forked from, or one this database has
+    // never had.
+    let props = 'blockId' in block.props ? { ...block.props, blockId } : block.props;
+    // **A copied block carries its entries' details inside them; this is where they go back under the
+    // block's own attribute.** A read of a message leaves `details` out on purpose — a tool's whole output,
+    // re-read on every re-run of the view — so a block written from a fork or an import must not keep them
+    // in its props. A block the app created never carries any, and this does nothing.
+    const details = detailsWithin(props);
+    if (details) {
+      props = details.props;
+      write(blockId).set(BLOCK_DETAILS, details.byEntry);
+    }
+    if (props !== block.props) write(blockId).set('props', props);
+    return { id: blockId, type: block.type, props };
+  });
+}
+
+/**
+ * Discards a message's blocks the way the message itself is being discarded.
+ *
+ * **EARS cascades nothing, so an owner's children are the owner's to discard** — the shape `flowRepository`'s
+ * `deleteFlow` uses for its nodes and `collectionRepository` for a folder's children. Without this a deleted
+ * message leaves rows no message reaches. `trash()` is the soft one reads skip, `destroy()` the hard one, and
+ * which a block gets is whichever its message got.
+ */
+/**
+ * A message's text segments go outright with it, whichever way it goes.
+ *
+ * They are a turn's working state and never the user's, as a block's are — and a trashed message reads
+ * through `assembledMessage`, which would otherwise splice rows nothing reaches.
+ */
+function discardMessageText(messageId: EARS.EntityId): void {
+  for (const segment of textOf([messageId]).get(messageId) ?? []) {
+    write(messageId).unlink(EARS.RelKind.HAS_MESSAGE_TEXT, segment.id);
+    write(segment.id).destroy();
+  }
+}
+
+/**
+ * A block's own children, gone.
+ *
+ * **Its own function because a block is destroyed from two places** and only one of them remembered: a
+ * message being discarded walked them, and `removeMessageBlock` destroyed the block alone, leaving its
+ * segments and tool entries as rows nothing reaches. They are a block's working state and never the
+ * user's, so they go outright however the block goes.
+ */
+function discardBlockChildren(blockId: EARS.EntityId): void {
+  for (const segment of segmentsOf(blockId)) {
+    write(blockId).unlink(EARS.RelKind.HAS_TEXT, segment.id);
+    write(segment.id).destroy();
+  }
+  for (const entry of entriesOf(blockId)) {
+    write(blockId).unlink(EARS.RelKind.HAS_ENTRY, entry.id);
+    write(entry.id).destroy();
+  }
+}
+
+function discardBlocks(messageId: EARS.EntityId, how: 'trash' | 'destroy'): void {
+  for (const edge of query.ids(messageId).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block)) {
+    discardBlockChildren(edge.target);
+    if (how === 'trash') write(edge.target).trash();
+    else write(edge.target).destroy();
+  }
+}
+
+/**
+ * The position a new child takes among a parent's edges of a kind: past the furthest one recorded.
+ *
+ * **Not the count of them.** A count collides the moment one is removed — two blocks at 0 and 1, remove
+ * the first, and the next arrives at 1 beside the one already there, so the order a read sorts by is a
+ * tie. Reading the furthest recorded instead keeps positions unique for the life of the parent, which is
+ * all the sort needs; nothing renumbers and nothing reorders.
+ */
+function nextIndexOf(edges: ReadonlyArray<{ info?: unknown }>): number {
+  return edges.reduce((furthest, edge) => {
+    const at = indexOf(edge.info);
+    return at === Number.MAX_SAFE_INTEGER || at < furthest ? furthest : at + 1;
+  }, 0);
+}
+
+function blockIdOfType(messageId: EARS.EntityId, type: string): EARS.EntityId | undefined {
+  return query.ids(messageId).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block)
+    .map((edge) => edge.target)
+    .find((id) => query.ids(id).pickOne(['type'] as const)?.type === type);
+}
+
+/**
+ * **Every field a message is read with, and the one list there is.**
+ *
+ * There were four — this one, `threadQueries.messages`', `export-threads`' own, and `messageById`'s — and
+ * nothing said which was authoritative. Each had drifted: the export's lacked `context` and `compacted`,
+ * `threadQueries.messages`' lacked `id`. A reader that wants fewer fields still costs the same read, since
+ * a `pick` reads the row either way, so there was nothing to buy by differing.
+ *
+ * It matters more now that a message is assembled rather than read: `text` and `blocks` come from child
+ * rows, so a caller that picks its own fields gets a row with neither, and **truncated text does not
+ * crash** — it reaches a title, a recap, a transcript or a fork copy as if it were whole. One list and one
+ * reader is what makes that impossible rather than caught.
+ */
+const messagePickFields = ["id", "text", "sender", "timestamp", "blockResponse", "responseTimestamp", "createdAt", "updatedAt", "forkable", "references", "isCommand", "command", "context", "autoHide", "asUser", "asideText", "asideContext", "status", "compacted"] as const;
+
+/** One message, assembled: its row's fields with its children folded in */
+function messageOf(messageId: EARS.EntityId): MessageEntity | null {
+  const row = query.ids(messageId).pickOne(messagePickFields);
+  if (!row) return null;
+  return assembledMessage(row as Partial<MessageEntity>, blocksOf(messageId), textOf([messageId]).get(messageId) ?? []);
+}
+
+/** A row's fields with its children folded in: the blocks it holds and the text appended since its prefix */
+function assembledMessage(
+  row: Partial<MessageEntity>,
+  blocks: BlockConfig[],
+  segments: ReadonlyArray<{ id: EARS.EntityId; at: number; text: string }>,
+): MessageEntity {
+  const text = segments.reduce(
+    (held, segment) => held.slice(0, segment.at) + segment.text,
+    typeof row.text === 'string' ? row.text : '',
+  );
+  return {
+    ...row,
+    entityType: EARS.Entity.Message,
+    ...(segments.length > 0 && { text }),
+    ...(blocks.length > 0 && { blocks }),
+  } as MessageEntity;
+}
+
+/** These messages' text segments in offset order, in two reads however many messages there are */
+function textOf(messageIds: readonly EARS.EntityId[]): Map<EARS.EntityId, Array<{ id: EARS.EntityId; at: number; text: string }>> {
+  const held = new Map<EARS.EntityId, Array<{ id: EARS.EntityId; at: number; text: string }>>();
+  if (messageIds.length === 0) return held;
+
+  const edges = query.ids(messageIds).outEdges(EARS.RelKind.HAS_MESSAGE_TEXT, EARS.Entity.MessageText);
+  if (edges.length === 0) return held;
+
+  const rows = rowsByIdOf(edges.map((edge) => edge.target), ['at', 'text'] as const);
+  for (const edge of edges) {
+    const row = rows.get(edge.target);
+    if (!row) continue;
+    const mine = held.get(edge.source) ?? [];
+    mine.push({ id: edge.target, at: row.at as number, text: row.text as string });
+    held.set(edge.source, mine);
+  }
+  for (const mine of held.values()) mine.sort((a, b) => a.at - b.at);
+  return held;
+}
+
+/**
+ * A thread's messages, assembled, in the order the chat shows them: queued last.
+ *
+ * One relation walk and one batched read of the rows, then the children for all of them at once — so a
+ * thread of a hundred messages costs a constant number of crossings rather than one read per message
+ * (`tests/features/threads/be/query-work.spec.ts`).
+ */
+function messagesOfThread(threadId: EARS.EntityId): MessageEntity[] {
+  const rows = (query.ids(threadId).out(EARS.RelKind.CONTAINS, EARS.Entity.Message).pick(messagePickFields) ?? []) as Partial<MessageEntity>[];
+  const ids = rows.flatMap((row) => (row.id ? [row.id as EARS.EntityId] : []));
+  const children = childrenOfMessages(ids);
+  const text = textOf(ids);
+  return rows
+    .map((row) => assembledMessage(
+      row,
+      children.get(row.id as EARS.EntityId) ?? [],
+      text.get(row.id as EARS.EntityId) ?? [],
+    ))
+    .sort((a, b) => {
+      if (a.status === 'queued' && b.status !== 'queued') return 1;
+      if (b.status === 'queued' && a.status !== 'queued') return -1;
+      return 0;
+    });
+}
 
 function getThreadFields(threadId: EARS.EntityId): AgentThreadData | null {
   const thread = query.ids(threadId)
@@ -425,15 +850,7 @@ function getThreadFields(threadId: EARS.EntityId): AgentThreadData | null {
   return thread[0] as AgentThreadData | null;
 }
 
-function getAllThreadMessages(threadId: EARS.EntityId): Partial<MessageEntity>[] {
-  return (query.ids(threadId)
-    .out(EARS.RelKind.CONTAINS, EARS.Entity.Message).pick(messagePickFields) ?? [])
-    .sort((a, b) => {
-      if (a.status === 'queued' && b.status !== 'queued') return 1;
-      if (b.status === 'queued' && a.status !== 'queued') return -1;
-      return 0;
-    }) as Partial<MessageEntity>[];
-}
+
 
 /**
  * A thread's last `limit` messages that aren't queued, chronological, then its queued ones, each with its status alone,
@@ -539,7 +956,7 @@ export const chatQueries = {
 
     return {
       ...thread,
-      messages: getAllThreadMessages(threadId),
+      messages: messagesOfThread(threadId),
       artifacts: getThreadArtifacts(threadId) as any as ArtifactEntity[],
     };
   },
@@ -589,17 +1006,35 @@ export const chatQueries = {
     };
   },
 
-  messageById: (messageId: EARS.EntityId): MessageEntity | null => {
-    const message = query.ids(messageId).pickOne([
-      'id', 'text', 'sender', 'timestamp', 'blocks', 'blockResponse',
-      'responseTimestamp', 'createdAt', 'updatedAt', 'autoHide', 'asUser', 'asideText', 'asideContext',
-      'forkable', 'references', 'isCommand', 'command', 'status', 'context', 'compacted'
-    ] as const);
+  /** A message's blocks, assembled from their rows: what an export carries and `messageById` folds in */
+  blocksOf: (messageId: EARS.EntityId): StoredBlock[] => blocksOf(messageId),
+  entryDetails: (blockId: EARS.EntityId): Record<string, ToolActivityEntry['details']> => entryDetailsOf(blockId),
 
-    if (!message) return null;
+  /**
+   * A message's blocks with each tool entry's details merged back into it, for whoever is going to write
+   * them somewhere else.
+   *
+   * **A copier is not a reader.** `blocksOf` leaves `details` out because a message's view re-runs on every
+   * append and a tool's whole output would be re-read each time; a fork and an export are copying the block
+   * rather than drawing it, and the details are part of what the block is. Without this they were dropped,
+   * silently, by both.
+   */
+  blocksForCopy: (messageId: EARS.EntityId): StoredBlock[] => blocksOf(messageId).map((block) => {
+    const entries = block.props.entries as Array<{ id: string }> | undefined;
+    if (!Array.isArray(entries) || entries.length === 0) return block;
+    const details = entryDetailsOf(block.id);
+    if (Object.keys(details).length === 0) return block;
+    return {
+      ...block,
+      props: {
+        ...block.props,
+        entries: entries.map((entry) => (details[entry.id] ? { ...entry, details: details[entry.id] } : entry)),
+      },
+    };
+  }),
 
-    return { ...message, entityType: EARS.Entity.Message } as MessageEntity;
-  }
+  /** One message, whole; `null` once it is gone */
+  messageById: (messageId: EARS.EntityId): MessageEntity | null => messageOf(messageId)
 } as const;
 
 /**
@@ -651,6 +1086,8 @@ export const chatCommands = {
     text: string;
     sender: string;
     timestamp: number;
+    /** The blocks as rows, for a caller that describes the message it just added */
+    blocks?: StoredBlock[];
   } => {
     const { threadId, text, sender, blocks, forkable, references, isCommand, command, autoHide, asUser, asideContext, blockResponse, responseTimestamp, asideText, compacted, context, skipRelink } = params;
 
@@ -670,7 +1107,6 @@ export const chatCommands = {
     const timestamp = Date.now();
     const messageTx = create(EARS.Entity.Message, { text: text.trim(), timestamp, sender, createdAt: timestamp });
 
-    if (blocks) messageTx.set('blocks', blocks);
     if (forkable !== undefined) messageTx.set('forkable', forkable);
     if (references) messageTx.set('references', references);
     if (isCommand) messageTx.set('isCommand', isCommand);
@@ -686,6 +1122,8 @@ export const chatCommands = {
 
     const messageId = messageTx.link(EARS.RelKind.CONTAINS, threadId).id();
 
+    const storedBlocks = blocks ? createBlocks(messageId, blocks) : undefined;
+
     write(threadId).link(EARS.RelKind.CONTAINS, messageId);
     write(threadId).set('lastMessageTimestamp', timestamp);
 
@@ -693,7 +1131,226 @@ export const chatCommands = {
     // after a thread reload; a bulk add skips it for each message and moves them once after its last
     if (!skipRelink) relinkQueuedToEnd(threadId, messageId);
 
-    return { id: messageId, threadId, text: text.trim(), sender, timestamp };
+    return { id: messageId, threadId, text: text.trim(), sender, timestamp, ...(storedBlocks && { blocks: storedBlocks }) };
+  },
+
+  /** Creates a message's blocks as rows, in the order given: what a message's creation and an import write */
+  writeMessageBlocks: (params: { messageId: EARS.EntityId; blocks: readonly BlockConfig[] }): void => {
+    createBlocks(params.messageId, params.blocks);
+  },
+
+  /**
+   * Appends the next characters of a block's text, and answers nothing it did not write.
+   *
+   * **The store's half of what the feed sends.** A growing block's text used to be written whole on every
+   * durable flush, so what reached storage grew with the turn; a segment is written once. The block's own
+   * text is the compacted prefix and this is what follows it, so a reader splices by offset exactly as a
+   * window does.
+   *
+   * It folds the segments back in once there are `TEXT_SEGMENTS_BEFORE_COMPACTION` of them, which is what
+   * keeps a read of a long turn bounded. A caller never asks for that and cannot skip it.
+   */
+  appendMessageBlockText: (params: { blockId: EARS.EntityId; at: number; text: string }): void => {
+    const { blockId, at, text } = params;
+    if (!text) return;
+    if (!query.ids(blockId).ofType(EARS.Entity.Block).first()) {
+      throw new RepositoryError(`Block ${blockId} not found`, RepositoryErrorCode.NOT_FOUND);
+    }
+
+    const segment = create(EARS.Entity.BlockText, { at, text }).id();
+    write(blockId).link(EARS.RelKind.HAS_TEXT, segment);
+
+    if (segmentsOf(blockId).length >= TEXT_SEGMENTS_BEFORE_COMPACTION) compactBlockText(blockId);
+  },
+
+  /**
+   * Appends the next characters of a message's own text.
+   *
+   * **The same shape as a block's text, for the last field that was written whole.** `Message.text` keeps
+   * the compacted prefix and this is what follows it, spliced by offset exactly as a window splices the
+   * feed.
+   *
+   * It folds at `TEXT_SEGMENTS_BEFORE_COMPACTION`, and that fold is not an optimisation — it is what keeps
+   * the text searchable. `Message.text` is what the text index reads, so a tail living in segments is a
+   * tail no search finds, and a turn can end without its writer being finalised. The size trigger bounds
+   * that to one fold's worth; `foldMessageText` is the rest of the answer.
+   */
+  appendMessageText: (params: { messageId: EARS.EntityId; at: number; text: string }): void => {
+    const { messageId, at, text } = params;
+    if (!text) return;
+    if (!query.ids(messageId).ofType(EARS.Entity.Message).first()) {
+      throw new RepositoryError(`Message ${messageId} not found`, RepositoryErrorCode.NOT_FOUND);
+    }
+
+    const segment = create(EARS.Entity.MessageText, { at, text }).id();
+    write(messageId).link(EARS.RelKind.HAS_MESSAGE_TEXT, segment);
+
+    if ((textOf([messageId]).get(messageId) ?? []).length >= TEXT_SEGMENTS_BEFORE_COMPACTION) {
+      chatCommands.foldMessageText({ messageId });
+    }
+  },
+
+  /**
+   * Folds a message's text segments into its own field and removes them.
+   *
+   * **What makes the text searchable again**, so it is called when a turn's writer finalises and by the
+   * sweep at boot for a turn that ended without one.
+   */
+  foldMessageText: (params: { messageId: EARS.EntityId }): void => {
+    const { messageId } = params;
+    const segments = textOf([messageId]).get(messageId) ?? [];
+    if (segments.length === 0) return;
+
+    const row = query.ids(messageId).pickOne(['text'] as const);
+    const text = segments.reduce(
+      (held, segment) => held.slice(0, segment.at) + segment.text,
+      typeof row?.text === 'string' ? row.text : '',
+    );
+    write(messageId).set('text', text);
+    for (const segment of segments) {
+      write(messageId).unlink(EARS.RelKind.HAS_MESSAGE_TEXT, segment.id);
+      write(segment.id).destroy();
+    }
+  },
+
+  /**
+   * Folds every message that still holds text segments, and answers how many it folded.
+   *
+   * **Nothing streams at boot, so a message holding segments at boot was left unfolded** — which is the
+   * marker, and why this needs no `'streaming'` status to find them by. A turn interrupted by a kill
+   * finalises through its owner, and one interrupted by the process ending cannot, so this is that case's
+   * repair: without it the tail stays out of the text index for good.
+   */
+  foldStrandedMessageText: (): number => {
+    const stranded = [...new Set(
+      query(EARS.Entity.MessageText).ids()
+        .flatMap((segment) => query.ids(segment).inEdges(EARS.RelKind.HAS_MESSAGE_TEXT, EARS.Entity.Message))
+        .map((edge) => edge.source),
+    )];
+    for (const messageId of stranded) chatCommands.foldMessageText({ messageId });
+    return stranded.length;
+  },
+
+  /**
+   * Writes one of a block's tool entries, and answers its row.
+   *
+   * **The same shape as `writeMessageBlock`, one level down**: pass the row id a previous write answered
+   * and this is one row by id, which is what makes a tool event cost its own entry. Without one the entry
+   * is found among the block's by its `entryId`, or created at the end.
+   *
+   * `details` merges field-wise, as the writer's own `update` does, so a patch carrying only an output
+   * does not drop the input recorded when the tool started.
+   */
+  writeToolEntry: (params: {
+    blockId: EARS.EntityId;
+    entry: ToolActivityEntry;
+    entryRowId?: EARS.EntityId;
+  }): EARS.EntityId | undefined => {
+    const { blockId, entry, entryRowId } = params;
+
+    const held = entryRowId ?? entriesOf(blockId).find(({ entry: one }) => one.id === entry.id)?.id;
+    if (held) {
+      const kept = query.ids(held).pickOne(['details'] as const)?.details as ToolActivityEntry['details'];
+      write(held).setMany({
+        tool: entry.tool,
+        summary: entry.summary,
+        status: entry.status,
+        ...(entry.durationMs !== undefined && { durationMs: entry.durationMs }),
+        ...(entry.outputSummary !== undefined && { outputSummary: entry.outputSummary }),
+        ...(entry.details !== undefined && { details: { ...kept, ...entry.details } }),
+      });
+      return held;
+    }
+
+    const index = nextIndexOf(query.ids(blockId).outEdges(EARS.RelKind.HAS_ENTRY, EARS.Entity.ToolEntry));
+    const created = create(EARS.Entity.ToolEntry, {
+      entryId: entry.id,
+      tool: entry.tool,
+      summary: entry.summary,
+      status: entry.status,
+      ...(entry.durationMs !== undefined && { durationMs: entry.durationMs }),
+      ...(entry.outputSummary !== undefined && { outputSummary: entry.outputSummary }),
+      ...(entry.details !== undefined && { details: entry.details }),
+    }).id();
+    write(blockId).link(EARS.RelKind.HAS_ENTRY, created, { info: { index } });
+    return created;
+  },
+
+  /**
+   * Folds a block's children into it and removes them: what a writer calls when the block has stopped
+   * growing.
+   *
+   * **A finished block is one row again.** The children exist to make a *turn's* writes cheap; once it is
+   * over they are only cost — a read of the message assembles them, and a thread keeps them for ever. A
+   * turn of forty tools left forty rows per message behind without this.
+   */
+  compactMessageBlock: (params: { blockId: EARS.EntityId }): void => {
+    const { blockId } = params;
+    const parts = childrenOf([blockId]);
+    const segments = parts.segments.get(blockId) ?? [];
+    const entries = parts.entries.get(blockId) ?? [];
+    if (segments.length === 0 && entries.length === 0) return;
+
+    const props = (query.ids(blockId).pickOne(['props'] as const)?.props ?? {}) as Record<string, any>;
+    write(blockId).set('props', assembled(parts, blockId, props));
+    for (const segment of segments) {
+      write(blockId).unlink(EARS.RelKind.HAS_TEXT, segment.id);
+      write(segment.id).destroy();
+    }
+    // The details are folded onto the block under their own attribute, not into `props`: the rows that hold
+    // them are about to go, and a read of the message must not start carrying the turn's whole output again
+    if (entries.length > 0) write(blockId).set(BLOCK_DETAILS, entryDetailsOf(blockId));
+    for (const entry of entries) {
+      write(blockId).unlink(EARS.RelKind.HAS_ENTRY, entry.id);
+      write(entry.id).destroy();
+    }
+  },
+
+  /**
+   * Writes one of a message's blocks, by its type, and answers its row id.
+   *
+   * **The hot path of a streamed turn.** A caller that holds the id from a previous write passes it and the
+   * write is one row by id, with no walk: that is what makes a 250ms flush cost its own block and nothing
+   * else. Without one the block of that type is found, or created at the end.
+   */
+  writeMessageBlock: (params: {
+    messageId: EARS.EntityId;
+    block: BlockConfig;
+    blockId?: EARS.EntityId;
+  }): EARS.EntityId => {
+    const { messageId, block, blockId } = params;
+
+    const held = blockId ?? blockIdOfType(messageId, block.type);
+    if (held) {
+      // The props carry the whole of what the children held, so they are already in what is being set
+      for (const segment of segmentsOf(held)) {
+        write(held).unlink(EARS.RelKind.HAS_TEXT, segment.id);
+        write(segment.id).destroy();
+      }
+      if (block.props.entries !== undefined) {
+        for (const entry of entriesOf(held)) {
+          write(held).unlink(EARS.RelKind.HAS_ENTRY, entry.id);
+          write(entry.id).destroy();
+        }
+      }
+      write(held).setMany({ type: block.type, props: block.props });
+      return held;
+    }
+
+    const index = nextIndexOf(query.ids(messageId).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block));
+    const created = create(EARS.Entity.Block, { type: block.type, props: block.props }).id();
+    write(messageId).link(EARS.RelKind.HAS_BLOCK, created, { info: { index } });
+    return created;
+  },
+
+  /** Removes a message's block of that type; absence is not an error, the caller asking for it to be gone */
+  removeMessageBlock: (params: { messageId: EARS.EntityId; type: string }): void => {
+    const { messageId, type } = params;
+    const held = blockIdOfType(messageId, type);
+    if (!held) return;
+    discardBlockChildren(held);
+    write(messageId).unlink(EARS.RelKind.HAS_BLOCK, held);
+    write(held).destroy();
   },
 
   createThreadFromMessage: (text: string): {
@@ -716,7 +1373,7 @@ export const chatCommands = {
     messageId: EARS.EntityId;
     responseTimestamp: number;
     updatedAt: number;
-    blocks?: BlockConfig[];
+    blocks?: StoredBlock[];
   } => {
     const { messageId, response } = params;
 
@@ -731,28 +1388,34 @@ export const chatCommands = {
       .set('blockResponse', response)
       .set('responseTimestamp', now);
 
-    let updatedBlocks: BlockConfig[] | undefined;
-    const storedBlocks = query.ids(messageId).pickOne(['blocks'])?.blocks;
+    let updatedBlocks: StoredBlock[] | undefined;
+    // Assembled from the rows: `blocks` is not an attribute, and a pick naming it answered `undefined`.
+    // With their ids, because a message may hold two blocks of a type and only one holds this button
+    const storedRows = blocksOf(messageId);
 
-    if (Array.isArray(storedBlocks) && response.buttonId) {
-      let buttonToggled = false;
-      const newBlocks = (storedBlocks as BlockConfig[]).map((block: BlockConfig) => {
-        if (block.type === 'button-group') {
-          const updatedButtons = block.props.buttons.map((button: any) => {
-            if (button.toggleStates && button.id === response.buttonId) {
-              buttonToggled = true;
-              return { ...button, state: button.state === 'on' ? 'off' : 'on' };
-            }
-            return button;
-          });
-          return { ...block, props: { ...block.props, buttons: updatedButtons } };
-        }
-        return block;
+    if (storedRows.length > 0 && response.buttonId) {
+      const written: EARS.EntityId[] = [];
+      const newRows = storedRows.map((held) => {
+        if (held.type !== 'button-group') return held;
+        let holdsIt = false;
+        const buttons = held.props.buttons.map((button: any) => {
+          if (button.toggleStates && button.id === response.buttonId) {
+            holdsIt = true;
+            return { ...button, state: button.state === 'on' ? 'off' : 'on' };
+          }
+          return button;
+        });
+        if (!holdsIt) return held;
+        written.push(held.id);
+        return { ...held, props: { ...held.props, buttons } };
       });
 
-      if (buttonToggled) {
-        updatedBlocks = newBlocks;
-        write(messageId).set('blocks', newBlocks);
+      if (written.length > 0) {
+        updatedBlocks = newRows;
+        // By id, and only the rows that changed: a neighbour's row is never rewritten to reach one
+        for (const row of newRows.filter((held) => written.includes(held.id))) {
+          chatCommands.writeMessageBlock({ messageId, block: { type: row.type, props: row.props }, blockId: row.id });
+        }
       }
     }
 
@@ -766,7 +1429,7 @@ export const chatCommands = {
 
   updateMessageState: (params: {
     messageId: EARS.EntityId;
-    updates: Partial<Pick<MessageEntity, 'text' | 'blocks' | 'blockResponse' | 'responseTimestamp' | 'forkable' | 'status' | 'context' | 'compacted'>>;
+    updates: Partial<Pick<MessageEntity, 'text' | 'blockResponse' | 'responseTimestamp' | 'forkable' | 'status' | 'context' | 'compacted'>>;
   }): {
     messageId: EARS.EntityId;
     updatedAt: number;
@@ -778,6 +1441,12 @@ export const chatCommands = {
     if (!message) {
       throw new RepositoryError(`Message ${messageId} not found`, RepositoryErrorCode.NOT_FOUND);
     }
+
+    // **A write of the whole text is the fold**, so the segments go with it — they hold a tail this value
+    // already carries, and left behind they would splice over it. The same rule as `writeMessageBlock`'s
+    // whole-block write dropping a block's own segments; asking for the fold separately wrote the text
+    // twice, which is what made a streamed reply cost 2.8x where it now costs 1.84x
+    if (updates.text !== undefined) discardMessageText(messageId);
 
     const now = Date.now();
     write(messageId).setMany(updates);
@@ -875,6 +1544,9 @@ export const chatCommands = {
       for (const key of copyableKeys) {
         if (msg[key] != null) optional[key] = msg[key];
       }
+      // The blocks a copier wants, not the ones a reader got: `threadData` left each tool entry's details
+      // out, and a fork that copied those blocks dropped them
+      if (optional.blocks) optional.blocks = chatQueries.blocksForCopy(msg.id as EARS.EntityId);
 
       chatCommands.addMessage({
         threadId: targetThreadId,
@@ -917,7 +1589,11 @@ export const chatCommands = {
     // "undoing" their message. The message text is prefilled into the chat
     // input so they can re-send or edit it.
     const toDelete = nonDeleted.slice(targetIndex).flatMap((msg) => msg.id ? [msg.id as EARS.EntityId] : []);
-    for (const messageId of toDelete) write(messageId).trash();
+    for (const messageId of toDelete) {
+      discardBlocks(messageId, 'trash');
+      discardMessageText(messageId);
+      write(messageId).trash();
+    }
     const deletedIds: string[] = toDelete;
 
     return { deletedCount: deletedIds.length, deletedIds };

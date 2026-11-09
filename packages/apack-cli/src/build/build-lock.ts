@@ -22,7 +22,7 @@
 // the default is to queue, and the bound is for a holder that is wedged rather than working.
 import * as path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { findLockHolder, holdExclusiveLockWaiting, type ExclusiveLock } from '@apackdev/host/exclusive-lock';
+import { findLockHolder, holdExclusiveLockWaiting, waitWhileHeld, type ExclusiveLock, type HolderWatchOptions } from '@apackdev/host/exclusive-lock';
 
 /**
  * The lock, inside the pack.
@@ -34,15 +34,8 @@ import { findLockHolder, holdExclusiveLockWaiting, type ExclusiveLock } from '@a
  */
 export const packBuildLock = (packRoot: string): string => path.join(packRoot, '.apack', 'build.lock');
 
-/**
- * How long a second build waits before refusing: a bound, not a schedule — it returns the moment the holder is
- * gone. Five minutes against a full build of ~24s on the largest pack here, the ratio `waitForPackageBuild` and
- * `CHAIN_WAIT_MS` both chose: several times what the waited-for thing costs, so a wedged holder is reported
- * rather than waited on for ever.
- */
-export const PACK_BUILD_WAIT_MS = 300_000;
 
-/** Thrown when another build of this pack holds the lock and the wait ran out */
+/** Thrown when another build of this pack holds the lock and stopped working while it did */
 export class PackBuildLockHeld extends Error {
   constructor(readonly holder: string, packId: string, file: string) {
     const where = path.relative(process.cwd(), file);
@@ -54,7 +47,7 @@ export class PackBuildLockHeld extends Error {
 }
 
 /**
- * Takes the pack's build lock, waiting for a running build and then refusing.
+ * Takes the pack's build lock, waiting for a running build for as long as it works, then refusing.
  *
  * `what` is what the holder was doing, for the message the next arrival reads. A build in *this* process is
  * refused at once rather than waited for, which `holdExclusiveLockWaiting` does: nothing nests today, and
@@ -62,11 +55,14 @@ export class PackBuildLockHeld extends Error {
  */
 export async function holdPackBuildLock(
   packRoot: string,
-  { packId, what, waitMs = PACK_BUILD_WAIT_MS, onWait, now, pause, signal }: {
+  { packId, what, wait = true, onWait, now, pause, signal, idleMs, readWork }: {
     packId: string;
     what: string;
     signal?: AbortSignal;
-    waitMs?: number;
+    /** Whether to wait for a running build at all; without it a held lock is refused at once */
+    wait?: boolean;
+    idleMs?: HolderWatchOptions['idleMs'];
+    readWork?: HolderWatchOptions['readWork'];
     onWait?: (holder: string) => void;
     /**
      * Injected by the spec, as `holdChainLock`'s are: a case that waits on real time is a case whose duration
@@ -81,8 +77,10 @@ export async function holdPackBuildLock(
   return holdExclusiveLockWaiting({
     file,
     what,
-    waitMs,
+    wait,
     refuse: (holder) => new PackBuildLockHeld(holder, packId, file),
+    ...(idleMs !== undefined && { idleMs }),
+    ...(readWork && { readWork }),
     ...(onWait && { onWait }),
     ...(now && { now }),
     pause: async ms => {
@@ -110,23 +108,14 @@ export async function holdPackBuildLock(
  */
 export async function waitForPackBuild(
   packRoot: string,
-  { timeoutMs = PACK_BUILD_WAIT_MS, onWait, pause = (ms: number) => new Promise<void>((r) => { setTimeout(r, ms); }), now = Date.now }: {
-    timeoutMs?: number;
-    onWait?: (holder: string) => void;
-    pause?: (ms: number) => Promise<void>;
-    now?: () => number;
-  } = {},
+  { onWait, ...watch }: HolderWatchOptions & { onWait?: (holder: string) => void; pause?: (ms: number) => Promise<void> } = {},
 ): Promise<string | undefined> {
   const file = packBuildLock(packRoot);
   const waitedFor = findLockHolder(file);
   if (!waitedFor) return undefined;
   onWait?.(waitedFor);
-  const deadline = now() + timeoutMs;
-  // A bound, not a schedule: it returns the moment the holder is gone. A holder that outlasts it leaves the
-  // caller to read as it would have anyway, which is the behaviour without this rather than a hang.
-  while (findLockHolder(file) && now() < deadline) await pause(POLL_MS);
+  // For as long as the holder works: one that stops leaves the caller to read as it would have anyway, which is
+  // the behaviour without this rather than a hang
+  await waitWhileHeld(file, watch);
   return waitedFor;
 }
-
-/** How often a waiter looks again. Nothing is taken, so this is only how long it sleeps between reads */
-const POLL_MS = 250;
