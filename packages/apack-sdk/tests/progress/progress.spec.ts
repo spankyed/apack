@@ -1,6 +1,6 @@
 import { Worker } from 'node:worker_threads';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { answerWhileWorking, cpuAdded, createStallTracker, describeRefusal, execFileWhileWorking, fromNow, parseCpuTime, processWork, threadWork, treeCpuMs, treeCpuMsFrom, watchWork, win32Rows, type Refusal } from '../../src/progress.ts';
+import { LOOSE_CEILING_FACTOR, answerWhileWorking, cpuAdded, createStallTracker, describeRefusal, execFileWhileWorking, fromNow, parseCpuTime, processWork, threadWork, treeCpuMs, treeCpuMsFrom, watchWork, win32Rows, type Refusal } from '../../src/progress.ts';
 
 /** A reading that adds `step` milliseconds of work each time it is taken */
 const working = (step: number) => { let total = 0; return async () => (total += step); };
@@ -230,16 +230,22 @@ describe('what a watch says it spent, which a ceiling measures', () => {
     watch.stop();
   });
 
-  /** The container's VM counts host load as guest CPU, so there a ceiling is a clock; a stall still means a stall */
-  it('applies no ceiling under APACK_CEILING=off, and still ends a party that stops working', async () => {
-    vi.stubEnv('APACK_CEILING', 'off');
+  /**
+   * The container's VM counts host load as guest CPU, so there a ceiling held to its size fires on a busy host; held at
+   * ten times it, a spin is still ended, which a dropped ceiling never did. A stall still means a stall
+   */
+  it('holds a ceiling at ten times its size under APACK_CEILING=loose, and still ends a party that stops working', async () => {
+    vi.stubEnv('APACK_CEILING', 'loose');
     try {
       let refused: Refusal | undefined;
       let total = 0;
       const spinning = watchWork({ work: async () => (total += 2_000), idleMs: IDLE, ceilingMs: 5_000, onRefused: (refusal) => { refused = refusal; } });
       await vi.advanceTimersByTimeAsync(6 * (IDLE / 4));
-      expect(refused, 'a ceiling fired under APACK_CEILING=off').toBeUndefined();
+      expect(refused, 'a ceiling held to its size under APACK_CEILING=loose').toBeUndefined();
+      await vi.advanceTimersByTimeAsync(20 * (IDLE / 4));
+      expect(refused).toMatchObject({ kind: 'ceiling', ceilingMs: 5_000 * LOOSE_CEILING_FACTOR });
       spinning.stop();
+      refused = undefined;
       const idle = watchWork({ work: async () => 0, idleMs: IDLE, ceilingMs: 5_000, onRefused: (refusal) => { refused = refusal; } });
       await vi.advanceTimersByTimeAsync(IDLE + IDLE / 4);
       expect(refused).toMatchObject({ kind: 'stalled' });

@@ -347,7 +347,7 @@ Three suites, split by what a spec costs and needs:
   cases of the frontend and package-input specs. Its own run so the gate can schedule it beside integration.
   It runs one file at a time, and a case gets 300s of CPU as its budget (the `enormous` size), failed at twice it, since each composes
   cold captures, builds and watcher cycles; a case needing more declares a reviewed `meta: cpuBudget(ms)`. In the Linux
-  container the guard judges only the stall, its CPU readings including the host's load (`APACK_CEILING=off`).
+  container the guard holds that at ten times its size, its CPU readings including the host's load (`APACK_CEILING=loose`).
   A native case whose subject is not the compiler installation shares one per file
   (`tests/_support/shared-compiler.ts`, passed to `createPackBuilder` as `captureCompiler`); a case about
   capture, the captured runtime, an esbuild override or an installation's removal captures its own.

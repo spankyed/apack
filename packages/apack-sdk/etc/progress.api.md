@@ -48,6 +48,9 @@ export function fromNow(work: WorkReading): WorkReading;
 export const IDLE_MS = 120000;
 
 // @public
+export const LOOSE_CEILING_FACTOR = 10;
+
+// @public
 export function parseCpuTime(text: string): number;
 
 // @public

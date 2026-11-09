@@ -64,7 +64,7 @@ export async function runCommand(command: string, args: string[], cwd: string,
       if (grouped && process.env.APACK_WATCHDOG !== 'off' && child.pid !== undefined) {
         watch = watchWork({
           work: processWork(child.pid, readTree), fallbackMs: ceiling, watchesOutput: true,
-          ceilingMs: process.env.APACK_CEILING === 'off' ? undefined : ceiling,
+          ceilingMs: ceiling,
           onRefused: (refusal) => stop(new Error(`${label}: ${refusal.kind === 'stalled' ? 'stalled, it ' : ''}${describeRefusal(refusal)}\n${output}`)),
         });
       } else {

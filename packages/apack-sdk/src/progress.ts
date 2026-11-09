@@ -287,12 +287,15 @@ export interface Watch {
 }
 
 /**
- * Whether a CPU ceiling applies here: not under `APACK_CEILING=off`, which the Linux test container sets because its
- * VM counts the host's load as the guest's CPU, so a ceiling there fires on a busy host, not on a spin. Read where
- * every bound is built, so a caller passing a ceiling cannot forget it; a stall still reads as no CPU in a VM, and
- * the watch keeps that.
+ * How far a CPU ceiling is loosened under `APACK_CEILING=loose`, which the Linux test container sets because its VM
+ * counts the host's load as the guest's CPU, so a ceiling held to its size there fires on a busy host rather than on a
+ * spin. Loosened rather than dropped, because a ceiling is the only bound on a party that spins: the stall rule reads
+ * spinning as working. A declared class, not a measurement: well past what load adds to healthy work, and finite.
  */
-const ceilingsApply = (): boolean => process.env.APACK_CEILING !== 'off';
+export const LOOSE_CEILING_FACTOR = 10;
+
+/** What every ceiling is multiplied by here. Read where every bound is built, so a caller passing a ceiling cannot forget it */
+const ceilingFactor = (): number => (process.env.APACK_CEILING === 'loose' ? LOOSE_CEILING_FACTOR : 1);
 
 /**
  * Watches another party's work and says when it should be given up on: when its work stops growing for `idleMs` —
@@ -313,7 +316,7 @@ export function watchWork({ work, idleMs = IDLE_MS, ceilingMs: requestedCeilingM
   readonly watchesOutput?: boolean;
   readonly clock?: WatchClock;
 }): Watch {
-  const ceilingMs = ceilingsApply() ? requestedCeilingMs : undefined;
+  const ceilingMs = requestedCeilingMs === undefined ? undefined : requestedCeilingMs * ceilingFactor();
   const startedAt = clock.now();
   const tracker = createStallTracker(idleMs, startedAt);
   let lastTotal: number | undefined;

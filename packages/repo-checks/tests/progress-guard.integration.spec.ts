@@ -124,9 +124,9 @@ describe('with the CPU ceiling on', () => {
   });
 });
 
-describe('under APACK_CEILING=off', () => {
-  it('leaves a test that spends past its budget alone, the stall still judged', async () => {
-    const report = await runFixtures('ceiling-off', ['over.spec.ts', 'awaits.spec.ts'], { APACK_CEILING: 'off' });
+describe('under APACK_CEILING=loose', () => {
+  it('lets a test spend past its budget within ten times it, the stall still judged', async () => {
+    const report = await runFixtures('ceiling-loose', ['over.spec.ts', 'awaits.spec.ts'], { APACK_CEILING: 'loose' });
     expect(outcome(report, 'over.spec.ts', 'spends past its budget')).toMatchObject({ status: 'passed' });
     expect(outcome(report, 'awaits.spec.ts', 'awaits forever')).toMatchObject({ status: 'failed' });
   });

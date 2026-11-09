@@ -19,8 +19,8 @@
  *   disk stretches a run's wall time without adding to its CPU, so a CPU ceiling is reached by the one and never
  *   by the other. The clock is the bound only where the tree cannot be read — Windows, `APACK_WATCHDOG=off`, a
  *   tree whose work is in a VM (`idleMs: false`), and from the moment `ps` fails. A tree *inside* a VM that
- *   accounts no steal time — the Linux test container — reads the host's load as its own CPU, so it runs with
- *   the watchdog alone (`APACK_CEILING=off`, which `test:linux` sets). What neither catches is a
+ *   accounts no steal time — the Linux test container — reads the host's load as its own CPU, so its ceilings
+ *   are held loosely there (`APACK_CEILING=loose`, which `test:linux` sets). What neither catches is a
  *   loop that sleeps and prints for ever: its output is progress by the watchdog's rule, and it spends no CPU.
  * - **The process group dies, not just the child.** `npm run x` is a shell that spawns node that spawns
  *   vitest that spawns workers. Killing the child alone orphans the rest, still running. And the group dies
@@ -28,7 +28,7 @@
  */
 import { spawn } from 'node:child_process';
 import { describeRefusal, processWork, watchWork } from '../../packages/apack-sdk/src/progress.ts';
-import { IDLE_MS, ceilingEnabled, watchdogEnabled } from './step-budgets.ts';
+import { IDLE_MS, ceilingSetting, watchdogEnabled } from './step-budgets.ts';
 
 
 
@@ -188,9 +188,10 @@ export function boundedSpawn(command: string, args: readonly string[], budgetMs:
     };
 
     // A tree the watchdog reads is bounded by its progress and the CPU it spends (`watchWork`), and only a tree it
-    // cannot read by the clock. `APACK_CEILING=off` leaves the watchdog alone, for a VM whose CPU is not work
+    // cannot read by the clock. `APACK_CEILING=loose` loosens the ceiling, for a VM whose CPU over-reads work
+    ceilingSetting();
     const watch = idleMs === false || child.pid === undefined ? undefined : watchWork({
-      work: processWork(child.pid), idleMs, watchesOutput: true, ceilingMs: ceilingEnabled() ? budgetMs : undefined, fallbackMs: budgetMs,
+      work: processWork(child.pid), idleMs, watchesOutput: true, ceilingMs: budgetMs, fallbackMs: budgetMs,
       onRefused: (refusal) => {
         stalled = refusal.kind === 'stalled' ? true : undefined;
         say(`\n[bounded] ${refusal.kind === 'stalled'

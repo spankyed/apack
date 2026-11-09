@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { MACHINE_LOCK, MACHINE_WAIT_MS, MachineLockRefused, UNRESOLVED_WAIT_MS, expensiveSteps } from '../../../scripts/lib/machine-lock.ts';
+import { MACHINE_LOCK, MACHINE_WAIT_MS, MachineLockRefused, REPORT_EVERY_MS, UNRESOLVED_WAIT_MS, expensiveSteps } from '../../../scripts/lib/machine-lock.ts';
 
 const EXPENSIVE = { expensive: true, name: 'test:integration', dependsOn: [] } as const;
 const CHEAP = { name: 'lint:check', dependsOn: [] } as const;
@@ -18,7 +18,7 @@ afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-const lockAs = (fields: { pid?: number; machine?: string; what?: string }): void => {
+const lockAs = (fields: { pid?: number; machine?: string; what?: string; since?: string }): void => {
   fs.writeFileSync(file, JSON.stringify({ pid: process.ppid, machine: os.hostname(), what: 'npm run chain in /a/checkout', since: new Date().toISOString(), ...fields }));
 };
 
@@ -51,6 +51,29 @@ describe('a chain\'s steps', () => {
 });
 
 describe('another chain\'s hold', () => {
+  it('names the step that holds it', () => {
+    const holding = expensiveSteps({ what: 'npm run chain in /a/checkout', file });
+    expect(holding.admit(EXPENSIVE)).toBe(true);
+    expect(JSON.parse(fs.readFileSync(file, 'utf8')).what).toBe('npm run chain in /a/checkout: test:integration');
+    holding.leave(EXPENSIVE);
+  });
+
+  it('says again who holds it and for how long while the wait goes on', () => {
+    const since = Date.parse('2026-01-01T00:00:00Z');
+    lockAs({ since: new Date(since).toISOString() });
+    let at = since;
+    const told: string[] = [];
+    const lock = expensiveSteps({ what: 'this chain', file, onWait: (holder) => told.push(holder), now: () => at });
+    expect(lock.admit(EXPENSIVE)).toBe(false);
+    at = since + REPORT_EVERY_MS - 1;
+    expect(lock.admit(EXPENSIVE)).toBe(false);
+    expect(told).toHaveLength(1);
+    at = since + REPORT_EVERY_MS;
+    expect(lock.admit(EXPENSIVE)).toBe(false);
+    expect(told).toHaveLength(2);
+    expect(told[1]).toContain('held for 10 min');
+  });
+
   it('turns a step away, says who holds it and where, once, and lets it in when it ends', () => {
     lockAs({});
     const told: string[] = [];

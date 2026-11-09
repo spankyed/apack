@@ -342,10 +342,9 @@ const script = ['set -e', run].join('\n');
 /**
  * The one bound on a run as a whole, on the clock, and as generous as the longest class there is.
  *
- * Inside the container CPU time is not a reading of work (`APACK_CEILING`, above), so nothing in there catches a loop
- * that spins: the watchdog sees a spin as progress. A run from the chain is bounded by the step that started it, but
- * a direct `npm run test:linux` had nothing, so a spin ran until someone noticed. This is that bound — a backstop,
- * the way a CI job's own time limit is, which no run that is working reaches however busy the machine is.
+ * Inside the container CPU time over-reads work (`APACK_CEILING`, above), so its ceilings are loose and a spin is
+ * caught late. This is the bound on the run as a whole — a backstop, the way a CI job's own time limit is, which no
+ * run that is working reaches however busy the machine is.
  *
  * The container is stopped by the name it was given here, not by its client: a `docker run` killed outright leaves its
  * container running.
@@ -362,9 +361,9 @@ const child = spawn('docker', [
   '-v', `${ELMDB_CHECKOUT}:/elmdb-src:ro`, '-v', `${ELMDB_VOLUME}:/elmdb`, '-v', `${CARGO_REGISTRY_VOLUME}:/usr/local/cargo/registry`,
   ...gitDirMount(),
   ...forwarded.flatMap((key) => ['-e', key]),
-  // Set here and never forwarded: the VM counts the host's load as its CPU, so a ceiling in it is a clock
-  // (`ceilingEnabled`, `scripts/lib/step-budgets.ts`), whatever the Mac's own setting is
-  '-e', 'APACK_CEILING=off',
+  // Set here and never forwarded: the VM counts the host's load as its CPU, so a ceiling held to its size there fires
+  // on a busy host (`ceilingSetting`, `scripts/lib/step-budgets.ts`), whatever the Mac's own setting is
+  '-e', 'APACK_CEILING=loose',
   ...(compilerStore ? ['-e', `APACK_COMPILER_STORE=${compilerStore}`] : []),
   IMAGE, 'bash', '-c', script,
 ], { stdio: 'inherit' });

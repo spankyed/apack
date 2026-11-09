@@ -15,7 +15,7 @@
 // time, so a guest's CPU grows with the host's load: one fixed loop read 11.4s of CPU in the VM and 35.6s with
 // the Mac saturated, against 10.1s and 10.3s on the Mac itself (2026-11-07), and the container's forced setup
 // build, 102s of CPU on the Mac, read 724s there at a host load of 20. A ceiling there would be a clock, so the
-// container runs with none (`APACK_CEILING`, below).
+// container holds it loosely (`APACK_CEILING`, below).
 //
 // **A deadline is a declared class, never a multiple of a measurement.** A class carries no machine: it
 // states the kind of work and is chosen for the slowest plausible box, so a smaller machine runs the same
@@ -71,19 +71,18 @@ export function watchdogEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
 }
 
 /**
- * `APACK_CEILING=off` leaves a run the watchdog can read with no ceiling at all, for a machine whose CPU time
- * is not a reading of work: `test:linux` sets it in the container, whose VM counts the host's load as the
- * guest's CPU (see the header), so a ceiling there would be a clock under another name. A stall still reads as
- * no CPU in a VM, so the watchdog keeps its meaning; what bounds a spin is the honest ceiling on the Mac and CI,
- * which run the same builds, and the outer bound of the step that started the container. Where the watchdog is
- * off too, the clock still applies, so nothing runs unbounded. `on`, or unset, keeps the ceiling; any other
- * value is refused, as `APACK_WATCHDOG`'s is.
+ * `APACK_CEILING=loose` holds a run to `LOOSE_CEILING_FACTOR` times its ceiling (`@apackdev/sdk/progress`), for a
+ * machine whose CPU time over-reads work: `test:linux` sets it in the container, whose VM counts the host's load as
+ * the guest's CPU (see the header), so a ceiling held to its size there fires on a busy host. It is loosened rather
+ * than switched off because the ceiling is the one bound on a spin, which the watchdog reads as working. `on`, or
+ * unset, holds the ceiling to its size; any other value is refused, as `APACK_WATCHDOG`'s is. `watchWork` applies the
+ * factor, so this only says whether the setting is one this repo knows.
  */
-export function ceilingEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+export function ceilingSetting(env: NodeJS.ProcessEnv = process.env): 'on' | 'loose' {
   const value = env.APACK_CEILING;
-  if (value === undefined || value === 'on') return true;
-  if (value === 'off') return false;
-  throw new Error(`APACK_CEILING is ${JSON.stringify(value)}: set it to off to run with the watchdog alone, or on (the default)`);
+  if (value === undefined || value === 'on') return 'on';
+  if (value === 'loose') return 'loose';
+  throw new Error(`APACK_CEILING is ${JSON.stringify(value)}: set it to loose to hold ceilings at ten times their size, or on (the default)`);
 }
 
 /** Each class's deadline, in milliseconds of CPU time (of the clock where the tree cannot be read) — what `boundedSpawn` is given */

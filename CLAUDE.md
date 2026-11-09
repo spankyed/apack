@@ -185,9 +185,10 @@ measurement (`scripts/lib/step-budgets.ts`), and what a step costs is a reading 
 A deadline is a ceiling for a tree that spins, so it counts the tree's CPU time, which load and a slow disk cannot
 inflate; the clock bounds only a tree that cannot be read (Windows, `APACK_WATCHDOG=off`, work inside a VM).
 Inside the Linux test container CPU time grows with the Mac's load (its VM accounts no steal time), so a ceiling
-there would be a clock: `test:linux` sets `APACK_CEILING=off` and the container runs with the watchdog alone. What
-ends a stuck one is `boundedSpawn`'s watchdog, which kills a process tree that has gone `IDLE_MS` without CPU or
-output, so a step slowed by a busy machine is never killed for it.
+held to its size there would fire on a busy host: `test:linux` sets `APACK_CEILING=loose`, which holds every ceiling at
+ten times its size (`LOOSE_CEILING_FACTOR`, `@apackdev/sdk/progress`) rather than dropping it, since the ceiling is the
+one bound on a spin. What ends a stuck one is `boundedSpawn`'s watchdog, which kills a process tree that has gone
+`IDLE_MS` without CPU or output, so a step slowed by a busy machine is never killed for it.
 A spec's `runCommand` is bounded the same way (`@apackdev/sdk/progress`), and so is a **test**:
 every vitest config turns vitest's clock off (`testTimeout: 0`, `hookTimeout: 0`) and loads the progress guard
 (`@apackdev/testing`'s `vitest-progress-guard.ts`), which fails a test or hook whose process tree stalls and a test

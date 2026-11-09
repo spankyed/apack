@@ -156,10 +156,10 @@ spawn(process.execPath, ['-e', ${JSON.stringify(burn(CPU_IDLE + 2_000))}], { det
     expect(result.cpuMs).toBeLessThan(2_000);
   });
 
-  it('leaves a tree past its CPU budget alone under APACK_CEILING=off, with the watchdog still on', async () => {
-    // The container's case: CPU there is the host's load too, so the watchdog is the only bound
+  it('holds a tree to ten times its CPU budget under APACK_CEILING=loose, with the watchdog still on', async () => {
+    // The container's case: CPU there is the host's load too, so the ceiling is held loosely rather than to its size
     const [command, args] = node(burn(3_000));
-    process.env.APACK_CEILING = 'off';
+    process.env.APACK_CEILING = 'loose';
     try {
       const result = await boundedSpawn(command, args, 1_000, { idleMs: CPU_IDLE });
       expect(result).toMatchObject({ code: 0 });

@@ -5,8 +5,8 @@
  * load they ran under. This watches the worker's process tree instead — the worker and everything it started — with
  * the same reading `boundedSpawn` and `runCommand` take, and fails what is running when that tree goes `IDLE_MS`
  * without CPU. A test that spins is the other hang, and it fails when its tree has spent its CPU budget: the test's
- * `meta: cpuBudget(ms)`, or the config's `apack.testCpuMs`. Under `APACK_CEILING=off` (the Linux test container, whose
- * VM counts the host's load as its own CPU) only the stall is judged.
+ * `meta: cpuBudget(ms)`, or the config's `apack.testCpuMs`. Under `APACK_CEILING=loose` (the Linux test container, whose
+ * VM counts the host's load as its own CPU) that budget is held at ten times its size.
  *
  * `aroundEach` holds a test with its `beforeEach` and `afterEach`; `aroundAll` holds a file's `beforeAll`,
  * `afterAll` and the time between its tests. One reading serves both, and while a test runs only it is judged, so a
@@ -89,7 +89,7 @@ function judgeAfresh(): void {
   const alone = running.length === 1 && !running[0]!.shared ? running[0] : undefined;
   const work = workerWork();
   const watch = watchWork({
-    // `watchWork` drops the ceiling under APACK_CEILING=off, as it does for every bound
+    // `watchWork` loosens the ceiling under APACK_CEILING=loose, as it does for every bound
     work, idleMs, clock: realClock, ceilingMs: alone?.budgetMs,
     onRefused: (refusal) => {
       const together = running.length > 1 ? `, with ${running.length - 1} other test${running.length > 2 ? 's' : ''} running beside it` : '';

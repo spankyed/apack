@@ -27,6 +27,12 @@ export const UNRESOLVED_WAIT_MS = 30_000;
 
 const POLL_MS = 2_000;
 
+/**
+ * How often a waiting chain says again who it is waiting for and for how long they have held it. Not only once, since
+ * the case worth seeing is a holder whose step has stopped getting anywhere, and that shows only as the time grows.
+ */
+export const REPORT_EVERY_MS = 600_000;
+
 type ExpensiveStep = { readonly name: string; readonly expensive?: true };
 
 /** A lock this chain won't wait any longer for, naming what to do about it: a refusal rather than a bug in the chain */
@@ -55,15 +61,18 @@ export function expensiveSteps({ what, file = MACHINE_LOCK, onWait, now = Date.n
   let inside = 0;
   let held: ExclusiveLock | undefined;
   let waitingSince: number | undefined;
+  let reportedAt: number | undefined;
   let unresolvedSince: number | undefined;
 
   /** Notes a turn spent behind another's lock, refusing once it has gone on too long */
   const wait = (): void => {
     const at = now();
     const lock = readLock(file);
-    const holder = lock === null ? "a tool whose lock can't be read" : `${lock.what} (pid ${lock.pid}, on ${lock.machine})`;
-    if (waitingSince === undefined) {
-      waitingSince = at;
+    const heldFor = lock === null || Number.isNaN(Date.parse(lock.since)) ? '' : `, held for ${Math.round((at - Date.parse(lock.since)) / 60_000)} min`;
+    const holder = lock === null ? "a tool whose lock can't be read" : `${lock.what} (pid ${lock.pid}, on ${lock.machine}${heldFor})`;
+    waitingSince ??= at;
+    if (reportedAt === undefined || at - reportedAt >= REPORT_EVERY_MS) {
+      reportedAt = at;
       onWait?.(`${holder}\n  lock: ${file}`);
     }
     const resolvable = lock !== null && lock.machine === os.hostname() && lock.pid !== process.pid;
@@ -79,13 +88,15 @@ export function expensiveSteps({ what, file = MACHINE_LOCK, onWait, now = Date.n
     admit(step: ExpensiveStep): boolean {
       if (step.expensive !== true) return true;
       try {
-        held ??= holdExclusiveLock({ file, what, refuse: () => HELD });
+        // The step that took it is named, so a chain waiting behind this one can say what it is waiting on
+        held ??= holdExclusiveLock({ file, what: `${what}: ${step.name}`, refuse: () => HELD });
       } catch (error) {
         if (error !== HELD) throw error;
         wait();
         return false;
       }
       waitingSince = undefined;
+      reportedAt = undefined;
       unresolvedSince = undefined;
       inside++;
       return true;

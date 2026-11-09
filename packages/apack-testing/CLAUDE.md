@@ -88,7 +88,7 @@ whose process tree goes `IDLE_MS` without CPU, and a test that spends its CPU bu
 `apack.testCpuMs`, or the test's own `{ meta: cpuBudget(ms) }` from this entry. A busy machine stretches a test's
 wall time and leaves its CPU alone, so a slow test is never failed for it. Each test's spend is written to its
 `meta.cpuMs`, which the repo's reporter reads. The guard reads the worker's own CPU from `process.cpuUsage()` and
-its children's from `ps`, the reading `boundedSpawn` takes, and judges only the stall under `APACK_CEILING=off`.
+its children's from `ps`, the reading `boundedSpawn` takes, and holds the budget at ten times its size under `APACK_CEILING=loose`.
 `cpuBudget` is a function rather than a typed `meta` field because vitest declares `TaskMeta` in `@vitest/runner`,
 which this package does not depend on. `@app/repo-checks`' `progress-guard.integration.spec.ts` is the guard over
 a real run.
