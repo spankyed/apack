@@ -238,7 +238,14 @@ export async function consumeStream(
         if (delta?.type === 'thinking_delta' && typeof delta.thinking === 'string') {
           // Clear the "Thinking…" placeholder text on the first thinking delta
           // so only the thinking block is visible, not redundant text below it.
-          if (!thinking.hasContent) {
+          //
+          // **Only while the reply is still empty.** A write of `text` replaces the field and drops the
+          // segments the stream writer has appended to it, and the writer goes on counting from the offset
+          // it thinks the row holds — so clearing after any reply text has arrived loses it and puts the
+          // rest at an offset the row no longer has. Whole-field writes used to heal that by rewriting
+          // everything; appends do not. Thinking precedes text within a message, so this is a guard against
+          // an ordering rather than a case anyone has seen
+          if (!thinking.hasContent && !writer.text) {
             services.chat.updateMessageState(currentMessageId as any, { text: '' });
           }
           thinking.push(delta.thinking);

@@ -76,8 +76,16 @@ export function createStreamConsumer(
   // Plan mode state — accumulate plan text from item/plan/delta
   let planText = '';
 
+  /**
+   * Drops the `Thinking…` placeholder, once, and **only while the reply is still empty**.
+   *
+   * A write of `text` replaces the field and drops the segments the stream writer has appended to it,
+   * while the writer goes on counting from the offset it thinks the row holds — so clearing after any
+   * reply text has arrived loses it and puts the rest at an offset the row no longer has. Whole-field
+   * writes used to heal that by rewriting everything; appends do not.
+   */
   const clearPlaceholder = () => {
-    if (!placeholderCleared) {
+    if (!placeholderCleared && !writer.text) {
       placeholderCleared = true;
       services.chat.updateMessageState(messageId as any, { text: '' });
     }

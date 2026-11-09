@@ -66,6 +66,27 @@ describe('a message whose text is still arriving', () => {
     expect(repository.chatCommands.foldStrandedMessageText()).toBe(0)
   })
 
+  /**
+   * **A write of `text` replaces the field and drops the segments**, which is correct — the value being
+   * written is the whole of what the message says — and it is why a caller that writes `text` mid-turn has
+   * to care.
+   *
+   * The placeholder clear in both stream consumers is that caller: it writes `text: ''` on the first
+   * thinking delta, and is guarded on the reply still being empty, because clearing after the writer has
+   * appended would lose what it appended *and* leave it counting from an offset the row no longer has.
+   * Whole-field writes healed that by rewriting everything; appends do not.
+   */
+  it('loses its segments to a write of the whole text, which is why a mid-turn writer guards', async () => {
+    await startApp({ systems: ['threads'] })
+    const id = streaming(thread(), 'first', ' second')
+    expect(repository.chatQueries.messageById(id)?.text).toBe('first second')
+
+    repository.chatCommands.updateMessageState({ messageId: id, updates: { text: '' } })
+
+    expect(repository.chatQueries.messageById(id)?.text).toBe('')
+    expect(query(EARS.Entity.MessageText).ids()).toEqual([])
+  })
+
   /** A segment is a turn's working state and never the user's, so it goes with the message */
   it('loses its segments when its thread is deleted', async () => {
     await startApp({ systems: ['threads'] })
