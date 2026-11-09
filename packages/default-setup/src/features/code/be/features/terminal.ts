@@ -53,9 +53,6 @@ const emitToFrontend = (event: TerminalNews) => {
   broadcastToSurface(surfaceId, event)
 }
 
-// Pre-compiled regex patterns for OSC sequence detection (hot path — runs on every terminal data event)
-// The control characters are the sequences themselves — ESC and BEL delimit every OSC string.
-
 /**
  * Where a terminal's output and exit go — **given to the service before the session exists**, not registered
  * after it returns, which is F8: whatever the shell wrote first used to have nowhere to go and was dropped.
