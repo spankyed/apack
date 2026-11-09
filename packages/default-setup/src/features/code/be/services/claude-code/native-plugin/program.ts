@@ -267,7 +267,22 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
     }
   }
 
-  /** Learn this process's own host pid, which is what the observer leases against. */
+  /**
+   * Learn this process's own pid, which is what the observer leases against.
+   *
+   * **The pid is an identity anchor, not a label**: the observer resolves it to a background job's identity
+   * and revalidates that on every write, so a replaced process cannot keep reporting as the one that
+   * registered. A token alone would be replayable by exactly that process.
+   *
+   * **Why the app does not supply it.** A session's `pid` is a diagnostic in the terminal service's own
+   * words — `null` for a session it took up again after a restart, and explicitly not a handle — so a pid
+   * interpolated at spawn time would be absent in the case this path exists for. Asking the runtime is the
+   * only answer that is always about the process actually running the program.
+   *
+   * **This is the one POSIX-only line in the program**, and what replaces it is upstream: an accessor for
+   * the CLI's own pid, or peer credentials on the socket, which Node does not expose. Until one of those
+   * exists, a Windows host is refused by name where the terminal is prepared rather than approximated here.
+   */
   async function registerWithObserver($: ClaudePluginApi) {
     const host = await $.process.run(['/bin/sh', '-c', 'printf "%s" "$PPID"'], { timeoutMs: 3000 });
     if (host.exitCode !== 0) throw Error('Original background identity helper refused');

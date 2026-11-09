@@ -20,7 +20,10 @@ export interface ClaudeBackgroundAttachment {
 
 /** Own the original attach client; never send Stop to its background worker on close. */
 export async function openBackgroundAttachment(continuation: ClaudeNativeContinuation, jobId: string, options: SubcommandOptions = {}): Promise<ClaudeBackgroundAttachment> {
-  if (process.platform === 'win32') throw new Error('Native background attachment currently requires a POSIX terminal')
+  // Detaching without ending the worker is a signal to the client's process group (`signal` below), and the
+  // terminal service refuses a signal off POSIX rather than approximating one. What would lift this is a
+  // broker-side detach, not a platform check here.
+  if (process.platform === 'win32') throw new Error('Native background attachment detaches with a POSIX signal, which Windows has no form of')
   if (options.signal?.aborted) throw new Error('Background attachment cancelled')
   const session = await backgroundSession(continuation, {operation: 'refresh'}, options)
   if (!session || session.id !== jobId || session.sessionId !== continuation.continuedInSessionId) throw new Error('Background session changed; refresh before opening it')
