@@ -5,50 +5,18 @@ import { terminalEventBus } from '../../utils/terminal-events.ts';
 import { terminalPool } from '../../utils/terminal-pool.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { removeTabs, nextActiveFromHistory } from '../../utils/tab-management.ts';
+import type { TerminalInfo } from '../../../be/types.ts'
 
-export interface TerminalInfo {
-  id: string
-  title: string
-  customTitle?: string
-  pid: number
-  shell?: string
-  cwd: string
-  active: boolean
-  /**
-   * The session's size **when this was published**, which is a starting point and not a live reading.
-   *
-   * **A pty has one size and it is whatever a window last fitted**, so the live value lives where the
-   * session does: the service keeps it current and `restart` re-opens the shell at it. What a window holds
-   * is the snapshot it was last listed or opened with, and its one consumer wants exactly that — the pool
-   * builds the emulator at this size and `fitAddon.fit()` replaces it on the next frame, so it is the width
-   * a replayed screen is first drawn at and nothing more.
-   *
-   * It is spelled out because it reads as live and is not: a drive scenario waited on it for the size a
-   * window had just fitted and timed out at the creation size, with every resize having landed correctly
-   * (F18). Nothing is missing — a window that wants the size it fitted computed it, and the pty's own is
-   * the broker's to answer.
-   */
-  cols: number
-  /** The session's rows when this was published; see `cols` */
-  rows: number
-  /**
-   * How far back this session can be scrolled, which is the host's number and not this window's.
-   *
-   * Unlike `cols` this is not a starting point: it is the bound the pool builds the emulator with, and
-   * exceeding it would draw lines that cannot survive a reattach — the host is what answers a screen read
-   * when no window holds the bytes. It was pinned here as 10,000 against the broker's 1,000, so closing and
-   * reopening a window silently lost nine tenths of the scrollback.
-   */
-  scrollback: number
-  /**
-   * What ends a typed line for this session's shell — X6.
-   *
-   * A window cannot know which shell is on the other end, and it matters: typed into a Windows console,
-   * `\n` is echoed and never runs, so a command sits on screen looking typed while nothing happens. The
-   * backend computes it where the shell is chosen.
-   */
-  submit: string
-}
+/**
+ * **The type the system publishes, not a window's copy of it**, which is why it is imported and re-exported
+ * rather than declared here.
+ *
+ * A copy drifts silently in both directions. One missing a field still compiles where a handler writes it —
+ * `markTerminalCrashed` writes `exited`, and `.map`'s result is no fresh object literal, so excess-property
+ * checking never runs — and a field the backend publishes that the copy omits is dropped on the way in with
+ * nothing to say so. The window's half of `terminal.*` is this shape or it is wrong.
+ */
+export type { TerminalInfo }
 
 const createTerminalTab = (info: TerminalInfo) => ({
   path: `terminal:${info.id}`,
