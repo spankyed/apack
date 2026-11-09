@@ -41,7 +41,11 @@ export function useNativeTranscriptViewport(options: {
     let following = resume ? resume.owner !== owner || resume.following : isAtNativeTranscriptLatest(viewport), restoring = !!resume
     const valid = () => epoch === current && options.viewport.value === viewport && options.owner() === owner && options.active() && viewport.clientHeight > 0
     const scrolled = () => {
-      if (!restoring && valid() && viewport.clientWidth === width && viewport.clientHeight === height) { following = isAtNativeTranscriptLatest(viewport); top = viewport.scrollTop }
+      if (!restoring && valid()) {
+        if (viewport.clientWidth === width && viewport.clientHeight === height) following = isAtNativeTranscriptLatest(viewport)
+        // Browser anchoring can move a reader during reflow before ResizeObserver runs.
+        top = viewport.scrollTop
+      }
     }
     const reading = (event: Event) => {
       if (event instanceof WheelEvent && event.deltaY >= 0) return
@@ -54,7 +58,8 @@ export function useNativeTranscriptViewport(options: {
       width = viewport.clientWidth; height = viewport.clientHeight
       if (restoring) return
       if (!changed) { following = isAtNativeTranscriptLatest(viewport); top = viewport.scrollTop; return }
-      if (!following || frame !== undefined) return
+      if (!following) { top = viewport.scrollTop; return }
+      if (frame !== undefined) return
       frame = requestAnimationFrame(() => { frame = undefined; if (valid() && following) { viewport.scrollTop = nativeTranscriptLatestTop(viewport); top = viewport.scrollTop } })
     })
     resize.observe(viewport); resize.observe(content)

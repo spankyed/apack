@@ -87,12 +87,18 @@ it.each(['following', 'reading', 'new conversation'] as const)('restores %s afte
     row.getBoundingClientRect=()=>({top:10+latestTop-element.scrollTop,height:30}) as DOMRect
     element.scrollTop=450;observers.at(-1)!([],{} as ResizeObserver);flush();element.dispatchEvent(new Event('scroll'))
     if(mode!=='following'){element.dispatchEvent(new WheelEvent('wheel',{deltaY:-100}));element.scrollTop=100;element.dispatchEvent(new Event('scroll'))}
+    // Navigation/layout can reflow the reading viewport before its scroll event and observer settle.
+    // Keep the resulting visible position, rather than the pre-resize cached top.
+    if(mode==='reading'){
+      height=145;element.scrollTop=155;element.dispatchEvent(new Event('scroll'))
+      observers.at(-1)!([],{} as ResizeObserver)
+    }
     // v-show yields no geometry, and hidden message/layout work can clamp scrollTop to zero.
     height=0;element.scrollTop=0;active.value=false;await nextTick()
     latestTop=650;total=800
     if(mode==='new conversation'){owner.value='session-two';await nextTick()}
     height=150;active.value=true;await nextTick();flush()
-    expect(element.scrollTop).toBe(mode==='reading'?100:650)
+    expect(element.scrollTop).toBe(mode==='reading'?155:650)
     expect(document.activeElement).toBe(editor)
     // A gesture before the queued return frames run wins over restored following.
     element.scrollTop=650;element.dispatchEvent(new Event('scroll'))
