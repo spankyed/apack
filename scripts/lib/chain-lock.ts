@@ -10,7 +10,7 @@
 // It is a module of its own because `chain.ts` runs the chain on import (a top-level `await main()`), so a
 // spec can only reach this by it being here — the same reason `chain-stamps.ts` and `chain-flags.ts` exist.
 import * as path from 'node:path';
-import { holdExclusiveLockWaiting, type ExclusiveLock } from '@apackdev/host/exclusive-lock';
+import { findLockHolder, holdExclusiveLockWaiting, type ExclusiveLock } from '@apackdev/host/exclusive-lock';
 import { STAMP_DIR } from './chain-stamps.ts';
 
 /**
@@ -46,6 +46,26 @@ export class ChainLockHeld extends Error {
 /** What the holder was doing, for the message the next arrival reads: its own command, flags and all */
 export const chainInvocation = (argv: readonly string[] = process.argv.slice(2)): string =>
   ['npm run chain', ...argv].join(' ');
+
+/**
+ * Whether a chain run is in progress in this checkout, described, or `null` when none is — the second thing
+ * this lock answers, and the only one a reader rather than a taker needs.
+ *
+ * The lock is held for the whole of `chain.ts`' `main()`, every step included, so a step's own subprocess
+ * asking this during a chain run gets the holder and the same command run by hand gets `null`. That makes
+ * "this is the gate" **a fact about the machine**, which is what `CLAUDE.md` requires of every such
+ * condition: `process.env.CI` would be a refusal that never fires, since the chain is the gate whether or
+ * not CI is what started it.
+ *
+ * Its caller is a check whose subject only exists after a chain run — the stamp store, a dep file — which has
+ * nothing to compare outside one. Outside, missing evidence is not the contributor's change and saying so
+ * beats failing them; inside, that same silence is what the check exists to prevent, so there it refuses.
+ *
+ * `findLockHolder`'s answer rather than a second reading of the file, so there is one account of what held
+ * means: a lock that cannot be read, or one naming another machine, counts as held there — and both are
+ * cases where guessing "no chain is running" is the unsafe direction.
+ */
+export const runningChain = (file: string = CHAIN_LOCK): string | null => findLockHolder(file);
 
 /**
  * Takes the chain lock, or throws `ChainLockHeld`. With `waitMs`, a held lock is waited for and retried until

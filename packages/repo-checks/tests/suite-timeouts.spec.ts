@@ -205,7 +205,8 @@ function timeoutSources(file: string): string[] {
 function declaredTimeouts(file: string): { key: string; ms: number }[] {
   const out: { key: string; ms: number }[] = [];
   for (const raw of timeoutSources(file).join('\n').split('\n')) {
-    const line = raw.trim();
+    // A Playwright config's `expect: { timeout }` bounds an assertion's wait, not the test, so it is no test timeout
+    const line = raw.trim().replace(/\bexpect\s*:\s*\{[^}]*\}/g, '');
     if (line.startsWith('//') || line.startsWith('*')) continue;
     // **A nested clock is a different clock.** Playwright's `expect: { timeout }` bounds one assertion;
     // `timeout` bounds the whole test, and only the second is the deadline a size declares. Both are

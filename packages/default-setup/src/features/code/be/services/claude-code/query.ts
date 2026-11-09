@@ -27,6 +27,7 @@
  * between "internal logic" and "caller" without races.
  */
 
+import { processWork, workSignal } from '@apackdev/sdk/progress'
 import { createLogger } from '@apackdev/sdk/logger'
 import { argsFromOptions } from './args.ts'
 import { createControlRouter } from './control.ts'
@@ -241,9 +242,42 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
       })
     },
 
+    /**
+     * **Bounded by the child's own progress, never by a clock.**
+     *
+     * Closing stdin signals end-of-input, but acting on it is the CLI's choice, and a child that spawned
+     * anything which inherited its stdio holds the pipe open whether it means to or not. So this used to
+     * wait for ever: the caller never returned, and a conversation read as busy for the rest of the app's
+     * run.
+     *
+     * A child that is still working is waited on for as long as it keeps working — a deadline on the clock
+     * would refuse a busy machine's child for the load it ran under. One that has gone silent without
+     * exiting is terminated instead.
+     *
+     * A genuine exit failure still throws, as it always did: only the silent-child path is new, and it is
+     * the one case where there is nothing left to wait for.
+     */
     async close(): Promise<void> {
       stream.endInput()
-      await stream.done()
+      const exit = stream.done()
+      const pid = stream.child.pid
+      let exited = true
+
+      if (pid !== undefined) {
+        const watch = workSignal({ work: processWork(pid) })
+        exited = await new Promise<boolean>((resolve) => {
+          exit.then(() => resolve(true), () => resolve(true))
+          watch.signal.addEventListener('abort', () => resolve(false), { once: true })
+        })
+        watch.stop()
+      }
+
+      if (!exited) {
+        stream.kill('SIGTERM')
+        return
+      }
+      await exit
+      // The pump ends when stdout does, which an exited child's closed pipes cause
       await pumpPromise
     },
 

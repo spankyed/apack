@@ -24,6 +24,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { AppEnv } from '@apackdev/sdk/env';
+import { pollWhileWorking, type WorkReading } from '@apackdev/sdk/progress';
 import { writePrivateFile } from './private-file.ts';
 import { recordIsStale } from './process-liveness.ts';
 
@@ -80,23 +81,21 @@ export function debugPortArgsFor(env: AppEnv): string[] {
 /**
  * Waits for a session to be published on a data dir, or says why none was.
  *
- * **The deadline is a pack build, not a window.** A cold spawn runs the packages' freshness check and
- * `apack pack build` before Electron starts, which is tens of seconds — a deadline sized for a launch reports a
- * timeout on a build that was working. `isAlive` is how the caller says the launcher has gone: a child that
- * exited is an error with a body rather than a wait to the deadline, and the two read quite differently to
- * whoever is waiting.
+ * **Bounded by the launcher's work, not a window.** A cold spawn runs the packages' freshness check and
+ * `apack pack build` before Electron starts, which on a busy machine takes as long as it takes; `work` reads the
+ * launcher's process tree, and the wait gives up only once that tree has stopped working. `isAlive` is how the
+ * caller says the launcher has gone: a child that exited is an error with a body, read quite differently from a
+ * stall by whoever is waiting.
  */
-export async function waitForSession(
-  dataDir: string, { timeoutMs = 120_000, isAlive = () => true }: { timeoutMs?: number; isAlive?: () => boolean } = {},
+export function waitForSession(
+  dataDir: string, { work, isAlive = () => true, idleMs }: { work: WorkReading; isAlive?: () => boolean; idleMs?: number },
 ): Promise<DevSession> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
+  return pollWhileWorking(() => {
     const session = readSession(dataDir);
     if (session !== undefined) return session;
     if (!isAlive()) throw new Error(`The app exited before it published ${sessionFile(dataDir)}.`);
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error(`No session appeared at ${sessionFile(dataDir)} within ${Math.round(timeoutMs / 1000)}s.`);
+    return undefined;
+  }, { work, idleMs, what: `No session appeared at ${sessionFile(dataDir)}` });
 }
 
 /**
@@ -123,12 +122,11 @@ const PORT_FILE_SLACK_MS = 2_000;
  * well — which looks like a bug in the attach rather than in the publish. A file not newer than `after` is
  * "not yet", exactly as an absent one is.
  */
-export async function readDevToolsPort(
-  dataDir: string, { after, timeoutMs = 15_000 }: { after: number; timeoutMs?: number },
+export function readDevToolsPort(
+  dataDir: string, { after, work, idleMs }: { after: number; work: WorkReading; idleMs?: number },
 ): Promise<number> {
   const file = path.join(dataDir, 'DevToolsActivePort');
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
+  return pollWhileWorking(() => {
     // Absent is the ordinary case for the first few polls, and a half-written first line reads as NaN —
     // both are "not yet" rather than failures, so neither ends the wait
     try {
@@ -137,9 +135,8 @@ export async function readDevToolsPort(
         if (Number.isInteger(port) && port > 0) return port;
       }
     } catch {}
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  throw new Error(`No debug port appeared at ${file} within ${timeoutMs}ms.`);
+    return undefined;
+  }, { work, idleMs, pollMs: 50, what: `No debug port appeared at ${file}` });
 }
 
 /** What a launcher was told to record as its starter, or `dev` for one nobody told. */

@@ -1,3 +1,4 @@
+import { spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -5,7 +6,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { INTERRUPTS } from '@apackdev/host/exclusive-lock';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
-import { ABSENT, ALLOW_UNBUILT, BUILD_UNITS, packageBuildState, buildScriptFor, changedInputs, CHECKOUT_MARKER, covers, declaredPaths, diffableStamp, ensurePackagesBuilt, fingerprintInputs, fingerprintUnit, fingerprintWithDigests, freshnessSweep, inputFiles, outputDigests, INPUTS_CHANGED, PACKAGES_PREBUILT_ENV, packageWriter, PackagesWentStale, repoRelative, NOT_A_BUILD_INPUT, REPO_ROOT, staleMessage, stampRecord, stampedBuild, stampedRun, stampedRunAll, stampFile, unbuiltRefusal, unitStaleReason, withBuildLock, type BuildIntent, type BuildUnit, type StaleUnit } from '@apackdev/host/build/packages-built';
+import { ABSENT, ALLOW_UNBUILT, BUILD_UNITS, packageBuildState, buildScriptFor, changedInputs, CHECKOUT_MARKER, covers, declaredPaths, diffableStamp, ensurePackagesBuilt, fingerprintInputs, fingerprintUnit, fingerprintWithDigests, freshnessSweep, inputFiles, outputDigests, INPUTS_CHANGED, PACKAGES_PREBUILT_ENV, packageWriter, PackagesWentStale, repoRelative, NOT_A_BUILD_INPUT, REPO_ROOT, staleMessage, stampRecord, stampedBuild, stampedRun, stampedRunAll, stampFile, unbuiltRefusal, unitStaleReason, waitForPackageBuild, withBuildLock, type BuildIntent, type BuildUnit, type StaleUnit } from '@apackdev/host/build/packages-built';
 
 /**
  * The freshness rule behind `npm test -w @apackdev/cli`'s pretest (@apackdev/host/build/packages-built):
@@ -243,11 +244,17 @@ describe('the stamp protocol', () => {
     // fixture: editing a real `build:package` to test it makes that unit stale, and a stale unit used to stop
     // this file running at all.
     const inlinesHost = (workspace: string) => buildScriptFor(workspace) === 'scripts/bundle-package.ts';
+    // A listed file in a package's own tree is that package's source, and so an input of its own build
+    const packageDirs = new Map(fs.readdirSync(path.join(REPO_ROOT, 'packages')).flatMap((dir) => {
+      const manifest = path.join(REPO_ROOT, 'packages', dir, 'package.json');
+      return fs.existsSync(manifest) ? [[JSON.parse(fs.readFileSync(manifest, 'utf8')).name as string, dir] as const] : [];
+    }));
+    const ownSource = (workspace: string, rule: string) => rule.startsWith(`packages/${packageDirs.get(workspace)}/`);
     const offences = Object.keys(BUILD_UNITS).flatMap((workspace) => {
       if (inlinesHost(workspace)) return [];
       const resolved = new Set(BUILD_UNITS[workspace].inputs.flatMap((input) => inputFiles(input)));
       return Object.keys(NOT_A_BUILD_INPUT)
-        .filter((rule) => resolved.has(rule))
+        .filter((rule) => resolved.has(rule) && !ownSource(workspace, rule))
         .map((rule) => `${workspace} watches ${rule} — ${NOT_A_BUILD_INPUT[rule]}`);
     });
     expect(offences).toEqual([]);
@@ -991,6 +998,47 @@ describe('the build lock on the way out', () => {
   });
 });
 
+describe('waiting for a build in flight', () => {
+  const lockFile = () => path.join(tempDir(), 'packages-build.lock');
+  const hold = (file: string, pid: number, label = '@apackdev/other') =>
+    fs.writeFileSync(file, JSON.stringify({ pid, label, startedAt: new Date().toISOString() }));
+  // Holders the cases start, given the lock file's path, and ended after each case
+  const holders: ChildProcess[] = [];
+  afterEach(() => { for (const holder of holders.splice(0)) holder.kill('SIGKILL'); });
+  const holder = (script: string, file: string): number => {
+    const child = spawn(process.execPath, ['-e', script, file], { stdio: 'ignore' });
+    holders.push(child);
+    return child.pid!;
+  };
+
+  it('gives up on a holder that does no work', () => {
+    const file = lockFile();
+    // This process holds it, and does no work while it waits: what a wedged holder looks like
+    hold(file, process.pid);
+    const started = Date.now();
+    expect(waitForPackageBuild({ file, idleMs: 1_000 })?.pid).toBe(process.pid);
+    expect(Date.now() - started, 'it gave up without waiting').toBeGreaterThanOrEqual(900);
+  });
+
+  it('ends the wait when the holder releases, however idle it was', () => {
+    const file = lockFile();
+    hold(file, holder("setTimeout(() => require('node:fs').rmSync(process.argv[1]), 1000)", file));
+    const started = Date.now();
+    waitForPackageBuild({ file, idleMs: 10_000 });
+    expect(Date.now() - started, 'it waited out the stall window rather than the release').toBeLessThan(8_000);
+  });
+
+  /** The firing case for following the holder: one that hands the lock on is no stall, and its successor works */
+  it('follows a holder that hands the lock to a busy successor', () => {
+    const file = lockFile();
+    const busy = holder("const end = Date.now() + 6000; while (Date.now() < end) {} require('node:fs').rmSync(process.argv[1])", file);
+    hold(file, holder(`setTimeout(() => require('node:fs').writeFileSync(process.argv[1], JSON.stringify({ pid: ${busy}, label: 'next', startedAt: new Date().toISOString() })), 1000)`, file));
+    const started = Date.now();
+    waitForPackageBuild({ file, idleMs: 4_000 });
+    expect(Date.now() - started, 'the busy successor was charged its idle predecessor\'s silence').toBeGreaterThanOrEqual(5_000);
+  });
+});
+
 describe('the build lock', () => {
   const lockFile = () => path.join(tempDir(), 'packages-build.lock');
 
@@ -1011,10 +1059,11 @@ describe('the build lock', () => {
     await expect(withBuildLock('@apackdev/sdk', () => 'never', file, { intent: 'command' })).rejects.toThrow(/another package build holds/);
     expect(Date.now() - started, 'a command waited instead of failing at once').toBeLessThan(500);
 
-    // The wait is bounded, and says it waited — a holder that never goes is reported, not waited on forever
+    // The wait is bounded by the holder's work, and says so: this process holds it and is blocked in the wait, so
+    // it does no work, which is what a wedged holder looks like — reported, not waited on forever
     const waited = Date.now();
-    await expect(withBuildLock('@apackdev/sdk', () => 'never', file, { intent: 'freshness', timeoutMs: 1_000 }))
-      .rejects.toThrow(/after waiting 1s/);
+    await expect(withBuildLock('@apackdev/sdk', () => 'never', file, { intent: 'freshness', idleMs: 1_000 }))
+      .rejects.toThrow(/after waiting while it did no work for 1(\.0)?s/);
     expect(Date.now() - waited, 'a freshness fix gave up without waiting').toBeGreaterThanOrEqual(900);
   });
 
