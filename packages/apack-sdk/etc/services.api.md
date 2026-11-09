@@ -495,6 +495,7 @@ export interface TerminalListeners {
 
 // @public
 export interface TerminalService {
+    adopt(id: string, listeners: TerminalListeners): Promise<TerminalSession>;
     open(options: {
         cols: number;
         rows: number;
@@ -508,7 +509,7 @@ export interface TerminalService {
 // @public
 export interface TerminalSession {
     readonly id: string;
-    readonly pid: number;
+    readonly pid: number | null;
     resize(cols: number, rows: number): Promise<void>;
     readonly scrollback: number;
     terminate(): Promise<void>;

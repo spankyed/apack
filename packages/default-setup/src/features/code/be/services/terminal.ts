@@ -546,6 +546,7 @@ class TerminalService {
     for (const row of persisted) {
       if (this.terminals.has(row.id)) continue
       // Asked rather than assumed: a stored id is a name, and offering a stale one costs one refused request
+      if (row.session !== undefined && await this.adopt(row, row.session, handlers)) continue
       // **A row is data** (S3): the database console writes one, `apack db exec` writes one, and a backup
       // import replaces the whole store without looking at a row. So a stored shell and a stored directory
       // go through the same check a created one does, rather than straight to a spawn.
