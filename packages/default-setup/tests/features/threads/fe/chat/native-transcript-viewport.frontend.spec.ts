@@ -64,3 +64,42 @@ it('follows viewport resizing without stealing focus and retires queued work on 
     app.unmount(); expect(frames.size).toBe(0)
   } finally { if (root.firstChild) app.unmount(); root.remove(); editor.remove(); vi.unstubAllGlobals() }
 })
+
+
+it.each(['following', 'reading', 'new conversation'] as const)('restores %s after the native terminal temporarily hides conversation layout', async mode => {
+  const frames = new Map<number, FrameRequestCallback>(), observers: ResizeObserverCallback[] = []
+  let serial = 0, height = 100, total = 600, latestTop = 450
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { frames.set(++serial, callback); return serial })
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id))
+  vi.stubGlobal('ResizeObserver', class { constructor(callback: ResizeObserverCallback) { observers.push(callback) } observe() {} disconnect() {} })
+  const viewport = ref<HTMLElement | null>(null), content = ref<HTMLElement | null>(null), owner = ref('session-one'), active = ref(true)
+  const root = document.createElement('div'), editor = document.createElement('input'); document.body.append(root, editor); editor.focus()
+  const app = createApp({ setup() {
+    useNativeTranscriptViewport({ viewport, content, owner: () => owner.value, active: () => active.value })
+    return () => h('div', { ref: viewport }, h('div', { ref: content }, h('article', { 'data-message-id': 'latest-reply' })))
+  } })
+  const flush = () => { for (let i=0;i<3&&frames.size;i++){const pending=[...frames.values()];frames.clear();pending.forEach(callback=>callback(0))} }
+  app.mount(root)
+  try {
+    await nextTick();const element=viewport.value!,row=content.value!.firstElementChild!
+    Object.defineProperties(element,{clientWidth:{get:()=>800},clientHeight:{get:()=>height},scrollHeight:{get:()=>total}})
+    element.getBoundingClientRect=()=>({top:10}) as DOMRect
+    row.getBoundingClientRect=()=>({top:10+latestTop-element.scrollTop,height:30}) as DOMRect
+    element.scrollTop=450;observers.at(-1)!([],{} as ResizeObserver);flush();element.dispatchEvent(new Event('scroll'))
+    if(mode!=='following'){element.dispatchEvent(new WheelEvent('wheel',{deltaY:-100}));element.scrollTop=100;element.dispatchEvent(new Event('scroll'))}
+    // v-show yields no geometry, and hidden message/layout work can clamp scrollTop to zero.
+    height=0;element.scrollTop=0;active.value=false;await nextTick()
+    latestTop=650;total=800
+    if(mode==='new conversation'){owner.value='session-two';await nextTick()}
+    height=150;active.value=true;await nextTick();flush()
+    expect(element.scrollTop).toBe(mode==='reading'?100:650)
+    expect(document.activeElement).toBe(editor)
+    // A gesture before the queued return frames run wins over restored following.
+    element.scrollTop=650;element.dispatchEvent(new Event('scroll'))
+    height=0;element.scrollTop=0;active.value=false;await nextTick()
+    height=150;active.value=true;await nextTick();expect(frames.size).toBe(1)
+    element.dispatchEvent(new WheelEvent('wheel',{deltaY:-100}));element.scrollTop=80;element.dispatchEvent(new Event('scroll'))
+    flush();expect(element.scrollTop).toBe(80);expect(frames.size).toBe(0)
+    height=120;observers.at(-1)!([],{} as ResizeObserver);flush();expect(element.scrollTop).toBe(80)
+  } finally { app.unmount();root.remove();editor.remove();vi.unstubAllGlobals() }
+})

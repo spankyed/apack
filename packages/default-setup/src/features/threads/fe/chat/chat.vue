@@ -827,6 +827,7 @@ watch(canvasHeight, (height) => {
 const messagesContainer = ref<HTMLElement | null>(null)
 const messagesContent = ref<HTMLElement | null>(null)
 const isNearBottom = ref(true)
+const nativeTranscriptVisible = computed(() => !nativeTerminalActive.value && !focusedAgent.value && !agentSelection.value && !mainCommandView.value && !pendingNativeQuestion.value && !pendingNativePlan.value)
 // Navigation takes space beside history; the composer must not consume both.
 const nativeConversationNavigation = computed(() => !!currentThread.value?.context?.claudeCode && (!isNearBottom.value || !!currentThread.value.context.claudeCode.pendingElicitation) && allMessages.value.length > 0)
 const pendingScrollOnSend = ref(false)
@@ -839,12 +840,13 @@ const dontAskAgain = ref(false)
 
 function scrollToBottom(behavior: ScrollBehavior = 'smooth') {
   const el = messagesContainer.value
-  if (!el) return
+  if (!el || currentThread.value?.context?.claudeCode && (!nativeTranscriptVisible.value || !el.clientHeight)) return
   el.scrollTo({ top: currentThread.value?.context?.claudeCode ? nativeTranscriptLatestTop(el) : el.scrollHeight, behavior })
 }
 
 /** Instant scroll + double rAF to catch async content (Tiptap, images). */
 function forceScrollToBottom() {
+  if (currentThread.value?.context?.claudeCode && !nativeTranscriptVisible.value) return
   scrollPositioning.position(() => scrollToBottom('instant'))
 }
 
@@ -882,7 +884,7 @@ function readNativeHistory(event: WheelEvent) {
 
 function onScroll() {
   const el = messagesContainer.value
-  if (!el) return
+  if (!el || currentThread.value?.context?.claudeCode && (!nativeTranscriptVisible.value || !el.clientHeight)) return
   isNearBottom.value = currentThread.value?.context?.claudeCode
     ? isAtNativeTranscriptLatest(el)
     : el.scrollHeight - el.scrollTop - el.clientHeight < 100
@@ -1114,6 +1116,9 @@ function onMessagesRendered() {
     prependScroll = undefined
   }
 
+  // Keep hidden render bookkeeping without mistaking zero geometry for a reader gesture.
+  if (currentThread.value?.context?.claudeCode && !nativeTranscriptVisible.value) return
+
   // Handle scroll preservation for prepended older messages
   if (prependScroll) {
     const { height, top } = prependScroll
@@ -1163,10 +1168,15 @@ watch(messagesContent, (el, _, onCleanup) => {
   observer.observe(el)
   onCleanup(() => observer.disconnect())
 }, { immediate: true })
+watch(nativeTranscriptVisible, async visible => {
+  if (!visible || !currentThread.value?.context?.claudeCode) return
+  await nextTick()
+  if (nativeTranscriptVisible.value) onMessagesRendered()
+})
 useNativeTranscriptViewport({
   viewport: messagesContainer, content: messagesContent,
   owner: () => currentThread.value?.context?.claudeCode?.sessionId ? `${currentThread.value.id}:${currentThread.value.context.claudeCode.sessionId}` : undefined,
-  active: () => !nativeTerminalActive.value && !focusedAgent.value && !agentSelection.value && !mainCommandView.value && !pendingNativeQuestion.value && !pendingNativePlan.value,
+  active: () => nativeTranscriptVisible.value,
 })
 </script>
 

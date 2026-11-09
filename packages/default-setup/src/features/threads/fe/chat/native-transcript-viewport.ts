@@ -29,35 +29,55 @@ export function useNativeTranscriptViewport(options: {
   active(): boolean
 }) {
   let disconnect: (() => void) | undefined, frame: number | undefined, epoch = 0
+  let retained: { viewport: HTMLElement; content: HTMLElement; owner: string; following: boolean; top: number } | undefined, suspended = false
   const cancel = () => { if (frame !== undefined) cancelAnimationFrame(frame); frame = undefined }
   watch([options.viewport, options.content, options.owner, options.active], ([viewport, content, owner, active]) => {
     disconnect?.(); disconnect = undefined; cancel(); const current = ++epoch
-    if (!viewport || !content || !owner || !active) return
-    let width = viewport.clientWidth, height = viewport.clientHeight
-    let following = isAtNativeTranscriptLatest(viewport)
+    if (!viewport || !content || !owner) { retained = undefined; suspended = false; return }
+    if (!active) { suspended = true; return }
+    const resume = suspended && retained?.viewport === viewport && retained.content === content ? retained : undefined
+    suspended = false
+    let width = viewport.clientWidth, height = viewport.clientHeight, top = viewport.scrollTop
+    let following = resume ? resume.owner !== owner || resume.following : isAtNativeTranscriptLatest(viewport), restoring = !!resume
     const valid = () => epoch === current && options.viewport.value === viewport && options.owner() === owner && options.active() && viewport.clientHeight > 0
     const scrolled = () => {
-      if (valid() && viewport.clientWidth === width && viewport.clientHeight === height) following = isAtNativeTranscriptLatest(viewport)
+      if (!restoring && valid() && viewport.clientWidth === width && viewport.clientHeight === height) { following = isAtNativeTranscriptLatest(viewport); top = viewport.scrollTop }
     }
     const reading = (event: Event) => {
       if (event instanceof WheelEvent && event.deltaY >= 0) return
       if (event instanceof KeyboardEvent && !['ArrowUp', 'PageUp', 'Home'].includes(event.key)) return
-      following = false; cancel()
+      following = false; restoring = false; cancel(); if (valid()) top = viewport.scrollTop
     }
     const resize = new ResizeObserver(() => {
       if (!valid()) return
       const changed = width !== viewport.clientWidth || height !== viewport.clientHeight
       width = viewport.clientWidth; height = viewport.clientHeight
-      if (!changed) { following = isAtNativeTranscriptLatest(viewport); return }
+      if (restoring) return
+      if (!changed) { following = isAtNativeTranscriptLatest(viewport); top = viewport.scrollTop; return }
       if (!following || frame !== undefined) return
-      frame = requestAnimationFrame(() => { frame = undefined; if (valid() && following) viewport.scrollTop = nativeTranscriptLatestTop(viewport) })
+      frame = requestAnimationFrame(() => { frame = undefined; if (valid() && following) { viewport.scrollTop = nativeTranscriptLatestTop(viewport); top = viewport.scrollTop } })
     })
     resize.observe(viewport); resize.observe(content)
     viewport.addEventListener('scroll', scrolled, { passive: true })
     for (const name of ['wheel', 'pointerdown', 'touchstart', 'keydown']) viewport.addEventListener(name, reading, { passive: true })
     disconnect = () => {
+      retained = { viewport, content, owner, following, top }
       resize.disconnect(); viewport.removeEventListener('scroll', scrolled)
       for (const name of ['wheel', 'pointerdown', 'touchstart', 'keydown']) viewport.removeEventListener(name, reading)
+    }
+    if (resume) {
+      // Hidden DOM has no usable scroll geometry. Restore only this view's intent,
+      // after layout and async message bodies settle; a reader gesture cancels both passes.
+      const restore = () => {
+        frame = undefined
+        if (!valid() || !restoring) return
+        viewport.scrollTop = following ? nativeTranscriptLatestTop(viewport) : resume.top
+        top = viewport.scrollTop
+      }
+      frame = requestAnimationFrame(() => {
+        restore()
+        if (valid() && restoring) frame = requestAnimationFrame(() => { restore(); restoring = false })
+      })
     }
   }, { flush: 'post' })
   onBeforeUnmount(() => { epoch++; disconnect?.(); cancel() })
