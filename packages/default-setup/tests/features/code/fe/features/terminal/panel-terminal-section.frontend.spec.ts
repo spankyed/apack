@@ -39,6 +39,32 @@ afterEach(() => {
 
 describe('the panel terminal host', () => {
   /**
+   * **A collapsed panel stops holding the pty small**, which is the half of the grid rule that lives here.
+   *
+   * The backend runs a pty at the smallest fit of the windows showing it, so a window that stops showing one
+   * has to say so or it constrains every other window for as long as its connection lives — the same symptom
+   * as a terminal frozen at a grid nobody chose, reached by collapsing a panel instead of by a reconnect.
+   * Collapsing falls into the watcher's `else`, which releases the attachment, and a release that actually
+   * let go is what sends `terminal.DETACHED`.
+   *
+   * The release has to report whether *this* host is the one that let go (F1): during a remount the new host
+   * attaches before the old one releases, and a message from the old one would drop the fit the new one just
+   * recorded. So the case asserts one event and not merely a non-empty list.
+   */
+  it('tells the backend to release its fit when the panel collapses', async () => {
+    surface = startCodeSurface({ terminals: [info], panelTerminalId: info.id, panelTerminalExpanded: true })
+    surface.mount(PanelTerminalSection)
+    await surface.settle()
+    expect(surface.sent.filter((event) => event.type === 'terminal.DETACHED'),
+      'nothing has been let go of yet').toEqual([])
+
+    await surface.togglePanel()
+
+    expect(surface.sent.filter((event) => event.type === 'terminal.DETACHED'))
+      .toEqual([{ type: 'terminal.DETACHED', terminalId: info.id }])
+  })
+
+  /**
    * **T7.** The watcher's `else` is every case that is not a terminal to draw, of which there are three: the
    * panel collapsed, nothing selected, and this one — a terminal gone from the list while its id is still
    * the selected one. Naming the cases left this one in neither branch, so the host went on holding an
