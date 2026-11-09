@@ -34,7 +34,6 @@ const provided = <K extends 'apack.idleMs' | 'apack.testCpuMs'>(key: K): number 
 
 const idleMs = provided('apack.idleMs') ?? IDLE_MS;
 const defaultBudgetMs = provided('apack.testCpuMs');
-const ceiling = process.env.APACK_CEILING !== 'off';
 
 interface Running {
   readonly what: string;
@@ -90,7 +89,8 @@ function judgeAfresh(): void {
   const alone = running.length === 1 && !running[0]!.shared ? running[0] : undefined;
   const work = workerWork();
   const watch = watchWork({
-    work, idleMs, clock: realClock, ceilingMs: ceiling ? alone?.budgetMs : undefined,
+    // `watchWork` drops the ceiling under APACK_CEILING=off, as it does for every bound
+    work, idleMs, clock: realClock, ceilingMs: alone?.budgetMs,
     onRefused: (refusal) => {
       const together = running.length > 1 ? `, with ${running.length - 1} other test${running.length > 2 ? 's' : ''} running beside it` : '';
       const why = refusal.kind === 'stalled'

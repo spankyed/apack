@@ -298,13 +298,22 @@ export interface Watch {
  * failed reading between two good ones cannot pass off the whole total as new work. Where readings cannot be taken
  * at all — a system with neither `ps` nor PowerShell — `fallbackMs` is the bound on the clock from the first one that failed.
  */
-export function watchWork({ work, idleMs = IDLE_MS, ceilingMs, fallbackMs, onRefused, watchesOutput = false, clock = processClock }: {
+/**
+ * Whether a CPU ceiling applies here: not under `APACK_CEILING=off`, which the Linux test container sets because its
+ * VM counts the host's load as the guest's CPU, so a ceiling there fires on a busy host, not on a spin. Read where
+ * every bound is built, so a caller passing a ceiling cannot forget it; a stall still reads as no CPU in a VM, and
+ * the watch keeps that.
+ */
+const ceilingsApply = (): boolean => process.env.APACK_CEILING !== 'off';
+
+export function watchWork({ work, idleMs = IDLE_MS, ceilingMs: requestedCeilingMs, fallbackMs, onRefused, watchesOutput = false, clock = processClock }: {
   readonly work: WorkReading; readonly idleMs?: number; readonly ceilingMs?: number; readonly fallbackMs?: number;
   readonly onRefused: (refusal: Refusal) => void;
   /** Whether the caller reports the party's output (`output()`), so a refusal can say how long it has been silent */
   readonly watchesOutput?: boolean;
   readonly clock?: WatchClock;
 }): Watch {
+  const ceilingMs = ceilingsApply() ? requestedCeilingMs : undefined;
   const startedAt = clock.now();
   const tracker = createStallTracker(idleMs, startedAt);
   let lastTotal: number | undefined;
