@@ -50,6 +50,15 @@ isolation is clearly needed, such as concurrent editing sessions or work that mu
 the active branch. For an isolated session, start with `npm run session:new -- <name>` (or an explicit
 `git worktree add` outside the main checkout) and continue all edits, staging and validation there.
 Never share `node_modules`, generated output or the staging index between worktrees.
+
+**And never two worktrees on one branch.** A branch is one ref and a worktree's HEAD points at it, so a
+`reset`, `rebase` or `commit` in either moves the other's HEAD and leaves its index and working tree where
+they were — that checkout then reports every file differing between the old HEAD and the new one as a staged
+change, which reads as a reversal of whatever landed in between, staged by nobody, in a tree never edited.
+Git refuses `git checkout <branch>` for a branch another worktree holds, which is why the state reads as
+unreachable; it does not refuse `git checkout -B <branch> <start>`, which takes the ref. Give each worktree a
+branch of its own or detach it (`git checkout --detach`);
+`packages/repo-checks/tests/worktree-refs.spec.ts` refuses the state and names what to detach.
 Repository dev, drive and database scripts default to a separate profile in linked worktrees;
 explicit profile/storage overrides are intentional sharing, so use them only when requested.
 
