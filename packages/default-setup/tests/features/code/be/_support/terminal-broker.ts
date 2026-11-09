@@ -19,6 +19,7 @@ export interface OpenOptions {
   shell?: string
   args?: readonly string[]
   env?: Record<string, string>
+  unset?: readonly string[]
   cwd?: string
 }
 

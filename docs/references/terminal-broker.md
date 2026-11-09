@@ -106,6 +106,35 @@ something a caller can comply with.
   signal travels by name, inverted from that description against the same `strsignal` in the broker's own
   process, because the description is prose written for a person and translated.
 
+## A question is a request, not a signal that happens to be refused
+
+`owns` asks whether a pid is inside a session's tree, answered by the same walk the `pid` scope's refusal
+uses — so what a caller reads and what it would have been refused cannot disagree.
+
+**It exists because a signal is an act.** A caller that wanted the answer rather than the effect had nothing
+to ask, so it reached for the act, or walked the parent chain itself with `/bin/ps`. The second is the worse
+of the two: a separate implementation of the broker's own invariant, free to disagree with it, and off POSIX
+it finds no `ps`, answers *not owned* for everything, and refuses every claim without saying why.
+
+**What needs it is a claim nobody can check from outside**: a process says *"I am yours, pid N"* over a
+socket of its own, where the pid is whatever it chose to write, and admitting it is an authorization
+decision about a tree the broker owns. **The pid is the correlation**, not the session — a caller admitting
+several claims has more than one outstanding, and an answer taken for another pid's is one admitted or
+refused wrongly. Windows refuses with a code rather than answering `false`, the job-object route being
+unwritten until it can be claimed on that platform.
+
+## A spawn can keep a name out of its child
+
+A session inherits the broker's environment, and `env` adds to it — so `unset` is the only way to make a
+name *absent*. An owner starting the user's shell wants the inheritance; one starting a particular program
+often wants the opposite, and what it is usually subtracting is a credential: a CLI that found the app's own
+API key would authenticate as the app rather than as whoever the user signed in as.
+
+**This is the half of a `node-pty` spawn that does not survive being ported naively.** `pty.spawn(…, {env})`
+*replaces* a child's environment, so deleting a name from the object deleted it from the child; `open`'s
+`env` adds, and a delete there removes nothing. `unset` is applied after `env`, so absence is what an owner
+gets when it asks for both.
+
 ## The socket
 
 **A name, and its spelling differs by platform.** On POSIX it is a Unix socket in a 0700 directory under the

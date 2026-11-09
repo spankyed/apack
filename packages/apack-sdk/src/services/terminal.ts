@@ -181,6 +181,17 @@ export interface TerminalService {
       args?: readonly string[];
       /** Added to the environment the session is started in, which carries none of the app's own identity */
       env?: Readonly<Record<string, string>>;
+      /**
+       * Taken out of that environment, which `env` cannot express.
+       *
+       * **A session inherits the host's environment, so adding entries cannot make a name absent.** An owner
+       * starting the user's shell wants that inheritance; one starting a particular program often wants the
+       * opposite, and what it is usually subtracting is a credential — a CLI that found the app's own API
+       * key in its environment would authenticate as the app rather than as whoever the user signed in as.
+       *
+       * Applied after `env`, so absence is what an owner gets when it asks for both.
+       */
+      unset?: readonly string[];
       cwd?: string;
     },
     listeners: TerminalListeners,

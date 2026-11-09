@@ -260,6 +260,11 @@ export interface BrokerSessionOptions {
   args?: readonly string[];
   /** Added to the environment the broker runs in, which already has the app's own identity stripped out */
   env?: Readonly<Record<string, string>>;
+  /**
+   * Taken out of it, which `env` cannot express: a session inherits the broker's environment, so adding
+   * entries cannot make a name absent. Applied after `env`, so absence is what a caller asking for both gets.
+   */
+  unset?: readonly string[];
   cwd?: string;
 }
 
@@ -722,7 +727,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
 
   return {
     history,
-    async open({ cols, rows, shell, args, env, cwd }, sessionListeners) {
+    async open({ cols, rows, shell, args, env, unset, cwd }, sessionListeners) {
       connection.send({
         kind: 'spawn',
         cols,
@@ -730,6 +735,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
         shell: shell ?? null,
         args: [...args ?? []],
         env: Object.entries(env ?? {}),
+        unset: [...unset ?? []],
         cwd: cwd ?? null,
       });
       // Registered as the frame is read, so an `exited` in the same read is not lost; delivered once this
