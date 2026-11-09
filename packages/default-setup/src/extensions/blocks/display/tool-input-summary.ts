@@ -1,9 +1,15 @@
 import type { ToolActivityEntry } from '#features/threads/be/types.ts'
 
-/** Print-mode tools lack native drawings; describe their actual operation and location. */
-export function toolInputSummary(entry: ToolActivityEntry): string {
+/**
+ * Print-mode tools lack native drawings; describe their actual operation and location.
+ *
+ * **The details are a parameter because a block's props do not hold them**, so reading them off the entry
+ * fell back to the plain summary for every row. They are fetched for a block the user has open, which is
+ * also when the header showing this is worth enriching; closed, the fallback is the summary as before.
+ */
+export function toolInputSummary(entry: Omit<ToolActivityEntry, 'details'>, details: ToolActivityEntry['details']): string {
   if (entry.tool !== 'LSP') return entry.summary
-  const input = entry.details?.input
+  const input = details?.input
   if (!input || typeof input !== 'object' || Array.isArray(input)) return entry.summary
   const { operation, filePath, line, character } = input as Record<string, unknown>
   if (typeof operation !== 'string' || !operation || typeof filePath !== 'string' || !filePath) return entry.summary
