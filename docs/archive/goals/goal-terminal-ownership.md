@@ -237,11 +237,14 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
 - **Agent status rules** (is a Claude/Codex turn working, waiting or ready). Phase A builds the facts
   pipeline; the rules are product surface with their own iteration, and the refactor target warns that
   herdr's can mistake an unrecognized screen for idle. Owner: a later goal, once facts exist.
-- **G2–G7** (the agent path beyond G1), and the native-TUI adapter in #372. Their own goal, against the
-  shape recorded on that PR, and Phase B's factoring is what makes it cheap:
+- **G2–G7** (the agent path beyond G1), and the native-TUI adapter in #390, which replaced #372. Their own
+  goal, against the shape recorded on that PR, and Phase B's factoring is what makes it cheap:
   most of them dissolve against the process layer rather than needing fixes, so that goal is "migrate the
   agent path onto the broker", not "fix seven findings". G1 is in scope here because it is payload
   discipline rather than process ownership, and independent of everything else.
+  **They were closed anyway, which is why no goal inherited them**: the acceptance table carries G2, G4 and
+  G7 as `test`, G6 as `fixed` (on master, by #389) and G3 as `dissolved`. The exclusion stands as the
+  decision this goal made; what it deferred turned out not to need a goal of its own.
 - **node-pty-shaped Windows findings** (X1, X2 and their neighbours). Dissolved by the spine rather than
   fixed separately — but **closed on a Windows run, not a Mac one**: Phase B writes them and their
   acceptance needs the [Windows development VM](../../references/guides/windows-development-vm.md) and a
