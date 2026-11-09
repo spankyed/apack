@@ -43,6 +43,8 @@ export function useNativeTranscriptViewport(options: {
     let width = viewport.clientWidth, height = viewport.clientHeight, top = viewport.scrollTop
     // A new identity has no reader position; hidden geometry cannot decide its intent.
     let following = resume ? resume.owner !== owner || resume.following : true, restoring = returning
+    // Preserve reading through late native reflow until an explicit user action retires it.
+    let readerTarget = resume?.owner === owner && !resume.following ? resume.top : undefined
     const setFollowing = (value: boolean) => { following = value; options.onFollowingChange?.(value) }
     setFollowing(following)
     const valid = () => epoch === current && options.viewport.value === viewport && options.owner() === owner && options.active() && viewport.clientHeight > 0
@@ -50,10 +52,18 @@ export function useNativeTranscriptViewport(options: {
       if (frame !== undefined) return
       frame = requestAnimationFrame(() => { frame = undefined; if (valid() && following) { viewport.scrollTop = nativeTranscriptLatestTop(viewport); top = viewport.scrollTop } })
     }
-    requestFollow = () => { setFollowing(true); positionLatest() }
-    requestPause = () => { setFollowing(false); restoring = false; cancel(); if (valid()) top = viewport.scrollTop }
+    const positionReader = () => {
+      if (frame !== undefined) return
+      frame = requestAnimationFrame(() => {
+        frame = undefined
+        if (valid() && !following && readerTarget !== undefined) { viewport.scrollTop = readerTarget; top = viewport.scrollTop }
+      })
+    }
+    requestFollow = () => { readerTarget = undefined; setFollowing(true); positionLatest() }
+    requestPause = () => { readerTarget = undefined; setFollowing(false); restoring = false; cancel(); if (valid()) top = viewport.scrollTop }
     const scrolled = () => {
       if (!restoring && valid()) {
+        if (readerTarget !== undefined) { positionReader(); return }
         // Upward reading intent survives while the short latest body is still visible.
         if (viewport.clientWidth === width && viewport.clientHeight === height && !following && viewport.scrollTop > top) setFollowing(isAtNativeTranscriptLatest(viewport))
         // Browser anchoring can move a reader during reflow before ResizeObserver runs.
@@ -61,15 +71,18 @@ export function useNativeTranscriptViewport(options: {
       }
     }
     const reading = (event: Event) => {
-      if (event instanceof WheelEvent && event.deltaY >= 0) return
-      if (event instanceof KeyboardEvent && !['ArrowUp', 'PageUp', 'Home'].includes(event.key)) return
+      if (event instanceof WheelEvent && event.deltaY >= 0) { readerTarget = undefined; restoring = false; cancel(); return }
+      if (event instanceof KeyboardEvent && !['ArrowUp', 'PageUp', 'Home'].includes(event.key)) {
+        if (['ArrowDown', 'PageDown', 'End'].includes(event.key)) { readerTarget = undefined; restoring = false; cancel() }
+        return
+      }
       requestPause?.()
     }
     const resize = new ResizeObserver(() => {
       if (!valid()) return
       width = viewport.clientWidth; height = viewport.clientHeight
       if (restoring) return
-      if (!following) { top = viewport.scrollTop; return }
+      if (!following) { if (readerTarget !== undefined) positionReader(); else top = viewport.scrollTop; return }
       positionLatest()
     })
     resize.observe(viewport); resize.observe(content)

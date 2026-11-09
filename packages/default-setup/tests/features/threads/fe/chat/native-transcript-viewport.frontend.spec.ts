@@ -108,6 +108,15 @@ it.each(['following', 'reading', 'reading near latest', 'new conversation', 'new
     height=150;active.value=true;await nextTick();flush()
     expect(element.scrollTop).toBe(mode==='reading'?155:mode==='reading near latest'?480:650)
     expect(following.value).toBe(mode==='following'||mode.startsWith('new conversation'))
+    if(mode==='reading'||mode==='reading near latest'){
+      const saved=element.scrollTop
+      // The real native UI reflows after the initial return frames, without reader input.
+      element.scrollTop=saved-15;element.dispatchEvent(new Event('scroll'))
+      total+=32;observers.at(-1)!([],{} as ResizeObserver);flush()
+      expect(element.scrollTop).toBe(saved);expect(following.value).toBe(false)
+      element.dispatchEvent(new WheelEvent('wheel',{deltaY:10}));element.scrollTop=saved+10;element.dispatchEvent(new Event('scroll'))
+      observers.at(-1)!([],{} as ResizeObserver);flush();expect(element.scrollTop).toBe(saved+10)
+    }
     expect(document.activeElement).toBe(editor)
     if(mode==='following'){
       // Real return traces grow async content without a reader gesture. A queued
