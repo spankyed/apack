@@ -136,9 +136,25 @@ export function integrationFor(
       args: [],
       env: { ZDOTDIR: directory },
       files: [{
+        // **`.zshenv` is written as well as `.zshrc`, because zsh reads it from `ZDOTDIR` too — first, and
+        // for every shell.** With the variable pointed here and no file of ours in its place, the user's own
+        // `.zshenv` was simply skipped: an integrated terminal lost whatever they set there, which is where
+        // `PATH` and version managers usually go, and only in this app. It also honours a `ZDOTDIR` their
+        // own `.zshenv` sets, which is how a dotfile manager redirects zsh: that value is what `.zshrc`
+        // below then sources, and `ZDOTDIR` is put back to ours so this file's own `.zshrc` is still read.
+        at: '.zshenv',
+        contents: `# Written by apack. zsh reads .zshenv from ZDOTDIR, so without this one yours is skipped.\n`
+          // Quoted, because this is either a path the user set or the literal `$HOME`: double quotes expand
+          // the second and keep the first whole, where unquoted a directory with a space in it split and
+          // zsh ran the tail as a command
+          + `__apack_zdotdir="$ZDOTDIR"\nZDOTDIR="${theirs}"\n`
+          + `[ -f "\${ZDOTDIR}/.zshenv" ] && . "\${ZDOTDIR}/.zshenv"\n`
+          + `APACK_USER_ZDOTDIR="$ZDOTDIR"\nZDOTDIR="$__apack_zdotdir"\nunset __apack_zdotdir\n`,
+      }, {
         at: '.zshrc',
         contents: `# Written by apack. Sources your own configuration first, then reports the working directory.\n`
-          + `ZDOTDIR=${theirs}\n[ -f "\${ZDOTDIR}/.zshrc" ] && . "\${ZDOTDIR}/.zshrc"\n${OSC7.zsh}\n`,
+          + `ZDOTDIR="\${APACK_USER_ZDOTDIR:-${theirs}}"\nunset APACK_USER_ZDOTDIR\n`
+          + `[ -f "\${ZDOTDIR}/.zshrc" ] && . "\${ZDOTDIR}/.zshrc"\n${OSC7.zsh}\n`,
       }],
     }
   }

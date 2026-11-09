@@ -39,6 +39,14 @@ export function appMenuTemplate(
         submenu: [
           {role: 'toggleDevTools', accelerator: 'Control+Shift+I'},
           {role: 'togglefullscreen', accelerator: 'F11'},
+          // **Page zoom is kept, because `+`, `-` and `0` are not a shell's keys** — the rule above is about
+          // the accelerators a terminal cannot refuse, and these are not among them. Installing a menu
+          // replaces Electron's default, which is where Ctrl+0 / Ctrl+Plus / Ctrl+Minus came from off macOS,
+          // and nothing else in the app binds them: without these entries page zoom simply became
+          // unreachable there, where the macOS menu beside them keeps all three.
+          {role: 'resetZoom', accelerator: 'Control+0'},
+          {role: 'zoomIn', accelerator: 'Control+Plus'},
+          {role: 'zoomOut', accelerator: 'Control+-'},
         ],
       },
     ];

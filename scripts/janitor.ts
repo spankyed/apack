@@ -176,9 +176,24 @@ else {
   const before = freeBytes();
   const limits = limitsFor(before);
   say(`--- ${new Date().toISOString()}${dry ? ' (dry)' : ''}: ${gb(before)} free`);
-  const checkouts = rustCheckouts();
-  sweepRust(checkouts, limits.incrementalBudgetBytes, limits.sweepDays);
-  sweepTestTmp(checkouts);
+  // **A refusal is reported into the log this writes, not thrown past it.** `rustCheckoutsIn` refuses an
+  // empty `vendor/` on purpose, and thrown from here that refusal escaped before `writeLog()` — the only
+  // thing that trims the log to `LOG_LINES`. So an hourly launchd run with no link appended a stack trace to
+  // the one file this script exists to keep bounded, for ever, and swept nothing while doing it.
+  let checkouts: string[] = [];
+  let refused: unknown;
+  try {
+    checkouts = rustCheckouts();
+  } catch (error) {
+    refused = error;
+  }
+  if (refused === undefined) {
+    sweepRust(checkouts, limits.incrementalBudgetBytes, limits.sweepDays);
+    sweepTestTmp(checkouts);
+  } else {
+    say(`swept nothing: ${refused instanceof Error ? refused.message : String(refused)}`);
+  }
   say(`${gb(freeBytes())} free`);
   if (!dry) writeLog();
+  if (refused !== undefined) process.exit(1);
 }

@@ -9,6 +9,8 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import * as net from 'node:net';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { createLogger } from '@apackdev/sdk/logger';
 import { holdExclusiveLockWaiting, type ExclusiveLock } from '../exclusive-lock.ts';
 // The protocol's types, generated from the broker's Rust and shipped by its package — not a copy of them.
@@ -329,6 +331,23 @@ async function reach(options: BrokerOptions): Promise<net.Socket> {
   return connect(options.socket, options.startMs);
 }
 
+/** The prefix every Windows pipe address carries, which is a namespace rather than a directory */
+const PIPE_PREFIX = '\\\\.\\pipe\\';
+
+/**
+ * Where the exclusive start lock goes for a broker listening on `socket`.
+ *
+ * **The socket cannot carry it on Windows.** There the address is a named pipe, `\\.\pipe\<name>`, and that
+ * is a kernel namespace and not a directory: nothing can create `\\.\pipe\<name>.start.lock`, so the `wx`
+ * take fails with something other than `EEXIST` on every attempt, the waiter spends its whole window
+ * retrying and then throws, and the caller connects to a broker nobody started. A pipe's name is already
+ * unique per data dir, so the lock takes that name in the temporary directory instead.
+ */
+function startLockFile(socket: string): string {
+  if (!socket.startsWith(PIPE_PREFIX)) return `${socket}.start.lock`;
+  return path.join(os.tmpdir(), `${socket.slice(PIPE_PREFIX.length)}.start.lock`);
+}
+
 /**
  * Makes sure a broker is listening on this socket, starting one if nothing is.
  *
@@ -346,7 +365,7 @@ async function ensureListening(options: BrokerOptions): Promise<void> {
   let lock: ExclusiveLock;
   try {
     lock = await holdExclusiveLockWaiting({
-      file: `${options.socket}.start.lock`,
+      file: startLockFile(options.socket),
       what: 'starting the terminal broker',
       waitMs: options.startMs ?? BROKER_START_MS,
       refuse: (holder) => new Error(`another process is starting the terminal broker (${holder})`),
@@ -444,6 +463,30 @@ function unrefPipe(stream: unknown): void {
 }
 
 /**
+ * The broker's answer to a greeting, within `startMs`.
+ *
+ * **A connection that is accepted and never answered is the one shape that has no end of its own.** The
+ * socket is up, so nothing errors and nothing closes; the greeting's waiter simply never settles, and with
+ * it every `open()` behind the one lazy start — a hang rather than a refusal, so the caller's `catch` never
+ * runs and no attempt is ever counted against the budget. It is the same case `ready()` bounds on the other
+ * stream, for the same reason. Whoever catches this destroys the connection, which refuses the waiter left
+ * behind.
+ */
+function greetingWithin(connection: Connection, startMs = BROKER_START_MS): Promise<Event> {
+  let deadline: NodeJS.Timeout | undefined;
+  return Promise.race([
+    connection.next(event => event.kind === 'hello'),
+    new Promise<never>((_, refuse) => {
+      deadline = setTimeout(
+        () => refuse(new Error(`the broker accepted a connection and did not answer the greeting within ${startMs}ms`)),
+        startMs,
+      );
+      deadline.unref();
+    }),
+  ]).finally(() => { clearTimeout(deadline); });
+}
+
+/**
  * Holds the broker's sessions open for as long as this process lives.
  *
  * **The app's own process holds this and nothing else does.** Every session the broker owns ends when this
@@ -465,7 +508,7 @@ export async function holdBrokerSessions(options: BrokerOptions): Promise<{ clos
   // a `destroy` on that branch alone leaves the commonest refusal holding a connection open for ever
   let greeting: Event;
   try {
-    greeting = await greeted.next(event => event.kind === 'hello');
+    greeting = await greetingWithin(greeted, options.startMs);
   } catch (error) {
     greeted.destroy();
     throw error;
@@ -493,7 +536,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
   // way this connection is unusable and must not be left counted
   let greeting: Event;
   try {
-    greeting = await connection.next(event => event.kind === 'hello');
+    greeting = await greetingWithin(connection, options.startMs);
     if (greeting.kind === 'hello' && greeting.protocol !== PROTOCOL_VERSION) {
       throw new BrokerError('HANDSHAKE', `the broker speaks protocol ${greeting.protocol}; this app speaks ${PROTOCOL_VERSION}`);
     }
@@ -712,8 +755,12 @@ function frames(socket: net.Socket, listeners: Map<string, BrokerSessionListener
       // and `write`, `resize` and `kill` wait for nothing — so a refusal of one of those has no caller, and
       // reporting it is all there is to do. Shifting the queue instead rejected whoever happened to be at
       // its head, which is a call about another session being told it failed.
+      // A refusal naming no session is the connection's — a handshake, a spawn — so it belongs to a call
+      // that named none either. Taking the head instead rejected whoever was there: with a `screen` in
+      // flight and a `spawn` refused, the screen's caller was told the spawn's failure and the `open` it
+      // was really about waited for an answer that had already been consumed.
       const index = event.session == null
-        ? (waiting.length > 0 ? 0 : -1)
+        ? waiting.findIndex(one => one.session === undefined)
         : waiting.findIndex(one => one.session === event.session);
       if (index >= 0) waiting.splice(index, 1)[0]!.refuse(error);
       else if (event.code !== 'NO_SUCH_SESSION') {

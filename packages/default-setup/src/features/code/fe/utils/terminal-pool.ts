@@ -245,6 +245,10 @@ class TerminalPool {
     // quietly is what keeps the next real change a boundary again.
     if (pid === null || entry.pid === null) {
       entry.pid = pid
+      // The boundary is real even where neither side can be told apart by a number, so the next death is
+      // news again. Left set, a terminal whose first shell was an adopted session — pid unknown — had its
+      // crash drawn, took a restart with a real pid here, and then died with nothing written on the screen
+      entry.exitNoted = false
       return
     }
     // A crash already drew the line for this boundary, so the new pid is taken quietly; a restart of a shell

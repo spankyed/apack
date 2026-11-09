@@ -22,8 +22,21 @@ import { execFileSync } from 'node:child_process';
  */
 export function gitIn(checkout) {
   return (/** @type {string[]} */ args) =>
-    execFileSync('git', ['-C', checkout, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    execFileSync('git', ['-C', checkout, ...args], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      // **Bounded, and never asking.** One of these commands reaches the network, and git asks for
+      // credentials on `/dev/tty` rather than stdin, writing the prompt to the stderr discarded here — so a
+      // remote that wants auth, or a connect that stalls, left `npm run link:elmdb` hanging with nothing on
+      // screen, in the command a new checkout runs before anything is installed. Both turn into the
+      // "could not reach the remote" warning this file already words.
+      timeout: FETCH_MS,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    });
 }
+
+/** How long a git command here may take; it is a bound on a hang, not a measurement of a fetch */
+const FETCH_MS = 20_000;
 
 /**
  * The remote-tracking branches of `remote` that hold `rev`.

@@ -56,6 +56,14 @@ describe('the application menu off macOS', () => {
   it('keeps the developer tools reachable', () => {
     expect(rolesOf(appMenuTemplate('linux', env))).toContain('toggleDevTools');
   });
+
+  it('keeps page zoom reachable, which installing a menu takes from Electron s default', () => {
+    // `+`, `-` and `0` are not a shell's keys, so the rule above does not ask for these to go — and nothing
+    // else in the app binds them, so dropping them made page zoom unreachable off macOS
+    expect(rolesOf(appMenuTemplate('win32', env))).toEqual(
+      expect.arrayContaining(['resetZoom', 'zoomIn', 'zoomOut']),
+    );
+  });
 });
 
 describe('the application menu on macOS', () => {

@@ -744,7 +744,12 @@ export function suiteInputs(suite: UnitSuite, half: Half): string[] {
     // A suite's half runs under one root config, so which projects that config pools is an input to it
     ...rootConfigFor(suite, half),
     // The native pool's Docker scratch policy is part of both the outer and per-project verdict.
-    ...(half === 'native' ? ['scripts/linux-runner.ts', 'scripts/lib/linux-native-scratch.ts', 'scripts/linux/Dockerfile'] : []),
+    // `vendored-checkouts.ts` is one of the runner's own modules and belongs here with them: it decides
+    // which Rust toolchain the image installs, and the toolchain is part of the image tag — so an edit to it
+    // changes the container this suite runs in, and without the declaration the step reports itself cached.
+    ...(half === 'native'
+      ? ['scripts/linux-runner.ts', 'scripts/lib/linux-native-scratch.ts', 'scripts/lib/vendored-checkouts.ts', 'scripts/linux/Dockerfile']
+      : []),
     ...SUITE_RUNNER,
     ...suiteWorkspace(suite.dir),
     ...workspaceDeps(suite.dir).flatMap(dependencySource),

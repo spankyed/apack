@@ -33,14 +33,35 @@ describe('starting a shell so that it reports itself', () => {
     expect(arranged.env).toEqual({ ZDOTDIR: DIR })
     expect(arranged.args).toEqual([])
     const file = arranged.files.find(one => one.at === '.zshrc')!
-    expect(file.contents).toContain('ZDOTDIR=$HOME')
+    expect(file.contents).toContain('ZDOTDIR="${APACK_USER_ZDOTDIR:-$HOME}"')
     expect(file.contents).toContain('${ZDOTDIR}/.zshrc')
+  })
+
+  it("sources the user's own .zshenv, which zsh would otherwise skip entirely", () => {
+    // zsh reads `.zshenv` from ZDOTDIR before anything else, so pointing the variable at our directory
+    // without a file of ours there loses whatever the user set in theirs — `PATH` and version managers,
+    // in this app's terminals alone
+    const arranged = integrationFor('/bin/zsh', DIR, posix, noEnv)!
+
+    const file = arranged.files.find(one => one.at === '.zshenv')!
+    expect(file.contents).toContain('${ZDOTDIR}/.zshenv')
+    // ZDOTDIR goes back to ours, or the `.zshrc` that reports the working directory is never read
+    expect(file.contents).toContain('ZDOTDIR="$__apack_zdotdir"')
   })
 
   it("keeps a ZDOTDIR the user had already set, rather than sending them to their home", () => {
     const arranged = integrationFor('/bin/zsh', DIR, posix, { ZDOTDIR: '/home/someone/.config/zsh' } as NodeJS.ProcessEnv)!
 
-    expect(arranged.files[0]!.contents).toContain('ZDOTDIR=/home/someone/.config/zsh')
+    expect(arranged.files[0]!.contents).toContain('ZDOTDIR="/home/someone/.config/zsh"')
+  })
+
+  it('quotes it, because a directory may have a space in it', () => {
+    // Unquoted, zsh takes the assignment as far as the space and runs the rest as a command: the user's
+    // configuration is not loaded and the shell opens with an error about a directory it tried to execute.
+    // The default is the literal `$HOME`, which double quotes still expand, so one form serves both
+    const arranged = integrationFor('/bin/zsh', DIR, posix, { ZDOTDIR: '/home/some one/.config/zsh' } as NodeJS.ProcessEnv)!
+
+    expect(arranged.files[0]!.contents).toContain('ZDOTDIR="/home/some one/.config/zsh"')
   })
 
   it('adds to fish\'s data directories rather than replacing them', () => {

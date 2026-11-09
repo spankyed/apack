@@ -324,14 +324,23 @@ const attachTerminal = (terminalId: string) => {
   }
 }
 
-const detachTerminal = () => {
+/**
+ * Lets go of whatever this host is drawing.
+ *
+ * `handingOver` says an attach for the terminal the user asked for follows in this same turn — a switch from
+ * one terminal to another — in which case the request to focus is still that attach's and must survive.
+ * Clearing it unconditionally made the flag dead for the one case it exists for: every switch detaches
+ * first, so clicking a terminal while another was drawn here cleared the request before the attach could
+ * spend it, and the user's keystrokes went on reaching the list button they had clicked.
+ */
+const detachTerminal = ({ handingOver = false } = {}) => {
   // Releasing is also how a host another has taken over from detaches nothing (F1)
   attachment?.release()
   attachment = null
   hasSelection.value = false
   // Letting go ends any outstanding request to focus, for the same reason the guard above does: the attach
   // it was armed for is not going to happen, and the next one is somebody else's
-  focusOnAttach = false
+  if (!handingOver) focusOnAttach = false
 }
 
 // Context menu actions
@@ -548,9 +557,9 @@ onMounted(() => {
 // Watch expand/collapse, panelTerminalId, and activeTerminalInfo (for when terminals list arrives after expand)
 watch([isExpanded, panelTerminalId, activeTerminalInfo], async ([expanded, termId, info]) => {
   if (expanded && termId && info) {
-    // Detach old terminal if switching
+    // Detach old terminal if switching, handing the pending focus request to the attach below
     if (attachment && attachment.terminalId !== termId) {
-      detachTerminal()
+      detachTerminal({ handingOver: true })
     }
     // Only attach if not already attached to this terminal — the attachment names the one it holds
     if (attachment?.terminalId !== termId) {
