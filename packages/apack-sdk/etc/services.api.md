@@ -497,7 +497,7 @@ export interface TerminalFacts {
 
 // @public
 export interface TerminalListeners {
-    onExit(code: number | null): void;
+    onExit(code: number | null, signal: string | null): void;
     onOutput(data: string): void;
 }
 
@@ -518,12 +518,34 @@ export interface TerminalService {
 export interface TerminalSession {
     facts(): Promise<TerminalFacts>;
     readonly id: string;
+    pause(): Promise<void>;
     readonly pid: number | null;
     resize(cols: number, rows: number): Promise<void>;
+    resume(): Promise<void>;
     readonly scrollback: number;
+    signal(signal: TerminalSignal, scope: TerminalSignalScope): Promise<void>;
     terminate(): Promise<void>;
     write(data: string): Promise<void>;
 }
+
+// @public
+export type TerminalSignal = 'SIGHUP' | 'SIGINT' | 'SIGQUIT' | 'SIGTERM' | 'SIGKILL';
+
+// @public
+export type TerminalSignalScope =
+/** The process the host started for this session */
+    {
+    readonly kind: 'leader';
+}
+/** The process group it leads */
+| {
+    readonly kind: 'group';
+}
+/** One process, refused unless it is inside this session's tree */
+| {
+    readonly kind: 'pid';
+    readonly pid: number;
+};
 
 // @internal
 export const _toSecretMetadata: (input: SecretMetadata) => SecretMetadata;

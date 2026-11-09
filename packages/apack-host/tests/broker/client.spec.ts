@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { _whenSatisfied, settles } from '@apackdev/sdk/testing/waiting';
-import { BrokerError, holdBrokerSessions, startBroker, type Broker } from '../../src/broker/client.ts';
+import { BrokerError, holdBrokerSessions, PROTOCOL_VERSION, startBroker, type Broker } from '../../src/broker/client.ts';
 
 /**
  * A broker in a script: it answers the protocol from a table, so a test can say what it answers.
@@ -66,6 +66,24 @@ async function broker(script: Record<string, unknown[]>): Promise<Broker> {
   return running;
 }
 
+/** The same, with a fake that writes every request it read to a file, and that file's path */
+async function recordingBroker(script: Record<string, unknown[]>): Promise<{ broker: Broker; requests: () => unknown[] }> {
+  directory = mkdtempSync(path.join(tmpdir(), 'broker-client-'));
+  const binary = path.join(directory, 'fake-broker.cjs');
+  const asked = path.join(directory, 'requests.ndjson');
+  writeFileSync(binary, RECORDS);
+  chmodSync(binary, 0o755);
+  running = await startBroker({
+    binary,
+    socket: path.join(directory, 'b.sock'),
+    env: { ...process.env, FAKE_SCRIPT: JSON.stringify(script), FAKE_REQUESTS: asked },
+  });
+  return {
+    broker: running,
+    requests: () => readFileSync(asked, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line)),
+  };
+}
+
 /** A directory with a broker script in it, for a case that starts one itself rather than through `broker` */
 function brokerScript(body: string): { binary: string; socket: string } {
   directory = mkdtempSync(path.join(tmpdir(), 'broker-client-'));
@@ -85,6 +103,18 @@ function brokerScript(body: string): { binary: string; socket: string } {
 const COUNTING = FAKE.replace(
   'const server = net.createServer',
   "require('node:fs').appendFileSync(process.env.FAKE_PIDS, process.pid + '\\n');\nconst server = net.createServer",
+);
+
+/**
+ * A broker that records every request it was asked, so a case can assert the frame rather than an effect.
+ *
+ * `pause`, `resume` and `signal` have no answer — like `write` and `resize`, they are carried out or
+ * refused — so what a case about them can observe is the frame that left. The real broker's own suite is
+ * what proves the effect.
+ */
+const RECORDS = FAKE.replace(
+  '    const request = JSON.parse(line);',
+  "    const request = JSON.parse(line);\n    require('node:fs').appendFileSync(process.env.FAKE_REQUESTS, line + '\\n');",
 );
 
 /**
@@ -137,7 +167,9 @@ const recordedPids = (file: string) =>
   readFileSync(file, 'utf8').split('\n').filter(Boolean).map(Number);
 
 /** The two every test needs: a greeting, and a session to open */
-const GREETS = { hello: [{ kind: 'hello', protocol: 1 }] };
+// The version this client speaks, rather than a number written out: a bump is the client's edit, and a
+// fake that answered a stale one would refuse every case for the wrong reason
+const GREETS = { hello: [{ kind: 'hello', protocol: PROTOCOL_VERSION }] };
 const OPENS = { ...GREETS, spawn: [{ kind: 'spawned', session: 's-1', pid: 4242 }] };
 
 describe('the broker client', () => {
@@ -149,7 +181,7 @@ describe('the broker client', () => {
 
   it('refuses a broker that speaks another protocol, naming both', async () => {
     await expect(broker({ hello: [{ kind: 'hello', protocol: 99 }] }))
-      .rejects.toThrow(/broker speaks protocol 99.*app speaks 1/);
+      .rejects.toThrow(new RegExp(`broker speaks protocol 99.*app speaks ${PROTOCOL_VERSION}`));
   });
 
   it('delivers output to the session that produced it, and never to a caller waiting for an answer', async () => {
@@ -188,6 +220,69 @@ describe('the broker client', () => {
       () => (exits.length > 0 ? exits : undefined), 'the exit the broker reported');
 
     expect(exits, 'one exit, delivered once').toEqual([0]);
+  });
+
+  it('asks the broker to stop and start reading a session, and signals what it is told to', async () => {
+    // These three are carried out or refused, like a write and a resize, so the frame is what a case here
+    // can see. `apack-terminal/tests/broker.rs` is where the effect of each is proven
+    const fake = await recordingBroker(OPENS);
+    const session = await fake.broker.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
+
+    await session.pause();
+    await session.resume();
+    await session.signal('SIGTERM', { kind: 'pid', pid: 4243 });
+    await session.signal('SIGKILL', { kind: 'group' });
+
+    const asked = await settles(() => {
+      const sent = fake.requests().filter(request => (request as { kind: string }).kind !== 'hello');
+      if (sent.length < 5) throw new Error(`only ${sent.length} requests reached the broker`);
+      return sent;
+    });
+    expect(asked.slice(1)).toEqual([
+      { kind: 'pause', session: 's-1' },
+      { kind: 'resume', session: 's-1' },
+      { kind: 'signal', session: 's-1', signal: 'SIGTERM', scope: { kind: 'pid', pid: 4243 } },
+      { kind: 'signal', session: 's-1', signal: 'SIGKILL', scope: { kind: 'group' } },
+    ]);
+  });
+
+  it('reports a session killed by a signal as that signal and no code', async () => {
+    // **A code or a signal, never both.** Reported as one, a shutdown the app asked for and a crash are
+    // the same `1`, and nothing downstream can tell them apart
+    const fake = await broker({
+      ...OPENS,
+      kill: ['{"kind":"exited","session":"$session","code":null,"signal":"SIGTERM"}'],
+    });
+    const ends: Array<{ code: number | null; signal: string | null }> = [];
+    let ended = () => {};
+    const session = await fake.open({ cols: 80, rows: 24 }, {
+      onOutput() {},
+      onExit: (code, signal) => { ends.push({ code, signal }); ended(); },
+    });
+
+    await session.kill();
+    await _whenSatisfied(notify => { ended = notify; return () => { ended = () => {}; }; },
+      () => (ends.length > 0 ? ends : undefined), 'the exit the broker reported');
+
+    expect(ends).toEqual([{ code: null, signal: 'SIGTERM' }]);
+  });
+
+  it('reports a signal nobody said as null rather than as undefined', async () => {
+    // An older broker, or any frame that omits the field: the contract says `string | null`, so a listener
+    // must not be handed `undefined` and have to know that means the same thing
+    const fake = await broker({ ...OPENS, kill: ['{"kind":"exited","session":"$session","code":0}'] });
+    const ends: Array<{ code: number | null; signal: string | null }> = [];
+    let ended = () => {};
+    const session = await fake.open({ cols: 80, rows: 24 }, {
+      onOutput() {},
+      onExit: (code, signal) => { ends.push({ code, signal }); ended(); },
+    });
+
+    await session.kill();
+    await _whenSatisfied(notify => { ended = notify; return () => { ended = () => {}; }; },
+      () => (ends.length > 0 ? ends : undefined), 'the exit the broker reported');
+
+    expect(ends).toEqual([{ code: 0, signal: null }]);
   });
 
   it('raises a refusal as its code, not as a message to match on', async () => {

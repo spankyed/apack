@@ -12,6 +12,7 @@ import type { PackFrontendAddress } from '../../src/build/frontend-process.ts';
 import { startPackBuildWatcher } from '../../src/build/watch.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
 import { _workingSignal } from '@apackdev/sdk/testing/waiting';
+import { DEV_SERVER_HOST } from '@apackdev/host/packs/dev-server';
 
 let builder: PackBuilder | undefined;
 let temporary: string | undefined;
@@ -81,10 +82,10 @@ function fixture() {
  * which is when a browser re-imports them. Connected before the edit, so the message cannot be missed.
  */
 async function nextComponentUpdate(address: PackFrontendAddress): Promise<{ readonly received: Promise<void> }> {
-  const client = await (await fetch(`http://localhost:${address.port}/@vite/client`, { signal: _workingSignal() })).text();
+  const client = await (await fetch(`http://${DEV_SERVER_HOST}:${address.port}/@vite/client`, { signal: _workingSignal() })).text();
   const token = /const wsToken = "([^"]+)"/.exec(client)?.[1];
   if (!token) throw new Error('The Vite client names no HMR token');
-  const socket = new WebSocket(`ws://localhost:${address.port}/?token=${token}`, 'vite-hmr');
+  const socket = new WebSocket(`ws://${DEV_SERVER_HOST}:${address.port}/?token=${token}`, 'vite-hmr');
   const messages = (handle: (message: { type: string; updates?: { path: string }[] }) => boolean) => new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => { socket.close(); reject(new Error('Vite sent no HMR message within 20s')); }, 20_000);
     socket.addEventListener('error', () => { clearTimeout(timer); reject(new Error('Vite HMR socket failed')); }, { once: true });
@@ -104,7 +105,7 @@ async function response(address: PackFrontendAddress, template = false): Promise
   // file, and the template module is compiled from what that read cached
   if (template) await response(address);
   const suffix = template ? '?vue&type=template&id=generation' : '';
-  const result = await fetch(`http://localhost:${address.port}/src/View.vue${suffix}`, { signal: _workingSignal() });
+  const result = await fetch(`http://${DEV_SERVER_HOST}:${address.port}/src/View.vue${suffix}`, { signal: _workingSignal() });
   const text = await result.text();
   if (!result.ok) throw new Error(text);
   return text;

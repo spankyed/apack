@@ -16,6 +16,13 @@ import * as path from 'node:path';
 import { _appDirOf } from '@apackdev/sdk/env';
 import { recordIsStale } from '../process-liveness.ts';
 
+/**
+ * The one address a pack's dev server listens on and is reached at. An address, not `localhost`: a name resolves to
+ * both loopback families, and Node races the two with a 250ms attempt each, so a busy machine fails a connection
+ * to a server that is listening. Every client builds its URL from this, as the API's do from `API_HOST`.
+ */
+export const DEV_SERVER_HOST = '127.0.0.1';
+
 export interface DevServerMarker {
   port: number;
   /** The `apack pack dev` process serving the pack */
@@ -74,5 +81,5 @@ export function devServerUrl(userDataDir: string, packId: string, filePath: stri
   // listening on — and from here that looks exactly like a live one. The pack's frontend would fail to
   // load with a connection error and nothing pointing at this file. Its pid is what tells them apart.
   if (recordIsStale(markerPath, pid)) return null;
-  return `http://localhost:${port}${filePath}`;
+  return `http://${DEV_SERVER_HOST}:${port}${filePath}`;
 }
