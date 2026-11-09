@@ -13,7 +13,7 @@ import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { readPackBuild } from '@apackdev/host/packs';
 import { formatNodeOptions, parseNodeOptions } from '@apackdev/host/build/source-resolution';
 import { cliBin } from '../../src/utils.ts';
-import { _settles, _workingSignal } from '@apackdev/sdk/testing/waiting';
+import { settles, _workingSignal } from '@apackdev/sdk/testing/waiting';
 
 vi.mock('../../src/build/be-bundler', async importOriginal => ({
   ...await importOriginal<typeof import('../../src/build/be-bundler')>(),
@@ -501,7 +501,7 @@ it('terminates a compiling worker when its parent IPC disconnects without publis
   child.stdout?.on('data', chunk => { output += chunk; });
   child.stderr?.on('data', chunk => { output += chunk; });
   try {
-    await _settles(() => expect(fs.existsSync(path.join(root, 'ready')), output).toBe(true));
+    await settles(() => expect(fs.existsSync(path.join(root, 'ready')), output).toBe(true));
     child.disconnect();
     // Awaited, not deadlined: the subject is that the worker ends, and one that never did would keep compiling
     // until the progress guard's CPU budget failed the case. A 2s deadline failed it on a loaded machine
@@ -509,12 +509,12 @@ it('terminates a compiling worker when its parent IPC disconnects without publis
     if (grouped) {
       expect(child.signalCode).toBe('SIGKILL');
       const pid = Number(fs.readFileSync(path.join(root, '.apack/compiler-child-pid'), 'utf8'));
-      await _settles(async () => {
+      await settles(async () => {
         const state = await processState(pid);
         expect(state === '' || state.startsWith('Z')).toBe(true);
       });
     }
-    await _settles(() => expect(child.stdout?.readableEnded && child.stderr?.readableEnded).toBe(true));
+    await settles(() => expect(child.stdout?.readableEnded && child.stderr?.readableEnded).toBe(true));
     expect(fs.existsSync(path.join(root, 'dist'))).toBe(false);
   } finally {
     if (child.exitCode === null && child.signalCode === null) child.kill();

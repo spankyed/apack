@@ -187,6 +187,11 @@ export function registerContentRuntime(runtime: ContentRuntime): void;
 export function resetTestData(): void;
 
 // @public
+export function settles<T>(check: () => T | Promise<T>, input?: {
+    interval?: number;
+}): Promise<T>;
+
+// @public
 export function startFeTestRuntime(options?: FeTestRuntimeOptions): () => void;
 
 // @public

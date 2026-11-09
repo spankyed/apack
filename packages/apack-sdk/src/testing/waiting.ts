@@ -101,10 +101,16 @@ export function _whenSatisfied<T>(
  * progress guard around the test (`@apackdev/testing`'s `vitest-progress-guard.ts`): it fails a test whose process
  * tree does no work for `IDLE_MS`, or spends its CPU budget.
  *
+ * **It takes a wait on this process's own state too**, where a clock is defensible but buys nothing: the guard
+ * still bounds it, and a condition polled until it holds is never a guess about how long it takes. That is the
+ * case a pack's tests have, which is why this one of the waiters is published (`@apackdev/sdk/testing`) while the
+ * rest of this module stays the app's: the rule that a deadline must say why applies to every pack, so the tool
+ * that satisfies it has to reach one.
+ *
  * A poll the guard outlived keeps trying until its file's process exits: it holds no vitest hook to stop on, since
  * this module ships in the SDK, whose manifest does not declare vitest. Its timer is unref'd, so it holds nothing open.
  */
-export function _settles<T>(check: () => T | Promise<T>, { interval = 50 }: { interval?: number } = {}): Promise<T> {
+export function settles<T>(check: () => T | Promise<T>, { interval = 50 }: { interval?: number } = {}): Promise<T> {
   return new Promise<T>((resolve) => {
     const attempt = async (): Promise<void> => {
       try { resolve(await check()); } catch { setTimeout(() => { void attempt(); }, interval).unref(); }

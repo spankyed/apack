@@ -36,6 +36,11 @@ import { repoFiles } from './_support/repo-files.ts';
  * allowed to pass; a poll of something with no event to offer; and a race whose timer *is* the answer.
  */
 const BARE_WAIT_BY_DESIGN: Record<string, string> = {
+  // Examined: both of this file's sleeps prove a *negative* — that a schedule stopped with its app does not tick
+  // into the next test — and a negative cannot be polled for, there being no condition to await. The elapsed time
+  // is the subject, which its header says too. Its one clocked wait was on a positive condition and is now a poll
+  'packages/default-setup/tests/harness-app-stop.spec.ts > wait':
+    'the wait is the assertion: it proves a stopped schedule does not tick, so shortening it removes the check',
   'packages/apack-cli/tests/build/frontend-watch.native.spec.ts > fileEventsDelivered':
     'what the cases assert is that an event changes nothing, and an event that has no effect has nothing to await',
   'packages/apack-cli/tests/build/watch-package-edit.native.spec.ts > publishes one build when a refresh rewrites what the pack builds against':
@@ -76,7 +81,6 @@ const BARE_WAIT_BY_DESIGN: Record<string, string> = {
  * awaited event when somebody reads it.
  */
 const NOT_CONVERTED_YET: readonly string[] = [
-  'packages/default-setup/tests/harness-app-stop.spec.ts > wait',
   'packages/apack-cli/tests/commands/db.integration.spec.ts > writerDuring',
   'packages/repo-checks/tests/bounded-spawn.integration.spec.ts > kills the whole group, not the process it started',
   'packages/repo-checks/tests/chain-schedule.spec.ts > done',
@@ -122,8 +126,8 @@ describe('a spec waits for the thing it waits for', () => {
    * Asserted as an exact number for the same reason `spec-cost`'s records are: a count that drifts upward
    * without anyone noticing is how a list of deliberate exceptions becomes a list of everything.
    */
-  it('has four waits left to examine', () => {
-    expect(NOT_CONVERTED_YET).toHaveLength(4);
+  it('has three waits left to examine', () => {
+    expect(NOT_CONVERTED_YET).toHaveLength(3);
   });
 });
 
@@ -137,8 +141,6 @@ describe('a spec waits for the thing it waits for', () => {
 const CLOCK_BY_DESIGN: Record<string, string> = {
   'packages/apack-ears/tests/engine/rank-index.spec.ts':
     'waits on an index building in this process, so load slows the wait and the work alike',
-  'packages/default-setup/tests/harness-app-stop.spec.ts':
-    "waits on the in-process test app's timer flow ticking, which runs on this process's own event loop",
   // The Playwright suites: Playwright gives a test and a wait only a clock, and `definePackE2EConfig` declares the
   // suite's two backstops (60s a test, 30s an assertion). These are the waits that genuinely outlast them
   'tests/acceptance/pack-dev/test-pack-dev.ts':

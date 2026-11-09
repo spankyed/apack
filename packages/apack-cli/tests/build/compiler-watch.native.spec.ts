@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { startPackBuildWatcher } from '../../src/build/watch.ts';
 import * as reload from '../../src/app/app-api.ts';
 import { compilerWatchFixture } from '../_support/compiler-watch-fixture.ts';
-import { _settles } from '@apackdev/sdk/testing/waiting';
+import { settles } from '@apackdev/sdk/testing/waiting';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -26,7 +26,7 @@ it('rebuilds an idle session on actual tooling filesystem events', async () => {
     expect(builds).toBe(1);
     for (const [index, file] of [entry, executable, override].entries()) {
       fs.writeFileSync(file, `changed tooling ${index}`);
-      await _settles(() => expect(builds).toBe(index + 2));
+      await settles(() => expect(builds).toBe(index + 2));
     }
   } finally { await watcher.close(); }
 });

@@ -14,7 +14,7 @@ import { createCompilerWatchMatcher, mergeCompilerWatchPaths, type CompilerWatch
 import { nativeFixture, nativeLoad } from '../_support/native-libraries.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
-import { _settles } from '@apackdev/sdk/testing/waiting';
+import { settles } from '@apackdev/sdk/testing/waiting';
 
 
 // The native-library proofs are split by subject so the native half's shards can spread them; this one is
@@ -162,7 +162,7 @@ it('tracks retained Vite ESM preload and loader inputs without freezing Vue sour
     const view = `http://localhost:${frontend.address.port}/src/View.vue`;
     expect(await (await fetch(view)).text()).toContain('VITE_ESM_BEFORE');
     fs.writeFileSync(path.join(pack, 'src/View.vue'), '<template>VITE_ESM_AFTER</template>');
-    await _settles(async () => expect(await (await fetch(view)).text()).toContain('VITE_ESM_AFTER'));
+    await settles(async () => expect(await (await fetch(view)).text()).toContain('VITE_ESM_AFTER'));
     expect(await frontend.isCurrent(signal)).toBe(true);
   } finally {
     if (previous === undefined) delete process.env.NODE_OPTIONS;
@@ -196,13 +196,13 @@ it('retains independent captured Vite owners through replacement and close', asy
     const children = fs.readFileSync(proof, 'utf8').trim().split('\n').map(line => JSON.parse(line)) as { root: number; child: number }[];
     expect(children.map(child => child.root)).toEqual(frontends.map(frontend => frontend.address.pid));
     await frontends[0]!.close();
-    await _settles(() => expect(() => process.kill(children[0]!.child, 0)).toThrow());
+    await settles(() => expect(() => process.kill(children[0]!.child, 0)).toThrow());
     expect(frontends[1]!.alive()).toBe(true);
     expect(() => process.kill(children[1]!.child, 0)).not.toThrow();
     expect(await frontends[1]!.isCurrent(signal)).toBe(true);
     expect(await (await fetch(`http://localhost:${frontends[1]!.address.port}/src/View.vue`)).text()).toContain('VITE_OWNED');
     await frontends[1]!.close();
-    await _settles(() => expect(() => process.kill(children[1]!.child, 0)).toThrow());
+    await settles(() => expect(() => process.kill(children[1]!.child, 0)).toThrow());
   } finally {
     if (previous === undefined) delete process.env.NODE_OPTIONS;
     else process.env.NODE_OPTIONS = previous;
@@ -255,12 +255,12 @@ it.runIf(process.platform === 'darwin')('watches external Vite native changes an
     checkpoint('frontend ready');
     const view = `http://localhost:${addresses[0]!.port}/src/View.vue`;
     expect(await (await fetch(view)).text()).toContain('NATIVE_WATCH');
-    await _settles(() => expect(current).toHaveBeenCalled());
+    await settles(() => expect(current).toHaveBeenCalled());
     await current.mock.results.at(-1)!.value;
     current.mockClear();
     const touched = new Date(Date.now() + 2_000);
     fs.utimesSync(fixture.library, touched, touched);
-    await _settles(() => expect(current).toHaveBeenCalled());
+    await settles(() => expect(current).toHaveBeenCalled());
     expect(await current.mock.results.at(-1)!.value).toBe(true);
     expect(publications).not.toHaveBeenCalled();
     checkpoint('unchanged touch checked');
@@ -274,7 +274,7 @@ it.runIf(process.platform === 'darwin')('watches external Vite native changes an
     builds.mockClear();
     fs.rmSync(fixture.marker);
     fs.renameSync(replacement, fixture.library);
-    await _settles(() => expect(builds).toHaveBeenCalled());
+    await settles(() => expect(builds).toHaveBeenCalled());
     // Wait for the detected rebuild itself, rather than timing compilation through a console spy.
     await expect(builds.mock.results[0]!.value).rejects.toThrow('Pack frontend exited before readiness');
     expect(errors).toHaveBeenCalledWith(expect.stringContaining('Build/reload failed'));
@@ -289,11 +289,11 @@ it.runIf(process.platform === 'darwin')('watches external Vite native changes an
     builds.mockClear();
     fs.copyFileSync(helper, repaired);
     checkpoint('new dependency repaired');
-    await _settles(() => expect(builds).toHaveBeenCalled());
+    await settles(() => expect(builds).toHaveBeenCalled());
     checkpoint('repair rebuild started');
     await expect(builds.mock.results[0]!.value).resolves.toBeUndefined();
     checkpoint('repair rebuild completed');
-    await _settles(() => expect(publications).toHaveBeenCalledTimes(1));
+    await settles(() => expect(publications).toHaveBeenCalledTimes(1));
     checkpoint('repair published');
     expect(addresses).toHaveLength(2);
     expect(() => process.kill(addresses[0]!.pid, 0)).toThrow();
@@ -332,7 +332,7 @@ it.runIf(process.platform === 'darwin').each(['preload', 'thread'] as const)(
       compiler = await sharedCompiler.installation({ cwd: fixture.pack });
       process.env.NODE_OPTIONS = formatNodeOptions([...parseNodeOptions(previous), '--require', preload]);
       frontend = await startPackFrontend(fixture.pack, compiler, signal);
-      await _settles(() => expect(fs.existsSync(proof)).toBe(true));
+      await settles(() => expect(fs.existsSync(proof)).toBe(true));
       const loaded = JSON.parse(fs.readFileSync(proof, 'utf8').trim()) as { value: number; thread: number; libraries: string[] };
       expect(loaded.value).toBe(11);
       expect(loaded.thread > 0).toBe(site === 'thread');
@@ -347,7 +347,7 @@ it.runIf(process.platform === 'darwin').each(['preload', 'thread'] as const)(
       const view = `http://localhost:${frontend.address.port}/src/View.vue`;
       expect(await (await fetch(view)).text()).toContain('VITE_NATIVE_BEFORE');
       fs.writeFileSync(path.join(fixture.pack, 'src/View.vue'), '<template>VITE_NATIVE_AFTER</template>');
-      await _settles(async () => expect(await (await fetch(view)).text()).toContain('VITE_NATIVE_AFTER'));
+      await settles(async () => expect(await (await fetch(view)).text()).toContain('VITE_NATIVE_AFTER'));
       expect(await frontend.isCurrent(signal)).toBe(true);
       fs.writeFileSync(native.library, 'CHANGED');
       expect(await frontend.isCurrent(signal)).toBe(false);

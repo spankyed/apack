@@ -1,7 +1,7 @@
 import { expect } from 'vitest';
 import { createPackBuilder, type PackBuilderOptions } from '../../src/build/build-process.ts';
 import { startPackBuildWatcher, type WatchOptions } from '../../src/build/watch.ts';
-import { _settles, _workingSignal } from '@apackdev/sdk/testing/waiting';
+import { settles, _workingSignal } from '@apackdev/sdk/testing/waiting';
 
 // What a rebuild may cost, which sizes a case's CPU budget (`cpuBudget`): no wait here has a clock of its own, and
 // a watcher or build that stops working is ended by the progress guard and `_workingSignal`
@@ -45,7 +45,7 @@ export async function startTestPackBuildWatcher(root: string,
       async rebuildAfter(edit) {
         const before = builds.length;
         edit();
-        await _settles(() => expect(builds.length, 'watch request did not start a rebuild').toBeGreaterThan(before));
+        await settles(() => expect(builds.length, 'watch request did not start a rebuild').toBeGreaterThan(before));
         const result = await builds[before]!;
         if (result.interrupted) throw result.error;
       },

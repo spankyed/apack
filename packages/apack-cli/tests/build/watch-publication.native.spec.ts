@@ -18,7 +18,7 @@ import { packagesBuiltOrRefuse, REPO_ROOT } from '@apackdev/host/build/packages-
 import { startTestPackBuildWatcher, WATCH_REBUILD_BUDGET_MS, type TestPackBuildWatcher } from '../_support/watch-builds.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
-import { _settles } from '@apackdev/sdk/testing/waiting';
+import { settles } from '@apackdev/sdk/testing/waiting';
 
 const sharedCompiler = shareCompilerInstallation();
 
@@ -137,7 +137,7 @@ it.skipIf(!built)('publishes source and manifest edits together and retains the 
     fs.writeFileSync(manifestFile, JSON.stringify(manifest));
     fs.writeFileSync(path.join(root, 'modules/lifecycle.ts'), lifecycle('second'));
   });
-  await _settles(() => expect(state.reloads > 0 || errors.mock.calls.length > 0).toBe(true));
+  await settles(() => expect(state.reloads > 0 || errors.mock.calls.length > 0).toBe(true));
   expect(errors.mock.calls).toEqual([]);
   const updated = readPackBuild(path.join(root, 'dist'));
   expect(updated.revision).not.toBe(initial.revision);
@@ -147,13 +147,13 @@ it.skipIf(!built)('publishes source and manifest edits together and retains the 
 
   const accepted = state.publications;
   await rebuildAfter(() => { fs.writeFileSync(path.join(root, 'modules/lifecycle.ts'), 'export function init( {'); });
-  await _settles(() => expect(errors).toHaveBeenCalledWith(expect.stringContaining('Build/reload failed')));
+  await settles(() => expect(errors).toHaveBeenCalledWith(expect.stringContaining('Build/reload failed')));
   expect(state.publications).toBe(accepted);
   expect(readPackBuild(path.join(root, 'dist')).revision).toBe(updated.revision);
   expect(registry.getPackRegistration('watched-pack')?.lifecycle?.onInit?.()).toBe('second');
   await rebuildAfter(() => { fs.writeFileSync(path.join(root, 'modules/lifecycle.ts'), lifecycle('third')); });
-  await _settles(() => expect(state.publications).toBeGreaterThan(accepted));
-  await _settles(() => expect(registry.getPackRegistration('watched-pack')?.lifecycle?.onInit?.()).toBe('third'));
+  await settles(() => expect(state.publications).toBeGreaterThan(accepted));
+  await settles(() => expect(registry.getPackRegistration('watched-pack')?.lifecycle?.onInit?.()).toBe('third'));
 
 });
 
@@ -167,15 +167,15 @@ it.skipIf(!built)('follows retargeted manifest links through refusal, repair and
   fs.writeFileSync(path.join(hooks, 'retargeted.json'), '{');
   fs.unlinkSync(path.join(shared, 'manifest.json'));
   fs.symlinkSync(path.join(hooks, 'retargeted.json'), path.join(shared, 'manifest.json'));
-  await _settles(() => expect(errors).toHaveBeenCalledWith(expect.stringContaining('Build/reload failed')));
+  await settles(() => expect(errors).toHaveBeenCalledWith(expect.stringContaining('Build/reload failed')));
   expect(state.publications).toBe(beforeRetarget);
   await rebuildAfter(() => { fs.writeFileSync(path.join(hooks, 'retargeted.json'), JSON.stringify(changed)); });
-  await _settles(() => expect(registry.catalog.get('watched-pack')?.snapshot.manifest.features?.notes.description).toBe('Retargeted manifest.'));
+  await settles(() => expect(registry.catalog.get('watched-pack')?.snapshot.manifest.features?.notes.description).toBe('Retargeted manifest.'));
   expect(state.publications).toBeGreaterThan(beforeRetarget);
   changed.features.notes.description = 'Edited retargeted manifest.';
   await rebuildAfter(() => {
     fs.writeFileSync(path.join(hooks, 'replacement.json'), JSON.stringify(changed));
     fs.renameSync(path.join(hooks, 'replacement.json'), path.join(hooks, 'retargeted.json'));
   });
-  await _settles(() => expect(registry.catalog.get('watched-pack')?.snapshot.manifest.features?.notes.description).toBe('Edited retargeted manifest.'));
+  await settles(() => expect(registry.catalog.get('watched-pack')?.snapshot.manifest.features?.notes.description).toBe('Edited retargeted manifest.'));
 });
