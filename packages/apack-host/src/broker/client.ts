@@ -167,6 +167,16 @@ export interface Broker {
   open(options: BrokerSessionOptions, listeners: BrokerSessionListeners): Promise<BrokerSession>;
   close(): Promise<void>;
   /**
+   * Runs when the connection ended without `close()` — the broker is gone, and its sessions with it.
+   *
+   * **What it is for is forgetting this broker**, so that the next session starts a fresh one through the
+   * lazy path that already exists rather than through a second mechanism. A caller that keeps a reference
+   * instead hands the next `open()` a destroyed socket, where a request is written to nothing and the answer
+   * it waits for can never arrive — a hang rather than an error, since the close that would have refused it
+   * has already happened. Every session's listener has been told by the time this runs.
+   */
+  onGone(listener: () => void): void;
+  /**
    * How many lines of scrollback the broker keeps per session, from its handshake.
    *
    * **The one scrollback number, and it is the broker's because the broker is what answers for it.** An
@@ -195,6 +205,16 @@ interface Connection {
    * and `exited` microseconds apart, and a listener registered after the await never heard the exit.
    */
   next(accept: (event: Event) => boolean, options?: { session?: string; onMatch?: (event: Event) => void }): Promise<Event>;
+  /**
+   * Leaves without ending the sessions, so the close that follows is expected.
+   *
+   * **The distinction this draws is the whole of what makes a synthesised exit honest.** A connection
+   * closing means two opposite things: this client chose to leave, and the sessions carry on under whoever
+   * holds them; or the broker is gone, and every session with it. Only the first is knowable here, so it is
+   * recorded rather than inferred — the same shape as `ProcessManager.stop()` removing its exit handlers
+   * before it signals, so a deliberate replacement is not counted as a crash.
+   */
+  leave(): void;
 }
 
 /**
@@ -229,6 +249,15 @@ export interface BrokerOptions {
  * `try_overwrite`, since a path a previous run left behind must not refuse the bind, so a second broker
  * would take the address and leave the first one's sessions unreachable with no error anywhere.
  */
+/**
+ * How many of the broker's stderr chunks are kept for its failure message.
+ *
+ * Enough for a panic with its backtrace, which is what this is read for, and a ceiling rather than a
+ * measurement: what it exists to stop is a broker that logs steadily being accumulated for the life of the
+ * app by a reader that only ever wants its last words.
+ */
+const STDERR_CHUNKS_KEPT = 50;
+
 async function reach(options: BrokerOptions): Promise<net.Socket> {
   const listening = await connect(options.socket, options.startMs).catch(() => undefined);
   if (listening) return listening;
@@ -242,8 +271,23 @@ async function reach(options: BrokerOptions): Promise<net.Socket> {
     detached: true,
   });
   const stderr: string[] = [];
-  process_.stderr?.on('data', chunk => { stderr.push(String(chunk)); });
+  process_.stderr?.on('data', chunk => {
+    stderr.push(String(chunk));
+    // Bounded, because this is read whenever the broker ends rather than only while it is starting, and a
+    // broker that writes to stderr for an hour must not be kept in memory for the sake of its first line
+    if (stderr.length > STDERR_CHUNKS_KEPT) stderr.splice(0, stderr.length - STDERR_CHUNKS_KEPT);
+  });
   await ready(process_, stderr, options.startMs);
+
+  // **The handle is kept, so a broker that dies leaves a cause and not only a consequence.** `unref` stops
+  // it holding this process open; it does not stop this process hearing about it. Without this the sole
+  // trace of a crash was a socket closing, which says what happened to the connection and nothing about
+  // why — and the stderr collected above had no reader once the ready line had arrived.
+  // Its last words in the message rather than beside it, as `ready` already words a failure to start
+  process_.once('exit', (code, signal) => {
+    const said = stderr.join('').trim();
+    logger.warn(`the broker exited (${signal ?? `status ${code}`})${said ? `: ${said}` : ''}`);
+  });
   process_.unref();
   return connect(options.socket, options.startMs);
 }
@@ -281,7 +325,8 @@ export async function holdBrokerSessions(options: BrokerOptions): Promise<{ clos
 export async function startBroker(options: BrokerOptions): Promise<Broker> {
   const socket = await reach(options);
   const listeners = new Map<string, BrokerSessionListeners>();
-  const connection = frames(socket, listeners);
+  const gone = new Set<() => void>();
+  const connection = frames(socket, listeners, () => { for (const listener of gone) listener(); });
 
   connection.send({ kind: 'hello', protocol: PROTOCOL_VERSION, role: 'client' });
   const greeting = await connection.next(event => event.kind === 'hello');
@@ -366,8 +411,9 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
      * from leaving anything behind.
      */
     async close() {
-      socket.end();
+      connection.leave();
     },
+    onGone(listener) { gone.add(listener); },
   };
 }
 
@@ -424,7 +470,8 @@ function connect(path: string, startMs = BROKER_START_MS): Promise<net.Socket> {
  * output is news, so a reader waiting for an answer must not consume it, and a correlated answer must not be
  * lost behind a burst of it.
  */
-function frames(socket: net.Socket, listeners: Map<string, BrokerSessionListeners>): Connection {
+function frames(socket: net.Socket, listeners: Map<string, BrokerSessionListeners>, onGone?: () => void): Connection {
+  let leaving = false;
   const waiting: Array<{ accept: (event: Event) => boolean; settle: (event: Event) => void; refuse: (error: Error) => void; session?: string; onMatch?: (event: Event) => void }> = [];
   const lines = createInterface({ input: socket });
 
@@ -470,7 +517,26 @@ function frames(socket: net.Socket, listeners: Map<string, BrokerSessionListener
   });
 
   const ended = new Error('the broker connection ended');
-  socket.once('close', () => { while (waiting.length > 0) waiting.shift()!.refuse(ended); });
+  socket.once('close', () => {
+    while (waiting.length > 0) waiting.shift()!.refuse(ended);
+    if (leaving) return;
+
+    // **The broker is gone, and every session with it.** A pty dies with the process that owns it, so none
+    // of these sessions can be reached again — and saying nothing leaves a terminal drawn as live in front of
+    // a shell that no longer exists, which is the one state worse than reporting the death. An `exited` frame
+    // is how a single shell's end arrives, so each session is reported the same way and lands in the state the
+    // app already models for it: a shell that died badly, its terminal kept and its transcript labelled.
+    //
+    // `null` is the honest code rather than a sentinel. The session ended without a status, the kernel having
+    // reaped it when its owner died — which is what `null` means everywhere else on this listener, and what
+    // the window already words as *"without a status (a signal)"*.
+    //
+    // Taken first, because a listener may open a terminal again and must not find a stale entry.
+    const held = [...listeners.values()];
+    listeners.clear();
+    for (const listener of held) listener.onExit(null);
+    onGone?.();
+  });
 
   return {
     send(request) { socket.write(`${JSON.stringify(request)}\n`); },
@@ -478,6 +544,10 @@ function frames(socket: net.Socket, listeners: Map<string, BrokerSessionListener
       return new Promise<Event>((settle, refuse) => {
         waiting.push({ accept, settle, refuse, session: options?.session, onMatch: options?.onMatch });
       });
+    },
+    leave() {
+      leaving = true;
+      socket.end();
     },
   };
 }

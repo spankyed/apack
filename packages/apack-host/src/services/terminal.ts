@@ -172,9 +172,24 @@ export function holdTerminalSessions(): Promise<{ close(): void }> {
 /** Starts the broker the first time a session is wanted, and once per process thereafter */
 export function createTerminalService(): TerminalService & { shutdown(): Promise<void> } {
   let broker: Promise<Broker> | undefined;
+  let current: Broker | undefined;
 
   const running = (): Promise<Broker> => {
     broker ??= startBroker({ binary: brokerBinary(), socket: socketPath(), env: brokerEnvironment() })
+      .then((held) => {
+        // **A broker that is gone must not be remembered, and forgetting it is the whole of the restart.**
+        // The next session takes the branch above and starts one, which is the path a first session takes
+        // anyway — so recovery is the ordinary lazy start rather than a supervisor beside it. Remembering a
+        // dead one instead hands that session a destroyed socket: the request is written to nothing and its
+        // answer can never come, because the close that would have refused it has already happened.
+        current = held;
+        held.onGone(() => {
+          if (current !== held) return;
+          broker = undefined;
+          current = undefined;
+        });
+        return held;
+      })
       .catch((error: unknown) => {
       // A failed start must not be remembered as a broker: the next session tries again, so a contributor
       // who builds the binary and retries is not told to restart the app
@@ -207,6 +222,7 @@ export function createTerminalService(): TerminalService & { shutdown(): Promise
     async shutdown() {
       const started = broker;
       broker = undefined;
+      current = undefined;
       if (started) await (await started.catch(() => undefined))?.close();
     },
   };
