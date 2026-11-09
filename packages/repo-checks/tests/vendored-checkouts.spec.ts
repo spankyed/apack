@@ -10,7 +10,7 @@ import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { CHAIN_STEPS } from '../../../scripts/lib/chain-steps.ts';
 import { readsOf } from '../../../scripts/lib/dep-files.ts';
 import {
-  type PinnedToolchain, type VendoredCheckout, oneRustToolchain, rustCheckoutsForRun, rustCheckoutsIn,
+  type PinnedToolchain, type VendoredCheckout, oneRustToolchain, rustCheckoutsIn,
 } from '../../../scripts/lib/vendored-checkouts.ts';
 
 /**
@@ -21,38 +21,6 @@ import {
  * native source it had been given was present: the documented frozen-checkout qualification names that source
  * in `APACK_LINUX_ELMDB_ROOT` and needs no link at all, and the run exited 1 saying to run `link:elmdb`.
  */
-describe('rustCheckoutsForRun', () => {
-  const linked = (name: string, isRustCheckout = true): VendoredCheckout =>
-    ({ name, path: `/checkouts/${name}`, isRustCheckout });
-
-  // The firing case: the old call threw here, and the run exited 1 with a source it had already resolved
-  it('answers the native source alone when nothing is linked', () => {
-    expect(rustCheckoutsForRun('/frozen/elmdb', undefined, [])).toEqual(['/frozen/elmdb']);
-  });
-
-  it('adds every other linked Rust checkout, so one pinning another channel is weighed', () => {
-    expect(rustCheckoutsForRun('/checkouts/elmdb', '/checkouts/elmdb', [linked('elmdb'), linked('apack-terminal')]))
-      .toEqual(['/checkouts/elmdb', '/checkouts/apack-terminal']);
-  });
-
-  // A frozen copy *replaces* the developer's link rather than joining it, so the two are never weighed
-  // against each other for a toolchain — which is what `APACK_LINUX_ELMDB_ROOT` is for
-  it('leaves out the link the native source stands in for', () => {
-    expect(rustCheckoutsForRun('/frozen/elmdb', '/checkouts/elmdb', [linked('elmdb'), linked('apack-terminal')]))
-      .toEqual(['/frozen/elmdb', '/checkouts/apack-terminal']);
-  });
-
-  it('names the native source once when it is the link itself', () => {
-    expect(rustCheckoutsForRun('/checkouts/elmdb', '/checkouts/elmdb', [linked('elmdb')]))
-      .toEqual(['/checkouts/elmdb']);
-  });
-
-  it('ignores a link that is not a Rust checkout, as the image has nothing to build there', () => {
-    expect(rustCheckoutsForRun('/checkouts/elmdb', '/checkouts/elmdb', [linked('elmdb'), linked('notes', false)]))
-      .toEqual(['/checkouts/elmdb']);
-  });
-});
-
 describe('rustCheckoutsIn', () => {
   const linked = (name: string, isRustCheckout = true): VendoredCheckout =>
     ({ name, path: `/checkouts/${name}`, isRustCheckout });

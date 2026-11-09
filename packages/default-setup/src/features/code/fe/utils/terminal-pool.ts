@@ -302,7 +302,13 @@ class TerminalPool {
   ensure(info: TerminalInfo, sendInput: (data: string) => void): PoolEntry {
     const existing = this.entries.get(info.id)
     if (existing) {
-      this.markRestart(existing, info.pid)
+      // **A mounting component's descriptor does not decide which shell is answering.** This runs on every
+      // mount, and a host can hold a frozen one — `TerminalView` is handed `props.terminalInfo` and never
+      // refreshes it — so reconciling the pid here read a stale number as a boundary: a tab switched away
+      // and back drew a seam naming the *previous* shell and set the entry's pid to it, which made the next
+      // list a boundary again, and so on. What is authoritative is where the news arrives, `noteRestart`
+      // and `syncProcesses`, and the surface asks for a list as it starts, so nothing is missed by this
+      // saying nothing.
       return existing
     }
     this.listenForPaste()

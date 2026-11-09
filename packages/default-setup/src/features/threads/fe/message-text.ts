@@ -29,6 +29,31 @@ export function messageStreamText(
 }
 
 /** What a window holds of a block's growth: which block, from where, and what has arrived. */
+/**
+ * What a run becomes when its stream says `done`: the completed run, or nothing.
+ *
+ * **The last event carries the tail, and the row reaches a window by another road.** The writer writes the
+ * row and then sends what it had not fed yet beside `done` — but the row travels through the message's view
+ * subscription and the feed through the bus, two channels nothing orders. A window that simply dropped its
+ * run rendered the row as it last knew it, without that tail, until the view caught up: the end of a reply
+ * visibly missing and then appearing.
+ *
+ * Spliced in, the answer is complete at once and already equals what the row will say, so the run it leaves
+ * behind changes nothing when the view lands. A `done` carrying no text is the other case — a `finalize`
+ * that *replaced* the text, where the row is the only answer and a run spliced over it would hide the
+ * replacement, which is what a failed turn's warning is. So is a tail that does not continue the run: this
+ * window missed an event, and joining two halves with a hole between them would read as text.
+ */
+export function finishedRun(
+  held: { at: number; text: string } | undefined,
+  event: { at: number; text: string },
+): { at: number; text: string } | undefined {
+  if (!held) return undefined;
+  if (event.text.length === 0) return undefined;
+  if (held.at + held.text.length !== event.at) return undefined;
+  return { at: held.at, text: held.text + event.text };
+}
+
 export interface BlockRun {
   block: string;
   at: number;

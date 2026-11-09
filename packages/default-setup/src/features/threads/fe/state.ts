@@ -1,6 +1,6 @@
 import { surfaceStorage } from '@apackdev/sdk/fe'
 import { ref as featureRef } from '#generated/ref.ts'
-import { blockRunCaughtUp, messageStreamBlocks, messageStreamText } from './message-text.ts';
+import { blockRunCaughtUp, finishedRun, messageStreamBlocks, messageStreamText } from './message-text.ts';
 
 /** This surface's window storage: the prefix is its ref, so these names are scoped to it. */
 const storage = surfaceStorage(featureRef('threads'))
@@ -629,8 +629,17 @@ const threadsState = setup({
       // with — was then spliced away by the abandoned partial reply, with the error never shown.
       if (ev.done) {
         if (!held) return {};
-        const next = { ...context, messageStreams: others };
-        return { messageStreams: others, ...composedMessages(next) };
+        // **The last event carries the tail, and dropping the run threw it away.** The writer sends what it
+        // had not fed yet beside `done`, having written the row first — but the row reaches a window through
+        // its view subscription and this through the bus, two channels nothing orders. So the window that
+        // dropped its run on `done` rendered the row as it last knew it, without the tail, until the view
+        // caught up: the end of a reply visibly missing and then appearing.
+        //
+        // `finishedRun` is the rule, beside the splice it feeds, so a spec for it needs no window
+        const completed = finishedRun(held, ev);
+        const finished = completed ? { ...others, [ev.messageId]: completed } : others;
+        const next = { ...context, messageStreams: finished };
+        return { messageStreams: finished, ...composedMessages(next) };
       }
       if (!context.messageViews.includes(ev.messageId)) return {};
       const continues = held !== undefined && held.at + held.text.length === ev.at;

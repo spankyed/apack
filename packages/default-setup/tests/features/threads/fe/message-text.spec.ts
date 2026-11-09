@@ -6,7 +6,7 @@
 // two channels can actually be in, and the last two are the ones a simpler rule gets wrong — a window that
 // joined mid-stream, and a run the row has already overtaken.
 import { describe, expect, it } from 'vitest';
-import { blockRunCaughtUp, messageStreamBlocks, messageStreamText } from '#features/threads/fe/message-text.ts';
+import { blockRunCaughtUp, finishedRun, messageStreamBlocks, messageStreamText } from '#features/threads/fe/message-text.ts';
 
 describe('what a window shows while a reply is streaming', () => {
   it('shows the row when no reply is streaming into it', () => {
@@ -109,5 +109,30 @@ describe('what a window shows while a block is growing', () => {
     expect(blockRunCaughtUp([thinking('Think')], { block: 'thinking', at: 5, text: 'ing on' })).toBe(false);
     expect(blockRunCaughtUp([thinking('Thinking on')], undefined)).toBe(false);
     expect(blockRunCaughtUp(undefined, { block: 'thinking', at: 0, text: 'x' })).toBe(false);
+  });
+});
+
+describe('what a run becomes when its stream ends', () => {
+  it('takes the tail the last event carries, so the end of a reply is not lost', () => {
+    // The writer writes the row and then sends what it had not fed yet. The row travels by the message's
+    // view and this by the bus, so a window that dropped the run rendered the row as it last knew it —
+    // without this tail — until the view caught up
+    expect(finishedRun({ at: 0, text: 'Hello' }, { at: 5, text: ', world' }))
+      .toEqual({ at: 0, text: 'Hello, world' });
+  });
+
+  it('drops the run when the last event carries nothing', () => {
+    // `finalize` replaced the text, which is what a failed turn's warning is: the row is the only answer,
+    // and a run spliced over it would hide the replacement
+    expect(finishedRun({ at: 0, text: 'a partial reply' }, { at: 15, text: '' })).toBeUndefined();
+  });
+
+  it('drops a run the tail does not continue, rather than joining it across a gap', () => {
+    // This window missed an event; two halves with a hole between them would read as text
+    expect(finishedRun({ at: 0, text: 'Hello' }, { at: 9, text: 'world' })).toBeUndefined();
+  });
+
+  it('has nothing to complete when this window held no run', () => {
+    expect(finishedRun(undefined, { at: 0, text: 'all of it' })).toBeUndefined();
   });
 });

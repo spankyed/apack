@@ -423,6 +423,24 @@ describe('what the pool draws, and what it refuses to', () => {
     expect(fitted, 'the accepted grid was reported back as something this window had fitted').toEqual([])
   })
 
+  it('draws no seam for a mounting host\'s stale descriptor', () => {
+    // `ensure` runs on every mount and a host can hold a frozen descriptor — `TerminalView` is handed
+    // `props.terminalInfo` and never refreshes it. Read as a boundary, a tab switched away and back drew a
+    // seam naming the *previous* shell and set the entry's pid to it, which made the next list a boundary
+    // again: one death, a seam per switch, oscillating
+    const terminal = info() as unknown as { id: string; pid: number };
+    terminalPool.ensure(terminal as never, () => {});
+    terminalPool.syncProcesses([{ ...terminal, pid: terminal.pid + 1 } as never]);
+    written.length = 0;
+
+    terminalPool.ensure(terminal as never, () => {});
+
+    expect(written.join(''), 'the stale pid was read as a new shell').not.toContain('new shell');
+    // And the entry still names the shell that is answering, so the next list is not a boundary either
+    terminalPool.syncProcesses([{ ...terminal, pid: terminal.pid + 1 } as never]);
+    expect(written.join('')).not.toContain('new shell');
+  });
+
   it('says nothing when the process is the one the buffer came from', () => {
     const terminal = info() as unknown as { id: string; pid: number }
     terminalPool.ensure(terminal as never, () => {})
