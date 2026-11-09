@@ -7,6 +7,7 @@
 
 import { spawn, type ChildProcess } from 'child_process'
 import { resolveForService } from '../../utils/resolve-cli.ts'
+import { agentChildEnvironment } from '../shell-environment.ts'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -66,7 +67,9 @@ class CodexCliNotFoundError extends Error {
 // ─── Env ─────────────────────────────────────────────────────────────────────
 
 function buildCodexEnv(override?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, ...override }
+  // **The app's identity is stripped before anything else is decided** (`agentChildEnvironment`). This child
+  // is the widest case there is: its own tools spawn whatever the model asks for, in this environment
+  const env: NodeJS.ProcessEnv = { ...agentChildEnvironment(process.env), ...override }
   // Remove the server's Anthropic key so it doesn't leak to the Codex subprocess
   delete env.ANTHROPIC_API_KEY
   delete env.NODE_ENV
