@@ -21,6 +21,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 import { packFixture } from '@apackdev/sdk/testing/pack-fixture';
 import { packDevServerConfig } from '../../src/build/fe-bundler';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
+import { DEV_SERVER_HOST } from '@apackdev/host/packs/dev-server';
 
 /** A host-shared module: the pack must get the app's instance, so the server leaves it for the import map */
 const SHARED = '@apackdev/sdk/fe';
@@ -49,7 +50,7 @@ beforeAll(async () => {
   server = await vite.createServer({ ...config, logLevel: 'silent', server: { ...config.server, port: 0, strictPort: false } });
   await server.listen();
   const address = server.httpServer!.address();
-  origin = `http://localhost:${typeof address === 'object' && address !== null ? address.port : 0}`;
+  origin = `http://${DEV_SERVER_HOST}:${typeof address === 'object' && address !== null ? address.port : 0}`;
 });
 
 afterAll(async () => { await server?.close(); });

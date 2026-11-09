@@ -15,6 +15,7 @@ import { nativeFixture, nativeLoad } from '../_support/native-libraries.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
 import { settles } from '@apackdev/sdk/testing/waiting';
+import { DEV_SERVER_HOST } from '@apackdev/host/packs/dev-server';
 
 
 // The native-library proofs are split by subject so the native half's shards can spread them; this one is
@@ -159,7 +160,7 @@ it('tracks retained Vite ESM preload and loader inputs without freezing Vue sour
     fs.rmSync(path.join(path.dirname(loader), 'node_modules'), { recursive: true });
     fs.rmSync(path.join(root, 'sub/node_modules'), { recursive: true });
     expect(await frontend.isCurrent(signal)).toBe(true);
-    const view = `http://localhost:${frontend.address.port}/src/View.vue`;
+    const view = `http://${DEV_SERVER_HOST}:${frontend.address.port}/src/View.vue`;
     expect(await (await fetch(view)).text()).toContain('VITE_ESM_BEFORE');
     fs.writeFileSync(path.join(pack, 'src/View.vue'), '<template>VITE_ESM_AFTER</template>');
     await settles(async () => expect(await (await fetch(view)).text()).toContain('VITE_ESM_AFTER'));
@@ -200,7 +201,7 @@ it('retains independent captured Vite owners through replacement and close', asy
     expect(frontends[1]!.alive()).toBe(true);
     expect(() => process.kill(children[1]!.child, 0)).not.toThrow();
     expect(await frontends[1]!.isCurrent(signal)).toBe(true);
-    expect(await (await fetch(`http://localhost:${frontends[1]!.address.port}/src/View.vue`)).text()).toContain('VITE_OWNED');
+    expect(await (await fetch(`http://${DEV_SERVER_HOST}:${frontends[1]!.address.port}/src/View.vue`)).text()).toContain('VITE_OWNED');
     await frontends[1]!.close();
     await settles(() => expect(() => process.kill(children[1]!.child, 0)).toThrow());
   } finally {
@@ -253,7 +254,7 @@ it.runIf(process.platform === 'darwin')('watches external Vite native changes an
     checkpoint('watch ready');
     await builder.serveFrontend(address => { if (address) addresses.push(address); });
     checkpoint('frontend ready');
-    const view = `http://localhost:${addresses[0]!.port}/src/View.vue`;
+    const view = `http://${DEV_SERVER_HOST}:${addresses[0]!.port}/src/View.vue`;
     expect(await (await fetch(view)).text()).toContain('NATIVE_WATCH');
     await settles(() => expect(current).toHaveBeenCalled());
     await current.mock.results.at(-1)!.value;
@@ -344,7 +345,7 @@ it.runIf(process.platform === 'darwin').each(['preload', 'thread'] as const)(
       expect(await frontend.isCurrent(signal)).toBe(false);
       fs.writeFileSync(preload, initializedPreload);
       expect(await frontend.isCurrent(signal)).toBe(true);
-      const view = `http://localhost:${frontend.address.port}/src/View.vue`;
+      const view = `http://${DEV_SERVER_HOST}:${frontend.address.port}/src/View.vue`;
       expect(await (await fetch(view)).text()).toContain('VITE_NATIVE_BEFORE');
       fs.writeFileSync(path.join(fixture.pack, 'src/View.vue'), '<template>VITE_NATIVE_AFTER</template>');
       await settles(async () => expect(await (await fetch(view)).text()).toContain('VITE_NATIVE_AFTER'));

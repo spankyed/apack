@@ -56,7 +56,7 @@ describe('dev server marker', () => {
   it("gives the pack:// handler the dev server URL while the marker exists", () => {
     expect(devServerUrl(userDataDir, 'demo-pack', '/runtime/fe.js')).toBeNull();
     writeDevServerMarker(userDataDir, 'demo-pack', { port: 5200, pid: process.pid });
-    expect(devServerUrl(userDataDir, 'demo-pack', '/runtime/fe.js')).toBe('http://localhost:5200/runtime/fe.js');
+    expect(devServerUrl(userDataDir, 'demo-pack', '/runtime/fe.js')).toBe('http://127.0.0.1:5200/runtime/fe.js');
     expect(devServerUrl(userDataDir, 'other-pack', '/runtime/fe.js')).toBeNull();
     removeDevServerMarker(userDataDir, 'demo-pack');
     expect(devServerUrl(userDataDir, 'demo-pack', '/runtime/fe.js')).toBeNull();
@@ -76,7 +76,7 @@ describe('dev server marker', () => {
 
     await installPackFromLocal(builtPack(), packsDir);
     expect(verifyPack(dir).id).toBe('demo-pack');
-    expect(devServerUrl(userDataDir, 'demo-pack', '/runtime/fe.js')).toBe('http://localhost:5199/runtime/fe.js');
+    expect(devServerUrl(userDataDir, 'demo-pack', '/runtime/fe.js')).toBe('http://127.0.0.1:5199/runtime/fe.js');
   });
 });
 
@@ -93,7 +93,7 @@ describe('a dev server that is no longer running', () => {
 
   it('is not served from, while a live one still is', async () => {
     writeDevServerMarker(userDataDir, 'demo-pack', { port: 5199, pid: process.pid });
-    expect(devServerUrl(userDataDir, 'demo-pack', '/fe.js')).toBe('http://localhost:5199/fe.js');
+    expect(devServerUrl(userDataDir, 'demo-pack', '/fe.js')).toBe('http://127.0.0.1:5199/fe.js');
 
     writeDevServerMarker(userDataDir, 'demo-pack', { port: 5199, pid: await exitedPid() });
     expect(devServerUrl(userDataDir, 'demo-pack', '/fe.js')).toBeNull();

@@ -32,6 +32,7 @@ import { spawnCompilerWorker } from '../../src/build/compiler-process.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
 import { cpuBudget } from '@apackdev/testing/vitest';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
+import { DEV_SERVER_HOST } from '@apackdev/host/packs/dev-server';
 
 const sharedCompiler = shareCompilerInstallation();
 const execFileAsync = execFileWhileWorking;
@@ -876,7 +877,7 @@ it.runIf(process.platform === 'win32').each([
     expect(await frontend.isCurrent(signal)).toBe(false);
     fs.writeFileSync(replacement, original, { mode }); fs.renameSync(replacement, library);
     expect(await frontend.isCurrent(signal)).toBe(true);
-    const view = `http://localhost:${frontend.address.port}/src/View.vue`;
+    const view = `http://${DEV_SERVER_HOST}:${frontend.address.port}/src/View.vue`;
     expect(await (await fetch(view)).text()).toContain('PE_BEFORE');
     fs.writeFileSync(path.join(pack, 'src/View.vue'), '<template>PE_AFTER</template>');
     await settles(async () => expect(await (await fetch(view)).text()).toContain('PE_AFTER'));
@@ -1117,7 +1118,7 @@ it.runIf(process.platform === 'win32')('repairs a failed Vite assembly context t
     checkpoint('watch ready');
     await builder.serveFrontend(address => { if (address) addresses.push(address); });
     checkpoint('initial frontend ready');
-    const url = `http://localhost:${addresses[0]!.port}/src/View.vue`;
+    const url = `http://${DEV_SERVER_HOST}:${addresses[0]!.port}/src/View.vue`;
     // A bound on a hang, not a speed check: the first request is a cold Vite transform, which a loaded two-core
     // runner can take seconds over
     const served = { signal: _workingSignal() };

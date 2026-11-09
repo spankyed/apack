@@ -13,6 +13,7 @@ import { globWatchPlugin } from './glob-watch.ts';
 import type { CompilationInputs } from './compilation-inputs.ts';
 import { relativeCompilerPath, withCompilerFileReads } from '@apackdev/host/build/compiler-inputs';
 import { findPackageDirectory } from '@apackdev/host/build/package-inputs';
+import { DEV_SERVER_HOST } from '@apackdev/host/packs/dev-server';
 import { parseNodeOptions, withoutSourceCondition } from '@apackdev/host/build/source-resolution';
 
 /**
@@ -374,7 +375,7 @@ export async function packDevServerConfig(root: string, feEntry: string): Promis
       },
     ],
     server: {
-      port: 5199, strictPort: false, cors: true, hmr: { protocol: 'ws', host: 'localhost' },
+      host: DEV_SERVER_HOST, port: 5199, strictPort: false, cors: true, hmr: { protocol: 'ws', host: DEV_SERVER_HOST },
       // Scanning private build candidates can prevent their publication on Windows.
       watch: { ignored: file => relativeCompilerPath(root, file).split(path.sep)[0] === '.apack' },
     },

@@ -24,7 +24,7 @@ import type { AppEnv } from '@apackdev/sdk/env';
 import { readApiEndpoint } from '@apackdev/host/process-liveness';
 import { withoutSourceCondition } from '@apackdev/host/build/source-resolution';
 import { installPackFromLocal, readHostCompatibility, recordUserInstall } from '@apackdev/host/packs';
-import { removeDevServerMarker, writeDevServerMarker } from '@apackdev/host/packs/dev-server';
+import { removeDevServerMarker, writeDevServerMarker, DEV_SERVER_HOST } from '@apackdev/host/packs/dev-server';
 
 const HELP = `
 Usage: apack pack dev [--host <path|beta>]
@@ -561,7 +561,7 @@ async function session(args: string[], hooks: SessionHooks, target: 'app' | 'pac
       hold.holdsMarker(pack.manifest.id);
     } else removeDevServerMarker(userDataDir, pack.manifest.id);
   });
-  if (address) console.log(`\nDev server running at http://localhost:${address.port}`);
+  if (address) console.log(`\nDev server running at http://${DEV_SERVER_HOST}:${address.port}`);
   console.log('Frontend changes reload through Vite; authored inputs rebuild, reinstall and reload the verified pack.');
   console.log('Press Ctrl+C to stop.\n');
   await watch();
