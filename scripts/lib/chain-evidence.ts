@@ -21,6 +21,7 @@
 // direct run, which is a run someone is watching. A second orchestrator adopting this is what decides how two
 // of them share `runs/`; a field here for one that does not exist yet would be dead rather than ready.
 import * as fs from 'node:fs';
+import { vendoredStates, type VendoredState } from './vendored-checkouts.ts';
 import * as path from 'node:path';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { STAMP_DIR, flatStepName } from './chain-stamps.ts';
@@ -138,6 +139,25 @@ export function pruneRunEvidence(keep = KEEP_RUNS): void {
   }
 }
 
+/**
+ * What each vendored checkout was at, as a line per link.
+ *
+ * **Written beside a run's evidence because a local run compiles against the sibling's working tree, not
+ * the pin CI clones.** Without it a failure naming a symbol the pinned code does not have reads as a defect
+ * in the branch under test — and a checkout that has since moved back cannot be asked. `drifted` is the
+ * whole point: a run whose vendored input does not match its `.rev` is not comparable to a strict run.
+ */
+export function vendoredNote(states: readonly VendoredState[]): string {
+  if (states.length === 0) return '# vendor/: nothing linked';
+  return states.map((state) => {
+    const head = state.head ?? 'not a git checkout';
+    const pinned = state.pinned ?? 'no .rev committed';
+    const drifted = state.head !== undefined && state.pinned !== undefined && state.head !== state.pinned;
+    const notes = [drifted ? 'DRIFTED from its pin' : undefined, state.dirty ? 'dirty' : undefined].filter(Boolean);
+    return `# vendor/${state.name}: at ${head}, pinned ${pinned}${notes.length > 0 ? ` — ${notes.join(', ')}` : ''}`;
+  }).join('\n');
+}
+
 /** Where this run's evidence is, for whoever reads it after the run — printed only when there is some */
 export function evidenceLine(dir: string, kept: number): string {
   return `evidence from this run in ${path.relative(REPO_ROOT, dir)} (${kept} step${kept === 1 ? '' : 's'})`;
@@ -172,10 +192,15 @@ export interface RunEvidence {
 export function openRunEvidence(options: { startedAt: Date; pid: number; root?: string }): RunEvidence {
   const dir = path.join(options.root ?? RUNS_DIR, runId(options.startedAt, options.pid));
   let written = 0;
+  let vendored: string | undefined;
   return {
     dir,
     keep(label, result) {
       fs.mkdirSync(dir, { recursive: true });
+      // Taken on the first keep rather than at the run's start, so it describes the checkouts as they were
+      // when a step failed — which is the moment in question, and one a checkout that moves back hides
+      vendored ??= vendoredNote(vendoredStates(options.root === undefined ? REPO_ROOT : path.dirname(options.root)));
+      fs.writeFileSync(path.join(dir, 'vendored.txt'), `${vendored}\n`);
       fs.writeFileSync(evidenceFile(dir, label), `${evidenceHeader(label, result)}\n${result.output}`);
       written += 1;
     },
