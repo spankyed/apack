@@ -4,7 +4,7 @@ import {randomUUID} from 'node:crypto'
 import type {TerminalSignal} from '@apackdev/sdk/services'
 import {services} from '#generated/services.ts'
 import {resolveForService} from '../../utils/resolve-cli.ts'
-import {buildChildEnv} from './runner.ts'
+import {buildChildEnv, DENIED_TO_A_CHILD} from './runner.ts'
 import {backgroundSession} from './background-sessions.ts'
 import type {SubcommandOptions} from './subcommand.ts'
 import type {ClaudeNativeContinuation} from './terminal-session.ts'
@@ -41,7 +41,9 @@ export async function openBackgroundAttachment(continuation: ClaudeNativeContinu
   // **The listeners arrive with the open**, which the contract requires: there is no window in which this
   // client's output has nowhere to go. The pty is the broker's, so `TERM` is its to set and not named here
   const client = await services.terminal.open(
-    {cols: 100, rows: 30, shell: executable, args: ['attach', session.id], env, cwd: session.cwd},
+    // `unset` rather than an omission from `env`: a session inherits the host's environment, so leaving a
+    // key out of the overrides leaves it inherited
+    {cols: 100, rows: 30, shell: executable, args: ['attach', session.id], env, unset: DENIED_TO_A_CHILD, cwd: session.cwd},
     {
       onOutput: text => {
         if (ended) return

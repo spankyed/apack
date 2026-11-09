@@ -7,7 +7,7 @@ import { broadcastToSurface } from '#generated/events.ts'
 import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claude-code/terminal-owner.ts'
 import type { ClaudeNativeJournalEntry } from '#features/code/be/services/claude-code/terminal-journal.ts'
 import { projectClaudeTerminalHistory } from './claude-terminal-history.ts'
-import { sendBlockMessage, updateMessageState } from './services/chat.ts'
+import { sendBlockMessage, updateMessageBlock, updateMessageState } from './services/chat.ts'
 import { updateChatState } from './services/threads.ts'
 import type { ClaudeNativeSubmissionReceipt } from '#features/code/be/services/claude-code/terminal-session.ts'
 import type { MessageReferences, ToolActivityEntry } from './types.ts'
@@ -113,7 +113,17 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
       }
       block.props.state = entries.some(item => item.status === 'running') ? 'streaming' : entries.some(item => item.status === 'error') ? 'error' : 'done'
     }
-    if (existing) updateMessageState(existing.id, { text: row.text, blocks: row.blocks, context: row.context, ...(references ? { references } : {}) })
+    if (existing) {
+      updateMessageState(existing.id, { text: row.text, context: row.context, ...(references ? { references } : {}) })
+      // **A block is a row, so a sync writes each one against the row it already has.** Rebuilding the
+      // array and handing it over is what this did when `blocks` was a field; writing them without their
+      // ids would add a second copy of every block on each sync of the same message.
+      //
+      // Paired by type, which is a stable key here: the writers own one block each, so a restored message
+      // has at most one of a type, and a type the message has never had is created by passing no id.
+      const held = new Map(repository.chatQueries.blocksOf(existing.id).map(block => [block.type, block.id]))
+      for (const block of row.blocks ?? []) updateMessageBlock(existing.id, block, held.get(block.type))
+    }
     else {
       const result = repository.chatCommands.addMessage({ threadId, sender: row.sender, text: row.text, blocks: row.blocks, context: row.context, references, ...(timestamp !== undefined ? {timestamp} : {}) })
       // addMessage trims the human entry path; a native row's exact text is already accepted.
