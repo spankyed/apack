@@ -6,7 +6,7 @@
 // child they send to, so a case drives the surface the way the surface's own transitions would and reads
 // back what the component sent.
 import { ref, createApp, h, nextTick, type App, type Component, type Ref } from 'vue'
-import { assign, createActor, createMachine, type AnyActorRef, type AnyEventObject } from 'xstate'
+import { assign, createActor, createMachine, sendTo, type AnyActorRef, type AnyEventObject } from 'xstate'
 import { SurfaceScope } from '@apackdev/sdk/fe'
 import { fakeSettings, startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing'
 import { bindSettings } from '#generated/settings-fe.ts'
@@ -84,6 +84,8 @@ export function startCodeSurface(options: CodeSurfaceOptions = {}): CodeSurfaceH
     on: {
       SELECT_PANEL_TERMINAL: { actions: assign({ panelTerminalId: ({ event }) => event.terminalId as string | null }) },
       TOGGLE_PANEL_TERMINAL: { actions: assign({ panelTerminalExpanded: ({ context }) => !context.panelTerminalExpanded }) },
+      // A component sends its child through the surface, which routes the child's events to it as the real one does
+      'terminal.*': { actions: sendTo('terminal', ({ event }) => event) },
     },
   })
 
