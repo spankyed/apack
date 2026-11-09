@@ -1,8 +1,9 @@
 # Issue: Terminal integration — review findings and path forward
 
 **Date:** 2026-10-01 — findings re-verified against the tree 2026-11-07
-**Status:** Open. Decisions D1–D8 below are settled and D9–D11 live in the goal; T4, M3, G3, G6 and G7 are
-struck, the rest stand
+**Status:** Every finding is closed — 54 marked and 6 struck, of 60. Decisions D1–D8 below are settled and
+D9–D11 live in the goal; T4, M3, G3, G6, G7 and F18 are struck, the rest were fixed. Kept for what the
+findings were and what each cost; the evidence table carries the dispositions
 **Severity:** Critical — one finding writes user credentials to disk in plaintext; two more can lose work
 **Component:** `packages/default-setup/src/features/code` — terminal (xterm.js front end, node-pty back end),
 plus the app plumbing it depends on (`packages/main`, `packages/api`, `@apackdev/host/bus`)
@@ -87,8 +88,14 @@ orchestration, `L` = lifecycle and persisted data, `G` = agent sessions.
 **A ✔ means the row is closed**, with its disposition and evidence in
 [`docs/references/evidence/terminal-ownership.md`](../references/evidence/terminal-ownership.md) — that table
 is where a finding's *state* lives, and this one stays what the findings *are*. A row without one is open,
-and the evidence table says what each is waiting for. The marks are derived from that table's dispositions
-rather than set by hand here, so the two cannot disagree about what is done.
+and the evidence table says what each is waiting for.
+
+**The marks are kept by hand against that table, and nothing holds the two together.** This said they were
+derived "so the two cannot disagree about what is done", and they already had: F18 was dissolved in the
+evidence table on 2026-11-08 and read as the last open finding here until 2026-11-09. Nothing reads either
+document, so the claim was a property nobody implemented. It is written as what it is now, because a table
+that says it cannot drift is worse than one that admits it can — a reader trusts the first and checks the
+second. The evidence table is the record; a disagreement is this file being stale.
 
 | | Sev | Finding | Where |
 |---|---|---|---|
@@ -139,7 +146,7 @@ rather than set by hand here, so the two cannot disagree about what is done.
 | **F15** ✔ | Low | Focus is stolen on every attach | `TerminalView.vue:202`, `PanelTerminalSection.vue:316` |
 | **F16** ✔ | Low | Unhandled clipboard promise rejections | `terminal-pool.ts:194,200` |
 | **F17** ✔ | Low | Module-scope `document` listener is never removed | `terminal-pool.ts:355` |
-| **F18** | Medium | Nothing tells a surface its terminal was resized, so its `TerminalInfo` keeps the size the terminal was created with; only asking for the list again reveals the real one | `be/features/terminal.ts` `resizeTerminal` (answers only on failure), `fe/features/terminal/state.ts` (`terminals`) |
+| ~~**F18**~~ | ~~Medium~~ | **Dissolved.** The resize was never lost: `TerminalInfo.cols`/`rows` is the size **at publication**, which is what its one consumer wants — the pool building the emulator, whose fit replaces it on the next frame — and the contract says so now. It was a drive scenario's expectation of the field, not the code | `be/features/terminal.ts` `resizeTerminal` (answers only on failure), `fe/features/terminal/state.ts` (`terminals`) |
 | **F1** ✔ | Low | `detach` does not verify attachment ownership (see Corrections) | `terminal-pool.ts:260-272` |
 | **F2** ✔ | Medium | The panel scroll-jacks during output | `PanelTerminalSection.vue:296` |
 | **T6** ✔ | Low | "Restart Terminal" loses the tab's pin, group and position | `fe/canvas/canvas.vue:277-285` |
