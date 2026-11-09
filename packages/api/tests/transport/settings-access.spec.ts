@@ -14,7 +14,7 @@ import { createWindowSettingsRuntime } from '@apackdev/host/fe';
 const live = vi.hoisted(() => ({ packs: undefined as unknown as ReturnType<typeof createNativePackTestRegistry>, access: undefined as unknown as ReturnType<typeof createSettingsAccess> }));
 vi.mock('../../src/runtime/index.ts', () => ({
   get appPacks() { return live.packs; }, get appSettingsAccess() { return live.access; },
-  appClaims: { clientFor: () => undefined },
+  appClaims: { clientFor: () => undefined, release: () => {} },
 }));
 vi.mock('../../src/transport/emitter.ts', async () => ({ rootEvents: (await import('@apackdev/sdk/testing')).testRootEvents }));
 const { systemBusRouter } = await import('../../src/transport/bus.ts');

@@ -78,6 +78,18 @@ export interface TestApp {
   /** Sends CLIENT_CONNECTED, as a client connecting does; systems send their startup data */
   connect(): Promise<void>;
   /**
+   * Ends a connection, as a window closing or a socket dropping does, so what the app keyed by it is
+   * released.
+   *
+   * **The counterpart of a `client` on a send.** `send` takes the connection an ask arrived on, which is
+   * what lets a case drive two windows; without this there was no way to make one of them go, so anything
+   * the app held per connection could only be tested by reaching into it.
+   *
+   * In the app this is the per-connection abort signal firing, published by the middleware every procedure
+   * runs through. There is no socket here, so the event is emitted directly.
+   */
+  endConnection(client: string): Promise<void>;
+  /**
    * Sends a system an event, as a client's `sendToSystem` does (the pack's own by feature id, a dependency's as
    * `<packId>/<featureId>`); the bus routes it whether or not a client connected.
    *
@@ -446,6 +458,10 @@ export async function startApp(options: StartAppOptions): Promise<TestApp> {
   const app: TestApp = {
     connect: () => call(async () => {
       testRootEvents.emitConnected();
+      await settle();
+    }),
+    endConnection: (client) => call(async () => {
+      testRootEvents.emitConnectionEnded(client);
       await settle();
     }),
     send: (systemId, event, options) => call(async () => {

@@ -187,6 +187,9 @@ export const newCall: () => string;
 export function onConnected(callback: () => void): () => void;
 
 // @public
+export function onConnectionEnded(callback: (client: string) => void): () => void;
+
+// @public
 export function onIncoming(callback: (message: Message) => void): () => void;
 
 // @public

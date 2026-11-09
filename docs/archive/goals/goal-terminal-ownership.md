@@ -556,7 +556,7 @@ Objects are what own a Windows process tree, and no JS binding supplies them.
   **The fork itself is now settled** — see the Decisions entry *"A session's lifetime is bound to a handle
   the app holds"*, decided 2026-11-08 with the user's authorization after it had been recorded and stopped
   on as this goal requires. M1, M2, M4 and M5 are closed as dissolved with guards; a second window observes without sizing
-  the pty (`sizedBy`, the connection that opened it) and without sending it anything (attaching writes
+  the pty at its own width (its fit is recorded and the smallest wins) and without sending it anything (attaching writes
   nothing and injects nothing); and attach, detach and termination are already distinct — a host releases its
   attachment when its view closes, and only `terminate` ends a session.
   - **`client` is what made M2 checkable**, and it was already there: a handler is handed the connection a

@@ -38,7 +38,7 @@ vi.mock('../../src/runtime/index.ts', () => ({
   },
   appClaims: { clientFor: (ref: string) => (ref === claimed ? 'c-drive' : undefined) },
 }));
-vi.mock('../../src/transport/emitter.ts', () => ({ rootEvents: { onOutgoing: () => () => {}, emitConnected: () => {}, emitPackClientConnected: () => {} } }));
+vi.mock('../../src/transport/emitter.ts', () => ({ rootEvents: { onOutgoing: () => () => {}, emitConnected: () => {}, emitPackClientConnected: () => {}, onConnectionEnded: () => () => {}, emitConnectionEnded: () => {} } }));
 
 const { systemBusRouter } = await import('../../src/transport/bus.ts');
 

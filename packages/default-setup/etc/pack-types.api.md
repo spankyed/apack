@@ -2410,6 +2410,11 @@ type IncomingTerminalEvents = {
     terminalId: string;
     cols: number;
     rows: number;
+}
+/** This window has stopped showing that terminal, so its fit no longer holds the grid down */
+ | {
+    type: 'terminal.STOPPED_FITTING';
+    terminalId: string;
 } | {
     type: 'terminal.RENAME_TERMINAL';
     terminalId: string;

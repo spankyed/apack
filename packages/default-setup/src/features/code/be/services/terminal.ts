@@ -69,15 +69,43 @@ interface Terminal {
   info: Omit<TerminalInfo, 'active' | 'exited'>
   state: TerminalState
   /**
-   * The connection that opened it, which is the one allowed to size it (**M2**).
+   * What each window showing this terminal fitted, by the connection it fitted on.
    *
-   * A pty has one `(cols, rows)`, so two windows fitting the same session to their own widths is not a race
-   * to resolve but a contradiction — last writer wins, and the other window's screen is wrong until
-   * something makes it fit again. One window owns the size; the rest draw at it. Absent when the terminal
-   * was restored or opened by something that is not a window, in which case the first window to fit it
-   * takes the size and every later one is told no.
+   * **A pty has one `(cols, rows)`, so the grid it runs at is a question about every window at once** —
+   * which is why this is a map and not an owner. It used to be one connection, the one that opened the
+   * terminal, and every other window's fit was refused. That could not survive a reconnect: the id is
+   * minted per socket, so a window that dropped and came back was a different connection, was refused its
+   * own terminal, and stayed refused for the life of the process.
+   *
+   * So the grid is derived instead — `gridInForce`, the smallest of these — and an entry leaves when its
+   * window stops showing the terminal or its connection ends. Nothing is owned, so there is nothing to hand
+   * over and nothing to go stale.
    */
-  sizedBy: string | undefined
+  fittedBy: Map<string, Grid>
+  /**
+   * The grid this service has decided the pty should run at, which is **not** what windows have been told.
+   *
+   * `info` is told after the round trip, so mid-flight it still names the grid before this one. Asking
+   * "did it move?" of `info` therefore answers about the wrong baseline: a fit in flight, then a window
+   * going, and the second decision reads the grid as unmoved and does nothing — leaving the first one's
+   * answer to write a size that is no longer wanted. Two fields because they are two facts: what was
+   * decided, and what has been published.
+   */
+  decided: Grid
+  /**
+   * Which decision's write-back is still the current one.
+   *
+   * `session.resize` is a round trip, so two decisions about one pty are open together and answer in
+   * whichever order the broker reaches them. Bumped per decision, and a write-back whose token has moved is
+   * dropped — `opening`'s trick, for the same shape of problem.
+   */
+  sizing: number
+}
+
+/** A pty's grid */
+interface Grid {
+  cols: number
+  rows: number
 }
 
 /**
@@ -158,7 +186,7 @@ class TerminalService {
   /** Hands out `Terminal.opening` tokens; monotonic per process, and only ever compared for equality */
   private openings = 0
 
-  async create(options: TerminalCreate, handlers: TerminalHandlers, sizedBy?: string): Promise<TerminalInfo> {
+  async create(options: TerminalCreate, handlers: TerminalHandlers): Promise<TerminalInfo> {
     // Check terminal limit (0 = no limit)
     const codeSettings = featureSettings.forFeature('code').get()
     const maxTerminals = codeSettings?.maxTerminals ?? 0
@@ -191,7 +219,13 @@ class TerminalService {
       info: { id, title, pid: session.pid, shell, cwd, generation: 1, cols, rows,
         scrollback: session.scrollback, submit: submitFor(shell) },
       state: { kind: 'live', session, opening },
-      sizedBy,
+      // **Nothing has been fitted yet, and a size is not a fit.** `CREATE_TERMINAL` carries no grid — the
+      // frontend sends a title and a directory — so the 80x24 defaulted above is this service's number
+      // rather than anything a window measured. Recording it as the creating window's fit would make a
+      // grid nobody fitted the smallest one, and so the grid every other window is held to.
+      fittedBy: new Map(),
+      decided: { cols, rows },
+      sizing: 0,
     }
     this.terminals.set(id, terminal)
     repository.terminalCommands.create({ id, title, shell, cwd, cols, rows, session: session.id })
@@ -348,42 +382,111 @@ class TerminalService {
   }
 
   /**
-   * Sizes a terminal, if `asked` is the connection allowed to, answering **the grid that is in force**.
+   * The grid the pty should be running at: the smallest any window showing it has fitted.
    *
-   * **A second window observes; it does not resize** (M2). It still fits its own host and still sends what
-   * it fitted — a view cannot know it is the second one — so the refusal is here, where the session is. A
-   * session with no owner takes the first fit it is given and answers to that connection from then on,
-   * which is how a restored terminal acquires one.
+   * **No entries means no window has said anything, so the terminal keeps what it has.** That is a restored
+   * or adopted terminal before a window attaches, one created by an action or a flow rather than a window,
+   * and one whose last fitting window has gone — three paths to the same question, and "resize to nothing"
+   * is never the answer to it.
+   */
+  private gridInForce(terminal: Terminal): Grid {
+    let grid: Grid | undefined
+    for (const fit of terminal.fittedBy.values()) {
+      grid = grid === undefined ? fit : { cols: Math.min(grid.cols, fit.cols), rows: Math.min(grid.rows, fit.rows) }
+    }
+    return grid ?? { cols: terminal.info.cols, rows: terminal.info.rows }
+  }
+
+  /**
+   * Brings a terminal to the grid in force, answering it and whether this moved the pty.
    *
-   * **What the refusal is not any more is silent.** A boolean could not say the thing a caller needs: a
-   * refused resize answered `true`, so the asker could not tell *done* from *ignored* and went on rendering
-   * at a grid nothing had agreed to. The accepted grid answers both cases, and `changed` separates news
-   * from a refusal — a grid that moved is every window's business, a refusal is the asker's alone.
+   * **The write-back is guarded rather than awaited in order.** `session.resize` is a round trip, so the
+   * token is taken before it and checked after: a decision made while this one was in flight has already
+   * written the grid it decided, and overwriting it with this one's would leave `info` describing a grid the
+   * pty is not running at.
+   */
+  private async settleGrid(terminal: Terminal): Promise<AcceptedGrid> {
+    const { cols, rows } = this.gridInForce(terminal)
+    // Against what was decided, never against what windows were told: mid-flight those differ, and `info`
+    // is the one that is behind
+    if (terminal.decided.cols === cols && terminal.decided.rows === rows) {
+      return { cols: terminal.info.cols, rows: terminal.info.rows, changed: false }
+    }
+    terminal.decided = { cols, rows }
+    const sizing = (terminal.sizing += 1)
+    // A terminal whose shell has gone has no pty to resize, so the grid it is drawn at is all there is to
+    // move. Its kept dead screen reflows with it, which is why this is still recorded and still answered
+    if (terminal.state.kind === 'exited') {
+      terminal.info.cols = cols
+      terminal.info.rows = rows
+      return { cols, rows, changed: true }
+    }
+    await terminal.state.session.resize(cols, rows)
+    // Superseded while this was open. The decision that superseded it answered with its own grid, so this
+    // answers what is in force rather than the size it asked about
+    if (terminal.sizing !== sizing) {
+      return { cols: terminal.info.cols, rows: terminal.info.rows, changed: false }
+    }
+    terminal.info.cols = cols
+    terminal.info.rows = rows
+    // **No row is written.** The pty's size is not application state: it is whatever the windows showing it
+    // last fitted, and a restored terminal is re-fitted the moment a host attaches. What the row keeps is
+    // the size it was created at, which is a starting point and not a record of the live size. The live one
+    // is answered here and broadcast from the feature, so a window need not read the row for it.
+    return { cols, rows, changed: true }
+  }
+
+  /**
+   * Records what a window fitted and answers **the grid that is in force**, which is the smallest fit.
+   *
+   * **Every window's fit counts, and none is refused.** A pty has one grid, so a window drawing at a bigger
+   * one would draw columns the program cannot write to; the smallest fit is the one every window can show
+   * whole. What a window asked for is still not always what it gets, which is why `changed` is here: a grid
+   * that moved is every window's business and is broadcast, where a fit that was not honoured is the
+   * asker's alone and is replied.
+   *
+   * `asked` is the connection it was fitted on — the API stamps it and nobody can forge it. Without one
+   * there is no window to attribute it to, so nothing is recorded and this answers what is in force: a
+   * terminal fitted by an action is not a window showing it.
    */
   async resize(id: string, cols: number, rows: number, asked?: string): Promise<AcceptedGrid | undefined> {
     const terminal = this.terminals.get(id)
     if (!terminal) return undefined
-    // A terminal whose shell has gone keeps the grid it last had. There is no pty to resize, so a window
-    // fitting its dead screen is asking about a size nothing can change — a refusal, not a failure
-    if (terminal.state.kind === 'exited') {
-      return { cols: terminal.info.cols, rows: terminal.info.rows, changed: false }
-    }
-    if (terminal.sizedBy === undefined) terminal.sizedBy = asked
-    else if (asked !== undefined && asked !== terminal.sizedBy) {
-      return { cols: terminal.info.cols, rows: terminal.info.rows, changed: false }
-    }
-    if (terminal.info.cols === cols && terminal.info.rows === rows) {
-      return { cols, rows, changed: false }
-    }
+    if (asked !== undefined) terminal.fittedBy.set(asked, { cols, rows })
+    return this.settleGrid(terminal)
+  }
 
-    await terminal.state.session.resize(cols, rows)
-    terminal.info.cols = cols
-    terminal.info.rows = rows
-    // **No row is written.** The pty's size is not application state: it is whatever the owning window last
-    // fitted, and a restored terminal is re-fitted the moment its host attaches. What the row keeps is the
-    // size it was created at, which is a starting point and not a record of the live size. The live one is
-    // answered here and broadcast from the feature, so a window need not read the row for it.
-    return { cols, rows, changed: true }
+  /**
+   * A window has stopped showing this terminal, so its fit no longer holds the grid down.
+   *
+   * **Detaching is not disconnecting**, and leaving this out is how a fix becomes a trade: a popped-out
+   * window that fitted a terminal to 60 columns and then switched to another one would pin every other
+   * window to 60 for as long as its connection lived — the same symptom as the freeze this replaced,
+   * reached a different way. A window says so where it releases its attachment.
+   */
+  async stoppedFitting(id: string, client: string): Promise<AcceptedGrid | undefined> {
+    const terminal = this.terminals.get(id)
+    if (!terminal?.fittedBy.delete(client)) return undefined
+    return this.settleGrid(terminal)
+  }
+
+  /**
+   * A connection ended, so every terminal it was fitting loses that fit. Answers the grids that moved.
+   *
+   * **A connection's end is the only thing that can remove a fit a window left behind.** The id is minted
+   * per socket, so a window that reloads, sleeps or drops its connection comes back as a different one and
+   * can never clear what the old one recorded. Nothing else knows the window has gone.
+   *
+   * It answers rather than broadcasts: the service owns the grid, the feature owns the wire.
+   */
+  async forgetClient(client: string): Promise<Array<{ terminalId: string; grid: AcceptedGrid }>> {
+    const moved: Array<{ terminalId: string; grid: AcceptedGrid }> = []
+    for (const [terminalId, terminal] of this.terminals) {
+      if (!terminal.fittedBy.delete(client)) continue
+      const grid = await this.settleGrid(terminal)
+      if (grid.changed) moved.push({ terminalId, grid })
+    }
+    return moved
   }
 
   rename(id: string, customTitle: string): boolean {
@@ -556,8 +659,7 @@ class TerminalService {
         scrollback: taken.scrollback,
         submit: submitFor(shell),
       }
-      // Sized by nobody, as any restore is: the first window to fit it takes the size (M2)
-      this.terminals.set(row.id, { info, state: { kind: 'live', session: taken, opening }, sizedBy: undefined })
+      this.terminals.set(row.id, { info, state: { kind: 'live', session: taken, opening }, fittedBy: new Map(), decided: { cols: info.cols, rows: info.rows }, sizing: 0 })
       logger.info(`Took up session ${session} again for terminal ${row.title} (${row.id}); its shell and its output survived`)
       return true
     } catch (error) {
@@ -625,8 +727,7 @@ class TerminalService {
           scrollback: session.scrollback,
           submit: submitFor(shell),
         }
-        // Restored by nobody, so the first window to fit it takes the size (M2)
-        this.terminals.set(row.id, { info, state: { kind: 'live', session, opening }, sizedBy: undefined })
+        this.terminals.set(row.id, { info, state: { kind: 'live', session, opening }, fittedBy: new Map(), decided: { cols: info.cols, rows: info.rows }, sizing: 0 })
         // **The row names the session that is running now, as every other start records it.** Left naming
         // the one this replaced, the next restart of this process offers a stale id, is refused, and starts
         // a second shell beside one the app's hold is still keeping alive — the accumulation taking a

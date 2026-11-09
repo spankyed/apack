@@ -35,7 +35,8 @@ function appendAppEventLog(event: LogEvent) {
 }
 
 /** The app's event bus: what the SDK binds as HostRuntime.transport, and the tRPC routers serve */
-class RootEventEmitter extends EventEmitter implements RootEvents {
+/** Exported for its own cases: a case about telling the holders needs a bus of its own, not the app's */
+export class RootEventEmitter extends EventEmitter implements RootEvents {
   emit<_K>(eventName: string | symbol, ...args: any[]): boolean {
     return super.emit(eventName, ...args);
   }
@@ -48,6 +49,24 @@ class RootEventEmitter extends EventEmitter implements RootEvents {
 
   emitConnected() {
     this.emit('connected');
+  }
+
+  /**
+   * A client's connection ended. Emitted from one place — the middleware every procedure runs through — so
+   * no router arms its own listener and none can forget to.
+   */
+  emitConnectionEnded(client: string) {
+    // **Each listener independently, because every one of them is a different holder releasing its own
+    // state.** `emit` calls them in turn on one stack, so a claim registry that throws would keep the
+    // settings leases and a terminal's grid alive — one holder's bug becoming the leak this event exists to
+    // prevent. Nothing here can fix a holder that fails; what it can do is stop it spreading.
+    for (const listener of this.listeners('connection-ended')) {
+      try {
+        (listener as (client: string) => void)(client);
+      } catch (error) {
+        console.error('[backend] Releasing what a connection held failed', error);
+      }
+    }
   }
 
   /** A client has loaded a pack's frontend (its surface actors exist) and is ready for its systems' data */
@@ -99,6 +118,11 @@ class RootEventEmitter extends EventEmitter implements RootEvents {
   onPackClientConnected(callback: (packId: string) => void) {
     this.on('pack-connected', callback);
     return () => this.off('pack-connected', callback);
+  }
+
+  onConnectionEnded(callback: (client: string) => void) {
+    this.on('connection-ended', callback);
+    return () => this.off('connection-ended', callback);
   }
 
   onSurfaceSend(callback: (message: Message) => void) {
