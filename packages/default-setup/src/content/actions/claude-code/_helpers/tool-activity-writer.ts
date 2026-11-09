@@ -31,7 +31,6 @@
  */
 
 import type { Services, EntityId } from '#generated/services.ts';
-import { computeLabel } from './tool-activity-label.ts';
 import type { ToolActivityEntry, ToolActivityBlockProps } from './tool-activity-types.ts';
 
 export interface ToolActivityWriterOptions {
@@ -83,18 +82,25 @@ export function createToolActivityWriter(
   let blockId: EntityId | undefined;
   /** Each entry's row, by the CLI's id, so a patch is one row by id rather than a walk for it */
   const rows = new Map<string, EntityId>();
+  /** What the block's row was last written with, so it is written again only when that differs */
+  let written: string | undefined;
   /** Optional artifact ref attached via setArtifactRef (Phase C). */
   let artifactRef: { artifactId: string; label: string } | undefined;
 
   /**
    * What the block itself holds.
    *
-   * **`entries` is deliberately absent.** Each entry is a row of its own and a read assembles them, so
-   * carrying them here too would store the list twice and bring back the whole-array write this removed.
-   * What is left is about the block rather than about any entry, and is small enough to write per event.
+   * **`entries` and `label` are both deliberately absent.** Each entry is a row of its own and a read
+   * assembles them, so carrying them here too would store the list twice and bring back the whole-array
+   * write this removed. The label is `computeLabel(entries, state, phase)` — derived, so the block that
+   * shows it derives it (`ToolActivityBlock.vue` already did, behind a `props.label ||` fallback) and
+   * nothing stores it.
+   *
+   * **Between them they are why this row is no longer written per tool event.** What is left changes when
+   * the turn does — the block appearing, its state at the end, an artifact attached — and not when a tool
+   * starts or finishes. Storing a derived label is what made every event a write of this row.
    */
-  const buildBlockProps = (): Omit<ToolActivityBlockProps, 'entries'> => ({
-    label: computeLabel(entries, state, opts.phase),
+  const buildBlockProps = (): Omit<ToolActivityBlockProps, 'entries' | 'label'> => ({
     state,
     defaultOpen: false,
     ...(opts.phase && { phase: opts.phase }),
@@ -106,16 +112,21 @@ export function createToolActivityWriter(
       clearTimeout(pendingTimer);
       pendingTimer = null;
     }
-    const block = {
-      type: 'tool-activity',
-      props: buildBlockProps() as unknown as Record<string, any>,
-    };
+    lastFlushAt = Date.now();
+    const props = buildBlockProps();
+    const next = JSON.stringify(props);
+    // **The row is written when what it holds differs, which after the label stopped being stored is
+    // twice a turn**: the block appearing and its state at the end. A tool starting or finishing changes
+    // nothing here, so neither a flush nor an event writes it again
+    if (blockId && next === written) return;
+    written = next;
+
+    const block = { type: 'tool-activity', props: props as unknown as Record<string, any> };
     const firstWrite = blockId === undefined;
     blockId = services.chat.updateMessageBlock(messageId, block, blockId);
     // The block's row has to exist before an entry can hang off it, so a first write writes them all
     if (firstWrite) for (const entry of entries) writeEntry(entry);
     hasWrittenOnce = true;
-    lastFlushAt = Date.now();
   };
 
   /** Writes one entry's row, remembering it so the next patch of that entry is a write by id */
@@ -146,7 +157,9 @@ export function createToolActivityWriter(
       if (entries.some(e => e.id === entry.id)) return;
       entries.push(entry);
       writeEntry(entry);
-      schedule();
+      // Only to bring the row into being: an entry cannot hang off a block that is not there yet. Once it
+      // is, nothing about it changes until the turn ends, so no later event writes it
+      if (!blockId) schedule();
     },
 
     update(id: string, patch: Partial<ToolActivityEntry>): void {
@@ -154,7 +167,7 @@ export function createToolActivityWriter(
       if (idx === -1) return;
       entries[idx] = { ...entries[idx], ...patch, details: { ...entries[idx].details, ...patch.details } };
       writeEntry(entries[idx]);
-      schedule();
+      if (!blockId) schedule();
     },
 
     flush(): void {
@@ -179,6 +192,7 @@ export function createToolActivityWriter(
           // Removed rather than written: the thinking block is its own row and is not this writer's to rewrite
           services.chat.removeMessageBlock(messageId, 'tool-activity');
           blockId = undefined;
+          written = undefined;
           rows.clear();
         }
         return;

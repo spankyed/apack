@@ -35,7 +35,9 @@ describe('what the tool-activity writer writes', () => {
     const block = writes.map((write) => JSON.parse(write)).find((write) => write.type === 'tool-activity');
     expect(block).toBeDefined();
     expect(block.props).not.toHaveProperty('entries');
-    expect(block.props.label).toBeTruthy();
+    // Nor the label, which is derived from the entries: the block that shows it computes it
+    expect(block.props).not.toHaveProperty('label');
+    expect(block.props.state).toBe('streaming');
   });
 
   /** An entry's own row is written when it arrives, and again when it is patched — never its neighbours' */
@@ -122,6 +124,33 @@ describe('what the tool-activity writer writes', () => {
 
     expect(kept()).toBeGreaterThan(40 * 4_000);
     expect(written()).toBeLessThanOrEqual(kept() * 4);
+  });
+
+  /**
+   * **The block's row is written when the block changes, not when a tool does.**
+   *
+   * This is what storing a derived label cost: `label` is `computeLabel(entries, state, phase)`, so every
+   * tool event changed it and every event wrote this row — about 120 writes across a turn of 60 tools.
+   * Nothing stores it now (the block that shows it derives it), and what is left on the row changes when
+   * the turn does: the block appearing, and its state at the end.
+   *
+   * Asserted as a count rather than as bytes, because the bytes were never the expensive part of a write.
+   */
+  it('writes its block when the block changes, not when a tool does', () => {
+    const { services, writes } = recordTurnWrites();
+    const writer = createToolActivityWriter(services, MESSAGE, { intervalMs: 250 });
+
+    for (let tool = 0; tool < 20; tool++) {
+      writer.append(entry(`tool-${tool}`));
+      writer.flush();
+      writer.update(`tool-${tool}`, { status: 'ok' });
+      writer.flush();
+    }
+    writer.finalise('done');
+
+    const blockWrites = writes.filter((write) => JSON.parse(write).type === 'tool-activity');
+    // It appears, and it finishes. Twenty tools in between cost it nothing
+    expect(blockWrites).toHaveLength(2);
   });
 
   /** No tool ran, so this writer has no block and leaves none — and the thinking block is not its to touch */

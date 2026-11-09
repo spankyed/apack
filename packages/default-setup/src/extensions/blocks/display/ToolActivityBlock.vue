@@ -109,7 +109,8 @@ interface ArtifactRef {
 
 interface Props {
   entries: ToolActivityEntry[]
-  label: string
+  /** Derived from the entries, so the backend stores none and this component computes it below */
+  label?: string
   state: 'streaming' | 'done' | 'error'
   defaultOpen?: boolean
   artifactRef?: ArtifactRef

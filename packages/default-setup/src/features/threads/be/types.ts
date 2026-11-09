@@ -107,8 +107,14 @@ export interface ToolActivityEntry {
 export interface ToolActivityBlockProps {
   /** Tool entries in arrival order. Append-only during the turn. */
   entries: ToolActivityEntry[];
-  /** Live status label shown when collapsed (e.g. "Reading 3 files…"). */
-  label: string;
+  /**
+   * Live status label shown when collapsed (e.g. "Reading 3 files…").
+   *
+   * **Derived, so nothing writes it.** It is `computeLabel(entries, state, phase)`, which the block that
+   * shows it computes; storing it made every tool event a write of the block's row. Optional because a
+   * block written before that was true may still carry one.
+   */
+  label?: string;
   /** Group state — drives spinner visibility and label tense. */
   state: 'streaming' | 'done' | 'error';
   /** Initial open/closed state. User toggles win after first interaction. */

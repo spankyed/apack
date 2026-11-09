@@ -16,7 +16,7 @@
 
 import type { Services, EntityId } from '#generated/services.ts';
 import type { ThinkingBlockProps } from './thinking-types.ts';
-import { formatDuration } from './tool-activity-label.ts';
+import { formatDuration } from './duration.ts';
 import { ROW_INTERVAL_MS, THINKING_BLOCK } from './row-interval.ts';
 
 export interface ThinkingWriterOptions {
