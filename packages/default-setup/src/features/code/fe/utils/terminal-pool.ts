@@ -24,6 +24,17 @@ import '@xterm/xterm/css/xterm.css'
  * emulator whether or not any host is mounted.
  */
 
+/**
+ * How long a fit has to settle before the pty is told.
+ *
+ * **A coalescing window, not a deadline** — nothing fails when it elapses, and nothing waits on it: the
+ * emulator has already reflowed and the user is already looking at the new size. What it bounds is how often
+ * the *other* end hears, and the other end is a pty whose every resize sends `SIGWINCH` to whatever is
+ * running in it. One frame of a drag is 16ms, so this is a handful of frames: short enough that releasing the
+ * mouse feels immediate, long enough that a drag is one resize rather than the two dozen it observes.
+ */
+export const RESIZE_SETTLE_MS = 100
+
 const THEME = {
   background: '#1e1e1e',
   foreground: '#d4d4d4',
@@ -377,6 +388,33 @@ class TerminalPool {
     const own: Array<() => void> = []
     let released = false
 
+    /**
+     * Tells the host what this emulator fitted to — **once per settled drag, not once per frame.**
+     *
+     * Every notification here ends in a pty resize, and a pty resize sends `SIGWINCH` to the foreground
+     * process: a drag produces one fit per observed frame (24 per action, measured), so an unthrottled feed
+     * told `vim` to redraw two dozen times mid-drag and sent two dozen events across the bus to do it. The
+     * emulator reflows locally on its own `resize`, so what the window shows is already immediate; the only
+     * thing waiting is the pty learning the final grid, which is the one thing that need not be per frame.
+     *
+     * A quiet call fires at once, which is what an attach and a tab switch are. A burst coalesces to its
+     * last, read when the timer fires rather than when it was set, so the grid sent is the grid now.
+     */
+    let settling: ReturnType<typeof setTimeout> | undefined
+    let toldAt = 0
+    const tell = () => {
+      if (released) return
+      toldAt = Date.now()
+      handlers.onResize?.({ cols: term.cols, rows: term.rows })
+    }
+    const tellSettled = () => {
+      if (released || settling) return
+      const since = Date.now() - toldAt
+      if (since >= RESIZE_SETTLE_MS) { tell(); return }
+      settling = setTimeout(() => { settling = undefined; tell() }, RESIZE_SETTLE_MS - since)
+    }
+    own.push(() => { if (settling) clearTimeout(settling) })
+
     const report = () => {
       const viewport = this.getViewport(entry)
       if (!viewport) return
@@ -390,7 +428,7 @@ class TerminalPool {
     requestAnimationFrame(() => {
       if (released) return
       entry.fitAddon.fit()
-      handlers.onResize?.({ cols: term.cols, rows: term.rows })
+      tellSettled()
       this.syncViewport(terminalId)
     })
 
@@ -406,12 +444,12 @@ class TerminalPool {
       // follow works, so this is the cheap in-tree scroll rather than a round trip through the viewport
       if (entry.pinnedToBottom) term.scrollToBottom()
     })
-    const resized = term.onResize(({ cols, rows }) => handlers.onResize?.({ cols, rows }))
+    const resized = term.onResize(() => tellSettled())
     own.push(() => selection.dispose(), () => written.dispose(), () => resized.dispose())
 
     const observer = new ResizeObserver(() => {
       entry.fitAddon.fit()
-      handlers.onResize?.({ cols: term.cols, rows: term.rows })
+      tellSettled()
       if (entry.pinnedToBottom) this.syncViewport(terminalId)
     })
     observer.observe(host)
@@ -429,7 +467,7 @@ class TerminalPool {
       refit: () => {
         if (released) return
         entry.fitAddon.fit()
-        handlers.onResize?.({ cols: term.cols, rows: term.rows })
+        tellSettled()
       },
       followOutput: () => {
         entry.pinnedToBottom = true

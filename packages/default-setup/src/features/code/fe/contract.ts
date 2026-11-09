@@ -128,7 +128,12 @@ export type CodeContext = {
  */
 export type CodeInboxEvent =
   | { type: 'UPDATE_STATE'; updates: Partial<CodeContext> }
-  | { type: 'terminal.CREATE'; target: string; command: string; cwd?: string }
+  /**
+   * Open a terminal. Every field is optional because the surface's own senders pass `cwd` alone, and
+   * `target` is the literal the child acts on rather than any string: it routes `'tab'` to a tab and
+   * anything absent to the panel.
+   */
+  | { type: 'terminal.CREATE'; title?: string; cwd?: string; target?: 'tab'; command?: string }
   | { type: 'explorer.SET_BASE_DIRECTORY'; path: string }
   | { type: 'codeActions.OPEN_ACTION'; actionId: EARS.EntityId }
   | { type: 'codePrompts.OPEN_PROMPT'; promptId: EARS.EntityId }

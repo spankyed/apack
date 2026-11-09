@@ -656,11 +656,18 @@ type CodeContext = {
 type CodeInboxEvent = {
     type: 'UPDATE_STATE';
     updates: Partial<CodeContext>;
-} | {
+}
+/**
+ * Open a terminal. Every field is optional because the surface's own senders pass `cwd` alone, and
+ * `target` is the literal the child acts on rather than any string: it routes `'tab'` to a tab and
+ * anything absent to the panel.
+ */
+ | {
     type: 'terminal.CREATE';
-    target: string;
-    command: string;
+    title?: string;
     cwd?: string;
+    target?: 'tab';
+    command?: string;
 } | {
     type: 'explorer.SET_BASE_DIRECTORY';
     path: string;
@@ -3715,12 +3722,6 @@ type OutgoingTerminalEvents =
         data: string;
     };
 } | {
-    type: 'terminal.INITIAL_OUTPUT';
-    data: {
-        terminalId: string;
-        data: string;
-    };
-} | {
     type: 'terminal.CLOSED';
     data: {
         terminalId: string;
@@ -3735,6 +3736,23 @@ type OutgoingTerminalEvents =
     data: {
         terminalId: string;
         code: number | null;
+    };
+}
+/**
+ * The grid the pty is actually running at, which is **not** necessarily the one a window asked for.
+ *
+ * A pty has one `(cols, rows)` and the window that opened it owns them (M2), so a second window's fit is
+ * refused — and a window that is never told renders at a grid nothing agreed to. This carries the accepted
+ * one, so no window has to assume its own request took effect: broadcast when the grid moved, since every
+ * window showing the terminal needs it, and replied to the asker when its request was refused, which is
+ * news to nobody else.
+ */
+ | {
+    type: 'terminal.RESIZED';
+    data: {
+        terminalId: string;
+        cols: number;
+        rows: number;
     };
 }
 /** A new shell is running under a terminal that was already there; `generation` says how many it has had */

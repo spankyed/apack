@@ -106,8 +106,8 @@ export type Event =
   | { type: 'terminal.CWD_CHANGED'; data: { terminalId: string; cwd: string; title?: string } }
   | { type: 'terminal.OUTPUT'; data: { terminalId: string; data: string } }
   | { type: 'terminal.ERROR'; data: { message: string; terminalId?: string } }
+  | { type: 'terminal.RESIZED'; data: { terminalId: string; cols: number; rows: number } }
   | { type: 'terminal.TERMINAL_TAB_OPENED'; data: TerminalInfo }
-  | { type: 'CODE_STARTUP'; data: { terminals?: TerminalInfo[] } };  // Broadcasted event
 
 export const terminalState = setup({
   types: {
@@ -314,6 +314,22 @@ export const terminalState = setup({
       })
     }),
 
+    /**
+     * The grid the pty is running at, which is not always the one this window asked for.
+     *
+     * **What a window holds has to be the accepted grid, not its own fit.** A pty has one `(cols, rows)` and
+     * the window that opened it owns them, so a second window's fit is refused — and an emulator built from
+     * a stale `TerminalInfo` draws at a size nothing agreed to. The pool reads these when it builds one.
+     */
+    updateTerminalGrid: assign(({ context, event }) => {
+      const ev = event as { type: 'terminal.RESIZED'; data: { terminalId: string; cols: number; rows: number } }
+      return {
+        terminals: context.terminals.map(terminal => terminal.id === ev.data.terminalId
+          ? { ...terminal, cols: ev.data.cols, rows: ev.data.rows }
+          : terminal),
+      }
+    }),
+
     updateTerminalCwd: enqueueActions(({ enqueue, context, event, self }) => {
       const ev = event as { type: 'terminal.CWD_CHANGED'; data: { terminalId: string; cwd: string; title?: string } }
 
@@ -445,17 +461,6 @@ export const terminalState = setup({
       })
     }),
 
-    handleCodeStartup: ({ event, self }) => {
-      const ev = event as { type: 'CODE_STARTUP'; data: { terminals?: TerminalInfo[] } }
-      // If startup includes terminals, handle them like TERMINALS_LISTED
-      if (ev.data?.terminals) {
-        self.send({
-          type: 'terminal.TERMINALS_LISTED',
-          data: ev.data.terminals
-        })
-      }
-    },
-
     openTerminalTab: ({ event, self }) => {
       const ev = event as { type: 'terminal.OPEN_TAB'; terminalInfo: TerminalInfo }
       const parentContext = getParentContext(self)
@@ -572,11 +577,11 @@ export const terminalState = setup({
     'terminal.ERROR': {
       actions: 'settleFailedAsk'
     },
+    'terminal.RESIZED': {
+      actions: 'updateTerminalGrid'
+    },
     'terminal.TERMINAL_TAB_OPENED': {
       actions: 'handleTerminalTabOpened'
-    },
-    'CODE_STARTUP': {
-      actions: 'handleCodeStartup'
     }
   },
   states: {

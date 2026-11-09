@@ -56,6 +56,19 @@ interface Terminal {
  * whatever the shell wrote first — its prompt, and anything a command printed before the handler landed —
  * was dropped. `services.terminal.open` takes them, so there is no window in which output has nowhere to go.
  */
+/**
+ * The grid a pty is running at, and whether this call is what moved it.
+ *
+ * `changed` is the difference between news and a refusal: a grid that moved is every window's business and
+ * is broadcast, where a request that was refused — or that asked for the grid already in force — is the
+ * asker's alone.
+ */
+export interface AcceptedGrid {
+  cols: number
+  rows: number
+  changed: boolean
+}
+
 export interface TerminalHandlers {
   onData(terminalId: string, data: string): void
   /** The shell ended and the terminal is gone with it */
@@ -210,28 +223,37 @@ class TerminalService {
   }
 
   /**
-   * Sizes a terminal, if `asked` is the connection allowed to.
+   * Sizes a terminal, if `asked` is the connection allowed to, answering **the grid that is in force**.
    *
    * **A second window observes; it does not resize** (M2). It still fits its own host and still sends what
-   * it fitted — a view cannot know it is the second one — so the refusal is here, where the session is, and
-   * it is silent: nothing failed, and telling the user their other window is wider is not a diagnostic they
-   * can act on. A session with no owner takes the first fit it is given and answers to that connection from
-   * then on, which is how a restored terminal acquires one.
+   * it fitted — a view cannot know it is the second one — so the refusal is here, where the session is. A
+   * session with no owner takes the first fit it is given and answers to that connection from then on,
+   * which is how a restored terminal acquires one.
+   *
+   * **What the refusal is not any more is silent.** A boolean could not say the thing a caller needs: a
+   * refused resize answered `true`, so the asker could not tell *done* from *ignored* and went on rendering
+   * at a grid nothing had agreed to. The accepted grid answers both cases, and `changed` separates news
+   * from a refusal — a grid that moved is every window's business, a refusal is the asker's alone.
    */
-  async resize(id: string, cols: number, rows: number, asked?: string): Promise<boolean> {
+  async resize(id: string, cols: number, rows: number, asked?: string): Promise<AcceptedGrid | undefined> {
     const terminal = this.terminals.get(id)
-    if (!terminal) return false
+    if (!terminal) return undefined
     if (terminal.sizedBy === undefined) terminal.sizedBy = asked
-    else if (asked !== undefined && asked !== terminal.sizedBy) return true
+    else if (asked !== undefined && asked !== terminal.sizedBy) {
+      return { cols: terminal.info.cols, rows: terminal.info.rows, changed: false }
+    }
+    if (terminal.info.cols === cols && terminal.info.rows === rows) {
+      return { cols, rows, changed: false }
+    }
 
     await terminal.session.resize(cols, rows)
     terminal.info.cols = cols
     terminal.info.rows = rows
-    // **No row is written.** A drag produces one resize per observed frame — 24 per action, measured, each
-    // one an EARS write with no coalescing (F5). The pty's size is not application state: it is whatever the
-    // window last fitted, and a restored terminal is re-fitted the moment its host attaches. What the row
-    // keeps is the size it was created at, which is a starting point and not a record of the live size.
-    return true
+    // **No row is written.** The pty's size is not application state: it is whatever the owning window last
+    // fitted, and a restored terminal is re-fitted the moment its host attaches. What the row keeps is the
+    // size it was created at, which is a starting point and not a record of the live size. The live one is
+    // answered here and broadcast from the feature, so a window need not read the row for it.
+    return { cols, rows, changed: true }
   }
 
   rename(id: string, customTitle: string): boolean {

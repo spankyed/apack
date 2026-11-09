@@ -46,7 +46,7 @@ export type Event =
 
 /** A terminal's news, for every window showing the code surface: what its process did, never a listing */
 type TerminalNewsType = 'terminal.CWD_CHANGED' | 'terminal.OUTPUT' | 'terminal.CLOSED' | 'terminal.CREATED'
-  | 'terminal.CRASHED' | 'terminal.RESTARTED'
+  | 'terminal.CRASHED' | 'terminal.RESTARTED' | 'terminal.RESIZED'
 type TerminalNews = Extract<OutgoingTerminalEvents, { type: TerminalNewsType }>
 
 /** Tell every window showing the code surface what a terminal did */
@@ -249,8 +249,24 @@ export const terminalSystem = setup({
         // than a race. `client` names the connection the message arrived on, which the API stamps and
         // nobody can forge.
         void terminalService.resize(ev.terminalId, ev.cols, ev.rows, client)
-          .then(found => {
-            if (!found) failTerminal(reply, 'resize', `${terminalName} not found`, ev.terminalId)
+          .then(accepted => {
+            if (!accepted) {
+              failTerminal(reply, 'resize', `${terminalName} not found`, ev.terminalId)
+              return
+            }
+            const grid = { terminalId: ev.terminalId, cols: accepted.cols, rows: accepted.rows }
+            // **The grid moved, so every window showing this terminal needs it** — each renders the accepted
+            // one rather than whatever it fitted for itself, which is what stops a second window drawing at
+            // a size nothing agreed to.
+            if (accepted.changed) {
+              emitToFrontend({ type: 'terminal.RESIZED', data: grid })
+              return
+            }
+            // **Nothing moved, so this is not news** — but if the asker did not get what it asked for, that
+            // is the asker's business and nobody else's, so it is replied rather than broadcast.
+            if (accepted.cols !== ev.cols || accepted.rows !== ev.rows) {
+              reply?.({ type: 'terminal.RESIZED', data: grid })
+            }
           })
           .catch(error => failTerminal(reply, 'resize', error, ev.terminalId))
       } catch (error) {

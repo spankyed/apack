@@ -88,7 +88,7 @@ globalThis.requestAnimationFrame ??= ((callback: FrameRequestCallback) => {
   return 0
 }) as typeof requestAnimationFrame
 
-const { terminalPool, findScroller } = await import('#features/code/fe/utils/terminal-pool.ts')
+const { terminalPool, findScroller, RESIZE_SETTLE_MS } = await import('#features/code/fe/utils/terminal-pool.ts')
 const { terminalEventBus } = await import('#features/code/fe/utils/terminal-events.ts')
 
 let next = 0
@@ -233,6 +233,40 @@ describe('one session, one host', () => {
     expect(newResizes, 'the live host still hears its own resizes').toHaveLength(1)
     old.refit()
     expect(oldResizes, 'a released attachment reports nothing').toHaveLength(0)
+  })
+
+  /**
+   * **A drag is one pty resize, not one per frame** (F18's other half).
+   *
+   * Every notification a host gets here ends in a pty resize, and a pty resize sends `SIGWINCH` to whatever
+   * is running in it — so an unthrottled feed told `vim` to redraw once per observed frame, two dozen times
+   * for one drag, and sent two dozen events across the bus to do it. The emulator reflows locally either
+   * way, so nothing the user looks at waits for this.
+   *
+   * The timers are fake because the subject is how many notifications a burst produces, not how long a
+   * window takes: a case that slept would be asserting the clock.
+   */
+  it('tells its host once for a burst of fits, and once more when they settle', () => {
+    vi.useFakeTimers()
+    try {
+      const entry = terminalPool.ensure(info(), () => {})
+      const sizes: unknown[] = []
+      const attachment = terminalPool.attach(entry.terminalId, host(), { onResize: (size) => sizes.push(size) })!
+
+      // A quiet host hears the first fit at once, which is what an attach and a tab switch are
+      attachment.refit()
+      expect(sizes, 'the first fit waited').toHaveLength(1)
+
+      for (let frame = 0; frame < 24; frame += 1) attachment.refit()
+      expect(sizes, 'a burst was reported per fit rather than coalesced').toHaveLength(1)
+
+      vi.advanceTimersByTime(RESIZE_SETTLE_MS)
+      expect(sizes, 'the settled size never arrived').toHaveLength(2)
+
+      attachment.release()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('is the only module that reaches the emulator, which is what makes it the seam', () => {

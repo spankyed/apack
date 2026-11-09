@@ -210,13 +210,22 @@ export type OutgoingTerminalEvents =
    */
   | { type: 'terminal.OPENED'; data: TerminalInfo }
   | { type: 'terminal.OUTPUT'; data: { terminalId: string; data: string } }
-  | { type: 'terminal.INITIAL_OUTPUT'; data: { terminalId: string; data: string } }
   | { type: 'terminal.CLOSED'; data: { terminalId: string } }
   /**
    * The shell ended badly and **the terminal was kept**, so the user can read what it said and start it
    * again where it was. A shell that exits 0 is a user closing their terminal and sends `CLOSED` instead.
    */
   | { type: 'terminal.CRASHED'; data: { terminalId: string; code: number | null } }
+  /**
+   * The grid the pty is actually running at, which is **not** necessarily the one a window asked for.
+   *
+   * A pty has one `(cols, rows)` and the window that opened it owns them (M2), so a second window's fit is
+   * refused — and a window that is never told renders at a grid nothing agreed to. This carries the accepted
+   * one, so no window has to assume its own request took effect: broadcast when the grid moved, since every
+   * window showing the terminal needs it, and replied to the asker when its request was refused, which is
+   * news to nobody else.
+   */
+  | { type: 'terminal.RESIZED'; data: { terminalId: string; cols: number; rows: number } }
   /** A new shell is running under a terminal that was already there; `generation` says how many it has had */
   | { type: 'terminal.RESTARTED'; data: TerminalInfo }
   | { type: 'terminal.RENAMED'; data: { terminalId: string; customTitle: string } }
