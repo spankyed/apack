@@ -115,6 +115,16 @@ by hand on a copy. The tag of the first release that ships to people other than 
 does each layout change bump the format with its upgrade step. Why, and what it changed:
 [storage-format-one.md](docs/archive/plans/storage-format-one.md).
 
+**The terminal broker's `PROTOCOL_VERSION` is 1, and a change to what a message means is not a reason to move
+it.** Its two halves — `apack-terminal`'s `src/protocol.rs` and `packages/apack-host/src/broker/client.ts` — are
+pinned to each other by commit (`vendor/apack-terminal.rev`) and move in one change, so there is no app left
+reading an older shape, and nothing is published, so there is no third party either. A bump buys a number and
+costs a round of edits in two repositories. **What the `hello` exchange is for is the checkout whose link points
+at a build from before the change**, which it refuses by naming both numbers — that works at 1 and does not need
+1 to become 2. It moves when a consumer exists that cannot move with it; that is the condition, and it is a fact
+to check rather than assume. The same holds for `PACK_SNAPSHOT_FORMAT` and `PACK_LAYOUT_VERSION`, which are not
+yours to bump either.
+
 **Revisit this when a third-party pack can actually be installed from a registry.** That is the condition. Until it
 holds, "an installed pack might depend on this" has no subject, and a plan that treats it as a constraint should say
 so out loud so the claim can be checked.

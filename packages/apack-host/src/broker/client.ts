@@ -18,7 +18,14 @@ import { holdExclusiveLockWaiting, type ExclusiveLock } from '../exclusive-lock.
 // leaves nothing to carry (`apack-terminal/node/protocol.ts`, `cargo xtask check-generated` there).
 import type { ErrorCode, Event, Request } from 'apack-terminal';
 
-/** The protocol this client speaks. The broker refuses a connection that does not match. */
+/**
+ * The protocol this client speaks. The broker refuses a connection that does not match.
+ *
+ * **It stays 1 through a change to what a message means.** The broker is pinned by commit
+ * (`vendor/apack-terminal.rev`) and the two halves move in one change, so there is no app reading an older
+ * shape to protect. What the handshake is for is a checkout whose link points at a build from before the
+ * change: a refusal naming both numbers beats a message that means something else.
+ */
 export const PROTOCOL_VERSION = 1;
 
 /** A refusal the broker answered with, carrying its code rather than a message to match on */
@@ -110,6 +117,25 @@ export type BrokerWaitOutcome =
   /** The session ended before the condition held, so nothing is coming */
   | 'EXITED';
 
+/** A signal a session's processes may be sent — a closed set, so a caller cannot name an arbitrary one */
+export type BrokerSignal = 'SIGHUP' | 'SIGINT' | 'SIGQUIT' | 'SIGTERM' | 'SIGKILL';
+
+/**
+ * What a signal is sent to.
+ *
+ * **`group` is `kill(-pid)` and no more than that.** A shell with job control puts each background job in a
+ * process group of its own, so a group signal does not reach one — `kill()` is what ends a session and
+ * everything under it. What a group is for is a program the broker started directly and the children it
+ * left in its own group.
+ */
+export type BrokerSignalScope =
+  /** The process the broker started for this session */
+  | { readonly kind: 'leader' }
+  /** The process group it leads */
+  | { readonly kind: 'group' }
+  /** One process, which the broker refuses unless it is inside this session's tree */
+  | { readonly kind: 'pid'; readonly pid: number };
+
 /** One session's feed and the operations on it */
 export interface BrokerSession {
   readonly id: string;
@@ -125,6 +151,35 @@ export interface BrokerSession {
   readonly pid: number | null;
   write(data: string): Promise<void>;
   resize(cols: number, rows: number): Promise<void>;
+  /**
+   * Stops the broker reading this session's pty, so its process feels the reader stop.
+   *
+   * **For a holder whose own sink is slower than a shell can write** — an image transport that has to drain
+   * before the next frame. Reading this connection more slowly is not the same thing: one socket carries
+   * every session, so that stalls all of them to slow one down.
+   *
+   * **The bytes are held by the kernel, not by the broker**: the pty's buffer fills and the process blocks
+   * on its own write, so a pause is backpressure reaching the program and nothing accumulates. Two things
+   * follow, and both are the contract rather than a limitation — the chunk a read already outstanding
+   * returns still arrives, as it does for `node-pty`'s `pause()`, and a paused session's `screen`, `facts`
+   * and `text` wait describe it as it was when it was paused. An exit is unaffected: the broker waits for
+   * that on the child rather than reading it off the pty.
+   */
+  pause(): Promise<void>;
+  /** Reads it again, and sends what arrived while it was not being read */
+  resume(): Promise<void>;
+  /**
+   * Sends a signal to this session's process, its process group, or one process inside its tree.
+   *
+   * `kill()` ends a session and its tree, which is all a terminal needs. This is for a holder driving a
+   * particular program and shutting it down the way that program documents: signal the program so the
+   * servers it owns outlive its own shutdown handlers, then its group, then the group harder.
+   *
+   * **POSIX only.** Windows has no signals and the broker refuses with `UNSUPPORTED` rather than
+   * approximating them; a pid outside this session's tree is refused with `OUTSIDE_SESSION`, which is what
+   * makes naming one safe to offer at all.
+   */
+  signal(signal: BrokerSignal, scope: BrokerSignalScope): Promise<void>;
   /**
    * The screen as the broker has it, with up to `history` lines above the viewport.
    *
@@ -157,8 +212,15 @@ export interface BrokerSession {
 export interface BrokerSessionListeners {
   /** Bytes the process wrote. Unprompted, and nobody asked: a feed, as the app's own rules name it */
   onOutput(data: string): void;
-  /** The process ended, however it ended. Delivered once */
-  onExit(code: number | null): void;
+  /**
+   * The process ended, however it ended. Delivered once.
+   *
+   * **A code or a signal, never both.** A shell the user quit and a program the app terminated are the same
+   * `1` otherwise, so a holder cannot tell a crash it should draw a seam for from the shutdown it asked for
+   * itself. Both are `null` when the session's end was inferred rather than reported — the connection went,
+   * or the broker said there was no such session.
+   */
+  onExit(code: number | null, signal: string | null): void;
 }
 
 /**
@@ -357,7 +419,7 @@ function heldFeed(
   let ended = false;
   const held: BrokerSessionListeners = {
     onOutput: (text) => { queued.push(() => holder.onOutput(text)); },
-    onExit: (code) => { ended = true; queued.push(() => holder.onExit(code)); },
+    onExit: (code, signal) => { ended = true; queued.push(() => holder.onExit(code, signal)); },
   };
   listeners.set(id, held);
   return () => {
@@ -592,6 +654,9 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
       pid,
       async write(text) { connection.send({ kind: 'write', session: id, text }); },
       async resize(cols_, rows_) { connection.send({ kind: 'resize', session: id, cols: cols_, rows: rows_ }); },
+      async pause() { connection.send({ kind: 'pause', session: id }); },
+      async resume() { connection.send({ kind: 'resume', session: id }); },
+      async signal(signal, scope) { connection.send({ kind: 'signal', session: id, signal, scope }); },
       async screen(history = 0) {
         connection.send({ kind: 'screen', session: id, history });
         // Keyed by the session, because two of these can be outstanding and an answer must not be taken
@@ -783,7 +848,7 @@ function frames(socket: net.Socket, listeners: Map<string, BrokerSessionListener
     if (event.kind === 'exited') {
       const listener = listeners.get(event.session);
       listeners.delete(event.session);
-      listener?.onExit(event.code);
+      listener?.onExit(event.code, event.signal ?? null);
       return;
     }
     if (event.kind === 'throttled') {
@@ -820,7 +885,7 @@ function frames(socket: net.Socket, listeners: Map<string, BrokerSessionListener
       if (event.code === 'NO_SUCH_SESSION' && event.session != null) {
         const listener = listeners.get(event.session);
         listeners.delete(event.session);
-        listener?.onExit(null);
+        listener?.onExit(null, null);
       }
       return;
     }
@@ -851,7 +916,7 @@ function frames(socket: net.Socket, listeners: Map<string, BrokerSessionListener
     // Taken first, because a listener may open a terminal again and must not find a stale entry.
     const held = [...listeners.values()];
     listeners.clear();
-    for (const listener of held) listener.onExit(null);
+    for (const listener of held) listener.onExit(null, null);
     onGone?.();
   });
 
