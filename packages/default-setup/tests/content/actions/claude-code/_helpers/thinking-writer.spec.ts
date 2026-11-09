@@ -11,37 +11,31 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EntityId, Services } from '#generated/services.ts';
 import { createThinkingWriter } from '../../../../../src/content/actions/claude-code/_helpers/thinking-writer.ts';
+import { recordTurnWrites } from './_support/turn-writes.ts';
 import { ROW_INTERVAL_MS, THINKING_BLOCK } from '../../../../../src/content/actions/claude-code/_helpers/row-interval.ts';
 
 type Feed = { block: string; at: number; text: string; done?: true };
 
+/**
+ * The shared recorder, with this block's text feed beside it.
+ *
+ * It had its own copy of the store modelling — a block write replacing the row's text, an append splicing
+ * onto it — which is the duplication `_support/turn-writes.ts` exists to end. The feed stays local because
+ * it is this block's own channel and no other writer has one.
+ */
 function recorder() {
-  const writes: string[] = [];
-  /** What the row holds after each write, the store's text assembled the way a read assembles it */
-  const rows: string[] = [];
-  let row = '';
   const feed: Feed[] = [];
+  const shared = recordTurnWrites();
+  const chat = (shared.services as unknown as { chat: Record<string, (...args: never[]) => unknown> }).chat;
   const services = {
     chat: {
-      updateMessageBlock: (_id: unknown, block: { props: { content?: string } }) => {
-        writes.push(JSON.stringify(block));
-        row = block.props.content ?? '';
-        rows.push(row);
-        return 'block-one';
-      },
-      // An append costs its own characters and splices onto what the row holds, as the repository does
-      appendMessageBlockText: (_id: unknown, at: number, text: string) => {
-        writes.push(JSON.stringify({ at, text }));
-        row = row.slice(0, at) + text;
-        rows.push(row);
-      },
-      removeMessageBlock: () => {},
+      ...chat,
       streamMessageBlockText: (params: Feed & { messageId: unknown }) => {
         feed.push({ block: params.block, at: params.at, text: params.text, ...(params.done ? { done: true as const } : {}) });
       },
     },
   } as unknown as Services;
-  return { services, writes, rows, feed };
+  return { services, feed, writes: shared.writes, written: shared.written, kept: shared.kept, rowAfter: shared.rowAfter };
 }
 
 const writerOn = (services: Services) => createThinkingWriter(services, 'message-one' as EntityId);
@@ -50,13 +44,6 @@ const writerOn = (services: Services) => createThinkingWriter(services, 'message
 const windowText = (row: string, feed: Feed[]) =>
   feed.filter(one => !one.done).reduce((text, one) => text.slice(0, one.at) + one.text, row);
 
-/**
- * What the row held after the nth write.
- *
- * A write is no longer always the whole block: growth is appended from an offset, so what the row holds is
- * assembled rather than read off one write. The recorder keeps that, as the repository does.
- */
-const contentOf = (rows: string[], nth: number) => rows[nth] as string;
 
 beforeEach(() => { vi.useFakeTimers(); });
 afterEach(() => { vi.useRealTimers(); });
@@ -86,14 +73,14 @@ describe('what a growing thinking block costs', () => {
    * between the two is text the user never sees or sees twice, and neither channel can detect it alone.
    */
   it('continues the feed from exactly where the row left off', () => {
-    const { services, rows, feed } = recorder();
+    const { services, rowAfter, feed } = recorder();
     const writer = writerOn(services);
 
     writer.push('one ');
     writer.push('two ');
     writer.push('three');
 
-    const row = contentOf(rows, 0);
+    const row = rowAfter(0);
     expect(row).toBe('one ');
     expect(feed[0].at).toBe(row.length);
     expect(windowText(row, feed)).toBe('one two three');
@@ -101,7 +88,7 @@ describe('what a growing thinking block costs', () => {
 
   /** The row still collects it, on the durable clock, so a crash loses seconds of a turn rather than all. */
   it('writes the row on the durable interval while it grows', async () => {
-    const { services, writes, rows } = recorder();
+    const { services, writes, rowAfter } = recorder();
     const writer = writerOn(services);
 
     writer.push('Thinking');
@@ -112,7 +99,7 @@ describe('what a growing thinking block costs', () => {
     await vi.advanceTimersByTimeAsync(ROW_INTERVAL_MS);
     expect(writes).toHaveLength(2);
     // An append, not a rewrite: the row holds the growth and the write carried only the new characters
-    expect(contentOf(rows, 1)).toBe('Thinking more');
+    expect(rowAfter(1)).toBe('Thinking more');
     expect(writes[1]).toBe(JSON.stringify({ at: 8, text: ' more' }));
   });
 

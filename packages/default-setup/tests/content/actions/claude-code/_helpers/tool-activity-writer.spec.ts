@@ -149,8 +149,9 @@ describe('what the tool-activity writer writes', () => {
     writer.finalise('done');
 
     const blockWrites = writes.filter((write) => JSON.parse(write).type === 'tool-activity');
-    // It appears, and it finishes. Twenty tools in between cost it nothing
-    expect(blockWrites).toHaveLength(2);
+    // It appears, it finishes, and its entries fold into it. Twenty tools in between cost it nothing —
+    // the third write is the fold, which is the price of a finished block being one row
+    expect(blockWrites).toHaveLength(3);
   });
 
   /** No tool ran, so this writer has no block and leaves none — and the thinking block is not its to touch */

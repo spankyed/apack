@@ -155,8 +155,9 @@ export function createThinkingWriter(
       // The row first, then the run is dropped. A window drops its run on `done` and falls back to the row,
       // so the row has to be the finished one by then — the text feed's contract, for the same reason. The
       // label and state change here too, which are rewrites and only the row can carry them
+      // No compaction after it: the write above carries the whole text, and a whole-block write is what
+      // folds the segments in. Asking for one as well wrote the text twice
       writeNow();
-      if (blockId) services.chat.compactMessageBlock(blockId);
       if (blockId) {
         services.chat.streamMessageBlockText({ messageId, block: THINKING_BLOCK, at: 0, text: '', done: true });
       }

@@ -76,6 +76,22 @@ export function recordTurnWrites(): TurnWrites {
         entriesOf(String(blockId).replace('row-', '')).set(entry.id, bytes);
         return rowId ?? `entry-${entry.id}`;
       },
+      /**
+       * Folds a block's children into its row, as the repository does.
+       *
+       * **It is a write, and the recorder counts it as one**: the whole of what the children held goes into
+       * the block's row. That is what a finished block being one row costs — one write of its content at the
+       * end, in exchange for every later read of the message not assembling it.
+       */
+      compactMessageBlock: (blockId: string) => {
+        const type = String(blockId).replace('row-', '');
+        const held = entriesOf(type);
+        const folded = JSON.stringify({ type, props: { folded: (blocks.get(type) ?? '') + [...held.values()].join('') + text } });
+        writes.push(folded);
+        sizes.push({ block: type, bytes: folded.length });
+        blocks.set(type, folded);
+        entries.delete(type);
+      },
       removeMessageBlock: (_id: unknown, type: string) => { blocks.delete(type); entries.delete(type); },
       streamMessageBlockText: () => {},
     },

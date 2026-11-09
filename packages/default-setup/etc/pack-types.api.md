@@ -5763,8 +5763,15 @@ declare const chatCommands: {
         entry: ToolActivityEntry;
         entryRowId?: EARS.EntityId;
     }) => EARS.EntityId | undefined;
-    /** Folds a block's text segments into it: what a writer calls when the block has finished growing */
-    readonly compactMessageBlockText: (params: {
+    /**
+     * Folds a block's children into it and removes them: what a writer calls when the block has stopped
+     * growing.
+     *
+     * **A finished block is one row again.** The children exist to make a *turn's* writes cheap; once it is
+     * over they are only cost — a read of the message assembles them, and a thread keeps them for ever. A
+     * turn of forty tools left forty rows per message behind without this.
+     */
+    readonly compactMessageBlock: (params: {
         blockId: EARS.EntityId;
     }) => void;
     /**
@@ -5889,6 +5896,14 @@ declare function clearAllSchedules(): void;
 
 declare function clearHandle(key: string): void;
 
+/**
+ * Folds a block's children into it, so a finished block is one row again.
+ *
+ * The segments and entry rows under a block make a *turn's* writes cost what they write; once the turn is
+ * over they are only cost, to every read of that message and to the store for as long as the thread lives.
+ */
+declare function compactMessageBlock(blockId: EARS.EntityId): void;
+
 /** The recent-thread limit and order the threads settings hold, read where no view is asking */
 declare function configuredRecentThreads(): {
     limit: number;
@@ -5944,6 +5959,7 @@ declare const featureServices: {
         updateMessageBlock: typeof updateMessageBlock;
         appendMessageBlockText: typeof appendMessageBlockText;
         updateMessageToolEntry: typeof updateMessageToolEntry;
+        compactMessageBlock: typeof compactMessageBlock;
         removeMessageBlock: typeof removeMessageBlock;
         streamMessageText: typeof streamMessageText;
         streamMessageBlockText: typeof streamMessageBlockText;
