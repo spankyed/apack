@@ -9,22 +9,36 @@
 // Driven on fake timers against a recording `services.chat`, because the subject is which call happens when.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStreamWriter } from '../../../../../src/content/actions/claude-code/_helpers/stream-writer.ts';
+import { recordTurnWrites } from './_support/turn-writes.ts';
 
 type Write = { text: string; responseTimestamp?: number };
 type Feed = { at: number; text: string; done?: true };
 
+/**
+ * The shared recorder, with this writer's feed beside it.
+ *
+ * What a writer costs is one concept (`_support/turn-writes.ts`), and it was three phrasings — this spec's
+ * `reply * 8`, and two others' own. The text feed stays local because it is this writer's alone.
+ */
 function recorder() {
   const writes: Write[] = [];
   const feed: Feed[] = [];
+  const shared = recordTurnWrites();
+  const chat = (shared.services as unknown as { chat: Record<string, (...args: never[]) => unknown> }).chat;
   const services = {
     chat: {
-      updateMessageState: (_id: unknown, updates: Write) => { writes.push({ ...updates }); },
+      ...chat,
+      // Kept beside the shared recorder's accounting, because these cases read the whole-field writes
+      updateMessageState: (id: unknown, updates: Write) => {
+        if (updates.text !== undefined) writes.push({ ...updates });
+        (chat.updateMessageState as unknown as (i: unknown, u: Write) => void)(id, updates);
+      },
       streamMessageText: (params: { messageId: unknown; at: number; text: string; done?: true }) => {
         feed.push({ at: params.at, text: params.text, ...(params.done ? { done: true as const } : {}) });
       },
     },
   };
-  return { writes, feed, services: services as never };
+  return { writes, feed, written: shared.written, kept: shared.kept, messageText: shared.messageText, services: services as never };
 }
 
 /** The bytes a run of writes asks the engine to store, which is the figure G1 was priced in */
@@ -53,7 +67,7 @@ describe('what a streamed reply writes', () => {
    * more than the reply itself; the feed's job is that the row is written a few times rather than per flush.
    */
   it('costs the engine a few multiples of the reply rather than a multiple of its length', () => {
-    const { writes, services } = recorder();
+    const { writes, services, written, kept } = recorder();
     const writer = createStreamWriter(services, 'm-1' as never, { intervalMs: 80, durableMs: 2000 });
     const chunk = 'y'.repeat(108);
 
@@ -67,6 +81,8 @@ describe('what a streamed reply writes', () => {
 
     // The old model over the same run: 120 flushes x 12,960/2 = 777,600 bytes
     expect(writtenBytes(writes), 'the row is still being written').toBeGreaterThan(0);
+    // The shared bound, in the terms every writer is held in: what reached storage against what it keeps
+    expect(written()).toBeLessThanOrEqual(kept() * 4);
     expect(writtenBytes(writes)).toBeLessThan(reply * 8);
     expect(writes.length, 'one write per durable tick plus the final one').toBeLessThanOrEqual(8);
   });
@@ -97,6 +113,7 @@ describe('what a streamed reply writes', () => {
       chat: {
         updateMessageState: (_id: unknown, updates: { responseTimestamp?: number }) =>
           order.push(updates.responseTimestamp ? 'final write' : 'write'),
+        appendMessageText: () => order.push('append'),
         streamMessageText: (params: { done?: true }) => order.push(params.done ? 'done' : 'feed'),
       },
     } as never;
@@ -135,5 +152,105 @@ describe('what a streamed reply writes', () => {
 
     expect(writes.at(-1)?.text).toBe('the short final answer');
     expect(feed.at(-1)).toEqual({ at: 'the short final answer'.length, text: '', done: true });
+  });
+});
+
+describe('the last word is said once', () => {
+  /**
+   * **A turn's owner finalises as a backstop, so a second call must do nothing.**
+   *
+   * Every exit from the stream consumer now passes through one `finally` that releases the turn's
+   * writers. A path that finalised with text of its own — a warning replacing the reply, a paused turn's
+   * partial — is followed by that backstop, and before this guard the row was written twice and `done`
+   * emitted twice. `thinking-writer.finalise` and the codex consumer's wrapper already guarded; this one
+   * did not.
+   */
+  it('writes the row once when finalised twice', () => {
+    const { writes, feed, services } = recorder();
+    const writer = createStreamWriter(services, 'm-1' as never, { intervalMs: 80, durableMs: 2000 });
+
+    writer.push('the answer');
+    writer.finalize('a warning instead');
+    const afterFirst = writes.length;
+    const doneCount = feed.filter(one => one.done).length;
+
+    writer.finalize();
+
+    expect(writes).toHaveLength(afterFirst);
+    expect(feed.filter(one => one.done)).toHaveLength(doneCount);
+    expect(writer.text).toBe('a warning instead');
+  });
+
+  /**
+   * And the backstop still disarms an armed timer, which is the other half of what it is for: nothing
+   * disposed a writer, so a turn that ended without finalising left a timer that wrote the row up to a
+   * durable interval later — onto a message something else had already marked complete.
+   */
+  it('disarms a pending write even when it has already finalised', () => {
+    const { writes, services } = recorder();
+    const writer = createStreamWriter(services, 'm-1' as never, { intervalMs: 80, durableMs: 2000 });
+
+    writer.finalize('done early');
+    const after = writes.length;
+
+    // A push after finalising arms the durable timer again; the backstop's clear is what stops it landing
+    writer.push('late');
+    writer.finalize();
+    vi.advanceTimersByTime(5000);
+
+    expect(writes).toHaveLength(after);
+  });
+
+  /**
+   * **A backstop finalising an empty buffer must not claim the row.** A tool-only turn, a superseded
+   * consumer and a paused turn each leave this writer with nothing and mark the message complete
+   * themselves, deliberately leaving `text` as it stands rather than blanking the `Thinking…` placeholder.
+   * The `finally` that releases a turn's writers finalises all three regardless, so an empty buffer that
+   * wrote `text: ''` would undo exactly what those three paths took care to do.
+   *
+   * Nothing was fed either, so there is no run in any window to end and no `done` to send.
+   *
+   * An explicit `''` is a different statement — a caller saying the reply is empty — and is written.
+   */
+  it('leaves the row alone when it finalises with nothing to say', () => {
+    const { writes, feed, services } = recorder();
+    const writer = createStreamWriter(services, 'm-1' as never, { intervalMs: 80, durableMs: 2000 });
+
+    writer.finalize();
+
+    expect(writes, 'the row is not this writer\'s to decide').toHaveLength(0);
+    expect(feed, 'and no window holds a run of this message').toHaveLength(0);
+  });
+
+  it('writes an empty reply when it is told to say one', () => {
+    const { writes, feed, services } = recorder();
+    const writer = createStreamWriter(services, 'm-1' as never, { intervalMs: 80, durableMs: 2000 });
+
+    writer.finalize('');
+
+    expect(writes).toEqual([expect.objectContaining({ text: '' })]);
+    expect(feed.at(-1)?.done, 'and ends whatever run a window holds').toBe(true);
+  });
+
+  /**
+   * **The first commit waits for the clock like every other one.** `after` measures from when the row was
+   * last committed, so starting that at zero made it an age of the whole epoch: the delay computed as
+   * negative, clamped to none, and the row was written on the next tick whatever `durableMs` said. A turn
+   * whose characters are meant to cost nothing but a feed quietly committed one row immediately, and
+   * `views.spec.ts`'s "a flush carries characters, not a row" raced that tick for its answer.
+   */
+  it('commits no row before the durable clock, however many characters arrive', () => {
+    const { feed, written, messageText, services } = recorder();
+    const writer = createStreamWriter(services, 'm-1' as never, { intervalMs: 80, durableMs: 600_000 });
+
+    for (let n = 0; n < 16; n++) writer.pushImmediate('x');
+    vi.advanceTimersByTime(1_000);
+
+    expect(written('text'), 'the characters travel as a feed and touch no row').toBe(0);
+    expect(feed.length, 'and every one of them reached the windows').toBeGreaterThan(0);
+
+    vi.advanceTimersByTime(600_000);
+    expect(written('text'), 'and the clock commits them when it comes round').toBeGreaterThan(0);
+    expect(messageText()).toBe('x'.repeat(16));
   });
 });

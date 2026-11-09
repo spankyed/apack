@@ -1,15 +1,20 @@
 # Terminal runtime refactor target
 
-Status: **active as design, through
-[goal-terminal-ownership](../archive/goals/goal-terminal-ownership.md)**, which owns the delivery this document
-describes and settles the decisions it left to activation. Read the goal first: it keeps xterm.js and takes
-the [ghostty-web migration](xterm-to-ghostty-web.md) out of scope, so the order this document originally
-named — migration first, then this — is **inverted**. The reason is that both are answers to who owns a
-terminal session, and sequencing them moves ownership twice.
+Status: **active as design.** It authorizes nothing by itself; a goal does.
 
-This document remains the design authority for the broker, the host service, the ownership tables and the
-agent-observation contracts; the goal cites it rather than restating it. It does not mark any requirement
-complete, and it authorizes nothing by itself — the goal does.
+Its three halves are owned separately now:
+
+- **Ownership** — the broker, the host service and the ownership tables — was delivered by
+  [goal-terminal-ownership](../archive/goals/goal-terminal-ownership.md), which is complete. That goal kept
+  xterm.js and took emulator replacement out of its scope, which is why the order this document originally
+  named — migration first, then ownership — was inverted: both are answers to who owns a session, and
+  sequencing them the other way moves ownership twice.
+- **One terminal implementation** is [goal-one-vt-core](../goals/goal-one-vt-core.md), which this document's
+  recommendation of a "headless Ghostty terminal core" asked for and which only became buyable when
+  `libghostty-vt` 1.0 shipped a stable C ABI.
+- **The agent-observation pipeline** — adapter capabilities, the status reducer, provenance, honest
+  `unknown`, completion events — has no goal. This document remains its design authority and that work is
+  unowned, not dropped.
 
 ## Recommendation
 

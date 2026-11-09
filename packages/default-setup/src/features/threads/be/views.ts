@@ -20,6 +20,14 @@ export const threadViews = defineViews({
   /** A thread as the chat shows it, with the ids of its last `limit` messages and its queued ones; `null` once gone */
   chat: ({ threadId, limit }: { threadId: string; limit: number }) =>
     repository.chatQueries.chatPage(threadId as EARS.EntityId, limit),
+  /**
+   * The full details of one block's tool entries, by entry id — what a hover reveals.
+   *
+   * Apart from the message's view because the collapsed row shows a summary and `details.output` is the
+   * whole tool result: a window asks for these only once the block is open, so neither a streaming turn nor
+   * a thread of finished ones reads every tool's output to draw its rows.
+   */
+  entryDetails: ({ blockId }: { blockId: string }) => repository.chatQueries.entryDetails(blockId as EARS.EntityId),
   /** One message, whole; `null` once it is gone */
   message: ({ id }: { id: string }) => repository.chatQueries.messageById(id as EARS.EntityId),
   /** The messages the panel's search box matches, most relevant first and newer before older, each with its thread */

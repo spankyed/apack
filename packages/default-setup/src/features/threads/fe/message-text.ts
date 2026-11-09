@@ -55,14 +55,14 @@ export function finishedRun(
 }
 
 export interface BlockRun {
-  block: string;
+  blockId: string;
   at: number;
   text: string;
 }
 
 /** Only the shape this rule reads, so nothing here depends on the message model. */
 interface GrowingBlock {
-  type: string;
+  id: string;
   props: Record<string, unknown>;
 }
 
@@ -74,13 +74,17 @@ interface GrowingBlock {
  * write, so there is nothing to splice onto and the row is the honest answer until one arrives — the same
  * reasoning as a run that starts past the end of the text. The blocks are returned unchanged when the
  * splice changes nothing, so a window that is not streaming re-renders nothing.
+ *
+ * **The run names a block's row, not its type.** A message may hold two blocks of one type, and a type
+ * matches the first of them — so a run would splice one block's characters into another block's content,
+ * which reads as text rather than as an error.
  */
 export function messageStreamBlocks<T extends GrowingBlock>(
   blocks: T[] | undefined,
   run: BlockRun | undefined,
 ): T[] | undefined {
   if (!run || !blocks) return blocks;
-  const at = blocks.findIndex(block => block.type === run.block);
+  const at = blocks.findIndex(block => block.id === run.blockId);
   if (at < 0) return blocks;
   const held = blocks[at];
   const content = typeof held.props.content === 'string' ? held.props.content : '';
@@ -92,15 +96,23 @@ export function messageStreamBlocks<T extends GrowingBlock>(
 }
 
 /**
- * Has a durable write caught the row up to everything the run has delivered?
+ * Has a durable write caught `held` up to everything the run has delivered?
  *
- * The run is dropped when it has, so it cannot grow for the life of the message — the same reasoning as the
- * text's, and asked at the same place, since reading the message is the only thing that learns what the row
- * now holds.
+ * The run is dropped when it has, so it cannot grow for the life of the message — and it is asked where the
+ * message is read, since that is the only thing that learns what the row now holds.
+ *
+ * **One rule for both runs.** A message's own text and a block's text are two feeds with two targets, and
+ * this arithmetic is the whole of what "caught up" means for either; it was stated inline for the text and
+ * again inside the block's reader, so the two could drift apart while reading as one idea.
  */
+export function runCaughtUp(held: string | undefined, run: { at: number; text: string } | undefined): boolean {
+  if (!run) return false;
+  return (held?.length ?? 0) >= run.at + run.text.length;
+}
+
+/** The same question for the block a run names, whose text is a prop of it */
 export function blockRunCaughtUp<T extends GrowingBlock>(blocks: T[] | undefined, run: BlockRun | undefined): boolean {
   if (!run) return false;
-  const held = blocks?.find(block => block.type === run.block);
-  const content = typeof held?.props.content === 'string' ? held.props.content : '';
-  return content.length >= run.at + run.text.length;
+  const held = blocks?.find(block => block.id === run.blockId);
+  return runCaughtUp(typeof held?.props.content === 'string' ? held.props.content : '', run);
 }

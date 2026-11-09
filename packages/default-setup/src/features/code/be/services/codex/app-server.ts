@@ -317,7 +317,10 @@ export class CodexAppServer {
   }
 
   unregisterConsumer(codexThreadId: string): void {
+    const held = this.consumers.get(codexThreadId)
     this.consumers.delete(codexThreadId)
+    // Deleted first, so a release that notifies cannot route back into the consumer being removed
+    try { held?.onUnregistered?.() } catch { /* a release must not fail an unregister */ }
   }
 
   // ── Internal ──────────────────────────────────────────────────────────

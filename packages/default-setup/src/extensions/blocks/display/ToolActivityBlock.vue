@@ -72,12 +72,12 @@
 
           <!-- Summaries -->
           <div class="flex-1 min-w-0">
-            <JsonHoverPopup :value="entry.details?.input" :label="entry.tool" width="trigger">
+            <JsonHoverPopup :value="detailsFor(entry)?.input" :label="entry.tool" width="trigger">
               <div class="text-neutral-400 truncate font-mono text-left" :dir="entry.tool === 'LSP' ? 'ltr' : 'rtl'">{{ toolInputSummary(entry) }}</div>
             </JsonHoverPopup>
             <JsonHoverPopup
               v-if="entry.outputSummary && entry.status !== 'running' && !entry.nativeAgent && !entry.nativeResult"
-              :value="entry.details?.output || entry.details?.error"
+              :value="detailsFor(entry)?.output || detailsFor(entry)?.error"
               :label="`${entry.tool} output`"
               width="trigger"
             >
@@ -96,7 +96,7 @@
         </div>
         <NativeToolDrawing component="ToolProgress" :tool-use-id="entry.id" />
         <NativeToolDrawing v-if="entry.nativeResult" component="ToolResult" :tool-use-id="entry.id" class="mt-1">
-          <JsonHoverPopup v-if="entry.outputSummary && !entry.nativeAgent" :value="entry.details?.output || entry.details?.error" :label="`${entry.tool} output`" width="trigger"><div class="truncate text-[10px] text-neutral-500">{{ entry.outputSummary }}</div></JsonHoverPopup>
+          <JsonHoverPopup v-if="entry.outputSummary && !entry.nativeAgent" :value="detailsFor(entry)?.output || detailsFor(entry)?.error" :label="`${entry.tool} output`" width="trigger"><div class="truncate text-[10px] text-neutral-500">{{ entry.outputSummary }}</div></JsonHoverPopup>
         </NativeToolDrawing>
         <div v-if="resourceFiles.get(entry.id)?.length" class="mt-2 flex min-w-0 flex-wrap gap-2">
           <button v-for="file in resourceFiles.get(entry.id)" :key="file.path" type="button" :title="file.path" :aria-label="'Open resource ' + file.uri"
@@ -127,7 +127,7 @@ import JsonHoverPopup from '@apackdev/ui/components/JsonHoverPopup'
 import { computeLabel } from './tool-activity-label.ts'
 import { toolInputSummary } from './tool-input-summary.ts'
 import { nativeResourceFiles } from './native-resource-files.ts'
-import { openSurface } from '#generated/fe.ts'
+import { openSurface, useView } from '#generated/fe.ts'
 
 import type { ToolActivityEntry } from '#features/threads/be/types.ts'
 import { claudeToolDrawings } from './native-tool-drawings.ts'
@@ -142,7 +142,16 @@ interface ArtifactRef {
 
 interface Props {
   entries: ToolActivityEntry[]
-  label: string
+  /**
+   * The block's own row, which is what its entries' details are asked for by.
+   *
+   * Optional because a block assembled without entries carries none — and because the details are a
+   * separate read, a block drawn before that read answers shows its summaries and no hover content, which
+   * is the same thing it shows for an entry that has no details at all.
+   */
+  blockId?: string
+  /** Derived from the entries, so the backend stores none and this component computes it below */
+  label?: string
   state: 'streaming' | 'done' | 'error'
   defaultOpen?: boolean
   skipNativeGroups?: boolean
@@ -226,6 +235,16 @@ function onListScroll(e: Event) {
 // honest even if the backend writer lags. The backend-provided `label`
 // from props is the source of truth; we only override if it's missing.
 const label = computed(() => props.label || computeLabel(props.entries, props.state, props.phase))
+
+/**
+ * The entries' full details, read only while this block is open.
+ *
+ * `null` arguments leave the view idle, so a collapsed block — which is every block while a turn streams,
+ * `defaultOpen` being false — subscribes to nothing and the backend reads no tool output for it. What the
+ * row itself draws is `outputSummary`, which its entries carry.
+ */
+const details = useView('threads', 'entryDetails', () => (isOpen.value && props.blockId ? { blockId: props.blockId } : null))
+const detailsFor = (entry: ToolActivityEntry) => details.data?.[entry.id]
 
 
 // While streaming: last running entry. When done: last entry overall.

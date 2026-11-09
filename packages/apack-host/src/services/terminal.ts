@@ -198,6 +198,7 @@ function expose(held: Broker, session: BrokerSession): TerminalSession {
     resume: () => session.resume(),
     // The SDK declares the same closed set and the same scopes, so this passes them through rather than
     // mapping: a table here would be a second place for a signal to be missing from
+    owns: (pid) => session.owns(pid),
     signal: (signal, scope) => session.signal(signal, scope),
     terminate: () => session.kill(),
   };

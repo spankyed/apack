@@ -19,6 +19,7 @@ export interface OpenOptions {
   shell?: string
   args?: readonly string[]
   env?: Record<string, string>
+  unset?: readonly string[]
   cwd?: string
 }
 
@@ -43,6 +44,10 @@ export interface RecordingBroker {
   readonly flow: ReadonlyArray<{ id: string; kind: 'pause' | 'resume' }>
   /** The signals sent, with what each was aimed at */
   readonly signalled: ReadonlyArray<{ id: string; signal: TerminalSignal; scope: TerminalSignalScope }>
+  /** The pids a session was asked about, in order */
+  readonly askedOwns: ReadonlyArray<{ id: string; pid: number }>
+  /** Says a pid is inside a session's tree, as a process it started would be */
+  declareOwned(id: string, pid: number): void
   /**
    * Ends the shell under a session as the OS would.
    *
@@ -89,6 +94,8 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
   const terminated: string[] = []
   const flow: Array<{ id: string; kind: 'pause' | 'resume' }> = []
   const signalled: Array<{ id: string; signal: TerminalSignal; scope: TerminalSignalScope }> = []
+  const askedOwns: Array<{ id: string; pid: number }> = []
+  const owned = new Map<string, Set<number>>()
   const listening = new Map<string, TerminalListeners>()
   const refusals = new Map<number, string>()
   const refusedTerminations = new Map<string, string>()
@@ -101,9 +108,9 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
    * One session handle for both routes, because what a holder may do with a session does not depend on how
    * it came to hold it — and because this file's own history is six copies that drifted.
    */
-  const handle = (id: string, pid: number | null): TerminalSession => ({
+  const handle = (id: string, handlePid: number | null): TerminalSession => ({
     id,
-    pid,
+    pid: handlePid,
     scrollback: 1000,
     write: async (data: string) => { written.push({ id, data }) },
     resize: async (cols: number, rows: number) => { resized.push({ id, cols, rows }) },
@@ -115,6 +122,12 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
     }),
     pause: async () => { flow.push({ id, kind: 'pause' }) },
     resume: async () => { flow.push({ id, kind: 'resume' }) },
+    // **Its own process is inside its tree**, which is the edge a walk gets wrong by starting a hop up;
+    // anything else is one a case declared
+    owns: async (pid: number) => {
+      askedOwns.push({ id, pid })
+      return pid === handlePid || (owned.get(id)?.has(pid) ?? false)
+    },
     signal: async (signal, scope) => { signalled.push({ id, signal, scope }) },
     // **A signal, as the broker's kill is**, and a signal is not an exit code: `portable-pty` kills with
     // SIGHUP and the protocol reports that by name with no code at all. A double answering a number here
@@ -165,7 +178,8 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
     return found
   }
   return {
-    opened, resized, written, terminated, adopted, flow, signalled,
+    opened, resized, written, terminated, adopted, flow, signalled, askedOwns,
+    declareOwned: (id, pid) => { owned.set(id, (owned.get(id) ?? new Set()).add(pid)) },
     get live() { return [...live] },
     endShell: (id, code, signal = null) => {
       // The broker forgets a session as it exits, which is what makes its id refuse an adoption afterwards

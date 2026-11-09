@@ -14,6 +14,109 @@ export interface BlockConfig {
   props: Record<string, any>;
 }
 
+/**
+ * A block as a read hands it back: what it holds, and **which block it is**.
+ *
+ * A message may hold two blocks of one type, so a type does not address one. Everything that acts on a
+ * block someone else is also writing needs the row — the button-group toggle writes back the block that
+ * holds the button, and a window splices a streamed run into the block the feed names — and both got the
+ * first block of the type before this field existed.
+ *
+ * It is not on `BlockConfig`, which is what a caller passes to *create* a block and has no row yet.
+ */
+export interface StoredBlock extends BlockConfig {
+  id: EARS.EntityId;
+}
+
+/**
+ * One of a message's blocks, as a row of its own.
+ *
+ * **A block is a record two writers mutate independently, so it is a row and not a field.** It was a field —
+ * `Message.blocks`, the whole array — and an attribute is written whole, so a write to any block carried every
+ * other block's bytes. With a thinking block growing through a turn and a tool-activity block written every
+ * 250ms, what reached storage was the accumulated thinking text once per tool event: measured at 170x what the
+ * turn left behind. The two writers also had to carry each other's block to avoid deleting it, which is the
+ * coordination that no longer exists.
+ *
+ * The position is on the edge rather than here (`has_block`'s `info.index`), being a fact about the membership
+ * and not about the block.
+ *
+ * **Five things in this feature are called a block, and only three are this one.** `BlockConfig` is this
+ * row's `type` and `props` as a caller passes them to create one, `StoredBlock` is the same with the row's
+ * id as every read hands it back, and `Block` and `has_block` are this entity and its edge. The `BLOCKS`
+ * relation kind is unrelated — one *thread* blocking
+ * another — and `blockResponse` is what the user sent back from an interactive block. Nothing may be
+ * find-and-replaced across them.
+ */
+export interface BlockEntity {
+  type: string;
+  props: Record<string, any>;
+}
+
+/**
+ * The next characters of a growing block's text, from the offset they start at.
+ *
+ * **The store's half of the shape the feed already sends.** A streamed block's text goes to the windows as
+ * `(at, text)` and used to be *stored* whole, so every durable write re-wrote all of it and what reached
+ * storage grew with the turn — 47.9x what the turn left behind, after a block became a row. A segment is
+ * written once and never rewritten, so the text costs what the text is.
+ *
+ * `at` is absolute, so a segment is read by the same rule the window splices by: the text so far wins up to
+ * `at` and the segment continues from there. The block's own `props.content` is the compacted prefix, and a
+ * read is that followed by its segments in offset order.
+ *
+ * Segments are a turn's working state, not the record: `compactBlockText` folds them into `props.content`
+ * when there are enough of them to read and again when the block finishes, so a finished block is exactly
+ * what it was before this existed and costs nothing extra to read.
+ */
+export interface BlockTextEntity {
+  at: number;
+  text: string;
+}
+
+/**
+ * The next characters of a message's own text, from the offset they start at.
+ *
+ * **The last growing thing in a turn that was stored whole.** A message's `text` is one attribute, so
+ * every durable commit rewrote the whole reply and the cost grew with the turn — the shape `BlockText`
+ * removed for a block's text and `ToolEntry` for its tool calls. This is the same move for the message,
+ * and it is what lets the row's commit rate join the blocks' instead of being eight times slower to
+ * afford the rewrite.
+ *
+ * `Message.text` stays the authoritative field — it is the one the text index reads — holding the
+ * compacted prefix, with these carrying the tail. So `.search` is behind by at most one fold for a message
+ * still streaming, where it used to be behind by one commit; a finished message is indexed whole.
+ */
+export interface MessageTextEntity {
+  at: number;
+  text: string;
+}
+
+/**
+ * One tool call as the activity block lists it, as a row of its own.
+ *
+ * **An entry is patched, not appended to** — `running` to `ok`, `denied` or `error`, with its output
+ * filled in when the tool answers — so it is an independently-mutating record, which is a row for the
+ * same reason a block is one. It was a member of the block's `props.entries`, and an attribute is written
+ * whole, so every later flush rewrote every entry: `details.output` holds the untruncated tool result, so
+ * one read of a large file was written again once per subsequent tool event.
+ *
+ * `entryId` is the CLI's `tool_use_id`, which is what a patch arrives by and what the writer de-dupes on;
+ * `id` is the engine's. The position is on the edge (`has_entry`'s `info.index`), as a block's is.
+ *
+ * The block keeps what is about the block — its label, state and artifact — and a read assembles these
+ * into the `entries` its component draws.
+ */
+export interface ToolEntryEntity {
+  entryId: string;
+  tool: string;
+  summary: string;
+  status: 'running' | 'ok' | 'denied' | 'error';
+  durationMs?: number;
+  outputSummary?: string;
+  details?: { input?: unknown; output?: string; error?: string };
+}
+
 // Tool-activity block — collapsible group of Claude Code tool calls within one turn.
 // Replaces the prior per-tool `> 🔧 name` blockquote spam with a single compact
 // group that shows a live status label while streaming and freezes to a summary
@@ -43,8 +146,14 @@ export interface ToolActivityEntry {
 export interface ToolActivityBlockProps {
   /** Tool entries in arrival order. Append-only during the turn. */
   entries: ToolActivityEntry[];
-  /** Live status label shown when collapsed (e.g. "Reading 3 files…"). */
-  label: string;
+  /**
+   * Live status label shown when collapsed (e.g. "Reading 3 files…").
+   *
+   * **Derived, so nothing writes it.** It is `computeLabel(entries, state, phase)`, which the block that
+   * shows it computes; storing it made every tool event a write of the block's row. Optional because a
+   * block written before that was true may still carry one.
+   */
+  label?: string;
   /** Group state — drives spinner visibility and label tense. */
   state: 'streaming' | 'done' | 'error';
   /** Initial open/closed state. User toggles win after first interaction. */
@@ -135,12 +244,31 @@ export type BlockResponse =
 
 export interface MessageEntity extends BaseEntity {
   entityType: EARS.Entity.Message;
+  /**
+   * What the message says, and **the field both of its indexes read**: the text index `searchMessages`
+   * ranks on (`search`), and the trigram index `containing` and `matching` answer from (`substrings`).
+   *
+   * **The trigram index has no caller in this repo, and is declared on purpose.** It was deleted once for
+   * exactly that reason, which cost a measurement to undo, so the reason it is here is here: it is the
+   * capability the Database console offers over a message's text, and what a reader would need before it
+   * could be written. Keeping it is a decision rather than an oversight
+   * (`docs/archive/plans/decisions.md`).
+   *
+   * It is affordable because a streamed reply is **appended** rather than rewritten: this field is written
+   * on folds and when the turn finishes, about eight times a turn instead of thirty, so maintaining both
+   * indexes costs ~9ms of a minute-long turn. Under the whole-field writes it replaced, the trigram index
+   * alone was ~61% of a turn's write time — so if this field ever goes back to being written whole, that
+   * is the figure to re-measure before assuming it is still cheap.
+   *
+   * A streaming message holds the compacted prefix here and the rest in `MessageText` children, so both
+   * indexes are behind by at most one fold until the turn ends.
+   */
   text: string;
   sender: 'user' | 'assistant' | 'system' | 'marker';
   timestamp: number;
   // Block-based interaction system
   responseTimestamp?: number; // Timestamp when the message was responded to
-  blocks?: BlockConfig[];
+  blocks?: StoredBlock[];
   /**
    * Response data for block-based interactions. See the `BlockResponse`
    * union above for the full set of observed shapes. Always narrow
@@ -618,7 +746,7 @@ export type OutgoingThreadsEvents =
    * `block` names which of the message's blocks the run belongs to, since a message holds several. A
    * block's label, state and re-projected lists are rewrites and travel on the row; this carries growth.
    */
-  | { type: 'MESSAGE_BLOCK_TEXT_APPENDED'; messageId: EARS.EntityId; block: string; at: number; text: string; done?: true }
+  | { type: 'MESSAGE_BLOCK_TEXT_APPENDED'; messageId: EARS.EntityId; blockId: EARS.EntityId; at: number; text: string; done?: true }
   | { type: 'CHAT_STARTED'; data: ChatStart }
   | { type: 'THREAD_CHAT_ERROR'; threadId: string; error: string }
   | { type: 'THREADS_EXPORTED'; filePath: string; threadCount: number }

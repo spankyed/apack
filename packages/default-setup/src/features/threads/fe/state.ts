@@ -1,6 +1,6 @@
 import { surfaceStorage } from '@apackdev/sdk/fe'
 import { ref as featureRef } from '#generated/ref.ts'
-import { blockRunCaughtUp, finishedRun, messageStreamBlocks, messageStreamText } from './message-text.ts';
+import { blockRunCaughtUp, finishedRun, messageStreamBlocks, messageStreamText, runCaughtUp } from './message-text.ts';
 
 /** This surface's window storage: the prefix is its ref, so these names are scoped to it. */
 const storage = surfaceStorage(featureRef('threads'))
@@ -173,7 +173,7 @@ type ViewEvent =
   | { type: 'CHAT.READ'; threadId: string; chat: ChatPage | null }
   | { type: 'MESSAGE.READ'; id: string; message: MessageEntity | null }
   | { type: 'MESSAGE_TEXT_APPENDED'; messageId: string; at: number; text: string; done?: true }
-  | { type: 'MESSAGE_BLOCK_TEXT_APPENDED'; messageId: string; block: string; at: number; text: string; done?: true }
+  | { type: 'MESSAGE_BLOCK_TEXT_APPENDED'; messageId: string; blockId: string; at: number; text: string; done?: true }
   | { type: 'TAB.READ'; threadId: string; tab: ThreadTabView | null }
   | { type: 'SEARCH.READ'; query: string; results: MessageSearchResult[] }
   | { type: 'VIEW.FAILED'; view: string; error: string }
@@ -612,7 +612,7 @@ const threadsState = setup({
       // A durable write caught the row up to the run, so the run has nothing left to add. Dropped here
       // rather than left to grow: this is the only place that learns what the row now holds
       const run = context.messageStreams[messageId];
-      const caughtUp = run !== undefined && (message?.text?.length ?? 0) >= run.at + run.text.length;
+      const caughtUp = runCaughtUp(message?.text, run);
       const { [messageId]: _spliced, ...streams } = context.messageStreams;
       const blockRun = context.messageBlockStreams[messageId];
       const blockCaughtUp = blockRunCaughtUp(message?.blocks, blockRun);
@@ -670,8 +670,9 @@ const threadsState = setup({
      * The same rule as the text's run, for a block that grows.
      *
      * A run only continues when the delta starts exactly where the last one ended **and names the same
-     * block**: a message holds several, and two blocks' runs under one message id would otherwise splice
-     * each other's characters into whichever block arrived last.
+     * block's row**: a message holds several, and two blocks' runs under one message id would otherwise
+     * splice each other's characters into whichever block arrived last. The row rather than the type,
+     * because a message may hold two blocks of one type and a type matches the first of them.
      */
     appendMessageBlockText: assign(({ context, event }) => {
       const ev = typeOf('MESSAGE_BLOCK_TEXT_APPENDED', event);
@@ -684,10 +685,10 @@ const threadsState = setup({
         return { messageBlockStreams: others, ...composedMessages(next) };
       }
       if (!context.messageViews.includes(ev.messageId)) return {};
-      const continues = held !== undefined && held.block === ev.block && held.at + held.text.length === ev.at;
+      const continues = held !== undefined && held.blockId === ev.blockId && held.at + held.text.length === ev.at;
       const run = continues
-        ? { block: ev.block, at: held.at, text: held.text + ev.text }
-        : { block: ev.block, at: ev.at, text: ev.text };
+        ? { blockId: ev.blockId, at: held.at, text: held.text + ev.text }
+        : { blockId: ev.blockId, at: ev.at, text: ev.text };
       const messageBlockStreams = { ...others, [ev.messageId]: run };
       return { messageBlockStreams, ...composedMessages({ ...context, messageBlockStreams }) };
     }),

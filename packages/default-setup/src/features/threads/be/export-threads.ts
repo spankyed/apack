@@ -22,9 +22,9 @@ export function exportThreads(outputDir: string): { filePath: string; threadCoun
   const exportedThreads: ExportedThread[] = []
 
   for (const thread of threads) {
-    // Full message data; a link reaches no message in the trash
-    const messages = (query.ids(thread.id)
-      .out(EARS.RelKind.CONTAINS, EARS.Entity.Message).pick(['id', 'text', 'sender', 'timestamp', 'blocks', 'blockResponse', 'responseTimestamp', 'forkable', 'references', 'isCommand', 'command'] as const) ?? []) as Partial<MessageEntity>[]
+    // Through the one reader, which assembles: a message's `text` and `blocks` come from child rows, so a
+    // field list of its own would have exported a prefix and no blocks, and said nothing about it
+    const messages = repository.threadQueries.messages(thread.id) as Partial<MessageEntity>[]
 
     const linkedThreads = repository.threadQueries.linkedThreads(thread.id)
 
@@ -38,7 +38,9 @@ export function exportThreads(outputDir: string): { filePath: string; threadCoun
         timestamp: msg.timestamp || 0,
       }
       if (msg.responseTimestamp) exported.responseTimestamp = msg.responseTimestamp
-      if (msg.blocks) exported.blocks = msg.blocks
+      // The blocks a copier wants: the reader assembled them without each tool entry's details, which a
+      // file meant to be imported somewhere else is exactly what does need
+      if (msg.blocks?.length) exported.blocks = msg.id ? repository.chatQueries.blocksForCopy(msg.id) : msg.blocks
       if (msg.blockResponse !== undefined) exported.blockResponse = msg.blockResponse
       if (msg.forkable !== undefined) exported.forkable = msg.forkable
       if (msg.isCommand) exported.isCommand = msg.isCommand

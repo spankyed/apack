@@ -277,9 +277,9 @@ export async function action(
   }).messageId;
   log.debug('placeholder message created', { messageId: currentMessageId });
 
-  const writer = createStreamWriter(services, currentMessageId, { intervalMs: 80 });
+  const writer = createStreamWriter(services, currentMessageId);
   const thinking = createThinkingWriter(services, currentMessageId);
-  const toolActivity = createToolActivityWriter(services, currentMessageId, { phase, getThinkingBlock: () => thinking.buildBlock() });
+  const toolActivity = createToolActivityWriter(services, currentMessageId, { phase });
 
   // Upsert the thread's claude-session artifact (type marker only).
   ensureSessionMarker(services, threadId);

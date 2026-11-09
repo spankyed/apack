@@ -93,7 +93,7 @@ export interface ThreadsContext {
    */
   messageStreams: Record<string, { at: number; text: string }>;
   /** A growing block's run, per message: which block it belongs to, from where, and what has arrived */
-  messageBlockStreams: Record<string, { block: string; at: number; text: string }>;
+  messageBlockStreams: Record<string, { blockId: string; at: number; text: string }>;
   /** The messages a view is followed for */
   messageViews: string[];
   /** The open tabs a view is followed for */

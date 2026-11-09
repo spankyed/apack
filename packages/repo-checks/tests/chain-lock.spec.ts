@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { CHAIN_LOCK, CHAIN_WAIT_MS, ChainLockHeld, chainInvocation, holdChainLock, runningChain } from '../../../scripts/lib/chain-lock.ts';
+import { CHAIN_LOCK, ChainLockHeld, chainInvocation, holdChainLock, runningChain } from '../../../scripts/lib/chain-lock.ts';
 import { STAMP_DIR } from '../../../scripts/lib/chain-stamps.ts';
 import { CHAIN_FLAGS } from '../../../scripts/lib/chain-flags.ts';
 
@@ -148,7 +148,7 @@ describe('--wait', () => {
 
     const lock = await holdChainLock({
       what: 'npm run chain -- --wait',
-      waitMs: CHAIN_WAIT_MS,
+      wait: true,
       file,
       onWait: (holder) => { told = holder; },
       // The holder goes on the third look, and nothing here sleeps
@@ -161,24 +161,26 @@ describe('--wait', () => {
     lock.release();
   });
 
-  it('gives up at the bound rather than waiting on a wedged holder forever', async () => {
+  it('gives up on a holder that stops working rather than waiting on it forever', async () => {
     heldByAnother('npm run chain');
     let waits = 0;
-    // A clock that reaches the bound on the second look, so the bound is what ends this and not a timer
+    // A clock of its own and a holder that does no work, so its stall is what ends this and not a timer
     let clock = 0;
     const now = () => clock;
 
     const refused = await holdChainLock({
       what: 'npm run chain -- --wait',
-      waitMs: CHAIN_WAIT_MS,
+      wait: true,
       file,
       now,
-      pause: async () => { waits++; clock += CHAIN_WAIT_MS; },
+      idleMs: 2_000,
+      readWork: async () => new Map([[1, 0]]),
+      pause: async () => { waits++; clock += 500; },
     }).catch((err: unknown) => err);
 
     expect(refused).toBeInstanceOf(ChainLockHeld);
-    expect(waits, 'it waited before giving up').toBe(1);
-    expect((refused as ChainLockHeld).message, 'and says the holder is still there, not to wait for it')
-      .toContain('It is still running.');
+    expect(waits, 'it waited before giving up').toBeGreaterThan(1);
+    expect((refused as ChainLockHeld).message, 'and says the holder looks stuck, not to wait for it')
+      .toContain('it looks stuck');
   });
 });

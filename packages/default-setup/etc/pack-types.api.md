@@ -4,7 +4,7 @@
 
 ```ts
 import * as _apackdev_ears from '@apackdev/ears';
-import { EARS as EARS$2, ShortCode } from '@apackdev/ears';
+import { ShortCode } from '@apackdev/ears';
 import * as _apackdev_sdk from '@apackdev/sdk';
 import { ActionEntity, ActionParameter, ContentSection, DocumentShortCode, EARS as EARS$1, FlowEntity, NodeBase, PromptEntity, SdkEntityShapes, TemplateInput } from '@apackdev/sdk';
 import { ArtifactItem } from '@apackdev/sdk/artifacts';
@@ -230,6 +230,31 @@ interface BlockConfig {
 }
 
 /**
+ * One of a message's blocks, as a row of its own.
+ *
+ * **A block is a record two writers mutate independently, so it is a row and not a field.** It was a field —
+ * `Message.blocks`, the whole array — and an attribute is written whole, so a write to any block carried every
+ * other block's bytes. With a thinking block growing through a turn and a tool-activity block written every
+ * 250ms, what reached storage was the accumulated thinking text once per tool event: measured at 170x what the
+ * turn left behind. The two writers also had to carry each other's block to avoid deleting it, which is the
+ * coordination that no longer exists.
+ *
+ * The position is on the edge rather than here (`has_block`'s `info.index`), being a fact about the membership
+ * and not about the block.
+ *
+ * **Five things in this feature are called a block, and only three are this one.** `BlockConfig` is this
+ * row's `type` and `props` as a caller passes them to create one, `StoredBlock` is the same with the row's
+ * id as every read hands it back, and `Block` and `has_block` are this entity and its edge. The `BLOCKS`
+ * relation kind is unrelated — one *thread* blocking
+ * another — and `blockResponse` is what the user sent back from an interactive block. Nothing may be
+ * find-and-replaced across them.
+ */
+interface BlockEntity {
+    type: string;
+    props: Record<string, any>;
+}
+
+/**
  * Block-based interaction helpers for creating composable messages
  *
  * These helpers make it easy to create messages using reusable blocks that can be
@@ -269,18 +294,9 @@ type BlockMessageOptions = BlockMessageBase & AutoHideOptions;
  * assuming the union is exhaustive; the event-level and field-level types use
  * the union, because every emit matches one of its arms.
  */
-type BlockResponse = {
-    buttonId: 'accept' | 'cancel' | 'decline';
-    content?: Record<string, ClaudeMcpFormValue>;
-} | {
-    validationFailed: true;
-} | {
-    nativeQuestionAnswer: ClaudeQuestionAnswer;
-    nativeQuestionRenderToken?: string;
-    nativeQuestionDraftStarted?: boolean;
-}
+type BlockResponse = 
 /** Approval buttons: InteractionContainer `handleApprove`/`handleDeny`. */
- | {
+{
     approved: boolean;
     reason?: string;
 }
@@ -292,6 +308,27 @@ type BlockResponse = {
  | string
 /** Multi-select choice emits a raw string array (of choice ids). */
  | string[];
+
+/**
+ * The next characters of a growing block's text, from the offset they start at.
+ *
+ * **The store's half of the shape the feed already sends.** A streamed block's text goes to the windows as
+ * `(at, text)` and used to be *stored* whole, so every durable write re-wrote all of it and what reached
+ * storage grew with the turn — 47.9x what the turn left behind, after a block became a row. A segment is
+ * written once and never rewritten, so the text costs what the text is.
+ *
+ * `at` is absolute, so a segment is read by the same rule the window splices by: the text so far wins up to
+ * `at` and the segment continues from there. The block's own `props.content` is the compacted prefix, and a
+ * read is that followed by its segments in offset order.
+ *
+ * Segments are a turn's working state, not the record: `compactBlockText` folds them into `props.content`
+ * when there are enough of them to read and again when the block finishes, so a finished block is exactly
+ * what it was before this existed and costs nothing extra to read.
+ */
+interface BlockTextEntity {
+    at: number;
+    text: string;
+}
 
 interface Bookmark {
     url: string;
@@ -485,2891 +522,6 @@ type ChatStart = {
 
 type ChatState = 'error' | 'idle' | 'paused' | 'success' | 'working';
 
-/** Original Agent output, attributed to its native task; never person input or approval. */
-interface ClaudeAgentHandback {
-    taskId: string;
-    runId?: string;
-    text: string;
-    warning?: string;
-}
-
-type ClaudeBackgroundApproval = Exclude<ClaudeBackgroundControl, {
-    kind: 'question';
-}>;
-
-interface ClaudeBackgroundAttachment {
-    readonly snapshot: ClaudeBackgroundAttachmentSnapshot;
-    subscribe(listener: () => void): () => void;
-    input(id: string, text: string): boolean;
-    resize(id: string, columns: number, rows: number): boolean;
-    close(): Promise<void>;
-}
-
-/** An attach client is separate from the background worker it displays. */
-interface ClaudeBackgroundAttachmentSnapshot {
-    id: string;
-    jobId: string;
-    sessionId: string;
-    cwd: string;
-    /**
-     * The attach client's process id, **`null` when the host did not say** — it answers one for a session it
-     * just started and not for one it took up again. A diagnostic: nothing addresses the client by it.
-     */
-    clientPid: number | null;
-    status: 'exited' | 'live';
-    exitCode?: number;
-    output: {
-        sequence: number;
-        text: string;
-    }[];
-}
-
-interface ClaudeBackgroundAttachmentView {
-    requestId: string;
-    revision: number;
-    sessionId: string;
-    continuedInSessionId: string;
-    status: 'error' | 'opening' | 'ready';
-    state?: ClaudeBackgroundAttachmentSnapshot;
-    problem?: string;
-}
-
-type ClaudeBackgroundCheckpoint = NonNullable<Awaited<ReturnType<typeof claimClaudeBackgroundCheckpoint>>>;
-
-type ClaudeBackgroundControl = z.infer<typeof ClaudeBackgroundControlSchema>;
-
-declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
-    kind: z.ZodLiteral<"question">;
-    dialog: z.ZodObject<{
-        id: z.ZodString;
-        revision: z.ZodString;
-        sessionId: z.ZodString;
-        requestId: z.ZodString;
-        toolName: z.ZodLiteral<"AskUserQuestion">;
-        shownInput: z.ZodRecord<z.ZodString, z.ZodUnknown>;
-        presentation: z.ZodObject<{
-            notice: z.ZodOptional<z.ZodString>;
-            previewFormat: z.ZodNullable<z.ZodString>;
-            extendedQuestions: z.ZodBoolean;
-            optionalDescriptions: z.ZodBoolean;
-            previews: z.ZodArray<z.ZodObject<{
-                question: z.ZodString;
-                option: z.ZodString;
-                kind: z.ZodEnum<{
-                    empty: "empty";
-                    full: "full";
-                    withheld: "withheld";
-                }>;
-                markdown: z.ZodOptional<z.ZodString>;
-                html: z.ZodOptional<z.ZodString>;
-            }, z.core.$strip>>;
-        }, z.core.$strip>;
-    }, z.core.$strip>;
-}, z.core.$strip>, z.ZodObject<{
-    kind: z.ZodLiteral<"bash">;
-    dialog: z.ZodObject<{
-        id: z.ZodString;
-        revision: z.ZodString;
-        sessionId: z.ZodString;
-        requestId: z.ZodString;
-        toolName: z.ZodLiteral<"Bash">;
-        command: z.ZodString;
-        cwd: z.ZodString;
-        choices: z.ZodOptional<z.ZodArray<z.ZodObject<{
-            value: z.ZodString;
-            token: z.ZodString;
-            label: z.ZodString;
-            prefix: z.ZodOptional<z.ZodString>;
-        }, z.core.$strip>>>;
-        choiceToken: z.ZodOptional<z.ZodString>;
-        description: z.ZodOptional<z.ZodString>;
-        reason: z.ZodOptional<z.ZodString>;
-        input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
-    }, z.core.$strip>;
-}, z.core.$strip>, z.ZodObject<{
-    kind: z.ZodLiteral<"file">;
-    dialog: z.ZodObject<{
-        id: z.ZodString;
-        revision: z.ZodString;
-        sessionId: z.ZodString;
-        requestId: z.ZodString;
-        toolName: z.ZodEnum<{
-            Read: "Read";
-            Write: "Write";
-            Edit: "Edit";
-            NotebookEdit: "NotebookEdit";
-        }>;
-        review: z.ZodOptional<z.ZodObject<{
-            withheld: z.ZodBoolean;
-            notice: z.ZodOptional<z.ZodString>;
-            before: z.ZodOptional<z.ZodString>;
-            after: z.ZodOptional<z.ZodString>;
-            replaceAll: z.ZodOptional<z.ZodBoolean>;
-            notebook: z.ZodOptional<z.ZodObject<{
-                editMode: z.ZodEnum<{
-                    replace: "replace";
-                    insert: "insert";
-                    delete: "delete";
-                }>;
-                cellId: z.ZodOptional<z.ZodString>;
-                cellType: z.ZodOptional<z.ZodEnum<{
-                    code: "code";
-                    markdown: "markdown";
-                }>>;
-            }, z.core.$strip>>;
-        }, z.core.$strip>>;
-        approval: z.ZodOptional<z.ZodObject<{
-            token: z.ZodString;
-            ready: z.ZodBoolean;
-            choices: z.ZodArray<z.ZodObject<{
-                value: z.ZodString;
-                label: z.ZodString;
-                decision: z.ZodEnum<{
-                    deny: "deny";
-                    allow: "allow";
-                }>;
-                feedback: z.ZodBoolean;
-            }, z.core.$strip>>;
-        }, z.core.$strip>>;
-        title: z.ZodString;
-        question: z.ZodString;
-        reason: z.ZodOptional<z.ZodString>;
-        input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
-    }, z.core.$strip>;
-}, z.core.$strip>, z.ZodObject<{
-    kind: z.ZodLiteral<"workflow">;
-    dialog: z.ZodObject<{
-        id: z.ZodString;
-        revision: z.ZodString;
-        sessionId: z.ZodString;
-        requestId: z.ZodString;
-        toolName: z.ZodLiteral<"Workflow">;
-        presentation: z.ZodObject<{
-            token: z.ZodString;
-            ready: z.ZodBoolean;
-            withheld: z.ZodBoolean;
-            script: z.ZodOptional<z.ZodString>;
-            args: z.ZodOptional<z.ZodString>;
-            summary: z.ZodOptional<z.ZodArray<z.ZodObject<{
-                title: z.ZodString;
-                detail: z.ZodOptional<z.ZodString>;
-                prompts: z.ZodArray<z.ZodString>;
-            }, z.core.$strip>>>;
-            canEdit: z.ZodOptional<z.ZodBoolean>;
-            description: z.ZodOptional<z.ZodString>;
-            raw: z.ZodOptional<z.ZodBoolean>;
-            summaryUnavailable: z.ZodOptional<z.ZodBoolean>;
-            choices: z.ZodArray<z.ZodObject<{
-                value: z.ZodEnum<{
-                    yes: "yes";
-                    no: "no";
-                    "yes-always": "yes-always";
-                }>;
-                label: z.ZodString;
-                decision: z.ZodEnum<{
-                    deny: "deny";
-                    allow: "allow";
-                }>;
-                feedback: z.ZodBoolean;
-            }, z.core.$strip>>;
-        }, z.core.$strip>;
-        reason: z.ZodOptional<z.ZodString>;
-        input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
-    }, z.core.$strip>;
-}, z.core.$strip>, z.ZodObject<{
-    kind: z.ZodLiteral<"plan">;
-    dialog: z.ZodObject<{
-        id: z.ZodString;
-        revision: z.ZodString;
-        sessionId: z.ZodString;
-        requestId: z.ZodString;
-        toolName: z.ZodEnum<{
-            EnterPlanMode: "EnterPlanMode";
-            ExitPlanMode: "ExitPlanMode";
-        }>;
-        presentation: z.ZodObject<{
-            plan: z.ZodString;
-            planFilePath: z.ZodOptional<z.ZodString>;
-            initialChoice: z.ZodString;
-            empty: z.ZodBoolean;
-            withheld: z.ZodBoolean;
-            choices: z.ZodArray<z.ZodObject<{
-                value: z.ZodString;
-                label: z.ZodString;
-                mode: z.ZodEnum<{
-                    default: "default";
-                    plan: "plan";
-                    auto: "auto";
-                    acceptEdits: "acceptEdits";
-                    bypassPermissions: "bypassPermissions";
-                }>;
-                clearContext: z.ZodBoolean;
-            }, z.core.$strip>>;
-        }, z.core.$strip>;
-        reason: z.ZodOptional<z.ZodString>;
-        input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
-    }, z.core.$strip>;
-}, z.core.$strip>, z.ZodObject<{
-    kind: z.ZodLiteral<"tool">;
-    dialog: z.ZodObject<{
-        id: z.ZodString;
-        revision: z.ZodString;
-        sessionId: z.ZodString;
-        requestId: z.ZodString;
-        toolName: z.ZodEnum<{
-            WebFetch: "WebFetch";
-            Skill: "Skill";
-        }>;
-        presentation: z.ZodObject<{
-            token: z.ZodString;
-            ready: z.ZodBoolean;
-            choices: z.ZodArray<z.ZodObject<{
-                value: z.ZodString;
-                label: z.ZodString;
-                decision: z.ZodEnum<{
-                    deny: "deny";
-                    allow: "allow";
-                }>;
-                feedback: z.ZodBoolean;
-            }, z.core.$strip>>;
-            title: z.ZodString;
-            details: z.ZodArray<z.ZodObject<{
-                label: z.ZodString;
-                value: z.ZodString;
-                ansi: z.ZodOptional<z.ZodString>;
-            }, z.core.$strip>>;
-        }, z.core.$strip>;
-        reason: z.ZodOptional<z.ZodString>;
-        input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
-    }, z.core.$strip>;
-}, z.core.$strip>, z.ZodObject<{
-    kind: z.ZodLiteral<"generic">;
-    dialog: z.ZodObject<{
-        id: z.ZodString;
-        revision: z.ZodString;
-        sessionId: z.ZodString;
-        requestId: z.ZodString;
-        toolName: z.ZodString;
-        presentation: z.ZodObject<{
-            token: z.ZodString;
-            ready: z.ZodBoolean;
-            choices: z.ZodArray<z.ZodObject<{
-                value: z.ZodString;
-                label: z.ZodString;
-                decision: z.ZodEnum<{
-                    deny: "deny";
-                    allow: "allow";
-                }>;
-                feedback: z.ZodBoolean;
-            }, z.core.$strip>>;
-            title: z.ZodString;
-            details: z.ZodArray<z.ZodObject<{
-                label: z.ZodString;
-                value: z.ZodString;
-                ansi: z.ZodOptional<z.ZodString>;
-            }, z.core.$strip>>;
-            defaultFocusValue: z.ZodOptional<z.ZodString>;
-            canCancel: z.ZodBoolean;
-            choiceDescriptions: z.ZodRecord<z.ZodString, z.ZodString>;
-        }, z.core.$strip>;
-        reason: z.ZodOptional<z.ZodString>;
-        input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
-    }, z.core.$strip>;
-}, z.core.$strip>], "kind">;
-
-interface ClaudeBackgroundControls {
-    readonly value: ClaudeBackgroundControl | undefined;
-    readonly turn: {
-        id: string;
-        cancelled: boolean;
-    } | undefined;
-    interrupt(turnId: string): Promise<{
-        cancelled: boolean;
-        ending?: boolean;
-    }>;
-    refresh(): Promise<void>;
-    subscribe(listener: () => void): () => void;
-    settled(id: string, revision: string): void;
-    close(): void;
-}
-
-interface ClaudeBackgroundDesktopOwner {
-    readonly id: string;
-    readonly parentSessionId: string;
-    readonly identity: Readonly<ClaudeBackgroundStatusIdentity>;
-    readonly registration: number;
-    readonly transport: ClaudeTerminalUiTransport;
-    readonly controls: ReturnType<typeof createClaudeBackgroundControls>;
-    readonly done: Promise<void>;
-}
-
-/** Native next-turn reply; an acknowledgement means queued, not a stored transcript receipt. */
-interface ClaudeBackgroundReplyRequest {
-    operation: 'reply';
-    id: string;
-    pid: number;
-    text: string;
-}
-
-interface ClaudeBackgroundReview {
-    revision: string;
-    title: string;
-    paragraphs: string[];
-    confirmLabel: string;
-    cancelLabel: string;
-    defaultFocus: 'cancel' | 'confirm';
-}
-
-interface ClaudeBackgroundReviewState {
-    status: 'error' | 'loading' | 'pending' | 'ready';
-    review?: ClaudeBackgroundReview;
-    problem?: string;
-}
-
-/** Original background job identity is distinct from the parent app conversation. */
-interface ClaudeBackgroundSession {
-    id: string;
-    sessionId: string;
-    cwd: string;
-    name?: string;
-    pid?: number;
-    state: 'blocked' | 'done' | 'failed' | 'stopped' | 'working';
-    status?: 'busy' | 'idle' | 'waiting';
-    waitingFor?: string;
-}
-
-type ClaudeBackgroundSessionRequest = {
-    operation: 'refresh';
-} | {
-    operation: 'stop';
-    id: string;
-    pid: number;
-};
-
-interface ClaudeBackgroundSessionState {
-    sessionId: string;
-    continuedInSessionId: string;
-    revision: number;
-    operation: 'interrupt' | 'refresh' | 'reply' | 'stop';
-    turn?: {
-        id: string;
-        cancelled: boolean;
-    };
-    question?: {
-        id: string;
-        revision: string;
-    };
-    approval?: {
-        id: string;
-        revision: string;
-    };
-    desktop?: ClaudeBackgroundUiTarget;
-    status: 'done' | 'error' | 'pending';
-    session?: ClaudeBackgroundSession;
-    problem?: string;
-}
-
-/** Original session totals belong to the child snapshot; they are never parent billing deltas. */
-interface ClaudeBackgroundStatus {
-    jobId: string;
-    sessionId: string;
-    pid: number;
-    observedAt: number;
-    model: string;
-    turns: number;
-    startedAt: number;
-    context?: {
-        tokens: number;
-        window: number;
-        percent: number;
-    };
-    totalCostUsd?: number;
-    statusLine?: string;
-    agents?: ClaudeNativeTerminalTask[];
-}
-
-interface ClaudeBackgroundStatusIdentity {
-    jobId: string;
-    sessionId: string;
-    activeSessionId: string;
-    pid: number;
-    start: string;
-    hostPid: number;
-    hostStart: string;
-    cwd: string;
-}
-
-type ClaudeBackgroundStatusObserver = Awaited<ReturnType<typeof createClaudeBackgroundStatusObserver>>;
-
-/** Explicit original turn cancellation; never a whole-worker Stop request. */
-interface ClaudeBackgroundTurnInterruptRequest {
-    operation: 'interrupt';
-    target: ClaudeBackgroundUiTarget;
-    turnId: string;
-}
-
-/** Exact app-owned worker incarnation selected by a desktop composer. */
-interface ClaudeBackgroundUiTarget {
-    ownerId: string;
-    parentSessionId: string;
-    sessionId: string;
-    jobSessionId: string;
-    jobId: string;
-    pid: number;
-    processStart: string;
-}
-
-interface ClaudeBillingObservation {
-    sessionId: string;
-    observedAt: number;
-    info: Pick<ClaudeRateLimitInfo, 'isUsingOverage' | 'overageDisabledReason' | 'overageStatus' | 'rateLimitType' | 'resetsAt' | 'status'>;
-}
-
-type ClaudeContextUsage = z.infer<typeof ClaudeContextUsageSchema>;
-
-declare const ClaudeContextUsageSchema: z.ZodObject<{
-    model: z.ZodString;
-    totalTokens: z.ZodNumber;
-    maxTokens: z.ZodNumber;
-    percentage: z.ZodNumber;
-    memoryFiles: z.ZodArray<z.ZodObject<{
-        path: z.ZodString;
-        type: z.ZodString;
-        tokens: z.ZodNumber;
-    }, z.core.$loose>>;
-    skills: z.ZodOptional<z.ZodObject<{
-        skillFrontmatter: z.ZodArray<z.ZodObject<{
-            name: z.ZodString;
-            source: z.ZodString;
-            tokens: z.ZodNumber;
-        }, z.core.$loose>>;
-    }, z.core.$loose>>;
-    categories: z.ZodArray<z.ZodObject<{
-        name: z.ZodString;
-        tokens: z.ZodNumber;
-        kind: z.ZodOptional<z.ZodString>;
-    }, z.core.$loose>>;
-}, z.core.$loose>;
-
-interface ClaudeConversation {
-    readonly billing?: ClaudeBillingObservation;
-    readonly handle: QueryHandle;
-    readonly busy: boolean;
-    readonly closing: boolean;
-    readonly sessionId?: string;
-    readonly sessionCwd?: string;
-    /** Last acknowledged selection, distinct from observed effective model. */
-    readonly modelSelection?: string;
-    readonly done: Promise<void>;
-    start(input: string | UserInputMessage, consume: ClaudeTurnConsumer): string;
-    release(handle: QueryHandle): boolean;
-    ownsTurn(handle: QueryHandle): boolean;
-    hasPendingElicitation(requestId: string): boolean;
-    subscribe(listener: (event: StreamLine) => void): () => void;
-    close(): Promise<void>;
-    kill(): void;
-}
-
-interface ClaudeConversationTurn {
-    handle: QueryHandle;
-    inputId?: string;
-    /** Explicit teardown won before or during consumption; never register new app ownership. */
-    stopped: boolean;
-    /** Native process cost already accounted for before this turn. */
-    costBaseline: number;
-    activity: ClaudeNestedActivity;
-}
-
-type ClaudeFileRewind = z.infer<typeof ClaudeFileRewindSchema>;
-
-/** Native rewind verdict; a successful control response may still reject the checkpoint. */
-declare const ClaudeFileRewindSchema: z.ZodObject<{
-    canRewind: z.ZodBoolean;
-    error: z.ZodOptional<z.ZodString>;
-    filesChanged: z.ZodOptional<z.ZodArray<z.ZodString>>;
-    insertions: z.ZodOptional<z.ZodNumber>;
-    deletions: z.ZodOptional<z.ZodNumber>;
-    skippedLinks: z.ZodOptional<z.ZodNumber>;
-}, z.core.$loose>;
-
-interface ClaudeHookRegistration {
-    matcher?: string;
-    timeout?: number;
-    callbacks: Array<(input: Record<string, unknown>) => Record<string, unknown> | Promise<Record<string, unknown>>>;
-}
-
-type ClaudeHooks = Record<string, ClaudeHookRegistration[]>;
-
-type ClaudeInitialization = z.infer<typeof ClaudeInitializationSchema>;
-
-/** Metadata returned by the initialize exchange in Claude Code 2.1.299–2.1.301. */
-declare const ClaudeInitializationSchema: z.ZodObject<{
-    commands: z.ZodArray<z.ZodObject<{
-        name: z.ZodString;
-        description: z.ZodOptional<z.ZodString>;
-    }, z.core.$loose>>;
-    agents: z.ZodArray<z.ZodObject<{
-        name: z.ZodString;
-    }, z.core.$loose>>;
-    models: z.ZodArray<z.ZodObject<{
-        value: z.ZodString;
-        displayName: z.ZodString;
-        resolvedModel: z.ZodOptional<z.ZodString>;
-        description: z.ZodOptional<z.ZodString>;
-        supportsEffort: z.ZodOptional<z.ZodBoolean>;
-        supportedEffortLevels: z.ZodOptional<z.ZodArray<z.ZodString>>;
-        supportsAdaptiveThinking: z.ZodOptional<z.ZodBoolean>;
-        supportsFastMode: z.ZodOptional<z.ZodBoolean>;
-        supportsAutoMode: z.ZodOptional<z.ZodBoolean>;
-        supportsThinkingOff: z.ZodOptional<z.ZodBoolean>;
-    }, z.core.$loose>>;
-    claude_code_version: z.ZodOptional<z.ZodString>;
-    current_permission_mode: z.ZodOptional<z.ZodString>;
-    capabilities: z.ZodOptional<z.ZodArray<z.ZodString>>;
-}, z.core.$loose>;
-
-type ClaudeInterruptReceipt = z.infer<typeof ClaudeInterruptReceiptSchema>;
-
-/** Native acknowledgement distinguishes cancelled inputs from inputs still queued. */
-declare const ClaudeInterruptReceiptSchema: z.ZodObject<{
-    still_queued: z.ZodArray<z.ZodString>;
-    cancelled: z.ZodOptional<z.ZodArray<z.ZodString>>;
-}, z.core.$loose>;
-
-type ClaudeManagedSettingsDiagnostic = z.infer<typeof managedSettingsDiagnostic>;
-
-type ClaudeMcpElicitationAnswer = z.infer<typeof ClaudeMcpElicitationAnswerSchema>;
-
-/** MCP answers are independent of tool permission allow/deny and generic dialog results. */
-declare const ClaudeMcpElicitationAnswerSchema: z.ZodObject<{
-    action: z.ZodEnum<{
-        accept: "accept";
-        decline: "decline";
-        cancel: "cancel";
-    }>;
-    content: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnion<readonly [z.ZodString, z.ZodNumber, z.ZodBoolean, z.ZodArray<z.ZodString>]>>>;
-}, z.core.$strict>;
-
-interface ClaudeMcpForm {
-    fields: ClaudeMcpFormField[];
-}
-
-interface ClaudeMcpFormField {
-    name: string;
-    type: 'array' | 'boolean' | 'integer' | 'number' | 'string';
-    title: string;
-    description?: string;
-    required: boolean;
-    options?: Array<{
-        value: string;
-        label: string;
-    }>;
-    minLength?: number;
-    maxLength?: number;
-    format?: 'date' | 'date-time' | 'email' | 'uri';
-    minimum?: number;
-    maximum?: number;
-    minItems?: number;
-    maxItems?: number;
-    default?: ClaudeMcpFormValue;
-}
-
-interface ClaudeMcpFormValidation {
-    valid: boolean;
-    errors: Record<string, string>;
-    content?: Record<string, ClaudeMcpFormValue>;
-}
-
-type ClaudeMcpFormValue = string | number | boolean | string[];
-
-type ClaudeMcpStatus = z.infer<typeof ClaudeMcpStatusSchema>;
-
-/** Live MCP server state; preserve future status/configuration fields. */
-declare const ClaudeMcpStatusSchema: z.ZodObject<{
-    mcpServers: z.ZodArray<z.ZodObject<{
-        name: z.ZodString;
-        status: z.ZodString;
-        serverInfo: z.ZodOptional<z.ZodObject<{
-            name: z.ZodString;
-            version: z.ZodString;
-        }, z.core.$loose>>;
-        tools: z.ZodOptional<z.ZodArray<z.ZodObject<{
-            name: z.ZodString;
-        }, z.core.$loose>>>;
-    }, z.core.$loose>>;
-}, z.core.$loose>;
-
-type ClaudeModelCatalog = z.infer<typeof ClaudeModelCatalogSchema>;
-
-declare const ClaudeModelCatalogSchema: z.ZodObject<{
-    models: z.ZodArray<z.ZodObject<{
-        value: z.ZodString;
-        displayName: z.ZodString;
-        resolvedModel: z.ZodOptional<z.ZodString>;
-        description: z.ZodOptional<z.ZodString>;
-        supportsEffort: z.ZodOptional<z.ZodBoolean>;
-        supportedEffortLevels: z.ZodOptional<z.ZodArray<z.ZodString>>;
-        supportsAdaptiveThinking: z.ZodOptional<z.ZodBoolean>;
-        supportsFastMode: z.ZodOptional<z.ZodBoolean>;
-        supportsAutoMode: z.ZodOptional<z.ZodBoolean>;
-        supportsThinkingOff: z.ZodOptional<z.ZodBoolean>;
-    }, z.core.$loose>>;
-}, z.core.$loose>;
-
-interface ClaudeNativeAgentCommandConfirmation {
-    id: string;
-    title: string;
-    confirmLabel: string;
-    commandName?: string;
-}
-
-interface ClaudeNativeAgentInputReview {
-    text: string;
-    removed: number;
-}
-
-/** One observed Agent selection in one native process. A mount cannot change targets. */
-interface ClaudeNativeAgentUiTarget {
-    ownerId: string;
-    sessionId: string;
-    revision: number;
-    taskId: string;
-}
-
-type ClaudeNativeBashDialog = z.infer<typeof ClaudeNativeBashDialogSchema>;
-
-interface ClaudeNativeBashDialogResponse {
-    id: string;
-    revision: string;
-    sessionId: string;
-    decision: 'allow' | 'deny';
-    choice?: string;
-    choiceToken?: string;
-    prefix?: string;
-    feedback?: string;
-}
-
-/** Native-owned Bash decisions; standing choices retain original callbacks and policy gates. */
-declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
-    id: z.ZodString;
-    revision: z.ZodString;
-    sessionId: z.ZodString;
-    requestId: z.ZodString;
-    toolName: z.ZodLiteral<"Bash">;
-    command: z.ZodString;
-    cwd: z.ZodString;
-    choices: z.ZodOptional<z.ZodArray<z.ZodObject<{
-        value: z.ZodString;
-        token: z.ZodString;
-        label: z.ZodString;
-        prefix: z.ZodOptional<z.ZodString>;
-    }, z.core.$strip>>>;
-    choiceToken: z.ZodOptional<z.ZodString>;
-    description: z.ZodOptional<z.ZodString>;
-    reason: z.ZodOptional<z.ZodString>;
-    input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
-}, z.core.$strip>;
-
-interface ClaudeNativeContinuation {
-    sessionId: string;
-    continuedInSessionId: string;
-    timestamp: string;
-}
-
-type ClaudeNativeFileDialog = z.infer<typeof ClaudeNativeFileDialogSchema>;
-
-interface ClaudeNativeFileDialogResponse {
-    choice?: string;
-    choiceToken?: string;
-    id: string;
-    revision: string;
-    sessionId: string;
-    decision: 'allow' | 'deny';
-    feedback?: string;
-}
-
-/** A one-time file decision; native retains policy, input and dialog lifecycle ownership. */
-declare const ClaudeNativeFileDialogSchema: z.ZodObject<{
-    id: z.ZodString;
-    revision: z.ZodString;
-    sessionId: z.ZodString;
-    requestId: z.ZodString;
-    toolName: z.ZodEnum<{
-        Read: "Read";
-        Write: "Write";
-        Edit: "Edit";
-        NotebookEdit: "NotebookEdit";
-    }>;
-    review: z.ZodOptional<z.ZodObject<{
-        withheld: z.ZodBoolean;
-        notice: z.ZodOptional<z.ZodString>;
-        before: z.ZodOptional<z.ZodString>;
-        after: z.ZodOptional<z.ZodString>;
-        replaceAll: z.ZodOptional<z.ZodBoolean>;
-        notebook: z.ZodOptional<z.ZodObject<{
-            editMode: z.ZodEnum<{
-                replace: "replace";
-                insert: "insert";
-                delete: "delete";
-            }>;
-            cellId: z.ZodOptional<z.ZodString>;
-            cellType: z.ZodOptional<z.ZodEnum<{
-                code: "code";
-                markdown: "markdown";
-            }>>;
-        }, z.core.$strip>>;
-    }, z.core.$strip>>;
-    approval: z.ZodOptional<z.ZodObject<{
-        token: z.ZodString;
-        ready: z.ZodBoolean;
-        choices: z.ZodArray<z.ZodObject<{
-            value: z.ZodString;
-            label: z.ZodString;
-            decision: z.ZodEnum<{
-                deny: "deny";
-                allow: "allow";
-            }>;
-            feedback: z.ZodBoolean;
-        }, z.core.$strip>>;
-    }, z.core.$strip>>;
-    title: z.ZodString;
-    question: z.ZodString;
-    reason: z.ZodOptional<z.ZodString>;
-    input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
-}, z.core.$strip>;
-
-interface ClaudeNativeFocusProjection {
-    sessionId: string;
-    viewRevision: number;
-    producerId: string;
-    active: boolean;
-    hidden: string[];
-}
-
-type ClaudeNativeGenericToolPermissionDialog = z.infer<typeof ClaudeNativeGenericToolPermissionDialogSchema>;
-
-interface ClaudeNativeGenericToolPermissionDialogResponse {
-    id: string;
-    revision: string;
-    sessionId: string;
-    toolName: string;
-    choice: string;
-    choiceToken: string;
-    decision: 'allow' | 'cancel' | 'deny';
-    feedback?: string;
-}
-
-/** Exact permission_prompt; the original native payload supplies the tool identity. */
-declare const ClaudeNativeGenericToolPermissionDialogSchema: z.ZodObject<{
-    id: z.ZodString;
-    revision: z.ZodString;
-    sessionId: z.ZodString;
-    requestId: z.ZodString;
-    toolName: z.ZodString;
-    presentation: z.ZodObject<{
-        token: z.ZodString;
-        ready: z.ZodBoolean;
-        choices: z.ZodArray<z.ZodObject<{
-            value: z.ZodString;
-            label: z.ZodString;
-            decision: z.ZodEnum<{
-                deny: "deny";
-                allow: "allow";
-            }>;
-            feedback: z.ZodBoolean;
-        }, z.core.$strip>>;
-        title: z.ZodString;
-        details: z.ZodArray<z.ZodObject<{
-            label: z.ZodString;
-            value: z.ZodString;
-            ansi: z.ZodOptional<z.ZodString>;
-        }, z.core.$strip>>;
-        defaultFocusValue: z.ZodOptional<z.ZodString>;
-        canCancel: z.ZodBoolean;
-        choiceDescriptions: z.ZodRecord<z.ZodString, z.ZodString>;
-    }, z.core.$strip>;
-    reason: z.ZodOptional<z.ZodString>;
-    input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
-}, z.core.$strip>;
-
-interface ClaudeNativeImage {
-    mediaType: 'image/gif' | 'image/jpeg' | 'image/png' | 'image/webp';
-    data: string;
-}
-
-interface ClaudeNativeJournalBatch {
-    entries: ClaudeNativeJournalEntry[];
-    pending: boolean;
-    problems: string[];
-}
-
-interface ClaudeNativeJournalEntry {
-    sessionId: string;
-    row: Record<string, unknown>;
-}
-
-/** Persisted launch intent; credentials, resolved settings and process capabilities stay backend-only. */
-interface ClaudeNativeLaunch {
-    sessionId: string;
-    cwd: string;
-    model?: string;
-    permissionMode?: PermissionMode;
-    prePlanMode?: PermissionMode;
-    allowedTools?: string[];
-    disallowedTools?: string[];
-    appendSystemPrompt?: string;
-    addDir?: string[];
-    pluginDir?: string[];
-    channels?: string[];
-}
-
-type ClaudeNativeManagedTaskType = z.infer<typeof ClaudeNativeManagedTaskTypeSchema>;
-
-/** Task families whose original manager owns their distinct details and confirmation flows. */
-declare const ClaudeNativeManagedTaskTypeSchema: z.ZodEnum<{
-    remote_agent: "remote_agent";
-    dream: "dream";
-    auto_mode_scan: "auto_mode_scan";
-    local_memory_import: "local_memory_import";
-    monitor_mcp: "monitor_mcp";
-    monitor_ws: "monitor_ws";
-}>;
-
-type ClaudeNativeMcpForm = z.infer<typeof ClaudeNativeMcpFormSchema>;
-
-type ClaudeNativeMcpFormOperation = z.infer<typeof ClaudeNativeMcpFormOperationSchema>;
-
-declare const ClaudeNativeMcpFormOperationSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
-    operation: z.ZodLiteral<"edit">;
-    field: z.ZodString;
-    value: z.ZodNullable<z.ZodUnion<readonly [z.ZodString, z.ZodNumber, z.ZodBoolean, z.ZodArray<z.ZodString>]>>;
-    cursorOffset: z.ZodOptional<z.ZodNumber>;
-}, z.core.$strict>, z.ZodObject<{
-    operation: z.ZodLiteral<"focus">;
-    field: z.ZodString;
-}, z.core.$strict>, z.ZodObject<{
-    operation: z.ZodLiteral<"cursor">;
-    field: z.ZodString;
-    cursorOffset: z.ZodNumber;
-}, z.core.$strict>, z.ZodObject<{
-    operation: z.ZodEnum<{
-        accept: "accept";
-        decline: "decline";
-        cancel: "cancel";
-    }>;
-}, z.core.$strict>], "operation">;
-
-interface ClaudeNativeMcpFormRequest {
-    id: string;
-    revision: string;
-    sessionId: string;
-    token: string;
-    action: ClaudeNativeMcpFormOperation;
-}
-
-declare const ClaudeNativeMcpFormSchema: z.ZodObject<{
-    id: z.ZodString;
-    revision: z.ZodString;
-    sessionId: z.ZodString;
-    token: z.ZodString;
-    ready: z.ZodBoolean;
-    serverName: z.ZodString;
-    message: z.ZodString;
-    schema: z.ZodRecord<z.ZodString, z.ZodUnknown>;
-    propertyOrder: z.ZodArray<z.ZodString>;
-    values: z.ZodRecord<z.ZodString, z.ZodUnion<readonly [z.ZodString, z.ZodNumber, z.ZodBoolean, z.ZodArray<z.ZodString>]>>;
-    errors: z.ZodRecord<z.ZodString, z.ZodString>;
-    resolvingFields: z.ZodArray<z.ZodString>;
-    expandedAccordion: z.ZodOptional<z.ZodString>;
-    currentFieldIndex: z.ZodOptional<z.ZodNumber>;
-    focusedButton: z.ZodNullable<z.ZodEnum<{
-        accept: "accept";
-        decline: "decline";
-    }>>;
-    textInputValue: z.ZodString;
-    textInputCursorOffset: z.ZodOptional<z.ZodNumber>;
-}, z.core.$strip>;
-
-type ClaudeNativeMcpTaskInfo = z.infer<typeof ClaudeNativeMcpTaskInfoSchema>;
-
-/** Observed original MCP task fields; server task identity is separate from the native registry id. */
-declare const ClaudeNativeMcpTaskInfoSchema: z.ZodObject<{
-    truncated: z.ZodBoolean;
-    serverName: z.ZodOptional<z.ZodString>;
-    toolName: z.ZodOptional<z.ZodString>;
-    serverTaskId: z.ZodOptional<z.ZodString>;
-    status: z.ZodString;
-    statusMessage: z.ZodOptional<z.ZodString>;
-    pollIntervalMs: z.ZodOptional<z.ZodNumber>;
-    startTime: z.ZodNumber;
-    endTime: z.ZodOptional<z.ZodNumber>;
-    protocol: z.ZodOptional<z.ZodString>;
-}, z.core.$strip>;
-
-type ClaudeNativeMcpUrl = z.infer<typeof ClaudeNativeMcpUrlSchema>;
-
-type ClaudeNativeMcpUrlOperation = z.infer<typeof ClaudeNativeMcpUrlOperationSchema>;
-
-declare const ClaudeNativeMcpUrlOperationSchema: z.ZodObject<{
-    operation: z.ZodEnum<{
-        accept: "accept";
-        decline: "decline";
-        cancel: "cancel";
-        open: "open";
-        continue: "continue";
-    }>;
-}, z.core.$strict>;
-
-interface ClaudeNativeMcpUrlRequest {
-    id: string;
-    revision: string;
-    sessionId: string;
-    token: string;
-    action: ClaudeNativeMcpUrlOperation;
-}
-
-declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
-    id: z.ZodString;
-    revision: z.ZodString;
-    sessionId: z.ZodString;
-    token: z.ZodString;
-    ready: z.ZodBoolean;
-    kind: z.ZodEnum<{
-        mcp_elicitation: "mcp_elicitation";
-        mcp_url_elicitation: "mcp_url_elicitation";
-        mcp_elicitation_waiting: "mcp_elicitation_waiting";
-    }>;
-    serverName: z.ZodString;
-    message: z.ZodString;
-    url: z.ZodString;
-    title: z.ZodString;
-    phase: z.ZodEnum<{
-        prompt: "prompt";
-        waiting: "waiting";
-    }>;
-    userConfirmsCompletion: z.ZodBoolean;
-    choices: z.ZodArray<z.ZodObject<{
-        operation: z.ZodEnum<{
-            accept: "accept";
-            decline: "decline";
-            cancel: "cancel";
-            open: "open";
-            continue: "continue";
-        }>;
-        label: z.ZodString;
-        selected: z.ZodBoolean;
-    }, z.core.$strip>>;
-    warnings: z.ZodArray<z.ZodString>;
-}, z.core.$strip>;
-
-type ClaudeNativeMessageRetirements = z.infer<typeof ClaudeNativeMessageRetirementsSchema>;
-
-/** Original dialog settlement identities, scoped to their native conversation. */
-declare const ClaudeNativeMessageRetirementsSchema: z.ZodArray<z.ZodObject<{
-    sessionId: z.ZodString;
-    uuids: z.ZodArray<z.ZodString>;
-    rewoundUserUuids: z.ZodOptional<z.ZodArray<z.ZodString>>;
-    rewoundNoticeUuids: z.ZodOptional<z.ZodArray<z.ZodString>>;
-}, z.core.$strip>>;
-
-type ClaudeNativeNotice = z.infer<typeof ClaudeNativeNoticeSchema>;
-
-type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | 'sessionId'> & {
-    decision: 'background_confirm' | 'background_stay' | 'cancelled' | 'compact_accept' | 'compact_dismiss' | 'compact_keep' | 'compact_next' | 'compact_previous' | 'continue' | 'disable' | 'edit_prompt' | 'goal_accept' | 'goal_decline' | 'interrupt' | 'never' | 'newer_accept' | 'newer_dismiss' | 'newer_keep' | 'no' | 'policy_approve' | 'policy_reject' | 'quota_dismiss' | 'quota_new_conversation' | 'quota_resume' | 'resume_compact' | 'resume_continue' | 'resume_dismiss' | 'resume_never' | 'retry_fallback' | 'sandbox_allow' | 'sandbox_cancel' | 'sandbox_deny' | 'sandbox_remember' | 'yes';
-};
-
-/** Native owns the dialog, available choices, timeout and acknowledgement. */
-declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
-    kind: z.ZodLiteral<"left_arrow_confirm">;
-    preferredChoice: z.ZodEnum<{
-        background_confirm: "background_confirm";
-        background_stay: "background_stay";
-    }>;
-    choices: z.ZodArray<z.ZodObject<{
-        value: z.ZodEnum<{
-            background_confirm: "background_confirm";
-            background_stay: "background_stay";
-        }>;
-        label: z.ZodString;
-    }, z.core.$strip>>;
-    title: z.ZodString;
-    paragraphs: z.ZodArray<z.ZodString>;
-    id: z.ZodString;
-    revision: z.ZodString;
-    sessionId: z.ZodString;
-}, z.core.$strip>, z.ZodObject<{
-    kind: z.ZodLiteral<"sandbox_network_access">;
-    choices: z.ZodArray<z.ZodObject<{
-        value: z.ZodEnum<{
-            sandbox_allow: "sandbox_allow";
-            sandbox_remember: "sandbox_remember";
-            sandbox_deny: "sandbox_deny";
-        }>;
-        label: z.ZodString;
-    }, z.core.$strip>>;
-    title: z.ZodString;
-    paragraphs: z.ZodArray<z.ZodString>;
-    id: z.ZodString;
-    revision: z.ZodString;
-    sessionId: z.ZodString;
-}, z.core.$strip>, z.ZodObject<{
-    kind: z.ZodLiteral<"managed_settings_security">;
-    paragraphsAnsi: z.ZodArray<z.ZodString>;
-    preferredChoice: z.ZodEnum<{
-        policy_approve: "policy_approve";
-        policy_reject: "policy_reject";
-    }>;
-    choices: z.ZodArray<z.ZodObject<{
-        value: z.ZodEnum<{
-            policy_approve: "policy_approve";
-            policy_reject: "policy_reject";
-        }>;
-        label: z.ZodString;
-    }, z.core.$strip>>;
-    title: z.ZodString;
-    paragraphs: z.ZodArray<z.ZodString>;
-    id: z.ZodString;
-    revision: z.ZodString;
-    sessionId: z.ZodString;
-}, z.core.$strip>, z.ZodObject<{
-    kind: z.ZodLiteral<"refusal_fallback_prompt">;
-    helpUrl: z.ZodOptional<z.ZodString>;
-    originalModel: z.ZodString;
-    fallbackModel: z.ZodString;
-    choices: z.ZodArray<z.ZodObject<{
-        value: z.ZodEnum<{
-            retry_fallback: "retry_fallback";
-            edit_prompt: "edit_prompt";
-        }>;
-        label: z.ZodString;
-    }, z.core.$strip>>;
-    title: z.ZodString;
-    paragraphs: z.ZodArray<z.ZodString>;
-    id: z.ZodString;
-    revision: z.ZodString;
-    sessionId: z.ZodString;
-}, z.core.$strip>, z.ZodObject<{
-    kind: z.ZodLiteral<"autocompact_offer">;
-    selectedTokens: z.ZodNumber;
-    canPrevious: z.ZodBoolean;
-    canNext: z.ZodBoolean;
-    choices: z.ZodArray<z.ZodObject<{
-        value: z.ZodEnum<{
-            compact_accept: "compact_accept";
-            compact_keep: "compact_keep";
-        }>;
-        label: z.ZodString;
-    }, z.core.$strip>>;
-    title: z.ZodString;
-    paragraphs: z.ZodArray<z.ZodString>;
-    id: z.ZodString;
-    revision: z.ZodString;
-    sessionId: z.ZodString;
-}, z.core.$strip>, z.ZodObject<{
-    kind: z.ZodLiteral<"cold_resume_quota">;
-    trigger: z.ZodEnum<{
-        idle: "idle";
-        resume: "resume";
-    }>;
-    preferredChoice: z.ZodOptional<z.ZodEnum<{
-        quota_resume: "quota_resume";
-        quota_new_conversation: "quota_new_conversation";
-    }>>;
-    choices: z.ZodArray<z.ZodObject<{
-        value: z.ZodEnum<{
-            quota_resume: "quota_resume";
-            quota_new_conversation: "quota_new_conversation";
-        }>;
-        label: z.ZodString;
-        description: z.ZodOptional<z.ZodString>;
-    }, z.core.$strip>>;
-    title: z.ZodString;
-    paragraphs: z.ZodArray<z.ZodString>;
-    id: z.ZodString;
-    revision: z.ZodString;
-    sessionId: z.ZodString;
-}, z.core.$strip>, z.ZodObject<{
-    kind: z.ZodLiteral<"newer_model_inline">;
-    ansi: z.ZodString;
-    title: z.ZodString;
-    paragraphs: z.ZodArray<z.ZodString>;
-    id: z.ZodString;
-    revision: z.ZodString;
-    sessionId: z.ZodString;
-}, z.core.$strip>, z.ZodObject<{
-    kind: z.ZodLiteral<"newer_model_offer">;
-    choices: z.ZodArray<z.ZodObject<{
-        value: z.ZodEnum<{
-            newer_keep: "newer_keep";
-            newer_accept: "newer_accept";
-        }>;
-        label: z.ZodString;
-    }, z.core.$strip>>;
-    title: z.ZodString;
-    paragraphs: z.ZodArray<z.ZodString>;
-    id: z.ZodString;
-    revision: z.ZodString;
-    sessionId: z.ZodString;
-}, z.core.$strip>, z.ZodObject<{
-    kind: z.ZodLiteral<"resume_return">;
-    choices: z.ZodArray<z.ZodObject<{
-        value: z.ZodEnum<{
-            resume_compact: "resume_compact";
-            resume_continue: "resume_continue";
-            resume_never: "resume_never";
-        }>;
-        label: z.ZodString;
-    }, z.core.$strip>>;
-    title: z.ZodString;
-    paragraphs: z.ZodArray<z.ZodString>;
-    id: z.ZodString;
-    revision: z.ZodString;
-    sessionId: z.ZodString;
-}, z.core.$strip>, z.ZodObject<{
-    kind: z.ZodLiteral<"goal_proposal">;
-    choices: z.ZodArray<z.ZodObject<{
-        value: z.ZodEnum<{
-            goal_decline: "goal_decline";
-            goal_accept: "goal_accept";
-        }>;
-        label: z.ZodString;
-    }, z.core.$strip>>;
-    title: z.ZodString;
-    paragraphs: z.ZodArray<z.ZodString>;
-    id: z.ZodString;
-    revision: z.ZodString;
-    sessionId: z.ZodString;
-}, z.core.$strip>, z.ZodObject<{
-    kind: z.ZodLiteral<"auto_mode_server_fallback">;
-    helpUrl: z.ZodString;
-    title: z.ZodString;
-    paragraphs: z.ZodArray<z.ZodString>;
-    id: z.ZodString;
-    revision: z.ZodString;
-    sessionId: z.ZodString;
-}, z.core.$strip>, z.ZodObject<{
-    kind: z.ZodLiteral<"plugin_hint">;
-    pluginName: z.ZodString;
-    marketplaceName: z.ZodString;
-    sourceCommand: z.ZodString;
-    choices: z.ZodArray<z.ZodObject<{
-        value: z.ZodEnum<{
-            disable: "disable";
-            yes: "yes";
-            no: "no";
-        }>;
-        label: z.ZodString;
-    }, z.core.$strip>>;
-    title: z.ZodString;
-    paragraphs: z.ZodArray<z.ZodString>;
-    id: z.ZodString;
-    revision: z.ZodString;
-    sessionId: z.ZodString;
-}, z.core.$strip>, z.ZodObject<{
-    kind: z.ZodLiteral<"lsp_recommendation">;
-    pluginName: z.ZodString;
-    marketplaceName: z.ZodString;
-    fileExtension: z.ZodString;
-    choices: z.ZodArray<z.ZodObject<{
-        value: z.ZodEnum<{
-            never: "never";
-            disable: "disable";
-            yes: "yes";
-            no: "no";
-        }>;
-        label: z.ZodString;
-    }, z.core.$strip>>;
-    title: z.ZodString;
-    paragraphs: z.ZodArray<z.ZodString>;
-    id: z.ZodString;
-    revision: z.ZodString;
-    sessionId: z.ZodString;
-}, z.core.$strip>], "kind">;
-
-type ClaudeNativePlanDialog = z.infer<typeof ClaudeNativePlanDialogSchema>;
-
-interface ClaudeNativePlanDialogResponse {
-    id: string;
-    revision: string;
-    sessionId: string;
-    choice: string;
-    feedback?: string;
-    plan?: string;
-}
-
-/** Frozen native plan choices; the host never supplies permission updates or reset state. */
-declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
-    id: z.ZodString;
-    revision: z.ZodString;
-    sessionId: z.ZodString;
-    requestId: z.ZodString;
-    toolName: z.ZodEnum<{
-        EnterPlanMode: "EnterPlanMode";
-        ExitPlanMode: "ExitPlanMode";
-    }>;
-    presentation: z.ZodObject<{
-        plan: z.ZodString;
-        planFilePath: z.ZodOptional<z.ZodString>;
-        initialChoice: z.ZodString;
-        empty: z.ZodBoolean;
-        withheld: z.ZodBoolean;
-        choices: z.ZodArray<z.ZodObject<{
-            value: z.ZodString;
-            label: z.ZodString;
-            mode: z.ZodEnum<{
-                default: "default";
-                plan: "plan";
-                auto: "auto";
-                acceptEdits: "acceptEdits";
-                bypassPermissions: "bypassPermissions";
-            }>;
-            clearContext: z.ZodBoolean;
-        }, z.core.$strip>>;
-    }, z.core.$strip>;
-    reason: z.ZodOptional<z.ZodString>;
-    input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
-}, z.core.$strip>;
-
-/** Presence matters: an explicit default config path selects a different native Keychain namespace. */
-interface ClaudeNativeProfile {
-    configDir?: string;
-    secureStorageConfigDir?: string;
-}
-
-type ClaudeNativeQuestionDialog = z.infer<typeof ClaudeNativeQuestionDialogSchema>;
-
-interface ClaudeNativeQuestionDialogResponse {
-    id: string;
-    revision: string;
-    sessionId: string;
-    answer: Record<string, unknown>;
-    renderToken?: string;
-    draftStarted?: boolean;
-}
-
-/** Native owns the shown card and answer admission, including richer form fields. */
-declare const ClaudeNativeQuestionDialogSchema: z.ZodObject<{
-    id: z.ZodString;
-    revision: z.ZodString;
-    sessionId: z.ZodString;
-    requestId: z.ZodString;
-    toolName: z.ZodLiteral<"AskUserQuestion">;
-    shownInput: z.ZodRecord<z.ZodString, z.ZodUnknown>;
-    presentation: z.ZodObject<{
-        notice: z.ZodOptional<z.ZodString>;
-        previewFormat: z.ZodNullable<z.ZodString>;
-        extendedQuestions: z.ZodBoolean;
-        optionalDescriptions: z.ZodBoolean;
-        previews: z.ZodArray<z.ZodObject<{
-            question: z.ZodString;
-            option: z.ZodString;
-            kind: z.ZodEnum<{
-                empty: "empty";
-                full: "full";
-                withheld: "withheld";
-            }>;
-            markdown: z.ZodOptional<z.ZodString>;
-            html: z.ZodOptional<z.ZodString>;
-        }, z.core.$strip>>;
-    }, z.core.$strip>;
-}, z.core.$strip>;
-
-interface ClaudeNativeQuestionHoldRequest {
-    id: string;
-    revision: string;
-    sessionId: string;
-    clientId: string;
-    renderToken: string;
-}
-
-type ClaudeNativeQuestionRender = z.infer<typeof ClaudeNativeQuestionRenderSchema>;
-
-interface ClaudeNativeQuestionRenderRequest {
-    id: string;
-    revision: string;
-    sessionId: string;
-    clientId: string;
-    viewport?: {
-        columns: number;
-        rows: number;
-        isFullscreen?: boolean;
-    };
-}
-
-declare const ClaudeNativeQuestionRenderSchema: z.ZodObject<{
-    tree: z.ZodUnknown;
-    props: z.ZodRecord<z.ZodString, z.ZodUnknown>;
-    rewritten: z.ZodBoolean;
-    hooked: z.ZodBoolean;
-    question: z.ZodObject<{
-        token: z.ZodString;
-        dialogId: z.ZodString;
-        revision: z.ZodString;
-        shownInput: z.ZodRecord<z.ZodString, z.ZodUnknown>;
-        presentation: z.ZodObject<{
-            notice: z.ZodOptional<z.ZodString>;
-            previewFormat: z.ZodNullable<z.ZodString>;
-            extendedQuestions: z.ZodBoolean;
-            optionalDescriptions: z.ZodBoolean;
-            previews: z.ZodArray<z.ZodObject<{
-                question: z.ZodString;
-                option: z.ZodString;
-                kind: z.ZodEnum<{
-                    empty: "empty";
-                    full: "full";
-                    withheld: "withheld";
-                }>;
-                markdown: z.ZodOptional<z.ZodString>;
-                html: z.ZodOptional<z.ZodString>;
-            }, z.core.$strip>>;
-        }, z.core.$strip>;
-    }, z.core.$strip>;
-}, z.core.$loose>;
-
-interface ClaudeNativeSessionMetadata {
-    cwd: string;
-    model: string;
-    modelSelection?: string;
-    turns: number;
-    startedAt: number;
-    totalCostUsd?: number;
-    permissionMode?: PermissionMode;
-    prePlanMode?: PermissionMode;
-}
-
-interface ClaudeNativeSubmissionReceipt {
-    sessionId: string;
-    uuid: string;
-    text: string;
-}
-
-interface ClaudeNativeTaskDetails {
-    mcp?: ClaudeNativeMcpTaskInfo;
-    shell?: {
-        command: string;
-        commandTruncated: boolean;
-        cwd?: string;
-        output: string;
-        totalBytes: number;
-        truncated: boolean;
-    };
-    handback?: ClaudeAgentHandback;
-    workflow?: {
-        settled: boolean;
-        canPause: boolean;
-        canResume: boolean;
-        canStop: boolean;
-        name?: string;
-        runId?: string;
-        agentCount: number;
-        phaseCount: number;
-        progress: {
-            type: 'workflow_agent' | 'workflow_log' | 'workflow_phase';
-            index?: number;
-            phaseIndex?: number;
-            tokens?: number;
-            toolCalls?: number;
-            title?: string;
-            kind?: string;
-            label?: string;
-            state?: string;
-            phaseTitle?: string;
-            agentId?: string;
-            model?: string;
-            error?: string;
-            resultPreview?: string;
-            message?: string;
-            cached?: boolean;
-            skipped?: boolean;
-            controlToken?: string;
-        }[];
-        logs: string[];
-        output?: string;
-        outputUnavailable: boolean;
-        truncated: boolean;
-    };
-    taskId: string;
-    name: string;
-    status: string;
-    canInput: boolean;
-    canMessage: boolean;
-    metadata?: {
-        prompt?: string;
-        promptTruncated: boolean;
-        model?: string;
-        effort?: string;
-        elapsedMs?: number;
-        tokenCount?: number;
-        toolUseCount?: number;
-        error?: string;
-        errorTruncated: boolean;
-    };
-    messages: {
-        uuid: string;
-        role: 'assistant' | 'user';
-        text: string;
-        renderText?: string;
-        apiMessageId?: string;
-        origin?: {
-            kind: string;
-            name?: string;
-            asUser?: boolean;
-            server?: string;
-        };
-    }[];
-    truncated: boolean;
-}
-
-interface ClaudeNativeTaskInputReceipt {
-    messageId: string;
-    mode: 'queued' | 'resumed';
-}
-
-type ClaudeNativeTerminalHandoffOptions = Pick<ClaudeNativeTerminalOptions, 'cliPath' | 'columns' | 'env' | 'prePlanMode' | 'rows' | 'signal'> & {
-    resume?: ClaudeNativeLaunch;
-};
-
-interface ClaudeNativeTerminalOptions {
-    sessionId: string;
-    cwd: string;
-    settings: ClaudeSettings;
-    permissionMode: PermissionMode;
-    prePlanMode?: PermissionMode;
-    cliPath?: string;
-    env?: NodeJS.ProcessEnv;
-    columns?: number;
-    rows?: number;
-    model?: string;
-    allowedTools?: string[];
-    disallowedTools?: string[];
-    appendSystemPrompt?: string;
-    addDir?: string[];
-    pluginDir?: string[];
-    channels?: string[];
-    signal?: AbortSignal;
-}
-
-interface ClaudeNativeTerminalOwner {
-    readonly backgroundObserver?: ClaudeBackgroundStatusObserver;
-    readonly backgroundInfo?: ClaudeBackgroundStatus;
-    /** Reviewed native UI operations; reverse hosts and the full UI owner are integrated separately. */
-    readonly uiTransport: ClaudeTerminalUiTransport;
-    readonly state: ClaudeNativeTerminalState;
-    readonly busy: boolean;
-    readonly modelSelection?: string;
-    readonly done: Promise<void>;
-    /** Register persistence work before the process exits; done waits for these callbacks. */
-    beforeRelease(listener: () => Promise<void>): void;
-    /** Raw native terminal bytes, sequenced independently of presentation metadata. */
-    readonly output: readonly {
-        sequence: number;
-        text: string;
-    }[];
-    readonly canReplyBackground: boolean;
-    replyBackground(jobId: string, pid: number, text: string): Promise<ClaudeBackgroundSession>;
-    refreshMcpInput(): Promise<void>;
-    operateMcpForm(request: ClaudeNativeMcpFormRequest): Promise<void>;
-    operateMcpUrl(request: ClaudeNativeMcpUrlRequest): Promise<void>;
-    cancelMcpInput(expected: Pick<ClaudeNativeMcpForm, 'id' | 'revision' | 'sessionId'>): Promise<void>;
-    refreshNotice(): Promise<void>;
-    answerNotice(response: ClaudeNativeNoticeResponse): Promise<void>;
-    readJournal(): Promise<ClaudeNativeJournalBatch>;
-    readonly records: readonly {
-        sequence: number;
-        record: ClaudeNativeTerminalRecord;
-    }[];
-    subscribe(listener: () => void): () => void;
-    input(ownerId: string, text: string): boolean;
-    resize(ownerId: string, columns: number, rows: number): boolean;
-    holdQuestionDialog(request: ClaudeNativeQuestionHoldRequest): Promise<void>;
-    renderQuestionDialog(request: ClaudeNativeQuestionRenderRequest): Promise<ClaudeNativeQuestionRender>;
-    getQuestionDialogs(): Promise<ClaudeNativeQuestionDialog[]>;
-    answerQuestionDialog(response: ClaudeNativeQuestionDialogResponse): Promise<void>;
-    getBashDialogs(): Promise<ClaudeNativeBashDialog[]>;
-    answerBashDialog(response: ClaudeNativeBashDialogResponse): Promise<void>;
-    getPlanDialogs(): Promise<ClaudeNativePlanDialog[]>;
-    answerPlanDialog(response: ClaudeNativePlanDialogResponse): Promise<void>;
-    getWorkflowDialogs(): Promise<ClaudeNativeWorkflowDialog[]>;
-    answerWorkflowDialog(response: ClaudeNativeWorkflowDialogResponse): Promise<void>;
-    getGenericToolPermissionDialogs(): Promise<ClaudeNativeGenericToolPermissionDialog[]>;
-    answerGenericToolPermissionDialog(response: ClaudeNativeGenericToolPermissionDialogResponse): Promise<void>;
-    getToolPermissionDialogs(): Promise<ClaudeNativeToolPermissionDialog[]>;
-    answerToolPermissionDialog(response: ClaudeNativeToolPermissionDialogResponse): Promise<void>;
-    getFileDialogs(): Promise<ClaudeNativeFileDialog[]>;
-    answerFileDialog(response: ClaudeNativeFileDialogResponse): Promise<void>;
-    operateTask(taskId: string, operation: 'background' | 'foreground' | 'input' | 'inspect' | 'pause_workflow' | 'resume_workflow' | 'retry_worker' | 'send' | 'skip_worker' | 'stop', text?: string, worker?: ClaudeNativeWorkflowWorkerTarget): Promise<{
-        paused?: boolean;
-        resume?: {
-            taskId: string;
-            runId: string;
-            requested: true;
-        };
-        worker?: ClaudeNativeWorkflowWorkerReceipt;
-        view?: {
-            taskId: string | null;
-        };
-        sent?: boolean;
-        input?: ClaudeNativeTaskInputReceipt;
-        stopped?: boolean;
-        details?: ClaudeNativeTaskDetails;
-    }>;
-    getMcpStatus(): Promise<ClaudeMcpStatus>;
-    controlMcpServer(serverName: string, operation: 'disable' | 'enable' | 'reconnect'): Promise<ClaudeMcpStatus>;
-    getModels(options?: {
-        includeUnsupportedModels?: boolean;
-    }): Promise<ClaudeModelCatalog>;
-    renameSession(title: string): Promise<{
-        title: string;
-        message: string;
-    }>;
-    setModel(model: string): Promise<{
-        selection: string;
-        notice: string;
-    }>;
-    setPermissionMode(mode: PermissionMode): Promise<PermissionMode>;
-    submit(text: string, images?: readonly ClaudeNativeImage[], phase?: 'Edit' | 'Plan'): Promise<ClaudeNativeSubmissionReceipt>;
-    close(): Promise<void>;
-    kill(): void;
-}
-
-interface ClaudeNativeTerminalRecord {
-    sessionId: string;
-    uuid: string;
-    door: string;
-    origin: Record<string, unknown>;
-    message: {
-        type: 'assistant' | 'attachment' | 'system' | 'user';
-        role?: 'assistant' | 'user';
-        isMeta?: true;
-        content: {
-            type: string;
-            [key: string]: unknown;
-        }[];
-    };
-}
-
-interface ClaudeNativeTerminalState {
-    /** Original background gesture is reviewing, deferring or forking; independent of process exit. */
-    handoffPending?: boolean;
-    /** Available after the native dialog store has been observed; retained through owned shutdown. */
-    messageRetirements?: ClaudeNativeMessageRetirements;
-    mcpUrl?: ClaudeNativeMcpUrl;
-    mcpForm?: ClaudeNativeMcpForm;
-    notice?: ClaudeNativeNotice;
-    /** Original native selected view, independent of the app thread. Undefined until observed. */
-    view?: ClaudeNativeTerminalView;
-    ownerId: string;
-    sessionId: string;
-    cwd: string;
-    status: 'error' | 'exited' | 'live' | 'starting';
-    /** Process attached to the PTY; may be a configured launcher. */
-    pid?: number;
-    /** Authenticated native executable beneath that launcher. */
-    nativePid?: number;
-    exitCode?: number;
-    continuation?: ClaudeNativeContinuation;
-    preview?: {
-        turnId: string;
-        output: string;
-    };
-    busy: boolean;
-    /** Native pending-work counts, independent of prompt submission readiness. */
-    activity?: {
-        pendingAgents: number;
-        pendingWorkflows: number;
-    };
-    focus?: ClaudeNativeFocusProjection;
-    lastTurn?: {
-        id: string;
-        reason: 'aborted' | 'answer' | 'error' | 'refusal';
-    };
-    session?: ClaudeNativeSessionMetadata;
-    billing?: ClaudeBillingObservation;
-    mainStatus?: string;
-    tasks: ClaudeNativeTerminalTask[];
-    problem?: string;
-}
-
-/** Native task ids and terminal owners are independent of apack thread ids. */
-interface ClaudeNativeTerminalTask {
-    kind?: 'managed' | 'mcp' | 'shell' | 'workflow';
-    nativeTaskType?: ClaudeNativeManagedTaskType;
-    mcp?: ClaudeNativeMcpTaskInfo;
-    settled?: boolean;
-    canPause?: boolean;
-    canResume?: boolean;
-    canStop?: boolean;
-    id: string;
-    name: string;
-    status: string;
-    statusText?: string;
-}
-
-type ClaudeNativeTerminalView = {
-    kind: 'main';
-    revision: number;
-} | {
-    kind: 'agent';
-    revision: number;
-    registryId: string;
-    taskId?: string;
-};
-
-type ClaudeNativeToolPermissionDialog = z.infer<typeof ClaudeNativeToolPermissionDialogSchema>;
-
-interface ClaudeNativeToolPermissionDialogResponse {
-    id: string;
-    revision: string;
-    sessionId: string;
-    toolName: 'Skill' | 'WebFetch';
-    choice: string;
-    choiceToken: string;
-    decision: 'allow' | 'deny';
-    feedback?: string;
-}
-
-/** Original WebFetch/Skill approval; only original choice tokens cross back to native. */
-declare const ClaudeNativeToolPermissionDialogSchema: z.ZodObject<{
-    id: z.ZodString;
-    revision: z.ZodString;
-    sessionId: z.ZodString;
-    requestId: z.ZodString;
-    toolName: z.ZodEnum<{
-        WebFetch: "WebFetch";
-        Skill: "Skill";
-    }>;
-    presentation: z.ZodObject<{
-        token: z.ZodString;
-        ready: z.ZodBoolean;
-        choices: z.ZodArray<z.ZodObject<{
-            value: z.ZodString;
-            label: z.ZodString;
-            decision: z.ZodEnum<{
-                deny: "deny";
-                allow: "allow";
-            }>;
-            feedback: z.ZodBoolean;
-        }, z.core.$strip>>;
-        title: z.ZodString;
-        details: z.ZodArray<z.ZodObject<{
-            label: z.ZodString;
-            value: z.ZodString;
-            ansi: z.ZodOptional<z.ZodString>;
-        }, z.core.$strip>>;
-    }, z.core.$strip>;
-    reason: z.ZodOptional<z.ZodString>;
-    input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
-}, z.core.$strip>;
-
-type ClaudeNativeWorkflowDialog = z.infer<typeof ClaudeNativeWorkflowDialogSchema>;
-
-interface ClaudeNativeWorkflowDialogResponse {
-    id: string;
-    revision: string;
-    sessionId: string;
-    decision: 'allow' | 'deny';
-    choice?: string;
-    choiceToken: string;
-    feedback?: string;
-}
-
-declare const ClaudeNativeWorkflowDialogSchema: z.ZodObject<{
-    id: z.ZodString;
-    revision: z.ZodString;
-    sessionId: z.ZodString;
-    requestId: z.ZodString;
-    toolName: z.ZodLiteral<"Workflow">;
-    presentation: z.ZodObject<{
-        token: z.ZodString;
-        ready: z.ZodBoolean;
-        withheld: z.ZodBoolean;
-        script: z.ZodOptional<z.ZodString>;
-        args: z.ZodOptional<z.ZodString>;
-        summary: z.ZodOptional<z.ZodArray<z.ZodObject<{
-            title: z.ZodString;
-            detail: z.ZodOptional<z.ZodString>;
-            prompts: z.ZodArray<z.ZodString>;
-        }, z.core.$strip>>>;
-        canEdit: z.ZodOptional<z.ZodBoolean>;
-        description: z.ZodOptional<z.ZodString>;
-        raw: z.ZodOptional<z.ZodBoolean>;
-        summaryUnavailable: z.ZodOptional<z.ZodBoolean>;
-        choices: z.ZodArray<z.ZodObject<{
-            value: z.ZodEnum<{
-                yes: "yes";
-                no: "no";
-                "yes-always": "yes-always";
-            }>;
-            label: z.ZodString;
-            decision: z.ZodEnum<{
-                deny: "deny";
-                allow: "allow";
-            }>;
-            feedback: z.ZodBoolean;
-        }, z.core.$strip>>;
-    }, z.core.$strip>;
-    reason: z.ZodOptional<z.ZodString>;
-    input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
-}, z.core.$strip>;
-
-interface ClaudeNativeWorkflowWorkerReceipt {
-    agentId: string;
-    operation: 'retry_worker' | 'skip_worker';
-    accepted: true;
-}
-
-interface ClaudeNativeWorkflowWorkerTarget {
-    agentId: string;
-    token: string;
-}
-
-interface ClaudeNestedAccounting {
-    toolCallCount: number;
-    mutatedPaths: string[];
-    hadErrors: boolean;
-}
-
-interface ClaudeNestedActivity {
-    /** Bind an observed root tool to its existing app activity, for this process lifetime. */
-    register(rootToolId: string, receive: (event: StreamLine) => void): void;
-    /** Drain facts once, at the next native result; output bindings remain registered. */
-    takeAccounting(): ClaudeNestedAccounting;
-}
-
-type ClaudeParentCommandResult = z.infer<typeof parentCommandResult>;
-
-type ClaudePlan = z.infer<typeof ClaudePlanSchema>;
-
-/** Native lookup does not create a plan; paths can be omitted by the native access mode. */
-declare const ClaudePlanSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
-    exists: z.ZodLiteral<false>;
-}, z.core.$loose>, z.ZodObject<{
-    exists: z.ZodLiteral<true>;
-    content: z.ZodString;
-    path: z.ZodOptional<z.ZodString>;
-}, z.core.$loose>], "exists">;
-
-interface ClaudePrintClientProjection {
-    managedSettingsDiagnostics(clientId: string): Promise<ClaudeManagedSettingsDiagnostic[]>;
-    prepareRender?(request: ClaudeUiRender): Promise<void>;
-    project(request: ClaudeUiRender, frame: ClaudeUiRenderResult): Promise<ClaudeUiRenderResult>;
-    action(request: (ClaudeUiPress | ClaudeUiInput | ClaudeUiSelect) & {
-        subtype: string;
-    }): Promise<unknown | undefined>;
-    event(request: {
-        client_id: string;
-        id: string;
-        sequence: number;
-        event: ClaudeUiClientInput;
-    }): Promise<unknown>;
-    release(request: {
-        client_id: string;
-        component: string;
-        instance_id: string;
-        instance_revision: number;
-    }): Promise<{
-        released: boolean;
-    }>;
-    detach(clientId: string): Promise<void>;
-    prompt?(clientId: string, decorations: NonNullable<ClaudePromptHostFill['decorations']>): Promise<NonNullable<ClaudePromptHostFill['decorations']>>;
-}
-
-type ClaudePromptCompletionReply = {
-    revision: number;
-    status: 'ready';
-    result: ClaudeUiPromptCompletions;
-} | {
-    revision: number;
-    status: 'error';
-    message: string;
-};
-
-type ClaudePromptCompletionRequest = Omit<ClaudeUiPromptAutocomplete, 'client_id' | 'surface'> & {
-    revision: number;
-};
-
-type ClaudePromptEdit = Omit<ClaudeUiPromptEdit, 'client_id' | 'surface'> & {
-    revision: number;
-};
-
-interface ClaudePromptHost {
-    available?(): boolean;
-    read(signal: AbortSignal, expiresAt: number): Promise<ClaudePromptHostBox | undefined>;
-    fill(input: ClaudePromptHostFill, signal: AbortSignal, expiresAt: number): Promise<boolean>;
-    suggest?(text: string, signal: AbortSignal, expiresAt: number): Promise<boolean>;
-    selection?(signal: AbortSignal, expiresAt: number): Promise<ClaudeUiSelection | undefined>;
-    copy?(text: string, signal: AbortSignal, expiresAt: number): Promise<boolean>;
-}
-
-type ClaudePromptHostBox = z.infer<typeof box>;
-
-type ClaudePromptHostFill = z.infer<typeof fill>;
-
-type ClaudePromptHostRequest = {
-    requestId: string;
-    revision: number;
-    expiresAt: number;
-} & ({
-    kind: 'read';
-} | {
-    kind: 'fill';
-    input: ClaudePromptHostFill;
-} | {
-    kind: 'suggest';
-    text: string;
-} | {
-    kind: 'copy';
-    text: string;
-} | {
-    kind: 'selection';
-    replyUrl: string;
-});
-
-type ClaudePromptHostResponse = {
-    requestId: string;
-} & ({
-    kind: 'read';
-    box?: ClaudePromptHostBox;
-} | {
-    kind: 'fill';
-    filled: boolean;
-} | {
-    kind: 'suggest';
-    shown: boolean;
-} | {
-    kind: 'copy';
-    copied: boolean;
-} | {
-    kind: 'selection';
-    submitted: boolean;
-});
-
-type ClaudePromptReply = {
-    revision: number;
-    status: 'applied';
-    frame: ClaudeUiPromptFrame;
-} | {
-    revision: number;
-    status: 'error';
-    message: string;
-};
-
-interface ClaudeQuestionAnswer {
-    answers?: Record<string, string | string[]>;
-    annotations?: Record<string, {
-        preview?: string;
-        notes?: string;
-    }>;
-    response?: string;
-    followUp?: boolean;
-}
-
-type ClaudeQuestionPresentation = z.infer<typeof ClaudeQuestionPresentationSchema>;
-
-declare const ClaudeQuestionPresentationSchema: z.ZodObject<{
-    notice: z.ZodOptional<z.ZodString>;
-    previewFormat: z.ZodNullable<z.ZodString>;
-    extendedQuestions: z.ZodBoolean;
-    optionalDescriptions: z.ZodBoolean;
-    previews: z.ZodArray<z.ZodObject<{
-        question: z.ZodString;
-        option: z.ZodString;
-        kind: z.ZodEnum<{
-            empty: "empty";
-            full: "full";
-            withheld: "withheld";
-        }>;
-        markdown: z.ZodOptional<z.ZodString>;
-        html: z.ZodOptional<z.ZodString>;
-    }, z.core.$strip>>;
-}, z.core.$strip>;
-
-type ClaudeRateLimitInfo = z.infer<typeof ClaudeRateLimitInfoSchema>;
-
-/** Native observations describe a completed request, never a promise about the next bill. */
-declare const ClaudeRateLimitInfoSchema: z.ZodObject<{
-    status: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    rateLimitType: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    resetsAt: z.ZodOptional<z.ZodNullable<z.ZodNumber>>;
-    isUsingOverage: z.ZodOptional<z.ZodNullable<z.ZodBoolean>>;
-    overageStatus: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    overageDisabledReason: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-}, z.core.$loose>;
-
-interface ClaudeSessionArtifactContent {
-    /** Claude CLI session id (empty string until the first system/init event). */
-    sessionId: string;
-    /** Model name reported by the CLI ("claude-sonnet-4-6" etc.). */
-    model: string;
-    /** Working directory the CLI is running in. */
-    cwd: string;
-    /** Epoch ms when the session artifact was created. */
-    startedAt: number;
-    /** Epoch ms of the most recent turn. */
-    lastTurnAt: number;
-    /** Number of turns executed in this session. */
-    turns: number;
-    /** Running cost total in USD across all turns. */
-    totalCostUsd: number;
-    /** High-level chat state. Drives the status indicator and pause button. */
-    chatState: 'idle' | 'paused' | 'working';
-    /** Total tool calls across all turns in this session. */
-    toolCallCount: number;
-    /** Last 3 tools executed (rolling window, most recent last). */
-    recentTools?: Array<{
-        name: string;
-        summary: string;
-        at: number;
-    }>;
-    /**
-     * Permission policy for the next turn. Mutated by the user via the
-     * session artifact's segmented control in the right panel and read by
-     * `chat.ts` at action entry. The three useful values are:
-     *   - `'default'` — CLI emits `can_use_tool` per Edit/Write/Bash (Ask mode)
-     *   - `'acceptEdits'` — CLI auto-approves Edit/Write (Auto mode); Bash still prompts
-     *   - `'plan'` — read-only; CLI produces a plan, makes no file changes
-     * Other `PermissionMode` variants are allowed by the type but not
-     * surfaced in the UI. Optional for backwards compat with artifacts
-     * persisted before this field existed; readers coalesce to `'default'`.
-     */
-    permissionMode?: PermissionMode;
-    /** Threshold percentages that have already fired an alert (avoids re-alerting). */
-    alertedThresholds?: number[];
-    /** Full context usage breakdown from CLI `/context` query (populated after each turn). */
-    contextUsage?: {
-        model: string;
-        totalTokens: number;
-        maxTokens: number;
-        percentage: number;
-        categories: Array<{
-            name: string;
-            tokens: number;
-            percentage: number;
-        }>;
-        memoryFiles?: Array<{
-            type: string;
-            path: string;
-            tokens: number;
-        }>;
-        skills?: Array<{
-            name: string;
-            source: string;
-            tokens: number;
-        }>;
-    };
-}
-
-interface ClaudeSessionContextOptions extends Pick<QueryOptions, 'cliPath' | 'env' | 'signal'> {
-    sessionId: string;
-    cwd: string;
-}
-
-interface ClaudeSessionFileRewindOptions extends Pick<QueryOptions, 'cliPath' | 'env' | 'signal'> {
-    sessionId: string;
-    userMessageId: string;
-    cwd: string;
-}
-
-interface ClaudeSessionPlanOptions extends Pick<QueryOptions, 'cliPath' | 'env' | 'signal'> {
-    sessionId: string;
-    cwd: string;
-}
-
-interface ClaudeSessionResumeTargetOptions extends Pick<QueryOptions, 'cliPath' | 'env' | 'signal'> {
-    sessionId: string;
-    messageUuid: string;
-    cwd: string;
-}
-
-type ClaudeSettings = z.infer<typeof ClaudeSettingsSchema>;
-
-type ClaudeSettingsOperation = z.infer<typeof claudeSettingsOperation>;
-
-/** Native merged settings and source attribution; backend-only, never log or publish the values. */
-declare const ClaudeSettingsSchema: z.ZodObject<{
-    effective: z.ZodRecord<z.ZodString, z.ZodUnknown>;
-    sources: z.ZodArray<z.ZodObject<{
-        source: z.ZodString;
-        settings: z.ZodRecord<z.ZodString, z.ZodUnknown>;
-    }, z.core.$loose>>;
-    applied: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
-}, z.core.$loose>;
-
-type ClaudeSettingsSnapshot = z.infer<typeof claudeSettingsSnapshot>;
-
-type ClaudeSettingsView = {
-    requestId: string;
-    status: 'error' | 'pending' | 'ready';
-    snapshot?: ClaudeSettingsSnapshot;
-    problem?: string;
-    savedKey?: string;
-};
-
-interface ClaudeTerminalStopState {
-    ownerId: string;
-    revision: number;
-    status: 'done' | 'error' | 'pending';
-    problem?: string;
-}
-
-interface ClaudeTerminalSubmissionState {
-    ownerId: string;
-    revision: number;
-    status: 'accepted' | 'pending' | 'rejected';
-    receipt?: ClaudeNativeSubmissionReceipt;
-    command?: ClaudeParentCommandResult;
-    problem?: string;
-}
-
-interface ClaudeTerminalTaskState {
-    ownerId: string;
-    taskId: string;
-    revision: number;
-    operation: 'background' | 'foreground' | 'input' | 'inspect' | 'pause_workflow' | 'resume_workflow' | 'retry_worker' | 'send' | 'skip_worker' | 'stop';
-    status: 'done' | 'error' | 'pending';
-    view?: {
-        taskId: string | null;
-    };
-    paused?: boolean;
-    resume?: {
-        taskId: string;
-        runId: string;
-        requested: true;
-    };
-    worker?: ClaudeNativeWorkflowWorkerReceipt;
-    input?: ClaudeNativeTaskInputReceipt;
-    sent?: boolean;
-    details?: ClaudeNativeTaskDetails;
-    problem?: string;
-}
-
-interface ClaudeTerminalUiTransport {
-    readonly promptHosts: Pick<ReturnType<typeof createClaudePromptHosts>, 'answers' | 'detach' | 'register'>;
-    request(value: Record<string, unknown> & {
-        subtype: string;
-    }): Promise<unknown>;
-    subscribe(listener: (event: Record<string, unknown>) => void): () => void;
-}
-
-type ClaudeTerminalViewReply = ClaudeTerminalViewSnapshot & {
-    type: 'CLAUDE_TERMINAL_STATE';
-    threadId: string;
-    mountId: string;
-};
-
-type ClaudeTerminalViewRequest = {
-    threadId: string;
-    mountId: string;
-} & ({
-    type: 'CLAUDE_TERMINAL_MOUNT';
-} | {
-    type: 'CLAUDE_TERMINAL_UNMOUNT';
-} | {
-    type: 'CLAUDE_TERMINAL_OPEN';
-} | {
-    type: 'CLAUDE_TERMINAL_CANCEL_OPEN';
-    openingId: string;
-} | {
-    type: 'CLAUDE_TERMINAL_SUBMIT';
-    ownerId: string;
-    revision: number;
-    text: string;
-    references?: MessageReferences;
-    phase?: 'Edit' | 'Plan';
-} | {
-    type: 'CLAUDE_TERMINAL_INPUT';
-    ownerId: string;
-    text: string;
-} | {
-    type: 'CLAUDE_TERMINAL_RESIZE';
-    ownerId: string;
-    columns: number;
-    rows: number;
-} | ({
-    type: 'CLAUDE_TERMINAL_TASK';
-    ownerId: string;
-    revision: number;
-    taskId: string;
-} & ({
-    operation: 'background' | 'foreground' | 'inspect' | 'pause_workflow' | 'resume_workflow' | 'stop';
-} | {
-    operation: 'input' | 'send';
-    text: string;
-} | {
-    operation: 'retry_worker' | 'skip_worker';
-    worker: ClaudeNativeWorkflowWorkerTarget;
-})) | {
-    type: 'CLAUDE_TERMINAL_NOTICE';
-    ownerId: string;
-    notice: ClaudeNativeNoticeResponse;
-} | {
-    type: 'CLAUDE_TERMINAL_MCP_URL';
-    ownerId: string;
-    sequence: number;
-    request: ClaudeNativeMcpUrlRequest;
-} | {
-    type: 'CLAUDE_TERMINAL_MCP_FORM';
-    ownerId: string;
-    sequence: number;
-    request: ClaudeNativeMcpFormRequest;
-} | ({
-    type: 'CLAUDE_TERMINAL_BACKGROUND';
-    sessionId: string;
-    continuedInSessionId: string;
-    revision: number;
-} & (ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest | ClaudeBackgroundTurnInterruptRequest)) | {
-    type: 'CLAUDE_BACKGROUND_OPEN';
-    sessionId: string;
-    continuedInSessionId: string;
-    jobId: string;
-    revision: number;
-} | {
-    type: 'CLAUDE_BACKGROUND_INPUT';
-    attachmentId: string;
-    text: string;
-} | {
-    type: 'CLAUDE_BACKGROUND_RESIZE';
-    attachmentId: string;
-    columns: number;
-    rows: number;
-} | {
-    type: 'CLAUDE_BACKGROUND_CLOSE';
-    requestId: string;
-} | {
-    type: 'CLAUDE_TERMINAL_CLOSE';
-    ownerId: string;
-});
-
-type ClaudeTerminalViewSnapshot = {
-    backgroundInfo?: ClaudeBackgroundStatus;
-    canReplyBackground?: boolean;
-    attachment?: ClaudeBackgroundAttachmentView;
-    background?: ClaudeBackgroundSessionState;
-    mcpOperation?: {
-        sequence: number;
-        status: 'done' | 'error' | 'pending';
-        problem?: string;
-    };
-    noticeAnswer?: {
-        id: string;
-        revision: string;
-        status: 'done' | 'error' | 'pending';
-        problem?: string;
-    };
-    task?: ClaudeTerminalTaskState;
-    stop?: ClaudeTerminalStopState;
-    submission?: ClaudeTerminalSubmissionState;
-    state?: ClaudeNativeTerminalState;
-    opening: boolean;
-    openingId?: string;
-    cancelling?: boolean;
-    problem?: string;
-    output: {
-        sequence: number;
-        text: string;
-    }[];
-};
-
-type ClaudeTurnConsumer = (turn: ClaudeConversationTurn) => Promise<void>;
-
-type ClaudeUiActionKeyRequest = z.infer<typeof actionKeyRequest>;
-
-type ClaudeUiActionKeyState = z.infer<typeof actionKeys>;
-
-type ClaudeUiApprovalAnswer = z.infer<typeof ClaudeUiApprovalAnswerSchema>;
-
-/** App decisions carry original choice tokens; native owns their admission and effects. */
-declare const ClaudeUiApprovalAnswerSchema: z.ZodObject<{
-    approved: z.ZodBoolean;
-    cancelled: z.ZodOptional<z.ZodBoolean>;
-    reason: z.ZodOptional<z.ZodString>;
-    choice: z.ZodOptional<z.ZodString>;
-    choiceToken: z.ZodOptional<z.ZodString>;
-    prefix: z.ZodOptional<z.ZodString>;
-    plan: z.ZodOptional<z.ZodString>;
-}, z.core.$strict>;
-
-interface ClaudeUiApprovalFrame {
-    id: string;
-    control: ClaudeBackgroundApproval;
-    pending?: boolean;
-    problem?: string;
-}
-
-type ClaudeUiAttach = z.infer<typeof attach>;
-
-interface ClaudeUiBoxLayout {
-    position?: 'absolute' | 'relative';
-    top?: number;
-    bottom?: number;
-    left?: number;
-    right?: number;
-    flexDirection?: 'column' | 'column-reverse' | 'row' | 'row-reverse';
-    flexGrow?: number;
-    flexShrink?: number;
-    flexWrap?: 'nowrap' | 'wrap' | 'wrap-reverse';
-    alignItems?: 'center' | 'flex-end' | 'flex-start' | 'stretch';
-    alignSelf?: 'auto' | 'center' | 'flex-end' | 'flex-start';
-    justifyContent?: 'center' | 'flex-end' | 'flex-start' | 'space-around' | 'space-between' | 'space-evenly';
-    display?: 'flex' | 'none';
-    overflow?: 'hidden' | 'visible';
-    width?: number | string;
-    height?: number | string;
-    minWidth?: number | string;
-    minHeight?: number | string;
-    gap?: number | 'xs' | 'sm' | 'md' | 'lg' | 'xl';
-    columnGap?: ClaudeUiBoxLayout['gap'];
-    rowGap?: ClaudeUiBoxLayout['gap'];
-    margin?: ClaudeUiBoxLayout['gap'];
-    marginX?: ClaudeUiBoxLayout['gap'];
-    marginY?: ClaudeUiBoxLayout['gap'];
-    marginTop?: ClaudeUiBoxLayout['gap'];
-    marginBottom?: ClaudeUiBoxLayout['gap'];
-    marginLeft?: ClaudeUiBoxLayout['gap'];
-    marginRight?: ClaudeUiBoxLayout['gap'];
-    padding?: ClaudeUiBoxLayout['gap'];
-    paddingX?: ClaudeUiBoxLayout['gap'];
-    paddingY?: ClaudeUiBoxLayout['gap'];
-    paddingTop?: ClaudeUiBoxLayout['gap'];
-    paddingBottom?: ClaudeUiBoxLayout['gap'];
-    paddingLeft?: ClaudeUiBoxLayout['gap'];
-    paddingRight?: ClaudeUiBoxLayout['gap'];
-}
-
-interface ClaudeUiBoxPaint {
-    borderStyle?: string;
-    borderColor?: string;
-    borderDimColor?: boolean;
-    backgroundColor?: string;
-}
-
-interface ClaudeUiClientEvent {
-    id: string;
-    sequence: number;
-    event: ClaudeUiClientInput;
-}
-
-type ClaudeUiClientInput = z.infer<typeof clientInput>;
-
-type ClaudeUiComposerPlacement = z.infer<typeof composerPlacement>;
-
-type ClaudeUiControls = ReturnType<typeof createClaudeUiControls>;
-
-type ClaudeUiDiagnosticAttachment = z.infer<typeof diagnosticAttachment>;
-
-type ClaudeUiFieldEvent = {
-    actionId: string;
-    revision: number;
-    kind: 'change' | 'select' | 'submit';
-    value: string;
-};
-
-type ClaudeUiFocus = z.infer<typeof focus>;
-
-/** Opaque current-drawing focus identity; absence reports hold only, null selects the container. */
-type ClaudeUiFocusEvent = {
-    paneId?: string;
-    revision: number;
-    isHeld: boolean;
-    focusId?: string | null;
-    by: 'auto' | 'person';
-};
-
-type ClaudeUiFocusReply = {
-    paneId?: string;
-    revision: number;
-    moved: boolean;
-    focusId: string | null;
-    deny?: string;
-};
-
-type ClaudeUiFocusResult = z.infer<typeof focusResult>;
-
-/** Existing app tool data carried to a canonical native group's default drawing. */
-interface ClaudeUiGroupedTool {
-    id: string;
-    tool: string;
-    summary: string;
-    status: 'denied' | 'error' | 'ok' | 'running';
-    durationMs?: number;
-    outputSummary?: string;
-    nativeAgent?: {
-        id: string;
-        ownerId?: string;
-        sessionId?: string;
-        name: string;
-        status: string;
-        statusText?: string;
-    };
-    nativeResult?: {
-        uuid: string;
-        sessionId: string;
-    };
-    details?: {
-        input?: unknown;
-        output?: string;
-        error?: string;
-    };
-}
-
-interface ClaudeUiHover {
-    group?: string;
-    text?: Pick<ClaudeUiTextStyle, 'backgroundColor' | 'bold' | 'color' | 'dimColor' | 'inverse' | 'italic' | 'strikethrough' | 'underline'>;
-    paint?: ClaudeUiBoxPaint;
-    layout?: Pick<ClaudeUiBoxLayout, 'bottom' | 'display' | 'left' | 'right' | 'top'>;
-}
-
-type ClaudeUiIdeContext = z.infer<typeof ideContext>;
-
-type ClaudeUiInput = z.infer<typeof input>;
-
-type ClaudeUiMountRequest = {
-    type: 'CLAUDE_UI_MOUNT';
-    promptFocused: boolean;
-    threadId: string;
-    mountId: string;
-    resumeKey?: string;
-    nativeView?: ClaudeNativeAgentUiTarget;
-    backgroundView?: ClaudeBackgroundUiTarget;
-    messageIds?: string[];
-    userExpansion?: Record<string, boolean>;
-    blockExpansion?: Record<string, number[]>;
-};
-
-type ClaudeUiMountState = ({
-    status: 'connecting' | 'disconnected' | 'rendering';
-} | {
-    status: 'live';
-    tree: ClaudeUiNode;
-} | {
-    status: 'error';
-    message: string;
-}) & {
-    ide?: ClaudeUiIdeContext & {
-        actionId: string;
-    };
-    billing?: ClaudeBillingObservation;
-    actionKeys?: ClaudeUiActionKeyState;
-    promptPalette?: Record<string, string>;
-    agent?: ClaudeNativeTaskDetails;
-    agentProblem?: string;
-    gestureProblem?: string;
-    agentInput?: {
-        revision: number;
-        status: 'blocked' | 'command_done' | 'command_output' | 'confirmation' | 'deciding' | 'done' | 'error' | 'panel' | 'panel_done' | 'pending' | 'review';
-        panel?: {
-            id: string;
-            commandName: string;
-        };
-        backgroundReview?: ClaudeBackgroundReviewState;
-        settings?: ClaudeSettingsView;
-        output?: {
-            messageId: string;
-            commandName: string;
-            text: string;
-            isErrored: boolean;
-            outcome?: string;
-        };
-        receipt?: {
-            messageId: string;
-        };
-        command?: ClaudeNativeAgentCommandConfirmation;
-        decision?: 'cancel' | 'confirm';
-        review?: ClaudeNativeAgentInputReview;
-        problem?: string;
-    };
-    composer?: ClaudeUiTranscriptFrame[];
-    panes?: ClaudeUiPanePresentation;
-    scroll?: ClaudeUiScrollState;
-    notices?: ClaudeUiNotices;
-    managedSettingsDiagnostics?: ClaudeManagedSettingsDiagnostic[];
-    diagnostics?: (ClaudeUiDiagnosticAttachment & {
-        messageId: string;
-    })[];
-    transcriptMessages?: ClaudeUiTranscriptFrame[];
-    question?: ClaudeUiQuestionFrame;
-    approval?: ClaudeUiApprovalFrame;
-};
-
-type ClaudeUiNode = {
-    kind: 'image';
-    columns: number;
-    rows: number;
-    alt: string;
-    format: 'png' | 'rgba';
-    data: string;
-    width?: number;
-    height?: number;
-    plugin?: string;
-} | {
-    kind: 'raster';
-    columns: number;
-    rows: number;
-    nativeAnsi: string;
-    plugin?: string;
-} | {
-    kind: 'client';
-    id: string;
-    pointer: boolean;
-    keys: boolean;
-    layout?: Pick<ClaudeUiBoxLayout, 'flexGrow' | 'height' | 'width'>;
-    children: ClaudeUiNode[];
-    plugin?: string;
-} | {
-    kind: 'text';
-    hover?: ClaudeUiHover;
-    text: string;
-    children?: ClaudeUiNode[];
-    style?: ClaudeUiTextStyle;
-    plugin?: string;
-} | {
-    kind: 'svg';
-    source: string;
-    alt: string;
-    width?: number;
-    height?: number;
-    interactive: boolean;
-    plugin?: string;
-} | {
-    kind: 'link';
-    color?: string;
-    href?: string;
-    children: ClaudeUiNode[];
-    plugin?: string;
-} | {
-    kind: 'box';
-    scrollId?: string;
-    boxKey?: string | false;
-    hover?: ClaudeUiHover;
-    layout?: ClaudeUiBoxLayout;
-    paint?: ClaudeUiBoxPaint;
-    children: ClaudeUiNode[];
-    plugin?: string;
-} | {
-    kind: 'markdown';
-    formattingFallback?: boolean;
-    nativeAnsi?: string;
-    color?: string;
-    text: string;
-    dim: boolean;
-    actionId?: string;
-    pressableLinks?: string[];
-    plugin?: string;
-} | {
-    kind: 'code';
-    formattingFallback?: boolean;
-    color?: string;
-    nativeAnsi?: string;
-    source: string;
-    language?: string;
-    path?: string;
-    startLine?: number;
-    format: 'diff' | 'source';
-    wrap: 'truncate-end' | 'wrap';
-    plugin?: string;
-} | {
-    kind: 'button';
-    renderId?: string;
-    expanded?: boolean;
-    color?: string;
-    hotkeyColor?: string;
-    focusId?: string;
-    hover?: ClaudeUiHover;
-    label: string;
-    hotkey?: string;
-    children?: ClaudeUiNode[];
-    dimColor?: boolean;
-    variant?: 'primary' | 'secondary';
-    role?: 'dismiss';
-    autoFocus?: boolean;
-    actionId?: string;
-    plugin?: string;
-} | {
-    kind: 'input';
-    theme?: {
-        text: string;
-        inverseText: string;
-    };
-    focusId?: string;
-    actionId: string;
-    revision: number;
-    submitLabel: string;
-    label?: string;
-    placeholder?: string;
-    value: string;
-    rows: number;
-    autoFocus: boolean;
-    plugin?: string;
-} | {
-    kind: 'select';
-    theme?: {
-        text: string;
-        inverseText: string;
-    };
-    focusId?: string;
-    actionId: string;
-    revision: number;
-    label?: string;
-    value?: string;
-    options: {
-        value: string;
-        label: string;
-    }[];
-    autoFocus: boolean;
-    plugin?: string;
-} | {
-    kind: 'unsupported';
-    component: string;
-    plugin?: string;
-};
-
-type ClaudeUiNoticeEvent = {
-    kind: 'dismiss';
-    id: string;
-} | {
-    kind: 'hold';
-    id: string;
-    isHeld: boolean;
-};
-
-interface ClaudeUiNotices {
-    statuses: {
-        plugin: string;
-        text: string;
-    }[];
-    toasts: {
-        id: string;
-        plugin: string;
-        text: string;
-        title?: string;
-    }[];
-}
-
-type ClaudeUiPaneEvent = {
-    kind: 'close' | 'focus' | 'show';
-    id: string | null;
-} | {
-    kind: 'layout';
-    id: string;
-    columns: number;
-    rows: number;
-    offset: number;
-};
-
-interface ClaudeUiPanePresentation {
-    scroll?: ClaudeUiScrollState;
-    roster: ClaudeUiPaneRoster;
-    body: {
-        status: 'connecting' | 'error' | 'rendering';
-        message?: string;
-    } | {
-        status: 'live';
-        tree: ClaudeUiNode;
-    };
-}
-
-type ClaudeUiPaneRoster = z.infer<typeof paneRoster>;
-
-type ClaudeUiPress = z.infer<typeof press>;
-
-type ClaudeUiPromptAutocomplete = z.infer<typeof promptAutocomplete>;
-
-type ClaudeUiPromptCompletions = z.infer<typeof promptCompletions>;
-
-type ClaudeUiPromptEdit = z.infer<typeof promptEdit>;
-
-type ClaudeUiPromptFrame = z.infer<typeof promptFrame>;
-
-interface ClaudeUiQuestionFrame {
-    messageId: string;
-    id: string;
-    revision: string;
-    draftActionId: string;
-    token?: string;
-    pending?: boolean;
-    problem?: string;
-    shownInput?: Record<string, unknown>;
-    presentation?: ClaudeQuestionPresentation;
-    body: {
-        status: 'rendering';
-    } | {
-        status: 'live';
-        tree: ClaudeUiNode;
-    } | {
-        status: 'error';
-        message: string;
-    };
-}
-
-type ClaudeUiRender = z.infer<typeof render>;
-
-type ClaudeUiRenderResult = z.infer<typeof renderResult>;
-
-type ClaudeUiScroll = z.infer<typeof scroll>;
-
-interface ClaudeUiScrollEvent {
-    paneId?: string;
-    revision: number;
-    offset: number;
-    by: number;
-    rows: number;
-    contentRows: number;
-    pointer?: {
-        column: number;
-        row: number;
-    };
-    keyed: {
-        id: string;
-        top: number;
-        bottom: number;
-    }[];
-}
-
-interface ClaudeUiScrollState {
-    serial: number;
-    requestRevision?: number;
-    offset: number;
-    followEnd: boolean;
-}
-
-type ClaudeUiSelect = z.infer<typeof field>;
-
-type ClaudeUiSelection = z.infer<typeof selection>;
-
-type ClaudeUiTerminalPlacement = z.infer<typeof terminalPlacement>;
-
-interface ClaudeUiTextStyle {
-    wrap?: ClaudeUiTextWrap;
-    color?: string;
-    backgroundColor?: string;
-    size?: 'body' | 'caption' | 'footnote' | 'heading' | 'title';
-    weight?: 'bold' | 'medium' | 'regular' | 'semibold';
-    dir?: 'ltr' | 'rtl';
-    bold?: boolean;
-    italic?: boolean;
-    underline?: boolean;
-    strikethrough?: boolean;
-    mono?: boolean;
-    tabular?: boolean;
-    dimColor?: boolean;
-    inverse?: boolean;
-}
-
-type ClaudeUiTextWrap = 'end' | 'middle' | 'truncate' | 'truncate-end' | 'truncate-middle' | 'truncate-start' | 'wrap';
-
-type ClaudeUiToolGroup = z.infer<typeof toolGroup>;
-
-type ClaudeUiTranscriptFrame = ClaudeUiTranscriptRow & {
-    instanceRevision: number;
-    nativeHint?: boolean;
-    groupExpanded?: boolean;
-    displayText: string;
-    outputRewritten?: boolean;
-    engineOutput?: string;
-    body: {
-        status: 'error' | 'rendering';
-    } | {
-        status: 'live';
-        tree: ClaudeUiNode;
-    };
-};
-
-interface ClaudeUiTranscriptLayout {
-    component: 'ToolGroup' | 'ToolProgress' | 'ToolResult' | 'ToolUse';
-    uuid: string;
-    instanceRevision: number;
-    columns: number;
-}
-
-type ClaudeUiTranscriptRow = ClaudeUiTranscriptRowSource & ({
-    component: 'AssistantMessage';
-    isFirstOfReply: boolean;
-    isSummary?: false;
-} | {
-    component: 'AssistantMessage';
-    isFirstOfReply: boolean;
-    isSummary: true;
-    blockIndex: number;
-} | {
-    component: 'ToolUse';
-    blockIndex: number;
-    assistantUuid: string;
-    activityStatus: string;
-    resultUuid?: string;
-} | {
-    component: 'ToolProgress';
-    blockIndex: number;
-    assistantUuid: string;
-    activityStatus: string;
-    resultUuid?: string;
-} | {
-    component: 'ToolGroup';
-    blockIndex: number;
-    revision: string;
-    isExpanded: boolean;
-    isActive: boolean;
-    usesEngine: boolean;
-    tools: ClaudeUiGroupedTool[];
-    artifacts: {
-        artifactId: string;
-        label: string;
-    }[];
-} | {
-    component: 'ToolResult';
-    blockIndex: number;
-    assistantUuid: string;
-    resultUuid: string;
-    tool: string;
-    isErrored: boolean;
-} | {
-    component: 'CommandOutput';
-    isErrored: boolean;
-} | {
-    component: 'PromptHint' | 'SessionMode' | 'Spinner';
-    sourceRevision: string;
-} | {
-    component: 'InfoNotice' | 'TurnDuration';
-    sourceRevision: string;
-} | {
-    component: 'UserMessage';
-    origin: {
-        kind: string;
-        name?: string;
-        asUser?: boolean;
-        server?: string;
-    };
-    isExpanded: boolean;
-});
-
-interface ClaudeUiTranscriptRowSource {
-    producerRevision?: string;
-    messageId: string;
-    uuid: string;
-    sessionId: string;
-    text: string;
-    start: number;
-    end: number;
-}
-
-type ClaudeUiViewRequest = ({
-    type: 'CLAUDE_UI_KEY';
-    threadId: string;
-    mountId: string;
-    sequence: number;
-} & ClaudeUiActionKeyRequest) | {
-    type: 'CLAUDE_UI_AGENTS_GESTURE';
-    threadId: string;
-    mountId: string;
-    sequence: number;
-    revision: number;
-} | {
-    type: 'CLAUDE_UI_BACKGROUND_REVIEW';
-    threadId: string;
-    mountId: string;
-    revision: number;
-    panelId: string;
-    sourceRevision: string;
-    decision: 'cancel' | 'confirm';
-} | {
-    type: 'CLAUDE_UI_SETTINGS';
-    threadId: string;
-    mountId: string;
-    revision: number;
-    panelId: string;
-    requestId: string;
-    action: ClaudeSettingsOperation;
-} | {
-    type: 'CLAUDE_UI_COMMAND_PANEL';
-    threadId: string;
-    mountId: string;
-    revision: number;
-    panelId: string;
-    text?: string;
-} | {
-    type: 'CLAUDE_UI_COMMAND_DECISION';
-    threadId: string;
-    mountId: string;
-    revision: number;
-    commandId: string;
-    decision: 'cancel' | 'confirm';
-} | {
-    type: 'CLAUDE_UI_AGENT_INPUT';
-    threadId: string;
-    mountId: string;
-    revision: number;
-    text: string;
-} | ({
-    type: 'CLAUDE_PROMPT_HOST_RESPONSE';
-    threadId: string;
-    mountId: string;
-} & ClaudePromptHostResponse) | ({
-    type: 'CLAUDE_UI_FOCUS';
-    threadId: string;
-    mountId: string;
-} & ClaudeUiFocusEvent) | ({
-    type: 'CLAUDE_PROMPT_AUTOCOMPLETE';
-    threadId: string;
-    mountId: string;
-} & ClaudePromptCompletionRequest) | ({
-    type: 'CLAUDE_PROMPT_EDIT';
-    threadId: string;
-    mountId: string;
-} & ClaudePromptEdit) | ({
-    type: 'CLAUDE_UI_NOTICE';
-    threadId: string;
-    mountId: string;
-} & ClaudeUiNoticeEvent) | ({
-    type: 'CLAUDE_UI_TRANSCRIPT_LAYOUT';
-    threadId: string;
-    mountId: string;
-} & ClaudeUiTranscriptLayout) | ({
-    type: 'CLAUDE_UI_SCROLL';
-    threadId: string;
-    mountId: string;
-} & ClaudeUiScrollEvent) | ({
-    type: 'CLAUDE_UI_PANE';
-    threadId: string;
-    mountId: string;
-} & ClaudeUiPaneEvent) | ClaudeUiMountRequest | {
-    type: 'CLAUDE_UI_UNMOUNT';
-    threadId: string;
-    mountId: string;
-    resumeKey?: string;
-} | ({
-    type: 'CLAUDE_UI_CLIENT';
-    threadId: string;
-    mountId: string;
-} & ClaudeUiClientEvent) | ({
-    type: 'CLAUDE_UI_FIELD';
-    threadId: string;
-    mountId: string;
-} & ClaudeUiFieldEvent) | {
-    type: 'CLAUDE_UI_APPROVAL_ANSWER';
-    threadId: string;
-    mountId: string;
-    frameId: string;
-    answer: ClaudeUiApprovalAnswer;
-} | {
-    type: 'CLAUDE_UI_QUESTION_REJECT';
-    threadId: string;
-    mountId: string;
-    messageId: string;
-    token: string;
-} | {
-    type: 'CLAUDE_UI_QUESTION_ANSWER';
-    threadId: string;
-    mountId: string;
-    messageId: string;
-    token: string;
-    answer: ClaudeQuestionAnswer;
-} | {
-    type: 'CLAUDE_UI_PRESS';
-    threadId: string;
-    mountId: string;
-    actionId: string;
-    href?: string;
-};
-
 interface CliServiceType {
     git: {
         commit(message: string): Promise<void>;
@@ -3399,7 +551,8 @@ interface CliServiceType {
     };
     /**
      * Claude Code wrapper. Highlights only — the full surface (sessions, mcp,
-     * plugins, skills, …) is available from '#features/code/be/services/claude-code/index.ts'.
+     * surfaces, skills, …) is available via `import { claudeCode } from
+     * '#features/code/be/services/claude-code/index.ts'`.
      */
     /** Clear-cache resolve + exec test — same path as the Settings test button. */
     testCli(provider: string): Promise<{
@@ -3410,58 +563,15 @@ interface CliServiceType {
         error: string;
     }>;
     claudeCode: {
-        openBackgroundAttachment: typeof openBackgroundAttachment;
-        backgroundSession: typeof backgroundSession;
-        replyBackgroundSession: typeof replyBackgroundSession;
-        parseMcpElicitationForm: typeof parseMcpElicitationForm;
-        validateMcpElicitationForm: typeof validateMcpElicitationForm;
         query(opts: Omit<QueryOptions, 'cwd'> & {
             cwd?: string;
         }): Promise<QueryHandle>;
-        openConversation(key: string, launchKey: string, opts: Omit<QueryOptions, 'cwd' | 'prompt'> & {
-            cwd?: string;
-            accountedCostUsd?: number;
-        }, consumeAutonomous: ClaudeTurnConsumer): Promise<ClaudeConversation>;
-        getConversation(key: string): {
-            owner: ClaudeConversation;
-            launchKey: string;
-        } | undefined;
-        isConversationBusy(key: string): boolean;
-        isCurrentTurn(key: string, handle: QueryHandle): boolean;
-        closeIdleConversation(key: string): Promise<boolean>;
-        /** Read a saved session's native plan without a prompt or transcript writes. */
-        getPlan(opts: Omit<ClaudeSessionPlanOptions, 'cwd'> & {
-            cwd?: string;
-        }): Promise<ClaudePlan>;
-        /** Read a saved session's native context summary without a prompt or transcript writes. */
-        getContextUsage(opts: Omit<ClaudeSessionContextOptions, 'cwd'> & {
-            cwd?: string;
-        }): Promise<ClaudeContextUsage>;
-        /** Validate native fork/resume membership without a prompt or persisted fork. */
-        validateResumeTarget(opts: Omit<ClaudeSessionResumeTargetOptions, 'cwd'> & {
-            cwd?: string;
-        }): Promise<void>;
-        getFileRewindPreview(opts: Omit<ClaudeSessionFileRewindOptions, 'cwd'> & {
-            cwd?: string;
-        }): Promise<ClaudeFileRewind>;
-        rewindFiles(opts: Omit<ClaudeSessionFileRewindOptions, 'cwd'> & {
-            cwd?: string;
-        }): Promise<ClaudeFileRewind>;
-        /** Config root to pin before creating a conversation. No credentials are returned. */
-        profile(): ClaudeNativeProfile;
-        prepareOwnedProfileSetup(): Promise<{
-            command: string;
-            cwd: string;
-        }>;
         version(): Promise<string>;
-        authStatus(opts?: {
-            env?: NodeJS.ProcessEnv;
-        }): Promise<AuthStatus>;
+        authStatus(): Promise<AuthStatus>;
         listSessions(opts?: SessionListOptions): Promise<SessionInfo[]>;
         /** List sessions across ALL project directories (not just the configured cwd). */
         listAllSessions(opts?: {
             limit?: number;
-            env?: NodeJS.ProcessEnv;
         }): Promise<SessionInfo[]>;
         /**
          * Parse a session's JSONL transcript into an in-memory array of entries.
@@ -3482,12 +592,8 @@ interface CliServiceType {
         storeHandle(key: string, handle: QueryHandle): void;
         /** Retrieve a stored query handle by key (typically threadId). */
         getHandle(key: string): QueryHandle | undefined;
-        /** Release an owned turn; idle process controls remain available until close/teardown. */
+        /** Clear a stored handle (call on query end to avoid leaking references). */
         clearHandle(key: string): void;
-        /** Explicitly move an idle live conversation into its native terminal interface. */
-        openNativeTerminal(key: string, options?: ClaudeNativeTerminalHandoffOptions): Promise<ClaudeNativeTerminalOwner>;
-        getNativeLaunch(key: string): Promise<ClaudeNativeLaunch | undefined>;
-        getNativeTerminal(key: string): ClaudeNativeTerminalOwner | undefined;
         /**
          * Low-level one-shot CLI invocation. Used by `CC: Handle Revert` to run
          * `claude --resume <sid> --rewind-files <uuid>` for file-rewind on revert.
@@ -3497,44 +603,28 @@ interface CliServiceType {
             cwd?: string;
         }): Promise<ExecOnceResult>;
         /** Read the CLI's user-scope settings.json (~/.claude/settings.json). */
-        readSettings(opts?: {
-            env?: NodeJS.ProcessEnv;
-        }): Promise<Record<string, any>>;
+        readSettings(): Promise<Record<string, any>>;
         /** Write the CLI's user-scope settings.json (~/.claude/settings.json). */
-        writeSettings(settings: Record<string, any>, opts?: {
-            env?: NodeJS.ProcessEnv;
-        }): Promise<void>;
-        /** Native model discovery can run session hooks when a temporary process is explicitly requested. */
-        getModels(opts?: {
-            cwd?: string;
-            env?: NodeJS.ProcessEnv;
-            includeUnsupportedModels?: boolean;
-        }): Promise<ClaudeModelCatalog>;
+        writeSettings(settings: Record<string, any>): Promise<void>;
         /** List skill files from user (~/.claude/skills/) and project (.claude/skills/) dirs. */
-        listSkills(opts?: {
-            env?: NodeJS.ProcessEnv;
-        }): Promise<Array<{
+        listSkills(): Promise<Array<{
             name: string;
             scope: string;
             path: string;
         }>>;
         /** List memory/CLAUDE.md files from known locations. */
-        listMemoryFiles(opts?: {
-            env?: NodeJS.ProcessEnv;
-        }): Promise<Array<{
+        listMemoryFiles(): Promise<Array<{
             name: string;
             scope: string;
             path: string;
         }>>;
-        /** Rename a Claude Code session through the native process. */
+        /** Rename a Claude Code session by appending a metadata entry to its JSONL file. */
         renameSession(id: string, title: string, opts?: {
             cwd?: string;
-            env?: NodeJS.ProcessEnv;
         }): Promise<void>;
         /** Check whether a session JSONL file exists under the given (or default) project directory. */
         sessionExists(id: string, opts?: {
             cwd?: string;
-            env?: NodeJS.ProcessEnv;
         }): Promise<boolean>;
     };
     /** Codex CLI wrapper for one-shot tasks. */
@@ -3600,8 +690,6 @@ type CodeContext = {
     searchPrefillText: string;
     panelTerminalId: string | null;
     panelTerminalExpanded: boolean;
-    pendingClaudeProfileSetup?: string;
-    claudeProfileSetupError?: string;
     pendingTerminalTabIds?: string[];
     panelNavHistory: NavHistory<PanelType>;
 };
@@ -3612,8 +700,6 @@ type CodeContext = {
  * prefix — so they are spelled out, and each names the child that handles it.
  */
 type CodeInboxEvent = {
-    type: 'OPEN_CLAUDE_PROFILE_SETUP';
-} | {
     type: 'UPDATE_STATE';
     updates: Partial<CodeContext>;
 }
@@ -3630,9 +716,6 @@ type CodeInboxEvent = {
     command?: string;
 } | {
     type: 'explorer.SET_BASE_DIRECTORY';
-    path: string;
-} | {
-    type: 'explorer.OPEN_FILE';
     path: string;
 } | {
     type: 'codeActions.OPEN_ACTION';
@@ -3715,25 +798,6 @@ interface CollectionDTO {
     symlinkPath?: string;
 }
 
-type CommandLifecycleLine = z.infer<typeof CommandLifecycleLineSchema>;
-
-/** Native input queue lifecycle; command_uuid identifies the submitted user message. */
-declare const CommandLifecycleLineSchema: z.ZodObject<{
-    type: z.ZodLiteral<"command_lifecycle">;
-    command_uuid: z.ZodString;
-    state: z.ZodEnum<{
-        completed: "completed";
-        cancelled: "cancelled";
-        queued: "queued";
-        started: "started";
-        discarded: "discarded";
-        refused: "refused";
-    }>;
-    ran_ahead: z.ZodOptional<z.ZodLiteral<true>>;
-    uuid: z.ZodString;
-    session_id: z.ZodString;
-}, z.core.$loose>;
-
 interface CommitLogEntry {
     hash: string;
     shortHash: string;
@@ -3772,6 +836,15 @@ interface ConsumerHandlers {
     onApproval(method: string, requestId: number, params: any): void;
     /** Called when the app-server process exits unexpectedly. Consumer should clean up thread state. */
     onCrash?(error: string): void;
+    /**
+     * Called when this consumer is unregistered, so what a turn was holding is released.
+     *
+     * **Unregistering is one of the ways a turn ends, and the only one with no notification.** `killTurn`
+     * interrupts the turn and unregisters, so `turn/completed` never arrives and the consumer's own
+     * `finalize` never runs — which left the assistant message with a stale tail and no
+     * `responseTimestamp`. A consumer's writers have a lifetime, so the registration owns their release.
+     */
+    onUnregistered?(): void;
 }
 
 interface ContextReference {
@@ -4117,6 +1190,14 @@ declare namespace EARS {
         type Thread = typeof Thread;
         const Message = "Message";
         type Message = typeof Message;
+        const Block = "Block";
+        type Block = typeof Block;
+        const BlockText = "BlockText";
+        type BlockText = typeof BlockText;
+        const MessageText = "MessageText";
+        type MessageText = typeof MessageText;
+        const ToolEntry = "ToolEntry";
+        type ToolEntry = typeof ToolEntry;
         const Artifact = "Artifact";
         type Artifact = typeof Artifact;
         const Terminal = "Terminal";
@@ -4144,7 +1225,7 @@ declare namespace EARS {
         const Collection = "Collection";
         type Collection = typeof Collection;
     }
-    type Entity = Entity.Thread | Entity.Message | Entity.Artifact | Entity.Terminal | Entity.Note | Entity.BrowserTab | Entity.BrowserBookmark | Entity.SearchIndex | Entity.IndexedDoc | Entity.Flow | Entity.Node | Entity.Action | Entity.Prompt | Entity.Document | Entity.Collection;
+    type Entity = Entity.Thread | Entity.Message | Entity.Block | Entity.BlockText | Entity.MessageText | Entity.ToolEntry | Entity.Artifact | Entity.Terminal | Entity.Note | Entity.BrowserTab | Entity.BrowserBookmark | Entity.SearchIndex | Entity.IndexedDoc | Entity.Flow | Entity.Node | Entity.Action | Entity.Prompt | Entity.Document | Entity.Collection;
     type EntityId<E extends string = string> = _apackdev_ears.EARS.EntityId<E>;
     type RelationId = _apackdev_ears.EARS.RelationId;
     namespace RelKind {
@@ -4160,6 +1241,14 @@ declare namespace EARS {
         type COMPACTS = typeof COMPACTS;
         const BLOCKS = "blocks";
         type BLOCKS = typeof BLOCKS;
+        const HAS_BLOCK = "has_block";
+        type HAS_BLOCK = typeof HAS_BLOCK;
+        const HAS_TEXT = "has_text";
+        type HAS_TEXT = typeof HAS_TEXT;
+        const HAS_MESSAGE_TEXT = "has_message_text";
+        type HAS_MESSAGE_TEXT = typeof HAS_MESSAGE_TEXT;
+        const HAS_ENTRY = "has_entry";
+        type HAS_ENTRY = typeof HAS_ENTRY;
         const DUPLICATES = "duplicates";
         type DUPLICATES = typeof DUPLICATES;
         const CONTAINS = "contains";
@@ -4172,7 +1261,7 @@ declare namespace EARS {
         type PARENT_OF = typeof PARENT_OF;
     }
     /** Every relation kind this pack may link with: its own, its dependencies' and the SDK's */
-    const RELATION_KINDS: readonly ["has", "relates_to", "references", "forked_from", "compacts", "blocks", "duplicates", "contains", "transitions_to", "instance_of", "parent_of"];
+    const RELATION_KINDS: readonly ["has", "relates_to", "references", "forked_from", "compacts", "blocks", "has_block", "has_text", "has_message_text", "has_entry", "duplicates", "contains", "transitions_to", "instance_of", "parent_of"];
     type RelKind = (typeof RELATION_KINDS)[number];
     /** The relation kinds declared `weighted`, whose links take a weight: its own and its dependencies' */
     const WEIGHTED_KINDS: readonly [];
@@ -4216,19 +1305,11 @@ type EdgeEntity = FlowEdge;
 type Effort = z.infer<typeof EffortSchema>;
 
 declare const EffortSchema: z.ZodEnum<{
-    max: "max";
     low: "low";
     medium: "medium";
     high: "high";
-    xhigh: "xhigh";
+    max: "max";
 }>;
-
-type Endpoint = {
-    directory: string;
-    token: string;
-};
-
-type EntityId = EARS$2.EntityId;
 
 /** ── Brain-local types ──────────────────────────────────────────────────── */
 interface EventListenerEntity {
@@ -4262,9 +1343,11 @@ interface EventListenerEntity {
 interface ExecOnceOptions {
     cwd?: string;
     /**
-     * Merge overrides into the child environment, which is this process's minus everything the app set on it.
-     * ANTHROPIC_API_KEY is always removed, including an explicit override. Native file checkpointing defaults
-     * on only when its environment switch is unset.
+     * Override the env passed to the child. Defaults to a copy of `process.env`
+     * with `ANTHROPIC_API_KEY` removed so the CLI uses its own stored auth
+     * (`claude auth login`) instead of an env-var key meant for the server's
+     * LLM client. Pass an explicit object if you want no scrubbing — the
+     * helper assumes you know what you're doing and does not post-process it.
      */
     env?: NodeJS.ProcessEnv;
     /** Bytes piped to stdin. Pass `undefined` to leave stdin closed. */
@@ -4784,8 +1867,6 @@ type IncomingCodeEvents = IncomingExplorerEvents | IncomingSearchEvents | Incomi
  | {
     type: 'TEST_CLI_PROVIDER';
     provider: string;
-} | {
-    type: 'PREPARE_CLAUDE_PROFILE_SETUP';
 }
 /**
  * What a window's code surface starts from, asked as the shell starts it: answered with \`CODE_STARTED\`, and by the
@@ -5340,7 +2421,7 @@ type IncomingTerminalEvents = {
     terminalId: string;
 };
 
-type IncomingThreadsEvents = ClaudeTerminalViewRequest | ClaudeUiViewRequest | {
+type IncomingThreadsEvents = {
     type: 'CREATE_THREAD';
     topic: string;
     tags?: string[];
@@ -5357,10 +2438,6 @@ type IncomingThreadsEvents = ClaudeTerminalViewRequest | ClaudeUiViewRequest | {
     type: 'UPDATE_THREAD_STATUS';
     threadId: string;
     status: string;
-} | {
-    type: 'SET_CLAUDE_CHANNELS';
-    threadId: string;
-    channels: string[];
 } | {
     type: 'UPDATE_THREAD_FIELD';
     threadId: string;
@@ -5466,10 +2543,6 @@ type IncomingThreadsEvents = ClaudeTerminalViewRequest | ClaudeUiViewRequest | {
     type: 'DELETE_MESSAGE';
     messageId: string;
 } | {
-    type: 'SET_CLAUDE_PERMISSION_MODE';
-    threadId: string;
-    mode: PermissionMode;
-} | {
     type: 'FORWARD_BRAIN_EVENT';
     eventType: string;
     payload?: any;
@@ -5499,7 +2572,7 @@ interface KillNode extends NodeBase {
     nodeType: 'kill';
 }
 
-type KnownStreamLine = UserStreamLine | AssistantStreamLine | StreamEventLine | ToolProgressLine | SystemLine | RateLimitLine | ToolUseSummaryLine | ResultLine | ControlRequestLine | ControlResponseLine | ControlCancelLine | KeepAliveLine | CommandLifecycleLine | ParseErrorLine;
+type KnownStreamLine = UserStreamLine | AssistantStreamLine | StreamEventLine | ToolProgressLine | SystemLine | RateLimitLine | ToolUseSummaryLine | ResultLine | ControlRequestLine | ControlResponseLine | ControlCancelLine | KeepAliveLine | ParseErrorLine;
 
 interface LLMNode extends NodeBase {
     nodeType: 'llm';
@@ -5685,11 +2758,30 @@ type LogsSettings = SettingsOf<'logs'>;
 
 interface MessageEntity extends BaseEntity {
     entityType: EARS.Entity.Message;
+    /**
+     * What the message says, and **the field both of its indexes read**: the text index `searchMessages`
+     * ranks on (`search`), and the trigram index `containing` and `matching` answer from (`substrings`).
+     *
+     * **The trigram index has no caller in this repo, and is declared on purpose.** It was deleted once for
+     * exactly that reason, which cost a measurement to undo, so the reason it is here is here: it is the
+     * capability the Database console offers over a message's text, and what a reader would need before it
+     * could be written. Keeping it is a decision rather than an oversight
+     * (`docs/archive/plans/decisions.md`).
+     *
+     * It is affordable because a streamed reply is **appended** rather than rewritten: this field is written
+     * on folds and when the turn finishes, about eight times a turn instead of thirty, so maintaining both
+     * indexes costs ~9ms of a minute-long turn. Under the whole-field writes it replaced, the trigram index
+     * alone was ~61% of a turn's write time — so if this field ever goes back to being written whole, that
+     * is the figure to re-measure before assuming it is still cheap.
+     *
+     * A streaming message holds the compacted prefix here and the rest in `MessageText` children, so both
+     * indexes are behind by at most one fold until the turn ends.
+     */
     text: string;
     sender: 'assistant' | 'marker' | 'system' | 'user';
     timestamp: number;
     responseTimestamp?: number;
-    blocks?: BlockConfig[];
+    blocks?: StoredBlock[];
     /**
      * Response data for block-based interactions. See the `BlockResponse`
      * union above for the full set of observed shapes. Always narrow
@@ -5739,6 +2831,24 @@ interface MessageSearchResult {
     /** Whether the window starts after the text does, or ends before it */
     clippedStart: boolean;
     clippedEnd: boolean;
+}
+
+/**
+ * The next characters of a message's own text, from the offset they start at.
+ *
+ * **The last growing thing in a turn that was stored whole.** A message's `text` is one attribute, so
+ * every durable commit rewrote the whole reply and the cost grew with the turn — the shape `BlockText`
+ * removed for a block's text and `ToolEntry` for its tool calls. This is the same move for the message,
+ * and it is what lets the row's commit rate join the blocks' instead of being eight times slower to
+ * afford the rewrite.
+ *
+ * `Message.text` stays the authoritative field — it is the one the text index reads — holding the
+ * compacted prefix, with these carrying the tail. So `.search` is behind by at most one fold for a message
+ * still streaming, where it used to be behind by one commit; a finished message is indexed whole.
+ */
+interface MessageTextEntity {
+    at: number;
+    text: string;
 }
 
 /** What the flows surface starts from that isn't a row: the models a node may name */
@@ -5987,15 +3097,7 @@ type OutgoingBrowserEvents = {
     savedBookmarks: SavedBookmark[];
 };
 
-type OutgoingCodeEvents = {
-    type: 'CLAUDE_PROFILE_SETUP_PREPARED';
-    result: {
-        command: string;
-        cwd: string;
-    } | {
-        error: string;
-    };
-} | OutgoingExplorerEvents | OutgoingSearchEvents | OutgoingCommitEvents | OutgoingPullRequestEvents | OutgoingTerminalEvents | OutgoingActionsEvents | OutgoingPromptsEvents | {
+type OutgoingCodeEvents = OutgoingExplorerEvents | OutgoingSearchEvents | OutgoingCommitEvents | OutgoingPullRequestEvents | OutgoingTerminalEvents | OutgoingActionsEvents | OutgoingPromptsEvents | {
     type: 'CODE_STARTED';
     data: CodeConnectedData;
 }
@@ -6796,53 +3898,9 @@ type OutgoingTerminalEvents =
  * What the threads system sends. What it stores is its views (\`be/views.ts\`); what it sends is the answers to a
  * window's asks and writes, and the few notifications a flow sends a window, none of which carries a row.
  */
-type OutgoingThreadsEvents = {
-    type: 'CLAUDE_UI_KEY_RESULT';
-    threadId: string;
-    mountId: string;
-    sequence: number;
-    handled: boolean;
-    actionKeys?: ClaudeUiMountState['actionKeys'];
-} | {
-    type: 'CLAUDE_PERMISSION_MODE_RESULT';
-    threadId: string;
-    success: boolean;
-    reason?: string;
-} | ClaudeTerminalViewReply | {
-    type: 'CLAUDE_PROMPT_COMPLETIONS';
-    threadId: string;
-    mountId: string;
-    result: ClaudePromptCompletionReply;
-} | {
-    type: 'CLAUDE_PROMPT_STATE';
-    threadId: string;
-    mountId: string;
-    result: ClaudePromptReply;
-} | {
-    type: 'CLAUDE_PROMPT_HOST_REQUEST';
-    threadId: string;
-    mountId: string;
-    request: ClaudePromptHostRequest;
-} | {
-    type: 'CLAUDE_UI_FOCUS_STATE';
-    threadId: string;
-    mountId: string;
-    result: ClaudeUiFocusReply;
-} | {
-    type: 'CLAUDE_UI_STATE';
-    threadId: string;
-    mountId: string;
-    resumeKey: string;
-    attachmentId?: string;
-    state: ClaudeUiMountState;
-} | {
-    type: 'CLAUDE_UI_LEASE_EXPIRED';
-    threadId: string;
-    mountId: string;
-    resumeKey: string;
-}
+type OutgoingThreadsEvents = 
 /** The thread a \`CREATE_THREAD\` made, for the window that asked to mark */
- | {
+{
     type: 'THREAD_CREATED';
     id: EARS.EntityId;
 }
@@ -6892,7 +3950,7 @@ type OutgoingThreadsEvents = {
  | {
     type: 'MESSAGE_BLOCK_TEXT_APPENDED';
     messageId: EARS.EntityId;
-    block: string;
+    blockId: EARS.EntityId;
     at: number;
     text: string;
     done?: true;
@@ -6923,8 +3981,6 @@ type OutgoingThreadsEvents = {
 } | {
     type: 'SET_PHASE';
     phase: string;
-    threadId?: string;
-    source?: 'native';
 } | {
     type: 'FLASH_CHAT_STATE';
     threadId: string;
@@ -6938,6 +3994,10 @@ type OwnEntityShapes = {
         shortCode: ShortCode<'THR'>;
     };
     'Message': MessageEntity;
+    'Block': BlockEntity;
+    'BlockText': BlockTextEntity;
+    'MessageText': MessageTextEntity;
+    'ToolEntry': ToolEntryEntity;
     'Artifact': ArtifactEntity;
     'Terminal': TerminalEntity;
     'Note': NoteEntity;
@@ -7135,6 +4195,18 @@ type PermissionHandler = (request: CanUseToolRequest) => PermissionDecision | Pr
 type PermissionMode = z.infer<typeof PermissionModeSchema>;
 
 /**
+ * Type definitions + Zod schemas for the Claude Code stream-json wire protocol.
+ *
+ * The CLI is fast-moving and routinely adds fields; every object schema uses
+ * `.passthrough()` so unknown fields survive round-trips and we only validate
+ * the bits we actually read. Inferred TS types are exported next to each schema.
+ *
+ * Source of truth for field shapes: the stream-json writer at
+ * `src/cli/structuredIO.ts` and the SDK Zod schemas at
+ * `src/entrypoints/sdk/coreSchemas.ts` in the leaked Claude Code source.
+ */
+
+/**
  * Permission modes accepted by `claude --permission-mode`. Names match the
  * CLI's Commander validator exactly (see the leaked source at
  * `src/types/permissions.ts` or the error message the CLI prints when you
@@ -7148,11 +4220,11 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  */
 declare const PermissionModeSchema: z.ZodEnum<{
     default: "default";
-    plan: "plan";
-    auto: "auto";
     acceptEdits: "acceptEdits";
+    plan: "plan";
     bypassPermissions: "bypassPermissions";
     dontAsk: "dontAsk";
+    auto: "auto";
 }>;
 
 type Predicate = {
@@ -7258,27 +4330,44 @@ type QualifiedSurfaceEvents = Qualified<'default-setup', OwnSurfaceEvents> & Hos
 /** Every system this pack's code can send to, by ref: its own, its dependencies' and the host's. */
 type QualifiedSystemEvents = Qualified<'default-setup', PackSystemEvents> & HostSystemEvents;
 
+/**
+ * High-level streaming conversation API.
+ *
+ * `query()` spawns `claude -p` in stream-json mode, drives the control loop,
+ * and exposes two things to the caller:
+ *
+ *   - an async iterable of parsed stream events (everything except the
+ *     control-request traffic, which is handled internally)
+ *   - a `result` promise that resolves with the final normalised result
+ *
+ * Two modes, picked by whether an initial `prompt` is provided:
+ *
+ *  1. **Single-turn (default)**: pass `{ prompt }`. The wrapper writes the
+ *     turn, immediately EOFs stdin, and the CLI runs once + exits. Drain
+ *     `handle.events` in a `for await` and then `await handle.result`.
+ *     No cleanup needed — the child unwinds itself.
+ *
+ *  2. **Multi-turn (opt-in)**: pass `{ keepStdinOpen: true, prompt }` OR
+ *     pass no prompt. The wrapper leaves stdin open; the caller drives
+ *     follow-up turns via `handle.send(text)` and MUST call `handle.close()`
+ *     when done. Forgetting to close hangs the child until process exit.
+ *
+ * The implementation uses a fan-out: the raw NDJSON stream from the child is
+ * consumed once by an internal pump that (a) routes control requests to the
+ * control router and (b) pushes everything else into an async queue the
+ * public iterable reads from. This is the only way to share a single Readable
+ * between "internal logic" and "caller" without races.
+ */
+
 interface QueryHandle {
-    /** Exact native child identity for owned process handoff and cleanup verification. */
-    readonly pid: number | undefined;
-    /** Structured native UI controls; requires initialized ui_surface_v1 capability. */
-    readonly ui: ClaudeUiControls;
-    /** Native commands, models and capabilities, available before a model turn. */
-    readonly initialized: Promise<ClaudeInitialization>;
-    /** Explicit dryRun is required: preview and mutation have different effects. */
-    rewindFiles(userMessageId: string, options: {
-        dryRun: boolean;
-    }): Promise<ClaudeFileRewind>;
     /** Resolves with the session id as soon as the CLI emits `system/init`. */
     readonly sessionId: Promise<string>;
     /** Every non-control stream line, in order, until the child exits. */
     readonly events: AsyncIterable<StreamLine>;
-    /** Pending native task state when this result was emitted, independent of later buffered events. */
-    hasPendingBackgroundTasks(result: StreamLine): boolean;
-    /** First normalised result; later multi-turn results arrive through events. */
+    /** Final normalised result. Rejects on error result or non-zero exit. */
     readonly result: Promise<QueryResult>;
-    /** Write a user turn and return its host UUID. Lifecycle/replay events confirm native acceptance; throws when stdin is closed. */
-    send(text: string | UserInputMessage): string;
+    /** Send another user turn. No-op after close(). */
+    send(text: string | UserInputMessage): void;
     /**
      * Send a control_response back to the CLI for a surfaced control_request.
      * Only meaningful when `surfaceControlRequests: true` — in callback mode
@@ -7299,33 +4388,8 @@ interface QueryHandle {
         message?: string;
         updatedInput?: unknown;
     }): void;
-    /** Send an MCP form/URL answer through its distinct correlated native response channel. */
-    respondElicitation(requestId: string, response: ClaudeMcpElicitationAnswer): void;
-    /** Cancel an unsupported generic dialog through its native response channel. */
-    cancelUserDialog(requestId: string): void;
-    /** Cancel the current turn and await its native acknowledgement; optionally cancel queued inputs. */
-    interrupt(options?: {
-        cancelQueued?: boolean;
-    }): Promise<ClaudeInterruptReceipt>;
-    /** Rename the native session; an explicit ID protects against renaming a different session. */
-    renameSession(title: string, sessionId?: string): Promise<void>;
-    /** Read the current native plan without a model turn. */
-    getPlan(): Promise<ClaudePlan>;
-    /** Read live MCP server and tool status without a model turn. */
-    getMcpStatus(): Promise<ClaudeMcpStatus>;
-    controlMcpServer(serverName: string, operation: 'disable' | 'enable' | 'reconnect'): Promise<ClaudeMcpStatus>;
-    /** Read structured context usage; summary avoids per-category token-count API calls. */
-    getContextUsage(): Promise<ClaudeContextUsage>;
-    /** Descriptive native availability; custom IDs may be absent. Does not change selection. */
-    getModels(): Promise<ClaudeModelCatalog>;
-    /** Effective native settings for an explicit same-session terminal handoff. Backend only. */
-    getSettings(): Promise<ClaudeSettings>;
-    /** Acknowledges selection only; effective-model metadata comes from native turns. */
-    setModel(model: string): Promise<void>;
-    /** Change the running CLI policy and return its acknowledged permission mode. */
-    setPermissionMode(mode: PermissionMode): Promise<PermissionMode>;
-    /** Last native acknowledgement, initialized from the native handshake. */
-    getPermissionMode(): Promise<PermissionMode | undefined>;
+    /** Ask the CLI to cancel the current turn (interrupt control request). */
+    interrupt(): void;
     /** Close stdin and wait for the child to exit. */
     close(): Promise<void>;
     /** Force-terminate the child process. */
@@ -7340,22 +4404,18 @@ interface QueryNode extends NodeBase {
 }
 
 /**
- * Typed launch options exposed by this wrapper. Grouped by concern.
+ * Every option supported by `claude --print`. Grouped by concern.
  *
  * These translate 1:1 to CLI flags via `argsFromOptions()` — if you add a
  * field here, add the mapping there and a unit test covering it.
  */
 interface QueryOptions {
-    /** Native hook callbacks registered during initialization. */
-    hooks?: ClaudeHooks;
     prompt?: string | UserInputMessage;
     cwd?: string;
     env?: NodeJS.ProcessEnv;
     signal?: AbortSignal;
     cliPath?: string;
     model?: string;
-    /** Offer account models not yet recognized by the pinned native runtime. Explicit opt-in. */
-    includeUnsupportedModels?: boolean;
     fallbackModel?: string;
     effort?: Effort;
     thinking?: Thinking;
@@ -7369,8 +4429,6 @@ interface QueryOptions {
         prompt: string;
     }>;
     permissionMode?: PermissionMode;
-    /** Make a later user-requested bypass switch available without starting in bypass mode. */
-    allowDangerouslySkipPermissions?: boolean;
     dangerouslySkipPermissions?: boolean;
     allowedTools?: string[];
     disallowedTools?: string[];
@@ -7380,8 +4438,6 @@ interface QueryOptions {
     systemPromptFile?: string;
     appendSystemPromptFile?: string;
     mcpConfig?: string[];
-    /** Explicit native channel selection; original policy and allowlist still govern admission. */
-    channels?: string[];
     strictMcpConfig?: boolean;
     pluginDir?: string[];
     addDir?: string[];
@@ -7464,14 +4520,7 @@ declare const RateLimitLineSchema: z.ZodObject<{
     uuid: z.ZodOptional<z.ZodString>;
     session_id: z.ZodOptional<z.ZodString>;
     type: z.ZodLiteral<"rate_limit_event">;
-    rate_limit_info: z.ZodObject<{
-        status: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-        rateLimitType: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-        resetsAt: z.ZodOptional<z.ZodNullable<z.ZodNumber>>;
-        isUsingOverage: z.ZodOptional<z.ZodNullable<z.ZodBoolean>>;
-        overageStatus: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-        overageDisabledReason: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    }, z.core.$loose>;
+    rate_limit_info: z.ZodObject<{}, z.core.$loose>;
 }, z.core.$loose>;
 
 /** A note as the welcome page shows it, with when it last changed */
@@ -7485,14 +4534,12 @@ type Repositories = OwnRepositories;
 
 type ResultLine = z.infer<typeof ResultLineSchema>;
 
-/** Native result: per-input usage/duration_ms, with cumulative process cost/modelUsage. */
+/** Final result line — marks turn completion. */
 declare const ResultLineSchema: z.ZodObject<{
     uuid: z.ZodOptional<z.ZodString>;
     session_id: z.ZodOptional<z.ZodString>;
     type: z.ZodLiteral<"result">;
     subtype: z.ZodString;
-    user_message_uuid: z.ZodOptional<z.ZodString>;
-    queued_turn_count: z.ZodOptional<z.ZodNumber>;
     is_error: z.ZodOptional<z.ZodBoolean>;
     duration_ms: z.ZodOptional<z.ZodNumber>;
     duration_api_ms: z.ZodOptional<z.ZodNumber>;
@@ -7628,8 +4675,6 @@ interface SessionInfo {
 }
 
 interface SessionListOptions {
-    /** Same environment as the native process that owns these journals. */
-    env?: NodeJS.ProcessEnv;
     /** Working directory whose sessions to list. Defaults to `process.cwd()`. */
     cwd?: string;
     limit?: number;
@@ -7642,7 +4687,6 @@ interface SessionTranscriptEntry {
 }
 
 interface SessionViewOptions {
-    env?: NodeJS.ProcessEnv;
     cwd?: string;
     limit?: number;
     offset?: number;
@@ -7671,23 +4715,25 @@ type Simplify<T> = {
     [K in keyof T]: T[K];
 } & {};
 
-interface SpawnStreamOptions {
-    cwd?: string;
-    /**
-     * Merge overrides into the child environment, which is this process's minus everything the app set on it.
-     * ANTHROPIC_API_KEY is always removed, including an explicit override. Native file checkpointing defaults
-     * on only when its environment switch is unset.
-     */
-    env?: NodeJS.ProcessEnv;
-    signal?: AbortSignal;
-    cliPath?: string;
-}
-
 interface StashEntry {
     index: number;
     ref: string;
     message: string;
     date: string;
+}
+
+/**
+ * A block as a read hands it back: what it holds, and **which block it is**.
+ *
+ * A message may hold two blocks of one type, so a type does not address one. Everything that acts on a
+ * block someone else is also writing needs the row — the button-group toggle writes back the block that
+ * holds the button, and a window splices a streamed run into the block the feed names — and both got the
+ * first block of the type before this field existed.
+ *
+ * It is not on `BlockConfig`, which is what a caller passes to *create* a block and has no row yet.
+ */
+interface StoredBlock extends BlockConfig {
+    id: EARS.EntityId;
 }
 
 type StreamEventLine = z.infer<typeof StreamEventLineSchema>;
@@ -7709,25 +4755,6 @@ declare const StreamEventLineSchema: z.ZodObject<{
  * types without breaking the wrapper.
  */
 type StreamLine = KnownStreamLine | UnknownLine;
-
-/**
- * Shared helpers for subcommand namespaces.
- *
- * Every `mcp.list()` / `auth.status()` / `plugins.install()` etc. ultimately
- * becomes an `execOnce` call. Rather than each namespace reinventing error
- * handling and JSON parsing, they all go through these two helpers:
- *
- *   - `run(args, opts)`      → one-shot, returns trimmed stdout
- *   - `runJson<T>(args, opts)` → one-shot, `JSON.parse` the stdout
- *
- * Callers are free to fall through to `execOnce` directly for bespoke cases
- * (long-lived children, custom stdin, etc.).
- */
-
-interface SubcommandOptions extends ExecOnceOptions {
-    /** Prepend these args before everything else (e.g. `['--debug']`). */
-    prefix?: readonly string[];
-}
 
 interface SwitchNode extends NodeBase {
     nodeType: 'switch';
@@ -7879,9 +4906,9 @@ interface TerminalTab extends OpenFile {
 type Thinking = z.infer<typeof ThinkingSchema>;
 
 declare const ThinkingSchema: z.ZodEnum<{
-    disabled: "disabled";
     enabled: "enabled";
     adaptive: "adaptive";
+    disabled: "disabled";
 }>;
 
 /**
@@ -7893,10 +4920,7 @@ declare const ThinkingSchema: z.ZodEnum<{
  */
 interface ThreadContext {
     claudeCode?: {
-        nativeContinuation?: ClaudeNativeContinuation;
-        retiredNativeMessages?: ClaudeNativeMessageRetirements;
         sessionId?: string;
-        profile?: ClaudeNativeProfile;
         lastTurnAt?: number;
         cwd?: string;
         model?: string;
@@ -8101,34 +5125,6 @@ interface ThreadsContext {
         filePath: string;
         threadCount: number;
     };
-    nativeTerminalViews: Record<string, {
-        threadId: string;
-    } & ClaudeTerminalViewSnapshot>;
-    nativeUiViews: Record<string, {
-        threadId: string;
-        resumeKey?: string;
-        attachmentId?: string;
-        mountRequest?: ClaudeUiMountRequest;
-        state: ClaudeUiMountState;
-        actionKeyResult?: {
-            sequence: number;
-            handled: boolean;
-            actionKeys?: ClaudeUiMountState['actionKeys'];
-        };
-        promptHostRequest?: ClaudePromptHostRequest;
-        focusRevision?: number;
-        focusSite?: string;
-        focus?: ClaudeUiFocusReply;
-        prompt?: ClaudePromptReply;
-        promptRevision?: number;
-        completions?: ClaudePromptCompletionReply;
-        completionRevision?: number;
-        completionEditRevision?: number;
-    }>;
-    permissionModeChanges: Record<string, {
-        call: string | null;
-        reason?: string;
-    }>;
     currentThread: AgentThreadData | null;
     recentThreadIds: string[];
     messageInput: string;
@@ -8196,7 +5192,7 @@ interface ThreadsContext {
     }>;
     /** A growing block's run, per message: which block it belongs to, from where, and what has arrived */
     messageBlockStreams: Record<string, {
-        block: string;
+        blockId: string;
         at: number;
         text: string;
     }>;
@@ -8222,10 +5218,6 @@ interface ThreadsContext$1 {
 
 /** What the artifact viewers, the dashboard and the tiptap command items ask of the threads surface */
 type ThreadsInboxEvent = {
-    type: 'SET_CLAUDE_PERMISSION_MODE';
-    threadId: string;
-    mode: NonNullable<ClaudeSessionArtifactContent['permissionMode']>;
-} | {
     type: 'SELECT_ARTIFACT';
     artifactId: string;
 } | {
@@ -8246,6 +5238,56 @@ type ThreadsSettings = SettingsOf<'threads'>;
 type TokenKind = 'classic-pat' | 'fine-grained-pat' | 'oauth' | 'unknown';
 
 type TokenSource = 'GITHUB_TOKEN' | 'keyring' | 'unknown';
+
+interface ToolActivityEntry {
+    /** Stable id. Usually the CLI's `tool_use_id`. */
+    id: string;
+    /** Tool name as reported by the CLI: Read, Write, Edit, Glob, Grep, Bash, … */
+    tool: string;
+    /** One-line human summary of the input (e.g. a truncated file path). */
+    summary: string;
+    /** Row status drives the per-row icon and label. */
+    status: 'denied' | 'error' | 'ok' | 'running';
+    /** Wall-clock duration once the tool has reported progress/completion. */
+    durationMs?: number;
+    /** One-line output summary if the tool reported one (e.g. "3 matches"). */
+    outputSummary?: string;
+    /** Optional full details revealed when the row is expanded. */
+    details?: {
+        input?: unknown;
+        output?: string;
+        error?: string;
+    };
+}
+
+/**
+ * One tool call as the activity block lists it, as a row of its own.
+ *
+ * **An entry is patched, not appended to** — `running` to `ok`, `denied` or `error`, with its output
+ * filled in when the tool answers — so it is an independently-mutating record, which is a row for the
+ * same reason a block is one. It was a member of the block's `props.entries`, and an attribute is written
+ * whole, so every later flush rewrote every entry: `details.output` holds the untruncated tool result, so
+ * one read of a large file was written again once per subsequent tool event.
+ *
+ * `entryId` is the CLI's `tool_use_id`, which is what a patch arrives by and what the writer de-dupes on;
+ * `id` is the engine's. The position is on the edge (`has_entry`'s `info.index`), as a block's is.
+ *
+ * The block keeps what is about the block — its label, state and artifact — and a read assembles these
+ * into the `entries` its component draws.
+ */
+interface ToolEntryEntity {
+    entryId: string;
+    tool: string;
+    summary: string;
+    status: 'denied' | 'error' | 'ok' | 'running';
+    durationMs?: number;
+    outputSummary?: string;
+    details?: {
+        input?: unknown;
+        output?: string;
+        error?: string;
+    };
+}
 
 type ToolProgressLine = z.infer<typeof ToolProgressLineSchema>;
 
@@ -8325,8 +5367,6 @@ type UpdateOnMissing = 'create' | 'fail' | 'ignore';
 /** User message written to stdin during a stream-json conversation. */
 interface UserInputMessage {
     type: 'user';
-    /** Stable native command identity for lifecycle tracking and queued-message cancellation. */
-    uuid?: string;
     message: {
         role: 'user';
         content: string | Array<Record<string, unknown>>;
@@ -8415,7 +5455,6 @@ declare namespace __FeatureSettings_Code {
         cliPaths: {
             [k: string]: string;
         };
-        claudeProfile: "app" | "shared";
     }
 }
 
@@ -8604,46 +5643,6 @@ declare const actionCommands: {
     readonly delete: (id: _apackdev_sdk.EARS.EntityId) => void;
 };
 
-declare const actionKeyRequest: z.ZodObject<{
-    revision: z.ZodString;
-    event: z.ZodObject<{
-        key: z.ZodString;
-        ctrl: z.ZodBoolean;
-        alt: z.ZodBoolean;
-        shift: z.ZodBoolean;
-        super: z.ZodBoolean;
-        from_composer: z.ZodBoolean;
-    }, z.core.$strict>;
-}, z.core.$strict>;
-
-declare const actionKeys: z.ZodObject<{
-    revision: z.ZodString;
-    bindings: z.ZodArray<z.ZodArray<z.ZodObject<{
-        key: z.ZodString;
-        ctrl: z.ZodBoolean;
-        alt: z.ZodBoolean;
-        shift: z.ZodBoolean;
-        meta: z.ZodBoolean;
-        super: z.ZodBoolean;
-    }, z.core.$strict>>>;
-    continuations: z.ZodArray<z.ZodArray<z.ZodObject<{
-        key: z.ZodString;
-        ctrl: z.ZodBoolean;
-        alt: z.ZodBoolean;
-        shift: z.ZodBoolean;
-        meta: z.ZodBoolean;
-        super: z.ZodBoolean;
-    }, z.core.$strict>>>;
-    pending: z.ZodNullable<z.ZodArray<z.ZodObject<{
-        key: z.ZodString;
-        ctrl: z.ZodBoolean;
-        alt: z.ZodBoolean;
-        shift: z.ZodBoolean;
-        meta: z.ZodBoolean;
-        super: z.ZodBoolean;
-    }, z.core.$strict>>>;
-}, z.core.$strict>;
-
 /**
  * Action Repository: the SDK's action repository (`actionRepository`), which owns their reads and writes, as the
  * actions surface uses it, and what its views read. The SDK's methods are taken as they are, not wrapped.
@@ -8673,32 +5672,26 @@ declare function addMessagesToThread(params: {
     }>;
 }): void;
 
-declare const attach: z.ZodObject<{
-    client_id: z.ZodString;
-    surface: z.ZodEnum<{
-        desktop: "desktop";
-        mobile: "mobile";
-        vscode: "vscode";
-    }>;
-    viewport: z.ZodOptional<z.ZodObject<{
-        columns: z.ZodNumber;
-        rows: z.ZodNumber;
-        isFullscreen: z.ZodOptional<z.ZodBoolean>;
-    }, z.core.$strict>>;
-    native_view: z.ZodOptional<z.ZodObject<{
-        session_id: z.ZodString;
-        revision: z.ZodNumber;
-        agent_id: z.ZodString;
-    }, z.core.$strict>>;
-}, z.core.$strict>;
+/**
+ * Appends the next characters of a block's text to its row.
+ *
+ * **The durable half of a growing block, and the reason its interval is still worth having.** The feed
+ * (`streamMessageBlockText`) carries growth to the windows as it arrives; this commits it, batched, so the
+ * interval now decides how often a turn commits rather than how much of it is rewritten. A whole-text write
+ * per flush is what made a turn cost 47.9x the text it left behind.
+ *
+ * `at` is where these characters start, so the row is spliced exactly as a window splices the feed.
+ */
+declare function appendMessageBlockText(blockId: EARS.EntityId, at: number, text: string): void;
 
-/** Read only the child linked by the original parent's durable journal. */
-declare function backgroundSession(continuation: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest, options?: SubcommandOptions): Promise<ClaudeBackgroundSession | undefined>;
-
-declare const box: z.ZodObject<{
-    text: z.ZodString;
-    cursor: z.ZodNumber;
-}, z.core.$strict>;
+/**
+ * Appends the next characters of a message's own text, and folds when there are enough segments.
+ *
+ * The durable half of a streamed reply. The feed (`streamMessageText`) carries the characters to the
+ * windows as they arrive; this commits them, so the interval decides how often a turn commits rather than
+ * how much of the reply is written again.
+ */
+declare function appendMessageText(messageId: EARS.EntityId, at: number, text: string): void;
 
 declare const brainCommands: {
     /** An event a flow run heard, with its payload as the node's attributes */
@@ -8802,14 +5795,114 @@ declare const chatCommands: {
         compacted?: boolean;
         context?: Record<string, unknown>;
         skipRelink?: boolean;
-        timestamp?: number;
     }) => {
         id: EARS.EntityId;
         threadId: EARS.EntityId;
         text: string;
         sender: string;
         timestamp: number;
+        /** The blocks as rows, for a caller that describes the message it just added */
+        blocks?: StoredBlock[];
     };
+    /** Creates a message's blocks as rows, in the order given: what a message's creation and an import write */
+    readonly writeMessageBlocks: (params: {
+        messageId: EARS.EntityId;
+        blocks: readonly BlockConfig[];
+    }) => void;
+    /**
+     * Appends the next characters of a block's text, and answers nothing it did not write.
+     *
+     * **The store's half of what the feed sends.** A growing block's text used to be written whole on every
+     * durable flush, so what reached storage grew with the turn; a segment is written once. The block's own
+     * text is the compacted prefix and this is what follows it, so a reader splices by offset exactly as a
+     * window does.
+     *
+     * It folds the segments back in once there are `TEXT_SEGMENTS_BEFORE_COMPACTION` of them, which is what
+     * keeps a read of a long turn bounded. A caller never asks for that and cannot skip it.
+     */
+    readonly appendMessageBlockText: (params: {
+        blockId: EARS.EntityId;
+        at: number;
+        text: string;
+    }) => void;
+    /**
+     * Appends the next characters of a message's own text.
+     *
+     * **The same shape as a block's text, for the last field that was written whole.** `Message.text` keeps
+     * the compacted prefix and this is what follows it, spliced by offset exactly as a window splices the
+     * feed.
+     *
+     * It folds at `TEXT_SEGMENTS_BEFORE_COMPACTION`, and that fold is not an optimisation — it is what keeps
+     * the text searchable. `Message.text` is what the text index reads, so a tail living in segments is a
+     * tail no search finds, and a turn can end without its writer being finalised. The size trigger bounds
+     * that to one fold's worth; `foldMessageText` is the rest of the answer.
+     */
+    readonly appendMessageText: (params: {
+        messageId: EARS.EntityId;
+        at: number;
+        text: string;
+    }) => void;
+    /**
+     * Folds a message's text segments into its own field and removes them.
+     *
+     * **What makes the text searchable again**, so it is called when a turn's writer finalises and by the
+     * sweep at boot for a turn that ended without one.
+     */
+    readonly foldMessageText: (params: {
+        messageId: EARS.EntityId;
+    }) => void;
+    /**
+     * Folds every message that still holds text segments, and answers how many it folded.
+     *
+     * **Nothing streams at boot, so a message holding segments at boot was left unfolded** — which is the
+     * marker, and why this needs no `'streaming'` status to find them by. A turn interrupted by a kill
+     * finalises through its owner, and one interrupted by the process ending cannot, so this is that case's
+     * repair: without it the tail stays out of the text index for good.
+     */
+    readonly foldStrandedMessageText: () => number;
+    /**
+     * Writes one of a block's tool entries, and answers its row.
+     *
+     * **The same shape as `writeMessageBlock`, one level down**: pass the row id a previous write answered
+     * and this is one row by id, which is what makes a tool event cost its own entry. Without one the entry
+     * is found among the block's by its `entryId`, or created at the end.
+     *
+     * `details` merges field-wise, as the writer's own `update` does, so a patch carrying only an output
+     * does not drop the input recorded when the tool started.
+     */
+    readonly writeToolEntry: (params: {
+        blockId: EARS.EntityId;
+        entry: ToolActivityEntry;
+        entryRowId?: EARS.EntityId;
+    }) => EARS.EntityId | undefined;
+    /**
+     * Folds a block's children into it and removes them: what a writer calls when the block has stopped
+     * growing.
+     *
+     * **A finished block is one row again.** The children exist to make a *turn's* writes cheap; once it is
+     * over they are only cost — a read of the message assembles them, and a thread keeps them for ever. A
+     * turn of forty tools left forty rows per message behind without this.
+     */
+    readonly compactMessageBlock: (params: {
+        blockId: EARS.EntityId;
+    }) => void;
+    /**
+     * Writes one of a message's blocks, by its type, and answers its row id.
+     *
+     * **The hot path of a streamed turn.** A caller that holds the id from a previous write passes it and the
+     * write is one row by id, with no walk: that is what makes a 250ms flush cost its own block and nothing
+     * else. Without one the block of that type is found, or created at the end.
+     */
+    readonly writeMessageBlock: (params: {
+        messageId: EARS.EntityId;
+        block: BlockConfig;
+        blockId?: EARS.EntityId;
+    }) => EARS.EntityId;
+    /** Removes a message's block of that type; absence is not an error, the caller asking for it to be gone */
+    readonly removeMessageBlock: (params: {
+        messageId: EARS.EntityId;
+        type: string;
+    }) => void;
     readonly createThreadFromMessage: (text: string) => {
         threadId: EARS.EntityId;
         threadData: ReturnType<typeof threadCommands.create>;
@@ -8821,11 +5914,11 @@ declare const chatCommands: {
         messageId: EARS.EntityId;
         responseTimestamp: number;
         updatedAt: number;
-        blocks?: BlockConfig[];
+        blocks?: StoredBlock[];
     };
     readonly updateMessageState: (params: {
         messageId: EARS.EntityId;
-        updates: Partial<Pick<MessageEntity, "blockResponse" | "blocks" | "compacted" | "context" | "forkable" | "references" | "responseTimestamp" | "status" | "text">>;
+        updates: Partial<Pick<MessageEntity, "blockResponse" | "compacted" | "context" | "forkable" | "responseTimestamp" | "status" | "text">>;
     }) => {
         messageId: EARS.EntityId;
         updatedAt: number;
@@ -8903,377 +5996,22 @@ declare const chatQueries: {
      * and each pinned one's; and the threads settings
      */
     readonly chatStart: () => ChatStart;
-    readonly hasMessageInThread: (messageId: EARS.EntityId, threadId: EARS.EntityId) => boolean;
+    /** A message's blocks, assembled from their rows: what an export carries and `messageById` folds in */
+    readonly blocksOf: (messageId: EARS.EntityId) => StoredBlock[];
+    readonly entryDetails: (blockId: EARS.EntityId) => Record<string, ToolActivityEntry["details"]>;
+    /**
+     * A message's blocks with each tool entry's details merged back into it, for whoever is going to write
+     * them somewhere else.
+     *
+     * **A copier is not a reader.** `blocksOf` leaves `details` out because a message's view re-runs on every
+     * append and a tool's whole output would be re-read each time; a fork and an export are copying the block
+     * rather than drawing it, and the details are part of what the block is. Without this they were dropped,
+     * silently, by both.
+     */
+    readonly blocksForCopy: (messageId: EARS.EntityId) => StoredBlock[];
+    /** One message, whole; `null` once it is gone */
     readonly messageById: (messageId: EARS.EntityId) => MessageEntity | null;
 };
-
-/**
- * An immutable generation grants its successor with one exclusive hard link. No stale lock is
- * unlinked: concurrent claimants follow the winner, including when it dies during socket recovery.
- * The registry contains only a private endpoint capability, never Claude credentials or settings.
- */
-declare function claimClaudeBackgroundCheckpoint(options: {
-    profile: string;
-    parentSessionId: string;
-    endpoint?: Endpoint;
-}): Promise<{
-    directory: string;
-    token: string;
-    retire(): Promise<void>;
-} | undefined>;
-
-declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<[z.ZodObject<{
-    kind: z.ZodLiteral<"ideSelect">;
-    revision: z.ZodString;
-    value: z.ZodString;
-}, z.core.$strict>, z.ZodObject<{
-    kind: z.ZodLiteral<"helpTab">;
-    revision: z.ZodString;
-    tab: z.ZodEnum<{
-        General: "General";
-        Commands: "Commands";
-        "Custom commands": "Custom commands";
-    }>;
-}, z.core.$strict>, z.ZodObject<{
-    kind: z.ZodLiteral<"read">;
-}, z.core.$strict>, z.ZodObject<{
-    kind: z.ZodLiteral<"stats">;
-    revision: z.ZodString;
-    action: z.ZodEnum<{
-        Overview: "Overview";
-        Models: "Models";
-        cycleDates: "cycleDates";
-        copy: "copy";
-    }>;
-}, z.core.$strict>, z.ZodObject<{
-    kind: z.ZodLiteral<"tab">;
-    revision: z.ZodString;
-    tab: z.ZodEnum<{
-        Status: "Status";
-        Config: "Config";
-        Usage: "Usage";
-        Stats: "Stats";
-    }>;
-}, z.core.$strict>, z.ZodObject<{
-    kind: z.ZodLiteral<"write">;
-    revision: z.ZodString;
-    key: z.ZodString;
-    value: z.ZodUnion<readonly [z.ZodBoolean, z.ZodString, z.ZodNumber, z.ZodNull]>;
-}, z.core.$strict>, z.ZodObject<{
-    kind: z.ZodLiteral<"open">;
-    revision: z.ZodString;
-    key: z.ZodString;
-}, z.core.$strict>, z.ZodObject<{
-    kind: z.ZodLiteral<"editor">;
-    revision: z.ZodString;
-    editorRevision: z.ZodString;
-    command: z.ZodDiscriminatedUnion<[z.ZodObject<{
-        action: z.ZodLiteral<"change">;
-        formId: z.ZodString;
-        key: z.ZodString;
-        value: z.ZodString;
-    }, z.core.$strict>, z.ZodObject<{
-        action: z.ZodLiteral<"setGroup">;
-        key: z.ZodString;
-        value: z.ZodUnion<readonly [z.ZodBoolean, z.ZodString]>;
-    }, z.core.$strict>, z.ZodObject<{
-        action: z.ZodLiteral<"select">;
-        value: z.ZodString;
-    }, z.core.$strict>, z.ZodObject<{
-        action: z.ZodLiteral<"preview">;
-        value: z.ZodString;
-    }, z.core.$strict>, z.ZodObject<{
-        action: z.ZodEnum<{
-            themeEdit: "themeEdit";
-            themeReset: "themeReset";
-        }>;
-        value: z.ZodString;
-    }, z.core.$strict>, z.ZodObject<{
-        action: z.ZodLiteral<"toggleSyntax">;
-    }, z.core.$strict>, z.ZodObject<{
-        action: z.ZodLiteral<"focusModel">;
-        value: z.ZodString;
-    }, z.core.$strict>, z.ZodObject<{
-        action: z.ZodLiteral<"adjustEffort">;
-        direction: z.ZodEnum<{
-            left: "left";
-            right: "right";
-        }>;
-    }, z.core.$strict>, z.ZodObject<{
-        action: z.ZodLiteral<"save">;
-        values: z.ZodRecord<z.ZodString, z.ZodString>;
-    }, z.core.$strict>, z.ZodObject<{
-        action: z.ZodLiteral<"cancel">;
-    }, z.core.$strict>], "action">;
-}, z.core.$strict>], "kind">;
-
-declare const claudeSettingsSnapshot: z.ZodObject<{
-    ide: z.ZodOptional<z.ZodObject<{
-        stage: z.ZodEnum<{
-            selection: "selection";
-            enable: "enable";
-            disable: "disable";
-            connecting: "connecting";
-            finished: "finished";
-        }>;
-        title: z.ZodString;
-        description: z.ZodOptional<z.ZodString>;
-        paragraphs: z.ZodArray<z.ZodString>;
-        options: z.ZodArray<z.ZodObject<{
-            value: z.ZodString;
-            label: z.ZodString;
-            description: z.ZodOptional<z.ZodString>;
-        }, z.core.$strict>>;
-        selectedValue: z.ZodOptional<z.ZodString>;
-        disabled: z.ZodOptional<z.ZodBoolean>;
-    }, z.core.$strict>>;
-    help: z.ZodOptional<z.ZodObject<{
-        selectedTab: z.ZodEnum<{
-            General: "General";
-            Commands: "Commands";
-            "Custom commands": "Custom commands";
-        }>;
-        tabs: z.ZodArray<z.ZodEnum<{
-            General: "General";
-            Commands: "Commands";
-            "Custom commands": "Custom commands";
-        }>>;
-        paragraphs: z.ZodArray<z.ZodString>;
-        commands: z.ZodArray<z.ZodObject<{
-            name: z.ZodString;
-            label: z.ZodString;
-            description: z.ZodString;
-        }, z.core.$strict>>;
-        links: z.ZodArray<z.ZodString>;
-    }, z.core.$strict>>;
-    frame: z.ZodOptional<z.ZodObject<{
-        selectedTab: z.ZodEnum<{
-            Status: "Status";
-            Config: "Config";
-            Usage: "Usage";
-            Stats: "Stats";
-        }>;
-        tabs: z.ZodArray<z.ZodEnum<{
-            Status: "Status";
-            Config: "Config";
-            Usage: "Usage";
-            Stats: "Stats";
-        }>>;
-        hidden: z.ZodBoolean;
-        usage: z.ZodOptional<z.ZodObject<{
-            startedAt: z.ZodNumber;
-            context: z.ZodObject<{
-                window: z.ZodNumber;
-                tokens: z.ZodOptional<z.ZodNumber>;
-                percent: z.ZodOptional<z.ZodNumber>;
-            }, z.core.$strict>;
-            cost: z.ZodOptional<z.ZodObject<{
-                usd: z.ZodNumber;
-            }, z.core.$strict>>;
-            rateLimits: z.ZodArray<z.ZodObject<{
-                kind: z.ZodString;
-                percentUsed: z.ZodNumber;
-                resetsAt: z.ZodOptional<z.ZodString>;
-            }, z.core.$strict>>;
-        }, z.core.$strict>>;
-        stats: z.ZodOptional<z.ZodObject<{
-            view: z.ZodOptional<z.ZodEnum<{
-                Overview: "Overview";
-                Models: "Models";
-            }>>;
-            range: z.ZodOptional<z.ZodEnum<{
-                all: "all";
-                "7d": "7d";
-                "30d": "30d";
-            }>>;
-            loading: z.ZodBoolean;
-            copyState: z.ZodOptional<z.ZodEnum<{
-                error: "error";
-                idle: "idle";
-                pending: "pending";
-                saved: "saved";
-            }>>;
-            insight: z.ZodOptional<z.ZodString>;
-            calendar: z.ZodOptional<z.ZodString>;
-            outcome: z.ZodEnum<{
-                error: "error";
-                success: "success";
-                loading: "loading";
-                empty: "empty";
-                unavailable: "unavailable";
-            }>;
-            problem: z.ZodOptional<z.ZodString>;
-            data: z.ZodOptional<z.ZodObject<{
-                totalSessions: z.ZodNumber;
-                totalMessages: z.ZodNumber;
-                totalDays: z.ZodNumber;
-                activeDays: z.ZodNumber;
-                streaks: z.ZodOptional<z.ZodObject<{
-                    currentStreak: z.ZodNumber;
-                    longestStreak: z.ZodNumber;
-                    currentStreakStart: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-                    longestStreakStart: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-                    longestStreakEnd: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-                }, z.core.$strict>>;
-                longestSession: z.ZodOptional<z.ZodNullable<z.ZodObject<{
-                    sessionId: z.ZodString;
-                    duration: z.ZodNumber;
-                    messageCount: z.ZodNumber;
-                    timestamp: z.ZodString;
-                }, z.core.$strict>>>;
-                firstSessionDate: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-                lastSessionDate: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-                peakActivityDay: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-                peakActivityHour: z.ZodOptional<z.ZodNullable<z.ZodNumber>>;
-                dailyModelTokens: z.ZodOptional<z.ZodArray<z.ZodObject<{
-                    date: z.ZodString;
-                    tokensByModel: z.ZodRecord<z.ZodString, z.ZodNumber>;
-                }, z.core.$strict>>>;
-                allTimeActivity: z.ZodOptional<z.ZodArray<z.ZodObject<{
-                    date: z.ZodString;
-                    messageCount: z.ZodNumber;
-                    sessionCount: z.ZodNumber;
-                    toolCallCount: z.ZodNumber;
-                }, z.core.$strict>>>;
-                modelUsage: z.ZodRecord<z.ZodString, z.ZodObject<{
-                    inputTokens: z.ZodNumber;
-                    outputTokens: z.ZodNumber;
-                    cacheReadInputTokens: z.ZodNumber;
-                    cacheCreationInputTokens: z.ZodNumber;
-                    costUSD: z.ZodNumber;
-                }, z.core.$strict>>;
-                dailyActivity: z.ZodArray<z.ZodObject<{
-                    date: z.ZodString;
-                    messageCount: z.ZodNumber;
-                    sessionCount: z.ZodNumber;
-                    toolCallCount: z.ZodNumber;
-                }, z.core.$strict>>;
-            }, z.core.$strict>>;
-        }, z.core.$strict>>;
-        diagnostics: z.ZodOptional<z.ZodArray<z.ZodString>>;
-        status: z.ZodOptional<z.ZodArray<z.ZodArray<z.ZodObject<{
-            label: z.ZodString;
-            value: z.ZodString;
-        }, z.core.$strict>>>>;
-    }, z.core.$strict>>;
-    editor: z.ZodOptional<z.ZodDiscriminatedUnion<[z.ZodObject<{
-        kind: z.ZodLiteral<"information">;
-        revision: z.ZodString;
-        title: z.ZodString;
-        description: z.ZodString;
-    }, z.core.$strict>, z.ZodObject<{
-        kind: z.ZodLiteral<"choice">;
-        description: z.ZodOptional<z.ZodString>;
-        consent: z.ZodOptional<z.ZodObject<{
-            links: z.ZodOptional<z.ZodArray<z.ZodString>>;
-            description: z.ZodString;
-            cancelLabel: z.ZodString;
-            defaultFocusValue: z.ZodOptional<z.ZodString>;
-        }, z.core.$strict>>;
-        revision: z.ZodString;
-        title: z.ZodOptional<z.ZodString>;
-        value: z.ZodOptional<z.ZodString>;
-        previewValue: z.ZodOptional<z.ZodString>;
-        model: z.ZodOptional<z.ZodObject<{
-            draftEffort: z.ZodOptional<z.ZodString>;
-            focusValue: z.ZodOptional<z.ZodString>;
-            description: z.ZodString;
-            effortText: z.ZodString;
-            canAdjustEffort: z.ZodBoolean;
-            fastModeNotice: z.ZodOptional<z.ZodString>;
-        }, z.core.$strict>>;
-        canPreview: z.ZodOptional<z.ZodBoolean>;
-        canToggleSyntax: z.ZodOptional<z.ZodBoolean>;
-        preview: z.ZodOptional<z.ZodObject<{
-            theme: z.ZodObject<{
-                text: z.ZodString;
-                inverseText: z.ZodString;
-            }, z.core.$strict>;
-            text: z.ZodString;
-            ansi: z.ZodOptional<z.ZodString>;
-            lines: z.ZodArray<z.ZodString>;
-            caption: z.ZodString;
-        }, z.core.$strict>>;
-        disabled: z.ZodBoolean;
-        options: z.ZodArray<z.ZodObject<{
-            value: z.ZodString;
-            label: z.ZodString;
-            description: z.ZodOptional<z.ZodString>;
-            descriptionAnsi: z.ZodOptional<z.ZodString>;
-            disabled: z.ZodBoolean;
-            canEdit: z.ZodOptional<z.ZodBoolean>;
-            canReset: z.ZodOptional<z.ZodBoolean>;
-        }, z.core.$strict>>;
-    }, z.core.$strict>, z.ZodObject<{
-        kind: z.ZodLiteral<"group">;
-        revision: z.ZodString;
-        title: z.ZodString;
-        description: z.ZodOptional<z.ZodString>;
-        disabled: z.ZodBoolean;
-        rows: z.ZodArray<z.ZodObject<{
-            key: z.ZodString;
-            label: z.ZodString;
-            kind: z.ZodEnum<{
-                boolean: "boolean";
-                choice: "choice";
-            }>;
-            value: z.ZodUnion<readonly [z.ZodBoolean, z.ZodString]>;
-            disabled: z.ZodBoolean;
-            options: z.ZodOptional<z.ZodArray<z.ZodObject<{
-                value: z.ZodString;
-                label: z.ZodString;
-                disabled: z.ZodBoolean;
-            }, z.core.$strict>>>;
-        }, z.core.$strict>>;
-    }, z.core.$strict>, z.ZodObject<{
-        kind: z.ZodLiteral<"form">;
-        live: z.ZodOptional<z.ZodObject<{
-            id: z.ZodString;
-            feedback: z.ZodOptional<z.ZodObject<{
-                text: z.ZodString;
-                tone: z.ZodEnum<{
-                    error: "error";
-                    success: "success";
-                }>;
-            }, z.core.$strict>>;
-        }, z.core.$strict>>;
-        consent: z.ZodOptional<z.ZodObject<{
-            links: z.ZodOptional<z.ZodArray<z.ZodString>>;
-            cancelLabel: z.ZodString;
-            focusField: z.ZodLiteral<"answer">;
-            problem: z.ZodOptional<z.ZodString>;
-        }, z.core.$strict>>;
-        revision: z.ZodString;
-        title: z.ZodString;
-        description: z.ZodOptional<z.ZodString>;
-        submitLabel: z.ZodString;
-        fields: z.ZodArray<z.ZodObject<{
-            key: z.ZodString;
-            label: z.ZodString;
-            value: z.ZodString;
-        }, z.core.$strict>>;
-    }, z.core.$strict>], "kind">>;
-    commitPending: z.ZodOptional<z.ZodBoolean>;
-    refreshPending: z.ZodOptional<z.ZodBoolean>;
-    dismissible: z.ZodOptional<z.ZodBoolean>;
-    revision: z.ZodString;
-    rows: z.ZodArray<z.ZodObject<{
-        key: z.ZodString;
-        label: z.ZodString;
-        description: z.ZodOptional<z.ZodString>;
-        kind: z.ZodEnum<{
-            number: "number";
-            boolean: "boolean";
-            text: "text";
-            choice: "choice";
-        }>;
-        value: z.ZodUnion<readonly [z.ZodBoolean, z.ZodString, z.ZodNumber, z.ZodNull]>;
-        options: z.ZodOptional<z.ZodArray<z.ZodString>>;
-        editorAvailable: z.ZodOptional<z.ZodBoolean>;
-        isLocked: z.ZodBoolean;
-        lockReason: z.ZodOptional<z.ZodString>;
-    }, z.core.$strict>>;
-}, z.core.$strict>;
 
 /**
  * Stop and remove all cron jobs. Called on brain kill/restart.
@@ -9282,50 +6020,13 @@ declare function clearAllSchedules(): void;
 
 declare function clearHandle(key: string): void;
 
-declare const clientInput: z.ZodDiscriminatedUnion<[z.ZodObject<{
-    kind: z.ZodLiteral<"resize">;
-    columns: z.ZodNumber;
-    rows: z.ZodNumber;
-}, z.core.$strict>, z.ZodObject<{
-    kind: z.ZodLiteral<"key">;
-    key: z.ZodString;
-    ctrl: z.ZodOptional<z.ZodLiteral<true>>;
-    shift: z.ZodOptional<z.ZodLiteral<true>>;
-    meta: z.ZodOptional<z.ZodLiteral<true>>;
-}, z.core.$strict>, z.ZodObject<{
-    kind: z.ZodLiteral<"pointer">;
-    type: z.ZodEnum<{
-        down: "down";
-        move: "move";
-        up: "up";
-        enter: "enter";
-        leave: "leave";
-    }>;
-    x: z.ZodNumber;
-    y: z.ZodNumber;
-    fine: z.ZodOptional<z.ZodObject<{
-        x: z.ZodNumber;
-        y: z.ZodNumber;
-    }, z.core.$strict>>;
-    button: z.ZodOptional<z.ZodEnum<{
-        left: "left";
-        right: "right";
-        middle: "middle";
-    }>>;
-    ctrl: z.ZodOptional<z.ZodLiteral<true>>;
-    shift: z.ZodOptional<z.ZodLiteral<true>>;
-    alt: z.ZodOptional<z.ZodLiteral<true>>;
-}, z.core.$strict>], "kind">;
-
-declare const composerPlacement: z.ZodObject<{
-    component: z.ZodEnum<{
-        Spinner: "Spinner";
-        SessionMode: "SessionMode";
-        PromptHint: "PromptHint";
-    }>;
-    id: z.ZodString;
-    revision: z.ZodString;
-}, z.core.$strict>;
+/**
+ * Folds a block's children into it, so a finished block is one row again.
+ *
+ * The segments and entry rows under a block make a *turn's* writes cost what they write; once the turn is
+ * over they are only cost, to every read of that message and to the store for as long as the thread lives.
+ */
+declare function compactMessageBlock(blockId: EARS.EntityId): void;
 
 /** The recent-thread limit and order the threads settings hold, read where no view is asking */
 declare function configuredRecentThreads(): {
@@ -9340,594 +6041,6 @@ declare function configuredRecentThreads(): {
  */
 declare function create(options: CreateArtifactOptions): {
     artifactId: EARS.EntityId;
-};
-
-/** Observe the verified child once, independently of desktop clients and Reply visibility. */
-declare function createClaudeBackgroundControls(options: {
-    sessionId: string;
-    transport: Pick<ClaudeTerminalUiTransport, 'request'>;
-    changed(): void;
-}): ClaudeBackgroundControls;
-
-/** A read-only original runtime owns identity checks independently of the parent's UI socket. */
-declare function createClaudeBackgroundStatusAuthority(parentSessionId: string, options: SpawnStreamOptions): {
-    identify(sessionId: string, pid: number, cwd: string): Promise<ClaudeBackgroundStatusIdentity>;
-    close: () => Promise<void>;
-};
-
-/** The linked child owns this transport and plugin directory after the parent writer exits. */
-declare function createClaudeBackgroundStatusObserver(options: {
-    parentSessionId: string;
-    profile?: string;
-    childUiLaunch?: {
-        configDir?: string;
-        secureStorageConfigDir?: string;
-        executable: string;
-        cwd: string;
-        searchPath: string | undefined;
-    };
-    checkpoint?: ClaudeBackgroundCheckpoint;
-    target(): {
-        sessionId: string;
-        cwd: string;
-    } | undefined;
-    authority(parentSessionId: string): ReturnType<typeof createClaudeBackgroundStatusAuthority>;
-    changed(): void;
-}): Promise<{
-    directory: string;
-    socketPath: string;
-    token: string;
-    readonly desktopOwner: ClaudeBackgroundDesktopOwner | undefined;
-    /** Original identity and a fresh per-worker socket/token scope every desktop attachment. */
-    desktopTransport: () => Promise<ClaudeTerminalUiTransport | undefined>;
-    readonly parentSessionId: string;
-    readonly value: ClaudeBackgroundStatus | undefined;
-    readonly available: boolean;
-    resetParent(sessionId: string): Promise<void>;
-    adoptParent(nextTarget: typeof options.target, changed: () => void): void;
-    subscribe(listener: () => void): () => void;
-    releaseParent(): Promise<void>;
-    close: () => Promise<void>;
-}>;
-
-/** Process-local reverse UI requests. These never enter a conversation turn or permission queue. */
-declare function createClaudePromptHosts(write: (value: unknown) => boolean, paintFill?: (clientId: string, input: ClaudePromptHostFill) => Promise<ClaudePromptHostFill>): {
-    register(client: string, host: ClaudePromptHost): () => void;
-    answers(client: string): string[];
-    detach: (client: string) => void;
-    receive(line: ControlRequestLine): boolean;
-    cancel(id: string): boolean;
-    close(): void;
-};
-
-/** Native UI transport only. A renderer must validate tree nodes before displaying them. */
-declare function createClaudeUiControls(initialized: () => Promise<Pick<ClaudeInitialization, 'capabilities'>>, controls: Pick<ReturnType<typeof createHostControls>, 'request'>, promptHosts?: Pick<ReturnType<typeof createClaudePromptHosts>, 'answers' | 'detach' | 'register'>, printClients?: ClaudePrintClientProjection): {
-    terminalPlacements(id: string): Promise<ClaudeUiTerminalPlacement[]>;
-    composerPlacements(id: string): Promise<ClaudeUiComposerPlacement[]>;
-    managedSettingsDiagnostics(id: string): Promise<ClaudeManagedSettingsDiagnostic[]>;
-    diagnostics(id: string, columns?: number): Promise<ClaudeUiDiagnosticAttachment[]>;
-    toolGroups(id: string): Promise<ClaudeUiToolGroup[]>;
-    releaseInstance(options: z.infer<typeof instanceRelease>): Promise<{
-        released: boolean;
-    }>;
-    prepareParentCommand(options: {
-        client_id: string;
-        text: string;
-    }): Promise<{
-        kind: "prepared";
-        id: string;
-    } | {
-        kind: "not_command";
-    } | {
-        kind: "review";
-        text: string;
-        removed: number;
-    } | {
-        kind: "panel";
-        id: string;
-        commandName: string;
-    } | {
-        kind: "command_output";
-        messageId: string;
-        commandName: string;
-        text: string;
-        isErrored: boolean;
-        outcome?: string | undefined;
-    } | {
-        kind: "blocked";
-        message: string;
-    } | {
-        kind: "confirmation";
-        id: string;
-        title: string;
-        confirmLabel: string;
-        commandName?: string | undefined;
-    } | {
-        kind: "command_complete";
-        commandName: string;
-        messageId: string;
-        boundaryId?: string | undefined;
-        sessionId?: string | undefined;
-        conversationId?: string | undefined;
-    }>;
-    startParentCommand(options: {
-        client_id: string;
-        command_id: string;
-    }): Promise<{
-        kind: "running";
-        id: string;
-    }>;
-    readParentCommand(options: {
-        client_id: string;
-        command_id: string;
-    }): Promise<{
-        kind: "prepared" | "running";
-        id: string;
-    } | {
-        kind: "finished";
-        id: string;
-        result: {
-            kind: "not_command";
-        } | {
-            kind: "review";
-            text: string;
-            removed: number;
-        } | {
-            kind: "panel";
-            id: string;
-            commandName: string;
-        } | {
-            kind: "command_output";
-            messageId: string;
-            commandName: string;
-            text: string;
-            isErrored: boolean;
-            outcome?: string | undefined;
-        } | {
-            kind: "blocked";
-            message: string;
-        } | {
-            kind: "confirmation";
-            id: string;
-            title: string;
-            confirmLabel: string;
-            commandName?: string | undefined;
-        } | {
-            kind: "command_complete";
-            commandName: string;
-            messageId: string;
-            boundaryId?: string | undefined;
-            sessionId?: string | undefined;
-            conversationId?: string | undefined;
-        };
-    } | {
-        kind: "failed";
-        id: string;
-        message: string;
-    }>;
-    submitAgent(options: {
-        client_id: string;
-        text: string;
-    }): Promise<{
-        kind: "input";
-        messageId: string;
-        previousStatus: string;
-    } | {
-        kind: "review";
-        text: string;
-        removed: number;
-    } | {
-        kind: "panel";
-        id: string;
-        commandName: string;
-    } | {
-        kind: "command_output";
-        messageId: string;
-        commandName: string;
-        text: string;
-        isErrored: boolean;
-        outcome?: string | undefined;
-    } | {
-        kind: "blocked";
-        message: string;
-    } | {
-        kind: "confirmation";
-        id: string;
-        title: string;
-        confirmLabel: string;
-        commandName?: string | undefined;
-    }>;
-    agentsGesture(options: {
-        client_id: string;
-        sequence: number;
-    }): Promise<{
-        handled: boolean;
-    }>;
-    backgroundReview(options: {
-        client_id: string;
-        panel_id: string;
-    } & ({
-        operation: "read";
-    } | {
-        operation: "cancel" | "confirm";
-        revision: string;
-    })): Promise<{
-        open: boolean;
-        review?: {
-            revision: string;
-            title: string;
-            paragraphs: string[];
-            confirmLabel: string;
-            cancelLabel: string;
-            defaultFocus: "cancel" | "confirm";
-        } | undefined;
-    } | {
-        answered: true;
-    }>;
-    settings(options: {
-        client_id: string;
-        panel_id: string;
-        action: ClaudeSettingsOperation;
-    }): Promise<{
-        snapshot: {
-            revision: string;
-            rows: {
-                key: string;
-                label: string;
-                kind: "boolean" | "choice" | "number" | "text";
-                value: string | number | boolean | null;
-                isLocked: boolean;
-                description?: string | undefined;
-                options?: string[] | undefined;
-                editorAvailable?: boolean | undefined;
-                lockReason?: string | undefined;
-            }[];
-            ide?: {
-                stage: "connecting" | "disable" | "enable" | "finished" | "selection";
-                title: string;
-                paragraphs: string[];
-                options: {
-                    value: string;
-                    label: string;
-                    description?: string | undefined;
-                }[];
-                description?: string | undefined;
-                selectedValue?: string | undefined;
-                disabled?: boolean | undefined;
-            } | undefined;
-            help?: {
-                selectedTab: "Commands" | "Custom commands" | "General";
-                tabs: ("Commands" | "Custom commands" | "General")[];
-                paragraphs: string[];
-                commands: {
-                    name: string;
-                    label: string;
-                    description: string;
-                }[];
-                links: string[];
-            } | undefined;
-            frame?: {
-                selectedTab: "Config" | "Stats" | "Status" | "Usage";
-                tabs: ("Config" | "Stats" | "Status" | "Usage")[];
-                hidden: boolean;
-                usage?: {
-                    startedAt: number;
-                    context: {
-                        window: number;
-                        tokens?: number | undefined;
-                        percent?: number | undefined;
-                    };
-                    rateLimits: {
-                        kind: string;
-                        percentUsed: number;
-                        resetsAt?: string | undefined;
-                    }[];
-                    cost?: {
-                        usd: number;
-                    } | undefined;
-                } | undefined;
-                stats?: {
-                    loading: boolean;
-                    outcome: "empty" | "error" | "loading" | "success" | "unavailable";
-                    view?: "Models" | "Overview" | undefined;
-                    range?: "30d" | "7d" | "all" | undefined;
-                    copyState?: "error" | "idle" | "pending" | "saved" | undefined;
-                    insight?: string | undefined;
-                    calendar?: string | undefined;
-                    problem?: string | undefined;
-                    data?: {
-                        totalSessions: number;
-                        totalMessages: number;
-                        totalDays: number;
-                        activeDays: number;
-                        modelUsage: Record<string, {
-                            inputTokens: number;
-                            outputTokens: number;
-                            cacheReadInputTokens: number;
-                            cacheCreationInputTokens: number;
-                            costUSD: number;
-                        }>;
-                        dailyActivity: {
-                            date: string;
-                            messageCount: number;
-                            sessionCount: number;
-                            toolCallCount: number;
-                        }[];
-                        streaks?: {
-                            currentStreak: number;
-                            longestStreak: number;
-                            currentStreakStart?: string | null | undefined;
-                            longestStreakStart?: string | null | undefined;
-                            longestStreakEnd?: string | null | undefined;
-                        } | undefined;
-                        longestSession?: {
-                            sessionId: string;
-                            duration: number;
-                            messageCount: number;
-                            timestamp: string;
-                        } | null | undefined;
-                        firstSessionDate?: string | null | undefined;
-                        lastSessionDate?: string | null | undefined;
-                        peakActivityDay?: string | null | undefined;
-                        peakActivityHour?: number | null | undefined;
-                        dailyModelTokens?: {
-                            date: string;
-                            tokensByModel: Record<string, number>;
-                        }[] | undefined;
-                        allTimeActivity?: {
-                            date: string;
-                            messageCount: number;
-                            sessionCount: number;
-                            toolCallCount: number;
-                        }[] | undefined;
-                    } | undefined;
-                } | undefined;
-                diagnostics?: string[] | undefined;
-                status?: {
-                    label: string;
-                    value: string;
-                }[][] | undefined;
-            } | undefined;
-            editor?: {
-                kind: "information";
-                revision: string;
-                title: string;
-                description: string;
-            } | {
-                kind: "choice";
-                revision: string;
-                disabled: boolean;
-                options: {
-                    value: string;
-                    label: string;
-                    disabled: boolean;
-                    description?: string | undefined;
-                    descriptionAnsi?: string | undefined;
-                    canEdit?: boolean | undefined;
-                    canReset?: boolean | undefined;
-                }[];
-                description?: string | undefined;
-                consent?: {
-                    description: string;
-                    cancelLabel: string;
-                    links?: string[] | undefined;
-                    defaultFocusValue?: string | undefined;
-                } | undefined;
-                title?: string | undefined;
-                value?: string | undefined;
-                previewValue?: string | undefined;
-                model?: {
-                    description: string;
-                    effortText: string;
-                    canAdjustEffort: boolean;
-                    draftEffort?: string | undefined;
-                    focusValue?: string | undefined;
-                    fastModeNotice?: string | undefined;
-                } | undefined;
-                canPreview?: boolean | undefined;
-                canToggleSyntax?: boolean | undefined;
-                preview?: {
-                    theme: {
-                        text: string;
-                        inverseText: string;
-                    };
-                    text: string;
-                    lines: string[];
-                    caption: string;
-                    ansi?: string | undefined;
-                } | undefined;
-            } | {
-                kind: "group";
-                revision: string;
-                title: string;
-                disabled: boolean;
-                rows: {
-                    key: string;
-                    label: string;
-                    kind: "boolean" | "choice";
-                    value: string | boolean;
-                    disabled: boolean;
-                    options?: {
-                        value: string;
-                        label: string;
-                        disabled: boolean;
-                    }[] | undefined;
-                }[];
-                description?: string | undefined;
-            } | {
-                kind: "form";
-                revision: string;
-                title: string;
-                submitLabel: string;
-                fields: {
-                    key: string;
-                    label: string;
-                    value: string;
-                }[];
-                live?: {
-                    id: string;
-                    feedback?: {
-                        text: string;
-                        tone: "error" | "success";
-                    } | undefined;
-                } | undefined;
-                consent?: {
-                    cancelLabel: string;
-                    focusField: "answer";
-                    links?: string[] | undefined;
-                    problem?: string | undefined;
-                } | undefined;
-                description?: string | undefined;
-            } | undefined;
-            commitPending?: boolean | undefined;
-            refreshPending?: boolean | undefined;
-            dismissible?: boolean | undefined;
-        };
-        savedKey?: string | undefined;
-        problem?: string | undefined;
-    }>;
-    agentPanel(options: {
-        client_id: string;
-        panel_id: string;
-    } & ({
-        operation: "close" | "read";
-    } | {
-        operation: "input";
-        text: string;
-    })): Promise<{
-        open: boolean;
-    }>;
-    answerAgentCommand(options: {
-        client_id: string;
-        command_id: string;
-        decision: "cancel" | "confirm";
-    }): Promise<{
-        answered: true;
-    }>;
-    clientEvent(options: {
-        client_id: string;
-        id: string;
-        sequence: number;
-        event: ClaudeUiClientInput;
-    }): Promise<{
-        handled: boolean;
-    }>;
-    /** Register only a mounted composer; registration alone does not attach or create a process. */
-    servePrompt(id: string, host: ClaudePromptHost): () => void;
-    /** Advertise only reverse APIs the attached view can actually answer. */
-    attach(options: ClaudeUiAttach): Promise<{
-        [x: string]: unknown;
-        surfaces: ("desktop" | "mobile" | "terminal" | "vscode")[];
-    }>;
-    detach(id: string): Promise<{
-        [x: string]: unknown;
-        detached: boolean;
-        surfaces: ("desktop" | "mobile" | "terminal" | "vscode")[];
-    }>;
-    render(options: ClaudeUiRender): Promise<ClaudeUiRenderResult>;
-    /** Read on mount: a pane opened before stream arming produces no roster push. */
-    panes(id: string): Promise<ClaudeUiPaneRoster>;
-    showPane(options: z.infer<typeof paneSelection>): Promise<{
-        [x: string]: unknown;
-        shown_id: string | null;
-    }>;
-    /** Null returns the keyboard and settles a refused plugin focus request. */
-    focusPane(options: Omit<z.infer<typeof paneSelection>, "id"> & {
-        id: string | null;
-    }): Promise<{
-        [x: string]: unknown;
-        focused_id: string | null;
-    }>;
-    /** Native runs ui.close with origin person; a hook may refuse, so never hide optimistically. */
-    closePane(options: {
-        client_id: string;
-        id: string;
-    }): Promise<{
-        [x: string]: unknown;
-        closed: boolean;
-    }>;
-    /** Native owns scroll hooks and the authoritative offset, including a denied move. */
-    scroll(options: ClaudeUiScroll): Promise<{
-        [x: string]: unknown;
-        moved: boolean;
-        offset: number;
-        deny?: string | undefined;
-        follow_end?: boolean | undefined;
-    }>;
-    /** Hooks may redirect the ring; the mounted owner validates the returned identity before applying it. */
-    focus(options: ClaudeUiFocus): Promise<ClaudeUiFocusResult>;
-    /** Native resolves configured keys; no terminal callback handle is accepted from the renderer. */
-    dismissIde(options: {
-        client_id: string;
-        revision: string;
-    }): Promise<{
-        handled: boolean;
-    }>;
-    key(options: ClaudeUiActionKeyRequest & {
-        client_id: string;
-    }): Promise<{
-        handled: boolean;
-        action_keys: {
-            revision: string;
-            bindings: {
-                key: string;
-                ctrl: boolean;
-                alt: boolean;
-                shift: boolean;
-                meta: boolean;
-                super: boolean;
-            }[][];
-            continuations: {
-                key: string;
-                ctrl: boolean;
-                alt: boolean;
-                shift: boolean;
-                meta: boolean;
-                super: boolean;
-            }[][];
-            pending: {
-                key: string;
-                ctrl: boolean;
-                alt: boolean;
-                shift: boolean;
-                meta: boolean;
-                super: boolean;
-            }[] | null;
-        };
-    }>;
-    /** Native owns prompt.edit hooks and latest-edit coalescing; app adoption raises no edit hook. */
-    promptEdit(options: ClaudeUiPromptEdit): Promise<ClaudeUiPromptFrame>;
-    /** Plugin rows follow the host's own completion rows; autocomplete never gates an edit or Send. */
-    promptAutocomplete(options: ClaudeUiPromptAutocomplete): Promise<ClaudeUiPromptCompletions>;
-    /** Native serializes callbacks per plugin; send the whole current draft on each edit. */
-    input(options: ClaudeUiInput): Promise<{
-        [x: string]: unknown;
-        handled: boolean;
-        element?: string | undefined;
-        value?: string | undefined;
-    }>;
-    /** Native validates membership against the Select options in the current drawing. */
-    select(options: ClaudeUiSelect): Promise<{
-        [x: string]: unknown;
-        handled: boolean;
-        element?: string | undefined;
-        value?: string | undefined;
-    }>;
-    /** Forward the capability issued in the current tree; a stale handle returns handled:false. */
-    press(options: ClaudeUiPress): Promise<{
-        [x: string]: unknown;
-        handled: boolean;
-        element?: string | undefined;
-    }>;
-};
-
-/** Host-to-CLI requests are independent of CLI-to-host tool permission requests. */
-declare function createHostControls(write: (value: unknown) => boolean, pid?: number): {
-    request(request: Record<string, unknown> & {
-        subtype: string;
-    }, timeoutMs?: number): Promise<unknown>;
-    receive(value: unknown): void;
-    close(error?: Error): void;
 };
 
 /**
@@ -9960,14 +6073,6 @@ declare function createThread(options: ThreadCreateData): {
     status: string;
 };
 
-declare const diagnosticAttachment: z.ZodObject<{
-    id: z.ZodString;
-    revision: z.ZodString;
-    anchorIds: z.ZodArray<z.ZodString>;
-    summary: z.ZodString;
-    detail: z.ZodString;
-}, z.core.$strict>;
-
 declare const featureServices: {
     chat: {
         sendBlockMessage: typeof sendBlockMessage;
@@ -9975,11 +6080,16 @@ declare const featureServices: {
         sendChoiceBlock: typeof sendChoiceBlock;
         sendQuestionBlock: typeof sendQuestionBlock;
         updateMessageState: typeof updateMessageState;
+        updateMessageBlock: typeof updateMessageBlock;
+        appendMessageBlockText: typeof appendMessageBlockText;
+        appendMessageText: typeof appendMessageText;
+        updateMessageToolEntry: typeof updateMessageToolEntry;
+        compactMessageBlock: typeof compactMessageBlock;
+        removeMessageBlock: typeof removeMessageBlock;
         streamMessageText: typeof streamMessageText;
         streamMessageBlockText: typeof streamMessageBlockText;
         createMarkerMessage: typeof createMarkerMessage;
         addMessagesToThread: typeof addMessagesToThread;
-        importClaudeSessionMessages: typeof importClaudeSessionMessages;
         createThread: typeof createThread;
         showThread: typeof showThread;
         visitThread: typeof visitThread;
@@ -10070,46 +6180,6 @@ declare const featureServices: {
     };
 };
 
-declare const field: z.ZodObject<{
-    client_id: z.ZodString;
-    surface: z.ZodEnum<{
-        desktop: "desktop";
-        mobile: "mobile";
-        vscode: "vscode";
-    }>;
-    plugin: z.ZodString;
-    handle: z.ZodNumber;
-    key: z.ZodOptional<z.ZodString>;
-    component: z.ZodOptional<z.ZodString>;
-    instance_id: z.ZodOptional<z.ZodString>;
-    instance_revision: z.ZodOptional<z.ZodNumber>;
-    value: z.ZodString;
-}, z.core.$strict>;
-
-declare const fill: z.ZodObject<{
-    text: z.ZodString;
-    mode: z.ZodEnum<{
-        replace: "replace";
-        insert: "insert";
-        append: "append";
-    }>;
-    ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
-    focus: z.ZodOptional<z.ZodLiteral<true>>;
-    decorations: z.ZodOptional<z.ZodArray<z.ZodObject<{
-        _apackThemeColor: z.ZodOptional<z.ZodString>;
-        _apackThemeBackgroundColor: z.ZodOptional<z.ZodString>;
-        start: z.ZodNumber;
-        end: z.ZodNumber;
-        color: z.ZodOptional<z.ZodString>;
-        backgroundColor: z.ZodOptional<z.ZodString>;
-        dimColor: z.ZodOptional<z.ZodBoolean>;
-        bold: z.ZodOptional<z.ZodBoolean>;
-        italic: z.ZodOptional<z.ZodBoolean>;
-        underline: z.ZodOptional<z.ZodBoolean>;
-        strikethrough: z.ZodOptional<z.ZodBoolean>;
-    }, z.core.$strict>>>;
-}, z.core.$strict>;
-
 /**
  * Threads Repository
  */
@@ -10177,78 +6247,7 @@ declare const flowsQueries: {
     readonly graph: (flowId: EARS.EntityId) => FlowExtendedData | null;
 };
 
-declare const focus: z.ZodObject<{
-    client_id: z.ZodString;
-    surface: z.ZodEnum<{
-        desktop: "desktop";
-        mobile: "mobile";
-        vscode: "vscode";
-    }>;
-    component: z.ZodEnum<{
-        Pane: "Pane";
-        AbovePrompt: "AbovePrompt";
-    }>;
-    instance_id: z.ZodString;
-    is_held: z.ZodBoolean;
-    element: z.ZodOptional<z.ZodNullable<z.ZodObject<{
-        plugin: z.ZodString;
-        key: z.ZodString;
-    }, z.core.$strict>>>;
-    by: z.ZodEnum<{
-        person: "person";
-        auto: "auto";
-    }>;
-}, z.core.$strict>;
-
-declare const focusResult: z.ZodObject<{
-    moved: z.ZodBoolean;
-    element: z.ZodNullable<z.ZodObject<{
-        plugin: z.ZodString;
-        key: z.ZodString;
-    }, z.core.$strict>>;
-    deny: z.ZodOptional<z.ZodString>;
-}, z.core.$loose>;
-
 declare function getHandle(key: string): CodexTurnHandle | undefined;
-
-declare const ideContext: z.ZodObject<{
-    text: z.ZodString;
-    revision: z.ZodString;
-}, z.core.$strict>;
-
-/** Import canonical native rows without acquiring or persisting live drawing capabilities. */
-declare function importClaudeSessionMessages({ threadId, transcript, sessionId }: {
-    threadId: EntityId;
-    transcript: readonly Record<string, unknown>[];
-    sessionId: string;
-}): number;
-
-declare const input: z.ZodObject<{
-    client_id: z.ZodString;
-    surface: z.ZodEnum<{
-        desktop: "desktop";
-        mobile: "mobile";
-        vscode: "vscode";
-    }>;
-    plugin: z.ZodString;
-    handle: z.ZodNumber;
-    key: z.ZodOptional<z.ZodString>;
-    component: z.ZodOptional<z.ZodString>;
-    instance_id: z.ZodOptional<z.ZodString>;
-    instance_revision: z.ZodOptional<z.ZodNumber>;
-    value: z.ZodString;
-    kind: z.ZodEnum<{
-        change: "change";
-        submit: "submit";
-    }>;
-}, z.core.$strict>;
-
-declare const instanceRelease: z.ZodObject<{
-    client_id: z.ZodString;
-    component: z.ZodString;
-    instance_id: z.ZodString;
-    instance_revision: z.ZodNumber;
-}, z.core.$strict>;
 
 declare const libraryCommands: {
     /** Follows every write above, until the returned function is called */
@@ -10320,20 +6319,6 @@ declare function listAll(opts?: {
  */
 declare function listen(eventType: string, callback: BrainEventCallback, options?: ListenOptions): () => void;
 
-declare const managedSettingsDiagnostic: z.ZodObject<{
-    file: z.ZodString;
-    path: z.ZodString;
-    message: z.ZodString;
-    severity: z.ZodOptional<z.ZodEnum<{
-        warning: "warning";
-        fatal: "fatal";
-    }>>;
-    errorClass: z.ZodOptional<z.ZodString>;
-    errno: z.ZodOptional<z.ZodString>;
-    statusOnly: z.ZodOptional<z.ZodBoolean>;
-    userWritable: z.ZodOptional<z.ZodBoolean>;
-}, z.core.$strict>;
-
 declare const noteCommands: {
     readonly create: (input: {
         title: string;
@@ -10397,128 +6382,8 @@ declare const noteQueries: {
     readonly expiredSoftDeleted: (maxAgeDays: number) => NoteEntity[];
 };
 
-/** Own the original attach client; never send Stop to its background worker on close. */
-declare function openBackgroundAttachment(continuation: ClaudeNativeContinuation, jobId: string, options?: SubcommandOptions): Promise<ClaudeBackgroundAttachment>;
-
-declare const paneRoster: z.ZodObject<{
-    panes: z.ZodArray<z.ZodObject<{
-        id: z.ZodString;
-        title: z.ZodString;
-        plugin: z.ZodString;
-        close_on_escape: z.ZodOptional<z.ZodLiteral<true>>;
-        hold_toasts: z.ZodOptional<z.ZodLiteral<true>>;
-        rows: z.ZodOptional<z.ZodNumber>;
-        columns: z.ZodOptional<z.ZodNumber>;
-    }, z.core.$loose>>;
-    shown_id: z.ZodNullable<z.ZodString>;
-    focused_id: z.ZodNullable<z.ZodString>;
-    focus_requested_id: z.ZodNullable<z.ZodString>;
-    _apack_action_keys: z.ZodOptional<z.ZodObject<{
-        revision: z.ZodString;
-        bindings: z.ZodArray<z.ZodArray<z.ZodObject<{
-            key: z.ZodString;
-            ctrl: z.ZodBoolean;
-            alt: z.ZodBoolean;
-            shift: z.ZodBoolean;
-            meta: z.ZodBoolean;
-            super: z.ZodBoolean;
-        }, z.core.$strict>>>;
-        continuations: z.ZodArray<z.ZodArray<z.ZodObject<{
-            key: z.ZodString;
-            ctrl: z.ZodBoolean;
-            alt: z.ZodBoolean;
-            shift: z.ZodBoolean;
-            meta: z.ZodBoolean;
-            super: z.ZodBoolean;
-        }, z.core.$strict>>>;
-        pending: z.ZodNullable<z.ZodArray<z.ZodObject<{
-            key: z.ZodString;
-            ctrl: z.ZodBoolean;
-            alt: z.ZodBoolean;
-            shift: z.ZodBoolean;
-            meta: z.ZodBoolean;
-            super: z.ZodBoolean;
-        }, z.core.$strict>>>;
-    }, z.core.$strict>>;
-}, z.core.$loose>;
-
-declare const paneSelection: z.ZodObject<{
-    client_id: z.ZodString;
-    surface: z.ZodEnum<{
-        desktop: "desktop";
-        mobile: "mobile";
-        vscode: "vscode";
-    }>;
-    id: z.ZodString;
-}, z.core.$strict>;
-
-declare const parentCommandResult: z.ZodDiscriminatedUnion<[z.ZodObject<{
-    kind: z.ZodLiteral<"not_command">;
-}, z.core.$strict>, z.ZodObject<{
-    kind: z.ZodLiteral<"review">;
-    text: z.ZodString;
-    removed: z.ZodNumber;
-}, z.core.$strict>, z.ZodObject<{
-    kind: z.ZodLiteral<"panel">;
-    id: z.ZodString;
-    commandName: z.ZodString;
-}, z.core.$strict>, z.ZodObject<{
-    kind: z.ZodLiteral<"command_output">;
-    messageId: z.ZodString;
-    commandName: z.ZodString;
-    text: z.ZodString;
-    isErrored: z.ZodBoolean;
-    outcome: z.ZodOptional<z.ZodString>;
-}, z.core.$strict>, z.ZodObject<{
-    kind: z.ZodLiteral<"blocked">;
-    message: z.ZodString;
-}, z.core.$strict>, z.ZodObject<{
-    kind: z.ZodLiteral<"confirmation">;
-    id: z.ZodString;
-    title: z.ZodString;
-    confirmLabel: z.ZodString;
-    commandName: z.ZodOptional<z.ZodString>;
-}, z.core.$strict>, z.ZodObject<{
-    kind: z.ZodLiteral<"command_complete">;
-    commandName: z.ZodString;
-    messageId: z.ZodString;
-    boundaryId: z.ZodOptional<z.ZodString>;
-    sessionId: z.ZodOptional<z.ZodString>;
-    conversationId: z.ZodOptional<z.ZodString>;
-}, z.core.$strict>], "kind">;
-
 /** The flow node a node ran under: the nearest flow above it, or undefined for a session's root */
 declare function parentFlowOf(id: RunNodeId): RunNode | undefined;
-
-/** Interpret the pinned native MCP primitive form surface; unknown constructs fail visibly. */
-declare function parseMcpElicitationForm(input: unknown, propertyOrder?: string[]): ClaudeMcpForm;
-
-declare const press: z.ZodObject<{
-    client_id: z.ZodString;
-    surface: z.ZodEnum<{
-        desktop: "desktop";
-        mobile: "mobile";
-        vscode: "vscode";
-    }>;
-    plugin: z.ZodString;
-    handle: z.ZodNumber;
-    key: z.ZodOptional<z.ZodString>;
-    href: z.ZodOptional<z.ZodString>;
-    component: z.ZodOptional<z.ZodString>;
-    instance_id: z.ZodOptional<z.ZodString>;
-    instance_revision: z.ZodOptional<z.ZodNumber>;
-}, z.core.$strict>;
-
-declare const promptAutocomplete: z.ZodObject<{
-    client_id: z.ZodString;
-    surface: z.ZodEnum<{
-        desktop: "desktop";
-        mobile: "mobile";
-        vscode: "vscode";
-    }>;
-    text: z.ZodString;
-    cursor: z.ZodNumber;
-}, z.core.$strict>;
 
 declare const promptCommands: {
     create: (data: _apackdev_sdk_repositories.PromptInput) => PromptEntity;
@@ -10526,55 +6391,6 @@ declare const promptCommands: {
     /** Marks the prompt deleted */
     delete: (id: _apackdev_sdk.EARS.EntityId) => void;
 };
-
-declare const promptCompletions: z.ZodObject<{
-    suggestions: z.ZodArray<z.ZodObject<{
-        text: z.ZodString;
-        label: z.ZodOptional<z.ZodString>;
-        description: z.ZodOptional<z.ZodString>;
-    }, z.core.$loose>>;
-    start: z.ZodOptional<z.ZodNumber>;
-    superseded: z.ZodOptional<z.ZodLiteral<true>>;
-}, z.core.$loose>;
-
-declare const promptEdit: z.ZodObject<{
-    client_id: z.ZodString;
-    surface: z.ZodEnum<{
-        desktop: "desktop";
-        mobile: "mobile";
-        vscode: "vscode";
-    }>;
-    text: z.ZodString;
-    cursor: z.ZodNumber;
-    by: z.ZodEnum<{
-        person: "person";
-        app: "app";
-    }>;
-    key: z.ZodOptional<z.ZodObject<{
-        key: z.ZodString;
-        ctrl: z.ZodOptional<z.ZodLiteral<true>>;
-        shift: z.ZodOptional<z.ZodLiteral<true>>;
-        meta: z.ZodOptional<z.ZodLiteral<true>>;
-    }, z.core.$strict>>;
-}, z.core.$strict>;
-
-declare const promptFrame: z.ZodObject<{
-    text: z.ZodString;
-    cursor: z.ZodNumber;
-    decorations: z.ZodOptional<z.ZodArray<z.ZodObject<{
-        start: z.ZodNumber;
-        end: z.ZodNumber;
-        color: z.ZodOptional<z.ZodString>;
-        backgroundColor: z.ZodOptional<z.ZodString>;
-        dimColor: z.ZodOptional<z.ZodBoolean>;
-        bold: z.ZodOptional<z.ZodBoolean>;
-        italic: z.ZodOptional<z.ZodBoolean>;
-        underline: z.ZodOptional<z.ZodBoolean>;
-        strikethrough: z.ZodOptional<z.ZodBoolean>;
-        virtualText: z.ZodOptional<z.ZodString>;
-    }, z.core.$loose>>>;
-    superseded: z.ZodOptional<z.ZodLiteral<true>>;
-}, z.core.$loose>;
 
 /**
  * Prompts Repository: the SDK's prompt repository (`promptRepository`), which owns their reads and writes, as the
@@ -10599,71 +6415,13 @@ declare const promptQueries: {
  */
 declare function registerSchedule(key: string, cronExpression: string, callback: () => void): void;
 
-declare const render: z.ZodObject<{
-    client_id: z.ZodString;
-    surface: z.ZodEnum<{
-        desktop: "desktop";
-        mobile: "mobile";
-        vscode: "vscode";
-    }>;
-    component: z.ZodString;
-    instance_id: z.ZodString;
-    props: z.ZodRecord<z.ZodString, z.ZodUnknown>;
-    instance_revision: z.ZodOptional<z.ZodNumber>;
-    viewport: z.ZodOptional<z.ZodObject<{
-        columns: z.ZodNumber;
-        rows: z.ZodNumber;
-        isFullscreen: z.ZodOptional<z.ZodBoolean>;
-    }, z.core.$strict>>;
-}, z.core.$strict>;
-
-declare const renderResult: z.ZodObject<{
-    _apack_ide: z.ZodCatch<z.ZodOptional<z.ZodObject<{
-        text: z.ZodString;
-        revision: z.ZodString;
-    }, z.core.$strict>>>;
-    _apack_action_keys: z.ZodCatch<z.ZodOptional<z.ZodObject<{
-        revision: z.ZodString;
-        bindings: z.ZodArray<z.ZodArray<z.ZodObject<{
-            key: z.ZodString;
-            ctrl: z.ZodBoolean;
-            alt: z.ZodBoolean;
-            shift: z.ZodBoolean;
-            meta: z.ZodBoolean;
-            super: z.ZodBoolean;
-        }, z.core.$strict>>>;
-        continuations: z.ZodArray<z.ZodArray<z.ZodObject<{
-            key: z.ZodString;
-            ctrl: z.ZodBoolean;
-            alt: z.ZodBoolean;
-            shift: z.ZodBoolean;
-            meta: z.ZodBoolean;
-            super: z.ZodBoolean;
-        }, z.core.$strict>>>;
-        pending: z.ZodNullable<z.ZodArray<z.ZodObject<{
-            key: z.ZodString;
-            ctrl: z.ZodBoolean;
-            alt: z.ZodBoolean;
-            shift: z.ZodBoolean;
-            meta: z.ZodBoolean;
-            super: z.ZodBoolean;
-        }, z.core.$strict>>>;
-    }, z.core.$strict>>>;
-    native_hint: z.ZodOptional<z.ZodBoolean>;
-    group_engine: z.ZodOptional<z.ZodBoolean>;
-    tree: z.ZodUnknown;
-    props: z.ZodRecord<z.ZodString, z.ZodUnknown>;
-    rewritten: z.ZodBoolean;
-    hooked: z.ZodBoolean;
-    output_rewritten: z.ZodOptional<z.ZodBoolean>;
-    output_in_native_process: z.ZodOptional<z.ZodBoolean>;
-    engine_output: z.ZodOptional<z.ZodString>;
-    drawn_by: z.ZodOptional<z.ZodArray<z.ZodString>>;
-    client_modules: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
-}, z.core.$loose>;
-
-/** A fresh original CLI sends to the existing supervisor; it never resumes or writes the conversation. */
-declare function replyBackgroundSession(continuation: ClaudeNativeContinuation, request: ClaudeBackgroundReplyRequest, options?: SubcommandOptions): Promise<ClaudeBackgroundSession>;
+/**
+ * Removes a message's block of that type.
+ *
+ * What a writer calls when its block should no longer be there — a tool-activity writer finalising with no
+ * entries. It used to be written as a rewrite of the *surviving* blocks, so removing one rewrote the other.
+ */
+declare function removeMessageBlock(messageId: EARS.EntityId, type: string): void;
 
 /**
  * Resolve all message reference types (images, files, notes, threads,
@@ -10680,44 +6438,11 @@ declare function resolveReferences(references: MessageReferences | undefined): P
     addDirs: string[];
 }>;
 
-declare const scroll: z.ZodObject<{
-    client_id: z.ZodString;
-    surface: z.ZodEnum<{
-        desktop: "desktop";
-        mobile: "mobile";
-        vscode: "vscode";
-    }>;
-    component: z.ZodEnum<{
-        Pane: "Pane";
-        AbovePrompt: "AbovePrompt";
-    }>;
-    instance_id: z.ZodString;
-    offset: z.ZodNumber;
-    by: z.ZodNumber;
-    body_rows: z.ZodNumber;
-    content_rows: z.ZodNumber;
-    pointer: z.ZodOptional<z.ZodObject<{
-        column: z.ZodNumber;
-        row: z.ZodNumber;
-    }, z.core.$strict>>;
-    keyed: z.ZodOptional<z.ZodArray<z.ZodObject<{
-        plugin: z.ZodString;
-        key: z.ZodString;
-        top: z.ZodNumber;
-        bottom: z.ZodNumber;
-    }, z.core.$strict>>>;
-}, z.core.$strict>;
-
 /**
  * The messages a query matches, most relevant first and newer before older, with their threads: what the threads
  * panel's search lists. A compaction marker is no message a person wrote or read, and is left out
  */
 declare function searchMessages(text: string, limit?: number): MessageSearchResult[];
-
-declare const selection: z.ZodObject<{
-    text: z.ZodOptional<z.ZodString>;
-    instance_id: z.ZodOptional<z.ZodString>;
-}, z.core.$strict>;
 
 /** Send a message with custom blocks */
 declare function sendBlockMessage(options: BlockMessageOptions): {
@@ -10814,7 +6539,7 @@ declare function storeHandle(key: string, handle: CodexTurnHandle): void;
  */
 declare function streamMessageBlockText(params: {
     messageId: EARS.EntityId;
-    block: string;
+    blockId: EARS.EntityId;
     at: number;
     text: string;
     done?: true;
@@ -10865,16 +6590,6 @@ declare const terminalCommands: {
      */
     markClosed: (id: EARS.EntityId) => void;
 };
-
-declare const terminalPlacement: z.ZodObject<{
-    component: z.ZodEnum<{
-        TurnDuration: "TurnDuration";
-        InfoNotice: "InfoNotice";
-    }>;
-    id: z.ZodString;
-    revision: z.ZodString;
-    anchorIds: z.ZodArray<z.ZodString>;
-}, z.core.$strict>;
 
 declare const terminalQueries: {
     byId: (id: EARS.EntityId) => TerminalEntity | undefined;
@@ -10933,15 +6648,8 @@ declare const threadQueries: {
     readonly allUnfiltered: () => ThreadEntity[];
     /** The first thread holding the role, e.g. the onboarding birth thread */
     readonly idByRole: (role: EARS.RoleKind) => EARS.EntityId | undefined;
-    readonly messages: (threadId: EARS.EntityId) => ({
-        id: `${string}-${string}` & {
-            readonly __entity?: "Message" | undefined;
-        };
-    } & Pick<MessageEntity & _apackdev_ears.BaseEntity & {
-        id: `${string}-${string}` & {
-            readonly __entity?: "Message" | undefined;
-        };
-    }, "compacted" | "isCommand" | "sender" | "text" | "timestamp">)[];
+    /** A thread's messages, assembled — the one reader, so nothing here picks its own fields */
+    readonly messages: (threadId: EARS.EntityId) => MessageEntity[];
     /** The threads this one links to, by kind, then the threads that block it, as `blocked by` */
     readonly linkedThreads: (threadId: EARS.EntityId) => Array<{
         relation: ThreadLinkRelation;
@@ -10959,20 +6667,6 @@ declare const threadQueries: {
      */
     readonly findArtifactByType: typeof findArtifactByThreadAndType;
 };
-
-declare const toolGroup: z.ZodObject<{
-    id: z.ZodString;
-    anchorIds: z.ZodArray<z.ZodString>;
-    members: z.ZodArray<z.ZodObject<{
-        toolUseId: z.ZodString;
-        revision: z.ZodString;
-    }, z.core.$strict>>;
-    usesEngine: z.ZodBoolean;
-    isActive: z.ZodBoolean;
-    isExpanded: z.ZodBoolean;
-    initialized: z.ZodBoolean;
-    revision: z.ZodString;
-}, z.core.$strict>;
 
 /**
  * Remove a named listener by its ID.
@@ -11008,6 +6702,19 @@ declare function update(artifactId: EARS.EntityId, options: UpdateArtifactOption
 declare function updateChatState(threadId: EARS.EntityId, chatState: string): void;
 
 /**
+ * Writes one of a message's blocks, and answers the row it wrote.
+ *
+ * **A block is a row, so a write costs that block and nothing else.** It was a field — the whole `blocks`
+ * array — and since an attribute is written whole, a 250ms tool-activity flush carried the accumulated
+ * thinking text with it, at 170x what a turn left behind. It also meant each writer had to pass the other's
+ * block or delete it, which is the coordination that no longer exists.
+ *
+ * Pass the `blockId` a previous write answered and this is one row by id, with no walk for the type. The
+ * first write of a turn has none and creates the row.
+ */
+declare function updateMessageBlock(messageId: EARS.EntityId, block: BlockConfig, blockId?: EARS.EntityId): EARS.EntityId | undefined;
+
+/**
  * Update message state with any mutable fields
  * Main interface for ad hoc message state updates (text, blocks, blockResponse, responseTimestamp): a window showing
  * the message sees it through the message's view, the one view a streamed reply re-runs
@@ -11025,10 +6732,19 @@ declare function updateChatState(threadId: EARS.EntityId, chatState: string): vo
  *   text: 'Updated message content'
  * });
  */
-declare function updateMessageState(messageId: EARS.EntityId, updates: Partial<Pick<MessageEntity, 'blockResponse' | 'blocks' | 'compacted' | 'context' | 'forkable' | 'references' | 'responseTimestamp' | 'status' | 'text'>>): void;
+declare function updateMessageState(messageId: EARS.EntityId, updates: Partial<Pick<MessageEntity, 'blockResponse' | 'compacted' | 'context' | 'forkable' | 'responseTimestamp' | 'status' | 'text'>>): void;
 
-/** Validate without coercion, default insertion or silently deleting unknown response properties. */
-declare function validateMcpElicitationForm(form: ClaudeMcpForm, input: unknown): ClaudeMcpFormValidation;
+/**
+ * Writes one of a block's tool entries, and answers its row.
+ *
+ * **The entries' half of what the segments did for the text.** An entry used to be a member of the
+ * block's `props.entries`, written whole on every flush — and `details.output` holds the untruncated tool
+ * result, so one read of a large file was written again once per later tool event. Writing the entry
+ * alone costs that entry.
+ *
+ * Pass the row id a previous write answered and it is one row by id, with no walk for the entry.
+ */
+declare function updateMessageToolEntry(blockId: EARS.EntityId, entry: ToolActivityEntry, entryRowId?: EARS.EntityId): EARS.EntityId | undefined;
 
 /** Parse a Codex JSONL file into an array of entries. */
 declare function viewByFile(filePath: string, opts?: {
