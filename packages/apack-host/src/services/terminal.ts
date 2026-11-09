@@ -188,6 +188,12 @@ function expose(held: Broker, session: BrokerSession): TerminalSession {
     scrollback: held.history,
     write: (data) => session.write(data),
     resize: (cols, rows) => session.resize(cols, rows),
+    // Projected rather than passed, so the broker's `foreground` — a measurement, and a host shape — stays
+    // out of the pack-facing contract
+    facts: async () => {
+      const { cwd, command, running, exitStatus } = await session.facts();
+      return { cwd, command, running, exitStatus };
+    },
     terminate: () => session.kill(),
   };
 }

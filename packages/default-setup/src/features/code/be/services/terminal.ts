@@ -10,6 +10,7 @@ import { createLogger } from '@apackdev/sdk/logger';
 import { services } from '#generated/services.ts'
 import type { TerminalSession } from '@apackdev/sdk/services'
 import { directoryToStart, shellToStart, submitFor } from './known-shells.ts'
+import { cwdAsReported } from '../utils/osc-cwd.ts'
 import { integrationDirectory, integrationFor } from './shell-integration.ts'
 
 const logger = createLogger('terminal');
@@ -321,6 +322,21 @@ class TerminalService {
   private running(id: string): TerminalSession | undefined {
     const state = this.terminals.get(id)?.state
     return state === undefined || state.kind === 'exited' ? undefined : state.session
+  }
+
+  /**
+   * Where the shell says it is, shaped for this platform — **asked of the broker, not parsed again here.**
+   *
+   * The broker reads the markers where the bytes arrive and is the authority on them, including a sequence
+   * split across two reads, which nothing watching chunks can see. What it answers is decoded but not
+   * shaped: an OSC 7 URL gives `/C:/Users/...` on Windows, which is X5, so the one platform reader still
+   * runs — over the authority's value instead of a second capture of the same bytes.
+   */
+  async reportedCwd(id: string): Promise<string | undefined> {
+    const session = this.running(id)
+    if (!session) return undefined
+    const { cwd } = await session.facts()
+    return cwd === null ? undefined : cwdAsReported(cwd)
   }
 
   async write(id: string, data: string): Promise<boolean> {

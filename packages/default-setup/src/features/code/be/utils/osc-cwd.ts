@@ -22,30 +22,11 @@
  */
 const LONGEST_PATH = 4096;
 
-/**
- * Percent-decoding that cannot throw.
- *
- * `decodeURIComponent` throws on a malformed escape, and the sequence this reads is written by whatever is
- * in the pty — so a program emitting `%zz` once made the app log an error, and emitting it from a prompt
- * hook made it log one on every prompt. A stray `%` is kept as itself, which is what a shell that encoded
- * nothing wrote.
- */
-function decoded(reported: string): string {
-  return reported.replace(/(%[0-9A-Fa-f]{2})+/g, escape_ => {
-    try {
-      return decodeURIComponent(escape_);
-    } catch {
-      return escape_;
-    }
-  });
-}
-
 /** A `file://` URL's path, or the string itself when it is already a path (OSC 633 and 1337 send one) */
 function pathOf(reported: string): string {
-  const decoded_ = decoded(reported);
-  // The regex that captured this keeps the leading slash, which is right for POSIX and wrong before a drive
-  const drive = /^[/\\]([A-Za-z]:[/\\].*)$/.exec(decoded_);
-  return drive ? drive[1]! : decoded_;
+  // OSC 7 is a URL, so its path keeps the leading slash — right for POSIX and wrong before a drive
+  const drive = /^[/\\]([A-Za-z]:[/\\].*)$/.exec(reported);
+  return drive ? drive[1]! : reported;
 }
 
 /**
@@ -60,7 +41,7 @@ function pathOf(reported: string): string {
  * is refused outright rather than repaired: the terminal keeps the directory it had, which is the failure
  * that loses nothing. Repairing one would store a path that is not where anything is.
  */
-export function cwdFromOsc(reported: string, platform: NodeJS.Platform = process.platform): string | undefined {
+export function cwdAsReported(reported: string, platform: NodeJS.Platform = process.platform): string | undefined {
   const path = pathOf(reported.trim());
   if (path.length === 0 || path.length > LONGEST_PATH) return undefined;
   // A control character cannot be in a path any of the three platforms would hand back, and one in a string

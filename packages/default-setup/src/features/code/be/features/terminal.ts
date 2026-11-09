@@ -7,7 +7,6 @@ import { defineHandlers } from '@apackdev/sdk/framework';
 import { setup, assign, fromPromise } from 'xstate'
 
 import { terminalService } from '../services/terminal.ts'
-import { cwdFromOsc } from '../utils/osc-cwd.ts'
 import type { TerminalInfo } from '../types.ts'
 import { createLogger, reportError } from '@apackdev/sdk/logger';
 import type { Reply } from '@apackdev/sdk/events';
@@ -56,13 +55,6 @@ const emitToFrontend = (event: TerminalNews) => {
 
 // Pre-compiled regex patterns for OSC sequence detection (hot path — runs on every terminal data event)
 // The control characters are the sequences themselves — ESC and BEL delimit every OSC string.
-/* eslint-disable no-control-regex */
-const OSC_PATTERNS = [
-  /\x1b\]7;file:\/\/[^/]*(\/.+?)(?:\x07|\x1b\\)/,       // OSC 7
-  /\x1b\]633;P;Cwd=(.+?)(?:\x07|\x1b\\)/,                 // OSC 633
-  /\x1b\]1337;CurrentDir=(.+?)(?:\x07|\x1b\\)/,            // OSC 1337
-] as const
-/* eslint-enable no-control-regex */
 
 /**
  * Where a terminal's output and exit go — **given to the service before the session exists**, not registered
@@ -70,32 +62,20 @@ const OSC_PATTERNS = [
  */
 const terminalHandlers = {
   onData(terminalId: string, data: string) {
-    // **Almost no chunk carries a marker, and one `indexOf` says so.** Every pattern below begins `ESC ]`,
-    // so a chunk without those two bytes cannot match any of them — and without this the loop ran all three
-    // non-anchored regexes over the whole of every chunk the pty wrote, which is the highest-frequency feed
-    // the app has, to find nothing. It matters more than it reads: shell integration is on by default now,
-    // so this runs for every terminal rather than for the few that had it switched on.
-    let cwdMatch: RegExpMatchArray | null = null
+    // **The markers say to ask; the broker says what they said.** Two bytes decide it — every sequence that
+    // carries a directory begins `ESC ]` — and the answer comes from the one parser that sees the whole
+    // stream. Matching them here was a second parser for one fact, over the highest-frequency feed the app
+    // has, and the copy that loses a sequence split across two reads.
     if (data.includes('\x1b]')) {
-      for (const pattern of OSC_PATTERNS) {
-        cwdMatch = data.match(pattern)
-        if (cwdMatch) break
-      }
-    }
-
-    if (cwdMatch) {
-      try {
-        // **Decoded through one reader** (X5): an OSC 7 file URL on Windows decodes to `/C:/Users/...`,
-        // which nothing there can open, and which used to be stored on the row and spawned from next launch
-        const newCwd = cwdFromOsc(cwdMatch[1]!)
-        if (!newCwd) return
-        const result = terminalService.updateCwd(terminalId, newCwd)
-        if (result) {
-          emitToFrontend({ type: 'terminal.CWD_CHANGED', data: { terminalId, cwd: result.cwd, title: result.title } })
-        }
-      } catch (error) {
-        logger.error('Failed to parse CWD from OSC sequence', { error })
-      }
+      void terminalService.reportedCwd(terminalId)
+        .then(cwd => {
+          if (cwd === undefined) return
+          const moved = terminalService.updateCwd(terminalId, cwd)
+          if (moved) {
+            emitToFrontend({ type: 'terminal.CWD_CHANGED', data: { terminalId, cwd: moved.cwd, title: moved.title } })
+          }
+        })
+        .catch(error => { logger.error(`Could not read where ${terminalId}'s shell is`, { error }) })
     }
 
     emitToFrontend({ type: 'terminal.OUTPUT', data: { terminalId, data } })
