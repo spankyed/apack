@@ -17,7 +17,7 @@ function setup(custom = true) {
   const detail = vi.fn(async () => ({value:'Original theme preview'}))
   const walk = (root: any): any[] => root ? [root, ...walk(root.child), ...walk(root.sibling)] : []
   const api = vm.runInNewContext(claudeTerminalThemePanelRuntime + ';({readNativeThemePanel,nativeThemePanel})', {
-    createHash, randomUUID, stripVTControlCharacters, process: { stdout: undefined }, setTimeout,
+    createHash, randomUUID, stripVTControlCharacters, Buffer, process: { stdout: undefined }, setTimeout,
     nativeModelFunctionHash: (fn: any) => fn === Root ? hashes.root : fn === Picker ? hashes.picker : fn === Editor ? hashes.editor : undefined,
     nativeModelFibers: walk, sameNativeSettingsFiber: (a: any, b: any) => a === b,
     currentNativeSettingsFiber: (root: any, target: any) => { if (!walk(root).includes(target)) throw Error('retired'); return target },
@@ -26,7 +26,7 @@ function setup(custom = true) {
     nativeGenericPermissionText: (_n: any, value: any) => value?.props?.children ?? value,
     awaitNativeSettingsReading: async (value: any) => value,
   })
-  const n = { themeRoots: { ai: () => new Map([[undefined, { container: { current: owner } }]]) } }
+  const n = { themeStorageGate: { W: () => false }, themeStorageKeys: { Tr: () => true }, themeRoots: { ai: () => new Map([[undefined, { container: { current: owner } }]]) } }
   const abort = new AbortController()
   async function act(command: any, revision?: string) {
     const before = await api.readNativeThemePanel(n, entry, abort.signal)
@@ -131,7 +131,7 @@ it('rejects edits from a previous native form identity', async () => {
 it('resets only an offered native token with the original reset callback', async () => {
   const s = setup(), reset = vi.fn(() => { s.entry.closed = true }), cache: any[] = Array(152)
   const list = { placeholder: 'Filter color tokens…', title: 'My theme', items: ['success'], onSelect: vi.fn(), onCancel: vi.fn(), onTab: { handler: reset }, renderPreview: () => 'current: #55aa66; preset: #ffffff' }
-  cache[151] = { props: list }
+  Object.assign(cache, { 24: 'dark', 25: 'My theme', 34: { success: '#55aa66' }, 36: 'team' }); cache[151] = { props: list }
   s.owner.child = { type: s.Editor, memoizedProps: {}, updateQueue: { memoCache: { data: [cache] } }, child: { memoizedProps: list } }
   await expect(s.act({ action: 'themeReset', value: 'missing' })).rejects.toThrow('unavailable')
   await s.act({ action: 'themeReset', value: 'success' }); expect(reset).toHaveBeenCalledExactlyOnceWith('success')

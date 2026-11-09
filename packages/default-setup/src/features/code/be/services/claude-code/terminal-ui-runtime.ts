@@ -332,6 +332,7 @@ async function initialize(){
   const mcpInputTiming=await import('/$bunfs/root/chunk-p22r2x2e.js');
   const nativeKeyEvents=await import('/$bunfs/root/chunk-174fh6cj.js'),nativeKeyBindings=await import('/$bunfs/root/chunk-tvszjqy2.js'),nativeKeyDialogs=await import('/$bunfs/root/chunk-9qecvs92.js');
   const themePreferences=await import('/$bunfs/root/chunk-gnpc8ecg.js');
+  const themeStore=await import('/$bunfs/root/chunk-5feck2gp.js'),themeStorageKeys=await import('/$bunfs/root/chunk-r1ydygv8.js'),themeStorageGate=await import('/$bunfs/root/chunk-gc95262s.js');
   const rename=await import('/$bunfs/root/chunk-swjk3jdr.js');
   const taskControls=await import('/$bunfs/root/chunk-nmzacz4p.js');
   const taskOutput=await import('/$bunfs/root/chunk-nbvvw59m.js');
@@ -363,7 +364,7 @@ async function initialize(){
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
-  return native={mcpInputTiming,nativeKeyEvents,nativeKeyBindings,nativeKeyDialogs,nativeHost,nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,themePreferences,rename,taskControls,taskOutput,taskOutputText,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  return native={mcpInputTiming,nativeKeyEvents,nativeKeyBindings,nativeKeyDialogs,nativeHost,nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,themePreferences,themeStore,themeStorageKeys,themeStorageGate,rename,taskControls,taskOutput,taskOutputText,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }

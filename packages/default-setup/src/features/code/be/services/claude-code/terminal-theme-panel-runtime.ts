@@ -58,13 +58,51 @@ async function readNativeThemePanel(n,entry,signal){
 async function waitForNativeThemePanel(n,entry,signal){
  const deadline=Date.now()+1500;while(true){try{return await readNativeThemePanel(n,entry,signal);}catch(error){signal?.throwIfAborted();entry.current();if(entry.closed||Date.now()>=deadline||!['Native theme panel is not uniquely mounted','Native theme controls are not ready','Native theme editor controls are not ready','Native theme changed while reading','Native generic permission theme changed while formatting'].includes(error.message))throw error;await new Promise(resolve=>setTimeout(resolve,20));}}
 }
+// The pinned editor starts persistence without returning its promise. Read the original storage
+// boundary instead of treating callback completion or the live preview as a saved result.
+function nativeThemePersistedValue(value){
+ if(!value||typeof value.name!=='string'||typeof value.base!=='string'||!value.overrides||typeof value.overrides!=='object'||Array.isArray(value.overrides))throw Error('Native theme persistence value changed');
+ const rows=Object.entries(value.overrides);if(rows.length>256||rows.some(([key,value])=>key.length>16384||typeof value!=='string'||value.length>16384))throw Error('Native theme persistence exceeds bound');
+ const encoded=JSON.stringify([value.name,value.base,rows.sort(([a],[b])=>a.localeCompare(b))]);if(Buffer.byteLength(encoded)>262144)throw Error('Native theme persistence exceeds bound');return encoded;
+}
+function nativeThemeCommitTarget(n,read){
+ // We's hash-pinned cache: writer dependencies base/name at24/25; submit dependencies
+ // overrides/slug at34/36. These are the original post-callback values, not an app rewrite.
+ const cache=read.identity;if(cache.length!==152||typeof cache[36]!=='string'||!cache[36]||cache[36].length>16384)throw Error('Native theme persistence target changed');
+ const provider=cache[27],filename=cache[36]+'.json';
+ return {slug:cache[36],provider,usesV5:n.themeStorageGate.W()&&provider!==undefined&&n.themeStorageKeys.Tr(filename),value:nativeThemePersistedValue({base:cache[24],name:typeof cache[25]==='string'?cache[25].trim():cache[25],overrides:cache[34]})};
+}
+async function nativeThemeCommitResult(n,entry,read,abort){
+ const commit=entry.themeCommit;if(!commit)return {snapshot:read.snapshot};
+ const current=()=>{abort.signal.throwIfAborted();nativeThemeCommandFrame(n,entry);if(entry.themeCommit!==commit)throw Error('Native theme persistence check replaced');const provider=read.identity?.[27],usesV5=n.themeStorageGate.W()&&provider!==undefined&&n.themeStorageKeys.Tr(commit.slug+'.json');if(provider!==commit.provider||usesV5!==commit.usesV5)throw Error('Native theme storage boundary changed');};
+ current();let persisted,confirmed=false;
+ try{
+  const provider=commit.provider,filename=commit.slug+'.json';
+  if(commit.usesV5){
+   const key=n.themeStorageKeys.Be.userConfigDir('themes',[filename]);
+   const result=await awaitNativeSettingsReading(provider.read([key]),abort.signal);current();
+   if(!result?.ok||!Array.isArray(result.value?.items)||result.value.items.length!==1)throw Error('Native theme storage read is unavailable');
+   const item=result.value.items[0];if(item?.found){const bytes=Buffer.from(item.value);if(bytes.length>262144)throw Error('Native theme persistence exceeds bound');persisted=JSON.parse(bytes.toString('utf8'));}
+  }else{
+   const themes=await awaitNativeSettingsReading(n.themeStore.Ecr(n.themeStore.ost(),'user'),abort.signal);current();
+   if(!Array.isArray(themes)||themes.length>256)throw Error('Native theme persistence exceeds bound');
+   const matches=themes.filter(theme=>theme.slug===commit.slug);if(matches.length>1)throw Error('Native theme persistence target is ambiguous');persisted=matches[0];
+  }
+  current();confirmed=!!persisted&&nativeThemePersistedValue(persisted)===commit.value;
+ }catch(error){current();}
+ read=await waitForNativeThemePanel(n,entry,abort.signal);current();
+ if(confirmed){delete entry.themeCommit;return {snapshot:read.snapshot};}
+ const pending=Date.now()<commit.until;
+ return {snapshot:{...read.snapshot,...pending?{commitPending:true}:{}},...pending?{}:{problem:'Claude Code has not confirmed saving this theme. Changes may only be previewed. Refresh or retry.'}};
+}
 async function nativeThemePanel(n,entry,request,abort){
  if(request.operation!=='read'&&entry.themeOperation)throw Error('A native theme action is pending');
  const operation={};if(request.operation!=='read')entry.themeOperation=operation;
  try{
-  let before=await waitForNativeThemePanel(n,entry,abort.signal);if(request.operation==='read')return {snapshot:before.snapshot};
+  let before=await waitForNativeThemePanel(n,entry,abort.signal);if(request.operation==='read')return nativeThemeCommitResult(n,entry,before,abort);
   if(request.operation!=='editor'||request.revision!==before.snapshot.revision||request.editor_revision!==before.snapshot.editor.revision)throw Error('Native theme changed; refresh before editing');
   const command=request.command,editor=before.snapshot.editor;let callback,args=[];
+  const tracksPersistence=command?.action==='save'&&before.controls.field==='color'||command?.action==='themeReset';
   if(command?.action==='cancel')callback=before.controls.cancel;
   else if(['select','preview','themeEdit','themeReset'].includes(command?.action)&&editor.kind==='choice'){
    const option=editor.options.find(option=>option.value===command.value);if(!option||option.disabled)throw Error('Native theme option is unavailable');
@@ -82,10 +120,12 @@ async function nativeThemePanel(n,entry,request,abort){
    if(!before.controls.valid)throw Error('Claude Code has not accepted this theme value');callback=before.controls.input.onSubmit;
   }
   if(typeof callback!=='function')throw Error('Native theme action is unavailable');
+  const persistenceBoundary=tracksPersistence?nativeThemeCommitTarget(n,before):undefined;
   abort.signal.throwIfAborted();const checked=await waitForNativeThemePanel(n,entry,abort.signal);if(checked.snapshot.revision!==before.snapshot.revision)throw Error('Native theme changed before action');const owner=nativeThemeCommandFrame(n,entry),live=currentNativeSettingsFiber(owner,before.fiber);
   if(!sameNativeSettingsFiber(owner,before.owner)||live.memoizedProps!==before.props)throw Error('Native theme changed before action');
   await awaitNativeSettingsReading(callback(...args),abort.signal);
-  const deadline=Date.now()+500;while(!entry.closed){try{const after=await readNativeThemePanel(n,entry,abort.signal);if(after.snapshot.revision!==before.snapshot.revision||Date.now()>=deadline)return {snapshot:after.snapshot};}catch(error){abort.signal.throwIfAborted();if(Date.now()>=deadline)throw error;}await new Promise(resolve=>setTimeout(resolve,20));}
+  if(command?.action==='cancel'||command?.action==='select'&&before.identity.length===152)delete entry.themeCommit;
+  const deadline=Date.now()+500;while(!entry.closed){try{const after=await readNativeThemePanel(n,entry,abort.signal);if(after.snapshot.revision!==before.snapshot.revision||Date.now()>=deadline){if(tracksPersistence){const target=nativeThemeCommitTarget(n,after);if(target.provider!==persistenceBoundary.provider||target.usesV5!==persistenceBoundary.usesV5)throw Error('Native theme storage boundary changed');entry.themeCommit={...target,until:Date.now()+1500};}return nativeThemeCommitResult(n,entry,after,abort);}}catch(error){abort.signal.throwIfAborted();if(Date.now()>=deadline)throw error;}await new Promise(resolve=>setTimeout(resolve,20));}
   return {snapshot:before.snapshot};
  }finally{if(entry.themeOperation===operation)delete entry.themeOperation;}
 }
