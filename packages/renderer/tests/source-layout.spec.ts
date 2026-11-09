@@ -10,6 +10,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { population } from '@apackdev/sdk/testing';
 
 const SRC = path.resolve(import.meta.dirname, '..', 'src');
 
@@ -19,7 +20,16 @@ const JOBS = ['adapters', 'boot', 'runtime', 'transport', 'views'];
 /** What may sit at the root of src/: the entry the window loads, the types, and what a bundler needs there */
 const ROOT_FILES = ['main.ts', 'types.ts', 'electron.d.ts', 'web-env.d.ts', 'style.css'];
 
-const entries = () => fs.readdirSync(SRC, { withFileTypes: true }).filter((e) => !e.name.startsWith('.'));
+/**
+ * **Every read of the tree goes through a guard**, because each case below filters it for offenders and
+ * asserts the result is empty: a folder named for a layer, a spec left in `src/`, a `.vue` where none
+ * belongs. That shape passes for nothing when the read found no files, so a renamed or moved `src/` would
+ * read as the layout holding rather than as a check with no subject.
+ */
+const read = <T>(what: string, xs: T[]): T[] => [...population(`${what} in renderer/src`, xs)];
+
+const entries = () => read('entries',
+  fs.readdirSync(SRC, { withFileTypes: true }).filter((e) => !e.name.startsWith('.')));
 
 describe('packages/renderer/src', () => {
   it('holds one folder per job, and no folder named for a layer', () => {
@@ -35,7 +45,7 @@ describe('packages/renderer/src', () => {
   });
 
   it('names no folder for a layer, at any depth', () => {
-    const dirs = fs.readdirSync(SRC, { recursive: true, withFileTypes: true })
+    const dirs = read('paths', fs.readdirSync(SRC, { recursive: true, withFileTypes: true }))
       .filter((e) => e.isDirectory())
       .map((e) => ({ name: e.name, path: path.relative(SRC, path.join(e.parentPath ?? e.path, e.name)) }));
 
@@ -47,7 +57,7 @@ describe('packages/renderer/src', () => {
   });
 
   it('keeps its tests in tests/, mirroring src/, as every other package does', () => {
-    const inSrc = fs.readdirSync(SRC, { recursive: true })
+    const inSrc = read('paths', fs.readdirSync(SRC, { recursive: true, encoding: 'utf-8' }))
       .map(String)
       .filter((f) => f.includes('__tests__') || /\.(spec|test)\.[cm]?[jt]sx?$/.test(f));
 
@@ -65,7 +75,7 @@ describe('packages/renderer/src', () => {
   });
 
   it('renders in views/ only: no .vue outside it', () => {
-    const vue = fs.readdirSync(SRC, { recursive: true }).map(String).filter((f) => f.endsWith('.vue'));
+    const vue = read('paths', fs.readdirSync(SRC, { recursive: true, encoding: 'utf-8' })).map(String).filter((f) => f.endsWith('.vue'));
 
     expect(vue.filter((f) => !f.startsWith('views/'))).toEqual([]);
   });
