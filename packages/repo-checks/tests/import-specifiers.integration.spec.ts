@@ -692,7 +692,7 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
   },
   findNodePtyImports: () => {
     packFixture({ 'src/f.ts': "import { spawn } from 'node-pty';" });
-    return findNodePtyImports(PACK_SRC, root, {});
+    return findNodePtyImports(PACK_SRC, root);
   },
   findEmulatorImports: () => {
     packFixture({ 'src/view.ts': "import { Terminal } from '@xterm/xterm';" });
@@ -1921,50 +1921,19 @@ describe('findCrossFeatureImports', () => {
 describe('findNodePtyImports', () => {
   it('reports a pack file loading the native pty binding', () => {
     packFixture({ 'src/terminal.ts': "import * as pty from 'node-pty';" });
-    expect(findNodePtyImports(PACK_SRC, root, {})).toEqual([`${PACK_FIXTURE}/src/terminal.ts:1: node-pty`]);
+    expect(findNodePtyImports(PACK_SRC, root)).toEqual([`${PACK_FIXTURE}/src/terminal.ts:1: node-pty`]);
   });
 
   it('reports a subpath too, which is how a binding is reached when the root is watched', () => {
     packFixture({ 'src/terminal.ts': "import { spawn } from 'node-pty/lib/index.js';" });
-    expect(findNodePtyImports(PACK_SRC, root, {})).toEqual([
+    expect(findNodePtyImports(PACK_SRC, root)).toEqual([
       `${PACK_FIXTURE}/src/terminal.ts:1: node-pty/lib/index.js`,
     ]);
   });
 
   it('leaves a pack that asks the host for a session alone', () => {
     packFixture({ 'src/terminal.ts': "import { services } from '#generated/services.ts';" });
-    expect(findNodePtyImports(PACK_SRC, root, {})).toEqual([]);
-  });
-
-  // A mock names a module path, which is what `readSource` reports and what every other rule here wants from
-  // it. These two are the pair: the factory form replaces the binding, and `importActual` loads it.
-  it('reads a mock of the binding as the replacement it is', () => {
-    packFixture({ 'tests/terminal.spec.ts': "vi.mock('node-pty', () => ({ spawn: () => {} }));" });
-    expect(findNodePtyImports(PACK_TESTS, root, {})).toEqual([]);
-  });
-
-  it('still reports a spec that asks for the real binding', () => {
-    packFixture({ 'tests/terminal.spec.ts': "const pty = await vi.importActual('node-pty');" });
-    expect(findNodePtyImports(PACK_TESTS, root, {})).toEqual([
-      `${PACK_FIXTURE}/tests/terminal.spec.ts:1: node-pty`,
-    ]);
-  });
-
-  // The exception is for a pack file the contract cannot serve yet, and it is listed with the capability it
-  // is waiting on — so the question each case asks is whether the list is read, and whether it expires.
-  it('leaves a file the list names alone', () => {
-    packFixture({ 'src/terminal.ts': "import * as pty from 'node-pty';" });
-    const listed = { [`${PACK_FIXTURE}/src/terminal.ts`]: 'throttles the pty while its transport drains' };
-    expect(findNodePtyImports(PACK_SRC, root, listed)).toEqual([]);
-  });
-
-  it('reports an entry whose file no longer loads the binding, so the list cannot outlive its reasons', () => {
-    packFixture({ 'src/terminal.ts': "import { services } from '#generated/services.ts';" });
-    const listed = { [`${PACK_FIXTURE}/src/terminal.ts`]: 'reads the exit signal beside the code' };
-    expect(findNodePtyImports(PACK_SRC, root, listed)).toEqual([
-      `${PACK_FIXTURE}/src/terminal.ts: listed in OWNS_ITS_OWN_PTY (reads the exit signal beside the code)`
-      + ' but it no longer imports node-pty',
-    ]);
+    expect(findNodePtyImports(PACK_SRC, root)).toEqual([]);
   });
 });
 

@@ -1,14 +1,14 @@
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { prepareClaudeNativeTerminal } from '#features/code/be/services/claude-code/terminal-owner.ts'
-const f = vi.hoisted(() => { vi.resetModules(); return { spawn: vi.fn(), journal: vi.fn(), request: vi.fn(), ready: true, nativePid: undefined as number | undefined, projection: { sessionId: '11111111-1111-4111-8111-111111111111', tasks: [] } } })
-vi.mock('node-pty', () => ({ spawn: f.spawn }))
+import { nativeSession } from '../../_support/native-terminal.ts'
+const f = vi.hoisted(() => { vi.resetModules(); return { open: vi.fn(), journal: vi.fn(), request: vi.fn(), ready: true, nativePid: undefined as number | undefined, projection: { sessionId: '11111111-1111-4111-8111-111111111111', tasks: [] } } })
+vi.mock('#generated/services.ts', () => ({ services: { terminal: { open: f.open } } }))
 vi.mock('#features/code/be/services/claude-code/terminal-journal.ts', () => ({ createClaudeNativeJournalReader: () => f.journal }))
 vi.mock('#features/code/be/services/claude-code/terminal-bridge.ts', () => ({ createClaudeTerminalBridge: async () => ({ pluginRoot: '/private/fixture-plugin', bunOptions: 'fixture-preload', close: async () => {}, get ready() { return f.ready }, get nativePid() { return f.nativePid }, projection: f.projection, transcripts: [], session: { metadata: { permissionMode: 'default' }, update() {} }, uiTransport: { request: f.request } }) }))
 beforeEach(() => { vi.clearAllMocks(); f.request.mockReset(); f.journal.mockReset().mockResolvedValue({ entries: [], pending: false, problems: [] }); f.projection.sessionId = '11111111-1111-4111-8111-111111111111'; f.ready = true; f.nativePid = undefined })
 async function fixture() {
-  let exit!: (event: { exitCode: number }) => void
-  f.spawn.mockImplementation(() => ({ pid: 0, onData() {}, onExit(callback: typeof exit) { exit = callback }, kill() { exit({ exitCode: 0 }) } }))
+  f.open.mockImplementation(async (_options, listeners) => nativeSession(listeners))
   const prepared = await prepareClaudeNativeTerminal({ sessionId: f.projection.sessionId, cwd: tmpdir(), cliPath: process.execPath, permissionMode: 'default', settings: { effective: {}, sources: [] } }), owner = await prepared.start()
   const notice = { id: 'original', revision: randomUUID(), sessionId: f.projection.sessionId, kind: 'autocompact_offer' as const, title: 'Autocompact sooner?', paragraphs: ['Original explanation'], selectedTokens: 400000, canPrevious: true, canNext: true, choices: [{ value: 'compact_keep' as const, label: 'Keep auto' }, { value: 'compact_accept' as const, label: 'Autocompact at 400k' }] }
   f.request.mockResolvedValueOnce({ notice, handoffPending: false, retirements: [] }); await owner.refreshNotice()

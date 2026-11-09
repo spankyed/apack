@@ -1,19 +1,19 @@
 import { tmpdir } from 'node:os'
 import { prepareClaudeNativeTerminal } from '#features/code/be/services/claude-code/terminal-owner.ts'
+import { nativeSession } from '../../_support/native-terminal.ts'
 
 const f = vi.hoisted(() => {
   vi.resetModules()
-  return { metadata: {permissionMode:'default',modelSelection:undefined as string|undefined}, spawn: vi.fn(), request: vi.fn(), submit: vi.fn(), update: vi.fn(), projection: { sessionId:'11111111-1111-1111-1111-111111111111', tasks: [] } }
+  return { metadata: {permissionMode:'default',modelSelection:undefined as string|undefined}, open: vi.fn(), request: vi.fn(), submit: vi.fn(), update: vi.fn(), projection: { sessionId:'11111111-1111-1111-1111-111111111111', tasks: [] } }
 })
-vi.mock('node-pty', () => ({spawn:f.spawn}))
+vi.mock('#generated/services.ts', () => ({services:{terminal:{open:f.open}}}))
 vi.mock('#features/code/be/services/claude-code/terminal-bridge.ts', () => ({createClaudeTerminalBridge: async () => ({
   pluginRoot:'/private/fixture-plugin', bunOptions:'fixture-preload', close:async()=>{}, ready:true,
   projection:f.projection, session:{metadata:f.metadata,update:f.update},
   uiTransport:{request:f.request}, submit:f.submit,
 })}))
 async function fixture(options: {model?: string;permissionMode?: 'plan';prePlanMode?: 'acceptEdits'} = {}) {
-  let exit!: (event:{exitCode:number})=>void
-  f.spawn.mockImplementation(() => ({pid:0,onData(){},onExit(callback:typeof exit){exit=callback},kill(){exit({exitCode:0})}}))
+  f.open.mockImplementation(async (_options, listeners) => nativeSession(listeners))
   const prepared = await prepareClaudeNativeTerminal({sessionId:f.projection.sessionId,cwd:tmpdir(),cliPath:process.execPath,permissionMode:'default',settings:{effective:{},sources:[]},...options})
   return {prepared,owner:await prepared.start()}
 }
