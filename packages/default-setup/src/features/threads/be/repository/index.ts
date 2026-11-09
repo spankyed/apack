@@ -696,21 +696,46 @@ function discardMessageText(messageId: EARS.EntityId): void {
   }
 }
 
+/**
+ * A block's own children, gone.
+ *
+ * **Its own function because a block is destroyed from two places** and only one of them remembered: a
+ * message being discarded walked them, and `removeMessageBlock` destroyed the block alone, leaving its
+ * segments and tool entries as rows nothing reaches. They are a block's working state and never the
+ * user's, so they go outright however the block goes.
+ */
+function discardBlockChildren(blockId: EARS.EntityId): void {
+  for (const segment of segmentsOf(blockId)) {
+    write(blockId).unlink(EARS.RelKind.HAS_TEXT, segment.id);
+    write(segment.id).destroy();
+  }
+  for (const entry of entriesOf(blockId)) {
+    write(blockId).unlink(EARS.RelKind.HAS_ENTRY, entry.id);
+    write(entry.id).destroy();
+  }
+}
+
 function discardBlocks(messageId: EARS.EntityId, how: 'trash' | 'destroy'): void {
   for (const edge of query.ids(messageId).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block)) {
-    // A segment is a block's working state and is never the user's, so it goes outright either way: a
-    // trashed block reads through `assembled`, which would otherwise assemble rows nothing reaches
-    for (const segment of segmentsOf(edge.target)) {
-      write(edge.target).unlink(EARS.RelKind.HAS_TEXT, segment.id);
-      write(segment.id).destroy();
-    }
-    for (const entry of entriesOf(edge.target)) {
-      write(edge.target).unlink(EARS.RelKind.HAS_ENTRY, entry.id);
-      write(entry.id).destroy();
-    }
+    discardBlockChildren(edge.target);
     if (how === 'trash') write(edge.target).trash();
     else write(edge.target).destroy();
   }
+}
+
+/**
+ * The position a new child takes among a parent's edges of a kind: past the furthest one recorded.
+ *
+ * **Not the count of them.** A count collides the moment one is removed — two blocks at 0 and 1, remove
+ * the first, and the next arrives at 1 beside the one already there, so the order a read sorts by is a
+ * tie. Reading the furthest recorded instead keeps positions unique for the life of the parent, which is
+ * all the sort needs; nothing renumbers and nothing reorders.
+ */
+function nextIndexOf(edges: ReadonlyArray<{ info?: unknown }>): number {
+  return edges.reduce((furthest, edge) => {
+    const at = indexOf(edge.info);
+    return at === Number.MAX_SAFE_INTEGER || at < furthest ? furthest : at + 1;
+  }, 0);
 }
 
 function blockIdOfType(messageId: EARS.EntityId, type: string): EARS.EntityId | undefined {
@@ -1199,7 +1224,7 @@ export const chatCommands = {
       return held;
     }
 
-    const index = query.ids(blockId).outEdges(EARS.RelKind.HAS_ENTRY, EARS.Entity.ToolEntry).length;
+    const index = nextIndexOf(query.ids(blockId).outEdges(EARS.RelKind.HAS_ENTRY, EARS.Entity.ToolEntry));
     const created = create(EARS.Entity.ToolEntry, {
       entryId: entry.id,
       tool: entry.tool,
@@ -1274,7 +1299,7 @@ export const chatCommands = {
       return held;
     }
 
-    const index = query.ids(messageId).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block).length;
+    const index = nextIndexOf(query.ids(messageId).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block));
     const created = create(EARS.Entity.Block, { type: block.type, props: block.props }).id();
     write(messageId).link(EARS.RelKind.HAS_BLOCK, created, { info: { index } });
     return created;
@@ -1285,6 +1310,7 @@ export const chatCommands = {
     const { messageId, type } = params;
     const held = blockIdOfType(messageId, type);
     if (!held) return;
+    discardBlockChildren(held);
     write(messageId).unlink(EARS.RelKind.HAS_BLOCK, held);
     write(held).destroy();
   },
