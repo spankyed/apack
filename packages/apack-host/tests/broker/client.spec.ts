@@ -119,9 +119,13 @@ const alive = (pid: number) => {
 /**
  * Waits until a process is gone.
  *
- * Polled rather than subscribed to: nothing emits an event when *another* process exits, which is what
- * `settles` is for. Its bound is the progress guard around the test rather than a clock, so a machine that
- * slows the wait slows the exit it is waiting for by the same load — which a 5s deadline here did not.
+ * **Polled because there is nothing to subscribe to, and that is the subject.** Both callers are failure
+ * paths on which `start` kills the child, drops its handle and throws, so the exit observer it installs on
+ * the success path was never installed. A case holding a handle of its own to await `exit` would watch a
+ * relationship the product does not have, and would pass while the product leaked the child.
+ *
+ * Its bound is the progress guard around the test rather than a clock, so load slows the wait and the exit
+ * it is waiting for alike — which a 5s deadline did not, failing correct code on a busy machine.
  */
 const untilGone = (pid: number): Promise<void> =>
   settles(() => {
