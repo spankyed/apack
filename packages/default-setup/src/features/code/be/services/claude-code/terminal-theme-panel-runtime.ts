@@ -38,7 +38,11 @@ async function readNativeThemePanel(n,entry,signal){
    if(input.value.length>16384||!isName&&typeof cache[98]?.props?.children!=='string')throw Error('Native theme field changed');
    const field=isName?'name':'color',title=isName?'Name custom theme':'Edit '+cache[98].props.children;
    let form=entry.themeForm;if(!form||!sameNativeSettingsFiber(form.fiber,fiber)||form.field!==field){form={fiber,field,id:randomUUID()};entry.themeForm=form;}
-   editor={kind:'form',title,live:{id:form.id},description:isName?'Create a personal theme. Themes supplied by extensions are forked before editing.':'Accepts rgb(r,g,b), #rrggbb, ansi256(n), or ansi:name. Changes preview as you type; Cancel restores the saved color.',submitLabel:isName?'Create theme':'Save color',fields:[{key:field,label:isName?'Theme name':'Color value',value:input.value}]};
+   // Preserve the original editor's decision context; paths and presets remain native-owned.
+   const context=[];for(const element of isName?[cache[77]]:[cache[93],cache[103]]){if(!element||typeof element!=='object')throw Error('Native theme editor context changed');const text=await awaitNativeSettingsReading(nativeGenericPermissionText(n,element),signal);if(typeof text!=='string'||text.length>65536)throw Error('Native theme editor context exceeded bound');context.push(text);}
+   const instructions=isName?'Create a personal theme. Themes supplied by extensions are forked before editing.':'Accepts rgb(r,g,b), #rrggbb, ansi256(n), or ansi:name. Changes preview as you type; Cancel restores the saved color.';
+   const description=[...context,instructions].join('\n');if(description.length>65536)throw Error('Native theme editor context exceeded bound');
+   editor={kind:'form',title,live:{id:form.id},description,submitLabel:isName?'Create theme':'Save color',fields:[{key:field,label:isName?'Theme name':'Color value',value:input.value}]};
    controls={input,field,cancel:input.onExit,valid:isName?cache[56]?.length>0:cache[91]===true};
   }else if(!inputs.length&&lists.length===1){
    delete entry.themeForm;const list=lists[0].memoizedProps;

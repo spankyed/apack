@@ -23,7 +23,7 @@ function setup(custom = true) {
     currentNativeSettingsFiber: (root: any, target: any) => { if (!walk(root).includes(target)) throw Error('retired'); return target },
     nativeThemePalette: () => ({text:'#ffffff',inverseText:'#000000'}),
     nativeGenericPermissionDetail: detail,
-    nativeGenericPermissionText: (_n: any, value: any) => value,
+    nativeGenericPermissionText: (_n: any, value: any) => value?.props?.children ?? value,
     awaitNativeSettingsReading: async (value: any) => value,
   })
   const n = { themeRoots: { ai: () => new Map([[undefined, { container: { current: owner } }]]) } }
@@ -74,12 +74,39 @@ it('rejects expired owners even if a former theme snapshot remains available', a
 })
 
 function fieldEditor(s: ReturnType<typeof setup>, field: 'name' | 'color', valid = true) {
-  const cache: any[] = Array(152); cache[56] = 'My theme'; cache[91] = valid; cache[98] = { props: { children: 'success' } }
+  const cache: any[] = Array(152); cache[56] = 'My theme'; cache[91] = valid; cache[98] = { props: { children: 'success' } }; cache[77] = { props: { children: 'Base: dark; save to /owned/themes/my-theme.json' } }; cache[93] = { props: { children: 'My theme' } }; cache[103] = { props: { children: 'Preset: #ffffff' } }
   const input = { value: field === 'name' ? 'My theme' : '#55aa66', placeholder: field === 'name' ? 'my-theme' : 'rgb(r,g,b)', focus: true, onChange: vi.fn(), onSubmit: vi.fn(), onExit: vi.fn() }
   cache[field === 'name' ? 73 : 113] = { props: { children: [null, { props: input }] } }
   s.owner.child = { type: s.Editor, memoizedProps: {}, updateQueue: { memoCache: { data: [cache] } }, child: { memoizedProps: input } }
   return input
 }
+
+it.each(['name', 'color'] as const)('retains the original %s editor context beside its controls', async field => {
+  const s = setup(); fieldEditor(s, field)
+  const { snapshot } = await s.api.readNativeThemePanel(s.n, s.entry, s.abort.signal)
+  const context = field === 'name' ? 'Base: dark; save to /owned/themes/my-theme.json' : 'My theme\nPreset: #ffffff'
+  expect(snapshot.editor.description).toContain(context + '\n')
+  expect(snapshot.editor.fields[0].key).toBe(field)
+})
+
+it.each(['missing', 'oversized'] as const)('refuses %s native editor context rather than fabricating it', async variant => {
+  const s = setup(); fieldEditor(s, 'color')
+  const cache = s.owner.child.updateQueue.memoCache.data[0]
+  if (variant === 'missing') delete cache[93]
+  else cache[93].props.children = 'x'.repeat(65537)
+  await expect(s.api.readNativeThemePanel(s.n, s.entry, s.abort.signal)).rejects.toThrow(variant === 'missing' ? 'context changed' : 'exceeded bound')
+})
+
+it('refuses context from a native form replaced while its text is formatting', async () => {
+  const s = setup(); fieldEditor(s, 'color')
+  const cache = s.owner.child.updateQueue.memoCache.data[0]
+  let release!: (text: string) => void
+  cache[93].props.children = new Promise<string>(resolve => { release = resolve })
+  const reading = s.api.readNativeThemePanel(s.n, s.entry, s.abort.signal)
+  cache[93] = { props: { children: 'Replacement theme' } }
+  release('Old theme')
+  await expect(reading).rejects.toThrow('changed while reading')
+})
 
 it('submits only an acknowledged name through the original form callback', async () => {
   const s = setup(), input = fieldEditor(s, 'name')
