@@ -39,7 +39,7 @@ describe('a shell ending under its terminal', () => {
     broker.endShell('broker-1', 0)
 
     expect(only(terminalService.list(), info.id), 'a clean exit closes the terminal').toEqual([])
-    expect(told.onExit).toHaveBeenCalledWith(info.id, 0)
+    expect(told.onExit).toHaveBeenCalledWith(info.id)
     expect(told.onCrashed, 'and is not a crash').not.toHaveBeenCalled()
     await app.stop()
     resetTestData()

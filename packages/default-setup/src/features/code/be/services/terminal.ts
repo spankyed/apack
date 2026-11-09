@@ -131,8 +131,16 @@ export type TerminalClose =
 
 export interface TerminalHandlers {
   onData(terminalId: string, data: string): void
-  /** The shell ended and the terminal is gone with it */
-  onExit(terminalId: string, exitCode: number): void
+  /**
+   * The shell ended and the terminal is gone with it.
+   *
+   * **No status, because the terminal is gone and nothing asks why.** `terminal.CLOSED` carries the id and
+   * nothing else, so a code here was read by no one — and reporting `0` for a shell that ended without one,
+   * to satisfy a non-nullable parameter, read as a decision about an unknown status rather than the type
+   * workaround it was. A crash is the case where the status matters, and that is `onCrashed`, which takes it
+   * as `number | null`.
+   */
+  onExit(terminalId: string): void
   /**
    * The shell ended badly and the terminal was **kept**, so the user can see what it said and start it
    * again where it was.
@@ -149,7 +157,7 @@ class TerminalService {
   /** Hands out `Terminal.opening` tokens; monotonic per process, and only ever compared for equality */
   private openings = 0
   /**
-   * The open tokens whose session has been asked for and whose terminal is not recorded yet.
+   * The opens in flight, each holding the exit that arrived before its terminal was recorded.
    *
    * **An exit can arrive inside the open that was going to return its session.** The host delivers a
    * session's exit in the turn the broker's frame is read, so a shell that dies instantly — a bad
@@ -158,9 +166,7 @@ class TerminalService {
    * session that had already gone: every window drew it, writes to it answered success, and no `CRASHED`
    * was ever sent, which is precisely the state `TerminalState` exists to make unreachable.
    */
-  private starting = new Set<number>()
-  /** An exit that arrived before its terminal was recorded, by the open token it belongs to */
-  private earlyExits = new Map<number, number | null>()
+  private starting = new Map<number, { exit?: { code: number | null } }>()
 
   async create(options: TerminalCreate, handlers: TerminalHandlers, sizedBy?: string): Promise<TerminalInfo> {
     // Check terminal limit (0 = no limit)
@@ -180,11 +186,11 @@ class TerminalService {
 
     // **Arranged before the shell starts, not typed into it after** (D3, F14). `undefined` means this
     // platform or shell has no arrangement yet, and the session is started exactly as the user would.
-    const integration = await this.arrangeIntegration(shell)
+    const integration = await this.arrangeIntegration(shell, codeSettings)
 
     // The handlers are bound to the id before the session exists, so no byte can arrive with nowhere to go
     const opening = ++this.openings
-    this.starting.add(opening)
+    this.starting.set(opening, {})
     try {
       const session = await services.terminal.open({
         cols, rows, shell, cwd, args: integration?.args, env: integration?.env,
@@ -208,7 +214,6 @@ class TerminalService {
       return published(terminal)
     } finally {
       this.starting.delete(opening)
-      this.earlyExits.delete(opening)
     }
   }
 
@@ -220,9 +225,12 @@ class TerminalService {
    * status, which is the state a window needs in order to restart or close it.
    */
   private settleEarlyExit(id: string, opening: number, handlers: TerminalHandlers): void {
-    if (!this.earlyExits.has(opening)) return
-    const code = this.earlyExits.get(opening)!
-    this.earlyExits.delete(opening)
+    const inFlight = this.starting.get(opening)
+    if (!inFlight?.exit) return
+    const { code } = inFlight.exit
+    // Taken, so a second settle for one open — `restart`'s success path and its `catch` both reach here —
+    // ends the terminal once
+    delete inFlight.exit
     this.ended(id, code, handlers)
   }
 
@@ -244,8 +252,9 @@ class TerminalService {
     // there is no terminal to end and no row to trash yet; whichever path asked for the session applies it
     // the moment both exist (`settleEarlyExit`). Dropping it left a terminal recorded `live` over a session
     // that had already gone.
-    if (this.starting.has(opening)) {
-      this.earlyExits.set(opening, code)
+    const inFlight = this.starting.get(opening)
+    if (inFlight) {
+      inFlight.exit = { code }
       return
     }
     const terminal = this.terminals.get(id)
@@ -261,7 +270,7 @@ class TerminalService {
     // handed this exit before it could return — describes a shell that is gone rather than one that is live
     if (terminal) terminal.state = { kind: 'exited', code }
     if (code === 0 || closing) {
-      this.removed(id, code, handlers)
+      this.removed(id, handlers)
       return
     }
     if (!terminal) return
@@ -277,10 +286,10 @@ class TerminalService {
    * already trashed, so the next boot restores a terminal that was closed. Every close comes through here,
    * which is what makes *closed* mean one thing.
    */
-  private removed(id: string, code: number | null, handlers: TerminalHandlers): void {
+  private removed(id: string, handlers: TerminalHandlers): void {
     this.terminals.delete(id)
     try { repository.terminalCommands.markClosed(id as EARS.EntityId) } catch (error) { logger.error(`Could not close ${id}`, { error }) }
-    handlers.onExit(id, code ?? 0)
+    handlers.onExit(id)
   }
 
   /**
@@ -311,7 +320,7 @@ class TerminalService {
     const opening = ++this.openings
     try {
       const integration = await this.arrangeIntegration(this.shellFor(shell))
-      this.starting.add(opening)
+      this.starting.set(opening, {})
       const session = await services.terminal.open({
         cols, rows, shell, cwd, args: integration?.args, env: integration?.env,
       }, {
@@ -337,7 +346,6 @@ class TerminalService {
       throw error
     } finally {
       this.starting.delete(opening)
-      this.earlyExits.delete(opening)
     }
   }
 
@@ -424,6 +432,13 @@ class TerminalService {
   updateCwd(id: string, newCwd: string): { cwd: string; title?: string } | null {
     const terminal = this.terminals.get(id)
     if (!terminal) return null
+    // **The shell reports its directory before every prompt, and it is the same directory nearly every
+    // time.** What arrives is a report, not a change: the hooks emit OSC 7 from the prompt, so a command
+    // that runs and finishes in one place reports it twice. Writing anyway cost a row upsert and a commit,
+    // plus a broadcast every window answers by re-mapping its terminals and redrawing the tab strip — once
+    // per command run, where the directory moves once per `cd`. `null` is what the caller already reads as
+    // nothing to announce.
+    if (newCwd === terminal.info.cwd) return null
 
     terminal.info.cwd = newCwd
 
@@ -456,7 +471,7 @@ class TerminalService {
     // that waits for that answer never completes. The terminal was kept for its last words — this is the
     // user finally dismissing it.
     if (terminal.state.kind === 'exited') {
-      this.removed(id, terminal.state.code, handlers)
+      this.removed(id, handlers)
       return 'closed'
     }
 
@@ -471,7 +486,7 @@ class TerminalService {
       // The session is gone whatever the broker answered; a row left active would outlive it (L2), and a
       // window that was never told would go on drawing a terminal this process has forgotten. The broker
       // answered nothing, so there is no status to carry.
-      this.removed(id, null, handlers)
+      this.removed(id, handlers)
       return 'refused'
     }
   }
@@ -514,8 +529,11 @@ class TerminalService {
    * The files are rewritten on every session rather than once: they are small, they are ours, and the
    * alternative is a stale copy surviving an app upgrade with nobody able to say which version wrote it.
    */
-  private async arrangeIntegration(shell: string) {
-    const settings = featureSettings.forFeature('code').get()
+  private async arrangeIntegration(shell: string, settings = featureSettings.forFeature('code').get()) {
+    // **Read by default, passed where the caller already has it.** `.get()` is not a field read: it queries
+    // the row, clones it, validates the whole settings document across every feature, then merges — so
+    // `create` was paying for it twice and `restoreAll` once per restored row, for an answer that cannot
+    // differ between rows of one run.
     if (settings?.enableShellIntegration === false) return undefined
 
     const directory = integrationDirectory()
@@ -546,7 +564,7 @@ class TerminalService {
   private async adopt(row: TerminalEntity, session: string, handlers: TerminalHandlers): Promise<boolean> {
     const shell = this.shellFor(row.shell)
     const opening = ++this.openings
-    this.starting.add(opening)
+    this.starting.set(opening, {})
     try {
       const taken = await services.terminal.adopt(session, {
         onOutput: (data) => handlers.onData(row.id, data),
@@ -581,7 +599,6 @@ class TerminalService {
       return false
     } finally {
       this.starting.delete(opening)
-      this.earlyExits.delete(opening)
     }
   }
 
@@ -602,6 +619,8 @@ class TerminalService {
   async restoreAll(handlers: TerminalHandlers): Promise<void> {
     const persisted = repository.terminalQueries.all()
 
+    // One read for the restore: every row asks the same question of the same document
+    const codeSettings = featureSettings.forFeature('code').get()
     for (const row of persisted) {
       if (this.terminals.has(row.id)) continue
       // Asked rather than assumed: a stored id is a name, and offering a stale one costs one refused request
@@ -613,11 +632,11 @@ class TerminalService {
       const cwd = this.directoryFor(row.cwd)
       const opening = ++this.openings
       try {
-        const integration = await this.arrangeIntegration(shell)
+        const integration = await this.arrangeIntegration(shell, codeSettings)
         // **The same decision as every other session's**, rather than a second copy of it: a restored
         // terminal whose shell dies keeps its screen and reports the crash, where this used to delete the
         // terminal and report a clean exit 0 — losing the error, and only for terminals that came from a row
-        this.starting.add(opening)
+        this.starting.set(opening, {})
         const session = await services.terminal.open(
           { cols: row.cols, rows: row.rows, shell, cwd, args: integration?.args, env: integration?.env },
           {
@@ -658,7 +677,6 @@ class TerminalService {
         repository.terminalCommands.markClosed(row.id)
       } finally {
         this.starting.delete(opening)
-        this.earlyExits.delete(opening)
       }
     }
   }
