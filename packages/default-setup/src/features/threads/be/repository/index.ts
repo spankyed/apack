@@ -423,11 +423,23 @@ function getThreadArtifacts(threadId: EARS.EntityId): ArtifactItem[] {
  * so this runs for the one message that changed rather than for a page of them.
  */
 function blocksOf(messageId: EARS.EntityId): BlockConfig[] {
+  return blockRowsOf(messageId).map(({ type, props }) => ({ type, props }));
+}
+
+/**
+ * The same, each with the row it came from.
+ *
+ * **For a caller that may not assume one block per type.** `writeMessageBlock` resolves a block by type,
+ * which is right for a streaming writer that owns the only block of its own, and wrong for anything walking
+ * a message's blocks: a message may hold two of a type, and writing those back by type would put the second
+ * one's content on the first one's row.
+ */
+function blockRowsOf(messageId: EARS.EntityId): Array<{ id: EARS.EntityId; type: string; props: Record<string, any> }> {
   return query.ids(messageId).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block)
     .map((edge) => ({ edge, row: query.ids(edge.target).pickOne(['type', 'props'] as const) }))
     .filter((held): held is { edge: typeof held.edge; row: NonNullable<typeof held.row> } => held.row !== null)
     .sort((a, b) => indexOf(a.edge.info) - indexOf(b.edge.info))
-    .map(({ row }) => ({ type: row.type as string, props: (row.props ?? {}) as Record<string, any> }));
+    .map(({ edge, row }) => ({ id: edge.target, type: row.type as string, props: (row.props ?? {}) as Record<string, any> }));
 }
 
 /** The position an edge records; an edge written before one was recorded sorts last rather than first */
@@ -830,30 +842,32 @@ export const chatCommands = {
       .set('responseTimestamp', now);
 
     let updatedBlocks: BlockConfig[] | undefined;
-    // Assembled from the rows: `blocks` is not an attribute, and a pick naming it answered `undefined`
-    const storedBlocks = blocksOf(messageId);
+    // Assembled from the rows: `blocks` is not an attribute, and a pick naming it answered `undefined`.
+    // With their ids, because a message may hold two blocks of a type and only one holds this button
+    const storedRows = blockRowsOf(messageId);
 
-    if (storedBlocks.length > 0 && response.buttonId) {
-      let buttonToggled = false;
-      const newBlocks = storedBlocks.map((block: BlockConfig) => {
-        if (block.type === 'button-group') {
-          const updatedButtons = block.props.buttons.map((button: any) => {
-            if (button.toggleStates && button.id === response.buttonId) {
-              buttonToggled = true;
-              return { ...button, state: button.state === 'on' ? 'off' : 'on' };
-            }
-            return button;
-          });
-          return { ...block, props: { ...block.props, buttons: updatedButtons } };
-        }
-        return block;
+    if (storedRows.length > 0 && response.buttonId) {
+      const written: EARS.EntityId[] = [];
+      const newRows = storedRows.map((held) => {
+        if (held.type !== 'button-group') return held;
+        let holdsIt = false;
+        const buttons = held.props.buttons.map((button: any) => {
+          if (button.toggleStates && button.id === response.buttonId) {
+            holdsIt = true;
+            return { ...button, state: button.state === 'on' ? 'off' : 'on' };
+          }
+          return button;
+        });
+        if (!holdsIt) return held;
+        written.push(held.id);
+        return { ...held, props: { ...held.props, buttons } };
       });
 
-      if (buttonToggled) {
-        updatedBlocks = newBlocks;
-        // Only the block that holds the button is written; its neighbours' rows are untouched
-        for (const block of newBlocks.filter((one) => one.type === 'button-group')) {
-          chatCommands.writeMessageBlock({ messageId, block });
+      if (written.length > 0) {
+        updatedBlocks = newRows.map(({ type, props }) => ({ type, props }));
+        // By id, and only the rows that changed: a neighbour's row is never rewritten to reach one
+        for (const row of newRows.filter((held) => written.includes(held.id))) {
+          chatCommands.writeMessageBlock({ messageId, block: { type: row.type, props: row.props }, blockId: row.id });
         }
       }
     }
