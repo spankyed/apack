@@ -1,5 +1,5 @@
 import type { ClaudeHookRegistrar } from '#features/code/be/services/claude-code/native-plugin/claude-plugin-api.ts'
-import { createApackNativePlugin } from '#features/code/be/services/claude-code/native-plugin/program.ts'
+import { createPluginFixture } from './native-plugin/harness.ts'
 // Each fixture holds the clock still, so the backoff below is a fact about elapsed time and not about speed
 afterEach(()=>{vi.restoreAllMocks()})
 const CONFIG = { socketPath: '/owned.sock', token: 'private-token', background: { parentSessionId: '11111111-1111-4111-8111-111111111111', socketPath: '/child.sock', token: 'child-token' } }
@@ -9,7 +9,7 @@ function fixture(){
  const api={session:{id:async()=>child,cwd:async()=>'/owned',model:async()=>'sonnet',turns:async()=>2,usage:async()=>({startedAt:1,cost:{usd:0.001}})},agent:{list:async()=>[]},settings:{read:async()=>({})},env:{get:async():Promise<string|undefined>=>undefined},clock:{every:vi.fn((_ms:number,callback:()=>void)=>{tick=callback;return{cancel}})},process:{run:vi.fn(async()=>({exitCode:0,stdout:'119',stderr:''}))},http:{fetch:vi.fn(async(url:string,init:any)=>{const path=new URL(url).pathname;requests.push({path,body:JSON.parse(init.body)});if(lost)throw Error('Owned socket disappeared');return{ok:!['/transcript','/ui-ready'].includes(path)&&!(refused&&path==='/background-register'),text:JSON.stringify(path==='/poll'?{background:true}:path==='/background-register'?{token:'child-lease'}:{})}})}}
  vi.spyOn(Date,'now').mockImplementation(()=>now)
  const register=((event:string,...args:any[])=>hooks.set(event,args.at(-1))) as unknown as ClaudeHookRegistrar
- createApackNativePlugin(CONFIG).register(register)
+ createPluginFixture(CONFIG)(register)
  const next=async(value:any)=>value
  return{api,hooks,requests,cancel,lose:()=>{lost=true},restore:()=>{lost=false},advance:(ms:number)=>{now+=ms},refuse:()=>{refused=true},tick:()=>tick(),async start(){await hooks.get('classic.*')!(api,{session_id:child,transcript_path:'/owned/'+child+'.jsonl'},next);await hooks.get('session.start')!(api,{},next)},render:()=>hooks.get('ui.render')!(api,{},next)}
 }
@@ -90,7 +90,7 @@ function mainSessionFixture(){
  let sessionId=CONFIG.background.parentSessionId,turns=1
  const hooks=new Map<string,(...args:any[])=>Promise<any>>(),requests:{path:string;body:any}[]=[],ticks:(()=>void)[]=[]
  const api={session:{id:async()=>sessionId,cwd:async()=>'/'+sessionId,model:async()=>sessionId,turns:async()=>turns,usage:async()=>({startedAt:1})},agent:{list:async()=>[]},settings:{read:vi.fn(async()=>({}))},env:{get:vi.fn(async():Promise<string|undefined>=>undefined)},prompt:{read:vi.fn(async()=>({text:''})),fill:vi.fn(async()=>({isFilled:true}))},clock:{every:vi.fn((_ms:number,tick:()=>void)=>{ticks.push(tick);return{cancel:vi.fn()}})},http:{fetch:vi.fn(async(url:string,init:any)=>{const path=new URL(url).pathname;requests.push({path,body:JSON.parse(init.body)});return{ok:true,text:'{}'}})}}
- createApackNativePlugin(CONFIG).register(((event:string,...args:any[])=>hooks.set(event,args.at(-1))) as unknown as ClaudeHookRegistrar)
+ createPluginFixture(CONFIG)(((event:string,...args:any[])=>hooks.set(event,args.at(-1))) as unknown as ClaudeHookRegistrar)
  const fire=(event:string,next=async()=>({}))=>hooks.get(event)!(api,{},next)
  return{api,requests,fire,tick:()=>ticks.at(-1)!(),setTurns:(value:number)=>{turns=value},async start(id=sessionId){sessionId=id;await fire('session.start')}}
 }
@@ -143,4 +143,15 @@ it('does not publish a held old submission as belonging to the fresh session',as
  expect(f.requests.filter(r=>r.path==='/submission')).toHaveLength(0)
  await f.fire('prompt.submit')
  expect(f.requests.filter(r=>r.path==='/submission').map(r=>r.body.id)).toEqual(['fresh-command'])
+})
+
+it('fences the old prompt before waiting on fresh-session readiness delivery',async()=>{
+ const f=mainSessionFixture(),read=held<any>(),ready=held<{ok:boolean;text:string}>(),fresh='77777777-7777-4777-8777-777777777777'
+ f.api.prompt.read.mockImplementationOnce(()=>read.promise)
+ f.api.http.fetch.mockImplementation(async(url:string,init:any)=>{const path=new URL(url).pathname,body=JSON.parse(init.body);f.requests.push({path,body});if(path==='/ui-ready'&&body.sessionId===fresh)return ready.promise;return{ok:true,text:JSON.stringify(path==='/poll'?{id:'old-command',text:'draft'}:{})}})
+ await f.start();f.tick();await vi.waitFor(()=>expect(f.api.prompt.read).toHaveBeenCalledOnce())
+ const starting=f.start(fresh);await vi.waitFor(()=>expect(f.requests.some(r=>r.path==='/ui-ready'&&r.body.sessionId===fresh)).toBe(true))
+ read.resolve({text:''});await flushPlugin();expect(f.api.prompt.fill).not.toHaveBeenCalled()
+ expect(f.api.clock.every).toHaveBeenCalledTimes(2)
+ ready.resolve({ok:true,text:'{}'});await starting
 })

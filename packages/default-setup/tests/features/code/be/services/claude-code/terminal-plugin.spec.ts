@@ -1,6 +1,6 @@
 import { runInNewContext } from 'node:vm'
 import type { ClaudeHookRegistrar } from '#features/code/be/services/claude-code/native-plugin/claude-plugin-api.ts'
-import { createApackNativePlugin } from '#features/code/be/services/claude-code/native-plugin/program.ts'
+import { createPluginFixture } from './native-plugin/harness.ts'
 import { createClaudeTerminalPlugin } from '#features/code/be/services/claude-code/terminal-plugin.ts'
 
 // Two cases hold the clock still to make a cadence a fact about elapsed time rather than about speed
@@ -19,7 +19,7 @@ it('registers and publishes child status before parent-only transcript reporting
   process:{run:vi.fn(async()=>({exitCode:0,stdout:'119',stderr:''}))},
   http:{fetch:vi.fn(async(url:string,init:any)=>{const path=new URL(url).pathname;requests.push({path,body:JSON.parse(init.body)});return{ok:!['/transcript','/ui-ready'].includes(path),text:JSON.stringify(path==='/poll'?{background:true}:path==='/background-register'?{token:'child-lease'}:{})}})},
  }
- createApackNativePlugin(CONFIG).register(collector(hooks))
+ createPluginFixture(CONFIG)(collector(hooks))
  const next=async(value:any)=>value
  await hooks.get('classic.*')!(api,{session_id:child,transcript_path:'/owned/'+child+'.jsonl'},next)
  await hooks.get('session.start')!(api,{},next)
@@ -41,7 +41,7 @@ it('renews the original child lease after broker replacement, restores the user 
  const api={session:{id:async()=>child,cwd:async()=>'/owned',model:async()=> 'sonnet',turns:async()=>2,usage:async()=>({startedAt:1})},agent:{list:async()=>[]},settings:{read:async()=>({})},env:{get:async()=>prefix,set:vi.fn(async(_name:string,value:string)=>{prefix=value;return {}})},clock:{every:vi.fn((_ms:number,callback:()=>void)=>{tick=callback;return{cancel}})},process:{run:vi.fn(async()=>({exitCode:0,stdout:'119'}))},http:{fetch:vi.fn(async(url:string,init:any)=>{const path=new URL(url).pathname,body=JSON.parse(init.body);requests.push({path,body});if(!online&&path.startsWith('/background-'))throw Error('connection lost');if(path==='/background-register')return{ok:true,text:JSON.stringify({token:'lease-'+(++lease)})};return{ok:true,text:JSON.stringify(path==='/poll'?{background:true}:path==='/background-status'?{originalPrefix:'user-prefix',shellPrefix:'owned-'+lease}:{})}})}}
  const flush=()=>new Promise(resolve=>setImmediate(resolve))
  {
-  createApackNativePlugin(CONFIG).register(collector(hooks));await hooks.get('session.start')!(api,{},async()=>({}))
+  createPluginFixture(CONFIG)(collector(hooks));await hooks.get('session.start')!(api,{},async()=>({}))
   tick();await flush();tick();await flush();expect(prefix).toBe('owned-1')
   online=false;for(let n=0;n<4;n++){tick();await flush()}
   expect(prefix).toBe('user-prefix');expect(cancel).not.toHaveBeenCalled()
@@ -91,7 +91,7 @@ it('counts a notification the app refused and carries the count until an exchang
  const api={session:{id:async()=>child,cwd:async()=>'/owned',model:async()=>'sonnet',turns:async()=>2,usage:async()=>({startedAt:1})},agent:{list:async()=>[]},settings:{read:async()=>({})},env:{get:async()=>undefined},clock:{every:(_ms:number,callback:()=>void)=>{tick=callback;return{cancel(){}}}},process:{run:async()=>({exitCode:0,stdout:'119',stderr:''})},
   http:{fetch:async(url:string,init:any)=>{const path=new URL(url).pathname,body=JSON.parse(init.body);if(path==='/poll')polls.push(body);return{ok:!(appendRefused&&path==='/append'),status:appendRefused&&path==='/append'?500:200,text:JSON.stringify({})}}}}
  const next=async(value:any)=>value
- createApackNativePlugin(CONFIG).register(collector(hooks))
+ createPluginFixture(CONFIG)(collector(hooks))
  await hooks.get('session.start')!(api,{},next)
  const appended=async()=>hooks.get('session.append')!(api,{door:'prompt'},async()=>({uuid:'row-1',message:{role:'assistant'}}))
  await appended();await appended()
@@ -118,7 +118,7 @@ it('reports at the cadence the app answers with, and on a hook when the app is n
   http:{fetch:async(url:string,init:any)=>{const path=new URL(url).pathname;if(path==='/poll')polls.push(JSON.parse(init.body));return{ok:true,status:200,text:JSON.stringify(path==='/poll'?{reportEveryMs:cadence}:{})}}}}
  const next=async(value:any)=>value
  const flush=()=>new Promise(resolve=>setImmediate(resolve))
- createApackNativePlugin(CONFIG).register(collector(hooks))
+ createPluginFixture(CONFIG)(collector(hooks))
  await hooks.get('session.start')!(api,{},next)
  tick();await vi.waitFor(()=>expect(polls).toHaveLength(1))
  // The clock keeps ticking; the cadence is what decides whether a tick reports

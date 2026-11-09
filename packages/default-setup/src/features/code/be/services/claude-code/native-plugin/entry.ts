@@ -6,11 +6,11 @@
  * itself is the same bytes every run — which is what makes the built program a recorded file that a check
  * can re-derive.
  */
-import { createApackNativePlugin, type ApackNativePluginConfig } from './program.ts';
+import { registerApackNativePlugin, type ApackNativePluginConfig } from './program.ts';
 import type { ClaudeHookRegistrar } from './claude-plugin-api.ts';
 
 declare const APACK_NATIVE_CONFIG: ApackNativePluginConfig;
 
 export function register(on: ClaudeHookRegistrar): void {
-  createApackNativePlugin(APACK_NATIVE_CONFIG).register(on);
+  registerApackNativePlugin(on, APACK_NATIVE_CONFIG);
 }

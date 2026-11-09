@@ -9,7 +9,7 @@
  *
  * It was a template string, which meant neither the typechecker nor the linter read it and the only way to
  * run it was to launch the CLI. It is a module now, so `tests/features/code/be/services/claude-code/` drives
- * it with a fake `$` and the fencing, the lease and the backoff are unit-checked.
+ * its recorded bytes in fresh realms with a fake `$`, checking fencing, leases and backoff.
  *
  * **What the program owns:** one session's identity, and the generation fencing that makes a session
  * handoff discard everything the previous one had in flight.
@@ -118,449 +118,449 @@ function helperCommand(helper: ClaudePluginStatusLine | null | undefined): strin
   return helper?.type === 'command' && typeof helper.command === 'string' ? helper.command : null;
 }
 
-export function createApackNativePlugin(config: ApackNativePluginConfig) {
-  /**
-   * **The fence.** Every await in this program is a point where the session can be handed to another, and
-   * what was in flight across it belongs to the session that started it. Each start takes a generation, and
-   * anything that comes back under a stale one is dropped rather than applied.
-   */
-  let generation = 0;
-  let producerSessionId: string | undefined;
-  let timer: ClaudePluginTimer | undefined;
-  let retired = false;
-  let started = false;
-  let inFlight = false;
-  /** The app's command this program is filling, until `prompt.submit` reports what the CLI did with it. */
-  let submission: { id: string } | undefined;
-  /** Held while this session reports to the background observer rather than to the app. */
-  let backgroundLease: string | undefined;
-  let backgroundPid: number | undefined;
-  let backgroundSequence = 0;
-  let backgroundTick = 0;
-  let backgroundAttempted = false;
-  let reconnecting = false;
-  let retryAfter = 0;
-  let retryDelay = RETRY_FLOOR_MS;
-  /** What the app last asked for, and when the next report is due. `Infinity` is "when a hook says". */
-  let reportEveryMs: number = TICK_MS;
-  let reportDueAt = 0;
-  /** Hooks arriving during a report belong to the next pass, even when the app asks for silence. */
-  let reportWake = 0;
-  /** The prefix this program installed, and the user's own that it replaced. */
-  let formatterPrefix: string | undefined;
-  let originalFormatterPrefix: string | null | undefined;
-  /** Each session's transcript path, as the classic hook reports it. */
-  const paths: Record<string, string> = {};
-  /** Notifications that did not arrive, per route, until an exchange carries the count to the app. */
-  const dropped: Partial<Record<NativeNotificationRoute, number>> = {};
+/** One state per loaded CLI module; its compiler follows only module-level named helpers. */
+let config: ApackNativePluginConfig;
 
-  async function send($: ClaudePluginApi, path: string, body: Record<string, unknown>, sentGeneration = generation): Promise<Record<string, unknown>> {
-    if (sentGeneration !== generation) throw Error('Owned session retired');
-    const sessionId = await $.session.id();
-    if (sentGeneration !== generation) throw Error('Owned session retired');
-    const childRoute = BACKGROUND_ROUTES.includes(path);
-    // A leased child has nothing to say to the app: it reports to the observer and nowhere else.
-    if (backgroundLease && !childRoute) return {};
-    let response;
-    try {
-      response = await $.http.fetch('http://apack' + path, {
-        method: 'POST',
-        socketPath: childRoute ? config.background.socketPath : config.socketPath,
-        headers: {
-          'x-apack-native-token': childRoute ? config.background.token : config.token,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({ sessionId, ...body }),
-      });
-    } catch {
-      throw namedError(BROKER_UNAVAILABLE, 'Owned terminal broker unavailable');
-    }
-    if (sentGeneration !== generation) throw Error('Owned session retired');
-    if (!response.ok) {
-      throw namedError(childRoute && response.status === 409 ? LEASE_EXPIRED : BROKER_REFUSED, 'Owned terminal broker refused');
-    }
-    return JSON.parse(response.text) as Record<string, unknown>;
-  }
+/**
+ * **The fence.** Every await in this program is a point where the session can be handed to another, and
+ * what was in flight across it belongs to the session that started it. Each start takes a generation, and
+ * anything that comes back under a stale one is dropped rather than applied.
+ */
+let generation = 0;
+let producerSessionId: string | undefined;
+let timer: ClaudePluginTimer | undefined;
+let retired = false;
+let started = false;
+let inFlight = false;
+/** The app's command this program is filling, until `prompt.submit` reports what the CLI did with it. */
+let submission: { id: string } | undefined;
+/** Held while this session reports to the background observer rather than to the app. */
+let backgroundLease: string | undefined;
+let backgroundPid: number | undefined;
+let backgroundSequence = 0;
+let backgroundTick = 0;
+let backgroundAttempted = false;
+let reconnecting = false;
+let retryAfter = 0;
+let retryDelay = RETRY_FLOOR_MS;
+/** What the app last asked for, and when the next report is due. `Infinity` is "when a hook says". */
+let reportEveryMs: number = TICK_MS;
+let reportDueAt = 0;
+/** Hooks arriving during a report belong to the next pass, even when the app asks for silence. */
+let reportWake = 0;
+/** The prefix this program installed, and the user's own that it replaced. */
+let formatterPrefix: string | undefined;
+let originalFormatterPrefix: string | null | undefined;
+/** Each session's transcript path, as the classic hook reports it. */
+const paths: Record<string, string> = {};
+/** Notifications that did not arrive, per route, until an exchange carries the count to the app. */
+const dropped: Partial<Record<NativeNotificationRoute, number>> = {};
 
-  /**
-   * Tell the app something it will otherwise learn later, and count it if that fails.
-   *
-   * The route list above says what heals each one. A failure the *tick* meets is different — it drives the
-   * lease recovery — so only these five are counted rather than thrown.
-   */
-  async function notify($: ClaudePluginApi, route: NativeNotificationRoute, body: Record<string, unknown>, ownGeneration = generation) {
-    if (ownGeneration !== generation) return;
-    try {
-      await send($, '/' + route, body, ownGeneration);
-    } catch {
-      if (ownGeneration === generation) dropped[route] = (dropped[route] ?? 0) + 1;
-    }
-  }
-
-  /** Everything a session handoff drops, so the next session starts from nothing the previous one held. */
-  function retireForNewSession() {
-    generation++;
-    timer?.cancel();
-    started = false;
-    retired = false;
-    inFlight = false;
-    submission = undefined;
-    for (const route of NATIVE_NOTIFICATION_ROUTES) delete dropped[route];
-    backgroundLease = undefined;
-    backgroundSequence = 0;
-    backgroundTick = 0;
-    backgroundAttempted = false;
-    reportEveryMs = TICK_MS;
-    reportDueAt = 0;
-    // A child that already learned its own pid reconnects rather than asking for it again.
-    reconnecting = Number.isSafeInteger(backgroundPid) && (backgroundPid as number) > 1;
-    retryAfter = 0;
-    retryDelay = RETRY_FLOOR_MS;
-  }
-
-  /** The settings the status-line helpers come from, which policy can take over. */
-  async function readHelperSettings($: ClaudePluginApi) {
-    const settings = await $.settings.read();
-    const policy = await $.settings.read({ source: 'policy' });
-    const helpers: ClaudePluginSettings =
-      policy.allowManagedHooksOnly || (settings.disableAllHooks && !policy.disableAllHooks) ? policy : settings;
-    return { settings, policy, helpers, main: policy.disableAllHooks ? null : helpers.statusLine };
-  }
-
-  /** What the app is told about the session on every tick. */
-  async function readState($: ClaudePluginApi) {
-    const agents = (await $.agent.list()).map(agent => ({ id: agent.id, type: agent.type, status: agent.status }));
-    const usage = await $.session.usage();
-    const metadata = {
-      cwd: await $.session.cwd(),
-      model: await $.session.model(),
-      turns: await $.session.turns(),
-      startedAt: usage.startedAt,
-      ...(usage.cost ? { totalCostUsd: usage.cost.usd } : {}),
-    };
-    return { agents, usage, metadata };
-  }
-
-  /** A leased child's report to the background observer, and the formatter prefix it answers with. */
-  async function reportToObserver(
-    $: ClaudePluginApi,
-    ownGeneration: number,
-    state: Awaited<ReturnType<typeof readState>>,
-  ) {
-    if (backgroundTick++ % BACKGROUND_TICKS_PER_REPORT !== 0) return;
-    const { settings, policy, helpers, main } = await readHelperSettings($);
-    const currentPrefix = (await $.env.get('CLAUDE_CODE_SHELL_PREFIX')) ?? null;
-    if (ownGeneration !== generation) return;
-    // A prefix this program did not install is the user's, and is what it restores on the way out.
-    if (currentPrefix !== formatterPrefix) originalFormatterPrefix = currentPrefix;
-    const result = await send($, '/background-status', {
-      pid: backgroundPid,
-      token: backgroundLease,
-      sequence: ++backgroundSequence,
-      metadata: state.metadata,
-      usage: state.usage,
-      helpers: {
-        agents: state.agents,
-        command: policy.disableAllHooks ? null : helperCommand(helpers.subagentStatusLine),
-        policyKey: JSON.stringify([
-          policy.allowManagedHooksOnly === true,
-          policy.disableAllHooks === true,
-          settings.disableAllHooks === true,
-        ]),
+async function send($: ClaudePluginApi, path: string, body: Record<string, unknown>, sentGeneration = generation): Promise<Record<string, unknown>> {
+  if (sentGeneration !== generation) throw Error('Owned session retired');
+  const sessionId = await $.session.id();
+  if (sentGeneration !== generation) throw Error('Owned session retired');
+  const childRoute = BACKGROUND_ROUTES.includes(path);
+  // A leased child has nothing to say to the app: it reports to the observer and nowhere else.
+  if (backgroundLease && !childRoute) return {};
+  let response;
+  try {
+    response = await $.http.fetch('http://apack' + path, {
+      method: 'POST',
+      socketPath: childRoute ? config.background.socketPath : config.socketPath,
+      headers: {
+        'x-apack-native-token': childRoute ? config.background.token : config.token,
+        'content-type': 'application/json',
       },
-      formatter: {
-        command: helperCommand(main),
-        shellPrefix: originalFormatterPrefix ?? null,
-        policy: JSON.stringify({
-          allowManagedHooksOnly: policy.allowManagedHooksOnly === true,
-          disableAllHooks: policy.disableAllHooks === true,
-          hooksDisabled: settings.disableAllHooks === true,
-        }),
-      },
-    }, ownGeneration);
-    if (ownGeneration !== generation) return;
-    if (Object.prototype.hasOwnProperty.call(result, 'originalPrefix')) {
-      originalFormatterPrefix = result.originalPrefix as string | null;
-    }
-    if (Object.prototype.hasOwnProperty.call(result, 'shellPrefix') && result.shellPrefix !== currentPrefix) {
-      const applied = await $.env.set('CLAUDE_CODE_SHELL_PREFIX', (result.shellPrefix as string | undefined) ?? undefined);
-      if (ownGeneration === generation && !applied?.deny) formatterPrefix = result.shellPrefix as string | undefined;
-    }
+      body: JSON.stringify({ sessionId, ...body }),
+    });
+  } catch {
+    throw namedError(BROKER_UNAVAILABLE, 'Owned terminal broker unavailable');
   }
+  if (sentGeneration !== generation) throw Error('Owned session retired');
+  if (!response.ok) {
+    throw namedError(childRoute && response.status === 409 ? LEASE_EXPIRED : BROKER_REFUSED, 'Owned terminal broker refused');
+  }
+  return JSON.parse(response.text) as Record<string, unknown>;
+}
 
-  /**
-   * Learn this process's own pid, which is what the observer leases against.
-   *
-   * **The pid is an identity anchor, not a label**: the observer resolves it to a background job's identity
-   * and revalidates that on every write, so a replaced process cannot keep reporting as the one that
-   * registered. A token alone would be replayable by exactly that process.
-   *
-   * **Why the app does not supply it.** A session's `pid` is a diagnostic in the terminal service's own
-   * words — `null` for a session it took up again after a restart, and explicitly not a handle — so a pid
-   * interpolated at spawn time would be absent in the case this path exists for. Asking the runtime is the
-   * only answer that is always about the process actually running the program.
-   *
-   * **This is the one POSIX-only line in the program**, and what replaces it is upstream: an accessor for
-   * the CLI's own pid, or peer credentials on the socket, which Node does not expose. Until one of those
-   * exists, a Windows host is refused by name where the terminal is prepared rather than approximated here.
-   */
-  async function registerWithObserver($: ClaudePluginApi, ownGeneration: number) {
-    const host = await $.process.run(['/bin/sh', '-c', 'printf "%s" "$PPID"'], { timeoutMs: 3000 });
-    if (ownGeneration !== generation) return;
-    if (host.exitCode !== 0) throw Error('Original background identity helper refused');
-    backgroundPid = Number(host.stdout.trim());
+/**
+ * Tell the app something it will otherwise learn later, and count it if that fails.
+ *
+ * The route list above says what heals each one. A failure the *tick* meets is different — it drives the
+ * lease recovery — so only these five are counted rather than thrown.
+ */
+async function notify($: ClaudePluginApi, route: NativeNotificationRoute, body: Record<string, unknown>, ownGeneration = generation) {
+  if (ownGeneration !== generation) return;
+  try {
+    await send($, '/' + route, body, ownGeneration);
+  } catch {
+    if (ownGeneration === generation) dropped[route] = (dropped[route] ?? 0) + 1;
+  }
+}
+
+/** Everything a session handoff drops, so the next session starts from nothing the previous one held. */
+function retireForNewSession() {
+  generation++;
+  timer?.cancel();
+  started = false;
+  retired = false;
+  inFlight = false;
+  submission = undefined;
+  for (const route of NATIVE_NOTIFICATION_ROUTES) delete dropped[route];
+  backgroundLease = undefined;
+  backgroundSequence = 0;
+  backgroundTick = 0;
+  backgroundAttempted = false;
+  reportEveryMs = TICK_MS;
+  reportDueAt = 0;
+  // A child that already learned its own pid reconnects rather than asking for it again.
+  reconnecting = Number.isSafeInteger(backgroundPid) && (backgroundPid as number) > 1;
+  retryAfter = 0;
+  retryDelay = RETRY_FLOOR_MS;
+}
+
+/** The settings the status-line helpers come from, which policy can take over. */
+async function readHelperSettings($: ClaudePluginApi) {
+  const settings = await $.settings.read();
+  const policy = await $.settings.read({ source: 'policy' });
+  const helpers: ClaudePluginSettings =
+    policy.allowManagedHooksOnly || (settings.disableAllHooks && !policy.disableAllHooks) ? policy : settings;
+  return { settings, policy, helpers, main: policy.disableAllHooks ? null : helpers.statusLine };
+}
+
+/** What the app is told about the session on every tick. */
+async function readState($: ClaudePluginApi) {
+  const agents = (await $.agent.list()).map(agent => ({ id: agent.id, type: agent.type, status: agent.status }));
+  const usage = await $.session.usage();
+  const metadata = {
+    cwd: await $.session.cwd(),
+    model: await $.session.model(),
+    turns: await $.session.turns(),
+    startedAt: usage.startedAt,
+    ...(usage.cost ? { totalCostUsd: usage.cost.usd } : {}),
+  };
+  return { agents, usage, metadata };
+}
+
+/** A leased child's report to the background observer, and the formatter prefix it answers with. */
+async function reportToObserver(
+  $: ClaudePluginApi,
+  ownGeneration: number,
+  state: Awaited<ReturnType<typeof readState>>,
+) {
+  if (backgroundTick++ % BACKGROUND_TICKS_PER_REPORT !== 0) return;
+  const { settings, policy, helpers, main } = await readHelperSettings($);
+  const currentPrefix = (await $.env.get('CLAUDE_CODE_SHELL_PREFIX')) ?? null;
+  if (ownGeneration !== generation) return;
+  // A prefix this program did not install is the user's, and is what it restores on the way out.
+  if (currentPrefix !== formatterPrefix) originalFormatterPrefix = currentPrefix;
+  const result = await send($, '/background-status', {
+    pid: backgroundPid,
+    token: backgroundLease,
+    sequence: ++backgroundSequence,
+    metadata: state.metadata,
+    usage: state.usage,
+    helpers: {
+      agents: state.agents,
+      command: policy.disableAllHooks ? null : helperCommand(helpers.subagentStatusLine),
+      policyKey: JSON.stringify([
+        policy.allowManagedHooksOnly === true,
+        policy.disableAllHooks === true,
+        settings.disableAllHooks === true,
+      ]),
+    },
+    formatter: {
+      command: helperCommand(main),
+      shellPrefix: originalFormatterPrefix ?? null,
+      policy: JSON.stringify({
+        allowManagedHooksOnly: policy.allowManagedHooksOnly === true,
+        disableAllHooks: policy.disableAllHooks === true,
+        hooksDisabled: settings.disableAllHooks === true,
+      }),
+    },
+  }, ownGeneration);
+  if (ownGeneration !== generation) return;
+  if (Object.prototype.hasOwnProperty.call(result, 'originalPrefix')) {
+    originalFormatterPrefix = result.originalPrefix as string | null;
+  }
+  if (Object.prototype.hasOwnProperty.call(result, 'shellPrefix') && result.shellPrefix !== currentPrefix) {
+    const applied = await $.env.set('CLAUDE_CODE_SHELL_PREFIX', (result.shellPrefix as string | undefined) ?? undefined);
+    if (ownGeneration === generation && !applied?.deny) formatterPrefix = result.shellPrefix as string | undefined;
+  }
+}
+
+/**
+ * Learn this process's own pid, which is what the observer leases against.
+ *
+ * **The pid is an identity anchor, not a label**: the observer resolves it to a background job's identity
+ * and revalidates that on every write, so a replaced process cannot keep reporting as the one that
+ * registered. A token alone would be replayable by exactly that process.
+ *
+ * **Why the app does not supply it.** A session's `pid` is a diagnostic in the terminal service's own
+ * words — `null` for a session it took up again after a restart, and explicitly not a handle — so a pid
+ * interpolated at spawn time would be absent in the case this path exists for. Asking the runtime is the
+ * only answer that is always about the process actually running the program.
+ *
+ * **This is the one POSIX-only line in the program**, and what replaces it is upstream: an accessor for
+ * the CLI's own pid, or peer credentials on the socket, which Node does not expose. Until one of those
+ * exists, a Windows host is refused by name where the terminal is prepared rather than approximated here.
+ */
+async function registerWithObserver($: ClaudePluginApi, ownGeneration: number) {
+  const host = await $.process.run(['/bin/sh', '-c', 'printf "%s" "$PPID"'], { timeoutMs: 3000 });
+  if (ownGeneration !== generation) return;
+  if (host.exitCode !== 0) throw Error('Original background identity helper refused');
+  backgroundPid = Number(host.stdout.trim());
+  const registered = await send($, '/background-register', { pid: backgroundPid }, ownGeneration);
+  if (ownGeneration !== generation) return;
+  backgroundLease = registered.token as string;
+}
+
+/** Fill the app's command into the prompt, and report whether it took. */
+async function fillPrompt($: ClaudePluginApi, command: Record<string, unknown>, ownGeneration: number) {
+  if (ownGeneration !== generation) return;
+  const ownSubmission = { id: command.id as string };
+  submission = ownSubmission;
+  let filled = command.prepared === true;
+  try {
+    if (!filled) {
+      const before = await $.prompt.read();
+      if (ownGeneration !== generation) return;
+      if (!before.text) {
+        const result = await $.prompt.fill({ text: command.text as string, mode: 'replace' });
+        if (ownGeneration !== generation) return;
+        filled = result?.isFilled === true && (await $.prompt.read()).text === command.text;
+      }
+    }
+  } catch {
+    // A prompt the CLI would not let this program write is reported unfilled below, not thrown: the app
+    // keeps the draft and the user keeps the session.
+  }
+  if (ownGeneration !== generation) return;
+  if (!filled && submission === ownSubmission) submission = undefined;
+  await send($, '/result', { id: command.id, filled }, ownGeneration);
+}
+
+/** One pass: report state, take whatever work came back with the answer. */
+async function exchange($: ClaudePluginApi, ownGeneration: number) {
+  const observedWake = reportWake;
+  if (reconnecting) {
     const registered = await send($, '/background-register', { pid: backgroundPid }, ownGeneration);
     if (ownGeneration !== generation) return;
     backgroundLease = registered.token as string;
+    backgroundSequence = 0;
+    backgroundTick = 0;
+    reconnecting = false;
+    retryDelay = RETRY_FLOOR_MS;
+    return;
   }
+  const sessionId = await $.session.id();
+  if (ownGeneration !== generation) return;
+  const state = await readState($);
+  if (ownGeneration !== generation) return;
+  if (backgroundLease) return reportToObserver($, ownGeneration, state);
 
-  /** Fill the app's command into the prompt, and report whether it took. */
-  async function fillPrompt($: ClaudePluginApi, command: Record<string, unknown>, ownGeneration: number) {
+  const { settings, policy, helpers, main } = await readHelperSettings($);
+  const sub = policy.disableAllHooks ? null : helpers.subagentStatusLine;
+  if (ownGeneration !== generation) return;
+  const shellPrefix = (await $.env.get('CLAUDE_CODE_SHELL_PREFIX')) ?? null;
+  if (ownGeneration !== generation) return;
+  // Reported by value, and taken off the counters only once the app has them: a notification that fails
+  // while this exchange is in flight is counted for the next one rather than lost to the subtraction.
+  const reported = Object.keys(dropped).length ? { ...dropped } : undefined;
+  let command: Record<string, unknown>;
+  try {
+    command = await send($, '/poll', {
+      agents: state.agents,
+      metadata: state.metadata,
+      statusCommand: helperCommand(main),
+      subagentCommand: helperCommand(sub),
+      shellPrefix,
+      policy: {
+        allowManagedHooksOnly: policy.allowManagedHooksOnly === true,
+        disableAllHooks: policy.disableAllHooks === true,
+      },
+      hooksDisabled: settings.disableAllHooks === true,
+      ...(reported ? { dropped: reported } : {}),
+    }, ownGeneration);
     if (ownGeneration !== generation) return;
-    const ownSubmission = { id: command.id as string };
-    submission = ownSubmission;
-    let filled = command.prepared === true;
+    if (reported) settleReported(reported);
+    acceptCadence(command.reportEveryMs, observedWake);
+  } catch (error) {
+    // A session that is not the one the app launched, reaching an app that is gone, is a detached child:
+    // it registers with the observer rather than retiring.
+    if (ownGeneration !== generation) return;
+    if (errorName(error) === BROKER_UNAVAILABLE && sessionId !== config.background.parentSessionId) {
+      command = { background: true };
+    } else throw error;
+  }
+  if (command.background === true) {
+    if (backgroundAttempted) return;
+    backgroundAttempted = true;
+    return registerWithObserver($, ownGeneration);
+  }
+  if (paths[sessionId]) await send($, '/transcript', { sessionId, path: paths[sessionId] }, ownGeneration);
+  if (!command.id) return;
+  return fillPrompt($, command, ownGeneration);
+}
+
+/**
+ * Take the app's requested cadence, which is the only thing that changes how often this reports.
+ *
+ * An answer that is not a number leaves the cadence alone, so an older app — or a route that does not
+ * carry one — keeps the tick it had.
+ */
+function acceptCadence(value: unknown, observedWake: number) {
+  if (!Number.isSafeInteger(value) || (value as number) < 0 || (value as number) > REPORT_CEILING_MS) return;
+  reportEveryMs = value as number;
+  reportDueAt = observedWake !== reportWake ? 0 : reportEveryMs === 0 ? Infinity : Date.now() + reportEveryMs;
+}
+
+/** A hook has news, so the next tick reports whatever the cadence was. */
+function reportSoon() {
+  reportWake++;
+  reportDueAt = 0;
+}
+
+/** Take a delivered report off the counters, leaving whatever arrived while it was in flight. */
+function settleReported(reported: Partial<Record<NativeNotificationRoute, number>>) {
+  for (const route of Object.keys(reported) as NativeNotificationRoute[]) {
+    const left = (dropped[route] ?? 0) - (reported[route] ?? 0);
+    if (left > 0) dropped[route] = left;
+    else delete dropped[route];
+  }
+}
+
+/** What a failed pass does: recover the lease, or retire this program for good. */
+async function recover($: ClaudePluginApi, ownGeneration: number, error: unknown) {
+  if (ownGeneration !== generation) return;
+  const name = errorName(error);
+  if (!backgroundLease && !backgroundAttempted && !reconnecting && name !== BROKER_UNAVAILABLE) return;
+  const recoverable =
+    (backgroundLease || backgroundAttempted || reconnecting) &&
+    Number.isSafeInteger(backgroundPid) &&
+    (backgroundPid as number) > 1 &&
+    (name === BROKER_UNAVAILABLE || name === LEASE_EXPIRED);
+  if (recoverable) {
+    backgroundLease = undefined;
+    backgroundAttempted = false;
+    reconnecting = true;
+    retryAfter = Date.now() + retryDelay;
+    retryDelay = Math.min(RETRY_CEILING_MS, retryDelay * 2);
+  } else {
+    retired = true;
+    timer?.cancel();
+  }
+  // The user's prefix goes back while this program is not the one serving it.
+  if ((recoverable || backgroundLease) && formatterPrefix !== undefined) {
     try {
-      if (!filled) {
-        const before = await $.prompt.read();
-        if (ownGeneration !== generation) return;
-        if (!before.text) {
-          const result = await $.prompt.fill({ text: command.text as string, mode: 'replace' });
-          if (ownGeneration !== generation) return;
-          filled = result?.isFilled === true && (await $.prompt.read()).text === command.text;
-        }
+      const current = (await $.env.get('CLAUDE_CODE_SHELL_PREFIX')) ?? null;
+      if (ownGeneration === generation && current === formatterPrefix) {
+        await $.env.set('CLAUDE_CODE_SHELL_PREFIX', originalFormatterPrefix ?? undefined);
       }
     } catch {
-      // A prompt the CLI would not let this program write is reported unfilled below, not thrown: the app
-      // keeps the draft and the user keeps the session.
+      // A runtime that will not answer about its own environment cannot be made to restore it.
     }
-    if (ownGeneration !== generation) return;
-    if (!filled && submission === ownSubmission) submission = undefined;
-    await send($, '/result', { id: command.id, filled }, ownGeneration);
   }
+}
 
-  /** One pass: report state, take whatever work came back with the answer. */
-  async function exchange($: ClaudePluginApi, ownGeneration: number) {
-    const observedWake = reportWake;
-    if (reconnecting) {
-      const registered = await send($, '/background-register', { pid: backgroundPid }, ownGeneration);
-      if (ownGeneration !== generation) return;
-      backgroundLease = registered.token as string;
-      backgroundSequence = 0;
-      backgroundTick = 0;
-      reconnecting = false;
-      retryDelay = RETRY_FLOOR_MS;
-      return;
+/**
+ * Bind this program to whatever session is current, once.
+ *
+ * Every hook calls it, because any of them may be the first thing that runs after a handoff — and the
+ * session's identity is only knowable by asking.
+ */
+async function begin($: ClaudePluginApi) {
+  reportSoon();
+  const requestedGeneration = generation;
+  const currentSession = await $.session.id();
+  if (requestedGeneration !== generation) return;
+  if (producerSessionId !== undefined && producerSessionId !== currentSession) retireForNewSession();
+  if (started || retired) return;
+  producerSessionId = currentSession;
+  const ownGeneration = ++generation;
+  started = true;
+  timer = $.clock.every(TICK_MS, () => {
+    if (ownGeneration !== generation || retired || inFlight || Date.now() < retryAfter) return;
+    // A leased child reports to the observer, which is reading it: its cadence is its own (every fourth
+    // tick), and the app's answer has nothing to say about it.
+    if (!backgroundLease && !reconnecting && Date.now() < reportDueAt) return;
+    inFlight = true;
+    void exchange($, ownGeneration)
+      .catch(error => recover($, ownGeneration, error))
+      .finally(() => {
+        if (ownGeneration === generation) inFlight = false;
+      });
+  });
+}
+
+export function registerApackNativePlugin(on: ClaudeHookRegistrar, configuration: ApackNativePluginConfig) {
+  config = configuration;
+  on('classic.*', async ($, event: ClaudeClassicEvent, next) => {
+    const ownGeneration = generation;
+    const result = await next(event);
+    if (ownGeneration !== generation) return result;
+    if (event.transcript_path && event.session_id && event.transcript_path.endsWith('/' + event.session_id + '.jsonl')) {
+      paths[event.session_id] = event.transcript_path;
+      await notify($, 'transcript', { sessionId: event.session_id, path: event.transcript_path });
     }
+    return result;
+  });
+  on('session.append', async ($, event: ClaudeAppendEvent, next) => {
+    const ownGeneration = generation;
     const sessionId = await $.session.id();
-    if (ownGeneration !== generation) return;
-    const state = await readState($);
-    if (ownGeneration !== generation) return;
-    if (backgroundLease) return reportToObserver($, ownGeneration, state);
-
-    const { settings, policy, helpers, main } = await readHelperSettings($);
-    const sub = policy.disableAllHooks ? null : helpers.subagentStatusLine;
-    if (ownGeneration !== generation) return;
-    const shellPrefix = (await $.env.get('CLAUDE_CODE_SHELL_PREFIX')) ?? null;
-    if (ownGeneration !== generation) return;
-    // Reported by value, and taken off the counters only once the app has them: a notification that fails
-    // while this exchange is in flight is counted for the next one rather than lost to the subtraction.
-    const reported = Object.keys(dropped).length ? { ...dropped } : undefined;
-    let command: Record<string, unknown>;
+    const result: ClaudeAppendResult = await next(event);
+    if (ownGeneration !== generation) return result;
+    if (!event.agentId && result.message && result.uuid) {
+      await notify($, 'append', {
+        sessionId,
+        uuid: result.uuid,
+        message: result.message,
+        door: event.door,
+        origin: event.origin,
+        ...(submission && event.door === 'prompt' ? { submissionId: submission.id } : {}),
+      });
+    }
+    return result;
+  });
+  on('prompt.submit', async ($, event, next) => {
+    const ownGeneration = generation;
+    const own = submission;
     try {
-      command = await send($, '/poll', {
-        agents: state.agents,
-        metadata: state.metadata,
-        statusCommand: helperCommand(main),
-        subagentCommand: helperCommand(sub),
-        shellPrefix,
-        policy: {
-          allowManagedHooksOnly: policy.allowManagedHooksOnly === true,
-          disableAllHooks: policy.disableAllHooks === true,
-        },
-        hooksDisabled: settings.disableAllHooks === true,
-        ...(reported ? { dropped: reported } : {}),
-      }, ownGeneration);
-      if (ownGeneration !== generation) return;
-      if (reported) settleReported(reported);
-      acceptCadence(command.reportEveryMs, observedWake);
-    } catch (error) {
-      // A session that is not the one the app launched, reaching an app that is gone, is a detached child:
-      // it registers with the observer rather than retiring.
-      if (ownGeneration !== generation) return;
-      if (errorName(error) === BROKER_UNAVAILABLE && sessionId !== config.background.parentSessionId) {
-        command = { background: true };
-      } else throw error;
-    }
-    if (command.background === true) {
-      if (backgroundAttempted) return;
-      backgroundAttempted = true;
-      return registerWithObserver($, ownGeneration);
-    }
-    if (paths[sessionId]) await send($, '/transcript', { sessionId, path: paths[sessionId] }, ownGeneration);
-    if (!command.id) return;
-    return fillPrompt($, command, ownGeneration);
-  }
-
-  /**
-   * Take the app's requested cadence, which is the only thing that changes how often this reports.
-   *
-   * An answer that is not a number leaves the cadence alone, so an older app — or a route that does not
-   * carry one — keeps the tick it had.
-   */
-  function acceptCadence(value: unknown, observedWake: number) {
-    if (!Number.isSafeInteger(value) || (value as number) < 0 || (value as number) > REPORT_CEILING_MS) return;
-    reportEveryMs = value as number;
-    reportDueAt = observedWake !== reportWake ? 0 : reportEveryMs === 0 ? Infinity : Date.now() + reportEveryMs;
-  }
-
-  /** A hook has news, so the next tick reports whatever the cadence was. */
-  function reportSoon() {
-    reportWake++;
-    reportDueAt = 0;
-  }
-
-  /** Take a delivered report off the counters, leaving whatever arrived while it was in flight. */
-  function settleReported(reported: Partial<Record<NativeNotificationRoute, number>>) {
-    for (const route of Object.keys(reported) as NativeNotificationRoute[]) {
-      const left = (dropped[route] ?? 0) - (reported[route] ?? 0);
-      if (left > 0) dropped[route] = left;
-      else delete dropped[route];
-    }
-  }
-
-  /** What a failed pass does: recover the lease, or retire this program for good. */
-  async function recover($: ClaudePluginApi, ownGeneration: number, error: unknown) {
-    if (ownGeneration !== generation) return;
-    const name = errorName(error);
-    if (!backgroundLease && !backgroundAttempted && !reconnecting && name !== BROKER_UNAVAILABLE) return;
-    const recoverable =
-      (backgroundLease || backgroundAttempted || reconnecting) &&
-      Number.isSafeInteger(backgroundPid) &&
-      (backgroundPid as number) > 1 &&
-      (name === BROKER_UNAVAILABLE || name === LEASE_EXPIRED);
-    if (recoverable) {
-      backgroundLease = undefined;
-      backgroundAttempted = false;
-      reconnecting = true;
-      retryAfter = Date.now() + retryDelay;
-      retryDelay = Math.min(RETRY_CEILING_MS, retryDelay * 2);
-    } else {
-      retired = true;
-      timer?.cancel();
-    }
-    // The user's prefix goes back while this program is not the one serving it.
-    if ((recoverable || backgroundLease) && formatterPrefix !== undefined) {
-      try {
-        const current = (await $.env.get('CLAUDE_CODE_SHELL_PREFIX')) ?? null;
-        if (ownGeneration === generation && current === formatterPrefix) {
-          await $.env.set('CLAUDE_CODE_SHELL_PREFIX', originalFormatterPrefix ?? undefined);
-        }
-      } catch {
-        // A runtime that will not answer about its own environment cannot be made to restore it.
-      }
-    }
-  }
-
-  /**
-   * Bind this program to whatever session is current, once.
-   *
-   * Every hook calls it, because any of them may be the first thing that runs after a handoff — and the
-   * session's identity is only knowable by asking.
-   */
-  async function begin($: ClaudePluginApi) {
-    reportSoon();
-    const requestedGeneration = generation;
-    const currentSession = await $.session.id();
-    if (requestedGeneration !== generation) return;
-    if (producerSessionId !== undefined && producerSessionId !== currentSession) retireForNewSession();
-    if (started || retired) return;
-    producerSessionId = currentSession;
-    const ownGeneration = ++generation;
-    started = true;
-    timer = $.clock.every(TICK_MS, () => {
-      if (ownGeneration !== generation || retired || inFlight || Date.now() < retryAfter) return;
-      // A leased child reports to the observer, which is reading it: its cadence is its own (every fourth
-      // tick), and the app's answer has nothing to say about it.
-      if (!backgroundLease && !reconnecting && Date.now() < reportDueAt) return;
-      inFlight = true;
-      void exchange($, ownGeneration)
-        .catch(error => recover($, ownGeneration, error))
-        .finally(() => {
-          if (ownGeneration === generation) inFlight = false;
-        });
-    });
-  }
-
-  function register(on: ClaudeHookRegistrar) {
-    on('classic.*', async ($, event: ClaudeClassicEvent, next) => {
-      const ownGeneration = generation;
-      const result = await next(event);
-      if (ownGeneration !== generation) return result;
-      if (event.transcript_path && event.session_id && event.transcript_path.endsWith('/' + event.session_id + '.jsonl')) {
-        paths[event.session_id] = event.transcript_path;
-        await notify($, 'transcript', { sessionId: event.session_id, path: event.transcript_path });
+      const result: ClaudePromptSubmitResult = await next(event);
+      if (own) {
+        await notify($, 'submission', {
+          id: own.id,
+          ...(typeof result.drop === 'string' ? { drop: result.drop } : { accepted: true }),
+        }, ownGeneration);
       }
       return result;
-    });
-    on('session.append', async ($, event: ClaudeAppendEvent, next) => {
-      const ownGeneration = generation;
-      const sessionId = await $.session.id();
-      const result: ClaudeAppendResult = await next(event);
-      if (ownGeneration !== generation) return result;
-      if (!event.agentId && result.message && result.uuid) {
-        await notify($, 'append', {
-          sessionId,
-          uuid: result.uuid,
-          message: result.message,
-          door: event.door,
-          origin: event.origin,
-          ...(submission && event.door === 'prompt' ? { submissionId: submission.id } : {}),
-        });
-      }
-      return result;
-    });
-    on('prompt.submit', async ($, event, next) => {
-      const ownGeneration = generation;
-      const own = submission;
-      try {
-        const result: ClaudePromptSubmitResult = await next(event);
-        if (own) {
-          await notify($, 'submission', {
-            id: own.id,
-            ...(typeof result.drop === 'string' ? { drop: result.drop } : { accepted: true }),
-          }, ownGeneration);
-        }
-        return result;
-      } finally {
-        if (submission === own) submission = undefined;
-      }
-    });
-    on('session.start', async ($, event, next) => {
-      await notify($, 'ui-ready', {});
+    } finally {
+      if (submission === own) submission = undefined;
+    }
+  });
+  on('session.start', async ($, event, next) => {
+    await begin($);
+    await notify($, 'ui-ready', {});
+    return next(event);
+  });
+  on('ui.render', { component: 'SessionMode' }, async ($, event, next) => {
+    await begin($);
+    return next(event);
+  });
+  on('turn.start', async ($, event: ClaudeTurnEvent, next) => {
+    if (!event.agentId) {
       await begin($);
-      return next(event);
-    });
-    on('ui.render', { component: 'SessionMode' }, async ($, event, next) => {
+      await notify($, 'turn', { running: true });
+    }
+    return next(event);
+  });
+  on('turn.complete', async ($, event: ClaudeTurnEvent, next) => {
+    const result = await next(event);
+    if (!event.agentId) {
       await begin($);
-      return next(event);
-    });
-    on('turn.start', async ($, event: ClaudeTurnEvent, next) => {
-      if (!event.agentId) {
-        await begin($);
-        await notify($, 'turn', { running: true });
-      }
-      return next(event);
-    });
-    on('turn.complete', async ($, event: ClaudeTurnEvent, next) => {
-      const result = await next(event);
-      if (!event.agentId) {
-        await begin($);
-        await notify($, 'turn', { running: false, turnId: event.turnId, reason: event.reason });
-      }
-      return result;
-    });
-  }
-
-  return { register };
+      await notify($, 'turn', { running: false, turnId: event.turnId, reason: event.reason });
+    }
+    return result;
+  });
 }
