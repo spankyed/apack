@@ -19,9 +19,13 @@
 // The 170x and 47.9x in this branch's first two commits are that mistake.
 //
 // **Measured with this fixture, whose tools carry a 4KB `details.output` because that is what the product
-// stores: 15,111,163 bytes written for 253,451 kept, which is 59.6x. Now 276,191 for 253,379, or 1.09x.**
-// Both figures are the same fixture and the same denominator; the 55x between them is the entries ceasing
+// stores: 15,111,163 bytes written for 253,451 kept, which is 59.6x. Now 513,008 for 254,973, or 2.01x.**
+// Both figures are the same fixture and the same denominator; the 30x between them is the entries ceasing
 // to be one value rewritten whole on every flush.
+//
+// Of what is left, about half is the fold at the end: a finished block carries its children's content in
+// its own row, so that content is written once more when the turn stops. That is the trade — one write
+// against every later read of the message assembling forty rows, and against the thread keeping them.
 //
 // A turn now writes about what it keeps, so the bound is the thinking writer's 4x rather than a number
 // standing in for a known defect. The case below keeps saying *which* block the cost is in, because that

@@ -472,16 +472,22 @@ function rowsByIdOf<const F extends readonly string[]>(ids: readonly EARS.Entity
 /**
  * How many segments a block carries before its text is folded back into it.
  *
- * **This is the one number trading what a turn writes against what a read of it costs.** With no compaction
- * a block's text is written exactly once, and a view that re-runs on every append reads every segment each
- * time — which over a long turn is quadratic in the number of appends. Folding at a count bounds the read
- * at this many rows and costs one whole-text write per fold, so what a turn writes is about
- * `1 + appends / (2 x this)` times its text.
+ * **Not for the crossings, which are constant.** A read of a message costs two edge walks and two row
+ * reads whatever its blocks hold (`childrenOf`), so segments cost it nothing in reads of the engine — an
+ * earlier version of this comment justified the fold by a quadratic that the batching removed. What it
+ * bounds is what a read *assembles*: a view re-runs on every append, so without a fold a three-minute turn
+ * concatenates ninety segments ninety times. Folding at a count bounds that, and bounds the rows a turn
+ * holds open, at one whole-text write per fold.
  *
- * At 32, a three-minute turn of ninety appends writes about 2.4x what it leaves behind and no read of it
- * assembles more than 32 rows. The figure is a balance rather than a measurement, so it needs no record of
- * conditions; what it must not become is a per-caller knob, which would make what a block costs depend on
- * who wrote it.
+ * At 32, a turn of ninety appends writes about 2.4x its text and no read of it assembles more than 32
+ * segments. The figure is a balance rather than a measurement, so it needs no record of conditions; what
+ * it must not become is a per-caller knob, which would make what a block costs depend on who wrote it.
+ *
+ * **The entries have no equivalent, and that is a decision rather than an omission.** A segment is a few
+ * hundred characters of text that accretes, so folding thirty of them is a small write. An entry carries
+ * `details.output`, the untruncated tool result, and arrives whole — so folding entries mid-turn would
+ * write every output again, which is the amplification the rows removed. They fold once, when the block
+ * stops growing (`compactMessageBlock`).
  */
 const TEXT_SEGMENTS_BEFORE_COMPACTION = 32;
 
