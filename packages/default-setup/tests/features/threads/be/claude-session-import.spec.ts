@@ -14,7 +14,7 @@ it('imports native tool results, exact text and image references without replayi
  expect(rows[0].context).toMatchObject({cliUuid:uuid,claudeTerminalMessage:{uuid,sessionId}});
  // A tool's details are a row of their own, read by the block they belong to — a block carries its entries
  // and not their output, so that a message's view does not re-read every tool's result as a turn streams
- const activity=rows[0].blocks?.find(b=>b.type==='tool-activity')!;
+ const activity=(rows[0].blocks??[]).find(b=>b.type==='tool-activity')!;
  const tool=activity.props.entries[0];
  expect(tool).toMatchObject({id:'read-result',status:'ok',nativeResult:{uuid:resultUuid,sessionId}});
  expect(repository.chatQueries.entryDetails(activity.id)[tool.id]).toMatchObject({output:'Complete guide'});
