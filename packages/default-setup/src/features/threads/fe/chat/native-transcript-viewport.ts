@@ -35,12 +35,14 @@ export function useNativeTranscriptViewport(options: {
   const cancel = () => { if (frame !== undefined) cancelAnimationFrame(frame); frame = undefined }
   watch([options.viewport, options.content, options.owner, options.active], ([viewport, content, owner, active]) => {
     disconnect?.(); disconnect = undefined; requestFollow = undefined; cancel(); const current = ++epoch
-    if (!viewport || !content || !owner) { retained = undefined; suspended = false; return }
+    if (!viewport || !content || !owner) { retained = undefined; suspended = !active; return }
     if (!active) { suspended = true; return }
-    const resume = suspended && retained?.viewport === viewport && retained.content === content ? retained : undefined
+    const returning = suspended
+    const resume = returning && retained?.viewport === viewport && retained.content === content ? retained : undefined
     suspended = false
     let width = viewport.clientWidth, height = viewport.clientHeight, top = viewport.scrollTop
-    let following = resume ? resume.owner !== owner || resume.following : isAtNativeTranscriptLatest(viewport), restoring = !!resume
+    // A new identity has no reader position; hidden geometry cannot decide its intent.
+    let following = resume ? resume.owner !== owner || resume.following : true, restoring = returning
     const setFollowing = (value: boolean) => { following = value; options.onFollowingChange?.(value) }
     setFollowing(following)
     requestFollow = () => setFollowing(true)
@@ -76,13 +78,13 @@ export function useNativeTranscriptViewport(options: {
       resize.disconnect(); viewport.removeEventListener('scroll', scrolled)
       for (const name of ['wheel', 'pointerdown', 'touchstart', 'keydown']) viewport.removeEventListener(name, reading)
     }
-    if (resume) {
+    if (returning) {
       // Hidden DOM has no usable scroll geometry. Restore only this view's intent,
       // after layout and async message bodies settle; a reader gesture cancels both passes.
       const restore = () => {
         frame = undefined
         if (!valid() || !restoring) return
-        viewport.scrollTop = following ? nativeTranscriptLatestTop(viewport) : resume.top
+        viewport.scrollTop = following ? nativeTranscriptLatestTop(viewport) : resume ? resume.top : top
         top = viewport.scrollTop
       }
       frame = requestAnimationFrame(() => {

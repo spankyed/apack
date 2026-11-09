@@ -66,13 +66,13 @@ it('follows viewport resizing without stealing focus and retires queued work on 
 })
 
 
-it.each(['following', 'reading', 'reading near latest', 'new conversation'] as const)('restores %s after the native terminal temporarily hides conversation layout', async mode => {
+it.each(['following', 'reading', 'reading near latest', 'new conversation', 'new conversation through identity gap'] as const)('restores %s after the native terminal temporarily hides conversation layout', async mode => {
   const frames = new Map<number, FrameRequestCallback>(), observers: ResizeObserverCallback[] = []
   let serial = 0, height = 100, total = 600, latestTop = 450
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { frames.set(++serial, callback); return serial })
   vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id))
   vi.stubGlobal('ResizeObserver', class { constructor(callback: ResizeObserverCallback) { observers.push(callback) } observe() {} disconnect() {} })
-  const viewport = ref<HTMLElement | null>(null), content = ref<HTMLElement | null>(null), owner = ref('session-one'), active = ref(true)
+  const viewport = ref<HTMLElement | null>(null), content = ref<HTMLElement | null>(null), owner = ref<string | undefined>('session-one'), active = ref(true)
   const following = ref(true); let followLatest: () => void
   const root = document.createElement('div'), editor = document.createElement('input'); document.body.append(root, editor); editor.focus()
   const app = createApp({ setup() {
@@ -103,10 +103,11 @@ it.each(['following', 'reading', 'reading near latest', 'new conversation'] as c
     // v-show yields no geometry, and hidden message/layout work can clamp scrollTop to zero.
     height=0;element.scrollTop=0;active.value=false;await nextTick()
     latestTop=650;total=800
-    if(mode==='new conversation'){owner.value='session-two';await nextTick()}
+    if(mode==='new conversation through identity gap'){owner.value=undefined;await nextTick()}
+    if(mode.startsWith('new conversation')){owner.value='session-two';await nextTick()}
     height=150;active.value=true;await nextTick();flush()
     expect(element.scrollTop).toBe(mode==='reading'?155:mode==='reading near latest'?480:650)
-    expect(following.value).toBe(mode==='following'||mode==='new conversation')
+    expect(following.value).toBe(mode==='following'||mode.startsWith('new conversation'))
     expect(document.activeElement).toBe(editor)
     // A gesture before the queued return frames run wins over restored following.
     element.scrollTop=650;element.dispatchEvent(new Event('scroll'))
