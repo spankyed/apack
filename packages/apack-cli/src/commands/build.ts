@@ -12,6 +12,7 @@ import {
   PACK_SNAPSHOT_FORMAT,
   entitiesWithoutShapes,
   CONTENT_COMPILERS_FILE,
+  WORKERS_DIR,
   _buildProvenance,
   parseSnapshot,
   compileHelp,
@@ -21,7 +22,7 @@ import {
 import { findFEEntry, bundlePackFE } from '../build/fe-bundler';
 import { apackScope, dslInputsHash, typesInputsHash, readPhaseCache, reuseProblem, takeForward, writeStamps, type PhaseStamp } from '../build/phase-cache';
 import { refusePackRuleViolations } from '../build/pack-rules.ts';
-import { bundlePackRuntime, bundlePackContentCompilers, bundlePackContentRuntime, bundlePackStepBuild, CONTENT_RUNTIME_FILE } from '../build/be-bundler';
+import { bundlePackRuntime, bundlePackContentCompilers, bundlePackContentRuntime, bundlePackStepBuild, bundlePackWorkers, CONTENT_RUNTIME_FILE } from '../build/be-bundler';
 import { buildReads } from '../build/build-reads';
 import { BUILD_INPUTS_IPC_ENV, reportBuildWatchInputs } from '../build/build-watch-inputs.ts';
 import { generatedDeclarationProblems } from '../build/generated-declarations.ts';
@@ -370,6 +371,17 @@ async function buildIntoStaging(args: string[], root: string) {
       console.log(`  runtime: dist/${PACK_LAYOUT.runtimeEntry}`);
     } else {
       fail(`Runtime bundle failed: ${runtimeResult.error}`);
+    }
+
+    // ── Worker entries ───────────────────────────────────────────────────
+    const workers = manifest.build?.workers ?? {};
+    if (Object.keys(workers).length > 0) {
+      const workersResult = await bundlePackWorkers(root, outputDir, workers, { release, compilation, recordOutput: outputs.record, recordReads: reads?.forPhase('workers') });
+      if (workersResult.success) {
+        for (const name of Object.keys(workers)) console.log(`  worker: dist/${PACK_LAYOUT.runtimeDir}/${WORKERS_DIR}/${name}.cjs`);
+      } else {
+        fail(`Worker bundle failed: ${workersResult.error}`);
+      }
     }
 
     // ── FE bundling ──────────────────────────────────────────────────────

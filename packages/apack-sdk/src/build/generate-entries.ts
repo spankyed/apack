@@ -295,6 +295,9 @@ const MODULE_EXTENSIONS = new Set([...SCRIPT_MODULE_EXTENSIONS, '.vue', '.json',
  */
 export const STEPS_BUILD_MODULE = 'src/__generated__/steps-build.ts';
 
+/** The directory under a pack's runtime directory that `apack pack build` writes its `build.workers` entries to */
+export const WORKERS_DIR = 'workers';
+
 /** One step as codegen reads it: its manifest entry, its type (the map's key) and the directory its modules sit in */
 interface StepDeclaration {
   type: string;
@@ -2163,6 +2166,28 @@ export type { ImportMode } from '@apackdev/sdk/utils';
 `;
   }
 
+  /**
+   * `workerPath(name)`, where `apack pack build` put each `build.workers` entry. The loader hands the runtime its
+   * content directory (`setCompiledDir`), and the workers sit beside it under the same runtime directory.
+   */
+  function generateWorkers(): string {
+    const names = Object.keys(manifest.build?.workers ?? {});
+    if (names.length === 0) return '';
+    return `${HEADER}
+import * as path from 'node:path';
+import { getCompiledDir } from './appliers.ts';
+
+/** The pack's worker entries, by the names \`apack.json\` \`build.workers\` gives them */
+export const WORKER_NAMES = ${JSON.stringify(names)} as const;
+export type WorkerName = (typeof WORKER_NAMES)[number];
+
+/** The bundled file of the worker \`name\`, for \`new Worker(...)\` or a child process */
+export function workerPath(name: WorkerName): string {
+  return path.join(path.dirname(getCompiledDir()), '${WORKERS_DIR}', \`\${name}.cjs\`);
+}
+`;
+  }
+
   /** `content.sources` resolved against this pack's formats and its dependencies' (compiler modules aren't loaded here) */
   function resolvedContentSources(): Record<string, ResolvedContentSource> {
     const dependencies = new Map([...depSnapshots].map(([id, snap]) => [id, { manifest: snap.manifest }]));
@@ -2447,6 +2472,7 @@ export const runtimeServices = _createPackServices();
       : []),
     ['src/__generated__/references.ts', generateReferences()],
     ['src/__generated__/appliers.ts', generateAppliers()],
+    ['src/__generated__/workers.ts', generateWorkers()],
     ['src/__generated__/content-runtime.ts', generateContentRuntime()],
     ['src/__generated__/flow-helpers.ts', generateFlowHelpers()],
     ['src/__generated__/step-types.ts', generateStepTypes()],

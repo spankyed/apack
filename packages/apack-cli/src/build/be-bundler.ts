@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { APP_ONLY_EXPORTS, HOST_RESOLVED_BINARIES, SHARED_DEPS, sharedInstanceExternals } from '@apackdev/host/build/shared-deps';
-import { CONTENT_COMPILERS_FILE, STEPS_BUILD_MODULE } from '@apackdev/sdk/build';
+import { CONTENT_COMPILERS_FILE, STEPS_BUILD_MODULE, WORKERS_DIR } from '@apackdev/sdk/build';
 import { checkContentRuntimeLoads } from './content-runtime-check';
 import type { RecordReads } from './build-reads';
 import type { RecordBuildOutput } from './build-outputs.ts';
@@ -67,7 +67,7 @@ async function bundlePackSource<T extends EsbuildOptions>(
       path.resolve(stdin.resolveDir ?? packDir, stdin.sourcefile ?? 'stdin.ts'),
       Buffer.from(stdin.contents ?? ''));
   }
-  const plugins: import('esbuild').Plugin[] = [rejectHostImportsPlugin(), stubFrontendAssetsPlugin()];
+  const plugins: import('esbuild').Plugin[] = [rejectHostImportsPlugin(), stubFrontendAssetsPlugin(), ...(overrides.plugins ?? [])];
   if (options.compilation) plugins.push(capturedSourcesPlugin(options.compilation, workingDir));
 
   const merged: EsbuildOptions = {
@@ -77,13 +77,14 @@ async function bundlePackSource<T extends EsbuildOptions>(
     target: 'node20',
     external: [...HOST_EXTERNALS, ...HOST_RESOLVED_BINARIES],
     tsconfigRaw: configuration && esbuildTsconfig(configuration, tree?.path),
-    plugins,
     minify: options.release ?? false,
     logLevel: 'silent',
     // `metafile.inputs` is this bundle's dep file, and the one place the five esbuild bundles share: a
     // caller asking for the record never has to remember the flag, and one that is not pays nothing
     ...(options.recordReads && { metafile: true }),
     ...overrides,
+    // The shared guards always run; a bundle's own plugins are added to them, never in place of them
+    plugins,
     ...(tree && {
       absWorkingDir: workingDir,
       outfile: overrides.outfile && path.resolve(overrides.outfile),
@@ -162,6 +163,57 @@ function sourceExists(file: string, compilation?: CompilationInputs): boolean {
 
 function bundleError(err: unknown): { success: false; error: string } {
   return { success: false, error: errorMessage(err) };
+}
+
+/**
+ * Bundle each `build.workers` entry whole into dist/runtime/workers/<name>.cjs.
+ *
+ * A worker thread or child process has its own module system, where the host's module bridge and the SDK's and
+ * EARS' singletons don't exist, and an installed pack has no node_modules. So nothing is left external but Node's
+ * builtins, and an import that only resolves through the bridge is refused here rather than failing when the
+ * worker starts.
+ */
+export async function bundlePackWorkers(
+  packDir: string,
+  outputDir: string,
+  workers: Readonly<Record<string, string>>,
+  options: BundleRuntimeOptions = {},
+): Promise<{ success: boolean; error?: string }> {
+  const entries = Object.entries(workers);
+  if (entries.length === 0) return { success: true };
+  for (const [name, entry] of entries) {
+    if (!sourceExists(path.resolve(packDir, entry), options.compilation)) {
+      return { success: false, error: `Worker "${name}" names ${entry}, which doesn't exist` };
+    }
+  }
+  try {
+    await bundlePackSource(packDir, options, {
+      entryPoints: Object.fromEntries(entries.map(([name, entry]) => [name, path.resolve(packDir, entry)])),
+      format: 'cjs',
+      outdir: path.join(outputDir, 'runtime', WORKERS_DIR),
+      outExtension: { '.js': '.cjs' },
+      external: [],
+      sourcemap: options.release ? false : true,
+      plugins: [rejectBridgedImportsPlugin()],
+    });
+    return { success: true };
+  } catch (err) {
+    return bundleError(err);
+  }
+}
+
+/** Refuses, in a worker bundle, every import that only the host's module bridge resolves */
+function rejectBridgedImportsPlugin(): import('esbuild').Plugin {
+  const bridged = [...HOST_EXTERNALS, ...HOST_RESOLVED_BINARIES].filter(name => !name.endsWith('/*'));
+  const filter = new RegExp(`^(?:@apackdev/|(?:${bridged.map(escapeRegExp).join('|')})(?:/|$))`);
+  return {
+    name: 'reject-bridged-imports',
+    setup(build) {
+      build.onResolve({ filter }, (args) => ({
+        errors: [{ text: `${args.path} reaches a pack only through the host's module bridge, which a worker doesn't have; a worker bundles what it imports (imported from ${path.relative(process.cwd(), args.importer) || args.importer})` }],
+      }));
+    },
+  };
 }
 
 /**

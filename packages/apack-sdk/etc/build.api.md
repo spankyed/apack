@@ -1308,6 +1308,7 @@ export const ManifestSchema: z.ZodObject<{
     build: z.ZodOptional<z.ZodObject<{
         opaqueDeps: z.ZodOptional<z.ZodArray<z.ZodString>>;
         bundleUi: z.ZodOptional<z.ZodBoolean>;
+        workers: z.ZodOptional<z.ZodType<Record<string, string>, Record<string, string>, z.core.$ZodTypeInternals<Record<string, string>, Record<string, string>>>>;
     }, z.core.$strict>>;
     checks: z.ZodOptional<z.ZodObject<{
         allow: z.ZodOptional<z.ZodArray<z.ZodEnum<{
@@ -2535,6 +2536,9 @@ export interface ValidationResult {
 
 // @public
 export function withContentHashes(records: ContentItem[]): ContentItem[];
+
+// @public
+export const WORKERS_DIR = "workers";
 
 // (No @packageDocumentation comment for this package)
 
