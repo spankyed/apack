@@ -686,6 +686,11 @@ it('reads the plugin\'s dropped notifications and refuses a report its trace can
   expect((await request('/poll', { sessionId: session, agents: [], dropped: { 'not-a-route': 1 } })).status).toBe(400)
   expect((await request('/poll', { sessionId: session, agents: [], dropped: 'append' })).status).toBe(400)
   expect(dropped, 'a refused report reaches nothing').toHaveLength(2)
+  await request('/poll', { sessionId: session, agents: [], directOwner: true, busy: false, turn: null })
+  expect((await request('/poll', { sessionId: session, agents: [], dropped: { append: 3 } })).status).toBe(200)
+  expect(dropped).toEqual([['append', 2], ['turn', 1], ['append', 3]])
+  expect((await request('/poll', { sessionId: session, agents: [], dropped: { append: 0 } })).status).toBe(400)
+  expect(dropped).toHaveLength(3)
 })
 
 /**

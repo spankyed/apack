@@ -79,3 +79,68 @@ it.each(['session.start','turn.start','turn.complete'])('rebinds child polling f
  expect(status.body.token).toBe('fresh-lease');expect(status.body.sequence).toBe(1)
  await f.hooks.get('ui.render')!(freshApi,{},next);expect(f.api.clock.every).toHaveBeenCalledTimes(2);expect(f.api.process.run).toHaveBeenCalledOnce()
 })
+
+function held<T>() {
+ let resolve!: (value:T)=>void
+ const promise=new Promise<T>(done=>{resolve=done})
+ return {promise,resolve}
+}
+const flushPlugin=()=>new Promise(resolve=>setImmediate(resolve))
+function mainSessionFixture(){
+ let sessionId=CONFIG.background.parentSessionId,turns=1
+ const hooks=new Map<string,(...args:any[])=>Promise<any>>(),requests:{path:string;body:any}[]=[],ticks:(()=>void)[]=[]
+ const api={session:{id:async()=>sessionId,cwd:async()=>'/'+sessionId,model:async()=>sessionId,turns:async()=>turns,usage:async()=>({startedAt:1})},agent:{list:async()=>[]},settings:{read:vi.fn(async()=>({}))},env:{get:vi.fn(async():Promise<string|undefined>=>undefined)},prompt:{read:vi.fn(async()=>({text:''})),fill:vi.fn(async()=>({isFilled:true}))},clock:{every:vi.fn((_ms:number,tick:()=>void)=>{ticks.push(tick);return{cancel:vi.fn()}})},http:{fetch:vi.fn(async(url:string,init:any)=>{const path=new URL(url).pathname;requests.push({path,body:JSON.parse(init.body)});return{ok:true,text:'{}'}})}}
+ createApackNativePlugin(CONFIG).register(((event:string,...args:any[])=>hooks.set(event,args.at(-1))) as unknown as ClaudeHookRegistrar)
+ const fire=(event:string,next=async()=>({}))=>hooks.get(event)!(api,{},next)
+ return{api,requests,fire,tick:()=>ticks.at(-1)!(),setTurns:(value:number)=>{turns=value},async start(id=sessionId){sessionId=id;await fire('session.start')}}
+}
+
+it.each(['settings','environment'] as const)('does not send old metadata under a fresh session after a held %s read',async boundary=>{
+ const f=mainSessionFixture(),pending=held<any>(),fresh='77777777-7777-4777-8777-777777777777'
+ const read=boundary==='settings'?f.api.settings.read:f.api.env.get
+ read.mockImplementationOnce(()=>pending.promise)
+ await f.start();f.tick();await vi.waitFor(()=>expect(read).toHaveBeenCalled())
+ await f.start(fresh);pending.resolve(boundary==='settings'?{}:undefined);await flushPlugin()
+ expect(f.requests.filter(r=>r.path==='/poll')).toHaveLength(0)
+ f.tick();await flushPlugin()
+ expect(f.requests.filter(r=>r.path==='/poll').map(r=>r.body)).toEqual([expect.objectContaining({sessionId:fresh,metadata:expect.objectContaining({cwd:'/'+fresh,model:fresh})})])
+})
+
+it.each(['before-fill','fill','after-fill'] as const)('retires an old prompt command held at %s without clearing the fresh submission',async boundary=>{
+ const f=mainSessionFixture(),pending=held<any>(),fresh='77777777-7777-4777-8777-777777777777'
+ let polls=0
+ f.api.http.fetch.mockImplementation(async(url:string,init:any)=>{const path=new URL(url).pathname;f.requests.push({path,body:JSON.parse(init.body)});return{ok:true,text:JSON.stringify(path==='/poll'?{id:++polls===1?'old-command':'fresh-command',text:'draft',...(polls===2?{prepared:true}:{})}:{})}})
+ if(boundary==='before-fill')f.api.prompt.read.mockImplementationOnce(()=>pending.promise)
+ else if(boundary==='fill')f.api.prompt.fill.mockImplementationOnce(()=>pending.promise)
+ else f.api.prompt.read.mockResolvedValueOnce({text:''}).mockImplementationOnce(()=>pending.promise)
+ await f.start();f.tick()
+ await vi.waitFor(()=>expect(boundary==='fill'?f.api.prompt.fill:f.api.prompt.read).toHaveBeenCalledTimes(boundary==='after-fill'?2:1))
+ await f.start(fresh);f.tick();await flushPlugin()
+ pending.resolve(boundary==='fill'?{isFilled:true}:{text:''});await flushPlugin()
+ expect(f.api.prompt.fill).toHaveBeenCalledTimes(boundary==='before-fill'?0:1)
+ expect(f.requests.filter(r=>r.path==='/result').map(r=>r.body.id)).toEqual(['fresh-command'])
+ await f.fire('prompt.submit')
+ expect(f.requests.filter(r=>r.path==='/submission').map(r=>r.body.id)).toEqual(['fresh-command'])
+})
+
+it('keeps a hook wake arriving during a poll whose answer disables periodic reporting',async()=>{
+ const f=mainSessionFixture(),pending=held<{ok:boolean;text:string}>();let polls=0
+ f.api.http.fetch.mockImplementation(async(url:string,init:any)=>{const path=new URL(url).pathname;f.requests.push({path,body:JSON.parse(init.body)});if(path==='/poll'&&++polls===1)return pending.promise;return{ok:true,text:JSON.stringify(path==='/poll'?{reportEveryMs:0}:{})}})
+ await f.start();f.tick();await vi.waitFor(()=>expect(polls).toBe(1))
+ f.setTurns(2);await f.fire('turn.complete');pending.resolve({ok:true,text:JSON.stringify({reportEveryMs:0})});await flushPlugin()
+ f.tick();await flushPlugin()
+ expect(f.requests.filter(r=>r.path==='/poll').map(r=>r.body.metadata.turns)).toEqual([1,2])
+ f.tick();await flushPlugin();expect(polls).toBe(2)
+})
+
+it('does not publish a held old submission as belonging to the fresh session',async()=>{
+ const f=mainSessionFixture(),pending=held<any>();let polls=0
+ f.api.http.fetch.mockImplementation(async(url:string,init:any)=>{const path=new URL(url).pathname;f.requests.push({path,body:JSON.parse(init.body)});return{ok:true,text:JSON.stringify(path==='/poll'?{id:++polls===1?'old-command':'fresh-command',text:'draft',prepared:true}:{})}})
+ await f.start();f.tick();await flushPlugin()
+ const submitting=f.fire('prompt.submit',()=>pending.promise)
+ await f.start('77777777-7777-4777-8777-777777777777');f.tick();await flushPlugin()
+ pending.resolve({});await submitting
+ expect(f.requests.filter(r=>r.path==='/submission')).toHaveLength(0)
+ await f.fire('prompt.submit')
+ expect(f.requests.filter(r=>r.path==='/submission').map(r=>r.body.id)).toEqual(['fresh-command'])
+})

@@ -228,17 +228,17 @@ export async function createClaudeTerminalBridge(options: {
         const answer = (body: Record<string, unknown> = {}) =>
           reply(200, value.directOwner === true ? body : { ...body, reportEveryMs: pluginCadenceMs() })
         if (value.directOwner !== true && value.sessionId !== projection.sessionId) return reply(200, { background: linkedBackground()?.sessionId === value.sessionId })
-        // Once the native owner takes over, a late plugin poll cannot restore older policy metadata.
-        if (nativePolling && value.directOwner !== true) return answer()
-        if (value.directOwner === true && (typeof value.busy !== 'boolean' || value.turn !== null && (!object(value.turn) || typeof object(value.turn)?.id !== 'string' || typeof object(value.turn)?.cancelled !== 'boolean'))) return reply(400, {})
-        if (value.metadata !== undefined && !parseClaudeTerminalMetadata(value.metadata)) return reply(400, {})
-        for (const key of ['statusCommand', 'subagentCommand', 'shellPrefix']) if (value[key] !== undefined && value[key] !== null && (typeof value[key] !== 'string' || (value[key] as string).length > 32768)) return reply(400, {})
         const droppedReport = value.dropped === undefined ? undefined : object(value.dropped)
         // A closed set of routes and a plain count: the report is read into the lifecycle trace, so anything
         // else arriving here would be a payload, and the plugin that sends it is refused rather than logged.
         if (value.dropped !== undefined && (!droppedReport || Object.entries(droppedReport).some(([route, count]) =>
           !(NATIVE_NOTIFICATION_ROUTES as readonly string[]).includes(route) || !Number.isSafeInteger(count) || (count as number) < 1))) return reply(400, {})
         if (droppedReport) for (const [route, count] of Object.entries(droppedReport)) options.notificationsDropped?.(route as NativeNotificationRoute, count as number)
+        // Once the native owner takes over, a late plugin poll cannot restore older policy metadata.
+        if (nativePolling && value.directOwner !== true) return answer()
+        if (value.directOwner === true && (typeof value.busy !== 'boolean' || value.turn !== null && (!object(value.turn) || typeof object(value.turn)?.id !== 'string' || typeof object(value.turn)?.cancelled !== 'boolean'))) return reply(400, {})
+        if (value.metadata !== undefined && !parseClaudeTerminalMetadata(value.metadata)) return reply(400, {})
+        for (const key of ['statusCommand', 'subagentCommand', 'shellPrefix']) if (value[key] !== undefined && value[key] !== null && (typeof value[key] !== 'string' || (value[key] as string).length > 32768)) return reply(400, {})
         const policy = value.policy === undefined ? undefined : object(value.policy)
         if (value.policy !== undefined && (!policy || typeof policy.allowManagedHooksOnly !== 'boolean' || typeof policy.disableAllHooks !== 'boolean') || value.hooksDisabled !== undefined && typeof value.hooksDisabled !== 'boolean') return reply(400, {})
         const nextPolicyKey = policy ? JSON.stringify([policy.allowManagedHooksOnly, policy.disableAllHooks, value.hooksDisabled === true]) : helperPolicyKey

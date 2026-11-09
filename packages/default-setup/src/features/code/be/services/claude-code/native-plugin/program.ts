@@ -144,6 +144,8 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
   /** What the app last asked for, and when the next report is due. `Infinity` is "when a hook says". */
   let reportEveryMs: number = TICK_MS;
   let reportDueAt = 0;
+  /** Hooks arriving during a report belong to the next pass, even when the app asks for silence. */
+  let reportWake = 0;
   /** The prefix this program installed, and the user's own that it replaced. */
   let formatterPrefix: string | undefined;
   let originalFormatterPrefix: string | null | undefined;
@@ -152,8 +154,8 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
   /** Notifications that did not arrive, per route, until an exchange carries the count to the app. */
   const dropped: Partial<Record<NativeNotificationRoute, number>> = {};
 
-  async function send($: ClaudePluginApi, path: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const sentGeneration = generation;
+  async function send($: ClaudePluginApi, path: string, body: Record<string, unknown>, sentGeneration = generation): Promise<Record<string, unknown>> {
+    if (sentGeneration !== generation) throw Error('Owned session retired');
     const sessionId = await $.session.id();
     if (sentGeneration !== generation) throw Error('Owned session retired');
     const childRoute = BACKGROUND_ROUTES.includes(path);
@@ -186,11 +188,12 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
    * The route list above says what heals each one. A failure the *tick* meets is different — it drives the
    * lease recovery — so only these five are counted rather than thrown.
    */
-  async function notify($: ClaudePluginApi, route: NativeNotificationRoute, body: Record<string, unknown>) {
+  async function notify($: ClaudePluginApi, route: NativeNotificationRoute, body: Record<string, unknown>, ownGeneration = generation) {
+    if (ownGeneration !== generation) return;
     try {
-      await send($, '/' + route, body);
+      await send($, '/' + route, body, ownGeneration);
     } catch {
-      dropped[route] = (dropped[route] ?? 0) + 1;
+      if (ownGeneration === generation) dropped[route] = (dropped[route] ?? 0) + 1;
     }
   }
 
@@ -202,6 +205,7 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
     retired = false;
     inFlight = false;
     submission = undefined;
+    for (const route of NATIVE_NOTIFICATION_ROUTES) delete dropped[route];
     backgroundLease = undefined;
     backgroundSequence = 0;
     backgroundTick = 0;
@@ -273,13 +277,14 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
           hooksDisabled: settings.disableAllHooks === true,
         }),
       },
-    });
+    }, ownGeneration);
+    if (ownGeneration !== generation) return;
     if (Object.prototype.hasOwnProperty.call(result, 'originalPrefix')) {
       originalFormatterPrefix = result.originalPrefix as string | null;
     }
     if (Object.prototype.hasOwnProperty.call(result, 'shellPrefix') && result.shellPrefix !== currentPrefix) {
       const applied = await $.env.set('CLAUDE_CODE_SHELL_PREFIX', (result.shellPrefix as string | undefined) ?? undefined);
-      if (!applied?.deny) formatterPrefix = result.shellPrefix as string | undefined;
+      if (ownGeneration === generation && !applied?.deny) formatterPrefix = result.shellPrefix as string | undefined;
     }
   }
 
@@ -299,23 +304,29 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
    * the CLI's own pid, or peer credentials on the socket, which Node does not expose. Until one of those
    * exists, a Windows host is refused by name where the terminal is prepared rather than approximated here.
    */
-  async function registerWithObserver($: ClaudePluginApi) {
+  async function registerWithObserver($: ClaudePluginApi, ownGeneration: number) {
     const host = await $.process.run(['/bin/sh', '-c', 'printf "%s" "$PPID"'], { timeoutMs: 3000 });
+    if (ownGeneration !== generation) return;
     if (host.exitCode !== 0) throw Error('Original background identity helper refused');
     backgroundPid = Number(host.stdout.trim());
-    const registered = await send($, '/background-register', { pid: backgroundPid });
+    const registered = await send($, '/background-register', { pid: backgroundPid }, ownGeneration);
+    if (ownGeneration !== generation) return;
     backgroundLease = registered.token as string;
   }
 
   /** Fill the app's command into the prompt, and report whether it took. */
-  async function fillPrompt($: ClaudePluginApi, command: Record<string, unknown>) {
-    submission = { id: command.id as string };
+  async function fillPrompt($: ClaudePluginApi, command: Record<string, unknown>, ownGeneration: number) {
+    if (ownGeneration !== generation) return;
+    const ownSubmission = { id: command.id as string };
+    submission = ownSubmission;
     let filled = command.prepared === true;
     try {
       if (!filled) {
         const before = await $.prompt.read();
+        if (ownGeneration !== generation) return;
         if (!before.text) {
           const result = await $.prompt.fill({ text: command.text as string, mode: 'replace' });
+          if (ownGeneration !== generation) return;
           filled = result?.isFilled === true && (await $.prompt.read()).text === command.text;
         }
       }
@@ -323,14 +334,17 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
       // A prompt the CLI would not let this program write is reported unfilled below, not thrown: the app
       // keeps the draft and the user keeps the session.
     }
-    if (!filled) submission = undefined;
-    await send($, '/result', { id: command.id, filled });
+    if (ownGeneration !== generation) return;
+    if (!filled && submission === ownSubmission) submission = undefined;
+    await send($, '/result', { id: command.id, filled }, ownGeneration);
   }
 
   /** One pass: report state, take whatever work came back with the answer. */
   async function exchange($: ClaudePluginApi, ownGeneration: number) {
+    const observedWake = reportWake;
     if (reconnecting) {
-      const registered = await send($, '/background-register', { pid: backgroundPid });
+      const registered = await send($, '/background-register', { pid: backgroundPid }, ownGeneration);
+      if (ownGeneration !== generation) return;
       backgroundLease = registered.token as string;
       backgroundSequence = 0;
       backgroundTick = 0;
@@ -339,13 +353,16 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
       return;
     }
     const sessionId = await $.session.id();
+    if (ownGeneration !== generation) return;
     const state = await readState($);
     if (ownGeneration !== generation) return;
     if (backgroundLease) return reportToObserver($, ownGeneration, state);
 
     const { settings, policy, helpers, main } = await readHelperSettings($);
     const sub = policy.disableAllHooks ? null : helpers.subagentStatusLine;
+    if (ownGeneration !== generation) return;
     const shellPrefix = (await $.env.get('CLAUDE_CODE_SHELL_PREFIX')) ?? null;
+    if (ownGeneration !== generation) return;
     // Reported by value, and taken off the counters only once the app has them: a notification that fails
     // while this exchange is in flight is counted for the next one rather than lost to the subtraction.
     const reported = Object.keys(dropped).length ? { ...dropped } : undefined;
@@ -363,12 +380,14 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
         },
         hooksDisabled: settings.disableAllHooks === true,
         ...(reported ? { dropped: reported } : {}),
-      });
+      }, ownGeneration);
+      if (ownGeneration !== generation) return;
       if (reported) settleReported(reported);
-      acceptCadence(command.reportEveryMs);
+      acceptCadence(command.reportEveryMs, observedWake);
     } catch (error) {
       // A session that is not the one the app launched, reaching an app that is gone, is a detached child:
       // it registers with the observer rather than retiring.
+      if (ownGeneration !== generation) return;
       if (errorName(error) === BROKER_UNAVAILABLE && sessionId !== config.background.parentSessionId) {
         command = { background: true };
       } else throw error;
@@ -376,11 +395,11 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
     if (command.background === true) {
       if (backgroundAttempted) return;
       backgroundAttempted = true;
-      return registerWithObserver($);
+      return registerWithObserver($, ownGeneration);
     }
-    if (paths[sessionId]) await send($, '/transcript', { sessionId, path: paths[sessionId] });
+    if (paths[sessionId]) await send($, '/transcript', { sessionId, path: paths[sessionId] }, ownGeneration);
     if (!command.id) return;
-    return fillPrompt($, command);
+    return fillPrompt($, command, ownGeneration);
   }
 
   /**
@@ -389,14 +408,15 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
    * An answer that is not a number leaves the cadence alone, so an older app — or a route that does not
    * carry one — keeps the tick it had.
    */
-  function acceptCadence(value: unknown) {
+  function acceptCadence(value: unknown, observedWake: number) {
     if (!Number.isSafeInteger(value) || (value as number) < 0 || (value as number) > REPORT_CEILING_MS) return;
     reportEveryMs = value as number;
-    reportDueAt = reportEveryMs === 0 ? Infinity : Date.now() + reportEveryMs;
+    reportDueAt = observedWake !== reportWake ? 0 : reportEveryMs === 0 ? Infinity : Date.now() + reportEveryMs;
   }
 
   /** A hook has news, so the next tick reports whatever the cadence was. */
   function reportSoon() {
+    reportWake++;
     reportDueAt = 0;
   }
 
@@ -474,7 +494,9 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
 
   function register(on: ClaudeHookRegistrar) {
     on('classic.*', async ($, event: ClaudeClassicEvent, next) => {
+      const ownGeneration = generation;
       const result = await next(event);
+      if (ownGeneration !== generation) return result;
       if (event.transcript_path && event.session_id && event.transcript_path.endsWith('/' + event.session_id + '.jsonl')) {
         paths[event.session_id] = event.transcript_path;
         await notify($, 'transcript', { sessionId: event.session_id, path: event.transcript_path });
@@ -482,8 +504,10 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
       return result;
     });
     on('session.append', async ($, event: ClaudeAppendEvent, next) => {
+      const ownGeneration = generation;
       const sessionId = await $.session.id();
       const result: ClaudeAppendResult = await next(event);
+      if (ownGeneration !== generation) return result;
       if (!event.agentId && result.message && result.uuid) {
         await notify($, 'append', {
           sessionId,
@@ -497,6 +521,7 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
       return result;
     });
     on('prompt.submit', async ($, event, next) => {
+      const ownGeneration = generation;
       const own = submission;
       try {
         const result: ClaudePromptSubmitResult = await next(event);
@@ -504,7 +529,7 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
           await notify($, 'submission', {
             id: own.id,
             ...(typeof result.drop === 'string' ? { drop: result.drop } : { accepted: true }),
-          });
+          }, ownGeneration);
         }
         return result;
       } finally {
