@@ -131,6 +131,108 @@ machine, and the contract that every field is a claim some program made rather t
 `foreground`, which the broker measures for itself and the core has no business answering.
 
 
+## 2026-11-09 — Phase 0a passes: the two parsers agree, with three decided differences
+
+Driven in the `vt-core/conformance` worktree of `apack-terminal`, branched from `93b7de9`.
+`apack-terminal/tests/conformance.rs`, ten cases, behind the non-default `ghostty` feature.
+`libghostty-vt` 1.0.0 via `ghostty-vt-rs-sys` 0.3.0 from crates.io — published the day after the release,
+and its manifest's `[package.metadata.ghostty]` names the same commit this record resolved from the tag
+independently.
+
+### The four exit conditions
+
+| | |
+|---|---|
+| the link is proven by a running binary | `the_library_is_linked_and_answers`: construct, write text with a CSI move and an SGR reset, read the width back |
+| the eight grids agree textually | `the_two_parsers_produce_the_same_grid`, and again `..._byte_by_byte`. **No difference in any row, the cursor or the active screen** |
+| the new wrapper agrees with itself at every byte boundary | `ghostty_agrees_with_itself_at_every_boundary`, exhaustive over every split of every stream |
+| every `Facts` and reply difference carries a decision | the three below |
+
+**The result was too clean to take at face value**, so two cases exist to make it mean something. Two
+implementations that both answered an empty grid would agree perfectly, so the corpus is asserted to draw
+text — at least eight non-blank rows, and more rows than eight viewports, which is what proves history is
+read rather than skipped. And the comparison is proven to fire by planting a difference in each of the
+three fields it reads.
+
+### The three configuration matches, one of them the opposite of the guess
+
+Set in `GhosttyScreen::new`, and none is a preference: each is a default the two do not share, so leaving
+any of them would have reported a configuration mismatch as a parser difference.
+
+- **Scrollback lines.** The core keeps **no limit** by default — the option's own documentation says so —
+  where this broker declares `HISTORY_LINES` as a memory ceiling per session. The `scrolling` stream would
+  have differed on history depth.
+- **Scrollback bytes.** The core has a byte ceiling `alacritty_terminal` has no equivalent for. Left
+  unlimited so the line limit is the only rule bounding either.
+- **The advertised terminal**, `xterm-256color`, since a program decides what to emit from `TERM`.
+
+### Finding 1 — device attributes, where the core is right
+
+`CSI c`. `alacritty_terminal` answers `CSI ?6c`, a VT102; the core answers `CSI ?62;22c`, a VT220 with
+ANSI colour. The broker advertises `TERM=xterm-256color`, so a program that asks what it is talking to and
+hears "VT102" may turn off features the terminal has. **Decision: adopt the core's.** Recorded in the suite
+as a rewrite rather than a skipped case, so the rest of the same answer is still compared, with a case
+asserting both parsers still say what the entry claims — an entry that stopped describing either side would
+be dead text.
+
+The cursor position report (`CSI 6n`) is identical.
+
+### Finding 2 — the two read different shell-integration families, and this is the important one
+
+Measured over seven streams, each side driven with both families:
+
+| stream | `markers.rs` | `libghostty-vt` 1.0 |
+|---|---|---|
+| `OSC 133;C` then `133;D;0` | nothing | `running`, then `exit_status: Some(0)` |
+| `OSC 633;C` then `633;D;0` | `running`, then `exit_status: Some(0)` | nothing |
+| `OSC 133;C;cmdline=ls` | nothing | `command: "ls"`, `running` |
+| `OSC 633;E;ls -la` | `command: "ls -la"` | nothing |
+| `OSC 633;P;Cwd=/tmp` | `cwd: "/tmp"` | nothing |
+
+**`markers.rs` reads OSC 633 only** — VS Code's shell integration; it strips the prefix `633;` and nothing
+else. **The core reads OSC 133 only** — the FinalTerm sequence iTerm2, Ghostty's own integration and most
+shell-integration scripts emit.
+
+Two consequences, neither visible before this phase:
+
+- **The broker misses standard OSC 133 today.** A shell with ordinary integration installed reports nothing
+  to it. That is a defect in current behaviour, not something this goal introduced, and it is the strongest
+  argument the goal has acquired for proceeding.
+- **D5 was wrong twice and is corrected a third time.** Phase B cannot delete `markers.rs`' scanning: the
+  core would drop the 633 family with it. The union is strictly better than either, so the scanning stays
+  for 633 and 133 arrives from the core.
+
+### Finding 3 — the division of labour on payloads
+
+The core **decodes** the command line for us (`TerminalSemanticPrompt.command`: "the shell sends it
+encoded, and this is the decoded text") and **does not** parse the working directory, storing whatever
+bytes the shell emitted — which for OSC 7 is a `file://` URI. So `cwd_from_url` is the broker's either way
+and is now shared with the `vt` path rather than written twice. OSC 7 is the one sequence both read, and
+they agree once it is decoded.
+
+### Two mistakes of mine, recorded because each cost a false result
+
+- **A sweep that ended in `head -20`** produced the first O1 answer, which said the payloads were
+  unreachable. The matches sort by filename and `terminal.h` sorts last, so the file holding the answer was
+  cut off. Corrected above.
+- **A callback passed by pointer rather than by value.** A callback option takes the function pointer
+  itself, which the header says; passing `&callback` had the library call the address of a stack local.
+  SIGBUS, not a wrong answer.
+- And a third worth naming: **the first check of D4's no-network claim passed because cargo had cached the
+  build script.** The property that actually holds is that with `GHOSTTY_VT_RS_SYS_PREBUILT_DIR` set, a
+  fresh build of the sys crate creates no `out/prebuilt` directory — verified after deleting the crate's
+  build directory, not before.
+
+### What 0a does not cover
+
+- **`search`.** `screen::Screen::search` runs over its own snapshot, so it is compared only as far as the
+  snapshot is; the core's `search.h` is untouched. Phase B decides whether to move onto it.
+- **Reflow beyond one case.** The alternate-screen enter, resize and leave agree; the eight streams never
+  resize, so wrap-and-reflow on the primary screen at other sizes is unmeasured.
+- **Windows.** Everything above is this Mac. The toolchain, the archive and the link are unproven there,
+  and no Windows archive exists to link — which is O2.
+
+
 ### What is not done
 
 The both-parsers diff harness, which is the rest of Phase 0a. The link is not yet proven: nothing has been

@@ -104,14 +104,17 @@ this one's:
   `vt-core/conformance`, branched from `93b7de9`, which is what `vendor/apack-terminal.rev` pins. The main
   broker checkout stays detached at that pin so the monorepo's `vendor/` link does not drift under local
   work.
-- **Next deliverable:** the rest of Phase 0a — the both-parsers diff harness. The release is pinned and O1
-  is answered ([evidence](../references/evidence/one-vt-core.md)); nothing has yet been compiled against
-  `libghostty-vt.a`, so the link itself is unproven.
-- **Proven:** the release and its commit, that upstream publishes six files and none is a Windows or Linux
-  library, that the community archives are built from the release commit, that a verified archive unpacks
-  to the layout the `-sys` crate's prebuilt directory expects, and that every `Facts` field has a
-  first-class source in the C API.
-- **Known unresolved:** O2. D4 and D5 were both corrected by measurement rather than left standing.
+- **Phase 0a passes.** Ten conformance cases on `vt-core/conformance` (`897c01c`): the grids agree over all
+  eight streams whole and byte-by-byte, the new wrapper is self-consistent at every byte boundary, and the
+  three differences found are each decided — device attributes (the core is right), the disjoint
+  shell-integration families (take the union), and where payload decoding lives.
+- **Next deliverable:** Phase 0b, the packaged offline WebAssembly proof, which depends on nothing here.
+  Phase B depends on 0a's result, now in hand, and on O2.
+- **Proven:** the release and its commit; that upstream publishes six files and none is a Windows or Linux
+  library; that a verified archive unpacks to the layout the `-sys` crate expects and that a build with
+  `GHOSTTY_VT_RS_SYS_PREBUILT_DIR` set fetches nothing; and the grid, reply and facts results above.
+- **Known unresolved:** O2. D4 was corrected by measurement and D5 three times; `search`, primary-screen
+  reflow and all of Windows are named in evidence as outside what 0a covered.
 
 ## Decisions
 
@@ -168,13 +171,16 @@ core's state. `markers.rs` loses its hand-rolled scanning and keeps its state ma
 every field is a claim some program made, except `foreground`, which is measured. Nobody should size this
 work as "500 lines go away".
 
-Measured 2026-11-09, and larger than a first reading of the OSC parser suggested: `markers.rs` loses its
-scanning **and** its payload parsing. The core answers every fact through the terminal rather than the
-parser — `OPT_PWD_CHANGED` for the reported directory, `OPT_SEMANTIC_PROMPT` for a command and the status
-it finished with, `OPT_PROGRESS_REPORT` for OSC 9;4, `DATA_CURSOR_AT_PROMPT` beside them. What survives is
-the part worth keeping: the state machine, and the contract that every field is a claim some program made
-except `foreground`, which the broker measures and the core has no business answering. Evidence, including
-why the first reading was wrong: [one-vt-core.md](../references/evidence/one-vt-core.md).
+**Measured in Phase 0a, after two wrong guesses, and the answer is a union rather than a replacement.**
+The core answers every fact through the terminal rather than the parser — `OPT_SEMANTIC_PROMPT` for a
+command and the status it finished with, `OPT_PWD_CHANGED` for the reported directory,
+`OPT_PROGRESS_REPORT` for OSC 9;4, `DATA_CURSOR_AT_PROMPT` beside them — **but it reads OSC 133 and
+`markers.rs` reads OSC 633, and neither reads the other's.** So the scanning does not go: it stays for the
+633 family that VS Code's integration emits, and 133 arrives from the core, which this broker misses
+today. What also stays is the contract — every field is a claim some program made, except `foreground`,
+which the broker measures and the core has no business answering — and the OSC 7 decode, since the core
+stores that URI raw and documents that it does not parse it.
+[Evidence](../references/evidence/one-vt-core.md), including the two readings this corrects.
 
 **D6 — The protocol stays ours.** `ts-rs` generates the app's TypeScript from the broker's Rust types. A
 core handle's shape must not reach the wire, or the app's contract starts tracking a third party's struct
@@ -393,7 +399,7 @@ before cutover**, not after seeing the numbers.
 | Window on the same core's WASM, `@xterm/*` gone | missing | — | Phases 0b, R |
 | No Zig, no compile-time network, no run-time CDN | missing | D4 names the mechanism | Prove per target in Phase B/R |
 | Every relied-on capability asserted present | missing | — | D7's declaration and its check |
-| Conformance corpus passes, or each difference decided | missing | — | Phase 0a |
+| Conformance corpus passes, or each difference decided | **done** — `897c01c` | ten cases; [evidence](../references/evidence/one-vt-core.md#2026-11-09--phase-0a-passes-the-two-parsers-agree-with-three-decided-differences) | — |
 | Windows unaffected: job objects, pipe ACL, ConPTY | holds today | [terminal-ownership.md](../references/evidence/terminal-ownership.md) | Re-prove on the VM in Phase B |
 
 Checkpoint logs belong in `docs/references/evidence/one-vt-core.md`, dated, with source commits and exact
