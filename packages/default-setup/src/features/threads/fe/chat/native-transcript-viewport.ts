@@ -27,22 +27,28 @@ export function useNativeTranscriptViewport(options: {
   content: Ref<HTMLElement | null>
   owner(): string | undefined
   active(): boolean
+  onFollowingChange?(following: boolean): void
 }) {
+  let requestFollow: (() => void) | undefined
   let disconnect: (() => void) | undefined, frame: number | undefined, epoch = 0
   let retained: { viewport: HTMLElement; content: HTMLElement; owner: string; following: boolean; top: number } | undefined, suspended = false
   const cancel = () => { if (frame !== undefined) cancelAnimationFrame(frame); frame = undefined }
   watch([options.viewport, options.content, options.owner, options.active], ([viewport, content, owner, active]) => {
-    disconnect?.(); disconnect = undefined; cancel(); const current = ++epoch
+    disconnect?.(); disconnect = undefined; requestFollow = undefined; cancel(); const current = ++epoch
     if (!viewport || !content || !owner) { retained = undefined; suspended = false; return }
     if (!active) { suspended = true; return }
     const resume = suspended && retained?.viewport === viewport && retained.content === content ? retained : undefined
     suspended = false
     let width = viewport.clientWidth, height = viewport.clientHeight, top = viewport.scrollTop
     let following = resume ? resume.owner !== owner || resume.following : isAtNativeTranscriptLatest(viewport), restoring = !!resume
+    const setFollowing = (value: boolean) => { following = value; options.onFollowingChange?.(value) }
+    setFollowing(following)
+    requestFollow = () => setFollowing(true)
     const valid = () => epoch === current && options.viewport.value === viewport && options.owner() === owner && options.active() && viewport.clientHeight > 0
     const scrolled = () => {
       if (!restoring && valid()) {
-        if (viewport.clientWidth === width && viewport.clientHeight === height) following = isAtNativeTranscriptLatest(viewport)
+        // Upward reading intent survives while the short latest body is still visible.
+        if (viewport.clientWidth === width && viewport.clientHeight === height && (following || viewport.scrollTop > top)) setFollowing(isAtNativeTranscriptLatest(viewport))
         // Browser anchoring can move a reader during reflow before ResizeObserver runs.
         top = viewport.scrollTop
       }
@@ -50,14 +56,14 @@ export function useNativeTranscriptViewport(options: {
     const reading = (event: Event) => {
       if (event instanceof WheelEvent && event.deltaY >= 0) return
       if (event instanceof KeyboardEvent && !['ArrowUp', 'PageUp', 'Home'].includes(event.key)) return
-      following = false; restoring = false; cancel(); if (valid()) top = viewport.scrollTop
+      setFollowing(false); restoring = false; cancel(); if (valid()) top = viewport.scrollTop
     }
     const resize = new ResizeObserver(() => {
       if (!valid()) return
       const changed = width !== viewport.clientWidth || height !== viewport.clientHeight
       width = viewport.clientWidth; height = viewport.clientHeight
       if (restoring) return
-      if (!changed) { following = isAtNativeTranscriptLatest(viewport); top = viewport.scrollTop; return }
+      if (!changed) { if (following) setFollowing(isAtNativeTranscriptLatest(viewport)); top = viewport.scrollTop; return }
       if (!following) { top = viewport.scrollTop; return }
       if (frame !== undefined) return
       frame = requestAnimationFrame(() => { frame = undefined; if (valid() && following) { viewport.scrollTop = nativeTranscriptLatestTop(viewport); top = viewport.scrollTop } })
@@ -85,5 +91,6 @@ export function useNativeTranscriptViewport(options: {
       })
     }
   }, { flush: 'post' })
-  onBeforeUnmount(() => { epoch++; disconnect?.(); cancel() })
+  onBeforeUnmount(() => { epoch++; requestFollow = undefined; disconnect?.(); cancel() })
+  return { followLatest: () => requestFollow?.() }
 }

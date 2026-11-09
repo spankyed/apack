@@ -55,7 +55,7 @@
           <NativeMcpForm v-if="nativeComposerOwner?.mcpForm" :key="nativeComposerOwner.mcpForm.id + nativeComposerOwner.mcpForm.revision" :form="nativeComposerOwner.mcpForm" :operation="nativeComposerView?.mcpOperation" @operate="operateMcpForm" @pending="mcpFormPending = $event" />
           <!-- Agent Chat Content -->
           <div v-show="!mainCommandView && !pendingNativeQuestion && !pendingNativePlan" class="relative flex flex-col flex-1 w-full overflow-hidden min-h-0" data-testid="chat-transcript">
-            <div class="min-h-0 flex-1 overflow-y-auto" :class="$style.messagesContainer" ref="messagesContainer" @scroll="onScroll" @wheel.passive="readNativeHistory">
+            <div class="min-h-0 flex-1 overflow-y-auto" :class="$style.messagesContainer" ref="messagesContainer" @scroll="onScroll">
               <div v-if="allMessages.length === 0 && !currentThread?.instructions" class="flex items-center justify-center h-full">
                 <p class="text-neutral-700 text-center italic max-w-sm">{{ randomQuote }}</p>
               </div>
@@ -271,7 +271,7 @@ import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 import ConversationViewer from '@apackdev/ui/components/tiptap/ConversationViewer'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ClaudeNativeSession from './ClaudeNativeSession.vue'
-import { isAtNativeTranscriptLatest, nativeTranscriptLatestTop, useNativeTranscriptViewport } from './native-transcript-viewport.ts'
+import { nativeTranscriptLatestTop, useNativeTranscriptViewport } from './native-transcript-viewport.ts'
 import NativeTaskControls from '#extensions/blocks/display/NativeTaskControls.vue'
 import NativeMainCommand from './NativeMainCommand.vue'
 import NativeManagedTasks from './NativeManagedTasks.vue'
@@ -838,6 +838,7 @@ const dontAskAgain = ref(false)
 function scrollToBottom(behavior: ScrollBehavior = 'smooth') {
   const el = messagesContainer.value
   if (!el || currentThread.value?.context?.claudeCode && (!nativeTranscriptVisible.value || !el.clientHeight)) return
+  if (currentThread.value?.context?.claudeCode) nativeViewport.followLatest()
   el.scrollTo({ top: currentThread.value?.context?.claudeCode ? nativeTranscriptLatestTop(el) : el.scrollHeight, behavior })
 }
 
@@ -875,16 +876,10 @@ function handleSendCommand(command: string, text: string, references?: MessageRe
   pendingScrollOnSend.value = true
 }
 
-function readNativeHistory(event: WheelEvent) {
-  if (currentThread.value?.context?.claudeCode && event.deltaY < 0) isNearBottom.value = false
-}
-
 function onScroll() {
   const el = messagesContainer.value
   if (!el || currentThread.value?.context?.claudeCode && (!nativeTranscriptVisible.value || !el.clientHeight)) return
-  isNearBottom.value = currentThread.value?.context?.claudeCode
-    ? isAtNativeTranscriptLatest(el)
-    : el.scrollHeight - el.scrollTop - el.clientHeight < 100
+  if (!currentThread.value?.context?.claudeCode) isNearBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight < 100
 
   // Trigger load-more when scrolled near the top
   if (scrollPositioning.ready() && el.scrollTop < 100 && messagePagination.value.hasMore && !prependScroll) {
@@ -1170,10 +1165,11 @@ watch(nativeTranscriptVisible, async visible => {
   await nextTick()
   if (nativeTranscriptVisible.value) onMessagesRendered()
 })
-useNativeTranscriptViewport({
+const nativeViewport = useNativeTranscriptViewport({
   viewport: messagesContainer, content: messagesContent,
   owner: () => currentThread.value?.context?.claudeCode?.sessionId ? `${currentThread.value.id}:${currentThread.value.context.claudeCode.sessionId}` : undefined,
   active: () => nativeTranscriptVisible.value,
+  onFollowingChange: following => { isNearBottom.value = following },
 })
 </script>
 
