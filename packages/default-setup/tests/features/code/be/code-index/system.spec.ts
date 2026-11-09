@@ -74,6 +74,12 @@ it('turns an attached symbol into where it is now, and one that is gone into a l
   expect(live.textPrefix).toBe(`[Code symbol: function target at ${path.join(root, 'a.ts')}:5]\n${found!.signature}`)
   expect(live.addDirs).toEqual([root])
 
+  // Before the index notices: a symbol taken out of its file, then the file taken off disk
+  fs.writeFileSync(path.join(root, 'a.ts'), 'export const other = 1\n')
+  expect((await resolveReferences({ context: [attached] })).textPrefix).toBe('[Code symbol no longer indexed: target]')
+  fs.rmSync(path.join(root, 'a.ts'))
+  expect((await resolveReferences({ context: [attached] })).textPrefix).toBe('[Code symbol no longer indexed: target]')
+
   await app.send('code', { type: 'codeIndex.SET_ENABLED', enabled: false })
   await vi.waitFor(() => expect(codeIndexQueries.project(root)).toBeUndefined())
   expect((await resolveReferences({ context: [attached] })).textPrefix).toBe('[Code symbol no longer indexed: target]')

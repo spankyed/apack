@@ -125,6 +125,7 @@ export type CodeInboxEvent =
   | { type: 'codePrompts.OPEN_PROMPT'; promptId: EARS.EntityId }
 
 export type Contract = {
+  opens: 'CodeSymbol'
   state: CodeContext
   inbox: SurfaceInbox<{ pack: CodeInboxEvent }>
 }

@@ -1,4 +1,4 @@
-import { surfaceStorage } from '@apackdev/sdk/fe'
+import { entityIs, surfaceStorage } from '@apackdev/sdk/fe'
 import { ref as featureRef } from '#generated/ref.ts'
 
 /** This surface's window storage: the prefix is its ref, so these names are scoped to it. */
@@ -1295,6 +1295,11 @@ const codeState = setup({
         // Handle settings updates
         FEATURE_SETTINGS_UPDATED: {
           actions: ['handleSettingsUpdate']
+        },
+        // A symbol opened from elsewhere, a message's pill among them: its file at the line it is on now
+        OPEN_ENTITY: {
+          guard: ({ event }) => entityIs<'CodeSymbol'>({ event }, { entity: 'CodeSymbol' }),
+          actions: ({ event, self }) => { codeChild(self, 'codeIndex')?.send({ type: 'codeIndex.OPEN_SYMBOL', symbol: (event as { id: string }).id }) },
         },
         // Route events to child machines
         '*': {
