@@ -231,14 +231,16 @@ export async function action(params: Record<string, any>, services: Services, _z
   } catch (err: any) {
     const message = err?.message || 'Codex query failed to start';
     log.error('[codex] chat failed', { message, stack: err?.stack });
+    // The writers first: unregistering releases the consumer, whose own finalise would otherwise claim the
+    // stream writer's last word with its empty buffer and leave this message with no error on it
+    toolActivity.finalise('error');
+    writer.finalize(`⚠️ ${message}`);
     // Clean up consumer if it was registered
     if (activeThreadId) {
       try { codex.unregisterConsumer(activeThreadId); } catch { /* may not exist */ }
     }
-    toolActivity.finalise('error');
     setRunning(services, threadId, false);
     updateChatState(services, threadId, 'idle');
-    writer.finalize(`⚠️ ${message}`);
     return { success: false, error: message, messageId: currentMessageId };
   }
 }

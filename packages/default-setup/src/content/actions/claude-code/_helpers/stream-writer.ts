@@ -159,6 +159,11 @@ export function createStreamWriter(
       writeTimer = clear(writeTimer);
       if (finalized) return;
       finalized = true;
+      // **Nothing streamed and no replacement: the row is not this writer's to decide.** A tool-only turn,
+      // a superseded consumer and a paused turn each mark the message complete themselves rather than let
+      // an empty buffer overwrite the "Thinking…" placeholder, and the backstop that releases the turn's
+      // writers must not undo that. An explicit `''` is still a replacement and is written.
+      if (text === undefined && buffer === '') return;
       // Replacement text can be shorter than what the windows hold, so the run they are splicing is no
       // longer a run of this message. The row is the answer, and `done` is what tells them to read it.
       const replaced = text !== undefined && text !== buffer;

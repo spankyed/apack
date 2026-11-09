@@ -200,4 +200,35 @@ describe('the last word is said once', () => {
 
     expect(writes).toHaveLength(after);
   });
+
+  /**
+   * **A backstop finalising an empty buffer must not claim the row.** A tool-only turn, a superseded
+   * consumer and a paused turn each leave this writer with nothing and mark the message complete
+   * themselves, deliberately leaving `text` as it stands rather than blanking the `Thinking…` placeholder.
+   * The `finally` that releases a turn's writers finalises all three regardless, so an empty buffer that
+   * wrote `text: ''` would undo exactly what those three paths took care to do.
+   *
+   * Nothing was fed either, so there is no run in any window to end and no `done` to send.
+   *
+   * An explicit `''` is a different statement — a caller saying the reply is empty — and is written.
+   */
+  it('leaves the row alone when it finalises with nothing to say', () => {
+    const { writes, feed, services } = recorder();
+    const writer = createStreamWriter(services, 'm-1' as never, { intervalMs: 80, durableMs: 2000 });
+
+    writer.finalize();
+
+    expect(writes, 'the row is not this writer\'s to decide').toHaveLength(0);
+    expect(feed, 'and no window holds a run of this message').toHaveLength(0);
+  });
+
+  it('writes an empty reply when it is told to say one', () => {
+    const { writes, feed, services } = recorder();
+    const writer = createStreamWriter(services, 'm-1' as never, { intervalMs: 80, durableMs: 2000 });
+
+    writer.finalize('');
+
+    expect(writes).toEqual([expect.objectContaining({ text: '' })]);
+    expect(feed.at(-1)?.done, 'and ends whatever run a window holds').toBe(true);
+  });
 });

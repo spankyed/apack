@@ -59,8 +59,10 @@ export interface ToolActivityWriter {
   /**
    * Attach an artifact reference to the block (Phase C: diff artifact).
    * Writes immediately so the renderer shows the "View changes" link.
-   * Safe to call after `finalise` — it overwrites the previous block with
-   * the same entries+state plus the new `artifactRef` field.
+   *
+   * **Safe after `finalise`, and that is what makes the fold's bookkeeping load-bearing.** The write
+   * replaces the block's props, so once the entries have been folded into them it has to carry them too;
+   * attaching a ref to a finished block must not drop the list the fold put there.
    */
   setArtifactRef(ref: { artifactId: string; label: string }): void;
   /** Current entries (read-only snapshot). */
@@ -88,6 +90,14 @@ export function createToolActivityWriter(
   const rows = new Map<string, EntityId>();
   /** What the block's row was last written with, so it is written again only when that differs */
   let written: string | undefined;
+  /**
+   * Whether the entries now live in the block's props rather than in rows of their own.
+   *
+   * **A props write replaces the attribute**, so once `compactMessageBlock` has folded the entries into it,
+   * every later write of this row has to carry them or it drops the whole list — and a read assembles the
+   * live entry rows *instead of* the folded ones, so a later entry has to go into the props too.
+   */
+  let foldedIn = false;
   /** Optional artifact ref attached via setArtifactRef (Phase C). */
   let artifactRef: { artifactId: string; label: string } | undefined;
 
@@ -104,11 +114,20 @@ export function createToolActivityWriter(
    * the turn does — the block appearing, its state at the end, an artifact attached — and not when a tool
    * starts or finishes. Storing a derived label is what made every event a write of this row.
    */
-  const buildBlockProps = (): Omit<ToolActivityBlockProps, 'entries' | 'label'> => ({
+  type BlockProps = Omit<ToolActivityBlockProps, 'entries' | 'label'>
+    & Partial<Pick<ToolActivityBlockProps, 'entries'>>
+    & { blockId?: EntityId };
+
+  const buildBlockProps = (): BlockProps => ({
     state,
     defaultOpen: false,
     ...(opts.phase && { phase: opts.phase }),
     ...(artifactRef && { artifactRef }),
+    // Only once they have been folded in, and without `details`, which the block keeps under its own
+    // attribute and a read of the message must not carry
+    ...(foldedIn && blockId
+      ? { entries: entries.map(({ details: _details, ...rest }) => rest), blockId }
+      : {}),
   });
 
   const writeNow = (): void => {
@@ -131,6 +150,9 @@ export function createToolActivityWriter(
   /** Writes one entry's row, remembering it so the next patch of that entry is a write by id */
   const writeEntry = (entry: ToolActivityEntry): void => {
     if (!blockId) return;
+    // Once the entries are folded into the block, a row of its own would be assembled *instead of* the
+    // folded list, so an entry arriving after that is written as part of the block
+    if (foldedIn) { writeNow(); return; }
     const row = services.chat.updateMessageToolEntry(blockId, { ...entry }, rows.get(entry.id));
     if (row) rows.set(entry.id, row);
   };
@@ -167,8 +189,8 @@ export function createToolActivityWriter(
     setArtifactRef(ref: { artifactId: string; label: string }): void {
       artifactRef = ref;
       if (entries.length === 0) return;
-      // Writing immediately is safe even after finalise — same entries+state,
-      // just with the new artifactRef field included in the block props.
+      // Safe even after finalise: the props carry the state, the ref and — once the entries have been
+      // folded in — the entries, so this adds the ref without dropping the list
       writeNow();
     },
 
@@ -182,6 +204,7 @@ export function createToolActivityWriter(
           services.chat.removeMessageBlock(messageId, 'tool-activity');
           blockId = undefined;
           written = undefined;
+          foldedIn = false;
           rows.clear();
         }
         return;
@@ -197,7 +220,15 @@ export function createToolActivityWriter(
       writeNow();
       // The block has stopped growing, so its entries fold back into it: they made this turn's writes cheap
       // and from here they would only cost every read of the message, and the store, for the thread's life
-      if (blockId) services.chat.compactMessageBlock(blockId);
+      if (blockId && !foldedIn) {
+        services.chat.compactMessageBlock(blockId);
+        // The props now carry the entries, so every write of this row from here has to carry them too —
+        // and what the fold left there is exactly what `buildBlockProps` now answers, so the dedupe holds
+        // and a second finalise writes nothing
+        foldedIn = true;
+        rows.clear();
+        written = JSON.stringify(buildBlockProps());
+      }
     },
   };
 }
