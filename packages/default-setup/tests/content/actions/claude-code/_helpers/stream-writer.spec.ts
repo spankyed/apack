@@ -231,4 +231,26 @@ describe('the last word is said once', () => {
     expect(writes).toEqual([expect.objectContaining({ text: '' })]);
     expect(feed.at(-1)?.done, 'and ends whatever run a window holds').toBe(true);
   });
+
+  /**
+   * **The first commit waits for the clock like every other one.** `after` measures from when the row was
+   * last committed, so starting that at zero made it an age of the whole epoch: the delay computed as
+   * negative, clamped to none, and the row was written on the next tick whatever `durableMs` said. A turn
+   * whose characters are meant to cost nothing but a feed quietly committed one row immediately, and
+   * `views.spec.ts`'s "a flush carries characters, not a row" raced that tick for its answer.
+   */
+  it('commits no row before the durable clock, however many characters arrive', () => {
+    const { feed, written, messageText, services } = recorder();
+    const writer = createStreamWriter(services, 'm-1' as never, { intervalMs: 80, durableMs: 600_000 });
+
+    for (let n = 0; n < 16; n++) writer.pushImmediate('x');
+    vi.advanceTimersByTime(1_000);
+
+    expect(written('text'), 'the characters travel as a feed and touch no row').toBe(0);
+    expect(feed.length, 'and every one of them reached the windows').toBeGreaterThan(0);
+
+    vi.advanceTimersByTime(600_000);
+    expect(written('text'), 'and the clock commits them when it comes round').toBeGreaterThan(0);
+    expect(messageText()).toBe('x'.repeat(16));
+  });
 });

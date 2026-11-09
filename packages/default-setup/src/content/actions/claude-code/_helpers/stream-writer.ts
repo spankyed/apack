@@ -80,7 +80,14 @@ export function createStreamWriter(
   /** How much of `buffer` the windows have been sent. The feed's offsets are contiguous from 0 */
   let fedUpTo = 0;
   let lastFeedAt = 0;
-  let lastWriteAt = 0;
+  /**
+   * When the row was last committed, which starts **now** rather than at zero.
+   *
+   * `after` measures from this, so a zero here is an age of the whole epoch and the first commit is
+   * scheduled at no delay however long `durableMs` is — the row written on the next tick, not on its clock.
+   * The feed's `lastFeedAt` does start at zero, deliberately: the first characters must not wait.
+   */
+  let lastWriteAt = Date.now();
   let feedTimer: ReturnType<typeof setTimeout> | null = null;
   let writeTimer: ReturnType<typeof setTimeout> | null = null;
   /** Whether this writer has already said its last word */
