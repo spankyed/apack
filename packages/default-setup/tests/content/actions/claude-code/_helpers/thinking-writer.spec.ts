@@ -128,12 +128,15 @@ describe('what a growing thinking block costs', () => {
    * A bound derived from `ROW_INTERVAL_MS` could not catch the interval being lowered again, since it would
    * scale by the same factor as the writes — so this one is absolute and holds whatever the clock is set to.
    *
-   * **Measured on this fixture**: 36KB of thinking over three minutes writes 74KB, which is 2.06x. It wrote
-   * 1.68MB — 47x — while a flush carried the whole block, and 13MB on a quarter-second row, so the durable
-   * interval was worth 7.7x of that. What removed the rest is the text being appended from an offset rather
-   * than rewritten, so the interval now decides how often the turn commits and not how much of it is
-   * written again. What is left is the text once, plus one whole-text write per compaction
-   * (`TEXT_SEGMENTS_BEFORE_COMPACTION`), which is what the bound is over.
+   * **Measured on this fixture**: 36KB of thinking over three minutes writes 87,805 bytes, which is 2.44x.
+   * It wrote 1.68MB — 47x — while a flush carried the whole block. What removed that is the text being
+   * appended from an offset rather than rewritten; what is left is the text once, plus one whole-text write
+   * per compaction (`TEXT_SEGMENTS_BEFORE_COMPACTION`), which is what the bound is over.
+   *
+   * **And this is now the interval the app runs.** It read 2.06x while `ROW_INTERVAL_MS` was 2000 and every
+   * caller passed 250, so the figure described a configuration nothing used — the spec measured the default
+   * and the product overrode it. 2.44x against 2.06x is the whole difference eight times as many commits
+   * makes, which is the appending's doing: the old shape priced the same change at 13MB against 1.68MB.
    */
   it('writes a bounded multiple of what the turn leaves behind', async () => {
     const AMPLIFICATION = 4;

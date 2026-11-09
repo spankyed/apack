@@ -130,11 +130,11 @@ export async function consumeStream(
 
     const msg = services.chat.sendBlockMessage({ threadId, text: 'Thinking…', blocks: [], forkable: false });
     log.debug('message split', { previousId: currentMessageId, nextId: msg.messageId });
-    const newThinking = createThinkingWriter(services, msg.messageId as EntityId, { intervalMs: 250 });
+    const newThinking = createThinkingWriter(services, msg.messageId as EntityId);
     return {
       currentMessageId: msg.messageId as EntityId,
-      writer: createStreamWriter(services, msg.messageId as EntityId, { intervalMs: 80 }),
-      toolActivity: createToolActivityWriter(services, msg.messageId as EntityId, { intervalMs: 250, phase }),
+      writer: createStreamWriter(services, msg.messageId as EntityId),
+      toolActivity: createToolActivityWriter(services, msg.messageId as EntityId, { phase }),
       thinking: newThinking,
       currentMessageHasCliUuid: false,
     };

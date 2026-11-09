@@ -27,7 +27,7 @@ describe('what the tool-activity writer writes', () => {
    */
   it('keeps the entries out of the block it writes', () => {
     const { services, writes } = recordTurnWrites();
-    const writer = createToolActivityWriter(services, MESSAGE, { intervalMs: 250 });
+    const writer = createToolActivityWriter(services, MESSAGE, {});
 
     writer.append(entry('one'));
     writer.flush();
@@ -43,7 +43,7 @@ describe('what the tool-activity writer writes', () => {
   /** An entry's own row is written when it arrives, and again when it is patched — never its neighbours' */
   it('writes the entry that changed and no other', () => {
     const { services, written } = recordTurnWrites();
-    const writer = createToolActivityWriter(services, MESSAGE, { intervalMs: 250 });
+    const writer = createToolActivityWriter(services, MESSAGE, {});
 
     writer.append(entry('one'));
     writer.flush();
@@ -64,7 +64,7 @@ describe('what the tool-activity writer writes', () => {
    */
   it('keeps a detail recorded earlier when a later patch carries another', () => {
     const { services, writes } = recordTurnWrites();
-    const writer = createToolActivityWriter(services, MESSAGE, { intervalMs: 250 });
+    const writer = createToolActivityWriter(services, MESSAGE, {});
 
     writer.append(entry('one', { details: { input: { file: 'a.ts' } } }));
     // The block's row has to exist before an entry can hang off it, so nothing is written until it does
@@ -78,7 +78,7 @@ describe('what the tool-activity writer writes', () => {
   /** The CLI re-emits a tool_use after a permission pause, and a re-emitted one is not a second entry */
   it('ignores an entry it already holds', () => {
     const { services } = recordTurnWrites();
-    const writer = createToolActivityWriter(services, MESSAGE, { intervalMs: 250 });
+    const writer = createToolActivityWriter(services, MESSAGE, {});
 
     writer.append(entry('one'));
     writer.append(entry('one', { summary: 'again.ts' }));
@@ -93,7 +93,7 @@ describe('what the tool-activity writer writes', () => {
    */
   it('settles a stranded entry and preserves the terminal ones', () => {
     const { services } = recordTurnWrites();
-    const writer = createToolActivityWriter(services, MESSAGE, { intervalMs: 250 });
+    const writer = createToolActivityWriter(services, MESSAGE, {});
 
     writer.append(entry('running-one'));
     writer.append(entry('failed', { status: 'error' }));
@@ -112,7 +112,7 @@ describe('what the tool-activity writer writes', () => {
    */
   it('writes a bounded multiple of what its entries keep', () => {
     const { services, written, kept } = recordTurnWrites();
-    const writer = createToolActivityWriter(services, MESSAGE, { intervalMs: 250 });
+    const writer = createToolActivityWriter(services, MESSAGE, {});
 
     for (let tool = 0; tool < 40; tool++) {
       writer.append(entry(`tool-${tool}`));
@@ -138,7 +138,7 @@ describe('what the tool-activity writer writes', () => {
    */
   it('writes its block when the block changes, not when a tool does', () => {
     const { services, writes } = recordTurnWrites();
-    const writer = createToolActivityWriter(services, MESSAGE, { intervalMs: 250 });
+    const writer = createToolActivityWriter(services, MESSAGE, {});
 
     for (let tool = 0; tool < 20; tool++) {
       writer.append(entry(`tool-${tool}`));
@@ -157,7 +157,7 @@ describe('what the tool-activity writer writes', () => {
   /** No tool ran, so this writer has no block and leaves none — and the thinking block is not its to touch */
   it('writes nothing when the turn ran no tools', () => {
     const { services, writes } = recordTurnWrites();
-    const writer = createToolActivityWriter(services, MESSAGE, { intervalMs: 250 });
+    const writer = createToolActivityWriter(services, MESSAGE, {});
 
     writer.flush();
     writer.finalise('done');

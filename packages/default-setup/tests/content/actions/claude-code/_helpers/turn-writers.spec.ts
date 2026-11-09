@@ -23,32 +23,60 @@ import { describe, expect, it } from 'vitest';
 const HELPERS = path.resolve(import.meta.dirname, '..', '..', '..', '..', '..', 'src', 'content', 'actions', 'claude-code', '_helpers');
 const SPECS = import.meta.dirname;
 
-/** The writes a turn writer makes: the service calls that reach a message's row */
-const ROW_WRITES = new Set(['updateMessageState', 'updateMessageBlock', 'appendMessageBlockText', 'updateMessageToolEntry', 'removeMessageBlock']);
-/** How a writer defers one: the only timer this code has */
-const DEFERS = new Set(['setTimeout']);
+/** The writes a turn writer makes: the service calls that reach a message's rows */
+const ROW_WRITES = new Set(['updateMessageState', 'updateMessageBlock', 'appendMessageBlockText', 'updateMessageToolEntry', 'removeMessageBlock', 'compactMessageBlock']);
 
 /**
- * Whether a source both defers a flush and writes a row — which is what makes it a turn writer.
+ * Whether a source holds a turn writer: **a factory per message whose returned functions write its rows.**
  *
- * Both halves are required, and that is the discriminating part: a module that only writes is a one-shot
- * (`plan-artifact.ts`, `thread-context.ts`) and has no amplification to bound, while a module that only
- * defers is a timer with no store behind it.
+ * That shape is what needs bounding — something constructed once for a message and then written through
+ * many times as a turn streams, which is where a multiple of what it keeps can hide. A module that writes a
+ * row straight from its exported function is a one-shot (`plan-artifact.ts`, `thread-context.ts`) with no
+ * accumulation to bound, and the orchestrator that constructs the writers (`stream-consumer.ts`) writes
+ * rows too but is not one.
+ *
+ * **It used to ask whether the module deferred a flush, and that was a proxy that broke.** Deferring stood
+ * in for accumulating, so when the tool-activity writer's interval was removed — the entries having become
+ * rows written as they arrive — the most expensive writer of the three silently left the population. This
+ * gate's own floor case caught it, which is the one direction a derived population can be checked in.
  */
 export function turnWriterIn(text: string, file: string): boolean {
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
-  let defers = false;
-  let writes = false;
+
+  const writesARow = (node: ts.Node): boolean => {
+    let found = false;
+    const look = (inner: ts.Node): void => {
+      if (ts.isCallExpression(inner) && ts.isPropertyAccessExpression(inner.expression)
+        && ROW_WRITES.has(inner.expression.name.text)) found = true;
+      ts.forEachChild(inner, look);
+    };
+    ts.forEachChild(node, look);
+    return found;
+  };
+
+  /** A function nested inside the factory: what the factory hands back, rather than what it does itself */
+  const nestedWritesARow = (factory: ts.Node): boolean => {
+    let found = false;
+    const look = (inner: ts.Node): void => {
+      if (inner !== factory && (ts.isFunctionDeclaration(inner) || ts.isArrowFunction(inner)
+        || ts.isFunctionExpression(inner) || ts.isMethodDeclaration(inner)) && writesARow(inner)) found = true;
+      ts.forEachChild(inner, look);
+    };
+    ts.forEachChild(factory, look);
+    return found;
+  };
+
+  const takesAMessage = (node: ts.FunctionLikeDeclarationBase): boolean =>
+    node.parameters.some((parameter) => parameter.name.getText(source) === 'messageId');
+
+  let writer = false;
   const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node)) {
-      const callee = node.expression;
-      if (ts.isIdentifier(callee) && DEFERS.has(callee.text)) defers = true;
-      if (ts.isPropertyAccessExpression(callee) && ROW_WRITES.has(callee.name.text)) writes = true;
-    }
+    if ((ts.isFunctionDeclaration(node) || ts.isArrowFunction(node) || ts.isFunctionExpression(node))
+      && takesAMessage(node) && nestedWritesARow(node)) writer = true;
     ts.forEachChild(node, visit);
   };
   visit(source);
-  return defers && writes;
+  return writer;
 }
 
 const helperSources = (): string[] => [...population('the claude-code action helpers',
@@ -129,11 +157,17 @@ describe('every turn writer is bounded', () => {
 
   /** And the detector itself, over sources written to be each shape */
   it.each([
-    ['defers and writes', 'const t = () => { setTimeout(() => services.chat.updateMessageBlock(id, b), 10); };', true],
-    ['writes without deferring', 'const t = () => { services.chat.updateMessageBlock(id, b); };', false],
-    ['defers without writing', 'const t = () => { setTimeout(() => done(), 10); };', false],
+    ['hands back a function that writes',
+      'export function make(services, messageId) { return { push: () => services.chat.updateMessageBlock(messageId, b) }; }', true],
+    ['writes a row itself, taking no message',
+      'export function once(services, threadId) { services.chat.updateMessageBlock(threadId, b); }', false],
+    ['writes a row itself for a message, handing back nothing',
+      'export function once(services, messageId) { services.chat.updateMessageBlock(messageId, b); }', false],
+    ['hands back a function that writes nothing',
+      'export function make(services, messageId) { return { push: () => count(messageId) }; }', false],
+    ['names a write in a comment only',
+      'export function make(services, messageId) { return { push: () => /* services.chat.updateMessageBlock */ 1 }; }', false],
     ['neither', 'export const value = 1;', false],
-    ['names a write in a comment only', '// services.chat.updateMessageBlock\nsetTimeout(() => done(), 10);', false],
   ])('reads a source that %s', (_what, text, expected) => {
     expect(turnWriterIn(text, 'probe.ts')).toBe(expected);
   });

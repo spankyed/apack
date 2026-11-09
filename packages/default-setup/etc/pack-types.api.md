@@ -5886,6 +5886,7 @@ declare const chatQueries: {
     readonly chatStart: () => ChatStart;
     /** A message's blocks, assembled from their rows: what an export carries and `messageById` folds in */
     readonly blocksOf: (messageId: EARS.EntityId) => BlockConfig[];
+    readonly entryDetails: (blockId: EARS.EntityId) => Record<string, ToolActivityEntry["details"]>;
     readonly messageById: (messageId: EARS.EntityId) => MessageEntity | null;
 };
 

@@ -26,9 +26,30 @@
 import type { Services, EntityId } from '#generated/services.ts';
 
 export interface StreamWriterOptions {
-  /** Minimum ms between feed events — what the window's update cadence is. Default 80ms. */
+  /**
+   * How often the feed reaches the windows — a **frame rate**, and the one clock in this flow that should
+   * stay one.
+   *
+   * Everything else here waits on work rather than on time, and a reviewer coming from that rule will want
+   * to convert this too. It should not be: the consumer is a human reading text, and a display has a
+   * refresh rate. Twelve updates a second is already past what anyone can tell apart from continuous, so
+   * sending faster buys nothing and costs a broadcast through the bus, the subscription and every open
+   * window per token. There is also nothing here to wait on — a feed is fire-and-forget, with no
+   * acknowledgement a sender could use as backpressure.
+   *
+   * The first delta is not delayed: nothing has been sent, so the first `push` flushes at once and only a
+   * second one inside the frame waits.
+   */
   intervalMs?: number;
-  /** Minimum ms between durable writes of the row. Default 2000ms; see the header for what it buys. */
+  /**
+   * How often the row is committed.
+   *
+   * This is not a frame rate: it is how much a crash loses and how stale the row is for a window that
+   * joined mid-turn. **Unlike the block writers', this one still rewrites the whole field** — a message's
+   * `text` is one attribute, so a commit costs the reply so far and the cost grows with the turn, which is
+   * why this is seconds where the blocks' is a quarter of one (`ROW_INTERVAL_MS`). Appending it the way a
+   * block's text is appended is what would let these two converge.
+   */
   durableMs?: number;
 }
 

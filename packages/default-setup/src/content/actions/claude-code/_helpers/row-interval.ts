@@ -1,21 +1,24 @@
 /**
- * How often a growing block is written to its message row while a turn streams.
+ * How often a growing block's row is committed while a turn streams.
  *
- * **A flush writes the whole block, so the cost of one grows with the turn.** `updateMessageState` replaces
- * the field, which means every flush re-writes all of the thinking text and all of the tool entries
- * accumulated so far, and the two writers compound: once tool activity starts the thinking block rides
- * along in every tool-activity write. What reaches storage is then a multiple of what the user ends up
- * with, and the multiple grows with the length of the turn.
+ * **A quarter second, which is what every caller was already passing.** This constant said 2000 and
+ * explained why 2000 was right; all four construction sites overrode it with 250 and none said why, so the
+ * number the module documented was used by nothing and the specs measured a configuration the app never
+ * ran. The call sites were right and this was wrong: the row is what a window joining mid-turn is shown
+ * until the next commit reaches the feed's offset, so the interval is that window's staleness and a quarter
+ * second is the answer to it.
  *
- * So continuous growth is **fed** rather than written — `services.chat.streamMessageBlockText`, the block's
- * half of G1's split — and the row is written on this interval for durability, which is what lets a crash
- * lose seconds of a turn rather than all of it. A **discrete** change the user is waiting to see, a tool
- * appearing or the block reaching its final state, is written immediately and resets the interval.
+ * **It is affordable now for a reason that did not hold when it said 2000.** A commit used to rewrite the
+ * whole block, so eight times as many of them cost eight times as much — the comment here priced a
+ * quarter-second row at 13MB against 1.68MB. Growth is appended now (`BlockText`), so a commit costs the
+ * characters since the last one and the interval decides how often a turn commits rather than how much of
+ * it is written again. What it still costs is reaching the fold sooner
+ * (`TEXT_SEGMENTS_BEFORE_COMPACTION`), which is the figure `row-interval.spec.ts` records.
  *
- * The interval is the slowest one at which the row is still a useful fallback for a window that joined
- * mid-turn, since what it is no longer carrying is the live view.
+ * A **discrete** change the user is waiting to see — a block appearing, a tool arriving, a block reaching
+ * its final state — is committed at once and does not wait for this.
  */
-export const ROW_INTERVAL_MS = 2000;
+export const ROW_INTERVAL_MS = 250;
 
 /** The block whose growth is fed: a message holds one, and the feed names which it belongs to. */
 export const THINKING_BLOCK = 'thinking';

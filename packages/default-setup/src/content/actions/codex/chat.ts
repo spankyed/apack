@@ -112,9 +112,9 @@ export async function action(params: Record<string, any>, services: Services, _z
   // ─── Placeholder message + writers ──────────────────────────────────
   const currentMessageId = services.chat.sendBlockMessage({ threadId, text: 'Thinking…', blocks: [], forkable: false }).messageId;
   services.chat.updateMessageState(currentMessageId as any, { context: { agent: 'Codex' } } as any);
-  const thinking = createThinkingWriter(services, currentMessageId, { intervalMs: 250 });
-  const writer = createStreamWriter(services, currentMessageId, { intervalMs: 80 });
-  const toolActivity = createToolActivityWriter(services, currentMessageId, { intervalMs: 250 });
+  const thinking = createThinkingWriter(services, currentMessageId);
+  const writer = createStreamWriter(services, currentMessageId);
+  const toolActivity = createToolActivityWriter(services, currentMessageId, {});
 
   ensureSessionMarker(services, threadId);
   persistCodexState(services, threadId, { startedAt: prior?.startedAt ?? Date.now(), sessionError: undefined, ...(effectiveModel && { model: effectiveModel }) });

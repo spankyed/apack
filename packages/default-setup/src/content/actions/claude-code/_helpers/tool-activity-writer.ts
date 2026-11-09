@@ -34,9 +34,16 @@ import type { Services, EntityId } from '#generated/services.ts';
 import type { ToolActivityEntry, ToolActivityBlockProps } from './tool-activity-types.ts';
 
 export interface ToolActivityWriterOptions {
-  /** Minimum ms between `updateMessageState` calls. Default 250ms. */
-  intervalMs?: number;
-  /** Current phase — drives the streaming label ("Planning…" vs "Working…"). */
+  /**
+   * Current phase — drives the streaming label ("Planning…" vs "Working…").
+   *
+   * **There is no interval here any more.** This writer had one, and what it coalesced was a write of the
+   * block's row per tool event — which existed because the row carried the entries and a derived label.
+   * The entries are rows of their own now, written as they arrive, and the block holds only what changes
+   * when the turn does, so the row is written twice: when the block appears and when it finishes. Both are
+   * discrete changes the user is waiting for, and delaying a quarter second to coalesce a write that no
+   * longer repeats bought nothing.
+   */
   phase?: string;
 }
 
@@ -69,13 +76,10 @@ export function createToolActivityWriter(
   messageId: EntityId,
   opts: ToolActivityWriterOptions = {},
 ): ToolActivityWriter {
-  const intervalMs = opts.intervalMs ?? 250;
   const entries: ToolActivityEntry[] = [];
   const startedAt = Date.now();
 
   let state: 'streaming' | 'done' | 'error' = 'streaming';
-  let pendingTimer: ReturnType<typeof setTimeout> | null = null;
-  let lastFlushAt = 0;
   /** Once true, we've pushed at least one block — finalise(0-entries) should clear. */
   let hasWrittenOnce = false;
   /** This block's own row, from the first write; every write after it is that row by id */
@@ -108,11 +112,6 @@ export function createToolActivityWriter(
   });
 
   const writeNow = (): void => {
-    if (pendingTimer) {
-      clearTimeout(pendingTimer);
-      pendingTimer = null;
-    }
-    lastFlushAt = Date.now();
     const props = buildBlockProps();
     const next = JSON.stringify(props);
     // **The row is written when what it holds differs, which after the label stopped being stored is
@@ -136,16 +135,6 @@ export function createToolActivityWriter(
     if (row) rows.set(entry.id, row);
   };
 
-  const schedule = (): void => {
-    if (pendingTimer) return;
-    const since = Date.now() - lastFlushAt;
-    const delay = Math.max(0, intervalMs - since);
-    pendingTimer = setTimeout(() => {
-      pendingTimer = null;
-      writeNow();
-    }, delay);
-  };
-
   return {
     get entries() { return entries; },
     get hasEntries() { return entries.length > 0; },
@@ -159,7 +148,7 @@ export function createToolActivityWriter(
       writeEntry(entry);
       // Only to bring the row into being: an entry cannot hang off a block that is not there yet. Once it
       // is, nothing about it changes until the turn ends, so no later event writes it
-      if (!blockId) schedule();
+      if (!blockId) writeNow();
     },
 
     update(id: string, patch: Partial<ToolActivityEntry>): void {
@@ -167,7 +156,7 @@ export function createToolActivityWriter(
       if (idx === -1) return;
       entries[idx] = { ...entries[idx], ...patch, details: { ...entries[idx].details, ...patch.details } };
       writeEntry(entries[idx]);
-      if (!blockId) schedule();
+      if (!blockId) writeNow();
     },
 
     flush(): void {

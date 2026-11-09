@@ -19,7 +19,7 @@
 // The 170x and 47.9x in this branch's first two commits are that mistake.
 //
 // **Measured with this fixture, whose tools carry a 4KB `details.output` because that is what the product
-// stores: 15,111,163 bytes written for 253,451 kept, which is 59.6x. Now 513,008 for 254,973, or 2.01x.**
+// stores: 15,111,163 bytes written for 253,451 kept, which is 59.6x. Now 515,176 for 254,973, or 2.02x.**
 // Both figures are the same fixture and the same denominator; the 30x between them is the entries ceasing
 // to be one value rewritten whole on every flush.
 //
@@ -49,7 +49,7 @@ const MESSAGE = 'message-one' as EntityId;
  */
 async function turn(services: Services, { thinkingTicks = 120, growth = 50, tools = 60, output = 4_000 } = {}) {
   const thinking = createThinkingWriter(services, MESSAGE);
-  const toolActivity = createToolActivityWriter(services, MESSAGE, { intervalMs: 250 });
+  const toolActivity = createToolActivityWriter(services, MESSAGE, {});
 
   for (let tick = 0; tick < thinkingTicks; tick++) {
     thinking.push('x'.repeat(growth));
