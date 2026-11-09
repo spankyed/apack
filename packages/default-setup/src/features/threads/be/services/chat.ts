@@ -63,7 +63,8 @@ function createBlockMessage(options: BlockMessageOptions): {
     text: result.text,
     sender: result.sender as 'user' | 'assistant' | 'system',
     timestamp: result.timestamp,
-    blocks,
+    // The rows `addMessage` created, not the configs passed in: a block is addressed by its row
+    blocks: result.blocks,
     createdAt: result.timestamp,
     updatedAt: result.timestamp,
     ...(forkable === false && { forkable }),
@@ -391,7 +392,7 @@ export function streamMessageText(params: {
  */
 export function streamMessageBlockText(params: {
   messageId: EARS.EntityId;
-  block: string;
+  blockId: EARS.EntityId;
   at: number;
   text: string;
   done?: true;
@@ -399,7 +400,7 @@ export function streamMessageBlockText(params: {
   broadcastToSurface('threads', {
     type: 'MESSAGE_BLOCK_TEXT_APPENDED',
     messageId: params.messageId,
-    block: params.block,
+    blockId: params.blockId,
     at: params.at,
     text: params.text,
     ...(params.done ? { done: true as const } : {}),

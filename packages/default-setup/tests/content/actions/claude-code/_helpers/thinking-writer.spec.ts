@@ -12,9 +12,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EntityId, Services } from '#generated/services.ts';
 import { createThinkingWriter } from '../../../../../src/content/actions/claude-code/_helpers/thinking-writer.ts';
 import { recordTurnWrites } from './_support/turn-writes.ts';
-import { ROW_INTERVAL_MS, THINKING_BLOCK } from '../../../../../src/content/actions/claude-code/_helpers/row-interval.ts';
+import { ROW_INTERVAL_MS } from '../../../../../src/content/actions/claude-code/_helpers/row-interval.ts';
 
-type Feed = { block: string; at: number; text: string; done?: true };
+type Feed = { blockId: string; at: number; text: string; done?: true };
+
+/** The row the recorder gives a thinking block, which is what the feed names */
+const BLOCK_ROW = 'row-thinking';
 
 /**
  * The shared recorder, with this block's text feed beside it.
@@ -31,7 +34,7 @@ function recorder() {
     chat: {
       ...chat,
       streamMessageBlockText: (params: Feed & { messageId: unknown }) => {
-        feed.push({ block: params.block, at: params.at, text: params.text, ...(params.done ? { done: true as const } : {}) });
+        feed.push({ blockId: params.blockId, at: params.at, text: params.text, ...(params.done ? { done: true as const } : {}) });
       },
     },
   } as unknown as Services;
@@ -51,7 +54,7 @@ afterEach(() => { vi.useRealTimers(); });
 describe('what a growing thinking block costs', () => {
   /**
    * **The block appearing is written at once.** It is the discrete change the user is waiting for, and a run
-   * cannot splice onto a block the row has not got — a window matches a run to a block by type and ignores
+   * cannot splice onto a block the row has not got — a window matches a run to a block by its row and ignores
    * one it cannot see. So the first content is a row write and everything after it is growth.
    */
   it('writes the block as soon as there is one, and feeds what follows', () => {
@@ -64,7 +67,7 @@ describe('what a growing thinking block costs', () => {
 
     writer.push(' about it');
     expect(writes).toHaveLength(1);
-    expect(feed).toEqual([{ block: THINKING_BLOCK, at: 8, text: ' about it' }]);
+    expect(feed).toEqual([{ blockId: BLOCK_ROW, at: 8, text: ' about it' }]);
   });
 
   /**
@@ -117,7 +120,7 @@ describe('what a growing thinking block costs', () => {
     writer.finalise();
 
     expect(writes.at(-1)).toContain('Thought for');
-    expect(feed.at(-1)).toEqual({ block: THINKING_BLOCK, at: 0, text: '', done: true });
+    expect(feed.at(-1)).toEqual({ blockId: BLOCK_ROW, at: 0, text: '', done: true });
   });
 
   /**

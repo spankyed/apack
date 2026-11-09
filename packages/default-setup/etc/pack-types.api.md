@@ -242,9 +242,10 @@ interface BlockConfig {
  * The position is on the edge rather than here (`has_block`'s `info.index`), being a fact about the membership
  * and not about the block.
  *
- * **Four things in this feature are called a block, and only two are this one.** `BlockConfig` is this row's
- * `type` and `props` as a caller passes them and as a message's assembled `blocks` hand them back; `Block` and
- * `has_block` are this entity and its edge. The `BLOCKS` relation kind is unrelated — one *thread* blocking
+ * **Five things in this feature are called a block, and only three are this one.** `BlockConfig` is this
+ * row's `type` and `props` as a caller passes them to create one, `StoredBlock` is the same with the row's
+ * id as every read hands it back, and `Block` and `has_block` are this entity and its edge. The `BLOCKS`
+ * relation kind is unrelated — one *thread* blocking
  * another — and `blockResponse` is what the user sent back from an interactive block. Nothing may be
  * find-and-replaced across them.
  */
@@ -2780,7 +2781,7 @@ interface MessageEntity extends BaseEntity {
     sender: 'assistant' | 'marker' | 'system' | 'user';
     timestamp: number;
     responseTimestamp?: number;
-    blocks?: BlockConfig[];
+    blocks?: StoredBlock[];
     /**
      * Response data for block-based interactions. See the `BlockResponse`
      * union above for the full set of observed shapes. Always narrow
@@ -3949,7 +3950,7 @@ type OutgoingThreadsEvents =
  | {
     type: 'MESSAGE_BLOCK_TEXT_APPENDED';
     messageId: EARS.EntityId;
-    block: string;
+    blockId: EARS.EntityId;
     at: number;
     text: string;
     done?: true;
@@ -4721,6 +4722,20 @@ interface StashEntry {
     date: string;
 }
 
+/**
+ * A block as a read hands it back: what it holds, and **which block it is**.
+ *
+ * A message may hold two blocks of one type, so a type does not address one. Everything that acts on a
+ * block someone else is also writing needs the row — the button-group toggle writes back the block that
+ * holds the button, and a window splices a streamed run into the block the feed names — and both got the
+ * first block of the type before this field existed.
+ *
+ * It is not on `BlockConfig`, which is what a caller passes to *create* a block and has no row yet.
+ */
+interface StoredBlock extends BlockConfig {
+    id: EARS.EntityId;
+}
+
 type StreamEventLine = z.infer<typeof StreamEventLineSchema>;
 
 /** `{type:'stream_event', event:{...}}` — partial message chunks. */
@@ -5177,7 +5192,7 @@ interface ThreadsContext {
     }>;
     /** A growing block's run, per message: which block it belongs to, from where, and what has arrived */
     messageBlockStreams: Record<string, {
-        block: string;
+        blockId: string;
         at: number;
         text: string;
     }>;
@@ -5786,6 +5801,8 @@ declare const chatCommands: {
         text: string;
         sender: string;
         timestamp: number;
+        /** The blocks as rows, for a caller that describes the message it just added */
+        blocks?: StoredBlock[];
     };
     /** Creates a message's blocks as rows, in the order given: what a message's creation and an import write */
     readonly writeMessageBlocks: (params: {
@@ -5897,7 +5914,7 @@ declare const chatCommands: {
         messageId: EARS.EntityId;
         responseTimestamp: number;
         updatedAt: number;
-        blocks?: BlockConfig[];
+        blocks?: StoredBlock[];
     };
     readonly updateMessageState: (params: {
         messageId: EARS.EntityId;
@@ -5980,7 +5997,7 @@ declare const chatQueries: {
      */
     readonly chatStart: () => ChatStart;
     /** A message's blocks, assembled from their rows: what an export carries and `messageById` folds in */
-    readonly blocksOf: (messageId: EARS.EntityId) => BlockConfig[];
+    readonly blocksOf: (messageId: EARS.EntityId) => StoredBlock[];
     readonly entryDetails: (blockId: EARS.EntityId) => Record<string, ToolActivityEntry["details"]>;
     /** One message, whole; `null` once it is gone */
     readonly messageById: (messageId: EARS.EntityId) => MessageEntity | null;
@@ -6512,7 +6529,7 @@ declare function storeHandle(key: string, handle: CodexTurnHandle): void;
  */
 declare function streamMessageBlockText(params: {
     messageId: EARS.EntityId;
-    block: string;
+    blockId: EARS.EntityId;
     at: number;
     text: string;
     done?: true;

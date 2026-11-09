@@ -56,7 +56,7 @@ it('renders current block bindings inside conversation node views and drops disa
   const component = { props: ['disabled', 'response'], setup: (props: { disabled: boolean; response: { approved: boolean } }) =>
     () => h('div', { class: 'custom-input' }, `${props.disabled}:${props.response.approved}`) };
   const message: MessageEntity = { id: 'Message-block', entityType: 'Message', timestamp: 0, createdAt: 0,
-    sender: 'assistant', text: 'Body', blocks: [{ type: 'approval', props: {} }], responseTimestamp: 1,
+    sender: 'assistant', text: 'Body', blocks: [{ id: 'Block-approval', type: 'approval', props: {} }], responseTimestamp: 1,
     blockResponse: { approved: true } };
   app = createApp({ render: () => h(SurfaceScope, { surface: 'external/threads' }, {
     default: () => h(ConversationViewer, { messages: [message] }, {

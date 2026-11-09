@@ -55,14 +55,14 @@ export function finishedRun(
 }
 
 export interface BlockRun {
-  block: string;
+  blockId: string;
   at: number;
   text: string;
 }
 
 /** Only the shape this rule reads, so nothing here depends on the message model. */
 interface GrowingBlock {
-  type: string;
+  id: string;
   props: Record<string, unknown>;
 }
 
@@ -74,13 +74,17 @@ interface GrowingBlock {
  * write, so there is nothing to splice onto and the row is the honest answer until one arrives — the same
  * reasoning as a run that starts past the end of the text. The blocks are returned unchanged when the
  * splice changes nothing, so a window that is not streaming re-renders nothing.
+ *
+ * **The run names a block's row, not its type.** A message may hold two blocks of one type, and a type
+ * matches the first of them — so a run would splice one block's characters into another block's content,
+ * which reads as text rather than as an error.
  */
 export function messageStreamBlocks<T extends GrowingBlock>(
   blocks: T[] | undefined,
   run: BlockRun | undefined,
 ): T[] | undefined {
   if (!run || !blocks) return blocks;
-  const at = blocks.findIndex(block => block.type === run.block);
+  const at = blocks.findIndex(block => block.id === run.blockId);
   if (at < 0) return blocks;
   const held = blocks[at];
   const content = typeof held.props.content === 'string' ? held.props.content : '';
@@ -100,7 +104,7 @@ export function messageStreamBlocks<T extends GrowingBlock>(
  */
 export function blockRunCaughtUp<T extends GrowingBlock>(blocks: T[] | undefined, run: BlockRun | undefined): boolean {
   if (!run) return false;
-  const held = blocks?.find(block => block.type === run.block);
+  const held = blocks?.find(block => block.id === run.blockId);
   const content = typeof held?.props.content === 'string' ? held.props.content : '';
   return content.length >= run.at + run.text.length;
 }

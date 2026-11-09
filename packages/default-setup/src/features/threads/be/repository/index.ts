@@ -7,7 +7,7 @@ import { RepositoryError, RepositoryErrorCode } from '@apackdev/sdk/repositories
 import { wouldCreateCycle } from '@apackdev/sdk/ears';
 import { createLogger } from '@apackdev/sdk/logger';
 import type {
-  ThreadEntity, MessageEntity, ArtifactEntity, BlockConfig, MessageReferences, ToolActivityEntry,
+  ThreadEntity, MessageEntity, ArtifactEntity, BlockConfig, StoredBlock, MessageReferences, ToolActivityEntry,
   ThreadCreateData,
   ThreadExtendedData,
   ThreadExtended,
@@ -415,12 +415,16 @@ function getThreadArtifacts(threadId: EARS.EntityId): ArtifactItem[] {
 }
 
 /**
- * A message's blocks, in the order its edges record.
+ * A message's blocks, in the order its edges record, each with the row it came from.
  *
  * One relation walk per message. The chat and detail pages list message *ids* and each message is its own view,
  * so this runs for the one message that changed rather than for a page of them.
+ *
+ * **Every read carries the id**, because a type does not address a block: a message may hold two of one type.
+ * This was two functions, one with ids for the callers that could not assume otherwise and one without, and
+ * the plain one was the trap — a caller that wrote a block back by type reached the first of its type.
  */
-function blocksOf(messageId: EARS.EntityId): BlockConfig[] {
+function blocksOf(messageId: EARS.EntityId): StoredBlock[] {
   return childrenOfMessages([messageId]).get(messageId) ?? [];
 }
 
@@ -431,8 +435,8 @@ function blocksOf(messageId: EARS.EntityId): BlockConfig[] {
  * batched read of the block rows, and `childrenOf`'s own pair for every block at once. Asking per message
  * is what made reading a thread linear in its messages and then linear again in their children.
  */
-function childrenOfMessages(messageIds: readonly EARS.EntityId[]): Map<EARS.EntityId, BlockConfig[]> {
-  const blocks = new Map<EARS.EntityId, BlockConfig[]>();
+function childrenOfMessages(messageIds: readonly EARS.EntityId[]): Map<EARS.EntityId, StoredBlock[]> {
+  const blocks = new Map<EARS.EntityId, StoredBlock[]>();
   if (messageIds.length === 0) return blocks;
 
   const edges = query.ids(messageIds).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block);
@@ -445,40 +449,10 @@ function childrenOfMessages(messageIds: readonly EARS.EntityId[]): Map<EARS.Enti
     const row = rows.get(edge.target);
     if (!row) continue;
     const held = blocks.get(edge.source) ?? [];
-    held.push({ type: row.type as string, props: assembled(parts, edge.target, (row.props ?? {}) as Record<string, any>) });
+    held.push({ id: edge.target, type: row.type as string, props: assembled(parts, edge.target, (row.props ?? {}) as Record<string, any>) });
     blocks.set(edge.source, held);
   }
   return blocks;
-}
-
-/**
- * The same, each with the row it came from.
- *
- * **For a caller that may not assume one block per type.** `writeMessageBlock` resolves a block by type,
- * which is right for a streaming writer that owns the only block of its own, and wrong for anything walking
- * a message's blocks: a message may hold two of a type, and writing those back by type would put the second
- * one's content on the first one's row.
- */
-function blockRowsOf(messageId: EARS.EntityId): Array<{ id: EARS.EntityId; type: string; props: Record<string, any> }> {
-  const edges = query.ids(messageId).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block);
-  // **Most messages have no blocks at all**, and a message's read is the hot path — every message in an
-  // opened thread runs it — so one that has none asks nothing further
-  if (edges.length === 0) return [];
-
-  const rows = rowsByIdOf(edges.map((edge) => edge.target), ['type', 'props'] as const);
-  const parts = childrenOf(edges.map((edge) => edge.target));
-
-  return edges
-    .filter((edge) => rows.has(edge.target))
-    .sort((a, b) => indexOf(a.info) - indexOf(b.info))
-    .map((edge) => {
-      const row = rows.get(edge.target)!;
-      return {
-        id: edge.target,
-        type: row.type as string,
-        props: assembled(parts, edge.target, (row.props ?? {}) as Record<string, any>),
-      };
-    });
 }
 
 /**
@@ -668,10 +642,12 @@ const indexOf = (info: unknown): number =>
     : Number.MAX_SAFE_INTEGER;
 
 /** Creates a message's blocks as rows, each edge recording its position */
-function createBlocks(messageId: EARS.EntityId, blocks: readonly BlockConfig[]): void {
-  blocks.forEach((block, index) => {
+/** Creates a message's blocks, and answers them as a read would — with the rows they were created as */
+function createBlocks(messageId: EARS.EntityId, blocks: readonly BlockConfig[]): StoredBlock[] {
+  return blocks.map((block, index) => {
     const blockId = create(EARS.Entity.Block, { type: block.type, props: block.props }).id();
     write(messageId).link(EARS.RelKind.HAS_BLOCK, blockId, { info: { index } });
+    return { id: blockId, type: block.type, props: block.props };
   });
 }
 
@@ -994,7 +970,7 @@ export const chatQueries = {
   },
 
   /** A message's blocks, assembled from their rows: what an export carries and `messageById` folds in */
-  blocksOf: (messageId: EARS.EntityId): BlockConfig[] => blocksOf(messageId),
+  blocksOf: (messageId: EARS.EntityId): StoredBlock[] => blocksOf(messageId),
   entryDetails: (blockId: EARS.EntityId): Record<string, ToolActivityEntry['details']> => entryDetailsOf(blockId),
 
   /** One message, whole; `null` once it is gone */
@@ -1050,6 +1026,8 @@ export const chatCommands = {
     text: string;
     sender: string;
     timestamp: number;
+    /** The blocks as rows, for a caller that describes the message it just added */
+    blocks?: StoredBlock[];
   } => {
     const { threadId, text, sender, blocks, forkable, references, isCommand, command, autoHide, asUser, asideContext, blockResponse, responseTimestamp, asideText, compacted, context, skipRelink } = params;
 
@@ -1084,7 +1062,7 @@ export const chatCommands = {
 
     const messageId = messageTx.link(EARS.RelKind.CONTAINS, threadId).id();
 
-    if (blocks) createBlocks(messageId, blocks);
+    const storedBlocks = blocks ? createBlocks(messageId, blocks) : undefined;
 
     write(threadId).link(EARS.RelKind.CONTAINS, messageId);
     write(threadId).set('lastMessageTimestamp', timestamp);
@@ -1093,7 +1071,7 @@ export const chatCommands = {
     // after a thread reload; a bulk add skips it for each message and moves them once after its last
     if (!skipRelink) relinkQueuedToEnd(threadId, messageId);
 
-    return { id: messageId, threadId, text: text.trim(), sender, timestamp };
+    return { id: messageId, threadId, text: text.trim(), sender, timestamp, ...(storedBlocks && { blocks: storedBlocks }) };
   },
 
   /** Creates a message's blocks as rows, in the order given: what a message's creation and an import write */
@@ -1335,7 +1313,7 @@ export const chatCommands = {
     messageId: EARS.EntityId;
     responseTimestamp: number;
     updatedAt: number;
-    blocks?: BlockConfig[];
+    blocks?: StoredBlock[];
   } => {
     const { messageId, response } = params;
 
@@ -1350,10 +1328,10 @@ export const chatCommands = {
       .set('blockResponse', response)
       .set('responseTimestamp', now);
 
-    let updatedBlocks: BlockConfig[] | undefined;
+    let updatedBlocks: StoredBlock[] | undefined;
     // Assembled from the rows: `blocks` is not an attribute, and a pick naming it answered `undefined`.
     // With their ids, because a message may hold two blocks of a type and only one holds this button
-    const storedRows = blockRowsOf(messageId);
+    const storedRows = blocksOf(messageId);
 
     if (storedRows.length > 0 && response.buttonId) {
       const written: EARS.EntityId[] = [];
@@ -1373,7 +1351,7 @@ export const chatCommands = {
       });
 
       if (written.length > 0) {
-        updatedBlocks = newRows.map(({ type, props }) => ({ type, props }));
+        updatedBlocks = newRows;
         // By id, and only the rows that changed: a neighbour's row is never rewritten to reach one
         for (const row of newRows.filter((held) => written.includes(held.id))) {
           chatCommands.writeMessageBlock({ messageId, block: { type: row.type, props: row.props }, blockId: row.id });

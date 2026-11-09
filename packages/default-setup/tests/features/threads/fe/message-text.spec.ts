@@ -60,20 +60,20 @@ describe('what a window shows while a reply is streaming', () => {
  * A thinking block's text arrives as a feed while the row carries the block itself — its label, its state —
  * on the durable clock. So a window holds a run for one of a message's blocks and has to give one answer
  * for that block, by exactly the rule the text uses. What is different is that a message holds several
- * blocks, so a run names which one it belongs to, and that a block the row does not hold yet has nothing
- * for a run to splice onto.
+ * blocks, so a run names **which row** it belongs to, and that a block the row does not hold yet has
+ * nothing for a run to splice onto.
  */
 describe('what a window shows while a block is growing', () => {
-  const thinking = (content: string) => ({ type: 'thinking', props: { content, label: 'Thinking' } });
+  const thinking = (content: string, id = 'block-1') => ({ id, type: 'thinking', props: { content, label: 'Thinking' } });
 
   it('returns the blocks untouched when nothing is growing', () => {
     const blocks = [thinking('all of it')];
     expect(messageStreamBlocks(blocks, undefined)).toBe(blocks);
-    expect(messageStreamBlocks(undefined, { block: 'thinking', at: 0, text: 'x' })).toBeUndefined();
+    expect(messageStreamBlocks(undefined, { blockId: 'block-1', at: 0, text: 'x' })).toBeUndefined();
   });
 
   it('continues the named block from where the run starts', () => {
-    const shown = messageStreamBlocks([thinking('Think')], { block: 'thinking', at: 5, text: 'ing on' });
+    const shown = messageStreamBlocks([thinking('Think')], { blockId: 'block-1', at: 5, text: 'ing on' });
 
     expect(shown?.[0].props.content).toBe('Thinking on');
     // The rest of the block is the row's, and the splice leaves it exactly as it was
@@ -81,11 +81,24 @@ describe('what a window shows while a block is growing', () => {
   });
 
   it('leaves every other block alone', () => {
-    const blocks = [{ type: 'tool-activity', props: { content: 'untouched' } }, thinking('Think')];
-    const shown = messageStreamBlocks(blocks, { block: 'thinking', at: 5, text: 'ing' });
+    const blocks = [{ id: 'block-0', type: 'tool-activity', props: { content: 'untouched' } }, thinking('Think')];
+    const shown = messageStreamBlocks(blocks, { blockId: 'block-1', at: 5, text: 'ing' });
 
     expect(shown?.[0]).toBe(blocks[0]);
     expect(shown?.[1].props.content).toBe('Thinking');
+  });
+
+  /**
+   * **Two blocks of one type is why the run names a row.** A message holds as many thinking blocks as the
+   * turn produced, and a run matched by type reaches the first of them — so the second block's characters
+   * would appear in the first, which reads as text and not as an error.
+   */
+  it('continues the block the run names, not the first of its type', () => {
+    const blocks = [thinking('first', 'block-1'), thinking('Think', 'block-2')];
+    const shown = messageStreamBlocks(blocks, { blockId: 'block-2', at: 5, text: 'ing on' });
+
+    expect(shown?.[1].props.content).toBe('Thinking on');
+    expect(shown?.[0]).toBe(blocks[0]);
   });
 
   /**
@@ -94,21 +107,26 @@ describe('what a window shows while a block is growing', () => {
    * no state — so the row is the honest answer until one arrives.
    */
   it('ignores a run for a block the row does not hold', () => {
-    const blocks = [{ type: 'tool-activity', props: {} }];
-    expect(messageStreamBlocks(blocks, { block: 'thinking', at: 0, text: 'Think' })).toBe(blocks);
+    const blocks = [{ id: 'block-0', type: 'tool-activity', props: {} }];
+    expect(messageStreamBlocks(blocks, { blockId: 'block-1', at: 0, text: 'Think' })).toBe(blocks);
   });
 
   it('ignores a run that starts past the end of what the block holds', () => {
     const blocks = [thinking('Think')];
-    expect(messageStreamBlocks(blocks, { block: 'thinking', at: 99, text: 'ing' })).toBe(blocks);
+    expect(messageStreamBlocks(blocks, { blockId: 'block-1', at: 99, text: 'ing' })).toBe(blocks);
   });
 
   /** The run is dropped once a durable write has caught the row up to everything it delivered. */
   it('knows when the row has caught up with the run', () => {
-    expect(blockRunCaughtUp([thinking('Thinking on')], { block: 'thinking', at: 5, text: 'ing on' })).toBe(true);
-    expect(blockRunCaughtUp([thinking('Think')], { block: 'thinking', at: 5, text: 'ing on' })).toBe(false);
+    expect(blockRunCaughtUp([thinking('Thinking on')], { blockId: 'block-1', at: 5, text: 'ing on' })).toBe(true);
+    expect(blockRunCaughtUp([thinking('Think')], { blockId: 'block-1', at: 5, text: 'ing on' })).toBe(false);
     expect(blockRunCaughtUp([thinking('Thinking on')], undefined)).toBe(false);
-    expect(blockRunCaughtUp(undefined, { block: 'thinking', at: 0, text: 'x' })).toBe(false);
+    expect(blockRunCaughtUp(undefined, { blockId: 'block-1', at: 0, text: 'x' })).toBe(false);
+    // And it asks the row the run names: a caught-up namesake must not drop another block's run
+    expect(blockRunCaughtUp(
+      [thinking('Thinking on', 'block-1'), thinking('Think', 'block-2')],
+      { blockId: 'block-2', at: 5, text: 'ing on' },
+    )).toBe(false);
   });
 });
 

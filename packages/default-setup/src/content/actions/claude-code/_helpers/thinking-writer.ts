@@ -17,7 +17,7 @@
 import type { Services, EntityId } from '#generated/services.ts';
 import type { ThinkingBlockProps } from './thinking-types.ts';
 import { formatDuration } from './duration.ts';
-import { ROW_INTERVAL_MS, THINKING_BLOCK } from './row-interval.ts';
+import { ROW_INTERVAL_MS } from './row-interval.ts';
 
 export interface ThinkingWriterOptions {
   /** Minimum ms between durable `updateMessageState` calls. Default {@link ROW_INTERVAL_MS}. */
@@ -56,9 +56,9 @@ export function createThinkingWriter(
    * Sends the characters the windows have not been sent — the block's half of G1's feed.
    *
    * **A run can only splice onto a block the row already holds**, since a window matches a run to a block
-   * by type and ignores one it cannot see. So nothing is fed before the first durable write, and that write
-   * is immediate rather than on the interval: a block appearing is a discrete change the user is waiting
-   * for, where its growth is not.
+   * by that row's id and ignores one it cannot see. So nothing is fed before the first durable write, and
+   * that write is immediate rather than on the interval: a block appearing is a discrete change the user is
+   * waiting for, where its growth is not. It is also what makes the id available to name here.
    *
    * The buffer here only ever grows — `push` appends and a finished writer takes no more text — so there is
    * no rewrite this channel could be asked to carry.
@@ -68,7 +68,7 @@ export function createThinkingWriter(
     const at = fedUpTo;
     const text = buffer.slice(at);
     fedUpTo = buffer.length;
-    services.chat.streamMessageBlockText({ messageId, block: THINKING_BLOCK, at, text });
+    services.chat.streamMessageBlockText({ messageId, blockId, at, text });
   }
 
   function buildLabel(): string {
@@ -159,7 +159,7 @@ export function createThinkingWriter(
       // folds the segments in. Asking for one as well wrote the text twice
       writeNow();
       if (blockId) {
-        services.chat.streamMessageBlockText({ messageId, block: THINKING_BLOCK, at: 0, text: '', done: true });
+        services.chat.streamMessageBlockText({ messageId, blockId, at: 0, text: '', done: true });
       }
     },
 

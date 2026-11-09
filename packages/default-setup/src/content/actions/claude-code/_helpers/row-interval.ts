@@ -19,6 +19,3 @@
  * its final state — is committed at once and does not wait for this.
  */
 export const ROW_INTERVAL_MS = 250;
-
-/** The block whose growth is fed: a message holds one, and the feed names which it belongs to. */
-export const THINKING_BLOCK = 'thinking';

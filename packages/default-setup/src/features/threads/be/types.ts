@@ -14,6 +14,20 @@ export interface BlockConfig {
 }
 
 /**
+ * A block as a read hands it back: what it holds, and **which block it is**.
+ *
+ * A message may hold two blocks of one type, so a type does not address one. Everything that acts on a
+ * block someone else is also writing needs the row — the button-group toggle writes back the block that
+ * holds the button, and a window splices a streamed run into the block the feed names — and both got the
+ * first block of the type before this field existed.
+ *
+ * It is not on `BlockConfig`, which is what a caller passes to *create* a block and has no row yet.
+ */
+export interface StoredBlock extends BlockConfig {
+  id: EARS.EntityId;
+}
+
+/**
  * One of a message's blocks, as a row of its own.
  *
  * **A block is a record two writers mutate independently, so it is a row and not a field.** It was a field —
@@ -26,9 +40,10 @@ export interface BlockConfig {
  * The position is on the edge rather than here (`has_block`'s `info.index`), being a fact about the membership
  * and not about the block.
  *
- * **Four things in this feature are called a block, and only two are this one.** `BlockConfig` is this row's
- * `type` and `props` as a caller passes them and as a message's assembled `blocks` hand them back; `Block` and
- * `has_block` are this entity and its edge. The `BLOCKS` relation kind is unrelated — one *thread* blocking
+ * **Five things in this feature are called a block, and only three are this one.** `BlockConfig` is this
+ * row's `type` and `props` as a caller passes them to create one, `StoredBlock` is the same with the row's
+ * id as every read hands it back, and `Block` and `has_block` are this entity and its edge. The `BLOCKS`
+ * relation kind is unrelated — one *thread* blocking
  * another — and `blockResponse` is what the user sent back from an interactive block. Nothing may be
  * find-and-replaced across them.
  */
@@ -243,7 +258,7 @@ export interface MessageEntity extends BaseEntity {
   timestamp: number;
   // Block-based interaction system
   responseTimestamp?: number; // Timestamp when the message was responded to
-  blocks?: BlockConfig[];
+  blocks?: StoredBlock[];
   /**
    * Response data for block-based interactions. See the `BlockResponse`
    * union above for the full set of observed shapes. Always narrow
@@ -678,7 +693,7 @@ export type OutgoingThreadsEvents =
    * `block` names which of the message's blocks the run belongs to, since a message holds several. A
    * block's label, state and re-projected lists are rewrites and travel on the row; this carries growth.
    */
-  | { type: 'MESSAGE_BLOCK_TEXT_APPENDED'; messageId: EARS.EntityId; block: string; at: number; text: string; done?: true }
+  | { type: 'MESSAGE_BLOCK_TEXT_APPENDED'; messageId: EARS.EntityId; blockId: EARS.EntityId; at: number; text: string; done?: true }
   | { type: 'CHAT_STARTED'; data: ChatStart }
   | { type: 'THREAD_CHAT_ERROR'; threadId: string; error: string }
   | { type: 'THREADS_EXPORTED'; filePath: string; threadCount: number }
