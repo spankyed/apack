@@ -383,6 +383,8 @@
           </div>
         </div>
 
+        <SemanticChanges v-if="stagedFiles.length > 0" :staged-files="stagedFiles" />
+
         <!-- Unstaged Changes -->
         <div v-if="unstagedFiles.length > 0" class="p-3">
           <div class="flex items-center justify-between mb-2 px-2">
@@ -643,6 +645,7 @@ import NoDirectoryState from '#features/code/fe/features/NoDirectoryState.vue'
 import EmptyState from '#features/code/fe/features/EmptyState.vue'
 import RevertDialog from '#features/code/fe/features/commit/RevertDialog.vue'
 import CommitLogSection from '#features/code/fe/features/commit/CommitLogSection.vue'
+import SemanticChanges from '#features/code/fe/features/code-index/SemanticChanges.vue'
 import ToastNotification from '@apackdev/ui/design/ToastNotification'
 import ContextMenuPopup from '@apackdev/ui/design/ContextMenuPopup'
 import PanelResizer from '@apackdev/ui/layout/panel-resizer'
