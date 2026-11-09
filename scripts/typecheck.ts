@@ -25,9 +25,9 @@ import { schedule } from './lib/chain-schedule.ts';
 import { box, coresFor } from './lib/core-budget.ts';
 import { pruneDepFiles } from './lib/dep-files.ts';
 import { asCount, parseFlags } from './lib/measure.ts';
-import { TIMEOUT_MS, timedOutBecause, type TimeoutClass } from './lib/step-timeouts.ts';
+import { BUDGET_MS, whyKilled, type BudgetClass } from './lib/step-budgets.ts';
 import { RECORDED_FILE_CHECKS, CODEGEN, GENERATE_ENTRIES, type TypecheckCommand } from './lib/typecheck-jobs.ts';
-import { ENSURE, LEG_TIMEOUT, TYPECHECK_LEGS } from './lib/typecheck-legs.ts';
+import { ENSURE, LEG_BUDGET, TYPECHECK_LEGS } from './lib/typecheck-legs.ts';
 
 /**
  * What of the machine the legs may take: all of it, because nothing else is running.
@@ -55,17 +55,17 @@ interface Job {
   readonly name: string;
   readonly command: string;
   readonly cwd?: string;
-  readonly timeout: TimeoutClass;
+  readonly budget: BudgetClass;
   readonly cores: number;
   readonly dependsOn: readonly string[];
 }
 
 /** Borrow chain ownership, allowing a different derivation mode to declare its own deadline class. */
-function borrowed({ name, command, cwd, timeout }: TypecheckCommand): Job {
+function borrowed({ name, command, cwd, budget }: TypecheckCommand): Job {
   const step = CHAIN_STEPS.find((candidate) => candidate.name === name);
   if (!step) throw new Error(`${name} is not a chain step, so there is no class or cost to borrow — `
     + 'either it was renamed or it belongs in TYPECHECK_LEGS');
-  return { name, command, cwd, timeout: timeout ?? step.timeout, cores: coresFor(name),
+  return { name, command, cwd, budget: budget ?? step.budget, cores: coresFor(name),
     dependsOn: [ENSURE, CODEGEN] };
 }
 
@@ -80,13 +80,13 @@ const JOBS: readonly Job[] = [
   ...TYPECHECK_LEGS.map((leg) => ({
     name: leg.name,
     command: leg.command,
-    timeout: LEG_TIMEOUT,
+    budget: LEG_BUDGET,
     cores: coresFor(leg.name),
     dependsOn: leg.name === ENSURE ? [] : [ENSURE, CODEGEN],
   })),
   // Generation captures the compiler/dependency installation before compiling declarations; it is a
   // pack compilation prerequisite, rather than one of the single-tsc reader legs.
-  { ...GENERATE_ENTRIES, timeout: 'suite',
+  { ...GENERATE_ENTRIES, budget: 'suite',
     cores: 1, dependsOn: [ENSURE] },
   ...RECORDED_FILE_CHECKS.map(borrowed),
 ];
@@ -112,9 +112,9 @@ const result = await schedule({
   skip: () => false,
   async run(leg) {
     const [command, ...args] = leg.command.split(' ');
-    // The class is the job's own — `LEG_TIMEOUT` for a leg, and for a borrowed step the one its chain entry
+    // The class is the job's own — `LEG_BUDGET` for a leg, and for a borrowed step the one its chain entry
     // declares, so a step that fans out keeps the rung sized for that rather than a leg's.
-    const outcome = await boundedSpawn(command!, args, TIMEOUT_MS[leg.timeout].ms, { cwd: leg.cwd });
+    const outcome = await boundedSpawn(command!, args, BUDGET_MS[leg.budget].ms, { cwd: leg.cwd });
     done.set(leg.name, outcome);
     // One line as it finishes, so a ten-second command is not ten seconds of silence. Completion order, since
     // that is what progress *is*; the failures below are in declared order, which is what reading wants.
@@ -126,10 +126,10 @@ const result = await schedule({
 const failed = JOBS.filter((leg) => (done.get(leg.name)?.code ?? 0) !== 0);
 for (const leg of failed) {
   const outcome = done.get(leg.name)!;
-  // `LEG_TIMEOUT`, never the literal: this named `'quick'` while the kill above read `TIMEOUT_MS[LEG_TIMEOUT]`,
+  // `LEG_BUDGET`, never the literal: this named `'quick'` while the kill above read `BUDGET_MS[LEG_BUDGET]`,
   // so changing the legs' class would have had the message report a deadline other than the one that fired
   const why = outcome.timedOut === true
-    ? timedOutBecause({ what: leg.name, timeout: leg.timeout, stalled: outcome.stalled })
+    ? whyKilled({ what: leg.name, budget: leg.budget, stalled: outcome.stalled })
     : `${leg.name} failed (exit ${outcome.code})`;
   process.stderr.write(`\n${'─'.repeat(72)}\n${why}\n${'─'.repeat(72)}\n${outcome.output}\n`);
 }

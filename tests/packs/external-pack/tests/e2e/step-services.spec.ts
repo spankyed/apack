@@ -27,7 +27,7 @@ test('the running brain gives an external step its own service scope', async ({ 
     await expect(async () => {
       await appPage.evaluate(() => (window as any).__sendToSystem('e2e-fixture/memos', { type: 'SEND_STATE' }));
       await expect(appPage.getByTestId('memo-list').getByText('step-owner service reached', { exact: true })).toBeVisible();
-    }).toPass({ timeout: 15_000 });
+    }).toPass();
   } finally {
     await appPage.evaluate(id => (window as any).__sendToSystem('default-setup/flows', { type: 'SET_ROOT_FLOW', flowId: id ?? null }), originalRoot);
     await appPage.evaluate(() => (window as any).__sendToSystem('default-setup/brain', { type: 'RESTART_BRAIN' }));

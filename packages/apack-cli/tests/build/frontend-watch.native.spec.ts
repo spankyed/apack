@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import { _byDeadline } from '@apackdev/sdk/testing/waiting';
 import { createFrontendWatcher } from '../../src/build/frontend-watch.ts';
 import { readBuildWatchInputs } from '../../src/build/build-watch-inputs.ts';
 
@@ -42,7 +41,7 @@ it('uses file bytes for duplicate detection and watches outside resource edits',
   fs.utimesSync(file, touch, touch);
   expect(before.current()).toBe(true);
   write('resources/style.css', 'after');
-  await _byDeadline(firstChange, 'the outside stylesheet change');
+  await firstChange;
   expect(changed).toHaveBeenCalled();
   expect(before.current(), JSON.stringify(changed.mock.calls)).toBe(false);
 });
@@ -57,7 +56,7 @@ whereEventsAreLive('ignores new bytes in a file the build never read, and takes 
   await fileEventsDelivered();
   expect(before.current()).toBe(true);
   const added = write('resources/added.ts', 'new');
-  await _byDeadline(firstChange, 'the new file');
+  await firstChange;
   expect(changed.mock.calls.map(([changedFile]) => changedFile)).toEqual([added]);
   expect(before.current()).toBe(false);
 });
@@ -85,7 +84,7 @@ whereEventsAreLive('ignores what a package build writes, while a source file bes
   await fileEventsDelivered();
   expect(before.current()).toBe(true);
   const source = write('package/added.ts');
-  await _byDeadline(firstChange, 'the new source file');
+  await firstChange;
   expect(changed.mock.calls.map(([file]) => file)).toEqual([source]);
   expect(before.current()).toBe(false);
 });
@@ -130,7 +129,7 @@ it.each(['outside', 'profile/content'])('observes new content beneath a nested d
   await watcher.observe({ files: [], directories: [directory], successful: true });
   const before = watcher.snapshot();
   write(`${target}/nested/page.html`, '<div />');
-  await _byDeadline(firstChange, 'content created beneath the nested directory link');
+  await firstChange;
   expect(before.current()).toBe(false);
 });
 
@@ -142,7 +141,7 @@ it('observes repair beneath a dangling nested directory link', async () => {
   await watcher.observe({ files: [], directories: [directory], successful: true });
   const before = watcher.snapshot();
   write('future/nested/page.html', '<div />');
-  await _byDeadline(firstChange, 'repair beneath a dangling content directory link');
+  await firstChange;
   expect(before.current()).toBe(false);
 });
 
@@ -158,7 +157,7 @@ it('bounds cyclic directory links and excludes linked authored outputs from inpu
   write('pack/dist/runtime/fe.css', 'output');
   expect(before.current()).toBe(true);
   write('style.css', 'after');
-  await _byDeadline(firstChange, 'the resource edit beside cyclic and excluded directory links');
+  await firstChange;
   expect(before.current()).toBe(false);
 });
 
@@ -169,7 +168,7 @@ it('observes a missing stylesheet repaired by creating a symlink', async () => {
   await watcher.observe({ files: [stylesheet], directories: [], successful: false });
   const before = watcher.snapshot();
   fs.symlinkSync(target, path.join(temporary, 'styles/future.css'));
-  await _byDeadline(firstChange, 'a stylesheet candidate repaired with a symlink');
+  await firstChange;
   expect(before.current()).toBe(false);
 });
 
@@ -186,7 +185,7 @@ it.each(['nested', 'reported'])('observes a %s directory link retargeted into au
   const replacement = path.join(temporary, 'replacement');
   fs.symlinkSync(authored, replacement, 'dir');
   fs.renameSync(replacement, link);
-  await _byDeadline(firstChange, 'a content link retargeted into authored source');
+  await firstChange;
   expect(before.current()).toBe(false);
 });
 
@@ -201,7 +200,7 @@ it('rebuilds when a compiler-reported content directory link is retargeted', asy
   const next = path.join(temporary, 'next-content');
   fs.symlinkSync(replacement, next, 'dir');
   fs.renameSync(next, link);
-  await _byDeadline(firstChange, 'the content directory link replacement');
+  await firstChange;
   expect(before.current()).toBe(false);
 });
 
@@ -213,7 +212,7 @@ it('ignores output/profile events beneath a broad parent and cannot reopen after
   write('pack/dist/runtime/fe.css', 'output');
   write('profile/logs/app.log', 'app activity');
   write('style.css', 'after');
-  await _byDeadline(firstChange, 'the resource event after ignored output/profile writes');
+  await firstChange;
   expect(changed.mock.calls.filter(([file]) => !file.endsWith(`${path.sep}style.css`))).toEqual([]);
   await watcher.close();
   changed.mockClear();
@@ -225,6 +224,6 @@ it('ignores output/profile events beneath a broad parent and cannot reopen after
   cleanups.push(() => control.close());
   await control.observe(inputs);
   write('style.css', 'closed');
-  await _byDeadline(observed, 'the control watcher observing the same edit');
+  await observed;
   expect(changed).not.toHaveBeenCalled();
 });

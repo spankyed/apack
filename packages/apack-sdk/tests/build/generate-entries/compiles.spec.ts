@@ -8,13 +8,13 @@
 //
 // One of five files split from a 1,365-line original; `_support/pack.ts` holds the fixture and why.
 import * as fs from 'node:fs';
-import { execFileSync } from 'node:child_process';
 import { buildSync } from 'esbuild';
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import type { PackSnapshot } from '../../../src/build/manifest.ts';
+import { execFileWhileWorking } from '../../../src/progress.ts';
 import { setupPackFixture, dependency, facade, generatePackFiles, manifest, root, system, withSurface, withSurfaceState, write, writeSurfaceState, writeSystemEntry  } from './_support/pack.ts';
 
 setupPackFixture();
@@ -274,7 +274,7 @@ it('allows feature services to create settings handles during module initializat
   const outfile = path.join(root, 'probe.mjs');
   buildSync({ entryPoints: [path.join(root, 'src/probe.ts')], outfile,
     bundle: true, platform: 'node', format: 'esm', external: ['@apackdev/sdk/*'] });
-  expect(() => execFileSync(process.execPath, ['--import', 'tsx', outfile], { stdio: 'pipe' })).not.toThrow();
+  await execFileWhileWorking(process.execPath, ['--import', 'tsx', outfile]);
 });
 
 it('runs generated frontend settings through its entry binding without ambient host administration', async () => {
@@ -318,7 +318,7 @@ it('runs generated frontend settings through its entry binding without ambient h
   const outfile = path.join(root, 'probe.mjs');
   buildSync({ entryPoints: [path.join(root, 'src/probe.ts')], outfile,
     bundle: true, platform: 'node', format: 'esm', external: ['@apackdev/sdk/*', 'vue'] });
-  expect(() => execFileSync(process.execPath, ['--conditions=@apackdev/source', '--import', 'tsx', outfile], { stdio: 'pipe' })).not.toThrow();
+  await execFileWhileWorking(process.execPath, ['--conditions=@apackdev/source', '--import', 'tsx', outfile]);
 });
 
 it('generates owner-writable and dependency-readonly handles for both settings owners', async () => {
@@ -398,7 +398,7 @@ it('preserves prototype-like entity wires in generated registrations and typed/u
   const outfile = path.join(root, 'probe.mjs');
   buildSync({ entryPoints: [path.join(root, 'src/probe.ts')], outfile,
     bundle: true, platform: 'node', format: 'esm', external: ['@apackdev/sdk/*', '@apackdev/ears'] });
-  expect(() => execFileSync(process.execPath, ['--import', 'tsx', outfile], { stdio: 'pipe' })).not.toThrow();
+  await execFileWhileWorking(process.execPath, ['--import', 'tsx', outfile]);
 });
 
 it('keeps retained backend service roots retired across rebind and failed cleanup', async () => {
@@ -448,7 +448,7 @@ it('keeps retained backend service roots retired across rebind and failed cleanu
   const outfile = path.join(root, 'probe.mjs');
   buildSync({ entryPoints: [path.join(root, 'src/probe.ts')], outfile,
     bundle: true, platform: 'node', format: 'esm', external: ['@apackdev/sdk/*'] });
-  expect(() => execFileSync(process.execPath, ['--import', 'tsx', outfile], { stdio: 'pipe' })).not.toThrow();
+  await execFileWhileWorking(process.execPath, ['--import', 'tsx', outfile]);
 });
 
 it('typechecks only consumed host APIs and directly owned dependency service members', async () => {

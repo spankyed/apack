@@ -43,5 +43,5 @@ test('a reloaded pack is left running', async ({ app, appPage }) => {
   const text = `memo after reload ${Date.now()}`;
   await appPage.getByTestId('memo-input').fill(text);
   await appPage.getByTestId('memo-add').click();
-  await expect(appPage.getByTestId('memo-list').getByText(text, { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(appPage.getByTestId('memo-list').getByText(text, { exact: true })).toBeVisible();
 });

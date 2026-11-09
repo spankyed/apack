@@ -1,11 +1,11 @@
-import { execFile } from 'node:child_process';
 import fs from 'node:fs';
-import { promisify } from 'node:util';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { setTimeout as delay } from 'node:timers/promises';
 
 export const COMPILER_PROCESS_GROUP_ENV = 'APACK_COMPILER_PROCESS_GROUP';
 
-const execute = promisify(execFile);
+// `timeout` is the CPU `ps` may spend, so a busy machine slows a reading and never fails one
+const execute = execFileWhileWorking;
 // SIGKILL has no graceful shutdown phase; bound OS scheduling/state checks before refusing publication.
 const SHUTDOWN_MS = 2_000;
 

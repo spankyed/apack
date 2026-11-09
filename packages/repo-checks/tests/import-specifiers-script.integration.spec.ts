@@ -1,13 +1,12 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { CHECKS } from '../../../scripts/check-import-specifiers.ts';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
-const execFileAsync = promisify(execFile);
+const execFileAsync = execFileWhileWorking;
 
 /**
  * The one check on `scripts/check-import-specifiers.ts` that runs it as a process. Every other test of it

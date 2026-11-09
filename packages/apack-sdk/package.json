@@ -139,6 +139,11 @@
       "types": "./dist/templates/index.d.ts",
       "default": "./dist/templates/index.js"
     },
+    "./progress": {
+      "@apackdev/source": "./src/progress.ts",
+      "types": "./dist/progress.d.ts",
+      "default": "./dist/progress.js"
+    },
     "./utils": {
       "@apackdev/source": "./src/utils/index.ts",
       "types": "./dist/utils/index.d.ts",

@@ -1,8 +1,6 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { createRequire } from 'node:module';
 import { expect, it, onTestFinished, vi } from 'vitest';
 import { FIXTURE_DATA, FIXTURE_ENTITY, packFixture } from '@apackdev/sdk/testing/pack-fixture';
@@ -18,7 +16,7 @@ import { compilerPackageDirectory, type CompilerInstallation } from '../../src/b
 import { startPackFrontend, type PackFrontend } from '../../src/build/frontend-process.ts';
 import { nativeAddonSource } from '../_support/native-addon.ts';
 import { createWindowsPublisherPolicyFixture } from '../_support/windows-publisher-policy.ts';
-import { _byDeadline } from '@apackdev/sdk/testing/waiting';
+import { _settles, _workingSignal } from '@apackdev/sdk/testing/waiting';
 import { parsePeLibraryMetadata } from '../../src/build/compiler-pe-libraries.ts';
 import { assertCapturedPeLibraries } from '../../src/build/compiler-pe-admission.ts';
 import { BUILD_INPUTS_DIRECTORY_ENV } from '../../src/build/compiler-read-tree.ts';
@@ -32,11 +30,13 @@ import { compilerStartupOptions, COMPILER_NODE_OPTIONS_ENV } from '../../src/bui
 import { COMPILER_INPUTS_ENV } from '../../src/build/compiler-installation-inputs.ts';
 import { spawnCompilerWorker } from '../../src/build/compiler-process.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 const sharedCompiler = shareCompilerInstallation();
-const execFileAsync = promisify(execFile);
+const execFileAsync = execFileWhileWorking;
 
-it.runIf(process.platform === 'win32')('reads Windows loader state concurrently across owned threads without native corruption', async () => {
+it.runIf(process.platform === 'win32')('reads Windows loader state concurrently across owned threads without native corruption', { meta: cpuBudget(15_000) }, async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-pe-report-'));
   onTestFinished(() => fs.rmSync(root, { recursive: true, force: true }));
   const probe = path.join(root, 'report.mjs');
@@ -54,11 +54,11 @@ it.runIf(process.platform === 'win32')('reads Windows loader state concurrently 
     if (!process.report.excludeEnv) throw new Error('Report policy was not restored');
     if (done) { await done; console.log('REPORT_THREADS_COMPLETE'); }
   `);
-  const result = await promisify(execFile)(process.execPath, ['--conditions=@apackdev/source', '--import', 'tsx', probe], {
+  const result = await execFileWhileWorking(process.execPath, ['--conditions=@apackdev/source', '--import', 'tsx', probe], {
     cwd: REPO_ROOT, env: { ...process.env, NODE_OPTIONS: '' }, timeout: 10_000, windowsHide: true,
   }).catch(error => { throw new Error(`Report child exited ${error.code}: ${error.stdout} ${error.stderr}`); });
   expect(result.stdout).toContain('REPORT_THREADS_COMPLETE');
-}, 15_000);
+});
 
 it.runIf(process.platform === 'win32')('reads live native PATH despite replaced and thread-local JavaScript environments', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-pe-environment-'));
@@ -92,7 +92,7 @@ it.runIf(process.platform === 'win32')('reads live native PATH despite replaced 
       await done; console.log('NATIVE_PATH_COMPLETE');
     }
   `);
-  const result = await promisify(execFile)(process.execPath, ['--conditions=@apackdev/source', '--import', 'tsx', probe], {
+  const result = await execFileWhileWorking(process.execPath, ['--conditions=@apackdev/source', '--import', 'tsx', probe], {
     cwd: REPO_ROOT, env: { ...process.env, NODE_OPTIONS: '' }, timeout: 25_000, windowsHide: true,
   }).catch(error => { throw new Error(`Native environment child exited ${error.code}: ${error.stdout} ${error.stderr}`); });
   expect(result.stdout).toContain('NATIVE_PATH_COMPLETE');
@@ -329,7 +329,7 @@ int wmain(void) {
   completed = true;
 });
 
-it.runIf(process.platform === 'win32')('refuses Node .local overrides through the captured compiler runtime before initialization', async ({ onTestFinished }) => {
+it.runIf(process.platform === 'win32')('refuses Node .local overrides through the captured compiler runtime before initialization', { meta: cpuBudget(120_000) }, async ({ onTestFinished }) => {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-node-local-')));
   let completed = false;
   try {
@@ -362,7 +362,7 @@ it.runIf(process.platform === 'win32')('refuses Node .local overrides through th
     }`);
     const cli = path.join(compilerPackageDirectory(), 'dist/cli.js');
     const stop = new AbortController();
-    const request = promisify(execFile)(executable, [cli, 'pack', 'build'], {
+    const request = execFileWhileWorking(executable, [cli, 'pack', 'build'], {
       cwd: pack, env: { ...environment, NODE_OPTIONS: formatNodeOptions(['--require', preload]) },
       encoding: 'utf8', signal: stop.signal, maxBuffer: 1024 * 1024,
     });
@@ -384,7 +384,7 @@ it.runIf(process.platform === 'win32')('refuses Node .local overrides through th
     if (completed) fs.rmSync(root, { recursive: true, force: true });
     else console.error(`Retained Node .local runtime: ${root}`);
   }
-}, 120_000);
+});
 
 it.runIf(process.platform === 'win32').each([
   ['Node', 'application'],
@@ -879,7 +879,7 @@ it.runIf(process.platform === 'win32').each([
     const view = `http://localhost:${frontend.address.port}/src/View.vue`;
     expect(await (await fetch(view)).text()).toContain('PE_BEFORE');
     fs.writeFileSync(path.join(pack, 'src/View.vue'), '<template>PE_AFTER</template>');
-    await vi.waitFor(async () => expect(await (await fetch(view)).text()).toContain('PE_AFTER'), { timeout: 2_000 });
+    await _settles(async () => expect(await (await fetch(view)).text()).toContain('PE_AFTER'));
     const outside = path.join(root, 'outside');
     fs.mkdirSync(outside);
     const selected = path.join(outside, 'apack_value.dll');
@@ -905,7 +905,7 @@ it.runIf(process.platform === 'win32').each([
 });
 
 it.runIf(process.platform === 'win32').each(['preload', 'thread', 'preload-and-thread', 'preload-and-module'] as const)(
-  'captures PE %s inputs and preserves publication after outside-library refusal', async site => {
+  'captures PE %s inputs and preserves publication after outside-library refusal', { meta: cpuBudget(120_000) }, async site => {
     const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-pe-publication-')));
     const pack = path.join(root, 'pack');
     const previousOptions = process.env.NODE_OPTIONS;
@@ -1035,10 +1035,9 @@ require('node:worker_threads').parentPort.postMessage('NATIVE');`)}, {eval:true}
       finally { fs.rmSync(root, { recursive: true, force: true }); }
     }
   },
-  120_000,
 );
 
-it.runIf(process.platform === 'win32')('repairs a failed Vite assembly context through newly discovered watch inputs', async () => {
+it.runIf(process.platform === 'win32')('repairs a failed Vite assembly context through newly discovered watch inputs', { meta: cpuBudget(120_000 + 4 * 60_000 + 20_000) }, async () => {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-pe-watch-')));
   const pack = path.join(root, 'pack'), native = path.join(root, 'native'), preloadRoot = path.join(root, 'preload');
   const previous = process.env.NODE_OPTIONS;
@@ -1121,16 +1120,16 @@ it.runIf(process.platform === 'win32')('repairs a failed Vite assembly context t
     const url = `http://localhost:${addresses[0]!.port}/src/View.vue`;
     // A bound on a hang, not a speed check: the first request is a cold Vite transform, which a loaded two-core
     // runner can take seconds over
-    const served = { signal: AbortSignal.timeout(30_000) };
+    const served = { signal: _workingSignal() };
     expect(await (await fetch(url, served)).text()).toContain('ASSEMBLY_WATCH');
     fs.rmSync(dllMarker);
     builds.mockClear(); configure('repair');
-    await vi.waitFor(() => expect(builds).toHaveBeenCalled(), { timeout: 20_000 });
+    await _settles(() => expect(builds).toHaveBeenCalled());
     await expect(builds.mock.results[0]!.value).rejects.toThrow('Pack frontend exited before readiness');
     checkpoint('missing assembly refused');
     expect(addresses).toHaveLength(1);
     expect(fs.existsSync(dllMarker)).toBe(false);
-    expect(await (await fetch(url, { signal: AbortSignal.timeout(30_000) })).text()).toContain('ASSEMBLY_WATCH');
+    expect(await (await fetch(url, { signal: _workingSignal() })).text()).toContain('ASSEMBLY_WATCH');
     const repair = path.join(path.dirname(addon), 'repair', assembly);
     const repairedManifest = path.join(repair, assembly + '.manifest');
     expect(createCompilerWatchMatcher(observed)(repairedManifest, 'rename'), 'Failed context lost its new repair subscription').toBe(true);
@@ -1141,14 +1140,13 @@ it.runIf(process.platform === 'win32')('repairs a failed Vite assembly context t
     // The refusal's two edits (the marker removed, the configuration rewritten) can reach the watcher as separate
     // events, and one landing mid-build queues another refused build. The repair is asserted to start a build of its
     // own, so it lands on an idle watcher: a build that keeps starting another would leave this waiting and fail.
-    await _byDeadline((async () => { while (inFlight.size > 0) await Promise.allSettled(inFlight); })(),
-      'refused builds to settle before the repair', 60_000);
+    await (async () => { while (inFlight.size > 0) await Promise.allSettled(inFlight); })();
     builds.mockClear();
     fs.mkdirSync(path.dirname(repair), { recursive: true });
     fs.renameSync(staged, repair);
-    await vi.waitFor(() => expect(builds).toHaveBeenCalled(), { timeout: 20_000 });
+    await _settles(() => expect(builds).toHaveBeenCalled());
     await expect(builds.mock.results[0]!.value).resolves.toBeUndefined();
-    await vi.waitFor(() => expect(publications).toHaveBeenCalledTimes(1), { timeout: 2_000 });
+    await _settles(() => expect(publications).toHaveBeenCalledTimes(1));
     checkpoint('repair published');
     expect(addresses).toHaveLength(2);
     expect(() => process.kill(addresses[0]!.pid, 0)).toThrow();
@@ -1157,4 +1155,4 @@ it.runIf(process.platform === 'win32')('repairs a failed Vite assembly context t
     completed = true;
   } catch (error) { console.info('PE assembly watch refusals:', errors.mock.calls); throw error; }
   finally { await close(); }
-}, 120_000 + 4 * 60_000 + 20_000);
+});

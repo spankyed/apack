@@ -1,11 +1,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { afterEach, expect, it, vi } from 'vitest';
 import { assertNativeCompilerObservations, createCompilerFileView } from '@apackdev/host/build/compiler-inputs';
 import { BUILD_INPUTS_DIRECTORY_ENV, createCompilerReadTree, removeCompilerReadTree, type CompilerReadTree } from '../../src/build/compiler-read-tree.ts';
 import { compilerReadMapping } from '../../bin/compiler-source-hooks.mjs';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 const roots: string[] = [];
 const trees: CompilerReadTree[] = [];
@@ -37,10 +37,10 @@ it('replays retained copy integrity after the source disappears and refuses writ
 });
 
 /** A standalone tree's process may die before disposing it; the next standalone tree removes it */
-it('removes standalone trees whose process has exited and keeps a live process\'s', () => {
+it('removes standalone trees whose process has exited and keeps a live process\'s', async () => {
   const parent = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-standalone-trees-')));
   roots.push(parent);
-  const exited = spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8' }).stdout;
+  const exited = (await execFileWhileWorking(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'])).stdout;
   const abandoned = path.join(parent, `apack-inputs-${exited}-AbCdEf`);
   const live = path.join(parent, `apack-inputs-${process.pid}-GhIjKl`);
   for (const tree of [abandoned, live]) {

@@ -1,9 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { promisify } from 'node:util';
 import { expect, it, onTestFinished } from 'vitest';
 import { ManifestSchema } from '@apackdev/sdk/build';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
@@ -14,16 +12,18 @@ import { assertCapturedMachOLibraries, captureMachOLibraryEnvironment } from '..
 import { spawnCompilerWorker } from '../../src/build/compiler-process.ts';
 import { readCompilerRuntimeInputs } from '../../src/build/compiler-runtime.ts';
 import { nativeFixture } from '../_support/native-libraries.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
+import { execFileWhileWorking, processWork, watchWork } from '@apackdev/sdk/progress';
 
 // The native-library proofs are split by subject so the native half's shards can spread them; this one is
 // the captured Electron runtime, runtime-linked Mach-O libraries and default-fallback lookup.
 
-const execFileAsync = promisify(execFile);
+const execFileAsync = execFileWhileWorking;
 
 const electronRuntimes: Array<[string, string | undefined]> = [['captured', undefined]];
 if (process.env.APACK_TEST_SIGNED_ELECTRON) electronRuntimes.push(['strictly signed captured', process.env.APACK_TEST_SIGNED_ELECTRON]);
 
-it.runIf(process.platform === 'darwin').each(electronRuntimes)('uses the %s Electron runtime through the shared compiler launcher', async (_label, executable) => {
+it.runIf(process.platform === 'darwin').each(electronRuntimes)('uses the %s Electron runtime through the shared compiler launcher', { meta: cpuBudget(2 * 60_000) }, async (_label, executable) => {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-electron-runtime-')));
   try {
     const require = createRequire(import.meta.url);
@@ -66,13 +66,15 @@ try {
 phase('retired');
 console.log(JSON.stringify({...output,stored:installation.executable.startsWith(fs.realpathSync.native(process.env.APACK_COMPILER_STORE)+path.sep)}));`);
     const stdout = await new Promise<string>((resolve, reject) => {
-      execFile(electron, ['--import', 'tsx', '--conditions=@apackdev/source', driver], {
+      execFileWhileWorking(electron, ['--import', 'tsx', '--conditions=@apackdev/source', driver], {
         // Capture, launch and verification/retirement have distinct work; the driver bounds their sum.
         cwd: REPO_ROOT, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, encoding: 'utf8', timeout: 60_000 + 15_000 + 20_000,
-      }, (error, stdout, stderr) => {
+      }).then(({ stdout, stderr }) => {
         if (stderr) console.error(stderr.trim());
-        if (error) reject(error);
-        else resolve(stdout);
+        resolve(stdout);
+      }, (error: { stderr?: string }) => {
+        if (error.stderr) console.error(error.stderr.trim());
+        reject(error);
       });
     });
     const result = JSON.parse(stdout) as { value: { electron: string; executable: string }; captured: string; current: boolean; stored: boolean };
@@ -83,9 +85,9 @@ console.log(JSON.stringify({...output,stored:installation.executable.startsWith(
     // The captured runtime is the store's shared copy, kept for the next capture rather than retired with this one
     expect(result.stored).toBe(true);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
-}, 2 * 60_000);
+});
 
-it.runIf(process.platform === 'darwin' || process.platform === 'linux').each(electronRuntimes)('builds and archives a real pack under the %s Electron runtime', async (_label, executable) => {
+it.runIf(process.platform === 'darwin' || process.platform === 'linux').each(electronRuntimes)('builds and archives a real pack under the %s Electron runtime', { meta: cpuBudget(60_000 + 60_000 + (180_000 + 120_000) + 60_000 + 60_000) }, async (_label, executable) => {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-electron-pack-')));
   const require = createRequire(import.meta.url);
   const electron = executable ?? (require('electron') as string);
@@ -105,12 +107,19 @@ it.runIf(process.platform === 'darwin' || process.platform === 'linux').each(ele
   const command = async (cwd: string, args: string[], { runtime = { executable: electron, runtimeDirectory }, timeoutMs = 60_000 } = {}) => {
     const started = Date.now();
     console.log('Electron pack phase started', args[0]);
-    const signal = AbortSignal.any([stop.signal, AbortSignal.timeout(timeoutMs)]);
+    // A phase is ended when it stops working or spins past `timeoutMs` of CPU, never because a busy machine made
+    // it slow (`watchWork`), and on the clock only where its CPU cannot be read
+    const ended = new AbortController();
+    const signal = AbortSignal.any([stop.signal, ended.signal]);
     const child = spawnCompilerWorker({ ...runtime, bin }, [bin, 'pack', ...args], {
       cwd, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1',
         NODE_OPTIONS: formatNodeOptions(['--conditions=@apackdev/source']) },
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'], signal,
     }, root);
+    const watch = child.pid === undefined ? undefined : watchWork({
+      work: processWork(child.pid), ceilingMs: timeoutMs, fallbackMs: timeoutMs,
+      onRefused: (why) => ended.abort(new Error(`pack ${args[0]} ${why}`)),
+    });
     let output = '';
     child.stdout!.on('data', bytes => { output += bytes; });
     child.stderr!.on('data', bytes => { output += bytes; });
@@ -122,6 +131,7 @@ it.runIf(process.platform === 'darwin' || process.platform === 'linux').each(ele
       let failure: Error | undefined;
       child.once('error', error => { failure = error; });
       child.once('close', (code, received) => {
+        watch?.stop();
         clearTimeout(escalation);
         signal.removeEventListener('abort', abort);
         if (failure) reject(failure);
@@ -168,7 +178,7 @@ it.runIf(process.platform === 'darwin' || process.platform === 'linux').each(ele
   console.log('Electron pack compilation accepted', JSON.stringify({ runtime, revision: built.revision }));
   completed = true;
 // Four command bounds, followed by output verification and owned process disposal.
-}, 60_000 + 60_000 + (180_000 + 120_000) + 60_000 + 60_000);
+});
 
 it.runIf(process.platform === 'darwin')('refuses outside runtime-linked Mach-O constructors and accepts contained runtime libraries', async () => {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-macho-runtime-')));

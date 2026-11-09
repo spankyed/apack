@@ -13,7 +13,7 @@ test('pops a built-in surface out into its own window, which renders it', async 
 
   expect(new URL(popout.url()).searchParams.get('surfaceId')).toBe('default-setup/notes');
   await popout.waitForLoadState('domcontentloaded');
-  await expect(popout.getByTestId('notes-canvas')).toBeVisible({ timeout: 15_000 });
+  await expect(popout.getByTestId('notes-canvas')).toBeVisible();
   expect(await popout.evaluate(() => (window as any).__errorPageShown ?? false)).toBe(false);
   expect(errors).toEqual([]);
 });

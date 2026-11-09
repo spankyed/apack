@@ -4,12 +4,12 @@
 //
 // The unit tests for these live in @apackdev/host. This one boots the real composition, because what both
 // regressions broke was the lifecycle: one refused to start at all, the other deleted a pack on the way up.
-import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { _appDirOf } from '@apackdev/sdk/env';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'api-boot-recovery-'));
 process.env.APACK_ENV = 'test';
@@ -17,19 +17,21 @@ process.env.APACK_USER_DATA_DIR = dataDir;
 const backend = await import('../../src/runtime/index.ts');
 
 /** A process id no process has any more */
-function exitedPid(): number {
-  return spawnSync(process.execPath, ['-e', '']).pid!;
+async function exitedPid(): Promise<number> {
+  const exited = execFileWhileWorking(process.execPath, ['-e', '']);
+  await exited;
+  return exited.child.pid!;
 }
 
 const packsDir = path.join(_appDirOf(dataDir), 'packs');
-const stagingDir = `.demo-pack.previous-${exitedPid()}-a1b2c3d4`;
+const stagingDir = `.demo-pack.previous-${await exitedPid()}-a1b2c3d4`;
 
 beforeAll(async () => {
   // A lock an `apack db` command left behind when it was killed outright — the one way out that releases
   // nothing. Its pid is gone, so nothing is changing the database.
   fs.mkdirSync(_appDirOf(dataDir), { recursive: true });
   fs.writeFileSync(path.join(_appDirOf(dataDir), 'db-write.lock'), JSON.stringify({
-    pid: exitedPid(), machine: os.hostname(), what: 'apack db import', since: new Date().toISOString(),
+    pid: await exitedPid(), machine: os.hostname(), what: 'apack db import', since: new Date().toISOString(),
   }));
 
   // An install interrupted between moving the old copy aside and placing the new one: `demo-pack` is gone

@@ -325,6 +325,23 @@ const capturing = new Map<string, Promise<unknown>>();
  * absent or damaged. Normal Node loading reads that copy, never mutable compiler originals.
  */
 export async function captureCompilerInstallation(directory = compilerPackageDirectory(), options: CompilerInstallationOptions = {}): Promise<CompilerInstallation> {
+  // The graph can be written while it is read — `packages:ensure` rebuilding a workspace's dist beside a capture — and
+  // then the copy pass disagrees with the first read. The next attempt reads it settled, under a key derived from what
+  // it read; a graph that keeps moving is still refused, naming what moved.
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await captureOnce(directory, options);
+    } catch (error) {
+      if (attempt >= CAPTURE_ATTEMPTS || !(error instanceof Error) || !/changed during capture/.test(error.message)) throw error;
+      options.signal?.throwIfAborted();
+    }
+  }
+}
+
+/** How many times a capture reads a graph that changed under it before refusing */
+const CAPTURE_ATTEMPTS = 3;
+
+async function captureOnce(directory: string, options: CompilerInstallationOptions): Promise<CompilerInstallation> {
   directory = fs.realpathSync.native(directory);
   const inputs = await readPackageInputsAsync([{ id: 'compiler', directory, contents: true }], { signal: options.signal });
   options.signal?.throwIfAborted();

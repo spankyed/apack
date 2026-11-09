@@ -11,7 +11,7 @@ import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 // quoted in docs.
 import { describe, expect, it } from 'vitest';
 import { population } from '@apackdev/sdk/testing';
-import { RUNTIME_BUILD_LEGS, BUILD_TIMEOUT, type RuntimeBuildLeg } from '../../../scripts/lib/runtime-build-legs.ts';
+import { RUNTIME_BUILD_LEGS, BUILD_BUDGET, type RuntimeBuildLeg } from '../../../scripts/lib/runtime-build-legs.ts';
 import { CHAIN_STEPS } from '../../../scripts/lib/chain-steps.ts';
 import { workspaceScripts } from '../../../scripts/lib/npm-scripts.ts';
 
@@ -64,7 +64,7 @@ describe('the app build legs', () => {
   it('bounds a build at the class the chain bounds the step at', () => {
     const step = CHAIN_STEPS.find((candidate) => candidate.name === 'build:runtime');
     expect(step, 'no build:runtime step, so this case has nothing to compare against').toBeDefined();
-    expect(BUILD_TIMEOUT).toBe(step!.timeout);
+    expect(BUILD_BUDGET).toBe(step!.budget);
   });
 
   // Over the table, since it agrees today and an assertion over agreement cannot fail on its own

@@ -47,7 +47,7 @@ import { CHAIN_WAIT_MS, ChainLockHeld, chainInvocation, holdChainLock } from './
 import { expensiveSteps, MachineLockRefused } from './lib/machine-lock.ts';
 import { deadlinesNote } from './lib/chain-evidence.ts';
 import type { ExclusiveLock } from '@apackdev/host/exclusive-lock';
-import { timeoutMsFor, timedOutBecause, type TimeoutClass } from './lib/step-timeouts.ts';
+import { budgetMsFor, whyKilled, type BudgetClass } from './lib/step-budgets.ts';
 import { box } from './lib/core-budget.ts';
 import { compilerTestsRunHere } from '@apackdev/host/build/compiler-test-host';
 import { readStepSeconds, recordStepDurations, withRecordedSeconds } from './lib/step-durations.ts';
@@ -145,7 +145,7 @@ function pruneStamps(): void {
 const wrote = (step: ChainStep): string[] =>
   (step.outputs ?? []).map((target) => path.join(REPO_ROOT, target));
 
-type Result = { step: string; ms: number; code: number; output: string; timedOut?: true; stalled?: true };
+type Result = { step: string; ms: number; code: number; output: string; cpuMs?: number; timedOut?: true; stalled?: true };
 
 /**
  * What moved under a step's inputs since its last successful run, against that run's own stamp.
@@ -211,7 +211,7 @@ function whatMoved(
  * the two unit pools did exactly that. Only steps that declare them get any, because most steps' commands
  * would reject an argument they do not know.
  */
-async function run(step: string, timeout: TimeoutClass, force: readonly string[] = [], env: NodeJS.ProcessEnv = process.env): Promise<Result> {
+async function run(step: string, budget: BudgetClass, force: readonly string[] = [], env: NodeJS.ProcessEnv = process.env): Promise<Result> {
   const args = ['run', step];
   // npm forwards what follows `--` to the script's own command, which is how this chain was given `--all`
   const direct = force.length === 0 ? args : [...args, '--', ...force];
@@ -219,9 +219,9 @@ async function run(step: string, timeout: TimeoutClass, force: readonly string[]
   const withForce = inLinuxContainer(step) ? ['run', 'test:linux', '--', 'npm', ...direct] : direct;
   // Explicit feedback limits may shorten the declared work class's ceiling. A step in the container does its
   // work in the VM, where its process tree here cannot see it, so only the ceiling bounds it.
-  const { code, output, ms, timedOut, stalled } = await boundedSpawn('npm', withForce, timeoutMsFor(timeout),
+  const { code, output, ms, cpuMs, timedOut, stalled } = await boundedSpawn('npm', withForce, budgetMsFor(budget),
     { env, ...(withForce === direct ? {} : { idleMs: false as const }) });
-  const result = { step, ms, code, output, timedOut, stalled };
+  const result = { step, ms, code, output, cpuMs, timedOut, stalled };
   // Here rather than where a step's result is read, because this is the one place a step's bytes exist and
   // every caller passes through it. Written as the step ends, so a run that is interrupted keeps what finished.
   evidence?.keep(step, result);
@@ -282,11 +282,11 @@ class StepFailed extends Error {
 async function runAndStamp(step: ChainStep, all: boolean, budget: number, extra: readonly string[] = []): Promise<Result> {
   const force = [...all ? step.forceArgs ?? [] : [], ...extra];
   // A shard of a step passed part of it, which is not the step: it records nothing, as the pool beneath it does
-  if (step.neverCachedBecause !== undefined || extra.length > 0) return run(step.name, step.timeout, force, envFor(step, budget));
+  if (step.neverCachedBecause !== undefined || extra.length > 0) return run(step.name, step.budget, force, envFor(step, budget));
   let result: Result | undefined;
   try {
     await stampedRun(step.name, unitFor(step, budget), stampFor(step.name), async () => {
-      result = await run(step.name, step.timeout, force, envFor(step, budget));
+      result = await run(step.name, step.budget, force, envFor(step, budget));
       if (result.code !== 0) throw new StepFailed(result);
     });
   } catch (err) {
@@ -570,10 +570,10 @@ async function main(): Promise<void> {
       for (const slow of slowestTests(result.output)) {
         console.log(dim(`${' '.repeat(TIME_COLUMN)}${secs(slow.ms).padStart(6)}  ${oneLine(REASON_COLUMN, slow.name)}`));
       }
-      // The tests that passed past their size budget: reported, never failed, since load inflates a duration
-      // and never deflates one (`DEADLINE_FACTOR`). Not dimmed, being a finding rather than a profile.
+      // The tests that passed having spent more CPU than their budget: reported, never failed, the deadline being
+      // its multiple (`DEADLINE_FACTOR`). Not dimmed, being a finding rather than a profile.
       for (const over of overBudgetLines(result.output)) {
-        console.log(`${' '.repeat(TIME_COLUMN)}${secs(over.ms).padStart(6)}  ${oneLine(REASON_COLUMN, `over its ${secs(over.budgetMs)} budget: ${over.test}`)}`);
+        console.log(`${' '.repeat(TIME_COLUMN)}${secs(over.cpuMs).padStart(6)}  ${oneLine(REASON_COLUMN, `CPU over its ${secs(over.budgetMs)} budget: ${over.test}`)}`);
       }
       // And the same for whole files, which is the unit a half is decided in. It reads what the run wrote
       // rather than its output: a step's output is buffered and printed only on failure, so until this
@@ -608,7 +608,7 @@ async function main(): Promise<void> {
   if (failed) {
     const step = steps.find((s) => s.name === failed.step)!;
     const why = failed.timedOut
-      ? timedOutBecause({ what: step.name, timeout: step.timeout, seconds: recorded.get(step.name), stalled: failed.stalled })
+      ? whyKilled({ what: step.name, budget: step.budget, seconds: recorded.get(step.name), stalled: failed.stalled })
       : `${step.name} failed (exit ${failed.code})${howLong(recorded.get(step.name), failed.ms, budget)}`;
     console.log(`\n${'='.repeat(72)}\n${why}\n${'='.repeat(72)}\n${failed.output}`);
     const left = evidence?.keepFiles(step.name, keptOnFailure(step)) ?? [];

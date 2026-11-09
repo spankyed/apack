@@ -10,7 +10,7 @@
 // **Each command is a literal string.** `chain-inputs.spec.ts` walks the real module closure of the `.ts`
 // entries a step's script names, so this module is a declared input of `build:runtime`; and an interpolated
 // command would hide which workspace a leg builds from every reader except the runtime.
-import type { TimeoutClass } from './step-timeouts.ts';
+import type { BudgetClass } from './step-budgets.ts';
 
 /** One workspace's build */
 export interface RuntimeBuildLeg {
@@ -28,10 +28,10 @@ export interface RuntimeBuildLeg {
 
 /**
  * Declared once rather than on each leg, where four entries would hold the same value —
- * `typecheck-legs.ts`'s `LEG_TIMEOUT` is the precedent. It is the `build:runtime` step's own class, so the
+ * `typecheck-legs.ts`'s `LEG_BUDGET` is the precedent. It is the `build:runtime` step's own class, so the
  * chain's kill deadline and this runner's cannot disagree.
  */
-export const BUILD_TIMEOUT: TimeoutClass = 'suite';
+export const BUILD_BUDGET: BudgetClass = 'suite';
 
 /**
  * The four builds that produce the app, longest first.

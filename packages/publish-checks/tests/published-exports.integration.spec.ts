@@ -1,9 +1,8 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CONSUMER_MATRIX, PACKAGES_BUILT, TSC_VERSIONS, installPublishedPackages } from '../src/published-packages.ts';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 /** Every export of the packed @apackdev/ears, @apackdev/sdk and @apackdev/ui resolves to declarations for consumers. */
 let consumer: string | undefined;
@@ -33,7 +32,7 @@ function nonCodeExports(name: string): string[] {
 }
 
 
-const execFileAsync = promisify(execFile);
+const execFileAsync = execFileWhileWorking;
 
 describe.skipIf(!PACKAGES_BUILT)('published package exports', () => {
   it.each(CONSUMER_MATRIX)('all resolve to declarations under TypeScript $tsc, moduleResolution $moduleResolution', async ({ tsc, moduleResolution }) => {

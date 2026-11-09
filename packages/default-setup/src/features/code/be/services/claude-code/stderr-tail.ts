@@ -1,4 +1,15 @@
-/** Byte-bounded diagnostic retention for a long-lived child. */
+/**
+ * Byte-bounded diagnostic retention for a long-lived child.
+ *
+ * **A streaming agent child runs for as long as a conversation does, and everything it writes to stderr was
+ * kept.** It is collected for one purpose — a post-mortem when the child exits badly — and the useful part
+ * of that is the end. A CLI in a retry loop, or one whose own tools are noisy, writes to stderr for the
+ * whole life of the turn, so an array of every chunk is a leak with the lifetime of the conversation and no
+ * ceiling but the machine's memory.
+ *
+ * So the tail is kept and the rest is counted. What the text says, it says honestly: a reader is told how
+ * many bytes went missing rather than handed a quietly truncated log.
+ */
 export function createStderrTail(limit = 64 * 1024) {
   if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError('Invalid stderr limit')
   let tail = Buffer.alloc(0)

@@ -256,7 +256,7 @@ alone does not close those requirements.
    removes the staged tree and leaves the previous build in place.
 2. Unless `--skip-generate`: `resolveDeps` → `generateEntries`. `@apackdev/host/build/pack-inputs` supplies the shared authored-file scope; facade/DSL cache keys include generated entries and all asset extensions. The build captures authored inputs before reading the manifest and refuses publication if their content identity changed by completion.
 3. Feature schemas and explicit defaults are validated by the common compiler during manifest decoding; no settings modules execute.
-4. Dependencies' `steps.build.mjs` and manifests feed `buildPackConfigFromManifest`. `compilePack` loads step definitions, flow modules and custom content compilers through the same `createCompilerModuleLoader` scope: Node resolves against owned paths while tsx transforms captured ESM bytes under logical source URLs, preserving import.meta paths. A private loader below tsx supplies those bytes using the same storage projection as the input tree. CommonJS retains per-tree filenames for cache isolation; its metadata projection remains unfinished. Scope disposal awaits tsx unregistration before input cleanup. `bundlePackContentCompilers` then builds the declared `content.formats[].compiler` exports for dependents.
+4. Dependencies' `steps.build.mjs` and manifests feed `buildPackConfigFromManifest`. `compilePack` loads step definitions, flow modules and custom content compilers through the same `createCompilerModuleLoader` scope: Node resolves against owned paths while tsx transforms captured ESM bytes under logical source URLs, preserving import.meta paths. A private loader below tsx supplies those bytes using the same storage projection as the input tree. CommonJS retains per-tree filenames for cache isolation; its metadata projection remains unfinished. Scope disposal awaits tsx unregistration before input cleanup. **That scope needs Node `COMPILER_NODE_FLOOR` or newer** (`build/node-support.ts`, which the loader asserts before it registers anything): it installs both `module.register()` and `module.registerHooks()` hooks, and an older synchronous validator rejects the nullish CommonJS `source` the asynchronous default load returns, blaming the hook that passed it through. `bundlePackContentCompilers` then builds the declared `content.formats[].compiler` exports for dependents.
 5. Facade types: `bundlePackTypes` (`build/types-bundler.ts`, rollup-plugin-dts) → `dist/types/pack-types.d.ts`, then the facade gate (below), then a **warning** when a committed `etc/pack-types.api.md` no longer matches the bundle in hand (`build/facade-report.ts`; nothing when the pack has no report). Then `bundlePackFlowHelpers` (`build/flow-helpers-bundler.ts`); the snapshot is written last, once every step succeeded.
 6. `bundlePackStepBuild` (`src/__generated__/steps-build.ts`, which codegen writes from the manifest's `steps`), `bundlePackContentRuntime` + `checkContentRuntimeLoads`, `bundleDslDefs` (`build/dsl-defs.ts`, manifest `dsl`).
 7. `bundlePackRuntime` → `dist/runtime/index.cjs`, then `bundlePackFE` (`build/fe-bundler.ts`, Vite library build) for `findFEEntry()` unless `--skip-fe`. Every pack, whoever ships it: the app loads a backend runtime and fetches a frontend bundle from the pack's own directory.
@@ -342,8 +342,9 @@ Three suites, split by what a spec costs and needs:
   `npm run test:native`) — specs that execute a captured native compiler runtime or hold live filesystem
   watchers: the compiler native/ELF/PE library specs, `build-worker`, the `watch-*` specs and the watcher
   cases of the frontend and package-input specs. Its own run so the gate can schedule it beside integration.
-  It runs one file at a time, and a case gets a 300s budget (the `enormous` size), failed at twice it, since each composes cold captures,
-  builds and watcher cycles; a case needing longer still declares a reviewed per-test budget.
+  It runs one file at a time, and a case gets 300s of CPU as its budget (the `enormous` size), failed at twice it, since each composes
+  cold captures, builds and watcher cycles; a case needing more declares a reviewed `meta: cpuBudget(ms)`. In the Linux
+  container the guard judges only the stall, its CPU readings including the host's load (`APACK_CEILING=off`).
   A native case whose subject is not the compiler installation shares one per file
   (`tests/_support/shared-compiler.ts`, passed to `createPackBuilder` as `captureCompiler`); a case about
   capture, the captured runtime, an esbuild override or an installation's removal captures its own.
@@ -366,13 +367,15 @@ and a refresh with those inputs and outputs unmoved spawns nothing: it returns, 
 frontend watcher counts neither new bytes in a file the build never read nor a package build's writes as a
 change, since their events can arrive long after the signature that already includes them. Frontend replacement retains retiring subscriptions until asynchronous disposal settles.
 
-Integration and native specs start processes asynchronously: `promisify(execFile)` with a timeout for one
-short process, `runCommand` (`tests/_support/run-command.ts`) for the CLI or a nested vitest, which bounds each
-command, stops its process group and names it when it fails. `check:specifiers` refuses a synchronous spawn there.
+Integration and native specs start processes asynchronously: `execFileWhileWorking`
+(`@apackdev/sdk/progress`, `promisify(execFile)`'s contract with `timeout` read as CPU) for one
+process, `runCommand` (`tests/_support/run-command.ts`) for the CLI or a nested vitest, which bounds each command by
+its progress, stops its process group and names it when it fails. An in-process build takes a `workSignal` over the
+test's own tree rather than `AbortSignal.timeout`. `check:specifiers` refuses a synchronous spawn there.
 
 Real watcher integration edits use `tests/_support/watch-builds.ts`: wait at most 20s for a rebuild
-request, bound its compiler operation at 60s, then retain the original 20s notification/output checks.
-Initial capture keeps its 120s bound and cleanup has its own 20s bound. `rebuildAfter` does not replace assertions; preflight refusals
+request, bound the build it starts at 120s, then retain the original 20s notification/output checks.
+Cleanup has its own 20s bound. `rebuildAfter` does not replace assertions; preflight refusals
 before a builder is invoked keep their direct notification check. Compose case budgets from these
 phases; do not time the whole compilation as a missing-event wait.
 
@@ -394,7 +397,7 @@ can reach one from a change to what it checks. `repo-check-boundary.spec.ts` the
 back.
 
 **Which half a spec is in is a decision, declared by its filename**, and nothing re-derives it. What the
-integration half buys is a 60s per-test budget instead of 15s (each failed only at twice it, `DEADLINE_FACTOR`), a worker pool capped at half the cores, and
+integration half buys is 60s of CPU per test instead of 15s (each failed only at twice it, `DEADLINE_FACTOR`), a worker pool capped at half the cores, and
 separation from the per-change loop — so what belongs there is a spec that needs one of those, which in this
 package means the ones that spawn compilers.
 

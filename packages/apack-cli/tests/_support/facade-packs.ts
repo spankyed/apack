@@ -556,7 +556,7 @@ afterEach(() => new Promise<void>((resolve) => { setImmediate(resolve); }));
 
   describe.skipIf(published && !PACKAGES_BUILT)(`generated facades with a dependency ('${name}')`, () => {
   let parent: string;
-  beforeAll(async () => { parent = await buildPacks(published, dependencyStamp); }, 4 * 60_000);
+  beforeAll(async () => { parent = await buildPacks(published, dependencyStamp); });
   afterAll(() => { if (parent) fs.rmSync(parent, { recursive: true, force: true }); });
 
   it("writes the dependency's facade types into its snapshot", () => {

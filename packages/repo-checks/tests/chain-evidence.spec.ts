@@ -97,6 +97,8 @@ describe('where a chain run keeps its evidence', () => {
     expect(evidenceHeader('test:smoke', ended({ code: 1, ms: 6_000 }))).toBe('# test:smoke — exit 1 after 6.0s');
     expect(evidenceHeader('build:runtime', { ...ended({ ms: 300_000 }), timedOut: true }))
       .toBe('# build:runtime — timed out after 300.0s');
+    expect(evidenceHeader('build:default-setup', { ...ended({ code: 0, ms: 304_000 }), cpuMs: 181_250 }))
+      .toBe('# build:default-setup — exit 0 after 304.0s (181.3s CPU)');
   });
 
   describe('what it writes, and when', () => {

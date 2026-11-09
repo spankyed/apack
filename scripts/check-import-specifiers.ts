@@ -23,7 +23,8 @@ import {
 } from './lib/import-source-conditions.ts';
 import { backed, type ImportRule, type PackParity, packRule } from './lib/import-rules.ts';
 import { importedCallsIn } from './lib/imported-calls.ts';
-import { loadedByThePools, syncSpawnImportsIn } from './lib/process-spawns.ts';
+import { loadedByThePools, syncSpawnImportsIn, tsFilesUnder } from './lib/process-spawns.ts';
+import { clockedDeadlines } from './lib/test-timeouts.ts';
 import { listLines, ruleRows as rowsOf, type RuleRow, ruleTable } from './lib/import-list.ts';
 
 // Re-exported so the consumers of this file keep importing from it: it is the command, and the command is the
@@ -536,23 +537,31 @@ export function findSchemeRegistrations(dirs: readonly string[] = CHECKED_DIRS, 
 }
 
 /**
- * Modules the integration and native pools load that start a synchronous process on purpose, with why.
+ * Test modules that start a synchronous process on purpose, with why.
  *
  * An entry that stops applying is reported, so the list cannot outlive its reasons.
  */
+/** Every module under the packages' `tests/` trees, support modules included: where a spawn in a spec hides */
+const specModules = (root: string): string[] => fs.readdirSync(path.join(root, 'packages'))
+  .flatMap((dir) => tsFilesUnder(path.join(root, 'packages', dir, 'tests')))
+  .filter((file) => !file.includes(`${path.sep}node_modules${path.sep}`));
+
 const SYNC_SPAWN_ALLOWED: Record<string, string> = {
+  'packages/apack-host/tests/build/source-resolution.spec.ts':
+    "builds the `ResolveFile` `assertSourceResolution` calls, which is synchronous: a resolver that answered later would test a different function",
   'packages/repo-checks/tests/_support/repo-files.ts':
     '`git ls-files` takes milliseconds, and many fast specs read the repo\'s files synchronously at module and describe time',
 };
 
 /**
- * `file: execFileSync, spawnSync` for each module the integration or native pools load that imports a synchronous
- * `child_process` export, and each `SYNC_SPAWN_ALLOWED` entry that no longer does.
+ * `file: execFileSync, spawnSync` for each test module, in every half, that imports a synchronous `child_process`
+ * export, and each `SYNC_SPAWN_ALLOWED` entry that no longer does.
  *
- * A synchronous process blocks the vitest worker for as long as it runs, so the case's own timeout cannot fire and
- * vitest's fixed 60s RPC window expires, failing as an anonymous timeout rather than naming the slow command.
+ * A synchronous process blocks the vitest worker for as long as it runs: the progress guard cannot take a reading,
+ * so nothing bounds a hang but vitest's fixed 60s RPC window, which fails it as an anonymous timeout rather than
+ * naming the command.
  */
-export function findSyncSpawnsInSlowSpecs(files: readonly string[] = loadedByThePools(repoRoot), root = repoRoot,
+export function findSyncSpawnsInSpecs(files: readonly string[] = specModules(repoRoot), root = repoRoot,
   allowed = SYNC_SPAWN_ALLOWED): string[] {
   const applied = new Set<string>();
   const problems = files.flatMap((file) => {
@@ -566,6 +575,60 @@ export function findSyncSpawnsInSlowSpecs(files: readonly string[] = loadedByThe
     if (!applied.has(relative)) {
       problems.push(`${relative}: listed in SYNC_SPAWN_ALLOWED (${reason}) but it no longer imports a synchronous spawn`);
     }
+  }
+  return problems.sort();
+}
+
+/**
+ * Source files that hold a clocked deadline on purpose, with why: the wait is not on work a busy machine slows.
+ *
+ * Three reasons qualify. A network wait (a fetch, a model's API, a remote CLI) has no CPU to read, so a stall
+ * bound cannot tell a healthy request from a hung one; a kill-grace period is about time by definition; and a
+ * wait whose other party has no process this one can read. An entry that stops applying is reported.
+ */
+const PRE_ADMISSION_SPAWN = 'a native loader query made before admission verifies the process, where a thread would load libraries into it; only a synchronous spawn loads none';
+const CLOCK_BY_DESIGN: Record<string, string> = {
+  'packages/apack-host/src/packs/github.ts': "a fetch from GitHub's API: network, which no CPU reading describes",
+  'packages/apack-host/src/packs/installer.ts': 'a pack download: network, which no CPU reading describes',
+  'packages/default-setup/src/features/code/be/services/gh-cli.ts': "`gh` waits on GitHub's API: network, which no CPU reading describes",
+  'packages/default-setup/src/features/code/be/services/codex/app-server.ts':
+    "a request to the codex app-server waits on the model's API, during which the server is idle by design",
+  // The native loader queries run before admission has verified the process, so they may load nothing into it. A
+  // synchronous spawn loads nothing; a worker thread does. Bounding them by progress meant starting one from the
+  // synchronous admission, and on Windows its DLL loads followed a planted `.local` override, which ran —
+  // `compiler-pe-libraries.native.spec.ts`'s pre-initialization refusal case caught it on Windows CI
+  'packages/apack-cli/src/build/compiler-pe-activation.ts': PRE_ADMISSION_SPAWN,
+  'packages/apack-cli/src/build/compiler-pe-environment.ts': PRE_ADMISSION_SPAWN,
+  'packages/apack-cli/src/build/compiler-elf-environment.ts': PRE_ADMISSION_SPAWN,
+  'packages/apack-sdk/src/progress.ts':
+    'the synchronous process listing is the reading itself, so no progress can bound it, and its caller cannot be interrupted',
+  // The Playwright fixture: Playwright gives a wait only a clock, and each is sized as the suite's backstop
+  'packages/apack-testing/src/index.ts': "the Playwright fixture's own waits, which Playwright bounds only by a clock, and a 10s `sample` diagnostic",
+  'packages/apack-testing/src/engine/index.ts': "a Playwright wait in the test engine, which Playwright bounds only by a clock",
+};
+
+
+/**
+ * `file:line: what` for each clocked deadline in the packages' source that `CLOCK_BY_DESIGN` does not account for,
+ * and each entry there that no longer holds one.
+ *
+ * `clockedDeadlines` (`scripts/lib/test-timeouts.ts`) has what counts as one and what it cannot see.
+ */
+export function findClockedDeadlinesInSource(
+  files: readonly string[] = filesUnder(packageSourceDirs(repoRoot), repoRoot).filter((file) => file.endsWith('.ts')),
+  root = repoRoot, byDesign = CLOCK_BY_DESIGN,
+): string[] {
+  const seen = new Map<string, number>();
+  const problems = files.flatMap((file) => {
+    const found = clockedDeadlines(file, root);
+    if (found.length === 0) return [];
+    const relative = repoRelative(root, file);
+    seen.set(relative, found.length);
+    if (byDesign[relative] !== undefined) return [];
+    return found.map((clock) => `${relative}:${clock.line}: ${clock.what}`);
+  });
+  for (const [relative, reason] of Object.entries(byDesign)) {
+    if (!seen.has(relative)) problems.push(`${relative}: listed in CLOCK_BY_DESIGN (${reason}) but it holds no clocked deadline`);
   }
   return problems.sort();
 }
@@ -871,10 +934,16 @@ const RULE_LIST = [
     rule: "Ask repoFiles() what files this repo has, not git ls-files directly: the index holds a file deleted and not staged, and omits one written and not staged",
   },
   {
-    id: 'findSyncSpawnsInSlowSpecs',
-    repoOnly: { kind: 'inapplicable', note: "Its subject is this repo's integration and native test pools, which no pack has" },
-    find: findSyncSpawnsInSlowSpecs,
-    rule: 'Start a process asynchronously in the integration and native halves — promisify(execFile) with a timeout, or runCommand (apack-cli tests/_support/run-command.ts) for a CLI or vitest process tree: a synchronous one blocks the worker, so no timeout fires and the RPC window expires',
+    id: 'findSyncSpawnsInSpecs',
+    repoOnly: { kind: 'inapplicable', note: "Its subject is this repo's packages' test trees; a pack's tests are its author's" },
+    find: findSyncSpawnsInSpecs,
+    rule: 'Start a process asynchronously in a spec — execFileWhileWorking (@apackdev/sdk/progress), or runCommand (apack-cli tests/_support/run-command.ts) for a CLI or vitest process tree: a synchronous one blocks the worker, so the progress guard cannot read it and a hang ends as an anonymous RPC timeout',
+  },
+  {
+    id: 'findClockedDeadlinesInSource',
+    repoOnly: { kind: 'inapplicable', note: "Its subject is this repo's packages and their backlog of clocks; a pack's own waits are its author's" },
+    find: findClockedDeadlinesInSource,
+    rule: 'Bound work by its progress, not the clock: execFileWhileWorking, answerWhileWorking or workSignal (@apackdev/sdk/progress). A wait that is not on work a busy machine slows (network, a kill grace) goes in CLOCK_BY_DESIGN with why',
   },
   {
     id: 'findCompilerRunsInFastSpecs',

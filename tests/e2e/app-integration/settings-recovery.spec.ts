@@ -26,7 +26,7 @@ test('repairs invalid persisted settings in the app and starts packs only after 
     app.process().stderr?.pipe(log, { end: false });
     app.once('close', () => log.end());
     await expect.poll(() => app!.windows().some(page => page.url().includes('/renderer/dist/index.html')),
-      { timeout: 30_000, message: 'main renderer, rather than the splash window' }).toBe(true);
+      { message: 'main renderer, rather than the splash window' }).toBe(true);
     return app.windows().find(page => page.url().includes('/renderer/dist/index.html'))!;
   };
   try {

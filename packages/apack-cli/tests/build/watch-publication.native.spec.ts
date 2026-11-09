@@ -17,6 +17,8 @@ import { HOST_ENTITY_TYPES } from '@apackdev/host/app-state';
 import { packagesBuiltOrRefuse, REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { startTestPackBuildWatcher, WATCH_REBUILD_BUDGET_MS, type TestPackBuildWatcher } from '../_support/watch-builds.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
+import { _settles } from '@apackdev/sdk/testing/waiting';
 
 const sharedCompiler = shareCompilerInstallation();
 
@@ -117,14 +119,14 @@ let starting: ReturnType<typeof startWatchedPack> | undefined;
 beforeEach(async ({ signal }) => {
   starting = startWatchedPack(signal);
   watchedPack = await starting;
-}, 2 * 60_000);
+});
 afterEach(async () => {
   const pending = starting;
   starting = undefined;
   await pending?.then(started => started.close(), () => {});
 });
 
-it.skipIf(!built)('publishes source and manifest edits together and retains the incumbent after refusal', async () => {
+it.skipIf(!built)('publishes source and manifest edits together and retains the incumbent after refusal', { meta: cpuBudget(3 * WATCH_REBUILD_BUDGET_MS + 20_000) }, async () => {
   const { root, installed, registry, errors, lifecycle, state, rebuildAfter } = watchedPack;
   const initial = readPackBuild(path.join(root, 'dist'));
   // Neither declaration changes nor modules outside src/ may escape the watch contract.
@@ -135,7 +137,7 @@ it.skipIf(!built)('publishes source and manifest edits together and retains the 
     fs.writeFileSync(manifestFile, JSON.stringify(manifest));
     fs.writeFileSync(path.join(root, 'modules/lifecycle.ts'), lifecycle('second'));
   });
-  await vi.waitFor(() => expect(state.reloads > 0 || errors.mock.calls.length > 0).toBe(true), { timeout: 20_000 });
+  await _settles(() => expect(state.reloads > 0 || errors.mock.calls.length > 0).toBe(true));
   expect(errors.mock.calls).toEqual([]);
   const updated = readPackBuild(path.join(root, 'dist'));
   expect(updated.revision).not.toBe(initial.revision);
@@ -145,17 +147,17 @@ it.skipIf(!built)('publishes source and manifest edits together and retains the 
 
   const accepted = state.publications;
   await rebuildAfter(() => { fs.writeFileSync(path.join(root, 'modules/lifecycle.ts'), 'export function init( {'); });
-  await vi.waitFor(() => expect(errors).toHaveBeenCalledWith(expect.stringContaining('Build/reload failed')), { timeout: 20_000 });
+  await _settles(() => expect(errors).toHaveBeenCalledWith(expect.stringContaining('Build/reload failed')));
   expect(state.publications).toBe(accepted);
   expect(readPackBuild(path.join(root, 'dist')).revision).toBe(updated.revision);
   expect(registry.getPackRegistration('watched-pack')?.lifecycle?.onInit?.()).toBe('second');
   await rebuildAfter(() => { fs.writeFileSync(path.join(root, 'modules/lifecycle.ts'), lifecycle('third')); });
-  await vi.waitFor(() => expect(state.publications).toBeGreaterThan(accepted), { timeout: 20_000 });
-  await vi.waitFor(() => expect(registry.getPackRegistration('watched-pack')?.lifecycle?.onInit?.()).toBe('third'), { timeout: 20_000 });
+  await _settles(() => expect(state.publications).toBeGreaterThan(accepted));
+  await _settles(() => expect(registry.getPackRegistration('watched-pack')?.lifecycle?.onInit?.()).toBe('third'));
 
-}, 3 * WATCH_REBUILD_BUDGET_MS + 20_000);
+});
 
-it.skipIf(!built)('follows retargeted manifest links through refusal, repair and atomic replacement', async () => {
+it.skipIf(!built)('follows retargeted manifest links through refusal, repair and atomic replacement', { meta: cpuBudget(20_000 + 2 * WATCH_REBUILD_BUDGET_MS + 20_000) }, async () => {
   const { root, hooks, shared, registry, errors, state, rebuildAfter } = watchedPack;
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'apack.json'), 'utf8'));
   // Only external data changes below: a root-only watcher cannot observe them.
@@ -165,15 +167,15 @@ it.skipIf(!built)('follows retargeted manifest links through refusal, repair and
   fs.writeFileSync(path.join(hooks, 'retargeted.json'), '{');
   fs.unlinkSync(path.join(shared, 'manifest.json'));
   fs.symlinkSync(path.join(hooks, 'retargeted.json'), path.join(shared, 'manifest.json'));
-  await vi.waitFor(() => expect(errors).toHaveBeenCalledWith(expect.stringContaining('Build/reload failed')), { timeout: 20_000 });
+  await _settles(() => expect(errors).toHaveBeenCalledWith(expect.stringContaining('Build/reload failed')));
   expect(state.publications).toBe(beforeRetarget);
   await rebuildAfter(() => { fs.writeFileSync(path.join(hooks, 'retargeted.json'), JSON.stringify(changed)); });
-  await vi.waitFor(() => expect(registry.catalog.get('watched-pack')?.snapshot.manifest.features?.notes.description).toBe('Retargeted manifest.'), { timeout: 20_000 });
+  await _settles(() => expect(registry.catalog.get('watched-pack')?.snapshot.manifest.features?.notes.description).toBe('Retargeted manifest.'));
   expect(state.publications).toBeGreaterThan(beforeRetarget);
   changed.features.notes.description = 'Edited retargeted manifest.';
   await rebuildAfter(() => {
     fs.writeFileSync(path.join(hooks, 'replacement.json'), JSON.stringify(changed));
     fs.renameSync(path.join(hooks, 'replacement.json'), path.join(hooks, 'retargeted.json'));
   });
-  await vi.waitFor(() => expect(registry.catalog.get('watched-pack')?.snapshot.manifest.features?.notes.description).toBe('Edited retargeted manifest.'), { timeout: 20_000 });
-}, 20_000 + 2 * WATCH_REBUILD_BUDGET_MS + 20_000);
+  await _settles(() => expect(registry.catalog.get('watched-pack')?.snapshot.manifest.features?.notes.description).toBe('Edited retargeted manifest.'));
+});

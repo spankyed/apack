@@ -1,10 +1,18 @@
 # Issue: Terminal integration — review findings and path forward
 
-**Date:** 2026-10-01
-**Status:** Open
+**Date:** 2026-10-01 — findings re-verified against the tree 2026-11-07
+**Status:** Open. Decisions D1–D8 below are settled and D9–D11 live in the goal; T4 and M3 are fixed, the
+rest stand
 **Severity:** Critical — one finding writes user credentials to disk in plaintext; two more can lose work
 **Component:** `packages/default-setup/src/features/code` — terminal (xterm.js front end, node-pty back end),
 plus the app plumbing it depends on (`packages/main`, `packages/api`, `@apackdev/host/bus`)
+
+**Delivery is owned by [goal-terminal-ownership](../goals/goal-terminal-ownership.md).** This document owns
+the findings, the root causes and decisions D1–D8; the goal owns the outcome, the execution order and
+completion, and cites those decisions rather than restating them. Its D9–D11 settle what this document left
+open. A finding's disposition and the evidence that closed it live in
+[the evidence record](../references/evidence/terminal-ownership.md), not here; a row is struck here as it
+closes there.
 
 ## Symptom
 
@@ -23,8 +31,15 @@ static read of one feature, on the happy path, on macOS, in one window.
 see, plus a git-history pass. Produced S, M, X, T, L and G below, **corrected two round-1 findings**, and
 returned several useful negative results.
 
+**Line numbers predate the `apack` rename and the window-storage migration, and are refreshed as each
+finding is touched.** The mechanisms have held every spot-check so far; the citations have not. The migration
+is the reason: a `window-storage` pack rule now refuses a pack reaching `localStorage` itself, so the
+terminal's persistence moved behind `surfaceStorage(featureRef('code'))` — the same synchronous backing store
+at a different call site. Verifying a finding before acting on it belongs to the stage that acts, not to a
+pass run first; the four harm findings (S1, S2, F9, F10) were checked on 2026-11-07 and are accurate.
+
 Still not done: **nothing here was measured at runtime.** F3, F4, F5 and G1 are severity claims derived from
-reading code. See Stage 0.
+reading code; the goal's Phase G prices them.
 
 ---
 
@@ -74,7 +89,7 @@ orchestration, `L` = lifecycle and persisted data, `G` = agent sessions.
 | **S2** | **Critical** | Every terminal keystroke is logged at `info` and written to `main.log` + `main.jsonl` in plaintext | `apack-host/src/bus/client-events.ts:54` |
 | **S1** | **High** | The API process's whole env — app API token included — is handed to every pty | `be/services/terminal.ts:318-331`, `main/.../api-server/config.ts:100` |
 | **S3** | **High** | The restore path spawns a persisted `shell` and `cwd` with no validation | `be/services/terminal.ts:379-385` |
-| **F3** | **High** | O(n²) string accumulation per terminal, on the renderer's main thread | `fe/utils/terminal-events.ts:106` |
+| **F3** | **High** | O(n²) string accumulation per terminal, on the renderer's main thread | `fe/utils/terminal-events.ts:111` |
 | **F4** | **High** | One bus event per pty chunk; no coalescing, no flow control | `be/features/terminal.ts:76` |
 | **F5** | **High** | Resize storm, amplified into an EARS write per resize | `be/services/terminal.ts:153`, `TerminalView.vue:159,190,195` |
 | **F7** | **High** | `restoreAll` SIGKILLs a stored pid and its process group, unbounded | `be/services/terminal.ts:366` |
@@ -91,12 +106,12 @@ orchestration, `L` = lifecycle and persisted data, `G` = agent sessions.
 | **T3** | Medium | The 2,500 ms restore settle drops terminal tabs *and* rewrites the persisted list without them | `fe/state.ts:560-564,1208-1218` |
 | **T2** | Medium | A pinned terminal tab becomes a permanent ghost when its terminal dies | `fe/utils/tab-management.ts:29` |
 | **T5** | Medium | "Open Terminal Here" spawns a terminal without expanding the panel | `fe/features/CodePanelHeader.vue:22` |
-| **M3** | Medium | `terminal.CREATED` is broadcast and every window consumes it as if it had asked | `fe/features/terminal/state.ts:268-294` |
-| **M1** | Medium | Two windows write the same persisted-output key from differently-based copies | `fe/utils/terminal-events.ts:49` |
+| ~~**M3**~~ | ~~Medium~~ | **Fixed.** `terminal.CREATED` was broadcast and every window consumed it as if it had asked; the opening is a `reply` to the asker's connection now (`terminal.OPENED`) | `be/features/terminal.ts` |
+| **M1** | Medium | Two windows write the same persisted-output key from differently-based copies | `fe/utils/terminal-events.ts` |
 | **M4** | Medium | A window attaching after a pty replacement content the dead shell's scrollback with no seam | `fe/utils/terminal-pool.ts:164-178` |
-| **M5** | Medium | Every window restores and rewrites the single `code-surface-open-tabs` key | `fe/utils/persisted-tabs.ts:18` |
+| **M5** | Medium | Every window restores and rewrites the one persisted-tabs key | `fe/utils/persisted-tabs.ts` |
 | **L3** | Medium | No Terminal row is ever deleted; `terminalCommands.delete` is dead code | `be/repository/index.ts:136-145` |
-| **F6** | Medium | Up to 1 MB of synchronous `localStorage` per terminal per output burst | `fe/utils/terminal-events.ts:47` |
+| **F6** | Medium | Up to 1 MB of synchronous window storage per terminal per output burst | `fe/utils/terminal-events.ts` (via `surfaceStorage`) |
 | **F8** | Medium | First pty output can be lost before `onData` is registered | `be/features/terminal.ts:131` |
 | **F10** | Medium | No WebGL context-loss recovery | absent |
 | **F11** | Medium | Clear doesn't survive a restart | `fe/canvas/TerminalView.vue:133` |
@@ -283,20 +298,39 @@ throws on resize after exit, `:133-150` kills the console process list **asynchr
 helper, and `:229` delays the exit event by 1,000 ms. `runShutdownHooks()` runs inside `process.on('exit')`,
 where that async kill cannot complete even on a graceful exit.
 
-### G — agent sessions do not share the pty, but repeat one mistake
+### G — agent sessions, which stopped being pty-free while this document sat
 
-**Claude Code does not use `terminalService`.** `node-pty` appears in exactly one file in the repo, and
-`terminalService` has two importers (the terminal system, and `hooks.ts` for `killAll`). The agent path uses
-plain `child_process.spawn` and reaches the UI through the chat/threads pipeline, never `terminal.*`. **So
-F1-F17 do not reach agent sessions** — the review's scope is correct as written.
+**On master, Claude Code does not use `terminalService`.** `node-pty` has one importer in `src/`,
+`terminalService` has two (the terminal system, and `hooks.ts` for `killAll`), and the agent path uses plain
+`child_process.spawn`, reaching the UI through the chat/threads pipeline and never `terminal.*`. So F1-F17
+do not reach agent sessions as the tree stands.
+
+**That is no longer the whole picture, and the difference matters more than the findings below.**
+`session/claude-code-integration` (#372) adds a **native** half that runs the real `claude` TUI inside a pty
+and parses its screen into structured dialogs. On that branch there are three pty owners
+(`services/terminal.ts`, `claude-code/terminal-owner.ts`, `claude-code/background-attachment.ts`), a local
+`claude-code/native-process-ownership.ts`, and an attach lifecycle of its own. So the agent path is a client
+of the terminal capability rather than a stranger to it, and the goal designs that capability against the
+TUI adapter for exactly this reason. The target shape is a non-blocking comment on #372.
+
+**Re-verify every G finding against that branch before acting on it.** `runner.ts`, `handle-store.ts`,
+`query.ts` and `hooks.ts` all move substantially there, and **G3 is already fixed** — `hooks.ts` calls
+`killAllHandles()` on shutdown. The sketches below are against master.
 
 It independently repeats the write-amplification class, and worse: **G1** flushes
 `updateMessageState(messageId, { text: buffer })` with the *entire accumulated text* every 80 ms, and again
 for thinking at 250 ms. A 60-second answer producing 40 KB is ~750 flushes averaging ~20 KB → **~15 MB of
 LMDB writes and ~15 MB over the bus for 40 KB of text**, quadratic in message length, on every turn. The
-event *count* is coalesced correctly; the payload is not. **This is a stronger suspect for the write-discard
-issue in `docs/archive/issues/postmortem-pattern-kill-note-loss.md` than F5**, because it runs on every
-agent turn rather than only while dragging a divider.
+event *count* is coalesced correctly; the payload is not, and it runs on every agent turn rather than only
+while dragging a divider as F5 does.
+
+**It was filed as a suspect for the write-discard issue
+(`docs/archive/issues/postmortem-pattern-kill-note-loss.md`); that link is historical.** The buffering
+adapter whose failure path discarded writes silently no longer exists — the data layer moved to elmdb, which
+commits as it returns and keeps no copy in memory. So this is wasted work rather than a data-loss vector,
+which is the defect on its own terms and not a smaller one. That postmortem still reads "it is not fixed, and
+it is still happening"; whether the move closed it needs its own check, and the file being gone is not that
+check.
 
 **G3 is the mirror of F7**: the terminal over-kills a stale pid, while the agent path under-kills a live
 child — `onShutdown` doesn't touch `activeHandles`, the child is spawned without `detached`, and
@@ -313,7 +347,9 @@ Recorded so they are not re-investigated.
   `@xterm/addon-web-links@0.11.0`'s only regex matches `https?` (read out of the shipped bundle) and no
   `urlRegex` option is passed; and `main/src/modules/shell-access.ts:13` allows only `http:`/`https:` for the
   external branch. The remaining gap is S4, which the terminal cannot reach.
-- **Claude Code does not share the pty infrastructure** (above).
+- **Claude Code does not share the pty infrastructure** — **true on master only.** #372 gives it ptys of
+  its own; see the G section. Recorded here because the original claim shaped this document's scope, and a
+  negative result that has expired is worse than none.
 - **`pty` resize does not oscillate between windows** — every re-fit trigger was traced and none is driven by
   another window or the backend. M2 is last-writer-wins, not thrash.
 - **Keystrokes reach the pty once, not twice, with two windows.** `onData` is registered once per pool entry
@@ -352,29 +388,70 @@ Recorded so they are not re-investigated.
 
 ---
 
-## Path forward
+## What comes after this, and what it changes here
 
-### Stage A — stop the bleeding (independent of everything else)
+Two deferred plans follow this work, in order: the
+[ghostty-web migration](../deferred/xterm-to-ghostty-web.md) replaces the emulator, and the
+[terminal runtime refactor](../deferred/terminal-runtime-refactor-target.md) moves process and
+terminal-state authority into a host-owned service over a Rust broker. Neither is authorized, both are
+undated, and this list is meant to land first. Reading them changes four things here, and it is cheaper to
+know now than to discover at each stage:
 
-1. **S2**: log the event type and target, never the payload, at the bus seam. One line. Then decide what to do
-   about the log files already on disk — they are credential-bearing.
-2. **S1**: replace the pty env deny-list with an allow-list, and add the spec that fails when an app-owned
-   variable appears in a spawned pty's env.
-3. **F9**: route terminal errors through the shell's existing `notify` rather than surface context, so an error
-   nothing renders becomes structurally impossible.
-4. **F10**: add `onContextLoss`. Three lines; `1b414d35e` proves context loss happens here.
+- **The migration's primary replacement point is `terminal-pool.ts`** — the file the presentation phase rewrites.
+  Its Phase 1 requirements *are* that phase's invariants, in its own words: one output subscription and input
+  registration per entry, concurrent creation for one id deduplicated, asynchronous completion guarded
+  against a disposed or replaced entry. So the two are not redundant, but that phase must **draw its boundary
+  at the emulator**: the session owns lifecycle, ownership and subscription, and reaches the emulator
+  through a seam narrow enough that the migration swaps an implementation rather than reopening ownership.
+  Not an engine abstraction and not a selection flag — the migration refuses both, and so does this: one
+  emulator at a time, the seam internal to the feature.
+- **The baseline measurement is the migration's too.** It asks for first-open latency including
+  WASM, sustained output responsiveness, large-history replay, memory with several hidden sessions, resize
+  behaviour and packaged payload size, on one machine and corpus, with limits agreed *before* cutover.
+  Measuring once and recording it where that plan can cite it is the whole of the saving.
+- **The platform tier is dissolved rather than deferred.** X1 and X2 are node-pty's Windows
+  behaviour, and the refactor gives PTY and ConPTY ownership to the broker. With no released build there are
+  no Windows users to protect in the interim, so writing those fixes now is likely paying for code the
+  refactor deletes. X3 and X10 are not in that category — they are the app's menu and hotkey handling, which
+  no terminal plan touches.
+- **S2 is confirmed by the refactor, not merely compatible with it.** It specifies that logs carry *"IDs,
+  sizes, revisions and reason codes, not keystrokes, prompts, raw OSC or transcripts."* The decision below
+  was reached independently; this is the same rule arrived at twice.
+
+The one reversal is F14, recorded in decision 3.
+
+## What each fix looks like
+
+**Ordering belongs to the goal, not here.** These are the design sketches its phases cite — what a fix *is*,
+not when it happens. Each heading names the goal phase that delivers it; where the two differ, the goal is
+current. These groups carried stage numbers until the goal existed, and dropping them is deliberate: a
+document with its own stage ordering beside a goal with phases is two plans for one body of work.
+
+### The harm — independent of everything else *(goal: Phase T)*
+
+1. **S2**: log the event type and target, never the payload, at the bus seam (decision 5), with the firing
+   case that fails if a payload reaches a log.
+2. **S1**: capture the token at boot and delete it from `process.env`, and strip the app's identity variables
+   from spawned shells by a derived list (decision 4). Closes G2 and G4 with it.
+3. **F9**: report terminal errors through `reportError`, which the shell already turns into a toast — not a
+   new `HostShell` command. `HostShell` exposes no `notify`, so the mechanism this document first named does
+   not exist; the one that does needs no new published API.
+4. **F10**: add `onContextLoss`. Three lines; a past commit fixing a GL-context crash at teardown proves
+   context loss happens here. **Provisional**: it is xterm's WebGL addon specifically, and the ghostty-web
+   migration may remove the renderer it guards. Three lines is worth paying twice; a larger fix here would
+   not be.
 
 None depends on the restructure. 1 and 2 are the only items in this document that are about user harm rather
 than user annoyance.
 
-### Stage 0 — make it observable before touching the hot path
+### Observability, before the hot path moves *(goal: Phase G)*
 
 The pack suite is `environment: 'node'`, so `terminal-pool.ts` is unreachable by it. Add a jsdom project for
 the pool and the bus, and `drive/` scripts for the interactive invariants. **This stage is also where F3, F4,
 F5 and G1 get measured** — they are currently inferences, and the repo's own rule is to measure before
 optimising *and before accepting someone else's measurement*, including mine.
 
-### Stage 1 — one owner per terminal
+### One owner per terminal *(goal: Phases B, H and P)*
 
 A `TerminalSession` owning the xterm, the wrapper, the subscriptions and the pty wiring. Views become hosts
 that receive a node and emit intent, and cannot register a handler. Fixes F1, F2, F15, T1, T7, and makes
@@ -390,32 +467,32 @@ choosing to support it means a real multiplexer (two xterms over one pty, with r
 more work. Either way the rule belongs in **one owner** rather than in template conditions a new entry point
 can forget — that part is settled by M3 regardless of which way the fork goes.
 
-### Stage 2 — fix the pipe
+### The output pipe *(goal: Phases B and P)*
 
 Coalesce pty data in the backend on a ~8 ms or size threshold; enable node-pty `flowControl` with ack-based
 pause; replace the concat ring with a chunk list or drop the second copy and snapshot xterm's buffer with
-`SerializeAddon`; move persistence off `localStorage`. Fixes F3, F4, F6, M1, M6, and makes F11 trivial. Apply
-the same payload discipline to G1, which is the same defect in another feature.
+`SerializeAddon`; move persistence off `localStorage`. Fixes F3, F4, F6, M1, M6, and makes F11 trivial. Apply the same payload discipline to G1, which is the same defect in another feature.
 
-### Stage 3 — request/reply with correlation, and resize discipline
+### Correlation and resize discipline *(correlation done; resize goal: Phase B)*
 
 Give create a correlation id so a reply finds its requester, and scope a session to a window. Fixes T4, M3,
 M5. Separately: one resize send per settled size, rAF-debounced, guarded on changed dimensions, and stop
-writing EARS on resize at all. Fixes F5 and removes a suspect from the LMDB investigation.
+writing EARS on resize at all. Fixes F5, which no longer bears on the write-discard investigation — see G1
+for why that link lapsed.
 
-### Stage 4 — stop treating stored rows as handles
+### Stored rows are not handles *(goal: Phase B)*
 
 Bound or remove the orphan kill (F7); make `killAll` mark rows closed and cap `restoreAll` (L2); validate
 shell and cwd on restore after settling F13 (S3); delete or trash closed rows (L3); add `onError` to the
 restore actor (L1).
 
-### Stage 5 — platform
+### Platform *(X3 and X10 goal: Phase T; the rest held)*
 
 X1/X2 need a Windows job object or an explicit tree kill, and a shutdown path that can await. X3 needs a
 non-darwin menu. X10 needs `cmd`→`ctrl` normalisation. The rest of X follows from one allow-list and one
 path-handling decision.
 
-### Stage 6 — completeness and the F14 decision
+### Completeness, and shell integration *(goal: Phases A and P)*
 
 Shell integration needs a decision, not a fix, because it has never run. The options, from cheapest:
 **delete it** and title from the shell/process name; **listen instead of inject** via xterm's
@@ -427,7 +504,7 @@ cooperation. Then: `SearchAddon`, scrollback/font settings, bracketed paste ever
 explicitly, and the dead declarations (L6-L8).
 
 Separate from the terminal but found here: **G2, G3, G4, G6** are four small, independent fixes to the agent
-path, and **G1** belongs in Stage 2's payload discipline.
+path, and **G1** belongs with the output pipe's payload discipline.
 
 ### What makes it stay fixed
 
@@ -439,17 +516,33 @@ path, and **G1** belongs in Stage 2's payload discipline.
   only thing here that would have caught F3, F4 and G1 before a user felt them.
 - A correlation id on every request/reply pair, so "which reply is mine" is not answerable by luck.
 
-## Open decisions
+## Decisions (D1–D8)
 
-1. **F14** — which of the four shell-integration directions (Stage 6). The current code has never run, so
-   there is nothing to preserve.
-2. **The log files already on disk** — S2 means `main.log` and `main.jsonl` should be treated as
-   credential-bearing.
-3. **Repair vs restructure.** The existing code is not a quality baseline and its past fixes were partial or
-   failed attempts, so Stage 1 is not obliged to preserve any of its structure. Whether to rewrite the core
-   (~1,340 lines: service 430, system 330, pool 362, bus 218) against the invariants above, or to land the
-   stages incrementally, is a scope call.
-4. **One visible host per session, or a real multiplexer** (Stage 1). Still open. Today's exclusivity is
-   emergent from display conditions and is not an argument either way; the argument for one host is that a
-   pty has a single size and a single stateful stream, and the argument against is watching one terminal in a
-   popout on a second monitor.
+Settled 2026-11-07. D9–D11 are the goal's and are not repeated here. Each records what was chosen and what choosing it costs, so a later reader can reopen one
+on its merits rather than rediscover the question.
+
+1. **Restructure, not repair.** Seven of the root causes are structural, and the existing code is
+   not a quality baseline, so the rewrite covers the ~1,340-line core (service 430, system 330, pool 362, bus
+   218) against the invariants here, with the findings as its acceptance criteria. The cost is that it lands
+   as one larger change rather than 58 reviewable ones; the alternative's cost is reasoning about a structure
+   that is going to be deleted, once per finding.
+2. **One visible host per session**, not a multiplexer. The argument is the pty's shape — one
+   `(cols, rows)` and one stateful stream, so two visible hosts at different sizes is a contradiction rather
+   than a bug, which is what M2 looks like in practice. It holds whether or not today's guards exist. The
+   cost is the case it refuses: watching one terminal in a popout on a second monitor, which would need two
+   xterms over one pty with replay. Revisit if that case is wanted.
+3. **F14: fix the mechanism, keep the capability.** An earlier revision of this document chose to
+   delete `injectShellIntegration` and take titles from xterm's `onTitleChange`. That was wrong, and the
+   deferred [terminal runtime refactor](../deferred/terminal-runtime-refactor-target.md) is why: its
+   agent-observation pipeline runs on *"parsed OSC command markers for cwd, prompt, command start/end and
+   exit status"* and names VS Code's shell integration as the design to follow. Deleting that capability now
+   means rebuilding it two plans later.
+   What is defective is the **mechanism**, not the feature: `injectShellIntegration` types into the user's
+   interactive shell, which echoes, races startup, needs a branch per shell and has none for PowerShell or
+   cmd (X4). Replace it with launch-time injection — `--init-file`, `ZDOTDIR` over a temporary directory
+   that sources the user's, `XDG_DATA_DIRS`, `-NoExit` — and ship the rc scripts as app assets. That also
+   turns X4 from a dead end into a supported platform, and treats reported paths and titles as untrusted
+   metadata, which the refactor requires.
+   The cheap deletion remains available if the refactor is abandoned; it is a false economy while it is not.
+4. **S2's remediation is the code fix only.** The log files already written are out of scope: the app log is
+   off-limits for cleanup. The fix stops the accumulation, which is the whole of what is in scope here.

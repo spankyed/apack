@@ -81,7 +81,19 @@ export default defineConfig({
 });
 ```
 
-The run's dir is named `<prefix><pid>-XXXXXX`; `isolatedDataDir` first removes dirs with its prefix whose process is gone, left by runs that crashed before their teardown. The per-worker split matters when spec files run in parallel: without it, a spec resetting the media store deletes another worker's files mid-test. The entry uses only Node built-ins (`src/vitest.ts`, `vitest-worker.ts`, `vitest-teardown.ts`), so it loads without the `@apackdev/source` condition. The bundle ships the three as separate entries, since vitest loads the worker and teardown modules by path. The global setup also `provide`s the vitest project's root (`PROJECT_ROOT_KEY`), which the harness `inject`s to find the pack. A pack's config sets no `resolve.conditions`: a pack resolves the `@apackdev` packages' published `dist` whether they came from the registry or a checkout link, so there is nothing to select, and `check:specifiers` fails a pack config that declares the `@apackdev/source` condition. This is the config `apack pack init` scaffolds (`apack-cli/src/commands/init.ts`). default-setup's `vitest.config.ts` uses `isolatedDataDir` and is a pack config too: it also declares no condition, and `npm run typecheck:pack` and `npm run test:external-pack` run `packages:ensure` first so the `dist` it reads is current.
+**A test is bounded by its progress, never by the clock.** `definePackTestConfig` turns vitest's clock off
+(`testTimeout: 0`, `hookTimeout: 0`), and `isolatedDataDir`'s setup files include the progress guard
+(`src/vitest-progress-guard.ts`, a bundle entry loaded by path like the worker), which fails a test or a file's hooks
+whose process tree goes `IDLE_MS` without CPU, and a test that spends its CPU budget: the config's
+`apack.testCpuMs`, or the test's own `{ meta: cpuBudget(ms) }` from this entry. A busy machine stretches a test's
+wall time and leaves its CPU alone, so a slow test is never failed for it. Each test's spend is written to its
+`meta.cpuMs`, which the repo's reporter reads. The guard reads the worker's own CPU from `process.cpuUsage()` and
+its children's from `ps`, the reading `boundedSpawn` takes, and judges only the stall under `APACK_CEILING=off`.
+`cpuBudget` is a function rather than a typed `meta` field because vitest declares `TaskMeta` in `@vitest/runner`,
+which this package does not depend on. `@app/repo-checks`' `progress-guard.integration.spec.ts` is the guard over
+a real run.
+
+The run's dir is named `<prefix><pid>-XXXXXX`; `isolatedDataDir` first removes dirs with its prefix whose process is gone, left by runs that crashed before their teardown. The per-worker split matters when spec files run in parallel: without it, a spec resetting the media store deletes another worker's files mid-test. The entry uses only Node built-ins (`src/vitest.ts`, `vitest-worker.ts`, `vitest-teardown.ts`), so it loads without the `@apackdev/source` condition; the guard inlines `@apackdev/host`'s process reading. The bundle ships them as separate entries, since vitest loads the worker, guard and teardown modules by path. The global setup also `provide`s the vitest project's root (`PROJECT_ROOT_KEY`), which the harness `inject`s to find the pack. A pack's config sets no `resolve.conditions`: a pack resolves the `@apackdev` packages' published `dist` whether they came from the registry or a checkout link, so there is nothing to select, and `check:specifiers` fails a pack config that declares the `@apackdev/source` condition. This is the config `apack pack init` scaffolds (`apack-cli/src/commands/init.ts`). default-setup's `vitest.config.ts` uses `isolatedDataDir` and is a pack config too: it also declares no condition, and `npm run typecheck:pack` and `npm run test:external-pack` run `packages:ensure` first so the `dist` it reads is current.
 
 ## Keeping a checkout's packages current
 
@@ -127,7 +139,7 @@ Three things follow.
   and a check that runs as a spec file loads runs whenever the scheduler happened to start it. Door 5
   reported that instead of waiting until 2026-10-08, which failed a chain run about the race rather than
   the code — two pool steps each ensure the packages, so one can build while the other's first spec loads.
-  What is still named is a holder that outlasted the bound, which is a wedge rather than a queue.
+  What is still named is a holder that stopped working while it held the lock, which is a wedge rather than a queue.
 
 One path is deliberately not in the table twice. `npm run dev` reaches door 3, because its
 dev launcher runs the built-in pack's watcher with `apack pack build --watch`, whose builds ensure —

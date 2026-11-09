@@ -1,7 +1,22 @@
 # Migrate the embedded terminal from xterm.js to ghostty-web
 
-Status: deferred by request. This document authorizes no implementation. Revisit when terminal work is
-scheduled and a compatibility spike can demonstrate that ghostty-web meets the contracts below.
+Status: deferred by request. This document authorizes no implementation. Revisit when a compatibility spike
+can demonstrate that ghostty-web meets the contracts below.
+
+**This is now the follow-on, not the predecessor.**
+[goal-terminal-ownership](../goals/goal-terminal-ownership.md) decided to keep xterm.js and put emulator
+replacement out of its scope, so the order this document originally named is inverted: ownership moves
+first, and that goal's presentation phase builds the seam this migration becomes an implementation swap
+behind. Two consequences worth knowing before activation. The pool this document calls its primary
+replacement point will no longer exist in the shape described here — a session owns the emulator through a
+narrow seam, which is less to replace, not more. And the renderer's parse is a **replica**, never an
+authority: the broker owns terminal facts, so this migration no longer has to prove that a browser engine
+can be the source of truth for them.
+
+One pairing becomes available only here: a native Ghostty core and a ghostty-web renderer share a lineage
+and so cannot disagree about a screen. The goal's D11 chose a Rust VT crate precisely because that benefit
+was not purchasable while the renderer is xterm.js, and named the snapshot contract's missing
+binary-compatibility guarantee as what to weigh against it. That is the trade to reopen at activation.
 
 Written 2026-10-21 against the current checkout. Re-audit source paths and the selected upstream release
 before starting.

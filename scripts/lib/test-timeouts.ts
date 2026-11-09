@@ -33,6 +33,12 @@ export interface TimeoutOverride {
   /** Milliseconds, or `undefined` where the argument is not a literal this can evaluate */
   readonly ms: number | undefined;
   readonly line: number;
+  /**
+   * What the number bounds. `cpu` is a test's `meta: cpuBudget(ms)`, the CPU it may spend before the progress guard
+   * fails it (`@apackdev/testing`'s `vitest-progress-guard.ts`). `clock` is a timeout vitest measures on the clock —
+   * a trailing argument, or `timeout` in a test's options — which a busy machine reaches, so the rule refuses one.
+   */
+  readonly kind: 'cpu' | 'clock';
 }
 
 /** How an override is named in the exceptions list, and in anything a person has to read */
@@ -75,16 +81,34 @@ export function timeoutOverrides(absFile: string, repoRoot: string): TimeoutOver
       let head: ts.Node = node.expression;
       while (ts.isPropertyAccessExpression(head) || ts.isCallExpression(head)) head = head.expression;
       if (ts.isIdentifier(head) && RUNNERS.has(head.text)) {
-        const argument = node.arguments[HOOKS.has(head.text) ? 1 : 2];
-        if (argument) {
-          const first = node.arguments[0];
-          found.push({
-            file: path.relative(repoRoot, absFile),
-            runner: head.text,
-            name: first && ts.isStringLiteralLike(first) ? first.text : '',
-            ms: ts.isSpreadElement(argument) ? undefined : constantMs(argument),
-            line: source.getLineAndCharacterOfPosition(argument.getStart(source)).line + 1,
-          });
+        const first = node.arguments[0];
+        const record = (at: ts.Node, kind: TimeoutOverride['kind'], ms: number | undefined) => found.push({
+          file: path.relative(repoRoot, absFile),
+          runner: head.text,
+          name: first && ts.isStringLiteralLike(first) ? first.text : '',
+          ms,
+          line: source.getLineAndCharacterOfPosition(at.getStart(source)).line + 1,
+          kind,
+        });
+        const isFunction = (candidate: ts.Node) => ts.isArrowFunction(candidate) || ts.isFunctionExpression(candidate);
+        // A trailing timeout: whatever sits after the function, which a test's options object never does
+        const trailing = node.arguments[HOOKS.has(head.text) ? 1 : 2];
+        if (trailing && !isFunction(trailing) && !ts.isObjectLiteralExpression(trailing)) {
+          record(trailing, 'clock', ts.isSpreadElement(trailing) ? undefined : constantMs(trailing));
+        }
+        // A test's options, the second argument: `timeout` there is the same clock, `meta.cpuBudgetMs` is CPU
+        const options = HOOKS.has(head.text) ? undefined : node.arguments[1];
+        if (options && ts.isObjectLiteralExpression(options)) {
+          for (const property of options.properties) {
+            if (!ts.isPropertyAssignment(property) || !ts.isIdentifier(property.name)) continue;
+            if (property.name.text === 'timeout') record(property.initializer, 'clock', constantMs(property.initializer));
+            // `meta: cpuBudget(ms)`, `@apackdev/testing/vitest`'s helper and the one way a test declares it
+            const meta = property.name.text === 'meta' ? property.initializer : undefined;
+            if (meta && ts.isCallExpression(meta) && ts.isIdentifier(meta.expression) && meta.expression.text === 'cpuBudget') {
+              const [ms] = meta.arguments;
+              record(ms ?? meta, 'cpu', ms === undefined || ts.isSpreadElement(ms) ? undefined : constantMs(ms));
+            }
+          }
         }
       }
     }
@@ -190,7 +214,121 @@ export function bareWaits(absFile: string, repoRoot: string): BareWait[] {
   return found;
 }
 
-/** Every `*.spec.ts` under a directory */
+/**
+ * A deadline measured on the clock, for work whose duration depends on how busy the machine is.
+ *
+ * A busy machine reaches such a deadline while the work is still making progress, and the failure reads like a
+ * hang. What bounds work instead is its progress (`@apackdev/sdk/progress`: a stall window over the
+ * CPU a process tree spends, a CPU ceiling) or, in a spec, the vitest progress guard around the whole test.
+ *
+ * Five shapes, each a position in a call that the tree can name:
+ * - a `timeout` option handed to a method (`vi.waitFor(fn, { timeout })`, `expect.poll`, Playwright's waits and
+ *   assertions, `toPass`), and a bare number as `vi.waitFor` / `expect.poll`'s second argument;
+ * - a `timeout` option on a `child_process` call, including one made through `promisify(execFile)`. The `timeout`
+ *   `execFileWhileWorking` takes is CPU, so it is not one;
+ * - `AbortSignal.timeout(ms)` and `_byDeadline(...)`;
+ * - Playwright's `test.setTimeout(ms)`;
+ * - `page.waitForTimeout(ms)`, a sleep under another name.
+ *
+ * A `timeout` of `0` turns a clock off rather than setting one, and a test runner's own timeout (`it(…, ms)`) is
+ * `timeoutOverrides`' subject, so neither counts here. Not seen: a `setTimeout` that rejects or kills, which is
+ * the same deadline written by hand and indistinguishable by syntax from a debounce or a grace period.
+ */
+export interface Clock {
+  readonly file: string;
+  readonly line: number;
+  /** What was called, as written: `vi.waitFor`, `execFileSync`, `AbortSignal.timeout` */
+  readonly what: string;
+}
+
+const CHILD_PROCESS = new Set(['node:child_process', 'child_process']);
+const WAITERS = new Set(['vi.waitFor', 'expect.poll']);
+/** Matchers whose argument is the value expected, so a `timeout` in it is data rather than an option */
+const DATA_MATCHERS = new Set([
+  'toEqual', 'toStrictEqual', 'toMatchObject', 'objectContaining', 'toHaveBeenCalledWith', 'toHaveBeenLastCalledWith',
+  'toHaveBeenNthCalledWith', 'toContainEqual', 'toHaveProperty',
+]);
+
+const isZero = (node: ts.Node): boolean => ts.isNumericLiteral(node) && Number(node.text) === 0;
+
+/** The `timeout` an options object sets, unless it sets none or turns the clock off with `0` */
+function timeoutIn(node: ts.Node | undefined): boolean {
+  if (node === undefined || !ts.isObjectLiteralExpression(node)) return false;
+  return node.properties.some((property) => {
+    if (ts.isShorthandPropertyAssignment(property)) return property.name.text === 'timeout';
+    // A timer's handle stored under the name is the hand-written kind, which this does not claim to see
+    const handle = (value: ts.Expression) => ts.isCallExpression(value) && dotted(value.expression) === 'setTimeout';
+    return ts.isPropertyAssignment(property) && ts.isIdentifier(property.name) && property.name.text === 'timeout'
+      && !isZero(property.initializer) && !handle(property.initializer);
+  });
+}
+
+/** `a.b.c` for a callee made of names, `undefined` for anything computed */
+function dotted(node: ts.Expression): string | undefined {
+  if (ts.isIdentifier(node)) return node.text;
+  if (ts.isPropertyAccessExpression(node)) {
+    const left = dotted(node.expression);
+    return left === undefined ? undefined : `${left}.${node.name.text}`;
+  }
+  return undefined;
+}
+
+/** Every clocked deadline in one file */
+export function clockedDeadlines(absFile: string, repoRoot: string): Clock[] {
+  const source = ts.createSourceFile(absFile, fs.readFileSync(absFile, 'utf8'), ts.ScriptTarget.Latest, true);
+  // What reaches `child_process`: its bindings, its namespaces, and the consts bound to `promisify(<one of them>)`
+  const spawners = new Set<string>();
+  const namespaces = new Set<string>();
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)
+      || !CHILD_PROCESS.has(statement.moduleSpecifier.text)) continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings !== undefined && ts.isNamedImports(bindings)) for (const element of bindings.elements) spawners.add(element.name.text);
+    if (bindings !== undefined && ts.isNamespaceImport(bindings)) namespaces.add(bindings.name.text);
+    if (statement.importClause?.name !== undefined) namespaces.add(statement.importClause.name.text);
+  }
+  const promisified = (node: ts.Node): boolean => ts.isCallExpression(node) && dotted(node.expression)?.split('.').at(-1) === 'promisify'
+    && node.arguments.length === 1 && ts.isIdentifier(node.arguments[0]!) && spawners.has(node.arguments[0].text);
+  const spawns = (callee: ts.Expression): boolean => {
+    if (ts.isIdentifier(callee)) return spawners.has(callee.text);
+    if (promisified(callee)) return true;
+    return ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) && namespaces.has(callee.expression.text);
+  };
+
+  const found: Clock[] = [];
+  const record = (at: ts.Node, what: string) => found.push({
+    file: path.relative(repoRoot, absFile),
+    line: source.getLineAndCharacterOfPosition(at.getStart(source)).line + 1,
+    what,
+  });
+  const visit = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer !== undefined && promisified(node.initializer)) {
+      spawners.add(node.name.text);
+    }
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression;
+      const name = dotted(callee) ?? (promisified(callee) ? 'promisify' : undefined);
+      let head: ts.Node = callee;
+      while (ts.isPropertyAccessExpression(head) || ts.isCallExpression(head)) head = head.expression;
+      const runner = ts.isIdentifier(head) && RUNNERS.has(head.text);
+      const method = ts.isPropertyAccessExpression(callee) ? callee.name.text : undefined;
+      if (spawns(callee)) {
+        if (node.arguments.some(timeoutIn)) record(node, name ?? 'child_process');
+      } else if (name === 'AbortSignal.timeout' || name === '_byDeadline' || name === 'test.setTimeout' || method === 'waitForTimeout') {
+        record(node, name ?? method!);
+      } else if (name !== undefined && WAITERS.has(name) && node.arguments[1] !== undefined
+        && !ts.isObjectLiteralExpression(node.arguments[1]) && !isZero(node.arguments[1])) {
+        record(node, name);
+      } else if (method !== undefined && !runner && !DATA_MATCHERS.has(method) && node.arguments.some(timeoutIn)) {
+        record(node, name ?? method);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
+}
+
 /**
  * The size of the test target a file belongs to, which is what decides the timeout budget it fits inside.
  *

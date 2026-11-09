@@ -8,12 +8,13 @@ import { PACK_LAYOUT, readInstalledContributionCatalog, readPackBuild, stagedFil
 import { readPackBuildInputs } from '@apackdev/host/build/pack-build-inputs';
 import { packagesBuiltOrRefuse, REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { build } from '../../src/commands/build.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 packagesBuiltOrRefuse('npm run packages:ensure');
 let root: string;
 afterEach(() => { if (root) fs.rmSync(root, { recursive: true, force: true }); });
 
-it('publishes and reuses editor definitions without globals or frontend activation, readable from an installed copy without source', async () => {
+it('publishes and reuses editor definitions without globals or frontend activation, readable from an installed copy without source', { meta: cpuBudget(2 * 60_000 + 20_000) }, async () => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-dsl-snapshot-'));
   const author = path.join(root, 'author');
   packFixture({ at: author, manifest: { id: 'editor-data', name: 'Editor data', features: {},
@@ -46,4 +47,4 @@ it('publishes and reuses editor definitions without globals or frontend activati
     expect(stagedFileHashes(repeated.integrity)).toEqual(stagedFileHashes(first.integrity));
     expect(readPackBuildInputs(path.join(author, 'dist'), repeated.integrity).options).toEqual(['--skip-generate']);
   } finally { process.chdir(cwd); }
-}, 2 * 60_000 + 20_000);
+});

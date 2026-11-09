@@ -15,6 +15,7 @@ import { packagesBuiltOrRefuse, REPO_ROOT } from '@apackdev/host/build/packages-
 import { CLI, buildPack, callCli, packageJson, preparePack, tsconfig } from '../_support/pack-builds';
 import { runCommand } from '../_support/run-command.ts';
 import { PACK_LAYOUT } from '@apackdev/host/packs';
+import { cpuBudget } from '@apackdev/testing/vitest';
 
 /** Skips without built packages, and refuses rather than reading a stale `dist` */
 const PACKAGES_BUILT = packagesBuiltOrRefuse('npm run packages:build (or npm test -w @apackdev/cli, which builds them)');
@@ -70,7 +71,7 @@ beforeAll(async () => {
   const appDir = preparePack(parent, 'app-pack', pack('app-pack', { App: 'App' }, on('left-pack', 'right-pack')), modules);
   // produces: the app-pack build whose snapshot the tests read (its output is also checked for conflicts)
   built = await callCli(appDir, 'build');
-}, 4 * 60_000);
+});
 
 afterAll(() => {
   if (parent) fs.rmSync(parent, { recursive: true, force: true });
@@ -115,7 +116,7 @@ describe.skipIf(!PACKAGES_BUILT)('a pack depending on two packs that share an an
 describe.skipIf(!PACKAGES_BUILT)('a collision that is real', () => {
   // The diamond fix must not swallow this: two packs each declaring `Memo` themselves is not a diamond,
   // and a dependent of both cannot tell which one it means.
-  it('still fails when two independent packs declare the same entity', async () => {
+  it('still fails when two independent packs declare the same entity', { meta: cpuBudget(2 * 60_000 + 20_000) }, async () => {
     const modules = path.join(REPO_ROOT, 'node_modules');
     const rival = 'rival-pack';
     await buildPack(preparePack(parent, rival, pack(rival, { Memo: 'Memo' }), modules), rival);
@@ -126,6 +127,6 @@ describe.skipIf(!PACKAGES_BUILT)('a collision that is real', () => {
 
     expect(clash.code, clash.output).not.toBe(0);
     expect(clash.output).toMatch(/entity "Memo" declared by both/);
-  }, 2 * 60_000 + 20_000);
+  });
 });
 

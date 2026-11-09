@@ -393,6 +393,21 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
       return permissionMode
     },
 
+    /**
+     * **Bounded by the child's own progress, never by a clock.**
+     *
+     * Closing stdin signals end-of-input, but acting on it is the CLI's choice, and a child that spawned
+     * anything which inherited its stdio holds the pipe open whether it means to or not. So this used to
+     * wait for ever: the caller never returned, and a conversation read as busy for the rest of the app's
+     * run.
+     *
+     * A child that is still working is waited on for as long as it keeps working — a deadline on the clock
+     * would refuse a busy machine's child for the load it ran under. One that has gone silent without
+     * exiting is terminated instead.
+     *
+     * A genuine exit failure still throws, as it always did: only the silent-child path is new, and it is
+     * the one case where there is nothing left to wait for.
+     */
     async close(): Promise<void> {
       promptHosts.close()
       hostControls.close()

@@ -23,7 +23,6 @@
     "./build/pack-workdir": "./src/build/pack-workdir.ts",
     "./build/own-module-specifiers": "./src/build/own-module-specifiers.ts",
     "./build/packages-built": "./src/build/packages-built.ts",
-    "./build/process-progress": "./src/build/process-progress.ts",
     "./build/published-manifest": "./src/build/published-manifest.ts",
     "./build/shared-deps": "./src/build/shared-deps.ts",
     "./build/source-resolution": "./src/build/source-resolution.ts",

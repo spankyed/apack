@@ -3,12 +3,12 @@ import * as path from 'node:path';
 import { BUILD_UNITS, repoRelative, REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { PUBLISH_TREE } from '@apackdev/host/build/published-manifest';
 import { coresFor } from './core-budget.ts';
-import type { TimeoutClass } from './step-timeouts.ts';
+import type { BudgetClass } from './step-budgets.ts';
 import { UNIT_SUITES, type UnitSuite } from './unit-suites.ts';
 import { CONFIG_BY_HALF, hasHalf, type Half } from './spec-halves.ts';
 import { dependencySource, PACKAGE_DIRS, workspaceDeps } from './workspace-deps.ts';
-import { LEG_TIMEOUT, scopeOf, TYPECHECK_LEGS, type Leg } from './typecheck-legs.ts';
-import { API_CHECK_TIMEOUT } from './api-report-packages.ts';
+import { LEG_BUDGET, scopeOf, TYPECHECK_LEGS, type Leg } from './typecheck-legs.ts';
+import { API_CHECK_BUDGET } from './api-report-packages.ts';
 
 /**
  * The pre-merge chain's steps and what each is allowed to read. Separate from `scripts/chain.ts` because
@@ -140,12 +140,12 @@ export interface ChainStep {
   readonly expensive?: true;
   /**
    * How long it may run before its process group is killed, by the kind of work it is
-   * (`TIMEOUT_MS`, `scripts/lib/step-timeouts.ts`).
+   * (`BUDGET_MS`, `scripts/lib/step-budgets.ts`).
    *
-   * Declared, and never derived from what a step costs: a class carries no machine (`step-timeouts.ts`).
+   * Declared, and never derived from what a step costs: a class carries no machine (`step-budgets.ts`).
    * Required, because a step with no class has no bound — the hang `boundedSpawn` was written for.
    */
-  readonly timeout: TimeoutClass;
+  readonly budget: BudgetClass;
 }
 
 /** Every step, by name, for validating the derived edges */
@@ -534,7 +534,7 @@ export const needsApp = (step: Pick<ChainStep, 'inputs'>): boolean =>
 /** The Electron entry and the dev-mode switch: not inside a package, and read by anything that starts the app */
 const APP_ENTRY = ['packages/entry-point.mjs', 'packages/dev-mode.js'];
 /** The wrapper a shell-script step runs through, and the module that bounds it */
-const BOUNDED_RUNNER = ['scripts/bounded.ts', 'scripts/lib/bounded-spawn.ts', 'packages/apack-host/src/build/process-progress.ts'];
+const BOUNDED_RUNNER = ['scripts/bounded.ts', 'scripts/lib/bounded-spawn.ts', 'packages/apack-sdk/src/progress.ts'];
 
 /**
  * What *runs* the app's builds, as against what those builds read.
@@ -552,7 +552,7 @@ const BOUNDED_RUNNER = ['scripts/bounded.ts', 'scripts/lib/bounded-spawn.ts', 'p
  * `scripts/bounded.ts` wrapper a shell-script step runs under, and declaring the wrapper would re-run four
  * builds for an edit that cannot reach them.
  */
-const APP_RUNNER = ['scripts/build-runtime.ts', 'scripts/lib/runtime-build-legs.ts', 'scripts/lib/bounded-spawn.ts', 'packages/apack-host/src/build/process-progress.ts',
+const APP_RUNNER = ['scripts/build-runtime.ts', 'scripts/lib/runtime-build-legs.ts', 'scripts/lib/bounded-spawn.ts', 'packages/apack-sdk/src/progress.ts',
   'scripts/lib/chain-schedule.ts', 'scripts/lib/exit-on-epipe.ts', 'scripts/lib/measure.ts'];
 
 /**
@@ -832,9 +832,9 @@ const TYPECHECK_STEPS: readonly ChainStep[] = TYPECHECK_LEGS
   .filter((leg) => leg.name !== 'packages:ensure')
   .map((leg) => ({
     name: leg.name,
-    // Declared beside the legs (`LEG_TIMEOUT`), so the runner and this copy of the same steps cannot
+    // Declared beside the legs (`LEG_BUDGET`), so the runner and this copy of the same steps cannot
     // disagree about it
-    timeout: LEG_TIMEOUT,
+    budget: LEG_BUDGET,
     inputs: legInputs(leg),
     // A leg reading every source tree reads around the fixture packs' build output for the same reason
     // the single step did: `tsc -p tests` compiles `e2e/**` only and `check:specifiers` filters
@@ -859,7 +859,7 @@ const POOL_STEPS: readonly ChainStep[] = (['host', 'pack'] as const).map((kind) 
   return {
     name: `test:unit:${kind}`,
     // A pool fans out across workers
-    timeout: 'suite' as const,
+    budget: 'suite' as const,
     ...inputsForSuites(suites, 'fast'),
     // It keeps a cache of its own, so the chain's `--all` has to reach inside it
     forceArgs: ['--all'],
@@ -879,7 +879,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
   // its inputs had not moved — while `packagesBuiltOrRefuse()` refused, because the stamps are what it reads,
   // and every step that guards on the built packages would fail at collection. The step's own check is
   // content-addressed and returns in ~0.3s warm, so a chain-level cache on top buys nothing.
-  { name: 'packages:ensure', timeout: 'suite',
+  { name: 'packages:ensure', budget: 'suite',
     neverCachedBecause: 'what it guarantees is recorded in stamps of its own, which this fingerprint cannot '
       + 'see; its check is ~0.3s warm, so a cache on top only adds a record that can disagree',
     inputs: [...PACKAGE_BUILD_INPUTS, 'scripts/ensure-packages-built.ts'], outputs: PACKAGE_BUILD_OUTPUTS },
@@ -905,7 +905,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
    */
   // `suite` because it fans out — three extractions at once (`scripts/api-check.ts`) — which is the kind of
   // work that rung names. `chain-graph.spec.ts` holds every step to the rung its work implies
-  { name: 'api:check', timeout: API_CHECK_TIMEOUT,
+  { name: 'api:check', budget: API_CHECK_BUDGET,
     // The three packages it reports on, and nothing else that was built: not the CLI and testing bundles it
     // never opens, nor the `publish/` trees, which are a staged copy of the same declarations.
     //
@@ -921,7 +921,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
       'packages/apack-ears/package.json', 'packages/apack-sdk/package.json', 'packages/apack-ui/package.json',
       'scripts/api-check.ts', 'scripts/lib/api-report-packages.ts', 'scripts/lib/exit-on-epipe.ts',
       // `bounded-spawn` is how this runs the three extractions
-      'scripts/lib/bounded-spawn.ts', 'packages/apack-host/src/build/process-progress.ts',
+      'scripts/lib/bounded-spawn.ts', 'packages/apack-sdk/src/progress.ts',
       'scripts/api-reports.ts', 'scripts/component-contracts.ts', 'scripts/lib/api-entries.ts',
       'packages/apack-ears/etc', 'packages/apack-sdk/etc', 'packages/apack-ui/etc',
       'packages/apack-ears/tsconfig.api-extractor.json', 'packages/apack-sdk/tsconfig.api-extractor.json',
@@ -932,7 +932,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
   // Nothing it runs writes into a tree another step reads, so it takes no mutex: `scripts/packages-check.ts`
   // packs each tarball `attw` wants into a temp directory outside the repository, where `attw --pack` packed
   // it inside the tree it was checking, which conflicted with every other step reading those trees.
-  { name: 'packages:check', timeout: 'quick',
+  { name: 'packages:check', budget: 'quick',
     // Its own script and what that reaches, as `api:check` declares its own: `packages-check-plan.ts` decides
     // which tool is asked of which tree, and `published-manifest.ts` is where `packTree` lives — so an edit to
     // either moves what this step checks while a fingerprint over the trees alone would read fresh. The two
@@ -946,8 +946,8 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
       'packages/apack-host/src/replace-dir.ts'] },
   // Build the built-in pack before build:runtime reads its outputs.
   // Includes cold compiler capture, codegen, all bundles and final source/input verification.
-  { name: 'build:default-setup', timeout: 'suite', outputs: PACK_OUTPUTS,
-    // Compiler startup captures every root in the pack tsconfig, including its tests.
+  { name: 'build:default-setup', budget: 'suite', outputs: PACK_OUTPUTS,
+    // Its sources and its manifest, not its tests: `apack pack build` never reads those
     //
     // The CLI's sources reach here through `PACKAGE_BUILD_OUTPUTS`, since an edit to them makes the
     // `@apackdev/cli` build unit stale and `packages:ensure` rewrites the bundle this declares — and what the
@@ -959,7 +959,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     inputs: PACK_DERIVED_READS },
   // Compare the committed report with a verified current build; never regenerate shared inputs here.
   // Source/dependency freshness uses the build's recorded context, not this inspecting command's compiler.
-  { name: 'facade:check', timeout: 'quick',
+  { name: 'facade:check', budget: 'quick',
     inputs: [...PACK_DERIVED_READS, ...PACK_OUTPUTS] },
   // The fixture packs depend on default-setup, so they need its snapshot from build:default-setup
   //
@@ -971,7 +971,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
   // condition to re-check: were this step's work ever to become `apack pack build` alone, or were that skip to
   // grow to cover the typecheck or the specs, it would be stale for a reason its inner layer cannot see, so
   // it would run, skip everything and stamp green.
-  { name: 'test:external-pack:contract', timeout: 'suite', outputs: FIXTURE_OUTPUTS,
+  { name: 'test:external-pack:contract', budget: 'suite', outputs: FIXTURE_OUTPUTS,
     // It declares `tests/packs` for the pack sources; the Playwright output under each pack is written
     // by `:app`, changes every run, and is read by nothing
     excludes: FIXTURE_TEST_OUTPUT,
@@ -979,7 +979,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
       'tests/acceptance/external-pack/support.sh', ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS] },
   // A full shipped-pack fork is a separate producer, not work charged to the fixture contract suite. Its build,
   // archive and housekeeping phases take shares of this step's bound (`DEFAULT_FORK_BUDGET_MS`).
-  { name: 'test:external-pack:fork', timeout: 'scenario', outputs: [DEFAULT_FORK_OUTPUT],
+  { name: 'test:external-pack:fork', budget: 'scenario', outputs: [DEFAULT_FORK_OUTPUT],
     inputs: [...PACK_DERIVED_READS, ...BOUNDED_RUNNER, 'tests/acceptance/external-pack/prepare-default-pack-fork.ts',
       ...['apack-host', ...workspaceDeps('apack-host')].flatMap(dependencySource), ...PACK_OUTPUTS] },
   // The widest inputs in the table, and honestly so: it compiles every workspace, the scripts and the
@@ -990,13 +990,13 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
   // never the app — which is why they can run before `build` rather than behind it.
   // Needs `build:default-setup` and not just `packages:ensure`, because `dependency-runtime` builds a pack that depends
   // on default-setup and so reads its `dist`. Table order promises nothing (`orderedSteps`), so the edge is declared.
-  { name: 'test:integration', timeout: 'acceptance', expensive: true,
+  { name: 'test:integration', budget: 'acceptance', expensive: true,
     // It keeps a cache of its own, like the two unit pools, so `--all` has to reach inside it
     forceArgs: ['--all'],
     ...inputsForSuites(INTEGRATION_SUITES, 'integration') },
   // Native runtime and live-watcher scenarios, beside integration rather than inside it: same reads, and a
   // run of its own so it can be scheduled, selected and sharded apart from the ordinary integration specs.
-  { name: 'test:native', timeout: 'acceptance', linuxOnMac: true, expensive: true,
+  { name: 'test:native', budget: 'acceptance', linuxOnMac: true, expensive: true,
     forceArgs: ['--all'],
     ...inputsForSuites(NATIVE_SUITES, 'native') },
   // build:default-setup owns pack outputs; build:runtime only builds the four app workspaces.
@@ -1005,7 +1005,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
   // frontend fetched over `pack://`, so what this reads of a pack is `PACK_OUTPUTS` — its `dist`, which holds
   // both bundles. A pack source edit reaches this step through `build:default-setup`. `check:tiers` and the
   // app build's own header keep an app bundle from tracing into a pack's `src`
-  { name: 'build:runtime', timeout: 'suite', outputs: APP_OUTPUTS,
+  { name: 'build:runtime', budget: 'suite', outputs: APP_OUTPUTS,
     inputs: [...ROOT, ...APP_RUNNER, ...['renderer', 'api', 'main', 'preload', 'apack-host'].flatMap(workspace),
       'packages/api/tsup.config.ts', 'build/build-metadata.ts', 'package.json', ...APP_ENTRY,
       ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS] },
@@ -1013,7 +1013,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
   // app workspace bundle stays identical, so their cache keys must include PACK_OUTPUTS too.
   // Each fixture pack's Playwright suite on one worker per three cores, with the default-fork lifecycle
   // beside them where there are cores for it.
-  { name: 'test:external-pack:app', timeout: 'scenario', expensive: true,
+  { name: 'test:external-pack:app', budget: 'scenario', expensive: true,
     // Its own Playwright output, rewritten every run
     excludes: FIXTURE_TEST_OUTPUT,
     // PACKAGE_BUILD_OUTPUTS because the fixture it drives *is* one: `@apackdev/testing` resolves to its
@@ -1044,7 +1044,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
   // declared — so an unchanged stamp means the same app, and running it again asks a question already
   // answered. Uncached it put the warm chain back to 5.6s from 0.9s, which is most of what taking the
   // suite off the gate bought.
-  { name: 'test:smoke', timeout: 'suite',
+  { name: 'test:smoke', budget: 'suite',
     // The fixture writes the app's stdout and stderr here (`app-<workerIndex>.log`), which is the only
     // account of why an app did not start or did not close. Playwright clears the directory on the way in,
     // so the next run would take it
@@ -1057,7 +1057,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
   // built. It became a chain step, and then the reasoning about it became about caching a flaky pass —
   // which is a question you only ask of a regression gate. It has not caught one. Off the chain it costs
   // nothing and is still there when you want it, which is what it was for.
-  { name: 'test:e2e', timeout: 'suite',
+  { name: 'test:e2e', budget: 'suite',
     optInBecause: 'it is a harness for driving the app, not a regression gate; nothing has needed it to fail',
     neverCachedBecause: 'it drives real Electron, and a flaky pass cached green hides an intermittent failure',
     evidence: ['.apack/tests/results'],
@@ -1078,12 +1078,12 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
    * Neither half deletes that dir: it is the author half's declared output, and a step whose output is gone
    * reads as never-built. The author half clears the previous run's at its start.
    */
-  { name: 'test:packaged-authoring:author', timeout: 'scenario',
+  { name: 'test:packaged-authoring:author', budget: 'scenario',
     outputs: ['.apack/tests/authoring-handoff', '.apack/tests/authoring-handoff/work-ready', '.apack/tests/authoring-handoff/archive'],
     // APACK_HOST selects default-setup's built snapshot for the external pack's dependency.
     inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/acceptance/packaged-authoring/test-packaged-authoring-author.sh',
       'tests/acceptance/packaged-authoring/support.sh', ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS] },
-  { name: 'test:packaged-authoring:app', timeout: 'suite', expensive: true,
+  { name: 'test:packaged-authoring:app', budget: 'suite', expensive: true,
     inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/acceptance/packaged-authoring/test-packaged-authoring-app.sh',
       'tests/acceptance/packaged-authoring/support.sh', '.apack/tests/authoring-handoff', ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
 ];

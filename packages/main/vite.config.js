@@ -121,6 +121,7 @@ function handleHotReload() {
        */
       const { _inferElectronAppEnv, resolveAppEnvironment } = await import('@apackdev/sdk/env');
       const { debugPortArgsFor, publishSession, readDevToolsPort } = await import('@apackdev/host/dev-session');
+      const { processWork } = await import('@apackdev/sdk/progress');
       const env = _inferElectronAppEnv({
         playwrightTest: process.env.PLAYWRIGHT_TEST === 'true',
         isPackaged: false,
@@ -161,7 +162,9 @@ function handleHotReload() {
           // The build this spawn resolves, not a guess: asking with no argument threw here, which published
           // nothing and reported `not attachable` on a run that was otherwise perfectly fine
           const { userDataDir } = resolveAppEnvironment({ env });
-          const debugPort = await readDevToolsPort(userDataDir, { after: launchedAt });
+          if (spawned.pid === undefined) return;
+          // For as long as Electron works to start: the port appears once Chromium is up
+          const debugPort = await readDevToolsPort(userDataDir, { after: launchedAt, work: processWork(spawned.pid) });
           if (spawned !== electronApp) return;  // a rebuild replaced it while the port was being waited for
           // **No fallback to this process's pid.** The field means "the process to signal to end this", and
           // for this launcher that is Electron: the watcher exits *with* it (the listener below), never the

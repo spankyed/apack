@@ -19,6 +19,7 @@ import { copySecretsInto } from '../app/profile-secrets.ts';
 import { createDevHold, exited } from '../app/dev-hold.ts';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
+import { describeRefusal, processWork, watchWork } from '@apackdev/sdk/progress';
 import type { AppEnv } from '@apackdev/sdk/env';
 import { readApiEndpoint } from '@apackdev/host/process-liveness';
 import { withoutSourceCondition } from '@apackdev/host/build/source-resolution';
@@ -223,17 +224,24 @@ export function idleVerdict(lastAttachedMs: number, nowMs: number, idleMs: numbe
  * `other` is not a failure: one app per data dir, so the app that got there first is the one to use. Only
  * both — no child and no API — is.
  */
-async function waitForApi(apiPortFile: string, child: ChildProcess, timeoutMs = 60_000): Promise<'ours' | 'other'> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (child.exitCode !== null || child.signalCode !== null) {
-      if (readApiEndpoint(apiPortFile)) return 'other';
-      throw new Error(`The app exited (${child.exitCode ?? child.signalCode}) before its API came up`);
+async function waitForApi(apiPortFile: string, child: ChildProcess): Promise<'ours' | 'other'> {
+  // For as long as the app is working to start: a cold start on a busy machine is slow, and only a stall is a failure
+  let stalled: string | undefined;
+  const watch = child.pid === undefined ? undefined
+    : watchWork({ work: processWork(child.pid), onRefused: (refusal) => { stalled = describeRefusal(refusal); } });
+  try {
+    for (;;) {
+      if (child.exitCode !== null || child.signalCode !== null) {
+        if (readApiEndpoint(apiPortFile)) return 'other';
+        throw new Error(`The app exited (${child.exitCode ?? child.signalCode}) before its API came up`);
+      }
+      if (readApiEndpoint(apiPortFile)) return 'ours';
+      if (stalled !== undefined) throw new Error(`The app did not publish ${apiPortFile}: it ${stalled}`);
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
-    if (readApiEndpoint(apiPortFile)) return 'ours';
-    await new Promise(resolve => setTimeout(resolve, 200));
+  } finally {
+    watch?.stop();
   }
-  throw new Error(`The app did not publish ${apiPortFile} within ${timeoutMs / 1000}s`);
 }
 
 /** What a session hands back so `dev` can tear it down on the way out of a throw. */
@@ -339,10 +347,12 @@ async function session(args: string[], hooks: SessionHooks, target: 'app' | 'pac
    * A launch with no debug port publishes nothing. That is the honest answer rather than a record with a
    * hole in it: the file means "attachable", and a `test` or packaged context is not.
    */
-  async function publish(launchedAt: number): Promise<void> {
+  async function publish(launchedAt: number, spawned: ChildProcess): Promise<void> {
     if (app.kind !== 'source' || debugPortArgs(place).length === 0) return;
     try {
-      const debugPort = await readDevToolsPort(userDataDir, { after: launchedAt });
+      if (spawned.pid === undefined) return;
+      // For as long as the app is working to start: it writes the port once Chromium is up
+      const debugPort = await readDevToolsPort(userDataDir, { after: launchedAt, work: processWork(spawned.pid) });
       hold.holdsSession(publishSession({
         host: { kind: 'source', root: app.root },
         env: 'development',
@@ -476,7 +486,7 @@ async function session(args: string[], hooks: SessionHooks, target: 'app' | 'pac
       // Published only for an app this command holds, and after its API is up so the session carries the
       // port a driver needs. An app that was already here has a session of its own or is not attachable,
       // and either way is not this command's to describe.
-      await publish(launchedAt);
+      await publish(launchedAt, spawned);
       endWith(spawned);
     }
   }

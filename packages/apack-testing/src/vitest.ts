@@ -9,6 +9,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { TaskMeta } from 'vitest';
 import type { ViteUserConfig } from 'vitest/config';
 
 export interface IsolatedDataDir {
@@ -25,6 +26,37 @@ export interface IsolatedDataDir {
   setupFiles: string[];
 }
 
+
+
+/**
+ * What the progress guard reads (`vitest-progress-guard.ts`, one of the data dir's setup files) from a config:
+ * the CPU it gives each test, and, for the guard's own specs, how long a test may go without CPU.
+ */
+declare module 'vitest' {
+  interface ProvidedContext {
+    /** How long a test may go without CPU; `IDLE_MS` unless a config says otherwise, which only the guard's own specs do */
+    'apack.idleMs': number;
+    /** The CPU a test may spend unless it declares its own with `cpuBudget` */
+    'apack.testCpuMs': number;
+  }
+}
+
+/** What a test's `meta` carries to and from the progress guard */
+export interface ProgressMeta {
+  /** The CPU this test may spend, in milliseconds, where it needs more than its config's `apack.testCpuMs` */
+  readonly cpuBudgetMs?: number;
+  /** What it spent, written as it ends: a reading, which reporters may show and nothing decides with */
+  cpuMs?: number;
+}
+
+/**
+ * A test's own CPU budget, for the one that needs more than its config gives: `it(name, { meta: cpuBudget(ms) }, fn)`.
+ *
+ * A function rather than an object literal written at the call, because vitest's `TaskMeta` is declared in
+ * `@vitest/runner`, which this package does not depend on, and augmenting it would put that import into the
+ * published declarations. So the field is typed here (`ProgressMeta`) and handed over as vitest's own type.
+ */
+export const cpuBudget = (ms: number): Partial<TaskMeta> => ({ cpuBudgetMs: ms } satisfies ProgressMeta) as Partial<TaskMeta>;
 
 /** A sibling module of this one, with this module's extension (source .ts, or the bundle's .js) */
 function sibling(name: string): string {
@@ -73,7 +105,7 @@ export function isolatedDataDir(prefix = 'apack-tests-'): IsolatedDataDir {
     dir,
     env: { APACK_ENV: 'test', APACK_USER_DATA_DIR: dir },
     globalSetup: [sibling('vitest-teardown')],
-    setupFiles: [sibling('vitest-exit-with-parent'), sibling('vitest-worker')],
+    setupFiles: [sibling('vitest-exit-with-parent'), sibling('vitest-progress-guard'), sibling('vitest-worker')],
   };
 }
 
@@ -166,10 +198,13 @@ export async function definePackTestConfig(options: PackTestConfig = {}): Promis
       // `tests/e2e/` is Playwright's, run by `apack pack test` — a different runner, not a cost half. `_support/`
       // is helpers and fixture packs: a fixture that grew a spec would otherwise join this suite.
       exclude: ['**/node_modules/**', '**/dist/**', 'tests/e2e/**', 'tests/_support/**', ...(options.exclude ?? [])],
-      // Small (`SIZE_MS` × `DEADLINE_FACTOR`, scripts/lib/unit-suites.ts): a unit test that takes longer is hung, not
-      // slow. Vitest's own default is 5s for a test and 10s for a hook, both tighter than the size allows.
-      testTimeout: 30_000,
-      hookTimeout: 30_000,
+      // Small (`SIZE_MS` × `DEADLINE_FACTOR`, scripts/lib/unit-suites.ts): the CPU one test may spend. A test that
+      // needs more declares `meta.cpuBudgetMs`
+      provide: { 'apack.testCpuMs': 30_000 },
+      // Vitest's clock is off: the progress guard among the data dir's setup files fails a test or hook whose process
+      // tree stalls, and a test that spends the CPU budget above, so a busy machine fails nothing (`vitest-progress-guard.ts`)
+      testTimeout: 0,
+      hookTimeout: 0,
       // Each worker's tests create their own EARS engines, so files may run in parallel
       fileParallelism: true,
       env: dataDir.env,

@@ -14,7 +14,7 @@
     "packages/*"
   ],
   "engines": {
-    "node": "^24.11.0",
+    "node": "^24.12.0",
     "npm": ">=11"
   },
   "scripts": {
@@ -107,6 +107,7 @@
     "db:clear-settings": "node scripts/db-dev.mjs clear-settings",
     "check:idle": "tsx scripts/check-idle.ts",
     "measure": "tsx scripts/measure.ts",
+    "stress": "tsx scripts/stress.ts",
     "janitor": "node --disable-warning=ExperimentalWarning scripts/janitor.ts",
     "janitor:install": "node --disable-warning=ExperimentalWarning scripts/janitor.ts --install",
     "test:linux": "tsx scripts/linux-runner.ts",
@@ -144,7 +145,11 @@
     "@app/main": "*"
   },
   "overrides": {
-    "dompurify": "^3.4.17"
+    "dompurify": "^3.4.17",
+    "minimatch@>=7 <11.0.1": "^11.0.1",
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^11.0.1"
+    }
   },
-  "//minimatch": "Dependabot alert 354 (minimatch < 11.0.1, a denial of service from a crafted pattern) stays open on purpose. Every copy is a dev dependency, none ships in the app. An override can't fix it: eslint, electron-builder and dir-compare depend on versions 3 and 5, which are called in a way 11 no longer supports. It closes when those tools move."
+  "//minimatch": "GHSA-g3hv-75wg-m249 (a denial of service from a crafted pattern) affects minimatch >=7 <11.0.1, so the range override lifts only those copies to 11; the 3.x and 5.x copies eslint, electron-builder and dir-compare depend on are outside the range and stay. typescript-estree is reached through a peer dependency, which npm carries no override across, so it needs its own nested entry; npm ls still calls that edge invalid, since it does not credit the override there either."
 }

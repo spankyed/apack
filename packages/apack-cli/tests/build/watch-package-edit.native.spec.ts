@@ -5,6 +5,8 @@ import { afterEach, beforeEach, it, vi } from 'vitest';
 import { startTestPackBuildWatcher, WATCH_REBUILD_BUDGET_MS, type TestPackBuildWatcher } from '../_support/watch-builds.ts';
 import { runtimePack } from '../_support/frontend-pack.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
+import { _settles } from '@apackdev/sdk/testing/waiting';
 
 const sharedCompiler = shareCompilerInstallation();
 
@@ -17,7 +19,7 @@ let signal: AbortSignal;
 beforeEach(context => { signal = context.signal; root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-package-edit-')); });
 afterEach(() => { vi.restoreAllMocks(); fs.rmSync(root, { recursive: true, force: true }); });
 
-it('publishes one build when a refresh rewrites what the pack builds against', async ({ expect }) => {
+it('publishes one build when a refresh rewrites what the pack builds against', { meta: cpuBudget(120_000 + WATCH_REBUILD_BUDGET_MS + 20_000 + SECOND_BUILD_WAIT_MS) }, async ({ expect }) => {
   const { pack, helper, frontend } = runtimePack(root);
   const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
   // Stands in for a package build: it turns an edited source into what the pack reads
@@ -34,10 +36,10 @@ it('publishes one build when a refresh rewrites what the pack builds against', a
       onBuilt: async () => { publications++; },
     });
     await watcher.rebuildAfter(() => { fs.writeFileSync(helper, "export const marker = 'AFTERX';"); });
-    await vi.waitFor(() => expect(publications > 0 || errors.mock.calls.length > 0).toBe(true), { timeout: 20_000 });
+    await _settles(() => expect(publications > 0 || errors.mock.calls.length > 0).toBe(true));
     expect(errors.mock.calls).toEqual([]);
     expect(fs.readFileSync(frontend, 'utf8')).toContain('AFTERX');
     await new Promise(resolve => setTimeout(resolve, SECOND_BUILD_WAIT_MS));
     expect(publications).toBe(1);
   } finally { await watcher?.close(); }
-}, 120_000 + WATCH_REBUILD_BUDGET_MS + 20_000 + SECOND_BUILD_WAIT_MS);
+});

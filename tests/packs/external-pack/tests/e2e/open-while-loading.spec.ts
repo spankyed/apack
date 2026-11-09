@@ -42,8 +42,8 @@ test("opens a pack's surface asked for while the pack's frontend loads, once it 
 
   await togglePack(appPage);
 
-  await expect.poll(() => appPage.evaluate(() => (window as any).__openedWhileLoading), { timeout: 15_000 }).toBe(true);
-  await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.getSnapshot().context.activeSurface.id), { timeout: 15_000 })
+  await expect.poll(() => appPage.evaluate(() => (window as any).__openedWhileLoading)).toBe(true);
+  await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.getSnapshot().context.activeSurface.id))
     .toBe(MEMOS);
   await expect.poll(() => appPage.evaluate(() => (window as any).__memosEvents as string[])).toContain('E2E_LINK_FOLLOWED');
 });

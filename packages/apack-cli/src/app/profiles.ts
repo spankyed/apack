@@ -8,6 +8,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { APP_ENVS, appDataDirFor, resolveAppEnvironment } from '@apackdev/sdk/env';
 import { lockIsHeld, readApiEndpoint } from '@apackdev/host/process-liveness';
+import { describeRefusal, fromNow, processWork, watchWork } from '@apackdev/sdk/progress';
 import { _pathSegmentProblem, randomId } from '@apackdev/sdk/utils/pure';
 import type { CliDirs } from './pack-host';
 
@@ -188,18 +189,24 @@ export interface OpenedProfile {
  * The pid belongs to whatever record named it — a session file's `supervisorPid`, or the app lock's — and
  * both mean the same thing by it: the one process to signal. Nothing here reads a pid for itself.
  */
-export async function endAppHolding(dir: string, pid: number, timeoutMs = 20_000): Promise<void> {
+export async function endAppHolding(dir: string, pid: number): Promise<void> {
   try {
     process.kill(pid, 'SIGTERM');
   } catch {
     // Already gone between reading the record and signalling it, which is a miss rather than a problem
   }
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (!lockIsHeld(pid) && !dataDirInUse(dir)) return;
-    await new Promise((resolve) => setTimeout(resolve, 100));
+  // For as long as it is working to quit: an app shutting down on a busy machine is slow, and only a stall is stuck
+  let stalled: string | undefined;
+  const watch = watchWork({ work: fromNow(processWork(pid)), onRefused: (refusal) => { stalled = describeRefusal(refusal); } });
+  try {
+    for (;;) {
+      if (!lockIsHeld(pid) && !dataDirInUse(dir)) return;
+      if (stalled !== undefined) throw new Error(`The app on ${dir} (pid ${pid}) did not exit: it ${stalled}. Close it and try again.`);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  } finally {
+    watch.stop();
   }
-  throw new Error(`The app on ${dir} (pid ${pid}) did not exit within ${Math.round(timeoutMs / 1000)}s. Close it and try again.`);
 }
 
 /**

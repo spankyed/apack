@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { expect, it } from 'vitest';
-import { _byDeadline } from '@apackdev/sdk/testing/waiting';
 import { createFrontendResourceFixture, externalGlobConsumer, readFrontendOutput } from '../_support/frontend-resources.ts';
 import { bundlePackFE } from '../../src/build/fe-bundler.ts';
 import { createFrontendWatcher } from '../../src/build/frontend-watch.ts';
@@ -32,13 +31,13 @@ it.each([
     const added = nextChange();
     fs.mkdirSync(path.dirname(page));
     fs.writeFileSync(page, 'export const marker = "NEW_GLOB_PAGE";');
-    await _byDeadline(added, 'the new page');
+    await added;
     expect(before.current()).toBe(false);
     const second = await compile();
     expect(second.success, second.error).toBe(true);
     expect(readFrontendOutput(pack, '.js')).toContain('NEW_GLOB_PAGE');
     const removed = nextChange();
     fs.unlinkSync(page);
-    await _byDeadline(removed, 'the removed page');
+    await removed;
   } finally { await watcher.close(); expect(failures).toEqual([]); }
 });

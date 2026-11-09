@@ -7,8 +7,10 @@ import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { readPackBuild } from '@apackdev/host/packs';
 import { startTestPackBuildWatcher, WATCH_REBUILD_BUDGET_MS, type TestPackBuildWatcher } from '../_support/watch-builds.ts';
 import { tsconfig } from '../_support/pack-builds.ts';
+import { cpuBudget } from '@apackdev/testing/vitest';
+import { _settles } from '@apackdev/sdk/testing/waiting';
 
-it('rebuilds external contracts and recovers a retargeted missing input without an authored edit', async ({ signal }) => {
+it('rebuilds external contracts and recovers a retargeted missing input without an authored edit', { meta: cpuBudget(120_000 + 3 * WATCH_REBUILD_BUDGET_MS + 20_000) }, async ({ signal }) => {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-watch-external-types-'));
   const root = path.join(temporary, 'pack');
   const parent = path.join(temporary, 'base.json');
@@ -50,7 +52,7 @@ export default { spec, machine: setup({ types: spec.types }).createMachine({ id:
       fs.writeFileSync(path.join(temporary, 'replacement.d.ts'), contract('OTHER'));
       fs.renameSync(path.join(temporary, 'replacement.d.ts'), path.join(temporary, 'contract.d.ts'));
     });
-    await vi.waitFor(() => expect(publications > 0 || errors.mock.calls.length > 0).toBe(true), { timeout: 20_000 });
+    await _settles(() => expect(publications > 0 || errors.mock.calls.length > 0).toBe(true));
     expect(errors.mock.calls).toEqual([]);
     expect(entry()).toContain('OTHER');
     const facade = () => fs.readFileSync(path.join(root, 'dist/types/pack-types.d.ts'), 'utf8');
@@ -59,7 +61,7 @@ export default { spec, machine: setup({ types: spec.types }).createMachine({ id:
     const accepted = readPackBuild(path.join(root, 'dist')).revision;
     const count = publications;
     await watcher.rebuildAfter(() => { configure('future/contract.d.ts'); });
-    await vi.waitFor(() => expect(errors).toHaveBeenCalledWith(expect.stringContaining('Build/reload failed')), { timeout: 20_000 });
+    await _settles(() => expect(errors).toHaveBeenCalledWith(expect.stringContaining('Build/reload failed')));
     expect(publications).toBe(count);
     expect(readPackBuild(path.join(root, 'dist')).revision).toBe(accepted);
     expect(entry()).toContain('OTHER');
@@ -67,7 +69,7 @@ export default { spec, machine: setup({ types: spec.types }).createMachine({ id:
       fs.mkdirSync(path.join(temporary, 'future'));
       fs.writeFileSync(path.join(temporary, 'future/contract.d.ts'), contract('THIRD'));
     });
-    await vi.waitFor(() => expect(publications).toBeGreaterThan(count), { timeout: 20_000 });
+    await _settles(() => expect(publications).toBeGreaterThan(count));
     expect(entry()).toContain('THIRD');
     expect(facade()).toContain('THIRD');
     expect(fs.readFileSync(configPath)).toEqual(authored);
@@ -77,4 +79,4 @@ export default { spec, machine: setup({ types: spec.types }).createMachine({ id:
     fs.rmSync(temporary, { recursive: true, force: true });
   }
 // Four compiler attempts share this scenario; individual rebuild waits remain bounded above.
-}, 120_000 + 3 * WATCH_REBUILD_BUDGET_MS + 20_000);
+});
