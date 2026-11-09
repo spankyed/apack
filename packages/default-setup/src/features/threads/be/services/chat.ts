@@ -4,6 +4,7 @@ import { EARS } from '#generated/ears.ts';
 import { repository } from '#generated/repository.ts';
 import type { BlockConfig, BlockResponse, MessageEntity, OutgoingThreadsEvents, ThreadCreateData, MessageReferences } from '#features/threads/be/types.ts';
 
+import * as path from 'node:path';
 import { readMediaBuffer } from '@apackdev/sdk/utils';
 import * as threadsService from './threads.ts';
 import { blockRegistry } from '@apackdev/sdk/blocks';
@@ -340,11 +341,12 @@ export async function resolveReferences(
     }
   }
 
-  // ─── Context references (notes, threads, documents, folders) ───────
+  // ─── Context references (notes, threads, documents, folders, code symbols) ───────
   if (references.context?.length) {
     for (const ref of references.context) {
       const resolved = await resolveContextRef(ref);
-      if (resolved) parts.push(resolved);
+      if (resolved) parts.push(resolved.text);
+      if (resolved?.dir && !addDirs.includes(resolved.dir)) addDirs.push(resolved.dir);
     }
   }
 
@@ -376,19 +378,36 @@ export async function resolveReferences(
 
 async function resolveContextRef(
   ref: MessageReferences extends { context?: (infer R)[] } ? NonNullable<R> : never,
-): Promise<string | undefined> {
+): Promise<{ text: string; dir?: string } | undefined> {
+  const text = (value: string | undefined) => value === undefined ? undefined : { text: value };
   switch (ref.refType) {
     case 'note':
-      return resolveNote(ref);
+      return text(resolveNote(ref));
     case 'thread':
-      return resolveThread(ref);
+      return text(resolveThread(ref));
     case 'document':
-      return resolveDocument(ref);
+      return text(await resolveDocument(ref));
     case 'folder':
-      return resolveFolder(ref);
+      return text(resolveFolder(ref));
+    case 'symbol':
+      return resolveSymbol(ref);
     default:
       return undefined;
   }
+}
+
+/**
+ * A code symbol as where it is now and what it looks like, not its source: the agent reads the file, as it does an
+ * attached one, so its directory is added beside the text
+ */
+async function resolveSymbol(ref: { refId: string; label: string }): Promise<{ text: string; dir?: string }> {
+  const found = await repository.codeIndexAnswers.locate(ref.refId as EARS.EntityId);
+  if (!found) return { text: `[Code symbol no longer indexed: ${ref.label}]` };
+  const { symbol, local, location } = found;
+  return {
+    text: `[Code symbol: ${symbol.kind} ${local} at ${location.path}:${location.line}]\n${symbol.signature}`,
+    dir: path.dirname(location.path),
+  };
 }
 
 function resolveNote(ref: { refId: string; label: string }): string {
