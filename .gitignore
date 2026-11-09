@@ -7,7 +7,8 @@ packages/*/publish/
 !.env.signing.example
 .data
 .DS_Store
-.claude
+.claude/*
+!.claude/settings.json
 .apack/
 
 # Stale tsc output in source dirs (preload has no outDir)
