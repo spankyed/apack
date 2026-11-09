@@ -17,6 +17,8 @@
     "build:dev": "apack pack build",
     "facade:check": "apack pack facade-report",
     "facade:update": "apack pack facade-report --update",
+    "plugin:check": "tsx scripts/build-native-plugin.ts",
+    "plugin:update": "tsx scripts/build-native-plugin.ts --update",
     "flow-export:check": "npm test -- tests/extensions/steps/export-example.spec.ts",
     "flow-export:update": "UPDATE_FLOW_EXAMPLE=1 npm test -- tests/extensions/steps/export-example.spec.ts",
     "content-parity:check": "npm test -- tests/content",
@@ -27,6 +29,7 @@
     "@apackdev/sdk": "*",
     "@apackdev/ui": "*",
     "@antv/g6": "^5.0.48",
+    "@app/claude-terminal-xterm": "npm:@xterm/xterm@6.1.0-beta.290",
     "@floating-ui/vue": "^1.1.11",
     "@leeoniya/ufuzzy": "^1.0.18",
     "@vscode/ripgrep": "^1.17.1",
@@ -41,7 +44,9 @@
     "@xterm/xterm": "^5.5.0",
     "chokidar": "^3.6.0",
     "croner": "^10.0.1",
+    "diff": "8.0.4",
     "elkjs": "^0.9.0",
+    "lowlight": "3.3.0",
     "vue": "^3.5.18",
     "vue-arrange": "^1.5.0"
   },
@@ -59,6 +64,7 @@
     "@tiptap/starter-kit": "3.32.0",
     "jsdom": "^26.1.0",
     "tiptap-markdown": "^0.9.0",
+    "prosemirror-markdown": "^1.13.9",
     "@types/jsdom": "^21.1.7"
   }
 }

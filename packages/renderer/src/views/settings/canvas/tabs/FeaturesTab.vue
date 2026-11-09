@@ -16,7 +16,7 @@
       </div>
       <p v-if="!features.length" class="p-3 text-sm text-neutral-500">No feature preferences declared.</p>
     </div>
-    <div class="flex-1 p-8 overflow-auto">
+    <div class="min-w-0 flex-1 p-4 lg:p-8 overflow-auto">
       <SettingsEditor v-if="selected" :key="selected.id" :target="selected.target" :title="selected.label"
         :description="selected.definition.description" :form="selected.form"
         :value="snapshot?.values.features[selected.id]" :surface="selected.surface?.id">

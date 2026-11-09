@@ -1,3 +1,5 @@
+import { clearClaudeUiViews } from './threads/be/claude-ui.ts';
+import { killAllHandles } from './code/be/services/claude-code/handle-store.ts';
 import { clearAllSchedules } from './brain/be/services/scheduler.ts';
 import { removeAllListeners as removeAllAdHocListeners } from './brain/be/services/brain.ts';
 import { clearFlowActorRegistry } from './brain/be/flow-system.ts';
@@ -39,8 +41,14 @@ export const onShutdown = () => {
   // however the process died — and, with no owner holding it, the broker's own rule that the last client
   // leaving ends them, which is what keeps a dev run or a test from leaving a shell behind. The only
   // deliberate end is the user closing a terminal, which is `terminalService.kill`.
+  // What does end here is this process's own follow of the windows, which is not a session.
   stopTerminalSizing?.();
   stopTerminalSizing = undefined;
+  //
+  // The Claude Code integration's own children are a different matter: a handle is this process's, so a
+  // handle left running is leaked rather than persisted, and the views it fed have nobody to reach.
+  clearClaudeUiViews();
+  killAllHandles();
   clearAllSchedules();
   removeAllAdHocListeners();
   clearFlowActorRegistry();

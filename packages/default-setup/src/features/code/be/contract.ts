@@ -269,12 +269,14 @@ export type IncomingCodeEvents =
   | { type: 'SET_BASE_DIRECTORY'; path: string; fromUserNavigation?: boolean }
   /** Settings → Providers: resolve a CLI and store where it was found, in this feature's own settings */
   | { type: 'TEST_CLI_PROVIDER'; provider: string }
+  | { type: 'PREPARE_CLAUDE_PROFILE_SETUP' }
   /**
    * What a window's code surface starts from, asked as the shell starts it: answered with \`CODE_STARTED\`, and by the
    * explorer and the terminals, to which the system hands this same ask, with the files and the running terminals
    */
   | { type: 'GET_CODE_START' }
 export type OutgoingCodeEvents =
+  | { type: 'CLAUDE_PROFILE_SETUP_PREPARED'; result: {command: string; cwd: string} | {error: string} }
   | OutgoingExplorerEvents
   | OutgoingSearchEvents
   | OutgoingCommitEvents

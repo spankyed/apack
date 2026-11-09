@@ -1,3 +1,4 @@
+import { newCall, recordCall, settleCall } from '@apackdev/sdk/events'
 import { surfaceStorage } from '@apackdev/sdk/fe'
 import { ref as featureRef } from '#generated/ref.ts'
 
@@ -64,6 +65,7 @@ export type Event =
   | { type: 'FEATURE_SETTINGS_UPDATED'; settings: CodeSettings }
   // Generic update event for child actors to update parent state
   | CodeInboxEvent
+  | {type: 'DISMISS_CLAUDE_PROFILE_SETUP_ERROR'}
   | { type: 'ADD_TAB'; tab: any; replacePreview?: boolean; extraUpdates?: Partial<CodeContext> }
   | { type: 'SURFACE_ACTIVATED' }
   // The shell hands this to every surface as it starts it; this one reads which window it is in (M5)
@@ -848,6 +850,23 @@ const codeState = setup({
       })
       enqueue(assign(() => removeTabLogic(context, self, path)))
     }),
+    retireClaudeProfileSetup: assign({pendingClaudeProfileSetup: undefined}),
+    prepareClaudeProfileSetup: enqueueActions(({context, enqueue}) => {
+      if (context.pendingClaudeProfileSetup) return
+      const call = newCall()
+      enqueue.assign({pendingClaudeProfileSetup: call, claudeProfileSetupError: undefined})
+      enqueue(() => sendToSystem('code', {type: 'PREPARE_CLAUDE_PROFILE_SETUP'}, {call}))
+    }),
+    openClaudeProfileSetup: enqueueActions(({context, event, self, enqueue}) => {
+      if (event.type !== 'CLAUDE_PROFILE_SETUP_PREPARED' || !context.pendingClaudeProfileSetup) return
+      const pending = recordCall({}, context.pendingClaudeProfileSetup, true)
+      if (settleCall(pending, event).recorded === undefined) return
+      enqueue.assign({pendingClaudeProfileSetup: undefined, claudeProfileSetupError: 'error' in event.result ? event.result.error : undefined})
+      enqueue(() => {
+        const terminal = codeChild(self, 'terminal')
+        if (!('error' in event.result)) terminal?.send({type: 'terminal.CREATE', target: 'tab', title: 'Claude profile setup', cwd: event.result.cwd, command: event.result.command})
+      })
+    }),
     openTerminal: enqueueActions(({ enqueue, context, self }) => {
       const terminals: TerminalInfo[] = codeChild(self, 'terminal')?.getSnapshot()?.context?.terminals || []
       const tabbedIds = getTabbedTerminalIds(context.openFiles)
@@ -1366,6 +1385,7 @@ const codeState = setup({
         // What the surface starts from, asked as the shell starts it, in a delivery naming the surface
         SURFACE_STARTED: {
           actions: [
+            'retireClaudeProfileSetup',
             // Which window this is, as the shell starts the surface: a popout writes no layout (M5)
             assign(({ event }) => ({ ownsAppLayout: (event as { ownsAppLayout?: boolean }).ownsAppLayout !== false })),
             () => { sendToSystem('code', { type: 'GET_CODE_START' }) },
@@ -1373,7 +1393,7 @@ const codeState = setup({
         },
         // The directory moved, in every window: ask again for what the surface starts from
         BASE_DIRECTORY_CHANGED: {
-          actions: () => { sendToSystem('code', { type: 'GET_CODE_START' }) },
+          actions: ['retireClaudeProfileSetup', () => { sendToSystem('code', { type: 'GET_CODE_START' }) }],
         },
         // The answer, handed to every feature, each of which asks for what its panel shows
         CODE_STARTED: {
@@ -1469,6 +1489,9 @@ const codeState = setup({
         HOTKEY_PRESSED: {
           actions: ['handleHotkey']
         },
+        OPEN_CLAUDE_PROFILE_SETUP: {actions: 'prepareClaudeProfileSetup'},
+        DISMISS_CLAUDE_PROFILE_SETUP_ERROR: {actions: assign({claudeProfileSetupError: undefined})},
+        CLAUDE_PROFILE_SETUP_PREPARED: {actions: 'openClaudeProfileSetup'},
         OPEN_TERMINAL: {
           actions: 'openTerminal'
         },

@@ -14,8 +14,10 @@
  * commits rather than how much of it is written again.
  */
 
+import { createClaudeNativeMessageTracker } from './native-assistant-messages.ts';
+import { isClaudeNarrationSignature } from './native-thinking.ts';
 import type { Services, EntityId } from '#generated/services.ts';
-import type { ThinkingBlockProps } from './thinking-types.ts';
+import type { ThinkingBlockProps, ClaudeNativeThinkingMessage } from './thinking-types.ts';
 import { formatDuration } from './duration.ts';
 import { ROW_INTERVAL_MS } from './row-interval.ts';
 
@@ -26,11 +28,20 @@ export interface ThinkingWriterOptions {
 
 export interface ThinkingWriter {
   push(text: string): void;
+  acceptNativeMessage(message: { uuid?: string; sessionId?: string; apiMessageId?: string; text: string; signature?: unknown; parentToolUseId?: string }): void;
   flush(): void;
   finalise(): void;
   buildBlock(): { type: string; props: ThinkingBlockProps } | null;
   readonly hasContent: boolean;
   readonly isStreaming: boolean;
+}
+
+/** How much of two texts is the same from the start — where a heal of the buffer begins. */
+function commonPrefixLength(before: string, after: string): number {
+  const limit = Math.min(before.length, after.length);
+  let at = 0;
+  while (at < limit && before.charCodeAt(at) === after.charCodeAt(at)) at++;
+  return at;
 }
 
 export function createThinkingWriter(
@@ -40,8 +51,12 @@ export function createThinkingWriter(
 ): ThinkingWriter {
   const intervalMs = opts.intervalMs ?? ROW_INTERVAL_MS;
   let buffer = '';
-  let firstPushAt = 0;
-  let finalisedAt = 0;
+  const native = createClaudeNativeMessageTracker({ separator: '\n\n', completePartial: true });
+  let nativeMessages: readonly ClaudeNativeThinkingMessage[] = [];
+  const summaries = new Set<string>();
+  /** When the current thinking segment began, and the time every finished one took */
+  let segmentStartedAt: number | undefined;
+  let thinkingElapsed = 0;
   let state: 'streaming' | 'done' = 'streaming';
   let pendingTimer: ReturnType<typeof setTimeout> | null = null;
   let lastFlushAt = 0;
@@ -51,6 +66,14 @@ export function createThinkingWriter(
   let blockId: EntityId | undefined;
   /** How much of `buffer` the row holds, as its own text plus the segments appended to it */
   let rowUpTo = 0;
+  /**
+   * Whether the text changed behind what the row already holds, which only a write of the block can mend.
+   *
+   * **A native message can heal text it already sent** — a completed block replacing the partial that
+   * streamed — and an append cannot take that back: the row's segments up to `rowUpTo` are then wrong. A
+   * whole-block write replaces the text, so that is the one path a heal can take.
+   */
+  let healed = false;
 
   /**
    * Sends the characters the windows have not been sent — the block's half of G1's feed.
@@ -60,8 +83,9 @@ export function createThinkingWriter(
    * that write is immediate rather than on the interval: a block appearing is a discrete change the user is
    * waiting for, where its growth is not. It is also what makes the id available to name here.
    *
-   * The buffer here only ever grows — `push` appends and a finished writer takes no more text — so there is
-   * no rewrite this channel could be asked to carry.
+   * **A healed native message rewrites what the windows already hold**, where a delta only ever appended.
+   * `at` is an absolute offset and a window splices there, tail included, so a rewrite is expressible:
+   * whoever changes `buffer` behind what was sent pulls `fedUpTo` back to the first character that differs.
    */
   function feed(): void {
     if (!blockId || fedUpTo >= buffer.length) return;
@@ -73,15 +97,16 @@ export function createThinkingWriter(
 
   function buildLabel(): string {
     if (state === 'streaming') return 'Thinking';
-    const elapsed = (finalisedAt || Date.now()) - (firstPushAt || Date.now());
-    return `Thought for ${formatDuration(elapsed)}`;
+    // Thinking time rather than wall time: a turn's thinking comes in cycles with tool work between them,
+    // and the waiting is not what the user spent thinking about
+    return `Thought for ${formatDuration(thinkingElapsed)}`;
   }
 
   function buildBlock(): { type: string; props: ThinkingBlockProps } | null {
     if (!buffer) return null;
     return {
       type: 'thinking',
-      props: { content: buffer, label: buildLabel(), state, defaultOpen: false },
+      props: { content: buffer, ...(nativeMessages.length ? { nativeMessages } : {}), label: buildLabel(), state, defaultOpen: false },
     };
   }
 
@@ -101,7 +126,7 @@ export function createThinkingWriter(
     }
     if (!buffer) return;
 
-    if (blockId && state === 'streaming') {
+    if (blockId && state === 'streaming' && !healed) {
       if (buffer.length > rowUpTo) {
         services.chat.appendMessageBlockText(blockId, rowUpTo, buffer.slice(rowUpTo));
         rowUpTo = buffer.length;
@@ -111,6 +136,7 @@ export function createThinkingWriter(
       if (block) {
         blockId = services.chat.updateMessageBlock(messageId, block, blockId);
         rowUpTo = buffer.length;
+        healed = false;
       }
     }
     // The row now holds everything the buffer does, so nothing up to here is the feed's to send
@@ -134,12 +160,39 @@ export function createThinkingWriter(
     get isStreaming() { return state === 'streaming'; },
 
     push(text: string): void {
-      if (!text || state === 'done') return;
-      if (!firstPushAt) firstPushAt = Date.now();
+      if (!text) return;
+      // **A later model cycle reopens the block**, which is a discrete change and the one case the row has
+      // to carry: a window dropped its run when this block last finished
+      const reopened = state === 'done';
+      if (reopened) { state = 'streaming'; if (buffer) buffer += '\n\n'; }
+      segmentStartedAt ??= Date.now();
       buffer += text;
+      if (reopened) { writeNow(); return; }
       // The first content is the block appearing, which is written at once; everything after it is growth,
       // which the feed carries while the row collects it on the durable interval
       if (!blockId) { writeNow(); return; }
+      feed();
+      schedule();
+    },
+
+    acceptNativeMessage(message): void {
+      if (message.parentToolUseId || !message.text) return;
+      const projected = native.accept(buffer, message);
+      const reopened = projected.text !== buffer && state === 'done';
+      if (projected.text !== buffer) {
+        state = 'streaming';
+        segmentStartedAt ??= Date.now();
+        const common = commonPrefixLength(buffer, projected.text);
+        if (common < rowUpTo || common < fedUpTo) healed = true;
+        fedUpTo = Math.min(fedUpTo, common);
+        buffer = projected.text;
+      }
+      if (projected.rows.length > nativeMessages.length && message.uuid && message.text.trim()
+        && isClaudeNarrationSignature(message.signature)) summaries.add(message.uuid);
+      nativeMessages = projected.rows.map(row => ({ ...row, ...(summaries.has(row.uuid) ? { isSummary: true as const } : {}) }));
+      // More thinking text arriving is growth like a delta, except where it is the block appearing or a
+      // cycle reopening, which the row has to carry
+      if (!blockId || reopened || healed) { writeNow(); return; }
       feed();
       schedule();
     },
@@ -150,7 +203,8 @@ export function createThinkingWriter(
 
     finalise(): void {
       if (state === 'done') return;
-      finalisedAt = Date.now();
+      if (segmentStartedAt !== undefined) thinkingElapsed += Date.now() - segmentStartedAt;
+      segmentStartedAt = undefined;
       state = 'done';
       // The row first, then the run is dropped. A window drops its run on `done` and falls back to the row,
       // so the row has to be the finished one by then — the text feed's contract, for the same reason. The
