@@ -6056,7 +6056,6 @@ declare const featureServices: {
         updateMessageBlock: typeof updateMessageBlock;
         appendMessageBlockText: typeof appendMessageBlockText;
         appendMessageText: typeof appendMessageText;
-        foldMessageText: typeof foldMessageText;
         updateMessageToolEntry: typeof updateMessageToolEntry;
         compactMessageBlock: typeof compactMessageBlock;
         removeMessageBlock: typeof removeMessageBlock;
@@ -6220,9 +6219,6 @@ declare const flowsQueries: {
     /** A flow's nodes and edges, or `null` for a flow that doesn't exist */
     readonly graph: (flowId: EARS.EntityId) => FlowExtendedData | null;
 };
-
-/** Folds a message's text segments into its own field, so a search finds the whole of it again */
-declare function foldMessageText(messageId: EARS.EntityId): void;
 
 declare function getHandle(key: string): CodexTurnHandle | undefined;
 

@@ -291,15 +291,6 @@ export function appendMessageText(messageId: EARS.EntityId, at: number, text: st
   }
 }
 
-/** Folds a message's text segments into its own field, so a search finds the whole of it again */
-export function foldMessageText(messageId: EARS.EntityId): void {
-  try {
-    repository.chatCommands.foldMessageText({ messageId });
-  } catch (err) {
-    logger.error(`foldMessageText failed for ${messageId}`, { error: errorMessage(err) });
-  }
-}
-
 /**
  * Writes one of a block's tool entries, and answers its row.
  *
@@ -702,7 +693,6 @@ export const chatService = {
   updateMessageBlock,
   appendMessageBlockText,
   appendMessageText,
-  foldMessageText,
   updateMessageToolEntry,
   compactMessageBlock,
   removeMessageBlock,
