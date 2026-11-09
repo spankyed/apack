@@ -1,10 +1,15 @@
-import { createClaudeTerminalPlugin } from '#features/code/be/services/claude-code/terminal-plugin.ts'
+import type { ClaudeHookRegistrar } from '#features/code/be/services/claude-code/native-plugin/claude-plugin-api.ts'
+import { createApackNativePlugin } from '#features/code/be/services/claude-code/native-plugin/program.ts'
+// Each fixture holds the clock still, so the backoff below is a fact about elapsed time and not about speed
+afterEach(()=>{vi.restoreAllMocks()})
+const CONFIG = { socketPath: '/owned.sock', token: 'private-token', background: { parentSessionId: '11111111-1111-4111-8111-111111111111', socketPath: '/child.sock', token: 'child-token' } }
 function fixture(){
  const child='05ff1d31-597d-4537-8737-4407191add6e',hooks=new Map<string,(...args:any[])=>Promise<any>>()
  const requests:{path:string;body:any}[]=[],cancel=vi.fn();let tick!:()=>void,lost=false,refused=false,now=Date.now()
  const api={session:{id:async()=>child,cwd:async()=>'/owned',model:async()=>'sonnet',turns:async()=>2,usage:async()=>({startedAt:1,cost:{usd:0.001}})},agent:{list:async()=>[]},settings:{read:async()=>({})},env:{get:async():Promise<string|undefined>=>undefined},clock:{every:vi.fn((_ms:number,callback:()=>void)=>{tick=callback;return{cancel}})},process:{run:vi.fn(async()=>({exitCode:0,stdout:'119',stderr:''}))},http:{fetch:vi.fn(async(url:string,init:any)=>{const path=new URL(url).pathname;requests.push({path,body:JSON.parse(init.body)});if(lost)throw Error('Owned socket disappeared');return{ok:!['/transcript','/ui-ready'].includes(path)&&!(refused&&path==='/background-register'),text:JSON.stringify(path==='/poll'?{background:true}:path==='/background-register'?{token:'child-lease'}:{})}})}}
- const register=new Function('Date',createClaudeTerminalPlugin('/owned.sock','private-token',{parentSessionId:'11111111-1111-4111-8111-111111111111',socketPath:'/child.sock',token:'child-token'}).replace('export function register','function register')+';return register')({now:()=>now})
- register((event:string,...args:any[])=>hooks.set(event,args.at(-1)))
+ vi.spyOn(Date,'now').mockImplementation(()=>now)
+ const register=((event:string,...args:any[])=>hooks.set(event,args.at(-1))) as unknown as ClaudeHookRegistrar
+ createApackNativePlugin(CONFIG).register(register)
  const next=async(value:any)=>value
  return{api,hooks,requests,cancel,lose:()=>{lost=true},restore:()=>{lost=false},advance:(ms:number)=>{now+=ms},refuse:()=>{refused=true},tick:()=>tick(),async start(){await hooks.get('classic.*')!(api,{session_id:child,transcript_path:'/owned/'+child+'.jsonl'},next);await hooks.get('session.start')!(api,{},next)},render:()=>hooks.get('ui.render')!(api,{},next)}
 }
