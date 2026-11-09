@@ -2757,6 +2757,25 @@ type LogsSettings = SettingsOf<'logs'>;
 
 interface MessageEntity extends BaseEntity {
     entityType: EARS.Entity.Message;
+    /**
+     * What the message says, and **the field both of its indexes read**: the text index `searchMessages`
+     * ranks on (`search`), and the trigram index `containing` and `matching` answer from (`substrings`).
+     *
+     * **The trigram index has no caller in this repo, and is declared on purpose.** It was deleted once for
+     * exactly that reason, which cost a measurement to undo, so the reason it is here is here: it is the
+     * capability the Database console offers over a message's text, and what a reader would need before it
+     * could be written. Keeping it is a decision rather than an oversight
+     * (`docs/archive/plans/decisions.md`).
+     *
+     * It is affordable because a streamed reply is **appended** rather than rewritten: this field is written
+     * on folds and when the turn finishes, about eight times a turn instead of thirty, so maintaining both
+     * indexes costs ~9ms of a minute-long turn. Under the whole-field writes it replaced, the trigram index
+     * alone was ~61% of a turn's write time — so if this field ever goes back to being written whole, that
+     * is the figure to re-measure before assuming it is still cheap.
+     *
+     * A streaming message holds the compacted prefix here and the rest in `MessageText` children, so both
+     * indexes are behind by at most one fold until the turn ends.
+     */
     text: string;
     sender: 'assistant' | 'marker' | 'system' | 'user';
     timestamp: number;
