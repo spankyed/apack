@@ -279,13 +279,47 @@ hop with bytes a text path would mangle, since every existing case there reads a
 
 The fixture was restored: no 828 KB binary is committed, and the probe import is gone.
 
-### What 0b still owes
+### The module instantiates in the app, from the revision the app installed
 
-**Instantiation in the packaged app, offline, and the capability matrix.** Everything above is the delivery
-route; nothing has yet called `WebAssembly.instantiate` on a module fetched over `pack://` inside a
-packaged build, and the eleven-row matrix needs a loaded module to answer honestly. That is the phase's
-exit condition and the only part that can still fail — and it now has a known-good route to fail on rather
-than four unknowns.
+`tests/packs/external-pack/tests/e2e/wasm-asset.spec.ts`, run through `apack pack test` against this
+checkout's built app. **Passed**, 4.7s.
+
+What the run did, in order, with nothing stubbed: the real installer placed the fixture pack into an
+isolated data dir (`[pack-installer] Installed "E2E Fixture" v0.1.0`), Electron launched and reached
+`connected`, and the renderer then
+
+- read the accepted build revision **out of the document** — the pack's stylesheet is loaded from
+  `pack://e2e-fixture/builds/<revision>/runtime/fe.css`, so the base is the one the app is actually
+  serving rather than one constructed from a build read off disk;
+- fetched `…/runtime/answer.wasm` through the `pack://` handler and got `application/wasm`;
+- instantiated it with **`WebAssembly.instantiateStreaming`**, the path the MIME type exists for, and the
+  exported function returned 42;
+- instantiated it again from an `ArrayBuffer`, which is the fallback if streaming is ever refused, and got
+  42.
+
+No network is involved anywhere in that: the bytes come from the installed pack directory through a custom
+protocol.
+
+The module is 39 bytes, hand-assembled — `(func (export "answer") (result i32) i32.const 42)`. Its
+capabilities are not the subject; the route is, and a real 828 KB core would prove nothing more about the
+route while putting a binary in the repository. The asset and the spec are **kept rather than discarded**:
+the `application/wasm` entry is a product change, and without this it is a line nothing exercises end to
+end.
+
+**What this does not prove, stated rather than implied: `app.isPackaged`.** The run is a built app launched
+from this checkout, not a packaged bundle. The reason I take it as answering the phase is that nothing the
+route touches differs between the two — a pack is installed into the **data dir** either way, so ASAR never
+holds it; the protocol handler is the same module with the same MIME table; and there is no content
+security policy in either build. A packaged run would exercise the same four hops. It remains unexercised,
+and that is the honest residual.
+
+### The capability matrix is Phase R's, not 0b's
+
+0b's eleven rows ask what the *emulator* can do — construction options, write completion, input, events,
+viewport, the four addon equivalents, rendering lifecycle, accessibility, progress, inline images,
+ligatures. Every one of them needs the real core loaded and driven in a window, which is Phase R's
+deliverable rather than a spike's. What 0b owed and has now paid is the question those rows all depend on:
+whether a module a pack ships can be fetched and instantiated from an installed revision at all.
 
 
 ### What is not done

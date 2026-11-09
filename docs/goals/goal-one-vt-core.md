@@ -108,8 +108,16 @@ this one's:
   eight streams whole and byte-by-byte, the new wrapper is self-consistent at every byte boundary, and the
   three differences found are each decided — device attributes (the core is right), the disjoint
   shell-integration families (take the union), and where payload decoding lives.
-- **Next deliverable:** Phase 0b, the packaged offline WebAssembly proof, which depends on nothing here.
-  Phase B depends on 0a's result, now in hand, and on O2.
+- **Phase 0b passes for the delivery route.** A pack's WebAssembly module reaches the window and
+  instantiates from the revision the app installed, over `pack://`, both streaming and buffered
+  (`tests/packs/external-pack/tests/e2e/wasm-asset.spec.ts`). Three of its four risks were answered by
+  reading; the fourth needed `application/wasm` in the protocol's MIME table. **An imported module is the
+  wrong mechanism** — a Vite library build inlines it as base64, 99.1% of the bundle — and the route that
+  works needed no build change, `<pack>/public/` already being copied into the frontend's output.
+- **Next deliverable:** Phase B, which depends on 0a's result (in hand) and on O2. Phase R depends on 0b's
+  route (in hand) and not on B.
+- **Not exercised:** a *packaged* bundle. The run is a built app from this checkout; why that answers the
+  route is argued in evidence, and the residual is named there rather than waved away.
 - **Proven:** the release and its commit; that upstream publishes six files and none is a Windows or Linux
   library; that a verified archive unpacks to the layout the `-sys` crate expects and that a build with
   `GHOSTTY_VT_RS_SYS_PREBUILT_DIR` set fetches nothing; and the grid, reply and facts results above.
@@ -396,7 +404,7 @@ before cutover**, not after seeing the numbers.
 | Requirement | Implementation / source | Evidence | Remaining work |
 |---|---|---|---|
 | Broker on `libghostty-vt`, `alacritty_terminal` gone | missing | — | Phases 0a, B |
-| Window on the same core's WASM, `@xterm/*` gone | missing | — | Phases 0b, R |
+| Window on the same core's WASM, `@xterm/*` gone | **route proven** — the delivery half | [evidence](../references/evidence/one-vt-core.md) | Phase R: the emulator itself, and the capability matrix with it |
 | No Zig, no compile-time network, no run-time CDN | missing | D4 names the mechanism | Prove per target in Phase B/R |
 | Every relied-on capability asserted present | missing | — | D7's declaration and its check |
 | Conformance corpus passes, or each difference decided | **done** — `897c01c` | ten cases; [evidence](../references/evidence/one-vt-core.md#2026-11-09--phase-0a-passes-the-two-parsers-agree-with-three-decided-differences) | — |
