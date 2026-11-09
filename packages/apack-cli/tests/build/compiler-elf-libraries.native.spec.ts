@@ -13,6 +13,7 @@ import { nativeAddonSource } from '../_support/native-addon.ts';
 import { shareCompilerInstallation } from '../_support/shared-compiler.ts';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { settles } from '@apackdev/sdk/testing/waiting';
+import { DEV_SERVER_HOST } from '@apackdev/host/packs/dev-server';
 
 const sharedCompiler = shareCompilerInstallation();
 
@@ -77,7 +78,7 @@ it.runIf(process.platform === 'linux')('owns retained ELF libraries, preserves V
     fs.writeFileSync(replacement, original, { mode: originalMode });
     fs.renameSync(replacement, library);
     expect(await frontend.isCurrent(signal)).toBe(true);
-    const view = `http://localhost:${frontend.address.port}/src/View.vue`;
+    const view = `http://${DEV_SERVER_HOST}:${frontend.address.port}/src/View.vue`;
     expect(await (await fetch(view)).text()).toContain('ELF_BEFORE');
     fs.writeFileSync(path.join(pack, 'src/View.vue'), '<template>ELF_AFTER</template>');
     await settles(async () => expect(await (await fetch(view)).text()).toContain('ELF_AFTER'));
