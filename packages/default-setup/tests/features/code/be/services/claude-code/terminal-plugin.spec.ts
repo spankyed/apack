@@ -77,3 +77,28 @@ it('writes a program that loads with its config, registers hooks and keeps its e
  await hooks.get('session.start')!(api,{},async(value:any)=>value)
  tick();await vi.waitFor(()=>expect(requests).toContain('/background-register'))
 })
+
+/**
+ * A notification is the fast path to something the app also learns another way, so one that fails is
+ * counted and carried rather than swallowed — the app's end of this is `notificationsDropped`.
+ */
+it('counts a notification the app refused and carries the count until an exchange takes it',async()=>{
+ const child='05ff1d31-597d-4537-8737-4407191add6e'
+ const hooks=new Map<string,(...args:any[])=>Promise<any>>(),polls:any[]=[]
+ let tick!:()=>void,appendRefused=true
+ const api={session:{id:async()=>child,cwd:async()=>'/owned',model:async()=>'sonnet',turns:async()=>2,usage:async()=>({startedAt:1})},agent:{list:async()=>[]},settings:{read:async()=>({})},env:{get:async()=>undefined},clock:{every:(_ms:number,callback:()=>void)=>{tick=callback;return{cancel(){}}}},process:{run:async()=>({exitCode:0,stdout:'119',stderr:''})},
+  http:{fetch:async(url:string,init:any)=>{const path=new URL(url).pathname,body=JSON.parse(init.body);if(path==='/poll')polls.push(body);return{ok:!(appendRefused&&path==='/append'),status:appendRefused&&path==='/append'?500:200,text:JSON.stringify({})}}}}
+ const next=async(value:any)=>value
+ createApackNativePlugin(CONFIG).register(collector(hooks))
+ await hooks.get('session.start')!(api,{},next)
+ const appended=async()=>hooks.get('session.append')!(api,{door:'prompt'},async()=>({uuid:'row-1',message:{role:'assistant'}}))
+ await appended();await appended()
+ tick();await vi.waitFor(()=>expect(polls).toHaveLength(1))
+ expect(polls[0].dropped).toEqual({append:2})
+ // Taken off the counters only once it has been delivered, and the next exchange says nothing
+ appendRefused=false;tick();await vi.waitFor(()=>expect(polls).toHaveLength(2))
+ expect(polls[1]).not.toHaveProperty('dropped')
+ await appended()
+ tick();await vi.waitFor(()=>expect(polls).toHaveLength(3))
+ expect(polls[2]).not.toHaveProperty('dropped')
+})

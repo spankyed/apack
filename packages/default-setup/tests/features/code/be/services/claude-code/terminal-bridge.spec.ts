@@ -670,3 +670,20 @@ it('refuses to preserve a formerly open interaction after its broker fails', asy
   await vi.advanceTimersByTimeAsync(5000)
   expect(await outcome).toEqual({ error: 'Native prompt bridge timed out' })
 })
+
+/**
+ * The plugin counts the notifications it could not deliver; this is the end that reads them.
+ *
+ * A route or a count the session's trace cannot carry is refused rather than logged, because the report
+ * reaches a channel whose fields are a closed set on purpose.
+ */
+it('reads the plugin\'s dropped notifications and refuses a report its trace cannot carry', async () => {
+  const dropped: [string, number][] = []
+  bridge = await createClaudeTerminalBridge({ backgroundAuthority: () => ({ identify: async () => { throw Error('No child in this fixture') }, close: async () => {} }), sessionId: session, settings: { effective: {}, sources: [] }, ownsProcess: async pid => pid === process.pid, changed() {}, enter() {}, notificationsDropped: (route, count) => dropped.push([route, count]) })
+  expect((await request('/poll', { sessionId: session, agents: [], dropped: { append: 2, turn: 1 } })).status).toBe(200)
+  expect(dropped).toEqual([['append', 2], ['turn', 1]])
+  expect((await request('/poll', { sessionId: session, agents: [], dropped: { append: 0 } })).status).toBe(400)
+  expect((await request('/poll', { sessionId: session, agents: [], dropped: { 'not-a-route': 1 } })).status).toBe(400)
+  expect((await request('/poll', { sessionId: session, agents: [], dropped: 'append' })).status).toBe(400)
+  expect(dropped, 'a refused report reaches nothing').toHaveLength(2)
+})
