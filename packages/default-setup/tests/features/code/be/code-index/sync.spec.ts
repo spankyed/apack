@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFileWhileWorking } from '@apackdev/sdk/progress'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
@@ -13,12 +13,12 @@ import { semanticDiff } from '#features/code/be/code-index/semantic-diff.ts'
 let root: string
 const never = new AbortController().signal
 
-const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' })
+const git = async (...args: string[]) => (await execFileWhileWorking('git', args, { cwd: root })).stdout
 const put = (file: string, text: string | Buffer) => {
   fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true })
   fs.writeFileSync(path.join(root, file), text)
 }
-const commit = (message = 'c') => { git('add', '-A'); git('commit', '-qm', message, '--allow-empty') }
+const commit = async (message = 'c') => { await git('add', '-A'); await git('commit', '-qm', message, '--allow-empty') }
 
 const symbols = () => query(EARS.Entity.CodeSymbol).where('project', projectIdOf(root)).pickAll()
 /** Everything the index holds of the project, without the times, ordered: what two indexes are compared by */
@@ -44,9 +44,9 @@ const clearProject = async () => {
 beforeEach(async () => {
   await startApp({ systems: [] })
   root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'code-index-')))
-  git('init', '-q', '-b', 'main')
-  git('config', 'user.email', 'a@b.c')
-  git('config', 'user.name', 'a')
+  await git('init', '-q', '-b', 'main')
+  await git('config', 'user.email', 'a@b.c')
+  await git('config', 'user.name', 'a')
 })
 afterEach(() => fs.rmSync(root, { recursive: true, force: true }))
 
@@ -55,7 +55,7 @@ describe('what a sync writes', () => {
     put('.gitignore', 'ignored.ts\n')
     put('tracked.ts', 'export function tracked() {}')
     put('changed.ts', 'export function before() {}')
-    commit()
+    await commit()
     put('changed.ts', 'export function after() {}')
     put('untracked.ts', 'export function untracked() {}')
     put('ignored.ts', 'export function ignored() {}')
@@ -70,7 +70,7 @@ describe('what a sync writes', () => {
     put('real.ts', 'export function real() {}')
     put('deleted.ts', 'export function deleted() {}')
     fs.symlinkSync('real.ts', path.join(root, 'link.ts'))
-    commit()
+    await commit()
     fs.rmSync(path.join(root, 'deleted.ts'))
     enable()
     await sync()
@@ -80,7 +80,7 @@ describe('what a sync writes', () => {
   it('drops a file deleted from disk but not yet from git', async () => {
     put('a.ts', 'export function a() {}')
     put('b.ts', 'export function b() {}')
-    commit()
+    await commit()
     enable()
     await sync()
     fs.rmSync(path.join(root, 'b.ts'))
@@ -91,7 +91,7 @@ describe('what a sync writes', () => {
 
   it('keeps ids across a save, and writes no row for a reformat', async () => {
     put('a.ts', 'export function keep() { return 1 }\nexport function move() { return 1 }')
-    commit()
+    await commit()
     enable()
     await sync()
     const before = new Map(symbols().map(s => [s.name, s]))
@@ -107,7 +107,7 @@ describe('what a sync writes', () => {
 
   it('gives two definitions of a name their own ids, the same each time', async () => {
     put('a.ts', 'function f(a: string): void; function f(a: unknown) {}')
-    commit()
+    await commit()
     enable()
     await sync()
     const ids = symbols().map(s => s.id).sort()
@@ -121,7 +121,7 @@ describe('what a sync writes', () => {
   it('parses only files whose blob moved', async () => {
     put('a.ts', 'export function a() {}')
     put('b.ts', 'export function b() {}')
-    commit()
+    await commit()
     enable()
     await sync()
     const read = vi.spyOn(fs.promises, 'readFile')
@@ -134,7 +134,7 @@ describe('what a sync writes', () => {
 
   it('re-extracts every file when the extractor answers differently', async () => {
     put('a.ts', 'export function a() {}')
-    commit()
+    await commit()
     enable()
     await sync()
     const stored = codeIndexQueries.project(root)!.extractorStamp!
@@ -151,7 +151,7 @@ describe('what a sync writes', () => {
     put('large.ts', 'x'.repeat(MAX_FILE_BYTES + 1))
     put('latin.ts', Buffer.from([0x63, 0x61, 0x66, 0xe9]))
     put('good.ts', 'export function good() {}')
-    commit()
+    await commit()
     enable()
     await sync()
     expect(codeIndexQueries.status(root).progress).toMatchObject({ files: 3, symbols: 1, skipped: { 'too-large': 1, 'not-utf8': 1 } })
@@ -168,12 +168,12 @@ describe('what a sync writes', () => {
 describe('turning a project off', () => {
   it('removes its rows and nothing else', async () => {
     put('a.ts', 'export function a() {}')
-    commit()
+    await commit()
     enable()
     await sync()
     const other = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'code-index-other-')))
     try {
-      execFileSync('git', ['init', '-q'], { cwd: other })
+      await execFileWhileWorking('git', ['init', '-q'], { cwd: other })
       fs.writeFileSync(path.join(other, 'b.ts'), 'export function b() {}')
       codeIndexCommands.setEnabled(other, true)
       await syncProject(other, never)
@@ -189,7 +189,7 @@ describe('turning a project off', () => {
 
   it('a project never turned on is not read', async () => {
     put('a.ts', 'export function a() {}')
-    commit()
+    await commit()
     const runner = createSyncRunner((error) => { throw error })
     await runner.request(root)
     expect(codeIndexQueries.project(root)).toBeUndefined()
@@ -202,7 +202,7 @@ describe('the running sync', () => {
 
   it('a sync cut short finishes on the next run, equal to a fresh index', async () => {
     someFiles(40)
-    commit()
+    await commit()
     enable()
     const controller = new AbortController()
     let reads = 0
@@ -227,7 +227,7 @@ describe('the running sync', () => {
 
   it('a new request cancels the running one and ends in sync', async () => {
     someFiles(30)
-    commit()
+    await commit()
     enable()
     const errors: unknown[] = []
     const runner = createSyncRunner(error => errors.push(error))
@@ -243,7 +243,7 @@ describe('the running sync', () => {
 
   it('records a failed sync on the project', async () => {
     put('a.ts', 'export function a() {}')
-    commit()
+    await commit()
     enable()
     const errors: unknown[] = []
     const runner = createSyncRunner(error => errors.push(error))
@@ -286,8 +286,8 @@ describe('incremental equals full', () => {
     const random = randomizer(seed)
     enable()
     put('base.ts', 'export function base() {}')
-    commit()
-    git('branch', 'other')
+    await commit()
+    await git('branch', 'other')
     await sync()
     for (let step = 0; step < 25; step++) {
       const action = random.int(6)
@@ -298,10 +298,10 @@ describe('incremental equals full', () => {
       else if (action === 3) {
         const target = random.pick(FILES)
         if (fs.existsSync(absolute) && !fs.existsSync(path.join(root, target))) { fs.mkdirSync(path.dirname(path.join(root, target)), { recursive: true }); fs.renameSync(absolute, path.join(root, target)) }
-      } else if (action === 4) commit(`step ${step}`)
+      } else if (action === 4) await commit(`step ${step}`)
       else {
-        commit(`switch ${step}`)
-        git('checkout', '-q', random.pick(['main', 'other']))
+        await commit(`switch ${step}`)
+        await git('checkout', '-q', random.pick(['main', 'other']))
       }
       if (random.int(2) === 0) await sync()
     }
@@ -321,7 +321,7 @@ describe('the graph', () => {
   it('joins a call through an import and within a file, once a pair, weighted by its sites', async () => {
     put('lib.ts', 'export function target() {}\nexport function other() { helper(); helper() }\nfunction helper() {}')
     put('use.ts', "import { target } from './lib.ts'\nexport function caller() { target(); target(); target() }")
-    commit()
+    await commit()
     enable()
     await sync()
     // The compiler confirms both, so they are its edges, at full weight
@@ -335,7 +335,7 @@ describe('the graph', () => {
     put('a.ts', 'export function map() {}')
     put('b.ts', 'export function map() {}')
     put('use.ts', "import { map } from './b.ts'\nexport function go(array: number[]) { map(); array.map(x => x) }")
-    commit()
+    await commit()
     enable()
     await sync()
     const maps = symbols().filter(s => s.name === 'map')
@@ -347,7 +347,7 @@ describe('the graph', () => {
   it('makes no edge from a bare name it does not hold, and follows no local that shadows an import', async () => {
     put('lib.ts', 'export function Error() {}\nexport function shadowed() {}')
     put('use.ts', "import { shadowed } from './lib.ts'\nexport function go() { new Error(); const inner = (shadowed: () => void) => shadowed(); return inner }")
-    commit()
+    await commit()
     enable()
     await sync()
     expect(callers('Error').results).toEqual([])
@@ -357,7 +357,7 @@ describe('the graph', () => {
   it('follows a member call through its type, which syntax alone cannot', async () => {
     put('lib.ts', 'export class Thing { run() {} }')
     put('use.ts', "import { Thing } from './lib.ts'\nexport function go(thing: Thing) { thing.run() }")
-    commit()
+    await commit()
     enable()
     await sync()
     const run = callers('run')
@@ -368,7 +368,7 @@ describe('the graph', () => {
   it('keeps the syntax edges of a file the compiler does not read', async () => {
     put('lib.ts', 'export function target() {}')
     put('use.js', "import { target } from './lib.ts'\nexport function caller() { target() }")
-    commit()
+    await commit()
     enable()
     await sync()
     expect(callers('target').results).toMatchObject([{ name: 'caller', path: 'use.js', layer: 'inferred' }])
@@ -383,7 +383,7 @@ describe('the graph', () => {
       'export class Sub extends Base { a() { this.b() } b() {} }',
       'export function viaNamespace() { all.deep() }', 'export function viaBarrel() { deep() }', 'export function viaRename() { named() }',
     ].join('\n'))
-    commit()
+    await commit()
     enable()
     await sync()
     expect(callers('deep').results.map(r => r.name).sort()).toEqual(['viaBarrel', 'viaNamespace', 'viaRename'])
@@ -395,7 +395,7 @@ describe('the graph', () => {
     put('Child.vue', '<template><div /></template>')
     put('Parent.vue', `<template><Child @click="go" /></template>\n<script setup lang="ts">\nimport Child from './Child.vue'\nconst go = () => {}\n</script>`)
     put('default.ts', "export { default } from './Child.vue'")
-    commit()
+    await commit()
     enable()
     await sync()
     expect(callers('go').results.map(r => r.name)).toEqual(['Parent'])
@@ -405,7 +405,7 @@ describe('the graph', () => {
   it('a default export follows what it holds, through a rename of it', async () => {
     put('lib.ts', 'export default function named() {}')
     put('use.ts', "import thing from './lib.ts'\nexport function go() { thing() }")
-    commit()
+    await commit()
     enable()
     await sync()
     expect(callers('named').results.map(r => r.name)).toEqual(['go'])
@@ -418,7 +418,7 @@ describe('the graph', () => {
     put('lib.ts', 'export function a() {}')
     put('wantsA.ts', "import { a } from './lib.ts'\nexport function useA() { a() }")
     put('wantsB.ts', "import { b } from './lib.ts'\nexport function useB() { b() }")
-    commit()
+    await commit()
     enable()
     await sync()
     const read = vi.spyOn(fs.promises, 'readFile')
@@ -432,7 +432,7 @@ describe('the graph', () => {
   it('a save keeps other files\' edges into a symbol that stays', async () => {
     put('lib.ts', 'export function target() { return 1 }')
     put('use.ts', "import { target } from './lib.ts'\nexport function caller() { target() }")
-    commit()
+    await commit()
     enable()
     await sync()
     const before = findRelations({ target: symbolNamed('target').id })
@@ -445,7 +445,7 @@ describe('the graph', () => {
     put('deep.ts', 'export function deep() {}')
     put('barrel.ts', "export * from './deep.ts'")
     put('use.ts', "import { deep } from './barrel.ts'\nimport { later } from './later.ts'\nexport function caller() { deep(); later() }")
-    commit()
+    await commit()
     enable()
     await sync()
     expect(callers('deep').results.map(r => r.name)).toEqual(['caller'])
@@ -466,7 +466,7 @@ describe('the graph', () => {
     put('a.ts', 'export function a() {}')
     put('b.ts', 'export function a() {}')
     put('use.ts', "import { a } from '#a'\nexport function go() { a() }")
-    commit()
+    await commit()
     enable()
     await sync()
     put('package.json', JSON.stringify({ imports: { '#a': './b.ts' } }))
@@ -479,7 +479,7 @@ describe('the graph', () => {
     put('deep.ts', 'export function deep() {}')
     put('barrel.ts', "export { deep as shallow } from './deep.ts'")
     put('use.ts', "import { shallow } from './barrel.ts'\nexport function go() { shallow() }")
-    commit()
+    await commit()
     enable()
     await sync()
     expect(callers('deep').results.map(r => r.name)).toEqual(['go'])
@@ -497,7 +497,7 @@ describe('the graph', () => {
     put('deep.ts', 'export function deep() {}')
     put('barrel.ts', 'export const nothing = 1')
     put('use.ts', "import { shallow } from './barrel.ts'\nexport function go() { shallow() }")
-    commit()
+    await commit()
     enable()
     await sync()
     expect(callers('deep').results).toEqual([])
@@ -508,7 +508,7 @@ describe('the graph', () => {
 
   it('an import that asks for no name finds a file that appears', async () => {
     put('use.ts', "import './later.ts'\nexport function go() {}")
-    commit()
+    await commit()
     enable()
     await sync()
     expect(query.ids(fileIdOf(projectIdOf(root), 'use.ts')).pickOne()).toMatchObject({ importsMissing: true })
@@ -521,7 +521,7 @@ describe('the graph', () => {
   it('a file losing a default export and its imports holds what a fresh index would', async () => {
     put('lib.ts', 'export function x() {}')
     put('a.ts', "import { x } from './lib.ts'\nexport default function run() { x() }")
-    commit()
+    await commit()
     enable()
     await sync()
     put('a.ts', 'export function run() {}')
@@ -535,7 +535,7 @@ describe('the graph', () => {
 
   it('counts a member of a local as unfollowed, and a local alone as nothing', async () => {
     put('a.ts', 'export function go(items: number[], fn: () => void) { fn(); items.map(fn) }')
-    commit()
+    await commit()
     enable()
     await sync()
     expect(query.ids(fileIdOf(projectIdOf(root), 'a.ts')).pickOne()).toMatchObject({ unresolvedSites: 1, unresolvedNames: ['map'] })
@@ -547,7 +547,7 @@ describe('the graph', () => {
     put('other.ts', "import { hub } from './hub.ts'\nexport function near() { hub() }")
     put('far.ts', 'export function far() {}')
     put('hub.spec.ts', "import { hub } from './hub.ts'\nexport function aTest() { hub() }")
-    commit()
+    await commit()
     enable()
     await sync()
     const names = codeIndexAnswers.codeMap(root, 'open.ts', 5).map(r => r.name)
@@ -563,12 +563,12 @@ describe('a semantic diff', () => {
   it('reads a staged change with the index off', async () => {
     put('a.ts', 'export function f() { return 1 }\nexport function gone() {}')
     put('style.ts', 'export function g(){return 1}')
-    commit()
+    await commit()
     put('a.ts', 'export function f() { return 2 }\nexport function fresh() {}')
     put('style.ts', 'export function g() {\n  return 1;\n}\n')
     put('new.ts', 'export function brandNew() {}')
     put('notes.md', 'prose')
-    git('add', '-A')
+    await git('add', '-A')
     const diff = await semanticDiff(root, { staged: true })
     expect(diff.changes.map(c => `${c.path} ${c.change} ${c.name}`).sort()).toEqual([
       'a.ts added fresh', 'a.ts body f', 'a.ts removed gone', 'new.ts added brandNew',
@@ -579,12 +579,12 @@ describe('a semantic diff', () => {
 
   it('reads a range', async () => {
     put('a.ts', 'export function f(a: string) {}')
-    commit()
-    const base = git('rev-parse', 'HEAD').trim()
+    await commit()
+    const base = (await git('rev-parse', 'HEAD')).trim()
     put('a.ts', 'export function f(b: string) {}')
     fs.rmSync(path.join(root, 'a.ts'))
     put('b.ts', 'export function h() {}')
-    commit()
+    await commit()
     const diff = await semanticDiff(root, { base, head: 'HEAD' })
     expect(diff.changes.map(c => `${c.path} ${c.change} ${c.name}`).sort()).toEqual(['a.ts removed f', 'b.ts added h'])
   })
@@ -594,7 +594,7 @@ describe('searching symbols', () => {
   it('finds by name, in this project, with tests after the rest', async () => {
     put('tests/a.spec.ts', 'export function widgetHelper() {}')
     put('src/a.ts', 'export function widgetMaker(size: number) {}\nexport function other(widgetArg: string) {}')
-    commit()
+    await commit()
     enable()
     await sync()
     const results = codeIndexQueries.searchSymbols(root, 'widgetM', 10)
