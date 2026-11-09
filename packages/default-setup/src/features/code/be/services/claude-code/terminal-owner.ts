@@ -142,13 +142,13 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   const done = new Promise<void>(resolve => { resolveDone = resolve })
   const changed = () => { for (const listener of listeners) { try { listener() } catch { /* isolate views */ } } }
   const bridge = await createClaudeTerminalBridge({ sessionId: options.sessionId, backgroundProfile:resolveAppEnvironment().userDataDir, backgroundChildUiLaunch:{configDir:env.CLAUDE_CONFIG_DIR,secureStorageConfigDir:env.CLAUDE_SECURESTORAGE_CONFIG_DIR,executable,cwd:options.cwd,searchPath:env.PATH}, backgroundObserver, backgroundAuthority: parentSessionId => createClaudeBackgroundStatusAuthority(parentSessionId, {cwd: options.cwd, cliPath: executable, env}), backgroundTarget: () => continuation ? {parentSessionId: continuation.sessionId, sessionId: continuation.continuedInSessionId, cwd: options.cwd} : undefined, ...(options.permissionMode === 'plan' && options.prePlanMode ? {restorePlan: {sessionId: options.sessionId, mode: options.prePlanMode}} : {}), settings: options.settings, bunOptions: env.BUN_OPTIONS, ownsProcess: pid => isClaudeNativeDescendant(pid, terminal?.pid ?? undefined), changed,
-    pasteImage(path) { if (closed || !terminal) throw new Error('Native terminal closed'); void terminal.write('\x1b[200~' + path + '\x1b[201~') },
-    enter() { if (closed || !terminal) throw new Error('Native terminal closed'); void terminal.write('\r') } })
+    pasteImage(path) { if (closed || !terminal) throw new Error('Native terminal closed'); bestEffort(terminal.write('\x1b[200~' + path + '\x1b[201~')) },
+    enter() { if (closed || !terminal) throw new Error('Native terminal closed'); bestEffort(terminal.write('\r')) } })
   const imageCache = createClaudeTerminalImageCache()
   const imageListeners = new Set<(event: Record<string, unknown>) => void>()
-  const graphicsQuery = createClaudeTerminalGraphicsQueryResponder(text => { if (!closed) void terminal?.write(text) })
+  const graphicsQuery = createClaudeTerminalGraphicsQueryResponder(text => { if (!closed && terminal) bestEffort(terminal.write(text)) })
   const imageTransport = createClaudeTerminalImageFileTransport({
-    reply(text) { if (!closed) void terminal?.write(text) },
+    reply(text) { if (!closed && terminal) bestEffort(terminal.write(text)) },
     image(value) {
       imageCache.put(value)
       for (const listener of imageListeners) { try { listener({ type: 'system', subtype: 'ui_invalidate', event: 'ui.render', client_snapshot: true }) } catch { /* isolate mounted views */ } }
@@ -183,13 +183,24 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       return () => { imageListeners.delete(listener); detach() }
     },
   }
+  /**
+   * A write, resize or pause that cannot be delivered is not this call's to report.
+   *
+   * **Every one of these is a promise, and an unhandled rejection ends the process** — Node's default since
+   * 15. They were synchronous while the pty was this process's, so a failure reached whoever typed; the
+   * session is a socket away, and the honest report of one nobody can reach is its own exit, which arrives
+   * on `onExit` and closes this owner. So they are best effort by construction rather than by neglect.
+   */
+  const bestEffort = (sent: Promise<unknown>): void => { void sent.catch(() => {}) }
   let outputFailed = false, pendingOutput = 0
   let hardStop: ReturnType<typeof setTimeout> | undefined
-  async function finish(code: number, signal?: string) {
+  async function finish(code: number | null, signal?: string) {
     if (closed) return
     imageTransport.close(); imageCache.close(); imageListeners.clear()
-    trace('exit', {outcome:outputFailed ? 'error' : stopping ? 'cancelled' : code === 0 ? 'ok' : 'error',code});
-    closed = true; clearTimeout(hardStop); status = outputFailed ? 'error' : stopping || code === 0 && !signal ? 'exited' : 'error'; exitCode = code
+    // `code` is absent when a signal ended it, which this trace takes only integers for; `outcome` is what
+    // carries that case, and the signal itself reaches the window on the session's own exit
+    trace('exit', {outcome:outputFailed ? 'error' : stopping ? 'cancelled' : code === 0 ? 'ok' : 'error',code: code ?? undefined});
+    closed = true; clearTimeout(hardStop); status = outputFailed ? 'error' : stopping || code === 0 && !signal ? 'exited' : 'error'; exitCode = code ?? undefined
     try { await bridge.close() } finally {
       releasing = true
       try { for (const observer of exitObservers) await observer() } finally { changed(); resolveDone() }
@@ -207,8 +218,8 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       if (closed || terminal !== session) return
       // The group and then the process the broker started: neither pid is this process's to find, and the
       // broker refuses anything outside the session's own tree
-      void session.signal('SIGTERM', { kind: 'group' }).catch(() => {})
-      void session.signal('SIGTERM', { kind: 'leader' }).catch(() => {})
+      bestEffort(session.signal('SIGTERM', { kind: 'group' }))
+      bestEffort(session.signal('SIGTERM', { kind: 'leader' }))
     }
     // **The CLI alone first, so the servers it owns outlive its own shutdown handlers**, where the group
     // would take them with it. The pid is the bridge's claim about which process the CLI is, and the broker
@@ -220,13 +231,13 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
     // What covers it is the escalation below, which was always the backstop for a CLI that does not go:
     // the cost of the bridge naming a pid the broker does not own is that the group waits for it.
     if (nativePid && nativePid !== process.pid) {
-      void session.signal('SIGTERM', { kind: 'pid', pid: nativePid }).catch(() => {})
+      bestEffort(session.signal('SIGTERM', { kind: 'pid', pid: nativePid }))
     } else stopGroup()
     if (!hardStop && !closed) {
       hardStop = setTimeout(() => {
         if (closed || terminal !== session) return
-        void session.signal('SIGKILL', { kind: 'group' }).catch(() => {})
-        void session.signal('SIGKILL', { kind: 'leader' }).catch(() => {})
+        bestEffort(session.signal('SIGKILL', { kind: 'group' }))
+        bestEffort(session.signal('SIGKILL', { kind: 'leader' }))
       }, 2000)
       hardStop.unref()
     }
@@ -265,15 +276,15 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
             if (closed || stopping) return
             // **The session stops being read while the transport drains**, which is what a pause is for: the
             // bytes wait in the pty's buffer and the CLI blocks on its own write, rather than piling up here
-            pendingOutput++; void terminal?.pause()
+            pendingOutput++; if (terminal) bestEffort(terminal.pause())
             void imageTransport.write(text).catch(() => { outputFailed = true; kill() }).finally(() => {
               pendingOutput--
-              if (!closed && !stopping && pendingOutput === 0) void terminal?.resume()
+              if (!closed && !stopping && pendingOutput === 0 && terminal) bestEffort(terminal.resume())
             })
           },
           onExit: (code, signal) => {
             options.signal?.removeEventListener('abort', kill)
-            void finish(code ?? 0, signal ?? undefined).catch(() => {})
+            void finish(code, signal ?? undefined).catch(() => {})
           },
         },
       )
@@ -425,10 +436,10 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         exitObservers.push(listener)
       },
       subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
-      input(id, text) { if (closed || (changingView || preparingParent) && text !== '\x03' || id !== ownerId || typeof text !== 'string' || text.length > 32768) return false; void terminal!.write(text); return true },
+      input(id, text) { if (closed || (changingView || preparingParent) && text !== '\x03' || id !== ownerId || typeof text !== 'string' || text.length > 32768) return false; bestEffort(terminal!.write(text)); return true },
       resize(id, columns, rows) {
         if (closed || id !== ownerId || !Number.isSafeInteger(columns) || !Number.isSafeInteger(rows) || columns < 2 || columns > 500 || rows < 2 || rows > 200) return false
-        void terminal!.resize(columns, rows); return true
+        bestEffort(terminal!.resize(columns, rows)); return true
       },
       async holdQuestionDialog(request) {
         if (closed || request.sessionId !== bridge.projection.sessionId) throw new Error('Native question session expired')

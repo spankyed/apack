@@ -61,7 +61,12 @@ export async function openBackgroundAttachment(continuation: ClaudeNativeContinu
   // **This client's own group, and never the worker it attached to.** `terminate` would end the session and
   // everything under it; what has to go is the `attach` process, which the broker refuses to confuse with
   // anything outside this session's tree
-  const signal = (name: TerminalSignal) => {void client.signal(name, {kind: 'group'}).catch(() => {})}
+  /**
+   * A request this client cannot deliver is not the caller's to hear about: every one is a promise, and an
+   * unhandled rejection ends the process. What reports a client nobody can reach is its own exit.
+   */
+  const bestEffort = (sent: Promise<unknown>): void => { void sent.catch(() => {}) }
+  const signal = (name: TerminalSignal) => {bestEffort(client.signal(name, {kind: 'group'}))}
   const close = async () => {
     if (!ended && !closing) {
       closing = true
@@ -76,8 +81,8 @@ export async function openBackgroundAttachment(continuation: ClaudeNativeContinu
   return {
     get snapshot(): ClaudeBackgroundAttachmentSnapshot {return {id, jobId:session.id, sessionId:session.sessionId, cwd:session.cwd, clientPid:client.pid, status:ended?'exited':'live', exitCode, output:[...chunks]}},
     subscribe(listener) {listeners.add(listener); return () => listeners.delete(listener)},
-    input(ownerId,text) {if (ownerId !== id || ended || closing || typeof text !== 'string' || text.length > 32768) return false; void client.write(text); return true},
-    resize(ownerId,columns,rows) {if (ownerId !== id || ended || closing || !Number.isSafeInteger(columns) || !Number.isSafeInteger(rows) || columns < 2 || columns > 500 || rows < 2 || rows > 200) return false; void client.resize(columns,rows); return true},
+    input(ownerId,text) {if (ownerId !== id || ended || closing || typeof text !== 'string' || text.length > 32768) return false; bestEffort(client.write(text)); return true},
+    resize(ownerId,columns,rows) {if (ownerId !== id || ended || closing || !Number.isSafeInteger(columns) || !Number.isSafeInteger(rows) || columns < 2 || columns > 500 || rows < 2 || rows > 200) return false; bestEffort(client.resize(columns,rows)); return true},
     close,
   }
 }
