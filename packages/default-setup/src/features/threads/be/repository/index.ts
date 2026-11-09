@@ -435,15 +435,38 @@ function blocksOf(messageId: EARS.EntityId): BlockConfig[] {
  * one's content on the first one's row.
  */
 function blockRowsOf(messageId: EARS.EntityId): Array<{ id: EARS.EntityId; type: string; props: Record<string, any> }> {
-  return query.ids(messageId).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block)
-    .map((edge) => ({ edge, row: query.ids(edge.target).pickOne(['type', 'props'] as const) }))
-    .filter((held): held is { edge: typeof held.edge; row: NonNullable<typeof held.row> } => held.row !== null)
-    .sort((a, b) => indexOf(a.edge.info) - indexOf(b.edge.info))
-    .map(({ edge, row }) => ({
-      id: edge.target,
-      type: row.type as string,
-      props: assembled(edge.target, (row.props ?? {}) as Record<string, any>),
-    }));
+  const edges = query.ids(messageId).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block);
+  // **Most messages have no blocks at all**, and a message's read is the hot path — every message in an
+  // opened thread runs it — so one that has none asks nothing further
+  if (edges.length === 0) return [];
+
+  const rows = rowsByIdOf(edges.map((edge) => edge.target), ['type', 'props'] as const);
+  const parts = childrenOf(edges.map((edge) => edge.target));
+
+  return edges
+    .filter((edge) => rows.has(edge.target))
+    .sort((a, b) => indexOf(a.info) - indexOf(b.info))
+    .map((edge) => {
+      const row = rows.get(edge.target)!;
+      return {
+        id: edge.target,
+        type: row.type as string,
+        props: assembled(parts, edge.target, (row.props ?? {}) as Record<string, any>),
+      };
+    });
+}
+
+/**
+ * Rows by id, in one read of the engine rather than one per id.
+ *
+ * **`query.ids` takes the whole list**, which is the difference between a message's read costing what it
+ * holds and costing a constant. Asking per id made reading a message with forty tool entries 45 crossings
+ * where it is now the same handful as a message with none (`tests/features/threads/be/query-work.spec.ts`).
+ */
+function rowsByIdOf<const F extends readonly string[]>(ids: readonly EARS.EntityId[], fields: F): Map<EARS.EntityId, Record<string, any>> {
+  if (ids.length === 0) return new Map();
+  const rows = query.ids(ids).pick(fields as never) as unknown as Array<Record<string, any>> | null;
+  return new Map((rows ?? []).map((row) => [row.id as EARS.EntityId, row]));
 }
 
 /**
@@ -463,18 +486,65 @@ function blockRowsOf(messageId: EARS.EntityId): Array<{ id: EARS.EntityId; type:
 const TEXT_SEGMENTS_BEFORE_COMPACTION = 32;
 
 /**
- * A block's stored props with its children folded in: text segments spliced onto the compacted prefix,
- * and entry rows as the list its component draws.
+ * Every block's growing children, read for all of them at once.
+ *
+ * **Four reads for a message however many blocks it has and however much they hold** — two edge walks and
+ * two row reads — because `query.ids` and `outEdges` both take the whole set. Per block and per child it
+ * was one read each, which put a message's cost on the hot path at what its turn happened to produce.
+ */
+interface BlockChildren {
+  readonly segments: Map<EARS.EntityId, Array<{ id: EARS.EntityId; at: number; text: string }>>;
+  readonly entries: Map<EARS.EntityId, Array<{ id: EARS.EntityId; entry: ToolActivityEntry }>>;
+}
+
+const TOOL_ENTRY_FIELDS = ['entryId', 'tool', 'summary', 'status', 'durationMs', 'outputSummary', 'details'] as const;
+
+function childrenOf(blockIds: readonly EARS.EntityId[]): BlockChildren {
+  const segments = new Map<EARS.EntityId, Array<{ id: EARS.EntityId; at: number; text: string }>>();
+  const entries = new Map<EARS.EntityId, Array<{ id: EARS.EntityId; entry: ToolActivityEntry }>>();
+  if (blockIds.length === 0) return { segments, entries };
+
+  const textEdges = query.ids(blockIds).outEdges(EARS.RelKind.HAS_TEXT, EARS.Entity.BlockText);
+  const entryEdges = query.ids(blockIds).outEdges(EARS.RelKind.HAS_ENTRY, EARS.Entity.ToolEntry);
+
+  const textRows = rowsByIdOf(textEdges.map((edge) => edge.target), ['at', 'text'] as const);
+  const entryRows = rowsByIdOf(entryEdges.map((edge) => edge.target), TOOL_ENTRY_FIELDS);
+
+  for (const edge of textEdges) {
+    const row = textRows.get(edge.target);
+    if (!row) continue;
+    const held = segments.get(edge.source) ?? [];
+    held.push({ id: edge.target, at: row.at as number, text: row.text as string });
+    segments.set(edge.source, held);
+  }
+  for (const edge of entryEdges) {
+    const row = entryRows.get(edge.target);
+    if (!row) continue;
+    const held = entries.get(edge.source) ?? [];
+    held.push({ id: edge.target, entry: toolEntryOf(row), index: indexOf(edge.info) } as never);
+    entries.set(edge.source, held);
+  }
+
+  for (const held of segments.values()) held.sort((a, b) => a.at - b.at);
+  for (const held of entries.values()) {
+    held.sort((a, b) => ((a as never as { index: number }).index) - ((b as never as { index: number }).index));
+  }
+  return { segments, entries };
+}
+
+/**
+ * A block's stored props with its children folded in: text segments spliced onto the compacted prefix, and
+ * entry rows as the list its component draws.
  *
  * **A block's growing parts are children, and they assemble into the two prop names the components read.**
  * Naming `content` and `entries` here is the contract rather than a leak: there are two kinds of growing
  * part and they are genuinely different — text spliced by offset, entries ordered by their edge — so a
  * generic part mechanism invented for two cases would be machinery standing in for a decision.
  */
-function assembled(blockId: EARS.EntityId, props: Record<string, any>): Record<string, any> {
+function assembled(parts: BlockChildren, blockId: EARS.EntityId, props: Record<string, any>): Record<string, any> {
   let held = props;
 
-  const segments = segmentsOf(blockId);
+  const segments = parts.segments.get(blockId) ?? [];
   if (segments.length > 0) {
     const content = segments.reduce(
       (text, segment) => text.slice(0, segment.at) + segment.text,
@@ -483,13 +553,11 @@ function assembled(blockId: EARS.EntityId, props: Record<string, any>): Record<s
     held = { ...held, content };
   }
 
-  const entries = entriesOf(blockId);
+  const entries = parts.entries.get(blockId) ?? [];
   if (entries.length > 0) held = { ...held, entries: entries.map(({ entry }) => entry) };
 
   return held;
 }
-
-const TOOL_ENTRY_FIELDS = ['entryId', 'tool', 'summary', 'status', 'durationMs', 'outputSummary', 'details'] as const;
 
 /** An entry as its block's props carry it: the stored row under the `id` its component and the CLI use */
 const toolEntryOf = (row: Record<string, unknown>): ToolActivityEntry => {
@@ -497,30 +565,19 @@ const toolEntryOf = (row: Record<string, unknown>): ToolActivityEntry => {
   return { ...rest, id: entryId } as unknown as ToolActivityEntry;
 };
 
-/** A block's tool entries in edge order, each with its row */
-function entriesOf(blockId: EARS.EntityId): Array<{ id: EARS.EntityId; entry: ToolActivityEntry }> {
-  return query.ids(blockId).outEdges(EARS.RelKind.HAS_ENTRY, EARS.Entity.ToolEntry)
-    .map((edge) => ({ edge, row: query.ids(edge.target).pickOne(TOOL_ENTRY_FIELDS) }))
-    .filter((held): held is { edge: typeof held.edge; row: NonNullable<typeof held.row> } => held.row !== null)
-    .sort((a, b) => indexOf(a.edge.info) - indexOf(b.edge.info))
-    .map(({ edge, row }) => ({ id: edge.target, entry: toolEntryOf(row as Record<string, unknown>) }));
-}
+/** One block's text segments in offset order, each with its row */
+const segmentsOf = (blockId: EARS.EntityId) => childrenOf([blockId]).segments.get(blockId) ?? [];
 
-/** A block's text segments in offset order, each with its row */
-function segmentsOf(blockId: EARS.EntityId): Array<{ id: EARS.EntityId; at: number; text: string }> {
-  return query.ids(blockId).outEdges(EARS.RelKind.HAS_TEXT, EARS.Entity.BlockText)
-    .map((edge) => ({ id: edge.target, row: query.ids(edge.target).pickOne(['at', 'text'] as const) }))
-    .filter((held): held is { id: EARS.EntityId; row: NonNullable<typeof held.row> } => held.row !== null)
-    .map(({ id, row }) => ({ id, at: row.at as number, text: row.text as string }))
-    .sort((a, b) => a.at - b.at);
-}
+/** One block's tool entries in edge order, each with its row */
+const entriesOf = (blockId: EARS.EntityId) => childrenOf([blockId]).entries.get(blockId) ?? [];
 
 /** Folds a block's segments into its own text and removes them; the block then reads as it always did */
 function compactBlockText(blockId: EARS.EntityId): void {
-  const segments = segmentsOf(blockId);
-  if (segments.length === 0) return;
+  const parts = childrenOf([blockId]);
+  if ((parts.segments.get(blockId) ?? []).length === 0) return;
   const props = (query.ids(blockId).pickOne(['props'] as const)?.props ?? {}) as Record<string, any>;
-  write(blockId).set('props', assembled(blockId, props));
+  write(blockId).set('props', assembled(parts, blockId, props));
+  const segments = parts.segments.get(blockId) ?? [];
   for (const segment of segments) {
     write(blockId).unlink(EARS.RelKind.HAS_TEXT, segment.id);
     write(segment.id).destroy();
@@ -936,9 +993,31 @@ export const chatCommands = {
     return created;
   },
 
-  /** Folds a block's text segments into it: what a writer calls when the block has finished growing */
-  compactMessageBlockText: (params: { blockId: EARS.EntityId }): void => {
-    compactBlockText(params.blockId);
+  /**
+   * Folds a block's children into it and removes them: what a writer calls when the block has stopped
+   * growing.
+   *
+   * **A finished block is one row again.** The children exist to make a *turn's* writes cheap; once it is
+   * over they are only cost — a read of the message assembles them, and a thread keeps them for ever. A
+   * turn of forty tools left forty rows per message behind without this.
+   */
+  compactMessageBlock: (params: { blockId: EARS.EntityId }): void => {
+    const { blockId } = params;
+    const parts = childrenOf([blockId]);
+    const segments = parts.segments.get(blockId) ?? [];
+    const entries = parts.entries.get(blockId) ?? [];
+    if (segments.length === 0 && entries.length === 0) return;
+
+    const props = (query.ids(blockId).pickOne(['props'] as const)?.props ?? {}) as Record<string, any>;
+    write(blockId).set('props', assembled(parts, blockId, props));
+    for (const segment of segments) {
+      write(blockId).unlink(EARS.RelKind.HAS_TEXT, segment.id);
+      write(segment.id).destroy();
+    }
+    for (const entry of entries) {
+      write(blockId).unlink(EARS.RelKind.HAS_ENTRY, entry.id);
+      write(entry.id).destroy();
+    }
   },
 
   /**

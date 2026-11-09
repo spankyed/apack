@@ -206,6 +206,9 @@ export function createToolActivityWriter(
         if (e.status === 'running') { e.status = 'ok'; writeEntry(e); }
       }
       writeNow();
+      // The block has stopped growing, so its entries fold back into it: they made this turn's writes cheap
+      // and from here they would only cost every read of the message, and the store, for the thread's life
+      if (blockId) services.chat.compactMessageBlock(blockId);
     },
   };
 }

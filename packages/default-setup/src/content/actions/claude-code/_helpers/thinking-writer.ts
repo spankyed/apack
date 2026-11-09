@@ -156,6 +156,7 @@ export function createThinkingWriter(
       // so the row has to be the finished one by then — the text feed's contract, for the same reason. The
       // label and state change here too, which are rewrites and only the row can carry them
       writeNow();
+      if (blockId) services.chat.compactMessageBlock(blockId);
       if (blockId) {
         services.chat.streamMessageBlockText({ messageId, block: THINKING_BLOCK, at: 0, text: '', done: true });
       }

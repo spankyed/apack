@@ -300,6 +300,20 @@ export function updateMessageToolEntry(
 }
 
 /**
+ * Folds a block's children into it, so a finished block is one row again.
+ *
+ * The segments and entry rows under a block make a *turn's* writes cost what they write; once the turn is
+ * over they are only cost, to every read of that message and to the store for as long as the thread lives.
+ */
+export function compactMessageBlock(blockId: EARS.EntityId): void {
+  try {
+    repository.chatCommands.compactMessageBlock({ blockId });
+  } catch (err) {
+    logger.error(`compactMessageBlock failed for ${blockId}`, { error: errorMessage(err) });
+  }
+}
+
+/**
  * Removes a message's block of that type.
  *
  * What a writer calls when its block should no longer be there — a tool-activity writer finalising with no
@@ -664,6 +678,7 @@ export const chatService = {
   updateMessageBlock,
   appendMessageBlockText,
   updateMessageToolEntry,
+  compactMessageBlock,
   removeMessageBlock,
   streamMessageText,
   streamMessageBlockText,
