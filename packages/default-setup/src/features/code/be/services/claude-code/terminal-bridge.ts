@@ -86,6 +86,23 @@ export async function createClaudeTerminalBridge(options: {
   let activity: ClaudeNativeTerminalState['activity'], activitySequence = 0, activityRecord: string | undefined
   let preview: ClaudeNativeTerminalState['preview'], previewSequence = 0, previewRecord: string | undefined
   let nativePolling = false
+  /**
+   * How often the plugin should report this session's state, which is the app's answer and not the
+   * plugin's timer.
+   *
+   * **State out and commands in are one request, and that is what bounds this.** The plugin's state is
+   * read by this bridge only until the CLI's own UI mounts and reports its own (`nativePolling`), after
+   * which the plugin's half was answered `{}` and its four requests a second continued for the rest of the
+   * session. That half is now `0`: the reader says it is not reading, and the plugin reports only when a
+   * hook — a session start, a render, either turn boundary — says there is news.
+   *
+   * **Why the other half stays at the fine cadence rather than idling slower.** The same request is how a
+   * submission reaches the prompt: the app cannot push one, so a slower tick is latency the user feels
+   * between pressing send and seeing their text. Slowing it needs the command half to stop riding on it —
+   * one outstanding request this bridge completes when it has work — and that is a change to how a
+   * submission is delivered, not to this cadence.
+   */
+  const pluginCadenceMs = () => nativePolling ? 0 : 250
   let closed = false, busy = false, ready = false
   const ui = createClaudeTerminalUiTransport({ socketPath: uiSocketPath, token, current: () => !closed && observerPid ? { pid: observerPid, sessionId: projection.sessionId } : undefined })
   let backgroundObserver: ClaudeBackgroundStatusObserver | undefined
@@ -206,9 +223,13 @@ export async function createClaudeTerminalBridge(options: {
       }
       if (request.url === '/owner-pending') return value.sessionId === projection.sessionId ? reply(200, { pending: !!pending, ...(pending?.entered ? { id: pending.id } : {}) }) : reply(409, {})
       if (request.url === '/poll') {
+        // Every answer the plugin gets carries the cadence its next report is due at; the CLI's own UI
+        // keeps its own timer, so a direct owner's answer says nothing about it.
+        const answer = (body: Record<string, unknown> = {}) =>
+          reply(200, value.directOwner === true ? body : { ...body, reportEveryMs: pluginCadenceMs() })
         if (value.directOwner !== true && value.sessionId !== projection.sessionId) return reply(200, { background: linkedBackground()?.sessionId === value.sessionId })
         // Once the native owner takes over, a late plugin poll cannot restore older policy metadata.
-        if (nativePolling && value.directOwner !== true) return reply(200, {})
+        if (nativePolling && value.directOwner !== true) return answer()
         if (value.directOwner === true && (typeof value.busy !== 'boolean' || value.turn !== null && (!object(value.turn) || typeof object(value.turn)?.id !== 'string' || typeof object(value.turn)?.cancelled !== 'boolean'))) return reply(400, {})
         if (value.metadata !== undefined && !parseClaudeTerminalMetadata(value.metadata)) return reply(400, {})
         for (const key of ['statusCommand', 'subagentCommand', 'shellPrefix']) if (value[key] !== undefined && value[key] !== null && (typeof value[key] !== 'string' || (value[key] as string).length > 32768)) return reply(400, {})
@@ -281,8 +302,8 @@ export async function createClaudeTerminalBridge(options: {
           if (value.directOwner === true || ui.hasPromptHosts || submission.images.length) {
             try {
               const result = object(await ui.transport.request({ subtype: 'apack_prepare_prompt', text: submission.text, submission_id: submission.id, allow_empty: submission.images.length > 0 }))
-              if (pending !== submission || submission.sessionId !== projection.sessionId) return reply(200, {})
-              if (result?.filled !== true) { settle(new Error('Native terminal draft could not be prepared; the app draft was retained')); return reply(200, {}) }
+              if (pending !== submission || submission.sessionId !== projection.sessionId) return answer()
+              if (result?.filled !== true) { settle(new Error('Native terminal draft could not be prepared; the app draft was retained')); return answer() }
               for (const [index, image] of submission.images.entries()) {
                 if (!options.pasteImage) throw new Error('Native image input is unavailable')
                 if (pending !== submission) throw new Error('Native image submission was retired')
@@ -304,14 +325,14 @@ export async function createClaudeTerminalBridge(options: {
                   await ui.transport.request({ subtype: 'apack_terminal_draft', submission_id: submission.id, remember: true })
                 } finally { await rm(path, { force: true }) }
               }
-              if (pending !== submission || submission.sessionId !== projection.sessionId) return reply(200, {})
+              if (pending !== submission || submission.sessionId !== projection.sessionId) return answer()
               submission.prepared = true
-              return reply(200, { id: submission.id, text: submission.text, prepared: true })
-            } catch (error) { if (pending === submission) settle(error instanceof Error ? error : new Error('Native terminal draft could not be prepared')); return reply(200, {}) }
+              return answer({ id: submission.id, text: submission.text, prepared: true })
+            } catch (error) { if (pending === submission) settle(error instanceof Error ? error : new Error('Native terminal draft could not be prepared')); return answer() }
           }
-          return reply(200, { id: submission.id, text: submission.text })
+          return answer({ id: submission.id, text: submission.text })
         }
-        return reply(200, {})
+        return answer()
       }
       if (value.sessionId !== projection.sessionId) return reply(409, {})
       if (request.url === '/native-view') {
