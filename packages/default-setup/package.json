@@ -17,6 +17,8 @@
     "build:dev": "apack pack build",
     "facade:check": "apack pack facade-report",
     "facade:update": "apack pack facade-report --update",
+    "plugin:check": "tsx scripts/build-native-plugin.ts",
+    "plugin:update": "tsx scripts/build-native-plugin.ts --update",
     "flow-export:check": "npm test -- tests/extensions/steps/export-example.spec.ts",
     "flow-export:update": "UPDATE_FLOW_EXAMPLE=1 npm test -- tests/extensions/steps/export-example.spec.ts",
     "content-parity:check": "npm test -- tests/content",

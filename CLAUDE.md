@@ -151,13 +151,17 @@ resolves the published `dist`, an integration half behind a second config, and a
 build inputs, which reach their specs only through `apack pack build` — and `npm run spec:full` runs them.
 The routes are data (`scripts/lib/spec-plan.ts`).
 
-Three things the chain cannot work out for you, because they rewrite files you commit. **Read the
+Four things the chain cannot work out for you, because they rewrite files you commit. **Read the
 regenerated diff before committing it**: every line should be the edit you just made.
 
 - **A public export of `@apackdev/ears`, `/sdk` or `/ui`** — `npm run api:update`, and commit `etc/`.
 - **default-setup's facade** — `npm run facade:update -w @app/default-setup`, and commit
   `etc/pack-types.api.md`. The chain's `facade:check` replays the verified build (`--from-build`); the
   pack-local command derives from source.
+- **The Claude CLI plugin program (`features/code/be/services/claude-code/native-plugin/`)** — the pack
+  carries it as text, because it runs in the CLI's runtime; `npm run plugin:update -w @app/default-setup`
+  re-bundles it and commits `program.generated.ts`. `program-built.spec.ts` re-takes the same derivation in
+  `test:unit:pack`, so a stale copy fails there rather than at the next terminal launch.
 - **A pack's content source (`src/content/`)** — when only `contentHash`/`rowSha256` moved, re-record with
   `npm run content-parity:update -w @app/default-setup`; never edit a hash by hand.
   `packages/default-setup/tests/content/CLAUDE.md` has the rule for what a golden records.
