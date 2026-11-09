@@ -729,6 +729,23 @@ export function onConnected(callback: () => void): () => void {
   return boundHost().transport.rootEvents.onConnected(callback);
 }
 
+/**
+ * Calls `callback` when a client's connection ends, with the client that went; returns the unsubscribe
+ * (backend only).
+ *
+ * **For a pack that keeps something per window.** A handler is handed the `client` its message arrived on,
+ * so a system can tell one window's ask from another's — a terminal decides whose fit sizes its pty that
+ * way. Keeping that id was unsafe until this existed: the bus has no client-left event, so nothing could
+ * clear what a window left behind, and a reconnect mints a new id, which made the state outlive every
+ * window that could have cleared it.
+ *
+ * Subscribe where the pack starts (`boot.onInit`) rather than at module scope — this reads the bound app,
+ * and a unit test importing the module binds none — and dispose in `boot.onShutdown`.
+ */
+export function onConnectionEnded(callback: (client: string) => void): () => void {
+  return boundHost().transport.rootEvents.onConnectionEnded(callback);
+}
+
 /** Calls `callback` with each message sent to a backend system; returns the unsubscribe (backend only) */
 export function onIncoming(callback: (message: Message) => void): () => void {
   return boundHost().transport.rootEvents.onIncoming(callback);

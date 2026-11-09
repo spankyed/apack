@@ -190,6 +190,8 @@ export type IncomingTerminalEvents =
   | { type: 'terminal.RESTART_TERMINAL'; terminalId: string }
   | { type: 'terminal.TERMINAL_INPUT'; terminalId: string; data: string }
   | { type: 'terminal.RESIZE_TERMINAL'; terminalId: string; cols: number; rows: number }
+  /** This window has stopped showing that terminal, so its fit no longer holds the grid down */
+  | { type: 'terminal.STOPPED_FITTING'; terminalId: string }
   | { type: 'terminal.RENAME_TERMINAL'; terminalId: string; customTitle: string }
   | { type: 'terminal.REFRESH_LIST' }
   | { type: 'terminal.OPEN_TERMINAL_TAB'; terminalId: string }

@@ -4,6 +4,10 @@ import { clearAllSchedules } from './brain/be/services/scheduler.ts';
 import { removeAllListeners as removeAllAdHocListeners } from './brain/be/services/brain.ts';
 import { clearFlowActorRegistry } from './brain/be/flow-system.ts';
 import { services } from '#generated/services.ts';
+import { startTerminalSizing } from './code/be/features/terminal.ts';
+
+/** What the pack's backend follows for as long as it runs */
+let stopTerminalSizing: (() => void) | undefined;
 
 /**
  * The pack's backend started.
@@ -18,6 +22,8 @@ import { services } from '#generated/services.ts';
  * index for good.
  */
 export const onInit = () => {
+  // A terminal's grid is the smallest fit of the windows showing it, so it has to hear when one goes
+  stopTerminalSizing = startTerminalSizing();
   const folded = services.repository.chatCommands.foldStrandedMessageText();
   if (folded > 0) services.logger.info('folded the text of messages a turn left unfinished', { messages: folded });
 };
@@ -35,6 +41,9 @@ export const onShutdown = () => {
   // however the process died — and, with no owner holding it, the broker's own rule that the last client
   // leaving ends them, which is what keeps a dev run or a test from leaving a shell behind. The only
   // deliberate end is the user closing a terminal, which is `terminalService.kill`.
+  // What does end here is this process's own follow of the windows, which is not a session.
+  stopTerminalSizing?.();
+  stopTerminalSizing = undefined;
   //
   // The Claude Code integration's own children are a different matter: a handle is this process's, so a
   // handle left running is leaked rather than persisted, and the views it fed have nobody to reach.

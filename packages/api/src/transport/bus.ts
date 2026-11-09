@@ -32,6 +32,13 @@ const addressable = (ref: string): boolean =>
   || appPacks.getSurfaceEventValidationMap().has(ref)
   || appClaims.clientFor(ref) !== undefined;
 
+// **Released when the connection ends, which is the only event that means the claimer is gone.** A claim is
+// keyed by an id minted per socket, so there is nothing to reconcile: the name is free for the next one.
+//
+// One subscription for the process, rather than a listener armed per successful claim. The old arming was
+// narrower than the thing it protected: a claim made any other way had nobody releasing it.
+rootEvents.onConnectionEnded((client) => { appClaims.release(client); });
+
 export const systemBusRouter = router({
   send: procedure
     // Every field of `Message` beside `event` is named here rather than the object being made passthrough: zod
@@ -119,9 +126,6 @@ export const systemBusRouter = router({
       if (!outcome.ok) {
         throw new TRPCError({ code: 'CONFLICT', message: `"${input.as}" is already claimed by another connection. Close the other drive session, or claim a different name.` });
       }
-      // Released when the connection ends, which is the only event that means the claimer is gone. A claim is
-      // keyed by an id minted per socket, so there is nothing to reconcile: the name is free for the next one.
-      ctx.closed.addEventListener('abort', () => appClaims.release(ctx.client), { once: true });
       logger.info(`→ Claimed "${input.as}"`, { as: input.as });
     }),
   sub: procedure

@@ -196,11 +196,11 @@ import { ChevronRight, ChevronsDownUp, Search } from 'lucide-vue-next'
 import CodePanelHeader from '#features/code/fe/features/CodePanelHeader.vue'
 import NoDirectoryState from '#features/code/fe/features/NoDirectoryState.vue'
 import EmptyState from '#features/code/fe/features/EmptyState.vue'
-import { codeChild } from '../children.ts';
+import { panelChild } from '../children.ts';
 
 // Get actors
 const codeActor: CodeState = useSurface()
-const searchActor = codeChild(codeActor, 'search')!
+const searchActor = panelChild(codeActor, 'search')!
 
 // State selectors
 const searchQuery = ref('')
@@ -344,7 +344,7 @@ const toggleResultExpanded = (path: string) => {
 
 const openMatch = (result: typeof searchResults.value[0], match: typeof result.matches[0]) => {
   // Open file through explorer
-  const explorerActor = codeChild(codeActor, 'explorer')
+  const explorerActor = panelChild(codeActor, 'explorer')
   explorerActor?.send({
     type: 'explorer.OPEN_FILE',
     path: result.path

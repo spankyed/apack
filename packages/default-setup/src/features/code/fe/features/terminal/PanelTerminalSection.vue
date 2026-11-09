@@ -240,13 +240,13 @@ import ContextMenuPopup from '@apackdev/ui/design/ContextMenuPopup'
 import { useSectionVisibilityMenu } from '#features/code/fe/composables/useSectionVisibilityMenu.ts'
 import type { TerminalScript } from '#generated/types.ts'
 import type { TerminalAttachment } from '#features/code/fe/utils/terminal-pool.ts'
-import { codeChild } from '../children.ts';
+import { panelChild } from '../children.ts';
 
 const props = withDefaults(defineProps<{ height?: number }>(), { height: 256 })
 
 // Actors
 const codeActor: CodeState = useSurface()
-const terminalActor = codeChild(codeActor, 'terminal')!
+const terminalActor = panelChild(codeActor, 'terminal')!
 
 // State selectors
 const panelTerminalId = useSelector(codeActor, (state) => state.context.panelTerminalId)
@@ -335,7 +335,12 @@ const attachTerminal = (terminalId: string) => {
  */
 const detachTerminal = ({ handingOver = false } = {}) => {
   // Releasing is also how a host another has taken over from detaches nothing (F1)
-  attachment?.release()
+  const letGo = attachment?.release() ?? false
+  // **The backend holds the grid to the smallest fit of the windows showing it**, so a window that has
+  // stopped showing one has to say so or it goes on holding that terminal small for every other window.
+  // Only when this host is what let go: during a remount the new host has already attached, and this would
+  // drop the fit it just recorded.
+  if (letGo && attachment) terminalActor?.send({ type: 'terminal.DETACHED', terminalId: attachment.terminalId })
   attachment = null
   hasSelection.value = false
   // Letting go ends any outstanding request to focus, for the same reason the guard above does: the attach

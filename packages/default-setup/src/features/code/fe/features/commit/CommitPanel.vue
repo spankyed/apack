@@ -647,12 +647,12 @@ import ToastNotification from '@apackdev/ui/design/ToastNotification'
 import ContextMenuPopup from '@apackdev/ui/design/ContextMenuPopup'
 import PanelResizer from '@apackdev/ui/layout/panel-resizer'
 import { useSectionVisibilityMenu } from '#features/code/fe/composables/useSectionVisibilityMenu.ts'
-import { codeChild } from '../children.ts';
+import { panelChild } from '../children.ts';
 
 // Get actors
 const shell = useShell()
 const codeActor: CodeState = useSurface()
-const commitActor = codeChild(codeActor, 'commit')!
+const commitActor = panelChild(codeActor, 'commit')!
 
 // Settings from code actor
 const codeSettings = useSelector(codeActor, (state) => state.context.settings)

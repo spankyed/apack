@@ -20,6 +20,8 @@ vi.mock('../../src/runtime/index.ts', () => ({ appPacks: {} }));
 vi.mock('../../src/transport/emitter.ts', () => ({
   rootEvents: {
     onOutgoing: (callback: (message: Message) => void) => { listeners.add(callback); return () => listeners.delete(callback); },
+    onConnectionEnded: () => () => {},
+    emitConnectionEnded: () => {},
     emitConnected: () => {},
     emitPackClientConnected: () => {},
   },
