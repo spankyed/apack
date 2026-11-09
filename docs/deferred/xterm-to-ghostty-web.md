@@ -81,6 +81,9 @@ Check these behaviors against actual upstream APIs:
 | Events | Resize, selection and parsed-output notifications have supported equivalents |
 | Viewport | Observe scroll position and restore pinned/unpinned state without depending on xterm DOM classes |
 | Addon replacements | Identify supported fitting, link activation, Unicode width and clipboard behavior; do not assume xterm addons load unchanged |
+| Inline images | Does the release draw sixel or the Kitty graphics protocol? xterm answers only with `@xterm/addon-image`, which this repo does not ship, so neither engine has it today and a WASM parser port may answer for neither. A capability we lack, not a parity risk |
+| Progress reporting | OSC 9;4. The broker's marker scanner already reads the stream a shell emits it on, so this is a question about the renderer alone |
+| Ligatures | xterm needs `@xterm/addon-ligatures`, which reads font files from disk and so needs a Node path rather than the sandboxed renderer. Record whether the replacement needs anything at all |
 | Rendering lifecycle | Open, detach, hidden output, reattach, resize and dispose work without leaked renderers or listeners |
 | Accessibility | Keyboard focus and assistive text access remain usable in Electron |
 
@@ -178,6 +181,14 @@ terminal reference documentation, record verification evidence and archive this 
 - How does that release expose write completion, viewport state, fitting and accessibility?
 - Can the existing pack asset pipeline deliver its WASM unchanged, or is a targeted build change needed?
 - What measured regression limits determine whether the migration is acceptable?
+- **Is one engine purchasable?** This repo parses the same bytes twice — `alacritty_terminal` in the broker,
+  for search, snapshots and the markers, and the window's emulator again for drawing. The paragraph above on
+  shared lineage is only buyable if libghostty's VT core exposes a C API a Rust broker can bind. If it does,
+  `alacritty_terminal`, its `vte` and much of `markers.rs` collapse into one implementation and the two
+  halves cannot disagree about a screen. If it does not, two engines is the permanent state and D11's choice
+  of a Rust VT crate stands as decided. Answer this in Phase 0, because it decides whether the broker is in
+  this migration's scope at all — and until it is answered, do not refactor the broker's parser onto `vte`,
+  which would couple the marker scanner to the crate most likely to leave.
 
 The next checkpoint is Phase 0's capability matrix and offline packaged-WASM proof. No implementation,
 dependency change or commit is part of writing this deferred plan.
