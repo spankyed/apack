@@ -78,6 +78,34 @@ The budget this buys is derived rather than chosen: a message leaves when the wi
 so a run of a given length cannot produce more than one per window plus one per cap. Measured in the app over
 the same corpus either side of the change: **64 KiB of output was 115 messages and is 6**.
 
+## Stopping one session, and signalling one program
+
+**A pack never holds a pty**, and the three things that used to need one are requests now: `pause`/`resume`
+on a session, `signal` to its process, its group or one pid inside its tree, and an `exit` that says whether
+a code or a signal ended it. The reason to know this is the mistake it prevents — a feature that needs any
+of the three reaches for `node-pty`, which puts a pty back in the API process and takes the Electron-ABI
+rebuild with it. `findNodePtyImports` refuses that in pack sources, and these are what make the refusal
+something a caller can comply with.
+
+- **`pause` is a second class of flow control**, not the credit that bounds the channel. Credit bounds how
+  much output is in flight for every session at once, because one connection carries them all — so reading
+  that connection more slowly stalls every terminal in the app to slow one down. A pause stops one session
+  being read, and the bytes stay in the kernel's pty buffer: it fills, the program blocks on its own write,
+  and nothing accumulates anywhere. Two things follow and are the contract: the chunk a read already
+  outstanding returns still arrives (as it does for `node-pty`'s `pause()`), and a paused session's screen
+  stops being fed, so a `screen`, a `facts` and a `text` wait describe it as it was. An exit is unaffected.
+- **A pause does not outlive the client that asked for one.** The connection leaving resumes everything,
+  because the next client never asked and has no way to find out.
+- **`signal` is for driving a particular program**, where `terminate` ends a session and its whole tree.
+  `group` is `kill(-pid)` and no more: a shell with job control puts each background job in a group of its
+  own, so a group signal does not reach one. A pid outside the session's tree is refused
+  (`OUTSIDE_SESSION`), which is what makes naming one safe to offer at all — a pid is a number any caller
+  can produce. POSIX only: Windows answers `UNSUPPORTED` rather than approximating signals.
+- **An exit is a code or a signal, never both.** `portable-pty` reports a killed child as code 1 with the
+  system's description of the signal, so a shutdown the app asked for and a crash were the same `1`. The
+  signal travels by name, inverted from that description against the same `strsignal` in the broker's own
+  process, because the description is prose written for a person and translated.
+
 ## The socket
 
 **A name, and its spelling differs by platform.** On POSIX it is a Unix socket in a 0700 directory under the

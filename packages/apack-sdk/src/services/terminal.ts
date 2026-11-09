@@ -20,8 +20,41 @@ export interface TerminalListeners {
   /** Bytes the process wrote, as they arrive */
   onOutput(data: string): void;
   /** The process ended, however it ended — killed or of its own accord. Delivered once */
-  onExit(code: number | null): void;
+  /**
+   * The process ended, however it ended: a code when it exited, the name of a signal when one killed it,
+   * and never both.
+   *
+   * **A signal is not an exit code, and reporting one as the other loses what a window needed.** A shell the
+   * user quit and a program the app terminated are the same `1` otherwise, so nothing can tell a crash it
+   * should draw a seam for from the shutdown it asked for itself. Both are `null` when the end was inferred
+   * rather than reported — the host lost its connection to the session's owner.
+   */
+  onExit(code: number | null, signal: string | null): void;
 }
+
+/**
+ * A signal a session's processes may be sent.
+ *
+ * A closed set rather than a number, because the point is a caller that cannot name something else: an
+ * arbitrary one would make this an interface to `kill(2)` rather than to a session.
+ */
+export type TerminalSignal = 'SIGHUP' | 'SIGINT' | 'SIGQUIT' | 'SIGTERM' | 'SIGKILL';
+
+/**
+ * What a signal is sent to.
+ *
+ * **`group` is the process group the session's own process leads, and no more than that.** A shell with job
+ * control puts each background job in a group of its own, so a group signal does not reach one — `terminate`
+ * is what ends a session and everything under it. What a group is for is a program started directly and the
+ * children it left in its own group.
+ */
+export type TerminalSignalScope =
+  /** The process the host started for this session */
+  | { readonly kind: 'leader' }
+  /** The process group it leads */
+  | { readonly kind: 'group' }
+  /** One process, refused unless it is inside this session's tree */
+  | { readonly kind: 'pid'; readonly pid: number };
 
 /** One session, as its owner holds it */
 export interface TerminalSession {
@@ -49,6 +82,35 @@ export interface TerminalSession {
   write(data: string): Promise<void>;
   /** The viewport changed. One size per session, because a pty has one */
   resize(cols: number, rows: number): Promise<void>;
+  /**
+   * Stops the session's pty being read, so the program in it feels the reader stop.
+   *
+   * **For an owner whose own sink is slower than a program can write** — output that has to be handed to
+   * something that drains before the next of it can be taken. Taking the output more slowly is not the same
+   * thing: one connection carries every session, so that slows all of them to slow one down.
+   *
+   * **The bytes are held by the kernel, not accumulated anywhere**: the pty's buffer fills and the program
+   * blocks on its own write, so a pause is backpressure reaching it. Two things follow, and both are the
+   * contract rather than a limitation — output a read already outstanding returns still arrives, and a
+   * paused session's `scrollback` stops growing because nothing is being parsed. An exit is unaffected: it
+   * is waited for on the process rather than read off the pty.
+   */
+  pause(): Promise<void>;
+  /** Reads it again, and delivers what arrived while it was not being read */
+  resume(): Promise<void>;
+  /**
+   * Sends a signal to the session's process, its process group, or one process inside its tree.
+   *
+   * `terminate` ends a session and its tree, which is all a terminal needs. This is for an owner driving a
+   * particular program and shutting it down the way that program documents: signal the program so the
+   * servers it owns outlive its own shutdown handlers, then its group, then the group harder.
+   *
+   * **POSIX only**, and refused rather than approximated elsewhere — Windows has no signals. A pid outside
+   * this session's tree is refused too, which is what makes naming one safe to offer: a pid is a number any
+   * caller can produce, and signalling whatever one names would be an interface to every process the user
+   * owns.
+   */
+  signal(signal: TerminalSignal, scope: TerminalSignalScope): Promise<void>;
   /** Ends the session and its process tree. Explicit termination, as distinct from a view closing */
   terminate(): Promise<void>;
 }

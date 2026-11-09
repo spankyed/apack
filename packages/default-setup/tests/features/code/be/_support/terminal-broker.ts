@@ -10,7 +10,7 @@
 // So fidelity lives here once. A case records what it cares about by reading the slice it wants off the
 // returned object; nothing is per-spec except which slice it reads.
 import { mockService } from '@apackdev/testing/harness'
-import type { TerminalListeners } from '@apackdev/sdk/services'
+import type { TerminalListeners, TerminalSession, TerminalSignal, TerminalSignalScope } from '@apackdev/sdk/services'
 
 /** The options the service was opened with, whole, so a case reads the field it is about */
 export interface OpenOptions {
@@ -39,6 +39,10 @@ export interface RecordingBroker {
   readonly written: ReadonlyArray<{ id: string; data: string }>
   /** The sessions `terminate()` was called on, in order */
   readonly terminated: readonly string[]
+  /** `pause()` and `resume()` as they were called, in order, so a case reads the sequence and not a count */
+  readonly flow: ReadonlyArray<{ id: string; kind: 'pause' | 'resume' }>
+  /** The signals sent, with what each was aimed at */
+  readonly signalled: ReadonlyArray<{ id: string; signal: TerminalSignal; scope: TerminalSignalScope }>
   /**
    * Ends the shell under a session as the OS would.
    *
@@ -46,7 +50,7 @@ export interface RecordingBroker {
    * `exit`, `logout` and Ctrl-D all end a shell with 0, and a segfault, an OOM kill and a failing `set -e`
    * script do not.
    */
-  endShell(id: string, code: number | null): void
+  endShell(id: string, code: number | null, signal?: string | null): void
   /** Bytes arriving from a session's shell */
   emit(id: string, data: string): void
   /** The sessions the broker still has: opened and not yet ended */
@@ -74,12 +78,41 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
   const resized: Array<{ id: string; cols: number; rows: number }> = []
   const written: Array<{ id: string; data: string }> = []
   const terminated: string[] = []
+  const flow: Array<{ id: string; kind: 'pause' | 'resume' }> = []
+  const signalled: Array<{ id: string; signal: TerminalSignal; scope: TerminalSignalScope }> = []
   const listening = new Map<string, TerminalListeners>()
   const refusals = new Map<number, string>()
   const refusedTerminations = new Map<string, string>()
   const live = new Set<string>()
   const adopted: string[] = []
   let next = 0
+
+  /**
+   * One session handle for both routes, because what a holder may do with a session does not depend on how
+   * it came to hold it — and because this file's own history is six copies that drifted.
+   */
+  const handle = (id: string, pid: number | null): TerminalSession => ({
+    id,
+    pid,
+    scrollback: 1000,
+    write: async (data: string) => { written.push({ id, data }) },
+    resize: async (cols: number, rows: number) => { resized.push({ id, cols, rows }) },
+    pause: async () => { flow.push({ id, kind: 'pause' }) },
+    resume: async () => { flow.push({ id, kind: 'resume' }) },
+    signal: async (signal, scope) => { signalled.push({ id, signal, scope }) },
+    // **A signal, as the broker's kill is**, and a signal is not an exit code: `portable-pty` kills with
+    // SIGHUP and the protocol reports that by name with no code at all. A double answering a number here
+    // would let the service decide a close by reading the code — the one thing that cannot work, so a case
+    // would pass while the app marked every closed terminal crashed
+    terminate: async () => {
+      const refusal = refusedTerminations.get(id)
+      // Nothing is recorded and no exit is delivered: a refused kill ended nothing, and the caller has
+      // only this rejection to act on
+      if (refusal !== undefined) throw new Error(refusal)
+      terminated.push(id)
+      listening.get(id)?.onExit(null, 'SIGHUP')
+    },
+  })
 
   mockService('terminal', {
     open: async (options: OpenOptions, listeners: TerminalListeners) => {
@@ -91,23 +124,7 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
       listening.set(id, listeners)
       live.add(id)
       opened.push({ id, pid, options, listenersGivenAtOpen: typeof listeners?.onOutput === 'function' })
-      return {
-        id,
-        pid,
-        write: async (data: string) => { written.push({ id, data }) },
-        resize: async (cols: number, rows: number) => { resized.push({ id, cols, rows }) },
-        // A signal, as the broker's kill is. A double exiting 0 here would let the service decide a close
-        // by reading the code — which is the one thing that cannot work, so a case would pass while the app
-        // marked every closed terminal crashed
-        terminate: async () => {
-          const refusal = refusedTerminations.get(id)
-          // Nothing is recorded and no exit is delivered: a refused kill ended nothing, and the caller has
-          // only this rejection to act on
-          if (refusal !== undefined) throw new Error(refusal)
-          terminated.push(id)
-          listening.get(id)?.onExit(1)
-        },
-      }
+      return handle(id, pid)
     },
 
     /**
@@ -121,19 +138,8 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
       adopted.push(id)
       if (!live.has(id)) throw new Error(`no session ${id}`)
       listening.set(id, listeners)
-      return {
-        id,
-        // As the broker does: a pid is answered for a spawn and for nothing else
-        pid: null,
-        write: async (data: string) => { written.push({ id, data }) },
-        resize: async (cols: number, rows: number) => { resized.push({ id, cols, rows }) },
-        terminate: async () => {
-          const refusal = refusedTerminations.get(id)
-          if (refusal !== undefined) throw new Error(refusal)
-          terminated.push(id)
-          listening.get(id)?.onExit(1)
-        },
-      }
+      // As the broker does: a pid is answered for a spawn and for nothing else
+      return handle(id, null)
     },
   })
 
@@ -143,12 +149,12 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
     return found
   }
   return {
-    opened, resized, written, terminated, adopted,
+    opened, resized, written, terminated, adopted, flow, signalled,
     get live() { return [...live] },
-    endShell: (id, code) => {
+    endShell: (id, code, signal = null) => {
       // The broker forgets a session as it exits, which is what makes its id refuse an adoption afterwards
       live.delete(id)
-      listenersFor(id).onExit(code)
+      listenersFor(id).onExit(code, signal)
     },
     emit: (id, data) => listenersFor(id).onOutput(data),
     refuseOpen: (nth, why = 'the broker would not start') => { refusals.set(nth, why) },
