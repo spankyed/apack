@@ -16,6 +16,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gitIn, pinWarnings } from './lib/vendor-pin.mjs';
 
 /** The apack-terminal checkout the link points at @param {NodeJS.ProcessEnv} [env] */
 export function apackTerminalCheckout(env = process.env) {
@@ -44,14 +45,17 @@ export function linkApackTerminal(root, checkout = apackTerminalCheckout()) {
   else if (held) throw new Error(`${link} is a ${held.isDirectory() ? 'directory' : 'file'}, not the link to an apack-terminal checkout: move it away first`);
   // A junction on Windows, as elmdb's is: neither elevation nor Developer Mode, and Node reads either as a link
   fs.symlinkSync(checkout, link, process.platform === 'win32' ? 'junction' : 'dir');
-  return { link, checkout, rev };
+  // Reported rather than refused, and after the link is in place: what they describe costs a CI run or a
+  // local one testing the wrong code, never this command (`lib/vendor-pin.mjs`)
+  return { link, checkout, rev, warnings: pinWarnings({ name: 'apack-terminal', rev, checkout, run: gitIn(checkout) }) };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   try {
-    const { link, checkout, rev } = linkApackTerminal(root);
+    const { link, checkout, rev, warnings } = linkApackTerminal(root);
     console.log(`${path.relative(root, link)} → ${checkout} (pinned ${rev.slice(0, 12)})`);
+    for (const warning of warnings) console.warn(`\n! ${warning}`);
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
     process.exit(1);
