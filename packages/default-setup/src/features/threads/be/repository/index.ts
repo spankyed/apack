@@ -497,7 +497,29 @@ interface BlockChildren {
   readonly entries: Map<EARS.EntityId, Array<{ id: EARS.EntityId; entry: ToolActivityEntry }>>;
 }
 
-const TOOL_ENTRY_FIELDS = ['entryId', 'tool', 'summary', 'status', 'durationMs', 'outputSummary', 'details'] as const;
+/**
+ * What an entry contributes to its block's props: the fields the collapsed row draws, and **not** `details`.
+ *
+ * `details.output` is the whole tool result — a `Read` of a large file is that file — and it is revealed on
+ * hover, inside a block the user has opened. Carried in the props it was read on every re-run of the
+ * message's view, which re-runs on every append while a turn streams, so a window paid for every tool's
+ * full output to draw rows showing a 120-character summary of each. That is a different axis from the
+ * crossings this file's neighbour bounded: one read, and all of it.
+ *
+ * `entryDetails` serves them instead, to the window that has the block open. EARS holds one value per
+ * attribute and `pick` reads the ones it names, so leaving `details` out of this list is what stops it
+ * being read — and `BLOCK_DETAILS` is where it goes once the entry rows are folded away.
+ */
+const TOOL_ENTRY_FIELDS = ['entryId', 'tool', 'summary', 'status', 'durationMs', 'outputSummary'] as const;
+
+/**
+ * The attribute a compacted block keeps its entries' details under, by entry id.
+ *
+ * **A separate attribute rather than a field of `props`**, which is what lets a finished block stay one row
+ * without putting the turn's whole output back into every read of it: a message's read picks `type` and
+ * `props`, so this is not loaded, and the hover's own read names it alone.
+ */
+const BLOCK_DETAILS = 'entryDetails';
 
 function childrenOf(blockIds: readonly EARS.EntityId[]): BlockChildren {
   const segments = new Map<EARS.EntityId, Array<{ id: EARS.EntityId; at: number; text: string }>>();
@@ -554,7 +576,9 @@ function assembled(parts: BlockChildren, blockId: EARS.EntityId, props: Record<s
   }
 
   const entries = parts.entries.get(blockId) ?? [];
-  if (entries.length > 0) held = { ...held, entries: entries.map(({ entry }) => entry) };
+  // `blockId` beside them because the entries no longer carry their `details`: it is what the component
+  // names to ask for them (`entryDetails`), and only a block with entries has anything to ask about
+  if (entries.length > 0) held = { ...held, entries: entries.map(({ entry }) => entry), blockId };
 
   return held;
 }
@@ -582,6 +606,26 @@ function compactBlockText(blockId: EARS.EntityId): void {
     write(blockId).unlink(EARS.RelKind.HAS_TEXT, segment.id);
     write(segment.id).destroy();
   }
+}
+
+/**
+ * The full details of a block's tool entries, by the entry id its component draws them under.
+ *
+ * **Both places they can be**, because a block is compacted when its writer finishes: the live entry rows
+ * while a turn runs, and `BLOCK_DETAILS` on the block itself once those rows have been folded away. A read
+ * that knew only the rows would answer nothing for every finished turn, which is most of a thread.
+ */
+function entryDetailsOf(blockId: EARS.EntityId): Record<string, ToolActivityEntry['details']> {
+  const folded = (query.ids(blockId).pickOne([BLOCK_DETAILS] as const)?.[BLOCK_DETAILS] ?? {}) as Record<string, ToolActivityEntry['details']>;
+  const live = rowsByIdOf(
+    query.ids(blockId).outEdges(EARS.RelKind.HAS_ENTRY, EARS.Entity.ToolEntry).map((edge) => edge.target),
+    ['entryId', 'details'] as const,
+  );
+  const held: Record<string, ToolActivityEntry['details']> = { ...folded };
+  for (const row of live.values()) {
+    if (row.entryId !== undefined) held[row.entryId as string] = row.details as ToolActivityEntry['details'];
+  }
+  return held;
 }
 
 /** The message's block of that type, or absence; the type is what a streaming writer owns one by */
@@ -807,6 +851,7 @@ export const chatQueries = {
 
   /** A message's blocks, assembled from their rows: what an export carries and `messageById` folds in */
   blocksOf: (messageId: EARS.EntityId): BlockConfig[] => blocksOf(messageId),
+  entryDetails: (blockId: EARS.EntityId): Record<string, ToolActivityEntry['details']> => entryDetailsOf(blockId),
 
   messageById: (messageId: EARS.EntityId): MessageEntity | null => {
     const message = query.ids(messageId).pickOne([
@@ -1014,6 +1059,9 @@ export const chatCommands = {
       write(blockId).unlink(EARS.RelKind.HAS_TEXT, segment.id);
       write(segment.id).destroy();
     }
+    // The details are folded onto the block under their own attribute, not into `props`: the rows that hold
+    // them are about to go, and a read of the message must not start carrying the turn's whole output again
+    if (entries.length > 0) write(blockId).set(BLOCK_DETAILS, entryDetailsOf(blockId));
     for (const entry of entries) {
       write(blockId).unlink(EARS.RelKind.HAS_ENTRY, entry.id);
       write(entry.id).destroy();
