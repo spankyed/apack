@@ -6,7 +6,9 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(0) })
 afterEach(() => vi.useRealTimers())
 function fixture() {
   const update = vi.fn()
-  const services = { chat: { updateMessageState: update } } as unknown as Services
+  // `streamMessageBlockText` is the block's feed (G1): growth goes out through it and is not stored, so a
+  // fixture about what reaches the row records the row's writes and lets the feed go nowhere.
+  const services = { chat: { updateMessageState: update, streamMessageBlockText: vi.fn() } } as unknown as Services
   return { writer: createThinkingWriter(services, 'message-one' as EntityId), update, services }
 }
 it('retains thinking from a later model cycle and counts active thinking time rather than tool wait time', async () => {
@@ -67,7 +69,11 @@ describe('what a turn writes to the message row', () => {
   function turn() {
     const writes: string[] = []
     const services = {
-      chat: { updateMessageState: (_id: unknown, updates: unknown) => { writes.push(JSON.stringify(updates)) } },
+      chat: {
+        updateMessageState: (_id: unknown, updates: unknown) => { writes.push(JSON.stringify(updates)) },
+        // The feed costs no write, which is the whole point of it; these cases count writes
+        streamMessageBlockText: () => {},
+      },
     } as unknown as Services
     const thinking = createThinkingWriter(services, 'message-one' as EntityId)
     const tools = createToolActivityWriter(services, 'message-one' as EntityId, {

@@ -474,7 +474,37 @@ export function findElmdbImports(rules = ELMDB_RULES, root = repoRoot): string[]
 }
 
 /**
- * `file:line: node-pty` for each pack file that imports the native pty binding.
+ * Pack files that hold a pty of their own, and what `services.terminal` cannot do for each.
+ *
+ * **Every entry here is a capability the broker's protocol is missing, not a preference.** The contract
+ * hands back a session that can be written to, resized and terminated, and these three need more than that:
+ *
+ *  - **Backpressure.** `onOutput` is news with nowhere to push back from. The native terminal pauses the pty
+ *    while its image transport drains a frame and resumes after, and without that the transport is overrun.
+ *  - **Signals, rather than an end.** `terminate()` ends the session and its tree. Stopping the `claude` CLI
+ *    means SIGTERM to the native pid so the servers it owns survive its own shutdown handlers, the process
+ *    group next, and SIGKILL to the group only after a grace — three different signals to two different
+ *    targets.
+ *  - **How it ended.** `onExit` carries a code; these read the signal beside it, which is what tells a kill
+ *    from an exit.
+ *
+ * So the condition for emptying this list is the protocol gaining those three, which is the sibling
+ * repository's change rather than this one's. Until then the rule holds for every pack file but these, and
+ * an entry that stops applying is reported, so the list cannot outlive its reasons.
+ */
+const OWNS_ITS_OWN_PTY: Record<string, string> = {
+  'packages/default-setup/src/features/code/be/services/claude-code/background-attachment.ts':
+    'attaches to a background worker and must signal that client\'s own process group without ending the '
+    + 'worker it attached to, where terminate() ends the session and everything under it',
+  'packages/default-setup/src/features/code/be/services/claude-code/terminal-owner.ts':
+    'drives the claude TUI: it throttles the pty while the image transport drains, signals the native pid '
+    + 'and the group separately so owned servers outlive the CLI\'s shutdown handlers, and reads the exit '
+    + 'signal beside the code',
+};
+
+/**
+ * `file:line: node-pty` for each pack file that imports the native pty binding, and each entry in
+ * {@link OWNS_ITS_OWN_PTY} that no longer does.
  *
  * **A pack does not own a process.** It asks `services.terminal` for a session; the pty is the broker's, in a
  * process of its own, which is what makes a session's lifetime independent of the API's and what gives the
@@ -485,10 +515,36 @@ export function findElmdbImports(rules = ELMDB_RULES, root = repoRoot): string[]
  * the one native module left. It is a rule over pack sources rather than a layer rule, because `node-pty` is
  * a third-party dependency and no layer table has a row for one.
  */
-export function findNodePtyImports(dirs: readonly string[] = PACK_CODE_DIRS, root = repoRoot): string[] {
-  const rule: Rule = (node) => (ts.isStringLiteralLike(node)
-    && (node.text === 'node-pty' || node.text.startsWith('node-pty/')) ? [node.text] : undefined);
-  return findInFiles(filesUnder(dirs, root), root, rule).sort();
+export function findNodePtyImports(dirs: readonly string[] = PACK_CODE_DIRS, root = repoRoot,
+  excepted = OWNS_ITS_OWN_PTY): string[] {
+  const rule: Rule = (node) => {
+    if (!ts.isStringLiteralLike(node) || (node.text !== 'node-pty' && !node.text.startsWith('node-pty/'))) {
+      return undefined;
+    }
+    // **A mock of the binding is the opposite of loading it**, and `readSource`'s specifiers cannot tell the
+    // two apart: `vi.mock` names a module path, which is what every other rule here wants from it. The
+    // factory is what runs in the binding's place, so nothing native is loaded — and a spec that writes one
+    // exists *because* the file it covers holds a pty, which is the finding already reported there. Listing
+    // each such spec instead would be a list that grows with the suite and names no defect of its own.
+    const call = node.parent;
+    if (call && ts.isCallExpression(call) && call.arguments[0] === node
+      && /^(vi|jest)\.(mock|doMock|unmock)$/.test(call.expression.getText())) return undefined;
+    return [node.text];
+  };
+  const applied = new Set<string>();
+  const problems = filesUnder(dirs, root).flatMap((file) => {
+    const relative = repoRelative(root, file);
+    const found = findInFiles([file], root, rule);
+    if (found.length === 0) return [];
+    if (excepted[relative] !== undefined) { applied.add(relative); return []; }
+    return found;
+  });
+  for (const [relative, reason] of Object.entries(excepted)) {
+    if (!applied.has(relative)) {
+      problems.push(`${relative}: listed in OWNS_ITS_OWN_PTY (${reason}) but it no longer imports node-pty`);
+    }
+  }
+  return problems.sort();
 }
 
 /** The one module that asks git what files this repo has; every other caller goes through it */
@@ -1005,7 +1061,7 @@ const RULE_LIST = [
     over: PACK_CODE_DIRS,
     repoOnly: { kind: 'inapplicable', note: "The pack-facing half is the pack bundle's own check: `apack pack build` refuses a bundle importing a native binding it cannot ship" },
     find: findNodePtyImports,
-    rule: 'A pack asks services.terminal for a session and never loads node-pty: the pty belongs to the broker, in a process of its own, which is what makes a session outlive the API and what owns a process tree on Windows',
+    rule: 'A pack asks services.terminal for a session and never loads node-pty: the pty belongs to the broker, in a process of its own, which is what makes a session outlive the API and what owns a process tree on Windows — bar the files in OWNS_ITS_OWN_PTY, each named with the capability the protocol is missing',
   },
   {
     id: 'findEmulatorImports',
