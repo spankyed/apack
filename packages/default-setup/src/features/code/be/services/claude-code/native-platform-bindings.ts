@@ -125,8 +125,18 @@ export const claudeNativeLinuxBindings: {
       "module": "chunk-xy72b2cp.js",
       "exports": {
         "ETt": "uRt",
-        "vcr": "ncr"
+        "vcr": "ncr",
+        "Ecr": "tcr",
+        "ost": "Xot"
       }
+    },
+    "chunk-r1ydygv8.js": {
+      "module": "chunk-qrep449b.js",
+      "exports": { "Tr": "Rr", "Be": "He" }
+    },
+    "chunk-gc95262s.js": {
+      "module": "chunk-tcpwse4c.js",
+      "exports": { "W": "W" }
     },
     "chunk-6f1afc3k.js": {
       "module": "chunk-j63zwyqg.js",

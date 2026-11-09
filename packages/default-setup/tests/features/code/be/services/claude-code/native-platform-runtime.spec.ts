@@ -92,3 +92,25 @@ it('admits every schema used by the actual computed native request dispatcher', 
   expect(Object.keys(schemas)).toHaveLength(14)
   for (const name of Object.values(schemas)) expect(module[name]).toBe(original[spec.exports[name]])
 })
+
+
+it('admits every literal native module import in both actual composed preloads', () => {
+  for (const source of [claudeTerminalUiRuntime, createClaudePrintClientRuntime({ socketPath: '/synthetic', token: 'synthetic', epoch: 'synthetic' })]) {
+    const modules = [...source.matchAll(/importClaudeNativeModule\(['"]([^'"]+)['"]\)/g)].map(match => match[1])
+    expect(modules).not.toHaveLength(0)
+    for (const name of modules) expect(claudeNativeLinuxBindings.modules[name], name).toBeDefined()
+  }
+})
+it('preserves the original theme storage reader, path, filename predicate, key factory and gate identities', async () => {
+  const f = fixture()
+  for (const [name, fields] of [
+    ['chunk-5feck2gp.js', ['Ecr', 'ost']],
+    ['chunk-r1ydygv8.js', ['Tr', 'Be']],
+    ['chunk-gc95262s.js', ['W']],
+  ] as const) {
+    const spec = claudeNativeLinuxBindings.modules[name]
+    const original = Object.fromEntries(fields.map(field => [spec.exports[field], field === 'Be' ? { userConfigDir: vi.fn() } : vi.fn()]))
+    const module = await f.api.importClaudeNativeModule(name, async () => original)
+    for (const field of fields) expect(module[field]).toBe(original[spec.exports[field]])
+  }
+})
