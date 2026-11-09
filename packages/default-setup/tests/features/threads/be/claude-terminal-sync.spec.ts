@@ -9,19 +9,23 @@ const fake = vi.hoisted(() => ({
   messages: [] as Record<string, unknown>[],
   thread: { context: {} as Record<string, unknown> },
   broadcast: vi.fn(),
+  // A block is a row with an id of its own, and `blocksOf` is how a writer finds the one it owns. The
+  // double names each one after the message and the type it holds, which is unique per message here:
+  // every block a native row projects is one of a kind.
+  stamp: (messageId: string, blocks: unknown) => (blocks as { type: string }[]).map(block => ({ ...block, id: `${messageId}-${block.type}` })),
 }))
 vi.mock('#generated/ears.ts', () => ({ write: (id: string) => ({ destroy: () => { const index=fake.messages.findIndex(message=>message.id===id);if(index!==-1)fake.messages.splice(index,1) } }) }))
 vi.mock('#generated/events.ts', () => ({ broadcastToSurface: fake.broadcast }))
 vi.mock('#generated/repository.ts', () => ({ repository: {
-  chatQueries: { threadData: () => ({ ...fake.thread, messages: fake.messages }), messageById: (id: string) => fake.messages.find(message => message.id === id) },
+  chatQueries: { threadData: () => ({ ...fake.thread, messages: fake.messages }), messageById: (id: string) => fake.messages.find(message => message.id === id), blocksOf: (id: string) => ((fake.messages.find(message => message.id === id)?.blocks ?? []) as { type: string; id: string }[]) },
   threadQueries: { byId: () => fake.thread },
   chatCommands: {
-    addMessage: (message: Record<string, unknown>) => { const row = { ...message, id: String(fake.messages.length) }; fake.messages.push(row); return row },
+    addMessage: (message: Record<string, unknown>) => { const id = String(fake.messages.length); const row = { ...message, id, ...(message.blocks ? { blocks: fake.stamp(id, message.blocks) } : {}) }; fake.messages.push(row); return row },
     updateMessageState: vi.fn(),
   },
   threadCommands: { update: (_: unknown, updates: { context: Record<string, unknown> }) => { fake.thread.context = updates.context } },
 } }))
-vi.mock('#features/threads/be/services/chat.ts', () => ({ sendBlockMessage: vi.fn((options: Record<string, unknown>) => { const row = { ...options, id: String(fake.messages.length) }; fake.messages.push(row); return { messageId: row.id } }), updateMessageState: vi.fn((id: string, updates: Record<string, unknown>) => { Object.assign(fake.messages.find(message => message.id === id)!, updates) }), // A block is a row, so a sync writes each one by id. The double keeps them on the fake message, replacing
+vi.mock('#features/threads/be/services/chat.ts', () => ({ sendBlockMessage: vi.fn((options: Record<string, unknown>) => { const id = String(fake.messages.length); const row = { ...options, id, ...(options.blocks ? { blocks: fake.stamp(id, options.blocks) } : {}) }; fake.messages.push(row); return { messageId: row.id } }), updateMessageState: vi.fn((id: string, updates: Record<string, unknown>) => { Object.assign(fake.messages.find(message => message.id === id)!, updates) }), // A block is a row, so a sync writes each one by id. The double keeps them on the fake message, replacing
 // the one of that type it already holds, which is what the real writer does by passing the row's id
 updateMessageBlock: vi.fn((id: string, block: { type: string }) => { const row = fake.messages.find(message => message.id === id)!; const blocks = (row.blocks ??= []) as Array<{ type: string; id?: string }>; const at = blocks.findIndex(held => held.type === block.type); const stored = { ...block, id: `${id}-${block.type}` }; if (at === -1) blocks.push(stored); else blocks[at] = stored; return stored.id }) }))
 vi.mock('#features/threads/be/services/threads.ts', () => ({ updateChatState: vi.fn() }))

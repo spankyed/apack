@@ -12,8 +12,12 @@ it('imports native tool results, exact text and image references without replayi
  const rows=repository.chatQueries.threadData(thread.id)!.messages!;
  expect(rows).toHaveLength(2);expect(rows[0].text).toBe('  Exact native text  ');expect(rows[0].timestamp).toBe(Date.parse(assistant.timestamp));
  expect(rows[0].context).toMatchObject({cliUuid:uuid,claudeTerminalMessage:{uuid,sessionId}});
- const tool=rows[0].blocks?.find(b=>b.type==='tool-activity')!.props.entries[0];
- expect(tool).toMatchObject({id:'read-result',status:'ok',nativeResult:{uuid:resultUuid,sessionId},details:{output:'Complete guide'}});
+ // A tool's details are a row of their own, read by the block they belong to — a block carries its entries
+ // and not their output, so that a message's view does not re-read every tool's result as a turn streams
+ const activity=rows[0].blocks?.find(b=>b.type==='tool-activity')!;
+ const tool=activity.props.entries[0];
+ expect(tool).toMatchObject({id:'read-result',status:'ok',nativeResult:{uuid:resultUuid,sessionId}});
+ expect(repository.chatQueries.entryDetails(activity.id)[tool.id]).toMatchObject({output:'Complete guide'});
  expect(rows[0].blocks?.find(b=>b.type==='thinking')!.props.content).toBe('Review the change');
  expect(rows[1].references?.images).toEqual([{name:'Native image',url:'data:image/png;base64,YWJj'}]);
 });
@@ -21,8 +25,10 @@ it('marks an interrupted saved tool as unresolved instead of leaving a live spin
  const sessionId='11111111-1111-1111-1111-111111111111';
  const thread=repository.threadCommands.create({topic:'Interrupted',instructions:''});
  importClaudeSessionMessages({threadId:thread.id,transcript:[{sessionId,uuid:'22222222-2222-2222-2222-222222222222',type:'assistant',message:{content:[{type:'tool_use',id:'pending',name:'Read',input:{}}]}}],sessionId});
- const tool=repository.chatQueries.threadData(thread.id)!.messages![0].blocks![0].props.entries[0];
- expect(tool).toMatchObject({status:'error',details:{error:'Saved session has no recorded result'}});expect(tool.nativeResult).toBeUndefined();
+ const block=repository.chatQueries.threadData(thread.id)!.messages![0].blocks![0];
+ const tool=block.props.entries[0];
+ expect(tool).toMatchObject({status:'error'});expect(tool.nativeResult).toBeUndefined();
+ expect(repository.chatQueries.entryDetails(block.id)[tool.id]).toMatchObject({error:'Saved session has no recorded result'});
 });
 
 it('loads imported native rows chronologically before pagination regardless of relation order', () => {
