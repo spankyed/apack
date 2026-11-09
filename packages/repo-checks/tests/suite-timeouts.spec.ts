@@ -17,8 +17,9 @@ import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { INTEGRATION_SUITES, NATIVE_SUITES } from '../../../scripts/lib/chain-steps.ts';
 import { DEADLINE_FACTOR, SIZE_MS, UNIT_SUITES, type Size } from '../../../scripts/lib/unit-suites.ts';
 import ts from 'typescript';
-import { constantMs, overrideKey, sizeOf, specFilesUnder, timeoutOverrides, type TimeoutOverride } from '../../../scripts/lib/test-timeouts.ts';
+import { clockedDeadlines, constantMs, overrideKey, sizeOf, specFilesUnder, timeoutOverrides, type TimeoutOverride } from '../../../scripts/lib/test-timeouts.ts';
 import { repoFiles } from './_support/repo-files.ts';
+import { population } from '@apackdev/sdk/testing';
 
 /**
  * Tests allowed a CPU budget above their size's, and why.
@@ -204,6 +205,58 @@ function timeoutSources(file: string): string[] {
   const [helper, source] = delegate;
   return [helperBody(fs.readFileSync(path.join(REPO_ROOT, source), 'utf-8'), helper), own];
 }
+
+
+/**
+ * The backstops `definePackE2EConfig` declares, read from the helper's own body rather than restated here.
+ *
+ * Playwright gives a test and a wait a clock and nothing else — the vitest progress guard does not run
+ * there — so a clock is the right instrument in an E2E suite and `spec-waits` leaves those files alone.
+ * What is still wrong there is a wait that outlasts the suite's own backstop: it cannot do what it says,
+ * because the test or the assertion is killed first, so the number is a claim nothing honours.
+ */
+function playwrightBackstops(): { test: number; assertion: number } {
+  const body = helperBody(
+    fs.readFileSync(path.join(REPO_ROOT, DELEGATES.definePackE2EConfig!), 'utf-8'), 'definePackE2EConfig');
+  const read = (pattern: RegExp): number | undefined => {
+    const found = pattern.exec(body);
+    return found === null ? undefined : Number(found[1]!.replace(/_/g, ''));
+  };
+  const assertion = read(/expect\s*:\s*\{[^}]*\btimeout\s*:\s*([\d_]+)/);
+  const test = read(/(?:^|\n)\s*timeout\s*:\s*([\d_]+)/);
+  if (test === undefined || assertion === undefined) {
+    throw new Error('definePackE2EConfig declares no test or assertion backstop: this check has no bound to read');
+  }
+  return { test, assertion };
+}
+
+/** Where Playwright runs: the trees whose configs delegate to `definePackE2EConfig` */
+const playwrightSpecs = (): string[] => repoFiles()
+  .filter((file) => /(^tests\/(e2e|acceptance)\/|\/tests\/e2e\/)/.test(file) && /\.(spec|ts)$|\.ts$/.test(file));
+
+/**
+ * A wait that cannot finish inside the test it runs in, which is the one thing worth checking here.
+ *
+ * **The bound is the test timeout, not the assertion one.** A per-call `timeout` — `expect.poll(fn, { … })`,
+ * `toBeHidden({ … })` — *overrides* the config's `expect.timeout` for that call, so a 40s poll under a 30s
+ * assertion default is legal and does what it says. Nothing overrides the test timeout: Playwright ends the
+ * test there, so a wait at or past it can never complete, and the number is a claim nothing honours.
+ *
+ * Measured when this was written: comparing against the assertion backstop instead reported ten waits, nine
+ * of which were correct Playwright. The one that was real — a 60s poll inside a 60s test — is the shape this
+ * is for, and was already carrying a by-design entry for "outlasts the suite's backstops".
+ *
+ * `test.setTimeout` is excluded: raising a test's own budget is exactly what it is for.
+ */
+const BACKSTOP_BY_DESIGN: Record<string, string> = {
+  // The one the check found on its first run, and `spec-waits` already carried the same knowledge for it
+  // under "outlasts the suite's backstops": the case boots the app twice over a database written between,
+  // so the poll is the whole test and the two numbers meeting is the author's intent rather than an error.
+  // It is here rather than shortened because shortening it would fail the case on a cold machine, which is
+  // the failure this repo refuses to buy with a guess about duration.
+  'tests/e2e/app-integration/db-write-through-boot.spec.ts':
+    'the poll is the whole test: two app boots over a database written between them',
+};
 
 /** The timeout values a config declares, ignoring commented-out lines */
 function declaredTimeouts(file: string): { key: string; ms: number }[] {
@@ -463,5 +516,40 @@ describe('a file takes the budget of the target it runs in', () => {
   it('refuses a file that belongs to no test target', () => {
     expect(() => sizeOf('docs/goals/README.md')).toThrow(/neither a test config nor a spec/);
     expect(() => sizeOf('scripts/lib/unit-suites.ts')).toThrow(/neither a test config nor a spec/);
+  });
+});
+
+describe('a Playwright wait fits inside the backstop its suite declares', () => {
+  it('reads the backstops from the helper that declares them', () => {
+    const { test, assertion } = playwrightBackstops();
+    expect(test).toBeGreaterThan(0);
+    expect(assertion).toBeGreaterThan(0);
+    // The assertion backstop is the tighter of the two, which is what makes it the bound a wait must fit
+    expect(assertion).toBeLessThanOrEqual(test);
+  });
+
+  it('finds Playwright specs to read, or says there is no evidence rather than passing over none', () => {
+    population('Playwright specs', playwrightSpecs(), { atLeast: 20 });
+  });
+
+  it('declares no wait that cannot finish inside its test', () => {
+    const { test: bound } = playwrightBackstops();
+    const over = playwrightSpecs()
+      .filter((file) => BACKSTOP_BY_DESIGN[file] === undefined)
+      .flatMap((file) => clockedDeadlines(path.join(REPO_ROOT, file), REPO_ROOT))
+      .filter((clock) => clock.what !== 'test.setTimeout' && clock.ms !== undefined && clock.ms >= bound)
+      .map((clock) => `${clock.file}:${clock.line}: ${clock.what} waits ${clock.ms}ms inside a ${bound}ms test`);
+    expect(over, [
+      'Playwright ends the test at its timeout, so a wait that long can never finish: shorten it, raise the',
+      "test's own budget with test.setTimeout, or record the file in BACKSTOP_BY_DESIGN with why.",
+    ].join(' ')).toEqual([]);
+  });
+
+  it('lists nothing by design that now finishes inside its test', () => {
+    const { test: bound } = playwrightBackstops();
+    const waiting = new Set(playwrightSpecs()
+      .filter((file) => clockedDeadlines(path.join(REPO_ROOT, file), REPO_ROOT)
+        .some((clock) => clock.what !== 'test.setTimeout' && clock.ms !== undefined && clock.ms >= bound)));
+    expect(Object.keys(BACKSTOP_BY_DESIGN).filter((file) => !waiting.has(file))).toEqual([]);
   });
 });

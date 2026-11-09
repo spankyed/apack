@@ -165,6 +165,12 @@ jobs:
       - name: Integration tests (cli)
         run: npm run test:integration --workspace @apackdev/cli -- --reporter=verbose
 
+      # This job is not the chain, and two checks here can only answer inside one: `chain-stamps` reads the
+      # chain's stamp store and `dep-files` reads what the compiler recorded. With no chain run in this job
+      # they have no observation to compare against, so they skip and name the run that writes it — a green
+      # step here does not mean they passed. The gate that holds them is `npm run chain` (and
+      # `strict-chain.yml`), which takes the chain lock, where absent evidence refuses instead of skipping.
+      # `--reporter=verbose` is what prints each skip's reason; the default reporter prints only a count.
       - name: Unit tests (repo checks)
         run: npm test --workspace @app/repo-checks -- --reporter=verbose
 
