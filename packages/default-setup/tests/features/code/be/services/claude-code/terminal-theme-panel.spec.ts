@@ -74,7 +74,7 @@ it('rejects expired owners even if a former theme snapshot remains available', a
 })
 
 function fieldEditor(s: ReturnType<typeof setup>, field: 'name' | 'color', valid = true) {
-  const cache: any[] = Array(152); cache[56] = 'My theme'; cache[91] = valid; cache[98] = { props: { children: 'success' } }; cache[77] = { props: { children: 'Base: dark; save to /owned/themes/my-theme.json' } }; cache[93] = { props: { children: 'My theme' } }; cache[103] = { props: { children: 'Preset: #ffffff' } }
+  const cache: any[] = Array(152); Object.assign(cache,{60:'dark',61:'my-theme',63:{},65:undefined,66:'My theme'}); cache[56] = 'My theme'; cache[91] = valid; cache[98] = { props: { children: 'success' } }; cache[77] = { props: { children: 'Base: dark; save to /owned/themes/my-theme.json' } }; cache[93] = { props: { children: 'My theme' } }; cache[103] = { props: { children: 'Preset: #ffffff' } }
   const input = { value: field === 'name' ? 'My theme' : '#55aa66', placeholder: field === 'name' ? 'my-theme' : 'rgb(r,g,b)', focus: true, onChange: vi.fn(), onSubmit: vi.fn(), onExit: vi.fn() }
   cache[field === 'name' ? 73 : 113] = { props: { children: [null, { props: input }] } }
   s.owner.child = { type: s.Editor, memoizedProps: {}, updateQueue: { memoCache: { data: [cache] } }, child: { memoizedProps: input } }

@@ -55,7 +55,7 @@ it('does not mistake unreadable storage for confirmed persistence', async () => 
   expect((await s.check()).problem).toMatch(/has not confirmed saving/)
   expect(s.entry.themeCommit).toBeDefined()
 })
-it.each(['commit', 'gate', 'provider', 'owner', 'cancel'] as const)('rejects a held read after %s replacement or retirement', async kind => {
+it.each(['commit', 'gate', 'provider', 'target', 'owner', 'cancel'] as const)('rejects a held read after %s replacement or retirement', async kind => {
   const s = setup(true)
   let release!: (result: any) => void
   s.provider.read.mockImplementation(() => new Promise(resolve => { release = resolve }))
@@ -63,6 +63,7 @@ it.each(['commit', 'gate', 'provider', 'owner', 'cancel'] as const)('rejects a h
   if (kind === 'commit') s.entry.themeCommit = { ...s.entry.themeCommit }
   if (kind === 'gate') s.gate.W.mockReturnValue(false)
   if (kind === 'provider') s.read.identity[27] = {}
+  if (kind === 'target') s.read.identity[36] = 'different-theme'
   if (kind === 'owner') s.current.mockImplementation(() => { throw Error('owner retired') })
   if (kind === 'cancel') s.abort.abort(Error('cancelled'))
   release({ ok: true, value: { items: [{ found: true, value: Buffer.from(JSON.stringify(saved)) }] } })
@@ -101,4 +102,68 @@ it('explains the original Reset recovery route when its in-memory removal was no
   expect(result.problem).toBe('Claude Code has not confirmed resetting this color. Reopen the theme editor to retry Reset.')
   expect(result.savedKey).toBeUndefined()
   expect(s.entry.themeCommit).toBeDefined()
+})
+
+function namingSetup() {
+  const s=setup(),props={},fiber={memoizedProps:props}
+  delete s.entry.themeCommit
+  Object.assign(s.read.identity,{60:'dark',61:'native-generated-2',63:saved.overrides,65:s.provider,66:'Forked release'})
+  const done=vi.fn(()=>{s.read.snapshot={revision:'done',editor:{kind:'choice',revision:'done-editor',options:[]}}})
+  const select=vi.fn(()=>{s.read.snapshot={revision:'color',editor:{kind:'form',revision:'color-editor',live:{id:'color-form'},fields:[]}}})
+  const submit=vi.fn(()=>{
+    Object.assign(s.read.identity,{25:'Forked release',36:'native-generated-2'})
+    s.read.snapshot={revision:'created',editor:{kind:'choice',revision:'created-editor',options:[{value:'text',disabled:false}]}}
+    s.read.controls={select,cancel:done}
+  })
+  Object.assign(s.read,{props,fiber,owner:{},controls:{field:'name',valid:true,input:{value:'Forked release',onSubmit:submit}}})
+  s.read.snapshot.editor={kind:'form',revision:'name-editor',live:{id:'name-form'},fields:[]}
+  s.store.Ecr.mockResolvedValue([])
+  const command=(command:any)=>s.api.nativeThemePanel(s.n,s.entry,{operation:'editor',revision:s.read.snapshot.revision,editor_revision:s.read.snapshot.editor.revision,command},s.abort)
+  return {...s,submit,done,select,command,create:()=>command({action:'save',values:{name:'Forked release'}})}
+}
+it('tracks the naming callback original generated target across its synchronous editor transition',async()=>{
+  const s=namingSetup(),result=await s.create()
+  expect(s.submit).toHaveBeenCalledExactlyOnceWith()
+  expect(s.entry.themeCreation.slug).toBe('native-generated-2')
+  expect(s.entry.themeCreation.operation).toBe('create')
+  expect(result.snapshot.commitPending).toBe(true)
+  s.entry.themeCommit.until=Date.now()-1
+  expect((await s.check()).problem).toMatch(/not confirmed creating.*Edit a color and save/)
+})
+it('refuses original Done after denied creation instead of letting it select and report an unsaved theme',async()=>{
+  const s=namingSetup();await s.create();s.entry.themeCommit.until=Date.now()-1
+  const result=await s.command({action:'cancel'})
+  expect(s.done).not.toHaveBeenCalled()
+  expect(result.problem).toMatch(/not confirmed creating/)
+  expect(s.entry.themeCreation).toBeDefined()
+})
+it('preserves unconfirmed creation when opening a retry form and cancelling back to the token list',async()=>{
+  const s=namingSetup();await s.create();s.entry.themeCommit.until=Date.now()-1
+  expect((await s.command({action:'select',value:'text'})).problem).toBeUndefined()
+  expect(s.entry.themeCommit).toBeUndefined()
+  expect(s.entry.themeCreation).toBeDefined()
+  s.read.controls.cancel=()=>{s.read.snapshot={revision:'back',editor:{kind:'choice',revision:'back-editor',options:[]}}}
+  expect((await s.command({action:'cancel'})).problem).toMatch(/not confirmed creating/)
+  expect(s.entry.themeCreation).toBeDefined()
+  expect(s.done).not.toHaveBeenCalled()
+})
+it('allows original Done after late persisted creation is independently confirmed',async()=>{
+  const s=namingSetup();await s.create();s.entry.themeCommit.until=Date.now()-1
+  s.store.Ecr.mockResolvedValue([{...saved,name:'Forked release',slug:'native-generated-2'}])
+  await s.command({action:'cancel'})
+  expect(s.done).toHaveBeenCalledExactlyOnceWith()
+  expect(s.entry.themeCreation).toBeUndefined()
+})
+it('clears the creation guard after the original color writer successfully retries persistence',async()=>{
+  const s=namingSetup();await s.create();s.entry.themeCommit.until=Date.now()-1
+  await s.command({action:'select',value:'text'})
+  s.read.controls={field:'color',valid:true,input:{value:'#e38142',onSubmit:()=>{
+    s.read.identity[34]={text:'#e38142'}
+    s.store.Ecr.mockResolvedValue([{...saved,name:'Forked release',overrides:{text:'#e38142'},slug:'native-generated-2'}])
+    s.read.snapshot={revision:'retried',editor:{kind:'choice',revision:'retried-editor',options:[]}}
+  }}}
+  const result=await s.command({action:'save',values:{color:'#e38142'}})
+  expect(result.problem).toBeUndefined()
+  expect(s.entry.themeCreation).toBeUndefined()
+  expect(s.entry.themeCommit).toBeUndefined()
 })
