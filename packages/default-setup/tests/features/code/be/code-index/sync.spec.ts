@@ -324,9 +324,10 @@ describe('the graph', () => {
     commit()
     enable()
     await sync()
-    expect(callers('target').results).toMatchObject([{ name: 'caller', path: 'use.ts', edge: 'code_calls', sites: 3, layer: 'inferred' }])
-    expect(callers('helper').results).toMatchObject([{ name: 'other', edge: 'code_calls', sites: 2, layer: 'extracted' }])
-    expect(findRelations({ target: symbolNamed('target').id })[0]!.weight).toBeCloseTo(2.97)
+    // The compiler confirms both, so they are its edges, at full weight
+    expect(callers('target').results).toMatchObject([{ name: 'caller', path: 'use.ts', edge: 'code_calls', sites: 3, layer: 'compiler' }])
+    expect(callers('helper').results).toMatchObject([{ name: 'other', edge: 'code_calls', sites: 2, layer: 'compiler' }])
+    expect(findRelations({ target: symbolNamed('target').id })[0]!.weight).toBeCloseTo(3)
     expect(codeIndexAnswers.callees(symbolNamed('caller').id)!.results.map(r => r.name)).toEqual(['target'])
   })
 
@@ -353,15 +354,24 @@ describe('the graph', () => {
     expect(callers('shadowed').results).toEqual([])
   })
 
-  it('counts what a member call could have meant against "no callers"', async () => {
+  it('follows a member call through its type, which syntax alone cannot', async () => {
     put('lib.ts', 'export class Thing { run() {} }')
     put('use.ts', "import { Thing } from './lib.ts'\nexport function go(thing: Thing) { thing.run() }")
     commit()
     enable()
     await sync()
     const run = callers('run')
-    expect(run.results).toEqual([])
-    expect(run.coverage).toEqual({ pendingFiles: 0, unresolvedFiles: 1 })
+    expect(run.results).toMatchObject([{ name: 'go', path: 'use.ts', edge: 'code_calls', layer: 'compiler' }])
+    expect(run.coverage).toEqual({ pendingFiles: 0, unresolvedFiles: 0 })
+  })
+
+  it('keeps the syntax edges of a file the compiler does not read', async () => {
+    put('lib.ts', 'export function target() {}')
+    put('use.js', "import { target } from './lib.ts'\nexport function caller() { target() }")
+    commit()
+    enable()
+    await sync()
+    expect(callers('target').results).toMatchObject([{ name: 'caller', path: 'use.js', layer: 'inferred' }])
   })
 
   it('follows a method on this, a namespace, a re-export, a class it extends and a package import', async () => {

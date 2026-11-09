@@ -13,8 +13,9 @@ import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import ts from 'typescript';
-import { languageOf, type Definition } from '../src/features/code/be/code-index/extract.ts';
-import { extractGraph, type FileGraph, type ImportBinding, type Site } from '../src/features/code/be/code-index/sites.ts';
+import { languageOf } from '../src/features/code/be/code-index/extract.ts';
+import { compilerTarget, ownerIn } from '../src/features/code/be/code-index/compiler.ts';
+import { extractGraph, type FileGraph, type ImportBinding } from '../src/features/code/be/code-index/sites.ts';
 import { resolveSite, type FileScope, type PackageInfo, type ProjectTable } from '../src/features/code/be/code-index/resolve.ts';
 
 function evaluate(root: string): void {
@@ -68,17 +69,10 @@ function evaluate(root: string): void {
   });
   const checker = program.getTypeChecker();
 
-  const owner = (declaration: ts.Declaration): { path: string; definition: Definition } | null => {
+  const owner = (declaration: ts.Declaration) => {
     const file = path.relative(root, declaration.getSourceFile().fileName).split(path.sep).join('/');
     const graph = graphs.get(file);
-    if (!graph) return null;
-    // The name, since a declaration's own start is its `export`, which a syntax tree's definition starts after
-    const at = (ts.getNameOfDeclaration(declaration) ?? declaration).getStart();
-    let best: Definition | null = null;
-    for (const definition of graph.definitions) {
-      if (definition.start <= at && at < definition.end && (!best || definition.end - definition.start <= best.end - best.start)) best = definition;
-    }
-    return best && { path: file, definition: best };
+    return graph ? ownerIn(file, graph, declaration) : null;
   };
 
   type Counts = { sites: number; compilerFound: number; resolved: number; correct: number; wrong: number; missed: number; external: number; compilerSilent: number };
@@ -114,10 +108,10 @@ function evaluate(root: string): void {
           if (resolution.status !== 'resolved') counts.missed++;
           else {
             counts.resolved++;
-            if (resolution.target.path === compiler.path && resolution.target.local === compiler.definition.local) counts.correct++;
+            if (resolution.target.path === compiler.path && resolution.target.local === compiler.local) counts.correct++;
             else {
               counts.wrong++;
-              if (counts === byStrategy.get(strategy) && Math.random() < 0.02 && wrongSamples.length < 14) wrongSamples.push(`${strategy}: ${file}:${site.line} ${site.path.join('.')} -> ${resolution.target.path}#${resolution.target.local}, compiler ${compiler.path}#${compiler.definition.local}`);
+              if (counts === byStrategy.get(strategy) && Math.random() < 0.02 && wrongSamples.length < 14) wrongSamples.push(`${strategy}: ${file}:${site.line} ${site.path.join('.')} -> ${resolution.target.path}#${resolution.target.local}, compiler ${compiler.path}#${compiler.local}`);
             }
           }
         }
@@ -138,40 +132,6 @@ function evaluate(root: string): void {
   report('By strategy', byStrategy);
   report('By how the site is written', byForm);
   if (wrongSamples.length) console.log(`\nWrong, a sample:\n${wrongSamples.map(sample => `- ${sample}`).join('\n')}`);
-}
-
-/** What the compiler says a site's last name is: a definition in the project, something outside it, or nothing it can say */
-function compilerTarget(
-  checker: ts.TypeChecker, source: ts.SourceFile, site: Site,
-  owner: (declaration: ts.Declaration) => { path: string; definition: Definition } | null,
-): 'silent' | 'outside' | { path: string; definition: Definition } {
-  const start = source.getPositionOfLineAndCharacter(site.line - 1, site.column);
-  let node: ts.Node | undefined = findToken(source, start);
-  if (!node) return 'silent';
-  const last = site.path[site.path.length - 1]!;
-  // A site's position is its whole expression's start, so walk the chain out to the name the path ends in
-  while (node && !(ts.isIdentifier(node) && node.text === last) && !(ts.isPrivateIdentifier(node) && node.text === last)) {
-    const parent: ts.Node | undefined = node.parent;
-    if (parent && ts.isPropertyAccessExpression(parent) && parent.expression === node) node = parent.name;
-    else return 'silent';
-  }
-  // `{ name }` is a property holding a variable: the site is the variable
-  const shorthand = node.parent && ts.isShorthandPropertyAssignment(node.parent) ? checker.getShorthandAssignmentValueSymbol(node.parent) : undefined;
-  let symbol = shorthand ?? checker.getSymbolAtLocation(node);
-  if (!symbol) return 'silent';
-  if (symbol.flags & ts.SymbolFlags.Alias) symbol = checker.getAliasedSymbol(symbol);
-  const declaration = symbol.valueDeclaration ?? symbol.declarations?.[0];
-  if (!declaration) return 'silent';
-  const found = owner(declaration);
-  return found ?? 'outside';
-}
-
-function findToken(source: ts.SourceFile, position: number): ts.Node | undefined {
-  const visit = (node: ts.Node): ts.Node | undefined => {
-    if (position < node.getFullStart() || position >= node.getEnd()) return undefined;
-    return ts.forEachChild(node, visit) ?? node;
-  };
-  return visit(source);
 }
 
 const repositories = process.argv.slice(2);
