@@ -5,6 +5,7 @@
 //
 // Imports nothing outside `node:`, because `janitor.ts` runs under launchd with no npm and no workspace
 // resolution.
+import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -53,6 +54,51 @@ export function vendoredCheckouts(repoRoot: string): VendoredCheckout[] {
     if (!fs.statSync(resolved).isDirectory()) return [];
     return [{ name, path: resolved, isRustCheckout: fs.existsSync(path.join(resolved, 'Cargo.toml')) }];
   });
+}
+
+/** A vendored checkout against the commit `vendor/<name>.rev` pins it to */
+export interface VendoredState {
+  name: string;
+  /** The commit the committed `.rev` names, which is the shared fact CI clones at */
+  pinned: string | undefined;
+  /** What the linked checkout is actually at, which is what a local build compiled against */
+  head: string | undefined;
+  /** Whether that checkout has uncommitted changes, so `head` does not describe it fully */
+  dirty: boolean;
+}
+
+/**
+ * What each `vendor/` link is at, beside the commit its `.rev` pins.
+ *
+ * **A local build compiles against the sibling's working tree; CI clones the pin.** The two diverge
+ * routinely and nothing reported it, so a failure naming a symbol the pinned code does not have reads as a
+ * defect in the branch under test. Worse, a checkout can move *while* a run is going: a chain run has hit
+ * both a type error from a field added upstream and the pack compiler's own
+ * `Compiler resolution namespace changed during discovery` on a vendored file, neither of which described
+ * the tree by the time anyone looked.
+ *
+ * So a run records this where its evidence is read. `head` absent means the link resolves to no git
+ * checkout; `pinned` absent means no `.rev` is committed for it.
+ */
+export function vendoredStates(repoRoot: string): VendoredState[] {
+  return vendoredCheckouts(repoRoot).map((entry) => {
+    let pinned: string | undefined;
+    try { pinned = fs.readFileSync(path.join(repoRoot, 'vendor', `${entry.name}.rev`), 'utf8').trim() || undefined; }
+    catch { pinned = undefined; }
+    return { name: entry.name, pinned, ...gitStateOf(entry.path) };
+  });
+}
+
+/** A checkout's HEAD and whether it is dirty, or absences when it is not a git checkout */
+function gitStateOf(checkout: string): { head: string | undefined; dirty: boolean } {
+  const git = (args: readonly string[]): string | undefined => {
+    try {
+      return execFileSync('git', ['-C', checkout, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    } catch { return undefined; }
+  };
+  const head = git(['rev-parse', 'HEAD']);
+  if (head === undefined) return { head: undefined, dirty: false };
+  return { head, dirty: (git(['status', '--porcelain']) ?? '') !== '' };
 }
 
 /** A Rust checkout and the toolchain channel its `rust-toolchain.toml` pins, if it pins one */
