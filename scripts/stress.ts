@@ -17,6 +17,19 @@ import * as path from 'node:path';
 import { boundedSpawn } from './lib/bounded-spawn.ts';
 import { asNumber, BURNER_CEILING_MS, startBurners } from './lib/measure.ts';
 
+/** How many of a failed run's last lines to print when its output names no failure of its own */
+const TAIL_LINES = 40;
+
+/**
+ * What a failed run says went wrong: the lines naming a failing case, an error or a stalled or spent bound, and
+ * the end of its output when none does, with terminal colours removed.
+ */
+function failureOf(output: string): string[] {
+  const lines = output.replace(/\x1b\[[0-9;]*m/g, '').split('\n');
+  const named = lines.filter((line) => /(^| )(FAIL|×) |Error:|AssertionError|stalled|CPU budget|failed \(exit/.test(line));
+  return (named.length > 0 ? [...new Set(named)] : lines.slice(-TAIL_LINES)).slice(0, TAIL_LINES);
+}
+
 const DEFAULT_COMMAND = ['npm', 'run', 'test:unit:host', '--', '--all'];
 const OUTPUT_DIR = path.join(process.cwd(), 'node_modules', '.cache', 'apack-stress');
 
@@ -46,7 +59,11 @@ try {
     fs.writeFileSync(file, result.output);
     const verdict = result.code === 0 ? 'passed' : `FAILED (exit ${result.code})`;
     console.log(`  run ${run}/${runs}: ${verdict} in ${Math.round(result.ms / 1000)}s — ${path.relative(process.cwd(), file)}`);
-    if (result.code !== 0) failed += 1;
+    if (result.code !== 0) {
+      failed += 1;
+      // Said here as well as kept: the file may not outlive the run (a container's is gone when it exits)
+      console.log(failureOf(result.output).map((line) => `    ${line}`).join('\n'));
+    }
   }
 } finally {
   burners.abort();
