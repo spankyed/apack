@@ -743,8 +743,8 @@ declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObjec
                 value: z.ZodString;
                 label: z.ZodString;
                 mode: z.ZodEnum<{
-                    plan: "plan";
                     default: "default";
+                    plan: "plan";
                     auto: "auto";
                     acceptEdits: "acceptEdits";
                     bypassPermissions: "bypassPermissions";
@@ -1234,6 +1234,24 @@ interface ClaudeNativeFileDialogResponse {
     feedback?: string;
 }
 
+/**
+ * **One element, one renderer.** A tool permission exists in the CLI's own TUI *and* can be drawn by this
+ * app, and the thing that must never happen is both sides answering it — that is an approval the user gave
+ * once being spent twice, or given by a card they never saw.
+ *
+ * Three things hold it, and all three are load-bearing:
+ *
+ * 1. **Every `*DialogsSchema` below is `.max(1)`.** That is not a size cap: a dialog is offered to the app
+ *    only while the CLI holds exactly one open, so two open dialogs offer nothing and the app has nothing
+ *    to draw. `terminal-dialogs-one-renderer.spec.ts` holds every schema in this module to it, derived from
+ *    the module's own exports rather than a list.
+ * 2. **A revision binds the descriptor objects**, not their contents: the native item and payload by
+ *    identity, plus the session. Anything that replaces either — a new payload, another dialog arriving,
+ *    the session changing, the dialog closing — expires an answer in flight (`terminal-ui-dialogs.spec.ts`).
+ * 3. **The app's answer goes through the CLI's own control**, which withdraws the item from the TUI as it
+ *    settles it. There is no second path that marks a dialog answered, so "answered here" and "withdrawn
+ *    there" cannot come apart.
+ */
 /** A one-time file decision; native retains policy, input and dialog lifecycle ownership. */
 declare const ClaudeNativeFileDialogSchema: z.ZodObject<{
     id: z.ZodString;
@@ -1763,8 +1781,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
             value: z.ZodString;
             label: z.ZodString;
             mode: z.ZodEnum<{
-                plan: "plan";
                 default: "default";
+                plan: "plan";
                 auto: "auto";
                 acceptEdits: "acceptEdits";
                 bypassPermissions: "bypassPermissions";
@@ -7264,8 +7282,8 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  * classifier instead of prompting.
  */
 declare const PermissionModeSchema: z.ZodEnum<{
-    plan: "plan";
     default: "default";
+    plan: "plan";
     auto: "auto";
     acceptEdits: "acceptEdits";
     bypassPermissions: "bypassPermissions";
@@ -9350,11 +9368,11 @@ declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<[z.ZodObject<{
 declare const claudeSettingsSnapshot: z.ZodObject<{
     ide: z.ZodOptional<z.ZodObject<{
         stage: z.ZodEnum<{
+            finished: "finished";
             selection: "selection";
             enable: "enable";
             disable: "disable";
             connecting: "connecting";
-            finished: "finished";
         }>;
         title: z.ZodString;
         description: z.ZodOptional<z.ZodString>;
@@ -9429,8 +9447,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             loading: z.ZodBoolean;
             copyState: z.ZodOptional<z.ZodEnum<{
                 error: "error";
-                idle: "idle";
                 pending: "pending";
+                idle: "idle";
                 saved: "saved";
             }>>;
             insight: z.ZodOptional<z.ZodString>;
@@ -10444,8 +10462,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        append: "append";
         insert: "insert";
+        append: "append";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;
