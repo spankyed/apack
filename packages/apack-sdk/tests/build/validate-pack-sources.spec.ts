@@ -206,6 +206,14 @@ describe('pack settings forms', () => {
       extensions: { settings: { preferences: { schema: { type: 'object' }, defaults: {} } } },
     })).toEqual({ status: 'valid', diagnostics: [], skippedChecks: [] });
   });
+  it('checks each build.workers entry exists and stays in the pack', () => {
+    const root = pack(['src/worker.ts']);
+    expect(validatePackSources(root, { build: { workers: { indexer: 'src/worker.ts' } } }).status).not.toBe('invalid');
+    const missing = validatePackSources(root, { build: { workers: { indexer: 'src/nowhere.ts' } } });
+    expect(missing.diagnostics).toMatchObject([{ code: 'module.missing-file', path: ['build', 'workers', 'indexer'] }]);
+    const escaping = validatePackSources(root, { build: { workers: { indexer: '../outside.ts' } } });
+    expect(escaping.diagnostics).toMatchObject([{ path: ['build', 'workers', 'indexer'] }]);
+  });
 });
 
 function messagesOf(result: { diagnostics: { message: string }[] }): string[] {

@@ -792,6 +792,7 @@ export const PackPermissionSchema = z.enum(['ears', 'llm', 'filesystem', 'networ
 const BuildConfigSchema = z.object({
   opaqueDeps: z.array(z.string()).describe('Dependencies the frontend bundle includes whole instead of tree-shaking, by package name. For a prebuilt bundle — a dependency shipped as one already-minified file, or compiled from another language — where the shake removes almost nothing and walking it is most of the build. Each ships as it is, so nothing inside it is dead-code eliminated.').optional(),
   bundleUi: z.boolean().describe('Bundle a copy of @apackdev/ui into the pack instead of using the host app\'s. All of @apackdev/ui is bundled, so the pack never mixes the two.').optional(),
+  workers: declarationRecord(IdentifierSchema, ModulePathSchema).describe('Entries the pack runs in a worker thread or a child process, by name: each module is bundled whole, its dependencies included, to runtime/workers/<name>.cjs, which `workerPath(name)` from #generated/workers finds. A worker has no module bridge, so it may not import @apackdev/* or a package the host resolves for the pack.').optional(),
 }).strict().describe('Build-time configuration: settings that change what the build produces, never what the app loads.');
 
 const TextEditorExtensionsSchema = z.object({

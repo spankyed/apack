@@ -624,6 +624,7 @@ The frontend entry itself isn't declared here: `apack pack build` bundles `src/p
 |---|---|---|
 | `opaqueDeps` | `string[]` | Dependencies the frontend bundle includes whole instead of tree-shaking, by package name |
 | `bundleUi` | `boolean` | Bundle a copy of `@apackdev/ui` into the pack instead of using the app's (default `false`). All of `@apackdev/ui` is bundled, so the pack never mixes the two |
+| `workers` | `Record<name, path>` | Modules the pack runs in a worker thread or a child process, each bundled whole to `runtime/workers/<name>.cjs` |
 
 Everything under `build` changes what `apack pack build` produces, or how long it takes, and nothing the app
 loads — which is what separates it from the sections above.
@@ -634,6 +635,21 @@ the frontend build spends its time on. It trades a little output size for build 
 apack ships, naming its one such dependency took `apack pack build` from 23.3s to 20.6s for 38 KB on an
 8.5 MB bundle (median of 3 interleaved runs, 2026-10-08). Every other module is shaken as before, so a
 dependency you wrote yourself does not belong here — it would keep its dead code for nothing.
+
+**`workers` is for work that would hold the app's event loop** — a language service, a large parse — run off
+it in a `worker_threads` Worker or a child process. Each entry is bundled with everything it imports, since an
+installed pack has no `node_modules`, and `workerPath(name)` from `#generated/workers` gives the bundled file:
+
+```ts
+import { Worker } from 'node:worker_threads';
+import { workerPath } from '#generated/workers';
+
+const worker = new Worker(workerPath('indexer'), { resourceLimits: { maxOldGenerationSizeMb: 1024 } });
+```
+
+A worker runs outside the app's module bridge, so it can't import `@apackdev/*` or a package the app resolves
+for packs (`xstate`, `zod`, `vue`, `@vscode/ripgrep`, …); the build refuses one that does. It talks to the pack over
+messages, and the pack bounds its waits on it with `threadWork` or `processWork` from `@apackdev/sdk/progress`.
 
 ## Dependencies
 

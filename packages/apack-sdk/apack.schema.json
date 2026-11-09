@@ -2124,6 +2124,18 @@
         "bundleUi": {
           "type": "boolean",
           "description": "Bundle a copy of @apackdev/ui into the pack instead of using the host app's. All of @apackdev/ui is bundled, so the pack never mixes the two."
+        },
+        "workers": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[A-Za-z_$][\\w$]*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[^#]+$"
+          },
+          "description": "Entries the pack runs in a worker thread or a child process, by name: each module is bundled whole, its dependencies included, to runtime/workers/<name>.cjs, which `workerPath(name)` from #generated/workers finds. A worker has no module bridge, so it may not import @apackdev/* or a package the host resolves for the pack."
         }
       },
       "additionalProperties": false,
