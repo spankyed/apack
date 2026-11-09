@@ -93,3 +93,12 @@ it('opens the original retry form without carrying an old unconfirmed error that
   expect(result.problem).toBeUndefined()
   expect(result.snapshot.commitPending).toBeUndefined()
 })
+
+it('explains the original Reset recovery route when its in-memory removal was not persisted', async () => {
+  const s = setup(); s.store.Ecr.mockResolvedValue([])
+  s.entry.themeCommit.operation = 'reset'; s.entry.themeCommit.until = Date.now() - 1
+  const result = await s.check()
+  expect(result.problem).toBe('Claude Code has not confirmed resetting this color. Reopen the theme editor to retry Reset.')
+  expect(result.savedKey).toBeUndefined()
+  expect(s.entry.themeCommit).toBeDefined()
+})

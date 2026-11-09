@@ -93,7 +93,7 @@ async function nativeThemeCommitResult(n,entry,read,abort){
  read=await waitForNativeThemePanel(n,entry,abort.signal);current();
  if(confirmed){delete entry.themeCommit;return {snapshot:read.snapshot};}
  const pending=Date.now()<commit.until;
- return {snapshot:{...read.snapshot,...pending?{commitPending:true}:{}},...pending?{}:{problem:'Claude Code has not confirmed saving this theme. Changes may only be previewed. Refresh or retry.'}};
+ return {snapshot:{...read.snapshot,...pending?{commitPending:true}:{}},...pending?{}:{problem:commit.operation==='reset'?'Claude Code has not confirmed resetting this color. Reopen the theme editor to retry Reset.':'Claude Code has not confirmed saving this theme. Changes may only be previewed. Refresh or retry.'}};
 }
 async function nativeThemePanel(n,entry,request,abort){
  if(request.operation!=='read'&&entry.themeOperation)throw Error('A native theme action is pending');
@@ -125,7 +125,7 @@ async function nativeThemePanel(n,entry,request,abort){
   if(!sameNativeSettingsFiber(owner,before.owner)||live.memoizedProps!==before.props)throw Error('Native theme changed before action');
   await awaitNativeSettingsReading(callback(...args),abort.signal);
   if(command?.action==='cancel'||command?.action==='select'&&before.identity.length===152)delete entry.themeCommit;
-  const deadline=Date.now()+500;while(!entry.closed){try{const after=await readNativeThemePanel(n,entry,abort.signal);if(after.snapshot.revision!==before.snapshot.revision||Date.now()>=deadline){if(tracksPersistence){const target=nativeThemeCommitTarget(n,after);if(target.provider!==persistenceBoundary.provider||target.usesV5!==persistenceBoundary.usesV5)throw Error('Native theme storage boundary changed');entry.themeCommit={...target,until:Date.now()+1500};}return nativeThemeCommitResult(n,entry,after,abort);}}catch(error){abort.signal.throwIfAborted();if(Date.now()>=deadline)throw error;}await new Promise(resolve=>setTimeout(resolve,20));}
+  const deadline=Date.now()+500;while(!entry.closed){try{const after=await readNativeThemePanel(n,entry,abort.signal);if(after.snapshot.revision!==before.snapshot.revision||Date.now()>=deadline){if(tracksPersistence){const target=nativeThemeCommitTarget(n,after);if(target.provider!==persistenceBoundary.provider||target.usesV5!==persistenceBoundary.usesV5)throw Error('Native theme storage boundary changed');entry.themeCommit={...target,operation:command.action==='themeReset'?'reset':'color',until:Date.now()+1500};}return nativeThemeCommitResult(n,entry,after,abort);}}catch(error){abort.signal.throwIfAborted();if(Date.now()>=deadline)throw error;}await new Promise(resolve=>setTimeout(resolve,20));}
   return {snapshot:before.snapshot};
  }finally{if(entry.themeOperation===operation)delete entry.themeOperation;}
 }
