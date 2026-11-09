@@ -11,7 +11,7 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolveAppEnvironment, withoutAppProcessEnv } from '@apackdev/sdk/env';
 import type { TerminalListeners, TerminalService, TerminalSession } from '@apackdev/sdk/services';
@@ -187,14 +187,60 @@ function expose(held: Broker, session: BrokerSession): TerminalSession {
   };
 }
 
+/**
+ * How many times a start may fail against one binary before the next session is refused with what that
+ * failure said, rather than spawning another doomed process.
+ *
+ * Three, which is what the app's own supervisor allows its API process (`API_CONFIG.MAX_RESTART_ATTEMPTS`).
+ * The number is derived from nothing, so it is the one this repo already chose rather than a second opinion.
+ */
+const START_ATTEMPTS = 3;
+
+/**
+ * What a start was attempted against: the binary's identity and the socket it would have bound.
+ *
+ * **This is what lets the budget below be forgiven without a timer or a reset hatch.** A contributor who
+ * rebuilds the broker, or points `APACK_TERMINAL_BINARY` at another build, changes this key and gets a fresh
+ * budget by doing the only thing that might fix it — which is the intent the old comment here stated and a
+ * plain counter would have broken. A cooldown would forgive a binary that is still broken, and so go back to
+ * spawning a process that cannot start, slower.
+ *
+ * The binary's size and mtime rather than its bytes: this runs before every start, and a hash of an Electron-
+ * sized binary on that path would cost more than the spawn it is deciding about.
+ */
+function startKey(binary: string, socket: string): string {
+  let stamp = 'absent';
+  try {
+    const { size, mtimeMs } = statSync(binary);
+    stamp = `${size}:${mtimeMs}`;
+  } catch {
+    // An unreadable binary is a key of its own: the start below fails and says so
+  }
+  return `${binary}@${stamp}->${socket}`;
+}
+
 /** Starts the broker the first time a session is wanted, and once per process thereafter */
 export function createTerminalService(): TerminalService & { shutdown(): Promise<void> } {
   let broker: Promise<Broker> | undefined;
   let current: Broker | undefined;
+  /** Consecutive failed starts against one `startKey`, and what the last of them said */
+  let failing: { key: string; count: number; error: unknown } | undefined;
 
   const running = (): Promise<Broker> => {
-    broker ??= startBroker({ binary: brokerBinary(), socket: socketPath(), env: brokerEnvironment() })
+    const binary = brokerBinary();
+    const socket = socketPath();
+    const key = startKey(binary, socket);
+    // **A broker that cannot start is not asked again until something about the attempt changes.** Every
+    // spawn here is a session the user asked for, so without this each attempt pays a process launch and a
+    // readiness wait to reach the same failure — and on a binary that is missing or not executable, that is
+    // every click of "new terminal" for the life of the run. What they are told is what the broker itself
+    // said, which `startBroker` already collects from its stderr, rather than a message about giving up.
+    if (failing && failing.key === key && failing.count >= START_ATTEMPTS) return Promise.reject(failing.error);
+    broker ??= startBroker({ binary, socket, env: brokerEnvironment() })
       .then((held) => {
+        // It started, so nothing is owed against this key: a later death is a crash rather than a failure to
+        // start, and the lazy path below is what recovers from one
+        failing = undefined;
         // **A broker that is gone must not be remembered, and forgetting it is the whole of the restart.**
         // The next session takes the branch above and starts one, which is the path a first session takes
         // anyway — so recovery is the ordinary lazy start rather than a supervisor beside it. Remembering a
@@ -210,8 +256,10 @@ export function createTerminalService(): TerminalService & { shutdown(): Promise
       })
       .catch((error: unknown) => {
       // A failed start must not be remembered as a broker: the next session tries again, so a contributor
-      // who builds the binary and retries is not told to restart the app
+      // who builds the binary and retries is not told to restart the app. What is remembered instead is the
+      // failure and what it was tried against, which is what `START_ATTEMPTS` is counted over
       broker = undefined;
+      failing = { key, count: failing?.key === key ? failing.count + 1 : 1, error };
       throw error;
     });
     return broker;
