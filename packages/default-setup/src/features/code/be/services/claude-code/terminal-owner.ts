@@ -111,7 +111,12 @@ export interface ClaudeNativeTerminalOptions {
 
 /** One native terminal process; no print sidecar and no independent status-command scheduler. */
 export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalOptions, backgroundObserver?: import('./background-status-observer.ts').ClaudeBackgroundStatusObserver): Promise<ClaudePreparedNativeTerminal> {
-  if (process.platform === 'win32') throw new Error('Native terminal status handoff currently requires a POSIX host')
+  // **Three POSIX dependencies, named so the next reader knows what Windows needs rather than that it is
+  // unsupported.** The pty is the broker's and portable; these are not: `session.signal` below, which the
+  // terminal service refuses off POSIX because Windows has no signals; the bridge's unix sockets, which
+  // need a named-pipe form on both ends, this app's server and the CLI's `$.http.fetch`; and the plugin's
+  // one `$PPID` call, which stands in for an accessor the CLI does not offer (`native-plugin/program.ts`).
+  if (process.platform === 'win32') throw new Error('Native terminal needs POSIX signals, unix sockets and a pid helper that Windows has no form of')
   if (!/^[a-f0-9-]{36}$/i.test(options.sessionId)) throw new Error('Native terminal needs an existing session identity')
   const env = buildChildEnv(options.env)
   const executable = await resolveClaudeExecutable(options.cliPath ?? await resolveForService('claude-code'), options.cwd, env.PATH)
