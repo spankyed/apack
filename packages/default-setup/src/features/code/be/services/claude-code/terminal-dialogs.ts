@@ -6,6 +6,25 @@ import { ClaudeFileApprovalReviewSchema, ClaudeFileApprovalPresentationSchema } 
 import { ClaudeQuestionPresentationSchema } from '../../../common/native-question.ts'
 import { z } from 'zod'
 
+/**
+ * **One element, one renderer.** A tool permission exists in the CLI's own TUI *and* can be drawn by this
+ * app, and the thing that must never happen is both sides answering it — that is an approval the user gave
+ * once being spent twice, or given by a card they never saw.
+ *
+ * Three things hold it, and all three are load-bearing:
+ *
+ * 1. **Every `*DialogsSchema` below is `.max(1)`.** That is not a size cap: a dialog is offered to the app
+ *    only while the CLI holds exactly one open, so two open dialogs offer nothing and the app has nothing
+ *    to draw. `terminal-dialogs-one-renderer.spec.ts` holds every schema in this module to it, derived from
+ *    the module's own exports rather than a list.
+ * 2. **A revision binds the descriptor objects**, not their contents: the native item and payload by
+ *    identity, plus the session. Anything that replaces either — a new payload, another dialog arriving,
+ *    the session changing, the dialog closing — expires an answer in flight (`terminal-ui-dialogs.spec.ts`).
+ * 3. **The app's answer goes through the CLI's own control**, which withdraws the item from the TUI as it
+ *    settles it. There is no second path that marks a dialog answered, so "answered here" and "withdrawn
+ *    there" cannot come apart.
+ */
+
 /** A one-time file decision; native retains policy, input and dialog lifecycle ownership. */
 export const ClaudeNativeFileDialogSchema = z.object({
   id: z.string().min(1).max(256), revision: z.string().uuid(), sessionId: z.string().uuid(),

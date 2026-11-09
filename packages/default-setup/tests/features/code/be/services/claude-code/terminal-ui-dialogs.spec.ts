@@ -54,6 +54,21 @@ it.each(['payload', 'nested input', 'session', 'closed', 'another dialog'])('rej
   await expect(f.reply(d)).rejects.toThrow('changed or expired')
   expect(f.answer).not.toHaveBeenCalled()
 })
+/**
+ * The offer side of one element, one renderer: the answer cases above prove a stale approval is refused,
+ * and this proves nothing is offered to be approved while the TUI holds more than one.
+ */
+it('offers no dialog while a second is open, and offers the survivor once it closes', async () => {
+  const f = fixture()
+  f.state.open.push({ ...f.item, id: 'dialog-2', payload: { ...f.item.payload, requestId: 'read-2' } })
+  expect(await f.snapshot(), 'two open dialogs are the app drawing neither').toBeUndefined()
+  f.state.open.pop()
+  const survivor = await f.snapshot()
+  expect(survivor).toMatchObject({ id: 'dialog-1' })
+  await f.reply(survivor)
+  expect(f.answer).toHaveBeenCalledOnce()
+})
+
 it('passes only native denial feedback and rejects unsupported decisions', async () => {
   const f = fixture(), d = await f.snapshot()
   await expect(f.reply(d, { decision: 'always_allow' })).rejects.toThrow('Invalid')
