@@ -232,28 +232,7 @@ function playwrightBackstops(): { test: number; assertion: number } {
 
 /** Where Playwright runs: the trees whose configs delegate to `definePackE2EConfig` */
 const playwrightSpecs = (): string[] => repoFiles()
-  .filter((file) => /(^tests\/(e2e|acceptance)\/|\/tests\/e2e\/)/.test(file) && /\.(spec|ts)$|\.ts$/.test(file));
-
-/**
- * A wait that cannot finish inside the test it runs in, which is the one thing worth checking here.
- *
- * **The bound is the test timeout, not the assertion one.** A per-call `timeout` — `expect.poll(fn, { … })`,
- * `toBeHidden({ … })` — *overrides* the config's `expect.timeout` for that call, so a 40s poll under a 30s
- * assertion default is legal and does what it says. Nothing overrides the test timeout: Playwright ends the
- * test there, so a wait at or past it can never complete, and its number is a claim nothing honours — the
- * failure arrives as "test timeout exceeded", which names no condition, instead of the poll's own message
- * naming what it was waiting for.
- *
- * **And the bound is per test, because `test.setTimeout(n)` raises it.** Reading the config's figure alone
- * is what the first version of this did, and its single finding was a false positive: a 60s poll inside a
- * case that had already declared 180s. An exception table then carried a plausible reason for a defect that
- * was not one, which is the dead text this repo refuses — so the budget is read from the enclosing test.
- *
- * **What it does not catch**, so nobody over-trusts it: a wait *under* the budget can still lose to whatever
- * the test does around it — 55s of polling after 10s of setup in a 60s test dies at the setup's expense.
- * That needs the time the rest of the test takes, which no reader of the source has. What is unambiguous is
- * a wait given the whole budget or more, and that is what this reports.
- */
+  .filter((file) => file.endsWith('.ts') && /(^tests\/(e2e|acceptance)\/|\/tests\/e2e\/)/.test(file));
 
 /** Each `test(...)` in a Playwright spec: the lines it spans, and the budget it declares for itself */
 function testsIn(absFile: string): { from: number; to: number; budget?: number }[] {
@@ -293,7 +272,26 @@ function dottedName(node: ts.Expression): string | undefined {
   return parts.join('.');
 }
 
-/** Every wait in a Playwright spec that is given its whole test's budget or more */
+/**
+ * A wait that cannot finish inside the test it runs in, which is the one thing worth checking here.
+ *
+ * **The bound is the test timeout, not the assertion one.** A per-call `timeout` — `expect.poll(fn, { … })`,
+ * `toBeHidden({ … })` — *overrides* the config's `expect.timeout` for that call, so a 40s poll under a 30s
+ * assertion default is legal and does what it says. Nothing overrides the test timeout: Playwright ends the
+ * test there, so a wait at or past it can never complete, and its number is a claim nothing honours — the
+ * failure arrives as "test timeout exceeded", which names no condition, instead of the poll's own message
+ * naming what it was waiting for.
+ *
+ * **And the bound is per test, because `test.setTimeout(n)` raises it.** The config's figure alone is not
+ * it: a 60s poll inside a case that has already declared 180s is correct, with two minutes to spare, so a
+ * check reading the config would report it and an exception table would then carry a plausible reason for a
+ * defect that does not exist — the dead text this repo refuses. The budget is the enclosing test's.
+ *
+ * **What it does not catch**, so nobody over-trusts it: a wait *under* the budget can still lose to whatever
+ * the test does around it — 55s of polling after 10s of setup in a 60s test dies at the setup's expense.
+ * That needs the time the rest of the test takes, which no reader of the source has. What is unambiguous is
+ * a wait given the whole budget or more, and that is what this reports.
+ */
 function waitsPastTheirTest(file: string, configBound: number): string[] {
   const absFile = path.join(REPO_ROOT, file);
   const tests = testsIn(absFile);
@@ -315,6 +313,7 @@ function waitsPastTheirTest(file: string, configBound: number): string[] {
  * non-defect is worse than no table: it reads as coverage and nothing ever revisits it.
  */
 const BACKSTOP_BY_DESIGN: Record<string, string> = {};
+
 /** The timeout values a config declares, ignoring commented-out lines */
 function declaredTimeouts(file: string): { key: string; ms: number }[] {
   const out: { key: string; ms: number }[] = [];

@@ -175,14 +175,11 @@ const CLOCK_BY_DESIGN: Record<string, string> = {
  * Playwright suite reported **1005 clocked waits across 175 files** — 471 `expect.poll`, 206
  * `waitForTimeout`, 157 `test.setTimeout`, and Playwright's assertion timeouts — every one of which would
  * have needed a per-file entry saying the same sentence. A list that grows one entry per Playwright file is
- * a list of everything, which is the shape this repo refuses; and the five entries it already held for
- * those suites were paperwork rather than findings.
+ * a list of everything, which is the shape this repo refuses; and the five entries it held for those suites
+ * were paperwork rather than findings.
  *
- * **What is still worth checking there is a different question with a true premise**: whether a wait
- * outlasts the backstops its config declares (`definePackE2EConfig`: 60s a test, 30s an assertion). A 5s
- * poll inside a 30s backstop is right; a 90s one is the defect. That check needs `clockedDeadlines` to
- * carry each clock's milliseconds, which it does not, so it is not this file's — and nothing is lost by
- * scoping here, because demanding an entry per file produced no finding either.
+ * **What is worth checking there is a different question with a true premise**: whether a wait outlasts the
+ * budget of the test it runs in. `suite-timeouts.spec.ts` asks it, over the `ms` each `Clock` now carries.
  *
  * `drive/` is out for a second reason besides: nothing collects or gates those scripts.
  */
