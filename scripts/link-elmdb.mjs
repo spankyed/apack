@@ -19,7 +19,14 @@ export function elmdbCheckout(env = process.env) {
  * @param {string} root @param {string} [checkout]
  */
 export function linkElmdb(root, checkout = elmdbCheckout()) {
-  const rev = fs.readFileSync(path.join(root, 'vendor', 'elmdb.rev'), 'utf8').trim();
+  const revFile = path.join(root, 'vendor', 'elmdb.rev');
+  // Named, because the bare read threw `ENOENT` at an absolute path — which says a file is
+  // missing and not that this checkout declares no elmdb pin, and sent one investigation
+  // looking at the linker instead of at the tree that had never had the pin.
+  if (!fs.existsSync(revFile)) {
+    throw new Error(`${root} declares no elmdb pin: vendor/elmdb.rev is missing`);
+  }
+  const rev = fs.readFileSync(revFile, 'utf8').trim();
   const binding = path.join(checkout, 'crates', 'elmdb-node');
   const manifest = path.join(binding, 'package.json');
   if (!fs.existsSync(manifest) || JSON.parse(fs.readFileSync(manifest, 'utf8')).name !== 'elmdb') {
