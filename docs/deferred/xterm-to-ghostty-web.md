@@ -10,10 +10,14 @@ all. **And its target package is the wrong artifact**: `ghostty-web` carries its
 and its README says it will consume a native WebAssembly distribution once one exists — which now exists,
 published per release by upstream. Taking the package would leave this repository with three parsers.
 
-What remains sound here is the capability matrix, the packaged-WebAssembly proof and the phase-3 corpus,
-which the goal consumes by reference. What is stale is the inventory: the host-facing seam the plan says
-needs building was built by the ownership goal, and the historical replay its Phase 1 guards against was
-deleted (F3, F6, F11).
+**Nothing here is a live input.** What was worth keeping — the capability matrix, the packaged-WebAssembly
+proof, the renderer's initialization and lifetime checklist and the acceptance corpus — is written into the
+goal's own phases, so the goal is the whole of what an executor reads. This document is kept for its
+reasoning and its dates.
+
+What is stale beyond the two premises above: the host-facing seam the plan says needs building was built by
+the ownership goal (`TerminalAttachment`), and the historical replay its Phase 1 guards against was deleted
+(F3, F6, F11), so the DA/DSR suppression it requires has no subject.
 
 **This is now the follow-on, not the predecessor.**
 [goal-terminal-ownership](../archive/goals/goal-terminal-ownership.md) decided to keep xterm.js and put emulator

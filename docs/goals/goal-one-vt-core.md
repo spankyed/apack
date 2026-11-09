@@ -82,6 +82,9 @@ Made at `30eb9ff664` on `master`, 2026-11-09. Inspect current code before relyin
 | `default-setup/.../fe/canvas/TerminalView.vue`, `.../terminal/PanelTerminalSection.vue` | Hosts. Import `terminalPool` and `TerminalAttachment` and **no xterm type**; their only coupling is ~35 lines of `.xterm` / `.xterm-viewport` CSS, duplicated |
 | `default-setup/.../fe/utils/terminal-events.ts` (55 lines) | Fan-out that keeps no copy |
 
+**This goal is self-contained.** The two deferred documents are absorbed: everything from them worth
+executing is in the Phases below, and they are kept for their reasoning rather than as references to follow.
+
 **Three things the predecessor plan assumed that are no longer true**, which is why its phase list is not
 this one's:
 
@@ -181,54 +184,101 @@ Phase B on Windows and nothing else.
 
 ## Phases
 
+Each phase lists the work as well as the exit condition, because **this document is the whole of what you
+read to execute it.** The two deferred documents are history: their status blocks say so, and nothing in
+them is a live input. Where their content was worth keeping it is below.
+
 ### Phase 0a — does the core agree with what we ship?
 
-**Deliverable:** `libghostty-vt` behind a Cargo feature in `apack-terminal`, with the existing `insta`
-snapshot corpus driven through both parsers and the differences recorded. No production path changes and
-the default feature set is unchanged. Serves required outcome 5 and answers O1.
+**Deliverable:** `libghostty-vt` behind a Cargo feature in `apack-terminal`, with the broker's existing
+`insta` snapshot corpus driven through both parsers and every difference decided. No production path
+changes; the default feature set is unchanged. Serves required outcome 5 and answers O1.
 
-**Dependencies:** none in this repository.
+**Dependencies:** none.
+
+**Work:**
+
+- Choose an exact `libghostty-vt` release. Record its version and the upstream commit its headers come from;
+  the two are one pin (D4).
+- Add a pinned raw `-sys` crate behind a Cargo feature, default off. No safe wrapper yet — that is Phase B.
+- Point the build at an unpacked archive through the crate's prebuilt-directory variable, and confirm the
+  build neither downloads nor compiles. Prove this before anything else: it is D4's whole mechanism.
+- Write a harness that feeds one byte stream to both parsers and dumps each one's grid, cursor position,
+  alternate-screen flag and scrollback contents.
+- Run every existing snapshot case through it.
+- For OSC 133, OSC 7 and OSC 9;4, call the core's API and record what it reports (O1).
 
 **Done when:**
 
-- Every existing snapshot case runs under both parsers and the diff is recorded in evidence — case by case,
-  with a decision per difference: the new parser is right, the old one was, or the case was testing our
-  wrapper rather than the parse.
+- Every snapshot case has run under both parsers and each difference carries a decision in evidence: the new
+  parser is right, the old one was, or the case was testing our wrapper rather than the parse.
 - The corpus is stated to be a conformance corpus rather than a regression net, and anything it does not
   cover that `markers.rs` relies on is named.
-- O1 is answered against the selected release's headers, by calling it rather than by reading its docs.
-- A capability the broker needs and the core reports `GHOSTTY_UNSUPPORTED` for is a Phase 0a **failure**,
+- O1 is answered by calling the release, not by reading its documentation.
+- A capability the broker needs for which the core returns `GHOSTTY_UNSUPPORTED` is a Phase 0a **failure**,
   recorded with the condition for retrying.
 
-**Why this is first:** it is the question the predecessor plan could not ask, it is the cheapest to answer,
-and every other phase is wasted if the answer is no.
+**Why first:** it is the question the predecessor plan could not ask, it is the cheapest to answer, and
+every other phase is wasted if the answer is no.
 
 ### Phase 0b — does the module load where it has to?
 
-**Deliverable:** the packaged-WASM proof, unchanged in substance from the predecessor plan: pack
-compilation → installed pack runtime assets → `pack://` revision URL → initialization, **offline, in a
-packaged app**, against the existing content security policy. A disposable integration, not a production
-switch.
+**Deliverable:** a disposable integration proving the WebAssembly module initializes through the app's real
+asset route, and a recorded capability matrix for the chosen release. Not a production switch.
 
 **Dependencies:** none. Independent of 0a and runnable beside it.
 
-**Done when:**
+**Work — the load path.** Follow the real route rather than a shortcut: pack compilation → installed pack
+runtime assets → `pack://<id>/builds/<revision>/…` → initialization. Then:
 
-- The module initializes from an installed pack revision in a packaged build with no network.
-- Asset inclusion, URL resolution and response MIME type are each shown, not assumed.
+- Show asset inclusion, URL resolution and response MIME type each explicitly.
+- Run it in a **packaged** app with **no network**, against the existing content security policy.
 - No CDN, no dev-server-only URL, no absolute checkout path, and no policy widening.
-- If the pack asset pipeline needs a change to carry a `.wasm`, that change is named and its installed
-  result covered.
+- If the pack asset pipeline cannot carry a `.wasm`, make the smallest explicit change and cover the
+  installed result.
 
-**Done is not "it worked in development":** this is the half that kills the goal if it fails, and it fails
-only in the packaged case.
+**Work — the capability matrix.** Record an answer per row against the chosen release, by calling it:
+
+| Contract | What has to be shown |
+|---|---|
+| Construction and options | Theme, font, cursor, initial dimensions, line endings, and scrollback honouring the broker's handshake number rather than a constant of its own |
+| Write completion | When a write has actually been parsed, and whether queued live output stays ordered behind an earlier write |
+| Input | Keyboard data, control sequences, Shift+Enter, selection copy, clipboard paste and bracketed paste, through the app's own entry points |
+| Events | Resize, selection change and parsed-output notification have supported equivalents |
+| Viewport | Scroll position can be read and a pinned/unpinned state restored without depending on a library's DOM class names |
+| Addon equivalents | Fitting, link activation, Unicode width and clipboard behaviour — the four xterm addons this app loads. Do not assume any of them has a drop-in |
+| Rendering lifecycle | Open, detach, hidden output, reattach, resize and dispose, with no leaked renderer or listener |
+| Accessibility | Keyboard focus and assistive text access remain usable in Electron |
+| Progress reporting | OSC 9;4. The broker's marker scanner already reads the stream it arrives on, so this is a question about the renderer alone |
+| Inline images | Sixel or the Kitty graphics protocol. A capability this app lacks on both engines today, not a parity risk — record it and move on |
+| Ligatures | xterm needs an addon that reads font files from disk, which the sandboxed renderer cannot. Record whether the replacement needs anything at all |
+
+**Done when:** the module initializes from an installed pack revision in a packaged build with no network,
+and every row above has a recorded answer. A row answered "unsupported" that Phase R depends on is a
+blocker named here rather than discovered there.
+
+**Done is not "it worked in development":** this is the half that kills the goal, and it fails only in the
+packaged case.
 
 ### Phase B — the broker on the core
 
-**Deliverable:** `screen.rs` mapped onto `libghostty-vt`, `markers.rs`' scanning replaced by the core's,
-`alacritty_terminal` removed, the safe layer of D3 written and owned here. Serves outcomes 1, 4 and 5.
+**Deliverable:** the broker's terminal state, search and marker scanning on `libghostty-vt`, with
+`alacritty_terminal` gone. Serves outcomes 1, 4 and 5.
 
 **Dependencies:** Phase 0a's agreement result; O1 and O2 answered.
+
+**Work:**
+
+- Write the safe Rust layer over the pinned `-sys` crate and own it here (D3). Roughly 200 lines; it is
+  where this app's semantics attach.
+- Map `screen.rs` onto the core's state: the grid, the cursor, which screen is showing, bounded scrollback.
+- Replace `markers.rs`' hand-rolled scanning with the core's, and **keep its state machine and its
+  contract** — every field is a claim some program made, except `foreground`, which is measured (D5).
+- Move the `search` request onto the core's search.
+- Remove `alacritty_terminal` from `Cargo.toml`.
+- Declare the feature set in one place and add the check that asserts it present (D7).
+- Bump `vendor/apack-terminal.rev`, and compare the working tree against the pin before trusting a local
+  chain run.
 
 **Done when:**
 
@@ -236,51 +286,89 @@ only in the packaged case.
   measured reason.
 - The conformance corpus passes with the feature flag removed.
 - The protocol's generated types are unchanged, or each change is a deliberate contract change (D6).
-- Windows is proven on the VM, not inferred: the Job Object ownership, the pipe ACL and the ConPTY paths
-  are the broker's least replaceable code and they are what a core swap most easily disturbs.
-- The declared feature set is asserted present (D7).
+- Windows is proven on the VM, not inferred: Job Object tree ownership, the named-pipe ACL and the ConPTY
+  paths are the broker's least replaceable code, and they are what a core swap most easily disturbs.
+- O2's answer is recorded: whether the release's static library links against the broker's MSVC build.
 
 ### Phase R — the renderer on the core
 
-**Deliverable:** `terminal-pool.ts` constructs the core's WASM emulator instead of xterm; the six
-`@xterm/*` packages, their CSS import, the addon setup and `vite.config.ts`'s optimizer entries are gone.
-Serves outcomes 2, 3 and 4.
+**Deliverable:** `terminal-pool.ts` constructs the core's WebAssembly emulator; the six `@xterm/*`
+packages, their CSS import, the addon setup and the bundler's optimizer entries are gone. Serves outcomes
+2, 3 and 4.
 
-**Dependencies:** Phase 0b's packaged load; Phase B is **not** a dependency — the two sides can land
-independently, which is a property of the split being real.
+**Dependencies:** Phase 0b's packaged load and its capability matrix. **Phase B is not a dependency** — the
+two sides land independently, which is a property of the split being real.
 
-**Done when:**
+**Work — initialization and lifetime.** This is where the defects live, so it is itemised:
 
-- `TerminalAttachment`'s ten methods behave as they do today, proven by the specs that already cover them.
-- Initialization is awaited, deduplicated per terminal id, and a close, teardown or unmount during it
-  attaches no stale wrapper and sends no input to a replaced process.
-- Exactly one output subscription and one input registration per entry, as now.
-- The hosts style their own viewport: the `.xterm` and `.xterm-viewport` CSS in both components is replaced
-  by the attachment exposing its viewport element. No component names another library's DOM.
-- Links still go through the app's `openLink` and its URL policy, with no widened permissions.
-- `xterm-256color` remains the advertised `TERM` unless capability testing requires otherwise. It is a
-  terminal capability identifier, not a dependency name.
+- Share one initialization per renderer realm; expose loading and failure to the terminal UI. An
+  initialization failure must produce neither an unhandled rejection nor an indefinitely blank terminal.
+- Make pool creation await readiness, and deduplicate concurrent requests for one terminal id.
+- A close, actor teardown or host unmount **during** initialization must not attach a stale wrapper,
+  resurrect a closed entry, leak a subscription, or send input to a replaced process.
+- Keep exactly one output subscription and one input registration per entry.
+- Guard every asynchronous completion callback against an entry that has been disposed or replaced.
+- Preserve the PID-change notice, the loading banner and its replacement on first byte, background parsing,
+  scroll ownership, and close and disposal.
 
-### Phase A — acceptance
+**Work — the seam and the hosts:**
+
+- `TerminalAttachment`'s ten methods keep their current behaviour; the specs that cover them are the proof.
+- Replace the four addons with the equivalents Phase 0b proved: fitting, link activation, Unicode width,
+  clipboard. Do not assume any loads unchanged.
+- Keep external links on the app's `openLink` path and its URL policy. Test OSC clipboard and link
+  behaviour rather than widening a permission to reach parity.
+- Have the attachment expose its viewport element, and delete the `.xterm` and `.xterm-viewport` CSS from
+  both Vue hosts. No component names another library's DOM.
+- Fit only after attachment to a visible host with nonzero dimensions; never send a zero-sized pty
+  dimension. Verify panel toggles, tab moves, window resize, font loading and display-scale changes.
+- Restore history position after a tab switch, and keep the user pinned to the bottom only if they already
+  were.
+
+**Work — removal:**
+
+- Delete the six `@xterm/*` dependencies, the CSS import, the addon setup, `vite.config.ts`'s optimizer
+  entries and the obsolete types.
+- Update the three specs that mock xterm, including the xterm-loading comment in
+  `tests/features/code/fe/terminal-opens-for-the-asker.spec.ts`.
+- Leave `xterm-256color` as the advertised `TERM` unless capability testing requires otherwise: it is a
+  terminfo name, not a dependency.
+
+**Done when** every item above holds and no `@xterm` specifier remains outside this goal's own history.
+
+### Phase A — acceptance and cutover
 
 **Deliverable:** one engine per side in a packaged app, with measured before-and-after and every remaining
 limitation recorded.
 
 **Dependencies:** Phases B and R.
 
+**Work — behaviour, both hosts:**
+
+- Ordinary shell output, long scrollback, alternate-screen programs (`vim`, `less`, a representative agent
+  TUI), cursor motion, ANSI colour, emoji, combining characters, CJK, IME, selection, links, mouse input.
+- Ctrl+C, Ctrl+D, arrows, multiline and bracketed paste, copy shortcuts, focus return.
+- Both paste paths: the terminal's own and `apack:paste`.
+- Visible and hidden output, repeated tab switches, a backend restart, a terminal restart and kill, and
+  several windows — without changing pty ownership semantics.
+
+**Work — measurement.** On one machine, one Electron build and one output corpus: first-open latency
+including module initialization, sustained-output responsiveness, large-history behaviour, memory with
+several hidden sessions, resize, and packaged payload size. **Agree the acceptance limits from the baseline
+before cutover**, not after seeing the numbers.
+
+**Work — gates and closure:**
+
+- `npm run chain`, the `test:smoke` e2e gate, and the packaged install path.
+- Update `docs/references/terminal-broker.md` and the root guide's terminal-stack description to the
+  contract that shipped.
+- Write Outcome, archive this goal and both deferred documents, and repair links.
+
 **Done when:**
 
-- Both hosts are exercised with ordinary output, long scrollback, alternate-screen programs (`vim`, `less`,
-  a representative agent TUI), cursor motion, colour, emoji, combining characters, CJK, IME, selection,
-  links and mouse input; Ctrl+C, Ctrl+D, arrows, multiline and bracketed paste, copy shortcuts and focus
-  return; visible and hidden output, repeated tab switches, a backend restart, a terminal restart and kill,
-  and several windows.
-- Both paste paths are rechecked — the terminal's own and `apack:paste`.
-- Measured on one machine and build: first-open latency including module initialization, sustained-output
-  responsiveness, large-history behaviour, memory with several hidden sessions, resize, and packaged payload
-  size. Limits are agreed from the baseline **before** cutover.
-- No dual engine and no permanent fallback. A blocker leaves the current engine in production on that side
-  and is recorded with its failing case.
+- Every behaviour above passes and the measured figures sit inside the agreed limits.
+- No dual engine and no permanent fallback. A blocker leaves the current engine in production **on that
+  side**, recorded with its failing case, and the other side still ships.
 
 ## Acceptance and evidence
 
