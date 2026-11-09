@@ -107,9 +107,10 @@ describe('a spec waits for the thing it waits for', () => {
       .map((wait) => `${wait.file}:${wait.line} > ${wait.name}`);
 
     expect(unaccounted, [
-      'A spec may not sleep and then assert. Await the thing instead —',
-      '`_whenSatisfied` or `_byDeadline` from @apackdev/sdk/testing/waiting — or, if the elapsed time really is',
-      'the subject, add it to BARE_WAIT_BY_DESIGN with the reason.',
+      'A spec may not sleep and then assert. Await the thing instead — `settles` from @apackdev/sdk/testing',
+      'for a condition to poll (the one a pack can reach too), or `_whenSatisfied`/`_byDeadline` from',
+      '@apackdev/sdk/testing/waiting for an event. If the elapsed time really is the subject, add it to',
+      'BARE_WAIT_BY_DESIGN with the reason.',
     ].join(' ')).toEqual([]);
   });
 

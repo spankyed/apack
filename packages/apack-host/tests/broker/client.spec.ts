@@ -11,7 +11,7 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { _whenSatisfied } from '@apackdev/sdk/testing/waiting';
+import { _whenSatisfied, settles } from '@apackdev/sdk/testing/waiting';
 import { BrokerError, holdBrokerSessions, startBroker, type Broker } from '../../src/broker/client.ts';
 
 /**
@@ -119,17 +119,14 @@ const alive = (pid: number) => {
 /**
  * Waits until a process is gone.
  *
- * Polled against a deadline rather than subscribed to: nothing emits an event when *another* process exits,
- * which is the case `_whenSatisfied`'s own header says to poll for. One loop, not a stack of sleeps.
+ * Polled rather than subscribed to: nothing emits an event when *another* process exits, which is what
+ * `settles` is for. Its bound is the progress guard around the test rather than a clock, so a machine that
+ * slows the wait slows the exit it is waiting for by the same load — which a 5s deadline here did not.
  */
-async function untilGone(pid: number, deadlineMs = 5_000): Promise<void> {
-  const until = Date.now() + deadlineMs;
-  while (Date.now() < until) {
-    if (!alive(pid)) return;
-    await new Promise(resolve => { setTimeout(resolve, 25); });
-  }
-  throw new Error(`the broker (${pid}) was still running ${deadlineMs}ms after it should have gone`);
-}
+const untilGone = (pid: number): Promise<void> =>
+  settles(() => {
+    if (alive(pid)) throw new Error(`the broker (${pid}) is still running`);
+  });
 
 /** The pid of the one broker a case started, read from where the script recorded it */
 const recordedPids = (file: string) =>
