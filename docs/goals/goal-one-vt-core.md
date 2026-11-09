@@ -167,20 +167,6 @@ and Kitty graphics, roughly halving the module, and the omitted functions stay e
 "one engine, two configurations", which is the disagreement this goal is buying away. The feature set per
 side is declared in one place and asserted (required outcome 4).
 
-**D8 — This goal precedes publishing the broker.** Settled 2026-11-09. Publishing elmdb and apack-terminal
-to a registry ([artifacts-not-source.md](../plans/artifacts-not-source.md)) builds per-platform artifacts
-for the same four triples this goal adds a binary dependency to, so doing it first means building that
-packaging twice and the second time is the harder one. The order is therefore **elmdb publishes → this goal
-→ the broker publishes**, and the broker's per-platform packages are built once against their final
-dependency set.
-
-Two things follow that are easy to get backwards. Publishing **elmdb** is unaffected and need not wait for
-anything here, so that half of the artifact work runs beside Phase 0. And the arrangement the publishing
-plan relies on — one vendored checkout still built from source, so the container's toolchain derivation and
-the janitor stay exercised — is **the broker**, which is exactly the checkout this goal is changing. It stays
-vendored and compiled throughout, which is what makes the two pieces of work compatible rather than merely
-sequential.
-
 ### Open decisions
 
 **O1 — Does the core answer every fact `markers.rs` currently derives?** Specifically OSC 133's command
@@ -242,8 +228,7 @@ only in the packaged case.
 **Deliverable:** `screen.rs` mapped onto `libghostty-vt`, `markers.rs`' scanning replaced by the core's,
 `alacritty_terminal` removed, the safe layer of D3 written and owned here. Serves outcomes 1, 4 and 5.
 
-**Dependencies:** Phase 0a's agreement result; O1 and O2 answered. Not the broker's publishing, which
-follows this phase rather than preceding it (D8).
+**Dependencies:** Phase 0a's agreement result; O1 and O2 answered.
 
 **Done when:**
 
