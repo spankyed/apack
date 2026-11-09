@@ -1184,6 +1184,8 @@ declare namespace EARS {
         type Block = typeof Block;
         const BlockText = "BlockText";
         type BlockText = typeof BlockText;
+        const ToolEntry = "ToolEntry";
+        type ToolEntry = typeof ToolEntry;
         const Artifact = "Artifact";
         type Artifact = typeof Artifact;
         const Terminal = "Terminal";
@@ -1211,7 +1213,7 @@ declare namespace EARS {
         const Collection = "Collection";
         type Collection = typeof Collection;
     }
-    type Entity = Entity.Thread | Entity.Message | Entity.Block | Entity.BlockText | Entity.Artifact | Entity.Terminal | Entity.Note | Entity.BrowserTab | Entity.BrowserBookmark | Entity.SearchIndex | Entity.IndexedDoc | Entity.Flow | Entity.Node | Entity.Action | Entity.Prompt | Entity.Document | Entity.Collection;
+    type Entity = Entity.Thread | Entity.Message | Entity.Block | Entity.BlockText | Entity.ToolEntry | Entity.Artifact | Entity.Terminal | Entity.Note | Entity.BrowserTab | Entity.BrowserBookmark | Entity.SearchIndex | Entity.IndexedDoc | Entity.Flow | Entity.Node | Entity.Action | Entity.Prompt | Entity.Document | Entity.Collection;
     type EntityId<E extends string = string> = _apackdev_ears.EARS.EntityId<E>;
     type RelationId = _apackdev_ears.EARS.RelationId;
     namespace RelKind {
@@ -1231,6 +1233,8 @@ declare namespace EARS {
         type HAS_BLOCK = typeof HAS_BLOCK;
         const HAS_TEXT = "has_text";
         type HAS_TEXT = typeof HAS_TEXT;
+        const HAS_ENTRY = "has_entry";
+        type HAS_ENTRY = typeof HAS_ENTRY;
         const DUPLICATES = "duplicates";
         type DUPLICATES = typeof DUPLICATES;
         const CONTAINS = "contains";
@@ -1243,7 +1247,7 @@ declare namespace EARS {
         type PARENT_OF = typeof PARENT_OF;
     }
     /** Every relation kind this pack may link with: its own, its dependencies' and the SDK's */
-    const RELATION_KINDS: readonly ["has", "relates_to", "references", "forked_from", "compacts", "blocks", "has_block", "has_text", "duplicates", "contains", "transitions_to", "instance_of", "parent_of"];
+    const RELATION_KINDS: readonly ["has", "relates_to", "references", "forked_from", "compacts", "blocks", "has_block", "has_text", "has_entry", "duplicates", "contains", "transitions_to", "instance_of", "parent_of"];
     type RelKind = (typeof RELATION_KINDS)[number];
     /** The relation kinds declared `weighted`, whose links take a weight: its own and its dependencies' */
     const WEIGHTED_KINDS: readonly [];
@@ -3941,6 +3945,7 @@ type OwnEntityShapes = {
     'Message': MessageEntity;
     'Block': BlockEntity;
     'BlockText': BlockTextEntity;
+    'ToolEntry': ToolEntryEntity;
     'Artifact': ArtifactEntity;
     'Terminal': TerminalEntity;
     'Note': NoteEntity;
@@ -5168,6 +5173,56 @@ type TokenKind = 'classic-pat' | 'fine-grained-pat' | 'oauth' | 'unknown';
 
 type TokenSource = 'GITHUB_TOKEN' | 'keyring' | 'unknown';
 
+interface ToolActivityEntry {
+    /** Stable id. Usually the CLI's `tool_use_id`. */
+    id: string;
+    /** Tool name as reported by the CLI: Read, Write, Edit, Glob, Grep, Bash, … */
+    tool: string;
+    /** One-line human summary of the input (e.g. a truncated file path). */
+    summary: string;
+    /** Row status drives the per-row icon and label. */
+    status: 'denied' | 'error' | 'ok' | 'running';
+    /** Wall-clock duration once the tool has reported progress/completion. */
+    durationMs?: number;
+    /** One-line output summary if the tool reported one (e.g. "3 matches"). */
+    outputSummary?: string;
+    /** Optional full details revealed when the row is expanded. */
+    details?: {
+        input?: unknown;
+        output?: string;
+        error?: string;
+    };
+}
+
+/**
+ * One tool call as the activity block lists it, as a row of its own.
+ *
+ * **An entry is patched, not appended to** — `running` to `ok`, `denied` or `error`, with its output
+ * filled in when the tool answers — so it is an independently-mutating record, which is a row for the
+ * same reason a block is one. It was a member of the block's `props.entries`, and an attribute is written
+ * whole, so every later flush rewrote every entry: `details.output` holds the untruncated tool result, so
+ * one read of a large file was written again once per subsequent tool event.
+ *
+ * `entryId` is the CLI's `tool_use_id`, which is what a patch arrives by and what the writer de-dupes on;
+ * `id` is the engine's. The position is on the edge (`has_entry`'s `info.index`), as a block's is.
+ *
+ * The block keeps what is about the block — its label, state and artifact — and a read assembles these
+ * into the `entries` its component draws.
+ */
+interface ToolEntryEntity {
+    entryId: string;
+    tool: string;
+    summary: string;
+    status: 'denied' | 'error' | 'ok' | 'running';
+    durationMs?: number;
+    outputSummary?: string;
+    details?: {
+        input?: unknown;
+        output?: string;
+        error?: string;
+    };
+}
+
 type ToolProgressLine = z.infer<typeof ToolProgressLineSchema>;
 
 /** Tool-use progress heartbeat. */
@@ -5693,6 +5748,21 @@ declare const chatCommands: {
         at: number;
         text: string;
     }) => void;
+    /**
+     * Writes one of a block's tool entries, and answers its row.
+     *
+     * **The same shape as `writeMessageBlock`, one level down**: pass the row id a previous write answered
+     * and this is one row by id, which is what makes a tool event cost its own entry. Without one the entry
+     * is found among the block's by its `entryId`, or created at the end.
+     *
+     * `details` merges field-wise, as the writer's own `update` does, so a patch carrying only an output
+     * does not drop the input recorded when the tool started.
+     */
+    readonly writeToolEntry: (params: {
+        blockId: EARS.EntityId;
+        entry: ToolActivityEntry;
+        entryRowId?: EARS.EntityId;
+    }) => EARS.EntityId | undefined;
     /** Folds a block's text segments into it: what a writer calls when the block has finished growing */
     readonly compactMessageBlockText: (params: {
         blockId: EARS.EntityId;
@@ -5873,6 +5943,7 @@ declare const featureServices: {
         updateMessageState: typeof updateMessageState;
         updateMessageBlock: typeof updateMessageBlock;
         appendMessageBlockText: typeof appendMessageBlockText;
+        updateMessageToolEntry: typeof updateMessageToolEntry;
         removeMessageBlock: typeof removeMessageBlock;
         streamMessageText: typeof streamMessageText;
         streamMessageBlockText: typeof streamMessageBlockText;
@@ -6528,6 +6599,18 @@ declare function updateMessageBlock(messageId: EARS.EntityId, block: BlockConfig
  * });
  */
 declare function updateMessageState(messageId: EARS.EntityId, updates: Partial<Pick<MessageEntity, 'blockResponse' | 'compacted' | 'context' | 'forkable' | 'responseTimestamp' | 'status' | 'text'>>): void;
+
+/**
+ * Writes one of a block's tool entries, and answers its row.
+ *
+ * **The entries' half of what the segments did for the text.** An entry used to be a member of the
+ * block's `props.entries`, written whole on every flush — and `details.output` holds the untruncated tool
+ * result, so one read of a large file was written again once per later tool event. Writing the entry
+ * alone costs that entry.
+ *
+ * Pass the row id a previous write answered and it is one row by id, with no walk for the entry.
+ */
+declare function updateMessageToolEntry(blockId: EARS.EntityId, entry: ToolActivityEntry, entryRowId?: EARS.EntityId): EARS.EntityId | undefined;
 
 /** Parse a Codex JSONL file into an array of entries. */
 declare function viewByFile(filePath: string, opts?: {

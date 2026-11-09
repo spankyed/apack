@@ -7,7 +7,7 @@ import { RepositoryError, RepositoryErrorCode } from '@apackdev/sdk/repositories
 import { wouldCreateCycle } from '@apackdev/sdk/ears';
 import { createLogger } from '@apackdev/sdk/logger';
 import type {
-  ThreadEntity, MessageEntity, ArtifactEntity, BlockConfig, MessageReferences,
+  ThreadEntity, MessageEntity, ArtifactEntity, BlockConfig, MessageReferences, ToolActivityEntry,
   ThreadCreateData,
   ThreadExtendedData,
   ThreadExtended,
@@ -442,7 +442,7 @@ function blockRowsOf(messageId: EARS.EntityId): Array<{ id: EARS.EntityId; type:
     .map(({ edge, row }) => ({
       id: edge.target,
       type: row.type as string,
-      props: withSegments(edge.target, (row.props ?? {}) as Record<string, any>),
+      props: assembled(edge.target, (row.props ?? {}) as Record<string, any>),
     }));
 }
 
@@ -462,15 +462,48 @@ function blockRowsOf(messageId: EARS.EntityId): Array<{ id: EARS.EntityId; type:
  */
 const TEXT_SEGMENTS_BEFORE_COMPACTION = 32;
 
-/** A block's stored props with its text segments spliced onto the compacted prefix */
-function withSegments(blockId: EARS.EntityId, props: Record<string, any>): Record<string, any> {
+/**
+ * A block's stored props with its children folded in: text segments spliced onto the compacted prefix,
+ * and entry rows as the list its component draws.
+ *
+ * **A block's growing parts are children, and they assemble into the two prop names the components read.**
+ * Naming `content` and `entries` here is the contract rather than a leak: there are two kinds of growing
+ * part and they are genuinely different — text spliced by offset, entries ordered by their edge — so a
+ * generic part mechanism invented for two cases would be machinery standing in for a decision.
+ */
+function assembled(blockId: EARS.EntityId, props: Record<string, any>): Record<string, any> {
+  let held = props;
+
   const segments = segmentsOf(blockId);
-  if (segments.length === 0) return props;
-  const content = segments.reduce(
-    (text, segment) => text.slice(0, segment.at) + segment.text,
-    typeof props.content === 'string' ? props.content : '',
-  );
-  return { ...props, content };
+  if (segments.length > 0) {
+    const content = segments.reduce(
+      (text, segment) => text.slice(0, segment.at) + segment.text,
+      typeof held.content === 'string' ? held.content : '',
+    );
+    held = { ...held, content };
+  }
+
+  const entries = entriesOf(blockId);
+  if (entries.length > 0) held = { ...held, entries: entries.map(({ entry }) => entry) };
+
+  return held;
+}
+
+const TOOL_ENTRY_FIELDS = ['entryId', 'tool', 'summary', 'status', 'durationMs', 'outputSummary', 'details'] as const;
+
+/** An entry as its block's props carry it: the stored row under the `id` its component and the CLI use */
+const toolEntryOf = (row: Record<string, unknown>): ToolActivityEntry => {
+  const { entryId, ...rest } = row as { entryId: string } & Record<string, unknown>;
+  return { ...rest, id: entryId } as unknown as ToolActivityEntry;
+};
+
+/** A block's tool entries in edge order, each with its row */
+function entriesOf(blockId: EARS.EntityId): Array<{ id: EARS.EntityId; entry: ToolActivityEntry }> {
+  return query.ids(blockId).outEdges(EARS.RelKind.HAS_ENTRY, EARS.Entity.ToolEntry)
+    .map((edge) => ({ edge, row: query.ids(edge.target).pickOne(TOOL_ENTRY_FIELDS) }))
+    .filter((held): held is { edge: typeof held.edge; row: NonNullable<typeof held.row> } => held.row !== null)
+    .sort((a, b) => indexOf(a.edge.info) - indexOf(b.edge.info))
+    .map(({ edge, row }) => ({ id: edge.target, entry: toolEntryOf(row as Record<string, unknown>) }));
 }
 
 /** A block's text segments in offset order, each with its row */
@@ -487,7 +520,7 @@ function compactBlockText(blockId: EARS.EntityId): void {
   const segments = segmentsOf(blockId);
   if (segments.length === 0) return;
   const props = (query.ids(blockId).pickOne(['props'] as const)?.props ?? {}) as Record<string, any>;
-  write(blockId).set('props', withSegments(blockId, props));
+  write(blockId).set('props', assembled(blockId, props));
   for (const segment of segments) {
     write(blockId).unlink(EARS.RelKind.HAS_TEXT, segment.id);
     write(segment.id).destroy();
@@ -521,10 +554,14 @@ function createBlocks(messageId: EARS.EntityId, blocks: readonly BlockConfig[]):
 function discardBlocks(messageId: EARS.EntityId, how: 'trash' | 'destroy'): void {
   for (const edge of query.ids(messageId).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block)) {
     // A segment is a block's working state and is never the user's, so it goes outright either way: a
-    // trashed block reads through `withSegments`, which would otherwise assemble rows nothing reaches
+    // trashed block reads through `assembled`, which would otherwise assemble rows nothing reaches
     for (const segment of segmentsOf(edge.target)) {
       write(edge.target).unlink(EARS.RelKind.HAS_TEXT, segment.id);
       write(segment.id).destroy();
+    }
+    for (const entry of entriesOf(edge.target)) {
+      write(edge.target).unlink(EARS.RelKind.HAS_ENTRY, entry.id);
+      write(entry.id).destroy();
     }
     if (how === 'trash') write(edge.target).trash();
     else write(edge.target).destroy();
@@ -854,6 +891,51 @@ export const chatCommands = {
     if (segmentsOf(blockId).length >= TEXT_SEGMENTS_BEFORE_COMPACTION) compactBlockText(blockId);
   },
 
+  /**
+   * Writes one of a block's tool entries, and answers its row.
+   *
+   * **The same shape as `writeMessageBlock`, one level down**: pass the row id a previous write answered
+   * and this is one row by id, which is what makes a tool event cost its own entry. Without one the entry
+   * is found among the block's by its `entryId`, or created at the end.
+   *
+   * `details` merges field-wise, as the writer's own `update` does, so a patch carrying only an output
+   * does not drop the input recorded when the tool started.
+   */
+  writeToolEntry: (params: {
+    blockId: EARS.EntityId;
+    entry: ToolActivityEntry;
+    entryRowId?: EARS.EntityId;
+  }): EARS.EntityId | undefined => {
+    const { blockId, entry, entryRowId } = params;
+
+    const held = entryRowId ?? entriesOf(blockId).find(({ entry: one }) => one.id === entry.id)?.id;
+    if (held) {
+      const kept = query.ids(held).pickOne(['details'] as const)?.details as ToolActivityEntry['details'];
+      write(held).setMany({
+        tool: entry.tool,
+        summary: entry.summary,
+        status: entry.status,
+        ...(entry.durationMs !== undefined && { durationMs: entry.durationMs }),
+        ...(entry.outputSummary !== undefined && { outputSummary: entry.outputSummary }),
+        ...(entry.details !== undefined && { details: { ...kept, ...entry.details } }),
+      });
+      return held;
+    }
+
+    const index = query.ids(blockId).outEdges(EARS.RelKind.HAS_ENTRY, EARS.Entity.ToolEntry).length;
+    const created = create(EARS.Entity.ToolEntry, {
+      entryId: entry.id,
+      tool: entry.tool,
+      summary: entry.summary,
+      status: entry.status,
+      ...(entry.durationMs !== undefined && { durationMs: entry.durationMs }),
+      ...(entry.outputSummary !== undefined && { outputSummary: entry.outputSummary }),
+      ...(entry.details !== undefined && { details: entry.details }),
+    }).id();
+    write(blockId).link(EARS.RelKind.HAS_ENTRY, created, { info: { index } });
+    return created;
+  },
+
   /** Folds a block's text segments into it: what a writer calls when the block has finished growing */
   compactMessageBlockText: (params: { blockId: EARS.EntityId }): void => {
     compactBlockText(params.blockId);
@@ -875,10 +957,16 @@ export const chatCommands = {
 
     const held = blockId ?? blockIdOfType(messageId, block.type);
     if (held) {
-      // The props carry the whole text, so segments written before it are already in what is being set
+      // The props carry the whole of what the children held, so they are already in what is being set
       for (const segment of segmentsOf(held)) {
         write(held).unlink(EARS.RelKind.HAS_TEXT, segment.id);
         write(segment.id).destroy();
+      }
+      if (block.props.entries !== undefined) {
+        for (const entry of entriesOf(held)) {
+          write(held).unlink(EARS.RelKind.HAS_ENTRY, entry.id);
+          write(entry.id).destroy();
+        }
       }
       write(held).setMany({ type: block.type, props: block.props });
       return held;

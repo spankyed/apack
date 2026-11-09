@@ -9,22 +9,33 @@
 // Driven on fake timers against a recording `services.chat`, because the subject is which call happens when.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStreamWriter } from '../../../../../src/content/actions/claude-code/_helpers/stream-writer.ts';
+import { recordTurnWrites } from './_support/turn-writes.ts';
 
 type Write = { text: string; responseTimestamp?: number };
 type Feed = { at: number; text: string; done?: true };
 
+/**
+ * The shared recorder, with this writer's feed beside it.
+ *
+ * What a writer costs is one concept (`_support/turn-writes.ts`), and it was three phrasings — this spec's
+ * `reply * 8`, and two others' own. The text feed stays local because it is this writer's alone.
+ */
 function recorder() {
   const writes: Write[] = [];
   const feed: Feed[] = [];
+  const shared = recordTurnWrites();
   const services = {
     chat: {
-      updateMessageState: (_id: unknown, updates: Write) => { writes.push({ ...updates }); },
+      updateMessageState: (id: unknown, updates: Write) => {
+        writes.push({ ...updates });
+        (shared.services as unknown as { chat: { updateMessageState(id: unknown, u: Write): void } }).chat.updateMessageState(id, updates);
+      },
       streamMessageText: (params: { messageId: unknown; at: number; text: string; done?: true }) => {
         feed.push({ at: params.at, text: params.text, ...(params.done ? { done: true as const } : {}) });
       },
     },
   };
-  return { writes, feed, services: services as never };
+  return { writes, feed, written: shared.written, kept: shared.kept, services: services as never };
 }
 
 /** The bytes a run of writes asks the engine to store, which is the figure G1 was priced in */
@@ -53,7 +64,7 @@ describe('what a streamed reply writes', () => {
    * more than the reply itself; the feed's job is that the row is written a few times rather than per flush.
    */
   it('costs the engine a few multiples of the reply rather than a multiple of its length', () => {
-    const { writes, services } = recorder();
+    const { writes, services, written, kept } = recorder();
     const writer = createStreamWriter(services, 'm-1' as never, { intervalMs: 80, durableMs: 2000 });
     const chunk = 'y'.repeat(108);
 
@@ -67,6 +78,8 @@ describe('what a streamed reply writes', () => {
 
     // The old model over the same run: 120 flushes x 12,960/2 = 777,600 bytes
     expect(writtenBytes(writes), 'the row is still being written').toBeGreaterThan(0);
+    // The shared bound, in the terms every writer is held in: what reached storage against what it keeps
+    expect(written()).toBeLessThanOrEqual(kept() * 8);
     expect(writtenBytes(writes)).toBeLessThan(reply * 8);
     expect(writes.length, 'one write per durable tick plus the final one').toBeLessThanOrEqual(8);
   });

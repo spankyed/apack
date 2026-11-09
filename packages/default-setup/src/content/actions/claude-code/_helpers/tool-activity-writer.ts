@@ -81,12 +81,19 @@ export function createToolActivityWriter(
   let hasWrittenOnce = false;
   /** This block's own row, from the first write; every write after it is that row by id */
   let blockId: EntityId | undefined;
+  /** Each entry's row, by the CLI's id, so a patch is one row by id rather than a walk for it */
+  const rows = new Map<string, EntityId>();
   /** Optional artifact ref attached via setArtifactRef (Phase C). */
   let artifactRef: { artifactId: string; label: string } | undefined;
 
-  const buildBlockProps = (): ToolActivityBlockProps => ({
-    // Fresh array copy so frontend reactivity sees a new reference on every write.
-    entries: entries.map(e => ({ ...e })),
+  /**
+   * What the block itself holds.
+   *
+   * **`entries` is deliberately absent.** Each entry is a row of its own and a read assembles them, so
+   * carrying them here too would store the list twice and bring back the whole-array write this removed.
+   * What is left is about the block rather than about any entry, and is small enough to write per event.
+   */
+  const buildBlockProps = (): Omit<ToolActivityBlockProps, 'entries'> => ({
     label: computeLabel(entries, state, opts.phase),
     state,
     defaultOpen: false,
@@ -103,9 +110,19 @@ export function createToolActivityWriter(
       type: 'tool-activity',
       props: buildBlockProps() as unknown as Record<string, any>,
     };
+    const firstWrite = blockId === undefined;
     blockId = services.chat.updateMessageBlock(messageId, block, blockId);
+    // The block's row has to exist before an entry can hang off it, so a first write writes them all
+    if (firstWrite) for (const entry of entries) writeEntry(entry);
     hasWrittenOnce = true;
     lastFlushAt = Date.now();
+  };
+
+  /** Writes one entry's row, remembering it so the next patch of that entry is a write by id */
+  const writeEntry = (entry: ToolActivityEntry): void => {
+    if (!blockId) return;
+    const row = services.chat.updateMessageToolEntry(blockId, { ...entry }, rows.get(entry.id));
+    if (row) rows.set(entry.id, row);
   };
 
   const schedule = (): void => {
@@ -128,6 +145,7 @@ export function createToolActivityWriter(
       // inside a replayed `assistant` line after a permission pause.
       if (entries.some(e => e.id === entry.id)) return;
       entries.push(entry);
+      writeEntry(entry);
       schedule();
     },
 
@@ -135,6 +153,7 @@ export function createToolActivityWriter(
       const idx = entries.findIndex(e => e.id === id);
       if (idx === -1) return;
       entries[idx] = { ...entries[idx], ...patch, details: { ...entries[idx].details, ...patch.details } };
+      writeEntry(entries[idx]);
       schedule();
     },
 
@@ -160,6 +179,7 @@ export function createToolActivityWriter(
           // Removed rather than written: the thinking block is its own row and is not this writer's to rewrite
           services.chat.removeMessageBlock(messageId, 'tool-activity');
           blockId = undefined;
+          rows.clear();
         }
         return;
       }
@@ -169,7 +189,7 @@ export function createToolActivityWriter(
       // permission flow) are preserved intentionally — they're meaningful
       // terminal states and must NOT be overwritten by this finaliser.
       for (const e of entries) {
-        if (e.status === 'running') e.status = 'ok';
+        if (e.status === 'running') { e.status = 'ok'; writeEntry(e); }
       }
       writeNow();
     },

@@ -3,7 +3,7 @@ import { answer } from '../answer.ts';
 import { broadcastToSurface } from '#generated/events.ts';
 import { EARS } from '#generated/ears.ts';
 import { repository } from '#generated/repository.ts';
-import type { BlockConfig, BlockResponse, MessageEntity, OutgoingThreadsEvents, ThreadCreateData, MessageReferences } from '#features/threads/be/types.ts';
+import type { BlockConfig, BlockResponse, MessageEntity, OutgoingThreadsEvents, ThreadCreateData, MessageReferences, ToolActivityEntry } from '#features/threads/be/types.ts';
 
 import { readMediaBuffer } from '@apackdev/sdk/utils';
 import * as threadsService from './threads.ts';
@@ -273,6 +273,29 @@ export function appendMessageBlockText(blockId: EARS.EntityId, at: number, text:
     repository.chatCommands.appendMessageBlockText({ blockId, at, text });
   } catch (err) {
     logger.error(`appendMessageBlockText failed for ${blockId}`, { error: errorMessage(err) });
+  }
+}
+
+/**
+ * Writes one of a block's tool entries, and answers its row.
+ *
+ * **The entries' half of what the segments did for the text.** An entry used to be a member of the
+ * block's `props.entries`, written whole on every flush — and `details.output` holds the untruncated tool
+ * result, so one read of a large file was written again once per later tool event. Writing the entry
+ * alone costs that entry.
+ *
+ * Pass the row id a previous write answered and it is one row by id, with no walk for the entry.
+ */
+export function updateMessageToolEntry(
+  blockId: EARS.EntityId,
+  entry: ToolActivityEntry,
+  entryRowId?: EARS.EntityId,
+): EARS.EntityId | undefined {
+  try {
+    return repository.chatCommands.writeToolEntry({ blockId, entry, entryRowId });
+  } catch (err) {
+    logger.error(`updateMessageToolEntry failed for ${blockId}`, { error: errorMessage(err) });
+    return undefined;
   }
 }
 
@@ -640,6 +663,7 @@ export const chatService = {
   updateMessageState,
   updateMessageBlock,
   appendMessageBlockText,
+  updateMessageToolEntry,
   removeMessageBlock,
   streamMessageText,
   streamMessageBlockText,

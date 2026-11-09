@@ -27,6 +27,7 @@
       "blocks": {},
       "has_block": {},
       "has_text": {},
+      "has_entry": {},
       "duplicates": {}
     },
     "roles": [
@@ -41,6 +42,7 @@
         "Message": { "shape": "src/features/threads/be/types.ts#MessageEntity", "indexes": ["status"], "search": { "fields": { "text": 1 } }, "substrings": ["text"] },
         "Block": { "shape": "src/features/threads/be/types.ts#BlockEntity", "indexes": ["type"] },
         "BlockText": { "shape": "src/features/threads/be/types.ts#BlockTextEntity" },
+        "ToolEntry": { "shape": "src/features/threads/be/types.ts#ToolEntryEntity" },
         "Artifact": { "shape": "src/features/threads/be/types.ts#ArtifactEntity" }
       },
       "designation": "threads",

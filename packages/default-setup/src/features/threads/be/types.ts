@@ -58,6 +58,31 @@ export interface BlockTextEntity {
   text: string;
 }
 
+/**
+ * One tool call as the activity block lists it, as a row of its own.
+ *
+ * **An entry is patched, not appended to** — `running` to `ok`, `denied` or `error`, with its output
+ * filled in when the tool answers — so it is an independently-mutating record, which is a row for the
+ * same reason a block is one. It was a member of the block's `props.entries`, and an attribute is written
+ * whole, so every later flush rewrote every entry: `details.output` holds the untruncated tool result, so
+ * one read of a large file was written again once per subsequent tool event.
+ *
+ * `entryId` is the CLI's `tool_use_id`, which is what a patch arrives by and what the writer de-dupes on;
+ * `id` is the engine's. The position is on the edge (`has_entry`'s `info.index`), as a block's is.
+ *
+ * The block keeps what is about the block — its label, state and artifact — and a read assembles these
+ * into the `entries` its component draws.
+ */
+export interface ToolEntryEntity {
+  entryId: string;
+  tool: string;
+  summary: string;
+  status: 'running' | 'ok' | 'denied' | 'error';
+  durationMs?: number;
+  outputSummary?: string;
+  details?: { input?: unknown; output?: string; error?: string };
+}
+
 // Tool-activity block — collapsible group of Claude Code tool calls within one turn.
 // Replaces the prior per-tool `> 🔧 name` blockquote spam with a single compact
 // group that shows a live status label while streaming and freezes to a summary
