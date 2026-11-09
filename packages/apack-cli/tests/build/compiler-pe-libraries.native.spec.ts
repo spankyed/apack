@@ -1129,9 +1129,6 @@ it.runIf(process.platform === 'win32')('repairs a failed Vite assembly context t
     checkpoint('missing assembly refused');
     expect(addresses).toHaveLength(1);
     expect(fs.existsSync(dllMarker)).toBe(false);
-    // The refusal's two edits can queue a second refused build, and the incumbent is asked for once the watcher is
-    // idle: a request landing while that build replaces the frontend reaches a server between owners
-    await (async () => { while (inFlight.size > 0) await Promise.allSettled(inFlight); })();
     expect(await (await fetch(url, { signal: _workingSignal() })).text()).toContain('ASSEMBLY_WATCH');
     const repair = path.join(path.dirname(addon), 'repair', assembly);
     const repairedManifest = path.join(repair, assembly + '.manifest');
