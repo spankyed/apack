@@ -5999,6 +5999,16 @@ declare const chatQueries: {
     /** A message's blocks, assembled from their rows: what an export carries and `messageById` folds in */
     readonly blocksOf: (messageId: EARS.EntityId) => StoredBlock[];
     readonly entryDetails: (blockId: EARS.EntityId) => Record<string, ToolActivityEntry["details"]>;
+    /**
+     * A message's blocks with each tool entry's details merged back into it, for whoever is going to write
+     * them somewhere else.
+     *
+     * **A copier is not a reader.** `blocksOf` leaves `details` out because a message's view re-runs on every
+     * append and a tool's whole output would be re-read each time; a fork and an export are copying the block
+     * rather than drawing it, and the details are part of what the block is. Without this they were dropped,
+     * silently, by both.
+     */
+    readonly blocksForCopy: (messageId: EARS.EntityId) => StoredBlock[];
     /** One message, whole; `null` once it is gone */
     readonly messageById: (messageId: EARS.EntityId) => MessageEntity | null;
 };

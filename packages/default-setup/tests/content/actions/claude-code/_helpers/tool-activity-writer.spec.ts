@@ -16,9 +16,15 @@ const MESSAGE = 'message-one' as EntityId;
 const entry = (id: string, over: Record<string, unknown> = {}) =>
   ({ id, tool: 'Read', summary: `${id}.ts`, status: 'running' as const, ...over });
 
-/** Every write of the block's own row, in order — the fold's write among them reads as one too */
+/**
+ * Every write of the block's own props, in order.
+ *
+ * The fold is a write of this row too, but of what its children held rather than of its props, so it is not
+ * one of these — `props.state` is what every props write carries and the fold's never does.
+ */
 const blockWrites = (writes: readonly string[]) =>
-  writes.map((write) => JSON.parse(write)).filter((write) => write.type === 'tool-activity');
+  writes.map((write) => JSON.parse(write))
+    .filter((write) => write.type === 'tool-activity' && write.props?.state !== undefined);
 
 beforeEach(() => { vi.useFakeTimers(); });
 afterEach(() => { vi.useRealTimers(); });
@@ -171,35 +177,6 @@ describe('what the tool-activity writer writes', () => {
   });
 
   /**
-   * **Once the entries are folded into the block's props, every later write of that row has to carry
-   * them.** A props write replaces the attribute, and a read assembles a block's live entry rows *instead
-   * of* whatever its props hold — so a write that leaves the folded list out drops a finished turn's whole
-   * tool list, and the fold does not run twice to put it back.
-   *
-   * Two finalises disagreeing about the state is the reachable way in: a turn's owner finalises with what
-   * it knows — `'error'` on a stream that failed — and the `finally` that releases the turn's writers
-   * finalises again with what the entries say, which is `'done'` when no tool itself failed.
-   */
-  it('keeps the entries in the block when it is written again after the fold', () => {
-    const { services, writes } = recordTurnWrites();
-    const writer = createToolActivityWriter(services, MESSAGE, {});
-
-    writer.append(entry('one', { status: 'ok' }));
-    writer.append(entry('two', { status: 'ok', details: { output: 'x'.repeat(5_000) } }));
-    writer.flush();
-    writer.finalise('error');
-
-    writer.finalise('done');
-
-    const block = blockWrites(writes).at(-1);
-    expect(block.props.state).toBe('done');
-    expect(block.props.entries.map((one: { id: string }) => one.id)).toEqual(['one', 'two']);
-    // And still not the details, which the block keeps under its own attribute: a read of the message
-    // carries what the collapsed rows draw and never a tool's whole output
-    expect(block.props.entries[1]).not.toHaveProperty('details');
-  });
-
-  /**
    * `setArtifactRef` is the other write after the fold, and a documented one — the diff artifact is
    * attached once the turn's paths are known, which is after the block has finished.
    */
@@ -218,24 +195,66 @@ describe('what the tool-activity writer writes', () => {
     expect(block.props.entries.map((one: { id: string }) => one.id)).toEqual(['one']);
   });
 
+
   /**
-   * **An entry arriving after the fold goes into the props, not a row of its own.** One live row is
-   * assembled instead of the folded list, so it would hide every entry the fold wrote.
+   * **`'error'` is terminal, and the entries do not always record why it was set.** A caller finalises with
+   * what it knows — the CLI returned an error result, the stream threw — and the backstop that releases a
+   * turn's writers finalises again with what the entries say, which is `'done'` when no single tool failed.
+   * So the turns that failed were exactly the ones whose block lost its error state.
    */
-  it('writes a late entry into the block rather than a row of its own', () => {
+  it('keeps an error state when it is finalised again as done', () => {
+    const { services, writes } = recordTurnWrites();
+    const writer = createToolActivityWriter(services, MESSAGE, {});
+
+    writer.append(entry('one', { status: 'ok' }));
+    writer.flush();
+    writer.finalise('error');
+
+    writer.finalise('done');
+
+    expect(blockWrites(writes).at(-1).props.state).toBe('error');
+  });
+
+  /** And an error still reaches a block that was finalised as done first, which the freeze below does */
+  it('takes an error state after it has been finalised as done', () => {
     const { services, writes } = recordTurnWrites();
     const writer = createToolActivityWriter(services, MESSAGE, {});
 
     writer.append(entry('one', { status: 'ok' }));
     writer.flush();
     writer.finalise('done');
-    const settled = writes.length;
 
-    writer.append(entry('late', { status: 'ok' }));
+    writer.finalise('error');
 
-    const since = writes.slice(settled).map((write) => JSON.parse(write));
-    expect(since, 'the late entry is written').not.toHaveLength(0);
-    expect(since.every((write) => write.type === 'tool-activity'), 'and never as an entry row').toBe(true);
-    expect(since.at(-1).props.entries.map((one: { id: string }) => one.id)).toEqual(['one', 'late']);
+    expect(blockWrites(writes).at(-1).props.state).toBe('error');
+  });
+
+  /**
+   * **The permission flow finalises this writer mid-turn, and then the block grows again.** It finalises to
+   * stop the block saying "Working…" while the user decides; the tool they approve then runs and its result
+   * arrives on this same writer. The fold has to come back out, or that entry's `details` have nowhere to
+   * go — the rows are gone, nothing updates the block's `entryDetails`, and the props carry no details by
+   * design, so every tool the user approved had an empty hover popup.
+   */
+  it('puts the entries back as rows when one arrives after the fold', () => {
+    const { services, writes } = recordTurnWrites();
+    const writer = createToolActivityWriter(services, MESSAGE, {});
+
+    writer.append(entry('one', { status: 'ok', details: { output: 'first output' } }));
+    writer.flush();
+    // The freeze: the user is being asked to approve something
+    writer.finalise('done');
+    const frozen = writes.length;
+
+    // Approved, and the tool's result arrives on this writer
+    writer.update('one', { status: 'ok', details: { output: 'the whole output' } });
+
+    const since = writes.slice(frozen).map((write) => JSON.parse(write));
+    const block = since.filter((write) => write.type === 'tool-activity').at(-1);
+    expect(block, 'the props stop carrying the list').toBeDefined();
+    expect(block.props).not.toHaveProperty('entries');
+    const rows = since.filter((write) => write.id === 'one');
+    expect(rows, 'and the entry is a row again, with its details').not.toHaveLength(0);
+    expect(rows.at(-1).details).toEqual({ output: 'the whole output' });
   });
 });

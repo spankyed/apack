@@ -38,8 +38,9 @@ export function exportThreads(outputDir: string): { filePath: string; threadCoun
         timestamp: msg.timestamp || 0,
       }
       if (msg.responseTimestamp) exported.responseTimestamp = msg.responseTimestamp
-      // The reader assembled them, so there is nothing to read again here
-      if (msg.blocks?.length) exported.blocks = msg.blocks
+      // The blocks a copier wants: the reader assembled them without each tool entry's details, which a
+      // file meant to be imported somewhere else is exactly what does need
+      if (msg.blocks?.length) exported.blocks = msg.id ? repository.chatQueries.blocksForCopy(msg.id) : msg.blocks
       if (msg.blockResponse !== undefined) exported.blockResponse = msg.blockResponse
       if (msg.forkable !== undefined) exported.forkable = msg.forkable
       if (msg.isCommand) exported.isCommand = msg.isCommand

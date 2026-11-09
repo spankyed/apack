@@ -128,13 +128,18 @@ export async function consumeStream(
   const releaseWriters = () => {
     if (released) return;
     released = true;
-    try {
-      finaliseThinking();
-      toolActivity.finalise(toolActivity.entries.some(e => e.status === 'error') ? 'error' : 'done');
-      writer.finalize();
-    } catch (releaseErr: any) {
+    // **One `try` each, because they are three independent releases.** Wrapped together, a throw in the
+    // first skipped the other two — and the stream writer going unfinalised is the precise failure this
+    // backstop exists to prevent, so a single `catch` turned one error into the bug it was guarding.
+    for (const release of [
+      () => finaliseThinking(),
+      () => toolActivity.finalise(toolActivity.entries.some(e => e.status === 'error') ? 'error' : 'done'),
+      () => writer.finalize(),
+    ]) {
       // A release that throws must not replace whatever ended the turn
-      log.warn('releasing the turn\'s writers failed', { error: releaseErr?.message ?? String(releaseErr) });
+      try { release(); } catch (releaseErr: any) {
+        log.warn('releasing one of the turn\'s writers failed', { error: releaseErr?.message ?? String(releaseErr) });
+      }
     }
   };
 

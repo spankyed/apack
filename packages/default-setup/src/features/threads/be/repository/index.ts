@@ -620,6 +620,24 @@ function compactBlockText(blockId: EARS.EntityId): void {
  * while a turn runs, and `BLOCK_DETAILS` on the block itself once those rows have been folded away. A read
  * that knew only the rows would answer nothing for every finished turn, which is most of a thread.
  */
+/**
+ * The details carried inside a block's entries, and the props with them removed — or nothing when there are
+ * none to move.
+ *
+ * The inverse of what `blocksForCopy` does, so one shape travels between databases: the entries carry their
+ * own details in an export file or a fork, and a stored block keeps them under `entryDetails`.
+ */
+function detailsWithin(props: Record<string, any>): { props: Record<string, any>; byEntry: Record<string, ToolActivityEntry['details']> } | undefined {
+  const entries = props.entries as Array<{ id: string; details?: ToolActivityEntry['details'] }> | undefined;
+  if (!Array.isArray(entries) || !entries.some((entry) => entry?.details)) return undefined;
+  const byEntry: Record<string, ToolActivityEntry['details']> = {};
+  const stripped = entries.map(({ details, ...rest }) => {
+    if (details) byEntry[rest.id] = details;
+    return rest;
+  });
+  return { props: { ...props, entries: stripped }, byEntry };
+}
+
 function entryDetailsOf(blockId: EARS.EntityId): Record<string, ToolActivityEntry['details']> {
   const folded = (query.ids(blockId).pickOne([BLOCK_DETAILS] as const)?.[BLOCK_DETAILS] ?? {}) as Record<string, ToolActivityEntry['details']>;
   const live = rowsByIdOf(
@@ -644,10 +662,29 @@ const indexOf = (info: unknown): number =>
 /** Creates a message's blocks as rows, each edge recording its position */
 /** Creates a message's blocks, and answers them as a read would — with the rows they were created as */
 function createBlocks(messageId: EARS.EntityId, blocks: readonly BlockConfig[]): StoredBlock[] {
+  // Past whatever the message already holds, by the rule every other block write uses: `writeMessageBlocks`
+  // is a public command and may be given a message that has blocks, where a position taken from the array
+  // index is one a block already has
+  const from = nextIndexOf(query.ids(messageId).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block));
   return blocks.map((block, index) => {
-    const blockId = create(EARS.Entity.Block, { type: block.type, props: block.props }).id();
-    write(messageId).link(EARS.RelKind.HAS_BLOCK, blockId, { info: { index } });
-    return { id: blockId, type: block.type, props: block.props };
+    const blockId: EARS.EntityId = create(EARS.Entity.Block, { type: block.type, props: block.props }).id();
+    write(messageId).link(EARS.RelKind.HAS_BLOCK, blockId, { info: { index: from + index } });
+    // **`props.blockId` names the block's own row, so a copied block must not keep the one it came from.**
+    // A fork and an import both pass a read message's blocks straight back in, and that value is what the
+    // component asks `entryDetails` for — a row in the thread it was forked from, or one this database has
+    // never had.
+    let props = 'blockId' in block.props ? { ...block.props, blockId } : block.props;
+    // **A copied block carries its entries' details inside them; this is where they go back under the
+    // block's own attribute.** A read of a message leaves `details` out on purpose — a tool's whole output,
+    // re-read on every re-run of the view — so a block written from a fork or an import must not keep them
+    // in its props. A block the app created never carries any, and this does nothing.
+    const details = detailsWithin(props);
+    if (details) {
+      props = details.props;
+      write(blockId).set(BLOCK_DETAILS, details.byEntry);
+    }
+    if (props !== block.props) write(blockId).set('props', props);
+    return { id: blockId, type: block.type, props };
   });
 }
 
@@ -972,6 +1009,29 @@ export const chatQueries = {
   /** A message's blocks, assembled from their rows: what an export carries and `messageById` folds in */
   blocksOf: (messageId: EARS.EntityId): StoredBlock[] => blocksOf(messageId),
   entryDetails: (blockId: EARS.EntityId): Record<string, ToolActivityEntry['details']> => entryDetailsOf(blockId),
+
+  /**
+   * A message's blocks with each tool entry's details merged back into it, for whoever is going to write
+   * them somewhere else.
+   *
+   * **A copier is not a reader.** `blocksOf` leaves `details` out because a message's view re-runs on every
+   * append and a tool's whole output would be re-read each time; a fork and an export are copying the block
+   * rather than drawing it, and the details are part of what the block is. Without this they were dropped,
+   * silently, by both.
+   */
+  blocksForCopy: (messageId: EARS.EntityId): StoredBlock[] => blocksOf(messageId).map((block) => {
+    const entries = block.props.entries as Array<{ id: string }> | undefined;
+    if (!Array.isArray(entries) || entries.length === 0) return block;
+    const details = entryDetailsOf(block.id);
+    if (Object.keys(details).length === 0) return block;
+    return {
+      ...block,
+      props: {
+        ...block.props,
+        entries: entries.map((entry) => (details[entry.id] ? { ...entry, details: details[entry.id] } : entry)),
+      },
+    };
+  }),
 
   /** One message, whole; `null` once it is gone */
   messageById: (messageId: EARS.EntityId): MessageEntity | null => messageOf(messageId)
@@ -1484,6 +1544,9 @@ export const chatCommands = {
       for (const key of copyableKeys) {
         if (msg[key] != null) optional[key] = msg[key];
       }
+      // The blocks a copier wants, not the ones a reader got: `threadData` left each tool entry's details
+      // out, and a fork that copied those blocks dropped them
+      if (optional.blocks) optional.blocks = chatQueries.blocksForCopy(msg.id as EARS.EntityId);
 
       chatCommands.addMessage({
         threadId: targetThreadId,

@@ -94,3 +94,42 @@ it('gives a block added after a removal a position of its own', () => {
   // And the order a read gives them follows: the survivor, then the new one
   expect(repository.chatQueries.messageById(id)?.blocks?.map((block) => block.type)).toEqual(['tool-activity', 'markdown'])
 })
+
+/**
+ * **A copied block must name its own row, and bring its entries' details with it.**
+ *
+ * `props.blockId` is what the component asks `entryDetails` for, so a block copied with the id it was read
+ * under asks about a row in the thread it came from — one that is gone the moment that thread is deleted,
+ * and one an import's database never had. And a read leaves `details` out on purpose, so a fork or an
+ * export that copied what it read dropped every tool call's input and output silently.
+ */
+it('gives a copied block its own row and keeps its entries\' details', () => {
+  const source = thread()
+  const { id: messageId } = repository.chatCommands.addMessage({
+    threadId: source, text: 'working', sender: 'assistant',
+    blocks: [{ type: 'tool-activity', props: { state: 'done' } }],
+  })
+  const blockId = query.ids(messageId).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block)[0]!.target
+  repository.chatCommands.writeToolEntry({
+    blockId,
+    entry: { id: 'tool-1', tool: 'Read', summary: 'a.ts', status: 'ok', details: { output: 'the whole file' } },
+  })
+  repository.chatCommands.compactMessageBlock({ blockId })
+
+  // What a copier reads, which is what a fork and an export both write somewhere else
+  const copied = repository.chatQueries.blocksForCopy(messageId)
+  expect(copied[0]!.props.entries[0].details, 'the details travel with the entry').toEqual({ output: 'the whole file' })
+
+  const target = thread()
+  const { id: forked } = repository.chatCommands.addMessage({
+    threadId: target, text: 'working', sender: 'assistant', blocks: copied,
+  })
+  const newBlock = query.ids(forked).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block)[0]!.target
+
+  expect(newBlock, 'a new row').not.toBe(blockId)
+  const props = repository.chatQueries.messageById(forked)?.blocks?.[0]?.props
+  expect(props?.blockId, 'which is the row the copy names').toBe(newBlock)
+  // Held under the block's own attribute, as the app holds them — not left in the props a read carries
+  expect(props?.entries?.[0]).not.toHaveProperty('details')
+  expect(repository.chatQueries.entryDetails(newBlock)).toEqual({ 'tool-1': { output: 'the whole file' } })
+})

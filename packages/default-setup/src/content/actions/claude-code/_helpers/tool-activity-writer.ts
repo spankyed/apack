@@ -147,12 +147,37 @@ export function createToolActivityWriter(
     hasWrittenOnce = true;
   };
 
+  /**
+   * Puts the folded entries back as rows, because the block turned out not to be finished.
+   *
+   * **A fold is not only the end of a turn.** The permission flow finalises this writer mid-turn to stop the
+   * block saying "Working…", and then the tool the user approved runs and its result arrives on this same
+   * writer. Writing that entry into the props instead would lose its `details` — the entry rows are gone,
+   * nothing updates the block's `entryDetails`, and the props carry no details by design — so every tool the
+   * user explicitly approved had an empty hover.
+   *
+   * Every entry is in memory here, details and all, so unfolding is exact: the props stop carrying the list,
+   * each entry becomes its own row again, and a read assembles them as it does for any growing block. The
+   * stale `entryDetails` the fold left is harmless, a live row overriding it. The real end folds again.
+   */
+  const unfold = (): void => {
+    if (!blockId) return;
+    foldedIn = false;
+    rows.clear();
+    // The props first, so no moment has the list in both places
+    writeNow();
+    for (const held of entries) {
+      const row = services.chat.updateMessageToolEntry(blockId, { ...held }, undefined);
+      if (row) rows.set(held.id, row);
+    }
+  };
+
   /** Writes one entry's row, remembering it so the next patch of that entry is a write by id */
   const writeEntry = (entry: ToolActivityEntry): void => {
     if (!blockId) return;
-    // Once the entries are folded into the block, a row of its own would be assembled *instead of* the
-    // folded list, so an entry arriving after that is written as part of the block
-    if (foldedIn) { writeNow(); return; }
+    // The block is growing again, so it goes back to being written the way a growing block is — and that
+    // writes every entry, this one among them
+    if (foldedIn) { unfold(); return; }
     const row = services.chat.updateMessageToolEntry(blockId, { ...entry }, rows.get(entry.id));
     if (row) rows.set(entry.id, row);
   };
@@ -195,7 +220,11 @@ export function createToolActivityWriter(
     },
 
     finalise(finalState: 'done' | 'error'): void {
-      state = finalState;
+      // **`'error'` is terminal, and the entries do not always record why.** A caller finalises with what it
+      // knows — the CLI returned an error result, the stream threw — while the backstop that releases a
+      // turn's writers finalises with what the entries say, which is `'done'` when no single tool failed. A
+      // plain assignment let that backstop clear the state of exactly the turns that failed.
+      state = finalState === 'error' || state === 'error' ? 'error' : finalState;
       if (entries.length === 0) {
         // No tools actually ran. Preserve the thinking block if present;
         // otherwise clear the blocks array if we had written before.

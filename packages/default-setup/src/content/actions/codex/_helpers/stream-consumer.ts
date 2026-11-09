@@ -435,7 +435,9 @@ export function createStreamConsumer(
 
     // Finalize writers — plan text was already streamed to the message
     finaliseThinking();
-    writer.finalize(writer.text);
+    // `|| undefined` so an empty buffer reaches the writer's guard as "nothing to say" rather than as an
+    // explicit empty reply: a turn that produced no prose would otherwise blank the `Thinking…` placeholder
+    writer.finalize(writer.text || undefined);
     toolActivity.finalise('done');
     services.chat.updateMessageState(messageId as any, { forkable: true } as any);
 
@@ -504,7 +506,9 @@ export function createStreamConsumer(
 
     // Always finalize writers (safe even if superseded)
     finaliseThinking();
-    writer.finalize(writer.text);
+    // `|| undefined` so an empty buffer reaches the writer's guard as "nothing to say" rather than as an
+    // explicit empty reply: a turn that produced no prose would otherwise blank the `Thinking…` placeholder
+    writer.finalize(writer.text || undefined);
     toolActivity.finalise(hadErrors ? 'error' : 'done');
     services.chat.updateMessageState(messageId as any, { forkable: true } as any);
 
