@@ -148,6 +148,32 @@ interface CompilerSources {
   readonly executableId: string;
 }
 
+/**
+ * The store entry a capture of these sources belongs in.
+ *
+ * **The capturing directory is part of the key, because a captured tree is not portable.** `capturedPathIn`
+ * below files every source under its *absolute* path, and the replay resolves them there, so an entry can
+ * only ever serve the checkout that made it. Keyed on contents alone — the package graph, the runtime, the
+ * esbuild identity — two checkouts sharing one `package-lock.json` agree on a key, and the second replays a
+ * tree holding the first one's paths: the build then fails on a module it can see on disk and not in the
+ * capture, naming neither checkout. Worktrees are ordinary here, `session:new` and `session:check` both
+ * making one, so that is the common case rather than an exotic one.
+ *
+ * The cost is a capture per checkout rather than per machine, which is what the tree's own shape already
+ * implied; `COMPILER_STORE_ENTRIES` bounds what the store keeps, oldest use first.
+ */
+export function compilerStoreKey(parts: {
+  readonly directory: string;
+  readonly inputsHash: string;
+  readonly runtimeHash: string;
+  readonly executableId: string;
+}): string {
+  return createHash('sha256')
+    .update(JSON.stringify([parts.directory, parts.inputsHash, parts.runtimeHash, parts.executableId]))
+    .digest('hex')
+    .slice(0, 16);
+}
+
 /** The path a source file has inside an installation rooted at `entry`; pure, so a reuse can recompute it */
 function capturedPathIn(entry: string, source: string): string {
   const root = path.parse(source).root;
@@ -349,7 +375,7 @@ async function captureOnce(directory: string, options: CompilerInstallationOptio
   const executable = readEsbuildOverride(options);
   const executableId = JSON.stringify(executableIdentity(directory, executable));
   const sources: CompilerSources = { directory, inputs, runtime, executable, executableId };
-  const key = createHash('sha256').update(JSON.stringify([inputs.hash, runtime.contentsHash, executableId])).digest('hex').slice(0, 16);
+  const key = compilerStoreKey({ directory, inputsHash: inputs.hash, runtimeHash: runtime.contentsHash, executableId });
   // Resolved, as every path verification compares against is: on macOS the temporary root is itself a link
   fs.mkdirSync(compilerStoreRoot(options.env), { recursive: true });
   const store = fs.realpathSync.native(compilerStoreRoot(options.env));
