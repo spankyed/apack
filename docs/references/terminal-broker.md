@@ -90,6 +90,12 @@ On Windows it is a named pipe, `\\.\pipe\apack-terminal-<hash>`, because the tra
 filesystem path there outright. The hash is the same one and does the same job: a pipe name is one flat
 namespace for the machine, so it is what keeps one app's broker apart from another's.
 
+**A 0700 directory is the POSIX half of who may connect, and a pipe has no such answer.** The default
+descriptor a Windows pipe gets grants read access to Everyone, so the broker creates its listener with one
+of its own — the starting account and `SYSTEM`, in a protected DACL — and refuses to listen rather than
+fall back if it cannot be built. The broker owns that decision and has read it back off a live pipe:
+`docs/architecture/windows-pipe-access.md` in its repository.
+
 ## Owning a process tree
 
 On POSIX, killing a session's shell makes the kernel send SIGHUP to the pty's foreground process group, which
