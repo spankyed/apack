@@ -137,7 +137,11 @@ onBeforeUnmount(() => {
   // The emulator is not disposed — it survives in the pool until `terminal.CLOSED`. Releasing is also how a
   // host that another has already taken over from detaches nothing (F1): during a remount the new host
   // attaches before this one unmounts.
-  attachment?.release()
+  const letGo = attachment?.release() ?? false
+  // The backend holds the grid to the smallest fit of the windows showing it, so a window that stops
+  // showing one says so. Only when this host is what let go — during a remount the new host has already
+  // attached (F1), and this would drop the fit it just recorded.
+  if (letGo && attachment) terminalActor?.send({ type: 'terminal.DETACHED', terminalId: attachment.terminalId })
   attachment = null
 })
 

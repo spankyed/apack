@@ -19,7 +19,9 @@ vi.mock('@apackdev/host/bus', async (importOriginal) => {
   return { ...actual, receiveClientEvent: () => {} };
 });
 vi.mock('../../src/runtime/index.ts', () => ({ appPacks: {}, appClaims: claims }));
-vi.mock('../../src/transport/emitter.ts', () => ({ rootEvents: { onOutgoing: () => () => {}, emitConnected: () => {}, emitPackClientConnected: () => {} } }));
+// The test bus rather than stubs: a claim is released by *subscribing* to a connection ending now, so a
+// mock that dropped the event would make every case here pass without the release ever happening
+vi.mock('../../src/transport/emitter.ts', async () => ({ rootEvents: (await import('@apackdev/sdk/testing')).testRootEvents }));
 
 const { systemBusRouter } = await import('../../src/transport/bus.ts');
 

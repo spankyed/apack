@@ -60,6 +60,8 @@ export type Event =
   | { type: 'terminal.RESTART'; terminalId: string }
   | { type: 'terminal.INPUT'; terminalId: string; data: string }
   | { type: 'terminal.RESIZE'; terminalId: string; cols: number; rows: number }
+  /** This window has stopped drawing that terminal, so its fit should stop holding the grid down */
+  | { type: 'terminal.DETACHED'; terminalId: string }
   | { type: 'terminal.RENAME'; terminalId: string; customTitle: string }
   | { type: 'terminal.REFRESH_LIST' }
   | { type: 'terminal.OPEN_TAB'; terminalInfo: TerminalInfo }
@@ -119,6 +121,11 @@ export const terminalState = setup({
     sendTerminalInput: ({ event }) => {
       const ev = event as { type: 'terminal.INPUT'; terminalId: string; data: string }
       sendToSystem('code', { type: 'terminal.TERMINAL_INPUT', terminalId: ev.terminalId, data: ev.data })
+    },
+
+    releaseTerminalFit: ({ event }) => {
+      const ev = event as { type: 'terminal.DETACHED'; terminalId: string }
+      sendToSystem('code', { type: 'terminal.STOPPED_FITTING', terminalId: ev.terminalId })
     },
 
     resizeTerminal: ({ event }) => {
@@ -504,6 +511,9 @@ export const terminalState = setup({
     },
     'terminal.RESIZE': {
       actions: 'resizeTerminal'
+    },
+    'terminal.DETACHED': {
+      actions: 'releaseTerminalFit'
     },
     'terminal.RENAME': {
       actions: 'renameTerminal'

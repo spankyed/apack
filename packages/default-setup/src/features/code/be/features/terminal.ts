@@ -9,6 +9,7 @@ import { setup, assign, fromPromise } from 'xstate'
 import { terminalService } from '../services/terminal.ts'
 import type { TerminalInfo } from '../types.ts'
 import { createLogger, reportError } from '@apackdev/sdk/logger';
+import { onConnectionEnded } from '@apackdev/sdk/events';
 import type { Reply } from '@apackdev/sdk/events';
 import type { OutgoingCodeEvents } from '../contract.ts'
 
@@ -36,6 +37,7 @@ export type Event =
   | { type: 'terminal.RESTART_TERMINAL'; terminalId: string }
   | { type: 'terminal.TERMINAL_INPUT'; terminalId: string; data: string }
   | { type: 'terminal.RESIZE_TERMINAL'; terminalId: string; cols: number; rows: number }
+  | { type: 'terminal.STOPPED_FITTING'; terminalId: string }
   | { type: 'terminal.RENAME_TERMINAL'; terminalId: string; customTitle: string }
   | { type: 'terminal.OPENED'; data: TerminalInfo }
   | { type: 'terminal.REFRESH_LIST' }
@@ -51,6 +53,29 @@ type TerminalNews = Extract<OutgoingTerminalEvents, { type: TerminalNewsType }>
 /** Tell every window showing the code surface what a terminal did */
 const emitToFrontend = (event: TerminalNews) => {
   broadcastToSurface(surfaceId, event)
+}
+
+/**
+ * Follows connections ending, so a terminal stops being held to the fit of a window that has gone.
+ *
+ * **A fit outlives its window otherwise, and nothing else can tell.** The connection id a window fits on is
+ * minted per socket, so one that reloads, sleeps or drops comes back as a different window and can never
+ * clear what the old one left; the grid would stay held down by a window nobody can see. This is the only
+ * notice that it went.
+ *
+ * Taken from `boot.onInit` rather than at module scope — it reads the bound app, and a unit test importing
+ * this module binds none — and disposed from `boot.onShutdown`.
+ */
+export function startTerminalSizing(): () => void {
+  return onConnectionEnded((client) => {
+    void terminalService.forgetClient(client)
+      .then(moved => {
+        for (const { terminalId, grid } of moved) {
+          emitToFrontend({ type: 'terminal.RESIZED', data: { terminalId, cols: grid.cols, rows: grid.rows } })
+        }
+      })
+      .catch(error => { logger.error(`Could not release the fits of connection ${client}`, { error }) })
+  })
 }
 
 /**
@@ -146,7 +171,7 @@ export const terminalSystem = setup({
       answer(reply, { type: 'terminal.TERMINALS_LISTED', data: terminalService.list() })
     },
 
-    createTerminal: ({ event, context, reply, client }) => {
+    createTerminal: ({ event, context, reply }) => {
       const ev = event as {
         type: 'terminal.CREATE_TERMINAL';
         title?: string;
@@ -165,7 +190,7 @@ export const terminalSystem = setup({
         shell: ev.shell,
         cols: ev.cols || 80,
         rows: ev.rows || 24,
-      }, terminalHandlers, client).then(terminalInfo => {
+      }, terminalHandlers).then(terminalInfo => {
         // The two halves of what used to be one event: every window's list grows, and only the window that
         // asked opens it. A terminal's id is minted here, so nothing the asker sent could have identified it
         emitToFrontend({ type: 'terminal.CREATED', data: { terminalId: terminalInfo.id } })
@@ -264,6 +289,23 @@ export const terminalSystem = setup({
       }
     },
 
+    /**
+     * A window has stopped showing a terminal, so the grid may rise for the windows that still are.
+     *
+     * Broadcast and never replied: the asker is the window that just stopped drawing it, and the windows
+     * that need the new grid are the others.
+     */
+    stoppedFitting: ({ event, client }) => {
+      const ev = event as { type: 'terminal.STOPPED_FITTING'; terminalId: string }
+      if (client === undefined) return
+      void terminalService.stoppedFitting(ev.terminalId, client)
+        .then(accepted => {
+          if (!accepted?.changed) return
+          emitToFrontend({ type: 'terminal.RESIZED', data: { terminalId: ev.terminalId, cols: accepted.cols, rows: accepted.rows } })
+        })
+        .catch(error => { logger.error(`Could not release ${ev.terminalId}'s fit`, { error }) })
+    },
+
     renameTerminal: ({ event, reply }) => {
       const ev = event as { type: 'terminal.RENAME_TERMINAL'; terminalId: string; customTitle: string }
       try {
@@ -335,6 +377,9 @@ export const terminalSystem = setup({
     },
     'terminal.RESIZE_TERMINAL': {
       actions: 'resizeTerminal'
+    },
+    'terminal.STOPPED_FITTING': {
+      actions: 'stoppedFitting'
     },
     'terminal.RENAME_TERMINAL': {
       actions: 'renameTerminal'

@@ -305,6 +305,8 @@ export interface _RendererPerformanceStatistics {
 
 // @public
 export interface RootEvents {
+    // (undocumented)
+    emitConnectionEnded(client: string): void;
     emitIncoming(message: Message): void;
     // (undocumented)
     emitLog(event: LogEvent): void;
@@ -312,6 +314,7 @@ export interface RootEvents {
     emitSurfaceSend(message: Message): void;
     // (undocumented)
     onConnected(callback: () => void): () => void;
+    onConnectionEnded(callback: (client: string) => void): () => void;
     // (undocumented)
     onIncoming(callback: (message: Message) => void): () => void;
     // (undocumented)

@@ -2,8 +2,15 @@ import { clearAllSchedules } from './brain/be/services/scheduler.ts';
 import { removeAllListeners as removeAllAdHocListeners } from './brain/be/services/brain.ts';
 import { clearFlowActorRegistry } from './brain/be/flow-system.ts';
 import { services } from '#generated/services.ts';
+import { startTerminalSizing } from './code/be/features/terminal.ts';
 
-export const onInit = () => {};
+/** What the pack's backend follows for as long as it runs */
+let stopTerminalSizing: (() => void) | undefined;
+
+export const onInit = () => {
+  // A terminal's grid is the smallest fit of the windows showing it, so it has to hear when one goes
+  stopTerminalSizing = startTerminalSizing();
+};
 
 /**
  * The pack's backend stopped (the app exiting or unloading the pack, a test app stopping): its stopped actors never
@@ -18,6 +25,8 @@ export const onShutdown = () => {
   // however the process died — and, with no owner holding it, the broker's own rule that the last client
   // leaving ends them, which is what keeps a dev run or a test from leaving a shell behind. The only
   // deliberate end is the user closing a terminal, which is `terminalService.kill`.
+  stopTerminalSizing?.();
+  stopTerminalSizing = undefined;
   clearAllSchedules();
   removeAllAdHocListeners();
   clearFlowActorRegistry();

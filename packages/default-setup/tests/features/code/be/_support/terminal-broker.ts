@@ -76,6 +76,17 @@ export interface RecordingBroker {
    * second chance — there is no later `onExit` to finish the job.
    */
   refuseTerminate(id: string, why?: string): void
+  /**
+   * Holds the **next** resize of that session until `settleResize`, as a broker a socket away does.
+   *
+   * **Every other call here answers in the same turn, which hides every ordering question.** A real resize
+   * is a round trip, so two decisions about one pty — a window's fit, and a window going — are in flight
+   * together and answer in whatever order the broker gets to them. What that costs when the app writes the
+   * grid on the answer is a `cols`/`rows` that describes a size the pty is not running at.
+   */
+  deferResize(id: string): void
+  /** Lets a held resize answer */
+  settleResize(id: string): void
 }
 
 /**
@@ -93,6 +104,9 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
   const refusals = new Map<number, string>()
   const refusedTerminations = new Map<string, string>()
   const reportedCwds = new Map<string, string | null>()
+  /** Sessions whose next resize is held, and what releases each */
+  const deferredResizes = new Map<string, () => void>()
+  const heldResizes = new Map<string, Promise<void>>()
   const live = new Set<string>()
   const adopted: string[] = []
   let next = 0
@@ -106,7 +120,13 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
     pid,
     scrollback: 1000,
     write: async (data: string) => { written.push({ id, data }) },
-    resize: async (cols: number, rows: number) => { resized.push({ id, cols, rows }) },
+    resize: async (cols: number, rows: number) => {
+      resized.push({ id, cols, rows })
+      const held = heldResizes.get(id)
+      if (held === undefined) return
+      heldResizes.delete(id)
+      await held
+    },
     facts: async () => ({
       cwd: reportedCwds.get(id) ?? null,
       command: null,
@@ -176,5 +196,14 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
     refuseOpen: (nth, why = 'the broker would not start') => { refusals.set(nth, why) },
     refuseTerminate: (id, why = 'the broker would not end the session') => { refusedTerminations.set(id, why) },
     reportsCwd: (id, cwd) => { reportedCwds.set(id, cwd) },
+    deferResize: (id) => {
+      let release = () => {}
+      heldResizes.set(id, new Promise<void>(resolve => { release = () => { resolve() } }))
+      deferredResizes.set(id, release)
+    },
+    settleResize: (id) => {
+      deferredResizes.get(id)?.()
+      deferredResizes.delete(id)
+    },
   }
 }

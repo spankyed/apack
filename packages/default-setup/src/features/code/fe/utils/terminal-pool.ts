@@ -164,8 +164,16 @@ export interface TerminalAttachment {
   refit(): void
   /** Follow the output again, from wherever the user had scrolled back to */
   followOutput(): void
-  /** This host is done. Idempotent, and a no-op once another host has taken the terminal over */
-  release(): void
+  /**
+   * This host is done. Idempotent, and a no-op once another host has taken the terminal over.
+   *
+   * **Answers whether this call is what let the terminal go**, which a host needs in order to say so: the
+   * backend holds a terminal's grid to the smallest fit of the windows showing it, and a window that has
+   * stopped showing one tells it to drop that fit. A host another has taken over from has nothing to tell —
+   * during a remount the new host attaches before the old one releases (F1), and a message from the old one
+   * would drop the fit the new one just recorded.
+   */
+  release(): boolean
 }
 
 /** What a host wants to hear about. Each is optional: a host that does not draw a control does not ask */
@@ -521,13 +529,13 @@ class TerminalPool {
         this.syncViewport(terminalId)
       },
       release: () => {
-        if (released) return
+        if (released) return false
         released = true
         for (const undo of own) {
           try { undo() } catch { /* a listener on an element already gone */ }
         }
         own.length = 0
-        this.detach(terminalId, host)
+        return this.detach(terminalId, host)
       },
     }
   }
@@ -568,10 +576,11 @@ class TerminalPool {
    * wrapper out of whichever host happened to hold it, leaving the live one blank. A host that is no longer
    * the attached one detaches nothing.
    */
-  detach(terminalId: string, host?: HTMLElement): void {
+  detach(terminalId: string, host?: HTMLElement): boolean {
     const entry = this.entries.get(terminalId)
-    if (!entry) return
-    if (host && entry.attachedContainer !== host) return
+    if (!entry) return false
+    // A host another has already taken over from detaches nothing (F1), and says so
+    if (host && entry.attachedContainer !== host) return false
     // Capture scrollTop before wrapper.remove() — Chromium zeroes it on
     // document-remove. Used by syncViewport() on the next attach when the
     // user isn't pinned to bottom.
@@ -581,6 +590,7 @@ class TerminalPool {
     }
     entry.wrapper.remove()
     entry.attachedContainer = null
+    return true
   }
 
   /**
