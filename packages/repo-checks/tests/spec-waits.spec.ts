@@ -131,29 +131,55 @@ const CLOCK_BY_DESIGN: Record<string, string> = {
     'waits on an index building in this process, so load slows the wait and the work alike',
   'packages/default-setup/tests/harness-app-stop.spec.ts':
     "waits on the in-process test app's timer flow ticking, which runs on this process's own event loop",
-  // The Playwright suites: Playwright gives a test and a wait only a clock, and `definePackE2EConfig` declares the
-  // suite's two backstops (60s a test, 30s an assertion). These are the waits that genuinely outlast them
-  'tests/acceptance/pack-dev/test-pack-dev.ts':
-    "waits on a watcher's rebuild and install, which outlasts the suite's 30s assertion backstop",
-  'tests/e2e/app-integration/db-write-through-boot.spec.ts':
-    'boots the app twice over a database written between, which outlasts the suite\'s backstops',
-  'tests/packs/external-pack/tests/e2e/default-pack-fork.spec.ts':
-    "forks and rebuilds the shipped pack inside the case, which outlasts the suite's 60s test backstop",
-  'tests/packs/external-pack/tests/e2e/settings-ownership.spec.ts':
-    'builds and installs two packs inside the case, and its process diagnostic samples for a fixed 2s',
-  'tests/e2e/app-integration/attach-parity.spec.ts':
-    "a 2s `waitForEvent` is a poll tick inside a loop that rechecks every window, not a deadline on work",
-  'tests/e2e/app-integration/feature-addressing.spec.ts':
-    'the 300ms is the subject: the case asserts that no second settings update arrives',
+  // The native Claude suites: `it.skipIf(!executable||!workspace||!endpoint)`, so these run only where someone
+  // has a real `claude` binary and an HTTP endpoint for it. Their waits are on that binary starting and
+  // answering over the network, which is the class the rule already admits — not on work this machine's load
+  // slows, and not something the progress guard can read, since the CPU is spent in another process tree.
+  'packages/default-setup/tests/content/actions/claude-code/reset-chat-native.spec.ts':
+    'drives a real `claude` against an HTTP endpoint, so the wait is a network wait and the signal bounds it',
+  'packages/default-setup/tests/features/code/be/services/claude-code/native-app-owner.spec.ts':
+    'the same binary end to end, including a model round trip per turn, which is a network wait',
+  // A child that may never signal: the case spawns a launcher and waits for it to write `started`. With no
+  // deadline the poll never ends when that child dies before writing, and the guard's stall window is the
+  // wrong instrument — the test is making progress, polling a file that will not appear
+  'packages/default-setup/tests/features/code/be/services/claude-code/terminal-bridge.spec.ts':
+    'bounds a spawned launcher that may never write its readiness file, where a clock-free poll cannot end',
+  // A kill grace, which the rule names: the wait is for the OS to reap a child after SIGKILL, and nothing
+  // this machine's load slows is in it — a second is already generous for a reap
+  'packages/default-setup/tests/features/code/be/services/claude-code/runner-once.spec.ts':
+    'waits for the OS to reap a killed child, which is a kill grace rather than work being done',
+  // In-process, which is the original class: a fake native whose completion flag this process sets
+  'packages/default-setup/tests/features/code/be/services/claude-code/conversation.spec.ts':
+    "waits on a flag the fake native sets on this process's own event loop, where load slows wait and work alike",
 };
 
 
-/** Every test file the clocks are counted over: the unit suites' trees, support modules included, the E2E and pack suites and `drive/` */
-const testFiles = (): string[] => [
-  ...UNIT_SUITES.map((suite) => path.join(REPO_ROOT, 'packages', suite.dir, 'tests')),
-  path.join(REPO_ROOT, 'tests'),
-  path.join(REPO_ROOT, 'drive'),
-].flatMap((dir) => tsFilesUnder(dir)).filter((file) => !/\/(node_modules|dist|\.apack)\//.test(file));
+/**
+ * Every test file the clocks are counted over: **the vitest trees, and only those.**
+ *
+ * The rule's remedy is "drop the timeout, the progress guard bounds the test", and that guard is
+ * `@apackdev/testing`'s `vitest-progress-guard`. It runs under vitest. It does not run under Playwright,
+ * where a test and a wait are given a clock and nothing else — so in a Playwright suite the remedy is false
+ * and `expect.poll(…, { timeout })` is the correct way to write the wait, not a defect to be excused.
+ *
+ * This walked `tests/` and `drive/` as well, and the cost was not theoretical: a branch bringing a real
+ * Playwright suite reported **1005 clocked waits across 175 files** — 471 `expect.poll`, 206
+ * `waitForTimeout`, 157 `test.setTimeout`, and Playwright's assertion timeouts — every one of which would
+ * have needed a per-file entry saying the same sentence. A list that grows one entry per Playwright file is
+ * a list of everything, which is the shape this repo refuses; and the five entries it already held for
+ * those suites were paperwork rather than findings.
+ *
+ * **What is still worth checking there is a different question with a true premise**: whether a wait
+ * outlasts the backstops its config declares (`definePackE2EConfig`: 60s a test, 30s an assertion). A 5s
+ * poll inside a 30s backstop is right; a 90s one is the defect. That check needs `clockedDeadlines` to
+ * carry each clock's milliseconds, which it does not, so it is not this file's — and nothing is lost by
+ * scoping here, because demanding an entry per file produced no finding either.
+ *
+ * `drive/` is out for a second reason besides: nothing collects or gates those scripts.
+ */
+const testFiles = (): string[] =>
+  UNIT_SUITES.map((suite) => path.join(REPO_ROOT, 'packages', suite.dir, 'tests'))
+    .flatMap((dir) => tsFilesUnder(dir)).filter((file) => !/\/(node_modules|dist|\.apack)\//.test(file));
 
 const clocksByFile = (): Map<string, Clock[]> => {
   const byFile = new Map<string, Clock[]>();
