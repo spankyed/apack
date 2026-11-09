@@ -322,6 +322,59 @@ deliverable rather than a spike's. What 0b owed and has now paid is the question
 whether a module a pack ships can be fetched and instantiated from an installed revision at all.
 
 
+## 2026-11-09 — Phase B: `Screen` is on the core, and one case is red on purpose
+
+`vt-core/conformance`. `screen.rs` is `libghostty-vt` behind an unchanged public API —
+`new`/`feed`/`facts`/`take_replies`/`resize`/`snapshot`/`search`, the seven `session.rs` and `main.rs`
+call — and `alacritty_terminal` is out of `Cargo.toml` and `Cargo.lock`.
+
+**The guarantee that nothing observable moved is the corpus, not a claim.** `tests/parser.rs`'s eight
+`insta` snapshots were recorded from the old parser and are **unchanged**; they pass against the core, as
+do the exhaustive single-byte-boundary property and the proptest over arbitrary chunking. The whole broker
+suite passes but for one case: 47 broker cases driving real shells, the markers, coalescing, channel,
+frames, signals, security and candidates suites, ~110 cases in all.
+
+`search` stays ours: it is a string search over the text `snapshot` already produced, so the core's
+`search.h` buys nothing and adding it would be a second implementation of a function that is not parsing.
+The `candidates.rs` probe for the VT core was rewritten rather than deleted — that suite's purpose is that
+each chosen crate still does the one thing it was picked for.
+
+### The blocker: the core does not honour its own scrollback line bound
+
+`a_session_keeps_its_declared_scrollback_and_not_more` is **red, and left red.** The broker declares
+`HISTORY_LINES = 1_000`, and that number is not decoration: the ownership goal made it *the* scrollback
+figure, answered to the window in the broker's handshake, exactly so a window never draws lines a reattach
+cannot reproduce.
+
+Measured with the limits read back off each terminal, so there is no doubt they were set:
+
+| lines fed | configured | scrollback rows held |
+|---|---|---|
+| 1,054 | `lines = 1000`, `bytes = ∞` | **1,051** — 5% over |
+| 6,004 | `lines = 1000`, `bytes = ∞` | **1,433** — 43% over |
+| 51,004 | `lines = 1000`, `bytes = ∞` | **753** — 25% **under** |
+
+Non-monotonic, and wrong in both directions. The under-hold is the one that matters: a session that has
+written 51,000 lines answers a reattach with 753 while the window has been told it may scroll back 1,000.
+
+**Two of my own errors were found on the way to this and are fixed**, and neither is the finding above:
+
+- The core's default scrollback ceiling is **10,000 bytes** — tiny — and I had not set the byte option at
+  all at first, so a session held 757 lines of short output and fewer as lines got longer.
+- `SCROLLBACK_MAX_BYTES = NULL` does **not** remove that ceiling. I generalised it from the *line* option,
+  whose documentation says a null removes its limit. Reading the limits back after setting them is what
+  showed it; `usize::MAX` does work, and the option then reads as unlimited.
+
+Fixing both changed the numbers not at all, which is what makes the remaining behaviour the core's rather
+than the configuration's.
+
+**Not resolved here, deliberately.** The assertion was not loosened to get a pass: a ceiling that reports
+1,000 and delivers between 753 and 1,433 is not a tighter test's problem. What it needs is the core's own
+source or its maintainers — whether `SCROLLBACK_MAX_LINES` is advisory, page-granular, or interacts with
+an allocator budget that an unlimited byte ceiling does not disable. Capping the figure in `snapshot`
+would fix the over-hold and leave the under-hold, which is the half that breaks the promise.
+
+
 ### What is not done
 
 The both-parsers diff harness, which is the rest of Phase 0a. The link is not yet proven: nothing has been
