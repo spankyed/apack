@@ -331,6 +331,41 @@ async function reach(options: BrokerOptions): Promise<net.Socket> {
   return connect(options.socket, options.startMs);
 }
 
+/**
+ * Registers a session's feed, held until whoever asked for the session is holding it.
+ *
+ * **A frame can arrive before the call that asked for the session has returned.** The broker answers
+ * `spawned` and the shell's `exited` in one read — a bad `--init-file`, `cmd /K` on a missing script — and
+ * readline delivers both in that turn, so a listener registered as the first frame is read is called while
+ * its caller is still inside `await`. Every holder then had to hold the exit for itself until it had
+ * somewhere to put it, and a holder that forgot recorded a session that had already gone as live.
+ *
+ * So the registration happens on the frame, which is what keeps the exit from being lost, and the delivery
+ * waits for the holder: `setImmediate` runs after the microtask queue, and a holder's work between `await`
+ * and its own next `await` is in that queue. The feed is in order either way, since the queue is drained in
+ * the order it was filled.
+ *
+ * An exit that arrived while held is not re-registered — the session is over, and `frames` has already
+ * forgotten it.
+ */
+function heldFeed(
+  listeners: Map<string, BrokerSessionListeners>,
+  id: string,
+  holder: BrokerSessionListeners,
+): () => void {
+  const queued: Array<() => void> = [];
+  let ended = false;
+  const held: BrokerSessionListeners = {
+    onOutput: (text) => { queued.push(() => holder.onOutput(text)); },
+    onExit: (code) => { ended = true; queued.push(() => holder.onExit(code)); },
+  };
+  listeners.set(id, held);
+  return () => {
+    if (!ended && listeners.get(id) === held) listeners.set(id, holder);
+    for (const deliver of queued.splice(0)) deliver();
+  };
+}
+
 /** The prefix every Windows pipe address carries, which is a namespace rather than a directory */
 const PIPE_PREFIX = '\\\\.\\pipe\\';
 
@@ -611,14 +646,17 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
         env: Object.entries(env ?? {}),
         cwd: cwd ?? null,
       });
-      // The listener is registered as the frame is read, not after the await: an `exited` in the same read
-      // would otherwise find no listener and the terminal would show as live behind a dead shell for ever
+      // Registered as the frame is read, so an `exited` in the same read is not lost; delivered once this
+      // call's caller is holding the session (`heldFeed`)
+      let release: (() => void) | undefined;
       const spawned = await connection.next(
         event => event.kind === 'spawned',
-        { onMatch: event => { if (event.kind === 'spawned') listeners.set(event.session, sessionListeners); } },
+        { onMatch: event => { if (event.kind === 'spawned') release = heldFeed(listeners, event.session, sessionListeners); } },
       );
       if (spawned.kind !== 'spawned') throw new BrokerError('PTY', 'the broker answered no session');
-      return sessionHandle(spawned.session, spawned.pid);
+      const handle = sessionHandle(spawned.session, spawned.pid);
+      if (release) setImmediate(release);
+      return handle;
     },
     /**
      * Takes up a session this process did not start.
@@ -637,16 +675,19 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
      */
     async adopt(id, sessionListeners) {
       connection.send({ kind: 'facts', session: id });
+      let release: (() => void) | undefined;
       const answer = await connection.next(
         event => event.kind === 'facts' && event.session === id,
-        { session: id, onMatch: () => { listeners.set(id, sessionListeners); } },
+        { session: id, onMatch: () => { release = heldFeed(listeners, id, sessionListeners); } },
       );
       if (answer.kind !== 'facts') throw new BrokerError('PTY', 'the broker answered no facts');
       // **No pid, because the broker does not answer one for a session it did not just spawn.** It is a
       // diagnostic the window uses to tell one shell from the next, and an adopted session *is* the shell
       // the window already knows — so saying nothing is the true answer, and inventing one would draw a
       // seam across a session that never ended.
-      return sessionHandle(id, null);
+      const taken = sessionHandle(id, null);
+      if (release) setImmediate(release);
+      return taken;
     },
     /**
      * Leaves the broker, without ending it.
