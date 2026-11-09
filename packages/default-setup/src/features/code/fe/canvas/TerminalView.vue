@@ -61,7 +61,7 @@ import { Copy, ClipboardPaste, TextSelect, Eraser, RotateCcw, Trash2 } from 'luc
 import { type CodeState } from '#features/code/fe/state.ts'
 import type { TerminalInfo } from '#features/code/fe/features/terminal/state.ts'
 import { terminalPool, type TerminalAttachment } from '#features/code/fe/utils/terminal-pool.ts'
-import { codeChild } from '../features/children.ts';
+import { panelChild } from '../features/children.ts';
 
 /* --------------------------------------------------------------------------
  * Props & actor -------------------------------------------------------------------------- */
@@ -75,7 +75,7 @@ defineEmits<{
 }>()
 
 const codeActor: CodeState = useSurface()
-const terminalActor = codeChild(codeActor, 'terminal')
+const terminalActor = panelChild(codeActor, 'terminal')
 
 /* --------------------------------------------------------------------------
  * Refs --------------------------------------------------------------------- */

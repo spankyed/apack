@@ -265,13 +265,13 @@ import PRComments from '#features/code/fe/features/pull-request/PRComments.vue'
 import PRActionBar from '#features/code/fe/features/pull-request/PRActionBar.vue'
 import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts'
 import type { TreeNode } from './types.ts'
-import { codeChild } from '../children.ts';
+import { panelChild } from '../children.ts';
 
 // Get actors
 const shell = useShell()
 const codeActor: CodeState = useSurface()
-const prActor = codeChild(codeActor, 'pr')!
-const commitActor = codeChild(codeActor, 'commit')!
+const prActor = panelChild(codeActor, 'pr')!
+const commitActor = panelChild(codeActor, 'commit')!
 
 // State selectors
 // The comparison this view is on, read from the slot keyed by it (`refKey`): an answer for any other PR
