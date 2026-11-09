@@ -54,7 +54,11 @@ export interface ClaudeBackgroundAttachmentSnapshot {
   jobId: string
   sessionId: string
   cwd: string
-  clientPid: number
+  /**
+   * The attach client's process id, **`null` when the host did not say** — it answers one for a session it
+   * just started and not for one it took up again. A diagnostic: nothing addresses the client by it.
+   */
+  clientPid: number | null
   status: 'live' | 'exited'
   exitCode?: number
   output: { sequence: number; text: string }[]

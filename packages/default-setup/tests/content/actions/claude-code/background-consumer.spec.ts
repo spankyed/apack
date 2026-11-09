@@ -15,7 +15,7 @@ describe('background continuation action consumer', () => {
   it('maps only the input replay UUID when tool-result user events arrive first', async () => {
     const { id } = repository.threadCommands.create({ topic: 'Replay identity', instructions: '', tags: [] });
     const update = vi.fn();
-    mockService<Services, 'chat'>('chat', { updateMessageState: update, sendBlockMessage: vi.fn() });
+    mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageState: update, sendBlockMessage: vi.fn() });
     mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
     mockService<Services, 'emitter'>('emitter', { sendToSystem: vi.fn(), broadcastToSurface: vi.fn() });
     const lines = [
@@ -41,7 +41,7 @@ describe('background continuation action consumer', () => {
   it('keeps nested prose, thinking, tools and UUIDs out of the parent while retaining launching-tool details', async () => {
     const { id } = repository.threadCommands.create({ topic: 'Nested Agent', instructions: '', tags: [] });
     const update = vi.fn(), emit = vi.fn();
-    mockService<Services, 'chat'>('chat', { updateMessageState: update });
+    mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageState: update });
     mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
     mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToSurface: vi.fn() });
     const activity = createClaudeNestedActivity();
@@ -85,7 +85,7 @@ describe('background continuation action consumer', () => {
   it('retains late child details on the launching message and accounts changes once in a later result', async () => {
     const { id } = repository.threadCommands.create({ topic: 'Cross-turn child', instructions: '', tags: [] });
     const update = vi.fn(), emit = vi.fn();
-    mockService<Services, 'chat'>('chat', { updateMessageState: update });
+    mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageState: update });
     mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
     mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToSurface: vi.fn() });
     mockService<Services, 'cli'>('cli', { claudeCode: { isCurrentTurn: vi.fn(() => true), clearHandle: vi.fn() } as never });
@@ -132,7 +132,7 @@ describe('background continuation action consumer', () => {
     const { id } = repository.threadCommands.create({ topic: 'Background', instructions: '', tags: [] });
     repository.threadCommands.update(id, { context: { claudeCode: { isRunning: true } } });
     const update = vi.fn();
-    mockService<Services, 'chat'>('chat', { updateMessageState: update,
+    mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageState: update,
       sendBlockMessage: vi.fn(() => ({ messageId: 'after-background' } as never)) });
     mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
     const emit = vi.fn();
@@ -171,7 +171,7 @@ describe('background continuation action consumer', () => {
     const emit = vi.fn();
     mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToSurface: vi.fn() });
     mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
-    mockService<Services, 'chat'>('chat', { updateMessageState: vi.fn() });
+    mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageState: vi.fn() });
     let current: object | undefined;
     const handle = { events: (async function* () {
       yield { type: 'result', subtype: 'success', session_id: 'old-session', total_cost_usd: 1 };
@@ -197,7 +197,7 @@ describe('background continuation action consumer', () => {
 it('cancels an unsupported generic dialog without sending tool denial, pausing or opening UI input', async () => {
   const { id } = repository.threadCommands.create({ topic: 'Unsupported native dialog', instructions: '', tags: [] });
   const sendBlockMessage = vi.fn(), emit = vi.fn();
-  mockService<Services, 'chat'>('chat', { updateMessageState: vi.fn(), sendBlockMessage });
+  mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageState: vi.fn(), sendBlockMessage });
   mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
   mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToSurface: vi.fn() });
   const cancelUserDialog = vi.fn(), respond = vi.fn();
@@ -225,7 +225,7 @@ it('cancels an unsupported generic dialog without sending tool denial, pausing o
 it('marks a success/is_error result as failed while preserving refusal detail and turn cost', async () => {
   const { id } = repository.threadCommands.create({ topic: 'Native refusal result', instructions: '', tags: [] });
   const update = vi.fn(), emit = vi.fn();
-  mockService<Services, 'chat'>('chat', { updateMessageState: update, sendBlockMessage: vi.fn() });
+  mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageState: update, sendBlockMessage: vi.fn() });
   mockService<Services, 'threads'>('threads', { updateChatState: vi.fn() });
   mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
   mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToSurface: vi.fn() });
@@ -249,7 +249,7 @@ it('marks a success/is_error result as failed while preserving refusal detail an
 it('uses the owner baseline updated during a reset when emitting completion cost', async () => {
   const { id } = repository.threadCommands.create({ topic: 'Reset cost', instructions: '', tags: [] })
   const emit = vi.fn()
-  mockService<Services, 'chat'>('chat', { updateMessageState: vi.fn() })
+  mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageState: vi.fn() })
   mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() })
   mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToSurface: vi.fn() })
   mockService<Services, 'cli'>('cli', { claudeCode: { storeHandle: vi.fn(), isCurrentTurn: () => true, clearHandle: vi.fn() } as never })

@@ -1,13 +1,13 @@
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { prepareClaudeNativeTerminal } from '#features/code/be/services/claude-code/terminal-owner.ts'
-const f = vi.hoisted(() => { vi.resetModules(); return { spawn: vi.fn(), request: vi.fn(), projection: { sessionId: '11111111-1111-4111-8111-111111111111', tasks: [] } } })
-vi.mock('node-pty', () => ({ spawn: f.spawn }))
+import { nativeSession } from '../../_support/native-terminal.ts'
+const f = vi.hoisted(() => { vi.resetModules(); return { open: vi.fn(), request: vi.fn(), projection: { sessionId: '11111111-1111-4111-8111-111111111111', tasks: [] } } })
+vi.mock('#generated/services.ts', () => ({ services: { terminal: { open: f.open } } }))
 vi.mock('#features/code/be/services/claude-code/terminal-bridge.ts', () => ({ createClaudeTerminalBridge: async () => ({ pluginRoot: '/private/fixture-plugin', bunOptions: 'fixture-preload', close: async () => {}, ready: true, projection: f.projection, session: { metadata: { permissionMode: 'default' }, update() {} }, uiTransport: { request: f.request } }) }))
 beforeEach(() => { vi.clearAllMocks(); f.request.mockReset() })
 async function fixture() {
-  let exit!: (event: { exitCode: number }) => void
-  f.spawn.mockImplementation(() => ({ pid: 0, onData() {}, onExit(callback: typeof exit) { exit = callback }, kill() { exit({ exitCode: 0 }) } }))
+  f.open.mockImplementation(async (_options, listeners) => nativeSession(listeners))
   const prepared = await prepareClaudeNativeTerminal({ sessionId: f.projection.sessionId, cwd: tmpdir(), cliPath: process.execPath, permissionMode: 'default', settings: { effective: {}, sources: [] } }), owner = await prepared.start()
   const form = { id: 'original', revision: randomUUID(), sessionId: f.projection.sessionId, token: 'a'.repeat(64), ready: true, serverName: 'Research', message: 'Review', schema: { type: 'object', properties: {} }, propertyOrder: [], values: { enabled: false, count: 0 }, errors: {}, resolvingFields: [], focusedButton: 'accept', textInputValue: '' }
   f.request.mockResolvedValueOnce({ form }); await owner.refreshMcpInput()

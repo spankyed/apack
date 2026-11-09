@@ -1,4 +1,6 @@
 import { resolveAppEnvironment } from '@apackdev/sdk/env'
+import type { TerminalSession } from '@apackdev/sdk/services'
+import { services } from '#generated/services.ts'
 import { createClaudeBackgroundStatusAuthority } from './background-status-authority.ts'
 import type { ClaudeBackgroundSession } from '../../../common/native-background.ts'
 import { backgroundSession } from './background-sessions.ts'
@@ -21,7 +23,6 @@ import { parseClaudeNativeContinuation, type ClaudeNativeContinuation } from './
 import type { ClaudeNativeTerminalRecord, ClaudeNativeSubmissionReceipt, ClaudeNativeImage } from './terminal-session.ts'
 import { stat } from 'node:fs/promises'
 import { resolveClaudeExecutable } from './native-executable.ts'
-import type * as pty from 'node-pty'
 import { createClaudeTerminalImageFileTransport } from './terminal-image-file-transport.ts'
 import { createClaudeTerminalImageCache } from './terminal-image-cache.ts'
 import { createClaudeTerminalGraphicsQueryResponder } from './terminal-graphics-query.ts'
@@ -117,8 +118,6 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   const executable = await resolveClaudeExecutable(options.cliPath ?? await resolveForService('claude-code'), options.cwd, env.PATH)
   if (options.signal?.aborted) throw new Error('Native terminal startup was cancelled')
   if (!(await stat(options.cwd)).isDirectory()) throw new Error('Native terminal working directory is unavailable')
-  // Content repositories load outside Electron; load the native driver only for a terminal handoff.
-  const pty = await import('node-pty')
   const terminalEnv: Record<string, string> = {}
   for (const [name, value] of Object.entries(env)) if (typeof value === 'string') terminalEnv[name] = value
   // Advertise app rendering capabilities only when the caller has not chosen an override.
@@ -131,7 +130,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   const trace = createClaudeLifecycleTrace('terminal')
   const ownerId = randomUUID(), listeners = new Set<() => void>()
   const output: { sequence: number; text: string }[] = []
-  let sequence = 0, outputSize = 0, terminal: pty.IPty | undefined, closed = false
+  let sequence = 0, outputSize = 0, terminal: TerminalSession | undefined, closed = false
   let status: ClaudeNativeTerminalState['status'] = 'starting'
   let handoffPending = false
   let continuation: ClaudeNativeContinuation | undefined
@@ -142,14 +141,14 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   let resolveDone!: () => void
   const done = new Promise<void>(resolve => { resolveDone = resolve })
   const changed = () => { for (const listener of listeners) { try { listener() } catch { /* isolate views */ } } }
-  const bridge = await createClaudeTerminalBridge({ sessionId: options.sessionId, backgroundProfile:resolveAppEnvironment().userDataDir, backgroundChildUiLaunch:{configDir:env.CLAUDE_CONFIG_DIR,secureStorageConfigDir:env.CLAUDE_SECURESTORAGE_CONFIG_DIR,executable,cwd:options.cwd,searchPath:env.PATH}, backgroundObserver, backgroundAuthority: parentSessionId => createClaudeBackgroundStatusAuthority(parentSessionId, {cwd: options.cwd, cliPath: executable, env}), backgroundTarget: () => continuation ? {parentSessionId: continuation.sessionId, sessionId: continuation.continuedInSessionId, cwd: options.cwd} : undefined, ...(options.permissionMode === 'plan' && options.prePlanMode ? {restorePlan: {sessionId: options.sessionId, mode: options.prePlanMode}} : {}), settings: options.settings, bunOptions: env.BUN_OPTIONS, ownsProcess: pid => isClaudeNativeDescendant(pid, terminal?.pid), changed,
-    pasteImage(path) { if (closed || !terminal) throw new Error('Native terminal closed'); terminal.write('\x1b[200~' + path + '\x1b[201~') },
-    enter() { if (closed || !terminal) throw new Error('Native terminal closed'); terminal.write('\r') } })
+  const bridge = await createClaudeTerminalBridge({ sessionId: options.sessionId, backgroundProfile:resolveAppEnvironment().userDataDir, backgroundChildUiLaunch:{configDir:env.CLAUDE_CONFIG_DIR,secureStorageConfigDir:env.CLAUDE_SECURESTORAGE_CONFIG_DIR,executable,cwd:options.cwd,searchPath:env.PATH}, backgroundObserver, backgroundAuthority: parentSessionId => createClaudeBackgroundStatusAuthority(parentSessionId, {cwd: options.cwd, cliPath: executable, env}), backgroundTarget: () => continuation ? {parentSessionId: continuation.sessionId, sessionId: continuation.continuedInSessionId, cwd: options.cwd} : undefined, ...(options.permissionMode === 'plan' && options.prePlanMode ? {restorePlan: {sessionId: options.sessionId, mode: options.prePlanMode}} : {}), settings: options.settings, bunOptions: env.BUN_OPTIONS, ownsProcess: pid => isClaudeNativeDescendant(pid, terminal?.pid ?? undefined), changed,
+    pasteImage(path) { if (closed || !terminal) throw new Error('Native terminal closed'); void terminal.write('\x1b[200~' + path + '\x1b[201~') },
+    enter() { if (closed || !terminal) throw new Error('Native terminal closed'); void terminal.write('\r') } })
   const imageCache = createClaudeTerminalImageCache()
   const imageListeners = new Set<(event: Record<string, unknown>) => void>()
-  const graphicsQuery = createClaudeTerminalGraphicsQueryResponder(text => { if (!closed) terminal?.write(text) })
+  const graphicsQuery = createClaudeTerminalGraphicsQueryResponder(text => { if (!closed) void terminal?.write(text) })
   const imageTransport = createClaudeTerminalImageFileTransport({
-    reply(text) { if (!closed) terminal?.write(text) },
+    reply(text) { if (!closed) void terminal?.write(text) },
     image(value) {
       imageCache.put(value)
       for (const listener of imageListeners) { try { listener({ type: 'system', subtype: 'ui_invalidate', event: 'ui.render', client_snapshot: true }) } catch { /* isolate mounted views */ } }
@@ -186,7 +185,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   }
   let outputFailed = false, pendingOutput = 0
   let hardStop: ReturnType<typeof setTimeout> | undefined
-  async function finish(code: number, signal?: number) {
+  async function finish(code: number, signal?: string) {
     if (closed) return
     imageTransport.close(); imageCache.close(); imageListeners.clear()
     trace('exit', {outcome:outputFailed ? 'error' : stopping ? 'cancelled' : code === 0 ? 'ok' : 'error',code});
@@ -201,22 +200,34 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
     trace('cancel_requested')
     stopping = true
     imageTransport.close()
-    const pid = terminal.pid, nativePid = bridge.nativePid
+    // **The session is what the guards compare, not its pid.** A replaced session is a different handle, and
+    // the broker answers no pid for one it took up again rather than started
+    const session = terminal, nativePid = bridge.nativePid
     const stopGroup = () => {
-      if (closed || terminal?.pid !== pid) return
-      try { if (pid > 1 && pid !== process.pid) process.kill(-pid, 'SIGTERM') } catch { /* already gone */ }
-      try { terminal.kill('SIGTERM') } catch { /* already gone */ }
+      if (closed || terminal !== session) return
+      // The group and then the process the broker started: neither pid is this process's to find, and the
+      // broker refuses anything outside the session's own tree
+      void session.signal('SIGTERM', { kind: 'group' }).catch(() => {})
+      void session.signal('SIGTERM', { kind: 'leader' }).catch(() => {})
     }
-    // Keep owned servers alive while the original CLI runs its shutdown handlers.
+    // **The CLI alone first, so the servers it owns outlive its own shutdown handlers**, where the group
+    // would take them with it. The pid is the bridge's claim about which process the CLI is, and the broker
+    // is what checks it belongs to this session — a pid outside the tree is refused there rather than
+    // walked for here.
+    //
+    // **A refusal cannot steer this, and that is why there is no branch on one.** A signal is carried out or
+    // refused like a write, with no answer on success, so the app does not learn that a pid was rejected.
+    // What covers it is the escalation below, which was always the backstop for a CLI that does not go:
+    // the cost of the bridge naming a pid the broker does not own is that the group waits for it.
     if (nativePid && nativePid !== process.pid) {
-      void isClaudeNativeDescendant(nativePid, pid).then(owned => {
-        if (closed || terminal?.pid !== pid) return
-        if (!owned) { stopGroup(); return }
-        try { process.kill(nativePid, 'SIGTERM') } catch { stopGroup() }
-      }, stopGroup)
+      void session.signal('SIGTERM', { kind: 'pid', pid: nativePid }).catch(() => {})
     } else stopGroup()
     if (!hardStop && !closed) {
-      hardStop = setTimeout(() => { if (!closed && pid > 1 && pid !== process.pid) { try { process.kill(-pid, 'SIGKILL') } catch { /* gone */ } } }, 2000)
+      hardStop = setTimeout(() => {
+        if (closed || terminal !== session) return
+        void session.signal('SIGKILL', { kind: 'group' }).catch(() => {})
+        void session.signal('SIGKILL', { kind: 'leader' }).catch(() => {})
+      }, 2000)
       hardStop.unref()
     }
   }
@@ -238,17 +249,35 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       if (options.appendSystemPrompt) args.push('--append-system-prompt', options.appendSystemPrompt)
       for (const directory of options.addDir ?? []) args.push('--add-dir', directory)
       if (options.signal?.aborted) throw new Error('Native terminal startup was cancelled')
-      terminal = pty.spawn(executable, args, { cwd: options.cwd, env: terminalEnv, name: 'xterm-256color', cols: options.columns ?? 100, rows: options.rows ?? 30 })
-      terminal.onData(text => {
-        if (closed || stopping) return
-        pendingOutput++; terminal?.pause?.()
-        void imageTransport.write(text).catch(() => { outputFailed = true; kill() }).finally(() => {
-          pendingOutput--
-          if (!closed && !stopping && pendingOutput === 0) terminal?.resume?.()
-        })
-      })
-      trace('ready', {pid:terminal.pid})
-      terminal.onExit(({ exitCode, signal }) => { options.signal?.removeEventListener('abort', kill); void finish(exitCode, signal).catch(() => {}) })
+      // **The listeners arrive with the open**, which the contract requires: there is no window in which
+      // output has nowhere to go. `TERM` is the broker's to set, so it is not named here
+      terminal = await services.terminal.open(
+        {
+          cols: options.columns ?? 100,
+          rows: options.rows ?? 30,
+          shell: executable,
+          args,
+          env: terminalEnv,
+          cwd: options.cwd,
+        },
+        {
+          onOutput: text => {
+            if (closed || stopping) return
+            // **The session stops being read while the transport drains**, which is what a pause is for: the
+            // bytes wait in the pty's buffer and the CLI blocks on its own write, rather than piling up here
+            pendingOutput++; void terminal?.pause()
+            void imageTransport.write(text).catch(() => { outputFailed = true; kill() }).finally(() => {
+              pendingOutput--
+              if (!closed && !stopping && pendingOutput === 0) void terminal?.resume()
+            })
+          },
+          onExit: (code, signal) => {
+            options.signal?.removeEventListener('abort', kill)
+            void finish(code ?? 0, signal ?? undefined).catch(() => {})
+          },
+        },
+      )
+      trace('ready', {pid:terminal.pid ?? undefined})
       options.signal?.addEventListener('abort', kill, { once: true })
       if (options.signal?.aborted) kill()
       status = 'starting'
@@ -281,7 +310,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       } finally { operatingMcpForm = false; finish() }
     }
     let backgroundState: ClaudeNativeTerminalState | undefined
-    const currentState = (): ClaudeNativeTerminalState => ({ handoffPending: !closed && handoffPending, messageRetirements, mcpForm: closed ? undefined : mcpForm, mcpUrl: closed ? undefined : mcpUrl, notice: closed ? undefined : notice, preview: closed ? undefined : bridge.preview, view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, continuation: continuation?.sessionId === bridge.projection.sessionId ? continuation : undefined, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingPermission || changingView || preparingParent, activity: bridge.activity, focus: bridge.focus, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, billing: closed ? undefined : bridge.billing, problem: bridge.problem, tasks: bridge.projection.tasks })
+    const currentState = (): ClaudeNativeTerminalState => ({ handoffPending: !closed && handoffPending, messageRetirements, mcpForm: closed ? undefined : mcpForm, mcpUrl: closed ? undefined : mcpUrl, notice: closed ? undefined : notice, preview: closed ? undefined : bridge.preview, view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, continuation: continuation?.sessionId === bridge.projection.sessionId ? continuation : undefined, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid ?? undefined, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingPermission || changingView || preparingParent, activity: bridge.activity, focus: bridge.focus, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, billing: closed ? undefined : bridge.billing, problem: bridge.problem, tasks: bridge.projection.tasks })
     const readState = (): ClaudeNativeTerminalState => backgroundState
       ? { ...backgroundState, status: closed ? status : backgroundState.status, exitCode }
       : currentState()
@@ -396,10 +425,10 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         exitObservers.push(listener)
       },
       subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
-      input(id, text) { if (closed || (changingView || preparingParent) && text !== '\x03' || id !== ownerId || typeof text !== 'string' || text.length > 32768) return false; terminal!.write(text); return true },
+      input(id, text) { if (closed || (changingView || preparingParent) && text !== '\x03' || id !== ownerId || typeof text !== 'string' || text.length > 32768) return false; void terminal!.write(text); return true },
       resize(id, columns, rows) {
         if (closed || id !== ownerId || !Number.isSafeInteger(columns) || !Number.isSafeInteger(rows) || columns < 2 || columns > 500 || rows < 2 || rows > 200) return false
-        terminal!.resize(columns, rows); return true
+        void terminal!.resize(columns, rows); return true
       },
       async holdQuestionDialog(request) {
         if (closed || request.sessionId !== bridge.projection.sessionId) throw new Error('Native question session expired')
