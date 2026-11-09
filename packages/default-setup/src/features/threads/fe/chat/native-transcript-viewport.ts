@@ -29,12 +29,12 @@ export function useNativeTranscriptViewport(options: {
   active(): boolean
   onFollowingChange?(following: boolean): void
 }) {
-  let requestFollow: (() => void) | undefined
+  let requestFollow: (() => void) | undefined, requestPause: (() => void) | undefined
   let disconnect: (() => void) | undefined, frame: number | undefined, epoch = 0
   let retained: { viewport: HTMLElement; content: HTMLElement; owner: string; following: boolean; top: number } | undefined, suspended = false
   const cancel = () => { if (frame !== undefined) cancelAnimationFrame(frame); frame = undefined }
   watch([options.viewport, options.content, options.owner, options.active], ([viewport, content, owner, active]) => {
-    disconnect?.(); disconnect = undefined; requestFollow = undefined; cancel(); const current = ++epoch
+    disconnect?.(); disconnect = undefined; requestFollow = undefined; requestPause = undefined; cancel(); const current = ++epoch
     if (!viewport || !content || !owner) { retained = undefined; suspended = !active; return }
     if (!active) { suspended = true; return }
     const returning = suspended
@@ -45,12 +45,17 @@ export function useNativeTranscriptViewport(options: {
     let following = resume ? resume.owner !== owner || resume.following : true, restoring = returning
     const setFollowing = (value: boolean) => { following = value; options.onFollowingChange?.(value) }
     setFollowing(following)
-    requestFollow = () => setFollowing(true)
     const valid = () => epoch === current && options.viewport.value === viewport && options.owner() === owner && options.active() && viewport.clientHeight > 0
+    const positionLatest = () => {
+      if (frame !== undefined) return
+      frame = requestAnimationFrame(() => { frame = undefined; if (valid() && following) { viewport.scrollTop = nativeTranscriptLatestTop(viewport); top = viewport.scrollTop } })
+    }
+    requestFollow = () => { setFollowing(true); positionLatest() }
+    requestPause = () => { setFollowing(false); restoring = false; cancel(); if (valid()) top = viewport.scrollTop }
     const scrolled = () => {
       if (!restoring && valid()) {
         // Upward reading intent survives while the short latest body is still visible.
-        if (viewport.clientWidth === width && viewport.clientHeight === height && (following || viewport.scrollTop > top)) setFollowing(isAtNativeTranscriptLatest(viewport))
+        if (viewport.clientWidth === width && viewport.clientHeight === height && !following && viewport.scrollTop > top) setFollowing(isAtNativeTranscriptLatest(viewport))
         // Browser anchoring can move a reader during reflow before ResizeObserver runs.
         top = viewport.scrollTop
       }
@@ -58,17 +63,14 @@ export function useNativeTranscriptViewport(options: {
     const reading = (event: Event) => {
       if (event instanceof WheelEvent && event.deltaY >= 0) return
       if (event instanceof KeyboardEvent && !['ArrowUp', 'PageUp', 'Home'].includes(event.key)) return
-      setFollowing(false); restoring = false; cancel(); if (valid()) top = viewport.scrollTop
+      requestPause?.()
     }
     const resize = new ResizeObserver(() => {
       if (!valid()) return
-      const changed = width !== viewport.clientWidth || height !== viewport.clientHeight
       width = viewport.clientWidth; height = viewport.clientHeight
       if (restoring) return
-      if (!changed) { if (following) setFollowing(isAtNativeTranscriptLatest(viewport)); top = viewport.scrollTop; return }
       if (!following) { top = viewport.scrollTop; return }
-      if (frame !== undefined) return
-      frame = requestAnimationFrame(() => { frame = undefined; if (valid() && following) { viewport.scrollTop = nativeTranscriptLatestTop(viewport); top = viewport.scrollTop } })
+      positionLatest()
     })
     resize.observe(viewport); resize.observe(content)
     viewport.addEventListener('scroll', scrolled, { passive: true })
@@ -93,6 +95,6 @@ export function useNativeTranscriptViewport(options: {
       })
     }
   }, { flush: 'post' })
-  onBeforeUnmount(() => { epoch++; requestFollow = undefined; disconnect?.(); cancel() })
-  return { followLatest: () => requestFollow?.() }
+  onBeforeUnmount(() => { epoch++; requestFollow = undefined; requestPause = undefined; disconnect?.(); cancel() })
+  return { followLatest: () => requestFollow?.(), pauseFollowing: () => requestPause?.() }
 }

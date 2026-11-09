@@ -271,7 +271,7 @@ import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 import ConversationViewer from '@apackdev/ui/components/tiptap/ConversationViewer'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ClaudeNativeSession from './ClaudeNativeSession.vue'
-import { nativeTranscriptLatestTop, useNativeTranscriptViewport } from './native-transcript-viewport.ts'
+import { useNativeTranscriptViewport } from './native-transcript-viewport.ts'
 import NativeTaskControls from '#extensions/blocks/display/NativeTaskControls.vue'
 import NativeMainCommand from './NativeMainCommand.vue'
 import NativeManagedTasks from './NativeManagedTasks.vue'
@@ -838,8 +838,8 @@ const dontAskAgain = ref(false)
 function scrollToBottom(behavior: ScrollBehavior = 'smooth') {
   const el = messagesContainer.value
   if (!el || currentThread.value?.context?.claudeCode && (!nativeTranscriptVisible.value || !el.clientHeight)) return
-  if (currentThread.value?.context?.claudeCode) nativeViewport.followLatest()
-  el.scrollTo({ top: currentThread.value?.context?.claudeCode ? nativeTranscriptLatestTop(el) : el.scrollHeight, behavior })
+  if (currentThread.value?.context?.claudeCode) { nativeViewport.followLatest(); return }
+  el.scrollTo({ top: el.scrollHeight, behavior })
 }
 
 /** Instant scroll + double rAF to catch async content (Tiptap, images). */
@@ -1073,6 +1073,7 @@ function showFocusedMessage(messages: MessageEntity[]): boolean {
   if (!focused) return false
   const el = messagesContainer.value?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(focused)}"]`)
   if (el) {
+    if (currentThread.value?.context?.claudeCode) nativeViewport.pauseFollowing()
     scrollPositioning.position(() => el.scrollIntoView({ block: 'center' }))
     el.classList.add(style.focused)
     setTimeout(() => el.classList.remove(style.focused), 1600)

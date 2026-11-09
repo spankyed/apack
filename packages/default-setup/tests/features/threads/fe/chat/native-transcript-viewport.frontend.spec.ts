@@ -73,11 +73,11 @@ it.each(['following', 'reading', 'reading near latest', 'new conversation', 'new
   vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id))
   vi.stubGlobal('ResizeObserver', class { constructor(callback: ResizeObserverCallback) { observers.push(callback) } observe() {} disconnect() {} })
   const viewport = ref<HTMLElement | null>(null), content = ref<HTMLElement | null>(null), owner = ref<string | undefined>('session-one'), active = ref(true)
-  const following = ref(true); let followLatest: () => void
+  const following = ref(true); let followLatest: () => void, pauseFollowing: () => void
   const root = document.createElement('div'), editor = document.createElement('input'); document.body.append(root, editor); editor.focus()
   const app = createApp({ setup() {
     const controller = useNativeTranscriptViewport({ viewport, content, owner: () => owner.value, active: () => active.value, onFollowingChange: value => { following.value = value } })
-    followLatest = controller.followLatest
+    followLatest = controller.followLatest; pauseFollowing = controller.pauseFollowing
     return () => h('div', { ref: viewport }, h('div', { ref: content }, h('article', { 'data-message-id': 'latest-reply' })))
   } })
   const flush = () => { for (let i=0;i<3&&frames.size;i++){const pending=[...frames.values()];frames.clear();pending.forEach(callback=>callback(0))} }
@@ -109,6 +109,16 @@ it.each(['following', 'reading', 'reading near latest', 'new conversation', 'new
     expect(element.scrollTop).toBe(mode==='reading'?155:mode==='reading near latest'?480:650)
     expect(following.value).toBe(mode==='following'||mode.startsWith('new conversation'))
     expect(document.activeElement).toBe(editor)
+    if(mode==='following'){
+      // Real return traces grow async content without a reader gesture. A queued
+      // older scroll must not demote following before the settled layout is measured.
+      latestTop=750;total=900;observers.at(-1)!([],{} as ResizeObserver);flush()
+      expect(element.scrollTop).toBe(750);expect(following.value).toBe(true)
+      element.scrollTop=700;element.dispatchEvent(new Event('scroll'))
+      observers.at(-1)!([],{} as ResizeObserver);flush()
+      expect(element.scrollTop).toBe(750);expect(following.value).toBe(true)
+      latestTop=650;total=800
+    }
     // A gesture before the queued return frames run wins over restored following.
     element.scrollTop=650;element.dispatchEvent(new Event('scroll'))
     height=0;element.scrollTop=0;active.value=false;await nextTick()
@@ -118,5 +128,7 @@ it.each(['following', 'reading', 'reading near latest', 'new conversation', 'new
     height=120;observers.at(-1)!([],{} as ResizeObserver);flush();expect(element.scrollTop).toBe(80)
     expect(following.value).toBe(false);followLatest!();expect(following.value).toBe(true)
     height=110;observers.at(-1)!([],{} as ResizeObserver);flush();expect(element.scrollTop).toBe(650)
+    pauseFollowing!();element.scrollTop=80;element.dispatchEvent(new Event('scroll'))
+    observers.at(-1)!([],{} as ResizeObserver);flush();expect(element.scrollTop).toBe(80);expect(following.value).toBe(false)
   } finally { app.unmount();root.remove();editor.remove();vi.unstubAllGlobals() }
 })
