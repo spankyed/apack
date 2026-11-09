@@ -174,22 +174,23 @@ and `.tsx` files:
 
 ## The semantic layer (stage 3)
 
-- **The compiler itself for TypeScript and Vue:** TypeScript's API over `@vue/language-core`'s virtual files, under
-  Electron's Node at low priority with its heap capped, loading no project plugins. `scip-typescript`'s README covers
-  TypeScript, JavaScript and Svelte, doesn't mention Vue or npm workspaces, and suggests a 16 GB heap. The evaluation runs
-  both on this repository and this choice stands or falls on those readings.
-- **This can't be purely in the pack as things are.** It needs a separate process and `typescript` and Volar on disk, and a
-  pack build emits one backend entry and ships only `dist/{runtime,build,types}`. The choice to take at this stage is a small
-  generic pack-build option for a second entry and its files, or a host feature.
-- **Mapping:** an occurrence is matched to the site at its position and to the `CodeSymbol` holding its declaration
-  (`scripts/code-index-evaluate.ts` does this already). The pair's edge takes `layer: 'compiler'`. Where the compiler names
-  another target, the syntax layer's pair loses that site, and its edge goes with its last one.
-- **When it runs:** when asked, and when the machine is idle on power, one run per project, cancelled by a newer one. A
-  whole-program run is a type-check, about 70 s for one of this repository's legs (2026-11-01, under load), so it doesn't
-  follow every commit. A failed run leaves the syntax layer in charge and says why.
-- **Staleness is per file:** a run records each file's blob. A file whose blob has moved falls back to its syntax
-  resolution. A compiler edge to a symbol that has been removed goes with the symbol; one to a symbol whose signature changed
-  is kept, and counted as unverified until the next run.
+- **TypeScript's own compiler, in a worker thread.** The pack declares it in `apack.json` `build.workers`
+  (`codeIndexCompiler`), which `apack pack build` bundles self-contained with `typescript` to
+  `runtime/workers/codeIndexCompiler.cjs`; `workerPath` finds it. That kept the feature in the pack: the other option was a
+  host feature, which would have moved a pack feature into the host to work around a build gap.
+- **One language service per checkout,** kept between syncs and told which files moved, over the checkout's own
+  `tsconfig.json` loosened to what reading needs. The worker's heap is capped; if it exits, the index keeps its syntax edges
+  and starts a new worker on the next sync. Waits on it last as long as it keeps working (`answerWhileWorking`).
+- **When it runs:** after each sync's syntax pass, for the files that pass resolved. A checkout's program is built by the
+  first sync that resolves something, so a start with nothing changed builds nothing.
+- **Mapping:** each site the compiler places in the checkout takes its target from the compiler, `layer: 'compiler'` at full
+  weight; one it places outside the checkout has no edge; one it can't answer keeps its syntax resolution.
+  `compiler.ts` is shared with `scripts/code-index-evaluate.ts`, so what ships is what is measured.
+- **Reading, 2026-11-09, this repository (2,732 files), load 12–19:** the first index with the compiler took 24.0 s,
+  with the event loop held 60 ms at most (over the 50 ms budget, under load). 11,752 of 19,221 edges came from the compiler;
+  the rest are syntax edges in files it doesn't read and sites it can't answer.
+- **`.vue` files stay on the syntax layer.** Volar (`@vue/language-core`) is the follow-up, once these readings settle what
+  it would cost and add.
 - **Other languages** come through a SCIP importer (stage 6), since SCIP is the one format they share. Indexers that drive
   a project's build run its code, so each is enabled per project, with that stated.
 

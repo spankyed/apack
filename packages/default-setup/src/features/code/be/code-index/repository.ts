@@ -85,7 +85,7 @@ export const symbolIdOf = (project: string, path: string, definition: Pick<Defin
 
 /** What an edge says about itself: how it was found, and how many sites it stands for */
 export interface CodeEdgeInfo {
-  layer: 'extracted' | 'inferred';
+  layer: 'extracted' | 'inferred' | 'compiler';
   sites: number;
 }
 

@@ -696,7 +696,7 @@ type CodeContext = {
 
 /** What an edge says about itself: how it was found, and how many sites it stands for */
 interface CodeEdgeInfo {
-    layer: 'extracted' | 'inferred';
+    layer: 'compiler' | 'extracted' | 'inferred';
     sites: number;
 }
 

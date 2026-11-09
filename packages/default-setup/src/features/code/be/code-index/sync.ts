@@ -9,7 +9,9 @@ import * as path from 'node:path';
 import { createLogger } from '@apackdev/sdk/logger';
 import { extractorStamp, languageOf, type Definition } from './extract.ts';
 import { readGitView, readPackages } from './git-view.ts';
-import { drainDirtyFiles } from './graph.ts';
+import { compilerAnswers } from './compiler-client.ts';
+import { compilerReads } from './compiler.ts';
+import { applyCompilerAnswers, drainDirtyFiles } from './graph.ts';
 import { extractGraph, wantedNamesOf, type FileGraph, type Reexport } from './sites.ts';
 import { codeIndexCommands, codeIndexQueries, projectIdOf, type CodeIndexProgress, type SkipReason } from './repository.ts';
 
@@ -20,6 +22,9 @@ const PROGRESS_EVERY_MS = 250;
 const FILE_PAGE = 500;
 /** Over this a file is counted and left out, so no single parse can hold the event loop past its budget */
 export const MAX_FILE_BYTES = 512 * 1024;
+
+/** Names the compiler layer in the stamp; changing what it answers changes this */
+const COMPILER_LAYER = 'compiler:1';
 
 /** A function that yields to the event loop once `ms` have passed since it last did */
 export function createSlicer(signal?: AbortSignal, ms = SLICE_MS): () => Promise<void> {
@@ -72,8 +77,9 @@ async function syncChanges(root: string, signal: AbortSignal): Promise<number> {
   signal.throwIfAborted();
   const packages = await readPackages(root).catch(() => []);
   signal.throwIfAborted();
-  // What a specifier means is in the manifests, so a changed one is a changed extractor as far as any file's edges go
-  const stamp = createHash('sha1').update(extractorStamp()).update(JSON.stringify(packages)).digest('base64url').slice(0, 16);
+  // What a specifier means is in the manifests, so a changed one is a changed extractor as far as any file's edges go;
+  // and every file's edges include the compiler layer's answers, so a checkout indexed without it is read again once
+  const stamp = createHash('sha1').update(extractorStamp()).update(JSON.stringify(packages)).update(COMPILER_LAYER).digest('base64url').slice(0, 16);
   const row = codeIndexQueries.project(root);
   if (!row) return 0;
   if (!view) {
@@ -144,12 +150,17 @@ async function syncChanges(root: string, signal: AbortSignal): Promise<number> {
     step();
     await pause();
   }
-  await drainDirtyFiles(root, packages, parsedFiles, signal, pause, (left) => {
+  const drained = await drainDirtyFiles(root, packages, parsedFiles, signal, pause, (left) => {
     pending = left;
     if (performance.now() - lastProgress < PROGRESS_EVERY_MS) return;
     codeIndexCommands.setProgress(root, progress('syncing'));
     lastProgress = performance.now();
   });
+  // The compiler, in its worker, for the files just resolved: told first what moved, so it answers against this view
+  const changes = [...stale.map(([file]) => ({ path: file })), ...gone.map(file => ({ path: file, gone: true }))];
+  const answers = await compilerAnswers(root, () => [...view.keys()], changes, drained.filter(compilerReads));
+  signal.throwIfAborted();
+  if (answers) await applyCompilerAnswers(root, packages, answers, signal, pause);
   codeIndexCommands.setStamp(root, stamp);
   pending = 0;
   codeIndexCommands.setProgress(root, progress('idle'));
