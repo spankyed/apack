@@ -8,6 +8,10 @@
  * **It owns its block's row for the whole turn.** A block is an entity, so this writer writes the `thinking`
  * row and the tool-activity writer writes its own; neither carries the other's and neither has to stop. It
  * holds the row's id from the first write, so every flush after it is one row by id.
+ *
+ * **And the text is appended rather than rewritten.** Growth goes to the row as a segment from the offset it
+ * starts at — the same `(at, text)` the feed sends the windows — so the interval decides how often the turn
+ * commits rather than how much of it is written again.
  */
 
 import type { Services, EntityId } from '#generated/services.ts';
@@ -45,6 +49,8 @@ export function createThinkingWriter(
   let fedUpTo = 0;
   /** The block's own row, from the first durable write; a run can only splice onto a block the row holds */
   let blockId: EntityId | undefined;
+  /** How much of `buffer` the row holds, as its own text plus the segments appended to it */
+  let rowUpTo = 0;
 
   /**
    * Sends the characters the windows have not been sent — the block's half of G1's feed.
@@ -79,18 +85,36 @@ export function createThinkingWriter(
     };
   }
 
+  /**
+   * Commits what has grown since the last flush.
+   *
+   * **Growth is appended; everything else is a write of the block.** A segment is written once and never
+   * rewritten, which is what stops a turn's cost growing with it — writing the whole block on every flush
+   * cost 47.9x the text the turn left behind. A write of the block is for what is not growth: the block
+   * appearing, and the label and state changing when it finishes, which are rewrites no append can carry.
+   * That write also replaces the text, so it is what folds the segments back in.
+   */
   function writeNow(): void {
     if (pendingTimer) {
       clearTimeout(pendingTimer);
       pendingTimer = null;
     }
     if (!buffer) return;
-    const block = buildBlock();
-    if (block) {
-      blockId = services.chat.updateMessageBlock(messageId, block, blockId);
-      // The row now holds everything the buffer does, so nothing up to here is the feed's to send
-      fedUpTo = buffer.length;
+
+    if (blockId && state === 'streaming') {
+      if (buffer.length > rowUpTo) {
+        services.chat.appendMessageBlockText(blockId, rowUpTo, buffer.slice(rowUpTo));
+        rowUpTo = buffer.length;
+      }
+    } else {
+      const block = buildBlock();
+      if (block) {
+        blockId = services.chat.updateMessageBlock(messageId, block, blockId);
+        rowUpTo = buffer.length;
+      }
     }
+    // The row now holds everything the buffer does, so nothing up to here is the feed's to send
+    fedUpTo = buffer.length;
     lastFlushAt = Date.now();
   }
 

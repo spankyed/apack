@@ -17,17 +17,31 @@ type Feed = { block: string; at: number; text: string; done?: true };
 
 function recorder() {
   const writes: string[] = [];
+  /** What the row holds after each write, the store's text assembled the way a read assembles it */
+  const rows: string[] = [];
+  let row = '';
   const feed: Feed[] = [];
   const services = {
     chat: {
-      updateMessageBlock: (_id: unknown, block: unknown) => { writes.push(JSON.stringify(block)); return 'block-one'; },
+      updateMessageBlock: (_id: unknown, block: { props: { content?: string } }) => {
+        writes.push(JSON.stringify(block));
+        row = block.props.content ?? '';
+        rows.push(row);
+        return 'block-one';
+      },
+      // An append costs its own characters and splices onto what the row holds, as the repository does
+      appendMessageBlockText: (_id: unknown, at: number, text: string) => {
+        writes.push(JSON.stringify({ at, text }));
+        row = row.slice(0, at) + text;
+        rows.push(row);
+      },
       removeMessageBlock: () => {},
       streamMessageBlockText: (params: Feed & { messageId: unknown }) => {
         feed.push({ block: params.block, at: params.at, text: params.text, ...(params.done ? { done: true as const } : {}) });
       },
     },
   } as unknown as Services;
-  return { services, writes, feed };
+  return { services, writes, rows, feed };
 }
 
 const writerOn = (services: Services) => createThinkingWriter(services, 'message-one' as EntityId);
@@ -36,8 +50,13 @@ const writerOn = (services: Services) => createThinkingWriter(services, 'message
 const windowText = (row: string, feed: Feed[]) =>
   feed.filter(one => !one.done).reduce((text, one) => text.slice(0, one.at) + one.text, row);
 
-/** The content of a recorded row write — the block itself now, a block being a row rather than a field. */
-const contentOf = (write: string) => JSON.parse(write).props.content as string;
+/**
+ * What the row held after the nth write.
+ *
+ * A write is no longer always the whole block: growth is appended from an offset, so what the row holds is
+ * assembled rather than read off one write. The recorder keeps that, as the repository does.
+ */
+const contentOf = (rows: string[], nth: number) => rows[nth] as string;
 
 beforeEach(() => { vi.useFakeTimers(); });
 afterEach(() => { vi.useRealTimers(); });
@@ -67,14 +86,14 @@ describe('what a growing thinking block costs', () => {
    * between the two is text the user never sees or sees twice, and neither channel can detect it alone.
    */
   it('continues the feed from exactly where the row left off', () => {
-    const { services, writes, feed } = recorder();
+    const { services, rows, feed } = recorder();
     const writer = writerOn(services);
 
     writer.push('one ');
     writer.push('two ');
     writer.push('three');
 
-    const row = contentOf(writes[0]);
+    const row = contentOf(rows, 0);
     expect(row).toBe('one ');
     expect(feed[0].at).toBe(row.length);
     expect(windowText(row, feed)).toBe('one two three');
@@ -82,7 +101,7 @@ describe('what a growing thinking block costs', () => {
 
   /** The row still collects it, on the durable clock, so a crash loses seconds of a turn rather than all. */
   it('writes the row on the durable interval while it grows', async () => {
-    const { services, writes } = recorder();
+    const { services, writes, rows } = recorder();
     const writer = writerOn(services);
 
     writer.push('Thinking');
@@ -92,7 +111,9 @@ describe('what a growing thinking block costs', () => {
 
     await vi.advanceTimersByTimeAsync(ROW_INTERVAL_MS);
     expect(writes).toHaveLength(2);
-    expect(writes[1]).toContain('Thinking more');
+    // An append, not a rewrite: the row holds the growth and the write carried only the new characters
+    expect(contentOf(rows, 1)).toBe('Thinking more');
+    expect(writes[1]).toBe(JSON.stringify({ at: 8, text: ' more' }));
   });
 
   /**
@@ -120,14 +141,15 @@ describe('what a growing thinking block costs', () => {
    * A bound derived from `ROW_INTERVAL_MS` could not catch the interval being lowered again, since it would
    * scale by the same factor as the writes — so this one is absolute and holds whatever the clock is set to.
    *
-   * **Measured on this fixture**: 36KB of thinking over three minutes writes 1.68MB, which is 47x. On a
-   * quarter-second row it was 13MB, so the durable interval is worth 7.7x — and what the feed buys is not
-   * that figure but the right to charge it: the growth reaches the windows as it arrives, so the row can be
-   * slow without the block looking stuck. The 47x that remains is the row carrying the whole block ninety
-   * times, and only storing the block's text as a delta would reduce it further.
+   * **Measured on this fixture**: 36KB of thinking over three minutes writes 74KB, which is 2.06x. It wrote
+   * 1.68MB — 47x — while a flush carried the whole block, and 13MB on a quarter-second row, so the durable
+   * interval was worth 7.7x of that. What removed the rest is the text being appended from an offset rather
+   * than rewritten, so the interval now decides how often the turn commits and not how much of it is
+   * written again. What is left is the text once, plus one whole-text write per compaction
+   * (`TEXT_SEGMENTS_BEFORE_COMPACTION`), which is what the bound is over.
    */
   it('writes a bounded multiple of what the turn leaves behind', async () => {
-    const AMPLIFICATION = 60;
+    const AMPLIFICATION = 4;
     const { services, writes } = recorder();
     const writer = writerOn(services);
     const ticks = 720, growth = 50;

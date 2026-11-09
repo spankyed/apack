@@ -37,6 +37,27 @@ export interface BlockEntity {
   props: Record<string, any>;
 }
 
+/**
+ * The next characters of a growing block's text, from the offset they start at.
+ *
+ * **The store's half of the shape the feed already sends.** A streamed block's text goes to the windows as
+ * `(at, text)` and used to be *stored* whole, so every durable write re-wrote all of it and what reached
+ * storage grew with the turn — 47.9x what the turn left behind, after a block became a row. A segment is
+ * written once and never rewritten, so the text costs what the text is.
+ *
+ * `at` is absolute, so a segment is read by the same rule the window splices by: the text so far wins up to
+ * `at` and the segment continues from there. The block's own `props.content` is the compacted prefix, and a
+ * read is that followed by its segments in offset order.
+ *
+ * Segments are a turn's working state, not the record: `compactBlockText` folds them into `props.content`
+ * when there are enough of them to read and again when the block finishes, so a finished block is exactly
+ * what it was before this existed and costs nothing extra to read.
+ */
+export interface BlockTextEntity {
+  at: number;
+  text: string;
+}
+
 // Tool-activity block — collapsible group of Claude Code tool calls within one turn.
 // Replaces the prior per-tool `> 🔧 name` blockquote spam with a single compact
 // group that shows a live status label while streaming and freezes to a summary

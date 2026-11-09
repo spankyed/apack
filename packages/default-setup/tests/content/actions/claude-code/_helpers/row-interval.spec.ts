@@ -13,8 +13,16 @@
 // accumulated thinking text reached storage once per tool event. What remains is one writer rewriting its own
 // whole text on its durable interval, which is the same multiple the thinking writer alone has always had.
 //
-// So this holds a turn to the bound a single writer was held to, which is the claim worth gating. Taking it
-// below that means storing the block's text as a delta rather than whole, as the feed already sends it.
+// **The text is no longer where a turn's cost is, and the figure above hid that.** It was measured against
+// the thinking text alone, which is not what the turn keeps — the tool-activity block keeps its entries too
+// — so it read the entries' writes as the text's amplification. Measured with both: 25x, of which the text
+// is 12,518 bytes and the entries 231,404. The text alone is 2.06x on its own fixture (`thinking-writer`),
+// down from 47x.
+//
+// So what remains is the same defect one level down: `entries` is a growing collection in one value, and a
+// flush rewrites all of it. It is not the text's problem and a delta does not fit it — an entry is patched
+// from `running` to `done`, not appended to — so the move that fits is the one that made a block a row.
+// Until then this bound is 30x and the case below says where it goes.
 //
 // Driven on fake timers against a recording `services.chat`, as its sibling is: the subject is what reaches
 // storage, so what is counted is the bytes of every `updateMessageState` a turn makes.
@@ -25,18 +33,37 @@ import { createToolActivityWriter } from '../../../../../src/content/actions/cla
 
 const MESSAGE = 'message-one' as EntityId;
 
+type Write = { block: string; bytes: number };
+
 function recorder() {
-  const writes: string[] = [];
+  const writes: Write[] = [];
+  const rows = new Map<string, string>();
   const services = {
     chat: {
-      updateMessageState: (_id: unknown, updates: unknown) => { writes.push(JSON.stringify(updates)); },
-      // What a block write costs is its own row, which is what is counted
-      updateMessageBlock: (_id: unknown, block: unknown) => { writes.push(JSON.stringify(block)); return 'block-one'; },
-      removeMessageBlock: () => {},
+      updateMessageState: () => {},
+      // A block write costs its own row, and the row it wrote is what that block ends up keeping
+      updateMessageBlock: (_id: unknown, block: { type: string; props: unknown }) => {
+        const bytes = JSON.stringify(block);
+        writes.push({ block: block.type, bytes: bytes.length });
+        rows.set(block.type, bytes);
+        return `row-${block.type}`;
+      },
+      // An append costs its own characters and nothing of what the block already held
+      appendMessageBlockText: (blockId: string, at: number, text: string) => {
+        writes.push({ block: blockId.replace('row-', ''), bytes: JSON.stringify({ at, text }).length });
+      },
+      removeMessageBlock: (_id: unknown, type: string) => { rows.delete(type); },
       streamMessageBlockText: () => {},
     },
   } as unknown as Services;
-  return { services, writes };
+
+  const written = (block?: string) => writes
+    .filter((write) => block === undefined || write.block === block)
+    .reduce((total, write) => total + write.bytes, 0);
+  /** What the turn leaves in the rows: every block's final write, which is what an amplification is over */
+  const kept = () => [...rows.values()].reduce((total, row) => total + row.length, 0);
+
+  return { services, written, kept };
 }
 
 /**
@@ -76,13 +103,31 @@ describe('what a turn writes to the row', () => {
    * one carries is the other's.
    */
   it('writes a bounded multiple of what the turn leaves behind', async () => {
-    const AMPLIFICATION = 60;
-    const { services, writes } = recorder();
+    const AMPLIFICATION = 30;
+    const { services, written, kept } = recorder();
 
-    const kept = await turn(services);
+    await turn(services);
 
-    const written = writes.reduce((total, write) => total + write.length, 0);
-    expect(kept).toBeGreaterThan(0);
-    expect(written).toBeLessThanOrEqual(kept * AMPLIFICATION);
+    expect(kept()).toBeGreaterThan(0);
+    expect(written()).toBeLessThanOrEqual(kept() * AMPLIFICATION);
+  });
+
+  /**
+   * **Which block the turn's cost is in**, which is the thing the single ratio above cannot say and the
+   * reason it is still 30x.
+   *
+   * The thinking text is appended, so it costs about what it is. The tool-activity block's `entries` are
+   * still one value rewritten whole on every flush, so that block costs a multiple that grows with the
+   * number of tools — and on this fixture it is 95% of the turn. Asserted as a share rather than a figure,
+   * since what matters is which of the two is the problem.
+   */
+  it('spends what it spends on the entries, not on the text', async () => {
+    const { services, written } = recorder();
+
+    await turn(services);
+
+    // The text: appended from an offset, so a multiple of itself rather than of the turn's length
+    expect(written('thinking')).toBeLessThan(written('tool-activity'));
+    expect(written('tool-activity') / written()).toBeGreaterThan(0.9);
   });
 });

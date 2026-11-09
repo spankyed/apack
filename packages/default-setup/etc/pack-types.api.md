@@ -308,6 +308,27 @@ type BlockResponse =
 /** Multi-select choice emits a raw string array (of choice ids). */
  | string[];
 
+/**
+ * The next characters of a growing block's text, from the offset they start at.
+ *
+ * **The store's half of the shape the feed already sends.** A streamed block's text goes to the windows as
+ * `(at, text)` and used to be *stored* whole, so every durable write re-wrote all of it and what reached
+ * storage grew with the turn — 47.9x what the turn left behind, after a block became a row. A segment is
+ * written once and never rewritten, so the text costs what the text is.
+ *
+ * `at` is absolute, so a segment is read by the same rule the window splices by: the text so far wins up to
+ * `at` and the segment continues from there. The block's own `props.content` is the compacted prefix, and a
+ * read is that followed by its segments in offset order.
+ *
+ * Segments are a turn's working state, not the record: `compactBlockText` folds them into `props.content`
+ * when there are enough of them to read and again when the block finishes, so a finished block is exactly
+ * what it was before this existed and costs nothing extra to read.
+ */
+interface BlockTextEntity {
+    at: number;
+    text: string;
+}
+
 interface Bookmark {
     url: string;
     title: string;
@@ -1161,6 +1182,8 @@ declare namespace EARS {
         type Message = typeof Message;
         const Block = "Block";
         type Block = typeof Block;
+        const BlockText = "BlockText";
+        type BlockText = typeof BlockText;
         const Artifact = "Artifact";
         type Artifact = typeof Artifact;
         const Terminal = "Terminal";
@@ -1188,7 +1211,7 @@ declare namespace EARS {
         const Collection = "Collection";
         type Collection = typeof Collection;
     }
-    type Entity = Entity.Thread | Entity.Message | Entity.Block | Entity.Artifact | Entity.Terminal | Entity.Note | Entity.BrowserTab | Entity.BrowserBookmark | Entity.SearchIndex | Entity.IndexedDoc | Entity.Flow | Entity.Node | Entity.Action | Entity.Prompt | Entity.Document | Entity.Collection;
+    type Entity = Entity.Thread | Entity.Message | Entity.Block | Entity.BlockText | Entity.Artifact | Entity.Terminal | Entity.Note | Entity.BrowserTab | Entity.BrowserBookmark | Entity.SearchIndex | Entity.IndexedDoc | Entity.Flow | Entity.Node | Entity.Action | Entity.Prompt | Entity.Document | Entity.Collection;
     type EntityId<E extends string = string> = _apackdev_ears.EARS.EntityId<E>;
     type RelationId = _apackdev_ears.EARS.RelationId;
     namespace RelKind {
@@ -1206,6 +1229,8 @@ declare namespace EARS {
         type BLOCKS = typeof BLOCKS;
         const HAS_BLOCK = "has_block";
         type HAS_BLOCK = typeof HAS_BLOCK;
+        const HAS_TEXT = "has_text";
+        type HAS_TEXT = typeof HAS_TEXT;
         const DUPLICATES = "duplicates";
         type DUPLICATES = typeof DUPLICATES;
         const CONTAINS = "contains";
@@ -1218,7 +1243,7 @@ declare namespace EARS {
         type PARENT_OF = typeof PARENT_OF;
     }
     /** Every relation kind this pack may link with: its own, its dependencies' and the SDK's */
-    const RELATION_KINDS: readonly ["has", "relates_to", "references", "forked_from", "compacts", "blocks", "has_block", "duplicates", "contains", "transitions_to", "instance_of", "parent_of"];
+    const RELATION_KINDS: readonly ["has", "relates_to", "references", "forked_from", "compacts", "blocks", "has_block", "has_text", "duplicates", "contains", "transitions_to", "instance_of", "parent_of"];
     type RelKind = (typeof RELATION_KINDS)[number];
     /** The relation kinds declared `weighted`, whose links take a weight: its own and its dependencies' */
     const WEIGHTED_KINDS: readonly [];
@@ -3915,6 +3940,7 @@ type OwnEntityShapes = {
     };
     'Message': MessageEntity;
     'Block': BlockEntity;
+    'BlockText': BlockTextEntity;
     'Artifact': ArtifactEntity;
     'Terminal': TerminalEntity;
     'Note': NoteEntity;
@@ -5525,6 +5551,18 @@ declare function addMessagesToThread(params: {
     }>;
 }): void;
 
+/**
+ * Appends the next characters of a block's text to its row.
+ *
+ * **The durable half of a growing block, and the reason its interval is still worth having.** The feed
+ * (`streamMessageBlockText`) carries growth to the windows as it arrives; this commits it, batched, so the
+ * interval now decides how often a turn commits rather than how much of it is rewritten. A whole-text write
+ * per flush is what made a turn cost 47.9x the text it left behind.
+ *
+ * `at` is where these characters start, so the row is spliced exactly as a window splices the feed.
+ */
+declare function appendMessageBlockText(blockId: EARS.EntityId, at: number, text: string): void;
+
 declare const brainCommands: {
     /** An event a flow run heard, with its payload as the node's attributes */
     readonly createEventRunNode: (eventNode: {
@@ -5638,6 +5676,26 @@ declare const chatCommands: {
     readonly writeMessageBlocks: (params: {
         messageId: EARS.EntityId;
         blocks: readonly BlockConfig[];
+    }) => void;
+    /**
+     * Appends the next characters of a block's text, and answers nothing it did not write.
+     *
+     * **The store's half of what the feed sends.** A growing block's text used to be written whole on every
+     * durable flush, so what reached storage grew with the turn; a segment is written once. The block's own
+     * text is the compacted prefix and this is what follows it, so a reader splices by offset exactly as a
+     * window does.
+     *
+     * It folds the segments back in once there are `TEXT_SEGMENTS_BEFORE_COMPACTION` of them, which is what
+     * keeps a read of a long turn bounded. A caller never asks for that and cannot skip it.
+     */
+    readonly appendMessageBlockText: (params: {
+        blockId: EARS.EntityId;
+        at: number;
+        text: string;
+    }) => void;
+    /** Folds a block's text segments into it: what a writer calls when the block has finished growing */
+    readonly compactMessageBlockText: (params: {
+        blockId: EARS.EntityId;
     }) => void;
     /**
      * Writes one of a message's blocks, by its type, and answers its row id.
@@ -5814,6 +5872,7 @@ declare const featureServices: {
         sendQuestionBlock: typeof sendQuestionBlock;
         updateMessageState: typeof updateMessageState;
         updateMessageBlock: typeof updateMessageBlock;
+        appendMessageBlockText: typeof appendMessageBlockText;
         removeMessageBlock: typeof removeMessageBlock;
         streamMessageText: typeof streamMessageText;
         streamMessageBlockText: typeof streamMessageBlockText;

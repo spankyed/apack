@@ -259,6 +259,24 @@ export function updateMessageBlock(messageId: EARS.EntityId, block: BlockConfig,
 }
 
 /**
+ * Appends the next characters of a block's text to its row.
+ *
+ * **The durable half of a growing block, and the reason its interval is still worth having.** The feed
+ * (`streamMessageBlockText`) carries growth to the windows as it arrives; this commits it, batched, so the
+ * interval now decides how often a turn commits rather than how much of it is rewritten. A whole-text write
+ * per flush is what made a turn cost 47.9x the text it left behind.
+ *
+ * `at` is where these characters start, so the row is spliced exactly as a window splices the feed.
+ */
+export function appendMessageBlockText(blockId: EARS.EntityId, at: number, text: string): void {
+  try {
+    repository.chatCommands.appendMessageBlockText({ blockId, at, text });
+  } catch (err) {
+    logger.error(`appendMessageBlockText failed for ${blockId}`, { error: errorMessage(err) });
+  }
+}
+
+/**
  * Removes a message's block of that type.
  *
  * What a writer calls when its block should no longer be there — a tool-activity writer finalising with no
@@ -621,6 +639,7 @@ export const chatService = {
   sendQuestionBlock,
   updateMessageState,
   updateMessageBlock,
+  appendMessageBlockText,
   removeMessageBlock,
   streamMessageText,
   streamMessageBlockText,

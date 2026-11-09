@@ -439,8 +439,62 @@ function blockRowsOf(messageId: EARS.EntityId): Array<{ id: EARS.EntityId; type:
     .map((edge) => ({ edge, row: query.ids(edge.target).pickOne(['type', 'props'] as const) }))
     .filter((held): held is { edge: typeof held.edge; row: NonNullable<typeof held.row> } => held.row !== null)
     .sort((a, b) => indexOf(a.edge.info) - indexOf(b.edge.info))
-    .map(({ edge, row }) => ({ id: edge.target, type: row.type as string, props: (row.props ?? {}) as Record<string, any> }));
+    .map(({ edge, row }) => ({
+      id: edge.target,
+      type: row.type as string,
+      props: withSegments(edge.target, (row.props ?? {}) as Record<string, any>),
+    }));
 }
+
+/**
+ * How many segments a block carries before its text is folded back into it.
+ *
+ * **This is the one number trading what a turn writes against what a read of it costs.** With no compaction
+ * a block's text is written exactly once, and a view that re-runs on every append reads every segment each
+ * time — which over a long turn is quadratic in the number of appends. Folding at a count bounds the read
+ * at this many rows and costs one whole-text write per fold, so what a turn writes is about
+ * `1 + appends / (2 x this)` times its text.
+ *
+ * At 32, a three-minute turn of ninety appends writes about 2.4x what it leaves behind and no read of it
+ * assembles more than 32 rows. The figure is a balance rather than a measurement, so it needs no record of
+ * conditions; what it must not become is a per-caller knob, which would make what a block costs depend on
+ * who wrote it.
+ */
+const TEXT_SEGMENTS_BEFORE_COMPACTION = 32;
+
+/** A block's stored props with its text segments spliced onto the compacted prefix */
+function withSegments(blockId: EARS.EntityId, props: Record<string, any>): Record<string, any> {
+  const segments = segmentsOf(blockId);
+  if (segments.length === 0) return props;
+  const content = segments.reduce(
+    (text, segment) => text.slice(0, segment.at) + segment.text,
+    typeof props.content === 'string' ? props.content : '',
+  );
+  return { ...props, content };
+}
+
+/** A block's text segments in offset order, each with its row */
+function segmentsOf(blockId: EARS.EntityId): Array<{ id: EARS.EntityId; at: number; text: string }> {
+  return query.ids(blockId).outEdges(EARS.RelKind.HAS_TEXT, EARS.Entity.BlockText)
+    .map((edge) => ({ id: edge.target, row: query.ids(edge.target).pickOne(['at', 'text'] as const) }))
+    .filter((held): held is { id: EARS.EntityId; row: NonNullable<typeof held.row> } => held.row !== null)
+    .map(({ id, row }) => ({ id, at: row.at as number, text: row.text as string }))
+    .sort((a, b) => a.at - b.at);
+}
+
+/** Folds a block's segments into its own text and removes them; the block then reads as it always did */
+function compactBlockText(blockId: EARS.EntityId): void {
+  const segments = segmentsOf(blockId);
+  if (segments.length === 0) return;
+  const props = (query.ids(blockId).pickOne(['props'] as const)?.props ?? {}) as Record<string, any>;
+  write(blockId).set('props', withSegments(blockId, props));
+  for (const segment of segments) {
+    write(blockId).unlink(EARS.RelKind.HAS_TEXT, segment.id);
+    write(segment.id).destroy();
+  }
+}
+
+/** The message's block of that type, or absence; the type is what a streaming writer owns one by */
 
 /** The position an edge records; an edge written before one was recorded sorts last rather than first */
 const indexOf = (info: unknown): number =>
@@ -466,12 +520,17 @@ function createBlocks(messageId: EARS.EntityId, blocks: readonly BlockConfig[]):
  */
 function discardBlocks(messageId: EARS.EntityId, how: 'trash' | 'destroy'): void {
   for (const edge of query.ids(messageId).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block)) {
+    // A segment is a block's working state and is never the user's, so it goes outright either way: a
+    // trashed block reads through `withSegments`, which would otherwise assemble rows nothing reaches
+    for (const segment of segmentsOf(edge.target)) {
+      write(edge.target).unlink(EARS.RelKind.HAS_TEXT, segment.id);
+      write(segment.id).destroy();
+    }
     if (how === 'trash') write(edge.target).trash();
     else write(edge.target).destroy();
   }
 }
 
-/** The message's block of that type, or absence; the type is what a streaming writer owns one by */
 function blockIdOfType(messageId: EARS.EntityId, type: string): EARS.EntityId | undefined {
   return query.ids(messageId).outEdges(EARS.RelKind.HAS_BLOCK, EARS.Entity.Block)
     .map((edge) => edge.target)
@@ -772,6 +831,35 @@ export const chatCommands = {
   },
 
   /**
+   * Appends the next characters of a block's text, and answers nothing it did not write.
+   *
+   * **The store's half of what the feed sends.** A growing block's text used to be written whole on every
+   * durable flush, so what reached storage grew with the turn; a segment is written once. The block's own
+   * text is the compacted prefix and this is what follows it, so a reader splices by offset exactly as a
+   * window does.
+   *
+   * It folds the segments back in once there are `TEXT_SEGMENTS_BEFORE_COMPACTION` of them, which is what
+   * keeps a read of a long turn bounded. A caller never asks for that and cannot skip it.
+   */
+  appendMessageBlockText: (params: { blockId: EARS.EntityId; at: number; text: string }): void => {
+    const { blockId, at, text } = params;
+    if (!text) return;
+    if (!query.ids(blockId).ofType(EARS.Entity.Block).first()) {
+      throw new RepositoryError(`Block ${blockId} not found`, RepositoryErrorCode.NOT_FOUND);
+    }
+
+    const segment = create(EARS.Entity.BlockText, { at, text }).id();
+    write(blockId).link(EARS.RelKind.HAS_TEXT, segment);
+
+    if (segmentsOf(blockId).length >= TEXT_SEGMENTS_BEFORE_COMPACTION) compactBlockText(blockId);
+  },
+
+  /** Folds a block's text segments into it: what a writer calls when the block has finished growing */
+  compactMessageBlockText: (params: { blockId: EARS.EntityId }): void => {
+    compactBlockText(params.blockId);
+  },
+
+  /**
    * Writes one of a message's blocks, by its type, and answers its row id.
    *
    * **The hot path of a streamed turn.** A caller that holds the id from a previous write passes it and the
@@ -787,6 +875,11 @@ export const chatCommands = {
 
     const held = blockId ?? blockIdOfType(messageId, block.type);
     if (held) {
+      // The props carry the whole text, so segments written before it are already in what is being set
+      for (const segment of segmentsOf(held)) {
+        write(held).unlink(EARS.RelKind.HAS_TEXT, segment.id);
+        write(segment.id).destroy();
+      }
       write(held).setMany({ type: block.type, props: block.props });
       return held;
     }
