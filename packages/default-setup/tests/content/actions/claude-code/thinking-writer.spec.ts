@@ -81,35 +81,67 @@ describe('what a turn writes to the message row', () => {
     return { thinking, tools, writes, appendTool }
   }
 
+  /** A three-minute turn: thinking arriving every quarter second, with fifty tools appearing through it. */
+  const TURN_MS = 180_000, DELTA_MS = 250, TOOL_COUNT = 50, GROWTH_PER_DELTA = 50
+
+  async function aThreeMinuteTurn() {
+    const fixture = turn()
+    const ticks = TURN_MS / DELTA_MS
+    const toolEvery = Math.floor(ticks / TOOL_COUNT)
+
+    for (let tick = 0; tick < ticks; tick++) {
+      fixture.thinking.push('x'.repeat(GROWTH_PER_DELTA))
+      if (tick > 0 && tick % toolEvery === 0 && fixture.tools.entries.length < TOOL_COUNT) {
+        const id = `tool-${fixture.tools.entries.length}`
+        fixture.appendTool(id)
+        fixture.tools.update(id, { status: 'ok' })
+      }
+      await vi.advanceTimersByTimeAsync(DELTA_MS)
+    }
+    fixture.thinking.finalise()
+    fixture.tools.finalise('done')
+    return { ...fixture, ticks }
+  }
+
   it('writes a growing block no more often than its writers\' intervals allow', async () => {
     // The defect this pins: a flush writes the whole block, so writing growth on a quarter-second clock made
     // what reached storage quadratic in the length of the turn — a three-minute turn wrote 14MB to leave
     // 40KiB behind. The bound is derived from the declared interval and the turn's own discrete events
     // rather than chosen to fit: one write per interval per writer that owns a clock, one per tool
     // appearing, and the final one.
-    const turnMs = 180_000, deltaMs = 250, toolCount = 50, writersWithAClock = 2
-    const { thinking, tools, writes, appendTool } = turn()
-    const ticks = turnMs / deltaMs
-    const toolEvery = Math.floor(ticks / toolCount)
+    const writersWithAClock = 2
+    const { thinking, tools, writes, ticks } = await aThreeMinuteTurn()
 
-    for (let tick = 0; tick < ticks; tick++) {
-      thinking.push('x'.repeat(50))
-      if (tick > 0 && tick % toolEvery === 0 && tools.entries.length < toolCount) {
-        const id = `tool-${tools.entries.length}`
-        appendTool(id)
-        tools.update(id, { status: 'ok' })
-      }
-      await vi.advanceTimersByTimeAsync(deltaMs)
-    }
-    thinking.finalise()
-    tools.finalise('done')
-
-    const allowed = writersWithAClock * Math.ceil(turnMs / ROW_INTERVAL_MS) + toolCount + 2
+    const allowed = writersWithAClock * Math.ceil(TURN_MS / ROW_INTERVAL_MS) + TOOL_COUNT + 2
     expect(writes.length).toBeGreaterThan(0)
     expect(writes.length).toBeLessThanOrEqual(allowed)
     // The row still ends up holding the whole turn, which is what those writes were paying for.
-    expect(thinking.buildBlock()?.props.content).toHaveLength(ticks * 50)
-    expect(tools.entries).toHaveLength(toolCount)
+    expect(thinking.buildBlock()?.props.content).toHaveLength(ticks * GROWTH_PER_DELTA)
+    expect(tools.entries).toHaveLength(TOOL_COUNT)
+  })
+
+  it('writes a bounded multiple of what the turn leaves behind', async () => {
+    // **The count above cannot catch the interval moving back**, because it derives its allowance from
+    // `ROW_INTERVAL_MS`: lower the constant and `allowed` grows by exactly the factor the writes do, and the
+    // case goes on passing while the defect returns. So this is the absolute half, and it is stated as the
+    // thing the defect was about rather than as a number of writes — a flush carries the whole block, so
+    // what reaches storage is a multiple of what the user is left with, and that multiple grows with the
+    // length of the turn.
+    //
+    // Measured on this fixture: 2.9MB written to leave 36KB behind, which is 81x. At a quarter second it is
+    // 15.6MB, so the interval bought 5.3x and this bound catches it going back — the count above does not.
+    //
+    // The multiple is still large, and the next reduction is not a slower clock: it is a feed and a row,
+    // the split `createStreamWriter` already makes for text. Growth would go out as a delta nobody stores
+    // and the durable write alone would carry the whole block. This ceiling is on the defect, so it holds
+    // whatever the clock is set to.
+    const AMPLIFICATION = 100
+    const { thinking, writes } = await aThreeMinuteTurn()
+
+    const written = writes.reduce((total, write) => total + write.length, 0)
+    const kept = thinking.buildBlock()?.props.content.length ?? 0
+    expect(kept).toBeGreaterThan(0)
+    expect(written).toBeLessThanOrEqual(kept * AMPLIFICATION)
   })
 
   it('writes a tool appearing straight away, and a patch to one on the row interval', async () => {
