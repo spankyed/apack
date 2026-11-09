@@ -39,7 +39,7 @@ describe('a shell ending under its terminal', () => {
     broker.endShell('broker-1', 0)
 
     expect(only(terminalService.list(), info.id), 'a clean exit closes the terminal').toEqual([])
-    expect(told.onExit).toHaveBeenCalledWith(info.id, 0)
+    expect(told.onExit).toHaveBeenCalledWith(info.id)
     expect(told.onCrashed, 'and is not a crash').not.toHaveBeenCalled()
     await app.stop()
     resetTestData()
@@ -149,7 +149,7 @@ describe('closing a terminal whose shell has already gone', () => {
     // sent now is answered by nobody: a close that waited for that answer would never arrive
     expect(closed, 'completed here rather than asked of the broker').toBe('closed')
     expect(only(terminalService.list(), info.id), 'so the close finishes here').toEqual([])
-    expect(told.onExit, 'every window is told, or they go on drawing it').toHaveBeenCalledWith(info.id, 139)
+    expect(told.onExit, 'every window is told, or they go on drawing it').toHaveBeenCalledWith(info.id)
     expect(repository.terminalQueries.all().map(row => row.id),
       'and the row goes too, or the next boot restores a terminal that was closed').not.toContain(info.id)
     await app.stop()
@@ -179,7 +179,7 @@ describe('a close the broker refuses', () => {
     // Forgetting it here while every window still draws it is the same wedge from the other side: the next
     // write to that terminal answers "not found" and nothing can close it, because there is nothing left to
     // close
-    expect(told.onExit, 'so the windows have to hear it as well').toHaveBeenCalledWith(info.id, 0)
+    expect(told.onExit, 'so the windows have to hear it as well').toHaveBeenCalledWith(info.id)
     await app.stop()
     resetTestData()
   })

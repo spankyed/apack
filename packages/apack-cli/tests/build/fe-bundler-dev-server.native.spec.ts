@@ -9,6 +9,7 @@ import { packDevServerConfig } from '../../src/build/fe-bundler';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { replaceDir } from '@apackdev/host/replace-dir';
 import { _workingSignal } from '@apackdev/sdk/testing/waiting';
+import { DEV_SERVER_HOST } from '@apackdev/host/packs/dev-server';
 
 it.runIf(process.platform === 'win32')('publishes staged output while retained dev servers watch authored files', async () => {
   // Realpath'd: on macOS the temp dir is reached through a symlink, outside `server.fs.allow` otherwise
@@ -20,7 +21,7 @@ it.runIf(process.platform === 'win32')('publishes staged output while retained d
   const server = await vite.createServer({ ...config, logLevel: 'silent', server: { ...config.server, port: 0, strictPort: false } });
   await server.listen();
   const address = server.httpServer!.address();
-  const origin = `http://localhost:${typeof address === 'object' && address !== null ? address.port : 0}`;
+  const origin = `http://${DEV_SERVER_HOST}:${typeof address === 'object' && address !== null ? address.port : 0}`;
   const children: ReturnType<typeof fork>[] = [];
   const staged = path.join(packDir, '.apack', 'build');
   const dest = path.join(packDir, 'dist');

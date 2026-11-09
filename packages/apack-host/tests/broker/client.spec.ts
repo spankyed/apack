@@ -363,16 +363,29 @@ describe('the broker client', () => {
    * found no listener, `onExit` never fired, and the terminal showed as live behind a dead shell for ever.
    * That is X2 again, on this side of the socket.
    */
-  it('hears an exit that arrives in the same read as the session it is about', async () => {
+  /**
+   * **An exit in the same read as its `spawned` is not lost, and does not arrive early either.**
+   *
+   * The broker answers both in one read for a shell that dies instantly, and readline delivers them in that
+   * turn — so the listener is registered on the frame, which is what keeps the exit. Delivering it there
+   * called the holder while it was still inside `await`, before it had anywhere to put the news: the
+   * session was then recorded as live over a shell that had already gone. The feed waits for its holder
+   * instead, which is why this asserts the arrival rather than reading it off the next line.
+   */
+  it('delivers an exit from the same read once its holder has the session', async () => {
     const fake = await broker({
       ...GREETS,
       spawn: [{ kind: 'spawned', session: 's-1', pid: 7 }, { kind: 'exited', session: 's-1', code: 1 }],
     });
     let ended: number | null | undefined;
+    let heldWhenOpenReturned: number | null | undefined;
 
-    await fake.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit(code) { ended = code; } });
+    const session = await fake.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit(code) { ended = code; } });
+    heldWhenOpenReturned = ended;
 
-    expect(ended, 'the exit arrived before the listener existed').toBe(1);
+    expect(session.id).toBe('s-1');
+    expect(heldWhenOpenReturned, 'delivered while its holder was still inside the open').toBeUndefined();
+    await settles(() => { expect(ended, 'the exit was dropped rather than held').toBe(1); });
   });
 
   /**

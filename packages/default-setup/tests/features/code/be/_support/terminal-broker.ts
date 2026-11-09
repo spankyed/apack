@@ -60,6 +60,15 @@ export interface RecordingBroker {
   /** Refuses the nth open (1-based), as a broker that would not start */
   refuseOpen(nth: number, why?: string): void
   /**
+   * What the session's shell will report as its directory when asked.
+   *
+   * **The broker is the authority on the markers**, so this is where a reported directory comes from: it
+   * reads the sequence out of the stream and answers `facts()` with what it read. A case drives the app's
+   * half by emitting bytes that *say* a marker arrived and setting what the broker would then say — which
+   * is the shape the real pair has, since the app never parses those bytes itself.
+   */
+  reportsCwd(id: string, cwd: string | null): void
+  /**
    * Refuses to end a session, as a broker that has gone or lost the socket does.
    *
    * **The refusal matters because no exit follows it.** A `terminate` that rejects ends nothing and
@@ -83,6 +92,7 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
   const listening = new Map<string, TerminalListeners>()
   const refusals = new Map<number, string>()
   const refusedTerminations = new Map<string, string>()
+  const reportedCwds = new Map<string, string | null>()
   const live = new Set<string>()
   const adopted: string[] = []
   let next = 0
@@ -97,6 +107,12 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
     scrollback: 1000,
     write: async (data: string) => { written.push({ id, data }) },
     resize: async (cols: number, rows: number) => { resized.push({ id, cols, rows }) },
+    facts: async () => ({
+      cwd: reportedCwds.get(id) ?? null,
+      command: null,
+      running: false,
+      exitStatus: null,
+    }),
     pause: async () => { flow.push({ id, kind: 'pause' }) },
     resume: async () => { flow.push({ id, kind: 'resume' }) },
     signal: async (signal, scope) => { signalled.push({ id, signal, scope }) },
@@ -159,5 +175,6 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
     emit: (id, data) => listenersFor(id).onOutput(data),
     refuseOpen: (nth, why = 'the broker would not start') => { refusals.set(nth, why) },
     refuseTerminate: (id, why = 'the broker would not end the session') => { refusedTerminations.set(id, why) },
+    reportsCwd: (id, cwd) => { reportedCwds.set(id, cwd) },
   }
 }

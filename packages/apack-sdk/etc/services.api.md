@@ -488,6 +488,14 @@ export interface StepRunNode extends RunNodeBase {
 }
 
 // @public
+export interface TerminalFacts {
+    readonly command: string | null;
+    readonly cwd: string | null;
+    readonly exitStatus: number | null;
+    readonly running: boolean;
+}
+
+// @public
 export interface TerminalListeners {
     onExit(code: number | null, signal: string | null): void;
     onOutput(data: string): void;
@@ -508,6 +516,7 @@ export interface TerminalService {
 
 // @public
 export interface TerminalSession {
+    facts(): Promise<TerminalFacts>;
     readonly id: string;
     pause(): Promise<void>;
     readonly pid: number | null;

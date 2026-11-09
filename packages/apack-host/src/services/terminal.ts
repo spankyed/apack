@@ -188,6 +188,12 @@ function expose(held: Broker, session: BrokerSession): TerminalSession {
     scrollback: held.history,
     write: (data) => session.write(data),
     resize: (cols, rows) => session.resize(cols, rows),
+    // Projected rather than passed, so the broker's `foreground` — a measurement, and a host shape — stays
+    // out of the pack-facing contract
+    facts: async () => {
+      const { cwd, command, running, exitStatus } = await session.facts();
+      return { cwd, command, running, exitStatus };
+    },
     pause: () => session.pause(),
     resume: () => session.resume(),
     // The SDK declares the same closed set and the same scopes, so this passes them through rather than
@@ -237,6 +243,11 @@ export function createTerminalService(): TerminalService & { shutdown(): Promise
   let failing: { key: string; count: number; error: unknown } | undefined;
 
   const running = (): Promise<Broker> => {
+    // **A broker already held is the answer, and finding one costs nothing.** Everything below decides
+    // *whether and what to start*, which is the branch `??=` guards — but it ran first regardless, so every
+    // session opened or taken up paid a `createRequire`, an `existsSync` of the binary, a SHA-256 of the
+    // data dir with the `mkdirSync` that goes with it, and a `statSync`, to reach a promise already settled.
+    if (broker) return broker;
     const binary = brokerBinary();
     const socket = socketPath();
     const key = startKey(binary, socket);
