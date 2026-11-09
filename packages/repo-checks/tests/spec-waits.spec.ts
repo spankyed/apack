@@ -25,7 +25,7 @@ import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { population } from '@apackdev/sdk/testing';
 import { UNIT_SUITES } from '../../../scripts/lib/unit-suites.ts';
 import { bareWaitKey, bareWaits, clockedDeadlines, specFilesUnder, type BareWait, type Clock } from '../../../scripts/lib/test-timeouts.ts';
-import { repoFiles } from './_support/repo-files.ts';
+import { tsFilesUnder } from '../../../scripts/lib/process-spawns.ts';
 
 /**
  * Waits whose subject genuinely is elapsed time, and why each one is.
@@ -140,43 +140,36 @@ describe('a spec waits for the thing it waits for', () => {
  * own state, where nothing outside it is slowed by load and a quick failure beats the guard's stall window.
  */
 const CLOCK_BY_DESIGN: Record<string, string> = {
-  // The Playwright suites: Playwright gives a test and a wait only a clock, and `definePackE2EConfig` declares the
-  // suite's two backstops (60s a test, 30s an assertion). These are the waits that genuinely outlast them
-  'tests/acceptance/pack-dev/test-pack-dev.ts':
-    "waits on a watcher's rebuild and install, which outlasts the suite's 30s assertion backstop",
-  'tests/e2e/app-integration/db-write-through-boot.spec.ts':
-    'boots the app twice over a database written between, which outlasts the suite\'s backstops',
-  'tests/packs/external-pack/tests/e2e/default-pack-fork.spec.ts':
-    "forks and rebuilds the shipped pack inside the case, which outlasts the suite's 60s test backstop",
-  'tests/packs/external-pack/tests/e2e/settings-ownership.spec.ts':
-    'builds and installs two packs inside the case, and its process diagnostic samples for a fixed 2s',
-  'tests/e2e/app-integration/attach-parity.spec.ts':
-    "a 2s `waitForEvent` is a poll tick inside a loop that rechecks every window, not a deadline on work",
-  'tests/e2e/app-integration/feature-addressing.spec.ts':
-    'the 300ms is the subject: the case asserts that no second settings update arrives',
+  // Empty, and the three cases below are what keep it honest rather than this table: scoped to the vitest
+  // trees, every clock left in them has become a progress bound, and the planted file above is what proves
+  // the reader still finds one. An entry is a claim about a named file, so the list going back up is a
+  // finding and not paperwork.
 };
 
 
-/** Every test file the clocks are counted over: the unit suites' trees, support modules included, the E2E and pack suites and `drive/` */
 /**
- * The files this gate reads: the working tree as it would be committed, under the three trees that hold tests.
+ * Every test file the clocks are counted over: **the vitest trees, and only those.**
  *
- * **Through `repoFiles`, because `drive/` is gitignored whole** (`drive/.gitignore` is `*`). A walk of the
- * directory sweeps in every scratch driving script on the machine running it, and those are exactly what the
- * guide tells you to write there — so this gate failed for anyone who had driven the app, with 53 entries in
- * one case, while CI saw none of them and passed. A clock in a file nobody commits is not a clock this repo
- * has. The tracked harness under `drive/` is still read, which is what naming the directory was for.
+ * The rule's remedy is "drop the timeout, the progress guard bounds the test", and that guard is
+ * `@apackdev/testing`'s `vitest-progress-guard`. It runs under vitest. It does not run under Playwright,
+ * where a test and a wait are given a clock and nothing else — so in a Playwright suite the remedy is false
+ * and `expect.poll(…, { timeout })` is the correct way to write the wait, not a defect to be excused.
+ *
+ * This walked `tests/` and `drive/` as well, and the cost was not theoretical: a branch bringing a real
+ * Playwright suite reported **1005 clocked waits across 175 files** — 471 `expect.poll`, 206
+ * `waitForTimeout`, 157 `test.setTimeout`, and Playwright's assertion timeouts — every one of which would
+ * have needed a per-file entry saying the same sentence. A list that grows one entry per Playwright file is
+ * a list of everything, which is the shape this repo refuses; and the five entries it held for those suites
+ * were paperwork rather than findings.
+ *
+ * **What is worth checking there is a different question with a true premise**: whether a wait outlasts the
+ * budget of the test it runs in. `suite-timeouts.spec.ts` asks it, over the `ms` each `Clock` now carries.
+ *
+ * `drive/` is out for a second reason besides: nothing collects or gates those scripts.
  */
-const TEST_TREES = [
-  ...UNIT_SUITES.map((suite) => path.join('packages', suite.dir, 'tests')),
-  'tests',
-  'drive',
-];
-
-const testFiles = (): string[] => repoFiles()
-  .filter((file) => file.endsWith('.ts') && TEST_TREES.some((tree) => file.startsWith(`${tree}/`)))
-  .filter((file) => !/(^|\/)(node_modules|dist|\.apack)\//.test(file))
-  .map((file) => path.join(REPO_ROOT, file));
+const testFiles = (): string[] =>
+  UNIT_SUITES.map((suite) => path.join(REPO_ROOT, 'packages', suite.dir, 'tests'))
+    .flatMap((dir) => tsFilesUnder(dir)).filter((file) => !/\/(node_modules|dist|\.apack)\//.test(file));
 
 const clocksByFile = (): Map<string, Clock[]> => {
   const byFile = new Map<string, Clock[]>();

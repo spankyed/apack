@@ -239,6 +239,15 @@ export interface Clock {
   readonly line: number;
   /** What was called, as written: `vi.waitFor`, `execFileSync`, `AbortSignal.timeout` */
   readonly what: string;
+  /**
+   * The milliseconds it was given, where they are written as a literal.
+   *
+   * `undefined` when the value is computed or named rather than written — a constant, an expression, a
+   * variable — which a reader of the source cannot resolve and a check over it must therefore not treat as
+   * zero. Every consumer asks "is this one longer than X", so an unknown length is no answer rather than a
+   * short one.
+   */
+  readonly ms?: number;
 }
 
 const CHILD_PROCESS = new Set(['node:child_process', 'child_process']);
@@ -273,6 +282,28 @@ function dotted(node: ts.Expression): string | undefined {
   return undefined;
 }
 
+/**
+ * The milliseconds a clocked call was given, as written.
+ *
+ * Three shapes, because the calls put it in three places: an options object's `timeout`
+ * (`vi.waitFor(fn, { timeout })`, an assertion's), a bare trailing or leading number
+ * (`AbortSignal.timeout(n)`, `test.setTimeout(n)`, `waitForTimeout(n)`, `vi.waitFor(fn, n)`), and
+ * `_byDeadline`'s third argument. Anything not written as a literal is `undefined` by design — see `ms`.
+ */
+function msOf(node: ts.CallExpression): number | undefined {
+  const literal = (value: ts.Node | undefined): number | undefined =>
+    value !== undefined && ts.isNumericLiteral(value) ? Number(value.text.replace(/_/g, '')) : undefined;
+  for (const argument of node.arguments) {
+    if (!ts.isObjectLiteralExpression(argument)) continue;
+    for (const property of argument.properties) {
+      if (ts.isPropertyAssignment(property) && ts.isIdentifier(property.name) && property.name.text === 'timeout') {
+        return literal(property.initializer);
+      }
+    }
+  }
+  return node.arguments.map((argument) => literal(argument)).find((value) => value !== undefined);
+}
+
 /** Every clocked deadline in one file */
 export function clockedDeadlines(absFile: string, repoRoot: string): Clock[] {
   const source = ts.createSourceFile(absFile, fs.readFileSync(absFile, 'utf8'), ts.ScriptTarget.Latest, true);
@@ -300,6 +331,7 @@ export function clockedDeadlines(absFile: string, repoRoot: string): Clock[] {
     file: path.relative(repoRoot, absFile),
     line: source.getLineAndCharacterOfPosition(at.getStart(source)).line + 1,
     what,
+    ...(ts.isCallExpression(at) ? { ms: msOf(at) } : {}),
   });
   const visit = (node: ts.Node): void => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer !== undefined && promisified(node.initializer)) {
