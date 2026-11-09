@@ -230,6 +230,31 @@ interface BlockConfig {
 }
 
 /**
+ * One of a message's blocks, as a row of its own.
+ *
+ * **A block is a record two writers mutate independently, so it is a row and not a field.** It was a field —
+ * `Message.blocks`, the whole array — and an attribute is written whole, so a write to any block carried every
+ * other block's bytes. With a thinking block growing through a turn and a tool-activity block written every
+ * 250ms, what reached storage was the accumulated thinking text once per tool event: measured at 170x what the
+ * turn left behind. The two writers also had to carry each other's block to avoid deleting it, which is the
+ * coordination that no longer exists.
+ *
+ * The position is on the edge rather than here (`has_block`'s `info.index`), being a fact about the membership
+ * and not about the block.
+ *
+ * **Five things in this feature are called a block, and only three are this one.** `BlockConfig` is this
+ * row's `type` and `props` as a caller passes them to create one, `StoredBlock` is the same with the row's
+ * id as every read hands it back, and `Block` and `has_block` are this entity and its edge. The `BLOCKS`
+ * relation kind is unrelated — one *thread* blocking
+ * another — and `blockResponse` is what the user sent back from an interactive block. Nothing may be
+ * find-and-replaced across them.
+ */
+interface BlockEntity {
+    type: string;
+    props: Record<string, any>;
+}
+
+/**
  * Block-based interaction helpers for creating composable messages
  *
  * These helpers make it easy to create messages using reusable blocks that can be
@@ -283,6 +308,27 @@ type BlockResponse =
  | string
 /** Multi-select choice emits a raw string array (of choice ids). */
  | string[];
+
+/**
+ * The next characters of a growing block's text, from the offset they start at.
+ *
+ * **The store's half of the shape the feed already sends.** A streamed block's text goes to the windows as
+ * `(at, text)` and used to be *stored* whole, so every durable write re-wrote all of it and what reached
+ * storage grew with the turn — 47.9x what the turn left behind, after a block became a row. A segment is
+ * written once and never rewritten, so the text costs what the text is.
+ *
+ * `at` is absolute, so a segment is read by the same rule the window splices by: the text so far wins up to
+ * `at` and the segment continues from there. The block's own `props.content` is the compacted prefix, and a
+ * read is that followed by its segments in offset order.
+ *
+ * Segments are a turn's working state, not the record: `compactBlockText` folds them into `props.content`
+ * when there are enough of them to read and again when the block finishes, so a finished block is exactly
+ * what it was before this existed and costs nothing extra to read.
+ */
+interface BlockTextEntity {
+    at: number;
+    text: string;
+}
 
 interface Bookmark {
     url: string;
@@ -599,6 +645,15 @@ type CodeConnectedData = {
 };
 
 type CodeContext = {
+    /**
+     * Whether this window is the one that keeps the app's layout (M5).
+     *
+     * Every window has its own copy of the window storage but they share its names, so two windows showing
+     * this surface kept their tabs under one key: each restored the other's and each rewrote them. The shell
+     * answers it on `SURFACE_STARTED` — the same fact it records the last-open surface by — and a popout
+     * reads the layout and writes none. Defaults true, since a window that was never told is the only one.
+     */
+    ownsAppLayout: boolean;
     baseDirectory: string;
     openFiles: (OpenFile | TerminalTab | ActionTab | PromptTab)[];
     activeFilePath: string | null;
@@ -680,11 +735,18 @@ interface CodeFileEntity {
 type CodeInboxEvent = {
     type: 'UPDATE_STATE';
     updates: Partial<CodeContext>;
-} | {
+}
+/**
+ * Open a terminal. Every field is optional because the surface's own senders pass `cwd` alone, and
+ * `target` is the literal the child acts on rather than any string: it routes `'tab'` to a tab and
+ * anything absent to the panel.
+ */
+ | {
     type: 'terminal.CREATE';
-    target: string;
-    command: string;
+    title?: string;
     cwd?: string;
+    target?: 'tab';
+    command?: string;
 } | {
     type: 'explorer.SET_BASE_DIRECTORY';
     path: string;
@@ -861,6 +923,15 @@ interface ConsumerHandlers {
     onApproval(method: string, requestId: number, params: any): void;
     /** Called when the app-server process exits unexpectedly. Consumer should clean up thread state. */
     onCrash?(error: string): void;
+    /**
+     * Called when this consumer is unregistered, so what a turn was holding is released.
+     *
+     * **Unregistering is one of the ways a turn ends, and the only one with no notification.** `killTurn`
+     * interrupts the turn and unregisters, so `turn/completed` never arrives and the consumer's own
+     * `finalize` never runs — which left the assistant message with a stale tail and no
+     * `responseTimestamp`. A consumer's writers have a lifetime, so the registration owns their release.
+     */
+    onUnregistered?(): void;
 }
 
 interface ContextReference {
@@ -1101,7 +1172,6 @@ interface DatabaseContext {
     } | null;
     mode: 'query' | 'transaction';
     isAiQueryLoading: boolean;
-    isRefreshing: boolean;
     settings: DatabaseSettings | null;
     viewMode: 'database' | 'runs';
     flowRuns: RunNode[];
@@ -1230,6 +1300,14 @@ declare namespace EARS {
         type Thread = typeof Thread;
         const Message = "Message";
         type Message = typeof Message;
+        const Block = "Block";
+        type Block = typeof Block;
+        const BlockText = "BlockText";
+        type BlockText = typeof BlockText;
+        const MessageText = "MessageText";
+        type MessageText = typeof MessageText;
+        const ToolEntry = "ToolEntry";
+        type ToolEntry = typeof ToolEntry;
         const Artifact = "Artifact";
         type Artifact = typeof Artifact;
         const Terminal = "Terminal";
@@ -1263,7 +1341,7 @@ declare namespace EARS {
         const Collection = "Collection";
         type Collection = typeof Collection;
     }
-    type Entity = Entity.Thread | Entity.Message | Entity.Artifact | Entity.Terminal | Entity.CodeProject | Entity.CodeFile | Entity.CodeSymbol | Entity.Note | Entity.BrowserTab | Entity.BrowserBookmark | Entity.SearchIndex | Entity.IndexedDoc | Entity.Flow | Entity.Node | Entity.Action | Entity.Prompt | Entity.Document | Entity.Collection;
+    type Entity = Entity.Thread | Entity.Message | Entity.Block | Entity.BlockText | Entity.MessageText | Entity.ToolEntry | Entity.Artifact | Entity.Terminal | Entity.CodeProject | Entity.CodeFile | Entity.CodeSymbol | Entity.Note | Entity.BrowserTab | Entity.BrowserBookmark | Entity.SearchIndex | Entity.IndexedDoc | Entity.Flow | Entity.Node | Entity.Action | Entity.Prompt | Entity.Document | Entity.Collection;
     type EntityId<E extends string = string> = _apackdev_ears.EARS.EntityId<E>;
     type RelationId = _apackdev_ears.EARS.RelationId;
     namespace RelKind {
@@ -1279,6 +1357,14 @@ declare namespace EARS {
         type COMPACTS = typeof COMPACTS;
         const BLOCKS = "blocks";
         type BLOCKS = typeof BLOCKS;
+        const HAS_BLOCK = "has_block";
+        type HAS_BLOCK = typeof HAS_BLOCK;
+        const HAS_TEXT = "has_text";
+        type HAS_TEXT = typeof HAS_TEXT;
+        const HAS_MESSAGE_TEXT = "has_message_text";
+        type HAS_MESSAGE_TEXT = typeof HAS_MESSAGE_TEXT;
+        const HAS_ENTRY = "has_entry";
+        type HAS_ENTRY = typeof HAS_ENTRY;
         const DUPLICATES = "duplicates";
         type DUPLICATES = typeof DUPLICATES;
         const CODE_CALLS = "code_calls";
@@ -1299,7 +1385,7 @@ declare namespace EARS {
         type PARENT_OF = typeof PARENT_OF;
     }
     /** Every relation kind this pack may link with: its own, its dependencies' and the SDK's */
-    const RELATION_KINDS: readonly ["has", "relates_to", "references", "forked_from", "compacts", "blocks", "duplicates", "code_calls", "code_references", "code_inherits", "code_imports", "contains", "transitions_to", "instance_of", "parent_of"];
+    const RELATION_KINDS: readonly ["has", "relates_to", "references", "forked_from", "compacts", "blocks", "has_block", "has_text", "has_message_text", "has_entry", "duplicates", "code_calls", "code_references", "code_inherits", "code_imports", "contains", "transitions_to", "instance_of", "parent_of"];
     type RelKind = (typeof RELATION_KINDS)[number];
     /** The relation kinds declared `weighted`, whose links take a weight: its own and its dependencies' */
     const WEIGHTED_KINDS: readonly ["code_calls", "code_references"];
@@ -2026,10 +2112,6 @@ type IncomingDatabaseEvents = {
     type: 'GENERATE_AI_QUERY';
     prompt: string;
     mode?: 'query' | 'transaction';
-}
-/** The schema as the data is now: answered with `SCHEMA_READ` */
- | {
-    type: 'GET_SCHEMA';
 } | {
     type: 'GET_FLOW_RUNS';
 } | {
@@ -2455,6 +2537,11 @@ type IncomingTerminalEvents = {
 } | {
     type: 'terminal.CLOSE_TERMINAL';
     terminalId: string;
+}
+/** Start a new shell under a terminal that already exists, keeping its id and everything attached to it */
+ | {
+    type: 'terminal.RESTART_TERMINAL';
+    terminalId: string;
 } | {
     type: 'terminal.TERMINAL_INPUT';
     terminalId: string;
@@ -2464,6 +2551,11 @@ type IncomingTerminalEvents = {
     terminalId: string;
     cols: number;
     rows: number;
+}
+/** This window has stopped showing that terminal, so its fit no longer holds the grid down */
+ | {
+    type: 'terminal.STOPPED_FITTING';
+    terminalId: string;
 } | {
     type: 'terminal.RENAME_TERMINAL';
     terminalId: string;
@@ -2778,11 +2870,30 @@ type LogsSettings = SettingsOf<'logs'>;
 
 interface MessageEntity extends BaseEntity {
     entityType: EARS.Entity.Message;
+    /**
+     * What the message says, and **the field both of its indexes read**: the text index `searchMessages`
+     * ranks on (`search`), and the trigram index `containing` and `matching` answer from (`substrings`).
+     *
+     * **The trigram index has no caller in this repo, and is declared on purpose.** It was deleted once for
+     * exactly that reason, which cost a measurement to undo, so the reason it is here is here: it is the
+     * capability the Database console offers over a message's text, and what a reader would need before it
+     * could be written. Keeping it is a decision rather than an oversight
+     * (`docs/archive/plans/decisions.md`).
+     *
+     * It is affordable because a streamed reply is **appended** rather than rewritten: this field is written
+     * on folds and when the turn finishes, about eight times a turn instead of thirty, so maintaining both
+     * indexes costs ~9ms of a minute-long turn. Under the whole-field writes it replaced, the trigram index
+     * alone was ~61% of a turn's write time — so if this field ever goes back to being written whole, that
+     * is the figure to re-measure before assuming it is still cheap.
+     *
+     * A streaming message holds the compacted prefix here and the rest in `MessageText` children, so both
+     * indexes are behind by at most one fold until the turn ends.
+     */
     text: string;
     sender: 'assistant' | 'marker' | 'system' | 'user';
     timestamp: number;
     responseTimestamp?: number;
-    blocks?: BlockConfig[];
+    blocks?: StoredBlock[];
     /**
      * Response data for block-based interactions. See the `BlockResponse`
      * union above for the full set of observed shapes. Always narrow
@@ -2832,6 +2943,24 @@ interface MessageSearchResult {
     /** Whether the window starts after the text does, or ends before it */
     clippedStart: boolean;
     clippedEnd: boolean;
+}
+
+/**
+ * The next characters of a message's own text, from the offset they start at.
+ *
+ * **The last growing thing in a turn that was stored whole.** A message's `text` is one attribute, so
+ * every durable commit rewrote the whole reply and the cost grew with the turn — the shape `BlockText`
+ * removed for a block's text and `ToolEntry` for its tool calls. This is the same move for the message,
+ * and it is what lets the row's commit rate join the blocks' instead of being eight times slower to
+ * afford the rewrite.
+ *
+ * `Message.text` stays the authoritative field — it is the one the text index reads — holding the
+ * compacted prefix, with these carrying the tail. So `.search` is behind by at most one fold for a message
+ * still streaming, where it used to be behind by one commit; a finished message is indexed whole.
+ */
+interface MessageTextEntity {
+    at: number;
+    text: string;
 }
 
 /** What the flows surface starts from that isn't a row: the models a node may name */
@@ -3249,21 +3378,14 @@ type OutgoingCommitEvents = {
 /**
  * What the database system sends. Every one answers whoever asked, by `reply`, but two: `DATABASE_REPLACED`, which is
  * news for every window, and the generated query, which a flow sends to the asking window by its connection.
- *
- * **The schema is fetched, not a view.** It is a walk over the whole store (`getSchemaStats`), so a view of it would
- * re-run that walk after every commit anyone makes; a window asks for it when it opens, when the user refreshes, and
- * after its own transaction or a replacement.
  */
-type OutgoingDatabaseEvents = {
-    type: 'SCHEMA_READ';
-    schema: DatabaseSchemaInfo;
-}
+type OutgoingDatabaseEvents = 
 /**
  * The data was replaced — imported or reset — by any window: every window drops the results it shows and the run
- * history it holds, which name rows that may be gone, and asks for the schema again. A notification; the window that
+ * history it holds, which name rows that may be gone. A notification; the window that
  * asked has its own outcome too.
  */
- | {
+{
     type: 'DATABASE_REPLACED';
 }
 /**
@@ -3837,16 +3959,43 @@ type OutgoingTerminalEvents =
         data: string;
     };
 } | {
-    type: 'terminal.INITIAL_OUTPUT';
-    data: {
-        terminalId: string;
-        data: string;
-    };
-} | {
     type: 'terminal.CLOSED';
     data: {
         terminalId: string;
     };
+}
+/**
+ * The shell ended badly and **the terminal was kept**, so the user can read what it said and start it
+ * again where it was. A shell that exits 0 is a user closing their terminal and sends `CLOSED` instead.
+ */
+ | {
+    type: 'terminal.CRASHED';
+    data: {
+        terminalId: string;
+        code: number | null;
+    };
+}
+/**
+ * The grid the pty is actually running at, which is **not** necessarily the one a window asked for.
+ *
+ * A pty has one `(cols, rows)` and the window that opened it owns them (M2), so a second window's fit is
+ * refused — and a window that is never told renders at a grid nothing agreed to. This carries the accepted
+ * one, so no window has to assume its own request took effect: broadcast when the grid moved, since every
+ * window showing the terminal needs it, and replied to the asker when its request was refused, which is
+ * news to nobody else.
+ */
+ | {
+    type: 'terminal.RESIZED';
+    data: {
+        terminalId: string;
+        cols: number;
+        rows: number;
+    };
+}
+/** A new shell is running under a terminal that was already there; `generation` says how many it has had */
+ | {
+    type: 'terminal.RESTARTED';
+    data: TerminalInfo;
 } | {
     type: 'terminal.RENAMED';
     data: {
@@ -3901,6 +4050,39 @@ type OutgoingThreadsEvents =
     type: 'SHOW_THREAD';
     threadId: EARS.EntityId;
     restore?: boolean;
+}
+/**
+ * The next characters of a streamed reply, for every window showing that message.
+ *
+ * **The feed, not the row** (G1). A streamed reply used to reach a window by writing the whole accumulated
+ * text to EARS every 80 ms, which is `flushes x final size / 2` bytes — 15 MB for a 40 KB reply over a
+ * minute, measured, and quadratic in reply length. The row is still written, on a slower clock and at the
+ * end, so a crash loses seconds rather than the reply; what arrives every 80 ms is this, the delta.
+ *
+ * `at` is the offset the delta starts at, so a window can splice it onto whatever the message's view last
+ * gave it and a window that opened mid-stream can tell it has no run to append to — it shows the row until
+ * the next durable write catches it up. `done` is the last one: the row is written before it is sent.
+ */
+ | {
+    type: 'MESSAGE_TEXT_APPENDED';
+    messageId: EARS.EntityId;
+    at: number;
+    text: string;
+    done?: true;
+}
+/**
+ * The next characters of a growing block, the same feed for the field that grows rather than changes.
+ *
+ * `block` names which of the message's blocks the run belongs to, since a message holds several. A
+ * block's label, state and re-projected lists are rewrites and travel on the row; this carries growth.
+ */
+ | {
+    type: 'MESSAGE_BLOCK_TEXT_APPENDED';
+    messageId: EARS.EntityId;
+    blockId: EARS.EntityId;
+    at: number;
+    text: string;
+    done?: true;
 } | {
     type: 'CHAT_STARTED';
     data: ChatStart;
@@ -3941,6 +4123,10 @@ type OwnEntityShapes = {
         shortCode: ShortCode<'THR'>;
     };
     'Message': MessageEntity;
+    'Block': BlockEntity;
+    'BlockText': BlockTextEntity;
+    'MessageText': MessageTextEntity;
+    'ToolEntry': ToolEntryEntity;
     'Artifact': ArtifactEntity;
     'Terminal': TerminalEntity;
     'CodeProject': CodeProjectEntity;
@@ -4636,7 +4822,7 @@ type ServerStatus = 'error' | 'ready' | 'starting' | 'stopped';
  * The declared service selection: own services, the SDK baseline and explicitly consumed APIs.
  * The featureServices value itself stays feature-only.
  */
-type Services = typeof featureServices & Pick<HostServices, "appData" | "filesystem" | "inference" | "logger" | "onboarding" | "runHistory" | "secrets" | "settings"> & {
+type Services = typeof featureServices & Pick<HostServices, "appData" | "filesystem" | "inference" | "logger" | "onboarding" | "runHistory" | "secrets" | "settings" | "terminal"> & {
     repository: Repositories;
     emitter: PackEmitter;
 };
@@ -4701,6 +4887,20 @@ interface StashEntry {
     ref: string;
     message: string;
     date: string;
+}
+
+/**
+ * A block as a read hands it back: what it holds, and **which block it is**.
+ *
+ * A message may hold two blocks of one type, so a type does not address one. Everything that acts on a
+ * block someone else is also writing needs the row — the button-group toggle writes back the block that
+ * holds the button, and a window splices a streamed run into the block the feed names — and both got the
+ * first block of the type before this field existed.
+ *
+ * It is not on `BlockConfig`, which is what a caller passes to *create* a block and has no row yet.
+ */
+interface StoredBlock extends BlockConfig {
+    id: EARS.EntityId;
 }
 
 type StreamEventLine = z.infer<typeof StreamEventLineSchema>;
@@ -4793,27 +4993,100 @@ interface TerminalEntity {
     entityType: EARS.Entity.Terminal;
     title: string;
     customTitle?: string;
-    pid: number;
+    /**
+     * **No pid, and `session` is not one.** A row used to carry the process id its session had, and
+     * `restoreAll` reached for it on the next boot — checking whether that process was alive and killing it
+     * and its group, which is F7, and which could name a process the OS had since given to something else.
+     *
+     * A broker session id is the opposite kind of name. The broker owns that namespace and never reissues an
+     * id, so a stale one names nothing rather than something else: offering it costs one request refused with
+     * `NO_SUCH_SESSION`, where offering a stale pid cost a stranger's process its life. What is forbidden here
+     * is a persisted handle that can be *mistaken* for a live one, not a persisted name.
+     *
+     * The live descriptor still carries a pid, because the renderer tells a new shell from the previous one by
+     * it; that is a diagnostic, not a handle.
+     */
     shell: string;
     cwd: string;
-    active: boolean;
     cols: number;
     rows: number;
+    /**
+     * The broker session this terminal's shell is running in, while one is.
+     *
+     * **What makes a shell survivable rather than merely surviving.** Sessions outlive the API on purpose, so
+     * that restarting it does not take a user's shells down — but a restarted API that cannot name them again
+     * leaves them running and unreachable, and spawns a fresh shell beside each. The id is the only thing it
+     * needs: the broker's feed is one slot, so output for a session already arrives on whatever connection
+     * greeted last.
+     *
+     * Absent for a row written before its session started, and stale after a full app restart, which ends
+     * every session — so it is offered to the broker rather than trusted (see `shell`).
+     */
+    session?: string;
     createdAt: number;
     updatedAt: number;
-    closedAt?: number;
 }
 
 interface TerminalInfo {
     id: EARS.EntityId;
     title: string;
     customTitle?: string;
-    pid: number;
+    /**
+     * The shell's process id, for a diagnostic — **`null` when it is not known**.
+     *
+     * A window tells one generation from the next by it, which is what draws the seam between a dead shell's
+     * output and its replacement's. It is unknown for a session the service took up again rather than started
+     * (the broker answers a pid only for a spawn), and that case is precisely the one where there is no
+     * boundary to draw: the shell is the one the window was already watching.
+     */
+    pid: number | null;
     shell?: string;
     cwd: string;
     active: boolean;
+    /**
+     * How many shells this terminal has had, counting from one.
+     *
+     * **A terminal is not its shell.** Its id, its tab and its place in that tab outlive the process behind
+     * it, so a shell that crashed and one the user restarted both leave the terminal where it was and start
+     * a new generation under it. The window tells one generation from the next by the pid and writes the
+     * seam; this is what says how many there have been, for a window that was not watching.
+     */
+    generation: number;
+    /** The shell ended and the terminal was kept. Absent while one is running */
+    exited?: {
+        code: number | null;
+    };
+    /**
+     * The session's size **when this was published**, which is a starting point and not a live reading.
+     *
+     * **A pty has one size and it is whatever a window last fitted**, so the live value lives where the
+     * session does: the service keeps it current and `restart` re-opens the shell at it. What a window holds
+     * is the snapshot it was last listed or opened with, and its one consumer wants exactly that — the pool
+     * builds the emulator at this size, so it is the width a replayed screen is first drawn at.
+     *
+     * It is spelled out because it reads as live and is not: a drive scenario waited on it for the size a
+     * window had just fitted and timed out at the creation size, with every resize having landed correctly
+     * (F18). A window that wants the size it fitted computed it, and the pty's own is the broker's to answer.
+     */
     cols: number;
+    /** The session's rows when this was published; see `cols` */
     rows: number;
+    /**
+     * How far back this session can be scrolled: the host's number, from the broker's handshake.
+     *
+     * The window derives its emulator's bound from this and never pins its own. Exceeding it would draw lines
+     * no reattach could reproduce — the broker is what answers a screen read when no window holds the bytes —
+     * and 10,000 pinned in the pool against the broker's 1,000 is exactly what that looked like.
+     */
+    scrollback: number;
+    /**
+     * What ends a typed line for *this* shell — X6.
+     *
+     * A window running a command has to end it the way the shell it is running in expects, and only the
+     * backend knows which shell that is. Typed into a Windows console, `\n` is echoed and never runs: the
+     * command sits on screen looking typed, and nothing happens. Measured on Windows rather than assumed.
+     */
+    submit: string;
 }
 
 interface TerminalTab extends OpenFile {
@@ -5096,6 +5369,24 @@ interface ThreadsContext {
     detailMessageIds: string[];
     /** Each listed message as its own view last gave it */
     messageContents: Record<string, Partial<MessageEntity>>;
+    /**
+     * The characters of a streamed reply that have arrived since the message's row was last written, by
+     * message id: `at` is the offset the run starts at (G1).
+     *
+     * **The run is spliced onto the row rather than replacing it**, so the two channels cannot disagree: the
+     * row is what the view gave, the run is what has arrived since, and a window that opened mid-stream has a
+     * run starting past the end of its row and shows the row until the next durable write catches it up.
+     */
+    messageStreams: Record<string, {
+        at: number;
+        text: string;
+    }>;
+    /** A growing block's run, per message: which block it belongs to, from where, and what has arrived */
+    messageBlockStreams: Record<string, {
+        blockId: string;
+        at: number;
+        text: string;
+    }>;
     /** The messages a view is followed for */
     messageViews: string[];
     /** The open tabs a view is followed for */
@@ -5138,6 +5429,56 @@ type ThreadsSettings = SettingsOf<'threads'>;
 type TokenKind = 'classic-pat' | 'fine-grained-pat' | 'oauth' | 'unknown';
 
 type TokenSource = 'GITHUB_TOKEN' | 'keyring' | 'unknown';
+
+interface ToolActivityEntry {
+    /** Stable id. Usually the CLI's `tool_use_id`. */
+    id: string;
+    /** Tool name as reported by the CLI: Read, Write, Edit, Glob, Grep, Bash, … */
+    tool: string;
+    /** One-line human summary of the input (e.g. a truncated file path). */
+    summary: string;
+    /** Row status drives the per-row icon and label. */
+    status: 'denied' | 'error' | 'ok' | 'running';
+    /** Wall-clock duration once the tool has reported progress/completion. */
+    durationMs?: number;
+    /** One-line output summary if the tool reported one (e.g. "3 matches"). */
+    outputSummary?: string;
+    /** Optional full details revealed when the row is expanded. */
+    details?: {
+        input?: unknown;
+        output?: string;
+        error?: string;
+    };
+}
+
+/**
+ * One tool call as the activity block lists it, as a row of its own.
+ *
+ * **An entry is patched, not appended to** — `running` to `ok`, `denied` or `error`, with its output
+ * filled in when the tool answers — so it is an independently-mutating record, which is a row for the
+ * same reason a block is one. It was a member of the block's `props.entries`, and an attribute is written
+ * whole, so every later flush rewrote every entry: `details.output` holds the untruncated tool result, so
+ * one read of a large file was written again once per subsequent tool event.
+ *
+ * `entryId` is the CLI's `tool_use_id`, which is what a patch arrives by and what the writer de-dupes on;
+ * `id` is the engine's. The position is on the edge (`has_entry`'s `info.index`), as a block's is.
+ *
+ * The block keeps what is about the block — its label, state and artifact — and a read assembles these
+ * into the `entries` its component draws.
+ */
+interface ToolEntryEntity {
+    entryId: string;
+    tool: string;
+    summary: string;
+    status: 'denied' | 'error' | 'ok' | 'running';
+    durationMs?: number;
+    outputSummary?: string;
+    details?: {
+        input?: unknown;
+        output?: string;
+        error?: string;
+    };
+}
 
 type ToolProgressLine = z.infer<typeof ToolProgressLineSchema>;
 
@@ -5531,6 +5872,27 @@ declare function addMessagesToThread(params: {
     }>;
 }): void;
 
+/**
+ * Appends the next characters of a block's text to its row.
+ *
+ * **The durable half of a growing block, and the reason its interval is still worth having.** The feed
+ * (`streamMessageBlockText`) carries growth to the windows as it arrives; this commits it, batched, so the
+ * interval now decides how often a turn commits rather than how much of it is rewritten. A whole-text write
+ * per flush is what made a turn cost 47.9x the text it left behind.
+ *
+ * `at` is where these characters start, so the row is spliced exactly as a window splices the feed.
+ */
+declare function appendMessageBlockText(blockId: EARS.EntityId, at: number, text: string): void;
+
+/**
+ * Appends the next characters of a message's own text, and folds when there are enough segments.
+ *
+ * The durable half of a streamed reply. The feed (`streamMessageText`) carries the characters to the
+ * windows as they arrive; this commits them, so the interval decides how often a turn commits rather than
+ * how much of the reply is written again.
+ */
+declare function appendMessageText(messageId: EARS.EntityId, at: number, text: string): void;
+
 declare const brainCommands: {
     /** An event a flow run heard, with its payload as the node's attributes */
     readonly createEventRunNode: (eventNode: {
@@ -5639,7 +6001,108 @@ declare const chatCommands: {
         text: string;
         sender: string;
         timestamp: number;
+        /** The blocks as rows, for a caller that describes the message it just added */
+        blocks?: StoredBlock[];
     };
+    /** Creates a message's blocks as rows, in the order given: what a message's creation and an import write */
+    readonly writeMessageBlocks: (params: {
+        messageId: EARS.EntityId;
+        blocks: readonly BlockConfig[];
+    }) => void;
+    /**
+     * Appends the next characters of a block's text, and answers nothing it did not write.
+     *
+     * **The store's half of what the feed sends.** A growing block's text used to be written whole on every
+     * durable flush, so what reached storage grew with the turn; a segment is written once. The block's own
+     * text is the compacted prefix and this is what follows it, so a reader splices by offset exactly as a
+     * window does.
+     *
+     * It folds the segments back in once there are `TEXT_SEGMENTS_BEFORE_COMPACTION` of them, which is what
+     * keeps a read of a long turn bounded. A caller never asks for that and cannot skip it.
+     */
+    readonly appendMessageBlockText: (params: {
+        blockId: EARS.EntityId;
+        at: number;
+        text: string;
+    }) => void;
+    /**
+     * Appends the next characters of a message's own text.
+     *
+     * **The same shape as a block's text, for the last field that was written whole.** `Message.text` keeps
+     * the compacted prefix and this is what follows it, spliced by offset exactly as a window splices the
+     * feed.
+     *
+     * It folds at `TEXT_SEGMENTS_BEFORE_COMPACTION`, and that fold is not an optimisation — it is what keeps
+     * the text searchable. `Message.text` is what the text index reads, so a tail living in segments is a
+     * tail no search finds, and a turn can end without its writer being finalised. The size trigger bounds
+     * that to one fold's worth; `foldMessageText` is the rest of the answer.
+     */
+    readonly appendMessageText: (params: {
+        messageId: EARS.EntityId;
+        at: number;
+        text: string;
+    }) => void;
+    /**
+     * Folds a message's text segments into its own field and removes them.
+     *
+     * **What makes the text searchable again**, so it is called when a turn's writer finalises and by the
+     * sweep at boot for a turn that ended without one.
+     */
+    readonly foldMessageText: (params: {
+        messageId: EARS.EntityId;
+    }) => void;
+    /**
+     * Folds every message that still holds text segments, and answers how many it folded.
+     *
+     * **Nothing streams at boot, so a message holding segments at boot was left unfolded** — which is the
+     * marker, and why this needs no `'streaming'` status to find them by. A turn interrupted by a kill
+     * finalises through its owner, and one interrupted by the process ending cannot, so this is that case's
+     * repair: without it the tail stays out of the text index for good.
+     */
+    readonly foldStrandedMessageText: () => number;
+    /**
+     * Writes one of a block's tool entries, and answers its row.
+     *
+     * **The same shape as `writeMessageBlock`, one level down**: pass the row id a previous write answered
+     * and this is one row by id, which is what makes a tool event cost its own entry. Without one the entry
+     * is found among the block's by its `entryId`, or created at the end.
+     *
+     * `details` merges field-wise, as the writer's own `update` does, so a patch carrying only an output
+     * does not drop the input recorded when the tool started.
+     */
+    readonly writeToolEntry: (params: {
+        blockId: EARS.EntityId;
+        entry: ToolActivityEntry;
+        entryRowId?: EARS.EntityId;
+    }) => EARS.EntityId | undefined;
+    /**
+     * Folds a block's children into it and removes them: what a writer calls when the block has stopped
+     * growing.
+     *
+     * **A finished block is one row again.** The children exist to make a *turn's* writes cheap; once it is
+     * over they are only cost — a read of the message assembles them, and a thread keeps them for ever. A
+     * turn of forty tools left forty rows per message behind without this.
+     */
+    readonly compactMessageBlock: (params: {
+        blockId: EARS.EntityId;
+    }) => void;
+    /**
+     * Writes one of a message's blocks, by its type, and answers its row id.
+     *
+     * **The hot path of a streamed turn.** A caller that holds the id from a previous write passes it and the
+     * write is one row by id, with no walk: that is what makes a 250ms flush cost its own block and nothing
+     * else. Without one the block of that type is found, or created at the end.
+     */
+    readonly writeMessageBlock: (params: {
+        messageId: EARS.EntityId;
+        block: BlockConfig;
+        blockId?: EARS.EntityId;
+    }) => EARS.EntityId;
+    /** Removes a message's block of that type; absence is not an error, the caller asking for it to be gone */
+    readonly removeMessageBlock: (params: {
+        messageId: EARS.EntityId;
+        type: string;
+    }) => void;
     readonly createThreadFromMessage: (text: string) => {
         threadId: EARS.EntityId;
         threadData: ReturnType<typeof threadCommands.create>;
@@ -5651,11 +6114,11 @@ declare const chatCommands: {
         messageId: EARS.EntityId;
         responseTimestamp: number;
         updatedAt: number;
-        blocks?: BlockConfig[];
+        blocks?: StoredBlock[];
     };
     readonly updateMessageState: (params: {
         messageId: EARS.EntityId;
-        updates: Partial<Pick<MessageEntity, "blockResponse" | "blocks" | "compacted" | "context" | "forkable" | "responseTimestamp" | "status" | "text">>;
+        updates: Partial<Pick<MessageEntity, "blockResponse" | "compacted" | "context" | "forkable" | "responseTimestamp" | "status" | "text">>;
     }) => {
         messageId: EARS.EntityId;
         updatedAt: number;
@@ -5733,6 +6196,20 @@ declare const chatQueries: {
      * and each pinned one's; and the threads settings
      */
     readonly chatStart: () => ChatStart;
+    /** A message's blocks, assembled from their rows: what an export carries and `messageById` folds in */
+    readonly blocksOf: (messageId: EARS.EntityId) => StoredBlock[];
+    readonly entryDetails: (blockId: EARS.EntityId) => Record<string, ToolActivityEntry["details"]>;
+    /**
+     * A message's blocks with each tool entry's details merged back into it, for whoever is going to write
+     * them somewhere else.
+     *
+     * **A copier is not a reader.** `blocksOf` leaves `details` out because a message's view re-runs on every
+     * append and a tool's whole output would be re-read each time; a fork and an export are copying the block
+     * rather than drawing it, and the details are part of what the block is. Without this they were dropped,
+     * silently, by both.
+     */
+    readonly blocksForCopy: (messageId: EARS.EntityId) => StoredBlock[];
+    /** One message, whole; `null` once it is gone */
     readonly messageById: (messageId: EARS.EntityId) => MessageEntity | null;
 };
 
@@ -5848,6 +6325,14 @@ declare const codeIndexQueries: {
     searchSymbols: (root: string | null, text: string, limit: number) => SymbolResult[];
 };
 
+/**
+ * Folds a block's children into it, so a finished block is one row again.
+ *
+ * The segments and entry rows under a block make a *turn's* writes cost what they write; once the turn is
+ * over they are only cost, to every read of that message and to the store for as long as the thread lives.
+ */
+declare function compactMessageBlock(blockId: EARS.EntityId): void;
+
 /** The recent-thread limit and order the threads settings hold, read where no view is asking */
 declare function configuredRecentThreads(): {
     limit: number;
@@ -5900,6 +6385,14 @@ declare const featureServices: {
         sendChoiceBlock: typeof sendChoiceBlock;
         sendQuestionBlock: typeof sendQuestionBlock;
         updateMessageState: typeof updateMessageState;
+        updateMessageBlock: typeof updateMessageBlock;
+        appendMessageBlockText: typeof appendMessageBlockText;
+        appendMessageText: typeof appendMessageText;
+        updateMessageToolEntry: typeof updateMessageToolEntry;
+        compactMessageBlock: typeof compactMessageBlock;
+        removeMessageBlock: typeof removeMessageBlock;
+        streamMessageText: typeof streamMessageText;
+        streamMessageBlockText: typeof streamMessageBlockText;
         createMarkerMessage: typeof createMarkerMessage;
         addMessagesToThread: typeof addMessagesToThread;
         createThread: typeof createThread;
@@ -6228,6 +6721,14 @@ declare const promptQueries: {
 declare function registerSchedule(key: string, cronExpression: string, callback: () => void): void;
 
 /**
+ * Removes a message's block of that type.
+ *
+ * What a writer calls when its block should no longer be there — a tool-activity writer finalising with no
+ * entries. It used to be written as a rewrite of the *surviving* blocks, so removing one rewrote the other.
+ */
+declare function removeMessageBlock(messageId: EARS.EntityId, type: string): void;
+
+/**
  * Resolve all message reference types (images, files, notes, threads,
  * library docs/folders) into prompt-ready content for the Claude Code CLI.
  *
@@ -6322,23 +6823,87 @@ declare function showThread(threadId: EARS.EntityId, options?: {
 
 declare function storeHandle(key: string, handle: CodexTurnHandle): void;
 
+/**
+ * Sends the next characters of a growing **block** to the windows showing that message.
+ *
+ * **The same split as `streamMessageText`, for the one field that grows rather than changes.** A block is
+ * written with `updateMessageState({ blocks })`, which replaces the whole field — so a thinking block that
+ * grows for three minutes was rewritten in full on every flush, and what reached storage was a multiple of
+ * what the user was left with. The multiple grew with the turn, which is what makes it the same defect G1
+ * names for text and not a slower version of it.
+ *
+ * So the characters travel here and the row is written on the durable clock. `block` names the block's type
+ * — one of a message's blocks is a `thinking` block, one a `tool-activity` block — because a message holds
+ * several and a window has to know which one a run belongs to. Everything else is the text feed's contract:
+ * `at` is the offset so a window splices onto what its view last gave it, a run that starts past the end of
+ * what the window holds is a stream it joined late and is ignored until the row catches up, and `done`
+ * drops the run after the row has been written.
+ *
+ * **What this channel cannot carry is a change.** A block's label, its state and a re-projected list are
+ * rewrites, not appends, and they go on the row. This is for growth alone.
+ */
+declare function streamMessageBlockText(params: {
+    messageId: EARS.EntityId;
+    blockId: EARS.EntityId;
+    at: number;
+    text: string;
+    done?: true;
+}): void;
+
+/**
+ * Sends the next characters of a streamed reply to the windows showing that message.
+ *
+ * **The feed beside the row, which is what makes a streamed reply affordable** (G1). `updateMessageState`
+ * writes the whole message, and a streamed reply used to call it every 80 ms — `flushes x final size / 2`
+ * bytes, 15 MB for a 40 KB reply over a minute, quadratic in the reply's length. So the row is written on a
+ * slower clock and the characters travel here, which is what `default-setup/CLAUDE.md` means by *a feed is
+ * news too … as streaming tokens would*.
+ *
+ * It is a broadcast because every window showing the message needs it and nobody asked for it, and it
+ * carries `at` rather than the text so far so a window can splice it onto what its view last gave it. The
+ * channel choice lives here, beside `updateMessageState`, so an action keeps calling `services.chat`.
+ */
+declare function streamMessageText(params: {
+    messageId: EARS.EntityId;
+    at: number;
+    text: string;
+    done?: true;
+}): void;
+
 declare const terminalCommands: {
     /** Records a terminal the service started, under the id it took for it (`newId`) */
-    create: (terminal: Pick<TerminalEntity, "cols" | "cwd" | "pid" | "rows" | "shell" | "title"> & {
+    create: (terminal: Pick<TerminalEntity, "cols" | "cwd" | "rows" | "session" | "shell" | "title"> & {
         id: EARS.EntityId<"Terminal">;
     }) => EARS.EntityId;
-    resize: (id: EARS.EntityId, cols: number, rows: number) => void;
+    /**
+     * Records the broker session this terminal's shell is running in.
+     *
+     * Written whenever the shell is replaced, because a stored id that names the *previous* session is the one
+     * case the offer-and-fall-back rule cannot save: the broker would answer for it and this process would
+     * take up a session no terminal is showing.
+     */
+    recordSession: (id: EARS.EntityId, session: string) => void;
     rename: (id: EARS.EntityId, customTitle: string) => void;
     updateCwd: (id: EARS.EntityId, cwd: string, title?: string) => void;
-    updatePid: (id: EARS.EntityId, pid: number) => void;
+    /**
+     * The terminal is gone, so its row goes to the trash — **the one way a Terminal row ends** (L3).
+     *
+     * It used to set `active: false` and a `closedAt` nothing ever read, leaving a row behind for every
+     * terminal the user had ever opened; beside it sat an unreached `delete` that did the trashing. Nothing
+     * reads a closed terminal: `restoreAll` opens what the query answers, and that is the whole of what a row
+     * is for. So there is one path, and it removes the record rather than annotating it.
+     */
     markClosed: (id: EARS.EntityId) => void;
-    delete: (id: EARS.EntityId) => void;
 };
 
 declare const terminalQueries: {
     byId: (id: EARS.EntityId) => TerminalEntity | undefined;
+    /**
+     * The terminals there are — which is every row, because **a closed one leaves none** (L3). A query leaves
+     * out the trash, and `markClosed` puts a row there, so there is no `active` attribute to filter on and no
+     * second record of whether a terminal exists.
+     */
     all: () => TerminalEntity[];
-    active: () => TerminalEntity[];
 };
 
 declare const threadCommands: {
@@ -6388,15 +6953,8 @@ declare const threadQueries: {
     readonly allUnfiltered: () => ThreadEntity[];
     /** The first thread holding the role, e.g. the onboarding birth thread */
     readonly idByRole: (role: EARS.RoleKind) => EARS.EntityId | undefined;
-    readonly messages: (threadId: EARS.EntityId) => ({
-        id: `${string}-${string}` & {
-            readonly __entity?: "Message" | undefined;
-        };
-    } & Pick<MessageEntity & _apackdev_ears.BaseEntity & {
-        id: `${string}-${string}` & {
-            readonly __entity?: "Message" | undefined;
-        };
-    }, "compacted" | "isCommand" | "sender" | "text" | "timestamp">)[];
+    /** A thread's messages, assembled — the one reader, so nothing here picks its own fields */
+    readonly messages: (threadId: EARS.EntityId) => MessageEntity[];
     /** The threads this one links to, by kind, then the threads that block it, as `blocked by` */
     readonly linkedThreads: (threadId: EARS.EntityId) => Array<{
         relation: ThreadLinkRelation;
@@ -6449,6 +7007,19 @@ declare function update(artifactId: EARS.EntityId, options: UpdateArtifactOption
 declare function updateChatState(threadId: EARS.EntityId, chatState: string): void;
 
 /**
+ * Writes one of a message's blocks, and answers the row it wrote.
+ *
+ * **A block is a row, so a write costs that block and nothing else.** It was a field — the whole `blocks`
+ * array — and since an attribute is written whole, a 250ms tool-activity flush carried the accumulated
+ * thinking text with it, at 170x what a turn left behind. It also meant each writer had to pass the other's
+ * block or delete it, which is the coordination that no longer exists.
+ *
+ * Pass the `blockId` a previous write answered and this is one row by id, with no walk for the type. The
+ * first write of a turn has none and creates the row.
+ */
+declare function updateMessageBlock(messageId: EARS.EntityId, block: BlockConfig, blockId?: EARS.EntityId): EARS.EntityId | undefined;
+
+/**
  * Update message state with any mutable fields
  * Main interface for ad hoc message state updates (text, blocks, blockResponse, responseTimestamp): a window showing
  * the message sees it through the message's view, the one view a streamed reply re-runs
@@ -6466,7 +7037,19 @@ declare function updateChatState(threadId: EARS.EntityId, chatState: string): vo
  *   text: 'Updated message content'
  * });
  */
-declare function updateMessageState(messageId: EARS.EntityId, updates: Partial<Pick<MessageEntity, 'blockResponse' | 'blocks' | 'compacted' | 'context' | 'forkable' | 'responseTimestamp' | 'status' | 'text'>>): void;
+declare function updateMessageState(messageId: EARS.EntityId, updates: Partial<Pick<MessageEntity, 'blockResponse' | 'compacted' | 'context' | 'forkable' | 'responseTimestamp' | 'status' | 'text'>>): void;
+
+/**
+ * Writes one of a block's tool entries, and answers its row.
+ *
+ * **The entries' half of what the segments did for the text.** An entry used to be a member of the
+ * block's `props.entries`, written whole on every flush — and `details.output` holds the untruncated tool
+ * result, so one read of a large file was written again once per later tool event. Writing the entry
+ * alone costs that entry.
+ *
+ * Pass the row id a previous write answered and it is one row by id, with no walk for the entry.
+ */
+declare function updateMessageToolEntry(blockId: EARS.EntityId, entry: ToolActivityEntry, entryRowId?: EARS.EntityId): EARS.EntityId | undefined;
 
 /** Parse a Codex JSONL file into an array of entries. */
 declare function viewByFile(filePath: string, opts?: {
