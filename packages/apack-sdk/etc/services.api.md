@@ -518,6 +518,7 @@ export interface TerminalService {
 export interface TerminalSession {
     facts(): Promise<TerminalFacts>;
     readonly id: string;
+    owns(pid: number): Promise<boolean>;
     pause(): Promise<void>;
     readonly pid: number | null;
     resize(cols: number, rows: number): Promise<void>;

@@ -125,6 +125,23 @@ export interface TerminalSession {
   /** Reads it again, and delivers what arrived while it was not being read */
   resume(): Promise<void>;
   /**
+   * Whether `pid` is this session's own process or something it started, however deep.
+   *
+   * **A question, not a signal that happens to be refused.** The host checks exactly this before it signals
+   * a pid, but a signal is an act — asking for the effect to learn the answer is the mistake this exists to
+   * remove, and both come from one walk so the two cannot disagree.
+   *
+   * **What needs it is a claim an owner cannot check itself.** A process says *"I am yours, pid N"* over a
+   * socket of its own, where the pid is whatever it chose to write, and admitting it is an authorization
+   * decision about a tree the host owns. Walking the parent chain from outside answers the same question
+   * with a second implementation, which can disagree with the one the host enforces — and off POSIX it
+   * cannot answer at all.
+   *
+   * Refused where the platform cannot be asked, rather than answered `false`: a caller that cannot tell
+   * "no" from "I could not look" would refuse every claim and say nothing about why.
+   */
+  owns(pid: number): Promise<boolean>;
+  /**
    * Sends a signal to the session's process, its process group, or one process inside its tree.
    *
    * `terminate` ends a session and its tree, which is all a terminal needs. This is for an owner driving a
