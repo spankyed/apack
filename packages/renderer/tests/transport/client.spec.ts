@@ -201,7 +201,7 @@ it('carries request context and restores each delivery context separately', () =
   const sent = { traceparent: '00-11111111111111111111111111111111-2222222222222222-01' };
   const received = { traceparent: '00-33333333333333333333333333333333-4444444444444444-01' };
   const withCarrier = vi.fn<(carrier: unknown) => void>();
-  startFeTestRuntime({ diagnostics: { capture: () => sent, withCarrier: (carrier, fn) => { withCarrier(carrier); return fn(); }, carryEvent() {}, withEvent: (_event, fn) => fn() } });
+  startFeTestRuntime({ diagnostics: { capture: () => sent, withCarrier: (carrier, fn) => { withCarrier(carrier); return fn(); }, carryEvent() {}, withEvent: (_event, fn) => fn(), record() {} } });
   const observer = vi.fn();
   const stop = feClient.watchView({ ref: 'pack/feature', view: 'page' }, observer);
   try {
@@ -216,7 +216,7 @@ it('carries request context and restores each delivery context separately', () =
 it('drops old view callbacks when an API reload starts a new subscription generation', () => {
   const original = { traceparent: '00-11111111111111111111111111111111-2222222222222222-01' };
   const fresh = { traceparent: '00-33333333333333333333333333333333-4444444444444444-01' };
-  startFeTestRuntime({ diagnostics: { capture: () => fresh, withCarrier: (_carrier, fn) => fn(), carryEvent() {}, withEvent: (_event, fn) => fn() } });
+  startFeTestRuntime({ diagnostics: { capture: () => fresh, withCarrier: (_carrier, fn) => fn(), carryEvent() {}, withEvent: (_event, fn) => fn(), record() {} } });
   let apiEvent!: (event: { type: string; reloaded: boolean }) => void;
   (window as unknown as { electronAPI: unknown }).electronAPI = { apiStatus: {
     getStatus: async () => ({ running: true }), onEvent: (listener: typeof apiEvent) => { apiEvent = listener; return () => {}; },

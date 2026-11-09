@@ -8,7 +8,7 @@ import { parsePackDependency } from './dependency-source.ts';
 export const _BASELINE_HOST_SERVICE_NAMES = ['logger', 'emitter', 'repository', 'settings'] as const;
 /** @internal One inventory for schema assistance, selection and host-name collision checks. */
 export const _HOST_SERVICE_NAMES = [..._BASELINE_HOST_SERVICE_NAMES,
-  'onboarding', 'appData', 'runHistory', 'inference', 'secrets', 'filesystem',
+  'onboarding', 'appData', 'runHistory', 'inference', 'secrets', 'filesystem', 'terminal',
 ] as const satisfies readonly (keyof HostServices)[];
 const complete: Exclude<keyof HostServices, typeof _HOST_SERVICE_NAMES[number]> extends never ? true : never = true;
 void complete;

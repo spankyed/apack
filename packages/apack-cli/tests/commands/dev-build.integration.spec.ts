@@ -25,7 +25,7 @@ vi.mock('../../src/commands/build', () => ({
 }));
 import { build } from '../../src/commands/build';
 import { dev } from '../../src/commands/dev';
-import { _settles } from '@apackdev/sdk/testing/waiting';
+import { settles } from '@apackdev/sdk/testing/waiting';
 
 
 it('builds with a fresh compiler before attempting to reuse the host', async () => {
@@ -81,7 +81,7 @@ it('cancels its build child and disables inherited input reporting without an ob
     vi.stubEnv(BUILD_INPUTS_IPC_ENV, '1');
     running = runPackBuild(root, { signal: controller.signal });
     void running.catch(() => {});
-    await _settles(() => expect(fs.existsSync(ready)).toBe(true));
+    await settles(() => expect(fs.existsSync(ready)).toBe(true));
     const { pid, reporting, cacheDisabled } = JSON.parse(fs.readFileSync(ready, 'utf8'));
     expect(reporting).toBe('0');
     expect(cacheDisabled).toBe('1');
@@ -89,7 +89,7 @@ it('cancels its build child and disables inherited input reporting without an ob
     controller.abort();
     await stopped;
     expect(dispose).toHaveBeenCalledOnce();
-    await _settles(() => expect(() => process.kill(pid, 0)).toThrow());
+    await settles(() => expect(() => process.kill(pid, 0)).toThrow());
   } finally {
     controller.abort();
     await running?.catch(() => {});

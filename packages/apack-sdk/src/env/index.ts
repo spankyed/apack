@@ -167,3 +167,66 @@ export function _inferElectronAppEnv(input: {
 export function getAppVersion(): string {
   return boundHost().appVersion;
 }
+
+/**
+ * The variables the app sets on a process it starts: its identity, its paths, its port and its token.
+ *
+ * The list is the declaration and {@link AppProcessEnv} is derived from it, so the construction that sets them
+ * (`getEnvironment`, `@app/main`'s api-server module) cannot add one the list does not name and cannot omit one
+ * it does — the record it builds is typed by this, and either direction fails the typecheck.
+ *
+ * That is what makes the strip at the other end safe. A terminal spawns the user's shell from the API process's
+ * own environment, so everything here is inherited by it, and every one of them is the app talking to itself:
+ * `ELECTRON_RUN_AS_NODE=1` breaks any Electron app the user launches from that shell, `NODE_ENV=production`
+ * changes what their `npm install` does, and the token is app-process-level access to their own data. The
+ * hand-written deny-list that used to sit beside the spawn named two of these.
+ */
+export const APP_PROCESS_ENV_VARS = [
+  'NODE_ENV',
+  'API_PORT',
+  'APACK_API_TOKEN',
+  'APACK_STARTUP_ID',
+  'APACK_LOG_DIR',
+  'SHIPPED_PACKS_DIR',
+  'APACK_ENV',
+  'APACK_APP_MANIFEST',
+  'APACK_USER_DATA_DIR',
+  'ELECTRON_RUN_AS_NODE',
+] as const;
+
+/** A complete record of {@link APP_PROCESS_ENV_VARS}: what the app sets when it starts a process. */
+export type AppProcessEnv = Record<(typeof APP_PROCESS_ENV_VARS)[number], string | undefined>;
+
+/**
+ * Dynamic-loader variables, which nothing the app spawns should inherit.
+ *
+ * They make a program load code chosen by whoever set them, so a process that inherits one hands it to
+ * everything it runs. The app does not set `LD_PRELOAD`; it strips it because the API's own parent might
+ * have, and because it sets `NODE_OPTIONS` itself for a source run — a user's shell inheriting
+ * `--conditions=@apackdev/source` is this repo's own development setup leaking into their machine.
+ */
+export const BLOCKED_LOADER_VARS = [
+  'NODE_OPTIONS',
+  'LD_PRELOAD',
+  'LD_LIBRARY_PATH',
+  'DYLD_INSERT_LIBRARIES',
+  'DYLD_LIBRARY_PATH',
+] as const;
+
+/**
+ * `env` without the variables the app set on its own process, and without the loader variables above.
+ *
+ * **What the app spawns for the user must not inherit the app's identity.** A shell or an agent child that
+ * inherits `ELECTRON_RUN_AS_NODE=1` breaks any Electron app launched from it; one that inherits
+ * `APACK_USER_DATA_DIR` or `SHIPPED_PACKS_DIR` can be pointed at the user's data by anything it runs.
+ *
+ * **Derived, not written**, which is the whole point: `APP_PROCESS_ENV_VARS` is the same declaration the
+ * construction that sets them is typed by, so a variable added there is stripped here without anyone
+ * remembering to add it. A hand-written deny-list is the shape that rots, and this repo has the finding to
+ * prove it.
+ */
+export function withoutAppProcessEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const clean: NodeJS.ProcessEnv = { ...env };
+  for (const name of [...BLOCKED_LOADER_VARS, ...APP_PROCESS_ENV_VARS]) delete clean[name];
+  return clean;
+}

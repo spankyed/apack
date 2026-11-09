@@ -58,11 +58,9 @@ import {
 } from 'reka-ui'
 import { MENU_ITEM_CLASS, MENU_ITEM_DANGER_CLASS, MENU_CONTENT_CLASS, MENU_SEPARATOR_CLASS } from '#features/code/fe/features/explorer/constants.ts'
 import { Copy, ClipboardPaste, TextSelect, Eraser, RotateCcw, Trash2 } from 'lucide-vue-next'
-import type { Terminal, IDisposable } from '@xterm/xterm'
-import type { FitAddon } from '@xterm/addon-fit'
 import { type CodeState } from '#features/code/fe/state.ts'
 import type { TerminalInfo } from '#features/code/fe/features/terminal/state.ts'
-import { terminalPool } from '#features/code/fe/utils/terminal-pool.ts'
+import { terminalPool, type TerminalAttachment } from '#features/code/fe/utils/terminal-pool.ts'
 import { codeChild } from '../features/children.ts';
 
 /* --------------------------------------------------------------------------
@@ -82,147 +80,71 @@ const terminalActor = codeChild(codeActor, 'terminal')
 /* --------------------------------------------------------------------------
  * Refs --------------------------------------------------------------------- */
 const container = ref<HTMLElement>()
-let term: Terminal | null = null
-let fitAddon: FitAddon | null = null
-let resizeObserver: ResizeObserver | null = null
-const viewDisposables: IDisposable[] = []
-// Pin state is owned by the pool (survives tab-switch remounts); this ref is
-// just a reactive mirror so the FOB can show/hide. Always write both.
-const isPinnedToBottom = ref(true)
-const showScrollFob = computed(() => !isPinnedToBottom.value)
+// **The whole of this host's reach into the terminal.** No emulator type crosses it: the pool owns the
+// instance, its listeners and its size observer, so this component holds a terminal id and a container.
+let attachment: TerminalAttachment | null = null
+// Whether the session is following its output. The pool owns the value — it survives the unmount a tab
+// switch causes — and this is the reactive mirror the scroll control is drawn from.
+const isFollowingOutput = ref(true)
+const showScrollFob = computed(() => !isFollowingOutput.value)
 const hasSelection = ref(false)
 
 /* --------------------------------------------------------------------------
- * Helpers ------------------------------------------------------------------ */
-const scrollToBottom = () => {
-  isPinnedToBottom.value = true
-  terminalPool.setPinned(props.terminalInfo.id, true)
-  terminalPool.syncViewport(props.terminalInfo.id)
-}
-
-const sendResize = () => {
-  if (!term) return
-  terminalActor?.send({
-    type: 'terminal.RESIZE',
-    terminalId: props.terminalInfo.id,
-    cols: term.cols,
-    rows: term.rows
-  })
-}
-
-/* --------------------------------------------------------------------------
  * Context menu actions ----------------------------------------------------- */
+const scrollToBottom = () => attachment?.followOutput()
+
 const copySelection = () => {
-  if (!term) return
-  const selection = term.getSelection()
-  if (selection) navigator.clipboard.writeText(selection)
+  const selection = attachment?.selection()
+  // A clipboard the window may not read or write rejects; unhandled, that is a console error nobody can
+  // act on (F16)
+  if (selection) void navigator.clipboard.writeText(selection).catch(() => {})
 }
 
-const pasteClipboard = async () => {
-  if (!term) return
-  const text = await navigator.clipboard.readText()
-  if (text) {
-    terminalActor?.send({ type: 'terminal.INPUT', terminalId: props.terminalInfo.id, data: text })
-  }
+const pasteClipboard = () => {
+  // Through the emulator rather than as input (F12), which the attachment is the one way to do
+  void navigator.clipboard.readText().then(text => {
+    if (text) attachment?.paste(text)
+  }).catch(() => {})
 }
 
-const selectAll = () => {
-  term?.selectAll()
-}
+const selectAll = () => attachment?.selectAll()
 
-const clearTerminal = () => {
-  term?.clear()
-}
+const clearTerminal = () => attachment?.clear()
 
 /* --------------------------------------------------------------------------
  * Lifecycle ---------------------------------------------------------------- */
 onMounted(() => {
   if (!container.value) return
 
-  const sendInput = (data: string) => {
+  // The emulator is the pool's: this never constructs or disposes one
+  terminalPool.ensure(props.terminalInfo, data => {
     terminalActor?.send({ type: 'terminal.INPUT', terminalId: props.terminalInfo.id, data })
-  }
-
-  // Ensure a pool entry exists for this terminal, then attach its wrapper
-  // into our container. The xterm instance lives in the pool — we never
-  // construct or dispose it here.
-  const entry = terminalPool.ensure(props.terminalInfo, sendInput)
-  terminalPool.attach(props.terminalInfo.id, container.value)
-
-  term = entry.term
-  fitAddon = entry.fitAddon
-  // Mirror pool-owned pin state into a local reactive ref for FOB visibility.
-  isPinnedToBottom.value = entry.pinnedToBottom
-
-  // Defer fit to next frame so the browser has laid out the re-attached wrapper
-  // and container dimensions are accurate for cols/rows calculation.
-  requestAnimationFrame(() => {
-    fitAddon?.fit()
-    sendResize()
-    terminalPool.syncViewport(props.terminalInfo.id)
+  })
+  attachment = terminalPool.attach(props.terminalInfo.id, container.value, {
+    onResize: ({ cols, rows }) => {
+      terminalActor?.send({ type: 'terminal.RESIZE', terminalId: props.terminalInfo.id, cols, rows })
+    },
+    onSelectionChange: has => { hasSelection.value = has },
+    onFollowingChange: following => { isFollowingOutput.value = following },
   })
 
-  // Track user scroll to support "pin to bottom"
-  const viewport = term.element?.querySelector('.xterm-viewport') as HTMLElement | null
-  if (viewport) {
-    const onScroll = () => {
-      const pinned = viewport.scrollTop + viewport.clientHeight >= viewport.scrollHeight - 10
-      isPinnedToBottom.value = pinned
-      terminalPool.setPinned(props.terminalInfo.id, pinned)
-    }
-    viewport.addEventListener('scroll', onScroll, { passive: true })
-    viewDisposables.push({ dispose: () => viewport.removeEventListener('scroll', onScroll) })
-  }
-
-  // Track selection for the context menu
-  viewDisposables.push(term.onSelectionChange(() => {
-    hasSelection.value = !!term?.getSelection()
-  }))
-
-  // Auto-scroll on live writes while pinned. During live writes xterm's
-  // own scroll-follow works (ydisp advances with ybase), so the cheap
-  // in-tree scrollToBottom suffices — no pool round-trip needed.
-  viewDisposables.push(term.onWriteParsed(() => {
-    if (isPinnedToBottom.value) term?.scrollToBottom()
-  }))
-
-  // Forward xterm resize (driven by fit()) to the backend pty
-  viewDisposables.push(term.onResize(({ cols, rows }) => {
-    terminalActor?.send({ type: 'terminal.RESIZE', terminalId: props.terminalInfo.id, cols, rows })
-  }))
-
-  // Keep the terminal sized with its container
-  resizeObserver = new ResizeObserver(() => {
-    fitAddon?.fit()
-    sendResize()
-    if (isPinnedToBottom.value) terminalPool.syncViewport(props.terminalInfo.id)
-  })
-  resizeObserver.observe(container.value)
-
-  term.focus()
+  // **Not focused on mount** (F15). A terminal mounts on a tab switch, a panel drag and an actor
+  // replacement, none of which is the user asking for it — and taking focus from what they were typing in
+  // is the whole defect. The view exposes `focus()` for the cases that *are* a request.
 })
 
 onBeforeUnmount(() => {
-  resizeObserver?.disconnect()
-  resizeObserver = null
-
-  for (const d of viewDisposables) {
-    try { d.dispose() } catch { /* ignore */ }
-  }
-  viewDisposables.length = 0
-
-  // Detach the pool's wrapper from our container but DO NOT dispose the xterm
-  // instance — it survives in the pool until terminal.CLOSED.
-  terminalPool.detach(props.terminalInfo.id)
-
-  term = null
-  fitAddon = null
+  // The emulator is not disposed — it survives in the pool until `terminal.CLOSED`. Releasing is also how a
+  // host that another has already taken over from detaches nothing (F1): during a remount the new host
+  // attaches before this one unmounts.
+  attachment?.release()
+  attachment = null
 })
 
 /* --------------------------------------------------------------------------
  * Public API (exposed to parent via refs) ---------------------------------- */
 function focus() {
-  term?.focus()
+  attachment?.focus()
 }
 
 defineExpose({ focus })

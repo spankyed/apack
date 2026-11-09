@@ -1,5 +1,6 @@
 import { surfaceStorage } from '@apackdev/sdk/fe'
 import { ref as featureRef } from '#generated/ref.ts'
+import { blockRunCaughtUp, finishedRun, messageStreamBlocks, messageStreamText } from './message-text.ts';
 
 /** This surface's window storage: the prefix is its ref, so these names are scoped to it. */
 const storage = surfaceStorage(featureRef('threads'))
@@ -46,10 +47,18 @@ export const id = 'threads' as const;
 /** How many messages a page of the chat holds, and how many more each `LOAD_MORE_MESSAGES` asks for */
 const MESSAGE_PAGE_SIZE = 50;
 
-// Module-level mouse position tracker (read when hotkey fires)
+/**
+ * Where the pointer was, for the one thing that needs it: a hotkey carries no coordinates, so the quick
+ * prompt opens at the last position the pointer was seen (`quickPromptCursor`).
+ *
+ * **The listener is owned by `pointerTracker` below, not installed here.** Added at module scope it was
+ * never removed, so every replacement of this pack's frontend left another one behind writing into a module
+ * nothing could still reach — and it touched `window` at *import*, which is why a pure helper of this file
+ * had to be split out before a test could import it. Two numbers at module scope are fine; a listener is
+ * not, and this repo's rule is that a concern owning one is a child actor.
+ */
 let mouseX = 0;
 let mouseY = 0;
-window.addEventListener('mousemove', (e) => { mouseX = e.clientX; mouseY = e.clientY; }, { passive: true });
 
 
 function getInitialView(): 'list' | 'kanban' | 'dashboard' {
@@ -157,6 +166,8 @@ type ViewEvent =
   | { type: 'DETAIL.READ'; id: string; detail: ThreadDetailView | null }
   | { type: 'CHAT.READ'; threadId: string; chat: ChatPage | null }
   | { type: 'MESSAGE.READ'; id: string; message: MessageEntity | null }
+  | { type: 'MESSAGE_TEXT_APPENDED'; messageId: string; at: number; text: string; done?: true }
+  | { type: 'MESSAGE_BLOCK_TEXT_APPENDED'; messageId: string; block: string; at: number; text: string; done?: true }
   | { type: 'TAB.READ'; threadId: string; tab: ThreadTabView | null }
   | { type: 'SEARCH.READ'; query: string; results: MessageSearchResult[] }
   | { type: 'VIEW.FAILED'; view: string; error: string }
@@ -331,9 +342,16 @@ function threadStore(ctx: ThreadsContext, lists: ThreadsContext['lists']): Parti
   };
 }
 
-/** The messages `ids` name, as their views last gave them */
+/** The messages `ids` name: the row each view last gave, with a streamed reply's run spliced in (G1) */
 function messagesOf(ctx: ThreadsContext, ids: string[]): Partial<MessageEntity>[] {
-  return ids.flatMap((messageId) => (ctx.messageContents[messageId] ? [ctx.messageContents[messageId]] : []));
+  return ids.flatMap((messageId) => {
+    const row = ctx.messageContents[messageId];
+    if (!row) return [];
+    const shown = messageStreamText(row.text, ctx.messageStreams[messageId]);
+    const blocks = messageStreamBlocks(row.blocks, ctx.messageBlockStreams[messageId]);
+    if (shown === row.text && blocks === row.blocks) return [row];
+    return [{ ...row, ...(shown === row.text ? {} : { text: shown }), ...(blocks === row.blocks ? {} : { blocks }) }];
+  });
 }
 
 /** The chat's and the detail page's messages, composed again from their ids and each message's view */
@@ -383,6 +401,17 @@ const chatStateOverrideTimer = (threadId: string) => `clear-expired-override-${t
 const threadsState = setup({
   types: { context: {} as ThreadsContext, events: {} as ThreadEvents },
   actors: {
+    /**
+     * Follows the pointer for as long as this surface runs, and takes its listener back when it stops.
+     *
+     * It sends nothing: a transition per pointer move would be thousands of them for a value read once.
+     * What it owns is the listener's *lifetime* — the leak was never the two numbers.
+     */
+    pointerTracker: fromCallback(() => {
+      const follow = (event: MouseEvent) => { mouseX = event.clientX; mouseY = event.clientY; };
+      window.addEventListener('mousemove', follow, { passive: true });
+      return () => window.removeEventListener('mousemove', follow);
+    }),
     clearNewThreadFlag: fromCallback<AnyEventObject, { id: string }>(({ input, sendBack }) => {
       const ANIMATION_DURATION = 1000;
       const timer = setTimeout(() => sendBack({ type: 'CLEAR_NEW_THREAD_FLAG', id: input.id }), ANIMATION_DURATION);
@@ -466,6 +495,10 @@ const threadsState = setup({
       enqueue.assign({
         messageViews: listed,
         messageContents: Object.fromEntries(listed.flatMap(messageId => (context.messageContents[messageId] ? [[messageId, context.messageContents[messageId]]] : []))),
+        // A streamed run is pruned with the row it splices onto; a window that stops listing a message holds
+        // neither, and nothing accumulates across a long session
+        messageStreams: Object.fromEntries(listed.flatMap(messageId => (context.messageStreams[messageId] ? [[messageId, context.messageStreams[messageId]]] : []))),
+        messageBlockStreams: Object.fromEntries(listed.flatMap(messageId => (context.messageBlockStreams[messageId] ? [[messageId, context.messageBlockStreams[messageId]]] : []))),
       });
     }),
     /**
@@ -557,9 +590,89 @@ const threadsState = setup({
       const { id: messageId, message } = typeOf('MESSAGE.READ', event);
       if (!context.messageViews.includes(messageId)) return {};
       const { [messageId]: _gone, ...rest } = context.messageContents;
-      const next = { ...context, messageContents: message ? { ...rest, [messageId]: message } : rest };
-      return { messageContents: next.messageContents, ...composedMessages(next) };
+      // A durable write caught the row up to the run, so the run has nothing left to add. Dropped here
+      // rather than left to grow: this is the only place that learns what the row now holds
+      const run = context.messageStreams[messageId];
+      const caughtUp = run !== undefined && (message?.text?.length ?? 0) >= run.at + run.text.length;
+      const { [messageId]: _spliced, ...streams } = context.messageStreams;
+      const blockRun = context.messageBlockStreams[messageId];
+      const blockCaughtUp = blockRunCaughtUp(message?.blocks, blockRun);
+      const { [messageId]: _splicedBlock, ...blockStreams } = context.messageBlockStreams;
+      const next = {
+        ...context,
+        messageContents: message ? { ...rest, [messageId]: message } : rest,
+        messageStreams: caughtUp || !message ? streams : context.messageStreams,
+        messageBlockStreams: blockCaughtUp || !message ? blockStreams : context.messageBlockStreams,
+      };
+      return {
+        messageContents: next.messageContents,
+        messageStreams: next.messageStreams,
+        messageBlockStreams: next.messageBlockStreams,
+        ...composedMessages(next),
+      };
     }),
+
+    /**
+     * A streamed reply's next characters (G1): the feed beside the row, spliced by `messageStreamText`.
+     *
+     * A run is extended only where the event continues it exactly. A gap means this window missed an event,
+     * and the honest answer is to start a fresh run at the offset that just arrived — which the splice then
+     * ignores until the row reaches it, rather than showing text with a hole in it. `done` drops the run,
+     * and the writer has already written the row by then, which is why that order is its contract.
+     */
+    appendMessageText: assign(({ context, event }) => {
+      const ev = typeOf('MESSAGE_TEXT_APPENDED', event);
+      const { [ev.messageId]: held, ...others } = context.messageStreams;
+      // **`done` is taken whether or not this window is still following the message.** A run held from when
+      // it was followed has to end with the stream it belongs to: dropping the event with the guard below
+      // left the run in place, and a `finalize` that *replaced* the text — the warning a failed turn ends
+      // with — was then spliced away by the abandoned partial reply, with the error never shown.
+      if (ev.done) {
+        if (!held) return {};
+        // **The last event carries the tail, and dropping the run threw it away.** The writer sends what it
+        // had not fed yet beside `done`, having written the row first — but the row reaches a window through
+        // its view subscription and this through the bus, two channels nothing orders. So the window that
+        // dropped its run on `done` rendered the row as it last knew it, without the tail, until the view
+        // caught up: the end of a reply visibly missing and then appearing.
+        //
+        // `finishedRun` is the rule, beside the splice it feeds, so a spec for it needs no window
+        const completed = finishedRun(held, ev);
+        const finished = completed ? { ...others, [ev.messageId]: completed } : others;
+        const next = { ...context, messageStreams: finished };
+        return { messageStreams: finished, ...composedMessages(next) };
+      }
+      if (!context.messageViews.includes(ev.messageId)) return {};
+      const continues = held !== undefined && held.at + held.text.length === ev.at;
+      const run = continues ? { at: held.at, text: held.text + ev.text } : { at: ev.at, text: ev.text };
+      const messageStreams = { ...others, [ev.messageId]: run };
+      return { messageStreams, ...composedMessages({ ...context, messageStreams }) };
+    }),
+    /**
+     * The same rule as the text's run, for a block that grows.
+     *
+     * A run only continues when the delta starts exactly where the last one ended **and names the same
+     * block**: a message holds several, and two blocks' runs under one message id would otherwise splice
+     * each other's characters into whichever block arrived last.
+     */
+    appendMessageBlockText: assign(({ context, event }) => {
+      const ev = typeOf('MESSAGE_BLOCK_TEXT_APPENDED', event);
+      const { [ev.messageId]: held, ...others } = context.messageBlockStreams;
+      // Taken whether or not this window still follows the message, as the text's `done` is: a run left in
+      // place would splice itself over whatever the row says next, and the writer has written the row by now
+      if (ev.done) {
+        if (!held) return {};
+        const next = { ...context, messageBlockStreams: others };
+        return { messageBlockStreams: others, ...composedMessages(next) };
+      }
+      if (!context.messageViews.includes(ev.messageId)) return {};
+      const continues = held !== undefined && held.block === ev.block && held.at + held.text.length === ev.at;
+      const run = continues
+        ? { block: ev.block, at: held.at, text: held.text + ev.text }
+        : { block: ev.block, at: ev.at, text: ev.text };
+      const messageBlockStreams = { ...others, [ev.messageId]: run };
+      return { messageBlockStreams, ...composedMessages({ ...context, messageBlockStreams }) };
+    }),
+
     readTab: enqueueActions(({ context, event, enqueue }) => {
       const { threadId, tab } = typeOf('TAB.READ', event);
       if (!tab || !context.tabs.some(t => t.id === threadId)) return;
@@ -1420,6 +1533,8 @@ const threadsState = setup({
 }).createMachine({
   id,
   initial: getInitialView(),
+  // At the root, so it runs for exactly as long as this surface does and its cleanup is what stopping it runs
+  invoke: { src: 'pointerTracker', id: 'pointerTracker' },
   context: () => ({
     // Thread management (normalized)
     threadMap: {} as Record<string, ThreadListItem>,
@@ -1466,6 +1581,8 @@ const threadsState = setup({
     chatMessageIds: [],
     detailMessageIds: [],
     messageContents: {},
+    messageStreams: {},
+    messageBlockStreams: {},
     messageViews: [],
     tabViews: [],
     tabsRead: [],
@@ -1494,6 +1611,8 @@ const threadsState = setup({
     'SEARCH.READ': { actions: 'readMessageSearch' },
     'VIEW.FAILED': { guard: ({ event }) => event.view === 'messageSearch', actions: 'endMessageSearch' },
     'MESSAGE.READ': { actions: 'readMessage' },
+    MESSAGE_TEXT_APPENDED: { actions: 'appendMessageText' },
+    MESSAGE_BLOCK_TEXT_APPENDED: { actions: 'appendMessageBlockText' },
     'TAB.READ': [
       { guard: 'tabGone', actions: 'dropThread' },
       { actions: 'readTab' },

@@ -25,7 +25,7 @@ import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { population } from '@apackdev/sdk/testing';
 import { UNIT_SUITES } from '../../../scripts/lib/unit-suites.ts';
 import { bareWaitKey, bareWaits, clockedDeadlines, specFilesUnder, type BareWait, type Clock } from '../../../scripts/lib/test-timeouts.ts';
-import { tsFilesUnder } from '../../../scripts/lib/process-spawns.ts';
+import { repoFiles } from './_support/repo-files.ts';
 
 /**
  * Waits whose subject genuinely is elapsed time, and why each one is.
@@ -36,11 +36,24 @@ import { tsFilesUnder } from '../../../scripts/lib/process-spawns.ts';
  * allowed to pass; a poll of something with no event to offer; and a race whose timer *is* the answer.
  */
 const BARE_WAIT_BY_DESIGN: Record<string, string> = {
+  // Examined: both of this file's sleeps prove a *negative* — that a schedule stopped with its app does not tick
+  // into the next test — and a negative cannot be polled for, there being no condition to await. The elapsed time
+  // is the subject, which its header says too. Its one clocked wait was on a positive condition and is now a poll
+  'packages/default-setup/tests/harness-app-stop.spec.ts > wait':
+    'the wait is the assertion: it proves a stopped schedule does not tick, so shortening it removes the check',
   'packages/apack-cli/tests/build/frontend-watch.native.spec.ts > fileEventsDelivered':
     'what the cases assert is that an event changes nothing, and an event that has no effect has nothing to await',
   'packages/apack-cli/tests/build/watch-package-edit.native.spec.ts > publishes one build when a refresh rewrites what the pack builds against':
     'the subject is a second build that must not start, so there is no event to await; load can only cause a false '
     + 'pass here, never a false failure',
+  'packages/apack-host/tests/broker/lifetime.spec.ts > keeps a session when its client leaves and an owner holds the broker':
+    'the subject is a session that must *not* end, and attach is absent from the broker client, so a second '
+    + 'client cannot ask about a session it did not open and there is no event that says "still here". Load '
+    + 'can only make this pass falsely, never fail falsely',
+  'packages/apack-host/tests/broker/lifetime.spec.ts > reaped':
+    'the case it serves closes the only client, so no connection remains for an event to arrive on and the '
+    + "OS is the only witness left. Its sibling, where a client is still connected, awaits the broker's own "
+    + '`onExit` instead',
   'packages/apack-host/tests/bus/reply.spec.ts > after':
     "a delay inside the handler under test — a backend system's work is I/O, so it awaits before it answers, "
     + 'which is what makes the delivery scope load-bearing. The cases await the answer',
@@ -68,7 +81,6 @@ const BARE_WAIT_BY_DESIGN: Record<string, string> = {
  * awaited event when somebody reads it.
  */
 const NOT_CONVERTED_YET: readonly string[] = [
-  'packages/default-setup/tests/harness-app-stop.spec.ts > wait',
   'packages/apack-cli/tests/commands/db.integration.spec.ts > writerDuring',
   'packages/repo-checks/tests/bounded-spawn.integration.spec.ts > kills the whole group, not the process it started',
   'packages/repo-checks/tests/chain-schedule.spec.ts > done',
@@ -95,9 +107,10 @@ describe('a spec waits for the thing it waits for', () => {
       .map((wait) => `${wait.file}:${wait.line} > ${wait.name}`);
 
     expect(unaccounted, [
-      'A spec may not sleep and then assert. Await the thing instead —',
-      '`_whenSatisfied` or `_byDeadline` from @apackdev/sdk/testing/waiting — or, if the elapsed time really is',
-      'the subject, add it to BARE_WAIT_BY_DESIGN with the reason.',
+      'A spec may not sleep and then assert. Await the thing instead — `settles` from @apackdev/sdk/testing',
+      'for a condition to poll (the one a pack can reach too), or `_whenSatisfied`/`_byDeadline` from',
+      '@apackdev/sdk/testing/waiting for an event. If the elapsed time really is the subject, add it to',
+      'BARE_WAIT_BY_DESIGN with the reason.',
     ].join(' ')).toEqual([]);
   });
 
@@ -114,8 +127,8 @@ describe('a spec waits for the thing it waits for', () => {
    * Asserted as an exact number for the same reason `spec-cost`'s records are: a count that drifts upward
    * without anyone noticing is how a list of deliberate exceptions becomes a list of everything.
    */
-  it('has four waits left to examine', () => {
-    expect(NOT_CONVERTED_YET).toHaveLength(4);
+  it('has three waits left to examine', () => {
+    expect(NOT_CONVERTED_YET).toHaveLength(3);
   });
 });
 
@@ -127,10 +140,6 @@ describe('a spec waits for the thing it waits for', () => {
  * own state, where nothing outside it is slowed by load and a quick failure beats the guard's stall window.
  */
 const CLOCK_BY_DESIGN: Record<string, string> = {
-  'packages/apack-ears/tests/engine/rank-index.spec.ts':
-    'waits on an index building in this process, so load slows the wait and the work alike',
-  'packages/default-setup/tests/harness-app-stop.spec.ts':
-    "waits on the in-process test app's timer flow ticking, which runs on this process's own event loop",
   // The Playwright suites: Playwright gives a test and a wait only a clock, and `definePackE2EConfig` declares the
   // suite's two backstops (60s a test, 30s an assertion). These are the waits that genuinely outlast them
   'tests/acceptance/pack-dev/test-pack-dev.ts':
@@ -149,11 +158,25 @@ const CLOCK_BY_DESIGN: Record<string, string> = {
 
 
 /** Every test file the clocks are counted over: the unit suites' trees, support modules included, the E2E and pack suites and `drive/` */
-const testFiles = (): string[] => [
-  ...UNIT_SUITES.map((suite) => path.join(REPO_ROOT, 'packages', suite.dir, 'tests')),
-  path.join(REPO_ROOT, 'tests'),
-  path.join(REPO_ROOT, 'drive'),
-].flatMap((dir) => tsFilesUnder(dir)).filter((file) => !/\/(node_modules|dist|\.apack)\//.test(file));
+/**
+ * The files this gate reads: the working tree as it would be committed, under the three trees that hold tests.
+ *
+ * **Through `repoFiles`, because `drive/` is gitignored whole** (`drive/.gitignore` is `*`). A walk of the
+ * directory sweeps in every scratch driving script on the machine running it, and those are exactly what the
+ * guide tells you to write there — so this gate failed for anyone who had driven the app, with 53 entries in
+ * one case, while CI saw none of them and passed. A clock in a file nobody commits is not a clock this repo
+ * has. The tracked harness under `drive/` is still read, which is what naming the directory was for.
+ */
+const TEST_TREES = [
+  ...UNIT_SUITES.map((suite) => path.join('packages', suite.dir, 'tests')),
+  'tests',
+  'drive',
+];
+
+const testFiles = (): string[] => repoFiles()
+  .filter((file) => file.endsWith('.ts') && TEST_TREES.some((tree) => file.startsWith(`${tree}/`)))
+  .filter((file) => !/(^|\/)(node_modules|dist|\.apack)\//.test(file))
+  .map((file) => path.join(REPO_ROOT, file));
 
 const clocksByFile = (): Map<string, Clock[]> => {
   const byFile = new Map<string, Clock[]>();

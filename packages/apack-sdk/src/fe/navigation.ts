@@ -8,6 +8,8 @@ import { getDesignated, hasDesignation } from '../designations/index.ts';
 import type { HostShell, SurfaceEvent } from './shell.ts';
 import { splitRef } from '../ids/refs.ts';
 import { _runDelivery } from '../events/delivery.ts';
+import { summarizeUrl, webUrlProblem } from '../utils/web-url.ts';
+import { createLogger } from '../logger/index.ts';
 
 export type { SurfaceEvent } from './shell.ts';
 
@@ -31,11 +33,24 @@ export function untypedOpenSurface(ref: string, event?: SurfaceEvent | SurfaceEv
   getApp().send({ type: 'OPEN_SURFACE', surface: ref, events });
 }
 
+const links = createLogger('links');
+
 /**
  * Opens a link the way the user chose. The surface playing the `browser` role takes `LINK.OPEN { url }` and decides,
  * by its own settings (a tab of its own, or the system's browser); with no surface in that role, the system's browser.
+ *
+ * **The scheme is checked here, before either branch** (S4). A URL reaching this function is untrusted text —
+ * a note, a model's answer, a pack's UI — and only the external branch used to check it, so `javascript:` or
+ * `file:` was refused by the system browser and handed straight to an in-app tab. The rule is
+ * `webUrlProblem`, the same one `openExternalUrl` applies. A refusal is logged without the query, which may
+ * carry a token, and opens nothing: the link is data the app was given, not a caller's mistake to throw at.
  */
 export function openLink(url: string): void {
+  const problem = webUrlProblem(url);
+  if (problem) {
+    links.warn(`Refused to open "${summarizeUrl(url)}": ${problem}`);
+    return;
+  }
   const ref = hasDesignation('browser') ? getDesignated('browser') : undefined;
   const browser = ref ? getApp().system.get(ref) : undefined;
   // Reaching the actor rather than asking the shell, because the lookup *is* the decision: a shell request for a

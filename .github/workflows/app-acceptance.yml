@@ -49,6 +49,9 @@ jobs:
       - name: Record source
         run: git rev-parse HEAD
       - uses: ./.github/actions/elmdb
+      - uses: ./.github/actions/apack-terminal
+        with:
+          build: 'true'
       - name: Install dependencies
         env:
           GITHUB_TOKEN: ${{ github.token }}

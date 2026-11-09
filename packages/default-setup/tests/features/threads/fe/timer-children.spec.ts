@@ -5,8 +5,6 @@ import { createActor } from 'xstate'
 import { startFeTestRuntime } from '@apackdev/sdk/testing'
 import threadsState from '#features/threads/fe/state.ts'
 
-// The surface's module tracks the mouse for its hotkeys as it loads; the test setup's window is a bare stand-in
-vi.hoisted(() => { (globalThis as { addEventListener?: unknown }).addEventListener ??= () => {} })
 
 afterAll(startFeTestRuntime({ client: { send() {}, watchView: () => () => {} } }))
 beforeEach(() => vi.useFakeTimers())

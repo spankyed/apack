@@ -7,7 +7,7 @@
 // next test; shortening the wait removes what the test checks.
 import { describe, expect, it, vi } from 'vitest'
 import { importFlows, startApp, type TestApp } from '@apackdev/testing/harness'
-import { testRootEvents } from '@apackdev/sdk/testing'
+import { settles, testRootEvents } from '@apackdev/sdk/testing'
 import { action, schedule } from '#generated/flow-helpers.ts'
 import { repository } from '#generated/repository.ts'
 import { onShutdown } from '#features/hooks.ts'
@@ -47,7 +47,7 @@ describe('a real schedule', () => {
 
   it("doesn't tick once its app stopped, as the harness stops it after each test", async () => {
     const app = await startEverySecond()
-    await vi.waitFor(() => ranTick(app), { timeout: 3_000, interval: 50 })
+    await settles(() => ranTick(app))
     // from the app running, so the empty list after stopping means stopped rather than never started
     expect(getAllFlowActorIds()).not.toEqual([])
 

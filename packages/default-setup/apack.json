@@ -13,7 +13,8 @@
       "host/runHistory",
       "host/inference",
       "host/secrets",
-      "host/filesystem"
+      "host/filesystem",
+    "host/terminal"
     ]
   },
   "data": {
@@ -763,7 +764,7 @@
           "restoreTerminals": true,
           "defaultBaseDirectory": null,
           "baseDirectory": null,
-          "enableShellIntegration": false,
+          "enableShellIntegration": true,
           "confirmTerminalClose": true,
           "closeTerminalOnTabClose": true,
           "maxTerminals": 25,

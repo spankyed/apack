@@ -41,6 +41,9 @@ jobs:
         run: npm install -g npm@11.21.1
 
       - uses: ./.github/actions/elmdb
+      - uses: ./.github/actions/apack-terminal
+        with:
+          build: 'true'
 
       - name: Detect channel
         id: channel

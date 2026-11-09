@@ -546,6 +546,26 @@ export type OutgoingThreadsEvents =
    * which has no window to answer, to every window. It names the thread; its content is the thread's views.
    */
   | { type: 'SHOW_THREAD'; threadId: EARS.EntityId; restore?: boolean }
+  /**
+   * The next characters of a streamed reply, for every window showing that message.
+   *
+   * **The feed, not the row** (G1). A streamed reply used to reach a window by writing the whole accumulated
+   * text to EARS every 80 ms, which is `flushes x final size / 2` bytes — 15 MB for a 40 KB reply over a
+   * minute, measured, and quadratic in reply length. The row is still written, on a slower clock and at the
+   * end, so a crash loses seconds rather than the reply; what arrives every 80 ms is this, the delta.
+   *
+   * `at` is the offset the delta starts at, so a window can splice it onto whatever the message's view last
+   * gave it and a window that opened mid-stream can tell it has no run to append to — it shows the row until
+   * the next durable write catches it up. `done` is the last one: the row is written before it is sent.
+   */
+  | { type: 'MESSAGE_TEXT_APPENDED'; messageId: EARS.EntityId; at: number; text: string; done?: true }
+  /**
+   * The next characters of a growing block, the same feed for the field that grows rather than changes.
+   *
+   * `block` names which of the message's blocks the run belongs to, since a message holds several. A
+   * block's label, state and re-projected lists are rewrites and travel on the row; this carries growth.
+   */
+  | { type: 'MESSAGE_BLOCK_TEXT_APPENDED'; messageId: EARS.EntityId; block: string; at: number; text: string; done?: true }
   | { type: 'CHAT_STARTED'; data: ChatStart }
   | { type: 'THREAD_CHAT_ERROR'; threadId: string; error: string }
   | { type: 'THREADS_EXPORTED'; filePath: string; threadCount: number }

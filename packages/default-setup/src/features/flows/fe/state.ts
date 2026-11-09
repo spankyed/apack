@@ -155,7 +155,7 @@ type UIEvent =
   | { type: 'CANVAS.CLEAR_ERROR' }
   // Layout events
   | { type: 'SURFACE_DEACTIVATED' }
-  | { type: 'SURFACE_STARTED' }
+  | { type: 'SURFACE_STARTED'; ownsAppLayout: boolean }
   | { type: 'LAYOUT_COMPUTED'; graph: FlowsContext['graph']; positions: Record<string, { x: number; y: number }> }
 
 export type FlowsEvents = OpenEntity | UIEvent | SystemEvent | TrailClickEvent

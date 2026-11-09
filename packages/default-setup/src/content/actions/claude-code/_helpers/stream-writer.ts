@@ -1,17 +1,24 @@
 /**
- * Throttled writer for streaming text into an existing chat message.
+ * Writer for streaming text into an existing chat message: a feed to the windows, the row on a slower clock.
  *
- * Claude Code's stream-json protocol emits Anthropic text deltas a few
- * characters at a time. Pushing every delta through `chat.updateMessageState`
- * would drown the event bus and the renderer; pushing too rarely would make
- * the UI feel janky. This helper smooths the two sides:
+ * Claude Code's stream-json protocol emits Anthropic text deltas a few characters at a time. Pushing every
+ * delta at the window would drown the bus; pushing too rarely makes the UI janky. So the characters go out
+ * every `intervalMs`, and what goes out is the **delta** (`chat.streamMessageText`) rather than the message.
  *
- *  - `push(text)` appends to an in-memory buffer and schedules a single
- *    flush no sooner than `intervalMs` from the previous flush.
- *  - `flush()` writes the accumulated text immediately (used after a
- *    tool_use note or on completion).
- *  - `finalize(text?)` performs one last flush with optional replacement text
- *    and a `responseTimestamp` so the UI marks the message as complete.
+ * **The row is written on `durableMs` and at the end** (G1). Writing it every 80 ms was the whole cost of a
+ * streamed reply: `updateMessageState` writes the message, so the bytes are `flushes x final size / 2` —
+ * 15 MB for a 40 KB reply over a minute, measured, and quadratic in the reply's length. On a 2 s clock the
+ * same reply costs ~0.6 MB, and the row still exists while the reply is arriving, so a crash loses seconds
+ * of it rather than all of it. That durability is the reason this is not simply one write at the end, and
+ * it is also what lets a window that opened mid-stream catch up: it has no run to splice, so it shows the
+ * row until the next durable write.
+ *
+ *  - `push(text)` appends to an in-memory buffer; the feed goes out no sooner than `intervalMs` from the
+ *    last one, and the row no sooner than `durableMs`.
+ *  - `flush()` sends the pending characters immediately (used after a tool_use note).
+ *  - `finalize(text?)` writes the row with optional replacement text and a `responseTimestamp` so the UI
+ *    marks the message complete, then sends the last feed event with `done`. That order matters: the window
+ *    drops its run on `done`, and the row it falls back to has to be the finished one by then.
  *
  * The writer owns no external state — one instance per streaming message.
  */
@@ -19,8 +26,10 @@
 import type { Services, EntityId } from '#generated/services.ts';
 
 export interface StreamWriterOptions {
-  /** Minimum ms between `updateMessageState` calls. Default 80ms. */
+  /** Minimum ms between feed events — what the window's update cadence is. Default 80ms. */
   intervalMs?: number;
+  /** Minimum ms between durable writes of the row. Default 2000ms; see the header for what it buys. */
+  durableMs?: number;
 }
 
 export interface StreamWriter {
@@ -42,28 +51,43 @@ export function createStreamWriter(
   opts: StreamWriterOptions = {},
 ): StreamWriter {
   const intervalMs = opts.intervalMs ?? 80;
+  const durableMs = opts.durableMs ?? 2000;
   let buffer = '';
-  let lastFlushAt = 0;
-  let pendingTimer: ReturnType<typeof setTimeout> | null = null;
+  /** How much of `buffer` the windows have been sent. The feed's offsets are contiguous from 0 */
+  let fedUpTo = 0;
+  let lastFeedAt = 0;
+  let lastWriteAt = 0;
+  let feedTimer: ReturnType<typeof setTimeout> | null = null;
+  let writeTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const writeNow = () => {
-    if (pendingTimer) {
-      clearTimeout(pendingTimer);
-      pendingTimer = null;
-    }
-    services.chat.updateMessageState(messageId, { text: buffer });
-    lastFlushAt = Date.now();
+  const clear = (timer: ReturnType<typeof setTimeout> | null) => {
+    if (timer) clearTimeout(timer);
+    return null;
   };
 
+  /** Sends whatever the windows have not been sent. Nothing pending is no event: a feed carries characters */
+  const feedNow = () => {
+    feedTimer = clear(feedTimer);
+    lastFeedAt = Date.now();
+    if (fedUpTo >= buffer.length) return;
+    const at = fedUpTo;
+    const text = buffer.slice(at);
+    fedUpTo = buffer.length;
+    services.chat.streamMessageText({ messageId, at, text });
+  };
+
+  /** Writes the row. Durability only — no window waits for this, which is what makes its clock slow */
+  const writeNow = () => {
+    writeTimer = clear(writeTimer);
+    lastWriteAt = Date.now();
+    services.chat.updateMessageState(messageId, { text: buffer });
+  };
+
+  const after = (since: number, every: number) => Math.max(0, every - (Date.now() - since));
+
   const schedule = () => {
-    if (pendingTimer) return;
-    const since = Date.now() - lastFlushAt;
-    const delay = Math.max(0, intervalMs - since);
-    pendingTimer = setTimeout(() => {
-      pendingTimer = null;
-      services.chat.updateMessageState(messageId, { text: buffer });
-      lastFlushAt = Date.now();
-    }, delay);
+    if (!feedTimer) feedTimer = setTimeout(feedNow, after(lastFeedAt, intervalMs));
+    if (!writeTimer) writeTimer = setTimeout(writeNow, after(lastWriteAt, durableMs));
   };
 
   return {
@@ -76,22 +100,30 @@ export function createStreamWriter(
     pushImmediate(text: string): void {
       if (!text) return;
       buffer += text;
-      writeNow();
+      feedNow();
+      schedule();
     },
     flush(): void {
-      writeNow();
+      feedNow();
+      schedule();
     },
     finalize(text?: string): void {
+      feedTimer = clear(feedTimer);
+      writeTimer = clear(writeTimer);
+      // Replacement text can be shorter than what the windows hold, so the run they are splicing is no
+      // longer a run of this message. The row is the answer, and `done` is what tells them to read it.
+      const replaced = text !== undefined && text !== buffer;
       if (text !== undefined) buffer = text;
-      if (pendingTimer) {
-        clearTimeout(pendingTimer);
-        pendingTimer = null;
-      }
       services.chat.updateMessageState(messageId, {
         text: buffer,
         responseTimestamp: Date.now(),
       });
-      lastFlushAt = Date.now();
+      lastWriteAt = Date.now();
+      // The row is written first, because `done` is what makes a window fall back to it
+      const at = replaced ? buffer.length : fedUpTo;
+      const tail = replaced ? '' : buffer.slice(at);
+      fedUpTo = buffer.length;
+      services.chat.streamMessageText({ messageId, at, text: tail, done: true });
     },
   };
 }

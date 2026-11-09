@@ -129,6 +129,7 @@ export interface HostRuntimeServices {
     runHistory: RunHistory;
     secrets: SecretsService;
     settings: SettingsAdmin;
+    terminal: TerminalService;
 }
 
 // @internal
@@ -209,6 +210,7 @@ export interface PerformanceExecution {
     capture(): PerformanceCarrier;
     // (undocumented)
     carryEvent(event: object, carrier: unknown): void;
+    record(name: string, attributes?: () => Record<string, string | number | boolean>): void;
     // (undocumented)
     withCarrier<T>(carrier: unknown, fn: () => T): T;
     // (undocumented)
@@ -266,6 +268,9 @@ export const _recordingModeSchema: z.ZodEnum<{
     lightweight: "lightweight";
     detailed: "detailed";
 }>;
+
+// @internal
+export function _recordPerformance(name: string, attributes: () => Record<string, string | number | boolean>): void;
 
 // @internal
 export interface _RendererPerformanceResources {

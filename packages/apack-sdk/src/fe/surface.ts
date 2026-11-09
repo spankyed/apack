@@ -55,11 +55,15 @@ export type SurfaceStateOf<C> = C extends { state: infer State } ? State : never
  *
  * - `SURFACE_STARTED`, once, as soon as the surface's actor is spawned (each time it is, a pack's reload included).
  *   It is where a surface asks for what it starts from: a send made from the machine's own entry runs in no delivery,
- *   carries no sender, and so cannot be answered.
+ *   carries no sender, and so cannot be answered. It carries `ownsAppLayout`, which is what a surface drawn in more
+ *   than one window needs to know: every window has its own copy of the window storage, so two of them keeping a
+ *   layout under one name is two writers and the last one wins. The window that owns the app's layout is the one
+ *   that may write it; a popout observes and writes none. It is the same fact the shell records the last-open
+ *   surface by, so the two cannot disagree.
  * - `SURFACE_ACTIVATED` and `SURFACE_DEACTIVATED`, as the surface becomes the one shown and stops being it.
  */
 export type SurfaceLifecycleEvent =
-  | { type: 'SURFACE_STARTED' }
+  | { type: 'SURFACE_STARTED'; ownsAppLayout: boolean }
   | { type: 'SURFACE_ACTIVATED' }
   | { type: 'SURFACE_DEACTIVATED' }
 

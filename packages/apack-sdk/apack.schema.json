@@ -63,7 +63,8 @@
                   "host/runHistory",
                   "host/inference",
                   "host/secrets",
-                  "host/filesystem"
+                  "host/filesystem",
+                  "host/terminal"
                 ]
               },
               {

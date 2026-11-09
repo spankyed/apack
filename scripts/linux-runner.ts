@@ -17,6 +17,7 @@ import * as path from 'node:path';
 import { PACKAGES_PREBUILT_ENV, REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { linuxTestInvocation } from './lib/linux-native-scratch.ts';
 import { BUDGET_MS } from './lib/step-budgets.ts';
+import { oneRustToolchain, pinnedChannel } from './lib/vendored-checkouts.ts';
 
 const DOCKERFILE = path.join(REPO_ROOT, 'scripts', 'linux', 'Dockerfile');
 const short = (text: string | Buffer): string => createHash('sha256').update(text).digest('hex').slice(0, 12);
@@ -29,12 +30,29 @@ const ELMDB_CHECKOUT = (() => {
     process.exit(1);
   }
 })();
-/** The Rust toolchain elmdb pins, which the image installs */
-const RUST_TOOLCHAIN = /^channel\s*=\s*"([^"]+)"/m.exec(fs.readFileSync(path.join(ELMDB_CHECKOUT, 'rust-toolchain.toml'), 'utf8'))?.[1];
-if (RUST_TOOLCHAIN === undefined) {
-  process.stderr.write(`${ELMDB_CHECKOUT}/rust-toolchain.toml names no channel\n`);
-  process.exit(1);
-}
+/**
+ * The Rust checkouts this image installs a toolchain for, which is **the ones the container builds** and not
+ * every one `vendor/` links.
+ *
+ * A linked Rust checkout the container never compiles has no say in the toolchain: `vendor/apack-terminal` is
+ * one, since the broker reaches the container as a prebuilt binary in its npm package rather than as source to
+ * build. Folding it in made its `rust-toolchain.toml` a veto over every `test:linux` on a Mac — a channel
+ * disagreement in a checkout this image does nothing with refused the run and named both pins, with no way to
+ * act on it short of editing the other repository.
+ *
+ * Mounting a second source is what adds a member here, and `oneRustToolchain` is kept for that: with one it
+ * cannot refuse, and the edit that makes it fire again is a second `-v` beside elmdb's below.
+ */
+const CONTAINER_RUST_CHECKOUTS = [ELMDB_CHECKOUT];
+/** The one toolchain the image installs, since there is one image */
+const RUST_TOOLCHAIN = (() => {
+  try {
+    return oneRustToolchain(CONTAINER_RUST_CHECKOUTS.map((dir) => ({ path: dir, channel: pinnedChannel(dir) })));
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.exit(1);
+  }
+})();
 /** Keyed by the Dockerfile's bytes and the toolchain it installs, so either changing builds a new image */
 const IMAGE = `apack-linux-test:${short(`${fs.readFileSync(DOCKERFILE, 'utf8')}\n${RUST_TOOLCHAIN}`)}`;
 /**

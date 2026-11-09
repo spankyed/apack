@@ -203,4 +203,8 @@ export function dropAttribute(id: EARS.EntityId, kind: string): void {
 /** The subject a check asserted over, confirmed to be there — see its own doc comment for the rule */
 export { population } from './population.ts';
 
+// A condition awaited rather than slept on, bounded by the progress guard instead of a clock. The one waiter
+// a pack's tests can reach: the rest of `./waiting.ts` is the app's own and stays unpublished.
+export { settles } from './waiting.ts';
+
 export { nativeFrontendDeclarationFixture } from './frontend-declaration.ts';

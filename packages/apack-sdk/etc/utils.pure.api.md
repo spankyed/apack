@@ -135,6 +135,9 @@ export type Rename = {
     to: string;
 };
 
+// @public
+export function summarizeUrl(url: string): string;
+
 // @public (undocumented)
 export function toDisplayName(str: string): string;
 
@@ -143,6 +146,9 @@ export const toIdentifierSet: <T = unknown>(removed?: Array<T | string>, keyExtr
 
 // @public (undocumented)
 export const toMap: (r?: Rename[]) => Map<string, string>;
+
+// @public
+export function webUrlProblem(url: string): string | undefined;
 
 // (No @packageDocumentation comment for this package)
 

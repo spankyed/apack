@@ -28,7 +28,7 @@ export function withHostLast(surfaces: Surface[]): Surface[] {
  * returned, and the surface's startup asks would go out with no sender for the system to answer. `start()` on a
  * running actor returns at once, so the deferred start finds it running and does nothing.
  */
-export function spawnSurfaceActor(enqueue: unknown, surface: Surface): void {
+export function spawnSurfaceActor(enqueue: unknown, surface: Surface, ownsAppLayout: boolean): void {
   const spawner = enqueue as {
     spawnChild(state: AnyActorLogic, options: { id: string; systemId: string }): void;
     (action: (args: { system: { get(id: string): AnyActorRef | undefined } }) => void): void;
@@ -38,7 +38,10 @@ export function spawnSurfaceActor(enqueue: unknown, surface: Surface): void {
     const actor = system.get(surface.id);
     if (!actor) return;
     actor.start();
-    notifySurfaceActor(actor, surface.id, { type: 'SURFACE_STARTED' });
+    // **`ownsAppLayout` is the same fact that decides who records the last-open surface.** A window has its
+    // own copy of the window storage, so a surface drawn in two of them keeping a layout under one name is
+    // two writers and the last one wins; a popout observes and writes none.
+    notifySurfaceActor(actor, surface.id, { type: 'SURFACE_STARTED', ownsAppLayout });
   });
 }
 

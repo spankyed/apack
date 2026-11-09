@@ -4,6 +4,7 @@ import * as path from 'path'
 import * as fs from 'fs/promises'
 import type { GitStatusFile, StashEntry, CommitLogEntry } from '../types.ts'
 import { createLogger } from '@apackdev/sdk/logger'
+import { agentChildEnvironment } from './shell-environment.ts'
 
 const logger = createLogger('git')
 
@@ -217,7 +218,7 @@ export class GitRepository {
       try {
         const { stdout } = await execFileAsync('git', colorlessArgs, {
           cwd: this.workingDirectory,
-          env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+          env: { ...agentChildEnvironment(process.env), GIT_TERMINAL_PROMPT: '0' },
           maxBuffer: 10 * 1024 * 1024, // 10MB buffer limit
           encoding: 'utf8'
         })
@@ -729,7 +730,7 @@ export class GitRepository {
       const colorlessArgs = ['-c', 'color.ui=never', ...args]
       const { stdout } = await execFileAsync('git', colorlessArgs, {
         cwd: this.workingDirectory,
-        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+        env: { ...agentChildEnvironment(process.env), GIT_TERMINAL_PROMPT: '0' },
         maxBuffer: 10 * 1024 * 1024,
         encoding: 'buffer' as any
       })

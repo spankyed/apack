@@ -16,7 +16,7 @@ import { compilerPackageDirectory, type CompilerInstallation } from '../../src/b
 import { startPackFrontend, type PackFrontend } from '../../src/build/frontend-process.ts';
 import { nativeAddonSource } from '../_support/native-addon.ts';
 import { createWindowsPublisherPolicyFixture } from '../_support/windows-publisher-policy.ts';
-import { _settles, _workingSignal } from '@apackdev/sdk/testing/waiting';
+import { settles, _workingSignal } from '@apackdev/sdk/testing/waiting';
 import { parsePeLibraryMetadata } from '../../src/build/compiler-pe-libraries.ts';
 import { assertCapturedPeLibraries } from '../../src/build/compiler-pe-admission.ts';
 import { BUILD_INPUTS_DIRECTORY_ENV } from '../../src/build/compiler-read-tree.ts';
@@ -879,7 +879,7 @@ it.runIf(process.platform === 'win32').each([
     const view = `http://localhost:${frontend.address.port}/src/View.vue`;
     expect(await (await fetch(view)).text()).toContain('PE_BEFORE');
     fs.writeFileSync(path.join(pack, 'src/View.vue'), '<template>PE_AFTER</template>');
-    await _settles(async () => expect(await (await fetch(view)).text()).toContain('PE_AFTER'));
+    await settles(async () => expect(await (await fetch(view)).text()).toContain('PE_AFTER'));
     const outside = path.join(root, 'outside');
     fs.mkdirSync(outside);
     const selected = path.join(outside, 'apack_value.dll');
@@ -1124,7 +1124,7 @@ it.runIf(process.platform === 'win32')('repairs a failed Vite assembly context t
     expect(await (await fetch(url, served)).text()).toContain('ASSEMBLY_WATCH');
     fs.rmSync(dllMarker);
     builds.mockClear(); configure('repair');
-    await _settles(() => expect(builds).toHaveBeenCalled());
+    await settles(() => expect(builds).toHaveBeenCalled());
     await expect(builds.mock.results[0]!.value).rejects.toThrow('Pack frontend exited before readiness');
     checkpoint('missing assembly refused');
     expect(addresses).toHaveLength(1);
@@ -1144,9 +1144,9 @@ it.runIf(process.platform === 'win32')('repairs a failed Vite assembly context t
     builds.mockClear();
     fs.mkdirSync(path.dirname(repair), { recursive: true });
     fs.renameSync(staged, repair);
-    await _settles(() => expect(builds).toHaveBeenCalled());
+    await settles(() => expect(builds).toHaveBeenCalled());
     await expect(builds.mock.results[0]!.value).resolves.toBeUndefined();
-    await _settles(() => expect(publications).toHaveBeenCalledTimes(1));
+    await settles(() => expect(publications).toHaveBeenCalledTimes(1));
     checkpoint('repair published');
     expect(addresses).toHaveLength(2);
     expect(() => process.kill(addresses[0]!.pid, 0)).toThrow();

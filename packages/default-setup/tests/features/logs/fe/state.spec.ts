@@ -14,7 +14,7 @@ beforeEach(() => { sendToSystem.mockReset() })
 it('asks for the buffer when it starts and when its settings change, and shows what it is answered', () => {
   const actor = createActor(logsState).start()
   expect(asks()).toBe(0)
-  actor.send({ type: 'SURFACE_STARTED' })
+  actor.send({ type: 'SURFACE_STARTED', ownsAppLayout: true })
   expect(asks()).toBe(1)
 
   actor.send({ type: 'FEATURE_SETTINGS_UPDATED', settings: { maxLogs: 10, excludedSources: [] } as never })

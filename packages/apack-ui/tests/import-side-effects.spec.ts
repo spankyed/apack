@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import ts from 'typescript';
 import { parse } from '@vue/compiler-sfc';
 import { describe, expect, it } from 'vitest';
+import { population } from '@apackdev/sdk/testing';
 
 
 /**
@@ -16,10 +17,19 @@ import { describe, expect, it } from 'vitest';
 // would be an upward dependency (`check:specifiers`, findUpwardImports).
 const UI_SRC = path.resolve(import.meta.dirname, '..', 'src');
 
+/**
+ * **Refuses an empty walk.** Every case here filters this for offenders and asserts the result is empty,
+ * which passes for nothing when the walk itself found no files — a moved package or a renamed source
+ * directory would read as the rule holding.
+ */
 function modules(dir: string): string[] {
+  return [...population(`ui source modules under ${dir}`, _modules(dir))];
+}
+
+function _modules(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) return modules(full);
+    if (entry.isDirectory()) return _modules(full);
     return /(?<!\.d|\.spec|\.test)\.ts$|\.vue$/.test(entry.name) ? [full] : [];
   });
 }

@@ -3,11 +3,12 @@ import { ref as featureRef } from '#generated/ref.ts'
 
 /** This surface's window storage: the prefix is its ref, so these names are scoped to it. */
 const storage = surfaceStorage(featureRef('code'))
-import { setup, type ActorRefFrom, type AnyActorRef, assign, enqueueActions } from 'xstate';
+import { setup, type ActorRefFrom, type AnyActorRef, assign, enqueueActions, fromCallback } from 'xstate';
 
 import breadcrumb from '@apackdev/sdk/fe';
 import { type HotkeyEvent, type HotkeysMap, createHotkeyProcessor } from '@apackdev/sdk/fe';
 import { saveOpenTabs, loadPersistedTabs, sortTabsByPinned } from './utils/persisted-tabs.ts';
+import { terminalNameFor } from './utils/terminal-name.ts';
 import { loadRecentFiles, addRecentFile } from './utils/recent-files.ts';
 import { pushTabViewHistory, nextActiveFromHistory } from './utils/tab-management.ts';
 import { saveTabGroups, loadTabGroups, getNextAvailableColor, type TabGroupColor, type TabGroup } from '@apackdev/sdk/fe';
@@ -25,6 +26,7 @@ import { searchState } from './features/search/state.ts';
 import { commitState } from './features/commit/state.ts';
 import { pullRequestState } from './features/pull-request/state.ts';
 import { terminalState, type TerminalInfo } from './features/terminal/state.ts';
+import { terminalPool } from './utils/terminal-pool.ts';
 import { actionsState } from './features/actions/state.ts';
 import { promptsState } from './features/prompts/state.ts';
 import type { KeyboardShortcut } from '@apackdev/sdk/types';
@@ -64,6 +66,8 @@ export type Event =
   | CodeInboxEvent
   | { type: 'ADD_TAB'; tab: any; replacePreview?: boolean; extraUpdates?: Partial<CodeContext> }
   | { type: 'SURFACE_ACTIVATED' }
+  // The shell hands this to every surface as it starts it; this one reads which window it is in (M5)
+  | { type: 'SURFACE_STARTED'; ownsAppLayout: boolean }
   | { type: 'SELECT_PANEL'; panel: PanelType }
   // Tab pinning events
   | { type: 'PIN_TAB'; path: string }
@@ -157,7 +161,7 @@ function closeTabWithConfirmation(context: CodeContext, self: AnyActorRef, path:
     const confirmClose = context.settings?.confirmTerminalClose ?? true
     if (confirmClose) {
       const terminalInfo = (file as any).terminalInfo
-      const name = terminalInfo.customTitle || terminalInfo.cwd.split('/').filter(Boolean).pop() || terminalInfo.title
+      const name = terminalInfo.customTitle || terminalNameFor(terminalInfo.cwd) || terminalInfo.title
       if (!confirm(`Close terminal "${name}"?`)) return {}
     }
     if (context.settings?.closeTerminalOnTabClose ?? true) {
@@ -225,11 +229,24 @@ function groupIdsForOpenTabs(openFiles: (OpenFile | TerminalTab | ActionTab | Pr
   )
 }
 
+/**
+ * The groups still named by a tab: one that is open, **or one a restore is still expecting**.
+ *
+ * `stillExpected` is required rather than optional because forgetting it is the whole defect. A restore
+ * arrives tab by tab, so between the first arrival and the last there are open tabs and expected ones, and a
+ * prune that counts only the open ones removes the group of a tab that is still coming. That tab then
+ * hydrates naming a group nothing holds and loses its name, its colour and its place — and because
+ * `persistCodeTabs` prunes too, the loss is written to storage and survives the next launch.
+ */
 function pruneEmptyTabGroups(
   openFiles: (OpenFile | TerminalTab | ActionTab | PromptTab)[],
-  tabGroups: TabGroup[]
+  tabGroups: TabGroup[],
+  stillExpected: CodeContext['pendingPersistedMetadata']
 ): TabGroup[] {
   const groupIds = groupIdsForOpenTabs(openFiles)
+  for (const metadata of stillExpected?.values() ?? []) {
+    if (metadata.groupId) groupIds.add(metadata.groupId)
+  }
   return tabGroups.filter(group => groupIds.has(group.id))
 }
 
@@ -245,28 +262,69 @@ function prunePersistedTabGroups(
   return groups.filter(group => groupIds.has(group.id))
 }
 
+/**
+ * Writes this window's tab layout, **if this window is the one that keeps it** (M5).
+ *
+ * Every window has its own copy of the window storage but they share its names, so two windows showing this
+ * surface kept their layouts under one key: each restored the other's tabs and each rewrote them, and which
+ * one you got was whichever had most recently changed something. The shell already decides which window
+ * records app-wide layout — it is how the last-open surface is recorded — and this is the same question, so
+ * it is the same answer rather than a second one. A popout reads the layout and writes none.
+ */
 function persistCodeTabs(context: CodeContext): void {
-  const tabGroups = pruneEmptyTabGroups(context.openFiles, context.tabGroups)
-  saveOpenTabs(context.openFiles, context.activeFilePath, context.panelTerminalId, context.panelTerminalExpanded)
+  if (!context.ownsAppLayout) return
+  const stillExpected = unarrivedPaths(context)
+  const tabGroups = pruneEmptyTabGroups(context.openFiles, context.tabGroups, context.pendingPersistedMetadata)
+  saveOpenTabs(context.openFiles, context.activeFilePath, context.panelTerminalId, context.panelTerminalExpanded, stillExpected)
   saveTabGroups(storage, 'tab-groups', tabGroups)
 }
 
+/**
+ * The paths a restore is still waiting for: expected, and not yet open.
+ *
+ * **One notion of "still expected" for both halves of a save.** The groups are pruned against the same
+ * record (`pendingPersistedMetadata`, which the restore fills for every persisted tab), so the tab list and
+ * the group list cannot disagree about which tabs are still coming — a disagreement being how a group came
+ * to be removed from under a tab that then arrived.
+ */
+function unarrivedPaths(context: CodeContext): ReadonlySet<string> {
+  const expected = context.pendingPersistedMetadata
+  if (!expected || expected.size === 0) return new Set()
+  const open = new Set(context.openFiles.map(file => file.path))
+  return new Set([...expected.keys()].filter(path => !open.has(path)))
+}
+
+/**
+ * What the surface stops waiting for once the restore deadline passes.
+ *
+ * **The deadline is the give-up, not the answer.** A restore that completes settles itself: the arrival path
+ * clears each metadata entry as its tab lands and clears the order once every persisted path is present. So
+ * this runs only over what never arrived — in practice a terminal whose shell took longer than the deadline
+ * to spawn, which the backend does one at a time.
+ *
+ * Which is why **it keeps the metadata for a path that is still missing**: a tab landing after the deadline
+ * is hydrated from that entry, and dropping it cost the tab its pin, its group and its position. The groups
+ * are pruned against what is still expected as well as what is open, so a group is not removed from under a
+ * tab that is still coming.
+ */
 function finalizeRestoreState(context: CodeContext): Partial<CodeContext> {
   if (context.pendingTabOrder === undefined && context.pendingPersistedMetadata === undefined && context.pendingTerminalTabIds === undefined) {
     return {}
   }
 
   const openPaths = new Set(context.openFiles.map(file => file.path))
-  const tabGroups = pruneEmptyTabGroups(context.openFiles, context.tabGroups)
+  const stillExpected = new Map(
+    [...(context.pendingPersistedMetadata ?? [])].filter(([path]) => !openPaths.has(path))
+  )
   const activeFilePath = context.activeFilePath && openPaths.has(context.activeFilePath)
     ? context.activeFilePath
     : context.openFiles[0]?.path ?? null
 
   return {
     pendingTabOrder: undefined,
-    pendingPersistedMetadata: undefined,
+    pendingPersistedMetadata: stillExpected.size > 0 ? stillExpected : undefined,
     pendingTerminalTabIds: undefined,
-    tabGroups,
+    tabGroups: pruneEmptyTabGroups(context.openFiles, context.tabGroups, stillExpected),
     activeFilePath,
   }
 }
@@ -283,7 +341,23 @@ const codeState = setup({
     pullRequestState,
     terminalState,
     actionsState,
-    promptsState
+    promptsState,
+    /**
+     * **The owner of the terminal pool, which is a module singleton and so has no other.**
+     *
+     * A component releases its terminal on unmount and deliberately does not dispose it, so a remount draws
+     * the same emulator again. That is right while this bundle is alive and a leak once it is not: the shell
+     * replaces this pack's frontend by importing a fresh module, whose pool is fresh, and the last one's
+     * xterm instances, DOM and GL contexts stay alive in the window with nothing left that could reach them.
+     *
+     * A child actor rather than an `exit` action, because **XState 5 runs no `exit` action on
+     * `actor.stop()`** — an exit here would be dead code that read as cleanup. An invoked actor's cleanup
+     * does run, which is why this repo's rule is that a concern owning a listener or a resource is a child.
+     *
+     * It ends no shell: a session lives in the broker and outlives the window that drew it, so this disposes
+     * the drawing and never the terminal.
+     */
+    poolOwner: fromCallback(() => () => terminalPool.disposeAll()),
   },
   actions: {
     spawnFeatureActors: enqueueActions(({ enqueue }) => {
@@ -404,7 +478,7 @@ const codeState = setup({
       }
 
       const tabGroups = pendingTabOrder === undefined
-        ? pruneEmptyTabGroups(openFiles, context.tabGroups)
+        ? pruneEmptyTabGroups(openFiles, context.tabGroups, pendingPersistedMetadata)
         : context.tabGroups
 
       return {
@@ -442,7 +516,7 @@ const codeState = setup({
       }
 
       if (updates.tabsRestored && updates.pendingTabOrder === undefined) {
-        updates.tabGroups = pruneEmptyTabGroups(updates.openFiles, updates.tabGroups)
+        updates.tabGroups = pruneEmptyTabGroups(updates.openFiles, updates.tabGroups, updates.pendingPersistedMetadata)
       }
 
       return updates
@@ -884,6 +958,8 @@ const codeState = setup({
       return {
         openFiles: newOpenFiles,
         activeFilePath: newActiveFilePath,
+        // The group the moved tab was the last member of, which every other removal here prunes
+        tabGroups: pruneEmptyTabGroups(newOpenFiles, context.tabGroups, context.pendingPersistedMetadata),
         panelTerminalId: terminalId,
         panelTerminalExpanded: true
       }
@@ -1210,16 +1286,22 @@ const codeState = setup({
       }
     }),
 
+    /**
+     * **Settling writes nothing to storage.** It used to persist the list it had just pruned, which turned a
+     * slow restore into a permanent one: a terminal that had not come back inside the deadline was dropped
+     * from storage as well as from the surface, so the next launch had nothing left to ask for. Every real
+     * change persists through `saveTabsAction`, so leaving storage alone means a tab that is still missing is
+     * still there to try again — and the log says so rather than announcing a settle on every startup.
+     */
     settlePersistedTabsRestore: assign(({ context }) => {
       const updates = finalizeRestoreState(context)
       if (Object.keys(updates).length === 0) return {}
 
-      const nextContext = { ...context, ...updates }
-      persistCodeTabs(nextContext)
-      console.info('[Code Surface] restored tabs settled', {
-        openTabCount: nextContext.openFiles.length,
-        prunedPendingCount: context.pendingTabOrder?.filter(tab => !nextContext.openFiles.some(file => file.path === tab.path)).length ?? 0,
-      })
+      const openPaths = new Set(context.openFiles.map(file => file.path))
+      const missing = context.pendingTabOrder?.filter(tab => !openPaths.has(tab.path)) ?? []
+      if (missing.length > 0) {
+        console.info(`[Code Surface] ${missing.length} restored tab(s) have not arrived; they stay in storage for the next launch`)
+      }
       return updates
     }),
 
@@ -1244,8 +1326,14 @@ const codeState = setup({
 }).createMachine({
   id,
   initial: 'canvas',
+  // Invoked at the root, so it is running for exactly as long as this surface is and its cleanup is what
+  // the shell stopping this actor runs
+  invoke: { src: 'poolOwner', id: 'poolOwner' },
   entry: ['spawnFeatureActors', 'restorePersistedTabs'],
   context: {
+    // Until the shell says otherwise, this is the window that keeps the layout: a surface started with no
+    // answer is the only window there is
+    ownsAppLayout: true,
     baseDirectory: '', // Will be loaded from backend EARS store
     openFiles: [], // Don't load tabs here - wait for SURFACE_ACTIVATED
     activeFilePath: null,
@@ -1277,7 +1365,11 @@ const codeState = setup({
       on: {
         // What the surface starts from, asked as the shell starts it, in a delivery naming the surface
         SURFACE_STARTED: {
-          actions: () => { sendToSystem('code', { type: 'GET_CODE_START' }) },
+          actions: [
+            // Which window this is, as the shell starts the surface: a popout writes no layout (M5)
+            assign(({ event }) => ({ ownsAppLayout: (event as { ownsAppLayout?: boolean }).ownsAppLayout !== false })),
+            () => { sendToSystem('code', { type: 'GET_CODE_START' }) },
+          ],
         },
         // The directory moved, in every window: ask again for what the surface starts from
         BASE_DIRECTORY_CHANGED: {

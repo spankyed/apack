@@ -25,6 +25,14 @@ export interface PerformanceExecution {
   withCarrier<T>(carrier: unknown, fn: () => T): T;
   carryEvent(event: object, carrier: unknown): void;
   withEvent<T>(event: object, fn: () => T): T;
+  /**
+   * Record one instantaneous observation: a name and scalar attributes.
+   *
+   * For a fact with a size rather than a duration — how many bytes a send carried, how many messages a
+   * chunk became. **Attributes only, and never a payload**: what is being counted at a send is often an
+   * event whose content is a keystroke, and no part of it may reach a record (the bus's rule).
+   */
+  record(name: string, attributes?: () => Record<string, string | number | boolean>): void;
 }
 
 /** @internal The currently bound process/window resource, absent when recording is unavailable. */
@@ -32,6 +40,18 @@ export function _performanceExecution(): PerformanceExecution | undefined {
   if (_isFeHostBound()) return boundFeHost().diagnostics;
   if (_isHostBound()) return boundHost().diagnostics?.performance;
   return undefined;
+}
+
+/**
+ * @internal Record an observation when something is recording, and do nothing at all when not.
+ *
+ * **The thunk is passed on rather than called here.** The callers are hot paths — one of them serialises the
+ * message to measure it, per streamed token — and whether anything is recording is the implementation's
+ * question, not this function's: a bound execution is not a recording one, so calling it here charged every
+ * development run and every test for a measurement nobody collected.
+ */
+export function _recordPerformance(name: string, attributes: () => Record<string, string | number | boolean>): void {
+  _performanceExecution()?.record(name, attributes);
 }
 
 /** @internal Use an explicit cause when supplied; otherwise capture the current execution. */

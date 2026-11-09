@@ -176,7 +176,13 @@ export function createWebSocketServer() {
 
   // Setup graceful shutdown
   process.on('SIGTERM', () => {
-    // Stop XState actor system first (triggers exit actions like terminal cleanup)
+    // **Stopping the systems is all this does.** XState 5 runs no exit action on `actor.stop()` — measured,
+    // with a two-state machine — so nothing here is a hook anything can be hung on, and an `exit` added to a
+    // system's machine expecting to run at shutdown would be dead on this path. What must happen when this
+    // process ends happens in a pack's `onShutdown`, which the pack runtime awaits.
+    //
+    // In particular **no terminal is ended here**: a session outlives the API deliberately, and what ends one
+    // is the app's hold on the broker closing (`@apackdev/host`'s `holdBrokerSessions`, held by Electron main).
     backendActor?.stop();
     handler.broadcastReconnectNotification();
     wss.close();

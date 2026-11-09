@@ -201,6 +201,8 @@ export interface HostServices {
     runHistory: RunHistory;
     secrets: SecretsService;
     settings: SettingsService;
+    // (undocumented)
+    terminal: TerminalService;
 }
 
 // @internal
@@ -483,6 +485,35 @@ export interface StepRunNode extends RunNodeBase {
     stepNodeType: string;
     // (undocumented)
     triggerType?: never;
+}
+
+// @public
+export interface TerminalListeners {
+    onExit(code: number | null): void;
+    onOutput(data: string): void;
+}
+
+// @public
+export interface TerminalService {
+    adopt(id: string, listeners: TerminalListeners): Promise<TerminalSession>;
+    open(options: {
+        cols: number;
+        rows: number;
+        shell?: string;
+        args?: readonly string[];
+        env?: Readonly<Record<string, string>>;
+        cwd?: string;
+    }, listeners: TerminalListeners): Promise<TerminalSession>;
+}
+
+// @public
+export interface TerminalSession {
+    readonly id: string;
+    readonly pid: number | null;
+    resize(cols: number, rows: number): Promise<void>;
+    readonly scrollback: number;
+    terminate(): Promise<void>;
+    write(data: string): Promise<void>;
 }
 
 // @internal

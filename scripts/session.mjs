@@ -4,6 +4,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { tsImport } from 'tsx/esm/api';
 import { linkElmdb } from './link-elmdb.mjs';
+import { linkApackTerminal } from './link-apack-terminal.mjs';
 import { primaryWorktree } from './lib/worktrees.mjs';
 
 /** @param {string} root @param {string[]} args */
@@ -76,9 +77,14 @@ async function npm(dir, args) {
 
 /** A cold checkout needs API declarations and pack codegen before typechecks or a built app launch. @param {string} dir */
 async function setup(dir) {
-  // npm resolves @apackdev/ears' elmdb dependency through the link
+  // **Every vendored checkout, because `npm ci` will not say one is missing.** A `file:` dependency whose
+  // target is absent installs as a dangling symlink and exits 0, so a worktree without these links fails
+  // later and elsewhere: `apack-terminal` is a declared dependency of `@apackdev/host` and the API, and
+  // without it `typecheck:host` cannot resolve the broker's protocol types — which is the first leg of the
+  // strict chain `session:check` runs, on every branch.
   try {
     linkElmdb(dir);
+    linkApackTerminal(dir);
   } catch (error) {
     throw new Error(`${error instanceof Error ? error.message : error}. Checkout retained at ${dir}.`, { cause: error });
   }

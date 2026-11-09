@@ -5,18 +5,18 @@ import { terminalEventBus } from '../../utils/terminal-events.ts';
 import { terminalPool } from '../../utils/terminal-pool.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { removeTabs, nextActiveFromHistory } from '../../utils/tab-management.ts';
+import type { TerminalInfo } from '../../../be/types.ts'
 
-export interface TerminalInfo {
-  id: string
-  title: string
-  customTitle?: string
-  pid: number
-  shell?: string
-  cwd: string
-  active: boolean
-  cols: number
-  rows: number
-}
+/**
+ * **The type the system publishes, not a window's copy of it**, which is why it is imported and re-exported
+ * rather than declared here.
+ *
+ * A copy drifts silently in both directions. One missing a field still compiles where a handler writes it —
+ * `markTerminalCrashed` writes `exited`, and `.map`'s result is no fresh object literal, so excess-property
+ * checking never runs — and a field the backend publishes that the copy omits is dropped on the way in with
+ * nothing to say so. The window's half of `terminal.*` is this shape or it is wrong.
+ */
+export type { TerminalInfo }
 
 const createTerminalTab = (info: TerminalInfo) => ({
   path: `terminal:${info.id}`,
@@ -36,7 +36,6 @@ interface PendingOpen {
 
 export interface CodeTerminalContext {
   terminals: TerminalInfo[]
-  terminalError: string | null
   /**
    * What each outstanding `terminal.CREATE_TERMINAL` meant, by the call it was asked under.
    *
@@ -58,6 +57,7 @@ export interface CodeTerminalContext {
 export type Event =
   | { type: 'terminal.CREATE'; title?: string; cwd?: string; target?: 'tab'; command?: string }
   | { type: 'terminal.CLOSE'; terminalId: string }
+  | { type: 'terminal.RESTART'; terminalId: string }
   | { type: 'terminal.INPUT'; terminalId: string; data: string }
   | { type: 'terminal.RESIZE'; terminalId: string; cols: number; rows: number }
   | { type: 'terminal.RENAME'; terminalId: string; customTitle: string }
@@ -68,12 +68,14 @@ export type Event =
   | { type: 'terminal.CREATED'; data: { terminalId: string } }
   | { type: 'terminal.OPENED'; data: TerminalInfo }
   | { type: 'terminal.CLOSED'; data: { terminalId: string } }
+  | { type: 'terminal.CRASHED'; data: { terminalId: string; code: number | null } }
+  | { type: 'terminal.RESTARTED'; data: TerminalInfo }
   | { type: 'terminal.RENAMED'; data: { terminalId: string; customTitle: string } }
   | { type: 'terminal.CWD_CHANGED'; data: { terminalId: string; cwd: string; title?: string } }
   | { type: 'terminal.OUTPUT'; data: { terminalId: string; data: string } }
   | { type: 'terminal.ERROR'; data: { message: string; terminalId?: string } }
+  | { type: 'terminal.RESIZED'; data: { terminalId: string; cols: number; rows: number } }
   | { type: 'terminal.TERMINAL_TAB_OPENED'; data: TerminalInfo }
-  | { type: 'CODE_STARTUP'; data: { terminals?: TerminalInfo[] } };  // Broadcasted event
 
 export const terminalState = setup({
   types: {
@@ -107,6 +109,11 @@ export const terminalState = setup({
     closeTerminal: ({ event }) => {
       const ev = event as { type: 'terminal.CLOSE'; terminalId: string }
       sendToSystem('code', { type: 'terminal.CLOSE_TERMINAL', terminalId: ev.terminalId })
+    },
+
+    restartTerminal: ({ event }) => {
+      const ev = event as { type: 'terminal.RESTART'; terminalId: string }
+      sendToSystem('code', { type: 'terminal.RESTART_TERMINAL', terminalId: ev.terminalId })
     },
 
     sendTerminalInput: ({ event }) => {
@@ -143,7 +150,6 @@ export const terminalState = setup({
       enqueue(assign({ terminals }))
 
       enqueue(() => {
-        terminalEventBus.prunePersistedOutputs(terminals.map(t => t.id))
         // A terminal keeps its id across a backend restart but not its process, so this is where a pool
         // entry learns the shell under it was replaced
         terminalPool.syncProcesses(terminals)
@@ -218,6 +224,41 @@ export const terminalState = setup({
       }
     }),
 
+    /**
+     * A shell died badly and its terminal stays.
+     *
+     * **Removing it is what used to happen and is what loses the error.** A shell that exits 0 still sends
+     * `terminal.CLOSED` and the terminal still goes; this is the other case, where the screen holds the
+     * reason the user now wants to read.
+     */
+    markTerminalCrashed: assign({
+      terminals: ({ context, event }) => {
+        const ev = event as { type: 'terminal.CRASHED'; data: { terminalId: string; code: number | null } }
+        return context.terminals.map(one =>
+          one.id === ev.data.terminalId ? { ...one, active: false, exited: { code: ev.data.code } } : one)
+      }
+    }),
+
+    /** Says on the screen that the shell has gone, where the user is already looking */
+    noteCrashOnScreen: ({ event }) => {
+      const ev = event as { type: 'terminal.CRASHED'; data: { terminalId: string; code: number | null } }
+      terminalPool.noteExit(ev.data.terminalId, ev.data.code)
+    },
+
+    /** Tells the window's emulator which process is answering now, so one boundary draws one seam */
+    noteRestartOnScreen: ({ event }) => {
+      const ev = event as { type: 'terminal.RESTARTED'; data: TerminalInfo }
+      terminalPool.noteRestart(ev.data.id, ev.data.pid)
+    },
+
+    /** A new shell under a terminal that was already there: its descriptor is replaced, its place is not */
+    takeRestartedTerminal: assign({
+      terminals: ({ context, event }) => {
+        const ev = event as { type: 'terminal.RESTARTED'; data: TerminalInfo }
+        return context.terminals.map(one => one.id === ev.data.id ? ev.data : one)
+      }
+    }),
+
     updateTerminalTitle: enqueueActions(({ enqueue, context, event, self }) => {
       const ev = event as { type: 'terminal.RENAMED'; data: { terminalId: string; customTitle: string } }
 
@@ -239,6 +280,27 @@ export const terminalState = setup({
           changes: { customTitle: ev.data.customTitle }
         })
       })
+    }),
+
+    /**
+     * The grid the pty is running at, which is not always the one this window asked for.
+     *
+     * **What a window holds has to be the accepted grid, not its own fit.** A pty has one `(cols, rows)` and
+     * the window that opened it owns them, so a second window's fit is refused — and an emulator built from
+     * a stale `TerminalInfo` draws at a size nothing agreed to. The pool reads these when it builds one.
+     */
+    updateTerminalGrid: assign(({ context, event }) => {
+      const ev = event as { type: 'terminal.RESIZED'; data: { terminalId: string; cols: number; rows: number } }
+      // **The grid in force, which this window renders rather than whatever it fitted for itself** (M2).
+      // It arrives two ways and both end here: broadcast when the size moved, and replied to this window
+      // alone when its own fit was refused — which is the case that matters, since that window is the one
+      // drawing at a size the pty is not running at.
+      terminalPool.applyGrid(ev.data.terminalId, ev.data.cols, ev.data.rows)
+      return {
+        terminals: context.terminals.map(terminal => terminal.id === ev.data.terminalId
+          ? { ...terminal, cols: ev.data.cols, rows: ev.data.rows }
+          : terminal),
+      }
     }),
 
     updateTerminalCwd: enqueueActions(({ enqueue, context, event, self }) => {
@@ -270,17 +332,18 @@ export const terminalState = setup({
       })
     }),
 
-    clearTerminalError: assign({
-      terminalError: null
-    }),
-
-    assignTerminalError: assign(({ event, context }) => {
-      const ev = event as { type: 'terminal.ERROR'; data: { message: string; terminalId?: string } }
-      // A replied error settles the ask it answers, so its intent goes with it: a create that failed would
-      // otherwise leave its target and command in the map for the life of the surface. Only `pending` is
-      // wanted here — there is nothing to do with what the failed ask meant
-      return { terminalError: ev.data.message, pendingOpens: settleCall(context.pendingOpens, event).pending }
-    }),
+    /**
+     * A failed ask stops being outstanding. What the user is told is the backend's job, through `reportError`
+     * — the app raises the toast. This surface held the message in a context field instead, which nothing
+     * rendered, and that is what made every terminal failure silent.
+     *
+     * A replied error settles the ask it answers, so its intent goes with it: a create that failed would
+     * otherwise leave its target and command in the map for the life of the surface. Only `pending` is
+     * wanted here — there is nothing to do with what the failed ask meant.
+     */
+    settleFailedAsk: assign(({ event, context }) => ({
+      pendingOpens: settleCall(context.pendingOpens, event).pending
+    })),
 
     cleanupTerminalOutput: ({ event }) => {
       const ev = event as { type: 'terminal.CLOSED'; data: { terminalId: string } }
@@ -316,16 +379,20 @@ export const terminalState = setup({
           // Explicit tab target — create canvas tab
           addTabToParent(self, createTerminalTab(terminalInfo))
         } else {
-          // Default — route to panel
-          updateParentState(self, { panelTerminalId: terminalInfo.id })
+          // Default — route to panel, and show it. A terminal spawned into a collapsed panel is one the
+          // user asked for and cannot see; "Open Terminal Here" was the way to meet it
+          updateParentState(self, { panelTerminalId: terminalInfo.id, panelTerminalExpanded: true })
         }
 
-        // Run pending command if set
+        // Run pending command if set. **Ended the way this shell ends a line** (X6): a window cannot know
+        // which shell is on the other end, so the descriptor carries it
         if (command) {
           sendToSystem('code', {
             type: 'terminal.TERMINAL_INPUT',
             terminalId: terminalInfo.id,
-            data: command + '\n',
+            // A descriptor from before this field existed, or from a backend mid-reload, must not put the
+            // word `undefined` on the end of the user's command
+            data: command + (terminalInfo.submit ?? '\n'),
           })
         }
       })
@@ -356,24 +423,16 @@ export const terminalState = setup({
           const tabbedIds = new Set(
             (result.openFiles || []).filter((f: any) => f.isTerminal).map((f: any) => f.terminalInfo.id)
           )
-          const next = context.terminals.find(t => !tabbedIds.has(t.id))
+          // `context` is the snapshot this body was entered with, so the closed terminal is still in it:
+          // `removeTerminal` is queued above and assigns after the body returns. Excluding it by id rather
+          // than relying on that order, since the order is what made the panel show a dead terminal
+          const next = context.terminals.find(t => t.id !== terminalId && !tabbedIds.has(t.id))
           panelUpdate = { panelTerminalId: next?.id ?? null }
         }
 
         updateParentState(self, { ...result, ...panelUpdate })
       })
     }),
-
-    handleCodeStartup: ({ event, self }) => {
-      const ev = event as { type: 'CODE_STARTUP'; data: { terminals?: TerminalInfo[] } }
-      // If startup includes terminals, handle them like TERMINALS_LISTED
-      if (ev.data?.terminals) {
-        self.send({
-          type: 'terminal.TERMINALS_LISTED',
-          data: ev.data.terminals
-        })
-      }
-    },
 
     openTerminalTab: ({ event, self }) => {
       const ev = event as { type: 'terminal.OPEN_TAB'; terminalInfo: TerminalInfo }
@@ -428,15 +487,17 @@ export const terminalState = setup({
   initial: 'idle',
   context: {
     terminals: [],
-    terminalError: null,
     pendingOpens: {}
   },
   on: {
     'terminal.CREATE': {
-      actions: ['clearTerminalError', 'createTerminal']
+      actions: 'createTerminal'
     },
     'terminal.CLOSE': {
       actions: 'closeTerminal'
+    },
+    'terminal.RESTART': {
+      actions: 'restartTerminal'
     },
     'terminal.INPUT': {
       actions: 'sendTerminalInput'
@@ -457,12 +518,12 @@ export const terminalState = setup({
       actions: 'openTerminalTabs'
     },
     'terminal.TERMINALS_LISTED': {
-      actions: ['clearTerminalError', 'assignTerminals']
+      actions: 'assignTerminals'
     },
     // The news, which every window takes: the list grows and nothing else happens
     // A terminal exists, in some window: ask for the list again, which the system answers this window alone
     'terminal.CREATED': {
-      actions: ['clearTerminalError', 'listTerminals']
+      actions: 'listTerminals'
     },
     // The answer, which only the window that asked is sent
     'terminal.OPENED': {
@@ -470,6 +531,12 @@ export const terminalState = setup({
     },
     'terminal.CLOSED': {
       actions: 'handleTerminalClosed'
+    },
+    'terminal.CRASHED': {
+      actions: ['markTerminalCrashed', 'noteCrashOnScreen']
+    },
+    'terminal.RESTARTED': {
+      actions: ['takeRestartedTerminal', 'noteRestartOnScreen']
     },
     'terminal.RENAMED': {
       actions: 'updateTerminalTitle'
@@ -481,13 +548,13 @@ export const terminalState = setup({
       actions: 'handleTerminalOutput'
     },
     'terminal.ERROR': {
-      actions: 'assignTerminalError'
+      actions: 'settleFailedAsk'
+    },
+    'terminal.RESIZED': {
+      actions: 'updateTerminalGrid'
     },
     'terminal.TERMINAL_TAB_OPENED': {
       actions: 'handleTerminalTabOpened'
-    },
-    'CODE_STARTUP': {
-      actions: 'handleCodeStartup'
     }
   },
   states: {

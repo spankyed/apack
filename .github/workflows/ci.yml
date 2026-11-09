@@ -89,10 +89,18 @@ jobs:
         run: npm install -g npm@11.21.1
 
       - uses: ./.github/actions/elmdb
+      - uses: ./.github/actions/apack-terminal
+        with:
+          build: 'true'
 
       - name: Install dependencies
         env:
           GITHUB_TOKEN: ${{ github.token }}
+        # **This job launches no app, so it fetches no 180MB Electron binary.** `scripts/postinstall.mjs` is
+        # the only thing in the tree that downloads it, and it honours this variable because Electron 44's
+        # own package does not. A `504` from the release CDN failed this job on 2026-11-08 for a binary it
+        # never uses; nothing here can fail that way again.
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
         run: npm ci
 
       # Includes check:specifiers (relative imports name .ts sources in sdk, host and ui)
@@ -187,6 +195,18 @@ jobs:
         run: npm install -g npm@11.21.1
 
       - uses: ./.github/actions/elmdb
+      - uses: ./.github/actions/apack-terminal
+
+      # **Electron's binary is cached, so most runs never ask the CDN for it.** It comes from GitHub's release
+      # CDN, whose 504 failed a strict job inside `scripts/postinstall.mjs` on 2026-11-08 — before any of this
+      # repo's code ran. The retry there is what makes a refusal survivable; this is what makes it rare. Keyed
+      # on the runner and the locked version, so a bump fetches once and every later job restores it.
+      - name: Cache Electron's binary
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/electron
+          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-${{ runner.os }}-
 
       - name: Install dependencies
         env:

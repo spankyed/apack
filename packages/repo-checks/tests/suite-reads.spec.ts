@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { inputFiles, REPO_ROOT } from '@apackdev/host/build/packages-built';
-import { CHAIN_STEPS, INTEGRATION_SUITES, NATIVE_SUITES, suiteInputs } from '../../../scripts/lib/chain-steps.ts';
+import { CHAIN_STEPS, INTEGRATION_SUITES, NATIVE_SUITES, SUITE_SETUP_FILES, suiteInputs } from '../../../scripts/lib/chain-steps.ts';
 import { UNIT_SUITES, unitStepName, type UnitSuite } from '../../../scripts/lib/unit-suites.ts';
 import { reachableFrom } from '../../../scripts/lib/module-graph.ts';
 import type { Half } from '../../../scripts/lib/spec-halves.ts';
@@ -163,5 +163,50 @@ describe('a step declares what the suites it runs read', () => {
     });
     expect(missing, 'the step caches on less than its suites read, so it can stamp green over work it '
       + 'skipped. Build its inputs with `inputsForSuites`, as the pools do').toEqual([]);
+  });
+});
+
+/**
+ * A suite declares what its *runner* loads, which is the other half of what it reads.
+ *
+ * The cases above follow a spec's own imports. They cannot reach the two files every vitest config loads
+ * into every test file through `setupFiles`, because no spec imports them — the runner does, by a relative
+ * path (`../apack-testing/src/…`) rather than as `@apackdev/testing`. So they reach no package manifest,
+ * and `suiteInputs` builds a suite's dependency sources from what its workspace declares.
+ *
+ * **Measured before this case existed: nine of the thirteen unit suites did not cover the progress guard**,
+ * and the four that did covered it by accident, having declared `@apackdev/testing` for other reasons. An
+ * edit to the guard that bounds every test in the repo therefore left nine suites' projects fresh, with
+ * their last pass standing — the same shape as the three defects in this file's header, and the reason the
+ * paths are now one exported list (`SUITE_SETUP_FILES`) instead of a spelling inside each config.
+ *
+ * `suite-timeouts.spec.ts` asks the half this one cannot: that each config loads them at all. Together a
+ * config and the cache key of the suite it runs cannot disagree about them.
+ */
+describe('a suite declares what its runner loads', () => {
+  /** Whether a declared input covers a path: itself, or a directory above it */
+  const covers = (inputs: readonly string[], file: string): boolean =>
+    inputs.some((input) => input === file || file.startsWith(input.endsWith('/') ? input : `${input}/`));
+
+  it('covers every setup file every config loads, in each half it runs', () => {
+    const missing = UNIT_SUITES.flatMap((suite) => halvesOf(suite).flatMap((half) => {
+      const inputs = suiteInputs(suite, half);
+      return population('setup files', SUITE_SETUP_FILES)
+        .filter((file) => !covers(inputs, file))
+        .map((file) => `${suite.workspace} (${half}) does not declare ${file}`);
+    }));
+
+    expect(missing, 'a project whose runner moved is stale: add it to SUITE_SETUP_FILES or the suite\'s reads')
+      .toEqual([]);
+  });
+
+  // The rule over a doctored declaration, because the real one passes and a case that only ever reports
+  // nothing is indistinguishable from one looking at nothing
+  it('reports a suite whose inputs do not reach a setup file', () => {
+    expect(covers(['packages/apack-testing/src'], SUITE_SETUP_FILES[0]!)).toBe(true);
+    expect(covers(['packages/apack-testing/src/vitest-progress-guard.ts'], SUITE_SETUP_FILES[0]!)).toBe(false);
+    expect(covers([], SUITE_SETUP_FILES[0]!)).toBe(false);
+    // The trap a prefix match without the separator would fall into: a sibling directory is not a parent
+    expect(covers(['packages/apack-testing/src-other'], SUITE_SETUP_FILES[0]!)).toBe(false);
   });
 });
