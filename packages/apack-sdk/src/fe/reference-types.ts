@@ -30,7 +30,8 @@ export interface ReferenceBindings {
   categories: Record<string, {
     label: string
     icon: Component
-    useItems(): Readonly<Ref<ReferenceItem[]>>
+    /** The items a reference can name; `query` is what the user has typed, for a provider that searches rather than lists */
+    useItems(query: Readonly<Ref<string>>): Readonly<Ref<ReferenceItem[]>>
   }>
 }
 

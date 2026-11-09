@@ -870,7 +870,7 @@ interface ContextReference {
     label: string;
 }
 
-type ContextReferenceType = 'document' | 'folder' | 'note' | 'task' | 'tasklist' | 'thread';
+type ContextReferenceType = 'document' | 'folder' | 'note' | 'symbol' | 'task' | 'tasklist' | 'thread';
 
 type Contract = {
     state: LogsContext;
@@ -2515,24 +2515,7 @@ type IncomingThreadsEvents = {
     mode?: string;
     phase?: string;
     threadId?: string;
-    references?: {
-        images?: {
-            url: string;
-            name: string;
-        }[];
-        files?: {
-            name: string;
-            path: string;
-            typeLabel: string;
-            isImage: boolean;
-        }[];
-        context?: {
-            refType: 'document' | 'folder' | 'note' | 'task' | 'tasklist' | 'thread';
-            refId: string;
-            shortCode: string;
-            label: string;
-        }[];
-    };
+    references?: MessageReferences;
     cwdOverride?: string;
     forceDirectoryPicker?: boolean;
 } | {
@@ -2569,24 +2552,7 @@ type IncomingThreadsEvents = {
     mode?: string;
     phase?: string;
     threadId?: string;
-    references?: {
-        images?: {
-            url: string;
-            name: string;
-        }[];
-        files?: {
-            name: string;
-            path: string;
-            typeLabel: string;
-            isImage: boolean;
-        }[];
-        context?: {
-            refType: 'document' | 'folder' | 'note' | 'task' | 'tasklist' | 'thread';
-            refId: string;
-            shortCode: string;
-            label: string;
-        }[];
-    };
+    references?: MessageReferences;
     cwdOverride?: string;
 } | {
     type: 'TOGGLE_COMPACTED';
@@ -5778,6 +5744,15 @@ declare function clearHandle(key: string): void;
 
 /** Queries an answer reads, beside the ones the sync does */
 declare const codeIndexAnswers: {
+    /** A symbol and where it is now, read by parsing its file: no row holds a position, so a line moving writes nothing */
+    locate: (id: EARS.EntityId) => Promise<{
+        symbol: CodeSymbolEntity;
+        location: {
+            path: string;
+            line: number;
+            column: number;
+        };
+    } | null>;
     /** What calls, refers to or extends a symbol, tests after the rest, beside what that can't see */
     callers: (id: EARS.EntityId) => SymbolEdges | null;
     /** What a symbol calls, refers to or extends, beside how much of its own file syntax couldn't follow */
@@ -5864,8 +5839,8 @@ declare const codeIndexQueries: {
     symbolCount: (project: string) => number;
     symbol: (id: EARS.EntityId) => CodeSymbolEntity | undefined;
     file: (id: string) => CodeFileEntity | undefined;
-    /** The symbols a text finds in a project, most relevant first, with test files after the rest */
-    searchSymbols: (root: string, text: string, limit: number) => SymbolResult[];
+    /** The symbols a text finds in a checkout, or in every indexed one, most relevant first, with test files after the rest */
+    searchSymbols: (root: string | null, text: string, limit: number) => SymbolResult[];
 };
 
 /** The recent-thread limit and order the threads settings hold, read where no view is asking */

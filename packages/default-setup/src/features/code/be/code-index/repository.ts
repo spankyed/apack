@@ -1,9 +1,11 @@
 // The code index's rows. A row's id is derived from what it names, so a save finds the row it had without a lookup, and
 // a symbol that still exists keeps its id, which is what will keep other files' edges into it.
 import { createHash } from 'node:crypto';
+import { promises as fs } from 'node:fs';
+import * as path from 'node:path';
 import { findRelations, removeRelation } from '@apackdev/sdk/ears';
 import { EARS, create, query, transact, upsert, write } from '#generated/ears.ts';
-import type { CodeLanguage, Definition, SymbolKind } from './extract.ts';
+import { extractFile, type CodeLanguage, type Definition, type SymbolKind } from './extract.ts';
 import type { Reexport } from './sites.ts';
 
 export type SkipReason = 'too-large' | 'not-utf8' | 'parse-error';
@@ -199,12 +201,12 @@ export const codeIndexQueries = {
 
   file: (id: string): CodeFileEntity | undefined => query.ids(id as EARS.EntityId).ofType(EARS.Entity.CodeFile).pickOne() ?? undefined,
 
-  /** The symbols a text finds in a project, most relevant first, with test files after the rest */
-  searchSymbols: (root: string, text: string, limit: number): SymbolResult[] => {
+  /** The symbols a text finds in a checkout, or in every indexed one, most relevant first, with test files after the rest */
+  searchSymbols: (root: string | null, text: string, limit: number): SymbolResult[] => {
     if (!text.trim()) return [];
-    const project = projectIdOf(root);
-    const hits = query(EARS.Entity.CodeSymbol)
-      .where('project', project)
+    const symbols = query(EARS.Entity.CodeSymbol);
+    // Without a checkout, every indexed one: turning a checkout off deletes its rows, so there is nothing else to exclude
+    const hits = (root ? symbols.where('project', projectIdOf(root)) : symbols)
       .search(text, { prefix: true })
       .limit(limit)
       .hits({ fields: ['name', 'kind', 'signature', 'file'] });
@@ -248,6 +250,23 @@ function neighbours(id: string): { other: string; weight: number }[] {
 
 /** Queries an answer reads, beside the ones the sync does */
 export const codeIndexAnswers = {
+  /**
+   * A symbol, its name within its file (`Class.method`), and where it is now, read by parsing its file: no row holds a
+   * position, so a line moving writes nothing
+   */
+  locate: async (id: EARS.EntityId): Promise<{ symbol: CodeSymbolEntity; local: string; location: { path: string; line: number; column: number } } | null> => {
+    const symbol = codeIndexQueries.symbol(id);
+    const file = symbol && codeIndexQueries.file(symbol.file);
+    const project = symbol && codeIndexQueries.projectOf(symbol.project);
+    if (!symbol || !file || !project) return null;
+    const absolute = path.join(project.root, file.path);
+    const extraction = extractFile(file.path, await fs.readFile(absolute, 'utf8'));
+    if (!extraction.ok) return null;
+    const definition = extraction.definitions.find(candidate => symbolIdOf(symbol.project, file.path, candidate) === symbol.id);
+    // An editor's columns count from 1, a syntax tree's from 0
+    return { symbol, local: symbol.qualifiedName.slice(file.path.length + 1), location: { path: absolute, line: definition?.line ?? 1, column: (definition?.column ?? 0) + 1 } };
+  },
+
   /** What calls, refers to or extends a symbol, tests after the rest, beside what that can't see */
   callers: (id: EARS.EntityId): SymbolEdges | null => {
     const symbol = codeIndexQueries.symbol(id);

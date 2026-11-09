@@ -6,8 +6,8 @@ import type { EARS } from '#generated/ears.ts';
 export const codeIndexViews = defineViews({
   /** Whether a checkout is indexed and how far along it is */
   indexStatus: ({ root }: { root: string }) => repository.codeIndexQueries.status(root),
-  /** The symbols a text finds in a checkout */
-  symbols: ({ root, text, limit }: { root: string; text: string; limit: number }) => repository.codeIndexQueries.searchSymbols(root, text, limit),
+  /** The symbols a text finds in a checkout, or in every indexed one when none is named */
+  symbols: ({ root, text, limit }: { root?: string; text: string; limit: number }) => repository.codeIndexQueries.searchSymbols(root ?? null, text, limit),
   /** What calls or refers to a symbol, beside what that can't see */
   symbolCallers: ({ symbol }: { symbol: EARS.EntityId }) => repository.codeIndexAnswers.callers(symbol),
   /** What a symbol calls or refers to, beside what that can't see */

@@ -7,6 +7,7 @@ import * as path from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { startApp } from '@apackdev/testing/harness'
 import { codeIndexQueries } from '#features/code/be/code-index/repository.ts'
+import { resolveReferences } from '#features/threads/be/services/chat.ts'
 
 const CODE = 'default-setup/code'
 const MAIN = 'c-main'
@@ -51,6 +52,31 @@ it('answers where a symbol is, at the line it is on now', async () => {
   expect(await app.nextEmit('code', 'codeIndex.LOCATED', { answering: call })).toMatchObject({
     data: { path: path.join(root, 'a.ts'), line: 6, column: 8 },
   })
+})
+
+it('finds a symbol in every indexed checkout when none is named', async () => {
+  const app = await appOnDirectory()
+  await app.send('code', { type: 'codeIndex.SET_ENABLED', enabled: true })
+  await vi.waitFor(() => expect(codeIndexQueries.status(root).progress).toMatchObject({ state: 'idle', symbols: 1 }))
+  expect(codeIndexQueries.searchSymbols(null, 'targ', 5)).toMatchObject([{ name: 'target', path: 'a.ts' }])
+})
+
+// A symbol attached to a message reaches the agent as where it is now, and its directory, never as nothing
+it('turns an attached symbol into where it is now, and one that is gone into a line saying so', async () => {
+  const app = await appOnDirectory()
+  await app.send('code', { type: 'codeIndex.SET_ENABLED', enabled: true })
+  await vi.waitFor(() => expect(codeIndexQueries.status(root).progress).toMatchObject({ state: 'idle', symbols: 1 }))
+  const [found] = codeIndexQueries.searchSymbols(root, 'target', 5)
+  fs.writeFileSync(path.join(root, 'a.ts'), '\n\n\n\nexport function target() { return 1 }\n')
+  const attached = { refType: 'symbol' as const, refId: found!.id, shortCode: 'function', label: 'target' }
+
+  const live = await resolveReferences({ context: [attached] })
+  expect(live.textPrefix).toBe(`[Code symbol: function target at ${path.join(root, 'a.ts')}:5]\n${found!.signature}`)
+  expect(live.addDirs).toEqual([root])
+
+  await app.send('code', { type: 'codeIndex.SET_ENABLED', enabled: false })
+  await vi.waitFor(() => expect(codeIndexQueries.project(root)).toBeUndefined())
+  expect((await resolveReferences({ context: [attached] })).textPrefix).toBe('[Code symbol no longer indexed: target]')
 })
 
 it('answers a staged diff, with the index off', async () => {
