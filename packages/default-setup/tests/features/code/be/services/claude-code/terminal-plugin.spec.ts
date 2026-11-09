@@ -3,6 +3,8 @@ import type { ClaudeHookRegistrar } from '#features/code/be/services/claude-code
 import { createApackNativePlugin } from '#features/code/be/services/claude-code/native-plugin/program.ts'
 import { createClaudeTerminalPlugin } from '#features/code/be/services/claude-code/terminal-plugin.ts'
 
+// Two cases hold the clock still to make a cadence a fact about elapsed time rather than about speed
+afterEach(()=>{vi.restoreAllMocks()})
 const CONFIG = { socketPath: '/owned.sock', token: 'private-token', background: { parentSessionId: '11111111-1111-4111-8111-111111111111', socketPath: '/child.sock', token: 'child-token' } }
 /** The CLI's registrar, as a test holds it: every hook by name, the handler last. */
 const collector = (hooks: Map<string, (...args: any[])=>Promise<any>>) => ((event: string, ...args: any[]) => hooks.set(event, args.at(-1))) as unknown as ClaudeHookRegistrar
@@ -35,10 +37,10 @@ it('renews the original child lease after broker replacement, restores the user 
  const child='05ff1d31-597d-4537-8737-4407191add6e',hooks=new Map<string,(...args:any[])=>Promise<any>>()
  let tick!:()=>void,online=true,lease=0,prefix='user-prefix',now=1000
  const cancel=vi.fn(),requests:{path:string;body:any}[]=[]
- const clock=vi.spyOn(Date,'now').mockImplementation(()=>now)
+ vi.spyOn(Date,'now').mockImplementation(()=>now)
  const api={session:{id:async()=>child,cwd:async()=>'/owned',model:async()=> 'sonnet',turns:async()=>2,usage:async()=>({startedAt:1})},agent:{list:async()=>[]},settings:{read:async()=>({})},env:{get:async()=>prefix,set:vi.fn(async(_name:string,value:string)=>{prefix=value;return {}})},clock:{every:vi.fn((_ms:number,callback:()=>void)=>{tick=callback;return{cancel}})},process:{run:vi.fn(async()=>({exitCode:0,stdout:'119'}))},http:{fetch:vi.fn(async(url:string,init:any)=>{const path=new URL(url).pathname,body=JSON.parse(init.body);requests.push({path,body});if(!online&&path.startsWith('/background-'))throw Error('connection lost');if(path==='/background-register')return{ok:true,text:JSON.stringify({token:'lease-'+(++lease)})};return{ok:true,text:JSON.stringify(path==='/poll'?{background:true}:path==='/background-status'?{originalPrefix:'user-prefix',shellPrefix:'owned-'+lease}:{})}})}}
  const flush=()=>new Promise(resolve=>setImmediate(resolve))
- try{
+ {
   createApackNativePlugin(CONFIG).register(collector(hooks));await hooks.get('session.start')!(api,{},async()=>({}))
   tick();await flush();tick();await flush();expect(prefix).toBe('owned-1')
   online=false;for(let n=0;n<4;n++){tick();await flush()}
@@ -50,7 +52,7 @@ it('renews the original child lease after broker replacement, restores the user 
   online=true;now+=4000;tick();await flush();tick();await flush()
   expect(lease).toBe(2);expect(prefix).toBe('owned-2');expect(api.process.run).toHaveBeenCalledOnce()
   expect(requests.filter(row=>row.path==='/background-status').at(-1)?.body).toMatchObject({pid:119,token:'lease-2',sequence:1});expect(cancel).not.toHaveBeenCalled()
- }finally{clock.mockRestore()}
+ }
 })
 
 /**
@@ -101,4 +103,32 @@ it('counts a notification the app refused and carries the count until an exchang
  await appended()
  tick();await vi.waitFor(()=>expect(polls).toHaveLength(3))
  expect(polls[2]).not.toHaveProperty('dropped')
+})
+
+/**
+ * State out is the reader's cadence, not the program's clock: an app that has stopped reading this
+ * session's state answers `0`, and then only a hook's news wakes a report.
+ */
+it('reports at the cadence the app answers with, and on a hook when the app is not reading',async()=>{
+ const child='05ff1d31-597d-4537-8737-4407191add6e'
+ const hooks=new Map<string,(...args:any[])=>Promise<any>>(),polls:any[]=[]
+ let tick!:()=>void,now=1000,cadence=250
+ vi.spyOn(Date,'now').mockImplementation(()=>now)
+ const api={session:{id:async()=>child,cwd:async()=>'/owned',model:async()=>'sonnet',turns:async()=>2,usage:async()=>({startedAt:1})},agent:{list:async()=>[]},settings:{read:async()=>({})},env:{get:async()=>undefined},clock:{every:(_ms:number,callback:()=>void)=>{tick=callback;return{cancel(){}}}},process:{run:async()=>({exitCode:0,stdout:'119',stderr:''})},
+  http:{fetch:async(url:string,init:any)=>{const path=new URL(url).pathname;if(path==='/poll')polls.push(JSON.parse(init.body));return{ok:true,status:200,text:JSON.stringify(path==='/poll'?{reportEveryMs:cadence}:{})}}}}
+ const next=async(value:any)=>value
+ const flush=()=>new Promise(resolve=>setImmediate(resolve))
+ createApackNativePlugin(CONFIG).register(collector(hooks))
+ await hooks.get('session.start')!(api,{},next)
+ tick();await vi.waitFor(()=>expect(polls).toHaveLength(1))
+ // The clock keeps ticking; the cadence is what decides whether a tick reports
+ tick();await flush();tick();await flush();expect(polls).toHaveLength(1)
+ now+=250;tick();await vi.waitFor(()=>expect(polls).toHaveLength(2))
+ // Nothing reads this session's state any more: ticks stop reporting however long they run
+ cadence=0;now+=250;tick();await vi.waitFor(()=>expect(polls).toHaveLength(3))
+ for(let n=0;n<8;n++){now+=10000;tick();await flush()}
+ expect(polls).toHaveLength(3)
+ // A turn boundary is news, so the next tick reports it whatever the cadence said
+ await hooks.get('turn.start')!(api,{},next)
+ tick();await vi.waitFor(()=>expect(polls).toHaveLength(4))
 })

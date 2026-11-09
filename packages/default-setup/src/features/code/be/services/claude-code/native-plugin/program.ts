@@ -72,8 +72,19 @@ export const NATIVE_NOTIFICATION_ROUTES = ['transcript', 'append', 'turn', 'subm
 
 export type NativeNotificationRoute = (typeof NATIVE_NOTIFICATION_ROUTES)[number];
 
-/** How often the program reports state and asks for work. */
+/**
+ * The clock the program wakes on, and the rate it reports at until the app says otherwise.
+ *
+ * **Waking is not reporting.** The tick is the finest cadence available; what it does on each wake is
+ * decided by the app's last answer (`reportEveryMs`) and by the hooks, which ask for a pass immediately
+ * because a turn boundary or a render is news. An app that is not reading this session's state — the native
+ * UI reports its own, and then nothing reads the plugin's — answers `0`, and the program then reports only
+ * when a hook wakes it, instead of four times a second for the rest of the session.
+ */
 const TICK_MS = 250;
+
+/** The widest cadence the app may ask for; beyond this the answer is treated as absent. */
+const REPORT_CEILING_MS = 60000;
 
 /** A leased child reports a quarter as often: its status line is the only reader. */
 const BACKGROUND_TICKS_PER_REPORT = 4;
@@ -130,6 +141,9 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
   let reconnecting = false;
   let retryAfter = 0;
   let retryDelay = RETRY_FLOOR_MS;
+  /** What the app last asked for, and when the next report is due. `Infinity` is "when a hook says". */
+  let reportEveryMs: number = TICK_MS;
+  let reportDueAt = 0;
   /** The prefix this program installed, and the user's own that it replaced. */
   let formatterPrefix: string | undefined;
   let originalFormatterPrefix: string | null | undefined;
@@ -192,6 +206,8 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
     backgroundSequence = 0;
     backgroundTick = 0;
     backgroundAttempted = false;
+    reportEveryMs = TICK_MS;
+    reportDueAt = 0;
     // A child that already learned its own pid reconnects rather than asking for it again.
     reconnecting = Number.isSafeInteger(backgroundPid) && (backgroundPid as number) > 1;
     retryAfter = 0;
@@ -349,6 +365,7 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
         ...(reported ? { dropped: reported } : {}),
       });
       if (reported) settleReported(reported);
+      acceptCadence(command.reportEveryMs);
     } catch (error) {
       // A session that is not the one the app launched, reaching an app that is gone, is a detached child:
       // it registers with the observer rather than retiring.
@@ -364,6 +381,23 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
     if (paths[sessionId]) await send($, '/transcript', { sessionId, path: paths[sessionId] });
     if (!command.id) return;
     return fillPrompt($, command);
+  }
+
+  /**
+   * Take the app's requested cadence, which is the only thing that changes how often this reports.
+   *
+   * An answer that is not a number leaves the cadence alone, so an older app — or a route that does not
+   * carry one — keeps the tick it had.
+   */
+  function acceptCadence(value: unknown) {
+    if (!Number.isSafeInteger(value) || (value as number) < 0 || (value as number) > REPORT_CEILING_MS) return;
+    reportEveryMs = value as number;
+    reportDueAt = reportEveryMs === 0 ? Infinity : Date.now() + reportEveryMs;
+  }
+
+  /** A hook has news, so the next tick reports whatever the cadence was. */
+  function reportSoon() {
+    reportDueAt = 0;
   }
 
   /** Take a delivered report off the counters, leaving whatever arrived while it was in flight. */
@@ -415,6 +449,7 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
    * session's identity is only knowable by asking.
    */
   async function begin($: ClaudePluginApi) {
+    reportSoon();
     const requestedGeneration = generation;
     const currentSession = await $.session.id();
     if (requestedGeneration !== generation) return;
@@ -425,6 +460,9 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
     started = true;
     timer = $.clock.every(TICK_MS, () => {
       if (ownGeneration !== generation || retired || inFlight || Date.now() < retryAfter) return;
+      // A leased child reports to the observer, which is reading it: its cadence is its own (every fourth
+      // tick), and the app's answer has nothing to say about it.
+      if (!backgroundLease && !reconnecting && Date.now() < reportDueAt) return;
       inFlight = true;
       void exchange($, ownGeneration)
         .catch(error => recover($, ownGeneration, error))

@@ -687,3 +687,15 @@ it('reads the plugin\'s dropped notifications and refuses a report its trace can
   expect((await request('/poll', { sessionId: session, agents: [], dropped: 'append' })).status).toBe(400)
   expect(dropped, 'a refused report reaches nothing').toHaveLength(2)
 })
+
+/**
+ * The plugin's state is read here only until the CLI's own UI reports its own, and the answer says so:
+ * before that the fine cadence, after it nothing but what a hook wakes.
+ */
+it('tells the plugin to report only on a hook once the CLI\'s own UI is reporting', async () => {
+  await create()
+  expect((await request('/poll', { sessionId: session, agents: [] })).value).toMatchObject({ reportEveryMs: 250 })
+  const owner = await request('/poll', { sessionId: session, agents: [], directOwner: true, busy: false, turn: null })
+  expect(owner.value, 'the CLI\'s own UI keeps its own timer').not.toHaveProperty('reportEveryMs')
+  expect((await request('/poll', { sessionId: session, agents: [] })).value).toEqual({ reportEveryMs: 0 })
+})

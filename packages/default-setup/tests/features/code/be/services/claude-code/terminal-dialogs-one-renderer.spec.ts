@@ -8,8 +8,8 @@ import * as dialogs from '#features/code/be/services/claude-code/terminal-dialog
  * Derived from the module's exports, so a dialog kind added without the bound arrives here as a failure
  * instead of being missed by a list nobody updated.
  */
-const arrays = Object.entries(dialogs).filter((entry): entry is [string, z.ZodArray<z.ZodTypeAny>] =>
-  entry[0].endsWith('DialogsSchema') && entry[1] instanceof z.ZodArray)
+const arrays = Object.entries(dialogs).flatMap(([name, schema]) =>
+  name.endsWith('DialogsSchema') && schema instanceof z.ZodArray ? [[name, schema] as const] : [])
 
 it('offers at most one dialog of every kind the module declares', () => {
   expect(arrays.length, 'nothing to check means this spec looked at nothing').toBeGreaterThan(5)
