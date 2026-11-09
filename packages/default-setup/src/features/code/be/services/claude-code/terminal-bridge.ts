@@ -3,6 +3,7 @@ import { ClaudeBackgroundControlSchema } from './background-controls.ts'
 import { z } from 'zod'
 import { CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES } from './ui-text-limits.ts'
 import { createClaudeTerminalPlugin } from './terminal-plugin.ts'
+import { NATIVE_NOTIFICATION_ROUTES, type NativeNotificationRoute } from './native-plugin/program.ts'
 import { createClaudeBackgroundStatusObserver, type ClaudeBackgroundStatusObserver } from './background-status-observer.ts'
 import { createClaudeBillingState } from '../../../common/native-billing.ts'
 import { readClaudeUiActionKeys } from './ui-controls.ts'
@@ -39,6 +40,15 @@ export async function createClaudeTerminalBridge(options: {
   settings: ClaudeSettings
   bunOptions?: string
   ownsProcess?(pid: number): Promise<boolean>
+  /**
+   * A notification the plugin could not deliver, by route and how many.
+   *
+   * The plugin counts them rather than swallowing them, and this is the end that reads the count — without
+   * a reader it would be the error channel nobody looks at that this integration has already paid for.
+   * Each route is healed by something the app does anyway (`NATIVE_NOTIFICATION_ROUTES` says which), so the
+   * count is what the session's lifecycle records, not a failure it raises.
+   */
+  notificationsDropped?(route: NativeNotificationRoute, count: number): void
   changed(): void
   pasteImage?(path: string): void
   enter(): void
@@ -202,6 +212,12 @@ export async function createClaudeTerminalBridge(options: {
         if (value.directOwner === true && (typeof value.busy !== 'boolean' || value.turn !== null && (!object(value.turn) || typeof object(value.turn)?.id !== 'string' || typeof object(value.turn)?.cancelled !== 'boolean'))) return reply(400, {})
         if (value.metadata !== undefined && !parseClaudeTerminalMetadata(value.metadata)) return reply(400, {})
         for (const key of ['statusCommand', 'subagentCommand', 'shellPrefix']) if (value[key] !== undefined && value[key] !== null && (typeof value[key] !== 'string' || (value[key] as string).length > 32768)) return reply(400, {})
+        const droppedReport = value.dropped === undefined ? undefined : object(value.dropped)
+        // A closed set of routes and a plain count: the report is read into the lifecycle trace, so anything
+        // else arriving here would be a payload, and the plugin that sends it is refused rather than logged.
+        if (value.dropped !== undefined && (!droppedReport || Object.entries(droppedReport).some(([route, count]) =>
+          !(NATIVE_NOTIFICATION_ROUTES as readonly string[]).includes(route) || !Number.isSafeInteger(count) || (count as number) < 1))) return reply(400, {})
+        if (droppedReport) for (const [route, count] of Object.entries(droppedReport)) options.notificationsDropped?.(route as NativeNotificationRoute, count as number)
         const policy = value.policy === undefined ? undefined : object(value.policy)
         if (value.policy !== undefined && (!policy || typeof policy.allowManagedHooksOnly !== 'boolean' || typeof policy.disableAllHooks !== 'boolean') || value.hooksDisabled !== undefined && typeof value.hooksDisabled !== 'boolean') return reply(400, {})
         const nextPolicyKey = policy ? JSON.stringify([policy.allowManagedHooksOnly, policy.disableAllHooks, value.hooksDisabled === true]) : helperPolicyKey

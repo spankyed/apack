@@ -50,6 +50,28 @@ const LEASE_EXPIRED = 'ApackBackgroundLeaseExpired';
 /** The two routes that belong to the background observer rather than the owning app. */
 const BACKGROUND_ROUTES = ['/background-register', '/background-status'];
 
+/**
+ * The routes this program *notifies* on: what the app learns sooner this way than from what it already
+ * reads, and never the only way it can learn it.
+ *
+ * **Each one's failure is counted and carried to the app on the next exchange** (`dropped`), because a
+ * swallowed failure here is an error channel nothing reads — and that is a defect this integration has paid
+ * for once already. What makes a count the right answer rather than a refusal is that every one of them is
+ * already healed by something the app does anyway:
+ *
+ * - `transcript` — the tick re-sends the path on every pass while the session holds one.
+ * - `append` — the app reads the same row out of the journal file this path names.
+ * - `turn` — the next exchange reports the session's state, busy flag included.
+ * - `submission` — the app polls the prompt's outcome and times the submission out with a reason.
+ * - `ui-ready` — startup readiness; the first exchange reports the same session.
+ *
+ * So a drop costs latency, and the count is what says how much of it happened. It is not a payload: the
+ * app's lifecycle trace carries the route and the number, which is why both are closed sets.
+ */
+export const NATIVE_NOTIFICATION_ROUTES = ['transcript', 'append', 'turn', 'submission', 'ui-ready'] as const;
+
+export type NativeNotificationRoute = (typeof NATIVE_NOTIFICATION_ROUTES)[number];
+
 /** How often the program reports state and asks for work. */
 const TICK_MS = 250;
 
@@ -113,6 +135,8 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
   let originalFormatterPrefix: string | null | undefined;
   /** Each session's transcript path, as the classic hook reports it. */
   const paths: Record<string, string> = {};
+  /** Notifications that did not arrive, per route, until an exchange carries the count to the app. */
+  const dropped: Partial<Record<NativeNotificationRoute, number>> = {};
 
   async function send($: ClaudePluginApi, path: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
     const sentGeneration = generation;
@@ -140,6 +164,20 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
       throw namedError(childRoute && response.status === 409 ? LEASE_EXPIRED : BROKER_REFUSED, 'Owned terminal broker refused');
     }
     return JSON.parse(response.text) as Record<string, unknown>;
+  }
+
+  /**
+   * Tell the app something it will otherwise learn later, and count it if that fails.
+   *
+   * The route list above says what heals each one. A failure the *tick* meets is different — it drives the
+   * lease recovery — so only these five are counted rather than thrown.
+   */
+  async function notify($: ClaudePluginApi, route: NativeNotificationRoute, body: Record<string, unknown>) {
+    try {
+      await send($, '/' + route, body);
+    } catch {
+      dropped[route] = (dropped[route] ?? 0) + 1;
+    }
   }
 
   /** Everything a session handoff drops, so the next session starts from nothing the previous one held. */
@@ -277,6 +315,9 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
     const { settings, policy, helpers, main } = await readHelperSettings($);
     const sub = policy.disableAllHooks ? null : helpers.subagentStatusLine;
     const shellPrefix = (await $.env.get('CLAUDE_CODE_SHELL_PREFIX')) ?? null;
+    // Reported by value, and taken off the counters only once the app has them: a notification that fails
+    // while this exchange is in flight is counted for the next one rather than lost to the subtraction.
+    const reported = Object.keys(dropped).length ? { ...dropped } : undefined;
     let command: Record<string, unknown>;
     try {
       command = await send($, '/poll', {
@@ -290,7 +331,9 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
           disableAllHooks: policy.disableAllHooks === true,
         },
         hooksDisabled: settings.disableAllHooks === true,
+        ...(reported ? { dropped: reported } : {}),
       });
+      if (reported) settleReported(reported);
     } catch (error) {
       // A session that is not the one the app launched, reaching an app that is gone, is a detached child:
       // it registers with the observer rather than retiring.
@@ -306,6 +349,15 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
     if (paths[sessionId]) await send($, '/transcript', { sessionId, path: paths[sessionId] });
     if (!command.id) return;
     return fillPrompt($, command);
+  }
+
+  /** Take a delivered report off the counters, leaving whatever arrived while it was in flight. */
+  function settleReported(reported: Partial<Record<NativeNotificationRoute, number>>) {
+    for (const route of Object.keys(reported) as NativeNotificationRoute[]) {
+      const left = (dropped[route] ?? 0) - (reported[route] ?? 0);
+      if (left > 0) dropped[route] = left;
+      else delete dropped[route];
+    }
   }
 
   /** What a failed pass does: recover the lease, or retire this program for good. */
@@ -372,7 +424,7 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
       const result = await next(event);
       if (event.transcript_path && event.session_id && event.transcript_path.endsWith('/' + event.session_id + '.jsonl')) {
         paths[event.session_id] = event.transcript_path;
-        await send($, '/transcript', { sessionId: event.session_id, path: event.transcript_path }).catch(() => {});
+        await notify($, 'transcript', { sessionId: event.session_id, path: event.transcript_path });
       }
       return result;
     });
@@ -380,14 +432,14 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
       const sessionId = await $.session.id();
       const result: ClaudeAppendResult = await next(event);
       if (!event.agentId && result.message && result.uuid) {
-        await send($, '/append', {
+        await notify($, 'append', {
           sessionId,
           uuid: result.uuid,
           message: result.message,
           door: event.door,
           origin: event.origin,
           ...(submission && event.door === 'prompt' ? { submissionId: submission.id } : {}),
-        }).catch(() => {});
+        });
       }
       return result;
     });
@@ -396,10 +448,10 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
       try {
         const result: ClaudePromptSubmitResult = await next(event);
         if (own) {
-          await send($, '/submission', {
+          await notify($, 'submission', {
             id: own.id,
             ...(typeof result.drop === 'string' ? { drop: result.drop } : { accepted: true }),
-          }).catch(() => {});
+          });
         }
         return result;
       } finally {
@@ -407,11 +459,7 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
       }
     });
     on('session.start', async ($, event, next) => {
-      try {
-        await send($, '/ui-ready', {});
-      } catch {
-        // Startup readiness is a notification; the tick below reports the same session anyway.
-      }
+      await notify($, 'ui-ready', {});
       await begin($);
       return next(event);
     });
@@ -422,7 +470,7 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
     on('turn.start', async ($, event: ClaudeTurnEvent, next) => {
       if (!event.agentId) {
         await begin($);
-        await send($, '/turn', { running: true }).catch(() => {});
+        await notify($, 'turn', { running: true });
       }
       return next(event);
     });
@@ -430,7 +478,7 @@ export function createApackNativePlugin(config: ApackNativePluginConfig) {
       const result = await next(event);
       if (!event.agentId) {
         await begin($);
-        await send($, '/turn', { running: false, turnId: event.turnId, reason: event.reason }).catch(() => {});
+        await notify($, 'turn', { running: false, turnId: event.turnId, reason: event.reason });
       }
       return result;
     });
