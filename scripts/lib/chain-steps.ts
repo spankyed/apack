@@ -557,6 +557,24 @@ const APP_RUNNER = ['scripts/build-runtime.ts', 'scripts/lib/runtime-build-legs.
   'scripts/lib/chain-schedule.ts', 'scripts/lib/exit-on-epipe.ts', 'scripts/lib/measure.ts'];
 
 /**
+ * What every vitest config loads into every test file, whichever suite it belongs to.
+ *
+ * **They are the runner, not a dependency, which is why they were missing.** Each config names them by a
+ * relative path (`../apack-testing/src/…`) rather than importing `@apackdev/testing`, so they reach no
+ * package manifest — and `suiteInputs` derives a suite's dependency sources from what its workspace
+ * *declares*. Measured: nine of the thirteen unit suites did not cover this guard, and the four that did
+ * covered it by accident, through declaring `@apackdev/testing` for other reasons. So an edit to the thing
+ * that bounds every test in the repo — the guard that fails a stalled process tree or a spent CPU budget —
+ * left nine suites' projects fresh and their last pass standing.
+ *
+ * One list with two readers: `SUITE_RUNNER` puts them in every project's cache key, and
+ * `suite-reads.spec.ts` holds every suite to covering them. `suite-timeouts.spec.ts` asks the other half,
+ * that each config loads them at all, so between the three a config and its cache key cannot disagree.
+ */
+export const SUITE_SETUP_FILES = ['packages/apack-testing/src/vitest-exit-with-parent.ts',
+  'packages/apack-testing/src/vitest-progress-guard.ts'];
+
+/**
  * What *runs* a unit suite, as against what the suite reads — and an input to every project all the same.
  *
  * These decide what runs and how: the runner picks which projects a pool runs, `unit-suites.ts` says which
@@ -575,7 +593,7 @@ const SOURCE_RUNNER = ['scripts/with-source.mjs', 'packages/apack-host/src/build
 const SUITE_RUNNER = ['scripts/test-unit-pool.ts', 'scripts/lib/unit-pool.ts', 'scripts/lib/unit-suites.ts',
   'scripts/lib/exit-on-epipe.ts', ...SOURCE_RUNNER, 'scripts/lib/spec-durations.ts',
   'scripts/lib/spec-durations-reporter.ts', 'scripts/lib/over-budget.ts', 'scripts/lib/test-timeouts.ts',
-  'scripts/lib/spec-halves.ts', 'scripts/lib/chain-only.ts', ...BOUNDED_RUNNER];
+  'scripts/lib/spec-halves.ts', 'scripts/lib/chain-only.ts', ...SUITE_SETUP_FILES, ...BOUNDED_RUNNER];
 /**
  * What `build:default-setup` writes. `src/__generated__` is under the `src` it also reads, so it has to be declared:
  * `fingerprintUnit` excludes a unit's own output from its own fingerprint, and that is what stops the step
