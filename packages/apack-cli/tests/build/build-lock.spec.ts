@@ -15,7 +15,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { PACK_BUILD_WAIT_MS, PackBuildLockHeld, holdPackBuildLock, packBuildLock, waitForPackBuild } from '../../src/build/build-lock';
+import { PackBuildLockHeld, holdPackBuildLock, packBuildLock, waitForPackBuild } from '../../src/build/build-lock';
 import { buildStagingDir } from '../../src/build/build-publication.ts';
 
 let root: string;
@@ -33,6 +33,9 @@ const heldByAnother = (file: string): void => {
     pid: process.ppid, machine: os.hostname(), what: 'apack pack build', since: new Date().toISOString(),
   }));
 };
+
+/** A holder that does no work: what a wedged build looks like to a waiter */
+const idleHolder = async (): Promise<ReadonlyMap<number, number>> => new Map([[1, 0]]);
 
 describe('where the lock sits', () => {
   it('is inside the pack, under the directory every pack ignores', () => {
@@ -69,7 +72,7 @@ describe('a second build', () => {
     let clock = 0;
     let tries = 0;
     await expect(holdPackBuildLock(root, {
-      packId: 'demo', what: 'apack pack build', waitMs: 5_000,
+      packId: 'demo', what: 'apack pack build', idleMs: 5_000, readWork: idleHolder,
       onWait: (holder) => { waitedFor = holder; },
       now: () => clock,
       pause: async (ms) => { tries += 1; clock += ms; },
@@ -91,7 +94,7 @@ describe('a second build', () => {
   it('names the holder, the pack and the file it is waiting on', async () => {
     const file = packBuildLock(pack());
     heldByAnother(file);
-    const err = await holdPackBuildLock(root, { packId: 'demo-pack', what: 'apack pack build', waitMs: 0 })
+    const err = await holdPackBuildLock(root, { packId: 'demo-pack', what: 'apack pack build', wait: false })
       .then(() => undefined, (e: unknown) => e);
     expect(err).toBeInstanceOf(PackBuildLockHeld);
     const { message } = err as PackBuildLockHeld;
@@ -110,7 +113,7 @@ describe('a second build', () => {
     try {
       let tries = 0;
       await expect(holdPackBuildLock(root, {
-        packId: 'demo', what: 'a second build', waitMs: 60_000,
+        packId: 'demo', what: 'a second build',
         pause: async () => { tries += 1; },
       })).rejects.toThrow(PackBuildLockHeld);
       expect(tries, 'it waited on itself, which cannot succeed, instead of refusing').toBe(0);
@@ -121,10 +124,23 @@ describe('a second build', () => {
   });
 });
 
-describe('the bound', () => {
-  /** Several times a full build of the largest pack here, so a wedged holder is reported rather than waited on */
-  it('is minutes rather than a build', () => {
-    expect(PACK_BUILD_WAIT_MS).toBeGreaterThan(60_000);
+describe("the holder's work is the bound", () => {
+  /** A holder slow only because the machine is busy is a queue, not a wedge, however long it takes */
+  it('waits for as long as the holder works, and takes the lock once it is released', async () => {
+    const file = packBuildLock(pack());
+    heldByAnother(file);
+    let clock = 0;
+    let cpu = 0;
+    let looks = 0;
+    const lock = await holdPackBuildLock(root, {
+      packId: 'demo', what: 'apack pack build', idleMs: 5_000,
+      // Busy for far longer than the stall window, then done
+      readWork: async () => new Map([[1, (cpu += 2_000)]]),
+      now: () => clock,
+      pause: async (ms) => { clock += ms; if (++looks === 200) fs.rmSync(file); },
+    });
+    expect(clock, 'a working holder was given up on').toBeGreaterThan(5_000);
+    lock.release();
   });
 });
 
@@ -147,7 +163,7 @@ describe('waiting for a build without taking the lock', () => {
     let clock = 0;
     let looks = 0;
     const waited = await waitForPackBuild(root, {
-      timeoutMs: 5_000,
+      idleMs: 5_000, readWork: idleHolder,
       now: () => clock,
       pause: async (ms) => { looks += 1; clock += ms; },
     });
@@ -156,13 +172,13 @@ describe('waiting for a build without taking the lock', () => {
     expect(fs.existsSync(packBuildLock(root)), "the holder's lock is untouched").toBe(true);
   });
 
-  /** The bound is a bound: a holder that outlasts it leaves the caller to read as it would have anyway */
-  it('returns rather than hanging when the holder outlasts the bound', async () => {
+  /** A holder that stops working leaves the caller to read as it would have anyway, rather than hang */
+  it('returns rather than hanging when the holder stops working', async () => {
     const root = pack();
     heldByAnother(packBuildLock(root));
     let clock = 0;
     await expect(waitForPackBuild(root, {
-      timeoutMs: 1_000, now: () => clock, pause: async (ms) => { clock += ms; },
+      idleMs: 1_000, readWork: idleHolder, now: () => clock, pause: async (ms) => { clock += ms; },
     })).resolves.toContain('apack pack build');
   });
 });

@@ -1,5 +1,5 @@
 // One chain run per checkout, and the policy over `@apackdev/host/exclusive-lock`'s mechanism: where the lock
-// file lives, what the refusal says, and how long `--wait` waits.
+// file lives, what the refusal says, and that `--wait` waits for as long as the holding chain works.
 //
 // **Two runs share this checkout's stamps**, `node_modules/.cache/apack-chain`, so each would cache results
 // the other took against a different tree — and a step marked `cached` would mean "some run with these inputs
@@ -22,14 +22,6 @@ import { STAMP_DIR } from './chain-stamps.ts';
  */
 export const CHAIN_LOCK = path.join(STAMP_DIR, 'chain.lock');
 
-/**
- * How long `--wait` waits before refusing anyway: a bound, not a schedule — it returns the moment the holder
- * is gone. Ten minutes against a cold chain's ~180s, the ratio `waitForPackageBuild` chose for the same
- * reason: several times what the waited-for thing costs, so a wedged holder is reported rather than waited on
- * forever, and a bound nobody will wait for is the same as no bound. A holder queued for the expensive steps
- * (`machine-lock.ts`) can outlast it, and then this says it is still running, which it is.
- */
-export const CHAIN_WAIT_MS = 600_000;
 
 /** Thrown when another run holds the lock: a refusal, which is why `chain.ts` prints it rather than rethrowing */
 export class ChainLockHeld extends Error {
@@ -37,7 +29,7 @@ export class ChainLockHeld extends Error {
     const where = path.relative(process.cwd(), file);
     super(`another chain run holds ${where}:\n  ${holder}\n\n`
       + 'Two runs share this checkout\'s stamps, so each would cache results the other took against a\n'
-      + `different tree. ${waited ? 'It is still running.' : 'Wait for it to finish, or pass --wait to queue behind it.'}\n`
+      + `different tree. ${waited ? 'It stopped working while it held the lock, so it looks stuck.' : 'Wait for it to finish, or pass --wait to queue behind it.'}\n`
       + 'If you need both at once, give one of them its own checkout: `git worktree add`.\n'
       + `If no chain is running, delete ${where} and try again.`);
   }
@@ -68,16 +60,19 @@ export const chainInvocation = (argv: readonly string[] = process.argv.slice(2))
 export const runningChain = (file: string = CHAIN_LOCK): string | null => findLockHolder(file);
 
 /**
- * Takes the chain lock, or throws `ChainLockHeld`. With `waitMs`, a held lock is waited for and retried until
- * the bound — `holdExclusiveLockWaiting`'s job, so the retry, the bound's meaning and the one-shot `onWait`
+ * Takes the chain lock, or throws `ChainLockHeld`. With `wait`, a held lock is waited for and retried for as long
+ * as the chain holding it works — `holdExclusiveLockWaiting`'s job, so the retry, the bound and the one-shot `onWait`
  * are the mechanism's rather than a second copy of them here. What is this module's is the policy: where the
  * file lives, what the refusal says, and that waiting is opt-in (`--wait`) because two chain runs sharing one
  * checkout's stamps is a thing to be told about rather than queued for by default.
  */
 export async function holdChainLock(
-  { what, waitMs = 0, onWait, file = CHAIN_LOCK, now, pause }: {
+  { what, wait = false, onWait, file = CHAIN_LOCK, now, pause, idleMs, readWork }: {
     what: string;
-    waitMs?: number;
+    wait?: boolean;
+    /** How long the holding chain may do no work before a waiter gives up, injected by the spec */
+    idleMs?: number;
+    readWork?: (pid: number) => Promise<ReadonlyMap<number, number> | undefined>;
     onWait?: (holder: string) => void;
     /**
      * Which lock, defaulting to the one the chain takes — as `withBuildLock` and `runningPackageBuild` take
@@ -93,8 +88,10 @@ export async function holdChainLock(
   return holdExclusiveLockWaiting({
     file,
     what,
-    waitMs,
+    wait,
     refuse: (holder, waited) => new ChainLockHeld(holder, waited, file),
+    ...(idleMs !== undefined && { idleMs }),
+    ...(readWork && { readWork }),
     ...(onWait && { onWait }),
     ...(now && { now }),
     ...(pause && { pause }),

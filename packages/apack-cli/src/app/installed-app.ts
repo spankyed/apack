@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { replaceDir, stagingDirName } from '@apackdev/host/replace-dir';
 import { execFileSync } from 'node:child_process';
-import { execFileWhileWorking } from '@apackdev/sdk/progress';
+import { execFileWhileWorking, fromNow, processWork, watchWork } from '@apackdev/sdk/progress';
 import semver from 'semver';
 import { PRODUCT_NAMES, type PublishedAppChannel } from './channels';
 import type { AppChannel } from '@apackdev/sdk/env';
@@ -60,26 +60,35 @@ export function installedVersion(appPath: string): string | null {
 /** Quit this bundle gracefully, including instances using nondefault profiles. Never kill it. */
 export async function quitApp(product: string, log: (message: string) => void,
   appPath = path.join('/Applications', `${product}.app`)): Promise<void> {
-  const running = async () => {
+  /** One of the bundle's processes, or nothing once none is left */
+  const running = async (): Promise<number | undefined> => {
     const { stdout } = await execFileAsync('ps', ['-axo', 'pid=,command='], { timeout: 5_000 });
-    return stdout.split('\n').some(line => {
+    for (const line of stdout.split('\n')) {
       const match = line.trim().match(/^(\d+)\s+(.+)$/);
-      return match && Number(match[1]) !== process.pid && match[2]!.startsWith(`${appPath}/Contents/`);
-    });
+      if (match && Number(match[1]) !== process.pid && match[2]!.startsWith(`${appPath}/Contents/`)) return Number(match[1]);
+    }
+    return undefined;
   };
-  if (!await running()) return;
+  const first = await running();
+  if (first === undefined) return;
   log(`Quitting ${product}...`);
   try {
     await execFileAsync('osascript', ['-e', `tell application ${JSON.stringify(appPath)} to quit`], { timeout: 10_000 });
   } catch {
     // An app may already be quitting; the process check below decides whether replacement can proceed.
   }
-  const deadline = Date.now() + 20_000;
-  while (Date.now() < deadline) {
-    if (!await running()) return;
-    await new Promise(resolve => setTimeout(resolve, 250));
+  // For as long as the app is working to quit: one shutting down on a busy machine is slow, and only a stall is stuck
+  let stalled = false;
+  const watch = watchWork({ work: fromNow(processWork(first)), onRefused: () => { stalled = true; } });
+  try {
+    while (!stalled) {
+      if (await running() === undefined) return;
+      await new Promise(resolve => setTimeout(resolve, 250));
+    }
+  } finally {
+    watch.stop();
   }
-  throw new Error(`${product} is still running. Quit it and run this again; its bundle was not changed.`);
+  throw new Error(`${product} is still running and stopped working while it quit. Quit it and run this again; its bundle was not changed.`);
 }
 
 export interface AppCommandOptions {

@@ -43,7 +43,7 @@ import { CHAIN_STEPS, type ChainStep, chainSteps, keptOnFailure, needsApp, order
 import { stampFor, STAMP_DIR, unitFor } from './lib/chain-stamps.ts';
 import { evidenceLine, openRunEvidence, pruneRunEvidence, type RunEvidence } from './lib/chain-evidence.ts';
 import { CHAIN_FLAGS, chainHelp } from './lib/chain-flags.ts';
-import { CHAIN_WAIT_MS, ChainLockHeld, chainInvocation, holdChainLock } from './lib/chain-lock.ts';
+import { ChainLockHeld, chainInvocation, holdChainLock } from './lib/chain-lock.ts';
 import { expensiveSteps, MachineLockRefused } from './lib/machine-lock.ts';
 import { deadlinesNote } from './lib/chain-evidence.ts';
 import type { ExclusiveLock } from '@apackdev/host/exclusive-lock';
@@ -514,7 +514,7 @@ async function main(): Promise<void> {
   try {
     lock = await holdChainLock({
       what: chainInvocation(),
-      waitMs: args.flags.has('wait') ? CHAIN_WAIT_MS : 0,
+      wait: args.flags.has('wait'),
       onWait: (holder) => console.log(`waiting for another chain run to finish:\n  ${holder}`),
     });
   } catch (err) {

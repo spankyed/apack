@@ -388,7 +388,7 @@ async function captureOnce(directory: string, options: CompilerInstallationOptio
     if (existing) return existing;
     let captured = false;
     const lock = await holdExclusiveLockWaiting({
-      file: `${entry}.lock`, what: 'compiler installation capture', waitMs: 10 * 60_000,
+      file: `${entry}.lock`, what: 'compiler installation capture', wait: true,
       refuse: (holder) => new Error(`Another process is capturing this compiler installation (${holder})`),
     });
     try {

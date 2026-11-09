@@ -464,13 +464,13 @@ async function ensureListening(options: BrokerOptions): Promise<void> {
     lock = await holdExclusiveLockWaiting({
       file: startLockFile(options.socket),
       what: 'starting the terminal broker',
-      waitMs: options.startMs ?? BROKER_START_MS,
+      wait: true,
       refuse: (holder) => new Error(`another process is starting the terminal broker (${holder})`),
     });
   } catch {
-    // Waited out rather than refused: whoever holds it has had a full startup window, so whatever is on
-    // that socket now is what the caller should connect to. Throwing here would report a failure to start
-    // where there is one running.
+    // Given up on rather than refused: whoever holds it stopped working while starting the broker, so whatever
+    // is on that socket now is what the caller should connect to. Throwing here would report a failure to start
+    // where there may be one running.
     return;
   }
 

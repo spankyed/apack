@@ -12,6 +12,9 @@ import { randomBytes } from 'node:crypto';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { lockIsHeld, sameWriter } from './process-liveness.ts';
+// By path: the chain's own runner takes its lock through this module before any package is built, and
+// `@apackdev/sdk` resolves to its `dist` outside a host build
+import { createStallTracker, IDLE_MS, readTreeCpuMs } from '../../apack-sdk/src/progress.ts';
 
 /**
  * What the file holds. `pid` answers the question the lock exists to ask, "is the holder still running";
@@ -157,16 +160,64 @@ export function holdExclusiveLock(options: {
 
 /** How often a waiter tries again. The take is the test, so this is only how long a loser sleeps */
 const POLL_MS = 500;
+/** How often a waiter reads the holder's CPU: a listing of every process is too costly for each poll */
+const HOLDER_READ_MS = 5_000;
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => { setTimeout(resolve, ms); });
 
+/** How a wait on a held lock reads its holder: injected by a spec, so its bound is reached without waiting it out */
+export interface HolderWatchOptions {
+  /** How long the holder may do no work before the waiter gives up on it; half the watchdog's window by default */
+  idleMs?: number;
+  now?: () => number;
+  /** The holder's process tree's CPU; nothing where it cannot be read */
+  readWork?: (pid: number) => Promise<ReadonlyMap<number, number> | undefined>;
+}
+
 /**
- * `holdExclusiveLock`, waiting for a held lock instead of refusing at once — up to `waitMs`, then refusing.
+ * Whether the process holding `file` has stopped working, asked once per look: the stall decision `watchWork`
+ * takes, over readings of whoever holds the lock at each look. Each holder is watched from its own start, so one
+ * holder's silence is never charged to the next, and a holder on another machine, or one whose lock cannot be
+ * read, gives no reading and is bounded by its silence.
+ */
+function watchHolder(file: string, { idleMs = IDLE_MS / 2, now = Date.now, readWork = readTreeCpuMs }: HolderWatchOptions) {
+  let watching: { pid: number | undefined; tracker: ReturnType<typeof createStallTracker>; readAt: number } | undefined;
+  return async (): Promise<boolean> => {
+    const holder = readLock(file);
+    const pid = holder !== null && holder.machine === os.hostname() ? holder.pid : undefined;
+    const at = now();
+    const current = watching !== undefined && watching.pid === pid ? watching
+      : { pid, tracker: createStallTracker(idleMs, at), readAt: Number.NEGATIVE_INFINITY };
+    watching = current;
+    if (at - current.readAt < Math.min(HOLDER_READ_MS, idleMs / 4)) return false;
+    current.readAt = at;
+    return current.tracker.reading((pid === undefined ? undefined : await readWork(pid)) ?? new Map(), at);
+  };
+}
+
+/**
+ * Waits while `file` is held, for as long as its holder works, without taking it: for a reader of output another
+ * process is writing under the lock. Answers whether it was released, or `false` when the holder stopped working.
+ */
+export async function waitWhileHeld(file: string, options: HolderWatchOptions & { pause?: (ms: number) => Promise<void> } = {}): Promise<boolean> {
+  const stalled = watchHolder(file, options);
+  const pause = options.pause ?? sleep;
+  while (findLockHolder(file)) {
+    if (await stalled()) return false;
+    await pause(POLL_MS);
+  }
+  return true;
+}
+
+/**
+ * `holdExclusiveLock`, waiting for a held lock instead of refusing at once when `wait` is set — for as long as its
+ * holder keeps working, then refusing.
  *
- * **A bound, not a schedule**: it returns the moment the holder is gone. What the bound is for is a holder that
- * is wedged rather than working, which waiting forever cannot tell apart from one making progress; a bound
- * nobody will wait for is the same as no bound. `onWait` is told once, because a wait that prints nothing reads
- * as a hang.
+ * **The holder's progress, not a clock, is the bound**: it returns the moment the holder is gone, and refuses
+ * once the process the lock names has done no work for `idleMs`, which is a wedge rather than a queue. A holder
+ * slow only because the machine is busy is waited for, however long it takes. Half the watchdog's window by
+ * default, because a waiter does no work itself, and a run the watchdog bounds would otherwise be killed at the
+ * moment it would have refused. `onWait` is told once, because a wait that prints nothing reads as a hang.
  *
  * **The retry is around the take, never a check and then a take.** The create is the test (`wx`), so two
  * waiters arriving together cannot both win and a loser simply waits again. Asking who holds it and taking
@@ -185,14 +236,13 @@ export async function holdExclusiveLockWaiting(options: {
   file: string;
   what: string;
   refuse: (holder: string, waited: boolean) => Error;
-  waitMs: number;
+  /** Whether to wait for a held lock at all: without it, a held lock is refused at once */
+  wait: boolean;
   onWait?: (holder: string) => void;
-  /** Injected by a spec, so the bound is reached without waiting out a real one */
-  now?: () => number;
   pause?: (ms: number) => Promise<void>;
-}): Promise<ExclusiveLock> {
-  const { file, what, refuse, waitMs, onWait, now = Date.now, pause = sleep } = options;
-  const deadline = now() + waitMs;
+} & HolderWatchOptions): Promise<ExclusiveLock> {
+  const { file, what, refuse, wait, onWait, pause = sleep } = options;
+  const stalled = watchHolder(file, options);
   let told = false;
   for (;;) {
     const mine = readLock(file);
@@ -202,7 +252,7 @@ export async function holdExclusiveLockWaiting(options: {
     try {
       return holdExclusiveLock({ file, what, refuse: (holder) => refuse(holder, told) });
     } catch (err) {
-      if (now() >= deadline) throw err;
+      if (!wait || await stalled()) throw err;
       if (!told) {
         told = true;
         onWait?.(findLockHolder(file) ?? what);
