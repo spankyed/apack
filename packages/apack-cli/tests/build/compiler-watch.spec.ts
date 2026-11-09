@@ -323,7 +323,8 @@ describe('what a package build reads', () => {
     const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-unit-inputs-')));
     try {
       const paths = packageInputWatchPaths([unit(root)]);
-      expect(Object.fromEntries([...paths].map(([file, kind]) => [path.relative(root, file), kind]).sort())).toEqual({
+      // Compared as forward-slash paths: `path.relative` answers in the platform's separator, which on Windows is `\`
+      expect(Object.fromEntries([...paths].map(([file, kind]) => [path.relative(root, file).split(path.sep).join('/'), kind]).sort())).toEqual({
         'package.json': 'file', src: 'entries', 'src/nested': 'entries', 'src/nested/a.ts': 'file',
       });
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
