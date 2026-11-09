@@ -64,6 +64,20 @@ export function validatePackSources(packRoot: string, manifest: Partial<PackMani
         path, source: target, message: error instanceof Error ? error.message : String(error) });
     }
   }
+  // A worker is bundled on its own and imported by nothing, so it is checked here rather than among the targets
+  // codegen reads exports from, whose program would otherwise take in everything a worker imports
+  for (const [name, target] of Object.entries(manifest.build?.workers ?? {})) {
+    const label = `Worker "${name}"`;
+    try {
+      if (!findSourceModule(packRoot, target, SCRIPT_MODULE_EXTENSIONS, label)) {
+        diagnostics.push({ code: 'module.missing-file', severity: 'error', packId: manifest.id, path: ['build', 'workers', name], source: target,
+          message: `${label} file "${target}" not found` });
+      }
+    } catch (error) {
+      diagnostics.push({ code: 'module.invalid-target', severity: 'error', packId: manifest.id, path: ['build', 'workers', name], source: target,
+        message: error instanceof Error ? error.message : String(error) });
+    }
+  }
   const designatedBy = new Map<string, string>();
   for (const feature of packFeatures(manifest)) {
     if (feature.designation === undefined) continue;
