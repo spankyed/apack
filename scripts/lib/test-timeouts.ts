@@ -326,29 +326,7 @@ export function clockedDeadlines(absFile: string, repoRoot: string): Clock[] {
     return ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) && namespaces.has(callee.expression.text);
   };
 
-  /**
- * The milliseconds a clocked call was given, as written.
- *
- * Three shapes, because the calls put it in three places: an options object's `timeout`
- * (`vi.waitFor(fn, { timeout })`, an assertion's), a bare trailing or leading number
- * (`AbortSignal.timeout(n)`, `test.setTimeout(n)`, `waitForTimeout(n)`, `vi.waitFor(fn, n)`), and
- * `_byDeadline`'s third argument. Anything not written as a literal is `undefined` by design — see `ms`.
- */
-function msOf(node: ts.CallExpression): number | undefined {
-  const literal = (value: ts.Node | undefined): number | undefined =>
-    value !== undefined && ts.isNumericLiteral(value) ? Number(value.text.replace(/_/g, '')) : undefined;
-  for (const argument of node.arguments) {
-    if (!ts.isObjectLiteralExpression(argument)) continue;
-    for (const property of argument.properties) {
-      if (ts.isPropertyAssignment(property) && ts.isIdentifier(property.name) && property.name.text === 'timeout') {
-        return literal(property.initializer);
-      }
-    }
-  }
-  return node.arguments.map((argument) => literal(argument)).find((value) => value !== undefined);
-}
-
-const found: Clock[] = [];
+  const found: Clock[] = [];
   const record = (at: ts.Node, what: string) => found.push({
     file: path.relative(repoRoot, absFile),
     line: source.getLineAndCharacterOfPosition(at.getStart(source)).line + 1,
