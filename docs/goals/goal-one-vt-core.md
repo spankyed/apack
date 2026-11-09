@@ -202,6 +202,35 @@ side is declared in one place and asserted (required outcome 4).
 
 ### Open decisions
 
+**O3 — Phase R's premise is wrong as written, and the choice is yours.** Measured 2026-11-09, after 0b.
+
+D2 says the renderer takes upstream's WebAssembly module rather than `ghostty-web`, and the plan sizes
+Phase R as "one file, 742 lines, plus roughly 35 lines of CSS". **Those two cannot both be true.**
+`libghostty-vt` is a terminal emulator, not a terminal widget: `render.h` is "render state for creating
+high performance renderers" — it hands you a frame's worth of state and leaves the drawing to you. The
+release says outright that GUI features are not part of the library. So taking the module alone means
+writing the painter, the input wiring, the selection UI, IME, accessibility and the scrollbar — which is
+precisely the part of xterm.js that is not a parser.
+
+`ghostty-web` 0.4.0 is the other end: zero dependencies, ships its own `ghostty-vt.wasm`, and advertises
+migration as *"changing your import: `@xterm/xterm` → `ghostty-web`"*. It is the widget. What it is not is
+the same build — its README says "the patches are very minimal" and that it "will eventually consume a
+native Ghostty WASM distribution once available". That distribution now exists; it does not use it yet.
+
+| | one engine | Phase R's real size | what it buys over today |
+|---|---|---|---|
+| **upstream's module** (D2) | yes, byte-identical with the broker | a terminal widget: rendering, input encoding, selection, IME, accessibility | identical parses, and a renderer we own |
+| **`ghostty-web`** | no — two Ghostty-derived builds, same lineage | close to the plan's estimate | graphemes, complex scripts, XTPUSHSGR, and one fewer hand-written emulator |
+
+**My reading: D2 should go, and the renderer should take `ghostty-web`.** The ownership goal already settled
+that the window's parse is *a replica and never an authority* — the broker answers for the screen — so
+byte-identical renderer parsing buys less than it appears to, while writing a terminal widget is the
+largest single piece of work in this goal and none of it is terminal *emulation*. Phase B still delivers
+one engine where it matters, on the side that is the authority. The cost is honest: two Ghostty-derived
+builds in the tree until `ghostty-web` consumes the official distribution, which its own README commits to.
+
+Blocks Phase R and nothing else. Phase B is unaffected and proceeds.
+
 **O2 — Does a Windows library we build link against the broker's MSVC build?** The release is settled —
 `1.0.0`, tag `vt-1.0.0`, commit `0fa3d577a5614150ff8e2c152de5fb9d5c6d2dec` — and O1 is answered in
 evidence. What remains is Windows, and it is now two questions rather than one, because nothing is
