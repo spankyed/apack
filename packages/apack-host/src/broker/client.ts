@@ -394,8 +394,22 @@ async function start(options: BrokerOptions): Promise<void> {
     // them. The caller retries, so each abandoned child would otherwise be a permanent one.
     process_.stdout?.destroy();
     process_.stderr?.destroy();
+    // **The reap is said out loud, because the error the caller throws cannot say it.** `ready` words why the
+    // start failed and carries the broker's last words; what it has no way to mention is that a child was
+    // killed here. That matters now the service bounds its attempts (`START_ATTEMPTS`): someone hitting a
+    // broker that will not start sees three failures, and without this nothing tells them the processes
+    // behind them were not left running.
+    //
+    // Only when it was still running. A broker that exited before listening is what the thrown error is
+    // already about, and a second line claiming a kill would contradict it — `exitCode`/`signalCode` are
+    // both set by then, since that exit is what `ready` failed on.
+    //
+    // Nothing asserts this line: `client.spec.ts` drives this function but binds no app, so its logger
+    // writes to the console rather than anywhere a case could read.
+    const running = process_.exitCode === null && process_.signalCode === null;
     process_.kill();
     process_.unref();
+    if (running) logger.warn(`the broker (${process_.pid ?? 'pid unknown'}) never reported listening and was killed`);
     throw error;
   }
 
