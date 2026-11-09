@@ -30,7 +30,8 @@ describe('Codex Chat', () => {
     const references = { context: [{ refType: 'note', refId: 'Note-1', shortCode: 'NOT-1', label: 'Plan' }] };
     const { threadId, startTurn, resolveReferences } = startCodex({ textPrefix: '--- Note: Plan ---\nShip it\n---', imageBlocks: [], addDirs: [] });
 
-    await codexChat({ threadId, text: 'what does the plan say?', references, cwdOverride: '/work' }, services);
+    // Neither `z` nor a flow id is read on this path
+    await codexChat({ threadId, text: 'what does the plan say?', references, cwdOverride: '/work' }, services, undefined as never, '');
 
     expect(resolveReferences).toHaveBeenCalledWith(references);
     const sent = startTurn.mock.calls[0]![0].input[0].text as string;
