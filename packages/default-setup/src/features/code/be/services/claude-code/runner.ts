@@ -31,7 +31,6 @@ import { agentChildEnvironment } from '../shell-environment.ts'
 import { createClaudeLifecycleTrace } from './lifecycle-trace.ts'
 import { createStderrTail } from './stderr-tail.ts'
 import { decodeNdjson, encodeNdjsonLine, type DecodedLine } from './ndjson.ts'
-import { agentChildEnvironment } from '../shell-environment.ts'
 import {
   ClaudeAbortError,
   ClaudeCliNotFoundError,
