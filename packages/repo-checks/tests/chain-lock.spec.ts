@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { CHAIN_LOCK, CHAIN_WAIT_MS, ChainLockHeld, chainInvocation, holdChainLock } from '../../../scripts/lib/chain-lock.ts';
+import { CHAIN_LOCK, CHAIN_WAIT_MS, ChainLockHeld, chainInvocation, holdChainLock, runningChain } from '../../../scripts/lib/chain-lock.ts';
 import { STAMP_DIR } from '../../../scripts/lib/chain-stamps.ts';
 import { CHAIN_FLAGS } from '../../../scripts/lib/chain-flags.ts';
 
@@ -58,6 +58,45 @@ describe('where the chain lock lives', () => {
   // The flag is declared, which is what makes `--wait` reach the parser rather than being refused as a typo
   it('is opted into waiting by a declared flag', () => {
     expect(CHAIN_FLAGS.booleans).toContain('wait');
+  });
+});
+
+/**
+ * The other thing this lock answers, for a reader rather than a taker: is a chain run in progress.
+ *
+ * A check whose subject only exists after a chain run — the stamp store, a dep file — skips outside one and
+ * refuses inside it (`tests/_support/evidence.ts`), and this is the fact that decides which. It has to be a
+ * fact about the machine rather than `process.env.CI`, since the chain is the gate whoever started it, and
+ * the lock is the one such fact already on disk.
+ */
+describe('whether a chain run is in progress', () => {
+  /**
+   * Over a lock `holdChainLock` really took rather than one written out here, because the thing worth
+   * proving is that the writer and this reader agree about the file: a step's own subprocess asks this of
+   * whatever the chain wrote, and a reader that only ever saw a hand-made lock would pass while disagreeing.
+   */
+  it('names the holder of a lock the taker really took', async () => {
+    const lock = await holdChainLock({ what: 'npm run chain --all --strict', file });
+    try {
+      expect(runningChain(file)).toContain('npm run chain --all --strict');
+    } finally {
+      lock.release();
+    }
+  });
+
+  it('says none is when nothing holds the lock', () => {
+    expect(runningChain(file)).toBeNull();
+  });
+
+  /**
+   * A lock whose holder has exited is a crashed run, not a running one — and this is the direction worth
+   * being sure of: reading it as held would refuse every evidence-dependent check on the strength of a file
+   * nobody owns, for as long as it sat there.
+   */
+  it('says none is for a lock whose holder has gone', () => {
+    fs.writeFileSync(file, JSON.stringify({ pid: 2 ** 22, machine: os.hostname(), what: 'npm run chain', since: '' }));
+
+    expect(runningChain(file)).toBeNull();
   });
 });
 
