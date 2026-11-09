@@ -55,7 +55,7 @@
           <NativeMcpForm v-if="nativeComposerOwner?.mcpForm" :key="nativeComposerOwner.mcpForm.id + nativeComposerOwner.mcpForm.revision" :form="nativeComposerOwner.mcpForm" :operation="nativeComposerView?.mcpOperation" @operate="operateMcpForm" @pending="mcpFormPending = $event" />
           <!-- Agent Chat Content -->
           <div v-show="!mainCommandView && !pendingNativeQuestion && !pendingNativePlan" class="relative flex flex-col flex-1 w-full overflow-hidden min-h-0" data-testid="chat-transcript">
-            <div class="min-h-0 flex-1 overflow-y-auto" :class="$style.messagesContainer" ref="messagesContainer" @scroll="onScroll">
+            <div class="min-h-0 flex-1 overflow-y-auto" :class="$style.messagesContainer" :style="{ overflowAnchor: currentThread?.context?.claudeCode ? 'none' : undefined }" ref="messagesContainer" @scroll="onScroll">
               <div v-if="allMessages.length === 0 && !currentThread?.instructions" class="flex items-center justify-center h-full">
                 <p class="text-neutral-700 text-center italic max-w-sm">{{ randomQuote }}</p>
               </div>
