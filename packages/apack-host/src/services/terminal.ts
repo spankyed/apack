@@ -6,8 +6,13 @@
 //
 // **The binary comes from the `apack-terminal` package**, which answers for its own: a packaged app resolves
 // it as it resolves every other dependency, and `APACK_TERMINAL_BINARY` overrides it for a build of your
-// own. The crash-restart and the one-broker-per-data-dir that belong beside this are still the
-// composition's to own.
+// own.
+//
+// **A broker that dies is recovered by forgetting it.** The connection closing reports every session exited
+// (`broker/client.ts`) and tells this service, which drops the broker it had cached — so the next session
+// starts a fresh one through the lazy path above, the one a first session takes anyway, rather than through a
+// supervisor beside it. What bounds that is `START_ATTEMPTS`, counted over the binary a start was tried
+// against. One broker per data dir is the start lock's (`ensureListening`), not this file's.
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';

@@ -110,6 +110,30 @@ that crashes all reap the tree by one mechanism rather than three paths remember
 **`command-group` is not what does it.** It wraps `std::process::Command`, and `portable-pty` spawns the
 child itself, so there is no `Command` to wrap; the job is assigned to the pid afterwards instead.
 
+## Who holds a session, and what a broker's death costs
+
+**A session outlives the client that opened it, and dies with whoever owns the broker.** A connection greets
+as one of two roles. A `client` operates sessions — opens them, writes to them, reads their screen — and
+leaving does not end them. A `lifetime` connection asks for nothing and is sent nothing; it exists so that the
+sessions end when the app does. Electron main holds that one, because it is the only process whose lifetime is
+the app's: a descriptor closes on process death however the process died, so a crash or a kill reaps the
+shells exactly as a clean quit does, and there is no path that has to remember to. With no owner connected the
+broker falls back to ending its sessions when the last client leaves, which is what stops a dev run or a test
+leaving a shell behind.
+
+A client that comes back takes a surviving session up by its id (`adopt`) and reads what it missed from the
+broker's own screen, rather than from anything a window kept.
+
+**When the broker dies, every session dies with it, and the app is told so.** A pty dies with the process that
+owns it, so the connection closing is the news: the client reports every session it held as exited without a
+status — the shape a single shell's death already arrives in — and the window keeps the terminal and labels
+its transcript. The service then forgets that broker, so the next session starts a fresh one through the lazy
+start; there is no supervisor beside it. A start that keeps failing is tried three times against one binary
+and then refused with what the broker itself said, and rebuilding the binary is what earns a fresh budget.
+
+A client that chooses to leave is the opposite case and is recorded rather than inferred, so quitting the app
+draws no crash notice in any of its terminals.
+
 ## What submits a line
 
 Not the same on both platforms, and measured rather than assumed. Typed into a Windows console, `\n` is
@@ -119,11 +143,6 @@ know which shell is on the other end.
 
 ## What is not there yet
 
-- **A session does not outlive its client.** The broker ends a connection's sessions when the connection
-  closes, which is the backstop for an app that quits, crashes or is killed — a pack's `onShutdown` is
-  synchronous and runs in `process.on('exit')`, where no socket write completes. Surviving a client, attach
-  and detach, and reattach belong to the host session service.
-- **One connection at a time.** A second client is the same piece of work.
 - **The app on Windows.** The broker's own suite passes there in full — 12 of 12, on a Windows VM on
   2026-11-07 — and so does the parser's. What has not been done there is launching the Electron app itself.
   See the [Windows development VM guide](guides/windows-development-vm.md).
@@ -132,5 +151,4 @@ know which shell is on the other end.
   are the broker's own code and platform-independent; how much output it takes to fill a *named pipe*, which
   the bound's arithmetic includes, is not.
 - **A packaged build ships no broker.** The binary is resolved from `APACK_TERMINAL_BINARY` or the linked
-  checkout's debug build. Per-platform builds, their signing and crash-restart belong with the composition
-  that ships it.
+  checkout's debug build. Per-platform builds and their signing belong with the composition that ships it.
