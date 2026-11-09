@@ -16,6 +16,7 @@
  * bytes. The stream-json schema lives in `types.ts` and parsing in `ndjson.ts`.
  */
 
+import { createStderrTail } from './stderr-tail.ts'
 import {
   spawn,
   type ChildProcessByStdio,
@@ -270,9 +271,11 @@ export async function spawnStream(
     throw wrapSpawnError(err, cliPath)
   }
 
-  // Collect stderr lazily for post-mortem on exit.
-  const stderrChunks: Buffer[] = []
-  child.stderr.on('data', c => stderrChunks.push(c))
+  // Collect stderr for post-mortem on exit, bounded: this child lives as long as the conversation does, so
+  // an array of every chunk it ever wrote is a leak with that lifetime. The end is the part a post-mortem
+  // reads, and what is dropped is counted rather than hidden
+  const stderr = createStderrTail()
+  child.stderr.on('data', (c: Buffer) => stderr.append(c))
 
   // Swallow expected pipe errors that occur when the child is killed mid-write.
   // Without this listener the error becomes an uncaughtException and crashes the server.
@@ -294,7 +297,7 @@ export async function spawnStream(
         resolve({
           exitCode: code ?? -1,
           signal: sig,
-          stderr: Buffer.concat(stderrChunks).toString('utf8'),
+          stderr: stderr.text(),
         })
       })
     },
