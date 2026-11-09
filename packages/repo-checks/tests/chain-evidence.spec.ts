@@ -4,7 +4,7 @@
 // where a spec can reach them without starting a build — the same arrangement `chain-output.spec.ts` and
 // `chain-lock.spec.ts` have, and the reason both of those are pure specs over imported functions.
 import * as fs from 'node:fs';
-import { vendoredNote } from '../../../scripts/lib/chain-evidence.ts';
+import { vendoredDriftLine, vendoredNote } from '../../../scripts/lib/chain-evidence.ts';
 import type { VendoredState } from '../../../scripts/lib/vendored-checkouts.ts';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -224,6 +224,38 @@ describe('what a run compiled against', () => {
   it('says so when the checkout is dirty, since a commit does not describe it then', () => {
     expect(vendoredNote([state({ dirty: true })])).toContain('dirty');
     expect(vendoredNote([state()])).not.toContain('dirty');
+  });
+
+  /**
+   * **The result line, because a drift decides what a verdict is worth.**
+   *
+   * The evidence file records every link either way, but a run against a checkout that is not at its pin did
+   * not build what a strict run clones — and that belongs beside the verdict rather than in a file someone
+   * opens after a failure. It reports and never fails: which commit a sibling sits on is the developer's to
+   * choose, and refusing it would stop work on the vendored code itself.
+   */
+  it('qualifies the verdict when a checkout is off its pin, and says nothing when none is', () => {
+    expect(vendoredDriftLine([state()]), 'a clean run says nothing extra').toBeUndefined();
+
+    const line = vendoredDriftLine([state({ head: 'cccc333dddd' })]);
+    expect(line).toContain('vendor/apack-terminal');
+    expect(line, 'where it is').toContain('cccc333');
+    expect(line, 'and what it should be').toContain('aaaa111');
+    expect(line, 'and why that matters').toContain('CI clones');
+  });
+
+  it('names every drifted link rather than the first', () => {
+    const line = vendoredDriftLine([state({ head: 'cccc333' }), state({ name: 'elmdb', head: 'eeee555' })]);
+
+    expect(line).toContain('vendor/apack-terminal');
+    expect(line).toContain('vendor/elmdb');
+  });
+
+  it('calls nothing drifted for a link with no pin or no checkout', () => {
+    // Absence is not disagreement: a link resolving to no git checkout, or one with no `.rev` committed,
+    // has nothing to compare — reporting those as drift would make the line fire for every such repo
+    expect(vendoredDriftLine([state({ head: undefined })])).toBeUndefined();
+    expect(vendoredDriftLine([state({ pinned: undefined })])).toBeUndefined();
   });
 
   it('reports the absences rather than an empty line', () => {

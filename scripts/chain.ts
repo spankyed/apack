@@ -45,7 +45,8 @@ import { evidenceLine, openRunEvidence, pruneRunEvidence, type RunEvidence } fro
 import { CHAIN_FLAGS, chainHelp } from './lib/chain-flags.ts';
 import { ChainLockHeld, chainInvocation, holdChainLock } from './lib/chain-lock.ts';
 import { expensiveSteps, MachineLockRefused } from './lib/machine-lock.ts';
-import { deadlinesNote } from './lib/chain-evidence.ts';
+import { deadlinesNote, vendoredDriftLine } from './lib/chain-evidence.ts';
+import { vendoredStates } from './lib/vendored-checkouts.ts';
 import type { ExclusiveLock } from '@apackdev/host/exclusive-lock';
 import { budgetMsFor, whyKilled, type BudgetClass } from './lib/step-budgets.ts';
 import { box } from './lib/core-budget.ts';
@@ -678,7 +679,10 @@ async function main(): Promise<void> {
     recordStepDurations(REPO_ROOT, new Map([...measuredMs].filter(([step]) => passed.has(step))));
   }
 
+  const drift = vendoredDriftLine(vendoredStates(REPO_ROOT));
   console.log(`\n${verdictText()} in ${secs(Date.now() - started)}${skipped}${noNative ? ' (test:native not run: --no-native)' : ''}${` on ${cores(budget)}`}${floor}`);
+  // After the verdict rather than inside it: it qualifies how much the verdict is worth, and does not change it
+  if (drift !== undefined) console.log(`  ${drift}`);
   // After the verdict, so it is the last thing on screen and a reader who scrolled past everything else
   // still has it. Only when there is some: a fully cached run ran nothing and made no directory.
   if (evidence !== undefined && evidence.kept() > 0) console.log(dim(evidenceLine(evidence.dir, evidence.kept())));

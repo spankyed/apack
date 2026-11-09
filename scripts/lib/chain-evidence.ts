@@ -158,6 +158,24 @@ export function vendoredNote(states: readonly VendoredState[]): string {
   }).join('\n');
 }
 
+/**
+ * What to say on the result line when a vendored checkout is not at its pin.
+ *
+ * **A run against a drifted checkout is not comparable to a strict run**, which clones each `vendor/<name>.rev`.
+ * The evidence file records every link either way, but a drift decides how much a verdict is worth, and that
+ * belongs where the verdict is rather than in a file someone opens after a failure. Absent when every link
+ * sits on its pin, so a clean run says nothing extra.
+ *
+ * It reports and never fails: which commit a sibling checkout sits on is the developer's to choose, and a
+ * gate that refused it would stop work on the vendored code itself.
+ */
+export function vendoredDriftLine(states: readonly VendoredState[]): string | undefined {
+  const drifted = states.filter((state) => state.head !== undefined && state.pinned !== undefined && state.head !== state.pinned);
+  if (drifted.length === 0) return undefined;
+  const which = drifted.map((state) => `vendor/${state.name} at ${state.head?.slice(0, 7)} rather than ${state.pinned?.slice(0, 7)}`);
+  return `${which.join(', ')} — this run did not build what CI clones`;
+}
+
 /** Where this run's evidence is, for whoever reads it after the run — printed only when there is some */
 export function evidenceLine(dir: string, kept: number): string {
   return `evidence from this run in ${path.relative(REPO_ROOT, dir)} (${kept} step${kept === 1 ? '' : 's'})`;
