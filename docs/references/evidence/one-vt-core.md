@@ -870,3 +870,53 @@ canvas went from 16 drawn pixels to 3,400 in response to a typed command, and th
 output. The marker is the script's own plumbing rather than a statement about the app, so it is recorded as
 unresolved rather than explained away, and the fuller acceptance pass should write it somewhere outside a
 profile directory that the run removes.
+
+
+## 2026-11-09 — Moving the pin broke the app, and the cause was not the core
+
+The pin moved to the merged broker, the vendored checkout was fast-forwarded to it and
+`cargo xtask package` rebuilt `node/apack-terminal` — 1.6 MB to 2.7 MB, the core now linked in. The next
+driven run could not open a terminal at all: `terminal.CREATE` timed out after 60 seconds, and the app's
+log said
+
+```
+[terminal] the broker exited with null before it was listening
+```
+
+**Exit code 137 — SIGKILL — for every argument**, including ones the broker never parses.
+
+### What it was not
+
+Not the core, not the link and not the binary. The decisive measurement is that
+`target/release/apack-terminal` and `node/apack-terminal` had the **same SHA-256**, no extended attributes
+on either, and both passed `codesign -v` — and the first ran while the second was killed. Copying those
+same bytes to a new path ran too, far enough to report a real error of its own (a socket path longer than
+`sun_path` allows, which is this scratchpad's fault and not the broker's).
+
+So the bytes were fine and the **path** was not.
+
+### What it was
+
+macOS caches a binary's code signature against the file it executed. `cargo xtask package` staged with
+`std::fs::copy`, which writes **in place** — so a path the app had already spawned kept a cache entry
+pointing at bytes that were no longer there, and AMFI killed every later `exec` of it before `main`.
+
+Nothing about it presents as a signature problem, which is why it took the byte-identical comparison to
+find: the file verifies, `codesign -v` passes, and the app reports only that the broker exited before
+listening.
+
+The fix is a rename rather than an overwrite, so the path gets a new inode and there is no stale entry to
+match against. The temporary is placed beside the destination deliberately: a rename across filesystems is
+not atomic and falls back to a copy, which is the thing being avoided.
+
+### Why it is worth a section
+
+**This was not caused by the VT core and it was not new.** Any contributor whose app had spawned the
+broker before they rebuilt it would have met it, on any change at all. What the core swap did was make it
+certain — the pin moving is exactly the event that rebuilds that binary — and what found it was running
+the app rather than trusting that a green gate in the broker's own repository meant the app could start
+one. A broker that passes 135 tests and 61 mutants still exits 137 when the app spawns it.
+
+**A mistake of mine, recorded because it nearly hid this.** The first probe was
+`./node/apack-terminal --help | head -10`, and I read the exit status of `head`. It printed 0, so the
+binary looked healthy and the hunt went to the app. The binary had been dying from the first run.
