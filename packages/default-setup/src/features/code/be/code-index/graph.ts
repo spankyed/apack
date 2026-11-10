@@ -42,9 +42,9 @@ function namesProjectFile(table: ProjectTable, specifier: string): boolean {
 /**
  * The edges one file's sites make, pair by pair, and what they couldn't follow. `compiler` is what the compiler says
  * each site names, in site order, where it has answered: it outranks syntax, and a site it places outside the checkout
- * has no edge
+ * has no edge. `pause` is offered between sites, since a file of a thousand sites resolves for longer than a slice
  */
-export function edgesOf(project: string, file: string, graph: FileGraph, table: ProjectTable, compiler?: readonly (CompilerAnswer | undefined)[] | null) {
+export async function edgesOf(project: string, file: string, graph: FileGraph, table: ProjectTable, compiler: readonly (CompilerAnswer | undefined)[] | null, pause: () => Promise<void>) {
   const scope: FileScope = {
     path: file,
     imports: new Map(graph.imports.map(binding => [binding.local, binding])),
@@ -54,6 +54,7 @@ export function edgesOf(project: string, file: string, graph: FileGraph, table: 
   const unresolvedNames = new Set<string>();
   let unresolvedSites = 0;
   for (const [index, site] of graph.sites.entries()) {
+    await pause();
     const answer = compiler?.[index];
     if (answer === 'outside') continue;
     const resolution = answer && answer !== 'silent'
@@ -106,7 +107,7 @@ export async function drainDirtyFiles(root: string, packages: readonly PackageIn
         if (extraction?.ok) graph = extraction;
       }
       const wanted = graph
-        ? edgesOf(project, file.path, graph, table)
+        ? await edgesOf(project, file.path, graph, table, null, pause)
         : { edges: [], imports: [], importsMissing: false, unresolvedSites: 0, unresolvedNames: [] };
       codeIndexCommands.applyEdges(fileIdOf(project, file.path), wanted);
       if (graph) drained.push(file.path);
@@ -130,7 +131,10 @@ export async function applyCompilerAnswers(root: string, packages: readonly Pack
     const graph = source === null ? null : extractGraph(file, source);
     // Answers are in the order of the graph the worker parsed; a file changed since then is re-read by the next sync
     if (!graph?.ok || graph.sites.length !== answered.length) continue;
-    codeIndexCommands.applyEdges(fileIdOf(project, file), edgesOf(project, file, graph, table, answered));
+    await pause();
+    const edges = await edgesOf(project, file, graph, table, answered, pause);
+    signal.throwIfAborted();
+    codeIndexCommands.applyEdges(fileIdOf(project, file), edges);
     await pause();
   }
 }

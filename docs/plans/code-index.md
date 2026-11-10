@@ -186,9 +186,22 @@ and `.tsx` files:
 - **Mapping:** each site the compiler places in the checkout takes its target from the compiler, `layer: 'compiler'` at full
   weight; one it places outside the checkout has no edge; one it can't answer keeps its syntax resolution.
   `compiler.ts` is shared with `scripts/code-index-evaluate.ts`, so what ships is what is measured.
-- **Reading, 2026-11-09, this repository (2,732 files), load 12–19:** the first index with the compiler took 24.0 s,
-  with the event loop held 60 ms at most (over the 50 ms budget, under load). 11,752 of 19,221 edges came from the compiler;
-  the rest are syntax edges in files it doesn't read and sites it can't answer.
+- **Readings, 2026-11-09, this repository (2,735 files):**
+  - **First index:** 24.0 s at load 12–19. At load 80–140 the same index took 50–64 s; all of that is the machine.
+  - **Event loop:** a file's resolution ran as one synchronous stretch — up to 45 ms of the main thread's CPU for a
+    file of 1,124 sites, after a re-parse of up to 24 ms and before a write of up to 13 ms — so the compiler pass held
+    the loop about 80 ms per large file. Resolution now offers the slicer a pause between sites, and the pass yields
+    after the re-parse; the longest remaining stretch is one file's parse (27 ms CPU). Wall readings at load 80–140,
+    the only ones the machine allowed, were 159 ms before and 76 ms after: neither settles the 50 ms budget.
+  - **Receiving the worker's answers** for all 2,360 files in one message costs the main thread about 10 ms, the
+    same as in batches of 50, so the answers are not chunked.
+  - **A saved file** (`extract.ts`, imported across the code index) re-synced, compiler included, in 0.25–0.35 s, and
+    once 0.95 s, at load 80–140; the budget is 1 s.
+  - **The worker's heap** after answering every file: about 820 MB used of 950 MB, under its 3,072 MB cap.
+  - **Edges:** 11,783 of 19,257 came from the compiler; the rest are syntax edges in files it doesn't read and sites
+    it can't answer. Against `scripts/code-index-evaluate.ts`, the compiler places about 60,600 call and reference
+    sites in `.ts`/`.tsx` files, and syntax alone resolved about 38,600 of them correctly (precision 99.6–100%); the
+    compiler layer takes the rest in those files by construction, being what the evaluation measures against.
 - **`.vue` files stay on the syntax layer.** Volar (`@vue/language-core`) is the follow-up, once these readings settle what
   it would cost and add.
 - **Other languages** come through a SCIP importer (stage 6), since SCIP is the one format they share. Indexers that drive
