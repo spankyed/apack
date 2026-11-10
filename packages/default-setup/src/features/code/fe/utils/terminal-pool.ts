@@ -122,6 +122,9 @@ interface PoolEntry {
   writing: boolean
   /** When the last paste was taken from the window, so the same paste arriving as a second event is not pasted twice */
   pastedAt: number
+  /** Output handed to the emulator so far, and whether a frame is already due to publish it as painted */
+  outputBytes: number
+  paintDue: boolean
   /**
    * Set while the view is being put back where the user had it after a write moved it.
    *
@@ -617,7 +620,9 @@ class TerminalPool {
       clipboardPending: '',
       restoringScroll: false,
       writing: false,
-      pastedAt: 0
+      pastedAt: 0,
+      outputBytes: 0,
+      paintDue: false
     }
 
     // Shift+Enter inserts a newline instead of executing. Wired once here
@@ -686,6 +691,17 @@ class TerminalPool {
       } finally {
         entry.restoringScroll = false
         entry.writing = false
+      }
+      // **How much output has been painted, where a page can read it.** The canvas says nothing about
+      // what is on it, so a journey or a measurement waiting for output to be on screen watches this. Set
+      // from a frame requested here, which runs after the emulator's own for the same frame.
+      entry.outputBytes += data.length
+      if (!entry.paintDue) {
+        entry.paintDue = true
+        requestAnimationFrame(() => {
+          entry.paintDue = false
+          wrapper.dataset.apackTerminalDrawn = String(entry.outputBytes)
+        })
       }
 
       // **What the emulator does not surface** (OSC 52). The bytes have already gone to it, which ignores

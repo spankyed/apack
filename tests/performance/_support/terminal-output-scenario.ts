@@ -2,8 +2,12 @@ import { createHash } from 'node:crypto';
 import { createWarmScenario } from './scenario.ts';
 import type { PerformanceWindow } from './window.ts';
 
-/** The corpus: this many bytes of one repeated character, then the shell exits */
-const CORPUS_BYTES = 64 * 1024;
+/**
+ * The corpus: this many bytes of one repeated character, then the shell exits. 64 KiB prices the pipe's
+ * message count; `APACK_PERFORMANCE_TERMINAL_BYTES` sets a size that prices sustained throughput instead.
+ */
+const CORPUS_BYTES = Number(process.env.APACK_PERFORMANCE_TERMINAL_BYTES ?? 64 * 1024);
+if (!Number.isInteger(CORPUS_BYTES) || CORPUS_BYTES < 1) throw new Error('APACK_PERFORMANCE_TERMINAL_BYTES is not a byte count');
 /**
  * Deterministic, shell-agnostic, and ends by exiting, which is what the action can observe. `\n` is what
  * the pack's own command-running path sends (`handleTerminalOpened`), so it is what this sends.
