@@ -119,7 +119,7 @@ it('reveals a focused rich draft after resize without native edits and retires q
   vi.stubGlobal('cancelAnimationFrame',()=>{frame=undefined})
   const focused=vi.spyOn(document,'hasFocus').mockReturnValue(true),reveal=vi.fn(()=>true),send=vi.fn()
   const mount=editor.view.dom.parentElement!;document.body.append(mount)
-  editor.view.setProps({handleScrollToSelection:reveal});editor.view.dom.focus();editor.isFocused=true
+  editor.view.setProps({handleScrollToSelection:reveal});editor.view.focus();editor.isFocused=true
   const bridge=bindClaudePromptEditor(editor,send,vi.fn()),doc=editor.state.doc,selection=editor.state.selection,revision=bridge.revision
   send.mockClear()
   const flush=()=>{resize!();const next=frame;frame=undefined;next?.(0)}
@@ -130,4 +130,27 @@ it('reveals a focused rich draft after resize without native edits and retires q
     focused.mockReturnValue(true);Object.defineProperty(editor.view,'composing',{configurable:true,value:true});flush();expect(reveal).toHaveBeenCalledTimes(1)
     Object.defineProperty(editor.view,'composing',{configurable:true,value:false});resize!();const stale=frame;bridge.dispose();stale?.(0);expect(reveal).toHaveBeenCalledTimes(1);expect(send).not.toHaveBeenCalled()
   } finally {bridge.dispose();focused.mockRestore();mount.remove();vi.unstubAllGlobals()}
+})
+
+it('adopts the newer browser selection before a resize reveal can paint an older caret',()=>{
+  let resize:(()=>void)|undefined,frame:FrameRequestCallback|undefined
+  vi.stubGlobal('ResizeObserver',class{constructor(callback:()=>void){resize=callback}observe(){}disconnect(){}})
+  vi.stubGlobal('requestAnimationFrame',(callback:FrameRequestCallback)=>{frame=callback;return 1})
+  vi.stubGlobal('cancelAnimationFrame',()=>{frame=undefined})
+  const focused=vi.spyOn(document,'hasFocus').mockReturnValue(true)
+  const mount=editor.view.dom.parentElement!;document.body.append(mount)
+  editor.commands.setContent('Please also note the migration steps.')
+  editor.view.setProps({handleScrollToSelection:()=>true});editor.view.dom.focus();editor.isFocused=true
+  const send=vi.fn(),bridge=bindClaudePromptEditor(editor,send,vi.fn()),doc=editor.state.doc
+  try{
+    editor.view.dom.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))
+    const node=editor.view.dom.querySelector('p')!.firstChild!
+    document.getSelection()!.setBaseAndExtent(node,5,node,17)
+    expect(editor.state.selection.head).not.toBe(18)
+    resize!();const next=frame;frame=undefined;next?.(0)
+    expect(editor.state.doc).toBe(doc)
+    expect(editor.state.selection.toJSON()).toMatchObject({anchor:6,head:18})
+    expect(document.getSelection()!.toString()).toBe('e also note ')
+    expect(send.mock.lastCall![0]).toMatchObject({by:'person',cursor:17,text:'Please also note the migration steps.'})
+  }finally{bridge.dispose();focused.mockRestore();mount.remove();vi.unstubAllGlobals()}
 })

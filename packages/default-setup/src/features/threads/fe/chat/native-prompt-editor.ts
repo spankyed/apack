@@ -54,7 +54,11 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
   const dom = editor.view.dom
   let revealFrame: number | undefined
   const revealFocusedCaret = () => {
-    if (!disposed && !editor.isDestroyed && editor.isFocused && dom.ownerDocument.hasFocus() && !editor.view.composing) editor.view.dispatch(editor.state.tr.scrollIntoView())
+    if (!disposed && !editor.isDestroyed && editor.isFocused && dom.ownerDocument.hasFocus() && !editor.view.composing) {
+      // Chromium may move the caret before its deferred selectionchange reaches ProseMirror.
+      synchronizeSelection()
+      editor.view.dispatch(editor.state.tr.scrollIntoView())
+    }
   }
   const caretResize = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(() => {
     if (revealFrame !== undefined) cancelAnimationFrame(revealFrame)
