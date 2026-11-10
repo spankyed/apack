@@ -10,6 +10,14 @@ const logger = createLogger('git')
 
 const execFileAsync = promisify(execFile)
 
+/**
+ * What every git child runs with. No credential prompt, since nobody is at a terminal to answer one; and no
+ * optional locks, so a read made in the background (a status after a file changed) never holds `index.lock`
+ * against a git the user or an agent runs in the same repository.
+ */
+const gitEnvironment = (): NodeJS.ProcessEnv =>
+  ({ ...agentChildEnvironment(process.env), GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' })
+
 // Git porcelain v1 status codes that indicate an unmerged/conflict state.
 // These occupy BOTH the index and worktree slots and must be rendered as a
 // single row (not duplicated across staged/unstaged sections).
@@ -218,7 +226,7 @@ export class GitRepository {
       try {
         const { stdout } = await execFileAsync('git', colorlessArgs, {
           cwd: this.workingDirectory,
-          env: { ...agentChildEnvironment(process.env), GIT_TERMINAL_PROMPT: '0' },
+          env: gitEnvironment(),
           maxBuffer: 10 * 1024 * 1024, // 10MB buffer limit
           encoding: 'utf8'
         })
@@ -730,7 +738,7 @@ export class GitRepository {
       const colorlessArgs = ['-c', 'color.ui=never', ...args]
       const { stdout } = await execFileAsync('git', colorlessArgs, {
         cwd: this.workingDirectory,
-        env: { ...agentChildEnvironment(process.env), GIT_TERMINAL_PROMPT: '0' },
+        env: gitEnvironment(),
         maxBuffer: 10 * 1024 * 1024,
         encoding: 'buffer' as any
       })
@@ -874,6 +882,20 @@ export class GitRepository {
         throw new Error(result.error || 'Failed to commit')
       }
     })
+  }
+
+  /**
+   * Where this checkout's git state lives: its own git directory (index, HEAD) and the common one holding refs.
+   * The two differ in a linked worktree. Null when the working directory is in no repository.
+   */
+  async resolveGitDirectories(): Promise<{ gitDir: string; commonDir: string } | null> {
+    const result = await this.executeGitCommand(['rev-parse', '--git-dir', '--git-common-dir'])
+    const [gitDir, commonDir] = (result.success ? result.output ?? '' : '').split('\n').map(line => line.trim())
+    if (!gitDir || !commonDir) return null
+    return {
+      gitDir: path.resolve(this.workingDirectory, gitDir),
+      commonDir: path.resolve(this.workingDirectory, commonDir),
+    }
   }
 
   async isGitRepository(): Promise<boolean> {
