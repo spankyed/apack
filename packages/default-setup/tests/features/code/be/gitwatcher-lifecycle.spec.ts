@@ -171,7 +171,7 @@ it('starts watching a directory that became a repository when asked to check', a
 it('reports a failed watch as a change and opens it again when asked to check', async () => {
   const repo = directory('apack-watch-failed-');
   await git(repo, 'init', '--quiet');
-  const { watcher, changed, platform } = watcherOf(repo);
+  const { watcher, repository, changed, platform } = watcherOf(repo);
   await start(watcher);
   const tree = platform.of(repo)!;
 
@@ -182,6 +182,11 @@ it('reports a failed watch as a change and opens it again when asked to check', 
   expect(changed).toHaveBeenCalledTimes(1);
   expect(tree.closed).toBe(true);
 
+  expect(repository.hasWatchFailed, 'which a window showing the checkout is told').toBe(true);
+
   await watcher.check();
   expect(platform.of(repo), 'a new watch on the working tree').toBeDefined();
+  expect(repository.hasWatchFailed).toBe(false);
+  // Being watched again is something every window shows, so it is reported as a change
+  await expect.poll(() => changed.mock.calls.length).toBe(2);
 });

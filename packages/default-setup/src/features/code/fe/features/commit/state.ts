@@ -35,6 +35,8 @@ export interface CodeCommitContext {
   hasUpstream: boolean
   commitsAhead: number
   commitsBehind: number
+  /** Whether the backend's file watches on this repository are open; without them the panel changes only when asked */
+  isWatchingRepository: boolean
   isPushing: boolean
   isPulling: boolean
   isGeneratingMessage: boolean
@@ -92,7 +94,7 @@ export type Event =
   | { type: 'commit.CHECKOUT_BRANCH' }
   | { type: 'commit.PUSH_BRANCH' }
   | { type: 'commit.PULL_BRANCH' }
-  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number } }
+  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
   | { type: 'commit.DIFF_RECEIVED'; data: GitDiff }
   | { type: 'commit.FILES_STAGED'; paths: string[] }
   | { type: 'commit.FILES_UNSTAGED'; paths: string[] }
@@ -274,24 +276,28 @@ export const commitState = setup({
 
     handleStatusReceived: assign({
       gitStatus: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number } }
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
         return ev.data.files
       },
       gitBranch: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number } }
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
         return ev.data.branch
       },
       hasUpstream: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number } }
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
         return ev.data.hasUpstream
       },
       commitsAhead: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number } }
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
         return ev.data.commitsAhead
       },
       commitsBehind: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number } }
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
         return ev.data.commitsBehind
+      },
+      isWatchingRepository: ({ event }) => {
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
+        return ev.data.watching
       },
       isGitLoading: false,
       gitError: null
@@ -531,6 +537,7 @@ export const commitState = setup({
     hasUpstream: true,
     commitsAhead: 0,
     commitsBehind: 0,
+    isWatchingRepository: true,
     isPushing: false,
     isPulling: false,
     isGeneratingMessage: false,

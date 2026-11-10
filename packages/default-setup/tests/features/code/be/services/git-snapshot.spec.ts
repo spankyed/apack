@@ -145,6 +145,33 @@ it('reuses a snapshot only while a watcher reports the checkout, and reads again
   expect(await paths()).toEqual(['later.txt', 'unseen.txt']);
 });
 
+it('lists no untracked file for a user who has told git to show none', async () => {
+  const { root, repo } = await repository();
+  write(root, 'kept.txt', 'edited\n');
+  write(root, 'fresh.txt', '');
+  await git(root, 'config', 'status.showUntrackedFiles', 'no');
+  expect((await repo.readSnapshot()).files.map(file => file.path)).toEqual(['kept.txt']);
+
+  // `normal` collapses an untracked directory to its name; the panel lists files, so it is read as `all`
+  await git(root, 'config', 'status.showUntrackedFiles', 'normal');
+  write(root, 'fresh/deep.txt', '');
+  expect((await repo.readSnapshot()).files.map(file => file.path).sort()).toEqual(['fresh.txt', 'fresh/deep.txt', 'kept.txt']);
+});
+
+// That its watches failed is something the panel shows, so a check reports that changing; a checkout that
+// starts being watched for the first time is as it was
+it('says the repository changed when its watches fail and when they come back', async () => {
+  const { repo } = await repository();
+  await repo.refreshSnapshot();
+  repo.setWatched(true);
+  expect(await repo.refreshSnapshot(), 'watched for the first time').toBe(false);
+  repo.setWatched(false, true);
+  expect(await repo.refreshSnapshot(), 'its watches failed').toBe(true);
+  expect(await repo.refreshSnapshot()).toBe(false);
+  repo.setWatched(true);
+  expect(await repo.refreshSnapshot(), 'and came back').toBe(true);
+});
+
 it('lists the directories git ignores, and no ignored file', async () => {
   const { root, repo } = await repository();
   write(root, '.gitignore', 'out/\n*.log\n');

@@ -159,7 +159,12 @@ export class GitWatcherService {
     }
 
     // A snapshot is only reused while every watch that could say it went stale is open
-    this.gitRepository?.setWatched(wanted.size > 0 && [...wanted.keys()].every(key => this.subscriptions.has(key)))
+    const watched = wanted.size > 0 && [...wanted.keys()].every(key => this.subscriptions.has(key))
+    const failed = wanted.size > 0 && !watched
+    const failedBefore = this.gitRepository?.hasWatchFailed ?? false
+    this.gitRepository?.setWatched(watched, failed)
+    // That its watches failed, or came back, is something a window shows, so it is a change to report
+    if (failed !== failedBefore) this.scheduleChange()
   }
 
   private handleEvents(key: WatchKey, watch: WantedWatch, error: Error | null, events: WatchEvent[]) {
@@ -171,7 +176,7 @@ export class GitWatcherService {
       logger.error(`The ${key} watch failed`, { error })
       if (held) {
         this.subscriptions.delete(key)
-        this.gitRepository?.setWatched(false)
+        this.gitRepository?.setWatched(false, true)
         void held.subscription.unsubscribe().catch(() => {})
       }
       this.scheduleChange()

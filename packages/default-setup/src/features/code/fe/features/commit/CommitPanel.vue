@@ -174,6 +174,14 @@
       </div>
     </div>
 
+    <!-- The repository's file watches are not open, so nothing here changes until it is asked again -->
+    <div
+      v-if="!isWatchingRepository && !gitError"
+      class="px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
+    >
+      Live updates are off for this repository. It is read again when you return to this window or press Refresh.
+    </div>
+
     <!-- Git Error (only show non-directory errors) -->
     <div v-if="gitError && !isNoDirectoryError" class="p-3 border-b border-red-800 bg-red-900/20">
       <div class="flex items-start gap-2">
@@ -672,6 +680,7 @@ const availableBranches = useSelector(commitActor, (state) => state.context.avai
 const branchInput = useSelector(commitActor, (state) => state.context.branchInput)
 const isCheckingOutBranch = useSelector(commitActor, (state) => state.context.isCheckingOutBranch)
 const hasUpstream = useSelector(commitActor, (state) => state.context.hasUpstream)
+const isWatchingRepository = useSelector(commitActor, (state) => state.context.isWatchingRepository)
 const commitsAhead = useSelector(commitActor, (state) => state.context.commitsAhead)
 const commitsBehind = useSelector(commitActor, (state) => state.context.commitsBehind)
 const isPushing = useSelector(commitActor, (state) => state.context.isPushing)

@@ -1638,6 +1638,7 @@ declare class GitRepository {
     private checkedIdentity?;
     /** Whether a watcher reports this checkout's changes; without one a snapshot is read every time it is asked for */
     private watched;
+    private watchFailed;
     constructor(workingDirectory: string);
     getWorkingDir(): string;
     setFetchConfig(enabled: boolean, intervalSeconds: number): void;
@@ -1654,8 +1655,14 @@ declare class GitRepository {
     clearCache(): void;
     /** The repository may have changed: the next snapshot asked for is read from git */
     markSnapshotStale(): void;
-    /** Says whether a watcher reports this checkout's changes, which is what lets a snapshot be reused */
-    setWatched(watched: boolean): void;
+    /**
+     * Says whether a watcher reports this checkout's changes, which is what lets a snapshot be reused. `failed`
+     * says its watches could not be opened or have stopped, as opposed to not being open yet or not being wanted.
+     */
+    setWatched(watched: boolean, failed?: boolean): void;
+    get isWatched(): boolean;
+    /** Whether this checkout's watches failed: a panel showing it then changes only when it is asked again */
+    get hasWatchFailed(): boolean;
     private isDirectory;
     invalidateCache(paths?: string[]): void;
     private executeGitCommand;
@@ -3194,7 +3201,12 @@ type OutgoingCodeEvents = OutgoingExplorerEvents | OutgoingSearchEvents | Outgoi
     resolvedPath?: string;
 };
 
-type OutgoingCommitEvents = {
+type OutgoingCommitEvents = 
+/**
+ * What the commit panel shows of the checkout. `watching` is false when its file watches could not be opened or
+ * have failed: the panel then changes only when it is asked again, and says so
+ */
+{
     type: 'commit.STATUS_RECEIVED';
     data: {
         files: GitStatusFile[];
@@ -3202,6 +3214,7 @@ type OutgoingCommitEvents = {
         hasUpstream: boolean;
         commitsAhead: number;
         commitsBehind: number;
+        watching: boolean;
     };
 } | {
     type: 'commit.DIFF_RECEIVED';

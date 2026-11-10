@@ -150,6 +150,7 @@ export class GitRepository {
   private checkedIdentity?: string
   /** Whether a watcher reports this checkout's changes; without one a snapshot is read every time it is asked for */
   private watched = false
+  private watchFailed = false
 
   constructor(private workingDirectory: string) {
     this.validateWorkingDirectory(workingDirectory)
@@ -240,10 +241,23 @@ export class GitRepository {
     this.snapshotFresh = false
   }
 
-  /** Says whether a watcher reports this checkout's changes, which is what lets a snapshot be reused */
-  setWatched(watched: boolean): void {
+  /**
+   * Says whether a watcher reports this checkout's changes, which is what lets a snapshot be reused. `failed`
+   * says its watches could not be opened or have stopped, as opposed to not being open yet or not being wanted.
+   */
+  setWatched(watched: boolean, failed = false): void {
     this.watched = watched
+    this.watchFailed = failed
     this.markSnapshotStale()
+  }
+
+  get isWatched(): boolean {
+    return this.watched
+  }
+
+  /** Whether this checkout's watches failed: a panel showing it then changes only when it is asked again */
+  get hasWatchFailed(): boolean {
+    return this.watchFailed
   }
 
   private async isDirectory(filePath: string): Promise<boolean> {
@@ -348,13 +362,15 @@ export class GitRepository {
   async refreshSnapshot(): Promise<boolean> {
     // Compared with what the last check saw, not with what was last read: one window's ask can read a change
     // before this runs, and this is what tells the others
-    const before = this.checkedIdentity ?? this.lastIdentity
+    // Whether its watches failed is part of what a window shows of the checkout, so it is part of what changed
+    const seen = (identity: string) => `${this.watchFailed ? 'unwatched' : 'watched'}\n${identity}`
+    const before = this.checkedIdentity ?? (this.lastIdentity === undefined ? undefined : seen(this.lastIdentity))
     this.markSnapshotStale()
     let now: string
     try {
-      now = (await this.currentSnapshot()).identity
+      now = seen((await this.currentSnapshot()).identity)
     } catch {
-      now = this.lastIdentity = 'unreadable'
+      now = seen(this.lastIdentity = 'unreadable')
     }
     this.checkedIdentity = now
     return now !== before
@@ -379,7 +395,11 @@ export class GitRepository {
   }
 
   private async loadSnapshot(): Promise<{ value: RepositorySnapshot; identity: string }> {
-    const status = await this.executeGitCommand(['status', '--porcelain=v2', '--branch', '--untracked-files=all', '-z'])
+    // Every untracked file by name, which is what the panel lists — unless the user has told git to show
+    // none, which is theirs to decide and is usually said of a repository too large to walk
+    const shown = await this.executeGitCommand(['config', '--get', 'status.showUntrackedFiles'])
+    const untracked = shown.success && shown.output?.trim() === 'no' ? 'no' : 'all'
+    const status = await this.executeGitCommand(['status', '--porcelain=v2', '--branch', `--untracked-files=${untracked}`, '-z'])
     if (!status.success) {
       throw new Error(status.error || 'Failed to get git status')
     }
