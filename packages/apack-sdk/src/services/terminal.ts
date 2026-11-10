@@ -130,6 +130,12 @@ export type TerminalSignalScope =
 
 /** One session, as its owner holds it */
 export interface TerminalSession {
+  /**
+   * Which broker the session is on, as a window is told it to draw the session: `null` for this
+   * machine's, and otherwise the key of the target it was opened on (`TerminalService.at`). A session's
+   * `id` is its broker's name for it, so two sessions on different brokers may share one.
+   */
+  readonly target: string | null;
   /** The host's id for the session; a pack never invents one */
   readonly id: string;
   /**
@@ -345,4 +351,21 @@ export interface TerminalService {
   sessions(): Promise<readonly TerminalSessionSummary[]>;
   /** Opens the recording at `recording` to be looked back through, showing its end */
   rewind(recording: string, size: { readonly cols: number; readonly rows: number }): Promise<TerminalRewind>;
+  /**
+   * The same service for sessions somewhere else: another machine, a container — wherever `target`'s
+   * command runs. Everything a session does is the same there; what differs is that paths (`cwd`,
+   * `shell`, `record`) are that machine's.
+   */
+  at(target: TerminalTarget): TerminalService;
+}
+
+/**
+ * Somewhere a terminal can run that is not this machine, as the command that reaches it.
+ *
+ * The command runs the terminal broker's proxy there — `ssh host apack-terminal proxy <socket>`,
+ * `docker exec -i box apack-terminal proxy <socket>` — and is given as the arguments it is, never as a
+ * line for a shell to split. The broker's binary has to be on the far side; nothing here puts it there.
+ */
+export interface TerminalTarget {
+  readonly command: readonly string[];
 }

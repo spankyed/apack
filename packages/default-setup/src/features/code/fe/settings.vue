@@ -303,6 +303,70 @@
     </CollapsibleSection>
     </div>
 
+    <!-- Terminal Targets Section -->
+    <div class="border-t border-neutral-800 pt-8">
+      <CollapsibleSection label="Terminal Targets" :default-open="terminalTargets.length > 0" class="mb-8">
+        <p class="text-sm text-neutral-500 mb-4">
+          Other places a terminal can run — another machine, a container — each as the command that reaches
+          it. The command runs the terminal broker's proxy there, for example
+          <code class="text-neutral-400">ssh devbox apack-terminal proxy /tmp/apack-terminal.sock</code> or
+          <code class="text-neutral-400">docker exec -i box apack-terminal proxy /tmp/apack-terminal.sock</code>,
+          so <code class="text-neutral-400">apack-terminal</code> has to be installed there. Each appears under
+          the terminal panel's menu as “New Terminal on …”.
+        </p>
+        <div class="space-y-3">
+          <div v-for="(target, index) in terminalTargets" :key="target.id" class="flex items-center gap-2" data-terminal-target-row>
+            <input
+              v-model="terminalTargets[index].label"
+              placeholder="Name"
+              @blur="saveTargets"
+              @keydown.enter="($event.target as HTMLInputElement).blur()"
+              class="w-32 px-2 py-1 text-sm bg-neutral-800 border border-neutral-600 rounded text-neutral-200 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+            />
+            <input
+              v-model="terminalTargets[index].command"
+              placeholder="Command"
+              @blur="saveTargets"
+              @keydown.enter="($event.target as HTMLInputElement).blur()"
+              class="flex-1 px-2 py-1 text-sm bg-neutral-800 border border-neutral-600 rounded text-neutral-200 font-mono focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+            />
+            <button
+              @click="deleteTarget(index)"
+              class="p-1 text-neutral-500 hover:text-red-400 transition-colors flex-shrink-0"
+              title="Remove target"
+            >
+              <X :size="16" />
+            </button>
+          </div>
+          <div class="flex items-center gap-2">
+            <input
+              v-model="newTargetLabel"
+              placeholder="Name"
+              aria-label="New target's name"
+              @keydown.enter="addTarget"
+              class="w-32 px-2 py-1 text-sm bg-neutral-800 border border-neutral-700 rounded text-neutral-200 placeholder-neutral-600 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+            />
+            <input
+              v-model="newTargetCommand"
+              placeholder="ssh host apack-terminal proxy /tmp/apack-terminal.sock"
+              aria-label="New target's command"
+              @keydown.enter="addTarget"
+              class="flex-1 px-2 py-1 text-sm bg-neutral-800 border border-neutral-700 rounded text-neutral-200 placeholder-neutral-600 font-mono focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+            />
+            <button
+              @click="addTarget"
+              :disabled="!newTargetLabel.trim() || !newTargetCommand.trim()"
+              class="p-1 transition-colors flex-shrink-0"
+              :class="newTargetLabel.trim() && newTargetCommand.trim() ? 'text-neutral-400 hover:text-white' : 'text-neutral-700 cursor-not-allowed'"
+              title="Add target"
+            >
+              <Plus :size="16" />
+            </button>
+          </div>
+        </div>
+      </CollapsibleSection>
+    </div>
+
     <!-- Terminal Scripts Section -->
     <div class="border-t border-neutral-800 pt-8">
       <CollapsibleSection label="Terminal Scripts" :default-open="true" class="mb-8">
@@ -506,6 +570,11 @@ const localScripts = useSettingsDraft(() => props.settings?.terminalScripts ?? [
 const newScriptLabel = ref('')
 const newScriptCommand = ref('')
 
+// Terminal targets
+const terminalTargets = useSettingsDraft(() => props.settings?.terminalTargets ?? [])
+const newTargetLabel = ref('')
+const newTargetCommand = ref('')
+
 // Get projects from general settings
 const { value: general } = useAppSettings()
 const storedProjects = computed(() => general.value?.projects ?? [])
@@ -644,6 +713,28 @@ const addScript = () => {
 const deleteScript = (index: number) => {
   localScripts.value.splice(index, 1)
   saveScripts()
+}
+
+const saveTargets = () => {
+  emit('update-setting', {
+    path: ['terminalTargets'],
+    value: [...terminalTargets.value]
+  })
+}
+
+const addTarget = () => {
+  const label = newTargetLabel.value.trim()
+  const command = newTargetCommand.value.trim()
+  if (!label || !command) return
+  terminalTargets.value.push({ id: `tt_${Date.now()}`, label, command })
+  newTargetLabel.value = ''
+  newTargetCommand.value = ''
+  saveTargets()
+}
+
+const deleteTarget = (index: number) => {
+  terminalTargets.value.splice(index, 1)
+  saveTargets()
 }
 
 const goToProjects = () => {

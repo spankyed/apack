@@ -231,6 +231,11 @@ export interface TerminalInfo {
   generation: number
   /** Whether its shell goes on running when the app is not, which a window asks for with `terminal.KEEP_TERMINAL` */
   kept?: boolean
+  /**
+   * Where it runs when that is not this machine: the setting's id and label, and the `key` a window
+   * draws its session from (`terminalViews`). Absent for a terminal on this machine.
+   */
+  target?: { id: string; label: string; key: string }
   /** The shell ended and the terminal was kept. Absent while one is running */
   exited?: { code: number | null }
   /**
@@ -284,6 +289,8 @@ export interface TerminalResize {
 
 export interface TerminalCreate {
   id?: EARS.EntityId
+  /** One of the code settings' `terminalTargets`, by id: where to run it instead of on this machine */
+  target?: string
   title?: string
   cwd?: string
   shell?: string

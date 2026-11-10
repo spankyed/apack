@@ -21,14 +21,15 @@ export interface TerminalViewStream {
 }
 
 /**
- * Opens a connection to this app's terminal broker, as a view.
+ * Opens a connection to a terminal broker, as a view: this app's own, or the one `target` names — the
+ * `target` a `TerminalSession` on another machine carries.
  *
  * A session is named on it by the id its `TerminalSession` carries. Where there is no broker to reach — a
  * build without one, a test that bound none — the stream it answers with closes at once, which a view
  * reads as its session having ended.
  */
-export function terminalViews(): TerminalViewStream {
-  return boundFeHost().terminalViews?.() ?? noBroker();
+export function terminalViews(target?: string): TerminalViewStream {
+  return boundFeHost().terminalViews?.(target) ?? noBroker();
 }
 
 /** A connection that is over as soon as anyone listens for it to be */

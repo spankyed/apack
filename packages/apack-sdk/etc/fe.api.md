@@ -417,7 +417,7 @@ export interface _HostBridge {
     };
     // (undocumented)
     terminal: {
-        views: () => TerminalViewStream;
+        views: (target?: string) => TerminalViewStream;
     };
     // (undocumented)
     windowControls: {
@@ -933,7 +933,7 @@ export const targetIs: (input: {
 }) => boolean;
 
 // @public
-export function terminalViews(): TerminalViewStream;
+export function terminalViews(target?: string): TerminalViewStream;
 
 // @public
 export interface TerminalViewStream {

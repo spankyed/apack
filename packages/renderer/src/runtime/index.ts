@@ -27,10 +27,10 @@ export function bindRendererHost(application: () => HostShell | undefined): void
     settings: settingsPort,
     client: feClient,
     packs: fePacks,
-    terminalViews: () => {
+    terminalViews: (target) => {
       const bridge = (window as { electronAPI?: _HostBridge }).electronAPI;
       if (!bridge) throw new Error('This window has no bridge to the app, so it cannot reach the terminal broker');
-      return bridge.terminal.views();
+      return bridge.terminal.views(target);
     },
   });
 }

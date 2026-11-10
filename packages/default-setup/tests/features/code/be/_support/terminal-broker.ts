@@ -10,7 +10,7 @@
 // So fidelity lives here once. A case records what it cares about by reading the slice it wants off the
 // returned object; nothing is per-spec except which slice it reads.
 import { mockService } from '@apackdev/testing/harness'
-import type { TerminalCellSize, TerminalColors, TerminalCommand, TerminalEvent, TerminalListeners, TerminalRewind, TerminalSession, TerminalSessionSummary, TerminalSignal, TerminalSignalScope } from '@apackdev/sdk/services'
+import type { TerminalCellSize, TerminalColors, TerminalCommand, TerminalService, TerminalTarget, TerminalEvent, TerminalListeners, TerminalRewind, TerminalSession, TerminalSessionSummary, TerminalSignal, TerminalSignalScope } from '@apackdev/sdk/services'
 
 /** The options the service was opened with, whole, so a case reads the field it is about */
 export interface OpenOptions {
@@ -29,6 +29,8 @@ export interface OpenOptions {
 
 export interface OpenedSession {
   id: string
+  /** The command of the target it was opened on, or `null` for this machine */
+  target: readonly string[] | null
   pid: number
   options: OpenOptions
   /**
@@ -144,8 +146,10 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
    * One session handle for both routes, because what a holder may do with a session does not depend on how
    * it came to hold it — and because this file's own history is six copies that drifted.
    */
-  const handle = (id: string, handlePid: number | null): TerminalSession => ({
+  const handle = (id: string, handlePid: number | null, target: readonly string[] | null = null): TerminalSession => ({
     id,
+    // As the host names a target to a window: by a key made from its command
+    target: target === null ? null : `key:${target.join(' ')}`,
     pid: handlePid,
     scrollback: 1000,
     write: async (data: string) => { written.push({ id, data }) },
@@ -189,7 +193,8 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
     },
   })
 
-  mockService('terminal', {
+  /** The service for one broker: this machine's, or the one a target's command reaches */
+  const serviceFor = (target: readonly string[] | null): TerminalService => ({
     open: async (options: OpenOptions, listeners: TerminalListeners) => {
       next += 1
       const refusal = refusals.get(next)
@@ -199,11 +204,11 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
       listening.set(id, listeners)
       live.add(id)
       opened.push({
-        id, pid, options,
+        id, target, pid, options,
         listenersGivenAtOpen: typeof listeners?.onEvent === 'function',
         asksForBytes: typeof listeners?.onOutput === 'function',
       })
-      return handle(id, pid)
+      return handle(id, pid, target)
     },
 
     /**
@@ -218,7 +223,7 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
       if (!live.has(id)) throw new Error(`no session ${id}`)
       listening.set(id, listeners)
       // As the broker does: a pid is answered for a spawn and for nothing else
-      return handle(id, null)
+      return handle(id, null, target)
     },
 
     sessions: async (): Promise<TerminalSessionSummary[]> => [...live].map(id => ({
@@ -240,7 +245,11 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
         close: async () => { entry.closed = true },
       }
     },
+  
+    at: (to: TerminalTarget) => serviceFor(to.command),
   })
+
+  mockService('terminal', serviceFor(null))
 
   const listenersFor = (id: string): TerminalListeners => {
     const found = listening.get(id)

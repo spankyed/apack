@@ -205,3 +205,43 @@ test('a terminal keeps its screen when its shell is replaced, and can be looked 
   expect(await screen(appPage, terminalId), 'the shell that replaced it started on an empty screen').toContain('bef2ore');
 });
 
+/**
+ * A target is a broker somewhere else, reached through a command. Here it is a second broker on this
+ * machine, reached through the broker's own proxy — everything `ssh host apack-terminal proxy …` is but
+ * the transport — and the window draws its terminal from the socket the app puts in front of that command.
+ */
+test('a terminal on a target is drawn and typed at like any other', async ({ app, appPage }) => {
+  const broker = path.resolve('vendor/apack-terminal/node/apack-terminal');
+  test.skip(!fs.existsSync(broker) || process.platform === 'win32', 'needs the staged broker binary');
+  const far = path.join(workDir!, 'far.sock');
+  // Named where a person names one: in the code feature's settings
+  await app.navigate('host/settings');
+  await appPage.evaluate((code) => {
+    const settings = (window as unknown as { applicationState: { system: { get(ref: string): { send(event: Record<string, unknown>): void } } } })
+      .applicationState.system.get('host/settings');
+    settings.send({ type: 'TAB.SELECT', tab: 'features' });
+    settings.send({ type: 'FEATURE.SELECT', featureId: code });
+  }, CODE);
+  await appPage.getByRole('button', { name: 'Terminal Targets' }).click();
+  await appPage.getByLabel("New target's name").fill('elsewhere');
+  await appPage.getByLabel("New target's command").fill(`"${broker}" proxy "${far}"`);
+  await appPage.getByLabel("New target's command").press('Enter');
+  await expect(appPage.locator('[data-terminal-target-row]')).toHaveCount(1);
+  await app.navigate(CODE);
+
+  const drawn = appPage.locator('[data-apack-terminal]');
+  const ids = (): Promise<string[]> => drawn.evaluateAll((all) => all.map((el) => (el as HTMLElement).dataset.apackTerminal!));
+  const before = await ids();
+  await appPage.locator('button[title="Terminal actions"]').click();
+  await appPage.locator('[data-terminal-target]').click();
+  let terminalId: string | undefined;
+  await expect.poll(async () => (terminalId = (await ids()).find((id) => !before.includes(id))), { timeout: 20_000 }).toBeTruthy();
+  await expect(appPage.locator(`[data-apack-terminal="${terminalId!}"][data-terminal-drawn]`)).toBeVisible({ timeout: 20_000 });
+  await expect(appPage.locator('[data-terminal-on]').last()).toHaveText('elsewhere');
+
+  await type(appPage, terminalId!, 'echo fa$((1+1))r\n');
+  await expect.poll(() => screen(appPage, terminalId!), { timeout: 20_000 }).toContain('fa2r');
+  // The broker the command reached is one of its own, listening where the command said
+  expect(fs.existsSync(far), 'no broker was started where the target said').toBe(true);
+});
+

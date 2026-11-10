@@ -676,6 +676,29 @@
                 "additionalProperties": false
               }
             },
+            "terminalTargets": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "command": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "label",
+                  "command"
+                ],
+                "additionalProperties": false
+              }
+            },
             "showStashes": {
               "type": "boolean"
             },
@@ -706,6 +729,7 @@
             "autoFetchRemote",
             "autoFetchIntervalSeconds",
             "terminalScripts",
+            "terminalTargets",
             "showStashes",
             "showCommits",
             "showWorktrees",
@@ -797,6 +821,7 @@
               "command": "npm test"
             }
           ],
+          "terminalTargets": [],
           "showStashes": true,
           "showCommits": true,
           "showWorktrees": false,

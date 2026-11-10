@@ -34,6 +34,7 @@ export type Event =
       shell?: string;
       cols?: number;
       rows?: number;
+      target?: string;
     }
   | { type: 'terminal.CLOSE_TERMINAL'; terminalId: string }
   | { type: 'terminal.RESTART_TERMINAL'; terminalId: string }
@@ -202,6 +203,7 @@ export const terminalSystem = setup({
         shell?: string;
         cols?: number;
         rows?: number;
+        target?: string;
       }
       const cwd = ev.cwd || context.baseDirectory
       // **The answer waits for the session**, because the process is the broker's and a socket away. `reply`
@@ -213,6 +215,7 @@ export const terminalSystem = setup({
         shell: ev.shell,
         cols: ev.cols || 80,
         rows: ev.rows || 24,
+        target: ev.target,
       }, terminalHandlers).then(terminalInfo => {
         // The two halves of what used to be one event: every window's list grows, and only the window that
         // asked opens it. A terminal's id is minted here, so nothing the asker sent could have identified it

@@ -189,7 +189,8 @@ export type OutgoingPullRequestEvents =
 
 // ── terminal ─────────────────────────────────────────────────────────
 export type IncomingTerminalEvents =
-  | { type: 'terminal.CREATE_TERMINAL'; title?: string; cwd?: string; shell?: string; cols?: number; rows?: number }
+  /** `target` is one of the code settings' `terminalTargets`, by id: somewhere other than this machine to run it */
+  | { type: 'terminal.CREATE_TERMINAL'; title?: string; cwd?: string; shell?: string; cols?: number; rows?: number; target?: string }
   | { type: 'terminal.CLOSE_TERMINAL'; terminalId: string }
   /** Start a new shell under a terminal that already exists, keeping its id and everything attached to it */
   | { type: 'terminal.RESTART_TERMINAL'; terminalId: string }

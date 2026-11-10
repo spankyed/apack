@@ -63,7 +63,7 @@ export interface FeHostRuntime {
     packs: FePackRegistryView;
     secrets: SecretsClient;
     settings: SettingsPort;
-    terminalViews?(): TerminalViewStream;
+    terminalViews?(target?: string): TerminalViewStream;
 }
 
 // @public

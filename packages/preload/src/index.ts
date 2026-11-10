@@ -248,8 +248,8 @@ const GREETING_BYTES = 4096;
  * reading the greeting would take it for one.
  */
 const terminal = {
-  views: (): TerminalViewStream => {
-    const endpoint = ipcRenderer.sendSync('terminal:view-endpoint') as {socket: string; greeting: string} | null;
+  views: (target?: string): TerminalViewStream => {
+    const endpoint = ipcRenderer.sendSync('terminal:view-endpoint', target) as {socket: string; greeting: string} | null;
     const data = new Set<(chunk: Uint8Array) => void>();
     const closed = new Set<() => void>();
     let over = false;

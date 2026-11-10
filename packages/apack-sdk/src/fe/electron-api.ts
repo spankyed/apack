@@ -141,7 +141,7 @@ export interface _HostBridge {
      * can open one, and has already exchanged the broker's greeting when the first byte is handed over.
      * Reached through `terminalViews` (`@apackdev/sdk/fe`), not from here.
      */
-    views: () => TerminalViewStream;
+    views: (target?: string) => TerminalViewStream;
   };
   rendererReady: () => void;
   apiPort: number;

@@ -318,4 +318,19 @@ describe('the window\'s connection to the broker', () => {
     expect(views.every((view) => view.disposed)).toBe(true)
     made.length = 0
   })
+
+  it('is one for each broker its terminals are on, asked for by the target a terminal names', () => {
+    // A stream that says which broker it was asked for, where the default one is to none at all
+    stopRuntime?.()
+    stopRuntime = startFeTestRuntime({
+      terminalViews: (target) => Object.assign({ send() {}, onData: () => () => {}, onClose: () => () => {}, close() {} }, { target }),
+    })
+    const before = connections.opened
+    terminalPool.ensure(terminal())
+    terminalPool.ensure(terminal({ target: { id: 'tt_1', label: 'devbox', key: 'aaaaaaaaaaaa' } }))
+    terminalPool.ensure(terminal({ target: { id: 'tt_1', label: 'devbox', key: 'aaaaaaaaaaaa' } }))
+    terminalPool.ensure(terminal({ target: { id: 'tt_2', label: 'box', key: 'bbbbbbbbbbbb' } }))
+    expect(connections.opened - before, 'two terminals on one target each opened a connection to it').toBe(3)
+    expect(connections.targets.slice(-3)).toEqual([undefined, 'aaaaaaaaaaaa', 'bbbbbbbbbbbb'])
+  })
 })

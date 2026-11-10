@@ -38,7 +38,7 @@ export interface FakeView {
 /** Every view the pool has made, oldest first */
 export const views: FakeView[] = []
 /** How many connections to the broker have been asked for */
-export const connections = { opened: 0, closed: 0 }
+export const connections: { opened: number; closed: number; targets: Array<string | undefined> } = { opened: 0, closed: 0, targets: [] }
 
 export const lastView = (): FakeView => {
   const view = views.at(-1)
@@ -49,7 +49,7 @@ export const lastView = (): FakeView => {
 /** What `vi.mock('apack-terminal-view', …)` answers with */
 export function viewModule(): Record<string, unknown> {
   class BrokerViews {
-    constructor() { connections.opened += 1 }
+    constructor(stream: { target?: string }) { connections.opened += 1; connections.targets.push(stream?.target) }
     open(session: string): { session: string } { return { session } }
     close(): void { connections.closed += 1 }
   }

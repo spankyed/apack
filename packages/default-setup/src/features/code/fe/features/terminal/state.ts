@@ -86,7 +86,7 @@ export interface CodeTerminalContext {
 }
 
 export type Event =
-  | { type: 'terminal.CREATE'; title?: string; cwd?: string; target?: 'tab'; command?: string }
+  | { type: 'terminal.CREATE'; title?: string; cwd?: string; target?: 'tab'; command?: string; on?: string }
   | { type: 'terminal.CLOSE'; terminalId: string }
   | { type: 'terminal.RESTART'; terminalId: string }
   | { type: 'terminal.INPUT'; terminalId: string; data: string }
@@ -135,7 +135,7 @@ export const terminalState = setup({
      * turn is matched against a record the ask has not written yet.
      */
     createTerminal: enqueueActions(({ event, self, enqueue }) => {
-      const ev = event as { type: 'terminal.CREATE'; title?: string; cwd?: string; target?: 'tab'; command?: string }
+      const ev = event as { type: 'terminal.CREATE'; title?: string; cwd?: string; target?: 'tab'; command?: string; on?: string }
       const parentContext = getParentContext(self)
       const baseDir = parentContext?.baseDirectory
       const call = newCall()
@@ -147,7 +147,10 @@ export const terminalState = setup({
         sendToSystem('code', {
           type: 'terminal.CREATE_TERMINAL',
           title: ev.title,
-          cwd: ev.cwd || (baseDir && baseDir.trim() ? baseDir : undefined),
+          // `on` is one of the settings' targets: somewhere else, where this machine's directory names nothing
+          ...(ev.on === undefined
+            ? { cwd: ev.cwd || (baseDir && baseDir.trim() ? baseDir : undefined) }
+            : { target: ev.on }),
         }, { call })
       })
     }),

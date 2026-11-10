@@ -2478,13 +2478,16 @@ type IncomingSearchEvents = {
     type: 'search.CANCEL_SEARCH';
 };
 
-type IncomingTerminalEvents = {
+type IncomingTerminalEvents = 
+/** `target` is one of the code settings' `terminalTargets`, by id: somewhere other than this machine to run it */
+{
     type: 'terminal.CREATE_TERMINAL';
     title?: string;
     cwd?: string;
     shell?: string;
     cols?: number;
     rows?: number;
+    target?: string;
 } | {
     type: 'terminal.CLOSE_TERMINAL';
     terminalId: string;
@@ -5048,6 +5051,12 @@ interface TerminalEntity {
      * every session — so it is offered to the broker rather than trusted (see `shell`).
      */
     session?: string;
+    /**
+     * Where the terminal runs when it is not this machine: the id of one of the code settings'
+     * `terminalTargets`. A name, as `session` is: a target that has since been removed from the settings
+     * names nothing, and the terminal is then one that cannot be brought back.
+     */
+    target?: string;
     createdAt: number;
     updatedAt: number;
 }
@@ -5087,6 +5096,15 @@ interface TerminalInfo {
     generation: number;
     /** Whether its shell goes on running when the app is not, which a window asks for with `terminal.KEEP_TERMINAL` */
     kept?: boolean;
+    /**
+     * Where it runs when that is not this machine: the setting's id and label, and the `key` a window
+     * draws its session from (`terminalViews`). Absent for a terminal on this machine.
+     */
+    target?: {
+        id: string;
+        label: string;
+        key: string;
+    };
     /** The shell ended and the terminal was kept. Absent while one is running */
     exited?: {
         code: number | null;
@@ -5677,6 +5695,11 @@ declare namespace __FeatureSettings_Code {
         autoFetchRemote: boolean;
         autoFetchIntervalSeconds: number;
         terminalScripts: {
+            id: string;
+            label: string;
+            command: string;
+        }[];
+        terminalTargets: {
             id: string;
             label: string;
             command: string;
@@ -6799,7 +6822,7 @@ declare function streamMessageText(params: {
 
 declare const terminalCommands: {
     /** Records a terminal the service started, under the id it took for it (`newId`) */
-    create: (terminal: Pick<TerminalEntity, "cols" | "cwd" | "rows" | "session" | "shell" | "title"> & {
+    create: (terminal: Pick<TerminalEntity, "cols" | "cwd" | "rows" | "session" | "shell" | "target" | "title"> & {
         id: EARS.EntityId<"Terminal">;
     }) => EARS.EntityId;
     /**

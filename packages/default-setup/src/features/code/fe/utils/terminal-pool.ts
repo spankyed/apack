@@ -178,16 +178,23 @@ const restartedNotice = (pid: number | null) =>
 class TerminalPool {
   private entries = new Map<string, PoolEntry>()
   /** This window's connection to the broker, made when the first terminal is drawn and again if it goes */
-  private views: BrokerViews | null = null
+  /** By broker: `''` for the app's own, and a target's key for one somewhere else */
+  private views = new Map<string, BrokerViews>()
 
-  private connection(): BrokerViews {
-    if (this.views) return this.views
-    const stream = terminalViews()
+  /**
+   * This window's connection to the broker a terminal's session is on: the app's own, or the one a
+   * target's key names. One for each broker, however many of its sessions are drawn.
+   */
+  private connection(target: string | undefined): BrokerViews {
+    const key = target ?? ''
+    const open = this.views.get(key)
+    if (open) return open
+    const stream = terminalViews(target)
     const views = new BrokerViews(stream)
-    this.views = views
+    this.views.set(key, views)
     // A connection that ends takes every session on it; the next terminal drawn asks for a new one
     stream.onClose(() => {
-      if (this.views === views) this.views = null
+      if (this.views.get(key) === views) this.views.delete(key)
     })
     return views
   }
@@ -243,7 +250,7 @@ class TerminalPool {
     entry.pid = info.pid
     if (info.session === undefined) return
 
-    const source = this.connection().open(info.session)
+    const source = this.connection(info.target?.key).open(info.session)
     const view = new TerminalView(source, {
       font: FONT,
       theme: THEME,
@@ -516,8 +523,8 @@ class TerminalPool {
 
   disposeAll(): void {
     for (const id of this.entries.keys()) this.dispose(id)
-    this.views?.close()
-    this.views = null
+    for (const views of this.views.values()) views.close()
+    this.views.clear()
   }
 }
 

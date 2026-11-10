@@ -71,7 +71,7 @@ export interface FeHostRuntime {
    * broker's socket. Absent where there is no broker to reach, which `terminalViews` answers as a
    * connection that is already over.
    */
-  terminalViews?(): TerminalViewStream;
+  terminalViews?(target?: string): TerminalViewStream;
 }
 
 let bound: FeHostRuntime | undefined;

@@ -33,9 +33,10 @@ export function holdTerminalSessionsForTheApp(): AppModule {
       // from the broker directly, so it has to be told the socket; it is told the greeting too, so the
       // one place that knows the protocol's version stays the host. Asked as the window opens a
       // connection rather than given at its creation: the broker may not have been listening then.
-      ipcMain.on('terminal:view-endpoint', event => {
+      ipcMain.on('terminal:view-endpoint', (event, target?: unknown) => {
         try {
-          event.returnValue = terminalViewEndpoint();
+          // A target is the key of one of this app's own sockets, which the host checks it is
+          event.returnValue = terminalViewEndpoint(typeof target === 'string' ? target : undefined);
         } catch (error) {
           console.warn('[terminal] no broker for a window to draw from', error);
           event.returnValue = null;

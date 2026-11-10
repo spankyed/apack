@@ -593,6 +593,7 @@ export interface TerminalRewind {
 // @public
 export interface TerminalService {
     adopt(id: string, listeners: TerminalListeners): Promise<TerminalSession>;
+    at(target: TerminalTarget): TerminalService;
     open(options: {
         cols: number;
         rows: number;
@@ -627,6 +628,7 @@ export interface TerminalSession {
     resume(): Promise<void>;
     readonly scrollback: number;
     signal(signal: TerminalSignal, scope: TerminalSignalScope): Promise<void>;
+    readonly target: string | null;
     terminate(): Promise<void>;
     write(data: string): Promise<void>;
 }
@@ -671,6 +673,12 @@ export type TerminalSignalScope =
     readonly kind: 'pid';
     readonly pid: number;
 };
+
+// @public
+export interface TerminalTarget {
+    // (undocumented)
+    readonly command: readonly string[];
+}
 
 // @internal
 export const _toSecretMetadata: (input: SecretMetadata) => SecretMetadata;

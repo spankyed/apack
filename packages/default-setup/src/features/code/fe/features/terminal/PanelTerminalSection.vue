@@ -37,6 +37,16 @@
           <DropdownMenuPortal>
             <DropdownMenuContent class="min-w-[160px] bg-neutral-900 border border-neutral-700 rounded-md shadow-lg py-1 z-50" :side-offset="5">
               <DropdownMenuItem
+                v-for="target in terminalTargets"
+                :key="target.id"
+                :data-terminal-target="target.id"
+                @select="createTerminalOn(target.id)"
+                class="flex items-center gap-2 px-3 py-2 text-sm transition-colors cursor-pointer text-neutral-200 hover:bg-neutral-800 focus:bg-neutral-800 focus:outline-none"
+              >
+                <Server :size="16" />
+                New Terminal on {{ target.label }}
+              </DropdownMenuItem>
+              <DropdownMenuItem
                 @select="killAllTerminals"
                 class="flex items-center gap-2 px-3 py-2 text-sm transition-colors cursor-pointer text-red-400 hover:bg-neutral-800 focus:bg-neutral-800 focus:outline-none"
               >
@@ -145,6 +155,12 @@
                 />
               </div>
               <span v-else class="flex-1 min-w-0 truncate">{{ getTerminalDisplayName(terminal) }}</span>
+              <span
+                v-if="terminal.target"
+                class="flex-shrink-0 rounded bg-neutral-700/60 px-1 text-[10px] text-neutral-300"
+                :title="`Runs on ${terminal.target.label}`"
+                data-terminal-on
+              >{{ terminal.target.label }}</span>
               <TerminalActivityBadge :activity="activity[terminal.id]" :kept="terminal.kept === true" />
               <!-- **A terminal whose shell died is kept so its last output can be read**, which only works
                    if the list says so: drawn like a live one, it invites typing that goes nowhere and gives
@@ -218,7 +234,7 @@ import { useSurface } from '@apackdev/sdk/fe'
 import { useSettings } from '#generated/settings-fe.ts'
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useSelector } from '@xstate/vue'
-import { ChevronRight, ChevronDown, Plus, X, Edit, Trash2, PanelTop, PanelBottom, Terminal as TerminalIcon, Ellipsis, Square, Copy, ClipboardPaste, TextSelect, Eraser, RotateCcw } from 'lucide-vue-next'
+import { ChevronRight, ChevronDown, Plus, X, Edit, Trash2, PanelTop, PanelBottom, Terminal as TerminalIcon, Ellipsis, Square, Copy, ClipboardPaste, TextSelect, Eraser, RotateCcw, Server } from 'lucide-vue-next'
 import {
   ContextMenuRoot,
   ContextMenuTrigger,
@@ -266,6 +282,7 @@ const storedCodeSettings = featureSettings.value
 const confirmTerminalClose = computed(() => storedCodeSettings.value?.confirmTerminalClose ?? true)
 const closeTerminalOnTabClose = computed(() => storedCodeSettings.value?.closeTerminalOnTabClose ?? true)
 const terminalScripts = computed(() => (storedCodeSettings.value?.terminalScripts ?? []) as TerminalScript[])
+const terminalTargets = computed(() => storedCodeSettings.value?.terminalTargets ?? [])
 
 const { getTerminalDisplayName, } = useTerminalActions(terminalActor, confirmTerminalClose, closeTerminalOnTabClose)
 
@@ -425,6 +442,14 @@ const stopTerminal = () => {
 
 const createTerminal = () => {
   terminalActor?.send({ type: 'terminal.CREATE' })
+  if (!isExpanded.value) {
+    codeActor.send({ type: 'TOGGLE_PANEL_TERMINAL' })
+  }
+}
+
+/** A terminal somewhere other than this machine: on one of the targets the settings name */
+const createTerminalOn = (target: string) => {
+  terminalActor?.send({ type: 'terminal.CREATE', on: target })
   if (!isExpanded.value) {
     codeActor.send({ type: 'TOGGLE_PANEL_TERMINAL' })
   }
