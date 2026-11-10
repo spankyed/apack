@@ -339,43 +339,99 @@ frames, signals, security and candidates suites, ~110 cases in all.
 The `candidates.rs` probe for the VT core was rewritten rather than deleted — that suite's purpose is that
 each chosen crate still does the one thing it was picked for.
 
-### The blocker: the core does not honour its own scrollback line bound
+### Phase B's gate is green, Windows excepted
 
-`a_session_keeps_its_declared_scrollback_and_not_more` is **red, and left red.** The broker declares
-`HISTORY_LINES = 1_000`, and that number is not decoration: the ownership goal made it *the* scrollback
-figure, answered to the window in the broker's handshake, exactly so a window never draws lines a reattach
-cannot reproduce.
+`cargo xtask pre-push`, 2026-11-09, on `vt-core/conformance`:
 
-Measured with the limits read back off each terminal, so there is no doubt they were set:
+```
+locked dependencies  passed      tests          passed in 8s
+format               passed      doc tests      passed
+clippy               passed      npm package    passed
+generated protocol   passed      mutants        61 tested: 58 caught, 3 unviable
+mutant exclusions    passed      everything passed in 617s
+```
 
-| lines fed | configured | scrollback rows held |
+**Zero survivors.** `generated protocol` passing is the other half of D6: the protocol's TypeScript is
+derived from the broker's Rust types, and it is byte-identical, so swapping the VT core changed no part of
+the contract the app compiles against.
+
+So Phase B's exit conditions are met but one: **Windows, which is O2.** Nothing above was run there, no
+prebuilt archive exists for it from anyone, and the library has to be built from the signed source and
+dependency tarballs before the Job Object ownership, the named-pipe ACL and the ConPTY startup can be
+re-proven on the VM.
+
+**`vendor/apack-terminal.rev` is deliberately unmoved.** Bumping it is what makes the monorepo and CI test
+this core, and CI's Windows mutation job is the one place `tree.rs` is answered. Pointing it at a core
+unproven on Windows would be claiming a platform this evidence does not cover.
+
+
+### What the mutation gate found, which is the most useful thing in this phase
+
+`cargo xtask pre-push` scopes its mutants to the change, and the change was a new FFI layer. Three runs:
+
+| | mutants | missed |
 |---|---|---|
-| 1,054 | `lines = 1000`, `bytes = ∞` | **1,051** — 5% over |
-| 6,004 | `lines = 1000`, `bytes = ∞` | **1,433** — 43% over |
-| 51,004 | `lines = 1000`, `bytes = ∞` | **753** — 25% **under** |
+| first | 74 | **25**, every one in `src/vt/` |
+| after deleting two dead diagnostics and adding nine cases | 61 | **1** |
+| after the refusal case | 61 | **0** |
 
-Non-monotonic, and wrong in both directions. The under-hold is the one that matters: a session that has
-written 51,000 lines answers a reattach with 753 while the window has been told it may scroll back 1,000.
+**Twelve died by deletion rather than by a case.** `total_rows` and `configured_limits` were written to
+probe the scrollback bound; the probes are gone and nothing in the broker reads either. A method whose only
+caller was a deleted test is gone, not excluded.
 
-**Two of my own errors were found on the way to this and are fixed**, and neither is the finding above:
+**One case exposed a hole this phase's own fix created.** Capping `snapshot` at `HISTORY_LINES` means the
+broker's scrollback cases pass whether or not the limit was ever set — the cap hides the setter. The limit
+is now observed through `scrollback_rows`, where it cannot be.
 
-- The core's default scrollback ceiling is **10,000 bytes** — tiny — and I had not set the byte option at
-  all at first, so a session held 757 lines of short output and fewer as lines got longer.
-- `SCROLLBACK_MAX_BYTES = NULL` does **not** remove that ceiling. I generalised it from the *line* option,
-  whose documentation says a null removes its limit. Reading the limits back after setting them is what
-  showed it; `usize::MAX` does work, and the option then reads as unlimited.
+**The last survivor taught the sharpest lesson: a case is only as good as the guard it observes.**
+Replacing `Failed::check` with `Ok(())` was invisible because the refusal case ran through
+`Terminal::new`, which guards twice — on the call's result *and* on a null handle — so dropping the first
+left the second reporting the same error. The kill is an over-long terminfo name, which the core refuses at
+128 bytes and which reaches only the result check. It earns its place anyway: a broker that accepted one
+silently would leave a program's XTGETTCAP query unanswered with nothing said about why.
 
-Fixing both changed the numbers not at all, which is what makes the remaining behaviour the core's rather
-than the configuration's.
+**One exclusion, with its reason.** A mutant of `Drop` leaks the handle, and a leak is not an answer any
+case here can read without a leak checker this repository does not have. What makes the omission small is
+that the handle has one owner by construction: `Terminal` has no `Clone` and the pointer never leaves the
+type. My first pattern matched no mutant and `check-exclusions` said so — `in <fn>` prints only for a
+mutant *inside* a function, which that file already records for `security.rs`.
 
-**Not resolved here, deliberately.** The assertion was not loosened to get a pass: a ceiling that reports
-1,000 and delivers between 753 and 1,433 is not a tighter test's problem. What it needs is the core's own
-source or its maintainers — whether `SCROLLBACK_MAX_LINES` is advisory, page-granular, or interacts with
-an allocator budget that an unlimited byte ceiling does not disable. Capping the figure in `snapshot`
-would fix the over-hold and leave the under-hold, which is the half that breaks the promise.
+### One load-sensitive case, reported rather than hidden
+
+`an_alternate_screen_app_survives_a_resize_and_keeps_answering` failed once, in a `pre-push` run started
+immediately after a fourteen-minute mutation run. It then passed three times in isolation and twice more in
+full parallel runs — 128 of 128 both times. The case drives a real `less` and waits on a 10-second quiet
+deadline, so it is load sensitivity rather than a regression: nothing in this phase changed it.
+
+It is named here because this repository holds that a test passing only on a quiet machine is a defect, and
+that is not mine to quietly re-run until green. It is a candidate for a progress bound rather than a quiet
+deadline, and it is not Phase B's work.
 
 
-### The scrollback bound explained, from the core's own source
+### The scrollback bound: resolved, and my first conclusion was wrong
+
+**Recorded as a correction because the wrong version was committed first.** I measured the core holding
+749 to 1,997 rows for asks of 1,000, 2,000 and 3,000 — identical ranges — and concluded from that the ask
+was inert and the broker's contract unkeepable. That probe took its minimum and maximum across terminal
+widths it had conflated, and the identical figures should have been the tell: a reading that does not move
+when its input does is usually the reading that is broken.
+
+Measured again, one width at a time, at 80x24:
+
+| ask | after 2,000 lines | after 6,000 | after 20,000 |
+|---|---|---|---|
+| 1,000 | 793 | 649 | **441** |
+| 2,000 | 1,977 | 1,833 | **1,625** |
+| 4,000 | 1,977 | 3,609 | 3,993 |
+
+The ask decides it, and the floor is the ask less about one page. So the contract is kept by asking for
+twice it (`SCROLLBACK_ASKED`) and capping the read at it — both halves, because the window is told that
+figure in the handshake and must be answered with neither less nor more. `page.std_capacity` is 215 rows
+at 215 columns and grows as columns shrink, so one `HISTORY_LINES` of margin clears a page at every width
+a terminal is plausibly opened at; `tests/screen.rs` asserts it rather than trusting the arithmetic, with
+a case at twenty thousand lines because the floor is what broke and a short case cannot see it.
+
+### Why it looked unkeepable, from the core's own source
 
 Fetched `libghostty-vt-1.0.0.tar.gz` and checked it against the signed `SHA256SUMS`. The behaviour is
 documented and deliberate, so this is a contract mismatch rather than a defect to report upstream.

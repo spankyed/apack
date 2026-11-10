@@ -111,10 +111,14 @@ this one's:
 - **Phase 0b passes.** A pack's WebAssembly module instantiates in the app from the installed revision over
   `pack://`, streaming and buffered. An imported module is the wrong mechanism; a public asset is the
   right one and needed no build change.
-- **Phase B is written and one case is red.** `screen.rs` is the core, `alacritty_terminal` is gone, and
-  the eight snapshots recorded from the old parser pass unchanged — which is the evidence that nothing
-  observable moved. `search` stays ours. ~110 cases pass; `a_session_keeps_its_declared_scrollback_and_not_more`
-  does not, and is left red because the assertion is right about the contract as it stands.
+- **Phase B passes on this platform.** `screen.rs` is the core, `alacritty_terminal` is gone from the
+  manifest and the lockfile, and the eight snapshots recorded from the old parser pass unchanged — the
+  evidence that nothing observable moved. `search` stays ours. `cargo xtask pre-push` is green end to end,
+  mutants included: 61 tested, 58 caught, 3 unviable, **zero survivors**, with one `Drop` mutant excluded
+  for a recorded reason. The generated protocol is byte-identical, which is D6 held.
+- **Phase B's remaining exit condition is O2, Windows.** `vendor/apack-terminal.rev` is deliberately
+  unmoved: bumping it is what makes the monorepo and CI test this core, and CI's Windows mutation job is
+  where `tree.rs` is answered.
 - **Phase R has not started**, and should not until O3 is answered: its premise in D2 is wrong as written.
 - **Phase A has not started**, depending on B and R.
 
@@ -182,6 +186,14 @@ Three consequences worth stating, because each is a rule rather than a detail:
   we may end up producing. If we do, it is produced out-of-band and published as an artifact like any
   other — never inside the app's build.
 
+**D9 — The promised scrollback is kept by asking the core for twice it.** Settled 2026-11-09 in Phase B,
+after I had wrongly recorded it as unkeepable. The core's line limit is a page-granular heuristic whose
+floor is the ask less about one page, so asking for `HISTORY_LINES` settles *below* it — 441 rows against
+a promised 1,000 after 20,000 lines at 80 columns. `SCROLLBACK_ASKED` is therefore twice the promise, and
+`snapshot` caps what it answers at the promise: a window must never be answered with less than its
+scrollbar was sized for, and never with more. Both halves are asserted, including at volume, because the
+floor is the one that broke and a case feeding barely past the bound passes either way.
+
 **D5 — The collapse is of the parser, not the semantics.** `screen.rs` becomes a thin mapping onto the
 core's state. `markers.rs` loses its hand-rolled scanning and keeps its state machine and its contract:
 every field is a claim some program made, except `foreground`, which is measured. Nobody should size this
@@ -210,25 +222,6 @@ side is declared in one place and asserted (required outcome 4).
 
 ### Open decisions
 
-**O4 — `HISTORY_LINES` cannot be expressed as the core's `max_lines`, and the contract is yours to set.**
-Measured and then read out of the core's source 2026-11-09; the detail and the quotations are in
-[evidence](../references/evidence/one-vt-core.md). The core's line limit is a page-granular *heuristic*
-that never prunes the page holding the active area, so rows held ranged 749 to 1,997 and did not move when
-the ask went from 1,000 to 3,000. It offers a ceiling in whole pages and no floor above one page.
-
-The broker advertises `HISTORY_LINES` to the window in its handshake precisely so a window never draws
-lines a reattach cannot reproduce. That needs a floor, which is the thing the core does not give.
-
-| | what it keeps | what it gives up |
-|---|---|---|
-| **bound memory instead, in bytes** | the broker's actual intent — `HISTORY_LINES`' own doc calls it "a ceiling on memory per session" — and the dimension the core enforces tightly | a line count is no longer promised: wide content yields fewer rows than narrow, so the handshake figure becomes advisory |
-| **cap the read at `HISTORY_LINES`** | the window never sees more than it was promised | nothing about the floor: a session holding 749 still under-delivers against a promised 1,000 |
-| **advertise the floor** — one page's rows | a number that is always honoured | a much smaller advertised scrollback than today, and one that varies with the column count |
-
-`a_session_keeps_its_declared_scrollback_and_not_more` stays red until this is decided. It was not
-loosened, because the assertion is right about the contract as it currently stands.
-
-Blocks Phase B's exit and nothing else; `pre-push` cannot be green before it.
 
 **O3 — Phase R's premise is wrong as written, and the choice is yours.** Measured 2026-11-09, after 0b.
 
@@ -460,11 +453,11 @@ before cutover**, not after seeing the numbers.
 
 | Requirement | Implementation / source | Evidence | Remaining work |
 |---|---|---|---|
-| Broker on `libghostty-vt`, `alacritty_terminal` gone | missing | — | Phases 0a, B |
+| Broker on `libghostty-vt`, `alacritty_terminal` gone | **done on POSIX** | `pre-push` green, 0 mutants missed; [evidence](../references/evidence/one-vt-core.md) | O2: prove it on Windows, then move the pin |
 | Window on the same core's WASM, `@xterm/*` gone | **route proven** — the delivery half | [evidence](../references/evidence/one-vt-core.md) | Phase R: the emulator itself, and the capability matrix with it |
 | No Zig, no compile-time network, no run-time CDN | missing | D4 names the mechanism | Prove per target in Phase B/R |
 | Every relied-on capability asserted present | missing | — | D7's declaration and its check |
-| Conformance corpus passes, or each difference decided | **done** — `897c01c` | ten cases; [evidence](../references/evidence/one-vt-core.md#2026-11-09--phase-0a-passes-the-two-parsers-agree-with-three-decided-differences) | — |
+| Conformance corpus passes, or each difference decided | **done** — and the snapshots now hold the core to the old parser's output | ten cases; [evidence](../references/evidence/one-vt-core.md#2026-11-09--phase-0a-passes-the-two-parsers-agree-with-three-decided-differences) | — |
 | Windows unaffected: job objects, pipe ACL, ConPTY | holds today | [terminal-ownership.md](../references/evidence/terminal-ownership.md) | Re-prove on the VM in Phase B |
 
 Checkpoint logs belong in `docs/references/evidence/one-vt-core.md`, dated, with source commits and exact
