@@ -22,7 +22,12 @@ let focused = 0
 /** What the pool built each emulator with, so a case can assert a bound it derives rather than pins */
 const builtWith: Array<Record<string, unknown>> = []
 /** Each emulator the pool constructed, so a case can drive the one it just made */
-const builtEmulators: Array<{ viewportY: number; scrollbackLength: number }> = []
+const builtEmulators: Array<{
+  viewportY: number; scrollbackLength: number
+  animationFrameId?: number; loops: number; answering?: string; dropOnNextWrite: number
+}> = []
+/** How many instances of the emulator's module have been asked for */
+let instancesLoaded = 0
 
 /** The fit addon the pool loads. Inert: what it does needs a renderer, and none of it is under test */
 class StubAddon {
@@ -50,7 +55,7 @@ const linkProviders: Array<{ provideLinks(y: number, cb: (links: unknown[] | und
 let loadGate: { promise: Promise<void>; release: () => void } | undefined
 
 vi.mock('ghostty-web', () => ({
-  init: () => loadGate?.promise ?? Promise.resolve(),
+  Ghostty: { load: async () => { await loadGate?.promise; instancesLoaded += 1; return { instance: instancesLoaded } } },
   FitAddon: StubAddon,
   // Both of the library's providers are the same shape to the pool, which wraps each one
   OSC8LinkProvider: StubProvider,
@@ -73,9 +78,20 @@ vi.mock('ghostty-web', () => ({
     }
     open(host: HTMLElement) { host.appendChild(this.element); this.opened = true }
     scrollbackLength = 0
+    /** The frame loop, as the emulator keeps it: running from `open`, under these two names */
+    animationFrameId: number | undefined = 1
+    loops = 1
+    startRenderLoop() { this.animationFrameId = 1; this.loops += 1 }
+    /** What the emulator answers a program's question with, sent the way it sends everything: as data */
+    answering: string | undefined
+    /** How many lines of history the next write drops, as the emulator does a page at a time */
+    dropOnNextWrite = 0
     write(data: string, done?: () => void) {
       this.assertOpen('use')
       written.push(data)
+      if (this.answering !== undefined) for (const handler of onDataHandlers) handler(this.answering)
+      this.scrollbackLength -= this.dropOnNextWrite
+      this.dropOnNextWrite = 0
       // **As the emulator does**: a write appends to the scrollback and, if the view is scrolled back,
       // snaps it to the bottom. That second part is what the pool has to undo, so the stand-in has to do
       // it or the case asserts nothing.
@@ -144,7 +160,7 @@ globalThis.requestAnimationFrame ??= ((callback: FrameRequestCallback) => {
   return 0
 }) as typeof requestAnimationFrame
 
-const { terminalPool, openedByTheApp, takeClipboardWrites, RESIZE_SETTLE_MS } = await import('#features/code/fe/utils/terminal-pool.ts')
+const { terminalPool, openedByTheApp, takeClipboardWrites, pasteSafe, viewAfterWrite, RESIZE_SETTLE_MS } = await import('#features/code/fe/utils/terminal-pool.ts')
 const { terminalEventBus } = await import('#features/code/fe/utils/terminal-events.ts')
 
 let next = 0
@@ -699,7 +715,8 @@ describe('the view while output arrives', () => {
     const term = emulator()
     const id = (terminal as unknown as { id: string }).id
 
-    // The user scrolls back twelve lines
+    // The user scrolls back twelve lines, in a session with history to scroll back through
+    term.scrollbackLength = 40
     term.viewportY = 12
 
     // Three lines arrive, which the emulator appends and then snaps to the bottom for
@@ -826,6 +843,122 @@ describe('the scrollback the emulator is built with', () => {
 
     await terminalPool.ensure(info, () => {})
 
-    expect(builtWith.at(-1)?.scrollback, 'the pool built the emulator with a bound of its own').toBe(1_234)
+    // In bytes, which is what the emulator's option counts: 4096 for each line the session keeps
+    expect(builtWith.at(-1)?.scrollback, 'the pool built the emulator with a bound of its own').toBe(1_234 * 4096)
+  })
+})
+
+/**
+ * **The emulator drops history a page at a time**, so across such a write its scrollback shrinks while the
+ * user's content moves further from the bottom. Reading the difference as the lines added put the view
+ * hundreds of lines below where the user was.
+ */
+describe('the view when a write drops history', () => {
+  it('counts the lines added from the output when the scrollback shrank', () => {
+    // Twelve back in 1,100 lines; the write adds three and the emulator drops a page of 540
+    expect(viewAfterWrite(12, 1_100, 563, 'one\ntwo\nthree\n'), 'thrown down by the page that was dropped').toBe(15)
+    // The ordinary case is unchanged: the growth is the lines added
+    expect(viewAfterWrite(12, 40, 43, 'one\ntwo\nthree\n')).toBe(15)
+    // And the view never points above the top of what is left
+    expect(viewAfterWrite(900, 1_000, 400, 'x\n'), 'pointed above the oldest line still held').toBe(400)
+  })
+
+  it('keeps the user in place through one, in the pool', async () => {
+    const terminal = info()
+    await terminalPool.ensure(terminal, () => {})
+    const term = lastBuilt()
+    term.scrollbackLength = 1_100
+    term.viewportY = 12
+    term.dropOnNextWrite = 540
+
+    terminalEventBus.emit((terminal as unknown as { id: string }).id, 'one\ntwo\nthree\n')
+
+    expect(term.viewportY, 'a dropped page moved the view to the bottom').toBe(15)
+  })
+})
+
+/**
+ * **A paste is whatever was on the clipboard, and the emulator sends it as it is.** Text holding the
+ * marker that ends a bracketed paste closed the bracket early, and what followed reached the shell as
+ * typed — a newline there ran a command.
+ */
+describe('what a paste may carry', () => {
+  it('replaces the characters a terminal acts on, and keeps the ones a paste is made of', () => {
+    expect(pasteSafe('ls\x1b[201~id\r'), 'a forged end-of-paste marker survived').toBe('ls [201~id\r')
+    expect(pasteSafe('a\x03b\x1ac\x15d\x7fe\x00f')).toBe('a b c d e f')
+    expect(pasteSafe('tab\there\nand\r\nthere — 日本語 👍'), 'ordinary text was altered').toBe('tab\there\nand\r\nthere — 日本語 👍')
+  })
+
+  it('is applied to every paste the pool makes', async () => {
+    const terminal = info()
+    await terminalPool.ensure(terminal, () => {})
+    const attachment = terminalPool.attach((terminal as unknown as { id: string }).id, host())
+
+    attachment?.paste('echo ok\x1b[201~\rrm -rf x\r')
+
+    expect(pasted.at(-1), 'the paste reached the emulator with its escape intact').toBe('echo ok [201~\rrm -rf x\r')
+    attachment?.release()
+  })
+})
+
+/**
+ * **The host answers a program's questions; the emulator must not answer them again.** It parses the same
+ * question and sends its own answer down the channel keystrokes take, so the program found a second answer
+ * waiting as if it had been typed.
+ */
+describe('what the emulator sends while it is being written to', () => {
+  it('is not passed on as input, and a keystroke still is', async () => {
+    const sent: string[] = []
+    const terminal = info()
+    await terminalPool.ensure(terminal, (data) => { sent.push(data) })
+    const term = lastBuilt()
+
+    // The program asks where the cursor is, and the emulator answers inside the write
+    term.answering = '\x1b[2;1R'
+    terminalEventBus.emit((terminal as unknown as { id: string }).id, '\x1b[6n')
+    expect(sent, "the emulator's own answer was sent to the pty").toEqual([])
+
+    // Outside a write, what the emulator sends is the user typing
+    term.answering = undefined
+    for (const handler of onDataHandlers) handler('a')
+    expect(sent).toEqual(['a'])
+  })
+})
+
+/** **A terminal nobody is showing is not drawn.** Its frame loop ran from open to dispose regardless. */
+describe('drawing a terminal no host is showing', () => {
+  it('stops when the last host lets go and starts again when one attaches', async () => {
+    const terminal = info()
+    await terminalPool.ensure(terminal, () => {})
+    const term = lastBuilt()
+    const id = (terminal as unknown as { id: string }).id
+
+    const attachment = terminalPool.attach(id, host())
+    expect(term.animationFrameId, 'an attached terminal is not drawing').toBeDefined()
+
+    attachment?.release()
+    expect(term.animationFrameId, 'a detached terminal went on drawing').toBeUndefined()
+
+    const again = terminalPool.attach(id, host())
+    expect(term.animationFrameId, 'reattaching did not start it drawing').toBeDefined()
+    again?.release()
+  })
+})
+
+/**
+ * **Each terminal has an instance of the emulator's module to itself.** On a shared one, a terminal opened
+ * after another was closed started with the closed one's cells and could trap on its first write.
+ */
+describe("the emulator's module", () => {
+  it('is instantiated once for each terminal and handed to it', async () => {
+    const before = instancesLoaded
+    await terminalPool.ensure(info(), () => {})
+    const first = builtWith.at(-1)?.ghostty
+    await terminalPool.ensure(info(), () => {})
+    const second = builtWith.at(-1)?.ghostty
+
+    expect(instancesLoaded - before, 'two terminals shared an instance').toBe(2)
+    expect(first, 'the terminal was not given its instance').toBeDefined()
+    expect(second).not.toBe(first)
   })
 })

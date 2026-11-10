@@ -328,8 +328,8 @@ const attachTerminal = (terminalId: string) => {
     }
 
     attachment = terminalPool.attach(terminalId, container.value, {
-      onResize: ({ cols, rows }) => {
-        terminalActor?.send({ type: 'terminal.RESIZE', terminalId, cols, rows })
+      onResize: ({ cols, rows, cellWidth, cellHeight }) => {
+        terminalActor?.send({ type: 'terminal.RESIZE', terminalId, cols, rows, cellWidth, cellHeight })
       },
       onSelectionChange: has => { hasSelection.value = has },
     })

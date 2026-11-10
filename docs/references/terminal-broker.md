@@ -46,11 +46,21 @@ of a screen the broker owns, and where the two disagree the broker's is the one 
 
 **A terminal answers what a program asks it, and the broker is what answers.** ConPTY's first act is a
 cursor-position request (`ESC [ 6 n`) and it waits for the reply before initialising — so on Windows a
-session nobody answers never starts. The window's emulator replies too, which would make a terminal with a
-window work and one without never start: exactly the independence the broker exists for, false. The broker's
-core computes those replies — collected through `libghostty-vt`'s write-to-pty callback — and the reader
-thread writes them back. A POSIX pty asks nothing, which is why this was invisible until the suite first ran
-on Windows.
+session nobody answers never starts. The broker's core computes those replies — collected through
+`libghostty-vt`'s write-to-pty callback — and the reader thread writes them back. A POSIX pty asks nothing,
+which is why this was invisible until the suite first ran on Windows.
+
+**So the window's emulator must not answer, and the pool drops what it sends while it is being written to**
+(`PoolEntry.writing`, `terminal-pool.ts`). It parses the same question and sends its own reply down the
+channel keystrokes take; passed on, a program read the broker's answer and then found a second one waiting
+as if it had been typed, once for every window drawing the session.
+
+**The broker is told what the window looks like, because it answers for it.** A session is started with the
+colours it is drawn in (`Spawn.colors`, from `be/terminal-colors.ts`) and a resize carries the size of one
+cell in pixels, so a program asking the terminal for its background or its size hears the window's. Until a
+window has measured a cell a size in pixels is not answered at all. Grapheme clustering (mode 2027) is on,
+as it is in the window, and the Kitty image protocol is off, since nothing that draws a session draws an
+image.
 
 **A shell's exit is waited for, not inferred from its output ending.** A POSIX pty gives EOF on the master
 when the last slave closes; a ConPTY does not, because the broker still holds the pseudoconsole. The exit is
@@ -80,8 +90,20 @@ Output is coalesced per session on a 16 ms window — one frame at 60 Hz — or 
 credit: 64 coalesced messages may be in flight, and a flush waits when none is free. **Answers carry no
 credit**, so a reply to a query the terminal made is never held behind a megabyte of output.
 
+**The window bounds how often a busy session sends, not how soon a quiet one does.** It is measured from the
+last flush, so the first bytes after a pause leave at once — a keystroke's echo is not held — and an idle
+session waits on its reader and no timer.
+
 A flush that had to wait reports `Throttled` with the microseconds it waited. It is a wait and not a loss: the
-pty's own buffer fills behind it and the process feels it, so every byte still arrives.
+reader hands its chunks to the coalescer over a queue of eight (`READ_AHEAD`), so when credit runs out that
+queue fills, the reader stops reading the pty, the pty's own buffer fills and the process blocks on its
+write. Every byte still arrives, and the broker holds almost none of them.
+
+**The same bound is carried to the windows by the app.** Each `terminal.OUTPUT` says where the stream stands
+after it, a window answers `terminal.OUTPUT_DRAWN` with how far it has drawn, and the code feature pauses the
+session while a window that answers is more than `OUTPUT_HIGH_WATER` behind (`be/services/terminal-flow.ts`).
+Without it the broker's bound ended at the API, which held a slow window's backlog for as long as the
+program ran.
 
 The budget this buys is derived rather than chosen: a message leaves when the window closes or the cap fills,
 so a run of a given length cannot produce more than one per window plus one per cap. Measured in the app over

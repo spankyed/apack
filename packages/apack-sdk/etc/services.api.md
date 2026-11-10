@@ -488,6 +488,28 @@ export interface StepRunNode extends RunNodeBase {
 }
 
 // @public
+export interface TerminalCellSize {
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly width: number;
+}
+
+// @public
+export type TerminalColor = `#${string}`;
+
+// @public
+export interface TerminalColors {
+    readonly ansi: readonly TerminalColor[];
+    // (undocumented)
+    readonly background: TerminalColor;
+    // (undocumented)
+    readonly cursor?: TerminalColor;
+    // (undocumented)
+    readonly foreground: TerminalColor;
+}
+
+// @public
 export interface TerminalFacts {
     readonly command: string | null;
     readonly cwd: string | null;
@@ -513,6 +535,7 @@ export interface TerminalService {
         env?: Readonly<Record<string, string>>;
         unset?: readonly string[];
         cwd?: string;
+        colors?: TerminalColors;
     }, listeners: TerminalListeners): Promise<TerminalSession>;
 }
 
@@ -523,7 +546,7 @@ export interface TerminalSession {
     owns(pid: number): Promise<boolean>;
     pause(): Promise<void>;
     readonly pid: number | null;
-    resize(cols: number, rows: number): Promise<void>;
+    resize(cols: number, rows: number, cell?: TerminalCellSize): Promise<void>;
     resume(): Promise<void>;
     readonly scrollback: number;
     signal(signal: TerminalSignal, scope: TerminalSignalScope): Promise<void>;

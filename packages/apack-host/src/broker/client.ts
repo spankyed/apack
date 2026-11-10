@@ -40,6 +40,8 @@ export class BrokerError extends Error {
 export interface BrokerScreen {
   /** The history that was asked for, then the viewport, oldest first */
   readonly lines: readonly string[];
+  /** For each line, whether it runs on into the next: a line wider than the grid is several rows */
+  readonly wrapped: readonly boolean[];
   /** Within the viewport, so `0` is its first line however much history came with it */
   readonly cursorRow: number;
   readonly cursorColumn: number;
@@ -156,7 +158,8 @@ export interface BrokerSession {
    */
   readonly pid: number | null;
   write(data: string): Promise<void>;
-  resize(cols: number, rows: number): Promise<void>;
+  /** `cell` is one cell in pixels as a window measured it; absent keeps the last one given */
+  resize(cols: number, rows: number, cell?: { readonly width: number; readonly height: number }): Promise<void>;
   /**
    * Stops the broker reading this session's pty, so its process feels the reader stop.
    *
@@ -272,6 +275,17 @@ export interface BrokerSessionOptions {
    */
   unset?: readonly string[];
   cwd?: string;
+  /** What the session is drawn in, each colour as red, green and blue; absent leaves the broker's own */
+  colors?: BrokerColors;
+}
+
+/** The colours a session is drawn in, as the broker takes them */
+export interface BrokerColors {
+  foreground: [number, number, number];
+  background: [number, number, number];
+  cursor: [number, number, number] | null;
+  /** The first entries of the palette, in order */
+  ansi: Array<[number, number, number]>;
 }
 
 export interface Broker {
@@ -673,7 +687,14 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
       id,
       pid,
       async write(text) { connection.send({ kind: 'write', session: id, text }); },
-      async resize(cols_, rows_) { connection.send({ kind: 'resize', session: id, cols: cols_, rows: rows_ }); },
+      async resize(cols_, rows_, cell) {
+        connection.send({
+          kind: 'resize', session: id, cols: cols_, rows: rows_,
+          // Whole pixels, and zero for "not measured": the broker keeps the last cell it was given
+          cell_width: Math.max(0, Math.round(cell?.width ?? 0)),
+          cell_height: Math.max(0, Math.round(cell?.height ?? 0)),
+        });
+      },
       async pause() { connection.send({ kind: 'pause', session: id }); },
       async resume() { connection.send({ kind: 'resume', session: id }); },
       async owns(pid) {
@@ -697,6 +718,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
         if (answer.kind !== 'screen') throw new BrokerError('PTY', 'the broker answered no screen');
         return {
           lines: answer.lines,
+          wrapped: answer.wrapped,
           cursorRow: answer.cursor_row,
           cursorColumn: answer.cursor_column,
           altScreen: answer.alt_screen,
@@ -734,7 +756,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
 
   return {
     history,
-    async open({ cols, rows, shell, args, env, unset, cwd }, sessionListeners) {
+    async open({ cols, rows, shell, args, env, unset, cwd, colors }, sessionListeners) {
       connection.send({
         kind: 'spawn',
         cols,
@@ -744,6 +766,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
         env: Object.entries(env ?? {}),
         unset: [...unset ?? []],
         cwd: cwd ?? null,
+        colors: colors ?? null,
       });
       // Registered as the frame is read, so an `exited` in the same read is not lost; delivered once this
       // call's caller is holding the session (`heldFeed`)

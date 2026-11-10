@@ -133,8 +133,8 @@ onMounted(async () => {
   if (!entry || !mounted || !container.value) return
 
   attachment = terminalPool.attach(props.terminalInfo.id, container.value, {
-    onResize: ({ cols, rows }) => {
-      terminalActor?.send({ type: 'terminal.RESIZE', terminalId: props.terminalInfo.id, cols, rows })
+    onResize: ({ cols, rows, cellWidth, cellHeight }) => {
+      terminalActor?.send({ type: 'terminal.RESIZE', terminalId: props.terminalInfo.id, cols, rows, cellWidth, cellHeight })
     },
     onSelectionChange: has => { hasSelection.value = has },
     onFollowingChange: following => { isFollowingOutput.value = following },

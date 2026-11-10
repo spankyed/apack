@@ -55,6 +55,24 @@ export interface TerminalFacts {
   readonly finished: number;
 }
 
+/** A colour as `#rrggbb` */
+export type TerminalColor = `#${string}`;
+
+/** The colours a session is drawn in */
+export interface TerminalColors {
+  readonly foreground: TerminalColor;
+  readonly background: TerminalColor;
+  readonly cursor?: TerminalColor;
+  /** The first entries of the palette, in order: the sixteen a theme names. Fewer leaves the rest alone */
+  readonly ansi: readonly TerminalColor[];
+}
+
+/** One cell in pixels */
+export interface TerminalCellSize {
+  readonly width: number;
+  readonly height: number;
+}
+
 /**
  * A signal a session's processes may be sent.
  *
@@ -103,8 +121,14 @@ export interface TerminalSession {
   readonly scrollback: number;
   /** Bytes the user typed */
   write(data: string): Promise<void>;
-  /** The viewport changed. One size per session, because a pty has one */
-  resize(cols: number, rows: number): Promise<void>;
+  /**
+   * The viewport changed. One size per session, because a pty has one.
+   *
+   * `cell` is one cell in pixels as the window drawing the session measured it, which is what a program
+   * asking for the terminal's size in pixels is told. An owner that measures nothing leaves it out, and
+   * the last one given stands.
+   */
+  resize(cols: number, rows: number, cell?: TerminalCellSize): Promise<void>;
   /**
    * What the shell has reported about itself, as the host parsed it.
    *
@@ -199,6 +223,14 @@ export interface TerminalService {
        */
       unset?: readonly string[];
       cwd?: string;
+      /**
+       * What the session is drawn in, so a program that asks the terminal for its colours hears those.
+       *
+       * **The host answers that question and draws nothing**, so without this it answers with a palette
+       * nobody is looking at — and a program choosing a light or a dark theme from the answer chooses
+       * wrong. An owner with no window leaves it out.
+       */
+      colors?: TerminalColors;
     },
     listeners: TerminalListeners,
   ): Promise<TerminalSession>;

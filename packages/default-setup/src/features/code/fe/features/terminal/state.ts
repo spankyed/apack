@@ -6,6 +6,7 @@ import { terminalPool } from '../../utils/terminal-pool.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { removeTabs, nextActiveFromHistory } from '../../utils/tab-management.ts';
 import type { TerminalInfo } from '../../../be/types.ts'
+import { OUTPUT_ACK_EVERY } from '../../../be/services/terminal-flow.ts'
 
 /**
  * **The type the system publishes, not a window's copy of it**, which is why it is imported and re-exported
@@ -59,7 +60,7 @@ export type Event =
   | { type: 'terminal.CLOSE'; terminalId: string }
   | { type: 'terminal.RESTART'; terminalId: string }
   | { type: 'terminal.INPUT'; terminalId: string; data: string }
-  | { type: 'terminal.RESIZE'; terminalId: string; cols: number; rows: number }
+  | { type: 'terminal.RESIZE'; terminalId: string; cols: number; rows: number; cellWidth?: number; cellHeight?: number }
   /** This window has stopped drawing that terminal, so its fit should stop holding the grid down */
   | { type: 'terminal.DETACHED'; terminalId: string }
   | { type: 'terminal.RENAME'; terminalId: string; customTitle: string }
@@ -74,10 +75,31 @@ export type Event =
   | { type: 'terminal.RESTARTED'; data: TerminalInfo }
   | { type: 'terminal.RENAMED'; data: { terminalId: string; customTitle: string } }
   | { type: 'terminal.CWD_CHANGED'; data: { terminalId: string; cwd: string; title?: string } }
-  | { type: 'terminal.OUTPUT'; data: { terminalId: string; data: string } }
+  | { type: 'terminal.OUTPUT'; data: { terminalId: string; data: string; position: number } }
   | { type: 'terminal.ERROR'; data: { message: string; terminalId?: string } }
   | { type: 'terminal.RESIZED'; data: { terminalId: string; cols: number; rows: number } }
   | { type: 'terminal.TERMINAL_TAB_OPENED'; data: TerminalInfo }
+
+/**
+ * How far this window has told the backend it has drawn each terminal's output.
+ *
+ * **Module state, and safe as that**: it holds positions the backend issued, so a frontend that reloads
+ * starts empty and its first answer is simply the next position it sees. Nothing here counts.
+ */
+const outputDrawn = {
+  told: new Map<string, number>(),
+  /** Whether `position` is far enough past the last one told to be worth telling */
+  due(terminalId: string, position: number): boolean {
+    const last = this.told.get(terminalId)
+    // A position below the last one is a backend that restarted and is counting again from nothing
+    if (last !== undefined && position >= last && position - last < OUTPUT_ACK_EVERY) return false
+    this.told.set(terminalId, position)
+    return true
+  },
+  forget(terminalId: string): void {
+    this.told.delete(terminalId)
+  },
+}
 
 export const terminalState = setup({
   types: {
@@ -129,12 +151,17 @@ export const terminalState = setup({
     },
 
     resizeTerminal: ({ event }) => {
-      const ev = event as { type: 'terminal.RESIZE'; terminalId: string; cols: number; rows: number }
+      const ev = event as {
+        type: 'terminal.RESIZE'; terminalId: string; cols: number; rows: number
+        cellWidth?: number; cellHeight?: number
+      }
       sendToSystem('code', {
         type: 'terminal.RESIZE_TERMINAL',
         terminalId: ev.terminalId,
         cols: ev.cols,
         rows: ev.rows,
+        cellWidth: ev.cellWidth,
+        cellHeight: ev.cellHeight,
       })
     },
 
@@ -356,11 +383,20 @@ export const terminalState = setup({
       const ev = event as { type: 'terminal.CLOSED'; data: { terminalId: string } }
       terminalEventBus.clearOutput(ev.data.terminalId)
       terminalPool.dispose(ev.data.terminalId)
+      outputDrawn.forget(ev.data.terminalId)
     },
 
     handleTerminalOutput: ({ event }) => {
-      const ev = event as { type: 'terminal.OUTPUT'; data: { terminalId: string; data: string } }
-      terminalEventBus.emit(ev.data.terminalId, ev.data.data)
+      const ev = event as { type: 'terminal.OUTPUT'; data: { terminalId: string; data: string; position: number } }
+      const { terminalId, data, position } = ev.data
+      // The emulator parses inside this call, so once it returns the output is drawn as far as `position`
+      terminalEventBus.emit(terminalId, data)
+      // **Then the backend is told how far this window has got**, every so often rather than per message.
+      // That is what lets it pause a program writing faster than a window draws, instead of holding the
+      // backlog; a window with no emulator for the terminal still answers, having nothing to fall behind on
+      if (outputDrawn.due(terminalId, position)) {
+        sendToSystem('code', { type: 'terminal.OUTPUT_DRAWN', terminalId, position })
+      }
     },
 
     /**

@@ -1,10 +1,11 @@
 import {
-  FitAddon, init, OSC8LinkProvider, Terminal, UrlRegexProvider,
+  FitAddon, Ghostty, OSC8LinkProvider, Terminal, UrlRegexProvider,
   type IDisposable, type ILink, type ILinkProvider
 } from 'ghostty-web'
 import { terminalEventBus } from './terminal-events.ts'
 import { openLink } from '@apackdev/sdk/fe'
 import type { TerminalInfo } from '../features/terminal/state.ts'
+import { TERMINAL_THEME } from '../../be/terminal-colors.ts'
 
 /**
  * **The feature's seam to its emulator.** Every emulator instance the code surface has is here, and this is
@@ -13,9 +14,8 @@ import type { TerminalInfo } from '../features/terminal/state.ts'
  * file rather than a second rewrite of who owns what. That seam is what made it one.
  *
  * Each entry owns a detached wrapper div with a terminal mounted into it, and a host re-parents that wrapper
- * into its own container. The emulator survives a host's teardown, so there is no replay-on-remount cycle
- * and no class of bugs where synthesized DA/DSR/OSC responses get forwarded to the pty — and measured, a
- * reattach with 256 KiB of history costs 5.55 ms and not one message.
+ * into its own container. The emulator survives a host's teardown, so there is no replay-on-remount cycle,
+ * and measured, a reattach with 256 KiB of history costs 5.55 ms and not one message.
  *
  * The pool is the sole subscriber to `terminalEventBus` for each terminal, so pty output is written into the
  * emulator whether or not any host is mounted.
@@ -33,41 +33,36 @@ import type { TerminalInfo } from '../features/terminal/state.ts'
 export const RESIZE_SETTLE_MS = 100
 
 /**
- * The emulator's WebAssembly module, loaded once for this renderer realm.
+ * An instance of the emulator's WebAssembly module, **one per terminal**.
  *
- * **One load, however many sessions**, which is what the library's own `init` is: it creates the shared
- * instance every `Terminal` is built on. The promise is the deduplication — a second caller awaits the
- * first load rather than starting another — and it is deliberately *not* awaited at module scope, which
- * would block this pack's whole frontend, all eleven features of it, on the terminal's module.
+ * **Not shared, because a shared one is corrupted by closing a terminal.** Every terminal built on one
+ * instance allocates from one heap, and the emulator's core does not clear a page it reuses: with the
+ * module shared, a terminal opened after another was closed started with the closed one's cells already on
+ * its screen, and in a run with emoji it then trapped with *memory access out of bounds* — reproduced on
+ * the first cycle against the pinned build. An instance of its own gives each terminal a heap nothing else
+ * has written to, and closing the terminal drops the whole of it.
+ *
+ * What that costs is about 7 MiB a terminal and an instantiation per open, against a module the browser
+ * has already compiled once. The condition for sharing again is the core zeroing what it reuses.
  *
  * A failure is left to reject rather than swallowed: `ensure` is what a host awaits, so the host sees the
  * failure and can say so, where a pool that resolved anyway would hand back a terminal that draws nothing.
  */
-let loading: Promise<void> | undefined
-const emulatorReady = (): Promise<void> => (loading ??= init())
+const loadEmulator = (): Promise<Ghostty> => Ghostty.load()
 
-const THEME = {
-  background: '#1e1e1e',
-  foreground: '#d4d4d4',
-  cursor: '#d4d4d4',
-  cursorAccent: '#1e1e1e',
-  black: '#000000',
-  red: '#cd3131',
-  green: '#0dbc79',
-  yellow: '#e5e510',
-  blue: '#2472c8',
-  magenta: '#bc3fbc',
-  cyan: '#11a8cd',
-  white: '#e5e5e5',
-  brightBlack: '#666666',
-  brightRed: '#f14c4c',
-  brightGreen: '#23d18b',
-  brightYellow: '#f5f543',
-  brightBlue: '#3b8eea',
-  brightMagenta: '#d670d6',
-  brightCyan: '#29b8db',
-  brightWhite: '#e5e5e5'
-} as const
+/**
+ * How many bytes of scrollback the emulator is given for each line the session keeps.
+ *
+ * **The emulator's `scrollback` is a size in bytes, and the session's is a count of lines.** Passing the
+ * count as the size asked for a thousand bytes, which is below the emulator's floor, so a window kept
+ * whatever the floor happened to hold: about a thousand lines at 80 columns, and 257 to 552 at 160 —
+ * measured — against the thousand the host promises. A line costs about 14 bytes a column, so this is a
+ * line of up to roughly 270 columns; measured at 250 columns it keeps 1,091 lines at the least.
+ *
+ * It is a floor and not an exact count, because the emulator drops history a page at a time: a narrow
+ * terminal keeps several times what the host does.
+ */
+const SCROLLBACK_BYTES_PER_LINE = 4096
 
 /**
  * One session's emulator and the bookkeeping that outlives a host.
@@ -114,6 +109,19 @@ interface PoolEntry {
   savedViewportY: number | null
   /** An unfinished clipboard request, held until the read that completes it (`takeClipboardWrites`) */
   clipboardPending: string
+  /**
+   * Set while bytes are being written into the emulator, which is when anything it sends is its own.
+   *
+   * **The emulator answers a program's questions, and it must not.** A program that asks the terminal
+   * where the cursor is, or what it is, is answered by the host, which holds the session whether or not a
+   * window is drawing it. The emulator parses the same question and answers it too, through the channel
+   * the user's keystrokes take — so the program read one answer and then found a second waiting as if it
+   * had been typed, once per window. It answers inside the write that carried the question, and a
+   * keystroke never arrives inside one, so that is what tells the two apart.
+   */
+  writing: boolean
+  /** When the last paste was taken from the window, so the same paste arriving as a second event is not pasted twice */
+  pastedAt: number
   /**
    * Set while the view is being put back where the user had it after a write moved it.
    *
@@ -199,11 +207,86 @@ export interface TerminalAttachment {
 
 /** What a host wants to hear about. Each is optional: a host that does not draw a control does not ask */
 export interface TerminalAttachmentHandlers {
-  /** The emulator sized itself to this host, and the pty is the caller's to tell */
-  onResize?(size: { cols: number; rows: number }): void
+  /**
+   * The emulator sized itself to this host, and the pty is the caller's to tell. The cell is one cell in
+   * pixels where the emulator has measured one, for a program that asks the terminal its size in pixels
+   */
+  onResize?(size: { cols: number; rows: number; cellWidth?: number; cellHeight?: number }): void
   onSelectionChange?(hasSelection: boolean): void
   /** Whether the session is following its output, which a host draws a scroll control from */
   onFollowingChange?(following: boolean): void
+}
+
+/**
+ * The characters a paste may not carry, each replaced by a space.
+ *
+ * **Pasted text is whatever was on the clipboard, and a terminal acts on control characters.** The
+ * emulator wraps a paste in the bracketed-paste markers and sends it as it is, so text holding the closing
+ * marker ended the bracket early and everything after it reached the shell as if typed — a newline there
+ * ran a command. With `ESC` gone no marker can be forged. The rest are the characters a pty's line
+ * discipline acts on even inside a bracket (interrupt, quit, kill-line, suspend, the flow-control pair,
+ * word-erase, literal-next, reprint, discard) and the ones with no business in pasted text at all. It is
+ * the list Ghostty and xterm use. Tabs, newlines and carriage returns stay: they are what a paste is.
+ */
+const UNSAFE_IN_A_PASTE = new Set([
+  0x00, 0x03, 0x04, 0x05, 0x08, 0x0f, 0x11, 0x12, 0x13, 0x15, 0x16, 0x17, 0x1a, 0x1b, 0x1c, 0x7f,
+])
+
+/** `text` with every character a paste may not carry replaced by a space */
+export function pasteSafe(text: string): string {
+  let safe = ''
+  for (const character of text) {
+    safe += UNSAFE_IN_A_PASTE.has(character.codePointAt(0)!) ? ' ' : character
+  }
+  return safe
+}
+
+/**
+ * How far back to put the view after a write moved it, in lines from the bottom.
+ *
+ * The user is reading *content*, so the distance from the bottom to that content grows by the lines the
+ * write added. Normally that is how much the scrollback grew. **Not when the emulator dropped history**:
+ * it drops a page at a time, hundreds of lines, so the scrollback *shrinks* across such a write and the
+ * difference is negative — which put the view hundreds of lines below where the user was, usually at the
+ * bottom. Then the lines added are counted from the output itself, which undercounts a line that wrapped
+ * and is close; and the answer never points above the top of what is left.
+ */
+export function viewAfterWrite(wasBack: number, before: number, after: number, written: string): number {
+  const grew = after - before
+  const added = grew >= 0 ? grew : lineFeeds(written)
+  return Math.min(wasBack + added, after)
+}
+
+function lineFeeds(text: string): number {
+  let count = 0
+  for (let at = text.indexOf('\n'); at !== -1; at = text.indexOf('\n', at + 1)) count += 1
+  return count
+}
+
+/**
+ * The emulator's frame loop, which it does not expose.
+ *
+ * It draws on every animation frame from `open` until `dispose`, whether or not its canvas is in the
+ * document — so a terminal no host is showing went on painting a canvas nobody could see, for every frame
+ * of output it received. These two fields are the loop's own, reached by name because there is no public
+ * way to stop it; a build of the emulator without them is left running, which is what it did before.
+ */
+interface FrameLoop {
+  animationFrameId?: number
+  startRenderLoop?(): void
+}
+
+/** Stops the emulator drawing. What is written meanwhile is kept and drawn when it starts again */
+function stopDrawing(term: Terminal): void {
+  const loop = term as unknown as FrameLoop
+  if (loop.animationFrameId === undefined) return
+  cancelAnimationFrame(loop.animationFrameId)
+  loop.animationFrameId = undefined
+}
+
+function startDrawing(term: Terminal): void {
+  const loop = term as unknown as FrameLoop
+  if (loop.animationFrameId === undefined) loop.startRenderLoop?.()
 }
 
 /**
@@ -215,6 +298,9 @@ export interface TerminalAttachmentHandlers {
  * read as itself again.
  */
 const CLIPBOARD_HOLD_CAP = 1_048_576
+
+/** How long after a paste the same paste arriving as a second event is taken to be the first again */
+const PASTE_ECHO_MS = 100
 
 /** What starts one: `OSC 52 ;` */
 const CLIPBOARD_INTRODUCER = '\x1b]52;'
@@ -323,7 +409,7 @@ class TerminalPool {
     const entry = this.entries.get(terminalId)
     if (!entry || entry.exitNoted) return
     entry.exitNoted = true
-    entry.term.write(exitedNotice(code))
+    this.write(entry, exitedNotice(code))
   }
 
   /**
@@ -370,7 +456,7 @@ class TerminalPool {
     const drawn = entry.exitNoted === true
     entry.pid = pid
     entry.exitNoted = false
-    if (!drawn) entry.term.write(restartedNotice(pid))
+    if (!drawn) this.write(entry, restartedNotice(pid))
   }
 
   /**
@@ -408,11 +494,9 @@ class TerminalPool {
   /**
    * Returns an existing entry or constructs a new one.
    *
-   * `sendInput` is what the emulator sends the pty: the user's keystrokes, and the replies it makes on their
-   * behalf to a query a program in the pty asked (DA, DSR, a cursor position). It is wired as the entry is
-   * built, because **nothing is replayed into a new emulator** — the byte log and its window storage are gone
-   * (F3, F6, F11), so there is no historical write whose replies would have to be held back, and a
-   * parse boundary to wire it after would be a boundary in nothing.
+   * `sendInput` is what the emulator sends the pty: the user's keystrokes and what they paste. **Not the
+   * replies it makes to a program's questions** — the host answers those, and the emulator's own are
+   * dropped (`PoolEntry.writing`).
    */
   async ensure(info: TerminalInfo, sendInput: (data: string) => void): Promise<PoolEntry | null> {
     const existing = this.entries.get(info.id)
@@ -451,22 +535,25 @@ class TerminalPool {
   private discarded = new Set<string>()
 
   private async build(info: TerminalInfo, sendInput: (data: string) => void): Promise<PoolEntry | null> {
-    await emulatorReady()
+    const ghostty = await loadEmulator()
     this.listenForPaste()
 
     const term = new Terminal({
+      ghostty,
       fontFamily: 'JetBrains Mono, Cascadia Code, Fira Code, Menlo, monospace',
       fontSize: 14,
-      convertEol: true,
+      // **No end-of-line conversion.** A pty already turns a program's line feed into a carriage return
+      // and a line feed unless the program asked it not to, and a program that asked — every full-screen
+      // one — means a bare line feed as "down one row, same column". Converting it here moved the cursor
+      // to the first column where the host's screen, and the program, had it further right.
       cursorBlink: true,
       cursorStyle: 'bar',
-      // **The host's number, not one pinned here.** The emulator must not hold more than the session does:
-      // a window drawing 10,000 lines against a broker keeping 1,000 showed nine tenths that no reattach
-      // could reproduce. `info.scrollback` comes from the broker's handshake.
-      scrollback: info.scrollback,
+      // **The host's number of lines, as the bytes the emulator counts in** (`SCROLLBACK_BYTES_PER_LINE`).
+      // `info.scrollback` comes from the broker's handshake.
+      scrollback: info.scrollback * SCROLLBACK_BYTES_PER_LINE,
       cols: info.cols || 80,
       rows: info.rows || 24,
-      theme: { ...THEME }
+      theme: { ...TERMINAL_THEME }
     })
 
     const fitAddon = new FitAddon()
@@ -485,6 +572,24 @@ class TerminalPool {
     // terminal that has not been opened. `open` takes the element it is given as its own and appends the
     // canvas and the textarea to it, so there is nothing to size afterwards either.
     term.open(wrapper)
+
+    // **A paste is taken before the emulator sees it**, in the capture phase, because the emulator sends
+    // pasted text as it is (`pasteSafe`). It listens for the same two events on this element and on the
+    // input inside it; stopping them here is what makes this the only door a paste has.
+    const takePaste = (event: Event) => {
+      const paste = event as ClipboardEvent & InputEvent
+      if (event.type === 'beforeinput' && paste.inputType !== 'insertFromPaste') return
+      event.preventDefault()
+      event.stopPropagation()
+      const text = paste.clipboardData?.getData('text/plain') ?? paste.dataTransfer?.getData('text/plain') ?? paste.data ?? ''
+      // One paste can arrive as both events; the second is the first again
+      const now = Date.now()
+      if (!text || now - entry.pastedAt < PASTE_ECHO_MS) return
+      entry.pastedAt = now
+      this.pasteInto(entry, text)
+    }
+    wrapper.addEventListener('paste', takePaste, { capture: true })
+    wrapper.addEventListener('beforeinput', takePaste, { capture: true })
 
     // **Links are detected by the emulator and opened by the app.** Both providers are the library's —
     // `OSC8LinkProvider` reads the hyperlink a program declared as a sequence, `UrlRegexProvider` finds the
@@ -510,7 +615,9 @@ class TerminalPool {
       pinnedToBottom: true,
       savedViewportY: null,
       clipboardPending: '',
-      restoringScroll: false
+      restoringScroll: false,
+      writing: false,
+      pastedAt: 0
     }
 
     // Shift+Enter inserts a newline instead of executing. Wired once here
@@ -539,7 +646,7 @@ class TerminalPool {
         // markers when the application has asked for them, which is how a shell or an editor tells a paste
         // from typing — without it, a pasted newline runs a command.
         void navigator.clipboard.readText().then((text) => {
-          if (text) term.paste(text)
+          if (text) this.pasteInto(entry, text)
         }).catch(() => {})
         return false
       }
@@ -555,6 +662,7 @@ class TerminalPool {
         term.clear()
         entry.isShowingLoadingContent = false
       }
+      entry.writing = true
       // **The emulator snaps the view to the bottom on every write once the user has scrolled back**, so
       // a session reading its own history is dragged to the end by output it is not looking at. That is one
       // of the journeys the terminal complaint was about, and the window is where it has to be undone: the
@@ -572,12 +680,12 @@ class TerminalPool {
       try {
         term.write(data)
         if (wasScrolledBack !== 0) {
-          const grew = term.getScrollbackLength() - linesBefore
           term.scrollToBottom()
-          term.scrollLines(-(wasScrolledBack + grew))
+          term.scrollLines(-viewAfterWrite(wasScrolledBack, linesBefore, term.getScrollbackLength(), data))
         }
       } finally {
         entry.restoringScroll = false
+        entry.writing = false
       }
 
       // **What the emulator does not surface** (OSC 52). The bytes have already gone to it, which ignores
@@ -596,9 +704,16 @@ class TerminalPool {
     // storage are deleted (F3, F6): the scrollback lives in this emulator, which the pool keeps alive across
     // a host's teardown — so a tab switch costs 5.55 ms and no bytes, measured. A *fresh* emulator starts
     // fresh, and serving history for that case is the broker's bounded history, where one copy belongs.
-    showLoadingContent(term, info)
+    entry.writing = true
+    try { showLoadingContent(term, info) } finally { entry.writing = false }
     entry.isShowingLoadingContent = true
-    entry.disposables.push(term.onData(sendInput))
+    // What the emulator sends while it is being written to is its own answer to a program's question, and
+    // the host has already answered it (see `writing`). Everything else is the user's
+    entry.disposables.push(term.onData((data) => { if (!entry.writing) sendInput(data) }))
+    entry.disposables.push({ dispose: () => {
+      wrapper.removeEventListener('paste', takePaste, { capture: true })
+      wrapper.removeEventListener('beforeinput', takePaste, { capture: true })
+    } })
 
     // **Closed while this was being built**, so nothing is registered and what was made is thrown away.
     // Registering it would put an emulator for a finished session in the pool, holding its WebAssembly
@@ -609,6 +724,8 @@ class TerminalPool {
       return null
     }
 
+    // No host has it yet, so there is nothing to draw into; `attach` starts the emulator drawing
+    stopDrawing(term)
     this.entries.set(info.id, entry)
     return entry
   }
@@ -646,7 +763,12 @@ class TerminalPool {
     const tell = () => {
       if (released || entry.applying) return
       toldAt = Date.now()
-      handlers.onResize?.({ cols: term.cols, rows: term.rows })
+      // One cell as the emulator drew it, in whole pixels; absent before it has measured a font
+      const metrics = term.renderer?.getMetrics()
+      const cell = metrics && metrics.width > 0 && metrics.height > 0
+        ? { cellWidth: Math.round(metrics.width), cellHeight: Math.round(metrics.height) }
+        : {}
+      handlers.onResize?.({ cols: term.cols, rows: term.rows, ...cell })
     }
     const tellSettled = () => {
       if (released || settling || entry.applying) return
@@ -709,7 +831,7 @@ class TerminalPool {
       terminalId,
       selection: () => term.getSelection(),
       selectAll: () => term.selectAll(),
-      paste: (text) => term.paste(text),
+      paste: (text) => this.pasteInto(entry, text),
       clear: () => term.clear(),
       focus: () => term.focus(),
       refit: () => {
@@ -744,6 +866,7 @@ class TerminalPool {
     }
     host.appendChild(entry.wrapper)
     entry.attachedContainer = host
+    startDrawing(entry.term)
     return entry
   }
 
@@ -766,6 +889,8 @@ class TerminalPool {
     entry.savedViewportY = entry.term.viewportY
     entry.wrapper.remove()
     entry.attachedContainer = null
+    // Nothing is showing it, so nothing is drawn; what arrives meanwhile is kept for the next attach
+    stopDrawing(entry.term)
     return true
   }
 
@@ -884,9 +1009,24 @@ class TerminalPool {
       if (!entry) return
       event.preventDefault()
       el.focus()
-      entry.term.paste(event.detail.text)
+      this.pasteInto(entry, event.detail.text)
     }) as EventListener
     document.addEventListener('apack:paste', this.paste)
+  }
+
+  /**
+   * Pastes through the emulator, which wraps the text in the bracketed-paste markers when the program asked
+   * for them — after the characters a paste may not carry are taken out (`pasteSafe`). Every paste goes
+   * through here.
+   */
+  private pasteInto(entry: PoolEntry, text: string): void {
+    entry.term.paste(pasteSafe(text))
+  }
+
+  /** Writes the pool's own text into the emulator, marked as a write so nothing it sends back is input */
+  private write(entry: PoolEntry, text: string): void {
+    entry.writing = true
+    try { entry.term.write(text) } finally { entry.writing = false }
   }
 
   private stopListeningForPaste(): void {

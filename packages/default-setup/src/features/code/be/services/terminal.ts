@@ -8,7 +8,9 @@ import { EARS } from '#generated/ears.ts'
 import { repository } from '#generated/repository.ts';
 import { createLogger } from '@apackdev/sdk/logger';
 import { services } from '#generated/services.ts'
-import type { TerminalSession } from '@apackdev/sdk/services'
+import type { TerminalCellSize, TerminalSession } from '@apackdev/sdk/services'
+import { TERMINAL_COLORS } from '../terminal-colors.ts'
+import { OutputFlow } from './terminal-flow.ts'
 import { directoryToStart, shellToStart, submitFor } from './known-shells.ts'
 import { cwdAsReported } from '../utils/osc-cwd.ts'
 import { integrationDirectory, integrationFor } from './shell-integration.ts'
@@ -100,13 +102,19 @@ interface Terminal {
    * dropped — `opening`'s trick, for the same shape of problem.
    */
   sizing: number
+  /** How far each window has drawn this terminal's output, which is what pauses a program for a slow one */
+  flow: OutputFlow
 }
 
-/** A pty's grid */
+/** A pty's grid, and one cell of it in pixels where a window has measured one */
 interface Grid {
   cols: number
   rows: number
+  cell?: TerminalCellSize
 }
+
+const sameCell = (a: TerminalCellSize | undefined, b: TerminalCellSize | undefined): boolean =>
+  a?.width === b?.width && a?.height === b?.height
 
 /**
  * The terminal as everything outside this service sees it: what it is, plus what its shell is doing.
@@ -209,7 +217,7 @@ class TerminalService {
     // The handlers are bound to the id before the session exists, so no byte can arrive with nowhere to go
     const opening = ++this.openings
     const session = await services.terminal.open({
-      cols, rows, shell, cwd, args: integration?.args, env: integration?.env,
+      cols, rows, shell, cwd, args: integration?.args, env: integration?.env, colors: TERMINAL_COLORS,
     }, {
       onOutput: (data) => handlers.onData(id, data),
       onExit: (code) => this.exited(id, opening, code, handlers),
@@ -226,6 +234,7 @@ class TerminalService {
       fittedBy: new Map(),
       decided: { cols, rows },
       sizing: 0,
+      flow: new OutputFlow(),
     }
     this.terminals.set(id, terminal)
     repository.terminalCommands.create({ id, title, shell, cwd, cols, rows, session: session.id })
@@ -316,13 +325,14 @@ class TerminalService {
     try {
       const integration = await this.arrangeIntegration(this.shellFor(shell))
         const session = await services.terminal.open({
-        cols, rows, shell, cwd, args: integration?.args, env: integration?.env,
+        cols, rows, shell, cwd, args: integration?.args, env: integration?.env, colors: TERMINAL_COLORS,
       }, {
         onOutput: (data) => handlers.onData(id, data),
         onExit: (code) => this.exited(id, opening, code, handlers),
       })
 
       terminal.state = { kind: 'live', session, opening }
+      terminal.flow.restarted()
       terminal.info = { ...terminal.info, pid: session.pid, generation: terminal.info.generation + 1 }
       // The row must name the session that is running now. A stored id pointing at the shell this just
       // replaced is the one case offering it cannot survive: the broker would answer for it, and a restart
@@ -401,7 +411,10 @@ class TerminalService {
   private gridInForce(terminal: Terminal): Grid {
     let grid: Grid | undefined
     for (const fit of terminal.fittedBy.values()) {
-      grid = grid === undefined ? fit : { cols: Math.min(grid.cols, fit.cols), rows: Math.min(grid.rows, fit.rows) }
+      // A cell is the same size in every window drawing with one font, so whichever fit measured one says it
+      grid = grid === undefined
+        ? fit
+        : { cols: Math.min(grid.cols, fit.cols), rows: Math.min(grid.rows, fit.rows), cell: grid.cell ?? fit.cell }
     }
     return grid ?? { cols: terminal.info.cols, rows: terminal.info.rows }
   }
@@ -415,13 +428,19 @@ class TerminalService {
    * pty is not running at.
    */
   private async settleGrid(terminal: Terminal): Promise<AcceptedGrid> {
-    const { cols, rows } = this.gridInForce(terminal)
+    const { cols, rows, cell } = this.gridInForce(terminal)
     // Against what was decided, never against what windows were told: mid-flight those differ, and `info`
     // is the one that is behind
     if (terminal.decided.cols === cols && terminal.decided.rows === rows) {
+      // **A cell that changed size is told to the session and is nobody's news.** A program asking for the
+      // terminal's size in pixels should hear the new one, but the grid has not moved, so no window redraws
+      if (cell && !sameCell(terminal.decided.cell, cell) && terminal.state.kind !== 'exited') {
+        terminal.decided = { cols, rows, cell }
+        await terminal.state.session.resize(cols, rows, cell)
+      }
       return { cols: terminal.info.cols, rows: terminal.info.rows, changed: false }
     }
-    terminal.decided = { cols, rows }
+    terminal.decided = { cols, rows, cell }
     const sizing = (terminal.sizing += 1)
     // A terminal whose shell has gone has no pty to resize, so the grid it is drawn at is all there is to
     // move. Its kept dead screen reflows with it, which is why this is still recorded and still answered
@@ -430,7 +449,7 @@ class TerminalService {
       terminal.info.rows = rows
       return { cols, rows, changed: true }
     }
-    await terminal.state.session.resize(cols, rows)
+    await terminal.state.session.resize(cols, rows, cell)
     // Superseded while this was open. The decision that superseded it answered with its own grid, so this
     // answers what is in force rather than the size it asked about
     if (terminal.sizing !== sizing) {
@@ -458,11 +477,44 @@ class TerminalService {
    * there is no window to attribute it to, so nothing is recorded and this answers what is in force: a
    * terminal fitted by an action is not a window showing it.
    */
-  async resize(id: string, cols: number, rows: number, asked?: string): Promise<AcceptedGrid | undefined> {
+  async resize(
+    id: string, cols: number, rows: number, asked?: string, cell?: TerminalCellSize,
+  ): Promise<AcceptedGrid | undefined> {
     const terminal = this.terminals.get(id)
     if (!terminal) return undefined
-    if (asked !== undefined) terminal.fittedBy.set(asked, { cols, rows })
+    if (asked !== undefined) terminal.fittedBy.set(asked, { cols, rows, cell })
     return this.settleGrid(terminal)
+  }
+
+  /**
+   * Counts output about to be sent to the windows, answering where the stream stands after it.
+   *
+   * **Pauses the session when a window is too far behind** (`OutputFlow`), which stops its pty being read:
+   * the program blocks on its own write, and what this process holds for a slow window stops growing.
+   */
+  outputSent(id: string, chars: number): number {
+    const terminal = this.terminals.get(id)
+    if (!terminal) return 0
+    const { position, pause } = terminal.flow.send(chars)
+    if (pause && terminal.state.kind !== 'exited') {
+      void terminal.state.session.pause().catch(error => {
+        logger.error(`Could not pause ${id} for a window that has fallen behind`, { error })
+      })
+    }
+    return position
+  }
+
+  /** A window has drawn this terminal's output up to `position`, so the session may be read again */
+  outputDrawn(id: string, client: string, position: number): void {
+    const terminal = this.terminals.get(id)
+    if (terminal?.flow.drew(client, position).resume) this.readAgain(id, terminal)
+  }
+
+  private readAgain(id: string, terminal: Terminal): void {
+    if (terminal.state.kind === 'exited') return
+    void terminal.state.session.resume().catch(error => {
+      logger.error(`Could not resume ${id} once its windows had caught up`, { error })
+    })
   }
 
   /**
@@ -491,6 +543,8 @@ class TerminalService {
   async forgetClient(client: string): Promise<Array<{ terminalId: string; grid: AcceptedGrid }>> {
     const moved: Array<{ terminalId: string; grid: AcceptedGrid }> = []
     for (const [terminalId, terminal] of this.terminals) {
+      // A window that has gone is not one to wait for: a session paused for it would otherwise stay paused
+      if (terminal.flow.forget(client).resume) this.readAgain(terminalId, terminal)
       if (!terminal.fittedBy.delete(client)) continue
       const grid = await this.settleGrid(terminal)
       if (grid.changed) moved.push({ terminalId, grid })
@@ -668,7 +722,7 @@ class TerminalService {
         scrollback: taken.scrollback,
         submit: submitFor(shell),
       }
-      this.terminals.set(row.id, { info, state: { kind: 'live', session: taken, opening }, fittedBy: new Map(), decided: { cols: info.cols, rows: info.rows }, sizing: 0 })
+      this.terminals.set(row.id, { info, state: { kind: 'live', session: taken, opening }, fittedBy: new Map(), decided: { cols: info.cols, rows: info.rows }, sizing: 0, flow: new OutputFlow() })
       logger.info(`Took up session ${session} again for terminal ${row.title} (${row.id}); its shell and its output survived`)
       return true
     } catch (error) {
@@ -712,7 +766,7 @@ class TerminalService {
         // terminal whose shell dies keeps its screen and reports the crash, where this used to delete the
         // terminal and report a clean exit 0 — losing the error, and only for terminals that came from a row
             const session = await services.terminal.open(
-          { cols: row.cols, rows: row.rows, shell, cwd, args: integration?.args, env: integration?.env },
+          { cols: row.cols, rows: row.rows, shell, cwd, args: integration?.args, env: integration?.env, colors: TERMINAL_COLORS },
           {
             onOutput: (data) => handlers.onData(row.id, data),
             onExit: (code) => this.exited(row.id, opening, code, handlers),
@@ -736,7 +790,7 @@ class TerminalService {
           scrollback: session.scrollback,
           submit: submitFor(shell),
         }
-        this.terminals.set(row.id, { info, state: { kind: 'live', session, opening }, fittedBy: new Map(), decided: { cols: info.cols, rows: info.rows }, sizing: 0 })
+        this.terminals.set(row.id, { info, state: { kind: 'live', session, opening }, fittedBy: new Map(), decided: { cols: info.cols, rows: info.rows }, sizing: 0, flow: new OutputFlow() })
         // **The row names the session that is running now, as every other start records it.** Left naming
         // the one this replaced, the next restart of this process offers a stale id, is refused, and starts
         // a second shell beside one the app's hold is still keeping alive — the accumulation taking a

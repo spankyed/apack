@@ -20,7 +20,7 @@ class Emitter<T> {
 }
 
 /**
- * The emulator's WebAssembly load, which the pool awaits once per realm.
+ * The emulator's WebAssembly load, which the pool awaits for each terminal it builds.
  *
  * **Holdable, because the pool's hardest cases are the ones that happen during it.** A session can be
  * closed, and a host unmounted, while this is still pending — so a case that wants to drive that calls
@@ -29,9 +29,10 @@ class Emitter<T> {
 let held: Promise<void> | undefined
 let release: (() => void) | undefined
 
-export const init = (): Promise<void> => held ?? Promise.resolve()
+/** The module's own loader: one instance per terminal, which the pool asks for as it builds each one */
+export const Ghostty = { load: async (): Promise<object> => { await held; return {} } }
 
-/** Holds every `init` open until the returned function is called */
+/** Holds every load open until the returned function is called */
 export function holdEmulatorLoad(): () => void {
   held = new Promise<void>((resolve) => { release = resolve })
   return () => {
@@ -146,7 +147,7 @@ export class StubLinkProvider {
 export async function emulatorModule() {
   const support = await import('./terminal-emulator.ts')
   return {
-    init: support.init,
+    Ghostty: support.Ghostty,
     Terminal: support.RecordedTerminal,
     FitAddon: support.StubAddon,
     OSC8LinkProvider: support.StubLinkProvider,

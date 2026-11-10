@@ -19,8 +19,8 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolveAppEnvironment, withoutAppProcessEnv } from '@apackdev/sdk/env';
-import type { TerminalListeners, TerminalService, TerminalSession } from '@apackdev/sdk/services';
-import { type Broker, type BrokerSession, holdBrokerSessions, startBroker } from '../broker/client.ts';
+import type { TerminalColor, TerminalColors, TerminalListeners, TerminalService, TerminalSession } from '@apackdev/sdk/services';
+import { type Broker, type BrokerColors, type BrokerSession, holdBrokerSessions, startBroker } from '../broker/client.ts';
 
 /**
  * The longest a Unix socket path may be, conservatively.
@@ -187,7 +187,7 @@ function expose(held: Broker, session: BrokerSession): TerminalSession {
     // The broker's own, from its handshake, rather than a number this process also keeps
     scrollback: held.history,
     write: (data) => session.write(data),
-    resize: (cols, rows) => session.resize(cols, rows),
+    resize: (cols, rows, cell) => session.resize(cols, rows, cell),
     // Projected rather than passed, so the broker's `foreground` — a measurement, and a host shape — stays
     // out of the pack-facing contract
     facts: async () => {
@@ -201,6 +201,28 @@ function expose(held: Broker, session: BrokerSession): TerminalSession {
     owns: (pid) => session.owns(pid),
     signal: (signal, scope) => session.signal(signal, scope),
     terminate: () => session.kill(),
+  };
+}
+
+/**
+ * A `#rrggbb` colour as red, green and blue, refusing anything else.
+ *
+ * Refused rather than read as black: a colour is what a program in the session is told the terminal is
+ * drawn in, and a typo answered as black tells every one of them the background is dark.
+ */
+function rgb(color: TerminalColor): [number, number, number] {
+  const hex = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(color);
+  if (!hex) throw new Error(`A terminal colour is #rrggbb, and ${JSON.stringify(color)} is not`);
+  return [parseInt(hex[1]!, 16), parseInt(hex[2]!, 16), parseInt(hex[3]!, 16)];
+}
+
+/** A session's colours as the broker takes them */
+export function brokerColors(colors: TerminalColors): BrokerColors {
+  return {
+    foreground: rgb(colors.foreground),
+    background: rgb(colors.background),
+    cursor: colors.cursor === undefined ? null : rgb(colors.cursor),
+    ansi: colors.ansi.map(rgb),
   };
 }
 
@@ -290,7 +312,8 @@ export function createTerminalService(): TerminalService & { shutdown(): Promise
   return {
     async open(options, listeners: TerminalListeners): Promise<TerminalSession> {
       const held = await running();
-      return expose(held, await held.open(options, listeners));
+      const { colors, ...asked } = options;
+      return expose(held, await held.open(colors ? { ...asked, colors: brokerColors(colors) } : asked, listeners));
     },
     async adopt(id, listeners: TerminalListeners): Promise<TerminalSession> {
       const held = await running();

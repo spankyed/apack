@@ -193,7 +193,9 @@ export type IncomingTerminalEvents =
   /** Start a new shell under a terminal that already exists, keeping its id and everything attached to it */
   | { type: 'terminal.RESTART_TERMINAL'; terminalId: string }
   | { type: 'terminal.TERMINAL_INPUT'; terminalId: string; data: string }
-  | { type: 'terminal.RESIZE_TERMINAL'; terminalId: string; cols: number; rows: number }
+  | { type: 'terminal.RESIZE_TERMINAL'; terminalId: string; cols: number; rows: number; cellWidth?: number; cellHeight?: number }
+  /** How far this window has drawn a terminal's output, as the position its last `terminal.OUTPUT` carried */
+  | { type: 'terminal.OUTPUT_DRAWN'; terminalId: string; position: number }
   /** This window has stopped showing that terminal, so its fit no longer holds the grid down */
   | { type: 'terminal.STOPPED_FITTING'; terminalId: string }
   | { type: 'terminal.RENAME_TERMINAL'; terminalId: string; customTitle: string }
@@ -215,7 +217,8 @@ export type OutgoingTerminalEvents =
    * window routed a new terminal into its own panel.
    */
   | { type: 'terminal.OPENED'; data: TerminalInfo }
-  | { type: 'terminal.OUTPUT'; data: { terminalId: string; data: string } }
+  /** `position` is where the terminal's output stands after this, which a window answers with once drawn */
+  | { type: 'terminal.OUTPUT'; data: { terminalId: string; data: string; position: number } }
   | { type: 'terminal.CLOSED'; data: { terminalId: string } }
   /**
    * The shell ended badly and **the terminal was kept**, so the user can read what it said and start it

@@ -10,7 +10,7 @@
 // So fidelity lives here once. A case records what it cares about by reading the slice it wants off the
 // returned object; nothing is per-spec except which slice it reads.
 import { mockService } from '@apackdev/testing/harness'
-import type { TerminalListeners, TerminalSession, TerminalSignal, TerminalSignalScope } from '@apackdev/sdk/services'
+import type { TerminalCellSize, TerminalColors, TerminalListeners, TerminalSession, TerminalSignal, TerminalSignalScope } from '@apackdev/sdk/services'
 
 /** The options the service was opened with, whole, so a case reads the field it is about */
 export interface OpenOptions {
@@ -21,6 +21,7 @@ export interface OpenOptions {
   env?: Record<string, string>
   unset?: readonly string[]
   cwd?: string
+  colors?: TerminalColors
 }
 
 export interface OpenedSession {
@@ -36,7 +37,8 @@ export interface OpenedSession {
 
 export interface RecordingBroker {
   readonly opened: readonly OpenedSession[]
-  readonly resized: ReadonlyArray<{ id: string; cols: number; rows: number }>
+  /** Each resize, with the size of a cell where the caller gave one */
+  readonly resized: ReadonlyArray<{ id: string; cols: number; rows: number; cell?: TerminalCellSize }>
   readonly written: ReadonlyArray<{ id: string; data: string }>
   /** The sessions `terminate()` was called on, in order */
   readonly terminated: readonly string[]
@@ -102,7 +104,7 @@ export interface RecordingBroker {
  */
 export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): RecordingBroker {
   const opened: OpenedSession[] = []
-  const resized: Array<{ id: string; cols: number; rows: number }> = []
+  const resized: Array<{ id: string; cols: number; rows: number; cell?: TerminalCellSize }> = []
   const written: Array<{ id: string; data: string }> = []
   const terminated: string[] = []
   const flow: Array<{ id: string; kind: 'pause' | 'resume' }> = []
@@ -130,8 +132,8 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
     pid: handlePid,
     scrollback: 1000,
     write: async (data: string) => { written.push({ id, data }) },
-    resize: async (cols: number, rows: number) => {
-      resized.push({ id, cols, rows })
+    resize: async (cols: number, rows: number, cell?: TerminalCellSize) => {
+      resized.push(cell ? { id, cols, rows, cell } : { id, cols, rows })
       const held = heldResizes.get(id)
       if (held === undefined) return
       heldResizes.delete(id)

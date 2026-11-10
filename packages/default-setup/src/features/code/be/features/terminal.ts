@@ -36,7 +36,8 @@ export type Event =
   | { type: 'terminal.CLOSE_TERMINAL'; terminalId: string }
   | { type: 'terminal.RESTART_TERMINAL'; terminalId: string }
   | { type: 'terminal.TERMINAL_INPUT'; terminalId: string; data: string }
-  | { type: 'terminal.RESIZE_TERMINAL'; terminalId: string; cols: number; rows: number }
+  | { type: 'terminal.RESIZE_TERMINAL'; terminalId: string; cols: number; rows: number; cellWidth?: number; cellHeight?: number }
+  | { type: 'terminal.OUTPUT_DRAWN'; terminalId: string; position: number }
   | { type: 'terminal.STOPPED_FITTING'; terminalId: string }
   | { type: 'terminal.RENAME_TERMINAL'; terminalId: string; customTitle: string }
   | { type: 'terminal.OPENED'; data: TerminalInfo }
@@ -113,7 +114,10 @@ const terminalHandlers = {
         .catch(error => { logger.error(`Could not read where ${terminalId}'s shell is`, { error }) })
     }
 
-    emitToFrontend({ type: 'terminal.OUTPUT', data: { terminalId, data } })
+    // **Counted as it leaves**, so a window can say how far it has drawn and a program writing faster than
+    // a window draws is made to wait rather than buffered here (`OutputFlow`)
+    const position = terminalService.outputSent(terminalId, data.length)
+    emitToFrontend({ type: 'terminal.OUTPUT', data: { terminalId, data, position } })
   },
 
   onExit(terminalId: string) {
@@ -266,8 +270,22 @@ export const terminalSystem = setup({
       }
     },
 
+    /**
+     * A window says how far it has drawn a terminal's output, which is what lets a paused session be read
+     * again. `client` is the connection it arrived on; with none there is no window to count.
+     */
+    outputDrawn: ({ event, client }) => {
+      const ev = event as { type: 'terminal.OUTPUT_DRAWN'; terminalId: string; position: number }
+      if (client !== undefined) terminalService.outputDrawn(ev.terminalId, client, ev.position)
+    },
+
     resizeTerminal: ({ event, reply, client }) => {
-      const ev = event as { type: 'terminal.RESIZE_TERMINAL'; terminalId: string; cols: number; rows: number }
+      const ev = event as {
+        type: 'terminal.RESIZE_TERMINAL'; terminalId: string; cols: number; rows: number
+        cellWidth?: number; cellHeight?: number
+      }
+      // One cell in pixels, where the window measured one: what a program asking for the size in pixels is told
+      const cell = ev.cellWidth && ev.cellHeight ? { width: ev.cellWidth, height: ev.cellHeight } : undefined
       try {
         const terminal = terminalService.get(ev.terminalId)
         const terminalName = terminal ? terminal.info.title : 'Terminal'
@@ -277,7 +295,7 @@ export const terminalSystem = setup({
         // has one `(cols, rows)` and two windows fitting it to their own widths is a contradiction rather
         // than a race. `client` names the connection the message arrived on, which the API stamps and
         // nobody can forge.
-        void terminalService.resize(ev.terminalId, ev.cols, ev.rows, client)
+        void terminalService.resize(ev.terminalId, ev.cols, ev.rows, client, cell)
           .then(accepted => {
             if (!accepted) {
               failTerminal(reply, 'resize', `${terminalName} not found`, ev.terminalId)
@@ -391,6 +409,9 @@ export const terminalSystem = setup({
     },
     'terminal.RESIZE_TERMINAL': {
       actions: 'resizeTerminal'
+    },
+    'terminal.OUTPUT_DRAWN': {
+      actions: 'outputDrawn'
     },
     'terminal.STOPPED_FITTING': {
       actions: 'stoppedFitting'
