@@ -8,7 +8,7 @@
 //
 // And moving a terminal from a tab into the panel removed the tab without pruning the group it emptied,
 // where every other removal in this machine prunes.
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createActor } from 'xstate'
 
 vi.mock('#generated/events.ts', () => ({ sendToSystem: vi.fn(), broadcastToSurface: vi.fn(), sendToSurface: vi.fn() }))
@@ -25,11 +25,22 @@ const { terminalPool } = await import('#features/code/fe/utils/terminal-pool.ts'
 const TABS_KEY = 'default-setup/code:open-tabs'
 const GROUPS_KEY = 'default-setup/code:tab-groups'
 
-const started = () => createActor(codeState).start()
+/** Every surface a case started, stopped when it ends: a running surface holds listeners on the window */
+const running: Array<{ stop(): void }> = []
+const started = () => {
+  const actor = createActor(codeState).start()
+  running.push(actor)
+  return actor
+}
 const contextOf = (actor: ReturnType<typeof started>) => actor.getSnapshot().context
 const storedTabs = (): { tabs: Array<{ path: string }> } => JSON.parse(localStorage.getItem(TABS_KEY) ?? '{"tabs":[]}')
 
 beforeEach(() => localStorage.clear())
+afterEach(() => {
+  for (const actor of running.splice(0)) actor.stop()
+  // Stopping a surface disposes its pool, which is one case's subject and no other's
+  vi.mocked(terminalPool.disposeAll).mockClear()
+})
 
 describe('settling a restore that did not finish', () => {
   /** A previous session: one file and one terminal, the terminal pinned and in a group */
