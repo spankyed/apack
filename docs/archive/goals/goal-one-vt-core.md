@@ -9,8 +9,16 @@ would hide that the authorization widened as each phase answered.
 ## Outcome (2026-11-09)
 
 **One VT core, on both sides.** The broker parses with `libghostty-vt` 1.0's static library and
-`alacritty_terminal` is gone from its manifest and its lockfile; the window draws with the same release's
-WebAssembly build through `ghostty-web` and the six `@xterm/*` packages are gone from this repository.
+`alacritty_terminal` is gone from its manifest and its lockfile; the window draws with `ghostty-web` and the
+six `@xterm/*` packages are gone from this repository.
+
+> **Correction, 2026-11-10.** This paragraph first said the window draws with *the same release's*
+> WebAssembly build, and the heading above still says one core. Neither is true. `ghostty-web`'s module is
+> built from Ghostty commit `5714ed07a101` (2025-12-01) with its own patch; the broker's is `vt-1.0.0`,
+> `0fa3d577a561` (2026-11-06), 5,511 commits later. Phase 0a compared the new broker core with the broker's
+> *previous* parser and never with the window, so the claim was not tested, and a later comparison found
+> the two disagreeing on the cursor's column for 7 of 19 strings.
+> [The integration review](../../issues/ISSUE-ghostty-integration-review.md) has the measurements.
 `vendor/apack-terminal.rev` names the merged broker. `xterm-256color` stays as the advertised `TERM`,
 being a terminfo name and not a dependency.
 

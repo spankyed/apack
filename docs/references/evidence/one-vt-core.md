@@ -1413,3 +1413,12 @@ run 42790259817), which clones `vendor/elmdb` at its pin, and all six jobs passe
 That commit is later than the one gated above: it holds the facade report recorded there and the git
 watcher changes that followed it. The worktree `monorepo-worktrees.noindex/gate-pushed-master` is still
 present, on `session/gate-pushed-master` at `b458688785`, and nothing now waits on it.
+
+
+## 2026-11-10 — The strict chain, on the broker as later changed
+
+The run above gated `b0d003c6b2`. The broker's screen and protocol were changed after it (`facc376`, which
+`vendor/apack-terminal.rev` now names), so the strict chain was run again on `master` at `5bc0ba224e`
+(run 42824567521), and all six jobs passed: `producers`, `integration-1`, `integration-2`, `native-1`,
+`native-2` and `app-and-rest`. Two earlier dispatches on `5b2d92499d` (42822838062, 42823266256) were
+cancelled when `master` moved and carry no result.

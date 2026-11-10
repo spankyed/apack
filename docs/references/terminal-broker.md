@@ -36,11 +36,13 @@ it owns interaction — selection, reflow, IME — and nothing in the app may re
 is the authority and is fed before the bytes leave for the renderer, which is the only direction in which a
 disagreement is merely stale rather than wrong.
 
-That holds whatever each side parses with, and **both now parse with `libghostty-vt`**: the broker links the
-release's static library, and the window draws with the same release's WebAssembly build through
-`ghostty-web`. So the two cannot disagree about what a sequence *means* — which does not make the window's
-copy an authority, because it is still a replica of a screen the broker owns, and a window is not always
-there.
+That holds whatever each side parses with, and it has to, because **the two sides parse with different
+builds of Ghostty's core**: the broker links `libghostty-vt` 1.0's static library (commit `0fa3d577a561`),
+and the window draws with `ghostty-web`, whose WebAssembly module is built from an earlier Ghostty commit
+(`5714ed07a101`) with that project's own patch. They share lineage and not behaviour — the same bytes can
+leave the cursor in different columns on the two sides, measured in
+[the integration review](../issues/ISSUE-ghostty-integration-review.md) — so the window's copy is a replica
+of a screen the broker owns, and where the two disagree the broker's is the one a program was told about.
 
 **A terminal answers what a program asks it, and the broker is what answers.** ConPTY's first act is a
 cursor-position request (`ESC [ 6 n`) and it waits for the reply before initialising — so on Windows a
