@@ -171,67 +171,23 @@ this one's:
 
 ## Current handoff
 
-- **Checkout:** this repository on `master`; the broker in a worktree of `apack-terminal` at
-  `vt-core/conformance`, branched from `93b7de9`. The main broker checkout stays detached at that pin so
-  the monorepo's `vendor/` link does not drift under local work. `vendor/apack-terminal.rev` has **not**
-  been moved: the branch is not mergeable while O4 is open.
-- **Phase 0a passes.** Ten conformance cases. The grids agree over all eight streams whole and
-  byte-by-byte, the wrapper is self-consistent at every byte boundary, and three differences are decided:
-  device attributes (the core is right), the disjoint shell-integration families (take the union), and
-  where payload decoding lives.
-- **Phase 0b passes.** A pack's WebAssembly module instantiates in the app from the installed revision over
-  `pack://`, streaming and buffered. An imported module is the wrong mechanism; a public asset is the
-  right one and needed no build change.
-- **Phase B is complete.** It passes on POSIX and on Windows. `screen.rs` is the core, `alacritty_terminal` is gone from the
-  manifest and the lockfile, and the eight snapshots recorded from the old parser pass unchanged — the
-  evidence that nothing observable moved. `search` stays ours. `cargo xtask pre-push` is green end to end,
-  mutants included: 61 tested, 58 caught, 3 unviable, **zero survivors**, with one `Drop` mutant excluded
-  for a recorded reason. The generated protocol is byte-identical, which is D6 held.
-- **O2 is answered.** The library builds for `x86_64-windows-msvc` from the signed source and dependency
-  tarballs with Zig 0.17.0 and `--system`, it links against the broker's MSVC build, and all 97 tests pass
-  there — with Job Object tree ownership, the named-pipe ACL and the ConPTY `ESC [ 6 n` startup each
-  re-proven by name. Two findings came with it: the crate's source build passes `zig build` a flag Zig
-  0.17.0 rejects, and D4's prebuilt-directory hatch asserts a file name no Windows build produces.
-- **The pin is moved.** `vendor/apack-terminal.rev` names `80ffdb3`, the merged commit the gate actually
-  ran on — master had gained the Windows mutants CI fix, which touches three files Phase B also changed, so
-  the merge was re-gated rather than assumed (135 tests, 61 mutants, none missed). The vendored checkout is
-  fast-forwarded to it and `node/apack-terminal` rebuilt from it.
-- **Phase R is delivered.** The window draws with `ghostty-web`, the six `@xterm/*` packages are gone, and
-  the app has been driven: the emulator opens into the pool's detached wrapper, draws, and comes back from a
-  tab switch with the same pixels, the same session and the same pid. OSC 52 is implemented rather than
-  carried. O3 is answered — the renderer takes `ghostty-web` — so
-  D2 above is the replacement decision and Phase R's work below is written against it.
-- **Phase A is part-done, and what is left is held on a machine rather than on a decision.**
-  - **Done:** the driven run above; the packaging defect it exposed and its fix; OSC 52; the reference docs
-    (`terminal-broker.md` and the root guide's terminal line) describing what shipped.
-  - **Held:** `cargo xtask pre-push` on the broker's packaging fix, `npm run chain`, `test:smoke`, the
-    packaged install path and the `npm run measure` figures. Every one of those is timing-sensitive and this
-    machine is carrying a sustained load average above 120 from work that is not this goal's, which already
-    produced two unrelated broker cases failing on their deadlines — one that passes in 2.08s alone having
-    taken 9.97s, and one that took 47s and then timed out at 60. Re-running them until they pass is not a
-    fix, and a figure measured here would not be citable.
-  - **Not started:** the fuller behaviour pass (both hosts, real shells, alternate-screen programs, the two
-    paste paths, several windows), and closure — the Outcome and the archive move, which this repository's
-    documentation rule says may not stand in for an unmet requirement.
-  - **One open question for the owner**, recorded rather than decided: this goal's closure step says to
-    archive *both* deferred documents, but only [xterm-to-ghostty-web](../archive/plans/xterm-to-ghostty-web.md)
-    is absorbed by it. [terminal-runtime-refactor-target](../deferred/terminal-runtime-refactor-target.md) is
-    named **out of scope** above and still owns the agent-observation pipeline as design that no goal
-    delivers, so archiving it would retire live design rather than completed work.
+**Closed.** The Outcome above is the account; this section records only the end state of the checkouts,
+because that is the part a reader cannot derive from the Outcome.
 
-**Four decisions block the rest, and three of them are the user's.** None is a thing to work around:
-
-| | blocks | what it needs |
-|---|---|---|
-| **O1** | — | answered in Phase 0a |
-| **O2** | — | **answered**: it builds, links and passes on Windows; two findings about the crate |
-| **O3** | — | **answered**: `ghostty-web`, and D2 is retired in its favour |
-| **O4** | Phase B's exit | a decision: the broker's advertised scrollback contract, which this core cannot keep as written |
-
-**O4 is the one that stops `pre-push` going green**, and there is no configuration that avoids it: the
-core's floor is one page's rows, a page is a fixed number of *bytes*, so the rows it holds fall as content
-widens. A promise of a fixed line count is therefore unkeepable with this core for arbitrary content, which
-is why it is a contract question rather than a tuning one.
+- **This repository** on `master`. The window draws with `ghostty-web`, the six `@xterm/*` packages are
+  gone, and `vendor/apack-terminal.rev` names `80ffdb3`.
+- **The broker**: `vt-core/conformance` merged to `master` in `apack-terminal`, which is what the pin names.
+  The worktree `apack-terminal-worktrees.noindex/vt-core` can go; the main checkout is on `master` and holds
+  the pin.
+- **One commit sits past the pin**: the packaging fix that stages the binary by rename. Until the pin
+  advances to it, a chain run uses the sibling's working tree, which has it, and CI clones the pin, which
+  does not — the chain says so on its own result line, and that line is the thing to read rather than this
+  one.
+- **The driving scripts are not in the tree.** `drive/.gitignore` keeps everything but the README and the
+  Playwright config, so `terminal-core-swap.ts` — which opens a terminal, reads the canvas, and fingerprints
+  it either side of a write — exists only where it was written. What it asked and what it answered is in
+  [evidence](../references/evidence/one-vt-core.md); rebuilding it from that is a few minutes and is how
+  the two compensations should be re-measured.
 
 ## Decisions
 
