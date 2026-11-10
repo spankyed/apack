@@ -535,3 +535,108 @@ decision.
 Against those: the alternative is writing a terminal widget — painter, input encoding, selection, IME,
 accessibility, scrollbar — none of which is terminal emulation. That is the largest single piece of work in
 the goal and the least related to its purpose.
+
+
+## 2026-11-09 — O2 answered: Windows builds, links and passes, with two findings about the crate
+
+Measured on the [Windows VM](../guides/windows-development-vm.md), `apack-win-dev`:
+Windows Server 2025, `x86_64-pc-windows-msvc`, rustc **1.99.1** (the pin, installed from
+`rust-toolchain.toml`), Visual Studio Build Tools 2026 at `C:\BuildTools`, the branch
+`vt-core/conformance` at `3e47475` in a worktree of its own.
+
+### The library builds from the signed tarballs, offline, with Zig 0.17.0
+
+Nothing is published for Windows by anyone, so it is built. Inputs, both verified against the signed
+`SHA256SUMS` before use:
+
+```
+libghostty-vt-1.0.0.tar.gz        4a6ef758be721923e1969e7b81b443dcc92d8dd3fb5a39600c03a8817a753676
+libghostty-vt-1.0.0-deps.tar.gz   4d5ea5e448e4c7ea8fb55ccbaa8668f2a97d44f438cee831e2b7ecd162d85c29
+```
+
+from `https://release.files.ghostty.org/libghostty-vt/1.0.0/`, which is where these releases are
+published — **not** the GitHub release of the tag, where none of the six files exists. The build:
+
+```
+zig build -Demit-lib-vt=true -Doptimize=ReleaseFast -Dapp-runtime=none -Demit-xcframework=false \
+          -Dtarget=x86_64-windows-msvc -Dcpu=baseline \
+          --system <deps> --prefix <prefix>
+```
+
+with `ZIG_GLOBAL_CACHE_DIR` a fresh empty directory. `--system` is what makes it hermetic: Zig resolves
+every package from the dependency tarball instead of fetching. It installs the full `include/ghostty/vt/`
+header set, cmake and pkg-config files, and two libraries:
+
+| file | bytes |
+|---|---|
+| `lib/ghostty-vt-static.lib` | 13,079,862 |
+| `lib/ghostty-vt.lib` (the DLL import library) | 57,268 |
+
+### It links, and the whole suite passes
+
+`cargo test --locked`, every suite, on the library built above:
+
+| suite | tests | suite | tests |
+|---|---|---|---|
+| lib | 10 | `markers.rs` | 16 |
+| `broker.rs` | 29 | `parser.rs` | 4 |
+| `coalescing.rs` | 9 | `screen.rs` | 6 |
+| `conformance.rs` | 5 | `security.rs` | 2 |
+| `frames.rs` | 11 | `vt.rs` | 5 |
+
+**97 tests, 0 failed.** `candidates.rs`, `channel.rs` and `signals.rs` compile to no cases there, being
+POSIX-only. The three things a core swap most easily disturbs were each re-proven by name rather than
+inferred from a green total:
+
+- **Job Object tree ownership** — `killing_a_session_takes_the_whole_tree_with_it`.
+- **The named-pipe ACL** — `the_pipe_is_the_starting_user_s_and_nobody_broader` and
+  `exactly_two_accounts_are_granted_anything`.
+- **ConPTY startup, which is the one that fails invisibly on POSIX** —
+  `a_keystroke_reaches_a_pty_and_its_output_comes_back`,
+  `a_query_the_terminal_answers_itself_is_collected_for_the_pty` and
+  `a_program_asking_what_terminal_this_is_is_told_what_the_pty_says`. ConPTY's first act is `ESC [ 6 n`
+  and it waits for the answer before initialising, so a core that collects no replies does not start a
+  session on Windows at all. It answers.
+
+### Finding 1 — the crate's source build is broken with Zig 0.17.0
+
+`ghostty-vt-rs-sys` 0.3.0's `build.rs` passes `--global-cache-dir` to `zig build` whenever
+`GHOSTTY_ZIG_SYSTEM_DIR` is set. Zig 0.17.0's `zig build` does not accept it — it has `--cache-dir`, and
+the global cache is `ZIG_GLOBAL_CACHE_DIR` or the driver's `--global-cache`:
+
+```
+error: unrecognized argument: --global-cache-dir
+```
+
+The two are coupled in the same branch, so **the one route that supplies packages offline is the one that
+cannot run**, and `1.0.0` builds with no Zig but 0.17.0. This is worth reporting upstream; it is not in our
+way, because we do not build the library during `cargo build`.
+
+### Finding 2 — D4's mechanism is POSIX-shaped, and this is the one that matters to us
+
+D4 says the build is handed an already-unpacked, verified archive so that it "neither downloads nor
+compiles". On Windows that hatch does not fit what a Windows build produces:
+
+- `GHOSTTY_VT_RS_SYS_PREBUILT_DIR` asserts `lib/libghostty-vt.a`.
+- No Windows build produces that name. Zig installs `ghostty-vt-static.lib`, which is also the name the
+  crate's **own** link directive uses there (`static:+verbatim=ghostty-vt-static.lib`, because neither name
+  rustc derives from `static=ghostty-vt` finds a Zig archive on Windows).
+
+So the assertion and the link step disagree about the same file on the same target. The measurement above
+was taken with a copy of `ghostty-vt-static.lib` placed under the asserted name beside it: the copy is
+never a linker input — the verbatim directive names the real library — so what linked is what Zig built,
+but it is a file that exists only to satisfy an assertion, and that is not a thing to build on.
+
+**What this means for D4, stated rather than left implicit:** the decision holds — no Zig and no network in
+*our* build — and the per-target table is unchanged. What does not hold is the claim that one environment
+variable delivers it everywhere. Windows needs either the upstream fix, or our own `vt-prebuilt` task to lay
+out a prefix the crate accepts on each platform, which is a Phase A packaging detail rather than a question
+about the core.
+
+### What is now true of Phase B
+
+Every exit condition is met: the gate is green with zero mutants missed on POSIX, the protocol's generated
+types are byte-identical, and Windows builds, links and passes. **The pin is still not moved.**
+`vendor/apack-terminal.rev` names a commit CI clones from the remote, and `vt-core/conformance` has not been
+pushed, so moving it now would name a commit nothing can fetch. That is the one remaining action and it is
+not a measurement.

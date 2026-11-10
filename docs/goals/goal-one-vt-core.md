@@ -111,14 +111,20 @@ this one's:
 - **Phase 0b passes.** A pack's WebAssembly module instantiates in the app from the installed revision over
   `pack://`, streaming and buffered. An imported module is the wrong mechanism; a public asset is the
   right one and needed no build change.
-- **Phase B passes on this platform.** `screen.rs` is the core, `alacritty_terminal` is gone from the
+- **Phase B is complete.** It passes on POSIX and on Windows. `screen.rs` is the core, `alacritty_terminal` is gone from the
   manifest and the lockfile, and the eight snapshots recorded from the old parser pass unchanged — the
   evidence that nothing observable moved. `search` stays ours. `cargo xtask pre-push` is green end to end,
   mutants included: 61 tested, 58 caught, 3 unviable, **zero survivors**, with one `Drop` mutant excluded
   for a recorded reason. The generated protocol is byte-identical, which is D6 held.
-- **Phase B's remaining exit condition is O2, Windows.** `vendor/apack-terminal.rev` is deliberately
-  unmoved: bumping it is what makes the monorepo and CI test this core, and CI's Windows mutation job is
-  where `tree.rs` is answered.
+- **O2 is answered.** The library builds for `x86_64-windows-msvc` from the signed source and dependency
+  tarballs with Zig 0.17.0 and `--system`, it links against the broker's MSVC build, and all 97 tests pass
+  there — with Job Object tree ownership, the named-pipe ACL and the ConPTY `ESC [ 6 n` startup each
+  re-proven by name. Two findings came with it: the crate's source build passes `zig build` a flag Zig
+  0.17.0 rejects, and D4's prebuilt-directory hatch asserts a file name no Windows build produces.
+- **`vendor/apack-terminal.rev` is still unmoved, and that is now the only thing left in Phase B.** The
+  pin names a commit CI clones from the remote, and `vt-core/conformance` is unpushed, so moving it would
+  name a commit nothing can fetch. Pushing the branch is the action; it is not a measurement and it has not
+  been asked for.
 - **Phase R has not started, and is unblocked.** O3 is answered — the renderer takes `ghostty-web` — so
   D2 above is the replacement decision and Phase R's work below is written against it.
 - **Phase A has not started**, depending on B and R.
@@ -128,7 +134,7 @@ this one's:
 | | blocks | what it needs |
 |---|---|---|
 | **O1** | — | answered in Phase 0a |
-| **O2** | Phase B's exit on Windows | the Windows VM, and a library built from the signed tarballs since no archive exists from anyone |
+| **O2** | — | **answered**: it builds, links and passes on Windows; two findings about the crate |
 | **O3** | — | **answered**: `ghostty-web`, and D2 is retired in its favour |
 | **O4** | Phase B's exit | a decision: the broker's advertised scrollback contract, which this core cannot keep as written |
 
@@ -269,7 +275,11 @@ builds in the tree until `ghostty-web` consumes the official distribution, which
 
 Blocks Phase R and nothing else. Phase B is unaffected and proceeds.
 
-**O2 — Does a Windows library we build link against the broker's MSVC build?** The release is settled —
+**O2 — answered 2026-11-09: yes.** It builds from the signed tarballs, links, and passes all 97 tests on
+`x86_64-pc-windows-msvc`; the measurements and the two findings are in
+[evidence](../references/evidence/one-vt-core.md). The question as it stood:
+
+The release is settled —
 `1.0.0`, tag `vt-1.0.0`, commit `0fa3d577a5614150ff8e2c152de5fb9d5c6d2dec` — and O1 is answered in
 evidence. What remains is Windows, and it is now two questions rather than one, because nothing is
 published for it: we build the library from the signed source and dependency tarballs, then link it. Upstream
@@ -470,7 +480,7 @@ before cutover**, not after seeing the numbers.
 
 | Requirement | Implementation / source | Evidence | Remaining work |
 |---|---|---|---|
-| Broker on `libghostty-vt`, `alacritty_terminal` gone | **done on POSIX** | `pre-push` green, 0 mutants missed; [evidence](../references/evidence/one-vt-core.md) | O2: prove it on Windows, then move the pin |
+| Broker on `libghostty-vt`, `alacritty_terminal` gone | **done** | `pre-push` green with 0 mutants missed on POSIX; 97 tests pass on Windows MSVC; [evidence](../references/evidence/one-vt-core.md) | push the branch, then move the pin |
 | Window on the same core's WASM, `@xterm/*` gone | **route proven** — the delivery half | [evidence](../references/evidence/one-vt-core.md) | Phase R: the emulator itself, and the capability matrix with it |
 | No Zig, no compile-time network, no run-time CDN | missing | D4 names the mechanism | Prove per target in Phase B/R |
 | Every relied-on capability asserted present | missing | — | D7's declaration and its check |
