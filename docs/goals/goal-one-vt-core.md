@@ -496,9 +496,9 @@ before cutover**, not after seeing the numbers.
 
 | Requirement | Implementation / source | Evidence | Remaining work |
 |---|---|---|---|
-| Broker on `libghostty-vt`, `alacritty_terminal` gone | **done** | `pre-push` green with 0 mutants missed on POSIX; 97 tests pass on Windows MSVC; [evidence](../references/evidence/one-vt-core.md) | push the branch, then move the pin |
-| Window on the same core's WASM, `@xterm/*` gone | **done, unrun** | typecheck, pack build, `check:specifiers`, 104 cases; [evidence](../references/evidence/one-vt-core.md) | Phase A: run it in the app; OSC 52 is a named regression |
-| No Zig, no compile-time network, no run-time CDN | missing | D4 names the mechanism | Prove per target in Phase B/R |
+| Broker on `libghostty-vt`, `alacritty_terminal` gone | **done, and the pin is moved** | `pre-push` green on the merged commit, 135 tests and 61 mutants with none missed; 97 tests on Windows MSVC; [evidence](../references/evidence/one-vt-core.md) | — |
+| Window on the same core's WASM, `@xterm/*` gone | **done, and drawn in the app** | typecheck, pack build, `check:specifiers`, 104 cases, and a driven run: opens detached, draws, survives a re-parent; [evidence](../references/evidence/one-vt-core.md) | OSC 52 is a named regression; the fuller behaviour pass |
+| No Zig, no compile-time network, no run-time CDN | **held, with one finding** | the broker links a library supplied to the build (`vt-prebuilt` fetches and verifies; Windows is built out of band from the signed tarballs); the renderer's module is inlined in the package it comes from | the crate's prebuilt-directory hatch asserts a POSIX file name, so Windows runs it only with a copy under that name — [evidence](../references/evidence/one-vt-core.md) |
 | Every relied-on capability asserted present | missing | — | D7's declaration and its check |
 | Conformance corpus passes, or each difference decided | **done** — and the snapshots now hold the core to the old parser's output | ten cases; [evidence](../references/evidence/one-vt-core.md#2026-11-09--phase-0a-passes-the-two-parsers-agree-with-three-decided-differences) | — |
 | Windows unaffected: job objects, pipe ACL, ConPTY | holds today | [terminal-ownership.md](../references/evidence/terminal-ownership.md) | Re-prove on the VM in Phase B |
