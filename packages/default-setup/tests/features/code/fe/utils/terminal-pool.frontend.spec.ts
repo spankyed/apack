@@ -58,14 +58,20 @@ vi.mock('ghostty-web', () => ({
     cols = 80
     rows = 24
     viewportY = 0
+    // The real emulator refuses write, clear, paste, input, reset, scrollLines and registerLinkProvider
+    // before `open`, by name. Registering the providers during construction passed here and failed in the
+    // app, so the stand-in refuses what the emulator refuses.
+    opened = false
+    assertOpen(what: string) { if (!this.opened) throw new Error(`Terminal must be opened before ${what}`) }
     constructor(options: Record<string, unknown> = {}) { builtWith.push(options) }
     loadAddon() {}
     registerLinkProvider(provider: { provideLinks(y: number, cb: (links: unknown[] | undefined) => void): void }) {
+      this.assertOpen('registering link providers')
       linkProviders.push(provider)
     }
-    open(host: HTMLElement) { host.appendChild(this.element) }
-    write(data: string, done?: () => void) { written.push(data); done?.() }
-    paste(data: string) { pasted.push(data) }
+    open(host: HTMLElement) { host.appendChild(this.element); this.opened = true }
+    write(data: string, done?: () => void) { this.assertOpen('use'); written.push(data); done?.() }
+    paste(data: string) { this.assertOpen('use'); pasted.push(data) }
     onData(handler: (data: string) => void) { onDataHandlers.push(handler); return { dispose() {} } }
     onResize(handler: (size: { cols: number; rows: number }) => void) {
       onResizeHandlers.push(handler)
@@ -80,10 +86,10 @@ vi.mock('ghostty-web', () => ({
     attachCustomKeyEventHandler(handler: (event: KeyboardEvent) => boolean) { keyHandlers.push(handler) }
     getSelection() { return '' }
     selectAll() {}
-    clear() {}
+    clear() { this.assertOpen('use') }
     focus() { focused += 1 }
     scrollToBottom() { this.viewportY = 0 }
-    scrollLines(amount: number) { this.viewportY = Math.max(0, this.viewportY - amount) }
+    scrollLines(amount: number) { this.assertOpen('use'); this.viewportY = Math.max(0, this.viewportY - amount) }
     getScrollbackLength() { return 0 }
     dispose() {}
     // As the emulator's does: the grid changes and it raises its own `resize` for it, which is the feed

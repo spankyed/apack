@@ -378,6 +378,20 @@ class TerminalPool {
     const fitAddon = new FitAddon()
     term.loadAddon(fitAddon)
 
+    const wrapper = document.createElement('div')
+    wrapper.style.height = '100%'
+    wrapper.style.width = '100%'
+    // **The app's own name for a drawn terminal**, so anything that needs to find one — the performance
+    // scenarios do — asks for this rather than for whatever the emulator calls its elements. Reading the
+    // emulator's DOM is what the old viewport lookup did, and replacing the emulator is what broke it.
+    wrapper.dataset.apackTerminal = info.id
+
+    // **Everything below here has to come after `open`**, and the emulator says so rather than misbehaving:
+    // `write`, `clear`, `paste`, `input`, `reset`, `scrollLines` and `registerLinkProvider` each refuse a
+    // terminal that has not been opened. `open` takes the element it is given as its own and appends the
+    // canvas and the textarea to it, so there is nothing to size afterwards either.
+    term.open(wrapper)
+
     // **Links are detected by the emulator and opened by the app.** Both providers are the library's —
     // `OSC8LinkProvider` reads the hyperlink a program declared as a sequence, `UrlRegexProvider` finds the
     // rest in the drawn text — and each link they hand back carries an `activate` of its own. That is the
@@ -388,18 +402,6 @@ class TerminalPool {
     for (const provider of [new OSC8LinkProvider(term), new UrlRegexProvider(term)]) {
       term.registerLinkProvider(openedByTheApp(provider))
     }
-
-    const wrapper = document.createElement('div')
-    wrapper.style.height = '100%'
-    wrapper.style.width = '100%'
-    // **The app's own name for a drawn terminal**, so anything that needs to find one — the performance
-    // scenarios do — asks for this rather than for whatever the emulator calls its elements. Reading the
-    // emulator's DOM is what the old viewport lookup did, and replacing the emulator is what broke it.
-    wrapper.dataset.apackTerminal = info.id
-
-    term.open(wrapper)
-    // WebGL addon is loaded later in attach() — see comment there.
-    if (term.element) term.element.style.height = '100%'
 
     const entry: PoolEntry = {
       terminalId: info.id,

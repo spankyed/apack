@@ -63,11 +63,25 @@ export class StubTerminal {
   /** The link providers the pool registered, so a case can offer one a link and see who opens it */
   readonly linkProviders: unknown[] = []
 
+  /**
+   * **The real emulator refuses almost everything before `open`**, and says so by name: `write`, `clear`,
+   * `paste`, `input`, `reset`, `scrollLines` and `registerLinkProvider` each throw. A stand-in that
+   * accepted them passed an ordering the app then failed on — which is how registering the link providers
+   * during construction reached a build, so this is here rather than in a comment.
+   */
+  private opened = false
+  private assertOpen(what: string) {
+    if (!this.opened) throw new Error(`Terminal must be opened before ${what}`)
+  }
+
   loadAddon() {}
-  registerLinkProvider(provider: unknown) { this.linkProviders.push(provider) }
-  open(host: HTMLElement) { host.appendChild(this.element) }
-  write(data: string, done?: () => void) { this.written.push(data); done?.() }
-  paste(data: string) { this.pasted.push(data) }
+  registerLinkProvider(provider: unknown) {
+    this.assertOpen('registering link providers')
+    this.linkProviders.push(provider)
+  }
+  open(host: HTMLElement) { host.appendChild(this.element); this.opened = true }
+  write(data: string, done?: () => void) { this.assertOpen('use'); this.written.push(data); done?.() }
+  paste(data: string) { this.assertOpen('use'); this.pasted.push(data) }
   onData(handler: (data: string) => void) { return this.data.listen(handler) }
   onResize(handler: (size: { cols: number; rows: number }) => void) { return this.resized.listen(handler) }
   onRender(handler: (range: { start: number; end: number }) => void) { return this.rendered.listen(handler) }
@@ -77,10 +91,10 @@ export class StubTerminal {
   attachCustomWheelEventHandler() {}
   getSelection() { return this.selection }
   selectAll() { this.selection = this.written.join('') }
-  clear() { this.cleared += 1 }
+  clear() { this.assertOpen('use'); this.cleared += 1 }
   focus() { this.focused += 1 }
   scrollToBottom() { this.viewportY = 0 }
-  scrollLines(amount: number) { this.viewportY = Math.max(0, this.viewportY - amount) }
+  scrollLines(amount: number) { this.assertOpen('use'); this.viewportY = Math.max(0, this.viewportY - amount) }
   scrollToTop() { this.viewportY = this.scrollback.length }
   getScrollbackLength() { return this.scrollback.length }
   dispose() { this.disposed += 1 }
