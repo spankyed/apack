@@ -129,3 +129,17 @@ since the event has already asked for a pass. After an open, each new watch re-r
 between saves, 50 of 50 in-place and 50 of 50 replacing saves were caught, twice. Opening and closing 1,200 file watches
 took 38 ms and 6 ms and lost none of 300 saves on a directory watch beside them.
 
+
+## kqueue alone (2026-11-09)
+
+`npm run soak:watch -- --files-only` holds no directory watch, so the watcher can only learn of an edit through its
+file watches. Its first three rounds lost a replacing save. The pass blocked the process, the save landed during it,
+and that pass's `hold` closed the old inode's watch with its event still undelivered. The new watch took the
+replaced file as its baseline. A probe that replaced a file and held again in the same turn missed 20 of 20. A watch
+that `hold` closes before it reported its file going now reports it then, and the same probe misses 0 of 20.
+
+After that fix, under `npm run stress -- --busy 10` at load 107 to 237: 40 of 40 rounds picked up, 20 of them
+replacing saves. The median round took 15 s and the slowest 48 s. FSEvents did not stall in this run. The bystander's
+`fs.watch` saw every save within 125 ms, and a chokidar 3 witness set up as Vite's dev server watches saw every save
+within 713 ms. So this run is no evidence that hot reload misses edits. The day's recording above is the evidence that
+FSEvents can.
