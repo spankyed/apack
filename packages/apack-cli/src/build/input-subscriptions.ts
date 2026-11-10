@@ -104,6 +104,10 @@ export interface FileWatches {
  * watch therefore re-reads its file's identity after the poll, and calls `receive` when it moved. An edit after an
  * event needs no such check: the event has already asked for a read, and that read sees the edit.
  *
+ * kqueue also delivers on a poll, so a `hold` in the same turn as a save that replaced or deleted a file closes the old
+ * watch with its event undelivered, and takes the new file as it already is. A watch closed by `hold` before it reported
+ * its file going (a `rename` event) therefore calls `receive` itself.
+ *
  * Elsewhere this holds nothing: a file watch there is no different from the directory watches the caller has. A watch
  * that cannot open (too many open files, say) warns once and leaves the caller on its directory watches.
  */
@@ -112,7 +116,8 @@ export function createFileWatches(warn: (message: string) => void, platform: Nod
   const identityOf = (stats: fs.Stats | undefined): Identity | undefined =>
     stats && { ino: stats.ino, dev: stats.dev, mtimeMs: stats.mtimeMs, size: stats.size };
   let failed = false;
-  let held = new Set<string>();
+  // Each held watch's key, and whether it has reported its file being replaced or deleted
+  let held = new Map<string, { receive: () => void; gone: boolean }>();
   const subscriptions = createInputSubscriptions((watched, error) => {
     const refusal = new Error(`Cannot watch "${watched}": ${String(error)}`, { cause: error });
     if (!failed) {
@@ -127,16 +132,24 @@ export function createFileWatches(warn: (message: string) => void, platform: Nod
       if (platform !== 'darwin' || failed) return;
       const wanted: InputSubscription[] = [];
       const fresh: Array<{ file: string; identity: Identity; receive: () => void }> = [];
+      const receivers = new Map<string, () => void>();
       for (const { file, receive } of files) {
         const identity = identityOf(fs.statSync(file, { throwIfNoEntry: false }));
         if (!identity) continue;
         const key = JSON.stringify([file, identity.ino, identity.dev]);
-        wanted.push({ key, path: file, recursive: false, receive: () => receive() });
+        wanted.push({ key, path: file, recursive: false, receive: event => {
+          const watch = held.get(key);
+          if (watch && event === 'rename') watch.gone = true;
+          receive();
+        } });
+        receivers.set(key, receive);
         if (!held.has(key)) fresh.push({ file, identity, receive });
       }
       try { subscriptions.hold(wanted); }
       catch { subscriptions.close(); return; }
-      held = new Set(wanted.map(subscription => subscription.key));
+      const previous = held;
+      held = new Map([...receivers].map(([key, receive]) => [key, previous.get(key) ?? { receive, gone: false }]));
+      for (const [key, watch] of previous) if (!held.has(key) && !watch.gone) watch.receive();
       if (fresh.length === 0) return;
       // Resolves on the poll that armed the new watches; only a read started after it sees what they would miss
       const polled = fs.promises.stat(fresh[0]!.file).catch(() => undefined);
@@ -147,7 +160,7 @@ export function createFileWatches(warn: (message: string) => void, platform: Nod
       }
     },
     close() {
-      held = new Set();
+      held = new Map();
       subscriptions.close();
     },
   };

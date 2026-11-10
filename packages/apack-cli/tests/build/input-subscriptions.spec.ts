@@ -93,6 +93,32 @@ describe('file watches', () => {
     watches.close();
   });
 
+  it('reports a file replaced or deleted before its watch said so, when the next hold closes that watch', () => {
+    const [replaced, deleted] = [known('replaced.ts'), known('deleted.ts')];
+    const receive = { replaced: vi.fn(), deleted: vi.fn() };
+    const watches = createFileWatches(() => {}, 'darwin');
+    watches.hold([{ file: replaced, receive: receive.replaced }, { file: deleted, receive: receive.deleted }]);
+    fs.writeFileSync(`${replaced}.tmp`, 'replaced');
+    fs.renameSync(`${replaced}.tmp`, replaced);
+    fs.rmSync(deleted);
+    watches.hold([{ file: replaced, receive: receive.replaced }]);
+    expect([receive.replaced.mock.calls.length, receive.deleted.mock.calls.length]).toEqual([1, 1]);
+    watches.close();
+  });
+
+  it('reports a replacement once when its watch already said so', () => {
+    const file = known('a.ts');
+    const receive = vi.fn();
+    const watches = createFileWatches(() => {}, 'darwin');
+    watches.hold([{ file, receive }]);
+    fs.writeFileSync(`${file}.tmp`, 'replaced');
+    fs.renameSync(`${file}.tmp`, file);
+    opened[0]!.deliver('rename', 'a.ts');
+    watches.hold([{ file, receive }]);
+    expect(receive).toHaveBeenCalledTimes(1);
+    watches.close();
+  });
+
   it('reports an edit made before a new watch was armed, and nothing when there was none', async () => {
     const [edited, untouched] = [known('edited.ts'), known('untouched.ts')];
     const receive = { edited: vi.fn(), untouched: vi.fn() };
