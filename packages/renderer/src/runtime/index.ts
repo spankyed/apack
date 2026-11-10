@@ -1,8 +1,9 @@
 import { windowPerformance } from './performance.ts';
 // The renderer's side of the SDK's frontend port (bindFeHost): the app shell, the secrets client, the app's
-// settings, the window's client to the API, and the window's registered pack frontends
+// settings, the window's client to the API, the window's registered pack frontends, and its connection to
+// the terminal broker
 import { bindFeHost } from '@apackdev/sdk/runtime';
-import type { HostShell } from '@apackdev/sdk/fe';
+import type { HostShell, _HostBridge } from '@apackdev/sdk/fe';
 import { feClient } from '@/transport/client';
 import { fePacks } from '@/runtime/packs';
 import { secretsClient } from '@/transport/secrets';
@@ -26,5 +27,10 @@ export function bindRendererHost(application: () => HostShell | undefined): void
     settings: settingsPort,
     client: feClient,
     packs: fePacks,
+    terminalViews: () => {
+      const bridge = (window as { electronAPI?: _HostBridge }).electronAPI;
+      if (!bridge) throw new Error('This window has no bridge to the app, so it cannot reach the terminal broker');
+      return bridge.terminal.views();
+    },
   });
 }

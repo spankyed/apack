@@ -121,3 +121,149 @@ describe('what reaches the window', () => {
     expect([...bridge.exposed.keys()]).toEqual(['electronAPI']);
   });
 });
+
+describe('a window\'s connection to the terminal broker', () => {
+  /**
+   * A socket a case holds the other end of, standing in for the broker: what the window sent, and a way to
+   * answer. A real socket, since the bridge's whole job here is what it does with one.
+   */
+  async function broker() {
+    const net = await import('node:net');
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'preload-term-'));
+    const socket = process.platform === 'win32' ? `\\\\.\\pipe\\preload-term-${process.pid}-${Date.now()}` : path.join(directory, 't.sock');
+    const received: Buffer[] = [];
+    let peer: import('node:net').Socket | undefined;
+    const arrived = new Set<() => void>();
+    const server = net.createServer((connection) => {
+      peer = connection;
+      connection.on('data', (chunk) => {
+        received.push(chunk);
+        for (const wake of arrived) wake();
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(socket, resolve));
+    /** Resolves once everything received, joined, satisfies `enough` */
+    const until = (enough: (all: string) => boolean) => new Promise<string>((resolve) => {
+      const check = () => {
+        const all = Buffer.concat(received).toString('latin1');
+        if (!enough(all)) return;
+        arrived.delete(check);
+        resolve(all);
+      };
+      arrived.add(check);
+      check();
+    });
+    return {
+      socket,
+      until,
+      say: (bytes: string | Uint8Array) => { peer!.write(bytes); },
+      hangUp: () => { peer!.destroy(); },
+      close: () => {
+        peer?.destroy();
+        server.close();
+        fs.rmSync(directory, { recursive: true, force: true });
+      },
+    };
+  }
+
+  const GREETING = '{"kind":"hello","protocol":1,"role":"view"}\n';
+
+  async function connected(endpoint: { socket: string; greeting: string } | null) {
+    process.argv = ['electron', 'app'];
+    vi.resetModules();
+    const { contextBridge, ipcRenderer } = await import('../tests/electron-stub');
+    ipcRenderer.syncAnswers.set('terminal:view-endpoint', endpoint);
+    await import('../src/index.ts');
+    const api = contextBridge.exposed.get('electronAPI') as Record<string, any>;
+    const stream = api.terminal.views();
+    const chunks: Uint8Array[] = [];
+    let closed = 0;
+    const woken = new Set<() => void>();
+    stream.onData((chunk: Uint8Array) => { chunks.push(chunk); for (const wake of woken) wake(); });
+    stream.onClose(() => { closed += 1; for (const wake of woken) wake(); });
+    const until = (enough: () => boolean) => new Promise<void>((resolve) => {
+      const check = () => { if (enough()) { woken.delete(check); resolve(); } };
+      woken.add(check);
+      check();
+    });
+    return { stream, until, text: () => Buffer.concat(chunks).toString('latin1'), closed: () => closed };
+  }
+
+  /**
+   * **The greeting is the only thing the bridge reads.** Main supplies the line to send, the broker answers
+   * with one of its own, and from the byte after that the connection is the page's — including whatever
+   * arrived in the same read as the answer.
+   */
+  it('greets the broker with the line main gave it, and hands over what follows the answer', async () => {
+    const far = await broker();
+    try {
+      const near = await connected({ socket: far.socket, greeting: GREETING });
+      expect(await far.until((all) => all.includes('\n'))).toBe(GREETING);
+
+      far.say('{"kind":"hello","protocol":1,"history":1000}\nABC');
+      await near.until(() => near.text().length >= 3);
+      far.say('DEF');
+      await near.until(() => near.text().length >= 6);
+      expect(near.text()).toBe('ABCDEF');
+    } finally { far.close(); }
+  });
+
+  /**
+   * What the page sends before the broker has answered is held. A broker still reading the greeting reads
+   * lines, and the page's first message is not one.
+   */
+  it('holds what the page sends until the broker has answered the greeting', async () => {
+    const far = await broker();
+    try {
+      const near = await connected({ socket: far.socket, greeting: GREETING });
+      near.stream.send(Uint8Array.of(1, 2, 3));
+      await far.until((all) => all.includes('\n'));
+      expect(await far.until(() => true), 'bytes reached the broker ahead of its answer').toBe(GREETING);
+
+      far.say('{"kind":"hello","protocol":1,"history":1000}\n');
+      near.stream.send(Uint8Array.of(4));
+      expect(await far.until((all) => all.length >= GREETING.length + 4)).toBe(`${GREETING}\x01\x02\x03\x04`);
+    } finally { far.close(); }
+  });
+
+  it('is over when the broker refuses the greeting, and nothing of the refusal reaches the page', async () => {
+    const far = await broker();
+    try {
+      const near = await connected({ socket: far.socket, greeting: GREETING });
+      await far.until((all) => all.includes('\n'));
+      far.say('{"kind":"failed","session":null,"code":"HANDSHAKE","message":"no"}\nXYZ');
+      await near.until(() => near.closed() > 0);
+      expect(near.closed()).toBe(1);
+      expect(near.text()).toBe('');
+    } finally { far.close(); }
+  });
+
+  it('is over, once, when the broker goes or the page closes it', async () => {
+    const far = await broker();
+    try {
+      const near = await connected({ socket: far.socket, greeting: GREETING });
+      await far.until((all) => all.includes('\n'));
+      far.say('{"kind":"hello","protocol":1,"history":1000}\n');
+      far.hangUp();
+      await near.until(() => near.closed() > 0);
+      near.stream.close();
+      near.stream.send(Uint8Array.of(9));
+      expect(near.closed()).toBe(1);
+    } finally { far.close(); }
+  });
+
+  /** Main answers nothing when there is no broker: the window is told its terminals have none, not hung */
+  it('is over at once where main has no broker to point at, or nothing is listening there', async () => {
+    const none = await connected(null);
+    await none.until(() => none.closed() > 0);
+
+    const far = await broker();
+    far.close();
+    const refused = await connected({ socket: far.socket, greeting: GREETING });
+    await refused.until(() => refused.closed() > 0);
+    expect([none.closed(), refused.closed()]).toEqual([1, 1]);
+  });
+});

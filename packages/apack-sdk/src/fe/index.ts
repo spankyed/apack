@@ -35,6 +35,7 @@ export { targetIs, TRAIL_CLICK, type TrailClickEvent } from './route-trailer.ts'
 export { getDesignated, hasDesignation } from '../designations/index.ts'
 
 export { secretsClient, type SecretsClient, type SecretsSnapshot } from './secrets-client.ts'
+export { terminalViews, type TerminalViewStream } from './terminal-views.ts'
 export { useSettingsDraft } from './settings-draft.ts'
 export {
   _createFeSettings, useFeatureSettings, useSettingsSave, useSettingsStatus, useAppSettings, usePackSettings,

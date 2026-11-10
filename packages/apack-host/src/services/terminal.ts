@@ -20,7 +20,7 @@ import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolveAppEnvironment, withoutAppProcessEnv } from '@apackdev/sdk/env';
 import type { TerminalColor, TerminalColors, TerminalListeners, TerminalService, TerminalSession } from '@apackdev/sdk/services';
-import { type Broker, type BrokerColors, type BrokerSession, holdBrokerSessions, startBroker } from '../broker/client.ts';
+import { type Broker, type BrokerColors, type BrokerSession, PROTOCOL_VERSION, holdBrokerSessions, startBroker } from '../broker/client.ts';
 
 /**
  * The longest a Unix socket path may be, conservatively.
@@ -172,6 +172,20 @@ export function holdTerminalSessions(): Promise<{ close(): void }> {
     socket: socketPath(),
     env: brokerEnvironment(),
   });
+}
+
+/**
+ * Where a window connects to draw this app's terminals, and the line it greets the broker with.
+ *
+ * A window is the broker's `view`: it asks for no session and ends none, and after this greeting speaks
+ * the broker's view protocol rather than the client's. The greeting is built here so that the protocol's
+ * version is written where the client's is.
+ */
+export function terminalViewEndpoint(): { socket: string; greeting: string } {
+  return {
+    socket: socketPath(),
+    greeting: `${JSON.stringify({ kind: 'hello', protocol: PROTOCOL_VERSION, role: 'view' })}\n`,
+  };
 }
 
 /**

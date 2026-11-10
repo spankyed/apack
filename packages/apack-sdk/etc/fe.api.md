@@ -416,6 +416,10 @@ export interface _HostBridge {
         popout: (surfaceId: string, title?: string) => Promise<void>;
     };
     // (undocumented)
+    terminal: {
+        views: () => TerminalViewStream;
+    };
+    // (undocumented)
     windowControls: {
         minimize: () => void;
         maximize: () => void;
@@ -927,6 +931,19 @@ export const targetIs: (input: {
 }, params: {
     view: string;
 }) => boolean;
+
+// @public
+export function terminalViews(): TerminalViewStream;
+
+// @public
+export interface TerminalViewStream {
+    // (undocumented)
+    close(): void;
+    onClose(listener: () => void): () => void;
+    onData(listener: (chunk: Uint8Array) => void): () => void;
+    // (undocumented)
+    send(bytes: Uint8Array): void;
+}
 
 // @public (undocumented)
 export interface TextEditorExtensions {

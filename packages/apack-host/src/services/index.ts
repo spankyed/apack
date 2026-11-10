@@ -10,10 +10,10 @@ import { createOnboarding } from './onboarding.ts';
 import { HOST } from '../refs.ts';
 import { createLogger } from '@apackdev/sdk/logger';
 import { filesystem } from './filesystem.ts';
-import { createTerminalService, holdTerminalSessions } from './terminal.ts';
+import { createTerminalService, holdTerminalSessions, terminalViewEndpoint } from './terminal.ts';
 
 /** The app's own process holds every terminal session open; see the function's own note for why it is here */
-export { holdTerminalSessions };
+export { holdTerminalSessions, terminalViewEndpoint };
 import { createSettingsService } from './settings.ts';
 import { createSettingsStore } from '../features/settings/be/store.ts';
 

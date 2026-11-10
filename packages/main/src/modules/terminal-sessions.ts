@@ -1,4 +1,5 @@
-import {holdTerminalSessions} from '@apackdev/host/services';
+import {ipcMain} from 'electron';
+import {holdTerminalSessions, terminalViewEndpoint} from '@apackdev/host/services';
 import type {AppModule} from '../AppModule.ts';
 
 /**
@@ -28,6 +29,18 @@ import type {AppModule} from '../AppModule.ts';
 export function holdTerminalSessionsForTheApp(): AppModule {
   return {
     async enable({app}) {
+      // **Where a window finds the broker, and what it says to it first.** A window draws its terminals
+      // from the broker directly, so it has to be told the socket; it is told the greeting too, so the
+      // one place that knows the protocol's version stays the host. Asked as the window opens a
+      // connection rather than given at its creation: the broker may not have been listening then.
+      ipcMain.on('terminal:view-endpoint', event => {
+        try {
+          event.returnValue = terminalViewEndpoint();
+        } catch (error) {
+          console.warn('[terminal] no broker for a window to draw from', error);
+          event.returnValue = null;
+        }
+      });
       try {
         const held = await holdTerminalSessions();
         app.once('will-quit', () => {
