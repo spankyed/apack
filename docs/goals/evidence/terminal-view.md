@@ -205,3 +205,43 @@ path with the far side on this machine.
 - **fish**, and **bash newer than 3.2**, whose `PROMPT_COMMAND` may be an array.
 - **A notification raised with the system**, which needs the window not to have focus.
 
+## Phase 9 — acceptance
+
+2026-11-10. This repository `b9735034ee`, broker `ca45ef1`, view `0628e7f`; the three were read before and
+after each run and had not moved.
+
+### The chain
+
+`npm run chain`, all 32 steps, nothing touched in the three checkouts while it ran. 31 passed in the first
+run, `test:integration` and `test:native` among them. `test:unit:pack` failed with every test it ran
+passing (1,288): the worker running `tests/features/code/be/default-directory.spec.ts` exited, with no
+crash report written. That file passed 5 of 5 alone, and the step passed when the chain was run again
+(the other 31 cached on unchanged inputs). **One worker exit in seven runs of that file, undiagnosed.**
+Its subject is the code feature's git watchers, which this branch does not change.
+
+The run said `vendor/elmdb at 0371481 rather than 4b67670`: the linked elmdb checkout is ahead of its pin,
+so that run built an elmdb CI would not. The strict chain on CI clones the pin.
+
+### Against the baselines
+
+The same commands as phase 0's, lightweight recording, five warmups. The machine was not quiet — another
+project's build and browser tests were running, 65% idle by `check:idle` — and load can lengthen a
+duration and cannot shorten one.
+
+| Scenario | Trials | Before | After |
+|---|---|---|---|
+| `terminal-echo`: a typed character to the frame that painted it | 20 | median 16.7 ms, p90 24.9 ms, max 25.8 ms | median 13.3 ms, p90 14.7 ms, worst 27.5 ms |
+| `terminal-output`, 64 KiB, to the shell's exit | 20, three times | 1,092 ms; renderer tasks 57 ms | 1,083, 1,103 and 1,163 ms; renderer tasks 31 to 34 ms |
+| `terminal-output`, 16 MiB | 5 | 2,312 ms; renderer tasks 647 ms, script 442 ms | 1,921 ms; renderer tasks 159 ms, script 40 ms |
+
+A 64 KiB corpus was 7 messages on the app's event bus and is none: the view painted 5 or 6 frames for it,
+and 65 for 16 MiB where the bus carried 263 messages. What the bus carries during the action now is three
+messages and about 330 bytes, which are the terminal closing.
+
+No measurement is worse than its baseline, so painting stays on the 2D canvas.
+
+**One trial did not complete, once.** In the first of four 64 KiB runs the first warmup trial ended
+*missing-view-ready*: the command typed into the first terminal of a fresh app did not run — two frames
+painted, the shell did not exit. It did not recur in the three runs after (75 trials). Undiagnosed; its
+evidence is `.apack/performance/terminal-output-lightweight-1794344406630`.
+
