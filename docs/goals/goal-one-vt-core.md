@@ -119,7 +119,8 @@ this one's:
 - **Phase B's remaining exit condition is O2, Windows.** `vendor/apack-terminal.rev` is deliberately
   unmoved: bumping it is what makes the monorepo and CI test this core, and CI's Windows mutation job is
   where `tree.rs` is answered.
-- **Phase R has not started**, and should not until O3 is answered: its premise in D2 is wrong as written.
+- **Phase R has not started, and is unblocked.** O3 is answered — the renderer takes `ghostty-web` — so
+  D2 above is the replacement decision and Phase R's work below is written against it.
 - **Phase A has not started**, depending on B and R.
 
 **Four decisions block the rest, and three of them are the user's.** None is a thing to work around:
@@ -128,7 +129,7 @@ this one's:
 |---|---|---|
 | **O1** | — | answered in Phase 0a |
 | **O2** | Phase B's exit on Windows | the Windows VM, and a library built from the signed tarballs since no archive exists from anyone |
-| **O3** | Phase R | a decision: `libghostty-vt` is a parser, not a widget, so D2 as written means writing a terminal renderer |
+| **O3** | — | **answered**: `ghostty-web`, and D2 is retired in its favour |
 | **O4** | Phase B's exit | a decision: the broker's advertised scrollback contract, which this core cannot keep as written |
 
 **O4 is the one that stops `pre-push` going green**, and there is no configuration that avoids it: the
@@ -141,12 +142,25 @@ is why it is a contract question rather than a tuning one.
 **D1 — The core is `libghostty-vt`, pinned to an exact release, on both sides.** One implementation is the
 whole point; a second would restore the problem under a new name.
 
-**D2 — The renderer takes upstream's WebAssembly module, not `ghostty-web`.** Upstream publishes WASM
-modules per release at `release.files.ghostty.org/libghostty-vt/<version>/`, which is "the only place
-releases are published". `coder/ghostty-web` predates that build and carries its own parser; taking it buys
-an xterm-compatible API at the cost of the thing this goal exists for. If an xterm-shaped surface turns out
-to be worth having, it is a shim we write over the same module, in the one file that already owns the
-emulator.
+**D2 — The renderer takes `ghostty-web`.** This replaces the original D2, which said upstream's
+WebAssembly module and not `ghostty-web`, on the ground that an xterm-compatible API would cost "the thing
+this goal exists for". That reasoning had a false premise: `libghostty-vt` is an emulator, not a widget —
+`render.h` hands you a frame's state and leaves the drawing to you — so taking the module alone means
+writing the painter, the input encoding, the selection UI, IME, accessibility and the scrollbar. None of
+that is terminal emulation, and all of it is the largest single piece of work in this goal.
+
+What the goal exists for is **one answer to what a sequence means**, and `ghostty-web` is compiled from
+Ghostty's source with one patch that exposes extra entry points, so the window's emulator stops being an
+independent implementation. Byte-identical parsing on the renderer side buys less than it appears to,
+because the ownership goal already settled that the window's screen is **a replica and never an
+authority** — the broker answers for the screen. Phase B delivers one engine on the side that is the
+authority.
+
+The cost is two Ghostty-derived builds in the tree until `ghostty-web` consumes the official distribution,
+which its README commits to, and a `next` prerelease until it cuts a stable release. Both are recorded with
+the condition for leaving them, and the measured API surface is in
+[evidence](../references/evidence/one-vt-core.md). **The wasm arrives inlined as a base64 data URL**, so
+the renderer needs no `pack://` asset route for it.
 
 **D3 — We own the safe Rust layer over the raw FFI.** The C ABI is 1.0 with strict compatibility promises;
 the community safe wrappers are 0.2.x and say their API is not yet stable. Depending on a pre-1.0 wrapper
@@ -223,7 +237,10 @@ side is declared in one place and asserted (required outcome 4).
 ### Open decisions
 
 
-**O3 — Phase R's premise is wrong as written, and the choice is yours.** Measured 2026-11-09, after 0b.
+**O3 — answered 2026-11-09: the renderer takes `ghostty-web`, and D2 is retired.** The reasoning that
+produced the answer is kept below, because it is what a reader needs to judge the decision rather than
+take it on trust; the package's measured API surface, its costs and the inlined wasm are in
+[evidence](../references/evidence/one-vt-core.md).
 
 D2 says the renderer takes upstream's WebAssembly module rather than `ghostty-web`, and the plan sizes
 Phase R as "one file, 742 lines, plus roughly 35 lines of CSS". **Those two cannot both be true.**

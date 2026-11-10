@@ -471,6 +471,67 @@ written in.
 
 ### What is not done
 
-The both-parsers diff harness, which is the rest of Phase 0a. The link is not yet proven: nothing has been
-compiled against `libghostty-vt.a` from this repository, so every statement above is from headers, signed
-checksums and the published file list rather than from a running binary.
+**O2, which is Windows**, and Phases R and A. Everything above was measured on this Mac; the Windows half
+has its own section below.
+
+## 2026-11-09 — O3 answered: the renderer takes `ghostty-web`, and D2 is retired
+
+O3 asked whether Phase R takes upstream's raw WebAssembly module (D2 as written) or `ghostty-web`. The
+reasoning was recorded with the question; what was missing was the package itself, so it was read rather
+than argued about.
+
+| | measured |
+|---|---|
+| version | `0.4.0` is `latest`, published **2025-12-09**; development is on `next`, `0.4.0-next.21.g640db46`, published **2026-10-28** |
+| licence, dependencies | MIT, **zero** runtime dependencies, `coder/ghostty-web` |
+| size | 2.17 MB unpacked, of which `ghostty-vt.wasm` is 414 KB |
+| provenance | built from Ghostty's source with one patch (`patches/ghostty-wasm-api.patch`) that exposes additional C entry points |
+
+**Its API is xterm.js's, deliberately.** `dist/index.d.ts` is 2,032 lines, and the names are xterm's own:
+`ITerminalAddon`, `ITerminalOptions`, `ITheme`, `IDisposable`, `IEvent`, `IBuffer`, `IBufferCell`,
+`ILinkProvider`. `Terminal` carries `open`, `write(data, callback)`, `writeln`, `paste`, `input`, `resize`,
+`clear`, `reset`, `focus`, `blur`, `loadAddon`, `dispose`, the selection methods, the five `scroll*`
+methods, `attachCustomKeyEventHandler`, `attachCustomWheelEventHandler`, `registerLinkProvider`, and
+`onData`, `onResize`, `onTitleChange`, `onScroll`, `onRender`, `onCursorMove`, `onBell`, `onKey`,
+`onSelectionChange`. So the plan's estimate for Phase R — one file and some CSS — survives contact with the
+package, which is the thing O3 needed to establish.
+
+**Three of the four addons are in the package** and the fourth is the app's already: `FitAddon implements
+ITerminalAddon`; links are `LinkDetector` with `UrlRegexProvider` and `OSC8LinkProvider`, which is more than
+`@xterm/addon-web-links` does, since OSC 8 hyperlinks are a sequence rather than a regex over text;
+unicode11 has no equivalent because it needs none, grapheme clustering being what the core does. Clipboard
+stays on the app's `openLink`/clipboard paths, where the goal wants it.
+
+**It also answers things xterm.js cannot**, which matters for a window whose screen is a replica of the
+broker's: `getMode(mode, isAnsi)`, `hasBracketedPaste()`, `hasFocusEvents()`, `hasMouseTracking()`,
+`getScrollbackLine(offset)` and `getScrollbackLength()`. Today those are inferred in the app or simply not
+known.
+
+### The wasm is inlined, so Phase R needs none of 0b's asset route
+
+`dist/ghostty-web.js` holds `new URL("data:application/wasm;base64,AGFzbQEAAAAB…")`: the 414 KB module is
+base64 in the JavaScript, which is the same Vite library-build behaviour 0b measured from the other side.
+**So the default route needs no file, no MIME type, no receipt entry and no `pack://` request** — which is
+most of what 0b was worried about, and it is worth saying plainly that 0b's asset work is not wasted but is
+also not on Phase R's path. It bought the `application/wasm` MIME entry and the binary-route proof, which a
+pack shipping its own module still needs.
+
+The package also exports `./ghostty-vt.wasm` as a file, and `init()`'s own doc describes constructing a
+`Ghostty` and handing it to `Terminal`, so loading the external module instead is available if the base64
+inflation of the renderer bundle turns out to matter. That is a Phase A measurement, not a Phase R
+decision.
+
+### What it costs, stated rather than discovered later
+
+- **Two Ghostty-derived builds in the tree** until `ghostty-web` consumes the official distribution, which
+  its README commits to. They share lineage, not bytes.
+- **`latest` is eleven months old.** Development is on `next`, twelve days old at the time of writing. A
+  prerelease in the app's dependency list is a real cost, and the condition for leaving it is a stable
+  release or the official-distribution switch, whichever comes first.
+- **The renderer stops being an independent implementation**, which is the point: it replaces a
+  hand-written TypeScript emulator with one compiled from the same source as the broker's. That is what
+  "one core" was protecting — not identical bytes, but one answer to what a sequence means.
+
+Against those: the alternative is writing a terminal widget — painter, input encoding, selection, IME,
+accessibility, scrollbar — none of which is terminal emulation. That is the largest single piece of work in
+the goal and the least related to its purpose.
