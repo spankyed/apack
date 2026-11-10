@@ -31,6 +31,20 @@ const ELMDB_CHECKOUT = (() => {
   }
 })();
 /**
+ * The checkout a window's terminals are drawn with, which the built-in pack bundles.
+ *
+ * **Copied in as files, built.** It is TypeScript, so what the Mac's link built is what Linux runs, and
+ * there is nothing for the container to compile: its `dist/` goes where the link would have pointed.
+ */
+const VIEW_CHECKOUT = (() => {
+  try {
+    return fs.realpathSync(path.join(REPO_ROOT, 'vendor', 'apack-terminal-view'));
+  } catch {
+    process.stderr.write('The terminal view is unavailable: run npm run link:apack-terminal-view.\n');
+    process.exit(1);
+  }
+})();
+/**
  * The Rust checkouts this image installs a toolchain for, which is **the ones the container builds** and not
  * every one `vendor/` links.
  *
@@ -264,7 +278,10 @@ const quote = (arg: string): string => `'${arg.replace(/'/g, `'\\''`)}'`;
  */
 const sync = [
   // The link is the container's own, to its copy of elmdb, where its Linux binding is built before npm resolves it
-  `rsync -a --delete --exclude=/${RUN_LOCK} --exclude=/${CHECKOUT_FILE} --exclude=/vendor/elmdb ${FILTERS.map(quote).join(' ')} /src/ /work/`,
+  `rsync -a --delete --exclude=/${RUN_LOCK} --exclude=/${CHECKOUT_FILE} --exclude=/vendor/elmdb --exclude=/vendor/apack-terminal-view ${FILTERS.map(quote).join(' ')} /src/ /work/`,
+  // The view, as the files its link names on the Mac: see VIEW_CHECKOUT
+  'mkdir -p /work/vendor/apack-terminal-view',
+  'rsync -a --delete --exclude=/node_modules --exclude=/.git /view-src/ /work/vendor/apack-terminal-view/',
   `exec 8>/elmdb/${ELMDB_LOCK}`,
   'if ! flock -n 8; then',
   '  echo "Waiting for another checkout\'s test:linux run to finish syncing the shared elmdb volume…" >&2',
@@ -359,6 +376,7 @@ const child = spawn('docker', [
   'run', '--rm', '--init', '--name', CONTAINER, ...RESOURCE_LIMITS, ...scratchArgs, '--sysctl', 'net.ipv6.conf.all.disable_ipv6=1',
   '-v', `${REPO_ROOT}:/src:ro`, '-v', `${WORK_VOLUME}:/work`, '-v', `${NPM_CACHE_VOLUME}:/root/.npm`,
   '-v', `${ELMDB_CHECKOUT}:/elmdb-src:ro`, '-v', `${ELMDB_VOLUME}:/elmdb`, '-v', `${CARGO_REGISTRY_VOLUME}:/usr/local/cargo/registry`,
+  '-v', `${VIEW_CHECKOUT}:/view-src:ro`,
   ...gitDirMount(),
   ...forwarded.flatMap((key) => ['-e', key]),
   // Set here and never forwarded: the VM counts the host's load as its CPU, so a ceiling held to its size there fires

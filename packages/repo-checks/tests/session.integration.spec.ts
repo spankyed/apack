@@ -11,6 +11,7 @@ let dir: string;
 let repo: string;
 let elmdb: string;
 let apackTerminal: string;
+let apackTerminalView: string;
 const execFileAsync = execFileWhileWorking;
 const RUN = { encoding: 'utf8', timeout: 60_000, maxBuffer: 64 * 1024 * 1024 } as const;
 const git = async (root: string, ...args: string[]) => (await execFileAsync('git', args, { cwd: root, ...RUN })).stdout.trim();
@@ -38,12 +39,23 @@ beforeEach(async () => {
   await git(apackTerminal, 'init', '-b', 'main');
   await git(apackTerminal, 'add', '.');
   await git(apackTerminal, '-c', 'user.name=Session test', '-c', 'user.email=session@example.invalid', 'commit', '-m', 'apack-terminal');
+  // And the apack-terminal-view checkout, the third it links: a manifest naming it, and a `dist/` newer
+  // than everything it is built from, which is what the linker takes for built
+  apackTerminalView = path.join(dir, 'apack-terminal-view');
+  fs.mkdirSync(path.join(apackTerminalView, 'dist'), { recursive: true });
+  fs.writeFileSync(path.join(apackTerminalView, 'package.json'), JSON.stringify({ name: 'apack-terminal-view' }));
+  await git(apackTerminalView, 'init', '-b', 'main');
+  await git(apackTerminalView, 'add', '.');
+  await git(apackTerminalView, '-c', 'user.name=Session test', '-c', 'user.email=session@example.invalid', 'commit', '-m', 'apack-terminal-view');
+  fs.writeFileSync(path.join(apackTerminalView, 'dist', 'index.js'), '');
+  fs.writeFileSync(path.join(apackTerminalView, 'dist', 'index.d.ts'), '');
   fs.writeFileSync(path.join(repo, 'base.txt'), 'base');
   fs.mkdirSync(path.join(repo, 'vendor'));
   fs.writeFileSync(path.join(repo, 'vendor', 'elmdb.rev'), `${await git(elmdb, 'rev-parse', 'HEAD')}\n`);
   fs.writeFileSync(path.join(repo, 'vendor', 'apack-terminal.rev'), `${await git(apackTerminal, 'rev-parse', 'HEAD')}\n`);
+  fs.writeFileSync(path.join(repo, 'vendor', 'apack-terminal-view.rev'), `${await git(apackTerminalView, 'rev-parse', 'HEAD')}\n`);
   // As the repo's own does: the link is the checkout's, never a change to it
-  fs.writeFileSync(path.join(repo, '.gitignore'), 'vendor/elmdb\nvendor/apack-terminal\n');
+  fs.writeFileSync(path.join(repo, '.gitignore'), 'vendor/elmdb\nvendor/apack-terminal\nvendor/apack-terminal-view\n');
   await git(repo, 'add', '.');
   await git(repo, 'commit', '-m', 'Base');
 });
@@ -78,7 +90,7 @@ if (process.argv[3] === 'chain') {
     const { stdout, stderr } = await execFileAsync(process.execPath, [path.join(REPO_ROOT, 'scripts/session.mjs'), ...args], {
       cwd: repo, ...RUN, env: {
         ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}`,
-        SESSION_MODE: mode, SESSION_COMMANDS: path.join(dir, 'commands'), SESSION_SOURCE: repo, ELMDB_DIR: elmdb, APACK_TERMINAL_DIR: apackTerminal,
+        SESSION_MODE: mode, SESSION_COMMANDS: path.join(dir, 'commands'), SESSION_SOURCE: repo, ELMDB_DIR: elmdb, APACK_TERMINAL_DIR: apackTerminal, APACK_TERMINAL_VIEW_DIR: apackTerminalView,
       },
     });
     return { status: 0, stdout, stderr };

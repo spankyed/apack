@@ -52,6 +52,7 @@ jobs:
       - uses: ./.github/actions/apack-terminal
         with:
           build: 'true'
+      - uses: ./.github/actions/apack-terminal-view
       - name: Install dependencies
         env:
           GITHUB_TOKEN: ${{ github.token }}
