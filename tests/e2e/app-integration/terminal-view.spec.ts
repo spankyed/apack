@@ -114,3 +114,28 @@ test('a paste that could run a command is shown to the person, and runs nothing 
   await expect.poll(() => screen(appPage, terminalId), { timeout: 20_000 }).toContain('aft3er');
   expect(await screen(appPage, terminalId), 'the refused paste ran').not.toContain('IN42J');
 });
+
+/**
+ * What a program prints is drawn from its session and is no event. What it *does* — here, asking for text
+ * on the clipboard — is one, and reaches the surface from the system.
+ */
+test('what a program asks of the world outside its screen reaches the surface', async ({ appPage }) => {
+  await appPage.evaluate((code) => {
+    const win = window as unknown as DrivenWindow & {
+      __asked?: string[];
+      applicationState: { system: { inspect(observer: (inspection: { type: string; actorRef: { id: string }; event: { type: string; data?: { text?: string } } }) => void): void } };
+    };
+    win.__asked = [];
+    win.applicationState.system.inspect((inspection) => {
+      if (inspection.type === '@xstate.event' && inspection.actorRef?.id === code && inspection.event.type === 'terminal.CLIPBOARD') {
+        win.__asked!.push(inspection.event.data?.text ?? '');
+      }
+    });
+  }, CODE);
+  const terminalId = await openTerminal(appPage);
+
+  await type(appPage, terminalId, `printf '\\033]52;c;${Buffer.from('copied-by-a-program').toString('base64')}\\007'\n`);
+
+  await expect.poll(() => appPage.evaluate(() => (window as unknown as { __asked?: string[] }).__asked ?? []), { timeout: 20_000 })
+    .toContain('copied-by-a-program');
+});
