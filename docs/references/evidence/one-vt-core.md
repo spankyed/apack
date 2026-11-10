@@ -1180,3 +1180,27 @@ A smaller note with them: because the documentation tree is an input to two step
 for a goal invalidates the gate for that goal**. The sequence that works is to take the chain on a
 quiescent tree and then write, which is what the 361s run was; the alternative is a step whose declared
 inputs do not include the prose about it.
+
+
+## 2026-11-09 — The latency could not be taken, and the tooling is what says so
+
+A second attempt at a citable `terminal-open` median was made after the gates were green, this time with
+the machine's own gate in front of it: a waiter polling `npm run check:idle` every thirty seconds, which
+would take three runs of twenty trials as soon as the machine was quiet enough to time on.
+
+```
+GAVE UP: machine never went quiet within 25 minutes
+```
+
+`check:idle` refused throughout — *"0% idle — too busy to time a latency on; a latency needs 70%"* — at
+load averages between 102 and 152, from work that is not this goal's. A spot check after the load fell to
+33 refused as well.
+
+**So the figure is not "not measured", it is "the repository's gate for measuring declined for
+twenty-five minutes".** That is the honest record and it is a stronger one: the earlier four runs are
+exactly what taking the reading anyway produces, a median spread across eighty per cent of itself.
+
+What stands unchanged is the floor, which is the one statement load cannot have manufactured: **15.8 ms
+observed against the baseline's best of 18**, and attaching a terminal did not get slower. Anyone wanting
+the median has the method — the scenario, the mode, the trial count and the baseline's conditions are all
+above — and needs only a machine that `check:idle` accepts.
