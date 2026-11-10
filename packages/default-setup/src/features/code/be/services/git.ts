@@ -1,14 +1,38 @@
-import { execFile } from 'child_process'
-import { promisify } from 'util'
 import * as path from 'path'
 import * as fs from 'fs/promises'
 import type { GitStatusFile, StashEntry, CommitLogEntry } from '../types.ts'
 import { createLogger } from '@apackdev/sdk/logger'
+import { execFileWhileWorking } from '@apackdev/sdk/progress'
 import { agentChildEnvironment } from './shell-environment.ts'
 
 const logger = createLogger('git')
 
-const execFileAsync = promisify(execFile)
+/**
+ * A branch, tag or other ref a caller named, as an argument git will read as a ref.
+ *
+ * **A name that begins with a dash is an option to git, whatever the caller meant by it**: `--hard` given as a
+ * commit resets the working tree, and `--upload-pack=…` given as a branch names a program to run. Names reach
+ * here from events and from a pull request's data, so the refusal is here, where the argument is built.
+ */
+function refArgument(name: string, what = 'ref'): string {
+  // eslint-disable-next-line no-control-regex
+  if (!name || name.startsWith('-') || /[\s\x00-\x1f\x7f]/.test(name)) {
+    throw new Error(`Invalid ${what}: ${JSON.stringify(name)}`)
+  }
+  return name
+}
+
+/** A stash a caller named by its position in the list */
+function stashArgument(index: number): string {
+  if (!Number.isInteger(index) || index < 0) throw new Error(`Invalid stash index: ${JSON.stringify(index)}`)
+  return `stash@{${index}}`
+}
+
+/** A commit a caller named by its hash, whole or abbreviated */
+function commitArgument(hash: string): string {
+  if (!/^[0-9a-fA-F]{4,64}$/.test(hash)) throw new Error(`Invalid commit hash: ${JSON.stringify(hash)}`)
+  return hash
+}
 
 /**
  * What every git child runs with. No credential prompt, since nobody is at a terminal to answer one; and no
@@ -300,7 +324,9 @@ export class GitRepository {
       const colorlessArgs = ['-c', 'color.ui=never', ...args]
 
       try {
-        const { stdout } = await execFileAsync('git', colorlessArgs, {
+        // Ended when it stops working, not when a clock runs out: a fetch stalled on the network would
+        // otherwise hold this repository's queue, and every later command with it, until the app restarts
+        const { stdout } = await execFileWhileWorking('git', colorlessArgs, {
           cwd: this.workingDirectory,
           env: gitEnvironment(),
           maxBuffer: 10 * 1024 * 1024, // 10MB buffer limit
@@ -753,6 +779,7 @@ export class GitRepository {
     }
 
     try {
+      refArgument(branch, 'branch')
       const ref = filePath.includes(':') || filePath.startsWith('-')
         ? `${branch}:./${filePath}`
         : `${branch}:${filePath}`
@@ -773,20 +800,21 @@ export class GitRepository {
   private executeGitCommandBinary(args: string[]): Promise<Buffer> {
     return this.enqueueCommand(async () => {
       const colorlessArgs = ['-c', 'color.ui=never', ...args]
-      const { stdout } = await execFileAsync('git', colorlessArgs, {
+      // Read as latin1, which maps each byte to one character and back, so the bytes survive a text channel
+      const { stdout } = await execFileWhileWorking('git', colorlessArgs, {
         cwd: this.workingDirectory,
         env: gitEnvironment(),
         maxBuffer: 10 * 1024 * 1024,
-        encoding: 'buffer' as any
+        encoding: 'latin1'
       })
-      return stdout as unknown as Buffer
+      return Buffer.from(stdout, 'latin1')
     })
   }
 
   async stageFiles(filePaths: string[]): Promise<void> {
     if (filePaths.length === 0) return
     return this.withWriteFlag(async () => {
-      const result = await this.executeGitCommand(['add', ...filePaths])
+      const result = await this.executeGitCommand(['add', '--', ...filePaths])
       if (!result.success) {
         throw new Error(result.error || 'Failed to stage files')
       }
@@ -797,7 +825,7 @@ export class GitRepository {
   async unstageFiles(filePaths: string[]): Promise<void> {
     if (filePaths.length === 0) return
     return this.withWriteFlag(async () => {
-      const result = await this.executeGitCommand(['reset', 'HEAD', ...filePaths])
+      const result = await this.executeGitCommand(['reset', 'HEAD', '--', ...filePaths])
       if (!result.success) {
         throw new Error(result.error || 'Failed to unstage files')
       }
@@ -826,7 +854,7 @@ export class GitRepository {
           // File was added by stash/merge — delete it and clean the index entry
           const fullPath = path.join(this.workingDirectory, filePath)
           await fs.unlink(fullPath)
-          await this.executeGitCommand(['rm', '--cached', '--force', filePath])
+          await this.executeGitCommand(['rm', '--cached', '--force', '--', filePath])
         }
       } else {
         const result = await this.executeGitCommand(['checkout', '--', filePath])
@@ -877,7 +905,7 @@ export class GitRepository {
         for (const p of newFiles) {
           const fullPath = path.join(this.workingDirectory, p)
           await fs.unlink(fullPath)
-          await this.executeGitCommand(['rm', '--cached', '--force', p])
+          await this.executeGitCommand(['rm', '--cached', '--force', '--', p])
         }
       }
 
@@ -904,7 +932,7 @@ export class GitRepository {
       if (!result.success) {
         throw new Error(result.error || `Failed to resolve conflict with ${strategy}`)
       }
-      await this.executeGitCommand(['add', filePath])
+      await this.executeGitCommand(['add', '--', filePath])
       this.markSnapshotStale()
     })
   }
@@ -1089,7 +1117,7 @@ export class GitRepository {
     const target = targetBranch || 'HEAD'
     
     // Get the list of changed files between branches with NUL termination and rename detection
-    const result = await this.executeGitCommand(['diff', '--name-status', '-z', '-M', '-C', `${baseBranch}...${target}`])
+    const result = await this.executeGitCommand(['diff', '--name-status', '-z', '-M', '-C', `${refArgument(baseBranch, 'base branch')}...${refArgument(target, 'branch')}`])
     if (!result.success) {
       throw new Error(result.error || 'Failed to get branch diff')
     }
@@ -1136,6 +1164,8 @@ export class GitRepository {
     if (!/^[a-zA-Z0-9._/-]+$/.test(baseBranch) || !/^[a-zA-Z0-9._/-]+$/.test(target)) {
       throw new Error('Invalid branch name')
     }
+    refArgument(baseBranch, 'base branch')
+    refArgument(target, 'branch')
     
     const result = await this.executeGitCommand(['diff', '--binary', '-M', `${baseBranch}...${target}`, '--', filePath])
     if (!result.success) {
@@ -1152,10 +1182,10 @@ export class GitRepository {
     
     if (filePath.includes(':') || filePath.startsWith('-')) {
       // Use the rev:./path syntax which is safer for special characters
-      result = await this.executeGitCommand(['show', `${branch}:./${filePath}`])
+      result = await this.executeGitCommand(['show', `${refArgument(branch, 'branch')}:./${filePath}`])
     } else {
       // Standard format for normal paths
-      result = await this.executeGitCommand(['show', `${branch}:${filePath}`])
+      result = await this.executeGitCommand(['show', `${refArgument(branch, 'branch')}:${filePath}`])
     }
     
     if (!result.success) {
@@ -1167,13 +1197,13 @@ export class GitRepository {
 
   async fetchRemoteBranch(branch: string): Promise<void> {
     return this.withWriteFlag(async () => {
-      await this.executeGitCommand(['fetch', 'origin', branch])
+      await this.executeGitCommand(['fetch', 'origin', refArgument(branch, 'branch')])
     })
   }
 
   async deleteRemoteBranch(branch: string): Promise<void> {
     return this.withWriteFlag(async () => {
-      const result = await this.executeGitCommand(['push', 'origin', '--delete', branch])
+      const result = await this.executeGitCommand(['push', 'origin', '--delete', refArgument(branch, 'branch')])
       if (!result.success) {
         throw new Error(result.error || 'Failed to delete remote branch')
       }
@@ -1221,7 +1251,7 @@ export class GitRepository {
     }
     
     // Validate branch name to prevent command injection
-    if (!/^[a-zA-Z0-9._/-]+$/.test(branchName)) {
+    if (branchName.startsWith('-') || !/^[a-zA-Z0-9._/-]+$/.test(branchName)) {
       throw new Error('Invalid branch name. Branch names can only contain letters, numbers, dots, underscores, hyphens, and forward slashes.')
     }
     
@@ -1446,7 +1476,7 @@ export class GitRepository {
 
   async stashApply(index: number): Promise<void> {
     return this.withWriteFlag(async () => {
-      const result = await this.executeGitCommand(['stash', 'apply', `stash@{${index}}`])
+      const result = await this.executeGitCommand(['stash', 'apply', stashArgument(index)])
       if (!result.success) {
         if (this.isStashConflict(result)) {
           // Stash was applied — unmerged files now exist. Refresh cache so
@@ -1462,7 +1492,7 @@ export class GitRepository {
 
   async stashPop(index: number): Promise<void> {
     return this.withWriteFlag(async () => {
-      const result = await this.executeGitCommand(['stash', 'pop', `stash@{${index}}`])
+      const result = await this.executeGitCommand(['stash', 'pop', stashArgument(index)])
       if (!result.success) {
         if (this.isStashConflict(result)) {
           // `git stash pop` with conflicts leaves the stash in place and
@@ -1484,7 +1514,7 @@ export class GitRepository {
 
   async stashDrop(index: number): Promise<void> {
     return this.withWriteFlag(async () => {
-      const result = await this.executeGitCommand(['stash', 'drop', `stash@{${index}}`])
+      const result = await this.executeGitCommand(['stash', 'drop', stashArgument(index)])
       if (!result.success) {
         throw new Error(result.error || 'Failed to drop stash')
       }
@@ -1558,11 +1588,11 @@ export class GitRepository {
     return this.withWriteFlag(async () => {
       const args = ['worktree', 'add']
       if (createBranch && branch) {
-        args.push('-b', branch, wtPath)
+        args.push('-b', refArgument(branch, 'branch'), '--', wtPath)
       } else if (branch) {
-        args.push(wtPath, branch)
+        args.push('--', wtPath, refArgument(branch, 'branch'))
       } else {
-        args.push(wtPath)
+        args.push('--', wtPath)
       }
 
       const result = await this.executeGitCommand(args)
@@ -1577,7 +1607,7 @@ export class GitRepository {
     return this.withWriteFlag(async () => {
       const args = ['worktree', 'remove']
       if (force) args.push('--force')
-      args.push(wtPath)
+      args.push('--', wtPath)
 
       const result = await this.executeGitCommand(args)
       if (!result.success) {
@@ -1589,7 +1619,7 @@ export class GitRepository {
   async getCommitsBetweenBranches(baseBranch: string, targetBranch = 'HEAD'): Promise<{ subject: string; body: string }[]> {
     const separator = '---COMMIT_SEP---'
     const result = await this.executeGitCommand([
-      'log', `${baseBranch}..${targetBranch}`,
+      'log', `${refArgument(baseBranch, 'base branch')}..${refArgument(targetBranch, 'branch')}`,
       `--format=%s${separator}%b${separator}`,
       '--reverse'
     ])
@@ -1643,7 +1673,7 @@ export class GitRepository {
 
   async revertCommit(hash: string): Promise<void> {
     return this.withWriteFlag(async () => {
-      const result = await this.executeGitCommand(['revert', hash, '--no-edit'])
+      const result = await this.executeGitCommand(['revert', '--no-edit', commitArgument(hash)])
       if (!result.success) {
         throw new Error(result.error || `Failed to revert commit ${hash}`)
       }
@@ -1653,7 +1683,7 @@ export class GitRepository {
 
   async resetToCommit(hash: string): Promise<void> {
     return this.withWriteFlag(async () => {
-      const result = await this.executeGitCommand(['reset', hash])
+      const result = await this.executeGitCommand(['reset', commitArgument(hash)])
       if (!result.success) {
         throw new Error(result.error || `Failed to reset to commit ${hash}`)
       }
