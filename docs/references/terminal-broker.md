@@ -31,17 +31,24 @@ is a benefit of leaving the API process rather than a reason to choose a languag
 The second layer exists because a session's state must not depend on a window being alive to hold it: a
 session nobody is drawing still has a screen, and `Request::Screen` answers it.
 
-**Both the broker and the renderer parse the same bytes, and only one is right.** The renderer keeps xterm.js
-because it owns interaction — selection, reflow, IME — and nothing in the app may read that copy as a fact.
-The broker is the authority and is fed before the bytes leave for the renderer, which is the only direction in
-which a disagreement is merely stale rather than wrong.
+**Both the broker and the renderer parse the same bytes, and only one is right.** The renderer parses because
+it owns interaction — selection, reflow, IME — and nothing in the app may read that copy as a fact. The broker
+is the authority and is fed before the bytes leave for the renderer, which is the only direction in which a
+disagreement is merely stale rather than wrong.
+
+That holds whatever each side parses with, and **both now parse with `libghostty-vt`**: the broker links the
+release's static library, and the window draws with the same release's WebAssembly build through
+`ghostty-web`. So the two cannot disagree about what a sequence *means* — which does not make the window's
+copy an authority, because it is still a replica of a screen the broker owns, and a window is not always
+there.
 
 **A terminal answers what a program asks it, and the broker is what answers.** ConPTY's first act is a
 cursor-position request (`ESC [ 6 n`) and it waits for the reply before initialising — so on Windows a
-session nobody answers never starts. In the app xterm.js replies, which would make a terminal with a window
-work and one without never start: exactly the independence the broker exists for, false. `alacritty_terminal`
-computes those replies and the reader thread writes them back. A POSIX pty asks nothing, which is why this
-was invisible until the suite first ran on Windows.
+session nobody answers never starts. The window's emulator replies too, which would make a terminal with a
+window work and one without never start: exactly the independence the broker exists for, false. The broker's
+core computes those replies — collected through `libghostty-vt`'s write-to-pty callback — and the reader
+thread writes them back. A POSIX pty asks nothing, which is why this was invisible until the suite first ran
+on Windows.
 
 **A shell's exit is waited for, not inferred from its output ending.** A POSIX pty gives EOF on the master
 when the last slave closes; a ConPTY does not, because the broker still holds the pseudoconsole. The exit is
