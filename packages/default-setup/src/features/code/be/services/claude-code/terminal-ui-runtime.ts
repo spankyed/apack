@@ -1,4 +1,3 @@
-import { isClaudeNativeInterruption } from '../../../common/native-interruption.ts'
 import { claudeTerminalChromeSetupRuntime } from './terminal-chrome-setup-runtime.ts'
 import { claudeTerminalHelperPolicyRuntime } from './terminal-helper-policy-runtime.ts'
 import { CLAUDE_UI_PROMPT_RPC_SUBTYPES, CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES } from './ui-text-limits.ts'
@@ -51,7 +50,7 @@ import {stripVTControlCharacters} from 'node:util';
 import {readFileSync} from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
 const nativeUiTextMessageMaxBytes=${CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES};
-const nativeInterruptionMessage=${isClaudeNativeInterruption.toString()};
+async function nativeInterruptionModule(){return await import('/$bunfs/root/chunk-ev1xcp32.js');}
 const nativeUiPromptRpcSubtypes=new Set(${JSON.stringify(CLAUDE_UI_PROMPT_RPC_SUBTYPES)});
 const configUrl=new URL('./observer.json',import.meta.url),config=JSON.parse(readFileSync(configUrl,'utf8'));
 ${claudeTerminalHelperPolicyRuntime}
@@ -421,12 +420,13 @@ function installHosts(n){
  n.runtime.Zao(wrappedContext);
 }
 let preparedPrompt;
-function promptOutcome(n,id){
+async function promptOutcome(n,id){
+ const interruptions=await nativeInterruptionModule();
  if(!preparedPrompt||preparedPrompt.id!==id)return {};
  const messages=(originalContext??n.runtime.ey())?.messages?.()??[];
  const message=messages.findLast(row=>row.promptSubmitEnding&&!preparedPrompt.before.has(row.uuid));
  if(!message){
-  const candidates=messages.filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true&&!nativeInterruptionMessage(row)&&!preparedPrompt.before.has(row.uuid)&&!(Array.isArray(row.message?.content)&&row.message.content.some(block=>block.type==='tool_result')));
+  const candidates=messages.filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true&&!interruptions.Sh(row)&&!preparedPrompt.before.has(row.uuid)&&!(Array.isArray(row.message?.content)&&row.message.content.some(block=>block.type==='tool_result')));
   if(candidates.length!==1)return {};
   const row=candidates[0],content=typeof row.message.content==='string'?[{type:'text',text:row.message.content}]:row.message.content;
   return {accepted:{uuid:row.uuid,door:'prompt',origin:row.origin??{kind:'native'},message:{type:'user',content}}};
@@ -814,9 +814,10 @@ async function control(request,abort){
   const limits=await import('/$bunfs/root/chunk-2bb0j573.js');
   const billing=limits.xme()?{info:limits.ha(),observedAt:limits.HFs()}:null;
   if(request.policy_only===true)return {...facts,privateHooksSuppressed,preview,billing,transcriptPath:n.runtime.Cf(sessionId),activity,managedTasks:nativeManagedTasks(activityContext.taskRegistry),mcpTasks:nativeMcpTasks(n,activityContext.taskRegistry),shells:nativeShellTasks(activityContext.taskRegistry),workflows:nativeWorkflowTasks(n,activityContext.taskRegistry),focus:nativeFocusProjection(n,facts)??null,...helperState};
+  const interruptions=await nativeInterruptionModule();
   const context=binding.toolContext(abort),messages=binding.messages(),usage=await n.runtime.Hco({},'apack native owner');
   // Frozen native her: exclude synthetic/meta/virtual tool-result inputs from the human turn count.
-  const turns=messages.filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true&&!nativeInterruptionMessage(row)&&!(Array.isArray(row.message?.content)&&row.message.content.some(block=>block.type==='tool_result'))).length;
+  const turns=messages.filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true&&!interruptions.Sh(row)&&!(Array.isArray(row.message?.content)&&row.message.content.some(block=>block.type==='tool_result'))).length;
   const turn=n.runtime.lpe();
   return {sessionId,view,privateHooksSuppressed,busy:context.turnActivity.getSnapshot()===true,transcriptPath:n.runtime.Cf(sessionId),metadata:{permissionMode:context.getAppState().toolPermissionContext.mode,prePlanMode:context.getAppState().toolPermissionContext.prePlanMode,cwd:paths.ce(),model:binding.model(),modelSelection:context.getAppState().mainLoopModelForSession??context.getAppState().mainLoopModel??'default',turns,startedAt:usage.startedAt,totalCostUsd:usage.cost.usd},...helperState,shellPrefix:process.env.CLAUDE_CODE_SHELL_PREFIX??null,turn:turn?{id:turn.turnId,cancelled:turn.cancelled()}:null,managedTasks:nativeManagedTasks(context.taskRegistry),mcpTasks:nativeMcpTasks(n,context.taskRegistry),shells:nativeShellTasks(context.taskRegistry),workflows:nativeWorkflowTasks(n,context.taskRegistry),taskFacts:Object.values(context.taskRegistry.all()).flatMap(task=>{const identity=n.runtime.flt(task);return identity?[{...identity,status:task.status,isIdle:task.isIdle===true,finalizing:task.finalizing===true,awaitingPlanApproval:task.awaitingPlanApproval===true,keepaliveReasons:[...task.keepaliveReasons??[]]}]:[]})};
  }
