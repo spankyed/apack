@@ -120,6 +120,10 @@ Each ends in something checked. A phase is not started on a red one.
 
 ## Current handoff
 
-- **Source state.** Branches created at monorepo `6a5b677019`, broker `102ca53`, view `640db46`. No code yet.
-- **Running.** Phase 0: the broker's gate over `facc376..102ca53`.
-- **Next.** The chain on this branch's base; the drive of the window fixes; the two new scenarios.
+- **Evidence.** [evidence/terminal-view.md](evidence/terminal-view.md).
+- **Phase 0 is done.** The broker's gate had a hole and two survivors, all three fixed on the broker's
+  branch; the window's fixes are reproduced and proven in the real app; the baselines are taken. One
+  integration spec outside this goal stalls on a busy machine and is recorded there.
+- **View** (`apack-terminal-view`): the contract (`src/source.ts`), row store, viewport, drawing, 2D painter,
+  the view itself and the selection, against a fake source.
+- **Next.** Phase 1: the wire format in the broker, its TypeScript codec, and vectors both read.
