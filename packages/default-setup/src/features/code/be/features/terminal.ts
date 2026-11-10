@@ -8,6 +8,8 @@ import { setup, assign, fromPromise } from 'xstate'
 
 import { terminalService } from '../services/terminal.ts'
 import type { TerminalInfo } from '../types.ts'
+import { cwdAsReported } from '../utils/osc-cwd.ts'
+import type { TerminalEvent } from '@apackdev/sdk/services'
 import { createLogger, reportError } from '@apackdev/sdk/logger';
 import { onConnectionEnded } from '@apackdev/sdk/events';
 import type { Reply } from '@apackdev/sdk/events';
@@ -37,7 +39,6 @@ export type Event =
   | { type: 'terminal.RESTART_TERMINAL'; terminalId: string }
   | { type: 'terminal.TERMINAL_INPUT'; terminalId: string; data: string }
   | { type: 'terminal.RESIZE_TERMINAL'; terminalId: string; cols: number; rows: number; cellWidth?: number; cellHeight?: number }
-  | { type: 'terminal.OUTPUT_DRAWN'; terminalId: string; position: number }
   | { type: 'terminal.STOPPED_FITTING'; terminalId: string }
   | { type: 'terminal.RENAME_TERMINAL'; terminalId: string; customTitle: string }
   | { type: 'terminal.OPENED'; data: TerminalInfo }
@@ -47,7 +48,8 @@ export type Event =
   | { type: 'GET_CODE_START' };
 
 /** A terminal's news, for every window showing the code surface: what its process did, never a listing */
-type TerminalNewsType = 'terminal.CWD_CHANGED' | 'terminal.OUTPUT' | 'terminal.CLOSED' | 'terminal.CREATED'
+type TerminalNewsType = 'terminal.CWD_CHANGED' | 'terminal.CLIPBOARD' | 'terminal.BELL' | 'terminal.NOTIFIED'
+  | 'terminal.PROGRESS' | 'terminal.TITLED' | 'terminal.CLOSED' | 'terminal.CREATED'
   | 'terminal.CRASHED' | 'terminal.RESTARTED' | 'terminal.RESIZED'
 type TerminalNews = Extract<OutgoingTerminalEvents, { type: TerminalNewsType }>
 
@@ -80,48 +82,47 @@ export function startTerminalSizing(): () => void {
 }
 
 /**
- * What each terminal's shell last reported of the commands it has finished, to tell a prompt that follows a
- * command from any other. The first reading of a terminal is where it stands, not a command ending: a session
- * taken up after a restart has finished commands this app never saw.
- */
-const commandsFinished = new Map<string, number>()
-
-/**
- * Where a terminal's output and exit go — **given to the service before the session exists**, not registered
- * after it returns, which is F8: whatever the shell wrote first used to have nowhere to go and was dropped.
+ * Where a terminal's news and its exit go — **given to the service before the session exists**, not
+ * registered after it returns, so nothing a shell does first has nowhere to go.
  */
 const terminalHandlers = {
-  onData(terminalId: string, data: string) {
-    // **The markers say to ask; the broker says what they said.** Two bytes decide it — every sequence that
-    // carries a directory begins `ESC ]` — and the answer comes from the one parser that sees the whole
-    // stream. Matching them here was a second parser for one fact, over the highest-frequency feed the app
-    // has, and the copy that loses a sequence split across two reads.
-    if (data.includes('\x1b]')) {
-      void terminalService.reportedFacts(terminalId)
-        .then(facts => {
-          if (!facts) return
-          // A command that finished may have changed the repository or an open file with no file event for it
-          const before = commandsFinished.get(terminalId)
-          commandsFinished.set(terminalId, facts.finished)
-          if (before !== undefined && before !== facts.finished) sendToSystem('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES' })
-
-          if (facts.cwd === undefined) return
-          const moved = terminalService.updateCwd(terminalId, facts.cwd)
-          if (moved) {
-            emitToFrontend({ type: 'terminal.CWD_CHANGED', data: { terminalId, cwd: moved.cwd, title: moved.title } })
-          }
-        })
-        .catch(error => { logger.error(`Could not read where ${terminalId}'s shell is`, { error }) })
+  onEvent(terminalId: string, event: TerminalEvent) {
+    switch (event.kind) {
+      // A command that finished may have changed the repository or an open file with no file event for it
+      case 'commandFinished':
+        sendToSystem('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES' })
+        break
+      case 'cwdChanged': {
+        // Shaped for this platform: an OSC 7 URL gives `/C:/Users/...` on Windows, which nothing can open
+        const cwd = cwdAsReported(event.cwd)
+        const moved = cwd === undefined ? undefined : terminalService.updateCwd(terminalId, cwd)
+        if (moved) emitToFrontend({ type: 'terminal.CWD_CHANGED', data: { terminalId, cwd: moved.cwd, title: moved.title } })
+        break
+      }
+      // **A claim, handed to the windows to act on.** The program asked; a window that has the person's
+      // attention is where putting text on their clipboard, or telling them something, happens
+      case 'clipboard':
+        emitToFrontend({ type: 'terminal.CLIPBOARD', data: { terminalId, text: event.text } })
+        break
+      case 'bell':
+        emitToFrontend({ type: 'terminal.BELL', data: { terminalId } })
+        break
+      case 'notification':
+        emitToFrontend({ type: 'terminal.NOTIFIED', data: { terminalId, title: event.title, body: event.body } })
+        break
+      case 'progress':
+        emitToFrontend({ type: 'terminal.PROGRESS', data: { terminalId, state: event.state, percent: event.percent } })
+        break
+      case 'title':
+        emitToFrontend({ type: 'terminal.TITLED', data: { terminalId, title: event.title } })
+        break
+      // The shell saying a command began is the start of nothing this feature tracks
+      case 'commandStarted':
+        break
     }
-
-    // **Counted as it leaves**, so a window can say how far it has drawn and a program writing faster than
-    // a window draws is made to wait rather than buffered here (`OutputFlow`)
-    const position = terminalService.outputSent(terminalId, data.length)
-    emitToFrontend({ type: 'terminal.OUTPUT', data: { terminalId, data, position } })
   },
 
   onExit(terminalId: string) {
-    commandsFinished.delete(terminalId)
     try {
       emitToFrontend({ type: 'terminal.CLOSED', data: { terminalId } })
     } catch (error) {
@@ -270,15 +271,6 @@ export const terminalSystem = setup({
       }
     },
 
-    /**
-     * A window says how far it has drawn a terminal's output, which is what lets a paused session be read
-     * again. `client` is the connection it arrived on; with none there is no window to count.
-     */
-    outputDrawn: ({ event, client }) => {
-      const ev = event as { type: 'terminal.OUTPUT_DRAWN'; terminalId: string; position: number }
-      if (client !== undefined) terminalService.outputDrawn(ev.terminalId, client, ev.position)
-    },
-
     resizeTerminal: ({ event, reply, client }) => {
       const ev = event as {
         type: 'terminal.RESIZE_TERMINAL'; terminalId: string; cols: number; rows: number
@@ -409,9 +401,6 @@ export const terminalSystem = setup({
     },
     'terminal.RESIZE_TERMINAL': {
       actions: 'resizeTerminal'
-    },
-    'terminal.OUTPUT_DRAWN': {
-      actions: 'outputDrawn'
     },
     'terminal.STOPPED_FITTING': {
       actions: 'stoppedFitting'

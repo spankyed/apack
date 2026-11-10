@@ -10,7 +10,7 @@
 // So fidelity lives here once. A case records what it cares about by reading the slice it wants off the
 // returned object; nothing is per-spec except which slice it reads.
 import { mockService } from '@apackdev/testing/harness'
-import type { TerminalCellSize, TerminalColors, TerminalListeners, TerminalSession, TerminalSignal, TerminalSignalScope } from '@apackdev/sdk/services'
+import type { TerminalCellSize, TerminalColors, TerminalEvent, TerminalListeners, TerminalSession, TerminalSignal, TerminalSignalScope } from '@apackdev/sdk/services'
 
 /** The options the service was opened with, whole, so a case reads the field it is about */
 export interface OpenOptions {
@@ -33,6 +33,8 @@ export interface OpenedSession {
    * nowhere to go. A service that registered them afterwards hands this `false`.
    */
   listenersGivenAtOpen: boolean
+  /** Whether the session was opened to be sent its bytes, which one a window draws is not */
+  asksForBytes: boolean
 }
 
 export interface RecordingBroker {
@@ -58,8 +60,8 @@ export interface RecordingBroker {
    * script do not.
    */
   endShell(id: string, code: number | null, signal?: string | null): void
-  /** Bytes arriving from a session's shell */
-  emit(id: string, data: string): void
+  /** The session's program did something that is not on its screen, which its holder is told as it happens */
+  happens(id: string, event: TerminalEvent): void
   /** The sessions the broker still has: opened and not yet ended */
   readonly live: readonly string[]
   /** The sessions `adopt()` was asked for, in order, whether or not the broker still had them */
@@ -178,7 +180,11 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
       const pid = pidBase + next
       listening.set(id, listeners)
       live.add(id)
-      opened.push({ id, pid, options, listenersGivenAtOpen: typeof listeners?.onOutput === 'function' })
+      opened.push({
+        id, pid, options,
+        listenersGivenAtOpen: typeof listeners?.onEvent === 'function',
+        asksForBytes: typeof listeners?.onOutput === 'function',
+      })
       return handle(id, pid)
     },
 
@@ -212,11 +218,15 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
       live.delete(id)
       listenersFor(id).onExit(code, signal)
     },
-    emit: (id, data) => listenersFor(id).onOutput(data),
+    happens: (id, event) => listenersFor(id).onEvent?.(event),
     refuseOpen: (nth, why = 'the broker would not start') => { refusals.set(nth, why) },
     refuseTerminate: (id, why = 'the broker would not end the session') => { refusedTerminations.set(id, why) },
     reportsCwd: (id, cwd) => { reportedCwds.set(id, cwd) },
-    reportsCommandFinished: (id) => { finishedCommands.set(id, (finishedCommands.get(id) ?? 0) + 1) },
+    // Both halves of the fact: what `facts()` answers afterwards, and the event that says it happened
+    reportsCommandFinished: (id) => {
+      finishedCommands.set(id, (finishedCommands.get(id) ?? 0) + 1)
+      listenersFor(id).onEvent?.({ kind: 'commandFinished', exitStatus: 0 })
+    },
     deferResize: (id) => {
       let release = () => {}
       heldResizes.set(id, new Promise<void>(resolve => { release = () => { resolve() } }))

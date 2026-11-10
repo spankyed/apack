@@ -198,6 +198,14 @@ export interface GhReviewComment {
 // Terminal types
 export interface TerminalInfo {
   id: EARS.EntityId
+  /**
+   * The session a window draws this terminal from, by the name the terminal broker knows it by. Absent
+   * while the terminal has no shell — one that ended and was kept.
+   *
+   * **Not the terminal's own id, because a terminal is not its shell.** A restart puts a new session under
+   * the same terminal, and a window that went on drawing the old one would be drawing a shell that is gone.
+   */
+  session?: string
   title: string
   customTitle?: string // User-defined custom name, takes precedence over default
   /**

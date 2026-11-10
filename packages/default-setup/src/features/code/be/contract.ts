@@ -195,8 +195,6 @@ export type IncomingTerminalEvents =
   | { type: 'terminal.RESTART_TERMINAL'; terminalId: string }
   | { type: 'terminal.TERMINAL_INPUT'; terminalId: string; data: string }
   | { type: 'terminal.RESIZE_TERMINAL'; terminalId: string; cols: number; rows: number; cellWidth?: number; cellHeight?: number }
-  /** How far this window has drawn a terminal's output, as the position its last `terminal.OUTPUT` carried */
-  | { type: 'terminal.OUTPUT_DRAWN'; terminalId: string; position: number }
   /** This window has stopped showing that terminal, so its fit no longer holds the grid down */
   | { type: 'terminal.STOPPED_FITTING'; terminalId: string }
   | { type: 'terminal.RENAME_TERMINAL'; terminalId: string; customTitle: string }
@@ -218,8 +216,21 @@ export type OutgoingTerminalEvents =
    * window routed a new terminal into its own panel.
    */
   | { type: 'terminal.OPENED'; data: TerminalInfo }
-  /** `position` is where the terminal's output stands after this, which a window answers with once drawn */
-  | { type: 'terminal.OUTPUT'; data: { terminalId: string; data: string; position: number } }
+  /**
+   * **What a terminal's program did that is not on its screen**, for every window: the five below. The
+   * screen itself is not an event at all — a window draws a terminal from the rows its session sends it
+   * (`TerminalInfo.session`), so nothing a program prints crosses here.
+   *
+   * Each is a claim the program made. A window decides what to do about one where the person is: whether
+   * text reaches their clipboard, whether a notification is worth their attention.
+   */
+  | { type: 'terminal.CLIPBOARD'; data: { terminalId: string; text: string } }
+  | { type: 'terminal.BELL'; data: { terminalId: string } }
+  | { type: 'terminal.NOTIFIED'; data: { terminalId: string; title: string; body: string } }
+  /** How far along the program says it is; `percent` is `null` where it gave none, and `none` clears it */
+  | { type: 'terminal.PROGRESS'; data: { terminalId: string; state: 'none' | 'running' | 'error' | 'indeterminate' | 'paused'; percent: number | null } }
+  /** The name the program gave its terminal, which is empty when it took the name back */
+  | { type: 'terminal.TITLED'; data: { terminalId: string; title: string } }
   | { type: 'terminal.CLOSED'; data: { terminalId: string } }
   /**
    * The shell ended badly and **the terminal was kept**, so the user can read what it said and start it

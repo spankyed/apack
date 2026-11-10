@@ -1,12 +1,10 @@
 import { setup, assign, enqueueActions, type ActorRefFrom } from 'xstate';
 import { sendToSystem } from '#generated/events.ts';
 import { newCall, recordCall, settleCall } from '@apackdev/sdk/events';
-import { terminalEventBus } from '../../utils/terminal-events.ts';
 import { terminalPool } from '../../utils/terminal-pool.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { removeTabs, nextActiveFromHistory } from '../../utils/tab-management.ts';
 import type { TerminalInfo } from '../../../be/types.ts'
-import { OUTPUT_ACK_EVERY } from '../../../be/services/terminal-flow.ts'
 
 /**
  * **The type the system publishes, not a window's copy of it**, which is why it is imported and re-exported
@@ -75,31 +73,10 @@ export type Event =
   | { type: 'terminal.RESTARTED'; data: TerminalInfo }
   | { type: 'terminal.RENAMED'; data: { terminalId: string; customTitle: string } }
   | { type: 'terminal.CWD_CHANGED'; data: { terminalId: string; cwd: string; title?: string } }
-  | { type: 'terminal.OUTPUT'; data: { terminalId: string; data: string; position: number } }
+  | { type: 'terminal.CLIPBOARD'; data: { terminalId: string; text: string } }
   | { type: 'terminal.ERROR'; data: { message: string; terminalId?: string } }
   | { type: 'terminal.RESIZED'; data: { terminalId: string; cols: number; rows: number } }
   | { type: 'terminal.TERMINAL_TAB_OPENED'; data: TerminalInfo }
-
-/**
- * How far this window has told the backend it has drawn each terminal's output.
- *
- * **Module state, and safe as that**: it holds positions the backend issued, so a frontend that reloads
- * starts empty and its first answer is simply the next position it sees. Nothing here counts.
- */
-const outputDrawn = {
-  told: new Map<string, number>(),
-  /** Whether `position` is far enough past the last one told to be worth telling */
-  due(terminalId: string, position: number): boolean {
-    const last = this.told.get(terminalId)
-    // A position below the last one is a backend that restarted and is counting again from nothing
-    if (last !== undefined && position >= last && position - last < OUTPUT_ACK_EVERY) return false
-    this.told.set(terminalId, position)
-    return true
-  },
-  forget(terminalId: string): void {
-    this.told.delete(terminalId)
-  },
-}
 
 export const terminalState = setup({
   types: {
@@ -279,10 +256,10 @@ export const terminalState = setup({
       terminalPool.noteExit(ev.data.terminalId, ev.data.code)
     },
 
-    /** Tells the window's emulator which process is answering now, so one boundary draws one seam */
+    /** Draws the terminal from the session answering now, and says on it that the shell is a new one */
     noteRestartOnScreen: ({ event }) => {
       const ev = event as { type: 'terminal.RESTARTED'; data: TerminalInfo }
-      terminalPool.noteRestart(ev.data.id, ev.data.pid)
+      terminalPool.noteRestart(ev.data)
     },
 
     /** A new shell under a terminal that was already there: its descriptor is replaced, its place is not */
@@ -320,16 +297,13 @@ export const terminalState = setup({
      * The grid the pty is running at, which is not always the one this window asked for.
      *
      * **What a window holds has to be the accepted grid, not its own fit.** A pty has one `(cols, rows)` and
-     * the window that opened it owns them, so a second window's fit is refused — and an emulator built from
-     * a stale `TerminalInfo` draws at a size nothing agreed to. The pool reads these when it builds one.
+     * the window that opened it owns them, so a second window's fit is refused. What is drawn follows the
+     * session's own frames, which carry the grid in force; this is the same fact for whatever lists it.
      */
     updateTerminalGrid: assign(({ context, event }) => {
       const ev = event as { type: 'terminal.RESIZED'; data: { terminalId: string; cols: number; rows: number } }
-      // **The grid in force, which this window renders rather than whatever it fitted for itself** (M2).
       // It arrives two ways and both end here: broadcast when the size moved, and replied to this window
-      // alone when its own fit was refused — which is the case that matters, since that window is the one
-      // drawing at a size the pty is not running at.
-      terminalPool.applyGrid(ev.data.terminalId, ev.data.cols, ev.data.rows)
+      // alone when its own fit was refused.
       return {
         terminals: context.terminals.map(terminal => terminal.id === ev.data.terminalId
           ? { ...terminal, cols: ev.data.cols, rows: ev.data.rows }
@@ -381,22 +355,21 @@ export const terminalState = setup({
 
     cleanupTerminalOutput: ({ event }) => {
       const ev = event as { type: 'terminal.CLOSED'; data: { terminalId: string } }
-      terminalEventBus.clearOutput(ev.data.terminalId)
       terminalPool.dispose(ev.data.terminalId)
-      outputDrawn.forget(ev.data.terminalId)
     },
 
-    handleTerminalOutput: ({ event }) => {
-      const ev = event as { type: 'terminal.OUTPUT'; data: { terminalId: string; data: string; position: number } }
-      const { terminalId, data, position } = ev.data
-      // The emulator parses inside this call, so once it returns the output is drawn as far as `position`
-      terminalEventBus.emit(terminalId, data)
-      // **Then the backend is told how far this window has got**, every so often rather than per message.
-      // That is what lets it pause a program writing faster than a window draws, instead of holding the
-      // backlog; a window with no emulator for the terminal still answers, having nothing to fall behind on
-      if (outputDrawn.due(terminalId, position)) {
-        sendToSystem('code', { type: 'terminal.OUTPUT_DRAWN', terminalId, position })
-      }
+    /**
+     * A program asked for text to be put on the clipboard.
+     *
+     * **Only by the window the person is in.** Every window showing the code surface hears this, and the
+     * clipboard is one thing: the window with the focus is where what the program did was seen, so it is
+     * the one that acts. A clipboard the window may not write rejects, and that is swallowed — there is
+     * nothing a person can do about it.
+     */
+    writeClipboard: ({ event }) => {
+      const ev = event as { type: 'terminal.CLIPBOARD'; data: { terminalId: string; text: string } }
+      if (!document.hasFocus()) return
+      void navigator.clipboard.writeText(ev.data.text).catch(() => {})
     },
 
     /**
@@ -590,8 +563,8 @@ export const terminalState = setup({
     'terminal.CWD_CHANGED': {
       actions: 'updateTerminalCwd'
     },
-    'terminal.OUTPUT': {
-      actions: 'handleTerminalOutput'
+    'terminal.CLIPBOARD': {
+      actions: 'writeClipboard'
     },
     'terminal.ERROR': {
       actions: 'settleFailedAsk'

@@ -53,7 +53,7 @@ describe('what the broker owning the process removes', () => {
     await app.stop()
   })
 
-  it('hands the output listener to the service at open, so a first byte cannot be dropped (F8)', async () => {
+  it('hands its listeners to the service at open, so what a shell does first cannot be dropped (F8)', async () => {
     const broker = recordingBroker({ pidBase: 4242 })
     const app = await startApp({ systems: ['code'] })
     await app.connect()
@@ -61,11 +61,29 @@ describe('what the broker owning the process removes', () => {
 
     expect(broker.opened[0]?.listenersGivenAtOpen, 'the listeners came with the open').toBe(true)
 
-    // What a shell writes immediately reaches the surface, with no registration step in between
-    broker.emit('broker-1', 'a prompt, written at once')
+    // What a program does immediately reaches the surface, with no registration step in between
+    broker.happens('broker-1', { kind: 'clipboard', text: 'copied at once' })
     await app.settle()
-    const output = app.emitted('code').filter(event => event.type === 'terminal.OUTPUT')
-    expect(output.map(event => (event as unknown as { data: { data: string } }).data.data)).toContain('a prompt, written at once')
+    const copied = app.emitted('code').filter(event => event.type === 'terminal.CLIPBOARD')
+    expect(copied.map(event => (event as unknown as { data: { text: string } }).data.text)).toEqual(['copied at once'])
+    await app.stop()
+  })
+
+  /**
+   * **A terminal a person looks at is not sent its bytes.** A window draws it from the rows its session
+   * sends, so this service asks for none: a session opened with an output listener would have every byte
+   * cross the app to be thrown away, and be held to the pace of whatever was not reading them.
+   */
+  it('opens a session without asking for its bytes, and tells a window which session to draw', async () => {
+    const broker = recordingBroker({ pidBase: 4242 })
+    const app = await startApp({ systems: ['code'] })
+    await app.connect()
+    await openATerminal(app)
+
+    expect(broker.opened[0]?.asksForBytes).toBe(false)
+    const { terminalService } = await import('#features/code/be/services/terminal.ts')
+    // The newest: the service outlives a case, so its list holds the terminals of the ones before
+    expect(terminalService.list().at(-1)?.session).toBe(broker.opened[0]!.id)
     await app.stop()
   })
 
@@ -108,7 +126,7 @@ describe('what the broker owning the process removes', () => {
     // Through the door the user has: there is no kill-everything operation, because the app ending the
     // sessions is the broker's job and not this process's
     // What the windows hear is another spec's subject; this one is about the rows
-    const told = { onData: () => {}, onExit: () => {}, onCrashed: () => {} }
+    const told = { onEvent: () => {}, onExit: () => {}, onCrashed: () => {} }
     for (const terminal of terminalService.list()) await terminalService.kill(terminal.id, told)
 
     // L2: a run that quit used to leave its rows open, so the next boot restored terminals that were never

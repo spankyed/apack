@@ -12,14 +12,11 @@
 // that element now.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('ghostty-web', async () => (await import('../../_support/terminal-emulator.ts')).emulatorModule())
+vi.mock('apack-terminal-view', async () => (await import('../../_support/terminal-view.ts')).viewModule())
 
-const { installDomStubs } = await import('../../_support/terminal-emulator.ts')
 const { startCodeSurface, terminalInfo } = await import('../../_support/terminal-host.ts')
 const { terminalPool } = await import('#features/code/fe/utils/terminal-pool.ts')
 const PanelTerminalSection = (await import('#features/code/fe/features/terminal/PanelTerminalSection.vue')).default
-
-installDomStubs()
 
 let surface: ReturnType<typeof startCodeSurface> | undefined
 const info = terminalInfo('panel-1')
@@ -68,7 +65,7 @@ describe('the panel terminal host', () => {
     surface = startCodeSurface({ terminals: [info], panelTerminalId: info.id, panelTerminalExpanded: true })
     surface.mount(PanelTerminalSection)
     await surface.settle()
-    const entry = (await terminalPool.ensure(info, () => {}))!
+    const entry = terminalPool.ensure(info)
     expect(entry.attachedContainer, 'the panel is not drawing the terminal').not.toBeNull()
 
     // The backend published a list without it — killed from a tab, from another window, or its shell exited
@@ -88,13 +85,13 @@ describe('the panel terminal host', () => {
     surface = startCodeSurface({ terminals: [info], panelTerminalId: info.id, panelTerminalExpanded: true })
     surface.mount(PanelTerminalSection)
     await surface.settle()
-    expect((await terminalPool.ensure(info, () => {}))!.attachedContainer, 'the first mount is not drawing').not.toBeNull()
+    expect(terminalPool.ensure(info).attachedContainer, 'the first mount is not drawing').not.toBeNull()
 
     surface.unmount()
     surface.mount(PanelTerminalSection)
     await surface.settle()
 
-    expect((await terminalPool.ensure(info, () => {}))!.attachedContainer, 'the remounted panel drew nothing')
+    expect(terminalPool.ensure(info).attachedContainer, 'the remounted panel drew nothing')
       .not.toBeNull()
   })
 })

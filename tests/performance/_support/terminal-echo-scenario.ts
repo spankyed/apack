@@ -24,7 +24,7 @@ const echoFixture = (trials: number) => ({
  * **How long a typed character takes to be on screen.**
  *
  * From the input event's dispatch to the frame that painted its echo, read from the count of painted output
- * a drawn terminal publishes (`data-apack-terminal-drawn`): the whole round trip, window to pty and back,
+ * a drawn terminal publishes (`data-terminal-drawn`): the whole round trip, window to pty and back,
  * and the paint. The terminal is quiet between keys, so each reading is one character's and none is
  * waiting behind another's output. A trial's duration is the sum; the distribution is in `work`, in
  * microseconds.
@@ -56,7 +56,7 @@ export async function terminalEchoScenario({ app, appPage, electronApp }: Parame
           else await new Promise(r => setTimeout(r, 25));
         }
         if (!terminalId) return null;
-        const drawn = () => document.querySelector<HTMLElement>(`[data-apack-terminal="${terminalId}"]`)?.dataset.apackTerminalDrawn;
+        const drawn = () => document.querySelector<HTMLElement>(`[data-apack-terminal="${terminalId}"]`)?.dataset.terminalDrawn;
         const quiet = async () => {
           for (let still = 0, last = drawn(); still < 12;) {
             await new Promise(r => setTimeout(r, 25));
@@ -90,7 +90,7 @@ export async function terminalEchoScenario({ app, appPage, electronApp }: Parame
             const painted = new Promise<void>((resolve, reject) => {
               const stalled = setTimeout(() => { observer.disconnect(); reject(new Error('no echo')); }, 5000);
               const observer = new MutationObserver(() => { clearTimeout(stalled); observer.disconnect(); resolve(); });
-              observer.observe(element, { attributes: true, attributeFilter: ['data-apack-terminal-drawn'] });
+              observer.observe(element, { attributes: true, attributeFilter: ['data-terminal-drawn'] });
             });
             const typed = performance.now();
             action.within(() => {

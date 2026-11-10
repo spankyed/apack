@@ -317,9 +317,8 @@ const attachTerminal = (terminalId: string) => {
     return
   }
 
-  void terminalPool.ensure(info, data => {
-    terminalActor?.send({ type: 'terminal.INPUT', terminalId, data })
-  }).then(entry => {
+  // What is typed goes from the view to its session; this host never carries a key
+  void Promise.resolve(terminalPool.ensure(info)).then(entry => {
     // Superseded, closed while it was opening, or the panel has gone: the request to focus dies with the
     // attach it was made for, exactly as it does for the cases above.
     if (!entry || generation !== attaching || !container.value) {
@@ -372,11 +371,7 @@ const detachTerminal = ({ handingOver = false } = {}) => {
 }
 
 // Context menu actions
-const copySelection = () => {
-  const selection = attachment?.selection()
-  // A clipboard the window may not write rejects; unhandled, that is a console error nobody can act on (F16)
-  if (selection) void navigator.clipboard.writeText(selection).catch(() => {})
-}
+const copySelection = () => { void attachment?.copy() }
 
 const pasteClipboard = () => {
   // **Through the emulator, not as input** (F12). This host sent the text as a keystroke, so a pasted

@@ -93,15 +93,11 @@ const hasSelection = ref(false)
  * Context menu actions ----------------------------------------------------- */
 const scrollToBottom = () => attachment?.followOutput()
 
-const copySelection = () => {
-  const selection = attachment?.selection()
-  // A clipboard the window may not read or write rejects; unhandled, that is a console error nobody can
-  // act on (F16)
-  if (selection) void navigator.clipboard.writeText(selection).catch(() => {})
-}
+const copySelection = () => { void attachment?.copy() }
 
 const pasteClipboard = () => {
-  // Through the emulator rather than as input (F12), which the attachment is the one way to do
+  // As a paste rather than as input: the program is told it is one, and one that could run a command is
+  // shown to the person first
   void navigator.clipboard.readText().then(text => {
     if (text) attachment?.paste(text)
   }).catch(() => {})
@@ -113,24 +109,17 @@ const clearTerminal = () => attachment?.clear()
 
 /* --------------------------------------------------------------------------
  * Lifecycle ---------------------------------------------------------------- */
-/**
- * Whether this host is still the one mounted.
- *
- * **The emulator's module is loaded on demand, so a mount can be awaiting when the unmount arrives** — a
- * tab switched away before the terminal finished opening. Attaching then would draw into a container this
- * component no longer owns and leave an attachment nothing releases, so the attach is dropped instead.
- */
+/** Whether this host is still the one mounted */
 let mounted = false
 
-onMounted(async () => {
+onMounted(() => {
   if (!container.value) return
   mounted = true
 
-  // The emulator is the pool's: this never constructs or disposes one
-  const entry = await terminalPool.ensure(props.terminalInfo, data => {
-    terminalActor?.send({ type: 'terminal.INPUT', terminalId: props.terminalInfo.id, data })
-  })
-  if (!entry || !mounted || !container.value) return
+  // The view is the pool's: this never makes or disposes one, and what is typed goes from the view to
+  // its session without passing through here
+  terminalPool.ensure(props.terminalInfo)
+  if (!mounted || !container.value) return
 
   attachment = terminalPool.attach(props.terminalInfo.id, container.value, {
     onResize: ({ cols, rows, cellWidth, cellHeight }) => {
@@ -147,7 +136,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   mounted = false
-  // The emulator is not disposed — it survives in the pool until `terminal.CLOSED`. Releasing is also how a
+  // The view is not disposed — it survives in the pool until `terminal.CLOSED`. Releasing is also how a
   // host that another has already taken over from detaches nothing (F1): during a remount the new host
   // attaches before this one unmounts.
   const letGo = attachment?.release() ?? false

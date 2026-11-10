@@ -8,9 +8,8 @@ import { EARS } from '#generated/ears.ts'
 import { repository } from '#generated/repository.ts';
 import { createLogger } from '@apackdev/sdk/logger';
 import { services } from '#generated/services.ts'
-import type { TerminalCellSize, TerminalSession } from '@apackdev/sdk/services'
+import type { TerminalCellSize, TerminalEvent, TerminalSession } from '@apackdev/sdk/services'
 import { TERMINAL_COLORS } from '../terminal-colors.ts'
-import { OutputFlow } from './terminal-flow.ts'
 import { directoryToStart, shellToStart, submitFor } from './known-shells.ts'
 import { cwdAsReported } from '../utils/osc-cwd.ts'
 import { integrationDirectory, integrationFor } from './shell-integration.ts'
@@ -102,8 +101,6 @@ interface Terminal {
    * dropped — `opening`'s trick, for the same shape of problem.
    */
   sizing: number
-  /** How far each window has drawn this terminal's output, which is what pauses a program for a slow one */
-  flow: OutputFlow
 }
 
 /** A pty's grid, and one cell of it in pixels where a window has measured one */
@@ -126,6 +123,7 @@ const sameCell = (a: TerminalCellSize | undefined, b: TerminalCellSize | undefin
 const published = (terminal: Terminal): TerminalInfo => ({
   ...terminal.info,
   active: terminal.state.kind !== 'exited',
+  ...(terminal.state.kind === 'live' && { session: terminal.state.session.id }),
   ...(terminal.state.kind === 'exited' && { exited: { code: terminal.state.code } }),
 })
 
@@ -167,7 +165,12 @@ export type TerminalClose =
   | 'unknown'
 
 export interface TerminalHandlers {
-  onData(terminalId: string, data: string): void
+  /**
+   * The terminal's program did something that is not on its screen: set a title, rang the bell, finished
+   * a command. **What was on its screen is not here at all** — a window draws a terminal from the rows its
+   * session sends it, so this service is handed the events and never the bytes.
+   */
+  onEvent(terminalId: string, event: TerminalEvent): void
   /**
    * The shell ended and the terminal is gone with it.
    *
@@ -219,7 +222,7 @@ class TerminalService {
     const session = await services.terminal.open({
       cols, rows, shell, cwd, args: integration?.args, env: integration?.env, colors: TERMINAL_COLORS,
     }, {
-      onOutput: (data) => handlers.onData(id, data),
+      onEvent: (event) => handlers.onEvent(id, event),
       onExit: (code) => this.exited(id, opening, code, handlers),
     })
 
@@ -234,7 +237,6 @@ class TerminalService {
       fittedBy: new Map(),
       decided: { cols, rows },
       sizing: 0,
-      flow: new OutputFlow(),
     }
     this.terminals.set(id, terminal)
     repository.terminalCommands.create({ id, title, shell, cwd, cols, rows, session: session.id })
@@ -327,12 +329,11 @@ class TerminalService {
         const session = await services.terminal.open({
         cols, rows, shell, cwd, args: integration?.args, env: integration?.env, colors: TERMINAL_COLORS,
       }, {
-        onOutput: (data) => handlers.onData(id, data),
+        onEvent: (event) => handlers.onEvent(id, event),
         onExit: (code) => this.exited(id, opening, code, handlers),
       })
 
       terminal.state = { kind: 'live', session, opening }
-      terminal.flow.restarted()
       terminal.info = { ...terminal.info, pid: session.pid, generation: terminal.info.generation + 1 }
       // The row must name the session that is running now. A stored id pointing at the shell this just
       // replaced is the one case offering it cannot survive: the broker would answer for it, and a restart
@@ -487,37 +488,6 @@ class TerminalService {
   }
 
   /**
-   * Counts output about to be sent to the windows, answering where the stream stands after it.
-   *
-   * **Pauses the session when a window is too far behind** (`OutputFlow`), which stops its pty being read:
-   * the program blocks on its own write, and what this process holds for a slow window stops growing.
-   */
-  outputSent(id: string, chars: number): number {
-    const terminal = this.terminals.get(id)
-    if (!terminal) return 0
-    const { position, pause } = terminal.flow.send(chars)
-    if (pause && terminal.state.kind !== 'exited') {
-      void terminal.state.session.pause().catch(error => {
-        logger.error(`Could not pause ${id} for a window that has fallen behind`, { error })
-      })
-    }
-    return position
-  }
-
-  /** A window has drawn this terminal's output up to `position`, so the session may be read again */
-  outputDrawn(id: string, client: string, position: number): void {
-    const terminal = this.terminals.get(id)
-    if (terminal?.flow.drew(client, position).resume) this.readAgain(id, terminal)
-  }
-
-  private readAgain(id: string, terminal: Terminal): void {
-    if (terminal.state.kind === 'exited') return
-    void terminal.state.session.resume().catch(error => {
-      logger.error(`Could not resume ${id} once its windows had caught up`, { error })
-    })
-  }
-
-  /**
    * A window has stopped showing this terminal, so its fit no longer holds the grid down.
    *
    * **Detaching is not disconnecting**, and leaving this out is how a fix becomes a trade: a popped-out
@@ -543,8 +513,6 @@ class TerminalService {
   async forgetClient(client: string): Promise<Array<{ terminalId: string; grid: AcceptedGrid }>> {
     const moved: Array<{ terminalId: string; grid: AcceptedGrid }> = []
     for (const [terminalId, terminal] of this.terminals) {
-      // A window that has gone is not one to wait for: a session paused for it would otherwise stay paused
-      if (terminal.flow.forget(client).resume) this.readAgain(terminalId, terminal)
       if (!terminal.fittedBy.delete(client)) continue
       const grid = await this.settleGrid(terminal)
       if (grid.changed) moved.push({ terminalId, grid })
@@ -702,7 +670,7 @@ class TerminalService {
     const opening = ++this.openings
     try {
       const taken = await services.terminal.adopt(session, {
-        onOutput: (data) => handlers.onData(row.id, data),
+        onEvent: (event) => handlers.onEvent(row.id, event),
         onExit: (code) => this.exited(row.id, opening, code, handlers),
       })
       const info: Terminal['info'] = {
@@ -722,7 +690,7 @@ class TerminalService {
         scrollback: taken.scrollback,
         submit: submitFor(shell),
       }
-      this.terminals.set(row.id, { info, state: { kind: 'live', session: taken, opening }, fittedBy: new Map(), decided: { cols: info.cols, rows: info.rows }, sizing: 0, flow: new OutputFlow() })
+      this.terminals.set(row.id, { info, state: { kind: 'live', session: taken, opening }, fittedBy: new Map(), decided: { cols: info.cols, rows: info.rows }, sizing: 0 })
       logger.info(`Took up session ${session} again for terminal ${row.title} (${row.id}); its shell and its output survived`)
       return true
     } catch (error) {
@@ -768,7 +736,7 @@ class TerminalService {
             const session = await services.terminal.open(
           { cols: row.cols, rows: row.rows, shell, cwd, args: integration?.args, env: integration?.env, colors: TERMINAL_COLORS },
           {
-            onOutput: (data) => handlers.onData(row.id, data),
+            onEvent: (event) => handlers.onEvent(row.id, event),
             onExit: (code) => this.exited(row.id, opening, code, handlers),
           },
         )
@@ -790,7 +758,7 @@ class TerminalService {
           scrollback: session.scrollback,
           submit: submitFor(shell),
         }
-        this.terminals.set(row.id, { info, state: { kind: 'live', session, opening }, fittedBy: new Map(), decided: { cols: info.cols, rows: info.rows }, sizing: 0, flow: new OutputFlow() })
+        this.terminals.set(row.id, { info, state: { kind: 'live', session, opening }, fittedBy: new Map(), decided: { cols: info.cols, rows: info.rows }, sizing: 0 })
         // **The row names the session that is running now, as every other start records it.** Left naming
         // the one this replaced, the next restart of this process offers a stale id, is refused, and starts
         // a second shell beside one the app's hold is still keeping alive — the accumulation taking a

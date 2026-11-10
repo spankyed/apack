@@ -1,26 +1,26 @@
 // What the canvas host does with the attachment the pool hands it.
 //
-// The pool's own cases cover its bookkeeping over a stand-in emulator; what they cannot reach is the half
-// that lives in a component — a host's lifecycle, and the wiring between the emulator and the actor that
-// owns the pty. Mounted in the code surface's scope, that half is a case rather than a reading.
+// The pool's own cases cover its bookkeeping over a stand-in view; what they cannot reach is the half that
+// lives in a component — a host's lifecycle, and the wiring between the view and the actor that owns the
+// pty. Mounted in the code surface's scope, that half is a case rather than a reading.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { RESIZE_SETTLE_MS } from '#features/code/fe/utils/terminal-pool.ts'
 
-vi.mock('ghostty-web', async () => (await import('../_support/terminal-emulator.ts')).emulatorModule())
+vi.mock('apack-terminal-view', async () => (await import('../_support/terminal-view.ts')).viewModule())
 
-const { emulators, lastEmulator, installDomStubs } = await import('../_support/terminal-emulator.ts')
+const { views, lastView } = await import('../_support/terminal-view.ts')
 const { startCodeSurface, terminalInfo } = await import('../_support/terminal-host.ts')
 const { terminalPool } = await import('#features/code/fe/utils/terminal-pool.ts')
 const TerminalView = (await import('#features/code/fe/canvas/TerminalView.vue')).default
 
-installDomStubs()
-
 let surface: ReturnType<typeof startCodeSurface> | undefined
 let next = 0
-/** A session of this case's own: the pool is a module singleton, so two cases must not share one */
-const session = () => terminalInfo(`view-${(next += 1)}`)
+/** A terminal of this case's own: the pool is a module singleton, so two cases must not share one */
+const terminal = () => terminalInfo(`view-${(next += 1)}`)
 
-beforeEach(() => { emulators.length = 0 })
+beforeEach(() => { views.length = 0 })
 afterEach(() => {
+  vi.useRealTimers()
   surface?.stop()
   surface = undefined
   for (let i = 1; i <= next; i += 1) terminalPool.dispose(`view-${i}`)
@@ -28,51 +28,56 @@ afterEach(() => {
 })
 
 describe('the canvas terminal host', () => {
-  it('draws the terminal and lets go of it on unmount, leaving the session in the pool', async () => {
-    const info = session()
+  it('draws the terminal and lets go of it on unmount, leaving its view in the pool', async () => {
+    const info = terminal()
     surface = startCodeSurface({ terminals: [info] })
     surface.mount(TerminalView, { terminalInfo: info })
     await surface.settle()
-    const entry = (await terminalPool.ensure(info, () => {}))!
-    expect(surface.root.contains(entry.wrapper), 'the host is not drawing the terminal').toBe(true)
+    const entry = terminalPool.ensure(info)
+    expect(surface.root.contains(lastView().element), 'the host is not drawing the terminal').toBe(true)
 
     surface.unmount()
 
-    // A tab switch unmounts this host; what the pool holds is not the host's to end, and the emulator
-    // outliving it is the whole of why a reattach replays nothing
+    // A tab switch unmounts this host; what the pool holds is not the host's to end, and the view
+    // outliving it is why coming back to the tab asks for nothing it already has
     expect(entry.attachedContainer, 'the host unmounted still holding the terminal').toBeNull()
-    expect(lastEmulator().disposed, 'the session was disposed with the host drawing it').toBe(0)
-    expect((await terminalPool.ensure(info, () => {}))!, 'the pool lost the session').toBe(entry)
+    expect(lastView().disposed, 'the view was disposed with the host drawing it').toBe(false)
+    expect(lastView().mountedIn, 'a view no host has is still mounted, and so still being sent frames').toBeNull()
+    expect(terminalPool.ensure(info), 'the pool lost the terminal').toBe(entry)
   })
 
-  it('tells the terminal that owns the pty what was typed and what size the emulator settled on', async () => {
-    const info = session()
+  it('tells the terminal that owns the pty what size fits here, once it has settled', async () => {
+    vi.useFakeTimers()
+    const info = terminal()
     surface = startCodeSurface({ terminals: [info] })
     surface.mount(TerminalView, { terminalInfo: info })
-    await surface.settle()
+    await vi.advanceTimersByTimeAsync(0)
 
-    lastEmulator().type('ls\r')
-    lastEmulator().resizeTo(120, 40)
+    lastView().reportFit(120, 40, 9, 18)
+    // A drag reports a fit a frame; the pty hears the one it stopped at
+    lastView().reportFit(121, 40, 9, 18)
+    lastView().reportFit(122, 41, 9, 18)
+    await vi.advanceTimersByTimeAsync(RESIZE_SETTLE_MS)
 
-    // Two things only this host can do: the pool owns the emulator and the actor owns the pty, and nothing
-    // else joins them. A size the pty is never told leaves a shell drawing its line editing at the wrong
-    // width, and a keystroke that never leaves the window is a terminal that looks alive and does nothing
-    expect(surface.sent).toContainEqual({ type: 'terminal.INPUT', terminalId: info.id, data: 'ls\r' })
-    expect(surface.sent).toContainEqual({ type: 'terminal.RESIZE', terminalId: info.id, cols: 120, rows: 40 })
+    const resizes = surface.sent.filter((event) => event.type === 'terminal.RESIZE')
+    expect(resizes.at(-1)).toEqual({ type: 'terminal.RESIZE', terminalId: info.id, cols: 122, rows: 41, cellWidth: 9, cellHeight: 18 })
+    expect(resizes.length, 'every frame of a drag was sent to the pty').toBeLessThanOrEqual(2)
+    // What is typed goes from the view to its session: this host carries no key
+    expect(surface.sent.filter((event) => event.type === 'terminal.INPUT')).toEqual([])
   })
 
   it('takes no focus when it mounts, and focuses when the surface asks it to', async () => {
-    const info = session()
+    const info = terminal()
     surface = startCodeSurface({ terminals: [info] })
     const view = surface.mount<{ focus(): void }>(TerminalView, { terminalInfo: info })
     await surface.settle()
 
     // F15. A terminal mounts on a tab switch, a panel drag and an actor replacement, none of which is the
     // user asking for it — and taking focus from what they were typing in is the defect
-    expect(lastEmulator().focused, 'mounting took the focus').toBe(0)
+    expect(lastView().focused, 'mounting took the focus').toBe(0)
 
     view.value!.focus()
 
-    expect(lastEmulator().focused, 'the surface asked for focus and nothing was focused').toBe(1)
+    expect(lastView().focused, 'the surface asked for focus and nothing was focused').toBe(1)
   })
 })
