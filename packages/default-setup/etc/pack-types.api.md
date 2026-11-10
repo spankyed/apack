@@ -1679,6 +1679,14 @@ declare class GitRepository {
     fileExistsInHead(filePath: string): Promise<boolean>;
     resolveConflict(filePath: string, strategy: 'ours' | 'theirs'): Promise<void>;
     commit(message: string): Promise<void>;
+    /**
+     * Where this checkout's git state lives: its own git directory (index, HEAD) and the common one holding refs.
+     * The two differ in a linked worktree. Null when the working directory is in no repository.
+     */
+    resolveGitDirectories(): Promise<{
+        gitDir: string;
+        commonDir: string;
+    } | null>;
     isGitRepository(): Promise<boolean>;
     hasUncommittedChanges(): Promise<boolean>;
     getStagedFiles(): Promise<GitStatusFile[]>;
@@ -1750,20 +1758,39 @@ declare class GitWatcherService {
     private onGitChangeCallback?;
     private onFileChangeCallback?;
     private gitStatusDebounceTimeout?;
+    /** When the first change not yet announced arrived */
+    private repositoryChangePendingSince?;
+    /** Whether a callback is already waiting on the repository's write in progress */
+    private awaitingWrite;
     private fileChangeTimeouts;
     private isWatching;
+    /** Whether the working directory is in a repository; outside one, only the open files are watched */
+    private inRepository;
+    /** Open files by the path they are compared under, each holding the path it was registered with */
     private openFiles;
+    private realDirectories;
     private gitRepository?;
     constructor(workingDirectory: string);
     setGitRepository(repo: GitRepository): void;
     setChangeCallback(callback: () => void): void;
     setFileChangeCallback(callback: (change: FileChangeInfo) => void): void;
+    /**
+     * The path a file is compared under: its directory's real path and its name. An open file and the event for
+     * it can name one file two ways, through a symlinked directory or in another letter case, and would not
+     * match as written.
+     */
+    private comparablePath;
     registerOpenFile(filePath: string): void;
     unregisterOpenFile(filePath: string): void;
     isFileOpen(filePath: string): boolean;
     getOpenFiles(): string[];
     startWatching(signal: AbortSignal): Promise<void>;
     private handleFileChange;
+    /** One announcement for every change that arrives close together */
+    private scheduleRepositoryChange;
+    private armRepositoryChange;
+    /** Per file, so a change to one open file is never dropped for a change to another */
+    private scheduleOpenFileChange;
     stopWatching(): Promise<void>;
     isActive(): boolean;
 }
