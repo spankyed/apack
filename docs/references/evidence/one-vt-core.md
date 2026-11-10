@@ -1349,3 +1349,55 @@ without it is not a run against this limit.
 sessions, resize and replay have nothing recorded from before the change, and deriving a limit from this
 goal's own numbers would be precisely the formality the clause existed to prevent. They stay readings,
 with their conditions, for whoever next has something to compare them against.
+
+
+## 2026-11-10 — Gating the pushed state, and the defect it found on master
+
+The chain had been run repeatedly in the main checkout, where other work kept changing the tree under it.
+To gate what is actually on `origin/master`, a worktree of its own was made at that commit —
+`npm run session:new -- gate-pushed-master origin/master`, which installs its own dependencies and builds
+its own app — and the chain run there. That tree cannot be edited by anything else, which is what the main
+checkout could not offer.
+
+### It found master red, at `facade:check`
+
+```
+etc/pack-types.api.md differs from the pack's facade types.
+```
+
+The commit `a3198edbd3` added `GitRepository.resolveGitDirectories()` and several `gitwatcher` fields.
+Those are pack facade types, and the report that records them was not updated with them, so **every chain
+run on master would have failed that step**. The regenerated report was sitting uncommitted in the main
+checkout, which is exactly why the main checkout could not show this: the file that makes the check pass
+was present there and absent from what anyone else would clone.
+
+Repaired by re-taking the report from master's own source — 27 added lines, each one a declaration that
+commit introduced. A facade report is a derivation rather than a decision, so regenerating it is the whole
+of the fix.
+
+**This is the argument for gating the pushed state rather than the working copy**, and it is worth keeping:
+a recorded file whose update is uncommitted is invisible precisely where it matters.
+
+### What the full run then said
+
+**27 of 28 attempted steps green** — 13 cached, 14 run — including `facade:check` after the repair and
+`test:native` at 3355.7s. One step failed:
+
+```
+test:external-pack:app
+  Compiler startup input changed: ["file","…/elmdb/crates/elmdb-node/elmdb.darwin-arm64.node"]
+  Run apack pack build before testing again.
+```
+
+**That is a refusal rather than a failure, and its cause is outside this tree.** `vendor/elmdb` is a
+symlink to a sibling checkout shared by every worktree, and that checkout was being rebuilt while the run
+read it — its commit moved four times over this session (`ed20979`, `0f35f0c`, `73e8db3`, `77809c6`), and
+the chain's own result line reported the drift on every run. The compiler noticed its startup input change
+underneath it and said so by name, which is the behaviour that exists to stop a build testing a mixture of
+two dependencies.
+
+**So the gate on master's own source is clean, and the one outstanding step is blocked on a vendored
+dependency being rebuilt concurrently rather than on anything this goal changed.** Re-running it needs a
+window in which `vendor/elmdb` holds still; the isolated worktree remains at
+`monorepo-worktrees.noindex/gate-pushed-master` for whoever takes that window, and `git worktree remove`
+disposes of it.
