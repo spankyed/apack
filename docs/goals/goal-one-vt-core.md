@@ -28,7 +28,20 @@ nobody is drawing — and the reference docs say so in those terms.
 | **0b** — does the module load where it has to? | done | a pack's WebAssembly module instantiates in a packaged app from the installed revision over `pack://`, streaming and buffered. An imported module is the wrong mechanism; a public asset needed no build change |
 | **B** — the broker on the core | done | `cargo xtask pre-push` green on the merged commit: 135 tests, 61 mutants, 58 caught, 3 unviable, **none missed**. Windows proven on the VM: built from the signed tarballs with Zig 0.17.0 and `--system`, linked, 97 tests, with Job Object tree ownership, the named-pipe ACL and the ConPTY `ESC [ 6 n` startup each re-proven by name |
 | **R** — the window on the core | done | the whole typecheck, `apack pack build`, `check:specifiers`' emulator rule in both directions, and the code surface's sixteen frontend spec files |
-| **A** — acceptance | done | the journeys driven against the built app on both new halves together, and five defects found by running it |
+| **A** — acceptance | done, with its measurement acceptance unmet and recorded | `npm run chain` (361s, 32 steps), `test:smoke`, the packaged install path and the broker's `pre-push` all green; the journeys driven against the built app on both new halves together; five defects found by running it |
+
+**One acceptance condition is not met, and is recorded rather than worked around.** Phase A says the
+measured figures must sit inside limits *agreed from the baseline before cutover*. No limits were agreed,
+so there is nothing for a figure to sit inside, and this goal cannot satisfy that clause however it
+measures.
+
+What was measured anyway: `terminal-open`, four runs, against the ownership goal's recorded baseline on
+the same machine and the same build identities. **The median is not citable** — four runs of an identical
+configuration spread from 17.1 to 30.8 ms — and the record declines to quote one. What survives is a
+floor, because load inflates a duration and cannot deflate it: 15.8 ms observed against the baseline's best
+of 18. **Attaching a terminal did not get slower.** The other four figures Phase A lists were not taken,
+for the same reason the median is not citable, and they are named in
+[evidence](../references/evidence/one-vt-core.md) rather than dropped.
 
 ### What running the app was worth
 
