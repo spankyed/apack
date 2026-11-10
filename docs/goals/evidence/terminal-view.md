@@ -59,3 +59,63 @@ module instance per terminal — is what `master` has.
 
 The echo is quantized by the display: the emulator paints on the next frame, so 16.7 ms is one frame at
 60 Hz. The 64 KiB reading is mostly the shell exiting, which is what ends the measurement.
+
+## Phases 1–5 — contracts, broker, view, data plane, cutover
+
+2026-11-10. Broker `75f6129`, view `cf6b53d`, this repository at the commit that pins them.
+
+### The contract holds across the two repositories
+
+`apack-terminal` writes `node/view-vectors.json` from its Rust encoder: every kind of message, as bytes and
+as the value they mean (`tests/view_vectors.rs`, which fails when the file is not what the encoder writes).
+`apack-terminal-view` holds a copy and its suite decodes each vector for a view and encodes each one for the
+broker (`tests/wire.spec.ts`, 21 kinds). The two copies are the same file; nothing here checks that yet.
+
+### The broker
+
+- **The invariant.** A model view that applies every frame it is sent holds exactly the terminal's rows —
+  the screen, and every line of history it still holds — over generated streams, resizes, fetches and
+  acknowledgements (`tests/view_model.rs`). Run at 4,000 cases while it was written, 256 as committed. It
+  found one defect in the publisher: history erased with nothing on screen moving was not a change a view
+  was told of.
+- **Broken on purpose**, the same case failed for: no count of scrolled lines; a flood between two frames
+  not named stale; a lost row mark not starting a new epoch; the shift between two captures ignored. It did
+  not fail for two others, which are covered by direct cases instead (`tests/view_frames.rs`): a program
+  holding the screen, and a switch between the two screens starting a new epoch.
+- **Over a real socket and a real shell** (`tests/view_broker.rs`): keys typed through a view run, history
+  is fetched by line, a paste that could run a command is refused until allowed, a view is sent the screen
+  as it ended, and a view that stops acknowledging or sends nonsense costs nobody else anything. 60 runs,
+  no failure.
+- 211 tests. `cargo xtask pre-push` has not been run over this branch's later commits yet.
+- **A flake that predates this work**: `broker::an_alternate_screen_app_survives_a_resize_and_keeps_answering`
+  failed 1 run in 30 on `0fef59f`, before any view code, and 0 in 30 after. Not this goal's.
+
+### The view
+
+160 tests against a fake source and a fake broker that is itself held to the broker's vectors. It has only
+been seen drawing in the app, below.
+
+### In the app
+
+`tests/e2e/app-integration/terminal-view.spec.ts`, against the built app, the broker and a shell:
+
+| Case | Result |
+|---|---|
+| A shell is drawn, and what is typed into the view runs | passes |
+| A program asking where the cursor is reads one answer | passes |
+| A paste holding the end-of-paste marker is shown to the person, and runs nothing when they decline | passes |
+| A program's clipboard request (OSC 52) reaches the surface | passes |
+
+The screen is read off the page (`[data-terminal-text]`), which the view publishes; the API process carries
+none of it. `test:smoke` passes (8). The full typecheck passes, and the specs the change affects: 571 files
+in the host pool, 191 in the pack's.
+
+### Not this goal's, found on the way
+
+Two specs in `tests/e2e/app-integration/` fail, and neither is a gate:
+
+- `surface-sends.spec.ts`, "the code system's file watcher…": fails at its first wait, a file read, before
+  any terminal step. The explorer answers `explorer.FILE_CONTENT` by reply, and the spec's raw send has no
+  return address for one. Its terminal half was changed here from the output broadcast to a clipboard
+  request and cannot be seen passing until the first half does; the same claim is the last row above.
+- `db-cli.spec.ts`: expects `apack db reset` beside a running app to be refused, and it exits 0.

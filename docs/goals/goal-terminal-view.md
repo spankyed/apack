@@ -121,9 +121,21 @@ Each ends in something checked. A phase is not started on a red one.
 ## Current handoff
 
 - **Evidence.** [evidence/terminal-view.md](evidence/terminal-view.md).
-- **Phase 0 is done.** The broker's gate had a hole and two survivors, all three fixed on the broker's
-  branch; the window's fixes are reproduced and proven in the real app; the baselines are taken. One
-  integration spec outside this goal stalls on a busy machine and is recorded there.
-- **View** (`apack-terminal-view`): the contract (`src/source.ts`), row store, viewport, drawing, 2D painter,
-  the view itself and the selection, against a fake source.
-- **Next.** Phase 1: the wire format in the broker, its TypeScript codec, and vectors both read.
+- **Done: phases 0 to 5.** A terminal in the app is drawn from rows the broker sends, over a connection the
+  window opens itself; the emulator, the output broadcast and its flow control are gone. Typecheck, the
+  affected specs, `test:smoke` and the real-app terminal spec pass.
+- **Changed from the design above, with why.**
+  - *No relay process.* A window's preload opens the broker's socket itself, which is the shortest path
+    there is and needs no second process to supervise. A relay returns when a window is sandboxed, or when
+    a measurement says the window's own process should not hold the socket.
+  - *The TypeScript codec lives in `apack-terminal-view`*, where the TypeScript toolchain is, held to
+    vectors the broker writes. Nothing yet checks the two repositories' copies of the vectors are one file.
+  - *Painting is 2D canvas.* The painter is behind an interface; a GPU painter is decided by phase 9's
+    measurement against the baseline, not assumed.
+- **Not yet built.** In the broker: command records, a larger history with compression, images, recording,
+  the proxy. In the app: phase 6's features beyond what the view already has (links, paste confirmation,
+  the clipboard event), phases 7 and 8.
+- **Owed before the pull requests.** The chain on this branch; `cargo xtask pre-push` over the broker's
+  branch; the performance scenarios against the baselines, whose `terminal-output` still counts an event
+  that no longer exists; a check that the two copies of the vectors agree; the broker's and the app's docs.
+- **Next.** The chain, as a checkpoint on the cutover.
