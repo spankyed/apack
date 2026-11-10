@@ -64,6 +64,7 @@ export interface ClaudeNativeTerminalOwner {
   holdQuestionDialog(request: ClaudeNativeQuestionHoldRequest): Promise<void>
   renderQuestionDialog(request: ClaudeNativeQuestionRenderRequest): Promise<ClaudeNativeQuestionRender>
   getQuestionDialogs(): Promise<ClaudeNativeQuestionDialog[]>
+  rejectQuestionDialog(response: Omit<ClaudeNativeQuestionDialogResponse, 'answer'>): Promise<void>
   answerQuestionDialog(response: ClaudeNativeQuestionDialogResponse): Promise<void>
   getBashDialogs(): Promise<ClaudeNativeBashDialog[]>
   answerBashDialog(response: ClaudeNativeBashDialogResponse): Promise<void>
@@ -467,6 +468,12 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         const result = await bridge.uiTransport.request({ subtype: 'apack_question_dialogs' }) as { dialogs?: unknown }
         if (closed) return []
         return ClaudeNativeQuestionDialogsSchema.parse(result.dialogs)
+      },
+      async rejectQuestionDialog(response) {
+        if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native question session expired')
+        if (!response.renderToken) throw new Error('Native question rejection requires its drawing')
+        const result = await bridge.uiTransport.request({ subtype: 'apack_deny_question_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, render_token: response.renderToken, draft_started: response.draftStarted }) as { answered?: unknown }
+        if (result.answered !== true) throw new Error('Native question rejection was not acknowledged')
       },
       async answerQuestionDialog(response) {
         if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native question session expired')

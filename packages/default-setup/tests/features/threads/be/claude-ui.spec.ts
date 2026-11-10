@@ -440,3 +440,19 @@ it('routes native IDE dismissal through the existing UUID action boundary to its
   handleClaudeUiView({...mount,type:'CLAUDE_UI_PRESS',actionId},'window',delivery)
   await vi.advanceTimersByTimeAsync(0);expect(ui.dismissIde).toHaveBeenCalledOnce()
 })
+it('routes main question rejection only through its current addressed drawing',async()=>{
+ await native();const base=getConversation('thread')!.owner,delivery=reply(),token=randomUUID(),reject=vi.fn(async()=>{})
+ let row={messageId:'question-message',id:'native-question',revision:randomUUID(),sessionId:randomUUID(),requestId:'native-tool-request'}
+ const question={ownerId:'native-owner',row:()=>row,hold:vi.fn(async()=>{}),reject,render:vi.fn(async()=>({tree:{type:'Box',children:[{type:'engine'}]},props:{},rewritten:false,hooked:false,question:{token,dialogId:row.id,revision:row.revision,shownInput:{questions:[]},presentation:{}}}))}
+ const owner={...base,question} as unknown as import('#features/code/be/services/claude-code/ui-mount.ts').ClaudeUiOwner
+ const read=vi.spyOn(uiOwners,'getClaudeUiOwner').mockReturnValue(owner)
+ try{
+  handleClaudeUiView(mount,'main-window',delivery);await vi.advanceTimersByTimeAsync(100)
+  const event={...mount,type:'CLAUDE_UI_QUESTION_REJECT' as const,messageId:row.messageId,token}
+  handleClaudeUiView(event,'foreign-window',reply());handleClaudeUiView({...event,token:randomUUID()},'main-window',delivery)
+  await vi.advanceTimersByTimeAsync(0);expect(reject).not.toHaveBeenCalled()
+  handleClaudeUiView(event,'main-window',delivery);await vi.advanceTimersByTimeAsync(0)
+  expect(reject).toHaveBeenCalledExactlyOnceWith({...row,renderToken:token,draftStarted:false})
+  handleClaudeUiView(event,'main-window',delivery);await vi.advanceTimersByTimeAsync(0);expect(reject).toHaveBeenCalledOnce()
+ }finally{read.mockRestore()}
+})

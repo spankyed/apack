@@ -353,7 +353,7 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     return
   }
   if(event.type==='CLAUDE_UI_QUESTION_REJECT') {
-    if(!view||!view.backgroundView||typeof event.messageId!=='string'||event.messageId.length>512||!validId(event.token))return
+    if(!view||view.nativeView||typeof event.messageId!=='string'||event.messageId.length>512||!validId(event.token))return
     bind(view);void view.mount?.rejectQuestion(event.messageId,event.token);return
   }
   if (event.type === 'CLAUDE_UI_QUESTION_ANSWER') {

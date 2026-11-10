@@ -114,3 +114,11 @@ it('shares in-flight capability discovery and preserves native capability refusa
   await expect(owner.handle.ui.attach({ client_id: 'third', surface: 'desktop' })).rejects.toThrow('native UI surface capability is unavailable')
   expect(request).toHaveBeenCalledOnce()
 })
+it('exposes original rejection only to the native main question owner',async()=>{
+ const {state,owner}=native(),reject=vi.fn(async()=>{})
+ owner.rejectQuestionDialog=reject;state.view={kind:'main',revision:3}
+ const main=getClaudeUiOwner('thread')!
+ expect(main.question?.reject).toBe(reject)
+ state.view={kind:'agent',revision:2,registryId:'registry-agent',taskId:'agent'}
+ expect(getClaudeUiOwner('thread',target)?.question?.reject).toBeUndefined()
+})

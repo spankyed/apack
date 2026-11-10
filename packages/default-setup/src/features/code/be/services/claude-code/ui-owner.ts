@@ -103,7 +103,7 @@ export function getClaudeUiOwner(threadId: string, target?: ClaudeNativeAgentUiT
     get billing() { return native.state.status === 'live' && native.state.sessionId === state.sessionId ? native.state.billing : undefined },
     sessionId: state.sessionId,
     subscribe: listener => native.uiTransport.subscribe(listener),
-    question: { ownerId: native.state.ownerId, render: native.renderQuestionDialog, hold: native.holdQuestionDialog },
+    question: { ownerId: native.state.ownerId, render: native.renderQuestionDialog, hold: native.holdQuestionDialog, reject: target ? undefined : native.rejectQuestionDialog },
     handle: { ui: createClaudeUiControls(initialized, native.uiTransport, native.uiTransport.promptHosts) },
   }
   nativeOwners.set(native, { key, owner })

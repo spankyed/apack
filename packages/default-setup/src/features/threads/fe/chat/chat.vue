@@ -137,10 +137,10 @@
               @pause="actor.send({ type: 'PAUSE_TURN', threadId: currentThread?.id ?? '' })" />
           </div>
           <div v-if="pendingNativeQuestion" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
-            <NativeQuestionDrawing :key="pendingNativeQuestion.messageId" :frame="pendingNativeQuestion.frame" :disabled="pendingNativeQuestion.disabled" :error="pendingNativeQuestion.error"
+            <NativeQuestionDrawing :key="pendingNativeQuestion.messageId" :frame="pendingNativeQuestion.frame" :disabled="pendingNativeQuestion.disabled" :error="pendingNativeQuestion.error" :can-reject="nativeComposerOwner?.view?.kind === 'main'"
               @press="pressNativeUi" @field="editNativeUi" @started="startNativeQuestionDraft"
               @respond="answerNativeQuestion"
-              @pause="pauseNativeQuestion" />
+              @reject="rejectNativeQuestion" @pause="pauseNativeQuestion" />
           </div>
           <!-- Keep the draft/editor mounted while the native process needs a decision. -->
           <!-- Input -->
@@ -720,6 +720,12 @@ function answerNativeQuestion(answer: import('#features/code/common/native-quest
   const token = identity.token
   if (!token) return
   actor.send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: question.messageId, response: { nativeQuestionAnswer: answer, nativeQuestionRenderToken: token, nativeQuestionDraftStarted: true } })
+}
+
+function rejectNativeQuestion(identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity) {
+  const question = pendingNativeQuestion.value, mount = nativeUiMount.value
+  if (!mount || !question?.frame || question.messageId !== identity.messageId || !identity.token || nativeComposerOwner.value?.view?.kind !== 'main') return
+  actor.send({ type: 'CLAUDE_UI_QUESTION_REJECT', threadId: mount.threadId, mountId: mount.mountId, messageId: identity.messageId, token: identity.token })
 }
 
 function pauseNativeQuestion(identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity) { if (pendingNativeQuestion.value?.messageId === identity.messageId) actor.send({type: 'PAUSE_TURN', threadId: currentThread.value?.id ?? ''}) }
