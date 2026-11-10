@@ -1014,11 +1014,11 @@ visible region changes no pixel in it and the two hashes are equal; if it snappe
 moved.
 
 ```
-scrolled back        367765107
-after one more line  1995027964     held: false
+before the fix   scrolled back 367765107   after one more line 1995027964   held: false
+after it         scrolled back 367765107   after one more line  367765107   held: true
 ```
 
-Different, so the screen had moved. That measurement is itself only possible because this engine draws to
+Different, so the screen had moved; identical afterwards, so it does not. That measurement is itself only possible because this engine draws to
 a 2D canvas; against the previous one it would have been a screenshot and an opinion.
 
 ### What was done about it
