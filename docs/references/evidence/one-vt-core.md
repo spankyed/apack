@@ -1042,3 +1042,47 @@ It is worth stating plainly that **this is a place where `ghostty-web` is less c
 replaced**, and the compensation lives in this app rather than upstream. If the package later takes the
 official distribution, or fixes this, the correction here should be re-measured rather than assumed still
 needed — the canvas fingerprint is how.
+
+
+## 2026-11-09 — Phase A's gates
+
+```
+chain passed in 361.0s (28 of 32 cached) on a 10-core budget
+```
+
+All four of the gates Phase A names:
+
+| gate | result |
+|---|---|
+| `npm run chain` | **passed**, 32 steps |
+| `test:smoke` | passed, as a chain step |
+| the packaged install path | `test:packaged-authoring:author` and `:app` passed |
+| `cargo xtask pre-push` on the broker | passed: 135 tests in 7.3s, 61 mutants, none missed |
+
+`test:native` passed in the Linux container (2876.8s) and `test:integration` in 681.7s, both on the run
+before this one; this run found their inputs unmoved and cached them, which is what the 28-of-32 is.
+
+### Two things the chain said that are worth reading
+
+**It did not build what CI clones.** Its result line says so by name: `vendor/apack-terminal at 26e6583
+rather than 80ffdb3`. One commit sits past the pin — the packaging fix that stages the binary by rename —
+because the pin cannot advance to a commit that has not been pushed. A local chain tests the sibling's
+working tree and CI clones the `.rev`, which is exactly the drift that line exists to surface.
+(`vendor/elmdb` is drifted too, from other work.)
+
+**A first run failed, and one of the two reasons was mine.** It failed at `test:unit:host` on
+`progress.spec.ts`'s *"reads a worker thread's own CPU from the first reading"* — `expected 105.321 to be
+greater than 200`, a CPU measurement starved by the chain's own worker concurrency, in a package this goal
+does not touch. It passes 32 of 32 alone, at a load average of 99.
+
+The other was self-inflicted and is the more useful note: the chain reported
+
+```
+test:integration  docs/goals/goal-one-vt-core.md  changed while it ran
+test:integration's result does not describe this tree: it read files that changed while it ran.
+```
+
+Documentation was being written during the run, and that step declares the tree it read. The result was
+therefore not cacheable and, under `--strict`, would have failed the run. **A chain run wants a quiescent
+tree**, including from whoever is writing the prose about it — which is why the figure above comes from a
+second run that touched nothing.
