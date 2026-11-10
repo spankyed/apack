@@ -1,7 +1,78 @@
 # One VT core
 
-Status: **planned**. Phase 0 is authorized; nothing past it is, and Phase 0's own exit condition is
-what decides whether the rest is worth doing.
+Status: **complete**, 2026-11-09. See Outcome below.
+
+The startup prompt is kept as it was written, because what it authorized — Phase 0 alone, with the rest
+conditional on Phase 0's answer — is the shape of how this goal ran, and a prompt rewritten after the fact
+would hide that the authorization widened as each phase answered.
+
+## Outcome (2026-11-09)
+
+**One VT core, on both sides.** The broker parses with `libghostty-vt` 1.0's static library and
+`alacritty_terminal` is gone from its manifest and its lockfile; the window draws with the same release's
+WebAssembly build through `ghostty-web` and the six `@xterm/*` packages are gone from this repository.
+`vendor/apack-terminal.rev` names the merged broker. `xterm-256color` stays as the advertised `TERM`,
+being a terminfo name and not a dependency.
+
+**What that buys is one answer to what a sequence means**, which is the claim the goal was for. It does
+not make the window's screen an authority — the broker is still fed first and still answers for a session
+nobody is drawing — and the reference docs say so in those terms.
+
+21 commits here and 13 in `apack-terminal`.
+
+### Per phase
+
+| Phase | Status | Evidence |
+|---|---|---|
+| **0a** — do the two parsers agree? | done | eight grids identical over the broker's own corpus, the single-byte-boundary property holding for the new wrapper alone, and three differences each decided. One of them found a **pre-existing defect**: the broker read OSC 633 and not the standard OSC 133 |
+| **0b** — does the module load where it has to? | done | a pack's WebAssembly module instantiates in a packaged app from the installed revision over `pack://`, streaming and buffered. An imported module is the wrong mechanism; a public asset needed no build change |
+| **B** — the broker on the core | done | `cargo xtask pre-push` green on the merged commit: 135 tests, 61 mutants, 58 caught, 3 unviable, **none missed**. Windows proven on the VM: built from the signed tarballs with Zig 0.17.0 and `--system`, linked, 97 tests, with Job Object tree ownership, the named-pipe ACL and the ConPTY `ESC [ 6 n` startup each re-proven by name |
+| **R** — the window on the core | done | the whole typecheck, `apack pack build`, `check:specifiers`' emulator rule in both directions, and the code surface's sixteen frontend spec files |
+| **A** — acceptance | done | the journeys driven against the built app on both new halves together, and five defects found by running it |
+
+### What running the app was worth
+
+**Five defects, none of which a spec caught, and three of which the specs *could not* have caught as they
+stood.** They are listed because the pattern is the lesson rather than any one of them:
+
+| | what it was |
+|---|---|
+| link providers registered before `open` | every terminal failed; the emulator refuses almost everything before `open` and says so |
+| `write('', cb)` as a wait primitive | `RangeError` twice per attach; this emulator parses *inside* `write` and its callback is only a `requestAnimationFrame` |
+| the broker binary overwritten in place | macOS kept a signature cached against the old file and SIGKILLed every later run; a byte-identical copy at another path ran |
+| snap-to-bottom on every write | a session scrolled back was dragged to the end by output it was not reading |
+| a suppression flag raised too late | the host was told a session had started following at the moment output took it there |
+
+Three of those were cases where **the stand-in was the thing that was wrong**: it accepted an empty write,
+an ordering and a silent scroll that the real emulator does not. Each stub was taught the real behaviour,
+and each fix fails exactly the case it should when reverted.
+
+### The findings, which are not defects
+
+- **`ghostty-vt-rs-sys` 0.3.0's source build cannot run offline.** It passes `zig build` a
+  `--global-cache-dir` that Zig 0.17.0 rejects, and only on the branch that supplies packages from the
+  dependency tarball — so the one hermetic route is the one that fails. Not in our way; we do not build the
+  library during `cargo build`.
+- **D4's mechanism is POSIX-shaped.** `GHOSTTY_VT_RS_SYS_PREBUILT_DIR` asserts a `lib/libghostty-vt.a` that
+  no Windows build produces, Zig installing `ghostty-vt-static.lib` — which is also the name the crate's own
+  link directive uses there. The decision holds; the claim that one environment variable delivers it
+  everywhere does not.
+- **`ghostty-web` is less capable than what it replaced in two places.** It surfaces no OSC 52, and it snaps
+  the view to the bottom on every write. Both are compensated for in this repository, and both should be
+  re-measured rather than assumed still needed if the package takes the official distribution.
+- **The emulator's JavaScript shrank and the bundle grew.** 502 KiB of `@xterm/*` became 134 KiB of
+  `ghostty-web`, and the bundle gained 184 KiB because a 414 KiB WebAssembly module is carried as 552 KiB
+  of base64 by the package's own library build. The package exports it as a file too and Phase 0b proved
+  that route, so the one optimisation here already has its number.
+
+### What this change made measurable
+
+The previous engine drew through WebGL and left no text in the DOM, and the terminal-ownership evidence
+recorded more than once that whether the screen was intact could only be judged by eye. This one draws to a
+**2D** canvas, so a page can read its pixels — which is how the snap-to-bottom was established and then
+shown fixed, by fingerprinting the canvas rather than looking at a screenshot. "The terminal is blank" and
+"the view moved" stop being things only a human can notice.
+
 
 ```text
 # Goal: one terminal implementation, parsed once per side and never twice differently
