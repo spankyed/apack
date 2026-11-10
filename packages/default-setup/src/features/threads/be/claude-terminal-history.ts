@@ -8,7 +8,6 @@ export function projectClaudeTerminalHistory(entry: ClaudeNativeJournalEntry): {
   uuid: string; sessionId: string; timestamp?: number; sender: 'user' | 'assistant' | 'system'; text: string; blocks: BlockConfig[]; references?: MessageReferences; context: Record<string, unknown>
 } | undefined {
   const source = entry.row
-  if (isClaudeNativeInterruption(source)) return
   // Original ui.log persists a transcript-only informational notice, outside model messages.
   if (source.type === 'system' && source.subtype === 'informational' && source.level === 'notice') {
     if (source.sessionId !== entry.sessionId || source.entrypoint !== 'cli' || source.isSidechain === true
@@ -30,6 +29,14 @@ export function projectClaudeTerminalHistory(entry: ClaudeNativeJournalEntry): {
     || (row.type !== 'user' && row.type !== 'assistant') || typeof row.uuid !== 'string' || !/^[a-f0-9-]{36}$/i.test(row.uuid)) return
   const content = typeof message.content === 'string' ? [{ type: 'text', text: message.content }] : Array.isArray(message.content) ? message.content.map(object).filter((block): block is Record<string, unknown> => !!block) : []
   const text = content.filter(block => block.type === 'text' && typeof block.text === 'string').map(block => block.text).join('\n')
+  // Preserve native interruption events without assigning person/composer ownership.
+  if (isClaudeNativeInterruption(row)) {
+    const timestamp = typeof row.timestamp === 'string' ? Date.parse(row.timestamp) : Number.NaN
+    return { uuid: row.uuid, sessionId: entry.sessionId, sender: 'system', text, blocks: [],
+      ...(Number.isFinite(timestamp) ? { timestamp } : {}),
+      context: { cliUuid: row.uuid, claudeTerminalMessage: { uuid: row.uuid, sessionId: entry.sessionId },
+        claudeNativeInterruption: { uuid: row.uuid, sessionId: entry.sessionId, text } } }
+  }
   const command = content.every(block => block.type === 'text') ? presentClaudeCommandHistory(row, text) : undefined
   if (command && !command.text) return
   const thinking = content.filter(block => block.type === 'thinking' && typeof block.thinking === 'string').map(block => block.thinking).join('\n')

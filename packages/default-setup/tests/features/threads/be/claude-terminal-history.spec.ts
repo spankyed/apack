@@ -102,7 +102,10 @@ it('omits native empty-command stdout while preserving literal user text and std
 })
 it('does not project native interruption envelopes as user bubbles but preserves literal human input',()=>{
  const entry={sessionId:'session',row:{sessionId:'session',type:'user',uuid:'11111111-1111-4111-8111-111111111111',message:{content:[{type:'text',text:'[Request interrupted by user for tool use]'}]}}}
- expect(projectClaudeTerminalHistory(entry)).toBeUndefined()
+ expect(projectClaudeTerminalHistory(entry)).toMatchObject({sender:'system',uuid:entry.row.uuid,text:'[Request interrupted by user for tool use]',context:{cliUuid:entry.row.uuid,claudeNativeInterruption:{sessionId:'session',uuid:entry.row.uuid}}})
+ expect(projectClaudeTerminalHistory({...entry,sessionId:'foreign'})).toBeUndefined()
+ expect(projectClaudeTerminalHistory({...entry,row:{...entry.row,isSidechain:true}})).toBeUndefined()
+ expect(projectClaudeTerminalHistory({...entry,row:{...entry.row,agentId:'child'}})).toBeUndefined()
  expect(projectClaudeTerminalHistory({...entry,row:{...entry.row,origin:{kind:'human'}}})?.sender).toBe('user')
  expect(projectClaudeTerminalHistory({...entry,row:{...entry.row,message:{content:'[Request interrupted by user for tool use]'}}})?.sender).toBe('user')
 })
