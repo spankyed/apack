@@ -248,9 +248,13 @@ export function takeClipboardWrites(pending: string, chunk: string): { writes: s
     const start = text.indexOf(CLIPBOARD_INTRODUCER, from)
     if (start === -1) break
     const after = start + CLIPBOARD_INTRODUCER.length
-    // A terminator is either BEL or ST
-    const end = text.slice(after).search(/\x07|\x1b\\/)
-    if (end === -1) { held = text.slice(start); break }
+    // A terminator is either BEL or ST, whichever comes first. Searched rather than matched, because a
+    // regex naming them is a regex of control characters, which `no-control-regex` refuses and is right to
+    const bell = text.indexOf('\x07', after)
+    const stop = text.indexOf('\x1b\\', after)
+    const terminator = bell === -1 ? stop : stop === -1 ? bell : Math.min(bell, stop)
+    if (terminator === -1) { held = text.slice(start); break }
+    const end = terminator - after
     const body = text.slice(after, after + end)
     const payload = body.slice(body.indexOf(';') + 1)
     if (body.includes(';') && payload !== '?') {
