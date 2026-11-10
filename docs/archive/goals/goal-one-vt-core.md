@@ -28,7 +28,7 @@ nobody is drawing — and the reference docs say so in those terms.
 | **0b** — does the module load where it has to? | done | a pack's WebAssembly module instantiates in a packaged app from the installed revision over `pack://`, streaming and buffered. An imported module is the wrong mechanism; a public asset needed no build change |
 | **B** — the broker on the core | done | `cargo xtask pre-push` green on the merged commit: 135 tests, 61 mutants, 58 caught, 3 unviable, **none missed**. Windows proven on the VM: built from the signed tarballs with Zig 0.17.0 and `--system`, linked, 97 tests, with Job Object tree ownership, the named-pipe ACL and the ConPTY `ESC [ 6 n` startup each re-proven by name |
 | **R** — the window on the core | done | the whole typecheck, `apack pack build`, `check:specifiers`' emulator rule in both directions, and the code surface's sixteen frontend spec files |
-| **A** — acceptance | done, with one acceptance clause unsatisfiable and recorded | `npm run chain` (3421.9s, all 32 steps, building what CI clones), `test:smoke`, the packaged install path and the broker's `pre-push` all green; **both** behaviour scripts driven against the built app on the new broker and the new renderer together; the five scenarios measured on an idle machine; five defects found by running it |
+| **A** — acceptance | done | `npm run chain` (3421.9s, all 32 steps, building what CI clones), `test:smoke`, the packaged install path and the broker's `pre-push` all green; **both** behaviour scripts driven against the built app on the new broker and the new renderer together; the five scenarios measured on an idle machine; five defects found by running it |
 
 **The figures were taken, and one acceptance clause is unsatisfiable rather than unsatisfied.**
 
@@ -50,10 +50,15 @@ having recorded no pre-cutover figure for any of them: sustained output 1126.1 m
 resize 28.7, large-history replay 4.6, all 20 of 20 passing, conditions in
 [evidence](../../references/evidence/one-vt-core.md).
 
-**What is unsatisfied is the clause's form, not its substance.** Phase A asks for limits *agreed from the
-baseline before cutover*; none were agreed, and no measurement taken afterwards can make them have been.
-The thing that clause protects against — a limit chosen after seeing the numbers — is answered instead by
-a baseline that predates this work and was recorded by someone else.
+**And the acceptance clause is met, 2026-11-10.** It asked for figures inside limits agreed from the
+baseline before cutover; none were agreed, so the owner adopted the **pre-cutover baseline's own recorded
+figures** as the limit — median ≤ 20.7 ms and maximum ≤ 25, read unchanged from the ownership goal's
+record, taken before this work by a different goal. All three runs are inside both halves of it.
+
+That the number's provenance predates this work is what makes the check real rather than a formality, and
+the limit carries the baseline's conditions with it: three of the four runs taken earlier under load had
+maxima of 57, 69 and 84 ms and would have failed it. The four scenarios with no pre-cutover figure get no
+limit, because deriving one from this goal's own numbers is exactly what the clause existed to prevent.
 
 ### What running the app was worth
 
@@ -557,9 +562,21 @@ before cutover**, not after seeing the numbers.
   contract that shipped.
 - Write Outcome, archive this goal and both deferred documents, and repair links.
 
+**The limits, adopted 2026-11-10.** No limits were agreed before cutover, so the goal's owner adopted the
+**pre-cutover baseline's own recorded figures** as the limit for the one scenario that has a baseline:
+
+> `terminal-open`: **median ≤ 20.7 ms and maximum ≤ 25 ms**, measured as the baseline was — 20 trials,
+> five warmups, `lightweight`, on a machine `npm run check:idle` accepts at the 70% floor.
+
+**Where the number comes from matters more than the number.** It is
+[the ownership goal's recorded measurement](../../references/evidence/terminal-ownership.md), taken before
+any of this work by a different goal, and it is adopted unchanged — not a threshold picked after seeing
+these results. The four scenarios with no pre-cutover figure get no limit, because inventing one from
+this goal's own numbers is the thing the clause existed to prevent.
+
 **Done when:**
 
-- Every behaviour above passes and the measured figures sit inside the agreed limits.
+- Every behaviour above passes and the measured figures sit inside those limits.
 - No dual engine and no permanent fallback. A blocker leaves the current engine in production **on that
   side**, recorded with its failing case, and the other side still ships.
 

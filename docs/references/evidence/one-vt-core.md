@@ -1316,3 +1316,36 @@ screen has no scrollback to fall back on, and a host handing the session to anot
 exactly where the detached-wrapper design is load-bearing. It went through two resizes, a tab switch and a
 host handover, left the alternate screen onto a primary screen still holding the session's history, and
 ran a command after.
+
+
+## 2026-11-10 — The limit, and the measurements checked against it
+
+Phase A's acceptance wanted figures inside limits agreed from the baseline *before* cutover. None were
+agreed and the cutover had happened, so the clause could not be satisfied by any measurement. The goal's
+owner resolved it by **adopting the pre-cutover baseline's own recorded figures as the limit**:
+
+> `terminal-open`: **median ≤ 20.7 ms, maximum ≤ 25 ms**, measured as the baseline was — 20 trials, five
+> warmups, `lightweight`, on a machine `check:idle` accepts at the 70% floor.
+
+**The provenance is the point.** Both numbers are read unchanged from
+[the ownership goal's record](terminal-ownership.md), taken before this work by a different goal for a
+different purpose. Nothing here chose a threshold after seeing a result, which is the only thing the
+original clause was protecting.
+
+| run | median | ≤ 20.7 | max | ≤ 25 | |
+|---|---|---|---|---|---|
+| 1 | 14.8 | yes | 18.9 | yes | **pass** |
+| 2 | 14.7 | yes | 16.0 | yes | **pass** |
+| 3 | 15.6 | yes | 20.3 | yes | **pass** |
+
+**All three inside the limit, on both halves of it.**
+
+**The limit carries its conditions, and that is not a formality.** Three of the four runs taken earlier
+under load had maxima of 57, 69 and 84 ms and would have failed it outright. The baseline declared
+`check:idle` at the 70% floor as part of its measurement, so the limit inherits that, and a run taken
+without it is not a run against this limit.
+
+**The four scenarios with no pre-cutover figure get no limit**, deliberately. Sustained output, hidden
+sessions, resize and replay have nothing recorded from before the change, and deriving a limit from this
+goal's own numbers would be precisely the formality the clause existed to prevent. They stay readings,
+with their conditions, for whoever next has something to compare them against.
