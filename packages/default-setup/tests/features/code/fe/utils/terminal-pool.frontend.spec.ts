@@ -204,6 +204,106 @@ describe('what a host is told', () => {
   })
 })
 
+describe('finding text in a terminal', () => {
+  const bar = (within: HTMLElement) => within.querySelector<HTMLElement>('[data-terminal-find]')
+  const typeInto = (input: HTMLInputElement, text: string) => {
+    input.value = text
+    input.dispatchEvent(new Event('input'))
+  }
+  const press = (target: HTMLElement, key: string, init: KeyboardEventInit = {}) =>
+    target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, ...init }))
+
+  it('asks the session, says which match of how many, and steps through them', async () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const mountedIn = host()
+    const attachment = terminalPool.attach(info.id, mountedIn)!
+    const view = lastView()
+    view.matches = 3
+
+    attachment.find()
+    const input = bar(mountedIn)!.querySelector('input')!
+    expect(document.activeElement, 'the person has to click before they can type what to find').toBe(input)
+    typeInto(input, 'error')
+    await vi.waitFor(() => { expect(bar(mountedIn)!.querySelector('[data-terminal-find-count]')!.textContent).toBe('1 of 3') })
+    expect(view.searches).toEqual(['error'])
+
+    press(input, 'Enter')
+    expect(bar(mountedIn)!.querySelector('[data-terminal-find-count]')!.textContent).toBe('2 of 3')
+    press(input, 'Enter', { shiftKey: true })
+    expect(bar(mountedIn)!.querySelector('[data-terminal-find-count]')!.textContent).toBe('1 of 3')
+
+    view.matches = 0
+    typeInto(input, 'nowhere')
+    await vi.waitFor(() => { expect(bar(mountedIn)!.querySelector('[data-terminal-find-count]')!.textContent).toBe('No results') })
+  })
+
+  it('closes on Escape, with nothing left marked and the terminal typed at again', async () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const mountedIn = host()
+    const attachment = terminalPool.attach(info.id, mountedIn)!
+    const view = lastView()
+    attachment.find()
+    typeInto(bar(mountedIn)!.querySelector('input')!, 'x')
+    press(bar(mountedIn)!.querySelector('input')!, 'Escape')
+
+    expect(bar(mountedIn)).toBeNull()
+    expect(view.searches.at(-1), 'the matches of a search nobody is looking at stayed marked').toBe('')
+    expect(view.focused).toBe(1)
+    // Asked for again, there is one bar and not two
+    attachment.find()
+    attachment.find()
+    expect(mountedIn.querySelectorAll('[data-terminal-find]')).toHaveLength(1)
+  })
+
+  it('opens on the app\'s key and leaves the shell\'s own Control-F to the shell', () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const mountedIn = host()
+    terminalPool.attach(info.id, mountedIn)
+    const key = (init: KeyboardEventInit) => lastView().options.onKey!(new KeyboardEvent('keydown', { code: 'KeyF', ...init }))
+
+    expect(key({ ctrlKey: true }), 'readline never saw its own key').toBe(false)
+    expect(bar(mountedIn)).toBeNull()
+    expect(key({ ctrlKey: true, shiftKey: true })).toBe(true)
+    expect(bar(mountedIn)).not.toBeNull()
+  })
+})
+
+describe('what a program printed', () => {
+  it('opens as the file it names: against the shell\'s directory, without the line a compiler put after it', () => {
+    const info = terminal({ cwd: '/work/app' })
+    terminalPool.ensure(info)
+    const opened: Array<[string, number | undefined]> = []
+    terminalPool.attach(info.id, host(), { onOpenPath: (path, line) => { opened.push([path, line]) } })
+    const click = (target: string) => lastView().options.onLink!({ kind: 'path', target, start: 0, end: 0 } as never, new MouseEvent('click'))
+
+    click('src/main.ts:12:5')
+    click('./lib/../README.md')
+    click('/etc/hosts:3')
+    expect(opened).toEqual([['/work/app/src/main.ts', 12], ['/work/app/README.md', undefined], ['/etc/hosts', 3]])
+  })
+
+  it('is copied as the output of the last command that finished', async () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const attachment = terminalPool.attach(info.id, host())!
+    const view = lastView()
+    expect(attachment.hasCommands()).toBe(false)
+    expect(await attachment.copyLastOutput(), 'a shell that marks no commands had one to copy').toBe(false)
+
+    const command = (id: number, finishedMs: number | null) =>
+      ({ id, command: `c${id}`, cwd: null, startedMs: 1, finishedMs, exitStatus: finishedMs === null ? null : 0, prompt: id * 10, output: id * 10 + 1, end: null })
+    view.commands = [command(1, 5), command(2, 9), command(3, null)]
+    expect(attachment.hasCommands()).toBe(true)
+    expect(await attachment.copyLastOutput()).toBe(true)
+    // The one still running has printed only part of what it will
+    expect(view.selectedOutputs).toEqual([2])
+    expect(view.copies).toBe(1)
+  })
+})
+
 describe('the window\'s connection to the broker', () => {
   it('is one for every terminal it draws, and closed when the surface lets all of them go', () => {
     const before = { ...connections }

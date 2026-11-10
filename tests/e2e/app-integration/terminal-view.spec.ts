@@ -139,3 +139,69 @@ test('what a program asks of the world outside its screen reaches the surface', 
   await expect.poll(() => appPage.evaluate(() => (window as unknown as { __asked?: string[] }).__asked ?? []), { timeout: 20_000 })
     .toContain('copied-by-a-program');
 });
+
+/** The text a recording being looked back through shows, which is drawn by a view of its own */
+const lookedBackAt = (appPage: Page): Promise<string> =>
+  appPage.locator('[data-terminal-rewind] [data-terminal-text] > div').allTextContents().then((rows) => rows.join('\n'));
+
+/**
+ * The shell is started with a hook that marks each command, the broker reads the marks, and the window is
+ * told the commands. Nothing in the app parses a prompt: an action that needs a finished command is
+ * offered exactly when the shell has reported one.
+ */
+test('the commands a shell runs are marked, and text on its screen is found', async ({ appPage }) => {
+  const terminalId = await openTerminal(appPage);
+  const terminal = appPage.locator(`[data-apack-terminal="${terminalId}"]`);
+  await type(appPage, terminalId, 'echo mar$((1+1))ked\n');
+  await expect.poll(() => screen(appPage, terminalId), { timeout: 20_000 }).toContain('mar2ked');
+
+  const copyOutput = appPage.locator('[data-terminal-menu="copy-output"]');
+  await expect(async () => {
+    await terminal.click({ button: 'right' });
+    await expect(copyOutput).toBeVisible();
+    await expect(copyOutput, 'no finished command reached the window').not.toHaveAttribute('data-disabled');
+  }).toPass({ timeout: 20_000 });
+
+  await appPage.locator('[data-terminal-menu="find"]').click();
+  const find = appPage.locator('[data-terminal-find]');
+  await find.locator('input').fill('mar2ked');
+  await expect(find.locator('[data-terminal-find-count]')).toHaveText(/^1 of \d+$/);
+  await find.locator('input').press('Escape');
+  await expect(find).toHaveCount(0);
+});
+
+/**
+ * A terminal is recorded, so the shell that replaces one starts under what the last one printed, and what
+ * it printed can be looked back through.
+ */
+test('a terminal keeps its screen when its shell is replaced, and can be looked back through', async ({ appPage }) => {
+  const terminalId = await openTerminal(appPage);
+  const terminal = appPage.locator(`[data-apack-terminal="${terminalId}"]`);
+  await type(appPage, terminalId, 'echo bef$((1+1))ore\n');
+  await expect.poll(() => screen(appPage, terminalId), { timeout: 20_000 }).toContain('bef2ore');
+
+  await terminal.click({ button: 'right' });
+  await appPage.locator('[data-terminal-menu="rewind"]').click();
+  const lookingBack = appPage.locator('[data-terminal-rewind]');
+  await expect(lookingBack).toBeVisible();
+  await expect.poll(() => lookedBackAt(appPage), { timeout: 20_000 }).toContain('bef2ore');
+  // The first moment the recording holds is before anything was typed
+  await lookingBack.locator('[data-terminal-rewind-moment]').evaluate((moment: HTMLInputElement) => {
+    moment.value = moment.min;
+    moment.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect.poll(() => lookedBackAt(appPage), { timeout: 20_000 }).not.toContain('bef2ore');
+  await lookingBack.locator('[data-terminal-rewind-close]').click();
+  await expect(lookingBack).toHaveCount(0);
+
+  await appPage.evaluate(({ code, id }) => {
+    (window as unknown as DrivenWindow).applicationState.send({ type: 'SEND_TO_SURFACE', surface: code, events: [{ type: 'terminal.RESTART', terminalId: id }] });
+  }, { code: CODE, id: terminalId });
+  await expect(appPage.locator(`[data-apack-terminal="${terminalId}"] ~ [data-terminal-notice="restarted"], [data-terminal-notice="restarted"]`).first())
+    .toBeVisible({ timeout: 20_000 });
+  // The new shell is typed at, under what the old one printed
+  await type(appPage, terminalId, 'echo aft$((1+2))er\n');
+  await expect.poll(() => screen(appPage, terminalId), { timeout: 20_000 }).toContain('aft3er');
+  expect(await screen(appPage, terminalId), 'the shell that replaced it started on an empty screen').toContain('bef2ore');
+});
+

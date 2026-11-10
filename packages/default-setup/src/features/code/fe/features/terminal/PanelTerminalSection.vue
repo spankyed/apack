@@ -64,8 +64,9 @@
             because its ref is a grandchild of the trigger, which is the shape this now matches.
           -->
           <ContextMenuTrigger as-child>
-            <div class="w-full h-full">
+            <div class="relative w-full h-full" @pointerdown.capture="seenPanelTerminal">
               <div ref="container" class="w-full h-full bg-[#1e1e1e] py-1 px-2"></div>
+              <TerminalRewind :key="activeTerminalInfo.id" :terminal-info="activeTerminalInfo" />
             </div>
           </ContextMenuTrigger>
           <ContextMenuPortal>
@@ -87,6 +88,7 @@
                 <Eraser class="w-4 h-4" />
                 Clear
               </ContextMenuItem>
+              <TerminalMenuExtras :terminal-id="activeTerminalInfo.id" :attachment="() => attachment" />
               <ContextMenuSeparator :class="MENU_SEPARATOR_CLASS" />
               <ContextMenuItem @select="restartPanelTerminal" :class="MENU_ITEM_CLASS">
                 <RotateCcw class="w-4 h-4" />
@@ -119,6 +121,7 @@
           <ContextMenuTrigger as-child>
             <div
               @click="!isInTab(terminal.id) ? selectTerminal(terminal.id) : undefined"
+              data-terminal-row
               class="group flex items-center gap-1.5 px-2 py-1.5 text-xs transition-colors"
               :class="[
                 isInTab(terminal.id)
@@ -142,6 +145,7 @@
                 />
               </div>
               <span v-else class="flex-1 min-w-0 truncate">{{ getTerminalDisplayName(terminal) }}</span>
+              <TerminalActivityBadge :activity="activity[terminal.id]" :kept="terminal.kept === true" />
               <!-- **A terminal whose shell died is kept so its last output can be read**, which only works
                    if the list says so: drawn like a live one, it invites typing that goes nowhere and gives
                    no reason for the screen having stopped. -->
@@ -236,6 +240,9 @@ import { terminalPool } from '#features/code/fe/utils/terminal-pool.ts'
 import { terminalNameFor } from '#features/code/fe/utils/terminal-name.ts'
 import { useTerminalActions } from '#features/code/fe/composables/useTerminalActions.ts'
 import RunScriptPopover from './RunScriptPopover.vue'
+import TerminalActivityBadge from './TerminalActivityBadge.vue'
+import TerminalMenuExtras from './TerminalMenuExtras.vue'
+import TerminalRewind from './TerminalRewind.vue'
 import ContextMenuPopup from '@apackdev/ui/design/ContextMenuPopup'
 import { useSectionVisibilityMenu } from '#features/code/fe/composables/useSectionVisibilityMenu.ts'
 import type { TerminalScript } from '#generated/types.ts'
@@ -252,6 +259,7 @@ const terminalActor = panelChild(codeActor, 'terminal')!
 const panelTerminalId = useSelector(codeActor, (state) => state.context.panelTerminalId)
 const openFiles = useSelector(codeActor, (state) => state.context.openFiles)
 const terminals = useSelector(terminalActor, (state) => state.context.terminals)
+const activity = useSelector(terminalActor, (state) => state.context.activity)
 
 const featureSettings = useSettings('code')
 const storedCodeSettings = featureSettings.value
@@ -331,7 +339,10 @@ const attachTerminal = (terminalId: string) => {
         terminalActor?.send({ type: 'terminal.RESIZE', terminalId, cols, rows, cellWidth, cellHeight })
       },
       onSelectionChange: has => { hasSelection.value = has },
+      // A path a program printed opens as the file it names, where the explorer opens every other
+      onOpenPath: path => { panelChild(codeActor, 'explorer')?.send({ type: 'explorer.OPEN_FILE', path }) },
     })
+    terminalActor.send({ type: 'terminal.SEEN', terminalId })
 
     // **Focused only when the user asked for this terminal** (F15). An attach happens on mount too — a
     // panel re-open, an actor replacement, a reconnect — none of which is a request, and taking focus from
@@ -384,6 +395,11 @@ const pasteClipboard = () => {
 const selectAll = () => attachment?.selectAll()
 
 const clearTerminal = () => attachment?.clear()
+
+/** The person is looking at the panel's terminal, so what was waiting for them to has been seen */
+const seenPanelTerminal = () => {
+  if (panelTerminalId.value) terminalActor.send({ type: 'terminal.SEEN', terminalId: panelTerminalId.value })
+}
 
 const killPanelTerminal = () => {
   if (!panelTerminalId.value) return

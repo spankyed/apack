@@ -201,7 +201,8 @@
               Restore terminals on startup
             </label>
             <p class="mt-1 text-xs text-neutral-600">
-              Automatically restore previously opened terminals when the application starts
+              Automatically restore previously opened terminals when the application starts, each with the
+              screen it had. What a terminal prints is kept in a file only you can read until it is closed
             </p>
           </div>
           <input

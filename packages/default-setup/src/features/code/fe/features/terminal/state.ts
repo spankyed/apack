@@ -17,6 +17,9 @@ import type { TerminalInfo } from '../../../be/types.ts'
  */
 export type { TerminalInfo }
 
+/** The name a recording's view is pooled under, which is not a terminal's and cannot be taken for one */
+export const rewindViewId = (session: string) => `rewind:${session}`
+
 const createTerminalTab = (info: TerminalInfo) => ({
   path: `terminal:${info.id}`,
   content: '',
@@ -33,8 +36,37 @@ interface PendingOpen {
   command: string | null
 }
 
+/**
+ * What a terminal's program has said that is not on its screen, as its tab shows it.
+ *
+ * **A program's claims, drawn and never acted on**: a bell and a notification mark the tab until the
+ * person looks at the terminal, progress is what the program last said of how far along it is, and
+ * `title` is what it last named its terminal.
+ */
+export interface TerminalActivity {
+  bell?: boolean
+  notification?: { title: string; body: string }
+  progress?: { state: 'running' | 'error' | 'indeterminate' | 'paused'; percent: number | null }
+  title?: string
+}
+
+/** A recording this window has open to look back through */
+export interface TerminalRewindView {
+  terminalId: string
+  /** What its view is drawn from */
+  session: string
+  /** The moments it runs between, and the one it shows, in milliseconds since the Unix epoch */
+  first: number
+  last: number
+  at: number
+}
+
 export interface CodeTerminalContext {
   terminals: TerminalInfo[]
+  /** By terminal, for the ones whose program has said something */
+  activity: Record<string, TerminalActivity>
+  /** The recording this window is looking back through, when it is */
+  rewind: TerminalRewindView | null
   /**
    * What each outstanding `terminal.CREATE_TERMINAL` meant, by the call it was asked under.
    *
@@ -74,6 +106,19 @@ export type Event =
   | { type: 'terminal.RENAMED'; data: { terminalId: string; customTitle: string } }
   | { type: 'terminal.CWD_CHANGED'; data: { terminalId: string; cwd: string; title?: string } }
   | { type: 'terminal.CLIPBOARD'; data: { terminalId: string; text: string } }
+  | { type: 'terminal.BELL'; data: { terminalId: string } }
+  | { type: 'terminal.NOTIFIED'; data: { terminalId: string; title: string; body: string } }
+  | { type: 'terminal.PROGRESS'; data: { terminalId: string; state: 'none' | 'running' | 'error' | 'indeterminate' | 'paused'; percent: number | null } }
+  | { type: 'terminal.TITLED'; data: { terminalId: string; title: string } }
+  /** The person is looking at that terminal: what was waiting for them to is no longer */
+  | { type: 'terminal.SEEN'; terminalId: string }
+  | { type: 'terminal.KEEP'; terminalId: string; kept: boolean }
+  | { type: 'terminal.KEPT'; data: { terminalId: string; kept: boolean } }
+  | { type: 'terminal.REWIND'; terminalId: string; cols: number; rows: number }
+  | { type: 'terminal.REWOUND'; data: { terminalId: string; session: string; first: number; last: number } }
+  | { type: 'terminal.REWIND_SEEK'; at: number }
+  | { type: 'terminal.REWIND_SOUGHT'; data: { session: string; at: number } }
+  | { type: 'terminal.REWIND_CLOSE' }
   | { type: 'terminal.ERROR'; data: { message: string; terminalId?: string } }
   | { type: 'terminal.RESIZED'; data: { terminalId: string; cols: number; rows: number } }
   | { type: 'terminal.TERMINAL_TAB_OPENED'; data: TerminalInfo }
@@ -358,6 +403,100 @@ export const terminalState = setup({
       terminalPool.dispose(ev.data.terminalId)
     },
 
+    /** What a closed terminal's program had said goes with it */
+    forgetActivity: assign(({ context, event }) => {
+      const ev = event as { type: 'terminal.CLOSED'; data: { terminalId: string } }
+      const { [ev.data.terminalId]: _gone, ...activity } = context.activity
+      return { activity }
+    }),
+
+    /**
+     * What a terminal's program said that is not on its screen, kept for its tab to show.
+     *
+     * A notification is also raised with the system where this window is not the one being looked at:
+     * the program asked for the person to be told, and a mark on a tab they cannot see tells them nothing.
+     */
+    noteActivity: assign(({ context, event }) => {
+      const ev = event as Extract<Event, { type: 'terminal.BELL' | 'terminal.NOTIFIED' | 'terminal.PROGRESS' | 'terminal.TITLED' }>
+      const id = ev.data.terminalId
+      const before = context.activity[id] ?? {}
+      let after: TerminalActivity
+      switch (ev.type) {
+        case 'terminal.BELL': after = { ...before, bell: true }; break
+        case 'terminal.NOTIFIED': {
+          after = { ...before, notification: { title: ev.data.title, body: ev.data.body } }
+          if (!document.hasFocus() && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            new Notification(ev.data.title || 'Terminal', { body: ev.data.body })
+          }
+          break
+        }
+        case 'terminal.PROGRESS': {
+          const { progress: _was, ...rest } = before
+          after = ev.data.state === 'none' ? rest : { ...rest, progress: { state: ev.data.state, percent: ev.data.percent } }
+          break
+        }
+        case 'terminal.TITLED': {
+          const { title: _was, ...rest } = before
+          after = ev.data.title === '' ? rest : { ...rest, title: ev.data.title }
+          break
+        }
+      }
+      return { activity: { ...context.activity, [id]: after } }
+    }),
+
+    /** The person looked: the bell and the notification were for them, and have been seen */
+    markSeen: assign(({ context, event }) => {
+      const ev = event as { type: 'terminal.SEEN'; terminalId: string }
+      const before = context.activity[ev.terminalId]
+      if (!before?.bell && !before?.notification) return {}
+      const { bell: _bell, notification: _notification, ...rest } = before
+      return { activity: { ...context.activity, [ev.terminalId]: rest } }
+    }),
+
+    keepTerminal: ({ event }) => {
+      const ev = event as { type: 'terminal.KEEP'; terminalId: string; kept: boolean }
+      sendToSystem('code', { type: 'terminal.KEEP_TERMINAL', terminalId: ev.terminalId, kept: ev.kept })
+    },
+
+    markKept: assign(({ context, event }) => {
+      const ev = event as { type: 'terminal.KEPT'; data: { terminalId: string; kept: boolean } }
+      return {
+        terminals: context.terminals.map(terminal => terminal.id === ev.data.terminalId
+          ? { ...terminal, kept: ev.data.kept }
+          : terminal),
+      }
+    }),
+
+    askForRewind: ({ event }) => {
+      const ev = event as { type: 'terminal.REWIND'; terminalId: string; cols: number; rows: number }
+      sendToSystem('code', { type: 'terminal.REWIND', terminalId: ev.terminalId, cols: ev.cols, rows: ev.rows })
+    },
+
+    /** A recording opened for this window: shown at its end, which is where the terminal is now */
+    openRewind: assign(({ event }) => {
+      const ev = event as { type: 'terminal.REWOUND'; data: { terminalId: string; session: string; first: number; last: number } }
+      return { rewind: { ...ev.data, at: ev.data.last } }
+    }),
+
+    seekRewind: ({ context, event }) => {
+      const ev = event as { type: 'terminal.REWIND_SEEK'; at: number }
+      if (context.rewind) sendToSystem('code', { type: 'terminal.REWIND_SEEK', session: context.rewind.session, at: ev.at })
+    },
+
+    noteRewindSought: assign(({ context, event }) => {
+      const ev = event as { type: 'terminal.REWIND_SOUGHT'; data: { session: string; at: number } }
+      if (context.rewind?.session !== ev.data.session) return {}
+      return { rewind: { ...context.rewind, at: ev.data.at } }
+    }),
+
+    closeRewind: assign(({ context }) => {
+      if (context.rewind) {
+        sendToSystem('code', { type: 'terminal.REWIND_CLOSE', session: context.rewind.session })
+        terminalPool.dispose(rewindViewId(context.rewind.session))
+      }
+      return { rewind: null }
+    }),
+
     /**
      * A program asked for text to be put on the clipboard.
      *
@@ -503,6 +642,8 @@ export const terminalState = setup({
   initial: 'idle',
   context: {
     terminals: [],
+    activity: {},
+    rewind: null,
     pendingOpens: {}
   },
   on: {
@@ -549,7 +690,7 @@ export const terminalState = setup({
       actions: ['handleTerminalOpened']
     },
     'terminal.CLOSED': {
-      actions: 'handleTerminalClosed'
+      actions: ['handleTerminalClosed', 'forgetActivity']
     },
     'terminal.CRASHED': {
       actions: ['markTerminalCrashed', 'noteCrashOnScreen']
@@ -566,6 +707,18 @@ export const terminalState = setup({
     'terminal.CLIPBOARD': {
       actions: 'writeClipboard'
     },
+    'terminal.BELL': { actions: 'noteActivity' },
+    'terminal.NOTIFIED': { actions: 'noteActivity' },
+    'terminal.PROGRESS': { actions: 'noteActivity' },
+    'terminal.TITLED': { actions: 'noteActivity' },
+    'terminal.SEEN': { actions: 'markSeen' },
+    'terminal.KEEP': { actions: 'keepTerminal' },
+    'terminal.KEPT': { actions: 'markKept' },
+    'terminal.REWIND': { actions: 'askForRewind' },
+    'terminal.REWOUND': { actions: 'openRewind' },
+    'terminal.REWIND_SEEK': { actions: 'seekRewind' },
+    'terminal.REWIND_SOUGHT': { actions: 'noteRewindSought' },
+    'terminal.REWIND_CLOSE': { actions: 'closeRewind' },
     'terminal.ERROR': {
       actions: 'settleFailedAsk'
     },

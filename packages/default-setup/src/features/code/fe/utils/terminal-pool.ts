@@ -30,6 +30,23 @@ import { TERMINAL_COLORS, TERMINAL_THEME } from '../../be/terminal-colors.ts'
  */
 export const RESIZE_SETTLE_MS = 100
 
+/** The strip beside the rows where each command's start is marked, in pixels */
+const COMMAND_GUTTER = 8
+
+const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
+
+/** `named` against `cwd` where it is not already a path from the root, with `.` and `..` taken out */
+export function resolvePath(cwd: string, named: string): string {
+  const joined = named.startsWith('/') ? named : `${cwd}/${named}`
+  const parts: string[] = []
+  for (const part of joined.split('/')) {
+    if (part === '' || part === '.') continue
+    if (part === '..') parts.pop()
+    else parts.push(part)
+  }
+  return `/${parts.join('/')}`
+}
+
 const FONT = { family: 'JetBrains Mono, Cascadia Code, Fira Code, Menlo, monospace', size: 14 }
 
 const rgb = (color: string): number => Number.parseInt(color.slice(1), 16)
@@ -109,6 +126,12 @@ export interface TerminalAttachment {
   paste(text: string): void
   /** Clears the screen the way the keyboard does, by asking the program to */
   clear(): void
+  /** Opens the bar for finding text in the terminal and its history */
+  find(): void
+  /** Copies what the last finished command printed, answering whether there was one */
+  copyLastOutput(): Promise<boolean>
+  /** Whether the shell has marked any command, which is what the command actions need */
+  hasCommands(): boolean
   /** Only where the user asked for it: an attach is not a request */
   focus(): void
   /**
@@ -142,6 +165,8 @@ export interface TerminalAttachmentHandlers {
   onSelectionChange?(hasSelection: boolean): void
   /** Whether the session is following its output, which a host draws a scroll control from */
   onFollowingChange?(following: boolean): void
+  /** A path a program printed was clicked: the file it names, and the line where it gave one */
+  onOpenPath?(path: string, line: number | undefined): void
 }
 
 const exitedNotice = (code: number | null) =>
@@ -223,6 +248,9 @@ class TerminalPool {
       font: FONT,
       theme: THEME,
       detectors: [paths],
+      // Where each command began, coloured by how it ended
+      gutter: COMMAND_GUTTER,
+      onKey: (event) => this.shortcut(entry, event),
       onFit: (fit) => entry.handlers.onResize?.({ cols: fit.columns, rows: fit.rows, cellWidth: fit.cellWidth, cellHeight: fit.cellHeight }),
       onFollowingChange: (following) => {
         entry.following = following
@@ -242,11 +270,97 @@ class TerminalPool {
     if (mounted) view.mount(entry.wrapper)
   }
 
-  /** What a path link opens. Set by the surface, which knows how its files are opened */
-  onOpenPath: (path: string, cwd: string) => void = () => {}
-
+  /**
+   * A path a program printed, as the file it names: without the line and column a compiler puts after
+   * it, and against the directory the shell is in when it is not a path from the root.
+   */
   private openPath(entry: PoolEntry, target: string): void {
-    this.onOpenPath(target, entry.cwd)
+    const [, named = target, line] = /^(.*?)(?::(\d+)(?::\d+)?)?$/.exec(target) ?? []
+    entry.handlers.onOpenPath?.(resolvePath(entry.cwd, named), line === undefined ? undefined : Number(line))
+  }
+
+  /** The keys that are the app's rather than the program's: finding text on the screen */
+  private shortcut(entry: PoolEntry, event: KeyboardEvent): boolean {
+    if (event.type !== 'keydown' || event.code !== 'KeyF' || event.altKey) return false
+    // Control-F belongs to the shell everywhere but here, where Command is the app's key
+    const held = MAC ? event.metaKey && !event.ctrlKey : event.ctrlKey && event.shiftKey
+    if (!held) return false
+    this.openFind(entry)
+    return true
+  }
+
+  /**
+   * A bar over the terminal for finding text in it and its history: what to find, which match of how
+   * many, and the way to the next and the one before.
+   *
+   * Asked of the session, not of the rows this window holds — a window keeps only the lines it has been
+   * shown — so a match in history nobody has scrolled to is found too.
+   */
+  private openFind(entry: PoolEntry): void {
+    const open = entry.wrapper.querySelector<HTMLInputElement>('[data-terminal-find] input')
+    if (open) {
+      open.focus()
+      open.select()
+      return
+    }
+    const bar = document.createElement('div')
+    bar.dataset.terminalFind = ''
+    bar.style.cssText = 'position:absolute;top:6px;right:18px;z-index:4;display:flex;align-items:center;gap:6px;'
+      + 'padding:4px 6px;border-radius:6px;background:#2d2d2d;border:1px solid #444;color:#ddd;'
+      + 'font:12px system-ui,sans-serif;box-shadow:0 4px 16px rgb(0 0 0 / 0.5)'
+    const input = document.createElement('input')
+    input.type = 'text'
+    input.placeholder = 'Find'
+    input.setAttribute('aria-label', 'Find in terminal')
+    input.style.cssText = 'width:180px;padding:3px 6px;border-radius:4px;border:1px solid #555;background:#1e1e1e;color:inherit;font:inherit;outline:none'
+    const count = document.createElement('span')
+    count.dataset.terminalFindCount = ''
+    count.style.cssText = 'min-width:56px;text-align:center;color:#999'
+    const said = () => {
+      const { current, total } = entry.view?.found ?? { current: 0, total: 0 }
+      count.textContent = input.value === '' ? '' : total === 0 ? 'No results' : `${current} of ${total}`
+    }
+    const step = (direction: -1 | 1) => {
+      entry.view?.findNext(direction)
+      said()
+    }
+    const close = () => {
+      bar.remove()
+      void entry.view?.find('')
+      entry.view?.focus()
+    }
+    const button = (label: string, title: string, act: () => void) => {
+      const made = document.createElement('button')
+      made.textContent = label
+      made.title = title
+      made.setAttribute('aria-label', title)
+      made.style.cssText = 'padding:2px 6px;border-radius:4px;border:none;background:transparent;color:inherit;font:inherit;cursor:pointer'
+      made.addEventListener('click', act)
+      return made
+    }
+    input.addEventListener('input', () => {
+      void entry.view?.find(input.value).then(said)
+    })
+    bar.addEventListener('keydown', (event) => {
+      // Typed here, not at the program under the bar
+      event.stopPropagation()
+      if (event.key === 'Escape') close()
+      else if (event.key === 'Enter') step(event.shiftKey ? -1 : 1)
+    })
+    bar.append(input, count, button('↑', 'Older match', () => step(1)), button('↓', 'Newer match', () => step(-1)), button('✕', 'Close', close))
+    entry.wrapper.appendChild(bar)
+    input.focus()
+  }
+
+  /**
+   * Copies what the last command to finish printed. Answers whether there was one to copy — a shell that
+   * marks no commands has none, and neither has one whose output has left the history.
+   */
+  private async copyLastOutput(entry: PoolEntry): Promise<boolean> {
+    const view = entry.view
+    const last = view?.commands.filter(command => command.finishedMs !== null && command.output !== null).at(-1)
+    if (!view || !last || !view.selectOutput(last)) return false
+    return view.copy()
   }
 
   /**
@@ -360,6 +474,9 @@ class TerminalPool {
       selectAll: () => entry.view?.selectAll(),
       paste: (text) => { void entry.view?.paste(text) },
       clear: () => entry.view?.clear(),
+      find: () => this.openFind(entry),
+      copyLastOutput: () => this.copyLastOutput(entry),
+      hasCommands: () => (entry.view?.commands.length ?? 0) > 0,
       focus: () => entry.view?.focus(),
       refit: () => { if (!released) entry.view?.fit() },
       followOutput: () => entry.view?.follow(),

@@ -1,9 +1,10 @@
 <template>
   <TrackedContextMenuRoot>
     <ContextMenuTrigger as-child>
-      <div class="relative h-full w-full">
+      <div class="relative h-full w-full" @pointerdown.capture="seen">
         <div ref="container" class="h-full w-full bg-[#1e1e1e] p-2"></div>
         <ScrollToBottomFob :visible="showScrollFob" @click="scrollToBottom()" />
+        <TerminalRewind :terminal-info="terminalInfo" />
         <ContextMenuPortal>
           <ContextMenuContent :class="MENU_CONTENT_CLASS" :side-offset="5">
             <ContextMenuItem
@@ -27,6 +28,7 @@
               <Eraser class="w-4 h-4" />
               Clear
             </ContextMenuItem>
+            <TerminalMenuExtras :terminal-id="terminalInfo.id" :attachment="() => attachment" />
             <ContextMenuSeparator :class="MENU_SEPARATOR_CLASS" />
             <ContextMenuItem @select="$emit('restart-terminal')" :class="MENU_ITEM_CLASS">
               <RotateCcw class="w-4 h-4" />
@@ -61,6 +63,8 @@ import { Copy, ClipboardPaste, TextSelect, Eraser, RotateCcw, Trash2 } from 'luc
 import { type CodeState } from '#features/code/fe/state.ts'
 import type { TerminalInfo } from '#features/code/fe/features/terminal/state.ts'
 import { terminalPool, type TerminalAttachment } from '#features/code/fe/utils/terminal-pool.ts'
+import TerminalMenuExtras from '#features/code/fe/features/terminal/TerminalMenuExtras.vue'
+import TerminalRewind from '#features/code/fe/features/terminal/TerminalRewind.vue'
 import { panelChild } from '../features/children.ts';
 
 /* --------------------------------------------------------------------------
@@ -107,6 +111,9 @@ const selectAll = () => attachment?.selectAll()
 
 const clearTerminal = () => attachment?.clear()
 
+/** The person is looking at this terminal, so what was waiting for them to has been seen */
+const seen = () => terminalActor?.send({ type: 'terminal.SEEN', terminalId: props.terminalInfo.id })
+
 /* --------------------------------------------------------------------------
  * Lifecycle ---------------------------------------------------------------- */
 /** Whether this host is still the one mounted */
@@ -127,7 +134,10 @@ onMounted(() => {
     },
     onSelectionChange: has => { hasSelection.value = has },
     onFollowingChange: following => { isFollowingOutput.value = following },
+    // A path a program printed opens as the file it names, where the explorer opens every other
+    onOpenPath: path => { panelChild(codeActor, 'explorer')?.send({ type: 'explorer.OPEN_FILE', path }) },
   })
+  seen()
 
   // **Not focused on mount** (F15). A terminal mounts on a tab switch, a panel drag and an actor
   // replacement, none of which is the user asking for it — and taking focus from what they were typing in

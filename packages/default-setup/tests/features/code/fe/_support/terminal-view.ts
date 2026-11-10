@@ -4,7 +4,7 @@
 // host has: what they are about is which session a terminal is drawn from, where it is mounted, and what
 // the host is told. So the stand-in records exactly that — every view made, with the session it was made
 // for and what was asked of it — and lets a case say what a real view would have reported.
-import type { ViewOptions } from 'apack-terminal-view'
+import type { Command, ViewOptions } from 'apack-terminal-view'
 
 export interface FakeView {
   readonly session: string
@@ -21,6 +21,14 @@ export interface FakeView {
   selectedAll: number
   readonly pasted: string[]
   copies: number
+  /** What the view was asked to find, in order, and how many matches each search is said to have */
+  readonly searches: string[]
+  matches: number
+  /** Which match it is on, from one */
+  current: number
+  /** The commands the session's shell is said to have marked, and the ones whose output was selected */
+  commands: Command[]
+  readonly selectedOutputs: number[]
   /** What a real view reports once it has measured how many cells fit its host */
   reportFit(columns: number, rows: number, cellWidth?: number, cellHeight?: number): void
   reportFollowing(following: boolean): void
@@ -59,6 +67,11 @@ export function viewModule(): Record<string, unknown> {
     selectedAll = 0
     readonly pasted: string[] = []
     copies = 0
+    readonly searches: string[] = []
+    matches = 0
+    current = 0
+    commands: Command[] = []
+    readonly selectedOutputs: number[] = []
 
     constructor(source: { session: string }, readonly options: ViewOptions) {
       this.session = source.session
@@ -85,6 +98,22 @@ export function viewModule(): Record<string, unknown> {
     selectAll(): void { this.selectedAll += 1 }
     async paste(text: string): Promise<void> { this.pasted.push(text) }
     async copy(): Promise<boolean> { this.copies += 1; return true }
+    async find(needle: string): Promise<number> {
+      this.searches.push(needle)
+      const total = needle === '' ? 0 : this.matches
+      this.current = total > 0 ? 1 : 0
+      return total
+    }
+    get found(): { current: number; total: number } {
+      return { current: this.current, total: this.searches.at(-1) ? this.matches : 0 }
+    }
+    findNext(direction: -1 | 1 = 1): void {
+      if (this.matches > 0) this.current = ((this.current - 1 + direction + this.matches) % this.matches) + 1
+    }
+    selectOutput(command: Command): boolean {
+      this.selectedOutputs.push(command.id)
+      return command.output !== null
+    }
 
     reportFit(columns: number, rows: number, cellWidth = 8, cellHeight = 16): void {
       this.options.onFit?.({ columns, rows, cellWidth, cellHeight })
