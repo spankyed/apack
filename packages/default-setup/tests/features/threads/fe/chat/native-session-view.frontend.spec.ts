@@ -245,6 +245,8 @@ it('keeps sandbox decisions tied to the displayed host and withdraws unavailable
 
 const identity={id:'notice',revision:'old-revision',sessionId:'session',title:'Original native notice',paragraphs:['Original explanation']}
 const ownedNoticeCases: { notice: ClaudeNativeNotice; button: string; decision: string }[] = [
+ {notice:{...identity,kind:'chrome_install_upsell',preferredChoice:'chrome_not_now',choices:[{value:'chrome_install',label:'Install extension'},{value:'chrome_not_now',label:'Not now'},{value:'chrome_never',label:'Don’t ask again'}]},button:'Not now',decision:'chrome_not_now'},
+ {notice:{...identity,kind:'chrome_install_setup',phase:'connected',installPageOpened:true,choices:[{value:'chrome_continue',label:'Continue with browser tools'},{value:'chrome_skip',label:'Continue without browser tools'}]},button:'Continue with browser tools',decision:'chrome_continue'},
  {notice:{...identity,kind:'auto_mode_server_fallback',helpUrl:'https://example.test/help'},button:'Continue in auto mode',decision:'continue'},
  {notice:{...identity,kind:'refusal_fallback_prompt',originalModel:'Original',fallbackModel:'Fallback',choices:[{value:'retry_fallback',label:'Retry'},{value:'edit_prompt',label:'Edit'}]},button:'Retry',decision:'retry_fallback'},
  {notice:{...identity,kind:'goal_proposal',choices:[{value:'goal_decline',label:'Not now'},{value:'goal_accept',label:'Set this goal'}]},button:'Set this goal',decision:'goal_accept'},
@@ -268,7 +270,7 @@ it.each(ownedNoticeCases)('does not retarget a displayed $notice.kind click or E
  fresh.click();expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({ownerId:'owner',notice:{id:notice.id,revision:'replacement',sessionId:notice.sessionId,decision}}))
 })
 it('does not transfer notice consent between owners with an unchanged replayed notice',async()=>{
- const f=await fixture(),notice=ownedNoticeCases[0]!.notice
+ const f=await fixture(),notice=ownedNoticeCases.find(row=>row.notice.kind==='auto_mode_server_fallback')!.notice
  f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick();f.publish({...f.snapshot,state:{...f.snapshot.state!,notice}});await nextTick()
  const card=f.root.querySelector('[data-native-notice]')!,stale=[...card.querySelectorAll<HTMLButtonElement>('button')].find(node=>node.textContent==='Continue in auto mode')!
  f.publish({...f.snapshot,state:{...f.snapshot.state!,ownerId:'replacement-owner',notice}})
@@ -276,7 +278,7 @@ it('does not transfer notice consent between owners with an unchanged replayed n
 })
 
 it('keeps keyboard focus when the same autocompact dialog publishes a fresh size revision',async()=>{
- const f=await fixture(),notice=ownedNoticeCases[3]!.notice
+ const f=await fixture(),notice=ownedNoticeCases.find(row=>row.notice.kind==='autocompact_offer')!.notice
  f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick();f.publish({...f.snapshot,state:{...f.snapshot.state!,notice}});await nextTick()
  const larger=[...f.root.querySelectorAll<HTMLButtonElement>('[data-native-notice] button')].find(button=>button.textContent==='Larger')!;larger.focus();expect(document.activeElement).toBe(larger)
  f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:{...notice,revision:'fresh-size'}}});await nextTick()
@@ -438,4 +440,18 @@ it('renders the original browser request literally and retains exact Cancel, pen
  f.publish({...f.snapshot,state:{...f.snapshot.state!,notice},noticeAnswer:{id:notice.id,revision:notice.revision,status:'pending'}});await nextTick();expect([...card.querySelectorAll('button')].every(button=>button.disabled)).toBe(true)
  f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:{...notice,revision:'policy-replacement',choices:notice.choices.filter(choice=>choice.value!=='browser_domain')}}});await nextTick();expect(card.textContent).not.toContain('Allow domain for this session')
  card.querySelector<HTMLButtonElement>('button')!.click();expect(actor.send.mock.calls.at(-1)![0].notice.revision).toBe('policy-replacement')
+})
+
+it('shows native Chrome setup descriptions and withdraws phase-specific actions without retargeting them',async()=>{
+ const f=await fixture(),base=ownedNoticeCases.find(row=>row.notice.kind==='chrome_install_setup')!.notice
+ if(base.kind!=='chrome_install_setup')throw Error('Missing Chrome setup fixture')
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:{...base,title:'Original connection status',paragraphs:['Native phase explanation'],choices:base.choices.map(choice=>({...choice,description:'Original browser setup description'}))}}});await nextTick()
+ const panel=f.root.querySelector('[aria-label="Claude browser setup"]')!;expect(panel.textContent).toContain('Original browser setup description')
+ const old=panel.querySelector<HTMLButtonElement>('[data-native-choice="chrome_continue"]')!
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:{...base,revision:'failed-phase',phase:'failed',choices:[{value:'chrome_skip',label:'Continue without browser tools'}]}}})
+ const count=actor.send.mock.calls.length;old.click();expect(actor.send.mock.calls.length).toBe(count);await nextTick()
+ expect(f.root.querySelector('[data-native-choice="chrome_continue"]')).toBeNull()
+ f.root.querySelector('[aria-label="Claude browser setup"]')!.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))
+ expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({notice:expect.objectContaining({revision:'failed-phase',decision:'chrome_cancel'})}))
 })

@@ -1539,11 +1539,52 @@ declare const ClaudeNativeMessageRetirementsSchema: z.ZodArray<z.ZodObject<{
 type ClaudeNativeNotice = z.infer<typeof ClaudeNativeNoticeSchema>;
 
 type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | 'sessionId'> & {
-    decision: 'background_confirm' | 'background_stay' | 'browser_allow' | 'browser_cancel' | 'browser_deny' | 'browser_domain' | 'cancelled' | 'compact_accept' | 'compact_dismiss' | 'compact_keep' | 'compact_next' | 'compact_previous' | 'continue' | 'disable' | 'edit_prompt' | 'goal_accept' | 'goal_decline' | 'interrupt' | 'never' | 'newer_accept' | 'newer_dismiss' | 'newer_keep' | 'no' | 'policy_approve' | 'policy_reject' | 'quota_dismiss' | 'quota_new_conversation' | 'quota_resume' | 'resume_compact' | 'resume_continue' | 'resume_dismiss' | 'resume_never' | 'retry_fallback' | 'sandbox_allow' | 'sandbox_cancel' | 'sandbox_deny' | 'sandbox_remember' | 'yes';
+    decision: 'background_confirm' | 'background_stay' | 'browser_allow' | 'browser_cancel' | 'browser_deny' | 'browser_domain' | 'cancelled' | 'chrome_cancel' | 'chrome_continue' | 'chrome_install' | 'chrome_never' | 'chrome_not_now' | 'chrome_skip' | 'chrome_wait' | 'compact_accept' | 'compact_dismiss' | 'compact_keep' | 'compact_next' | 'compact_previous' | 'continue' | 'disable' | 'edit_prompt' | 'goal_accept' | 'goal_decline' | 'interrupt' | 'never' | 'newer_accept' | 'newer_dismiss' | 'newer_keep' | 'no' | 'policy_approve' | 'policy_reject' | 'quota_dismiss' | 'quota_new_conversation' | 'quota_resume' | 'resume_compact' | 'resume_continue' | 'resume_dismiss' | 'resume_never' | 'retry_fallback' | 'sandbox_allow' | 'sandbox_cancel' | 'sandbox_deny' | 'sandbox_remember' | 'yes';
 };
 
 /** Native owns the dialog, available choices, timeout and acknowledgement. */
 declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
+    kind: z.ZodLiteral<"chrome_install_upsell">;
+    preferredChoice: z.ZodLiteral<"chrome_not_now">;
+    choices: z.ZodArray<z.ZodObject<{
+        value: z.ZodEnum<{
+            chrome_not_now: "chrome_not_now";
+            chrome_install: "chrome_install";
+            chrome_never: "chrome_never";
+        }>;
+        label: z.ZodString;
+        description: z.ZodOptional<z.ZodString>;
+    }, z.core.$strip>>;
+    title: z.ZodString;
+    paragraphs: z.ZodArray<z.ZodString>;
+    id: z.ZodString;
+    revision: z.ZodString;
+    sessionId: z.ZodString;
+}, z.core.$strip>, z.ZodObject<{
+    kind: z.ZodLiteral<"chrome_install_setup">;
+    phase: z.ZodEnum<{
+        failed: "failed";
+        connecting: "connecting";
+        waiting_install: "waiting_install";
+        stalled: "stalled";
+        connected: "connected";
+    }>;
+    installPageOpened: z.ZodBoolean;
+    choices: z.ZodArray<z.ZodObject<{
+        value: z.ZodEnum<{
+            chrome_continue: "chrome_continue";
+            chrome_wait: "chrome_wait";
+            chrome_skip: "chrome_skip";
+        }>;
+        label: z.ZodString;
+        description: z.ZodOptional<z.ZodString>;
+    }, z.core.$strip>>;
+    title: z.ZodString;
+    paragraphs: z.ZodArray<z.ZodString>;
+    id: z.ZodString;
+    revision: z.ZodString;
+    sessionId: z.ZodString;
+}, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"permission_browser">;
     toolName: z.ZodString;
     requestId: z.ZodString;
