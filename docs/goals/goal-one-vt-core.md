@@ -607,7 +607,25 @@ them later is a decision rather than a rediscovery.
 - **Core-backed selection.** Selection lives in the core, so it could be a fact the broker holds rather than
   state that dies when a host reparents a DOM node. Today it is per-emulator and vanishes on a tab move.
 - **One search implementation.** The core does search; the broker's `search` request currently has its own.
-- **An xterm-compatible shim**, if an xterm-shaped surface proves worth having after Phase R (D2).
+- **An xterm-compatible shim**, if an xterm-shaped surface proves worth having after Phase R (D2). Moot as
+  delivered: `ghostty-web`'s API *is* xterm's, so the shim would have nothing to adapt.
+
+### Two compensations to re-measure, not to keep forever
+
+These are not deferred features; they are workarounds this repository now carries for behaviour in a
+dependency, and the condition for dropping each is the same — `ghostty-web` taking the official
+distribution, which its README commits to, or fixing the behaviour itself.
+
+- **OSC 52.** The package surfaces none, so `terminal-pool.ts` reads clipboard requests out of the output
+  itself. If the package gains it, this should go rather than run beside it, or a program's copy lands on
+  the clipboard twice.
+- **The snap to the bottom.** The package scrolls the view to the end on every write once the user has
+  scrolled back, and the pool puts it back. **Re-measure with the canvas fingerprint** rather than reading
+  the source: that is how it was established and how it was shown fixed.
+- **The inlined WebAssembly module.** 552 KiB of base64 in the pack's frontend bundle, against 414 KiB as a
+  file over `pack://` — a route Phase 0b proved end to end, down to the `application/wasm` MIME entry it
+  added. The package exports the module as a file, and `init`'s own documentation describes handing a
+  `Ghostty` to a `Terminal`, which is the seam for it.
 
 ## Constraints
 
