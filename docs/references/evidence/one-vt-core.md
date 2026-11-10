@@ -1401,3 +1401,15 @@ dependency being rebuilt concurrently rather than on anything this goal changed.
 window in which `vendor/elmdb` holds still; the isolated worktree remains at
 `monorepo-worktrees.noindex/gate-pushed-master` for whoever takes that window, and `git worktree remove`
 disposes of it.
+
+
+## 2026-11-10 — The outstanding step, in CI
+
+The step the isolated worktree could not finish has run where the vendored checkout cannot move. The strict
+chain was dispatched on `master` at `b0d003c6b2` (`gh workflow run ci.yml --ref master -f strict_chain=true`,
+run 42790259817), which clones `vendor/elmdb` at its pin, and all six jobs passed: `producers`,
+`integration-1`, `integration-2`, `native-1`, `native-2` and `app-and-rest`.
+
+That commit is later than the one gated above: it holds the facade report recorded there and the git
+watcher changes that followed it. The worktree `monorepo-worktrees.noindex/gate-pushed-master` is still
+present, on `session/gate-pushed-master` at `b458688785`, and nothing now waits on it.

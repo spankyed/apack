@@ -30,7 +30,7 @@ nobody is drawing — and the reference docs say so in those terms.
 | **R** — the window on the core | done | the whole typecheck, `apack pack build`, `check:specifiers`' emulator rule in both directions, and the code surface's sixteen frontend spec files |
 | **A** — acceptance | done | `npm run chain` (3421.9s, all 32 steps, building what CI clones), `test:smoke`, the packaged install path and the broker's `pre-push` all green; **both** behaviour scripts driven against the built app on the new broker and the new renderer together; the five scenarios measured on an idle machine; five defects found by running it |
 
-**The figures were taken, and one acceptance clause is unsatisfiable rather than unsatisfied.**
+**The figures were taken, and they are inside the limit.**
 
 `terminal-open`, three runs on a machine `npm run check:idle` accepted, against the ownership goal's
 baseline recorded before any of this on the same machine identity and the same build identities:

@@ -55,7 +55,7 @@ ones that matter here.
   - The bystander's `fs.watch` saw every save within 125 ms, and a chokidar 3 witness set up like Vite's within 713 ms.
   - FSEvents never stalled in any soak run, so no soak has shown a rescue by kqueue directly. The rescue rests on the recorder.
 
-## Merged and open work
+## Merged work
 
 | PR | What | State |
 |---|---|---|
@@ -63,27 +63,27 @@ ones that matter here.
 | #340 | dev-loop freshness: package builds, early cutoff | merged `3df2840a2b` |
 | #342 | `createInputSubscriptions` keeps watches open; one recheck pass when the held set moves | merged `0c9207dbc7` |
 | #345 | `npm run soak:watch`, and a macOS native case in `compiler-macos.yml` | merged |
-| #408 | kqueue watch on each known input file of the pack watcher, darwin only | **open**, branch `session/watch-kqueue` |
+| #408 | kqueue watch on each known input file of the pack watcher, darwin only | merged `149c8786d7` |
 
-#408 has four commits on master:
+#408 is four commits:
 1. `3b0a0ae131`: `createFileWatches` and the pack watcher's use of it.
 2. `6323523965`: a watch closed by `hold` before it reported its file being replaced or deleted (a `rename` event) reports it then.
 3. `34287ae9b4`: `soak:watch --files-only`, backed by `WatchOptions.directoryWatches`, plus the route witnesses.
 4. `7f34c331e8`: evidence doc.
 
 Its strict chain (42747373337) and macOS case (42750262764) passed on `34287ae9b4`. The results comments are on the PR.
-Its worktree is `../monorepo-worktrees.noindex/watch-kqueue`.
+Its worktree is `../monorepo-worktrees.noindex/watch-kqueue`, on the branch `session/watch-kqueue`.
 
 ## Code map
 
-Everything below is on master unless marked #408.
+Everything below is on master.
 
 - **`packages/apack-cli/src/build/watch.ts`:** the pack watcher, run by `startPackBuildWatcher`.
   - `refreshInputs` holds the directory subscriptions: the pack root, authored targets and compiler targets.
-  - #408 adds `fileWatches`, holding `packInputFiles(root)` plus the `file` entries of `packageInputWatchPaths`.
+  - `fileWatches` holds `packInputFiles(root)` plus the `file` entries of `packageInputWatchPaths`.
   - `coalescingRunner` debounces and coalesces requests for a pass.
   - Each pass compares input signatures, so events are hints and the inputs are the truth.
-- **`packages/apack-cli/src/build/input-subscriptions.ts`:** `createInputSubscriptions` (directory watches, held open) and, in #408, `createFileWatches`, which handles kqueue arming, inode keys and replace-on-close.
+- **`packages/apack-cli/src/build/input-subscriptions.ts`:** `createInputSubscriptions` (directory watches, held open) and `createFileWatches`, which handles kqueue arming, inode keys and replace-on-close.
 - **`packages/apack-cli/src/build/compiler-watch.ts`:** `packageInputWatchPaths`, which lists package input files from disk via `inputFiles`, so untracked files are included.
 - **`packages/apack-cli/src/build/frontend-watch.ts`:** the frontend watcher. It uses chokidar 3 with default options, so on macOS its events come from FSEvents. Its guard watches go through `createInputSubscriptions`.
 - **`packages/apack-cli/src/build/frontend-process.ts:115`:** a directory `fs.watch`, so FSEvents.
@@ -92,7 +92,11 @@ Everything below is on master unless marked #408.
   - the API's `tsup --watch` (`build:dev:watch` in `packages/api/package.json`).
   - So **three processes** each watch on their own.
 - **`packages/main/src/modules/api-server/dev-reloader.ts:90`:** `fs.watch` on the API bundle file, so kqueue.
-- **`packages/default-setup/src/features/code/be/services/gitwatcher.ts`:** chokidar on the *user's* repositories. This is a product feature, not the dev loop. It was listed as an FSEvents user, but it is a separate question.
+- **`packages/default-setup/src/features/code/be/services/gitwatcher.ts`:** watches the *user's* repositories. This is a product feature, not the dev loop, and a separate question.
+  - It uses `@parcel/watcher` on the working tree and the git directories, so on macOS its events come from FSEvents.
+  - It treats an event as a hint: git is asked whether the status or a ref changed, and only a difference is announced.
+  - What no event reported is found by reading again when a window gains focus, a terminal command finishes or an agent's turn ends (`CHECK_FOR_EXTERNAL_CHANGES`).
+  - `services/open-file-watcher.ts` beside it watches each file open in an editor with chokidar's per-file `fs.watch` mode (`useFsEvents: false, usePolling: false`), so kqueue.
 - **Soak:** `packages/apack-cli/scripts/soak-watch.ts`, `soak-bystander.mjs`, `soak-rounds.ts`, with `tests/build/soak-rounds.spec.ts`.
 - **Tests:**
   - `tests/build/input-subscriptions.spec.ts` and `tests/build/watch-retry.spec.ts`: unit tests, with `fs.watch` faked.
@@ -174,6 +178,4 @@ Estimate: about 3 days for the hub and its consumers, plus about 1 day for the r
 
 ## Remaining housekeeping
 
-- #408 awaits review.
-- The remote branch `session/watch-soak` (merged) still exists, waiting on the user to delete it.
-- The `watch-kqueue` worktree stays until #408 merges.
+- #408 is merged. Its remote branch `session/watch-kqueue` and its worktree `../monorepo-worktrees.noindex/watch-kqueue` still exist, waiting on the user to delete them.
