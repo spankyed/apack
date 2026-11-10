@@ -808,3 +808,65 @@ reading of the shipped bundle. `open()` requires a real 2D canvas context, which
 so the one thing no spec in this repository can answer is whether this emulator opens into the pool's
 **detached** wrapper and survives being re-parented — which is the whole of what makes a tab switch cost
 no replay. That is Phase A's first question, and it needs the running app.
+
+
+## 2026-11-09 — Phase A: the app draws with it, and the detached wrapper survives
+
+Driven against the **built** app (`npm run dev:drive`, a disposable profile) on this Mac, by
+`drive/terminal-core-swap.ts`. That script is not committed — `drive/.gitignore` keeps everything but the
+README and the Playwright config, which is the directory's own rule — so what it asked is recorded here
+rather than referred to.
+
+### The app found a defect no spec could
+
+The first run drew no terminal at all. The code surface showed its own error, which is the first useful
+fact: a failure in the emulator reaches the UI rather than leaving a blank rectangle.
+
+```
+default-setup/code: canvas couldn't be displayed.
+Terminal must be opened before registering link providers
+```
+
+The pool registered its two link providers during construction. The emulator refuses **almost everything**
+before `open` and names it — `write`, `clear`, `paste`, `input`, `reset`, `scrollLines` and
+`registerLinkProvider` each throw — and the registration had been written next to `loadAddon`, which does
+not.
+
+**The specs passed anyway, and that is the part worth keeping.** The stand-ins accepted an ordering the
+real emulator refuses, so on this point they were a check that could not fail. They refuse what it refuses
+now, and the old ordering fails **30 cases** across the three files. This is the repository's own rule
+about a check that may have looked at nothing, met in the one place it was not being applied: the
+stand-in.
+
+### What the second run answered
+
+| question | answer |
+|---|---|
+| does it open into the pool's **detached** wrapper? | yes — `[data-apack-terminal]` holds a 2718×930 canvas, in the document |
+| does it draw? | 16 of 158,440 sampled pixels differ from the background at the prompt; **3,400** after the shell printed 31 lines |
+| what happens while the tab is away? | the element is absent — the host unmounted and the wrapper is detached, which is the design |
+| does it survive being re-parented? | yes — back after the tab switch with the **same 3,400**, the same session id and the same pid |
+| did it fit to its host? | 80×24 at creation, 151×31 after the return |
+| anything in the app's log? | no error matching terminal, broker, ghostty or wasm |
+
+That is the question Phase R could not answer and no spec in this repository can: `open()` needs a 2D
+canvas context, which jsdom does not implement. **The pool's shape is right for this emulator** — open
+detached, re-parent per host, no replay.
+
+### A capability this change bought, which the previous engine made impossible
+
+The terminal-ownership evidence recorded, more than once, that whether the screen was intact could only be
+judged by eye from screenshots: the old engine drew through WebGL and left no text in the DOM. This one
+draws to a **2D** canvas, so a page can read its pixels — and "there are pixels that are not the background
+colour" is an assertion where there used to be a screenshot. It says nothing about *what* is on the screen,
+which is still the screenshots' job, but "the terminal is blank" stops being a thing only a human can
+notice.
+
+### One thing the run did not establish
+
+The script also asked the shell to write a marker file and checked for it from the test process; that check
+did not pass, and **why is not established**. What the run does show is that input reaches the shell: the
+canvas went from 16 drawn pixels to 3,400 in response to a typed command, and the screenshots show the
+output. The marker is the script's own plumbing rather than a statement about the app, so it is recorded as
+unresolved rather than explained away, and the fuller acceptance pass should write it somewhere outside a
+profile directory that the run removes.
