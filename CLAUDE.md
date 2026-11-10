@@ -442,7 +442,8 @@ npm run check:idle               # Is this machine quiet enough to time a latenc
 npm run stress -- [--runs N] [--busy K] [cmd]  # Run a command N times under K busy cores; exit 1 if any run
                                  # failed. Default: the host unit pool, --all
 npm run soak:watch               # Does an edit made during a watcher pass get picked up? Run on a loaded Mac. Exit 1
-                                 # lost, 3 partial (file events stalled); -- --rounds N --max-delay SECONDS
+                                 # lost, 3 partial (file events stalled); -- --rounds N --max-delay SECONDS; --files-only
+                                 # holds no directory watch, so every pickup came through the kqueue file watches
 npm run janitor                  # Hold every linked Rust checkout's build caches to a budget (-- --dry); janitor:install
                                  # runs it hourly under launchd, logging to ~/Library/Logs/apack-janitor.log
 

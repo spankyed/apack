@@ -32,6 +32,12 @@ export interface WatchOptions {
   readonly buildArgs?: readonly string[];
   /** Where file watches are kept on known inputs (`createFileWatches`); the running platform unless a test says. */
   readonly platform?: NodeJS.Platform;
+  /**
+   * False holds none of this watcher's directory watches, so an edit reaches a pass only through the file watches on
+   * known inputs. `npm run soak:watch -- --files-only` uses it to show that route delivers on its own; a new file then
+   * goes unseen until another edit starts a pass.
+   */
+  readonly directoryWatches?: boolean;
 }
 
 /**
@@ -213,6 +219,7 @@ export async function startPackBuildWatcher(root: string, options: WatchOptions 
     fail(refused);
     return refused;
   });
+  const holdDirectories = (wanted: InputSubscription[]) => inputs.hold(options.directoryWatches === false ? [] : wanted);
   const fileWatches = createFileWatches(message => console.warn(message), options.platform);
   const rootSubscription: InputSubscription = {
     key: 'root', path: root, recursive: true,
@@ -251,7 +258,7 @@ export async function startPackBuildWatcher(root: string, options: WatchOptions 
         },
       });
     }
-    if (inputs.hold(wanted)) recheck();
+    if (holdDirectories(wanted)) recheck();
     // A file watch opening or closing restarts no stream, so a change to this set needs no recheck
     const known = [...packInputFiles(root).map(file => path.join(root, file)),
       ...[...packagePaths].flatMap(([file, kind]) => kind === 'file' ? [file] : [])];
@@ -288,7 +295,7 @@ export async function startPackBuildWatcher(root: string, options: WatchOptions 
   signal.addEventListener('abort', abort, { once: true });
   try {
     signal.throwIfAborted();
-    inputs.hold([rootSubscription]);
+    holdDirectories([rootSubscription]);
     unsubscribe = builder.subscribeFrontendInputs(({ paths, changed }) => {
       if (closed) return;
       if (paths.size !== frontendPaths.size || [...paths].some(([file, kind]) => frontendPaths.get(file) !== kind)) {

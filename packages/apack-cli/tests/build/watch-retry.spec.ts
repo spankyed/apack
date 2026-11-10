@@ -427,6 +427,21 @@ describe('watches on known files', () => {
     } finally { await watcher.close(); }
   });
 
+  it('holds only the file watches with directory watches off, and still asks for a pass when one fires', async () => {
+    const file = known('a.ts');
+    fixture.packageFiles = [file];
+    const watcher = await startPackBuildWatcher('/fixture', { platform: 'darwin', directoryWatches: false });
+    try {
+      await armed();
+      await vi.advanceTimersByTimeAsync(300);
+      expect(fixture.watches.map(entry => entry.directory)).toEqual([file]);
+      const passes = fixture.ensurePackages.mock.calls.length;
+      watchesOn(file)[0]!.receive('change', 'a.ts');
+      await vi.advanceTimersByTimeAsync(300);
+      expect(fixture.ensurePackages).toHaveBeenCalledTimes(passes + 1);
+    } finally { await watcher.close(); }
+  });
+
   it('watches a new file from the pass that finds it, with no extra pass for the change', async () => {
     const file = known('a.ts');
     fixture.packageFiles = [file];
