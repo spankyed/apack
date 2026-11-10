@@ -28,20 +28,32 @@ nobody is drawing — and the reference docs say so in those terms.
 | **0b** — does the module load where it has to? | done | a pack's WebAssembly module instantiates in a packaged app from the installed revision over `pack://`, streaming and buffered. An imported module is the wrong mechanism; a public asset needed no build change |
 | **B** — the broker on the core | done | `cargo xtask pre-push` green on the merged commit: 135 tests, 61 mutants, 58 caught, 3 unviable, **none missed**. Windows proven on the VM: built from the signed tarballs with Zig 0.17.0 and `--system`, linked, 97 tests, with Job Object tree ownership, the named-pipe ACL and the ConPTY `ESC [ 6 n` startup each re-proven by name |
 | **R** — the window on the core | done | the whole typecheck, `apack pack build`, `check:specifiers`' emulator rule in both directions, and the code surface's sixteen frontend spec files |
-| **A** — acceptance | done, with its measurement acceptance unmet and recorded | `npm run chain` (361s, 32 steps), `test:smoke`, the packaged install path and the broker's `pre-push` all green; the journeys driven against the built app on both new halves together; five defects found by running it |
+| **A** — acceptance | done, with one acceptance clause unsatisfiable and recorded | `npm run chain` (3421.9s, all 32 steps, building what CI clones), `test:smoke`, the packaged install path and the broker's `pre-push` all green; **both** behaviour scripts driven against the built app on the new broker and the new renderer together; the five scenarios measured on an idle machine; five defects found by running it |
 
-**One acceptance condition is not met, and is recorded rather than worked around.** Phase A says the
-measured figures must sit inside limits *agreed from the baseline before cutover*. No limits were agreed,
-so there is nothing for a figure to sit inside, and this goal cannot satisfy that clause however it
-measures.
+**The figures were taken, and one acceptance clause is unsatisfiable rather than unsatisfied.**
 
-What was measured anyway: `terminal-open`, four runs, against the ownership goal's recorded baseline on
-the same machine and the same build identities. **The median is not citable** — four runs of an identical
-configuration spread from 17.1 to 30.8 ms — and the record declines to quote one. What survives is a
-floor, because load inflates a duration and cannot deflate it: 15.8 ms observed against the baseline's best
-of 18. **Attaching a terminal did not get slower.** The other four figures Phase A lists were not taken,
-for the same reason the median is not citable, and they are named in
-[evidence](../../references/evidence/one-vt-core.md) rather than dropped.
+`terminal-open`, three runs on a machine `npm run check:idle` accepted, against the ownership goal's
+baseline recorded before any of this on the same machine identity and the same build identities:
+
+| | median | range |
+|---|---|---|
+| baseline, pre-cutover | **20.7 ms** | 18–25 |
+| after | **14.8, 14.7, 15.6 ms** | 13.2–20.3 |
+
+**Opening a terminal is about 28% faster**, and every maximum sits below the baseline's median. The three
+medians span 0.9 ms; under load the same configuration had spanned 13.7, which is the difference between a
+figure worth quoting and one that is not. Not all of it is parser — the window does less on attach now,
+with no WebGL context and no addon stack — and this scenario measures attachment.
+
+The other four scenarios were taken too, and are readings rather than comparisons, the ownership goal
+having recorded no pre-cutover figure for any of them: sustained output 1126.1 ms, hidden sessions 17.5,
+resize 28.7, large-history replay 4.6, all 20 of 20 passing, conditions in
+[evidence](../../references/evidence/one-vt-core.md).
+
+**What is unsatisfied is the clause's form, not its substance.** Phase A asks for limits *agreed from the
+baseline before cutover*; none were agreed, and no measurement taken afterwards can make them have been.
+The thing that clause protects against — a limit chosen after seeing the numbers — is answered instead by
+a baseline that predates this work and was recorded by someone else.
 
 ### What running the app was worth
 
@@ -581,9 +593,10 @@ them later is a decision rather than a rediscovery.
 
 ### Two compensations to re-measure, not to keep forever
 
-These are not deferred features; they are workarounds this repository now carries for behaviour in a
-dependency, and the condition for dropping each is the same — `ghostty-web` taking the official
-distribution, which its README commits to, or fixing the behaviour itself.
+These are not deferred features and **none is outstanding work**: each is in place, covered by cases and
+proven in the running app. What is recorded is the *condition under which to revisit* them, which is the
+same for all three — `ghostty-web` taking the official distribution, which its README commits to, or
+fixing the behaviour itself. Until one of those happens there is nothing here to do.
 
 - **OSC 52.** The package surfaces none, so `terminal-pool.ts` reads clipboard requests out of the output
   itself. If the package gains it, this should go rather than run beside it, or a program's copy lands on

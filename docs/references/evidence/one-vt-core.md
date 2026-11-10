@@ -1228,3 +1228,91 @@ full run that passed without a timing casualty, which is the fifth piece of evid
 **The only change to the tree after this gate is this record of it**, which is unavoidable: the
 documentation tree is an input to two of the steps, so a run can be taken before the writing or after it
 but not both.
+
+
+## 2026-11-09 — The figures, taken on a machine that accepted them
+
+**This supersedes the conclusion of the two attempts above**, which were that the median was not citable
+and the other four scenarios could not be taken. Both were true of the machine at the time and neither is
+true of these runs. The earlier entries stay because what a reading looks like when the machine will not
+hold still is worth keeping beside what it looks like when it will.
+
+`npm run check:idle` accepted before each run below, at a load average of 5.8–7.0.
+
+### `terminal-open`, against a baseline taken before any of this
+
+| | median | min | max |
+|---|---|---|---|
+| **baseline** (ownership goal, pre-cutover) | **20.7** | 18 | 25 |
+| run 1 | 14.8 | 13.3 | 18.9 |
+| run 2 | 14.7 | 13.2 | 16.0 |
+| run 3 | 15.6 | 14.6 | 20.3 |
+
+20 measured trials each, 5 warmups, `lightweight`, 20 of 20 passing with 0 unsuccessful; same scenario,
+same fixture generator (`terminal-open-v1`), same Electron 44.9.3 and Chromium 152.0.7977.167, and the
+manifests record the same machine identity `d74b1b3a…` as the baseline.
+
+**Opening a terminal went from 20.7 ms to about 14.8 — roughly 28% faster.** The three medians span
+0.9 ms where the loaded runs spanned 13.7, which is what makes this one citable and those not. Every
+maximum here is at or below 20.3, so **the whole range of the new measurement sits below the baseline's
+median**, and the slowest trial of the three runs is within 1.3 ms of the baseline's fastest.
+
+That is a larger improvement than the change obviously warrants, and the honest reading is that it is not
+all parser: the window now does less on attach — no WebGL context to acquire, no addon stack to load, one
+canvas instead of three — and this scenario measures attachment rather than parsing.
+
+### The other four Phase A scenarios
+
+One run each, same conditions:
+
+| scenario | median | min | max |
+|---|---|---|---|
+| `terminal-output` — sustained output | 1126.1 | 1106.4 | 1153.9 |
+| `terminal-hidden` — several hidden sessions | 17.5 | 10.5 | 107.0 |
+| `terminal-resize` | 28.7 | 24.7 | 40.5 |
+| `terminal-replay` — large history | 4.6 | 4.2 | 6.9 |
+
+All 20 of 20 passing, 0 unsuccessful. **These are readings and not comparisons**: the ownership goal
+recorded no pre-cutover figure for any of them — its own note says the other five were not taken — so
+there is nothing to hold them against, and this record does not invent a limit for them after the fact.
+`terminal-hidden`'s maximum of 107 ms against a median of 17.5 is the one worth a second look if anyone
+ever does take a baseline.
+
+### What this does and does not settle
+
+It settles the substance of Phase A's measurement: there **is** a pre-cutover baseline, recorded by
+another goal with its conditions, and the post-cutover figure beats it reproducibly on the same machine.
+
+It does not satisfy the clause as written — *limits agreed from the baseline before cutover* — because no
+limits were ever agreed, and no measurement taken afterwards can change that. The clause is unsatisfiable
+rather than unsatisfied, which is a different thing and the reason it is recorded in the Outcome rather
+than quietly marked done.
+
+
+## 2026-11-09 — The second behaviour script: an alternate-screen app moved around
+
+`drive/terminal-alternate-screen.ts`, which the earlier behaviour pass did not run. It is the harder of
+the two: `less` over a 500-line file, carried through everything that could disturb an alternate screen.
+
+Seven stages, **one session throughout — same id, same pid, never more than one terminal**:
+
+| stage | terminals |
+|---|---|
+| `less` open | 1 |
+| window resized smaller | 1 |
+| window resized back | 1 |
+| tab switched away and back | 1 |
+| **panel opened** — the other host takes the session over | 1 |
+| left `less` | 1 |
+| ran a command after | 1 |
+
+`terminalErrors: []`, and **zero page errors** — which is the half that would have caught what the first
+journeys run caught (the `RangeError` from the empty write fired twice per attach there, and this script
+re-parents four times).
+
+**Why this one matters more than its size suggests.** An alternate screen is the case where the window's
+copy and the broker's parse can most easily diverge: the program redraws from scratch on every resize, the
+screen has no scrollback to fall back on, and a host handing the session to another host mid-program is
+exactly where the detached-wrapper design is load-bearing. It went through two resizes, a tab switch and a
+host handover, left the alternate screen onto a primary screen still holding the session's history, and
+ran a command after.
