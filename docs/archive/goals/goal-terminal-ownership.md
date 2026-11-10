@@ -216,7 +216,7 @@ behaviour. Every finding in the [terminal integration review](../../issues/ISSUE
 closes with a test in the resulting structure, or is recorded as dissolved by construction with its reason.
 
 **Why one goal rather than three plans.** The review's fixes, the
-[ghostty-web migration](../../deferred/xterm-to-ghostty-web.md) and the
+[ghostty-web migration](../plans/xterm-to-ghostty-web.md) and the
 [runtime refactor](../../deferred/terminal-runtime-refactor-target.md) are three different answers to *who owns
 a terminal session* — and today nobody does: the renderer's pool owns the emulator, the pack's service owns
 the pty. This goal delivers the refactor's design and the review's findings together and takes the migration
@@ -816,7 +816,7 @@ renderer's copy as a fact.
 
 **D10 — the renderer keeps xterm.js, and replacing the emulator is out of this goal.** Settled. The outcome
 here is ownership; swapping emulators is the
-[ghostty-web migration](../../deferred/xterm-to-ghostty-web.md), which owns its own capability matrix, its own
+[ghostty-web migration](../plans/xterm-to-ghostty-web.md), which owns its own capability matrix, its own
 offline packaged-WASM proof and its own stop conditions. Phase P's deliverable is the seam, built so that
 migration becomes an implementation swap behind it rather than a second rewrite of ownership. Nothing in this
 goal assumes xterm survives; nothing in it blocks on proving a replacement.
@@ -879,7 +879,7 @@ lacks a binary-compatibility guarantee for snapshot format 1", which this broker
 lineage means broker and renderer could disagree about a rendered screen, answered by **where facts come
 from** rather than by matching implementations: explicit OSC markers, with any screen-derived signal bounded
 and carrying `inferred` provenance. Reopen at the
-[ghostty-web migration](../../deferred/xterm-to-ghostty-web.md), where lineage matching starts to pay and the
+[ghostty-web migration](../plans/xterm-to-ghostty-web.md), where lineage matching starts to pay and the
 snapshot-format risk is what to weigh against it.
 
 **No architectural decision is open**, and every phase below names its owning decision. A phase may still

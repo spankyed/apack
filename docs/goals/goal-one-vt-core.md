@@ -106,7 +106,7 @@ broker is the authority, the renderer is a replica, and a disagreement is theref
 Safe is as far as two implementations can be taken.
 
 **The condition for taking it further was named, and it is now met.** The
-[ghostty-web migration](../deferred/xterm-to-ghostty-web.md) closes with the question it could not answer:
+[ghostty-web migration](../archive/plans/xterm-to-ghostty-web.md) closes with the question it could not answer:
 
 > **Is one engine purchasable?** … only buyable if libghostty's VT core exposes a C API a Rust broker can
 > bind. If it does, `alacritty_terminal`, its `vte` and much of `markers.rs` collapse into one
@@ -214,7 +214,7 @@ this one's:
     paste paths, several windows), and closure — the Outcome and the archive move, which this repository's
     documentation rule says may not stand in for an unmet requirement.
   - **One open question for the owner**, recorded rather than decided: this goal's closure step says to
-    archive *both* deferred documents, but only [xterm-to-ghostty-web](../deferred/xterm-to-ghostty-web.md)
+    archive *both* deferred documents, but only [xterm-to-ghostty-web](../archive/plans/xterm-to-ghostty-web.md)
     is absorbed by it. [terminal-runtime-refactor-target](../deferred/terminal-runtime-refactor-target.md) is
     named **out of scope** above and still owns the agent-observation pipeline as design that no goal
     delivers, so archiving it would retire live design rather than completed work.

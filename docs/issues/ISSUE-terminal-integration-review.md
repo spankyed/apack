@@ -407,7 +407,7 @@ Recorded so they are not re-investigated.
 ## What comes after this, and what it changes here
 
 Two deferred plans follow this work, in order: the
-[ghostty-web migration](../deferred/xterm-to-ghostty-web.md) replaces the emulator, and the
+[ghostty-web migration](../archive/plans/xterm-to-ghostty-web.md) replaces the emulator, and the
 [terminal runtime refactor](../deferred/terminal-runtime-refactor-target.md) moves process and
 terminal-state authority into a host-owned service over a Rust broker. Neither is authorized, both are
 undated, and this list is meant to land first. Reading them changes four things here, and it is cheaper to
