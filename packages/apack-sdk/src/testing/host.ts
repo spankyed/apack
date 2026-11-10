@@ -197,7 +197,7 @@ export function bindTestRuntime({ engine, resetData, packs, appVersion = '0.0.0-
         writeFile: unmockedFilesystem, readFile: unmockedFilesystem, exists: unmockedFilesystem, mkdir: unmockedFilesystem,
         readDir: unmockedFilesystem, remove: unmockedFilesystem, rename: unmockedFilesystem, stat: unmockedFilesystem,
       },
-      terminal: { open: unmockedTerminal, adopt: unmockedTerminal },
+      terminal: { open: unmockedTerminal, adopt: unmockedTerminal, sessions: unmockedTerminal, rewind: unmockedTerminal },
       settings,
     },
   };

@@ -215,8 +215,61 @@ export interface TerminalSession {
    * owns.
    */
   signal(signal: TerminalSignal, scope: TerminalSignalScope): Promise<void>;
+  /** The commands the session's shell has reported, oldest first. A shell that marks none has none */
+  commands(): Promise<readonly TerminalCommand[]>;
+  /** What one of them printed, as text, or `null` for one whose output is no longer held */
+  commandOutput(command: number): Promise<string | null>;
+  /**
+   * Whether the session goes on running when the app is not: kept, it is not ended when the app quits,
+   * and `sessions()` finds it when the app next starts.
+   */
+  keep(kept: boolean): Promise<void>;
   /** Ends the session and its process tree. Explicit termination, as distinct from a view closing */
   terminate(): Promise<void>;
+}
+
+/** One command a session's shell reported. Everything but `id` is what the shell said */
+export interface TerminalCommand {
+  /** Counts from one in a session, and is never reused */
+  readonly id: number;
+  readonly command: string | null;
+  readonly cwd: string | null;
+  /** Milliseconds since the Unix epoch; `finishedMs` is `null` while it runs */
+  readonly startedMs: number | null;
+  readonly finishedMs: number | null;
+  /** `null` while it runs, and when the shell reported none — which is not zero */
+  readonly exitStatus: number | null;
+}
+
+/** A session that is running, as a caller that did not open it is told of it */
+export interface TerminalSessionSummary {
+  readonly id: string;
+  readonly pid: number;
+  readonly cols: number;
+  readonly rows: number;
+  /** Whether it was asked to outlive the app (`TerminalSession.keep`) */
+  readonly kept: boolean;
+  readonly recorded: boolean;
+  /** What its program last named the terminal, and what its shell last said of itself */
+  readonly title: string | null;
+  readonly cwd: string | null;
+  readonly command: string | null;
+  readonly running: boolean;
+}
+
+/**
+ * A recording opened to be looked back through. It is drawn like a session — a window attaches a view to
+ * `id` — and has no process: what is typed at it goes nowhere.
+ */
+export interface TerminalRewind {
+  readonly id: string;
+  /** The moments the recording runs between, in milliseconds since the Unix epoch */
+  readonly first: number;
+  readonly last: number;
+  /** Shows it as it was at `at`, answering the moment shown: `at` held to what the recording covers */
+  seek(at: number): Promise<number>;
+  resize(cols: number, rows: number, cell?: TerminalCellSize): Promise<void>;
+  close(): Promise<void>;
 }
 
 /** How a pack opens a terminal session */
@@ -262,6 +315,16 @@ export interface TerminalService {
        * wrong. An owner with no window leaves it out.
        */
       colors?: TerminalColors;
+      /**
+       * A file to record the session in: what its program writes, so that its screen can be picked up by
+       * the session that replaces it (`restore`) and looked back through (`rewind`). It holds everything
+       * the program printed, so it is recorded only where asked, in a file only the user can read.
+       */
+      record?: string;
+      /** Begin with the screen and history `record` already holds, and carry the recording on */
+      restore?: boolean;
+      /** Whether its programs may send images. For a session a window draws */
+      images?: boolean;
     },
     listeners: TerminalListeners,
   ): Promise<TerminalSession>;
@@ -278,4 +341,8 @@ export interface TerminalService {
    * report.
    */
   adopt(id: string, listeners: TerminalListeners): Promise<TerminalSession>;
+  /** Every session that is running, which is how the ones a previous run of the app kept are found */
+  sessions(): Promise<readonly TerminalSessionSummary[]>;
+  /** Opens the recording at `recording` to be looked back through, showing its end */
+  rewind(recording: string, size: { readonly cols: number; readonly rows: number }): Promise<TerminalRewind>;
 }

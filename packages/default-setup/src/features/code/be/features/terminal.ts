@@ -44,13 +44,17 @@ export type Event =
   | { type: 'terminal.OPENED'; data: TerminalInfo }
   | { type: 'terminal.REFRESH_LIST' }
   | { type: 'terminal.OPEN_TERMINAL_TAB'; terminalId: string }
+  | { type: 'terminal.KEEP_TERMINAL'; terminalId: string; kept: boolean }
+  | { type: 'terminal.REWIND'; terminalId: string; cols: number; rows: number }
+  | { type: 'terminal.REWIND_SEEK'; session: string; at: number }
+  | { type: 'terminal.REWIND_CLOSE'; session: string }
   | { type: 'terminal.UPDATE_BASE_DIRECTORY'; path: string }
   | { type: 'GET_CODE_START' };
 
 /** A terminal's news, for every window showing the code surface: what its process did, never a listing */
 type TerminalNewsType = 'terminal.CWD_CHANGED' | 'terminal.CLIPBOARD' | 'terminal.BELL' | 'terminal.NOTIFIED'
   | 'terminal.PROGRESS' | 'terminal.TITLED' | 'terminal.CLOSED' | 'terminal.CREATED'
-  | 'terminal.CRASHED' | 'terminal.RESTARTED' | 'terminal.RESIZED'
+  | 'terminal.CRASHED' | 'terminal.RESTARTED' | 'terminal.RESIZED' | 'terminal.KEPT'
 type TerminalNews = Extract<OutgoingTerminalEvents, { type: TerminalNewsType }>
 
 /** Tell every window showing the code surface what a terminal did */
@@ -381,6 +385,42 @@ export const terminalSystem = setup({
       }
     },
 
+    /** News rather than a reply: every window showing the terminal marks it as one that keeps running */
+    keepTerminal: ({ event, reply }) => {
+      const ev = event as { type: 'terminal.KEEP_TERMINAL'; terminalId: string; kept: boolean }
+      void terminalService.keep(ev.terminalId, ev.kept).then(info => {
+        if (!info) {
+          failTerminal(reply, 'keep', new Error(`No running terminal ${ev.terminalId}`), ev.terminalId)
+          return
+        }
+        emitToFrontend({ type: 'terminal.KEPT', data: { terminalId: ev.terminalId, kept: ev.kept } })
+      }).catch(error => failTerminal(reply, 'keep', error, ev.terminalId))
+    },
+
+    /** Replied: a recording is opened for the window that asked to look, and nobody else is looking */
+    rewindTerminal: ({ event, reply, client }) => {
+      const ev = event as { type: 'terminal.REWIND'; terminalId: string; cols: number; rows: number }
+      void terminalService.rewind(ev.terminalId, { cols: ev.cols, rows: ev.rows }, client).then(opened => {
+        if (!opened) {
+          failTerminal(reply, 'rewind', new Error(`No terminal ${ev.terminalId}`), ev.terminalId)
+          return
+        }
+        answer(reply, { type: 'terminal.REWOUND', data: opened })
+      }).catch(error => failTerminal(reply, 'rewind', error, ev.terminalId))
+    },
+
+    seekRewind: ({ event, reply }) => {
+      const ev = event as { type: 'terminal.REWIND_SEEK'; session: string; at: number }
+      void terminalService.seekRewind(ev.session, ev.at).then(at => {
+        if (at !== null) answer(reply, { type: 'terminal.REWIND_SOUGHT', data: { session: ev.session, at } })
+      }).catch(error => failTerminal(reply, 'rewind', error))
+    },
+
+    closeRewind: ({ event }) => {
+      const ev = event as { type: 'terminal.REWIND_CLOSE'; session: string }
+      void terminalService.closeRewind(ev.session).catch(error => { logger.error('Could not close a recording', { error }) })
+    },
+
     updateBaseDirectory: assign({
       baseDirectory: ({ event }) => {
         const ev = event as { type: 'terminal.UPDATE_BASE_DIRECTORY'; path: string }
@@ -477,6 +517,18 @@ export const terminalSystem = setup({
         },
         'terminal.OPEN_TERMINAL_TAB': {
           actions: 'openTerminalTab'
+        },
+        'terminal.KEEP_TERMINAL': {
+          actions: 'keepTerminal'
+        },
+        'terminal.REWIND': {
+          actions: 'rewindTerminal'
+        },
+        'terminal.REWIND_SEEK': {
+          actions: 'seekRewind'
+        },
+        'terminal.REWIND_CLOSE': {
+          actions: 'closeRewind'
         }
       }
     }

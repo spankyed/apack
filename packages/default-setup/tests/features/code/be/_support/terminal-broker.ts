@@ -10,7 +10,7 @@
 // So fidelity lives here once. A case records what it cares about by reading the slice it wants off the
 // returned object; nothing is per-spec except which slice it reads.
 import { mockService } from '@apackdev/testing/harness'
-import type { TerminalCellSize, TerminalColors, TerminalEvent, TerminalListeners, TerminalSession, TerminalSignal, TerminalSignalScope } from '@apackdev/sdk/services'
+import type { TerminalCellSize, TerminalColors, TerminalCommand, TerminalEvent, TerminalListeners, TerminalRewind, TerminalSession, TerminalSessionSummary, TerminalSignal, TerminalSignalScope } from '@apackdev/sdk/services'
 
 /** The options the service was opened with, whole, so a case reads the field it is about */
 export interface OpenOptions {
@@ -22,6 +22,9 @@ export interface OpenOptions {
   unset?: readonly string[]
   cwd?: string
   colors?: TerminalColors
+  record?: string
+  restore?: boolean
+  images?: boolean
 }
 
 export interface OpenedSession {
@@ -98,6 +101,14 @@ export interface RecordingBroker {
   deferResize(id: string): void
   /** Lets a held resize answer */
   settleResize(id: string): void
+  /** The sessions asked to outlive the app, as `keep()` last left each */
+  readonly kept: readonly string[]
+  /** The commands a session's shell will be said to have run, and what each printed */
+  reportsCommands(id: string, commands: ReadonlyArray<TerminalCommand & { output?: string }>): void
+  /** The recordings opened to be looked back through, with every moment each was asked to show */
+  readonly rewound: ReadonlyArray<{ id: string; recording: string; cols: number; rows: number; sought: number[]; closed: boolean }>
+  /** Says a recording does not exist, so opening it is refused */
+  refuseRewind(why?: string): void
 }
 
 /**
@@ -122,6 +133,10 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
   const deferredResizes = new Map<string, () => void>()
   const heldResizes = new Map<string, Promise<void>>()
   const live = new Set<string>()
+  const kept = new Set<string>()
+  const commandsOf = new Map<string, ReadonlyArray<TerminalCommand & { output?: string }>>()
+  const rewound: Array<{ id: string; recording: string; cols: number; rows: number; sought: number[]; closed: boolean }> = []
+  let rewindRefusal: string | undefined
   const adopted: string[] = []
   let next = 0
 
@@ -157,6 +172,9 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
       return pid === handlePid || (owned.get(id)?.has(pid) ?? false)
     },
     signal: async (signal, scope) => { signalled.push({ id, signal, scope }) },
+    commands: async () => (commandsOf.get(id) ?? []).map(({ output: _output, ...command }) => command),
+    commandOutput: async (command: number) => commandsOf.get(id)?.find(one => one.id === command)?.output ?? null,
+    keep: async (keeping: boolean) => { if (keeping) kept.add(id); else kept.delete(id) },
     // **A signal, as the broker's kill is**, and a signal is not an exit code: `portable-pty` kills with
     // SIGHUP and the protocol reports that by name with no code at all. A double answering a number here
     // would let the service decide a close by reading the code — the one thing that cannot work, so a case
@@ -202,6 +220,26 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
       // As the broker does: a pid is answered for a spawn and for nothing else
       return handle(id, null)
     },
+
+    sessions: async (): Promise<TerminalSessionSummary[]> => [...live].map(id => ({
+      id, pid: opened.find(one => one.id === id)?.pid ?? 0, cols: 80, rows: 24, kept: kept.has(id), recorded: false,
+      title: null, cwd: reportedCwds.get(id) ?? null, command: null, running: false,
+    })),
+
+    rewind: async (recording: string, size: { cols: number; rows: number }): Promise<TerminalRewind> => {
+      if (rewindRefusal !== undefined) throw new Error(rewindRefusal)
+      const entry = { id: `rewind-${rewound.length + 1}`, recording, ...size, sought: [] as number[], closed: false }
+      rewound.push(entry)
+      return {
+        id: entry.id,
+        first: 1_000,
+        last: 9_000,
+        // Held to what the recording covers, as the broker holds it
+        seek: async (at: number) => { const shown = Math.min(9_000, Math.max(1_000, at)); entry.sought.push(shown); return shown },
+        resize: async () => {},
+        close: async () => { entry.closed = true },
+      }
+    },
   })
 
   const listenersFor = (id: string): TerminalListeners => {
@@ -210,7 +248,10 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
     return found
   }
   return {
-    opened, resized, written, terminated, adopted, flow, signalled, askedOwns,
+    opened, resized, written, terminated, adopted, flow, signalled, askedOwns, rewound,
+    get kept() { return [...kept] },
+    reportsCommands: (id, commands) => { commandsOf.set(id, commands) },
+    refuseRewind: (why = 'there is no recording to look back through') => { rewindRefusal = why },
     declareOwned: (id, pid) => { owned.set(id, (owned.get(id) ?? new Set()).add(pid)) },
     get live() { return [...live] },
     endShell: (id, code, signal = null) => {

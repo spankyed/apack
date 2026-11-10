@@ -23,7 +23,7 @@ export {
 } from './run-history.ts';
 export { _createInferenceService, type _InferenceModels, type InferenceService, type OutputSchema, type OutputSpec, type _ResolveModel } from './inference.ts';
 export type { FileEntry, FileStat, FilesystemService } from './filesystem.ts';
-export type { TerminalService, TerminalSession, TerminalListeners, TerminalEvent, TerminalFacts, TerminalSignal, TerminalSignalScope, TerminalColor, TerminalColors, TerminalCellSize }
+export type { TerminalService, TerminalSession, TerminalListeners, TerminalEvent, TerminalFacts, TerminalSignal, TerminalSignalScope, TerminalColor, TerminalColors, TerminalCellSize, TerminalCommand, TerminalSessionSummary, TerminalRewind }
   from './terminal.ts';
 export type { SettingsChange, SettingsService, SettingsAdmin } from './settings.ts';
 export type { SecretMetadata, SecretProvider, SecretsProtection, SecretsService, SecretsSnapshot, SecretsStatus } from './secrets.ts';

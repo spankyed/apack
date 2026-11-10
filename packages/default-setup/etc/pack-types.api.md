@@ -2518,6 +2518,28 @@ type IncomingTerminalEvents = {
 } | {
     type: 'terminal.OPEN_TERMINAL_TAB';
     terminalId: string;
+}
+/** Whether that terminal's shell goes on running when the app is not, to be taken up again at the next start */
+ | {
+    type: 'terminal.KEEP_TERMINAL';
+    terminalId: string;
+    kept: boolean;
+}
+/** Open that terminal's recording to look back through, drawn at this size. Answered with `terminal.REWOUND` */
+ | {
+    type: 'terminal.REWIND';
+    terminalId: string;
+    cols: number;
+    rows: number;
+}
+/** Show an open recording as it was at `at`, in milliseconds since the Unix epoch */
+ | {
+    type: 'terminal.REWIND_SEEK';
+    session: string;
+    at: number;
+} | {
+    type: 'terminal.REWIND_CLOSE';
+    session: string;
 };
 
 type IncomingThreadsEvents = {
@@ -4037,6 +4059,35 @@ type OutgoingTerminalEvents =
 } | {
     type: 'terminal.TERMINAL_TAB_OPENED';
     data: TerminalInfo;
+}
+/** Whether a terminal's shell outlives the app changed: news for every window, which each draws on its tab */
+ | {
+    type: 'terminal.KEPT';
+    data: {
+        terminalId: string;
+        kept: boolean;
+    };
+}
+/**
+ * A recording is open, for the window that asked: `session` is what its view is drawn from, and it runs
+ * between `first` and `last`, in milliseconds since the Unix epoch.
+ */
+ | {
+    type: 'terminal.REWOUND';
+    data: {
+        terminalId: string;
+        session: string;
+        first: number;
+        last: number;
+    };
+}
+/** The moment an open recording now shows, for the window that asked */
+ | {
+    type: 'terminal.REWIND_SOUGHT';
+    data: {
+        session: string;
+        at: number;
+    };
 };
 
 /**
@@ -5034,6 +5085,8 @@ interface TerminalInfo {
      * seam; this is what says how many there have been, for a window that was not watching.
      */
     generation: number;
+    /** Whether its shell goes on running when the app is not, which a window asks for with `terminal.KEEP_TERMINAL` */
+    kept?: boolean;
     /** The shell ended and the terminal was kept. Absent while one is running */
     exited?: {
         code: number | null;

@@ -8,7 +8,8 @@ import { EARS } from '#generated/ears.ts'
 import { repository } from '#generated/repository.ts';
 import { createLogger } from '@apackdev/sdk/logger';
 import { services } from '#generated/services.ts'
-import type { TerminalCellSize, TerminalEvent, TerminalSession } from '@apackdev/sdk/services'
+import type { TerminalCellSize, TerminalEvent, TerminalRewind, TerminalSession, TerminalSessionSummary } from '@apackdev/sdk/services'
+import { resolveAppEnvironment } from '@apackdev/sdk/env'
 import { TERMINAL_COLORS } from '../terminal-colors.ts'
 import { directoryToStart, shellToStart, submitFor } from './known-shells.ts'
 import { cwdAsReported } from '../utils/osc-cwd.ts'
@@ -192,8 +193,28 @@ export interface TerminalHandlers {
   onCrashed(terminalId: string, exitCode: number | null): void
 }
 
+/**
+ * Where a terminal's recording is kept: what its shell printed, so the terminal can be reopened where it
+ * left off and looked back through. Inside the app's own data directory, in a file only the user reads.
+ */
+export function recordingFor(id: string, userDataDir = resolveAppEnvironment().userDataDir): string {
+  return path.join(userDataDir, 'apack', 'terminal-recordings', `${id}.recording`)
+}
+
+/** A recording opened to be looked back through, as the window that opened it is told of it */
+export interface OpenedRewind {
+  terminalId: string
+  /** The session a view attaches to */
+  session: string
+  /** The moments it runs between, in milliseconds since the Unix epoch */
+  first: number
+  last: number
+}
+
 class TerminalService {
   private terminals: Map<string, Terminal> = new Map()
+  /** Recordings being looked back through, by the session each is drawn from, with the window that opened it */
+  private rewinds = new Map<string, { rewind: TerminalRewind; client: string | undefined }>()
   /** Hands out `Terminal.opening` tokens; monotonic per process, and only ever compared for equality */
   private openings = 0
 
@@ -221,6 +242,7 @@ class TerminalService {
     const opening = ++this.openings
     const session = await services.terminal.open({
       cols, rows, shell, cwd, args: integration?.args, env: integration?.env, colors: TERMINAL_COLORS,
+      ...this.drawn(id, codeSettings, false),
     }, {
       onEvent: (event) => handlers.onEvent(id, event),
       onExit: (code) => this.exited(id, opening, code, handlers),
@@ -295,6 +317,8 @@ class TerminalService {
   private removed(id: string, handlers: TerminalHandlers): void {
     this.terminals.delete(id)
     try { repository.terminalCommands.markClosed(id as EARS.EntityId) } catch (error) { logger.error(`Could not close ${id}`, { error }) }
+    // What it printed goes with it: a recording of a terminal nobody can open again is only a record
+    void Promise.resolve().then(() => services.filesystem.remove(recordingFor(id))).catch(() => {})
     handlers.onExit(id)
   }
 
@@ -326,8 +350,10 @@ class TerminalService {
     const opening = ++this.openings
     try {
       const integration = await this.arrangeIntegration(this.shellFor(shell))
-        const session = await services.terminal.open({
+      const session = await services.terminal.open({
         cols, rows, shell, cwd, args: integration?.args, env: integration?.env, colors: TERMINAL_COLORS,
+        // The new shell starts under what the last one printed, which is usually what it was restarted to read
+        ...this.drawn(id, undefined, true),
       }, {
         onEvent: (event) => handlers.onEvent(id, event),
         onExit: (code) => this.exited(id, opening, code, handlers),
@@ -347,6 +373,61 @@ class TerminalService {
       handlers.onCrashed(id, null)
       throw error
     }
+  }
+
+  /**
+   * What a session a window draws is opened with beyond its shell: that its programs may send images, and
+   * — where terminals are restored at all — the file it is recorded in, and whether to begin with what
+   * that file already holds.
+   *
+   * **Recorded exactly where restoring is on.** A recording is what lets a restored terminal come back
+   * with its screen rather than empty, and it holds everything the shell printed; a user who turned
+   * restoring off has said they want neither.
+   */
+  private drawn(id: string, settings = featureSettings.forFeature('code').get(), restore: boolean) {
+    if (settings?.restoreTerminals === false) return { images: true }
+    return { images: true, record: recordingFor(id), restore }
+  }
+
+  /**
+   * Says whether a terminal's shell goes on running when the app is not. Kept, it is not ended when the
+   * app quits, and the next start takes it up again as it was — a build still running, a server still up.
+   */
+  async keep(id: string, kept: boolean): Promise<TerminalInfo | null> {
+    const terminal = this.terminals.get(id)
+    if (!terminal || terminal.state.kind === 'exited') return null
+    await terminal.state.session.keep(kept)
+    terminal.info = { ...terminal.info, kept }
+    return published(terminal)
+  }
+
+  /**
+   * Opens a terminal's recording to be looked back through, or answers `null` for a terminal with none.
+   *
+   * **A session of its own, with no process.** The window draws it like any other and what is typed at
+   * it goes nowhere; the terminal it is a recording of runs on beside it, untouched.
+   */
+  async rewind(id: string, size: { cols: number; rows: number }, client: string | undefined): Promise<OpenedRewind | null> {
+    const terminal = this.terminals.get(id)
+    if (!terminal) return null
+    const rewind = await services.terminal.rewind(recordingFor(id), {
+      cols: Math.max(1, Math.min(size.cols || terminal.info.cols, 500)),
+      rows: Math.max(1, Math.min(size.rows || terminal.info.rows, 200)),
+    })
+    this.rewinds.set(rewind.id, { rewind, client })
+    return { terminalId: id, session: rewind.id, first: rewind.first, last: rewind.last }
+  }
+
+  /** Shows a recording as it was at `at`, answering the moment shown, or `null` for one that is not open */
+  async seekRewind(session: string, at: number): Promise<number | null> {
+    const opened = this.rewinds.get(session)
+    return opened ? opened.rewind.seek(at) : null
+  }
+
+  async closeRewind(session: string): Promise<void> {
+    const opened = this.rewinds.get(session)
+    this.rewinds.delete(session)
+    await opened?.rewind.close()
   }
 
   get(id: string): Terminal | undefined {
@@ -511,6 +592,10 @@ class TerminalService {
    * It answers rather than broadcasts: the service owns the grid, the feature owns the wire.
    */
   async forgetClient(client: string): Promise<Array<{ terminalId: string; grid: AcceptedGrid }>> {
+    // A recording a window was looking back through has nobody looking at it
+    for (const [session, opened] of this.rewinds) {
+      if (opened.client === client) void this.closeRewind(session).catch(() => {})
+    }
     const moved: Array<{ terminalId: string; grid: AcceptedGrid }> = []
     for (const [terminalId, terminal] of this.terminals) {
       if (!terminal.fittedBy.delete(client)) continue
@@ -665,7 +750,7 @@ class TerminalService {
    * rather than checking first — there is nothing to check it against that the broker would not answer
    * better.
    */
-  private async adopt(row: TerminalEntity, session: string, handlers: TerminalHandlers): Promise<boolean> {
+  private async adopt(row: TerminalEntity, session: string, handlers: TerminalHandlers, kept: boolean): Promise<boolean> {
     const shell = this.shellFor(row.shell)
     const opening = ++this.openings
     try {
@@ -689,6 +774,7 @@ class TerminalService {
         rows: row.rows,
         scrollback: taken.scrollback,
         submit: submitFor(shell),
+        ...(kept && { kept }),
       }
       this.terminals.set(row.id, { info, state: { kind: 'live', session: taken, opening }, fittedBy: new Map(), decided: { cols: info.cols, rows: info.rows }, sizing: 0 })
       logger.info(`Took up session ${session} again for terminal ${row.title} (${row.id}); its shell and its output survived`)
@@ -715,13 +801,18 @@ class TerminalService {
    */
   async restoreAll(handlers: TerminalHandlers): Promise<void> {
     const persisted = repository.terminalQueries.all()
+    // Which of the sessions still running were asked to be: what a terminal taken up again is shown as
+    const kept = new Set(
+      (await services.terminal.sessions().catch((): readonly TerminalSessionSummary[] => []))
+        .filter(session => session.kept).map(session => session.id),
+    )
 
     // One read for the restore: every row asks the same question of the same document
     const codeSettings = featureSettings.forFeature('code').get()
     for (const row of persisted) {
       if (this.terminals.has(row.id)) continue
       // Asked rather than assumed: a stored id is a name, and offering a stale one costs one refused request
-      if (row.session !== undefined && await this.adopt(row, row.session, handlers)) continue
+      if (row.session !== undefined && await this.adopt(row, row.session, handlers, kept.has(row.session))) continue
       // **A row is data** (S3): the database console writes one, `apack db exec` writes one, and a backup
       // import replaces the whole store without looking at a row. So a stored shell and a stored directory
       // go through the same check a created one does, rather than straight to a spawn.
@@ -733,8 +824,12 @@ class TerminalService {
         // **The same decision as every other session's**, rather than a second copy of it: a restored
         // terminal whose shell dies keeps its screen and reports the crash, where this used to delete the
         // terminal and report a clean exit 0 — losing the error, and only for terminals that came from a row
-            const session = await services.terminal.open(
-          { cols: row.cols, rows: row.rows, shell, cwd, args: integration?.args, env: integration?.env, colors: TERMINAL_COLORS },
+        const session = await services.terminal.open(
+          {
+            cols: row.cols, rows: row.rows, shell, cwd, args: integration?.args, env: integration?.env, colors: TERMINAL_COLORS,
+            // Under the screen the last run left, where it recorded one
+            ...this.drawn(row.id, codeSettings, true),
+          },
           {
             onEvent: (event) => handlers.onEvent(row.id, event),
             onExit: (code) => this.exited(row.id, opening, code, handlers),

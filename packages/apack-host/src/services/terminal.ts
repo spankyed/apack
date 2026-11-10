@@ -214,6 +214,9 @@ function expose(held: Broker, session: BrokerSession): TerminalSession {
     // mapping: a table here would be a second place for a signal to be missing from
     owns: (pid) => session.owns(pid),
     signal: (signal, scope) => session.signal(signal, scope),
+    commands: () => session.commands(),
+    commandOutput: (command) => session.commandOutput(command),
+    keep: (kept) => session.keep(kept),
     terminate: () => session.kill(),
   };
 }
@@ -339,6 +342,12 @@ export function createTerminalService(): TerminalService & { shutdown(): Promise
      * `holdTerminalSessions` in the app, and otherwise the broker's own rule that the last client out ends
      * them, which is what stops a dev run or a test leaving anything behind.
      */
+    async sessions() {
+      return (await running()).sessions();
+    },
+    async rewind(recording, size) {
+      return (await running()).rewind(recording, size);
+    },
     async shutdown() {
       const started = broker;
       broker = undefined;

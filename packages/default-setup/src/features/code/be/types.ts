@@ -229,6 +229,8 @@ export interface TerminalInfo {
    * seam; this is what says how many there have been, for a window that was not watching.
    */
   generation: number
+  /** Whether its shell goes on running when the app is not, which a window asks for with `terminal.KEEP_TERMINAL` */
+  kept?: boolean
   /** The shell ended and the terminal was kept. Absent while one is running */
   exited?: { code: number | null }
   /**

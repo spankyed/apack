@@ -510,6 +510,19 @@ export interface TerminalColors {
 }
 
 // @public
+export interface TerminalCommand {
+    // (undocumented)
+    readonly command: string | null;
+    // (undocumented)
+    readonly cwd: string | null;
+    readonly exitStatus: number | null;
+    // (undocumented)
+    readonly finishedMs: number | null;
+    readonly id: number;
+    readonly startedMs: number | null;
+}
+
+// @public
 export type TerminalEvent =
 /** The program named its terminal. Empty when it took the name back */
     {
@@ -564,6 +577,20 @@ export interface TerminalListeners {
 }
 
 // @public
+export interface TerminalRewind {
+    // (undocumented)
+    close(): Promise<void>;
+    readonly first: number;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly last: number;
+    // (undocumented)
+    resize(cols: number, rows: number, cell?: TerminalCellSize): Promise<void>;
+    seek(at: number): Promise<number>;
+}
+
+// @public
 export interface TerminalService {
     adopt(id: string, listeners: TerminalListeners): Promise<TerminalSession>;
     open(options: {
@@ -575,13 +602,24 @@ export interface TerminalService {
         unset?: readonly string[];
         cwd?: string;
         colors?: TerminalColors;
+        record?: string;
+        restore?: boolean;
+        images?: boolean;
     }, listeners: TerminalListeners): Promise<TerminalSession>;
+    rewind(recording: string, size: {
+        readonly cols: number;
+        readonly rows: number;
+    }): Promise<TerminalRewind>;
+    sessions(): Promise<readonly TerminalSessionSummary[]>;
 }
 
 // @public
 export interface TerminalSession {
+    commandOutput(command: number): Promise<string | null>;
+    commands(): Promise<readonly TerminalCommand[]>;
     facts(): Promise<TerminalFacts>;
     readonly id: string;
+    keep(kept: boolean): Promise<void>;
     owns(pid: number): Promise<boolean>;
     pause(): Promise<void>;
     readonly pid: number | null;
@@ -591,6 +629,28 @@ export interface TerminalSession {
     signal(signal: TerminalSignal, scope: TerminalSignalScope): Promise<void>;
     terminate(): Promise<void>;
     write(data: string): Promise<void>;
+}
+
+// @public
+export interface TerminalSessionSummary {
+    // (undocumented)
+    readonly cols: number;
+    // (undocumented)
+    readonly command: string | null;
+    // (undocumented)
+    readonly cwd: string | null;
+    // (undocumented)
+    readonly id: string;
+    readonly kept: boolean;
+    // (undocumented)
+    readonly pid: number;
+    // (undocumented)
+    readonly recorded: boolean;
+    // (undocumented)
+    readonly rows: number;
+    // (undocumented)
+    readonly running: boolean;
+    readonly title: string | null;
 }
 
 // @public

@@ -224,7 +224,51 @@ export interface BrokerSession {
    * condition, the deadline and the session ending goes.
    */
   wait(until: BrokerWaitUntil, timeoutMs: number): Promise<BrokerWaitOutcome>;
+  /** The commands the session's shell has reported, oldest first */
+  commands(): Promise<readonly BrokerCommand[]>;
+  /** What one of them printed, or `null` for one whose output is no longer held */
+  commandOutput(command: number): Promise<string | null>;
+  /** Whether the session outlives the app's hold on the broker */
+  keep(kept: boolean): Promise<void>;
   kill(): Promise<void>;
+}
+
+/** One command a session's shell reported. Everything but the id is the shell's claim */
+export interface BrokerCommand {
+  readonly id: number;
+  readonly command: string | null;
+  readonly cwd: string | null;
+  /** Milliseconds since the Unix epoch; `finishedMs` is `null` while it runs */
+  readonly startedMs: number | null;
+  readonly finishedMs: number | null;
+  /** `null` while it runs, and when the shell reported none — which is not zero */
+  readonly exitStatus: number | null;
+}
+
+/** A session, as a caller that did not start it is told of it */
+export interface BrokerSessionSummary {
+  readonly id: string;
+  readonly pid: number;
+  readonly cols: number;
+  readonly rows: number;
+  readonly kept: boolean;
+  readonly recorded: boolean;
+  readonly title: string | null;
+  readonly cwd: string | null;
+  readonly command: string | null;
+  readonly running: boolean;
+}
+
+/** A recording opened to be looked back through: a session with no process, which a view attaches to */
+export interface BrokerRewind {
+  readonly id: string;
+  /** The moments the recording runs between, in milliseconds since the Unix epoch */
+  readonly first: number;
+  readonly last: number;
+  /** Shows it as it was at `at`, answering the moment shown: `at` held to what the recording covers */
+  seek(at: number): Promise<number>;
+  resize(cols: number, rows: number, cell?: { readonly width: number; readonly height: number }): Promise<void>;
+  close(): Promise<void>;
 }
 
 /** Something a session's program did that is not on its screen, as its holder is told it */
@@ -309,6 +353,11 @@ export interface BrokerSessionOptions {
    */
   unset?: readonly string[];
   cwd?: string;
+  /** A file to record the session in, and whether to begin with the screen it already holds */
+  record?: string;
+  restore?: boolean;
+  /** Whether its programs may send images, which is yes only where something draws them */
+  images?: boolean;
   /** What the session is drawn in, each colour as red, green and blue; absent leaves the broker's own */
   colors?: BrokerColors;
 }
@@ -333,6 +382,10 @@ export interface Broker {
    * survived from one that did not.
    */
   adopt(id: string, listeners: BrokerSessionListeners): Promise<BrokerSession>;
+  /** Every session the broker has, which is how the sessions a previous run kept are found */
+  sessions(): Promise<readonly BrokerSessionSummary[]>;
+  /** Opens a recording as a session showing its end */
+  rewind(recording: string, size: { readonly cols: number; readonly rows: number }): Promise<BrokerRewind>;
   close(): Promise<void>;
   /**
    * Runs when the connection ended without `close()` — the broker is gone, and its sessions with it.
@@ -786,12 +839,38 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
         if (answer.kind !== 'waited') throw new BrokerError('PTY', 'the broker answered no wait');
         return answer.outcome;
       },
+      async commands() {
+        connection.send({ kind: 'commands', session: id });
+        const answer = await connection.next(event => event.kind === 'commands' && event.session === id, { session: id });
+        if (answer.kind !== 'commands') throw new BrokerError('PTY', 'the broker answered no commands');
+        return answer.commands.map(one => ({
+          id: one.id,
+          command: one.command,
+          cwd: one.cwd,
+          startedMs: one.started_ms,
+          finishedMs: one.finished_ms,
+          exitStatus: one.exit_status,
+        }));
+      },
+      async commandOutput(command) {
+        connection.send({ kind: 'command_output', session: id, command });
+        const answer = await connection.next(
+          event => event.kind === 'command_output' && event.session === id && event.command === command,
+          { session: id },
+        );
+        if (answer.kind !== 'command_output') throw new BrokerError('PTY', 'the broker answered no output');
+        return answer.text;
+      },
+      async keep(kept) {
+        connection.send({ kind: 'keep', session: id, kept });
+        await connection.next(event => event.kind === 'kept' && event.session === id, { session: id });
+      },
       async kill() { connection.send({ kind: 'kill', session: id }); },
   });
 
   return {
     history,
-    async open({ cols, rows, shell, args, env, unset, cwd, colors }, sessionListeners) {
+    async open({ cols, rows, shell, args, env, unset, cwd, colors, record, restore, images }, sessionListeners) {
       connection.send({
         kind: 'spawn',
         cols,
@@ -804,6 +883,9 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
         colors: colors ?? null,
         // A holder that reads the bytes is sent them; one that does not has a session that sends none
         output: sessionListeners.onOutput !== undefined,
+        record: record ?? null,
+        restore: restore ?? false,
+        images: images ?? false,
       });
       // Registered as the frame is read, so an `exited` in the same read is not lost; delivered once this
       // call's caller is holding the session (`heldFeed`)
@@ -857,6 +939,39 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
      * the broker's own rule that the last client leaving ends them, which is what keeps a dev run or a test
      * from leaving anything behind.
      */
+    async sessions() {
+      connection.send({ kind: 'sessions' });
+      const answer = await connection.next(event => event.kind === 'sessions');
+      if (answer.kind !== 'sessions') throw new BrokerError('PTY', 'the broker answered no sessions');
+      return answer.sessions.map(one => ({
+        id: one.session, pid: one.pid, cols: one.cols, rows: one.rows, kept: one.kept, recorded: one.recorded,
+        title: one.title, cwd: one.cwd, command: one.command, running: one.running,
+      }));
+    },
+    async rewind(recording, size) {
+      connection.send({ kind: 'rewind', recording, cols: size.cols, rows: size.rows });
+      const answer = await connection.next(event => event.kind === 'rewound');
+      if (answer.kind !== 'rewound') throw new BrokerError('PTY', 'the broker opened no recording');
+      const id = answer.session;
+      return {
+        id,
+        first: answer.first,
+        last: answer.last,
+        async seek(at) {
+          connection.send({ kind: 'seek', session: id, at: Math.max(0, Math.round(at)) });
+          const sought = await connection.next(event => event.kind === 'sought' && event.session === id, { session: id });
+          return sought.kind === 'sought' ? sought.at : at;
+        },
+        async resize(cols_, rows_, cell) {
+          connection.send({
+            kind: 'resize', session: id, cols: cols_, rows: rows_,
+            cell_width: Math.max(0, Math.round(cell?.width ?? 0)),
+            cell_height: Math.max(0, Math.round(cell?.height ?? 0)),
+          });
+        },
+        async close() { connection.send({ kind: 'kill', session: id }); },
+      };
+    },
     async close() {
       connection.leave();
     },
