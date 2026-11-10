@@ -640,3 +640,69 @@ types are byte-identical, and Windows builds, links and passes. **The pin is sti
 `vendor/apack-terminal.rev` names a commit CI clones from the remote, and `vt-core/conformance` has not been
 pushed, so moving it now would name a commit nothing can fetch. That is the one remaining action and it is
 not a measurement.
+
+
+## 2026-11-09 — Phase R is bigger than "one import": three findings from reading the package
+
+O3 chose `ghostty-web` and the plan sized Phase R as one file plus roughly 35 lines of CSS. Reading the
+package against what `terminal-pool.ts` actually calls, that holds for most of it and not for one part.
+**The deliverable has not changed; the estimate has.** These are recorded before any code is written,
+because the third one changes the shape of the change rather than its size.
+
+### What maps straight across
+
+Every method the pool uses exists with the same name and meaning: `write` (with the completion callback
+`syncViewport` uses as its wait primitive), `paste`, `getSelection`, `selectAll`, `clear`, `focus`,
+`resize`, `open`, `dispose`, `cols`, `rows`, `element`, `attachCustomKeyEventHandler`, `onData`,
+`onResize`, `onSelectionChange`. `FitAddon` is in the package. `onWriteParsed` has no twin, and `onRender`
+is the one to use — the subscription exists to keep a pinned view at the bottom after a write, which is
+what `onRender` fires for.
+
+Three of the five addons stop being dependencies at all: `WebglAddon` because rendering is the package's
+own, `Unicode11Addon` because grapheme clustering is what the core does, and `WebLinksAddon` because
+`LinkDetector` with `UrlRegexProvider` and `OSC8LinkProvider` is better — OSC 8 hyperlinks are a sequence
+rather than a regex over drawn text.
+
+### Finding 1 — there is no DOM scroller, and the pool's scroll half is built on one
+
+This is the one that matters. `ghostty-web` draws to a `<canvas>` and renders its own scrollbar; scrolling
+is `viewportY`, `onScroll`, `scrollLines`/`scrollPages`/`scrollToLine`/`scrollToBottom` and a wheel
+handler. **Nothing in it has a scrolling DOM element.**
+
+The pool's scroll ownership is written against one: `findScroller` walks the emulator's DOM for an element
+whose computed `overflow-y` scrolls, `getViewport` caches it, `report` derives "is the user following the
+output" from `scrollTop + clientHeight >= scrollHeight - 10`, `detach` saves a `savedScrollFraction` of
+`scrollTop / scrollHeight`, and `syncViewport` writes `scrollTop` directly.
+
+`getViewport`'s own comment says the rule is "an element whose computed `overflow-y` scrolls, which is true
+of whichever emulator draws here". That was the assumption, and it is the one that breaks — which is worth
+saying plainly, because the comment was written to make the file emulator-agnostic and it chose the wrong
+invariant.
+
+**The replacement is smaller and exact, which is why this is not bad news.** `viewportY` is documented as
+the scroll offset with `0` at the bottom of the scrollback, so "following the output" is `viewportY === 0`
+rather than a measurement with a ten-pixel tolerance; a saved position is a line offset rather than a
+fraction of a changing `scrollHeight`; and three of the file's standing complaints disappear with the DOM
+dependency that caused them — Chromium zeroing `scrollTop` on `remove()`, `scrollToBottom` being a no-op
+when `ydisp === ybase`, and having to force layout by reading `scrollHeight` before writing `scrollTop`.
+`findScroller` and its specs go with it.
+
+### Finding 2 — OSC 52 is not surfaced, and the app has it today
+
+`@xterm/addon-clipboard` is loaded in the pool today, which is what makes a program's OSC 52 write reach
+the system clipboard. `ghostty-web` exposes no OSC 52: its clipboard members are the selection copy and
+the paste handler, and its only OSC provider is the OSC 8 one. Dropping the addon without a replacement is
+a regression in a behaviour that works now, so it is named here rather than discovered by whoever first
+runs `tmux save-buffer`.
+
+It is also the one gap with an architecturally better home than the window. The broker owns the screen and
+already routes the shell-integration OSC families, so a clipboard request is a fact for it to report rather
+than something the replica should act on by itself. That is work in two repositories and it is not in
+Phase R's scope as written, so it is a finding for the goal's owner and not a thing to slip in.
+
+### Finding 3 — title changes are a scan, not a parse
+
+`ghostty-web`'s own doc for its title handling says "Check for title changes in written data (OSC
+sequences) / Simplified implementation - looks for OSC 0, 1, 2". The core parses OSC properly; this
+particular path does not use it. The pool does not read `onTitleChange` today, so nothing regresses — it is
+recorded because it is the kind of thing that looks like a core guarantee and is not.
