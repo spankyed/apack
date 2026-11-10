@@ -952,3 +952,44 @@ Nine cases, each a decision rather than a restatement:
 | ordinary output | nothing held, so the carry cannot grow on normal traffic |
 | never terminated | given up on at a megabyte rather than held forever |
 | through the pool | a terminal receiving the sequence puts the text on the clipboard |
+
+
+## 2026-11-09 — Phase A: the behaviour pass, and a second defect the app found
+
+`drive/terminal-journeys.ts` against the built app, on the new broker and the new renderer together. The
+script is the one the terminal complaint produced — the journeys named there, driven and looked at — and
+it passed in 44.1s. What its report answers, each machine-checked rather than judged from a screenshot:
+
+| | |
+|---|---|
+| a crashed shell | keeps its terminal, and the restart draws one seam, not two |
+| a restarted shell | second generation recorded, restarted in place |
+| **the API process restarting under it** | the shell survived it and the terminal came back |
+| switching tabs away and back | came back and still works |
+| **an alternate-screen program** | `vim` ran, quit, and the shell worked after it |
+| **the working directory** | followed a `cd` — `{ cwd: "/tmp", title: "tmp" }` |
+| the environment | the shell inherited none of the app's own variables |
+| killing a terminal | its children were gone, none left running |
+| a renderer reload | the build terminal survived it |
+
+**Two of those are the core's own work reaching the app.** The cwd following is OSC 7 parsed by
+`libghostty-vt` in the broker, surfaced through the facts the broker reports — the path Phase B rebuilt —
+and the alternate-screen program is the parse that Phase 0a compared the two implementations over. Neither
+is a claim about the renderer; both are the broker's core answering, with the window drawing it.
+
+### The defect it found
+
+The run logged `RangeError: offset is out of bounds` from `Uint8Array.set`, twice per attach — once from
+`syncViewport` and once from the resize observer that calls it.
+
+`syncViewport` positioned the view inside `term.write('', callback)`. That idiom is the previous
+emulator's: it parsed writes on a queue, so the callback was how you got behind a burst of live output
+still being parsed. **This one parses inside `write`** — read out of the shipped bundle, `write` calls
+`wasmTerm.write` synchronously and its callback is nothing but a `requestAnimationFrame` — so the frame
+was all that was ever being bought, and the empty write that bought it raises on an offset past the end of
+a zero-length array.
+
+Asking for the frame directly is both what the callback did and the thing that does not crash. **No spec
+caught it and none could have**: the stand-ins accept an empty write because the previous emulator did.
+That is the second time in this phase that the stand-in was the thing that was wrong, after the
+open-before-use ordering, and both times the running app is what said so.
