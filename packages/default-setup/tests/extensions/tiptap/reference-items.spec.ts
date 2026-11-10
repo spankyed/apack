@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { effectScope, onScopeDispose, ref } from 'vue';
+import { computed, effectScope, onScopeDispose, ref } from 'vue';
 import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing';
 import { resolveName } from '@apackdev/sdk/ids';
 import type { ReferenceCatalogEntry } from '@apackdev/sdk/framework';
@@ -98,4 +98,14 @@ it('does not publish items from setup that closes its picker synchronously', () 
     return f.raw;
   } } });
   f.open(); expect(stopped).toHaveBeenCalledOnce(); expect(f.reader.items.value).toEqual([]);
+});
+
+it('hands a provider what was typed, so one that searches answers for it', () => {
+  const f = fixture();
+  f.categories.set('memos', { ...f.categoryBinding, binding: { ...f.categoryBinding.binding,
+    useItems: (query: Readonly<{ value: string }>) => computed(() => query.value ? [{ id: `Memo-${query.value}`, label: `${query.value} memo`, shortCode: '', type: 'memo' }] : []) } });
+  f.publish(); f.open();
+  expect(f.reader.items.value).toEqual([]);
+  f.query.value = 'second';
+  expect(f.reader.items.value.map(item => item.id)).toEqual(['Memo-second']);
 });

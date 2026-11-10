@@ -31,7 +31,7 @@ export function useReferenceItems(category: Ref<string | null>, query: Ref<strin
     const scope = effectScope(true)
     providerScope = scope
     try {
-      const items = scope.run(() => next.binding.useItems())
+      const items = scope.run(() => next.binding.useItems(query))
       if (providerScope === scope && selected.value === next) provided.value = items
       else scope.stop()
     } catch (error) {

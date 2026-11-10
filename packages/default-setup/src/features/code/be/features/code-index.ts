@@ -2,12 +2,10 @@ import { answer } from '../answer.ts'
 import { defineHandlers } from '@apackdev/sdk/framework';
 import { createLogger } from '@apackdev/sdk/logger';
 import { assign, setup } from 'xstate'
-import { promises as fs } from 'node:fs'
-import * as path from 'node:path'
+import type { EARS } from '#generated/ears.ts'
 
 import type { IncomingCodeIndexEvents } from '../contract.ts'
-import { extractFile } from '../code-index/extract.ts'
-import { codeIndexCommands, codeIndexQueries, symbolIdOf } from '../code-index/repository.ts'
+import { codeIndexAnswers, codeIndexCommands } from '../code-index/repository.ts'
 import { semanticDiff } from '../code-index/semantic-diff.ts'
 import { createSyncRunner } from '../code-index/sync.ts'
 
@@ -26,20 +24,6 @@ export type Event =
 
 const handlers = defineHandlers<CodeIndexSystemContext, Event>();
 
-/** Where a symbol is now, read by parsing its file: no row holds a position, so a line moving writes nothing */
-async function locate(id: string): Promise<{ path: string; line: number; column: number } | null> {
-  const symbol = codeIndexQueries.symbol(id as Parameters<typeof codeIndexQueries.symbol>[0])
-  const file = symbol && codeIndexQueries.file(symbol.file)
-  const project = symbol && codeIndexQueries.projectOf(symbol.project)
-  if (!symbol || !file || !project) return null
-  const absolute = path.join(project.root, file.path)
-  const extraction = extractFile(file.path, await fs.readFile(absolute, 'utf8'))
-  if (!extraction.ok) return null
-  const definition = extraction.definitions.find(candidate => symbolIdOf(symbol.project, file.path, candidate) === symbol.id)
-  // An editor's columns count from 1, a syntax tree's from 0
-  return { path: absolute, line: definition?.line ?? 1, column: (definition?.column ?? 0) + 1 }
-}
-
 export const codeIndexSystem = setup({
   types: {
     context: {} as CodeIndexSystemContext,
@@ -56,8 +40,8 @@ export const codeIndexSystem = setup({
     },
     locate: ({ event, reply }) => {
       const ev = event as Extract<Event, { type: 'codeIndex.LOCATE' }>
-      locate(ev.symbol).then(
-        location => answer(reply, { type: 'codeIndex.LOCATED', data: location }),
+      codeIndexAnswers.locate(ev.symbol as EARS.EntityId).then(
+        found => answer(reply, { type: 'codeIndex.LOCATED', data: found?.location ?? null }),
         (error: unknown) => {
           logger.error('Locating a symbol failed', { error })
           answer(reply, { type: 'codeIndex.LOCATED', data: null })

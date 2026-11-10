@@ -219,12 +219,7 @@ import { matchesHotkey, useSurfaceStorage, type HotkeyEvent, type HotkeysMap } f
 import QuickPromptsPopup from './QuickPromptsPopup.vue'
 import RevertHistoryPopup from './RevertHistoryPopup.vue'
 
-interface ContextReference {
-  refType: 'thread' | 'document' | 'note'
-  refId: string
-  shortCode: string
-  label: string
-}
+type ContextReference = NonNullable<MessageReferences['context']>[number]
 
 const props = defineProps<{
   currentThread: AgentThreadData | null

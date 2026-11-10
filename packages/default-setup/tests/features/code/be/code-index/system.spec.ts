@@ -1,27 +1,28 @@
 // The code system's half of the code index: what a window asks it, answered to that window, and the index following
 // the directory the surface is on.
-import { execFileSync } from 'node:child_process'
+import { execFileWhileWorking } from '@apackdev/sdk/progress'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { startApp } from '@apackdev/testing/harness'
 import { codeIndexQueries } from '#features/code/be/code-index/repository.ts'
+import { resolveReferences } from '#features/threads/be/services/chat.ts'
 
 const CODE = 'default-setup/code'
 const MAIN = 'c-main'
 
 let root: string
-const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' })
+const git = async (...args: string[]) => (await execFileWhileWorking('git', args, { cwd: root })).stdout
 
-beforeEach(() => {
+beforeEach(async () => {
   root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'code-index-system-')))
-  git('init', '-q', '-b', 'main')
-  git('config', 'user.email', 'a@b.c')
-  git('config', 'user.name', 'a')
+  await git('init', '-q', '-b', 'main')
+  await git('config', 'user.email', 'a@b.c')
+  await git('config', 'user.name', 'a')
   fs.writeFileSync(path.join(root, 'a.ts'), '\n\nexport function target() { return 1 }\n')
-  git('add', '-A')
-  git('commit', '-qm', 'c')
+  await git('add', '-A')
+  await git('commit', '-qm', 'c')
 })
 afterEach(() => fs.rmSync(root, { recursive: true, force: true }))
 
@@ -53,10 +54,41 @@ it('answers where a symbol is, at the line it is on now', async () => {
   })
 })
 
+it('finds a symbol in every indexed checkout when none is named', async () => {
+  const app = await appOnDirectory()
+  await app.send('code', { type: 'codeIndex.SET_ENABLED', enabled: true })
+  await vi.waitFor(() => expect(codeIndexQueries.status(root).progress).toMatchObject({ state: 'idle', symbols: 1 }))
+  expect(codeIndexQueries.searchSymbols(null, 'targ', 5)).toMatchObject([{ name: 'target', path: 'a.ts' }])
+})
+
+// A symbol attached to a message reaches the agent as where it is now, and its directory, never as nothing
+it('turns an attached symbol into where it is now, and one that is gone into a line saying so', async () => {
+  const app = await appOnDirectory()
+  await app.send('code', { type: 'codeIndex.SET_ENABLED', enabled: true })
+  await vi.waitFor(() => expect(codeIndexQueries.status(root).progress).toMatchObject({ state: 'idle', symbols: 1 }))
+  const [found] = codeIndexQueries.searchSymbols(root, 'target', 5)
+  fs.writeFileSync(path.join(root, 'a.ts'), '\n\n\n\nexport function target() { return 1 }\n')
+  const attached = { refType: 'symbol' as const, refId: found!.id, shortCode: 'function', label: 'target' }
+
+  const live = await resolveReferences({ context: [attached] })
+  expect(live.textPrefix).toBe(`[Code symbol: function target at ${path.join(root, 'a.ts')}:5]\n${found!.signature}`)
+  expect(live.addDirs).toEqual([root])
+
+  // Before the index notices: a symbol taken out of its file, then the file taken off disk
+  fs.writeFileSync(path.join(root, 'a.ts'), 'export const other = 1\n')
+  expect((await resolveReferences({ context: [attached] })).textPrefix).toBe('[Code symbol no longer indexed: target]')
+  fs.rmSync(path.join(root, 'a.ts'))
+  expect((await resolveReferences({ context: [attached] })).textPrefix).toBe('[Code symbol no longer indexed: target]')
+
+  await app.send('code', { type: 'codeIndex.SET_ENABLED', enabled: false })
+  await vi.waitFor(() => expect(codeIndexQueries.project(root)).toBeUndefined())
+  expect((await resolveReferences({ context: [attached] })).textPrefix).toBe('[Code symbol no longer indexed: target]')
+})
+
 it('answers a staged diff, with the index off', async () => {
   const app = await appOnDirectory()
   fs.writeFileSync(path.join(root, 'a.ts'), 'export function target() { return 2 }\n')
-  git('add', '-A')
+  await git('add', '-A')
   const call = await app.send('code', { type: 'codeIndex.SEMANTIC_DIFF', range: { staged: true } }, { sender: CODE, client: MAIN })
   expect(await app.nextEmit('code', 'codeIndex.SEMANTIC_DIFF_READY', { answering: call })).toMatchObject({
     data: { changes: [{ path: 'a.ts', name: 'target', change: 'body' }], unread: [] },

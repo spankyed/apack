@@ -1,6 +1,6 @@
 # Code index
 
-Status: stage 1 built; stages 2 to 6 planned, revised 2026-11-03. A graph of a project's code — its files, the definitions
+Status: stages 1 and 2 built; stages 3 to 6 planned, revised 2026-11-03. A graph of a project's code — its files, the definitions
 in them, and the calls, references, imports and inheritance between them — kept current as the code changes, so apack can
 answer what a change reaches, where a symbol is used and what matters around a file, and say how far each answer can be
 trusted. It is a feature of the default-setup pack, in the code feature, with no host service.
@@ -17,8 +17,8 @@ trusted. It is a feature of the default-setup pack, in the code feature, with no
    leaves other files' edges into it alone.
 5. **Every answer says what it couldn't see:** files pending, sites unresolved, event boundaries crossed. "No callers" is
    only ever said with its coverage beside it.
-6. **The syntax graph is evaluated before it is built.** Stage 2 starts by measuring the syntax layer against the compiler
-   on real code, for precision and recall, and those readings decide what it may claim.
+6. **The syntax graph is held to the compiler.** `scripts/code-index-evaluate.ts` measures what it says against TypeScript on
+   real code, and those readings decide what it may claim.
 
 ## What this repository looks like
 
@@ -39,8 +39,8 @@ What follows from it:
 
 - **Site-level edges would be the largest thing in the database.** A relation is four keys (its row, `d/o`, `d/n`, `d/b`),
   so about 636,000 keys for calls alone, and an `at` in the edge rewrites every edge below a changed line.
-- **Name matching can't be trusted on a member call.** Over half the sites have a receiver the syntax can't type. "One
-  definition with that name" would link every `array.map()` to a project's own `map`.
+- **Name matching can't be trusted at all.** Over half the sites have a receiver the syntax can't type, and "one definition
+  with that name" read 0 to 12% correct even on a bare name (below).
 - **Control flow here crosses events.** A callers walk stops at each `sendToSystem`, and neither a parser nor a compiler
   sees through it, so an answer has to say so.
 - **Tests are a third of the files.** Unfiltered, they dominate any ranking.
@@ -93,25 +93,26 @@ every start, and tree-sitter needs a WASM file or a native binding a pack build 
 - **Indexes:** values on `CodeFile` `project`, and on `CodeSymbol` `project` and `file`. Text (`search`) on `CodeSymbol` over
   `name`.
 
-From stage 2:
-
 | Relation kind | From → to | Rules | Info |
 |---|---|---|---|
-| `code_defines` | `CodeFile` → `CodeSymbol` | | |
-| `code_member_of` | method → class | | |
 | `code_calls` | `CodeSymbol` → `CodeSymbol` | `weighted` | `{ layer, sites }` |
 | `code_references` | `CodeSymbol` → `CodeSymbol` | `weighted` | `{ layer, sites }` |
+| `code_inherits` | `CodeSymbol` → `CodeSymbol` | | `{ layer, sites }` |
 | `code_imports` | `CodeFile` → `CodeFile` | | `{ layer }` |
-| `code_inherits` | `CodeSymbol` → `CodeSymbol` | | `{ layer, how }` |
 
 - **The prefix is needed.** `references` is already the notes' kind, and declaring it weighted would change how notes rank.
 - **One edge per pair**, which is elmdb's default identity, with no `key`. `link` merges, so a pair's edge is written from
-  its sites and a repeat costs nothing. Its weight is the sum of its sites' confidence, and its `layer` the strongest.
-- **No per-site row.** Showing an edge's evidence parses the caller's file and resolves its sites again.
-- **`layer`** is `compiler`, `extracted` (the far end in the same file) or `inferred` (resolved across files).
-- **`CodeFile` gains `names`** (every name its sites write) and **`dirty`**, both value-indexed. `names` answers "whose
-  resolution could this change", and `dirty`, written in the unit that makes a file stale, is the work queue, so a crash
-  loses nothing and an answer can count what's pending.
+  its sites and a repeat costs nothing. Its weight is the sum of its sites' confidence.
+- **No per-site row.** A site's position is read by parsing the caller's file.
+- **`layer`** is `extracted` (the far end in the same file) or `inferred` (through an import), and `compiler` from stage 3.
+- **A site in no definition makes no edge:** top-level code in a module has no symbol to start from. The file's `code_imports`
+  still says it depends on what it imports.
+- **`CodeFile` gains:**
+  - `dirty`, written in the unit that makes a file's edges stale, so a crash loses nothing and an answer can count what's pending;
+  - `wantedNames`, the names it asks other files for, which say what a change can reach;
+  - `unresolvedNames` and `unresolvedSites`, what it calls that syntax can't follow;
+  - `reexports` and `defaultExport`, so a resolver follows a file without parsing it;
+  - `importsMissing`, an import of a project file that found none, which a new file may answer.
 
 ## The syntax layer
 
@@ -131,60 +132,89 @@ kept, and the component is a definition whose body is its template. From stage 2
 it names, and a handler or binding expression is a site in the component. Without this every handler and component reads as
 unused.
 
-**Resolution (stage 2).** First that answers wins, with no fuzzy matching:
+**Resolution.** First that answers wins, with no fuzzy matching:
 
 | # | Strategy | Applies to |
 |---|---|---|
-| 1 | Import map: the prefix through the file's imports, then an exact `qualifiedName` | any site whose head is imported |
-| 2 | Same module | a bare name, `this.x` |
-| 3 | Unique name in the project | a bare name only |
-| 4 | Nearest by module path, ties broken by path order | a bare name only |
+| 1 | Import: the head through the file's imports, re-exports followed, then an exact name | any site whose head is imported |
+| 2 | Same file | a bare name, `this.x` |
 
-A member call on a receiver none of these reach makes no edge, and counts as unresolved on every definition it names.
-Whether 3 and 4 stay is decided by their evaluated precision. Each strategy's confidence is a table in the source, recorded
-from the evaluation with its date.
+Anything else makes no edge. `x.f()` on a value syntax can't type counts as unresolved against every definition named `f`; a
+bare name the file doesn't hold is a global or a package's.
+
+**What that is worth.** `scripts/code-index-evaluate.ts`, 2026-11-03, against TypeScript's compiler over each repository's `.ts`
+and `.tsx` files:
+
+| Repository | Files compared | Import: precision | Same file: precision | Of the sites the compiler places in the project, found |
+|---|---|---|---|---|
+| this one | 2,234 | 98.8% | 100.0% | 57% |
+| opencode | 1,444 | 100.0% | 100.0% | 60% |
+| tutanota | 1,657 | 100.0% | 99.9% | 56% |
+
+- **An edge is almost always right, and many are missing.** What's missed is nearly all member calls on values of a type
+  syntax can't read, which is why "no callers" is never said alone and why the compiler layer exists.
+- **This repository's misses in the import row** are mostly a method on an object the compiler places on the interface it
+  implements, so the two name different definitions of one thing.
+- **Two strategies were tried and removed.** "The one definition with that name in the project" read 0 to 12% correct, and "the
+  nearest definition with that name" 0 to 11%: nearly every hit was a global, such as `Error` linked to a story called `Error`.
 
 **Keeping current.**
 
 1. The code system's git watcher reports a change in the working tree or in git's `HEAD` and index, and a sync takes a new
    view. That watcher ignores paths such as `build/`, `dist/` and `tmp/`, anywhere in the absolute path, so a save under one is
-   picked up by the next change it does see. A request while one runs cancels it, and what it finished is already stored.
-2. A file whose blob id moved is read, extracted and diffed against its rows, and its blob id and symbols are written in one
-   unit. A file gone from the view loses its rows.
-3. From stage 2, the same unit resolves the file's sites, rewrites its edges and sets `dirty` on its dependents: files whose
-   `names` hold a name added or removed, and files importing this one. Dirty files drain a slice at a time.
-
-Adding a second `parse` anywhere changes what every file naming `parse` resolves to, which is why step 3 reads `names`.
+   picked up by the next change it does see. A request while a sync runs cancels it, and what it finished is already stored.
+2. A file whose blob id moved is read, extracted and diffed against its rows, and in one unit its blob id, its symbols and
+   `dirty` are written, on it and on whatever a change reaches: files with a changed name in `wantedNames`, followed through a
+   re-export that renames it; for a changed default or `export *`, the files importing this one; for a new file, those with
+   `importsMissing`. By name rather than by importer, because gaining an export changed 662 files of this repository by
+   importer and almost none by name.
+3. Dirty files are drained a slice at a time once every changed file's definitions are stored, so a site resolves against the
+   project as it now is, whatever order the files came in. A file parsed in step 2 isn't parsed again.
+4. A changed `package.json` counts as a changed extractor, since what a specifier means is in the manifests.
 
 ## The semantic layer (stage 3)
 
-- **The compiler itself for TypeScript and Vue:** TypeScript's API over `@vue/language-core`'s virtual files, under
-  Electron's Node at low priority with its heap capped, loading no project plugins. `scip-typescript`'s README covers
-  TypeScript, JavaScript and Svelte, doesn't mention Vue or npm workspaces, and suggests a 16 GB heap. The evaluation runs
-  both on this repository and this choice stands or falls on those readings.
-- **This can't be purely in the pack as things are.** It needs a separate process and `typescript` and Volar on disk, and a
-  pack build emits one backend entry and ships only `dist/{runtime,build,types}`. The choice to take at this stage is a small
-  generic pack-build option for a second entry and its files, or a host feature.
-- **Mapping:** an occurrence is matched to the site at its range and to the `CodeSymbol` holding its declaration. The pair's
-  edge takes `layer: 'compiler'`. Where the compiler names another target, the syntax layer's pair loses that site, and its
-  edge goes with its last one.
-- **When it runs:** when asked, and when the machine is idle on power, one run per project, cancelled by a newer one. A
-  whole-program run is a type-check, about 70 s for one of this repository's legs (2026-11-01, under load), so it doesn't
-  follow every commit. A failed run leaves the syntax layer in charge and says why.
-- **Staleness is per file:** a run records each file's blob. A file whose blob has moved falls back to its syntax
-  resolution. A compiler edge to a symbol that has been removed goes with the symbol; one to a symbol whose signature changed
-  is kept, and counted as unverified until the next run.
+- **TypeScript's own compiler, in a worker thread.** The pack declares it in `apack.json` `build.workers`
+  (`codeIndexCompiler`), which `apack pack build` bundles self-contained with `typescript` to
+  `runtime/workers/codeIndexCompiler.cjs`; `workerPath` finds it. That kept the feature in the pack: the other option was a
+  host feature, which would have moved a pack feature into the host to work around a build gap.
+- **One language service per checkout,** kept between syncs and told which files moved, over the checkout's own
+  `tsconfig.json` loosened to what reading needs. The worker's heap is capped; if it exits, the index keeps its syntax edges
+  and starts a new worker on the next sync. Waits on it last as long as it keeps working (`answerWhileWorking`).
+- **When it runs:** after each sync's syntax pass, for the files that pass resolved. A checkout's program is built by the
+  first sync that resolves something, so a start with nothing changed builds nothing.
+- **Mapping:** each site the compiler places in the checkout takes its target from the compiler, `layer: 'compiler'` at full
+  weight; one it places outside the checkout has no edge; one it can't answer keeps its syntax resolution.
+  `compiler.ts` is shared with `scripts/code-index-evaluate.ts`, so what ships is what is measured.
+- **Readings, 2026-11-09, this repository (2,735 files):**
+  - **First index:** 24.0 s at load 12–19. At load 80–140 the same index took 50–64 s; all of that is the machine.
+  - **Event loop:** a file's resolution ran as one synchronous stretch — up to 45 ms of the main thread's CPU for a
+    file of 1,124 sites, after a re-parse of up to 24 ms and before a write of up to 13 ms — so the compiler pass held
+    the loop about 80 ms per large file. Resolution now offers the slicer a pause between sites, and the pass yields
+    after the re-parse; the longest remaining stretch is one file's parse (27 ms CPU). Wall readings at load 80–140,
+    the only ones the machine allowed, were 159 ms before and 76 ms after: neither settles the 50 ms budget.
+  - **Receiving the worker's answers** for all 2,360 files in one message costs the main thread about 10 ms, the
+    same as in batches of 50, so the answers are not chunked.
+  - **A saved file** (`extract.ts`, imported across the code index) re-synced, compiler included, in 0.25–0.35 s, and
+    once 0.95 s, at load 80–140; the budget is 1 s.
+  - **The worker's heap** after answering every file: about 820 MB used of 950 MB, under its 3,072 MB cap.
+  - **Edges:** 11,783 of 19,257 came from the compiler; the rest are syntax edges in files it doesn't read and sites
+    it can't answer. Against `scripts/code-index-evaluate.ts`, the compiler places about 60,600 call and reference
+    sites in `.ts`/`.tsx` files, and syntax alone resolved about 38,600 of them correctly (precision 99.6–100%); the
+    compiler layer takes the rest in those files by construction, being what the evaluation measures against.
+- **`.vue` files stay on the syntax layer.** Volar (`@vue/language-core`) is the follow-up, once these readings settle what
+  it would cost and add.
 - **Other languages** come through a SCIP importer (stage 6), since SCIP is the one format they share. Indexers that drive
   a project's build run its code, so each is enabled per project, with that stated.
 
 ## Answers
 
 A read of the index is a view of the code feature, read with `useView`, so a window follows it live. What reads files or git
-is fetched and replied (`packages/default-setup/CLAUDE.md`, What a system sends a surface). From stage 2 each carries its
-coverage:
+is fetched and replied (`packages/default-setup/CLAUDE.md`, What a system sends a surface). What can be missing an edge carries
+its coverage, which `compilerShare` and `eventBoundaries` join with stages 3 and 5:
 
 ```ts
-{ results, coverage: { pendingFiles, compilerShare, unresolvedSites, eventBoundaries } }
+{ results, coverage: { pendingFiles, unresolvedFiles } }
 ```
 
 Nothing is added to a prompt unasked.
@@ -194,9 +224,9 @@ Nothing is added to a prompt unasked.
   (`codeIndex.LOCATE`).
 - **Semantic diff:** what a range or staged change did per definition (added, removed, signature, body), from the two versions
   alone (`codeIndex.SEMANTIC_DIFF`). It reads no row, so it works with the index off. A reformat is no change.
-- **Callers, callees and uses**, each with its layer and evidence.
-- **Code map:** the definitions most relevant to the open file, by `rank` seeded from its symbols, over `code_calls`,
-  `code_references` and `code_inherits`, leaving out test files by default.
+- **Used by, and uses** (`symbolCallers`, `symbolCallees`, views), each with its layer and how many sites, beside coverage.
+- **Code map** (`codeMap`, a view): the definitions most relevant to the open file, leaving out test files: a two-step walk
+  from its symbols, each step's share divided among a node's edges so a hub doesn't pull in everything it knows.
 - **Attach to a message:** a symbol with its callers and callees, or a code map, within a size the user sees. It adds to an
   agent browsing files rather than replacing it: Codebase-Memory's paper measures an agent on a graph alone at 0.83 against
   0.92 browsing, for a tenth of the tokens.
@@ -208,10 +238,10 @@ Nothing is added to a prompt unasked.
 - **Unused definitions:** only where coverage is complete: no pending files, the compiler layer current, no unresolved site
   naming it, not exported, not an event handler.
 
-`rank` is computed per request on the event loop, since a seeded rank has nothing to store ahead of its seeds (elmdb
-`docs/roadmap/rank-index.md`). It read 11.3 ms over 10,000 documents and 50,000 edges (2026-10-31), so at this graph's size it
-should fit; stage 2 measures it. No rank index is declared here, since a save changes edges and each change would cost a
-drain.
+**The code map doesn't use `rank`.** A seeded `rank` read 110 ms over this repository's graph, on the event loop, and as a view
+it ran again after every commit to any edge, which held the loop 1.7 s through a branch switch. The walk reads only the edges
+near the file, at most 4.2 ms. `rank` and `communities` stay for what wants the whole graph, stage 5's modules. No rank index is
+declared, since a save changes edges and each change would cost a drain.
 
 ## Budgets
 
@@ -227,7 +257,9 @@ changed to fit says why.
 | 1 | a branch switch changing 500 files | 2 s |
 | 1 | a semantic diff of a 100-file range | 500 ms |
 | 1 | the app database and a backup, grown by this repository | 50 MB |
+| 2 | first index, with its graph | 30 s |
 | 2 | one saved file, with its dependents | 200 ms at the 95th percentile |
+| 2 | a branch switch changing 500 files | 2 s |
 | 2 | a code map; callers of a symbol | 50 ms; 20 ms |
 | 2 | the app database and a backup, grown by this repository | 200 MB |
 | 3 | a compiler run | its heap under its cap; the API's event loop as above |
@@ -249,15 +281,31 @@ A debounce in the watcher (500 ms) comes before a save's sync. Searching signatu
 budget, and is why `search` covers names alone. `measure:loop`'s sampler doesn't reach the API process, since Electron starts it,
 which is why the loop figure is read from inside the sync.
 
+**Stage 2's readings**, 2026-11-03, the same conditions at load average 7 to 10, 2,605 files, 16,644 symbols:
+
+| What | Read | Budget |
+|---|---|---|
+| first index, with its graph | 11.2 s | 30 s |
+| longest delay to the API's event loop in any sync | 37 ms | 50 ms |
+| a save adding an export to a file with hundreds of importers, 11 saves | 112 to 133 ms | 200 ms |
+| a save renaming that file's main export, and back | 195 to 204 ms | 200 ms |
+| a branch switch changing 500 files, 3 switches | 1.6 to 1.7 s | 2 s |
+| used by, over 200 symbols (worst); code map, over 102 files (worst) | 1.2 ms; 4.2 ms | 20 ms; 50 ms |
+| a backup, with the index against without | 76.4 MB against 1.3 MB | 200 MB |
+
+The two query lines were read in the test harness rather than the app. The rename reads at the edge of its budget on a machine
+that wasn't quiet, for the one file in this repository most depended on.
+
 ## Verification
 
 - **Extraction:** fixtures per file type, Vue included; what moves each hash and what doesn't.
-- **Resolution:** a fixture per strategy, including two `map`s told apart by an import, and `array.map()` making no edge.
-- **Evaluation:** the stage 2 harness stays, as a command reporting precision and recall per strategy against the compiler,
-  run when the resolver changes.
+- **Resolution:** a case per strategy, including two `map`s told apart by an import, `array.map()` making no edge, and a global
+  named like a project's definition making none.
+- **Evaluation:** `scripts/code-index-evaluate.ts <repository>` reports precision and recall per strategy against the compiler.
+  Run it when the resolver changes.
 - **Identity:** a save leaves incoming edges and their ids in place; a reformat writes no row.
-- **Incremental equals full:** a seeded random history of edits, adds, removes, renames and branch switches, compared with a
-  fresh index. From stage 2 it includes a second definition of a name others resolved uniquely.
+- **Incremental equals full:** a seeded random history of edits, adds, removes, renames and branch switches over files that
+  import and re-export one another, compared with a fresh index, edges included.
 - **Interruption:** a sync cut short finishes on the next run, and the result equals a fresh index.
 - **Coverage:** an answer with files pending, unresolved sites or a dynamic send says so; "unused" refuses without coverage.
 - **Off:** turning a project off removes its rows and no other project's; a project never turned on is never read.
@@ -267,9 +315,9 @@ which is why the loop figure is read from inside the sync.
 
 1. **Symbols and semantic diff** (built): git's view, identity and diffing, sync, Vue extraction, status and the toggle; find
    a symbol; semantic diff in the commit panel.
-2. **The syntax graph:** first the evaluation, a command over this repository and two others for precision and recall per
-   strategy and call form against the compiler, whose findings edit this plan. Then resolution, dependents, `dirty`, coverage;
-   callers, callees and uses; code map; attach to a message.
+2. **The syntax graph** (built): the evaluation, resolution, dependents, `dirty`, coverage; used by and uses; code map.
+   **Attach to a message** isn't in it: a symbol reaches a message through the reference system, whose list of items is a
+   question of its own at 16,000 symbols, and it's next.
 3. **The semantic layer** for TypeScript and Vue, with the packaging choice above.
 4. **Impact,** in the commit panel and pull request review, once edges are worth trusting for it.
 5. **Event edges, modules, unused definitions,** and the graph view's overlays, which need the graph view built.

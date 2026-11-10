@@ -164,9 +164,9 @@ describe('Type inference — typed EARS helpers', () => {
       query(EARS.Entity.Note).rank('references', { seeds: [42] });
       // A seed may carry a weight, and a rank may leave weights out
       query(EARS.Entity.Note).rank('references', { seeds: [noteId, { id: noteId, weight: 2 }], weights: false });
-      // @ts-expect-error a weight is a weighted kind's, and this pack declares none
+      // @ts-expect-error a weight is a weighted kind's, and `references` isn't one
       write(noteId).link('references', otherId, { weight: 2 });
-      expectTypeOf<EARS.WeightedKind>().toEqualTypeOf<never>();
+      expectTypeOf<EARS.WeightedKind>().toEqualTypeOf<'code_calls' | 'code_references'>();
       // @ts-expect-error a rank index is one a pack declares, and this pack declares none
       query(EARS.Entity.Note).ranked('noteRank');
       expectTypeOf<EARS.RankIndex>().toEqualTypeOf<never>();

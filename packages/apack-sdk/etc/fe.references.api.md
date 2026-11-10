@@ -58,7 +58,7 @@ export interface ReferenceBindings {
     categories: Record<string, {
         label: string;
         icon: Component;
-        useItems(): Readonly<Ref<ReferenceItem[]>>;
+        useItems(query: Readonly<Ref<string>>): Readonly<Ref<ReferenceItem[]>>;
     }>;
     // (undocumented)
     types: Record<string, ReferenceTypeConfig>;

@@ -430,7 +430,7 @@ describe('apack pack build says what it read', () => {
     expect([...phases].sort(), 'a phase gone from here is a bundler that stopped reporting; a new one is a '
       + 'bundle that started').toEqual([
       'contentCompilers', 'contentRuntime', 'dslDefs', 'fe', 'flowHelperTypes',
-      'flowHelpersModule', 'runtime', 'stepBuild', 'types',
+      'flowHelpersModule', 'runtime', 'stepBuild', 'types', 'workers',
     ]);
   });
 
