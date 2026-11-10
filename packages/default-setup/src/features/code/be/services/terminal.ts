@@ -367,10 +367,18 @@ class TerminalService {
    * runs — over the authority's value instead of a second capture of the same bytes.
    */
   async reportedCwd(id: string): Promise<string | undefined> {
+    return (await this.reportedFacts(id))?.cwd
+  }
+
+  /**
+   * What the shell says of itself, asked of the broker the same way: where it is, and whether a command is
+   * running, which is what tells the prompt that ends a command from any other. Undefined once it has exited.
+   */
+  async reportedFacts(id: string): Promise<{ cwd: string | undefined; running: boolean } | undefined> {
     const session = this.running(id)
     if (!session) return undefined
-    const { cwd } = await session.facts()
-    return cwd === null ? undefined : cwdAsReported(cwd)
+    const { cwd, running } = await session.facts()
+    return { cwd: cwd === null ? undefined : cwdAsReported(cwd), running }
   }
 
   async write(id: string, data: string): Promise<boolean> {

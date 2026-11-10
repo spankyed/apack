@@ -3,11 +3,11 @@ import type { OutgoingCodeEvents } from '../contract.ts'
 import { answer } from '../answer.ts'
 import { broadcastToSurface } from '#generated/events.ts';
 import { defineHandlers } from '@apackdev/sdk/framework';
-import { assign, setup } from 'xstate'
+import { assign, fromCallback, setup, type AnyActorRef } from 'xstate'
 
 import { FileSystemRepository } from '../services/filesystem.ts'
-import { GitWatcherService } from '../services/gitwatcher.ts'
-import type { FileChangeInfo } from '../services/gitwatcher.ts'
+import { OpenFileWatcher } from '../services/open-file-watcher.ts'
+import type { FileChangeInfo } from '../services/open-file-watcher.ts'
 
 const surfaceId = 'code' as const
 
@@ -33,8 +33,13 @@ function requireRepository(context: CodeExplorerSystemContext, path: string, rep
 export interface CodeExplorerSystemContext {
   baseDirectory: string | null
   repository: FileSystemRepository | null
-  gitWatcher: GitWatcherService | null
 }
+
+/** What the explorer tells the watcher of its open files */
+type OpenFilesEvent = { type: 'OPEN' | 'CLOSE'; path: string } | { type: 'CHECK' }
+
+/** The watcher of the files open in an editor, which lives as long as the explorer does */
+const openFiles = (self: AnyActorRef): AnyActorRef | undefined => self.getSnapshot().children.openFiles
 
 export type Event =
   | { type: 'explorer.LIST_FILES'; path: string }
@@ -46,7 +51,8 @@ export type Event =
   | { type: 'explorer.CREATE_DIRECTORY'; path: string }
   | { type: 'explorer.GET_FILE_INFO'; path: string }
   | { type: 'explorer.SET_BASE_DIRECTORY'; path: string }
-  | { type: 'explorer.UPDATE_BASE_DIRECTORY'; path: string; gitWatcher: GitWatcherService | null }
+  | { type: 'explorer.UPDATE_BASE_DIRECTORY'; path: string }
+  | { type: 'explorer.CHECK_OPEN_FILES' }
   | { type: 'explorer.CLOSE_FILE'; path: string }
   | { type: 'explorer.MOVE_FILES'; sourcePaths: string[]; targetDir: string }
   | { type: 'explorer.COPY_FILES'; sourcePaths: string[]; targetDir: string }
@@ -60,16 +66,23 @@ export const explorerSystem = setup({
   types: {
     context: {} as CodeExplorerSystemContext,
     events: {} as Event,
-    input: {} as { baseDirectory: string | null; gitWatcher?: GitWatcherService | null }
+    input: {} as { baseDirectory: string | null }
+  },
+  actors: {
+    openFiles: fromCallback<OpenFilesEvent>(({ receive, sendBack }) => {
+      const watcher = new OpenFileWatcher(change => sendBack({ type: 'explorer.FILE_CHANGE_CALLBACK', change }))
+      receive((event) => {
+        if (event.type === 'OPEN') watcher.open(event.path)
+        else if (event.type === 'CLOSE') watcher.close(event.path)
+        else void watcher.check()
+      })
+      return () => { void watcher.stop() }
+    }),
   },
   actions: handlers.actions({
-    setupFileWatcher: ({ context, self }) => {
-      // Set up the callback for file changes from git watcher
-      if (context.gitWatcher) {
-        context.gitWatcher.setFileChangeCallback((change: FileChangeInfo) => {
-          self.send({ type: 'explorer.FILE_CHANGE_CALLBACK', change })
-        })
-      }
+    /** Something may have changed on disk without an event for it: look at every open file again */
+    checkOpenFiles: ({ self }) => {
+      openFiles(self)?.send({ type: 'CHECK' })
     },
 
     handleFileChange: ({ event }) => {
@@ -106,7 +119,7 @@ export const explorerSystem = setup({
       }
     },
 
-    readFile: async ({ event, context, reply }) => {
+    readFile: async ({ event, context, reply, self }) => {
       const ev = event as { type: 'explorer.READ_FILE'; path: string }
 
       if (!requireRepository(context, ev.path, reply)) return
@@ -118,10 +131,8 @@ export const explorerSystem = setup({
           data: content,
         })
 
-        // Register file with git watcher for external change detection
-        if (context.gitWatcher) {
-          context.gitWatcher.registerOpenFile(ev.path)
-        }
+        // Watch the file for changes made outside the editor
+        openFiles(self)?.send({ type: 'OPEN', path: ev.path })
       } catch (error: any) {
         answer(reply, {
           type: 'explorer.CODE_ERROR',
@@ -289,25 +300,18 @@ export const explorerSystem = setup({
 
     updateBaseDirectory: assign({
       baseDirectory: ({ event }) => {
-        const ev = event as { type: 'explorer.UPDATE_BASE_DIRECTORY'; path: string; gitWatcher: GitWatcherService | null }
+        const ev = event as { type: 'explorer.UPDATE_BASE_DIRECTORY'; path: string }
         return ev.path
       },
       repository: ({ event }) => {
-        const ev = event as { type: 'explorer.UPDATE_BASE_DIRECTORY'; path: string; gitWatcher: GitWatcherService | null }
+        const ev = event as { type: 'explorer.UPDATE_BASE_DIRECTORY'; path: string }
         return new FileSystemRepository(ev.path)
       },
-      gitWatcher: ({ event }) => {
-        const ev = event as { type: 'explorer.UPDATE_BASE_DIRECTORY'; path: string; gitWatcher: GitWatcherService | null }
-        return ev.gitWatcher
-      }
     }),
 
-    closeFile: ({ event, context }) => {
+    closeFile: ({ event, self }) => {
       const ev = event as { type: 'explorer.CLOSE_FILE'; path: string }
-      // Unregister file from git watcher when closed
-      if (context.gitWatcher) {
-        context.gitWatcher.unregisterOpenFile(ev.path)
-      }
+      openFiles(self)?.send({ type: 'CLOSE', path: ev.path })
     },
 
     quickOpenSearch: async ({ event, context, reply }) => {
@@ -333,7 +337,7 @@ export const explorerSystem = setup({
       }
     },
 
-    moveFiles: async ({ event, context, reply }) => {
+    moveFiles: async ({ event, context, reply, self }) => {
       const ev = event as { type: 'explorer.MOVE_FILES'; sourcePaths: string[]; targetDir: string }
 
       if (!requireRepository(context, ev.targetDir, reply)) return
@@ -343,10 +347,8 @@ export const explorerSystem = setup({
         for (const sourcePath of ev.sourcePaths) {
           const destPath = await context.repository.moveFile(sourcePath, ev.targetDir)
           movedPaths.push(destPath)
-          // Unregister old path from watcher to prevent stale FILE_CHANGED_EXTERNALLY events
-          if (context.gitWatcher) {
-            context.gitWatcher.unregisterOpenFile(sourcePath)
-          }
+          // The old path is no file any more, so a change at it is not one to an open file
+          openFiles(self)?.send({ type: 'CLOSE', path: sourcePath })
         }
 
         answer(reply, {
@@ -397,15 +399,14 @@ export const explorerSystem = setup({
 }).createMachine({
   id: 'explorer',
   initial: 'idle',
-  context: ({ input }: { input?: { baseDirectory: string | null; gitWatcher?: GitWatcherService | null } }) => {
+  context: ({ input }: { input?: { baseDirectory: string | null } }) => {
     const baseDir = input?.baseDirectory || null
     return {
       baseDirectory: baseDir,
       repository: baseDir ? new FileSystemRepository(baseDir) : null,
-      gitWatcher: input?.gitWatcher || null,
     }
   },
-  entry: 'setupFileWatcher',
+  invoke: { id: 'openFiles', src: 'openFiles' },
   states: {
     idle: {
       on: {
@@ -443,7 +444,10 @@ export const explorerSystem = setup({
           actions: 'copyFiles'
         },
         'explorer.UPDATE_BASE_DIRECTORY': {
-          actions: ['updateBaseDirectory', 'setupFileWatcher']
+          actions: ['updateBaseDirectory']
+        },
+        'explorer.CHECK_OPEN_FILES': {
+          actions: 'checkOpenFiles'
         },
         'explorer.CLOSE_FILE': {
           actions: 'closeFile'

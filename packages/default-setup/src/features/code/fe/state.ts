@@ -359,6 +359,16 @@ const codeState = setup({
      * the drawing and never the terminal.
      */
     poolOwner: fromCallback(() => () => terminalPool.disposeAll()),
+    /**
+     * Asks for the repository and the open files to be read again when the window gains focus: what changed
+     * while the user was in another program is what they came back to look at, and a file event the platform
+     * never delivered is made up for here.
+     */
+    externalChanges: fromCallback(() => {
+      const check = () => { sendToSystem('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES' }) };
+      window.addEventListener('focus', check);
+      return () => window.removeEventListener('focus', check);
+    }),
   },
   actions: {
     spawnFeatureActors: enqueueActions(({ enqueue }) => {
@@ -1329,7 +1339,7 @@ const codeState = setup({
   initial: 'canvas',
   // Invoked at the root, so it is running for exactly as long as this surface is and its cleanup is what
   // the shell stopping this actor runs
-  invoke: { src: 'poolOwner', id: 'poolOwner' },
+  invoke: [{ src: 'poolOwner', id: 'poolOwner' }, { src: 'externalChanges', id: 'externalChanges' }],
   entry: ['spawnFeatureActors', 'restorePersistedTabs'],
   context: {
     // Until the shell says otherwise, this is the window that keeps the layout: a surface started with no

@@ -97,8 +97,7 @@ export const systemMachine = setup({
       enqueue.spawnChild('explorerSystem', {
         id: 'explorer',
         input: {
-          baseDirectory: context.baseDirectory,
-          gitWatcher: context.gitWatcher
+          baseDirectory: context.baseDirectory
         }
       });
       enqueue.spawnChild('searchSystem', {
@@ -112,7 +111,6 @@ export const systemMachine = setup({
         input: {
           baseDirectory: context.baseDirectory,
           gitRepository: context.gitRepository,
-          gitWatcher: context.gitWatcher,
           code: self
         }
       });
@@ -176,18 +174,13 @@ export const systemMachine = setup({
       const newPath = ev.path
 
       // Update child systems
-      child(self, 'explorer')?.send({
-        type: 'explorer.UPDATE_BASE_DIRECTORY',
-        path: newPath,
-        gitWatcher: context.gitWatcher
-      });
+      child(self, 'explorer')?.send({ type: 'explorer.UPDATE_BASE_DIRECTORY', path: newPath });
       child(self, 'search')?.send({ type: 'search.UPDATE_BASE_DIRECTORY', path: newPath });
       // Pass the new git services to systems that need them
       child(self, 'commit')?.send({
         type: 'commit.UPDATE_BASE_DIRECTORY',
         path: newPath,
-        gitRepository: context.gitRepository,
-        gitWatcher: context.gitWatcher
+        gitRepository: context.gitRepository
       });
       child(self, 'pr')?.send({
         type: 'pr.UPDATE_BASE_DIRECTORY',
@@ -266,6 +259,18 @@ export const systemMachine = setup({
       child(self, 'terminal')?.send(event);
     },
     
+    /**
+     * Something may have changed on disk that no file event reported. The watches are brought in line with the
+     * checkout first — it may have become a repository, or a watch may have failed — and then git and the open
+     * files say what, if anything, differs.
+     */
+    checkForExternalChanges: ({ context, self }) => {
+      child(self, 'explorer')?.send({ type: 'explorer.CHECK_OPEN_FILES' });
+      const checkRepository = () => { child(self, 'commit')?.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' }) };
+      if (context.gitWatcher) void context.gitWatcher.check().then(checkRepository, checkRepository);
+      else checkRepository();
+    },
+
     selectGitWatcher: sendTo('gitWatcher', ({ context }) => ({
       type: 'WATCH', selection: { watcher: context.gitWatcher, repository: context.gitRepository },
     })),
@@ -299,7 +304,7 @@ export const systemMachine = setup({
   invoke: {
     id: 'gitWatcher', src: 'gitWatcherActor',
     input: ({ context, self }) => ({ watcher: context.gitWatcher, repository: context.gitRepository,
-      onChange: () => child(self, 'commit')?.send({ type: 'commit.GIT_STATUS_CHANGED' }),
+      onChange: () => child(self, 'commit')?.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' }),
     }),
   },
   states: {
@@ -310,6 +315,7 @@ export const systemMachine = setup({
         },
         // Handle settings updates
         TEST_CLI_PROVIDER: { actions: 'testCliProvider' },
+        CHECK_FOR_EXTERNAL_CHANGES: { actions: 'checkForExternalChanges' },
         FEATURE_SETTINGS_UPDATED: {
           actions: [
             'updateSettings',

@@ -1,270 +1,235 @@
 import * as path from 'path'
-import * as chokidar from 'chokidar'
-import { realpathSync } from 'fs'
-import { GitRepository } from './git.ts'
+import * as fs from 'fs/promises'
+import type { GitRepository } from './git.ts'
 import { createLogger } from '@apackdev/sdk/logger'
 
 const logger = createLogger('git-watcher')
 
-export interface FileChangeInfo {
+/** One change under a watched directory, as `@parcel/watcher` reports it */
+export interface WatchEvent {
   path: string
-  modifiedAt: Date
-  changeType: 'add' | 'change' | 'unlink'
+  type: 'create' | 'update' | 'delete'
 }
 
-/** How long the repository must go quiet before a change is announced */
-const REPOSITORY_QUIET_MS = 500
+/** Watches a directory and everything under it, apart from what `ignore` names relative to it */
+export type SubscribeToDirectory = (
+  directory: string,
+  onEvents: (error: Error | null, events: WatchEvent[]) => void,
+  options: { ignore: string[] },
+) => Promise<{ unsubscribe(): Promise<void> }>
+
+/**
+ * `@parcel/watcher`, loaded on first use. It is a native binding the host resolves, so a build that lacks its
+ * binary fails here, where the failure costs this checkout its watching, rather than at import, where it would
+ * cost the pack its load.
+ */
+const subscribeWithParcel: SubscribeToDirectory = async (directory, onEvents, options) => {
+  const loaded = await import('@parcel/watcher')
+  const watcher = 'subscribe' in loaded ? loaded : (loaded as { default: typeof loaded }).default
+  return watcher.subscribe(directory, onEvents, options)
+}
+
+/** How long the repository must go quiet before its change is reported */
+const QUIET_MS = 200
 /** The same once one of this app's own git writes has finished: its lock is already released */
-const REPOSITORY_QUIET_AFTER_WRITE_MS = 100
+const QUIET_AFTER_WRITE_MS = 50
 /** The longest a change waits for quiet, so a steady stream of writes cannot postpone it without end */
-const REPOSITORY_MAX_WAIT_MS = 2000
-/** How long one open file must go quiet before its change is announced */
-const OPEN_FILE_QUIET_MS = 300
+const MAX_WAIT_MS = 1000
 
-/** Files in a checkout's own git directory whose change means its status did */
-const GIT_DIR_FILES = ['index', 'HEAD', 'ORIG_HEAD', 'FETCH_HEAD', 'MERGE_HEAD', 'REBASE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD']
-/** The same in the common git directory, which a linked worktree shares with its main checkout */
-const COMMON_DIR_PATHS = ['refs', 'packed-refs']
+/** Files in a checkout's own git directory whose change means its status may have */
+const GIT_DIR_FILES = new Set(['index', 'HEAD', 'ORIG_HEAD', 'FETCH_HEAD', 'MERGE_HEAD', 'REBASE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD'])
+/** What a git directory holds that says nothing about status, and is written in bulk */
+const GIT_DIR_IGNORED = ['objects', 'logs', 'hooks', 'lfs', 'modules', 'worktrees']
+/** The most ignored directories handed to the watcher; the rest only cost a status that finds nothing changed */
+const MAX_IGNORED_DIRECTORIES = 2000
 
-/** Directories and files a working tree's changes are not reported from */
-const WORKING_TREE_IGNORED = [
-  '**/.git/**',
-  '**/node_modules/**',
-  '**/dist/**', '**/build/**', '**/out/**', '**/.next/**',
-  '**/.vscode/**', '**/.idea/**', '**/.DS_Store', '**/Thumbs.db',
-  '**/logs/**', '**/*.log',
-  '**/.cache/**', '**/tmp/**', '**/temp/**',
-  '**/coverage/**', '**/.nyc_output/**',
-]
+type WatchKey = 'tree' | 'git' | 'common'
 
+interface WantedWatch {
+  directory: string
+  ignore: string[]
+  /** Whether a change at this path, relative to the directory, can move the repository's status */
+  relevant(relativePath: string): boolean
+}
+
+const isRef = (relativePath: string) => relativePath === 'packed-refs' || relativePath.startsWith(`refs${path.sep}`)
+const isLock = (relativePath: string) => relativePath.endsWith('.lock')
+
+/**
+ * Reports that a checkout may have changed: its working tree, its index and HEAD, or its refs.
+ *
+ * **An event is a hint, and git is what says whether anything changed.** So nothing here needs to be exact: an
+ * event for a file git ignores costs one status that finds no difference, and an event the platform never
+ * delivered is made up for by `check`, which whoever knows the repository may have moved calls — a window
+ * gaining focus, a terminal command finishing, an agent's turn ending.
+ */
 export class GitWatcherService {
-  private gitWatcher?: chokidar.FSWatcher
-  private workingDirWatcher?: chokidar.FSWatcher
-  private onGitChangeCallback?: () => void
-  private onFileChangeCallback?: (change: FileChangeInfo) => void
-  private gitStatusDebounceTimeout?: NodeJS.Timeout
-  /** When the first change not yet announced arrived */
-  private repositoryChangePendingSince?: number
+  private subscriptions = new Map<WatchKey, { signature: string; subscription: { unsubscribe(): Promise<void> } }>()
+  /** Every start, stop and check in order, so two never set subscriptions up at once */
+  private establishing: Promise<void> = Promise.resolve()
+  /** Moves on every start and stop, which is what tells work begun before one that it is no longer wanted */
+  private generation = 0
+  private onChangeCallback?: () => void
+  private quietTimeout?: NodeJS.Timeout
+  /** When the first change not yet reported arrived */
+  private pendingSince?: number
   /** Whether a callback is already waiting on the repository's write in progress */
   private awaitingWrite = false
-  private fileChangeTimeouts: Map<string, NodeJS.Timeout> = new Map()
   private isWatching = false
-  /** Whether the working directory is in a repository; outside one, only the open files are watched */
-  private inRepository = false
-  /** Open files by the path they are compared under, each holding the path it was registered with */
-  private openFiles: Map<string, string> = new Map()
-  private realDirectories: Map<string, string> = new Map()
   private gitRepository?: GitRepository
 
-  constructor(private workingDirectory: string) {}
+  constructor(private workingDirectory: string, private subscribe: SubscribeToDirectory = subscribeWithParcel) {}
 
   setGitRepository(repo: GitRepository): void {
     this.gitRepository = repo
   }
 
   setChangeCallback(callback: () => void) {
-    this.onGitChangeCallback = callback
-  }
-
-  setFileChangeCallback(callback: (change: FileChangeInfo) => void) {
-    this.onFileChangeCallback = callback
-  }
-
-  /**
-   * The path a file is compared under: its directory's real path and its name. An open file and the event for
-   * it can name one file two ways, through a symlinked directory or in another letter case, and would not
-   * match as written.
-   */
-  private comparablePath(filePath: string): string {
-    const resolved = path.resolve(filePath)
-    const directory = path.dirname(resolved)
-    let real = this.realDirectories.get(directory)
-    if (real === undefined) {
-      try {
-        real = realpathSync.native(directory)
-        this.realDirectories.set(directory, real)
-      } catch {
-        real = directory
-      }
-    }
-    return path.join(real, path.basename(resolved))
-  }
-
-  registerOpenFile(filePath: string): void {
-    this.openFiles.set(this.comparablePath(filePath), filePath)
-    if (this.isWatching && !this.inRepository) this.workingDirWatcher?.add(path.resolve(filePath))
-  }
-
-  unregisterOpenFile(filePath: string): void {
-    this.openFiles.delete(this.comparablePath(filePath))
-    if (this.isWatching && !this.inRepository) this.workingDirWatcher?.unwatch(path.resolve(filePath))
-  }
-
-  isFileOpen(filePath: string): boolean {
-    return this.openFiles.has(this.comparablePath(filePath))
-  }
-
-  getOpenFiles(): string[] {
-    return Array.from(this.openFiles.values())
+    this.onChangeCallback = callback
   }
 
   async startWatching(signal: AbortSignal): Promise<void> {
-    if (this.isWatching || signal.aborted) {
-      return
-    }
+    if (this.isWatching || signal.aborted) return
+    const generation = ++this.generation
+    const cancelled = () => signal.aborted || generation !== this.generation
+    this.establishing = this.establishing.catch(() => {}).then(async () => {
+      await this.establish(cancelled)
+      if (!cancelled()) this.isWatching = true
+    })
+    await this.establishing
+  }
 
+  /**
+   * Brings the watches in line with the checkout as it is now, for a caller that knows it may have moved.
+   * A directory that became a repository starts being watched, a watch that failed is opened again, and the
+   * ignored directories are taken afresh.
+   */
+  async check(): Promise<void> {
+    if (!this.isWatching) return
+    const generation = this.generation
+    this.establishing = this.establishing
+      .catch(() => {})
+      .then(() => this.establish(() => generation !== this.generation))
+      .catch((error) => { logger.error('Could not re-establish the git watches', { error }) })
+    await this.establishing
+  }
+
+  private async establish(cancelled: () => boolean): Promise<void> {
     // Git says where its state lives: the working directory may be a subfolder of the checkout or a linked
     // worktree, and neither keeps a `.git` directory of its own holding the refs.
     const directories = await this.gitRepository?.resolveGitDirectories() ?? null
+    const ignored = directories ? await this.gitRepository!.listIgnoredDirectories() : []
+    if (cancelled()) return
 
-    // Do not create handles after the owner cancels asynchronous filesystem preflight.
-    if (this.isWatching || signal.aborted) return
-    this.isWatching = true
-    this.inRepository = directories !== null
-
-    const report = (changeType: FileChangeInfo['changeType']) => (filePath: string) => this.handleFileChange(changeType, filePath)
-
-    if (!directories) {
-      // No repository to report on, and no bound on what the directory holds: watch the open files alone.
-      logger.info('Not in a git repository, watching open files only')
-      this.workingDirWatcher = chokidar.watch([...this.openFiles.values()].map(file => path.resolve(file)), {
-        persistent: true,
-        ignoreInitial: true,
-        followSymlinks: false,
-        awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
+    const wanted = new Map<WatchKey, WantedWatch>()
+    if (directories) {
+      // The platform reports real paths, so a watched directory is named by its real path too
+      const real = (directory: string) => fs.realpath(directory).catch(() => directory)
+      const [tree, gitDir, commonDir] = await Promise.all([real(this.workingDirectory), real(directories.gitDir), real(directories.commonDir)])
+      const shared = gitDir === commonDir
+      wanted.set('tree', { directory: tree, ignore: ['.git', ...ignored.slice(0, MAX_IGNORED_DIRECTORIES)], relevant: () => true })
+      wanted.set('git', {
+        directory: gitDir,
+        ignore: GIT_DIR_IGNORED,
+        relevant: relativePath => !isLock(relativePath) && (GIT_DIR_FILES.has(relativePath) || (shared && isRef(relativePath))),
       })
-      this.workingDirWatcher
-        .on('change', report('change'))
-        .on('add', report('add'))
-        .on('unlink', report('unlink'))
-        .on('error', (error) => { logger.error('Open file watcher error', { error }) })
-      return
+      // A linked worktree's refs are in the git directory of its main checkout
+      if (!shared) wanted.set('common', { directory: commonDir, ignore: GIT_DIR_IGNORED, relevant: relativePath => !isLock(relativePath) && isRef(relativePath) })
+    }
+    if (cancelled()) return
+
+    const signatureOf = (watch: WantedWatch) => JSON.stringify([watch.directory, watch.ignore])
+    for (const [key, held] of this.subscriptions) {
+      const watch = wanted.get(key)
+      if (watch && held.signature === signatureOf(watch)) continue
+      this.subscriptions.delete(key)
+      await held.subscription.unsubscribe().catch((error) => { logger.error(`Could not close the ${key} watch`, { error }) })
+    }
+    for (const [key, watch] of wanted) {
+      if (this.subscriptions.has(key)) continue
+      try {
+        const subscription = await this.subscribe(watch.directory, (error, events) => this.handleEvents(key, watch, error, events), { ignore: watch.ignore })
+        if (cancelled()) {
+          await subscription.unsubscribe()
+          return
+        }
+        this.subscriptions.set(key, { signature: signatureOf(watch), subscription })
+      } catch (error) {
+        // Left unwatched: `check` tries again, and until then the repository is read every time it is asked for
+        logger.error(`Could not watch ${watch.directory}`, { error })
+      }
     }
 
-    this.gitWatcher = chokidar.watch([
-      ...GIT_DIR_FILES.map(name => path.join(directories.gitDir, name)),
-      ...COMMON_DIR_PATHS.map(name => path.join(directories.commonDir, name)),
-    ], {
-      persistent: true,
-      ignoreInitial: true,
-      // Don't follow symlinks to avoid watching outside .git
-      followSymlinks: false,
-      // Dot files, and the lock files git holds while it writes a ref
-      ignored: [/\/\.[^/]+$/, /\.lock$/],
-      awaitWriteFinish: {
-        stabilityThreshold: 200,
-        pollInterval: 100
-      }
-    })
-
-    this.gitWatcher
-      .on('change', report('change'))
-      .on('add', report('add'))
-      .on('unlink', report('unlink'))
-      .on('error', (error) => {
-        logger.error('Git watcher error', { error })
-      })
-      .on('ready', () => {
-        logger.info('Git watcher ready')
-      })
-
-    // Watch working directory for file changes (unstaged changes)
-    this.workingDirWatcher = chokidar.watch(this.workingDirectory, {
-      persistent: true,
-      ignoreInitial: true,
-      followSymlinks: false,
-      ignored: WORKING_TREE_IGNORED,
-      awaitWriteFinish: {
-        stabilityThreshold: 300,
-        pollInterval: 100
-      }
-    })
-
-    this.workingDirWatcher
-      .on('change', report('change'))
-      .on('add', report('add'))
-      .on('unlink', report('unlink'))
-      .on('error', (error) => {
-        logger.error('Working directory watcher error', { error })
-      })
-      .on('ready', () => {
-        logger.info('Working directory watcher ready')
-      })
+    // A snapshot is only reused while every watch that could say it went stale is open
+    this.gitRepository?.setWatched(wanted.size > 0 && [...wanted.keys()].every(key => this.subscriptions.has(key)))
   }
 
-  private handleFileChange(changeType: FileChangeInfo['changeType'], filePath: string) {
-    if (!this.isWatching) return
-    if (this.inRepository) this.scheduleRepositoryChange()
-    if (this.openFiles.size > 0 && this.onFileChangeCallback) this.scheduleOpenFileChange(changeType, filePath)
+  private handleEvents(key: WatchKey, watch: WantedWatch, error: Error | null, events: WatchEvent[]) {
+    const held = this.subscriptions.get(key)
+    if (error) {
+      // A watch that reported an error may have stopped reporting: close it, so `check` opens a new one
+      logger.error(`The ${key} watch failed`, { error })
+      if (held) {
+        this.subscriptions.delete(key)
+        this.gitRepository?.setWatched(false)
+        void held.subscription.unsubscribe().catch(() => {})
+      }
+      this.scheduleChange()
+      return
+    }
+    if (events.some(event => watch.relevant(path.relative(watch.directory, event.path)))) this.scheduleChange()
   }
 
-  /** One announcement for every change that arrives close together */
-  private scheduleRepositoryChange() {
-    this.repositoryChangePendingSince ??= Date.now()
+  /** One report for every change that arrives close together */
+  private scheduleChange() {
+    if (!this.onChangeCallback) return
+    this.pendingSince ??= Date.now()
 
     // While one of this app's git writes runs, wait for it to finish instead of racing it on a timer
     if (this.gitRepository?.isWriteInProgress) {
-      clearTimeout(this.gitStatusDebounceTimeout)
-      this.gitStatusDebounceTimeout = undefined
+      clearTimeout(this.quietTimeout)
+      this.quietTimeout = undefined
       if (this.awaitingWrite) return
       this.awaitingWrite = true
+      const generation = this.generation
       this.gitRepository.onWriteComplete(() => {
+        if (generation !== this.generation) return
         this.awaitingWrite = false
-        if (!this.isWatching || this.repositoryChangePendingSince === undefined) return
-        this.armRepositoryChange(REPOSITORY_QUIET_AFTER_WRITE_MS)
+        if (this.pendingSince !== undefined) this.armChange(QUIET_AFTER_WRITE_MS)
       })
       return
     }
-    this.armRepositoryChange(REPOSITORY_QUIET_MS)
+    this.armChange(QUIET_MS)
   }
 
-  private armRepositoryChange(quietMs: number) {
-    clearTimeout(this.gitStatusDebounceTimeout)
-    const waited = Date.now() - (this.repositoryChangePendingSince ?? Date.now())
-    const delay = Math.max(0, Math.min(quietMs, REPOSITORY_MAX_WAIT_MS - waited))
-    this.gitStatusDebounceTimeout = setTimeout(() => {
-      this.gitStatusDebounceTimeout = undefined
-      this.repositoryChangePendingSince = undefined
-      this.onGitChangeCallback?.()
-    }, delay)
-  }
-
-  /** Per file, so a change to one open file is never dropped for a change to another */
-  private scheduleOpenFileChange(changeType: FileChangeInfo['changeType'], filePath: string) {
-    const comparable = this.comparablePath(filePath)
-    const registered = this.openFiles.get(comparable)
-    if (registered === undefined) return
-
-    clearTimeout(this.fileChangeTimeouts.get(comparable))
-    this.fileChangeTimeouts.set(comparable, setTimeout(() => {
-      this.fileChangeTimeouts.delete(comparable)
-      this.onFileChangeCallback?.({ path: registered, modifiedAt: new Date(), changeType })
-    }, OPEN_FILE_QUIET_MS))
+  private armChange(quietMs: number) {
+    clearTimeout(this.quietTimeout)
+    const waited = Date.now() - (this.pendingSince ?? Date.now())
+    this.quietTimeout = setTimeout(() => {
+      this.quietTimeout = undefined
+      this.pendingSince = undefined
+      this.onChangeCallback?.()
+    }, Math.max(0, Math.min(quietMs, MAX_WAIT_MS - waited)))
   }
 
   async stopWatching(): Promise<void> {
-    const watchers = [this.gitWatcher, this.workingDirWatcher];
-    this.gitWatcher = undefined;
-    this.workingDirWatcher = undefined;
+    this.generation++
     this.isWatching = false
-    this.inRepository = false
-    this.onGitChangeCallback = undefined;
-    this.onFileChangeCallback = undefined;
-
-    // Clear all debounce timeouts
-    clearTimeout(this.gitStatusDebounceTimeout)
-    this.gitStatusDebounceTimeout = undefined
-    this.repositoryChangePendingSince = undefined
+    this.onChangeCallback = undefined
+    clearTimeout(this.quietTimeout)
+    this.quietTimeout = undefined
+    this.pendingSince = undefined
     this.awaitingWrite = false
 
-    for (const timeout of this.fileChangeTimeouts.values()) {
-      clearTimeout(timeout)
-    }
-    this.fileChangeTimeouts.clear()
-
-    this.openFiles.clear()
-    this.realDirectories.clear()
-    await Promise.all(watchers.map(watcher => watcher?.close()));
+    this.establishing = this.establishing.catch(() => {}).then(async () => {
+      const held = [...this.subscriptions.values()]
+      this.subscriptions.clear()
+      this.gitRepository?.setWatched(false)
+      await Promise.all(held.map(({ subscription }) => subscription.unsubscribe().catch((error) => {
+        logger.error('Could not close a git watch', { error })
+      })))
+    })
+    await this.establishing
   }
 
   isActive(): boolean {

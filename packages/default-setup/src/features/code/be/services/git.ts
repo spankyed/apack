@@ -18,11 +18,6 @@ const execFileAsync = promisify(execFile)
 const gitEnvironment = (): NodeJS.ProcessEnv =>
   ({ ...agentChildEnvironment(process.env), GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' })
 
-// Git porcelain v1 status codes that indicate an unmerged/conflict state.
-// These occupy BOTH the index and worktree slots and must be rendered as a
-// single row (not duplicated across staged/unstaged sections).
-const UNMERGED_XY_CODES = new Set(['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU'])
-
 /** Thrown when a stash apply/pop succeeds partially but leaves conflicts. */
 export class StashConflictError extends Error {
   constructor(message: string) {
@@ -66,6 +61,71 @@ interface CachedResult<T> {
   timestamp: number
 }
 
+/** What the commit panel shows of a checkout, read in one pass */
+export interface RepositorySnapshot {
+  files: GitStatusFile[]
+  /** The branch checked out, or `HEAD` when none is */
+  branch: string
+  /** Whether the branch tracks a remote branch that exists */
+  hasUpstream: boolean
+  ahead: number
+  behind: number
+}
+
+function statusOf(code: string): GitStatusFile['status'] {
+  switch (code) {
+    case 'M': return 'modified'
+    case 'A': return 'added'
+    case 'D': return 'deleted'
+    case 'R': return 'renamed'
+    case 'C': return 'copied'
+    case '?': return 'untracked'
+    case 'T': return 'typechange'
+    case 'U': return 'unmerged'
+    default: return 'modified'
+  }
+}
+
+/** Reads `git status --porcelain=v2 --branch -z`: the branch headers and one record per changed path */
+export function parseStatus(output: string): RepositorySnapshot {
+  const snapshot: RepositorySnapshot = { files: [], branch: 'HEAD', hasUpstream: false, ahead: 0, behind: 0 }
+  const records = output.split('\0')
+  /** A record's path is everything after its fixed fields, since a path may hold spaces */
+  const pathAfter = (record: string, fields: number): string => record.split(' ').slice(fields).join(' ')
+
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i]!
+    if (record.startsWith('# branch.head ')) {
+      const head = record.slice('# branch.head '.length)
+      snapshot.branch = head === '(detached)' ? 'HEAD' : head
+    } else if (record.startsWith('# branch.ab ')) {
+      const [ahead, behind] = record.slice('# branch.ab '.length).split(' ')
+      snapshot.hasUpstream = true
+      snapshot.ahead = Math.abs(parseInt(ahead ?? '0', 10)) || 0
+      snapshot.behind = Math.abs(parseInt(behind ?? '0', 10)) || 0
+    } else if (record.startsWith('? ')) {
+      snapshot.files.push({ path: record.slice(2), status: 'untracked', staged: false })
+    } else if (record.startsWith('u ')) {
+      // A conflict fills both the index and the worktree column: one row, not committable until resolved
+      snapshot.files.push({ path: pathAfter(record, 10), status: 'unmerged', staged: false })
+    } else if (record.startsWith('1 ') || record.startsWith('2 ')) {
+      const renamed = record.startsWith('2 ')
+      const [index, worktree] = [record[2]!, record[3]!]
+      const filePath = pathAfter(record, renamed ? 9 : 8)
+      // A rename or copy is followed by the path it came from, as a record of its own
+      const originalPath = renamed ? records[++i] : undefined
+      if (index !== '.') {
+        snapshot.files.push({
+          path: filePath, status: statusOf(index), staged: true,
+          originalPath: index === 'R' || index === 'C' ? originalPath : undefined,
+        })
+      }
+      if (worktree !== '.') snapshot.files.push({ path: filePath, status: statusOf(worktree), staged: false, originalPath: undefined })
+    }
+  }
+  return snapshot
+}
+
 export class GitRepository {
   private cache = new Map<string, CachedResult<any>>()
   private readonly CACHE_TTL = 5000 // 5 seconds
@@ -77,6 +137,17 @@ export class GitRepository {
   private _lastFetchTimestamp = 0
   private _autoFetchEnabled = false
   private _fetchThrottleMs = 180_000
+  /** The last snapshot read, with what it and the refs looked like, to tell a change from none */
+  private snapshot?: { value: RepositorySnapshot; identity: string }
+  /** Whether nothing has said the repository may have changed since `snapshot` was read */
+  private snapshotFresh = false
+  /** Counts every notice that the repository may have changed, so a read that one overtook is not kept as fresh */
+  private snapshotVersion = 0
+  private snapshotRead?: { version: number; promise: Promise<{ value: RepositorySnapshot; identity: string }> }
+  /** What the last read looked like, `unreadable` when it failed */
+  private lastIdentity?: string
+  /** Whether a watcher reports this checkout's changes; without one a snapshot is read every time it is asked for */
+  private watched = false
 
   constructor(private workingDirectory: string) {
     this.validateWorkingDirectory(workingDirectory)
@@ -117,6 +188,7 @@ export class GitRepository {
     try {
       return await fn()
     } finally {
+      this.markSnapshotStale()
       this._writeInProgress--
       if (this._writeInProgress === 0 && this._writeCompleteCallbacks.length > 0) {
         const callbacks = this._writeCompleteCallbacks.splice(0)
@@ -157,6 +229,19 @@ export class GitRepository {
   
   clearCache(): void {
     this.cache.clear()
+    this.markSnapshotStale()
+  }
+
+  /** The repository may have changed: the next snapshot asked for is read from git */
+  markSnapshotStale(): void {
+    this.snapshotVersion++
+    this.snapshotFresh = false
+  }
+
+  /** Says whether a watcher reports this checkout's changes, which is what lets a snapshot be reused */
+  setWatched(watched: boolean): void {
+    this.watched = watched
+    this.markSnapshotStale()
   }
 
   private async isDirectory(filePath: string): Promise<boolean> {
@@ -169,31 +254,6 @@ export class GitRepository {
     }
   }
 
-  private async getUntrackedFilesInDirectory(dirPath: string): Promise<GitStatusFile[]> {
-    try {
-      // Use git ls-files to get untracked files in the directory
-      const result = await this.executeGitCommand([
-        'ls-files', 
-        '--others', 
-        '--exclude-standard',
-        dirPath
-      ])
-      
-      if (!result.success || !result.output) {
-        return []
-      }
-      
-      const files = result.output.trim().split('\n').filter(Boolean)
-      return files.map(filePath => ({
-        path: filePath,
-        status: 'untracked' as const,
-        staged: false
-      }))
-    } catch {
-      return []
-    }
-  }
-  
   // Invalidate specific cache entries when files change
   invalidateCache(paths?: string[]): void {
     if (!paths || paths.length === 0) {
@@ -203,7 +263,7 @@ export class GitRepository {
     }
     
     // Always invalidate status when any file changes
-    this.cache.delete('status')
+    this.markSnapshotStale()
     
     // If .git files changed, invalidate branch-related caches
     if (paths.some(p => p.includes('.git'))) {
@@ -261,124 +321,75 @@ export class GitRepository {
   }
 
   async getStatus(): Promise<GitStatusFile[]> {
-    // Check cache first
-    const cached = this.getCached<GitStatusFile[]>('status')
-    if (cached) return cached
-
-    const result = await this.executeGitCommand(['status', '--porcelain', '-z'])
-    if (!result.success) {
-      throw new Error(result.error || 'Failed to get git status')
-    }
-    
-    const files: GitStatusFile[] = []
-    const entries = (result.output || '').split('\0').filter(Boolean)
-    
-    for (let i = 0; i < entries.length; i++) {
-      const entry = entries[i]
-      if (entry.length < 3) continue
-      
-      const indexStatus = entry[0]
-      const workingStatus = entry[1]
-      const rest = entry.substring(3)
-
-      // Handle renames - with -z flag, git status uses NUL-separated format
-      // For renames: XY newpath\0oldpath (the XY line contains the new path,
-      // and the entry after NUL is the original/old path per git docs)
-      let fileName: string = rest
-      let originalPath: string | undefined
-
-      // Unmerged/conflict entries (UU, AA, DD, AU, UA, UD, DU) — emit exactly
-      // once. Both XY chars are non-space, so the default staged/unstaged
-      // branches below would double-count these.
-      if (UNMERGED_XY_CODES.has(`${indexStatus}${workingStatus}`)) {
-        files.push({
-          path: fileName,
-          status: 'unmerged',
-          staged: false, // conflicts are not committable until resolved
-        })
-        continue
-      }
-
-      // Handle staged files
-      if (indexStatus !== ' ' && indexStatus !== '?') {
-        // For renames/copies in staged files, we need to handle the two-path format
-        if (indexStatus.startsWith('R') || indexStatus.startsWith('C')) {
-          // Next entry is the old/original path; fileName already has the new path
-          if (i + 1 < entries.length) {
-            originalPath = entries[++i]
-          }
-        }
-        
-        files.push({
-          path: fileName,
-          status: this.mapGitStatus(indexStatus),
-          staged: true,
-          originalPath: originalPath
-        })
-      }
-      
-      // Handle unstaged files
-      if (workingStatus !== ' ') {
-        // For renames/copies in working tree, handle two-path format
-        if (workingStatus.startsWith('R') || workingStatus.startsWith('C')) {
-          // For unstaged renames, we might need to consume the next path
-          // However, git status --porcelain doesn't show unstaged renames with two paths
-          // It shows them as deleted + untracked, so this is mainly for consistency
-        }
-        
-        files.push({
-          path: fileName,
-          status: this.mapGitStatus(workingStatus),
-          staged: false,
-          originalPath: undefined // Unstaged renames appear as D + ?
-        })
-      }
-      
-      // Handle untracked files - don't duplicate them
-      if (indexStatus === '?' && workingStatus === '?') {
-        // Only add if not already added
-        if (!files.some(f => f.path === fileName)) {
-          files.push({
-            path: fileName,
-            status: 'untracked',
-            staged: false
-          })
-        }
-      }
-    }
-    
-    // Expand directories to show individual files
-    const expandedFiles: GitStatusFile[] = []
-    for (const file of files) {
-      if (await this.isDirectory(file.path)) {
-        // If it's a directory, get all untracked files inside it
-        const dirFiles = await this.getUntrackedFilesInDirectory(file.path)
-        expandedFiles.push(...dirFiles)
-      } else {
-        expandedFiles.push(file)
-      }
-    }
-    
-    // Cache the result
-    this.setCached('status', expandedFiles)
-    return expandedFiles
+    return (await this.readSnapshot()).files
   }
 
-  private mapGitStatus(status: string): GitStatusFile['status'] {
-    // Extract the status letter from codes like R100, C85, M, etc.
-    const statusLetter = status.charAt(0)
-    
-    switch (statusLetter) {
-      case 'M': return 'modified'
-      case 'A': return 'added'
-      case 'D': return 'deleted'
-      case 'R': return 'renamed'
-      case 'C': return 'copied'
-      case '?': return 'untracked'
-      case 'T': return 'typechange'
-      case 'U': return 'unmerged'
-      default: return 'modified'
+  /**
+   * The checkout's changed files, branch and distance from its upstream.
+   *
+   * A snapshot is reused until something says the repository may have changed: a watcher's event, a write made
+   * here, a reconcile. With `fetch`, the remote is fetched first when the fetch settings say it is due.
+   */
+  async readSnapshot(options: { fetch?: boolean } = {}): Promise<RepositorySnapshot> {
+    let current = await this.currentSnapshot()
+    if (options.fetch && current.value.hasUpstream && await this.fetchIfStale()) {
+      this.markSnapshotStale()
+      current = await this.currentSnapshot()
     }
+    return current.value
+  }
+
+  /**
+   * Reads the snapshot from git and says whether it or any ref differs from the last one read. A watcher's
+   * event is a hint that something changed; this is what decides whether anything did.
+   */
+  async refreshSnapshot(): Promise<boolean> {
+    const before = this.lastIdentity
+    this.markSnapshotStale()
+    try {
+      return (await this.currentSnapshot()).identity !== before
+    } catch {
+      this.lastIdentity = 'unreadable'
+      return before !== 'unreadable'
+    }
+  }
+
+  private currentSnapshot(): Promise<{ value: RepositorySnapshot; identity: string }> {
+    if (this.snapshot && this.snapshotFresh && this.watched) return Promise.resolve(this.snapshot)
+    if (this.snapshotRead?.version === this.snapshotVersion) return this.snapshotRead.promise
+
+    const version = this.snapshotVersion
+    const promise = this.loadSnapshot().then((loaded) => {
+      this.snapshot = loaded
+      this.lastIdentity = loaded.identity
+      // A notice that arrived while git was running may be about a change this read did not see
+      this.snapshotFresh = version === this.snapshotVersion
+      return loaded
+    }).finally(() => {
+      if (this.snapshotRead?.promise === promise) this.snapshotRead = undefined
+    })
+    this.snapshotRead = { version, promise }
+    return promise
+  }
+
+  private async loadSnapshot(): Promise<{ value: RepositorySnapshot; identity: string }> {
+    const status = await this.executeGitCommand(['status', '--porcelain=v2', '--branch', '--untracked-files=all', '-z'])
+    if (!status.success) {
+      throw new Error(status.error || 'Failed to get git status')
+    }
+    // Refs move without the status moving: a fetch, a branch made or deleted, a stash
+    const refs = await this.executeGitCommand(['for-each-ref', '--format=%(objectname) %(refname)'])
+    return { value: parseStatus(status.output || ''), identity: `${status.output}\n${refs.output ?? ''}` }
+  }
+
+  /**
+   * The directories git ignores under the working directory, relative to it: what a watcher of the working
+   * tree need not report from.
+   */
+  async listIgnoredDirectories(): Promise<string[]> {
+    const result = await this.executeGitCommand(['ls-files', '--others', '--ignored', '--exclude-standard', '--directory', '-z'])
+    if (!result.success || !result.output) return []
+    return result.output.split('\0').filter(entry => entry.endsWith('/')).map(entry => entry.slice(0, -1))
   }
 
   private async isBinaryFile(filePath: string): Promise<boolean> {
@@ -753,7 +764,7 @@ export class GitRepository {
       if (!result.success) {
         throw new Error(result.error || 'Failed to stage files')
       }
-      this.cache.delete('status')
+      this.markSnapshotStale()
     })
   }
 
@@ -764,7 +775,7 @@ export class GitRepository {
       if (!result.success) {
         throw new Error(result.error || 'Failed to unstage files')
       }
-      this.cache.delete('status')
+      this.markSnapshotStale()
     })
   }
 
@@ -797,7 +808,7 @@ export class GitRepository {
           throw new Error(result.error || `Failed to revert file: ${filePath}`)
         }
       }
-      this.cache.delete('status')
+      this.markSnapshotStale()
     })
   }
 
@@ -852,7 +863,7 @@ export class GitRepository {
         }
       }
 
-      this.cache.delete('status')
+      this.markSnapshotStale()
     })
   }
 
@@ -868,7 +879,7 @@ export class GitRepository {
         throw new Error(result.error || `Failed to resolve conflict with ${strategy}`)
       }
       await this.executeGitCommand(['add', filePath])
-      this.cache.delete('status')
+      this.markSnapshotStale()
     })
   }
 
@@ -1065,7 +1076,7 @@ export class GitRepository {
       if (!statusPart || i >= parts.length) break
       
       // Status is just a letter (M, A, D, R, C, T, U)
-      const status = this.mapGitStatus(statusPart)
+      const status = statusOf(statusPart.charAt(0))
       const path = parts[i++]
       
       if (!path) continue
@@ -1250,18 +1261,20 @@ export class GitRepository {
     this._forceFetchNext = true
   }
 
-  private async fetchIfStale(): Promise<void> {
+  /** Fetches when a fetch was forced or the fetch settings say one is due, and says whether it did */
+  private async fetchIfStale(): Promise<boolean> {
     if (this._forceFetchNext) {
       this._forceFetchNext = false
       this._lastFetchTimestamp = Date.now()
       await this.executeGitCommand(['fetch', '--quiet'])
-      return
+      return true
     }
-    if (!this._autoFetchEnabled) return
+    if (!this._autoFetchEnabled) return false
     const now = Date.now()
-    if (now - this._lastFetchTimestamp < this._fetchThrottleMs) return
+    if (now - this._lastFetchTimestamp < this._fetchThrottleMs) return false
     this._lastFetchTimestamp = now
     await this.executeGitCommand(['fetch', '--quiet'])
+    return true
   }
 
   async getCommitsAheadBehind(): Promise<{ ahead: number; behind: number }> {

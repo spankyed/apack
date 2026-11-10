@@ -48,3 +48,29 @@ it('announces a write as the repository changing, and lists nothing itself', asy
   expect(announced).toHaveBeenCalledTimes(1);
   expect(listed).not.toHaveBeenCalled();
 });
+
+// A file event or a reconcile is a hint: git says whether the repository changed, and only then is it news
+it('announces a hint only when git says the repository changed, one check at a time', async () => {
+  let changed = false;
+  let release = () => {};
+  const refreshSnapshot = vi.fn(() => new Promise<boolean>((resolve) => { release = () => resolve(changed); }));
+  const announced = vi.fn();
+  const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: announced } }),
+    { input: { baseDirectory: '/repo', gitRepository: { refreshSnapshot } as never } }).start();
+  actors.push(actor);
+
+  actor.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' });
+  for (let i = 0; i < 3; i++) actor.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' });
+  expect(refreshSnapshot).toHaveBeenCalledTimes(1);
+  release();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(announced).not.toHaveBeenCalled();
+
+  // The hints that arrived during the first check are one more
+  expect(refreshSnapshot).toHaveBeenCalledTimes(2);
+  changed = true;
+  release();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(announced).toHaveBeenCalledTimes(1);
+  expect(refreshSnapshot).toHaveBeenCalledTimes(2);
+});

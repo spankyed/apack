@@ -2,7 +2,7 @@ import { answer } from '../answer.ts'
 import { featureSettings } from '#generated/settings.ts';
 import type { OutgoingTerminalEvents } from '../contract.ts'
 
-import { broadcastToSurface } from '#generated/events.ts';
+import { broadcastToSurface, sendToSystem } from '#generated/events.ts';
 import { defineHandlers } from '@apackdev/sdk/framework';
 import { setup, assign, fromPromise } from 'xstate'
 
@@ -78,6 +78,9 @@ export function startTerminalSizing(): () => void {
   })
 }
 
+/** Terminals whose shell last said a command was running, to tell the prompt that ends one from any other */
+const commandRunning = new Set<string>()
+
 /**
  * Where a terminal's output and exit go — **given to the service before the session exists**, not registered
  * after it returns, which is F8: whatever the shell wrote first used to have nowhere to go and was dropped.
@@ -89,10 +92,15 @@ const terminalHandlers = {
     // stream. Matching them here was a second parser for one fact, over the highest-frequency feed the app
     // has, and the copy that loses a sequence split across two reads.
     if (data.includes('\x1b]')) {
-      void terminalService.reportedCwd(terminalId)
-        .then(cwd => {
-          if (cwd === undefined) return
-          const moved = terminalService.updateCwd(terminalId, cwd)
+      void terminalService.reportedFacts(terminalId)
+        .then(facts => {
+          if (!facts) return
+          // A command that finished may have changed the repository or an open file with no file event for it
+          if (facts.running) commandRunning.add(terminalId)
+          else if (commandRunning.delete(terminalId)) sendToSystem('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES' })
+
+          if (facts.cwd === undefined) return
+          const moved = terminalService.updateCwd(terminalId, facts.cwd)
           if (moved) {
             emitToFrontend({ type: 'terminal.CWD_CHANGED', data: { terminalId, cwd: moved.cwd, title: moved.title } })
           }
@@ -104,6 +112,7 @@ const terminalHandlers = {
   },
 
   onExit(terminalId: string) {
+    commandRunning.delete(terminalId)
     try {
       emitToFrontend({ type: 'terminal.CLOSED', data: { terminalId } })
     } catch (error) {

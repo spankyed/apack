@@ -6,7 +6,6 @@ import { defineHandlers } from '@apackdev/sdk/framework';
 import { assign, setup, enqueueActions, fromCallback, type AnyActorRef } from 'xstate'
 
 import { GitRepository, StashConflictError } from '../services/git.ts'
-import { GitWatcherService } from '../services/gitwatcher.ts'
 import { requireGitRepository } from '../utils/git-helpers.ts'
 
 const surfaceId = 'code' as const
@@ -17,7 +16,6 @@ const surfaceId = 'code' as const
 
 export interface CodeCommitSystemContext {
   gitRepository: GitRepository | null
-  gitWatcher: GitWatcherService | null
   /** The code system, which routes a `pr.*` event to its pull request child */
   code?: AnyActorRef
 }
@@ -52,8 +50,9 @@ export type Event =
   | { type: 'commit.LOG_LIST' }
   | { type: 'commit.REVERT_COMMIT'; hash: string }
   | { type: 'commit.RESET_TO_COMMIT'; hash: string }
-  | { type: 'commit.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: GitRepository; gitWatcher: GitWatcherService }
+  | { type: 'commit.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: GitRepository }
   | { type: 'commit.GIT_STATUS_CHANGED' }
+  | { type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' }
   | { type: 'commit.ANNOUNCE_REPOSITORY_CHANGED' };
 
 /** Hands each handler the answer for the message it is handling — see `defineHandlers` */
@@ -63,25 +62,56 @@ export const commitSystem = setup({
   types: {
     context: {} as CodeCommitSystemContext,
     events: {} as Event,
-    input: {} as { baseDirectory: string | null; gitRepository?: GitRepository | null; gitWatcher?: GitWatcherService | null; code?: AnyActorRef }
+    input: {} as { baseDirectory: string | null; gitRepository?: GitRepository | null; code?: AnyActorRef }
   },
   actors: {
-    statusRefresh: fromCallback<{ type: 'REFRESH' }>(({ receive, sendBack }) => {
+    /**
+     * Turns what may be a change into the one announcement of it.
+     *
+     * `REFRESH` is a write made here: the repository did change, so it is announced once the writes that arrive
+     * together have. `CHECK` is a hint — a file event, a reconcile — so git is asked, and it is announced only if
+     * the status or a ref differs from what was last read; one check runs at a time, and hints that arrive
+     * during it are one more.
+     */
+    statusRefresh: fromCallback<{ type: 'REFRESH' } | { type: 'CHECK'; repository: GitRepository }>(({ receive, sendBack }) => {
       let timer: ReturnType<typeof setTimeout> | undefined;
-      receive(() => {
+      let stopped = false;
+      let checking = false;
+      let next: GitRepository | undefined;
+      const check = async (repository: GitRepository) => {
+        checking = true;
+        try {
+          for (let current: GitRepository | undefined = repository; current && !stopped; current = next) {
+            next = undefined;
+            if (await current.refreshSnapshot() && !stopped) sendBack({ type: 'commit.ANNOUNCE_REPOSITORY_CHANGED' });
+          }
+        } finally {
+          checking = false;
+        }
+      };
+      receive((event) => {
+        if (event.type === 'CHECK') {
+          if (checking) next = event.repository;
+          else void check(event.repository);
+          return;
+        }
         clearTimeout(timer);
         timer = setTimeout(() => {
           timer = undefined;
           sendBack({ type: 'commit.ANNOUNCE_REPOSITORY_CHANGED' });
         }, 150);
       });
-      return () => clearTimeout(timer);
+      return () => { stopped = true; clearTimeout(timer); };
     }),
   },
   actions: handlers.actions({
-    handleGitStatusChanged: enqueueActions(({ context, enqueue }) => {
+    handleGitStatusChanged: enqueueActions(({ enqueue }) => {
       enqueue.sendTo('statusRefresh', { type: 'REFRESH' });
-      context.code?.send({ type: 'pr.GIT_STATUS_CHANGED' })
+    }),
+
+    /** A hint that the repository changed, from its watcher or a reconcile: git decides whether it did */
+    checkRepository: enqueueActions(({ context, enqueue }) => {
+      if (context.gitRepository) enqueue.sendTo('statusRefresh', { type: 'CHECK', repository: context.gitRepository });
     }),
 
     getGitStatus: ({ context, reply }) => {
@@ -96,15 +126,10 @@ export const commitSystem = setup({
           return
         }
 
-        return Promise.all([
-          context.gitRepository!.getStatus(),
-          context.gitRepository!.getCurrentBranch(),
-          context.gitRepository!.isCurrentBranchPublished(),
-          context.gitRepository!.getCommitsAheadBehind()
-        ]).then(([status, branch, hasUpstream, commitsInfo]) => {
+        return context.gitRepository!.readSnapshot({ fetch: true }).then((snapshot) => {
           answer(reply, {
             type: 'commit.STATUS_RECEIVED',
-            data: { files: status, branch, hasUpstream, commitsAhead: commitsInfo.ahead, commitsBehind: commitsInfo.behind }
+            data: { files: snapshot.files, branch: snapshot.branch, hasUpstream: snapshot.hasUpstream, commitsAhead: snapshot.ahead, commitsBehind: snapshot.behind }
           })
         })
       }).catch((error: any) => {
@@ -527,18 +552,19 @@ export const commitSystem = setup({
 
     updateBaseDirectory: assign({
       gitRepository: ({ event }) => {
-        const ev = event as { type: 'commit.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: GitRepository; gitWatcher: GitWatcherService }
+        const ev = event as { type: 'commit.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: GitRepository }
         return ev.gitRepository
       },
-      gitWatcher: ({ event }) => {
-        const ev = event as { type: 'commit.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: GitRepository; gitWatcher: GitWatcherService }
-        return ev.gitWatcher
-      }
     }),
 
-    /** The repository changed (the watcher, or a write here; coalesced): news for every window, which each asks again about */
+    /** The repository changed (on disk, or by a write here; coalesced): news for every window, which each asks again about */
     announceRepositoryChanged: () => {
       broadcastToSurface(surfaceId, { type: 'commit.REPOSITORY_CHANGED' })
+    },
+
+    /** What a pull request shows is read from the same repository, so it hears the same news */
+    tellPullRequests: ({ context }) => {
+      context.code?.send({ type: 'pr.GIT_STATUS_CHANGED' })
     },
 
     stashPush: ({ event, context, self, reply }) => {
@@ -772,7 +798,6 @@ export const commitSystem = setup({
     const baseDir = input?.baseDirectory
     return {
       gitRepository: input?.gitRepository || (baseDir ? new GitRepository(baseDir) : null),
-      gitWatcher: input?.gitWatcher || (baseDir ? new GitWatcherService(baseDir) : null),
       code: input?.code
     }
   },
@@ -833,8 +858,11 @@ export const commitSystem = setup({
         'commit.GIT_STATUS_CHANGED': {
           actions: 'handleGitStatusChanged'
         },
+        'commit.REPOSITORY_MAY_HAVE_CHANGED': {
+          actions: 'checkRepository'
+        },
         'commit.ANNOUNCE_REPOSITORY_CHANGED': {
-          actions: 'announceRepositoryChanged'
+          actions: ['announceRepositoryChanged', 'tellPullRequests']
         },
         'commit.STASH_PUSH': {
           actions: 'stashPush'

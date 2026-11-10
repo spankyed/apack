@@ -1,112 +1,187 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+// The repository watcher reports that a checkout may have changed. Its events are hints, so these cases hand it
+// events directly and use a real git for everything git decides: where a checkout's state lives, and what it ignores.
+import { afterEach, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import * as chokidar from 'chokidar';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
-import { GitWatcherService } from '../../../../src/features/code/be/services/gitwatcher.ts';
+import { GitWatcherService, type SubscribeToDirectory, type WatchEvent } from '../../../../src/features/code/be/services/gitwatcher.ts';
 import { GitRepository } from '../../../../src/features/code/be/services/git.ts';
 
-beforeEach(() => { vi.spyOn(chokidar.FSWatcher.prototype, 'add'); });
+interface FakeWatch {
+  directory: string;
+  ignore: string[];
+  closed: boolean;
+  events(...relativePaths: string[]): void;
+  fail(error: Error): void;
+}
 
-const resources: Array<{ directory: string; watcher: GitWatcherService }> = [];
+/** Stands in for the platform's watcher: records each directory watched and lets a case deliver its events */
+function watches() {
+  const opened: FakeWatch[] = [];
+  const subscribe: SubscribeToDirectory = async (directory, onEvents, { ignore }) => {
+    const watch: FakeWatch = {
+      directory, ignore, closed: false,
+      events: (...relativePaths) => onEvents(null, relativePaths.map((relative): WatchEvent => ({ type: 'update', path: path.join(directory, relative) }))),
+      fail: error => onEvents(error, []),
+    };
+    opened.push(watch);
+    return { unsubscribe: async () => { watch.closed = true; } };
+  };
+  const open = () => opened.filter(watch => !watch.closed);
+  return { subscribe, open, of: (directory: string) => open().find(watch => watch.directory === directory) };
+}
+
+const cleanups: Array<() => Promise<void> | void> = [];
 afterEach(async () => {
-  for (const { directory, watcher } of resources.splice(0)) {
-    await watcher.stopWatching();
-    fs.rmSync(directory, { recursive: true, force: true });
-  }
   vi.useRealTimers();
-  vi.restoreAllMocks();
+  for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
 });
 
-it('creates no filesystem handles when startup is cancelled during preflight', async () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-watch-cancel-'));
-  fs.mkdirSync(path.join(directory, '.git'));
-  const watcher = new GitWatcherService(directory);
-  resources.push({ directory, watcher });
+function directory(prefix: string): string {
+  const created = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
+  cleanups.push(() => fs.rmSync(created, { recursive: true, force: true }));
+  return created;
+}
+const git = (cwd: string, ...args: string[]) =>
+  execFileWhileWorking('git', ['-C', cwd, '-c', 'user.name=spec', '-c', 'user.email=spec@example.com', ...args]);
+
+/** A watcher over a directory, with the fake platform watcher it opens its watches through */
+function watcherOf(workingDirectory: string) {
+  const platform = watches();
+  const watcher = new GitWatcherService(workingDirectory, platform.subscribe);
+  cleanups.push(() => watcher.stopWatching());
+  const repository = new GitRepository(workingDirectory);
+  const changed = vi.fn();
+  watcher.setGitRepository(repository);
+  watcher.setChangeCallback(changed);
+  return { watcher, repository, changed, platform };
+}
+const start = (watcher: GitWatcherService) => watcher.startWatching(new AbortController().signal);
+
+it('opens no watch when startup is cancelled before git has answered', async () => {
+  const repo = directory('apack-watch-cancel-');
+  await git(repo, 'init', '--quiet');
+  const { watcher, platform } = watcherOf(repo);
   const cancellation = new AbortController();
   const startup = watcher.startWatching(cancellation.signal);
   cancellation.abort();
   await startup;
-  expect(chokidar.FSWatcher.prototype.add).not.toHaveBeenCalled();
+  expect(platform.open()).toEqual([]);
+  expect(watcher.isActive()).toBe(false);
 });
 
-const emitter = (index: number) => vi.mocked(chokidar.FSWatcher.prototype.add).mock.instances[index] as chokidar.FSWatcher;
-const watchedPaths = (index: number) => vi.mocked(chokidar.FSWatcher.prototype.add).mock.calls[index][0] as string[];
-
-/** A watcher over a new directory, in a repository of its own unless told otherwise */
-async function watching(prefix: string, { repository = true } = {}) {
-  const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
-  if (repository) await execFileWhileWorking('git', ['init', '--quiet', directory]);
-  const watcher = new GitWatcherService(directory);
-  resources.push({ directory, watcher });
-  const git = new GitRepository(directory);
-  const changed = vi.fn();
-  watcher.setGitRepository(git);
-  watcher.setChangeCallback(changed);
-  return { directory, watcher, git, changed };
-}
-
-it('retires callbacks before a pending repository write finishes', async () => {
-  const { directory, watcher, git, changed } = await watching('apack-watch-write-');
-  await watcher.startWatching(new AbortController().signal);
-  vi.spyOn(git, 'isWriteInProgress', 'get').mockReturnValue(true);
-  const completions: Array<() => void> = [];
-  vi.spyOn(git, 'onWriteComplete').mockImplementation(callback => { completions.push(callback); });
-  emitter(0).emit('change', path.join(directory, '.git', 'index'));
-  expect(completions).toHaveLength(1);
-  await watcher.stopWatching();
+it('reports a change to the working tree, the index and a ref, and nothing for a lock or an unrelated git file', async () => {
+  const repo = directory('apack-watch-relevant-');
+  await git(repo, 'init', '--quiet');
+  const { watcher, changed, platform } = watcherOf(repo);
+  await start(watcher);
   vi.useFakeTimers();
-  completions[0]();
-  expect(vi.getTimerCount()).toBe(0);
-  await vi.advanceTimersByTimeAsync(100);
+  const gitDir = platform.of(path.join(repo, '.git'))!;
+
+  gitDir.events('index.lock', 'config', path.join('refs', 'heads', 'main.lock'));
+  await vi.advanceTimersByTimeAsync(2000);
   expect(changed).not.toHaveBeenCalled();
+
+  for (const deliver of [() => platform.of(repo)!.events('src/file.ts'), () => gitDir.events('index'), () => gitDir.events(path.join('refs', 'remotes', 'origin', 'main'))]) {
+    changed.mockClear();
+    deliver();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(changed).toHaveBeenCalledTimes(1);
+  }
 });
 
-it('announces a repository change while changes keep arriving', async () => {
-  const { directory, watcher, changed } = await watching('apack-watch-stream-');
-  await watcher.startWatching(new AbortController().signal);
+it('reports a change while changes keep arriving', async () => {
+  const repo = directory('apack-watch-stream-');
+  await git(repo, 'init', '--quiet');
+  const { watcher, changed, platform } = watcherOf(repo);
+  await start(watcher);
   vi.useFakeTimers();
   // Each change lands before the last one's quiet period ends, as a build or an agent's edits do
-  for (let i = 0; i < 12; i += 1) {
-    emitter(1).emit('change', path.join(directory, `file-${i}.ts`));
-    await vi.advanceTimersByTimeAsync(300);
+  for (let i = 0; i < 20; i += 1) {
+    platform.of(repo)!.events(`file-${i}.ts`);
+    await vi.advanceTimersByTimeAsync(100);
   }
   expect(changed).toHaveBeenCalled();
 });
 
-it('watches the refs a linked worktree shares with its main checkout', async () => {
-  const { directory } = await watching('apack-watch-worktree-');
-  const identity = ['-c', 'user.name=spec', '-c', 'user.email=spec@example.com'];
-  await execFileWhileWorking('git', ['-C', directory, ...identity, 'commit', '--quiet', '--allow-empty', '-m', 'first']);
-  const worktree = `${directory}-linked`;
-  await execFileWhileWorking('git', ['-C', directory, 'worktree', 'add', '--quiet', worktree]);
-  const watcher = new GitWatcherService(worktree);
-  resources.push({ directory: worktree, watcher });
-  watcher.setGitRepository(new GitRepository(worktree));
-  await watcher.startWatching(new AbortController().signal);
-
-  const watched = watchedPaths(0).map(watchedPath => fs.realpathSync(path.dirname(watchedPath)) + path.sep + path.basename(watchedPath));
-  const main = path.join(directory, '.git');
-  expect(watched).toContain(path.join(main, 'refs'));
-  expect(watched).toContain(path.join(main, 'packed-refs'));
-  expect(watched).toContain(path.join(main, 'worktrees', path.basename(worktree), 'index'));
+it('holds a change until a write this app is making has finished, and drops it once stopped', async () => {
+  const repo = directory('apack-watch-write-');
+  await git(repo, 'init', '--quiet');
+  const { watcher, repository, changed, platform } = watcherOf(repo);
+  await start(watcher);
+  vi.spyOn(repository, 'isWriteInProgress', 'get').mockReturnValue(true);
+  const completions: Array<() => void> = [];
+  vi.spyOn(repository, 'onWriteComplete').mockImplementation(callback => { completions.push(callback); });
+  platform.of(repo)!.events('a.ts', 'b.ts');
+  platform.of(repo)!.events('c.ts');
+  expect(completions).toHaveLength(1);
+  await watcher.stopWatching();
+  vi.useFakeTimers();
+  completions[0]!();
+  expect(vi.getTimerCount()).toBe(0);
+  await vi.advanceTimersByTimeAsync(2000);
+  expect(changed).not.toHaveBeenCalled();
 });
 
-it('outside a repository, reports an open file under the path it was opened by and no repository change', async () => {
-  const { directory, watcher, changed } = await watching('apack-watch-plain-', { repository: false });
-  fs.writeFileSync(path.join(directory, 'notes.txt'), 'one\n');
-  const link = `${directory}-link`;
-  fs.symlinkSync(directory, link);
-  resources.push({ directory: link, watcher });
-  const opened = path.join(link, 'notes.txt');
-  const fileChanged = vi.fn();
-  watcher.setFileChangeCallback(fileChanged);
-  watcher.registerOpenFile(opened);
-  await watcher.startWatching(new AbortController().signal);
+it('watches the refs a linked worktree shares with its main checkout', async () => {
+  const main = directory('apack-watch-main-');
+  await git(main, 'init', '--quiet');
+  await git(main, 'commit', '--quiet', '--allow-empty', '-m', 'first');
+  const worktree = `${main}-linked`;
+  await git(main, 'worktree', 'add', '--quiet', worktree);
+  cleanups.push(() => fs.rmSync(worktree, { recursive: true, force: true }));
+  const { watcher, changed, platform } = watcherOf(worktree);
+  await start(watcher);
   vi.useFakeTimers();
-  emitter(0).emit('change', path.join(directory, 'notes.txt'));
-  await vi.advanceTimersByTimeAsync(3000);
-  expect(fileChanged).toHaveBeenCalledWith(expect.objectContaining({ path: opened, changeType: 'change' }));
-  expect(changed).not.toHaveBeenCalled();
+
+  const common = platform.of(path.join(main, '.git'));
+  expect(common, 'the main checkout holds the refs').toBeDefined();
+  expect(platform.of(path.join(main, '.git', 'worktrees', path.basename(worktree))), 'the worktree holds its own index').toBeDefined();
+  common!.events(path.join('refs', 'heads', 'feature'));
+  await vi.advanceTimersByTimeAsync(2000);
+  expect(changed).toHaveBeenCalledTimes(1);
+});
+
+it('leaves the directories git ignores out of the working tree watch', async () => {
+  const repo = directory('apack-watch-ignored-');
+  await git(repo, 'init', '--quiet');
+  fs.writeFileSync(path.join(repo, '.gitignore'), 'out/\n');
+  fs.mkdirSync(path.join(repo, 'out'));
+  fs.writeFileSync(path.join(repo, 'out', 'bundle.js'), '');
+  fs.mkdirSync(path.join(repo, 'build'));
+  fs.writeFileSync(path.join(repo, 'build', 'tracked.ts'), '');
+  const { watcher, platform } = watcherOf(repo);
+  await start(watcher);
+  // `build` is a directory this repository tracks, whatever it is called
+  expect(platform.of(repo)!.ignore).toEqual(['.git', 'out']);
+});
+
+it('starts watching a directory that became a repository when asked to check', async () => {
+  const plain = directory('apack-watch-init-');
+  const { watcher, platform } = watcherOf(plain);
+  await start(watcher);
+  expect(platform.open()).toEqual([]);
+
+  await git(plain, 'init', '--quiet');
+  await watcher.check();
+  expect(platform.open().map(watch => watch.directory).sort()).toEqual([plain, path.join(plain, '.git')]);
+});
+
+it('reports a failed watch as a change and opens it again when asked to check', async () => {
+  const repo = directory('apack-watch-failed-');
+  await git(repo, 'init', '--quiet');
+  const { watcher, changed, platform } = watcherOf(repo);
+  await start(watcher);
+  const tree = platform.of(repo)!;
+
+  vi.useFakeTimers();
+  tree.fail(new Error('the platform stopped delivering events'));
+  await vi.advanceTimersByTimeAsync(2000);
+  vi.useRealTimers();
+  expect(changed).toHaveBeenCalledTimes(1);
+  expect(tree.closed).toBe(true);
+
+  await watcher.check();
+  expect(platform.of(repo), 'a new watch on the working tree').toBeDefined();
 });

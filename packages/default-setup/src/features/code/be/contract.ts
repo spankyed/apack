@@ -8,7 +8,7 @@ import type {
   SearchResult, StashEntry, TerminalInfo, WorktreeEntry,
 } from './types.ts';
 import type { ActiveTokenInfo } from './services/gh-cli.ts';
-import type { FileChangeInfo } from './services/gitwatcher.ts';
+import type { FileChangeInfo } from './services/open-file-watcher.ts';
 
 // ── The child actors' events ─────────────────────────────────────────────────────────────────────
 // They live here rather than beside each child because this module is the contract leaf: codegen reads it as a
@@ -274,6 +274,12 @@ export type IncomingCodeEvents =
    * explorer and the terminals, to which the system hands this same ask, with the files and the running terminals
    */
   | { type: 'GET_CODE_START' }
+  /**
+   * Something may have changed on disk that no file event reported: a window gained focus, a terminal command
+   * finished, an agent's turn ended. The repository and the open files are read again, and what differs is
+   * announced as it would have been.
+   */
+  | { type: 'CHECK_FOR_EXTERNAL_CHANGES' }
 export type OutgoingCodeEvents =
   | OutgoingExplorerEvents
   | OutgoingSearchEvents

@@ -1625,6 +1625,17 @@ declare class GitRepository {
     private _lastFetchTimestamp;
     private _autoFetchEnabled;
     private _fetchThrottleMs;
+    /** The last snapshot read, with what it and the refs looked like, to tell a change from none */
+    private snapshot?;
+    /** Whether nothing has said the repository may have changed since `snapshot` was read */
+    private snapshotFresh;
+    /** Counts every notice that the repository may have changed, so a read that one overtook is not kept as fresh */
+    private snapshotVersion;
+    private snapshotRead?;
+    /** What the last read looked like, `unreadable` when it failed */
+    private lastIdentity?;
+    /** Whether a watcher reports this checkout's changes; without one a snapshot is read every time it is asked for */
+    private watched;
     constructor(workingDirectory: string);
     getWorkingDir(): string;
     setFetchConfig(enabled: boolean, intervalSeconds: number): void;
@@ -1639,13 +1650,36 @@ declare class GitRepository {
     private getCached;
     private setCached;
     clearCache(): void;
+    /** The repository may have changed: the next snapshot asked for is read from git */
+    markSnapshotStale(): void;
+    /** Says whether a watcher reports this checkout's changes, which is what lets a snapshot be reused */
+    setWatched(watched: boolean): void;
     private isDirectory;
-    private getUntrackedFilesInDirectory;
     invalidateCache(paths?: string[]): void;
     private executeGitCommand;
     getCurrentBranch(): Promise<string>;
     getStatus(): Promise<GitStatusFile[]>;
-    private mapGitStatus;
+    /**
+     * The checkout's changed files, branch and distance from its upstream.
+     *
+     * A snapshot is reused until something says the repository may have changed: a watcher's event, a write made
+     * here, a reconcile. With `fetch`, the remote is fetched first when the fetch settings say it is due.
+     */
+    readSnapshot(options?: {
+        fetch?: boolean;
+    }): Promise<RepositorySnapshot>;
+    /**
+     * Reads the snapshot from git and says whether it or any ref differs from the last one read. A watcher's
+     * event is a hint that something changed; this is what decides whether anything did.
+     */
+    refreshSnapshot(): Promise<boolean>;
+    private currentSnapshot;
+    private loadSnapshot;
+    /**
+     * The directories git ignores under the working directory, relative to it: what a watcher of the working
+     * tree need not report from.
+     */
+    listIgnoredDirectories(): Promise<string[]>;
     private isBinaryFile;
     getDiff(filePath?: string, staged?: boolean): Promise<string>;
     /**
@@ -1679,6 +1713,14 @@ declare class GitRepository {
     fileExistsInHead(filePath: string): Promise<boolean>;
     resolveConflict(filePath: string, strategy: 'ours' | 'theirs'): Promise<void>;
     commit(message: string): Promise<void>;
+    /**
+     * Where this checkout's git state lives: its own git directory (index, HEAD) and the common one holding refs.
+     * The two differ in a linked worktree. Null when the working directory is in no repository.
+     */
+    resolveGitDirectories(): Promise<{
+        gitDir: string;
+        commonDir: string;
+    } | null>;
     isGitRepository(): Promise<boolean>;
     hasUncommittedChanges(): Promise<boolean>;
     getStagedFiles(): Promise<GitStatusFile[]>;
@@ -1709,6 +1751,7 @@ declare class GitRepository {
      * regardless of the auto-fetch toggle or throttle timer.
      */
     forceFetchOnce(): void;
+    /** Fetches when a fetch was forced or the fetch settings say one is due, and says whether it did */
     private fetchIfStale;
     getCommitsAheadBehind(): Promise<{
         ahead: number;
@@ -1743,27 +1786,45 @@ interface GitStatusFile {
     score?: number;
 }
 
+/**
+ * Reports that a checkout may have changed: its working tree, its index and HEAD, or its refs.
+ *
+ * **An event is a hint, and git is what says whether anything changed.** So nothing here needs to be exact: an
+ * event for a file git ignores costs one status that finds no difference, and an event the platform never
+ * delivered is made up for by `check`, which whoever knows the repository may have moved calls — a window
+ * gaining focus, a terminal command finishing, an agent's turn ending.
+ */
 declare class GitWatcherService {
     private workingDirectory;
-    private gitWatcher?;
-    private workingDirWatcher?;
-    private onGitChangeCallback?;
-    private onFileChangeCallback?;
-    private gitStatusDebounceTimeout?;
-    private fileChangeTimeouts;
+    private subscribe;
+    private subscriptions;
+    /** Every start, stop and check in order, so two never set subscriptions up at once */
+    private establishing;
+    /** Moves on every start and stop, which is what tells work begun before one that it is no longer wanted */
+    private generation;
+    private onChangeCallback?;
+    private quietTimeout?;
+    /** When the first change not yet reported arrived */
+    private pendingSince?;
+    /** Whether a callback is already waiting on the repository's write in progress */
+    private awaitingWrite;
     private isWatching;
-    private openFiles;
     private gitRepository?;
-    constructor(workingDirectory: string);
+    constructor(workingDirectory: string, subscribe?: SubscribeToDirectory);
     setGitRepository(repo: GitRepository): void;
     setChangeCallback(callback: () => void): void;
-    setFileChangeCallback(callback: (change: FileChangeInfo) => void): void;
-    registerOpenFile(filePath: string): void;
-    unregisterOpenFile(filePath: string): void;
-    isFileOpen(filePath: string): boolean;
-    getOpenFiles(): string[];
     startWatching(signal: AbortSignal): Promise<void>;
-    private handleFileChange;
+    /**
+     * Brings the watches in line with the checkout as it is now, for a caller that knows it may have moved.
+     * A directory that became a repository starts being watched, a watch that failed is opened again, and the
+     * ignored directories are taken afresh.
+     */
+    check(): Promise<void>;
+    private establish;
+    private handleEvents;
+    /** One report for every change that arrives close together */
+    private scheduleChange;
+    private armChange;
     stopWatching(): Promise<void>;
     isActive(): boolean;
 }
@@ -1874,6 +1935,14 @@ type IncomingCodeEvents = IncomingExplorerEvents | IncomingSearchEvents | Incomi
  */
  | {
     type: 'GET_CODE_START';
+}
+/**
+ * Something may have changed on disk that no file event reported: a window gained focus, a terminal command
+ * finished, an agent's turn ended. The repository and the open files are read again, and what differs is
+ * announced as it would have been.
+ */
+ | {
+    type: 'CHECK_FOR_EXTERNAL_CHANGES';
 };
 
 type IncomingCommitEvents = {
@@ -4537,6 +4606,17 @@ type RecentThreadsSortOrder = 'created' | 'message' | 'visited';
 /** Every repository this pack can use: its own and its dependencies' */
 type Repositories = OwnRepositories;
 
+/** What the commit panel shows of a checkout, read in one pass */
+interface RepositorySnapshot {
+    files: GitStatusFile[];
+    /** The branch checked out, or `HEAD` when none is */
+    branch: string;
+    /** Whether the branch tracks a remote branch that exists */
+    hasUpstream: boolean;
+    ahead: number;
+    behind: number;
+}
+
 type ResultLine = z.infer<typeof ResultLineSchema>;
 
 /** Final result line — marks turn completion. */
@@ -4760,6 +4840,13 @@ declare const StreamEventLineSchema: z.ZodObject<{
  * types without breaking the wrapper.
  */
 type StreamLine = KnownStreamLine | UnknownLine;
+
+/** Watches a directory and everything under it, apart from what `ignore` names relative to it */
+type SubscribeToDirectory = (directory: string, onEvents: (error: Error | null, events: WatchEvent[]) => void, options: {
+    ignore: string[];
+}) => Promise<{
+    unsubscribe(): Promise<void>;
+}>;
 
 interface SwitchNode extends NodeBase {
     nodeType: 'switch';
@@ -5395,6 +5482,12 @@ declare const UserStreamLineSchema: z.ZodObject<{
     isReplay: z.ZodOptional<z.ZodBoolean>;
     isSynthetic: z.ZodOptional<z.ZodBoolean>;
 }, z.core.$loose>;
+
+/** One change under a watched directory, as `@parcel/watcher` reports it */
+interface WatchEvent {
+    path: string;
+    type: 'create' | 'delete' | 'update';
+}
 
 interface WorktreeEntry {
     path: string;
