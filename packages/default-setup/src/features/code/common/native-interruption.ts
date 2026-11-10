@@ -1,8 +1,8 @@
 /** Pinned native yto envelope: interruption rows are not person-authored prompts.
  * Original source: Linux chunk-a7b8k0bt.js yto / chunk-q1hf100k.js XE,Lp,bh;
  * Darwin chunk-hqtnbrjd.js / chunk-ev1xcp32.js. Keep literal human input visible.
- * Persisted explicit human origins and literal string input stay visible; live turn counting
- * uses the original native Sh/bh predicate, which covers a wider set of envelopes.
+ * Persisted explicit human origins and literal string input stay visible. Native prompt receipts
+ * use the broader original Sh/bh predicate; session.turns keeps the distinct native her semantics.
  */
 export function isClaudeNativeInterruption(value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
