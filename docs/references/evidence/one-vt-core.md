@@ -706,3 +706,105 @@ Phase R's scope as written, so it is a finding for the goal's owner and not a th
 sequences) / Simplified implementation - looks for OSC 0, 1, 2". The core parses OSC properly; this
 particular path does not use it. The pool does not read `onTitleChange` today, so nothing regresses — it is
 recorded because it is the kind of thing that looks like a core guarantee and is not.
+
+
+## 2026-11-09 — Phase R: the window is on the core, and what it cost
+
+`terminal-pool.ts` constructs `ghostty-web`; the six `@xterm/*` packages are gone from the pack's manifest
+and the lockfile. `npm run typecheck` passes whole (twenty legs, `api:check` and `facade:check` among them),
+`apack pack build` produces the pack, `check:specifiers` passes — which is the emulator rule answering in
+both directions, an import outside the seam and the seam having stopped importing one — and the code
+surface's sixteen frontend spec files pass, 104 cases.
+
+### The size of it, attributed from the sourcemaps
+
+The same instrument the ownership goal used, so the two figures are comparable:
+
+| | KiB of source attributed into the pack's frontend |
+|---|---|
+| the six `@xterm/*` packages (measured 2026-11-07) | **502** |
+| `ghostty-web` | **686** |
+
+**That reads as a regression and is the opposite.** 552 KiB of the 686 is the WebAssembly module, inlined as
+a base64 data URL by the package's own library build; its JavaScript is **134 KiB**. So the emulator's code
+shrank by 368 KiB and the bundle grew by 184, because a 414 KiB binary is now carried as 552 KiB of string
+literal.
+
+**Which makes 0b's asset route the obvious next move, and it was already proven.** The package also exports
+`./ghostty-vt.wasm` as a file, and `init`'s own documentation describes constructing a `Ghostty` and handing
+it to `Terminal`, so the module can be fetched over `pack://` instead — the route 0b followed end to end,
+down to the `application/wasm` MIME entry it added for exactly this. That would leave 134 KiB in the
+JavaScript the window parses and 414 KiB fetched as a file. It is a Phase A measurement rather than a Phase
+R decision, and it is the one optimisation here with a number already attached to it.
+
+### What the asynchronous constructor cost, which was the real work
+
+The module is loaded on demand, so construction cannot be synchronous. It is deliberately **not** awaited at
+module scope: that would block all eleven of this pack's features on the terminal's module. `ensure` awaits
+it and both hosts await `ensure`, and then every assumption that rested on a synchronous constructor had to
+be made true again:
+
+| what can happen during the load | what answers it |
+|---|---|
+| two hosts mount together | one build per session, keyed by id; the second awaits the first |
+| the host unmounts | `TerminalView` drops the attach, the panel supersedes it by generation |
+| the user clicks another terminal | the panel's generation counter; the later attach wins |
+| the session is closed | `dispose` records the id and the build throws away what it made |
+
+The last is the one with teeth: registering it would leave an emulator for a finished session in the pool,
+holding its WebAssembly state and subscribed to a bus nothing writes to, until the whole frontend went.
+Three cases drive a **held** module load to cover them, and two mutants each fail exactly one — the discard
+(`if (this.discarded.delete(info.id))`) fails "registers nothing for a session closed while it was opening",
+and the dedupe (`if (building) return building`) fails "builds one emulator for two mounts that arrive
+together". Neither case was possible while construction was synchronous, which is why they are cases rather
+than a claim about the shape of the code.
+
+### The scroll rewrite, and the invariant that was wrong
+
+`getViewport` found the emulator's scrolling element by computed `overflow-y`, and its comment said the rule
+was "an element whose computed `overflow-y` scrolls, which is true of whichever emulator draws here". It is
+not: this one draws its own scrollbar onto its canvas, and has no scrolling element at all. The comment was
+written to keep the file emulator-agnostic and picked the wrong invariant, which is worth recording because
+the replacement could make the same mistake.
+
+What replaces it is smaller and exact. `scrollToBottom()` sets `viewportY = 0` and `scrollToTop()` sets it
+to `getScrollbackLength()` — read out of the shipped bundle rather than inferred, because `scrollToLine`'s
+own documentation uses the opposite convention — so `viewportY` counts lines up from the bottom, following
+the output is `viewportY === 0`, and a saved position is a line restored with `scrollLines`. Three standing
+workarounds go with the DOM element that caused them: a `scrollTop` Chromium zeroes on `remove()`, a
+`scrollHeight` read to force layout, and a `scrollToBottom` that did nothing when the buffer pointers were
+equal.
+
+`findScroller` and its five cases are deleted. In their place, five cases over `openedByTheApp`, which is
+the other half of the same lesson: the library's providers build each link's `activate` themselves, and
+that is the one part not theirs to decide, since the text they matched is whatever a program printed into a
+terminal.
+
+### `open(parent)` takes the element it is given, which decided the CSS
+
+It sets `element` to the parent, appends a `<canvas>` and a `<textarea>`, and sets `tabindex`,
+`contenteditable`, `role="textbox"`, `aria-label` and `aria-multiline` on it — so accessibility is the
+library's, and there is no `.xterm` or `.xterm-viewport` to reach into. The ~35 lines of CSS duplicated in
+both hosts matched nothing and are deleted; the inset they carried is each host's own padding, which is
+where it belonged, the two hosts having always wanted different values (8px and 4px 8px).
+
+The wrapper now carries `data-apack-terminal`. The performance scenarios found a drawn terminal by
+`.xterm` and counted `[class*="xterm"]` elements; they ask for the app's own name for it now, which is the
+mistake `findScroller` made, not repeated.
+
+### What is not done, and is a regression rather than a parity gap
+
+**OSC 52.** `@xterm/addon-clipboard` is loaded today, so a program writing OSC 52 reaches the system
+clipboard; `ghostty-web` surfaces no OSC 52 at all, its only OSC provider being the OSC 8 one. This phase
+does not replace it, so that behaviour is gone until something does.
+
+Its better home is the broker rather than the window: the broker owns the screen and already routes the
+shell-integration OSC families, so a clipboard request is a fact for it to report rather than something a
+replica should act on by itself. That is work in two repositories and outside Phase R as written, so it is
+named here and in the goal rather than slipped in.
+
+**And nothing here has been run in the app.** Every statement above is a typecheck, a build, a spec or a
+reading of the shipped bundle. `open()` requires a real 2D canvas context, which jsdom does not implement,
+so the one thing no spec in this repository can answer is whether this emulator opens into the pool's
+**detached** wrapper and survives being re-parented — which is the whole of what makes a tab switch cost
+no replay. That is Phase A's first question, and it needs the running app.
