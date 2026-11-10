@@ -1,6 +1,6 @@
 # Migrate the embedded terminal from xterm.js to ghostty-web
 
-Status: **delivered, by [goal-one-vt-core](../../goals/goal-one-vt-core.md)**, 2026-11-09. Archived for its
+Status: **delivered, by [goal-one-vt-core](../goals/goal-one-vt-core.md)**, 2026-11-09. Archived for its
 reasoning and its dates; it authorizes nothing and is not a current account of anything.
 
 **One of its judgements was reversed on measurement and is worth reading beside the goal's.** This plan

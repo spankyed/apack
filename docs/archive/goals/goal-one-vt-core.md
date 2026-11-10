@@ -41,7 +41,7 @@ configuration spread from 17.1 to 30.8 ms — and the record declines to quote o
 floor, because load inflates a duration and cannot deflate it: 15.8 ms observed against the baseline's best
 of 18. **Attaching a terminal did not get slower.** The other four figures Phase A lists were not taken,
 for the same reason the median is not citable, and they are named in
-[evidence](../references/evidence/one-vt-core.md) rather than dropped.
+[evidence](../../references/evidence/one-vt-core.md) rather than dropped.
 
 ### What running the app was worth
 
@@ -114,12 +114,12 @@ Phase 0 failing is a result, not a setback: record it and stop.
 **This repository parses the same bytes twice, with two implementations.** The broker parses them with
 `alacritty_terminal` — for `screen`, `search`, the shell-integration markers and the facts a hidden session
 answers — and the window parses them again with xterm.js, to draw. [Terminal session
-ownership](../archive/goals/goal-terminal-ownership.md) made that arrangement safe rather than correct: the
+ownership](goal-terminal-ownership.md) made that arrangement safe rather than correct: the
 broker is the authority, the renderer is a replica, and a disagreement is therefore stale rather than wrong.
 Safe is as far as two implementations can be taken.
 
 **The condition for taking it further was named, and it is now met.** The
-[ghostty-web migration](../archive/plans/xterm-to-ghostty-web.md) closes with the question it could not answer:
+[ghostty-web migration](../plans/xterm-to-ghostty-web.md) closes with the question it could not answer:
 
 > **Is one engine purchasable?** … only buyable if libghostty's VT core exposes a C API a Rust broker can
 > bind. If it does, `alacritty_terminal`, its `vte` and much of `markers.rs` collapse into one
@@ -146,8 +146,8 @@ it is **one core adopted on both sides of a split that already exists**.
 
 - **Any change to who owns a session.** The ownership tables, the lifetime hold, `adopt`, the restart budget
   and the protocol's shape are settled and this goal consumes them. See
-  [terminal-broker.md](../references/terminal-broker.md).
-- **The agent-observation pipeline**, which [terminal-runtime-refactor-target.md](../deferred/terminal-runtime-refactor-target.md)
+  [terminal-broker.md](../../references/terminal-broker.md).
+- **The agent-observation pipeline**, which [terminal-runtime-refactor-target.md](../../deferred/terminal-runtime-refactor-target.md)
   owns as design and no goal currently owns as delivery.
 - **Persistence, PTY multiplexing and shell-integration redesign**, as the predecessor plan excluded them.
 - **Inline images, progress reporting and core-backed selection.** Each becomes *reachable* here and none is
@@ -175,7 +175,7 @@ this one's:
 - *"The pool exposes raw emulator/addon types to both hosts."* It does not. `TerminalAttachment` is a
   ten-method interface and the hosts hold nothing else, so that plan's Phase 2 is already most of the way done.
 - *"Retain the stream/history contract; verify replay ordering."* There is no replay. The byte log and its
-  window storage were deleted as F3, F6 and F11 ([evidence](../references/evidence/terminal-ownership.md)),
+  window storage were deleted as F3, F6 and F11 ([evidence](../../references/evidence/terminal-ownership.md)),
   and the guards are mutation-checked. Phase 1's requirement to suppress emulator-generated DA/DSR replies
   *during historical replay* has no subject.
 - *The migration target is `coder/ghostty-web`.* That package is 0.4.0 and its own README says it will
@@ -199,7 +199,7 @@ because that is the part a reader cannot derive from the Outcome.
 - **The driving scripts are not in the tree.** `drive/.gitignore` keeps everything but the README and the
   Playwright config, so `terminal-core-swap.ts` — which opens a terminal, reads the canvas, and fingerprints
   it either side of a write — exists only where it was written. What it asked and what it answered is in
-  [evidence](../references/evidence/one-vt-core.md); rebuilding it from that is a few minutes and is how
+  [evidence](../../references/evidence/one-vt-core.md); rebuilding it from that is a few minutes and is how
   the two compensations should be re-measured.
 
 ## Decisions
@@ -224,7 +224,7 @@ authority.
 The cost is two Ghostty-derived builds in the tree until `ghostty-web` consumes the official distribution,
 which its README commits to, and a `next` prerelease until it cuts a stable release. Both are recorded with
 the condition for leaving them, and the measured API surface is in
-[evidence](../references/evidence/one-vt-core.md). **The wasm arrives inlined as a base64 data URL**, so
+[evidence](../../references/evidence/one-vt-core.md). **The wasm arrives inlined as a base64 data URL**, so
 the renderer needs no `pack://` asset route for it.
 
 **D3 — We own the safe Rust layer over the raw FFI.** The C ABI is 1.0 with strict compatibility promises;
@@ -287,7 +287,7 @@ command and the status it finished with, `OPT_PWD_CHANGED` for the reported dire
 today. What also stays is the contract — every field is a claim some program made, except `foreground`,
 which the broker measures and the core has no business answering — and the OSC 7 decode, since the core
 stores that URI raw and documents that it does not parse it.
-[Evidence](../references/evidence/one-vt-core.md), including the two readings this corrects.
+[Evidence](../../references/evidence/one-vt-core.md), including the two readings this corrects.
 
 **D6 — The protocol stays ours.** `ts-rs` generates the app's TypeScript from the broker's Rust types. A
 core handle's shape must not reach the wire, or the app's contract starts tracking a third party's struct
@@ -305,7 +305,7 @@ side is declared in one place and asserted (required outcome 4).
 **O3 — answered 2026-11-09: the renderer takes `ghostty-web`, and D2 is retired.** The reasoning that
 produced the answer is kept below, because it is what a reader needs to judge the decision rather than
 take it on trust; the package's measured API surface, its costs and the inlined wasm are in
-[evidence](../references/evidence/one-vt-core.md).
+[evidence](../../references/evidence/one-vt-core.md).
 
 D2 says the renderer takes upstream's WebAssembly module rather than `ghostty-web`, and the plan sizes
 Phase R as "one file, 742 lines, plus roughly 35 lines of CSS". **Those two cannot both be true.**
@@ -336,7 +336,7 @@ Blocks Phase R and nothing else. Phase B is unaffected and proceeds.
 
 **O2 — answered 2026-11-09: yes.** It builds from the signed tarballs, links, and passes all 97 tests on
 `x86_64-pc-windows-msvc`; the measurements and the two findings are in
-[evidence](../references/evidence/one-vt-core.md). The question as it stood:
+[evidence](../../references/evidence/one-vt-core.md). The question as it stood:
 
 The release is settled —
 `1.0.0`, tag `vt-1.0.0`, commit `0fa3d577a5614150ff8e2c152de5fb9d5c6d2dec` — and O1 is answered in
@@ -344,7 +344,7 @@ evidence. What remains is Windows, and it is now two questions rather than one, 
 published for it: we build the library from the signed source and dependency tarballs, then link it. Upstream
 builds with the GNU ABI and states MSVC programs link through the import library, with CI covering that, and
 one shipping consumer reports a static MSVC link working. Establish both on the
-[Windows VM](../references/guides/windows-development-vm.md) rather than inferring either. Blocks Phase B on
+[Windows VM](../../references/guides/windows-development-vm.md) rather than inferring either. Blocks Phase B on
 Windows and nothing else.
 
 ## Phases
@@ -464,7 +464,7 @@ packages, their CSS import, the addon setup and the bundler's optimizer entries 
 **Done, except in the app.** The code is in and everything that can be checked without running it passes:
 the whole typecheck, `apack pack build`, `check:specifiers`' emulator rule in both directions, and the code
 surface's sixteen frontend spec files, 104 cases. Three items below came out differently from how they are
-written, and each is recorded in [evidence](../references/evidence/one-vt-core.md) rather than quietly
+written, and each is recorded in [evidence](../../references/evidence/one-vt-core.md) rather than quietly
 amended here — the viewport element (there is none, the emulator draws its own scrollbar), the addon
 replacements (three stop being dependencies at all) and OSC 52, which the emulator does not surface at all
 and which the pool now reads out of the output itself. What is left is Phase A's: nothing has been run in the app, and the question
@@ -555,12 +555,12 @@ before cutover**, not after seeing the numbers.
 
 | Requirement | Implementation / source | Evidence | Remaining work |
 |---|---|---|---|
-| Broker on `libghostty-vt`, `alacritty_terminal` gone | **done, and the pin is moved** | `pre-push` green on the merged commit, 135 tests and 61 mutants with none missed; 97 tests on Windows MSVC; [evidence](../references/evidence/one-vt-core.md) | — |
-| Window on the same core's WASM, `@xterm/*` gone | **done, and drawn in the app** | typecheck, pack build, `check:specifiers`, 113 cases, and a driven run: opens detached, draws, survives a re-parent; [evidence](../references/evidence/one-vt-core.md) | the fuller behaviour pass |
-| No Zig, no compile-time network, no run-time CDN | **held, with one finding** | the broker links a library supplied to the build (`vt-prebuilt` fetches and verifies; Windows is built out of band from the signed tarballs); the renderer's module is inlined in the package it comes from | the crate's prebuilt-directory hatch asserts a POSIX file name, so Windows runs it only with a copy under that name — [evidence](../references/evidence/one-vt-core.md) |
+| Broker on `libghostty-vt`, `alacritty_terminal` gone | **done, and the pin is moved** | `pre-push` green on the merged commit, 135 tests and 61 mutants with none missed; 97 tests on Windows MSVC; [evidence](../../references/evidence/one-vt-core.md) | — |
+| Window on the same core's WASM, `@xterm/*` gone | **done, and drawn in the app** | typecheck, pack build, `check:specifiers`, 113 cases, and a driven run: opens detached, draws, survives a re-parent; [evidence](../../references/evidence/one-vt-core.md) | the fuller behaviour pass |
+| No Zig, no compile-time network, no run-time CDN | **held, with one finding** | the broker links a library supplied to the build (`vt-prebuilt` fetches and verifies; Windows is built out of band from the signed tarballs); the renderer's module is inlined in the package it comes from | the crate's prebuilt-directory hatch asserts a POSIX file name, so Windows runs it only with a copy under that name — [evidence](../../references/evidence/one-vt-core.md) |
 | Every relied-on capability asserted present | missing | — | D7's declaration and its check |
-| Conformance corpus passes, or each difference decided | **done** — and the snapshots now hold the core to the old parser's output | ten cases; [evidence](../references/evidence/one-vt-core.md#2026-11-09--phase-0a-passes-the-two-parsers-agree-with-three-decided-differences) | — |
-| Windows unaffected: job objects, pipe ACL, ConPTY | holds today | [terminal-ownership.md](../references/evidence/terminal-ownership.md) | Re-prove on the VM in Phase B |
+| Conformance corpus passes, or each difference decided | **done** — and the snapshots now hold the core to the old parser's output | ten cases; [evidence](../../references/evidence/one-vt-core.md#2026-11-09--phase-0a-passes-the-two-parsers-agree-with-three-decided-differences) | — |
+| Windows unaffected: job objects, pipe ACL, ConPTY | holds today | [terminal-ownership.md](../../references/evidence/terminal-ownership.md) | Re-prove on the VM in Phase B |
 
 Checkpoint logs belong in `docs/references/evidence/one-vt-core.md`, dated, with source commits and exact
 commands.
@@ -604,6 +604,6 @@ distribution, which its README commits to, or fixing the behaviour itself.
   chain tests the working tree while CI clones the pin — compare them before trusting a run.
 - Native execution belongs in the Linux test container, and Windows verification on the approved VM. Neither
   is a CI dispatch per experiment.
-- The [terminal integration review](../issues/ISSUE-terminal-integration-review.md) is dated investigation
+- The [terminal integration review](../../issues/ISSUE-terminal-integration-review.md) is dated investigation
   material. Its findings were closed by the ownership goal; recheck anything cited from it against current
   code.

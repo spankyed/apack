@@ -1,6 +1,6 @@
 # One VT core — evidence
 
-Checkpoints for [goal-one-vt-core](../../goals/goal-one-vt-core.md). Dated, with the source each fact came
+Checkpoints for [goal-one-vt-core](../../archive/goals/goal-one-vt-core.md). Dated, with the source each fact came
 from. Failed checks stay visible.
 
 ## 2026-11-09 — the pin, and what upstream actually publishes
