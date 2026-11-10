@@ -184,7 +184,7 @@ export function createFrontendWatcher(root: string, dataDirectory: string | unde
         const identity = fs.statSync(child);
         const parent = path.dirname(child);
         return {
-          key: JSON.stringify([child, identity.ino, identity.dev]), directory: parent, recursive: false,
+          key: JSON.stringify([child, identity.ino, identity.dev]), path: parent, recursive: false,
           receive(kind, file) {
             if (closed || kind !== 'rename' || (file && path.resolve(parent, file) !== child)) return;
             let stat: fs.Stats | undefined;

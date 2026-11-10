@@ -17,9 +17,13 @@ export interface SoakResult {
   readonly exitCode: 0 | 1 | 3;
 }
 
-export function judgeSoak(rounds: readonly SoakRound[]): SoakResult {
+/**
+ * `filesOnly`: the watcher held no directory watch, so the file event the bystander waits on is not the watcher's
+ * route, and a missed edit is lost whatever the bystander saw.
+ */
+export function judgeSoak(rounds: readonly SoakRound[], { filesOnly = false } = {}): SoakResult {
   const pickedUp = rounds.filter(round => round.pickedUp).length;
-  const lost = rounds.filter(round => !round.pickedUp && round.bystanderSaw).length;
+  const lost = rounds.filter(round => !round.pickedUp && (filesOnly || round.bystanderSaw)).length;
   const stalled = rounds.length - pickedUp - lost;
   return { rounds: rounds.length, pickedUp, lost, stalled, exitCode: lost > 0 ? 1 : stalled > 0 || rounds.length === 0 ? 3 : 0 };
 }
