@@ -31,18 +31,11 @@ is a benefit of leaving the API process rather than a reason to choose a languag
 The second layer exists because a session's state must not depend on a window being alive to hold it: a
 session nobody is drawing still has a screen, and `Request::Screen` answers it.
 
-**Both the broker and the renderer parse the same bytes, and only one is right.** The renderer parses because
-it owns interaction — selection, reflow, IME — and nothing in the app may read that copy as a fact. The broker
-is the authority and is fed before the bytes leave for the renderer, which is the only direction in which a
-disagreement is merely stale rather than wrong.
-
-That holds whatever each side parses with, and it has to, because **the two sides parse with different
-builds of Ghostty's core**: the broker links `libghostty-vt` 1.0's static library (commit `0fa3d577a561`),
-and the window draws with `ghostty-web`, whose WebAssembly module is built from an earlier Ghostty commit
-(`5714ed07a101`) with that project's own patch. They share lineage and not behaviour — the same bytes can
-leave the cursor in different columns on the two sides, measured in
-[the integration review](../issues/ISSUE-ghostty-integration-review.md) — so the window's copy is a replica
-of a screen the broker owns, and where the two disagree the broker's is the one a program was told about.
+**The broker is the only thing that interprets a program's bytes.** A window draws a terminal and
+interprets nothing: it is sent the rows that changed, as characters with their styles, and paints them
+(`apack-terminal-view`, a third sibling checkout). There is one copy of the screen, so there is nothing for
+two copies to disagree about — the cursor a program is told about is the cursor that is drawn, and a
+question a program asks the terminal is answered once, by the broker, however many windows are showing it.
 
 **A terminal answers what a program asks it, and the broker is what answers.** ConPTY's first act is a
 cursor-position request (`ESC [ 6 n`) and it waits for the reply before initialising — so on Windows a
@@ -50,22 +43,74 @@ session nobody answers never starts. The broker's core computes those replies �
 `libghostty-vt`'s write-to-pty callback — and the reader thread writes them back. A POSIX pty asks nothing,
 which is why this was invisible until the suite first ran on Windows.
 
-**So the window's emulator must not answer, and the pool drops what it sends while it is being written to**
-(`PoolEntry.writing`, `terminal-pool.ts`). It parses the same question and sends its own reply down the
-channel keystrokes take; passed on, a program read the broker's answer and then found a second one waiting
-as if it had been typed, once for every window drawing the session.
-
 **The broker is told what the window looks like, because it answers for it.** A session is started with the
 colours it is drawn in (`Spawn.colors`, from `be/terminal-colors.ts`) and a resize carries the size of one
 cell in pixels, so a program asking the terminal for its background or its size hears the window's. Until a
 window has measured a cell a size in pixels is not answered at all. Grapheme clustering (mode 2027) is on,
-as it is in the window, and the Kitty image protocol is off, since nothing that draws a session draws an
-image.
+and the Kitty image protocol is on for a session a window draws (`Spawn.images`) and off for any other,
+so a program asking whether it may send an image is told yes only where something would draw it.
 
 **A shell's exit is waited for, not inferred from its output ending.** A POSIX pty gives EOF on the master
 when the last slave closes; a ConPTY does not, because the broker still holds the pseudoconsole. The exit is
 the one signal both platforms give, and waiting on it still polls nothing. A session whose shell has gone is
 forgotten as its exit is reported, so a later write is refused by code rather than reaching a dead handle.
+
+## How a window draws a terminal
+
+A window opens **its own connection to the broker** and greets as a `view`. Its preload opens the socket
+(`packages/preload`), main says where the socket is and what to greet it with, and a pack is handed the
+byte stream by `terminalViews()` (`@apackdev/sdk/fe`). The API process is not on this path: a terminal's
+rows and its keys cross no process but the broker and the window.
+
+After the greeting the connection is length-prefixed binary (`src/view/wire.rs` in the broker,
+`src/broker/wire.ts` in the view). Its two halves are in two repositories and meet in a file of vectors
+the broker writes from its encoder; `packages/repo-checks/tests/terminal-view-vectors.spec.ts` holds the
+two copies to being one file at the commits pinned here.
+
+- **A frame is what changed since the frame that view last drew**, and the next is sent only once the
+  last was acknowledged. A window that stops drawing — hidden, busy, gone — is sent nothing and costs
+  nothing; a fast program is drawn at the rate the window paints, not at the rate it prints.
+- **Lines are numbered absolutely.** History is fetched by line when a view scrolls to it, so a window
+  holds the rows it has been shown and nothing else, and a hundred thousand lines of history cost a window
+  nothing until it looks.
+- **Input is encoded by the broker.** A view sends the key, the pointer event or the paste as it happened,
+  and the broker's core turns it into bytes by the modes the program actually set. A paste that could run
+  a command is refused until the person has seen it.
+- **Selection, search and links are asked of the broker** — the word at a cell, the text of a range, where
+  a string appears — because the core's rules for them are the ones every other terminal built on it has.
+- **What a program does that is not on its screen is an event** on the control connection: a title, a
+  bell, a clipboard write, a notification, progress, and each command the shell marks (OSC 133, OSC 633).
+  The pack's shell integration arranges for zsh, bash and fish to mark them.
+
+## What outlasts a shell
+
+- **A recording.** A session opened with `record` writes what its program printed to a file — the bytes,
+  each resize, and every megabyte the screen written out whole. A session opened with `restore` begins
+  with everything that file holds, which is how a terminal comes back with its screen after its shell is
+  replaced or the app restarts; `Rewind` opens the file as a session with no process, which a window draws
+  like any other and seeks through. The pack records exactly where it restores terminals, in the app's
+  data directory, in a file only the user can read, and removes it when the terminal is closed.
+- **The shell itself, where asked.** `Keep` marks a session to outlive the app's hold on the broker. The
+  broker then stays for as long as it has one, and the next start finds it with `Sessions` and takes it up
+  again.
+
+## A terminal somewhere else
+
+`apack-terminal proxy <socket>` is a process's stdin and stdout as a connection to the broker on that
+socket, starting one if there is none. Run under `ssh host` or `docker exec -i`, it is a connection to a
+broker on another machine or in a container.
+
+The app puts **a socket of its own in front of such a command** (`@apackdev/host`'s `broker/relay.ts`):
+each connection to it is one run of the command. So the app's client and a window's own connection reach
+a remote broker exactly as they reach the local one, and a remote terminal needs no second client and no
+second protocol. `services.terminal.at({ command })` is the same service for that broker; a session says
+which broker it is on (`TerminalSession.target`), and a window asks for its stream by that. A window can
+be pointed only at a socket the app made for a target.
+
+The code feature names targets in its settings (`terminalTargets`) and opens a terminal on one from the
+panel's menu. Nothing of this machine's is asked of the far side — no shell, directory, startup file or
+recording — so a terminal on a target has no command marks unless its own shell emits them, and is not
+recorded. The broker's binary has to be installed there; nothing puts it there.
 
 ## The protocol
 
@@ -99,15 +144,9 @@ reader hands its chunks to the coalescer over a queue of eight (`READ_AHEAD`), s
 queue fills, the reader stops reading the pty, the pty's own buffer fills and the process blocks on its
 write. Every byte still arrives, and the broker holds almost none of them.
 
-**The same bound is carried to the windows by the app.** Each `terminal.OUTPUT` says where the stream stands
-after it, a window answers `terminal.OUTPUT_DRAWN` with how far it has drawn, and the code feature pauses the
-session while a window that answers is more than `OUTPUT_HIGH_WATER` behind (`be/services/terminal-flow.ts`).
-Without it the broker's bound ended at the API, which held a slow window's backlog for as long as the
-program ran.
-
-The budget this buys is derived rather than chosen: a message leaves when the window closes or the cap fills,
-so a run of a given length cannot produce more than one per window plus one per cap. Measured in the app over
-the same corpus either side of the change: **64 KiB of output was 115 messages and is 6**.
+**This channel is for a caller that reads a program's bytes** — a flow driving a CLI, a tool. A terminal
+a person looks at is opened without it (`Spawn.output: false`): its screen reaches a window as frames, each
+sent only when the last was drawn, so there is no stream to bound and nothing for the API to hold.
 
 ## Stopping one session, and signalling one program
 

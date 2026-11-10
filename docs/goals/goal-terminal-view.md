@@ -121,21 +121,26 @@ Each ends in something checked. A phase is not started on a red one.
 ## Current handoff
 
 - **Evidence.** [evidence/terminal-view.md](evidence/terminal-view.md).
-- **Done: phases 0 to 5.** A terminal in the app is drawn from rows the broker sends, over a connection the
-  window opens itself; the emulator, the output broadcast and its flow control are gone. Typecheck, the
-  affected specs, `test:smoke` and the real-app terminal spec pass.
+- **Done: phases 0 to 8**, with what was not driven end to end named in the evidence. A terminal in the app
+  is drawn from rows the broker sends, over a connection the window opens itself; the emulator, the output
+  broadcast and its flow control are gone. Commands are marked, text is found, paths open, a tab shows what
+  its program said, a terminal keeps its screen across a restart and can keep its shell, a recording is
+  looked back through, images are drawn, and a terminal can run on a target.
 - **Changed from the design above, with why.**
-  - *No relay process.* A window's preload opens the broker's socket itself, which is the shortest path
-    there is and needs no second process to supervise. A relay returns when a window is sandboxed, or when
-    a measurement says the window's own process should not hold the socket.
+  - *No relay process for the app's own broker.* A window's preload opens the broker's socket itself, which
+    is the shortest path there is and needs no second process to supervise. A relay exists only in front
+    of a target's command (`broker/relay.ts`), in the API process, where each connection is one run of it.
   - *The TypeScript codec lives in `apack-terminal-view`*, where the TypeScript toolchain is, held to
-    vectors the broker writes. Nothing yet checks the two repositories' copies of the vectors are one file.
+    vectors the broker writes; a repo check here holds the two copies to being one file.
   - *Painting is 2D canvas.* The painter is behind an interface; a GPU painter is decided by phase 9's
     measurement against the baseline, not assumed.
-- **Not yet built.** In the broker: command records, a larger history with compression, images, recording,
-  the proxy. In the app: phase 6's features beyond what the view already has (links, paste confirmation,
-  the clipboard event), phases 7 and 8.
-- **Owed before the pull requests.** The chain on this branch; `cargo xtask pre-push` over the broker's
-  branch; the performance scenarios against the baselines, whose `terminal-output` still counts an event
-  that no longer exists; a check that the two copies of the vectors agree; the broker's and the app's docs.
-- **Next.** The chain, as a checkpoint on the cutover.
+  - *A keyframe is the core's VT dump, not its snapshot format.* The core has a snapshot encoder that also
+    carries images; a recording's keyframe is the sequences that redraw the screen, which a replay feeds
+    like any other bytes. A restored terminal therefore comes back without its images.
+  - *Recording follows the existing `restoreTerminals` setting* rather than a setting of its own: a
+    recording is what lets a restored terminal come back with its screen.
+  - *A terminal on a target has no shell integration and no recording.* Both are files on this machine.
+- **Not built.** Opening a file a program printed *at its line*: the explorer opens a file and has no way
+  to be told a line. A terminal on a target in the Linux test container.
+- **Owed before the pull requests (phase 9).** The chain on this branch, on a quiet tree; the mutation
+  gate over the broker's branch; the performance scenarios against the baselines.

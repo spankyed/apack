@@ -69,7 +69,8 @@ The echo is quantized by the display: the emulator paints on the next frame, so 
 `apack-terminal` writes `node/view-vectors.json` from its Rust encoder: every kind of message, as bytes and
 as the value they mean (`tests/view_vectors.rs`, which fails when the file is not what the encoder writes).
 `apack-terminal-view` holds a copy and its suite decodes each vector for a view and encodes each one for the
-broker (`tests/wire.spec.ts`, 21 kinds). The two copies are the same file; nothing here checks that yet.
+broker (`tests/wire.spec.ts`). The two copies are the same file, which
+`packages/repo-checks/tests/terminal-view-vectors.spec.ts` holds them to at the commits pinned here.
 
 ### The broker
 
@@ -119,3 +120,88 @@ Two specs in `tests/e2e/app-integration/` fail, and neither is a gate:
   return address for one. Its terminal half was changed here from the output broadcast to a clipboard
   request and cannot be seen passing until the first half does; the same claim is the last row above.
 - `db-cli.spec.ts`: expects `apack db reset` beside a running app to be refused, and it exits 0.
+
+## Phases 6–8 — features, recording, remote
+
+2026-11-10. Broker `ca45ef1`, view `0628e7f`.
+
+### A chain run that failed, and why it says nothing about the code
+
+`npm run chain` on the cutover failed in `test:integration` with *Compiler resolution namespace changed
+during discovery: …/apack-terminal…/node/view-vectors.json*, twice. The file is in the broker's npm
+package, which a pack build captures, and it was re-recorded in the linked broker checkout while the step
+ran: the run was not on a quiet tree, which is this goal's own rule. The run was stopped before its native
+step finished. Nothing was changed for it; the chain is run again in phase 9 with the sibling checkouts
+left alone.
+
+### The shell marks its commands
+
+`integrationFor` writes a hook for zsh, bash and fish that emits OSC 133 at a prompt, at a command's
+output and at its end, with OSC 633's command line. Run under a pty against the real shells on this
+machine (zsh 5.9, bash 3.2.57), with a user configuration that sets its own prompt hook, both emitted
+`133;A`, `133;B`, `633;E;<line>`, `133;C`, `133;D;<status>` in that order for each command, and the status
+of `echo one; false` was 1 in both — the user's hook did not replace it. bash reports the first simple
+command of a line as the line, which is what `BASH_COMMAND` holds. fish was not installed and was not run.
+
+### In the app
+
+`tests/e2e/app-integration/terminal-view.spec.ts`, against the built app, the broker and a shell, beside
+the four above:
+
+| Case | Result |
+|---|---|
+| A finished command reaches the window (the menu's *Copy Last Command Output* is offered), and text typed is found from the find bar, *1 of N* | passes |
+| A terminal's recording is looked back through: it shows the end, then — dragged to its first moment — a screen without what was typed; the shell that replaces the terminal's starts under what the last one printed | passes |
+| A target named in the code settings' form is opened from the panel's menu, drawn and typed at; the broker it reached is listening where its command said | passes |
+
+The second found a defect in the broker, fixed there (`339da87`): making a restored screen ready for a new
+shell left the alternate screen whether or not it was on it, which also puts the cursor back where a
+program last saved one, so a shell that had never been in an application was started over lines the last
+one printed.
+
+`test:smoke` passes (8). The full typecheck passes. The specs the change affects pass: 325 files in the
+host pool, 194 in the pack's.
+
+### The broker
+
+247 tests. Beside the suites above:
+
+- **A recording replays to what the live screen held** (`tests/recording.rs`): through output, a resize and
+  an application on the alternate screen; from its last keyframe and, for a session picked up, from its
+  first; cut off mid-entry; and kept inside its budget. A keyframe written row by row lost which rows were
+  one wrapped line, found by the round trip and fixed by writing wrapped rows as the line they are.
+- **Against the real binary and a real shell** (`tests/keeping.rs`): a kept session outlives its holder and
+  is found by the next; the broker exits when its last kept session does; a session begins with the screen
+  its recording holds, out of the application the last one was left in; a recording is looked back through
+  and typing at it reaches nothing.
+- **A proxy** (`tests/proxy.rs`): starts a broker where there is none, is the protocol byte for byte, and
+  several arriving together start one — which fails every run without the claim that makes it so.
+- **Images** (`tests/images.rs`): a Kitty image sent through the parser is told by the line it is on, which
+  stays true after thirty lines scroll it into history, and its pixels are read in parts that join into
+  the picture sent.
+
+### The view
+
+194 tests. Images were not seen drawn in the app: the suite proves which picture is drawn where, on a
+canvas that records calls, and nothing here ran a program that sends one.
+
+### A terminal on a target
+
+`packages/apack-host/tests/services/terminal-target.spec.ts` runs the real broker behind its own proxy as
+the far side — everything `ssh host apack-terminal proxy …` is but the transport: a session is opened and
+typed at through the app's socket, a window's greeting on that socket is answered by the far broker, and a
+command that reaches nothing says why (*No route to host*).
+
+**Not done: a terminal in the Linux test container.** The goal's phase 8 ends with one drawn in the app.
+That needs a Linux build of the broker inside the container, which was not made; what is proven is the
+path with the far side on this machine.
+
+### Not driven end to end
+
+- **An app restart.** A terminal's screen surviving one, and a kept session being taken up at the next
+  start, are proven in two halves — the broker's against the real binary (`tests/keeping.rs`), the pack's
+  against a stand-in broker (`terminal-outlasts-its-shell.spec.ts`) — and by a restart of the terminal's
+  shell in the real app, which is the same restore. The app itself was not quit and started again.
+- **fish**, and **bash newer than 3.2**, whose `PROMPT_COMMAND` may be an array.
+- **A notification raised with the system**, which needs the window not to have focus.
+

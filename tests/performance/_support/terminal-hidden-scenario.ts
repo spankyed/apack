@@ -15,9 +15,10 @@ const hiddenFixture = (trials: number) => ({
 /**
  * **What several sessions cost while nobody is looking at them.**
  *
- * The reading Phase G asks for as "memory with several hidden sessions", and the one the broker changes most
- * directly: today every session's pty, its reader and its emulator live in the API and renderer processes, so N
- * sessions are N sets of in-process state. A broker owns the processes instead.
+ * The reading Phase G asks for as "memory with several hidden sessions". A broker owns each session's
+ * process and its screen; the API holds a handle to it, and a window a view of the rows it is showing — so
+ * what N sessions cost the API and the renderer is what this reads, and the broker's own share is not in
+ * either.
  *
  * **It accumulates rather than resetting**, which is the whole difference from `terminal-open`: trial N runs
  * with N terminals alive and only the newest visible, so the recorded RSS is a curve against session count
