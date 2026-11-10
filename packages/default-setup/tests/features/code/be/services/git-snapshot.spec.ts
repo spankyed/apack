@@ -117,6 +117,18 @@ it('says the repository changed when its status or a ref did, and not otherwise'
   expect(await repo.refreshSnapshot(), 'a branch was made').toBe(true);
 });
 
+// A window's own ask can read a change before the check that its file event started has run. The check is
+// what tells every other window, so it compares with what was last checked, not with what was last read.
+it('says the repository changed when a read saw the change before the check did', async () => {
+  const { root, repo } = await repository();
+  await repo.refreshSnapshot();
+
+  write(root, 'kept.txt', 'edited\n');
+  expect((await repo.readSnapshot()).files.map(file => file.path)).toEqual(['kept.txt']);
+  expect(await repo.refreshSnapshot(), 'no check has seen the edit yet').toBe(true);
+  expect(await repo.refreshSnapshot()).toBe(false);
+});
+
 it('reuses a snapshot only while a watcher reports the checkout, and reads again once told it may have changed', async () => {
   const { root, repo } = await repository();
   const paths = async () => (await repo.readSnapshot()).files.map(file => file.path);

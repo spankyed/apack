@@ -124,16 +124,16 @@ export const explorerSystem = setup({
 
       if (!requireRepository(context, ev.path, reply)) return
 
+      // Watched from before it is read, so a change made while it is being read is one to what the editor holds
+      openFiles(self)?.send({ type: 'OPEN', path: ev.path })
       try {
         const content = await context.repository.readFile(ev.path)
         answer(reply, {
           type: 'explorer.FILE_CONTENT',
           data: content,
         })
-
-        // Watch the file for changes made outside the editor
-        openFiles(self)?.send({ type: 'OPEN', path: ev.path })
       } catch (error: any) {
+        openFiles(self)?.send({ type: 'CLOSE', path: ev.path })
         answer(reply, {
           type: 'explorer.CODE_ERROR',
           data: {

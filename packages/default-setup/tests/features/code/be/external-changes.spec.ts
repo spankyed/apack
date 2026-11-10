@@ -41,6 +41,22 @@ describe('a change no file event reported', () => {
     await expect.poll(announcements).toBe(1);
   });
 
+  it('to a file open in an editor is announced under the path it was opened by', async () => {
+    const { directory } = await codeOverPlainDirectory();
+    const file = path.join(directory, 'notes.txt');
+    fs.writeFileSync(file, 'one\n');
+    await app!.send('code', { type: 'explorer.READ_FILE', path: file }, { sender: 'default-setup/code', client: 'c-main' });
+    await app!.nextEmit('code', 'explorer.FILE_CONTENT');
+
+    // Each round is a change of its own, so the round the watcher first looked at the file in does not matter
+    await expect.poll(async () => {
+      fs.appendFileSync(file, 'more\n');
+      await app!.send('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES' });
+      return app!.emitted('code').filter(event => event.type === 'explorer.FILE_CHANGED_EXTERNALLY')
+        .map(event => event.data).at(-1);
+    }).toMatchObject({ path: file, changeType: 'change' });
+  });
+
   it('is looked for when a terminal command finishes, and not at every prompt', async () => {
     const { directory, broker } = await codeOverPlainDirectory();
     await app!.send('code', { type: 'terminal.CREATE_TERMINAL', title: 'one' });

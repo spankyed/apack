@@ -146,6 +146,8 @@ export class GitRepository {
   private snapshotRead?: { version: number; promise: Promise<{ value: RepositorySnapshot; identity: string }> }
   /** What the last read looked like, `unreadable` when it failed */
   private lastIdentity?: string
+  /** What the last `refreshSnapshot` saw, which is what its next one is compared with */
+  private checkedIdentity?: string
   /** Whether a watcher reports this checkout's changes; without one a snapshot is read every time it is asked for */
   private watched = false
 
@@ -344,14 +346,18 @@ export class GitRepository {
    * event is a hint that something changed; this is what decides whether anything did.
    */
   async refreshSnapshot(): Promise<boolean> {
-    const before = this.lastIdentity
+    // Compared with what the last check saw, not with what was last read: one window's ask can read a change
+    // before this runs, and this is what tells the others
+    const before = this.checkedIdentity ?? this.lastIdentity
     this.markSnapshotStale()
+    let now: string
     try {
-      return (await this.currentSnapshot()).identity !== before
+      now = (await this.currentSnapshot()).identity
     } catch {
-      this.lastIdentity = 'unreadable'
-      return before !== 'unreadable'
+      now = this.lastIdentity = 'unreadable'
     }
+    this.checkedIdentity = now
+    return now !== before
   }
 
   private currentSnapshot(): Promise<{ value: RepositorySnapshot; identity: string }> {

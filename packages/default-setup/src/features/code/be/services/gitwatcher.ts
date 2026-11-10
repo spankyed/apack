@@ -62,7 +62,7 @@ const isLock = (relativePath: string) => relativePath.endsWith('.lock')
  * gaining focus, a terminal command finishing, an agent's turn ending.
  */
 export class GitWatcherService {
-  private subscriptions = new Map<WatchKey, { signature: string; subscription: { unsubscribe(): Promise<void> } }>()
+  private subscriptions = new Map<WatchKey, { watch: WantedWatch; signature: string; subscription: { unsubscribe(): Promise<void> } }>()
   /** Every start, stop and check in order, so two never set subscriptions up at once */
   private establishing: Promise<void> = Promise.resolve()
   /** Moves on every start and stop, which is what tells work begun before one that it is no longer wanted */
@@ -151,7 +151,7 @@ export class GitWatcherService {
           await subscription.unsubscribe()
           return
         }
-        this.subscriptions.set(key, { signature: signatureOf(watch), subscription })
+        this.subscriptions.set(key, { watch, signature: signatureOf(watch), subscription })
       } catch (error) {
         // Left unwatched: `check` tries again, and until then the repository is read every time it is asked for
         logger.error(`Could not watch ${watch.directory}`, { error })
@@ -164,6 +164,8 @@ export class GitWatcherService {
 
   private handleEvents(key: WatchKey, watch: WantedWatch, error: Error | null, events: WatchEvent[]) {
     const held = this.subscriptions.get(key)
+    // A watch that has since been replaced may still deliver: what it says is about a watch that is gone
+    if (held && held.watch !== watch) return
     if (error) {
       // A watch that reported an error may have stopped reporting: close it, so `check` opens a new one
       logger.error(`The ${key} watch failed`, { error })

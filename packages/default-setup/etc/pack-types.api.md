@@ -1634,6 +1634,8 @@ declare class GitRepository {
     private snapshotRead?;
     /** What the last read looked like, `unreadable` when it failed */
     private lastIdentity?;
+    /** What the last `refreshSnapshot` saw, which is what its next one is compared with */
+    private checkedIdentity?;
     /** Whether a watcher reports this checkout's changes; without one a snapshot is read every time it is asked for */
     private watched;
     constructor(workingDirectory: string);
