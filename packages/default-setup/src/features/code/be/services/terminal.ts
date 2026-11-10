@@ -371,14 +371,15 @@ class TerminalService {
   }
 
   /**
-   * What the shell says of itself, asked of the broker the same way: where it is, and whether a command is
-   * running, which is what tells the prompt that ends a command from any other. Undefined once it has exited.
+   * What the shell says of itself, asked of the broker the same way: where it is, and `finished`, which moves
+   * each time a command it started has ended — so a command that ended before this was asked is still seen
+   * to have run. Undefined once the shell has exited.
    */
-  async reportedFacts(id: string): Promise<{ cwd: string | undefined; running: boolean } | undefined> {
+  async reportedFacts(id: string): Promise<{ cwd: string | undefined; finished: number } | undefined> {
     const session = this.running(id)
     if (!session) return undefined
-    const { cwd, running } = await session.facts()
-    return { cwd: cwd === null ? undefined : cwdAsReported(cwd), running }
+    const { cwd, finished } = await session.facts()
+    return { cwd: cwd === null ? undefined : cwdAsReported(cwd), finished }
   }
 
   async write(id: string, data: string): Promise<boolean> {

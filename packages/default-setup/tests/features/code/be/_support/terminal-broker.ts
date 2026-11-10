@@ -73,8 +73,8 @@ export interface RecordingBroker {
    * is the shape the real pair has, since the app never parses those bytes itself.
    */
   reportsCwd(id: string, cwd: string | null): void
-  /** Whether the session's shell says a command is running */
-  reportsRunning(id: string, running: boolean): void
+  /** The session's shell reports that a command it started has ended */
+  reportsCommandFinished(id: string): void
   /**
    * Refuses to end a session, as a broker that has gone or lost the socket does.
    *
@@ -113,7 +113,7 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
   const refusals = new Map<number, string>()
   const refusedTerminations = new Map<string, string>()
   const reportedCwds = new Map<string, string | null>()
-  const runningCommands = new Set<string>()
+  const finishedCommands = new Map<string, number>()
   /** Sessions whose next resize is held, and what releases each */
   const deferredResizes = new Map<string, () => void>()
   const heldResizes = new Map<string, Promise<void>>()
@@ -140,8 +140,9 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
     facts: async () => ({
       cwd: reportedCwds.get(id) ?? null,
       command: null,
-      running: runningCommands.has(id),
+      running: false,
       exitStatus: null,
+      finished: finishedCommands.get(id) ?? 0,
     }),
     pause: async () => { flow.push({ id, kind: 'pause' }) },
     resume: async () => { flow.push({ id, kind: 'resume' }) },
@@ -213,7 +214,7 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
     refuseOpen: (nth, why = 'the broker would not start') => { refusals.set(nth, why) },
     refuseTerminate: (id, why = 'the broker would not end the session') => { refusedTerminations.set(id, why) },
     reportsCwd: (id, cwd) => { reportedCwds.set(id, cwd) },
-    reportsRunning: (id, running) => { if (running) runningCommands.add(id); else runningCommands.delete(id) },
+    reportsCommandFinished: (id) => { finishedCommands.set(id, (finishedCommands.get(id) ?? 0) + 1) },
     deferResize: (id) => {
       let release = () => {}
       heldResizes.set(id, new Promise<void>(resolve => { release = () => { resolve() } }))

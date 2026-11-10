@@ -47,6 +47,12 @@ export interface TerminalFacts {
   readonly running: boolean;
   /** The status the last finished command reported; `null` when none has, or it reported none */
   readonly exitStatus: number | null;
+  /**
+   * Moves each time the shell reports a command it started has ended. A command that starts and ends between
+   * two reads leaves `running` false at both, and this is what says one ran. Compare it for a difference
+   * only: it is not an exact number of commands, and it wraps
+   */
+  readonly finished: number;
 }
 
 /**

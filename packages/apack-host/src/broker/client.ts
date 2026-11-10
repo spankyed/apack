@@ -67,6 +67,12 @@ export interface BrokerFacts {
    * without one: a shell that says nothing about how a command ended is not saying it succeeded */
   readonly exitStatus: number | null;
   /**
+   * Moves each time the shell reports a command it started has ended. A command that starts and ends between
+   * two reads leaves `running` false at both, and this is what says one ran. Compared for a difference only:
+   * it is not an exact number of commands, and it wraps
+   */
+  readonly finished: number;
+  /**
    * **What is running in the pty, measured rather than claimed** — the one field here that is not a report
    * of what some program said.
    *
@@ -705,6 +711,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
           command: answer.command,
           running: answer.running,
           exitStatus: answer.exit_status,
+          finished: answer.finished,
           foreground: answer.foreground ?? null,
         };
       },

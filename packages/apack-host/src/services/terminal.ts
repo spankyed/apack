@@ -191,8 +191,8 @@ function expose(held: Broker, session: BrokerSession): TerminalSession {
     // Projected rather than passed, so the broker's `foreground` — a measurement, and a host shape — stays
     // out of the pack-facing contract
     facts: async () => {
-      const { cwd, command, running, exitStatus } = await session.facts();
-      return { cwd, command, running, exitStatus };
+      const { cwd, command, running, exitStatus, finished } = await session.facts();
+      return { cwd, command, running, exitStatus, finished };
     },
     pause: () => session.pause(),
     resume: () => session.resume(),

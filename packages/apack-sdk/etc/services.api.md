@@ -492,6 +492,7 @@ export interface TerminalFacts {
     readonly command: string | null;
     readonly cwd: string | null;
     readonly exitStatus: number | null;
+    readonly finished: number;
     readonly running: boolean;
 }
 

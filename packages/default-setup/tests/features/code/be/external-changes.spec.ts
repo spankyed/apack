@@ -70,11 +70,12 @@ describe('a change no file event reported', () => {
     await app!.settle();
     expect(announcements()).toBe(0);
 
-    broker.reportsRunning(session, true);
-    broker.emit(session, '\x1b]133;C\x07');
-    await app!.settle();
-    broker.reportsRunning(session, false);
-    broker.emit(session, prompt);
-    await expect.poll(announcements).toBe(1);
+    // A command quick enough to start and end before the app asks: it is never seen running, only finished.
+    // Each round is a command of its own, so which prompt the app first read the terminal at does not matter
+    await expect.poll(() => {
+      broker.reportsCommandFinished(session);
+      broker.emit(session, prompt);
+      return announcements();
+    }).toBeGreaterThan(0);
   });
 });

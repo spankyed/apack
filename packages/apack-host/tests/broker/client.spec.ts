@@ -509,7 +509,7 @@ setInterval(() => {}, 1_000);
     const fake = await broker({
       ...OPENS,
       facts: [
-        { kind: 'facts', session: 's-1', cwd: '/home/me/w d', command: 'cargo test', running: true, exit_status: null },
+        { kind: 'facts', session: 's-1', cwd: '/home/me/w d', command: 'cargo test', running: true, exit_status: null, finished: 0 },
       ],
     });
     const session = await fake.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
@@ -519,6 +519,7 @@ setInterval(() => {}, 1_000);
       command: 'cargo test',
       running: true,
       exitStatus: null,
+      finished: 0,
       // A broker that answers no foreground says so as `null`, never as a missing field: a caller reading
       // `facts.foreground?.name` cannot tell those apart, and one reading `'foreground' in facts` would
       // get a different answer on Windows than on a shell this broker could not measure
@@ -539,6 +540,7 @@ setInterval(() => {}, 1_000);
           command: null,
           running: false,
           exit_status: null,
+          finished: 7,
           foreground: { pid: 4321, name: 'vim' },
         },
       ],
@@ -550,6 +552,7 @@ setInterval(() => {}, 1_000);
       command: null,
       running: false,
       exitStatus: null,
+      finished: 7,
       foreground: { pid: 4321, name: 'vim' },
     });
   });
@@ -557,7 +560,7 @@ setInterval(() => {}, 1_000);
   it('reports a reported status as the number it was', async () => {
     const fake = await broker({
       ...OPENS,
-      facts: [{ kind: 'facts', session: 's-1', cwd: null, command: null, running: false, exit_status: 130 }],
+      facts: [{ kind: 'facts', session: 's-1', cwd: null, command: null, running: false, exit_status: 130, finished: 1 }],
     });
     const session = await fake.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
 

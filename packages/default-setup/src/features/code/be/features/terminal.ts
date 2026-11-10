@@ -78,8 +78,12 @@ export function startTerminalSizing(): () => void {
   })
 }
 
-/** Terminals whose shell last said a command was running, to tell the prompt that ends one from any other */
-const commandRunning = new Set<string>()
+/**
+ * What each terminal's shell last reported of the commands it has finished, to tell a prompt that follows a
+ * command from any other. The first reading of a terminal is where it stands, not a command ending: a session
+ * taken up after a restart has finished commands this app never saw.
+ */
+const commandsFinished = new Map<string, number>()
 
 /**
  * Where a terminal's output and exit go — **given to the service before the session exists**, not registered
@@ -96,8 +100,9 @@ const terminalHandlers = {
         .then(facts => {
           if (!facts) return
           // A command that finished may have changed the repository or an open file with no file event for it
-          if (facts.running) commandRunning.add(terminalId)
-          else if (commandRunning.delete(terminalId)) sendToSystem('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES' })
+          const before = commandsFinished.get(terminalId)
+          commandsFinished.set(terminalId, facts.finished)
+          if (before !== undefined && before !== facts.finished) sendToSystem('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES' })
 
           if (facts.cwd === undefined) return
           const moved = terminalService.updateCwd(terminalId, facts.cwd)
@@ -112,7 +117,7 @@ const terminalHandlers = {
   },
 
   onExit(terminalId: string) {
-    commandRunning.delete(terminalId)
+    commandsFinished.delete(terminalId)
     try {
       emitToFrontend({ type: 'terminal.CLOSED', data: { terminalId } })
     } catch (error) {
