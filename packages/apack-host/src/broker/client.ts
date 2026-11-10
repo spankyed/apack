@@ -227,9 +227,43 @@ export interface BrokerSession {
   kill(): Promise<void>;
 }
 
+/** Something a session's program did that is not on its screen, as its holder is told it */
+export type BrokerSessionEvent =
+  | { readonly kind: 'title'; readonly title: string }
+  | { readonly kind: 'bell' }
+  | { readonly kind: 'clipboard'; readonly text: string }
+  | { readonly kind: 'notification'; readonly title: string; readonly body: string }
+  | { readonly kind: 'progress'; readonly state: 'none' | 'running' | 'error' | 'indeterminate' | 'paused'; readonly percent: number | null }
+  | { readonly kind: 'commandStarted'; readonly command: string | null }
+  | { readonly kind: 'commandFinished'; readonly exitStatus: number | null }
+  | { readonly kind: 'cwdChanged'; readonly cwd: string };
+
+/**
+ * A broker event that is news about a session's program, in the shape a holder hears it, or `undefined`
+ * for any other event.
+ */
+function sessionEvent(event: Event): BrokerSessionEvent | undefined {
+  switch (event.kind) {
+    case 'title': return { kind: 'title', title: event.title };
+    case 'bell': return { kind: 'bell' };
+    case 'clipboard': return { kind: 'clipboard', text: event.text };
+    case 'notification': return { kind: 'notification', title: event.title, body: event.body };
+    case 'progress': return { kind: 'progress', state: event.state, percent: event.percent };
+    case 'command_started': return { kind: 'commandStarted', command: event.command };
+    case 'command_finished': return { kind: 'commandFinished', exitStatus: event.exit_status };
+    case 'cwd_changed': return { kind: 'cwdChanged', cwd: event.cwd };
+    default: return undefined;
+  }
+}
+
 export interface BrokerSessionListeners {
-  /** Bytes the process wrote. Unprompted, and nobody asked: a feed, as the app's own rules name it */
-  onOutput(data: string): void;
+  /**
+   * Bytes the process wrote. Unprompted, and nobody asked: a feed, as the app's own rules name it. A
+   * session opened without this is spawned with its bytes unsent, which is what one a window draws wants.
+   */
+  onOutput?(data: string): void;
+  /** What the program did that is not on its screen: the SDK's `TerminalEvent`, which this shape is */
+  onEvent?(event: BrokerSessionEvent): void;
   /**
    * The process ended, however it ended. Delivered once.
    *
@@ -452,7 +486,8 @@ function heldFeed(
   const queued: Array<() => void> = [];
   let ended = false;
   const held: BrokerSessionListeners = {
-    onOutput: (text) => { queued.push(() => holder.onOutput(text)); },
+    onOutput: (text) => { queued.push(() => holder.onOutput?.(text)); },
+    onEvent: (event) => { queued.push(() => holder.onEvent?.(event)); },
     onExit: (code, signal) => { ended = true; queued.push(() => holder.onExit(code, signal)); },
   };
   listeners.set(id, held);
@@ -767,6 +802,8 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
         unset: [...unset ?? []],
         cwd: cwd ?? null,
         colors: colors ?? null,
+        // A holder that reads the bytes is sent them; one that does not has a session that sends none
+        output: sessionListeners.onOutput !== undefined,
       });
       // Registered as the frame is read, so an `exited` in the same read is not lost; delivered once this
       // call's caller is holding the session (`heldFeed`)
@@ -899,7 +936,13 @@ function frames(socket: net.Socket, listeners: Map<string, BrokerSessionListener
     try { event = JSON.parse(line) as Event; } catch { return; }
 
     if (event.kind === 'output') {
-      listeners.get(event.session)?.onOutput(event.text);
+      listeners.get(event.session)?.onOutput?.(event.text);
+      return;
+    }
+    const news = sessionEvent(event);
+    if (news) {
+      // Every one of these names its session, which is what `news` being defined says
+      listeners.get((event as { session: string }).session)?.onEvent?.(news);
       return;
     }
     if (event.kind === 'exited') {

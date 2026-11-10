@@ -15,11 +15,42 @@
  * service's and arrive with it; what this fixes now is who owns the process.
  */
 
-/** What a session's owner hears from it. Both are news: nobody asked, and neither answers a call. */
+/**
+ * Something a session's program did that is not on its screen.
+ *
+ * Each is a moment, reported as it happens: a bell rung is gone, and a command that finished did so at a
+ * time a caller asking `facts()` afterwards can only approximate. Every one is a claim the program made —
+ * what to do about a title, a notification or text it wants on the clipboard is the owner's to decide.
+ */
+export type TerminalEvent =
+  /** The program named its terminal. Empty when it took the name back */
+  | { readonly kind: 'title'; readonly title: string }
+  | { readonly kind: 'bell' }
+  /** The program asked for this text to be put on the clipboard */
+  | { readonly kind: 'clipboard'; readonly text: string }
+  | { readonly kind: 'notification'; readonly title: string; readonly body: string }
+  /** How far along the program says it is. `percent` is `null` where it gave none */
+  | { readonly kind: 'progress'; readonly state: 'none' | 'running' | 'error' | 'indeterminate' | 'paused'; readonly percent: number | null }
+  /** The shell is about to run a command, with the line it read where it said */
+  | { readonly kind: 'commandStarted'; readonly command: string | null }
+  /** What was running ended. `exitStatus` is `null` when the shell reported none, which is not zero */
+  | { readonly kind: 'commandFinished'; readonly exitStatus: number | null }
+  | { readonly kind: 'cwdChanged'; readonly cwd: string };
+
+/** What a session's owner hears from it. All of it is news: nobody asked, and none of it answers a call. */
 export interface TerminalListeners {
-  /** Bytes the process wrote, as they arrive */
-  onOutput(data: string): void;
-  /** The process ended, however it ended — killed or of its own accord. Delivered once */
+  /**
+   * Bytes the process wrote, as they arrive.
+   *
+   * **Given by an owner that reads them, and left out by one that does not.** A caller parsing a
+   * program's output, or forwarding it, wants the bytes. A terminal a person looks at is drawn by a
+   * window from the rows its session sends (`terminalViews`, `@apackdev/sdk/fe`), and its owner has no
+   * use for them: a session opened without this is not sent its bytes at all, and nothing has to keep up
+   * with them. Which it is is fixed when the session is opened.
+   */
+  onOutput?(data: string): void;
+  /** What the program did that is not on its screen, as it happens */
+  onEvent?(event: TerminalEvent): void;
   /**
    * The process ended, however it ended: a code when it exited, the name of a signal when one killed it,
    * and never both.

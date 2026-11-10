@@ -510,6 +510,44 @@ export interface TerminalColors {
 }
 
 // @public
+export type TerminalEvent =
+/** The program named its terminal. Empty when it took the name back */
+    {
+    readonly kind: 'title';
+    readonly title: string;
+} | {
+    readonly kind: 'bell';
+}
+/** The program asked for this text to be put on the clipboard */
+| {
+    readonly kind: 'clipboard';
+    readonly text: string;
+} | {
+    readonly kind: 'notification';
+    readonly title: string;
+    readonly body: string;
+}
+/** How far along the program says it is. `percent` is `null` where it gave none */
+| {
+    readonly kind: 'progress';
+    readonly state: 'none' | 'running' | 'error' | 'indeterminate' | 'paused';
+    readonly percent: number | null;
+}
+/** The shell is about to run a command, with the line it read where it said */
+| {
+    readonly kind: 'commandStarted';
+    readonly command: string | null;
+}
+/** What was running ended. `exitStatus` is `null` when the shell reported none, which is not zero */
+| {
+    readonly kind: 'commandFinished';
+    readonly exitStatus: number | null;
+} | {
+    readonly kind: 'cwdChanged';
+    readonly cwd: string;
+};
+
+// @public
 export interface TerminalFacts {
     readonly command: string | null;
     readonly cwd: string | null;
@@ -520,8 +558,9 @@ export interface TerminalFacts {
 
 // @public
 export interface TerminalListeners {
+    onEvent?(event: TerminalEvent): void;
     onExit(code: number | null, signal: string | null): void;
-    onOutput(data: string): void;
+    onOutput?(data: string): void;
 }
 
 // @public
