@@ -68,7 +68,7 @@ Its static imports are evaluated first, `virtual:host-shared-modules` among them
   beside them — and `fe-bundler-externals.spec.ts` asks the question directly, that every specifier a
   bundle leaves bare is one this map names.
 - **Resolution:** conditions include `@apackdev/source`. The API's router type comes from `@app/api` (a type-only import, a dev dependency).
-- `base: './'` (loaded from `file://` in builds), `modulePreload: false`, and a long `optimizeDeps.include` list (Monaco, xterm, tiptap, vidstack, …) for the dev server.
+- `base: './'` (loaded from `file://` in builds), `modulePreload: false`, and a long `optimizeDeps.include` list (Monaco, the terminal emulator, tiptap, vidstack, …) for the dev server.
 - `tsconfig.app.json` includes `../apack-sdk/src/fe/**/*` (the `Window.electronAPI` declaration, see `packages/preload/CLAUDE.md`) and maps `@/*` → `src/*`.
 
 ## tRPC client (`src/transport/index.ts`)

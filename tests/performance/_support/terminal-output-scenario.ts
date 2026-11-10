@@ -28,7 +28,7 @@ const outputFixture = (trials: number) => ({
  * (`app.surface.send`, `api/src/transport/emitter.ts`). The corpus is a fixed 64 KiB of one character, so
  * the bytes a run should deliver are known and the only variable is how the pipe carries them.
  *
- * **Completion is the shell exiting**, which is the one end-of-output signal a page can see: xterm draws to
+ * **Completion is the shell exiting**, which is the one end-of-output signal a page can see: the emulator draws to
  * a canvas, so the screen's contents are unreadable from the DOM, and the buffer is inside the pack's
  * module-scoped pool. The command ends with `exit`, the backend broadcasts `terminal.CLOSED`, and the
  * surface drops the terminal from its list — by which point every byte has been sent. `subscribe` supplies

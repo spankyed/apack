@@ -232,7 +232,7 @@ describe('which window keeps the layout', () => {
  *
  * A component releases its terminal on unmount and deliberately does not dispose it, so a remount draws the
  * same emulator again. That is right while this bundle is alive and a leak once it is not: the shell
- * replaces this pack's frontend by importing a fresh module with a fresh pool, and the last one's xterm
+ * replaces this pack's frontend by importing a fresh module with a fresh pool, and the last one's emulator
  * instances, DOM and GL contexts stay in the window with nothing left that could reach them.
  *
  * A child actor and not an `exit` action, because **XState 5 runs no `exit` action on `actor.stop()`** — an

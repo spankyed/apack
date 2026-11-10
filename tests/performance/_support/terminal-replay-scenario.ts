@@ -29,7 +29,7 @@ const replayFixture = (trials: number) => ({
  * asked the backend for the history again would show up here instead.
  *
  * Completion is the emulator attached and laid out again, as `terminal-open`'s is — the only thing the page
- * can see, since xterm draws to a canvas. What it cannot see is whether the *content* was restored
+ * can see, since the emulator draws to a canvas. What it cannot see is whether the *content* was restored
  * correctly, which needs a read through the emulator and is Phase P's seam.
  */
 export async function terminalReplayScenario({ app, appPage, electronApp }: Parameters<typeof createWarmScenario>[2]) {
@@ -82,9 +82,8 @@ export async function terminalReplayScenario({ app, appPage, electronApp }: Para
             accept: () => false,
             check: () => {
               if (!shown()) return false;
-              const terminal = document.querySelector('.xterm');
-              const viewport = document.querySelector('.xterm-viewport');
-              if (!terminal || !viewport || viewport.getClientRects().length === 0) return false;
+              const terminal = document.querySelector('[data-apack-terminal]');
+              if (!terminal || terminal.getClientRects().length === 0) return false;
               work.renderCanvases = terminal.querySelectorAll('canvas').length;
               if (work.renderCanvases === 0) return false;
               const ready = action.within(() => recording.begin('app.view.ready', {

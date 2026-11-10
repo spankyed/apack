@@ -5,13 +5,7 @@
 // owns the pty. Mounted in the code surface's scope, that half is a case rather than a reading.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@xterm/xterm', async () => ({ Terminal: (await import('../_support/terminal-emulator.ts')).RecordedTerminal }))
-vi.mock('@xterm/addon-fit', async () => ({ FitAddon: (await import('../_support/terminal-emulator.ts')).StubAddon }))
-vi.mock('@xterm/addon-web-links', async () => ({ WebLinksAddon: (await import('../_support/terminal-emulator.ts')).StubAddon }))
-vi.mock('@xterm/addon-unicode11', async () => ({ Unicode11Addon: (await import('../_support/terminal-emulator.ts')).StubAddon }))
-vi.mock('@xterm/addon-clipboard', async () => ({ ClipboardAddon: (await import('../_support/terminal-emulator.ts')).StubAddon }))
-vi.mock('@xterm/addon-webgl', async () => ({ WebglAddon: (await import('../_support/terminal-emulator.ts')).StubAddon }))
-vi.mock('@xterm/xterm/css/xterm.css', () => ({}))
+vi.mock('ghostty-web', async () => (await import('../_support/terminal-emulator.ts')).emulatorModule())
 
 const { emulators, lastEmulator, installDomStubs } = await import('../_support/terminal-emulator.ts')
 const { startCodeSurface, terminalInfo } = await import('../_support/terminal-host.ts')
@@ -39,7 +33,7 @@ describe('the canvas terminal host', () => {
     surface = startCodeSurface({ terminals: [info] })
     surface.mount(TerminalView, { terminalInfo: info })
     await surface.settle()
-    const entry = terminalPool.ensure(info, () => {})
+    const entry = (await terminalPool.ensure(info, () => {}))!
     expect(surface.root.contains(entry.wrapper), 'the host is not drawing the terminal').toBe(true)
 
     surface.unmount()
@@ -48,7 +42,7 @@ describe('the canvas terminal host', () => {
     // outliving it is the whole of why a reattach replays nothing
     expect(entry.attachedContainer, 'the host unmounted still holding the terminal').toBeNull()
     expect(lastEmulator().disposed, 'the session was disposed with the host drawing it').toBe(0)
-    expect(terminalPool.ensure(info, () => {}), 'the pool lost the session').toBe(entry)
+    expect((await terminalPool.ensure(info, () => {}))!, 'the pool lost the session').toBe(entry)
   })
 
   it('tells the terminal that owns the pty what was typed and what size the emulator settled on', async () => {

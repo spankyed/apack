@@ -12,13 +12,7 @@
 // that element now.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@xterm/xterm', async () => ({ Terminal: (await import('../../_support/terminal-emulator.ts')).RecordedTerminal }))
-vi.mock('@xterm/addon-fit', async () => ({ FitAddon: (await import('../../_support/terminal-emulator.ts')).StubAddon }))
-vi.mock('@xterm/addon-web-links', async () => ({ WebLinksAddon: (await import('../../_support/terminal-emulator.ts')).StubAddon }))
-vi.mock('@xterm/addon-unicode11', async () => ({ Unicode11Addon: (await import('../../_support/terminal-emulator.ts')).StubAddon }))
-vi.mock('@xterm/addon-clipboard', async () => ({ ClipboardAddon: (await import('../../_support/terminal-emulator.ts')).StubAddon }))
-vi.mock('@xterm/addon-webgl', async () => ({ WebglAddon: (await import('../../_support/terminal-emulator.ts')).StubAddon }))
-vi.mock('@xterm/xterm/css/xterm.css', () => ({}))
+vi.mock('ghostty-web', async () => (await import('../../_support/terminal-emulator.ts')).emulatorModule())
 
 const { installDomStubs } = await import('../../_support/terminal-emulator.ts')
 const { startCodeSurface, terminalInfo } = await import('../../_support/terminal-host.ts')
@@ -74,7 +68,7 @@ describe('the panel terminal host', () => {
     surface = startCodeSurface({ terminals: [info], panelTerminalId: info.id, panelTerminalExpanded: true })
     surface.mount(PanelTerminalSection)
     await surface.settle()
-    const entry = terminalPool.ensure(info, () => {})
+    const entry = (await terminalPool.ensure(info, () => {}))!
     expect(entry.attachedContainer, 'the panel is not drawing the terminal').not.toBeNull()
 
     // The backend published a list without it — killed from a tab, from another window, or its shell exited
@@ -94,13 +88,13 @@ describe('the panel terminal host', () => {
     surface = startCodeSurface({ terminals: [info], panelTerminalId: info.id, panelTerminalExpanded: true })
     surface.mount(PanelTerminalSection)
     await surface.settle()
-    expect(terminalPool.ensure(info, () => {}).attachedContainer, 'the first mount is not drawing').not.toBeNull()
+    expect((await terminalPool.ensure(info, () => {}))!.attachedContainer, 'the first mount is not drawing').not.toBeNull()
 
     surface.unmount()
     surface.mount(PanelTerminalSection)
     await surface.settle()
 
-    expect(terminalPool.ensure(info, () => {}).attachedContainer, 'the remounted panel drew nothing')
+    expect((await terminalPool.ensure(info, () => {}))!.attachedContainer, 'the remounted panel drew nothing')
       .not.toBeNull()
   })
 })

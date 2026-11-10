@@ -235,12 +235,7 @@ export default defineConfig(({ command }) => ({
     include: [
       ...SHARED_ENTRIES.filter(module => module.startsWith('prosemirror-')),
       'monaco-editor',
-      '@xterm/xterm',
-      '@xterm/addon-fit',
-      '@xterm/addon-web-links',
-      '@xterm/addon-unicode11',
-      '@xterm/addon-clipboard',
-      '@xterm/addon-webgl',
+      'ghostty-web',
       'xstate',
       '@xstate/vue',
       'lucide-vue-next',

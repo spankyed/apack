@@ -542,12 +542,18 @@ export function findRawGitListings(dirs: readonly string[] = CHECKED_DIRS, root 
  * The one module in the code surface that reaches its terminal emulator.
  *
  * Every host that draws a terminal holds a `TerminalAttachment` from this module and no emulator type, which
- * is what makes replacing xterm an implementation swap behind one file. Two hosts reached it directly before,
+ * is what made replacing the emulator an implementation swap behind one file. Two hosts reached it directly before,
  * each wiring its own listeners, and the two halves of that were F1 and F2 in the terminal review: a detach
  * that tore the wrapper out of whichever host held it, and one host scrolling on every write while the other
  * honoured where the user had scrolled back to.
  */
 const EMULATOR_OWNER = 'packages/default-setup/src/features/code/fe/utils/terminal-pool.ts';
+
+/**
+ * The emulator package itself, named once so the rule and its message cannot disagree about what they are
+ * about — and so that replacing it again is this line rather than a search for a prefix.
+ */
+const EMULATOR_PACKAGE = 'ghostty-web';
 
 /**
  * And the specs that **stand in** for the emulator, so a terminal's bookkeeping and the components that draw
@@ -566,15 +572,16 @@ const EMULATOR_STAND_INS = [
 ] as const;
 
 /**
- * `file:line: @xterm/…` for each import of the emulator outside `EMULATOR_OWNER`, and the owner itself when it
- * has stopped importing one.
+ * `file:line: <the emulator package>` for each import of it outside `EMULATOR_OWNER`, and the owner itself
+ * when it has stopped importing one.
  *
  * **The second half is the check having a subject.** A rule that only ever reports the absence of something
  * passes just as happily when the thing it is about has been renamed out from under it, so the owner is
  * derived from the same constant and asserted to be an importer.
  */
 export function findEmulatorImports(dirs: readonly string[] = PACK_CODE_DIRS, root = repoRoot): string[] {
-  const rule: Rule = (node) => (ts.isStringLiteralLike(node) && node.text.startsWith('@xterm/')
+  const rule: Rule = (node) => (ts.isStringLiteralLike(node)
+    && (node.text === EMULATOR_PACKAGE || node.text.startsWith(`${EMULATOR_PACKAGE}/`))
     ? [node.text] : undefined);
   const allowed = new Set<string>([EMULATOR_OWNER, ...EMULATOR_STAND_INS]);
   const outside = filesUnder(dirs, root)
@@ -1010,9 +1017,9 @@ const RULE_LIST = [
   {
     id: 'findEmulatorImports',
     over: PACK_CODE_DIRS,
-    repoOnly: { kind: 'inapplicable', note: "Its subject is the code surface's own seam to xterm.js, which is this pack's choice of emulator and not a contract any other pack is held to" },
+    repoOnly: { kind: 'inapplicable', note: "Its subject is the code surface's own seam to its terminal emulator, which is this pack's choice and not a contract any other pack is held to" },
     find: findEmulatorImports,
-    rule: "Only the code surface's terminal pool imports @xterm/*: a host that draws a terminal holds a TerminalAttachment, so replacing the emulator is a swap behind one module rather than a second rewrite of ownership",
+    rule: "Only the code surface's terminal pool imports the terminal emulator: a host that draws a terminal holds a TerminalAttachment, so replacing the emulator is a swap behind one module rather than a second rewrite of ownership",
   },
   {
     id: 'findSchemeRegistrations',

@@ -2,7 +2,7 @@
   <TrackedContextMenuRoot>
     <ContextMenuTrigger as-child>
       <div class="relative h-full w-full">
-        <div ref="container" class="h-full w-full bg-[#1e1e1e]"></div>
+        <div ref="container" class="h-full w-full bg-[#1e1e1e] p-2"></div>
         <ScrollToBottomFob :visible="showScrollFob" @click="scrollToBottom()" />
         <ContextMenuPortal>
           <ContextMenuContent :class="MENU_CONTENT_CLASS" :side-offset="5">
@@ -113,13 +113,25 @@ const clearTerminal = () => attachment?.clear()
 
 /* --------------------------------------------------------------------------
  * Lifecycle ---------------------------------------------------------------- */
-onMounted(() => {
+/**
+ * Whether this host is still the one mounted.
+ *
+ * **The emulator's module is loaded on demand, so a mount can be awaiting when the unmount arrives** — a
+ * tab switched away before the terminal finished opening. Attaching then would draw into a container this
+ * component no longer owns and leave an attachment nothing releases, so the attach is dropped instead.
+ */
+let mounted = false
+
+onMounted(async () => {
   if (!container.value) return
+  mounted = true
 
   // The emulator is the pool's: this never constructs or disposes one
-  terminalPool.ensure(props.terminalInfo, data => {
+  const entry = await terminalPool.ensure(props.terminalInfo, data => {
     terminalActor?.send({ type: 'terminal.INPUT', terminalId: props.terminalInfo.id, data })
   })
+  if (!entry || !mounted || !container.value) return
+
   attachment = terminalPool.attach(props.terminalInfo.id, container.value, {
     onResize: ({ cols, rows }) => {
       terminalActor?.send({ type: 'terminal.RESIZE', terminalId: props.terminalInfo.id, cols, rows })
@@ -134,6 +146,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  mounted = false
   // The emulator is not disposed — it survives in the pool until `terminal.CLOSED`. Releasing is also how a
   // host that another has already taken over from detaches nothing (F1): during a remount the new host
   // attaches before this one unmounts.
@@ -154,45 +167,3 @@ function focus() {
 defineExpose({ focus })
 </script>
 
-<style scoped>
-/* Terminal container should not create its own scroll */
-:host,
-:deep(.xterm) {
-  height: 100%;
-  padding: 8px;
-}
-
-/* Terminal-specific scrollbar styling */
-:deep(.xterm-viewport) {
-  background-color: transparent !important;
-  /* Override global scrollbar styles for terminal */
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-}
-
-:deep(.xterm-viewport::-webkit-scrollbar) {
-  width: 14px;
-  height: 14px;
-  background-color: rgba(0, 0, 0, 0.1);
-}
-
-:deep(.xterm-viewport::-webkit-scrollbar-thumb) {
-  background-color: rgba(255, 255, 255, 0.2);
-  border-radius: 0;
-  border: 3px solid transparent;
-  background-clip: padding-box;
-}
-
-:deep(.xterm-viewport::-webkit-scrollbar-thumb:hover) {
-  background-color: rgba(255, 255, 255, 0.3);
-}
-
-:deep(.xterm-viewport::-webkit-scrollbar-track) {
-  background-color: transparent;
-  border: none;
-}
-
-:deep(.xterm-viewport::-webkit-scrollbar-corner) {
-  background-color: transparent;
-}
-</style>

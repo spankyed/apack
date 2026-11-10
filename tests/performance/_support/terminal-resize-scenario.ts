@@ -31,7 +31,7 @@ const resizeFixture = (trials: number) => ({
  * Completion is the surface's own record of the terminal's size reaching the last step — the child's
  * `terminals` entry, read to assert rather than to drive — so the action cannot be counted complete while
  * resizes are still in flight. `awaitsDelivery` is false because a terminal has no view, and `subscribe`
- * supplies the trigger, because a resize mutates no DOM either: xterm draws to a canvas.
+ * supplies the trigger, because a resize mutates no DOM either: the emulator draws to a canvas.
  *
  * **The action has to ask for the list to see its own terminal's size**, since nothing tells the surface a
  * resize happened. That round trip is inside the measured interval, so the duration here covers it — one
@@ -75,7 +75,7 @@ export async function terminalResizeScenario({ app, appPage, electronApp }: Para
           await win.__waitForPerformanceView({
             awaitsDelivery: false,
             accept: () => false,
-            // A resize changes no view and mutates no DOM — xterm draws to a canvas — so the surface that
+            // A resize changes no view and mutates no DOM — the emulator draws to a canvas — so the surface that
             // records the new size is what says readiness may have changed
             subscribe: notify => {
               const subscription = win.applicationState.system.get('default-setup/code').subscribe(notify);

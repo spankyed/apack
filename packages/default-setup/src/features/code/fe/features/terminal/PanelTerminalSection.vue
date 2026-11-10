@@ -65,7 +65,7 @@
           -->
           <ContextMenuTrigger as-child>
             <div class="w-full h-full">
-              <div ref="container" class="w-full h-full bg-[#1e1e1e]"></div>
+              <div ref="container" class="w-full h-full bg-[#1e1e1e] py-1 px-2"></div>
             </div>
           </ContextMenuTrigger>
           <ContextMenuPortal>
@@ -293,7 +293,19 @@ const exitedTitle = (terminal: TerminalInfo) => terminal.exited?.code == null
   ? 'The shell ended without a status (a signal)'
   : `The shell ended with status ${terminal.exited.code}`
 
+/**
+ * Which attach is the current one.
+ *
+ * **The emulator's module is loaded on demand, so an attach can be awaiting when the next one starts** —
+ * the user clicking through the terminal list faster than one opens. Each attach takes a number and drops
+ * itself if another has started since, so the panel draws the terminal asked for last and not whichever
+ * module load happened to finish last. A detach bumps it too, so an attach whose host has gone draws
+ * nothing.
+ */
+let attaching = 0
+
 const attachTerminal = (terminalId: string) => {
+  const generation = ++attaching
   const info = terminals.value.find((t: TerminalInfo) => t.id === terminalId)
   if (!container.value || !info) {
     // **The request dies with the attach it was made for.** `selectTerminal` arms the flag because the
@@ -305,23 +317,32 @@ const attachTerminal = (terminalId: string) => {
     return
   }
 
-  terminalPool.ensure(info, data => {
+  void terminalPool.ensure(info, data => {
     terminalActor?.send({ type: 'terminal.INPUT', terminalId, data })
-  })
-  attachment = terminalPool.attach(terminalId, container.value, {
-    onResize: ({ cols, rows }) => {
-      terminalActor?.send({ type: 'terminal.RESIZE', terminalId, cols, rows })
-    },
-    onSelectionChange: has => { hasSelection.value = has },
-  })
+  }).then(entry => {
+    // Superseded, closed while it was opening, or the panel has gone: the request to focus dies with the
+    // attach it was made for, exactly as it does for the cases above.
+    if (!entry || generation !== attaching || !container.value) {
+      if (generation === attaching) focusOnAttach = false
+      return
+    }
 
-  // **Focused only when the user asked for this terminal** (F15). An attach happens on mount too — a panel
-  // re-open, an actor replacement, a reconnect — none of which is a request, and taking focus from what they
-  // were typing in is the defect. `selectTerminal` is the request, and sets the flag this reads.
-  if (focusOnAttach) {
-    focusOnAttach = false
-    attachment?.focus()
-  }
+    attachment = terminalPool.attach(terminalId, container.value, {
+      onResize: ({ cols, rows }) => {
+        terminalActor?.send({ type: 'terminal.RESIZE', terminalId, cols, rows })
+      },
+      onSelectionChange: has => { hasSelection.value = has },
+    })
+
+    // **Focused only when the user asked for this terminal** (F15). An attach happens on mount too — a
+    // panel re-open, an actor replacement, a reconnect — none of which is a request, and taking focus from
+    // what they were typing in is the defect. `selectTerminal` is the request, and sets the flag this
+    // reads.
+    if (focusOnAttach) {
+      focusOnAttach = false
+      attachment?.focus()
+    }
+  })
 }
 
 /**
@@ -334,6 +355,8 @@ const attachTerminal = (terminalId: string) => {
  * spend it, and the user's keystrokes went on reaching the list button they had clicked.
  */
 const detachTerminal = ({ handingOver = false } = {}) => {
+  // An attach still awaiting its module load is no longer current, so it will draw nothing
+  attaching += 1
   // Releasing is also how a host another has taken over from detaches nothing (F1)
   const letGo = attachment?.release() ?? false
   // **The backend holds the grid to the smallest fit of the windows showing it**, so a window that has
@@ -586,41 +609,3 @@ onBeforeUnmount(() => {
 })
 </script>
 
-<style scoped>
-:deep(.xterm) {
-  height: 100%;
-  padding: 4px 8px;
-}
-
-:deep(.xterm-viewport) {
-  background-color: transparent !important;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-}
-
-:deep(.xterm-viewport::-webkit-scrollbar) {
-  width: 14px;
-  height: 14px;
-  background-color: rgba(0, 0, 0, 0.1);
-}
-
-:deep(.xterm-viewport::-webkit-scrollbar-thumb) {
-  background-color: rgba(255, 255, 255, 0.2);
-  border-radius: 0;
-  border: 3px solid transparent;
-  background-clip: padding-box;
-}
-
-:deep(.xterm-viewport::-webkit-scrollbar-thumb:hover) {
-  background-color: rgba(255, 255, 255, 0.3);
-}
-
-:deep(.xterm-viewport::-webkit-scrollbar-track) {
-  background-color: transparent;
-  border: none;
-}
-
-:deep(.xterm-viewport::-webkit-scrollbar-corner) {
-  background-color: transparent;
-}
-</style>

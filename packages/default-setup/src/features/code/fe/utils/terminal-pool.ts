@@ -1,19 +1,16 @@
-import { Terminal, type IDisposable } from '@xterm/xterm'
-import { FitAddon } from '@xterm/addon-fit'
-import { WebLinksAddon } from '@xterm/addon-web-links'
-import { Unicode11Addon } from '@xterm/addon-unicode11'
-import { ClipboardAddon } from '@xterm/addon-clipboard'
-import { WebglAddon } from '@xterm/addon-webgl'
+import {
+  FitAddon, init, OSC8LinkProvider, Terminal, UrlRegexProvider,
+  type IDisposable, type ILink, type ILinkProvider
+} from 'ghostty-web'
 import { terminalEventBus } from './terminal-events.ts'
 import { openLink } from '@apackdev/sdk/fe'
 import type { TerminalInfo } from '../features/terminal/state.ts'
-import '@xterm/xterm/css/xterm.css'
 
 /**
- * **The feature's seam to its emulator.** Every xterm.js instance the code surface has is here, and this is
- * the only module that imports `@xterm/*` at all — the hosts that draw a terminal hold a `TerminalAttachment`
- * and no emulator type, so replacing xterm is an implementation swap behind this file rather than a second
- * rewrite of who owns what. That is what the goal's D10 keeps open and what its Phase P is for.
+ * **The feature's seam to its emulator.** Every emulator instance the code surface has is here, and this is
+ * the only module that imports `ghostty-web` at all — the hosts that draw a terminal hold a
+ * `TerminalAttachment` and no emulator type, so replacing the emulator is an implementation swap behind this
+ * file rather than a second rewrite of who owns what. That seam is what made it one.
  *
  * Each entry owns a detached wrapper div with a terminal mounted into it, and a host re-parents that wrapper
  * into its own container. The emulator survives a host's teardown, so there is no replay-on-remount cycle
@@ -34,6 +31,20 @@ import '@xterm/xterm/css/xterm.css'
  * mouse feels immediate, long enough that a drag is one resize rather than the two dozen it observes.
  */
 export const RESIZE_SETTLE_MS = 100
+
+/**
+ * The emulator's WebAssembly module, loaded once for this renderer realm.
+ *
+ * **One load, however many sessions**, which is what the library's own `init` is: it creates the shared
+ * instance every `Terminal` is built on. The promise is the deduplication — a second caller awaits the
+ * first load rather than starting another — and it is deliberately *not* awaited at module scope, which
+ * would block this pack's whole frontend, all eleven features of it, on the terminal's module.
+ *
+ * A failure is left to reject rather than swallowed: `ensure` is what a host awaits, so the host sees the
+ * failure and can say so, where a pool that resolved anyway would hand back a terminal that draws nothing.
+ */
+let loading: Promise<void> | undefined
+const emulatorReady = (): Promise<void> => (loading ??= init())
 
 const THEME = {
   background: '#1e1e1e',
@@ -61,9 +72,9 @@ const THEME = {
 /**
  * One session's emulator and the bookkeeping that outlives a host.
  *
- * **Not exported**, which is what makes this module's public surface emulator-agnostic: it names `Terminal`,
- * `FitAddon` and `WebglAddon`, and a host that could hold one would be coupled to xterm through a type even
- * while calling nothing on it. What a host gets is a `TerminalAttachment`.
+ * **Not exported**, which is what makes this module's public surface emulator-agnostic: it names `Terminal`
+ * and `FitAddon`, and a host that could hold one would be coupled to the emulator through a type even while
+ * calling nothing on it. What a host gets is a `TerminalAttachment`.
  */
 interface PoolEntry {
   terminalId: string
@@ -89,18 +100,18 @@ interface PoolEntry {
   disposables: IDisposable[]
   attachedContainer: HTMLElement | null
   isShowingLoadingContent: boolean
-  // Scroll state lives here (not in TerminalView.vue) so it survives the
-  // unmount/remount that happens on every tab switch. `wrapper.remove()` in
-  // detach() also resets the scrolling element's scrollTop in Chromium, so on
-  // every attach we re-drive the DOM scroll position ourselves rather than
-  // relying on the emulator's own scroll-to-bottom, which xterm makes a no-op
-  // when ydisp === ybase.
+  // Scroll state lives here, not in a host's component, so it survives the unmount and remount that every
+  // tab switch is — one session has one scroll position because it has one buffer, whichever host draws it.
   pinnedToBottom: boolean
-  savedScrollFraction: number | null
-  webglLoaded: boolean
-  webglAddon: WebglAddon | null
-  /** The emulator's scrolling element once found, re-derived if the emulator rebuilds its DOM */
-  scroller: HTMLElement | null
+  /**
+   * Where the user had scrolled back to, as a line in the buffer, kept across the detached spell between
+   * two hosts.
+   *
+   * **A line and not a fraction of a pixel height.** The emulator scrolls itself and draws its own
+   * scrollbar, so there is no scrolling DOM element whose `scrollTop` could be saved — and a line is the
+   * exact thing anyway, where a fraction of a `scrollHeight` that grows under live output is not.
+   */
+  savedViewportY: number | null
 }
 
 /**
@@ -186,19 +197,23 @@ export interface TerminalAttachmentHandlers {
 }
 
 /**
- * The first element at or under `root` that scrolls vertically, depth-first so the search stops at it.
+ * A link provider's links, with their activation replaced by the app's.
  *
- * Exported for its own cases: it is the whole of `getViewport`'s rule, it takes and returns nothing but DOM,
- * and the pool's own specs stand in for the emulator with an element that scrolls nothing.
+ * **Detecting a link and deciding what opening one means are different jobs.** The emulator's providers do
+ * the first, and the `activate` they build does the second by going at the window — which is not theirs to
+ * decide, because the text they matched is whatever a program printed into a terminal. `openLink` is the
+ * app's one door for that, with the URL policy behind it.
+ *
+ * Exported for its own cases: it is pure, and a case can hand it a provider that offers one link and assert
+ * that activating it reached `openLink` with the text rather than anywhere else.
  */
-export function findScroller(root: HTMLElement): HTMLElement | null {
-  const overflow = getComputedStyle(root).overflowY
-  if (overflow === 'scroll' || overflow === 'auto') return root
-  for (const child of root.children) {
-    const found = findScroller(child as HTMLElement)
-    if (found) return found
+export function openedByTheApp(provider: ILinkProvider): ILinkProvider {
+  return {
+    provideLinks: (y, callback) => provider.provideLinks(y, (links) => callback(
+      links?.map((link): ILink => ({ ...link, activate: () => { openLink(link.text) } }))
+    )),
+    dispose: () => provider.dispose?.()
   }
-  return null
 }
 
 class TerminalPool {
@@ -305,7 +320,7 @@ class TerminalPool {
    * (F3, F6, F11), so there is no historical write whose replies would have to be held back, and a
    * parse boundary to wire it after would be a boundary in nothing.
    */
-  ensure(info: TerminalInfo, sendInput: (data: string) => void): PoolEntry {
+  async ensure(info: TerminalInfo, sendInput: (data: string) => void): Promise<PoolEntry | null> {
     const existing = this.entries.get(info.id)
     if (existing) {
       // **A mounting component's descriptor does not decide which shell is answering.** This runs on every
@@ -317,6 +332,32 @@ class TerminalPool {
       // saying nothing.
       return existing
     }
+    // **A second mount while the first is still building awaits that build**, rather than constructing a
+    // second emulator for one session. Two hosts mounting together is the normal remount, and the
+    // emulator's module load is what makes the window between them wide enough to matter.
+    const building = this.building.get(info.id)
+    if (building) return building
+
+    const build = this.build(info, sendInput)
+    this.building.set(info.id, build)
+    try { return await build } finally { this.building.delete(info.id) }
+  }
+
+  /** Builds per session while `ensure` is awaiting, so one id is only ever built once */
+  private building = new Map<string, Promise<PoolEntry | null>>()
+
+  /**
+   * Sessions closed while they were being built.
+   *
+   * **A terminal can be closed before its emulator exists.** The module load is awaited, so a `CLOSED` for
+   * this session can arrive in between — and registering what was built after that would resurrect a
+   * session the backend has finished with, attached to no host and subscribed to a bus nobody writes to.
+   * `dispose` records the id and `build` throws away what it made.
+   */
+  private discarded = new Set<string>()
+
+  private async build(info: TerminalInfo, sendInput: (data: string) => void): Promise<PoolEntry | null> {
+    await emulatorReady()
     this.listenForPaste()
 
     const term = new Terminal({
@@ -325,7 +366,6 @@ class TerminalPool {
       convertEol: true,
       cursorBlink: true,
       cursorStyle: 'bar',
-      allowProposedApi: true,
       // **The host's number, not one pinned here.** The emulator must not hold more than the session does:
       // a window drawing 10,000 lines against a broker keeping 1,000 showed nine tenths that no reattach
       // could reproduce. `info.scrollback` comes from the broker's handshake.
@@ -337,17 +377,25 @@ class TerminalPool {
 
     const fitAddon = new FitAddon()
     term.loadAddon(fitAddon)
-    term.loadAddon(new WebLinksAddon((_event, url) => {
-      openLink(url)
-    }))
-    const unicode11 = new Unicode11Addon()
-    term.loadAddon(unicode11)
-    term.unicode.activeVersion = '11'
-    term.loadAddon(new ClipboardAddon())
+
+    // **Links are detected by the emulator and opened by the app.** Both providers are the library's —
+    // `OSC8LinkProvider` reads the hyperlink a program declared as a sequence, `UrlRegexProvider` finds the
+    // rest in the drawn text — and each link they hand back carries an `activate` of its own. That is the
+    // one thing not theirs to decide: a URL from a terminal is whatever a program printed, so it goes
+    // through `openLink` and the app's URL policy rather than straight at the window.
+    //
+    // Nothing is left for a grapheme or width addon to do: clustering is what the core does.
+    for (const provider of [new OSC8LinkProvider(term), new UrlRegexProvider(term)]) {
+      term.registerLinkProvider(openedByTheApp(provider))
+    }
 
     const wrapper = document.createElement('div')
     wrapper.style.height = '100%'
     wrapper.style.width = '100%'
+    // **The app's own name for a drawn terminal**, so anything that needs to find one — the performance
+    // scenarios do — asks for this rather than for whatever the emulator calls its elements. Reading the
+    // emulator's DOM is what the old viewport lookup did, and replacing the emulator is what broke it.
+    wrapper.dataset.apackTerminal = info.id
 
     term.open(wrapper)
     // WebGL addon is loaded later in attach() — see comment there.
@@ -364,10 +412,7 @@ class TerminalPool {
       attachedContainer: null,
       isShowingLoadingContent: false,
       pinnedToBottom: true,
-      savedScrollFraction: null,
-      webglLoaded: false,
-      webglAddon: null,
-      scroller: null
+      savedViewportY: null
     }
 
     // Shift+Enter inserts a newline instead of executing. Wired once here
@@ -392,9 +437,9 @@ class TerminalPool {
 
       // Ctrl+Shift+V → paste from clipboard (Windows/Linux terminal convention)
       if (event.type === 'keydown' && event.ctrlKey && event.shiftKey && event.key === 'V') {
-        // **`term.paste` rather than a raw write** (F12): xterm wraps it in the bracketed-paste markers
-        // when the application has asked for them, which is how a shell or an editor tells a paste from
-        // typing — without it, a pasted newline runs a command.
+        // **`term.paste` rather than a raw write** (F12): the emulator wraps it in the bracketed-paste
+        // markers when the application has asked for them, which is how a shell or an editor tells a paste
+        // from typing — without it, a pasted newline runs a command.
         void navigator.clipboard.readText().then((text) => {
           if (text) term.paste(text)
         }).catch(() => {})
@@ -423,6 +468,15 @@ class TerminalPool {
     showLoadingContent(term, info)
     entry.isShowingLoadingContent = true
     entry.disposables.push(term.onData(sendInput))
+
+    // **Closed while this was being built**, so nothing is registered and what was made is thrown away.
+    // Registering it would put an emulator for a finished session in the pool, holding its WebAssembly
+    // state and subscribed to a bus nothing writes to, until the whole frontend went.
+    if (this.discarded.delete(info.id)) {
+      unsubscribe()
+      try { term.dispose() } catch { /* nothing drew it */ }
+      return null
+    }
 
     this.entries.set(info.id, entry)
     return entry
@@ -471,10 +525,17 @@ class TerminalPool {
     }
     own.push(() => { if (settling) clearTimeout(settling) })
 
-    const report = () => {
-      const viewport = this.getViewport(entry)
-      if (!viewport) return
-      const following = viewport.scrollTop + viewport.clientHeight >= viewport.scrollHeight - 10
+    /**
+     * Whether the session is following its output, **asked of the emulator rather than measured.**
+     *
+     * `viewportY` is the distance scrolled back from the bottom, so following is `0` exactly — where the
+     * same question over a scrolling DOM element was `scrollTop + clientHeight >= scrollHeight - 10`, a
+     * comparison with a ten-pixel tolerance because the three numbers it read were pixels of a height that
+     * grows under live output. There is no element to read now: the emulator scrolls itself and draws its
+     * own scrollbar.
+     */
+    const report = (viewportY: number) => {
+      const following = viewportY === 0
       entry.pinnedToBottom = following
       handlers.onFollowingChange?.(following)
     }
@@ -488,14 +549,11 @@ class TerminalPool {
       this.syncViewport(terminalId)
     })
 
-    const viewport = this.getViewport(entry)
-    if (viewport) {
-      viewport.addEventListener('scroll', report, { passive: true })
-      own.push(() => viewport.removeEventListener('scroll', report))
-    }
+    const scrolled = term.onScroll(report)
+    own.push(() => scrolled.dispose())
 
     const selection = term.onSelectionChange(() => handlers.onSelectionChange?.(term.getSelection() !== ''))
-    const written = term.onWriteParsed(() => {
+    const written = term.onRender(() => {
       // **One policy per session, whichever host is drawing it** (F2): during a live write the emulator's own
       // follow works, so this is the cheap in-tree scroll rather than a round trip through the viewport
       if (entry.pinnedToBottom) term.scrollToBottom()
@@ -552,26 +610,11 @@ class TerminalPool {
     }
     host.appendChild(entry.wrapper)
     entry.attachedContainer = host
-    // Load WebGL on first in-DOM attach so the GL canvas is sized from live
-    // DOM metrics rather than a detached wrapper with zero dimensions.
-    if (!entry.webglLoaded) {
-      const addon = new WebglAddon()
-      // **A lost GL context draws nothing until something gives it up** (F10). The browser takes the context
-      // back under memory pressure, on a GPU reset, or when too many are live — and xterm's addon reports it
-      // rather than recovering, so the terminal goes blank and stays blank. Disposing the addon drops xterm
-      // to its DOM renderer, which is slower and still draws.
-      addon.onContextLoss(() => {
-        try { addon.dispose() } catch { /* already disposed with the context */ }
-        if (entry.webglAddon === addon) entry.webglAddon = null
-      })
-      try { entry.term.loadAddon(addon); entry.webglAddon = addon } catch { /* falls back to canvas renderer */ }
-      entry.webglLoaded = true
-    }
     return entry
   }
 
   /**
-   * Detach the wrapper from its host without disposing the xterm.
+   * Detach the wrapper from its host without disposing the emulator.
    *
    * **`host` is checked, not trusted** (F1). Two hosts can be mounted for one terminal during a remount —
    * the new one attaches before the old one unmounts — and a detach that did not say whose it was tore the
@@ -583,13 +626,10 @@ class TerminalPool {
     if (!entry) return false
     // A host another has already taken over from detaches nothing (F1), and says so
     if (host && entry.attachedContainer !== host) return false
-    // Capture scrollTop before wrapper.remove() — Chromium zeroes it on
-    // document-remove. Used by syncViewport() on the next attach when the
-    // user isn't pinned to bottom.
-    const viewport = this.getViewport(entry)
-    if (viewport && viewport.scrollHeight > 0) {
-      entry.savedScrollFraction = viewport.scrollTop / viewport.scrollHeight
-    }
+    // Where the user had scrolled back to, for `syncViewport` on the next attach. Read off the emulator, so
+    // taking the wrapper out of the document cannot disturb it — which is what reading a DOM `scrollTop`
+    // here had to be careful of, Chromium zeroing it on remove.
+    entry.savedViewportY = entry.term.viewportY
     entry.wrapper.remove()
     entry.attachedContainer = null
     return true
@@ -609,17 +649,19 @@ class TerminalPool {
   }
 
   /**
-   * Force the native scrollbar to match the desired viewport position after
-   * attach/fit. Uses term.write('', cb) as the wait primitive so the callback
-   * fires only after every queued write has been fully parsed — a burst of live output can still be
-   * parsing when a host attaches, and positioning the viewport against a buffer that is still growing
-   * lands it somewhere the next parsed chunk moves. Reading scrollHeight synchronously forces layout, so
-   * the viewport spacer is up to date when we write scrollTop.
+   * Puts the view back where this session was, after an attach or a fit.
    *
-   * We write scrollTop directly (rather than calling term.scrollToBottom())
-   * because xterm's scrollToBottom is a no-op when ydisp === ybase — always
-   * true on tab-switch remount, when wrapper.remove() has just zeroed the
-   * DOM scrollTop but the xterm buffer pointers are unchanged.
+   * **`term.write('', cb)` is the wait primitive**, and that is the one thing here that has not changed: the
+   * callback fires only once every queued write has been parsed, and a burst of live output can still be
+   * parsing when a host attaches — positioning against a buffer that is still growing lands the view
+   * somewhere the next parsed chunk moves it from.
+   *
+   * What it does once it fires is now two calls on the emulator. Following the output is `scrollToBottom`;
+   * a user who had scrolled back is put back the lines they were back by, because `viewportY` counts up
+   * from the bottom and `scrollLines` takes lines down. Neither reads or writes the DOM, so there is no
+   * layout to force and no frame to wait for — and the three things this had to work around are all gone
+   * with the element they were about: a `scrollTop` Chromium zeroes on remove, a `scrollHeight` that had to
+   * be read to force layout, and a `scrollToBottom` that did nothing when the buffer pointers were equal.
    */
   syncViewport(terminalId: string): void {
     const entry = this.entries.get(terminalId)
@@ -627,38 +669,10 @@ class TerminalPool {
     entry.term.write('', () => {
       const current = this.entries.get(terminalId)
       if (!current || !current.attachedContainer) return
-      // Defer to next frame so the browser has laid out the re-attached wrapper
-      // and scrollHeight reflects the current content.
-      requestAnimationFrame(() => {
-        const viewport = this.getViewport(current)
-        if (!viewport) return
-        if (current.pinnedToBottom) {
-          viewport.scrollTop = viewport.scrollHeight
-        } else if (current.savedScrollFraction != null) {
-          viewport.scrollTop = current.savedScrollFraction * viewport.scrollHeight
-        }
-      })
+      current.term.scrollToBottom()
+      const back = current.savedViewportY
+      if (!current.pinnedToBottom && back != null && back > 0) current.term.scrollLines(-back)
     })
-  }
-
-  /**
-   * The element the emulator scrolls, found by what it **is** rather than by what it is called.
-   *
-   * A scroller is an element whose computed `overflow-y` scrolls, which is true of whichever emulator draws
-   * here; a class name is true of one of them. That matters because this file is the seam the emulator is
-   * replaceable behind (the goal's D10), and the replacement's own capability matrix asks for exactly this —
-   * *observe scroll position and restore pinned/unpinned state without depending on xterm DOM classes*.
-   *
-   * Cached per entry, because this is read on every scroll event and `getComputedStyle` resolves style. The
-   * cache is checked against the emulator's own root rather than `isConnected`, so it survives the detached
-   * spell between two hosts — a re-parent is the pool's normal lifecycle, not a rebuild.
-   */
-  private getViewport(entry: PoolEntry): HTMLElement | null {
-    const root = entry.term.element
-    if (!root) return null
-    if (entry.scroller && root.contains(entry.scroller)) return entry.scroller
-    entry.scroller = findScroller(root)
-    return entry.scroller
   }
 
   /** Find a pool entry whose wrapper contains the given DOM element. */
@@ -669,8 +683,12 @@ class TerminalPool {
     return undefined
   }
 
-  /** Dispose xterm + all wire-level disposables. Call on terminal.CLOSED. */
+  /** Dispose the emulator and all wire-level disposables. Call on terminal.CLOSED. */
   dispose(terminalId: string): void {
+    // **A session can be closed while its emulator is still being built**, the module load being awaited in
+    // between, and there is no entry to dispose yet. Recording it is what stops `build` registering what it
+    // made: an emulator for a session the backend has finished with, attached to nothing.
+    if (this.building.has(terminalId)) this.discarded.add(terminalId)
     const entry = this.entries.get(terminalId)
     if (!entry) return
 
@@ -679,15 +697,6 @@ class TerminalPool {
     }
     entry.disposables.length = 0
 
-    // Dispose WebGL addon explicitly before the terminal — its internal
-    // disposables can reference a lost GL context, which crashes inside
-    // xterm's generic AddonManager.dispose() iteration.
-    if (entry.webglAddon) {
-      try { entry.webglAddon.dispose() } catch { /* GL context may already be lost */ }
-      entry.webglAddon = null
-    }
-
-    // Detach from DOM before disposing so the GL canvas tears down cleanly.
     entry.wrapper.remove()
     entry.attachedContainer = null
 
@@ -702,8 +711,8 @@ class TerminalPool {
    * **For the end of the frontend that holds the pool, which is the only lifetime a module singleton has.**
    * A component releases its terminal on unmount and deliberately does not dispose it, so a remount draws
    * the same emulator again — right while this bundle is alive, and a leak once it is not: a reload imports
-   * a fresh module with a fresh pool, and the last one's xterm instances, DOM and GL contexts are kept alive
-   * by the window with nothing left that could reach them.
+   * a fresh module with a fresh pool, and the last one's emulators, their canvases and their WebAssembly
+   * state are kept alive by the window with nothing left that could reach them.
    *
    * The code surface's machine calls this as it stops, which is when the shell replaces this pack's
    * frontend. **It ends no shell**: a session lives in the broker and survives the window that drew it, so

@@ -5,9 +5,9 @@
 // panel scrolled to the bottom on every write while the canvas honoured pinning, so the same terminal jumped
 // under the user in one host and not in the other.
 //
-// xterm needs a canvas and a GL context jsdom does not have, so the emulator is a stand-in. What is under test
-// is the pool's bookkeeping over it: which host holds the wrapper, how many times input is wired, and where the
-// pin state lives. Nothing here asserts anything about how xterm draws.
+// The emulator refuses to open without a 2D canvas context, which jsdom does not implement, so it is a
+// stand-in here. What is under test is the pool's bookkeeping over it: which host holds the wrapper, how many
+// times input is wired, and where the pin state lives. Nothing here asserts anything about how it draws.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const onDataHandlers: Array<(data: string) => void> = []
@@ -22,14 +22,47 @@ let focused = 0
 /** What the pool built each emulator with, so a case can assert a bound it derives rather than pins */
 const builtWith: Array<Record<string, unknown>> = []
 
-vi.mock('@xterm/xterm', () => ({
+/** The fit addon the pool loads. Inert: what it does needs a renderer, and none of it is under test */
+class StubAddon {
+  activate() {}
+  dispose() {}
+  fit() {}
+  proposeDimensions() { return { cols: 80, rows: 24 } }
+  observeResize() {}
+}
+
+/** A link provider of the library's, offering whatever a case put in `StubProvider.links` */
+class StubProvider {
+  static links: Array<{ text: string; activate: () => void }> = []
+  provideLinks(_y: number, callback: (links: unknown[] | undefined) => void) {
+    callback(StubProvider.links.length ? StubProvider.links : undefined)
+  }
+  dispose() {}
+}
+
+/** Each emulator's scroll position, and the handlers it would raise its own `scroll` to */
+const onScrollHandlers: Array<(viewportY: number) => void> = []
+/** The link providers the pool registered, each already wrapped by the pool */
+const linkProviders: Array<{ provideLinks(y: number, cb: (links: unknown[] | undefined) => void): void }> = []
+/** What the emulator's module load is, held open by a case that wants to act during it */
+let loadGate: { promise: Promise<void>; release: () => void } | undefined
+
+vi.mock('ghostty-web', () => ({
+  init: () => loadGate?.promise ?? Promise.resolve(),
+  FitAddon: StubAddon,
+  // Both of the library's providers are the same shape to the pool, which wraps each one
+  OSC8LinkProvider: StubProvider,
+  UrlRegexProvider: StubProvider,
   Terminal: class {
     element = document.createElement('div')
     cols = 80
     rows = 24
+    viewportY = 0
     constructor(options: Record<string, unknown> = {}) { builtWith.push(options) }
-    unicode = { activeVersion: '6' }
     loadAddon() {}
+    registerLinkProvider(provider: { provideLinks(y: number, cb: (links: unknown[] | undefined) => void): void }) {
+      linkProviders.push(provider)
+    }
     open(host: HTMLElement) { host.appendChild(this.element) }
     write(data: string, done?: () => void) { written.push(data); done?.() }
     paste(data: string) { pasted.push(data) }
@@ -38,16 +71,22 @@ vi.mock('@xterm/xterm', () => ({
       onResizeHandlers.push(handler)
       return { dispose() {} }
     }
-    onWriteParsed() { return { dispose() {} } }
+    onRender() { return { dispose() {} } }
     onSelectionChange() { return { dispose() {} } }
+    onScroll(handler: (viewportY: number) => void) {
+      onScrollHandlers.push(handler)
+      return { dispose() { onScrollHandlers.splice(onScrollHandlers.indexOf(handler), 1) } }
+    }
     attachCustomKeyEventHandler(handler: (event: KeyboardEvent) => boolean) { keyHandlers.push(handler) }
     getSelection() { return '' }
     selectAll() {}
     clear() {}
     focus() { focused += 1 }
-    scrollToBottom() {}
+    scrollToBottom() { this.viewportY = 0 }
+    scrollLines(amount: number) { this.viewportY = Math.max(0, this.viewportY - amount) }
+    getScrollbackLength() { return 0 }
     dispose() {}
-    // As xterm's does: the grid changes and the emulator raises its own `resize` for it, which is the feed
+    // As the emulator's does: the grid changes and it raises its own `resize` for it, which is the feed
     // the pool reports what this window fitted through
     resize(cols: number, rows: number) {
       this.cols = cols
@@ -57,36 +96,10 @@ vi.mock('@xterm/xterm', () => ({
     }
   },
 }))
-class StubAddon {
-  activate() {}
-  dispose() {}
-  fit() {}
-  proposeDimensions() { return { cols: 80, rows: 24 } }
-  onContextLoss() {}
-}
-vi.mock('@xterm/addon-fit', () => ({ FitAddon: StubAddon }))
-vi.mock('@xterm/addon-web-links', () => ({ WebLinksAddon: StubAddon }))
-vi.mock('@xterm/addon-unicode11', () => ({ Unicode11Addon: StubAddon }))
-vi.mock('@xterm/addon-clipboard', () => ({ ClipboardAddon: StubAddon }))
-/**
- * The WebGL addon, which the pool drives two ways: it hands it a context-loss handler and disposes it at
- * teardown. A GL context cannot be lost in jsdom, so the handler is kept here for a case to fire.
- */
-class WebglStub {
-  disposals = 0
-  loseContext: (() => void) | undefined
-  activate() {}
-  dispose() { this.disposals += 1 }
-  onContextLoss(handler: () => void) { this.loseContext = handler }
-}
-const webglAddons: WebglStub[] = []
-vi.mock('@xterm/addon-webgl', () => ({
-  WebglAddon: class WebglAddon extends WebglStub {
-    constructor() { super(); webglAddons.push(this) }
-  },
-}))
-vi.mock('@xterm/xterm/css/xterm.css', () => ({}))
-vi.mock('@apackdev/sdk/fe', () => ({ openLink: () => {} }))
+
+/** Every URL the app was asked to open, which is where a link's activation must end up */
+const opened: string[] = []
+vi.mock('@apackdev/sdk/fe', () => ({ openLink: (url: string) => { opened.push(url) } }))
 
 // jsdom has neither of these. The attachment uses both, and what is under test is its bookkeeping rather
 // than the browser's layout — a size observer that never fires and an immediate frame are enough for that
@@ -101,7 +114,7 @@ globalThis.requestAnimationFrame ??= ((callback: FrameRequestCallback) => {
   return 0
 }) as typeof requestAnimationFrame
 
-const { terminalPool, findScroller, RESIZE_SETTLE_MS } = await import('#features/code/fe/utils/terminal-pool.ts')
+const { terminalPool, openedByTheApp, RESIZE_SETTLE_MS } = await import('#features/code/fe/utils/terminal-pool.ts')
 const { terminalEventBus } = await import('#features/code/fe/utils/terminal-events.ts')
 
 let next = 0
@@ -127,8 +140,20 @@ beforeEach(() => {
   written.length = 0
   resizedTo.length = 0
   onResizeHandlers.length = 0
+  onScrollHandlers.length = 0
+  linkProviders.length = 0
+  opened.length = 0
+  StubProvider.links = []
+  loadGate = undefined
   focused = 0
 })
+
+/** The emulator's module load, as a case drives it: held until the returned function is called */
+const holdTheModuleLoad = () => {
+  let release = () => {}
+  loadGate = { promise: new Promise<void>((resolve) => { release = resolve }), release: () => release() }
+  return () => loadGate?.release()
+}
 
 /** The one key handler `ensure` wired, driven as the emulator would drive it */
 const press = (init: Partial<KeyboardEvent>) => {
@@ -137,9 +162,9 @@ const press = (init: Partial<KeyboardEvent>) => {
 }
 
 describe('one session, one host', () => {
-  it('leaves the wrapper where it is when a host that no longer holds it detaches', () => {
+  it('leaves the wrapper where it is when a host that no longer holds it detaches', async () => {
     const terminal = info()
-    const entry = terminalPool.ensure(terminal, () => {})
+    const entry = (await terminalPool.ensure(terminal, () => {}))!
     const oldHost = host()
     const newHost = host()
 
@@ -152,9 +177,9 @@ describe('one session, one host', () => {
     expect(entry.attachedContainer).toBe(newHost)
   })
 
-  it('detaches when the host that holds it asks', () => {
+  it('detaches when the host that holds it asks', async () => {
     const terminal = info()
-    const entry = terminalPool.ensure(terminal, () => {})
+    const entry = (await terminalPool.ensure(terminal, () => {}))!
     const only = host()
     terminalPool.attach(entry.terminalId, only)
 
@@ -164,10 +189,10 @@ describe('one session, one host', () => {
     expect(entry.attachedContainer).toBeNull()
   })
 
-  it('wires input once per session, however many hosts draw it', () => {
+  it('wires input once per session, however many hosts draw it', async () => {
     const terminal = info()
     const sent: string[] = []
-    const entry = terminalPool.ensure(terminal, (data) => sent.push(data))
+    const entry = (await terminalPool.ensure(terminal, (data) => sent.push(data)))!
     const first = host()
     const second = host()
 
@@ -175,29 +200,29 @@ describe('one session, one host', () => {
     terminalPool.detach(entry.terminalId, first)
     terminalPool.attach(entry.terminalId, second)
     // Each host calls `ensure` on mount; a second registration would send every keystroke twice
-    terminalPool.ensure(terminal, (data) => sent.push(data))
+    await terminalPool.ensure(terminal, (data) => sent.push(data))
 
     expect(onDataHandlers).toHaveLength(1)
     for (const handler of onDataHandlers) handler('x')
     expect(sent, 'one keystroke, sent once').toEqual(['x'])
   })
 
-  it('sends nothing to the shell when another host starts drawing it', () => {
+  it('sends nothing to the shell when another host starts drawing it', async () => {
     // A second host — a second window's, or the panel's — attaching is not something the user did to the
     // shell. Nothing is written on attach, and nothing is injected: whatever is on that screen stays what the
     // process put there. (Shell integration is injected once, at create, and never on an attach.)
     const terminal = info()
     const sent: string[] = []
-    const entry = terminalPool.ensure(terminal, (data) => sent.push(data))
+    const entry = (await terminalPool.ensure(terminal, (data) => sent.push(data)))!
     terminalPool.attach(entry.terminalId, host())
     terminalPool.attach(entry.terminalId, host())
 
     expect(sent, 'attaching typed into the shell').toEqual([])
   })
 
-  it('keeps one scroll policy per session, whichever host is drawing it', () => {
+  it('keeps one scroll policy per session, whichever host is drawing it', async () => {
     const terminal = info()
-    const entry = terminalPool.ensure(terminal, () => {})
+    const entry = (await terminalPool.ensure(terminal, () => {}))!
     const first = host()
     const following: boolean[] = []
     const attachment = terminalPool.attach(entry.terminalId, first, {
@@ -207,9 +232,16 @@ describe('one session, one host', () => {
     expect(following.at(-1), 'a new session follows its output').toBe(true)
     expect(terminalPool.isFollowingOutput(entry.terminalId)).toBe(true)
 
-    // The user scrolls back in this host; the *session* stops following, so the other host stops too (F2)
-    entry.pinnedToBottom = false
+    // The user scrolls back in this host. The emulator raises its own scroll with how far back it now is,
+    // and `0` is the bottom — so the *session* stops following, and the other host stops too (F2)
+    for (const handler of onScrollHandlers) handler(12)
+    expect(following.at(-1), 'the host drawing it was not told').toBe(false)
     expect(terminalPool.isFollowingOutput(entry.terminalId)).toBe(false)
+
+    // And back to the bottom is following again, by the same route
+    for (const handler of onScrollHandlers) handler(0)
+    expect(terminalPool.isFollowingOutput(entry.terminalId)).toBe(true)
+    for (const handler of onScrollHandlers) handler(3)
 
     // And asking to follow again is the session's answer, *told* to this host — the control it draws is the
     // only reader, so a change it is not told about is a scroll control stuck in the wrong state
@@ -230,9 +262,9 @@ describe('one session, one host', () => {
     expect(terminalPool.isFollowingOutput('never-opened')).toBe(true)
   })
 
-  it('gives each host its own listeners, and takes back only its own on release', () => {
+  it('gives each host its own listeners, and takes back only its own on release', async () => {
     const terminal = info()
-    const entry = terminalPool.ensure(terminal, () => {})
+    const entry = (await terminalPool.ensure(terminal, () => {}))!
     const oldHost = host()
     const newHost = host()
     const oldResizes: unknown[] = []
@@ -261,10 +293,10 @@ describe('one session, one host', () => {
    * The timers are fake because the subject is how many notifications a burst produces, not how long a
    * window takes: a case that slept would be asserting the clock.
    */
-  it('tells its host once for a burst of fits, and once more when they settle', () => {
+  it('tells its host once for a burst of fits, and once more when they settle', async () => {
     vi.useFakeTimers()
     try {
-      const entry = terminalPool.ensure(info(), () => {})
+      const entry = (await terminalPool.ensure(info(), () => {}))!
       const sizes: unknown[] = []
       const attachment = terminalPool.attach(entry.terminalId, host(), { onResize: (size) => sizes.push(size) })!
 
@@ -284,11 +316,11 @@ describe('one session, one host', () => {
     }
   })
 
-  it('is the only module that reaches the emulator, which is what makes it the seam', () => {
+  it('is the only module that reaches the emulator, which is what makes it the seam', async () => {
     // Not a reading of the source — `check:specifiers`' `findEmulatorImports` is that, and is the gate. This
     // is the behavioural half: everything a host does to a terminal is on the attachment, so a host needs no
     // emulator at all
-    const entry = terminalPool.ensure(info(), () => {})
+    const entry = (await terminalPool.ensure(info(), () => {}))!
     const attachment = terminalPool.attach(entry.terminalId, host())!
 
     expect(Object.keys(attachment).sort()).toEqual(
@@ -298,66 +330,72 @@ describe('one session, one host', () => {
 })
 
 /**
- * Which element the pool scrolls, which it finds by what the element **is**.
+ * Who opens a link the emulator found.
  *
- * It used to ask for `.xterm-viewport`, and that is the one dependence the ghostty-web plan's capability
- * matrix names — *without depending on xterm DOM classes*. These cases are over plain DOM, because the rule
- * is: jsdom computes `overflow-y` from the inline style, which is all the rule reads.
+ * The library's providers build each link's `activate` themselves, and what it does by default is go at the
+ * window. That is the one part not theirs to decide: the text they matched is whatever a program printed
+ * into a terminal, so it goes through the app's one door and its URL policy.
  */
-describe('the element the pool scrolls', () => {
-  const styled = (overflow: string) => {
-    const element = document.createElement('div')
-    element.style.overflowY = overflow
-    return element
+describe('the link the emulator found, and who opens it', () => {
+  const offer = (provider: { provideLinks(y: number, cb: (links: unknown[] | undefined) => void): void }) => {
+    let offered: unknown[] | undefined
+    provider.provideLinks(0, (links) => { offered = links })
+    return offered as Array<{ text: string; activate: (event: MouseEvent) => void }> | undefined
   }
 
-  it('finds the root itself when the root is what scrolls', () => {
-    const root = styled('scroll')
-    expect(findScroller(root)).toBe(root)
+  it('sends an activation to the app rather than wherever the provider would have', () => {
+    const wentSomewhereElse: string[] = []
+    const link = {
+      text: 'https://example.com/x',
+      range: { start: { x: 1, y: 1 }, end: { x: 20, y: 1 } },
+      activate: () => { wentSomewhereElse.push('provider') }
+    }
+    const wrapped = openedByTheApp({ provideLinks: (_y, cb) => cb([link]) })
+
+    offer(wrapped)![0].activate({} as MouseEvent)
+
+    expect(opened, 'the app was not asked to open it').toEqual(['https://example.com/x'])
+    expect(wentSomewhereElse, "the provider's own activation ran").toEqual([])
   })
 
-  it('finds a descendant that scrolls under a root that does not', () => {
-    const root = styled('visible')
-    const screen = styled('visible')
-    const viewport = styled('auto')
-    root.append(screen, viewport)
-    expect(findScroller(root)).toBe(viewport)
+  it('passes a row with no links through as none, rather than an empty list', () => {
+    const wrapped = openedByTheApp({ provideLinks: (_y, cb) => cb(undefined) })
+    expect(offer(wrapped)).toBeUndefined()
   })
 
-  it('finds one nested deeper than a direct child', () => {
-    const root = styled('visible')
-    const middle = styled('visible')
-    const viewport = styled('scroll')
-    middle.append(viewport)
-    root.append(middle)
-    expect(findScroller(root)).toBe(viewport)
+  it('keeps everything else about a link, since only activation is the app s', () => {
+    const range = { start: { x: 1, y: 2 }, end: { x: 3, y: 4 } }
+    const wrapped = openedByTheApp({
+      provideLinks: (_y, cb) => cb([{ text: 'https://example.com', range, activate: () => {} }])
+    })
+    expect((offer(wrapped)![0] as unknown as { range: unknown }).range).toBe(range)
   })
 
-  // What makes it a rule rather than a lucky query: nothing is named, so nothing scrolling is nothing found
-  it('finds nothing when nothing scrolls, whatever anything is called', () => {
-    const root = styled('visible')
-    const named = document.createElement('div')
-    named.className = 'xterm-viewport'
-    root.append(named)
-    expect(findScroller(root)).toBeNull()
+  it('disposes the provider it wrapped, which is what the emulator will ask of it', () => {
+    let disposed = 0
+    openedByTheApp({ provideLinks: (_y, cb) => cb(undefined), dispose: () => { disposed += 1 } }).dispose!()
+    expect(disposed).toBe(1)
   })
 
-  it('takes the first in document order, so one emulator gives one answer', () => {
-    const root = styled('visible')
-    const first = styled('scroll')
-    const second = styled('scroll')
-    root.append(first, second)
-    expect(findScroller(root)).toBe(first)
+  it('wraps every provider the pool registers, so neither family opens its own links', async () => {
+    StubProvider.links = [{ text: 'https://example.com/y', activate: () => {} }]
+    await terminalPool.ensure(info(), () => {})
+
+    expect(linkProviders.length, 'the pool registered neither provider').toBe(2)
+    for (const provider of linkProviders) offer(provider)![0].activate({} as MouseEvent)
+
+    expect(opened).toEqual(['https://example.com/y', 'https://example.com/y'])
   })
 })
 
+
 describe('what the pool draws, and what it refuses to', () => {
-  it('replays nothing into a fresh emulator, so a cleared terminal stays cleared', () => {
+  it('replays nothing into a fresh emulator, so a cleared terminal stays cleared', async () => {
     const terminal = info()
     // Output arriving while nothing is drawing it: the bus keeps no copy, so there is nothing to replay
     terminalEventBus.emit((terminal as unknown as { id: string }).id, 'before anyone looked\r\n')
 
-    terminalPool.ensure(terminal, () => {})
+    await terminalPool.ensure(terminal, () => {})
 
     // F11: the only thing that ever un-cleared a terminal was a replay of a persisted byte log. A fresh
     // emulator shows the banner and nothing else — history for that case is the broker's to serve
@@ -365,13 +403,13 @@ describe('what the pool draws, and what it refuses to', () => {
     expect(written.some((chunk) => chunk.includes('Starting terminal'))).toBe(true)
   })
 
-  it('marks the seam when a window meets a terminal whose process was replaced', () => {
+  it('marks the seam when a window meets a terminal whose process was replaced', async () => {
     // M4. A restored terminal keeps its id and gets a **new** shell, so the id cannot say whether what is on
     // screen came from the process answering now. The pid can, and the buffer above the seam survived only
     // because this pool outlives the backend — which is what makes the screen read as one session when it is
     // two.
     const terminal = info() as unknown as { id: string; pid: number }
-    terminalPool.ensure(terminal as never, () => {})
+    await terminalPool.ensure(terminal as never, () => {})
     written.length = 0
 
     // The backend came back with a new shell under the same id, and the list arrives before any host mounts
@@ -381,9 +419,9 @@ describe('what the pool draws, and what it refuses to', () => {
       .toContain(`new shell (pid ${terminal.pid + 1})`)
   })
 
-  it('draws one seam for one death, however the new shell is learnt', () => {
+  it('draws one seam for one death, however the new shell is learnt', async () => {
     const terminal = info() as unknown as { id: string; pid: number }
-    terminalPool.ensure(terminal as never, () => {})
+    await terminalPool.ensure(terminal as never, () => {})
     terminalPool.noteExit(terminal.id, 139)
     written.length = 0
 
@@ -399,9 +437,9 @@ describe('what the pool draws, and what it refuses to', () => {
 
   // **M2's other half.** One window owns a pty's size and the rest are told what is in force — which buys
   // nothing until the window that was told draws at it.
-  it('draws at the grid the host accepted, not the one it fitted', () => {
+  it('draws at the grid the host accepted, not the one it fitted', async () => {
     const terminal = info() as unknown as { id: string }
-    terminalPool.ensure(terminal as never, () => {})
+    await terminalPool.ensure(terminal as never, () => {})
 
     terminalPool.applyGrid(terminal.id, 90, 25)
 
@@ -409,9 +447,9 @@ describe('what the pool draws, and what it refuses to', () => {
       .toEqual([{ cols: 90, rows: 25 }])
   })
 
-  it('reports nothing back when it applies one, so two windows cannot trade a size', () => {
+  it('reports nothing back when it applies one, so two windows cannot trade a size', async () => {
     const terminal = info() as unknown as { id: string }
-    terminalPool.ensure(terminal as never, () => {})
+    await terminalPool.ensure(terminal as never, () => {})
     const fitted: Array<{ cols: number; rows: number }> = []
     terminalPool.attach(terminal.id, host(), { onResize: (size) => fitted.push(size) })
     fitted.length = 0
@@ -423,17 +461,17 @@ describe('what the pool draws, and what it refuses to', () => {
     expect(fitted, 'the accepted grid was reported back as something this window had fitted').toEqual([])
   })
 
-  it('draws no seam for a mounting host\'s stale descriptor', () => {
+  it('draws no seam for a mounting host\'s stale descriptor', async () => {
     // `ensure` runs on every mount and a host can hold a frozen descriptor — `TerminalView` is handed
     // `props.terminalInfo` and never refreshes it. Read as a boundary, a tab switched away and back drew a
     // seam naming the *previous* shell and set the entry's pid to it, which made the next list a boundary
     // again: one death, a seam per switch, oscillating
     const terminal = info() as unknown as { id: string; pid: number };
-    terminalPool.ensure(terminal as never, () => {});
+    await terminalPool.ensure(terminal as never, () => {})
     terminalPool.syncProcesses([{ ...terminal, pid: terminal.pid + 1 } as never]);
     written.length = 0;
 
-    terminalPool.ensure(terminal as never, () => {});
+    await terminalPool.ensure(terminal as never, () => {})
 
     expect(written.join(''), 'the stale pid was read as a new shell').not.toContain('new shell');
     // And the entry still names the shell that is answering, so the next list is not a boundary either
@@ -441,21 +479,21 @@ describe('what the pool draws, and what it refuses to', () => {
     expect(written.join('')).not.toContain('new shell');
   });
 
-  it('says nothing when the process is the one the buffer came from', () => {
+  it('says nothing when the process is the one the buffer came from', async () => {
     const terminal = info() as unknown as { id: string; pid: number }
-    terminalPool.ensure(terminal as never, () => {})
+    await terminalPool.ensure(terminal as never, () => {})
     written.length = 0
 
     terminalPool.syncProcesses([terminal as never])
-    terminalPool.ensure(terminal as never, () => {})
+    await terminalPool.ensure(terminal as never, () => {})
 
     // A seam on every list would be noise in the one place a user is reading output
     expect(written.join('')).not.toContain('new shell')
   })
 
-  it('takes no focus when a host attaches', () => {
+  it('takes no focus when a host attaches', async () => {
     const terminal = info()
-    const entry = terminalPool.ensure(terminal, () => {})
+    const entry = (await terminalPool.ensure(terminal, () => {}))!
     terminalPool.attach(entry.terminalId, host())
     // F15: an attach happens on a tab switch, a panel drag and an actor replacement, none of them a request
     expect(focused).toBe(0)
@@ -464,7 +502,7 @@ describe('what the pool draws, and what it refuses to', () => {
   it('pastes through the emulator rather than as input', async () => {
     const terminal = info()
     const sent: string[] = []
-    terminalPool.ensure(terminal, (data) => sent.push(data))
+    await terminalPool.ensure(terminal, (data) => sent.push(data))
     Object.defineProperty(navigator, 'clipboard', {
       value: { readText: () => Promise.resolve('rm -rf /\n') },
       configurable: true,
@@ -486,7 +524,7 @@ describe('what the pool draws, and what it refuses to', () => {
    * only observable is the registration itself, which is why this case watches `document` rather than a
    * getter written for it — and why it fails on the old code, where neither call is ever made.
    */
-  it('takes its paste listener back with the last session, and installs one per pool rather than per module', () => {
+  it('takes its paste listener back with the last session, and installs one per pool rather than per module', async () => {
     drain()
     const added: string[] = []
     const removed: string[] = []
@@ -503,8 +541,8 @@ describe('what the pool draws, and what it refuses to', () => {
 
     const first = info()
     const second = info()
-    terminalPool.ensure(first, () => {})
-    terminalPool.ensure(second, () => {})
+    await terminalPool.ensure(first, () => {})
+    await terminalPool.ensure(second, () => {})
 
     expect(added.length, 'one listener for the pool, not one per session').toBe(1)
     expect(removed, 'the pool still has sessions').toEqual([])
@@ -516,7 +554,7 @@ describe('what the pool draws, and what it refuses to', () => {
     expect(removed.length, 'the last session went and the listener stayed').toBe(1)
 
     // And it comes back for the next session, so taking it back is not a one-way door
-    terminalPool.ensure(info(), () => {})
+    await terminalPool.ensure(info(), () => {})
     expect(added.length).toBe(2)
 
     vi.restoreAllMocks()
@@ -524,7 +562,7 @@ describe('what the pool draws, and what it refuses to', () => {
 
   it('swallows a clipboard the window may not read', async () => {
     const terminal = info()
-    terminalPool.ensure(terminal, () => {})
+    await terminalPool.ensure(terminal, () => {})
     Object.defineProperty(navigator, 'clipboard', {
       value: { readText: () => Promise.reject(new Error('denied')), writeText: () => Promise.reject(new Error('denied')) },
       configurable: true,
@@ -541,26 +579,58 @@ describe('what the pool draws, and what it refuses to', () => {
   })
 })
 
-describe('the renderer the pool draws with', () => {
-  /**
-   * **F10.** The browser takes a GL context back under memory pressure, on a GPU reset, or when too many
-   * are live, and xterm's addon reports the loss rather than recovering: whatever still holds it draws
-   * nothing. Disposing it is what drops xterm to its DOM renderer, which is slower and still draws.
-   */
-  it('gives up the WebGL renderer when the context is lost, and disposes that addon once', () => {
-    const entry = terminalPool.ensure(info(), () => {})
-    terminalPool.attach(entry.terminalId, host())
-    const addon = webglAddons.at(-1)!
-    expect(entry.webglAddon as unknown, 'the addon the attach loaded').toBe(addon)
 
-    addon.loseContext!()
+/**
+ * What happens during the emulator's module load.
+ *
+ * **The load is awaited, so everything else can happen in the middle of it** — and the two that matter are
+ * a session closed before its emulator exists and a second mount arriving while the first is still
+ * building. Neither was possible while construction was synchronous, which is why they are here rather
+ * than inferred from the shape of the code.
+ */
+describe('a session that is still opening', () => {
+  it('builds one emulator for two mounts that arrive together', async () => {
+    const release = holdTheModuleLoad()
+    const terminal = info()
+    const built = builtWith.length
 
-    expect(addon.disposals).toBe(1)
-    // And the entry stops naming it, so teardown does not reach an addon that is already gone: disposing
-    // one over a lost context crashes inside xterm's own addon iteration
-    expect(entry.webglAddon).toBeNull()
-    terminalPool.dispose(entry.terminalId)
-    expect(addon.disposals).toBe(1)
+    const both = Promise.all([
+      terminalPool.ensure(terminal, () => {}),
+      terminalPool.ensure(terminal, () => {})
+    ])
+    release()
+    const [first, second] = await both
+
+    expect(builtWith.length - built, 'a second emulator was built for one session').toBe(1)
+    expect(first, 'the two mounts got different entries').toBe(second)
+    // And one input registration, which is what two emulators would have doubled
+    expect(onDataHandlers).toHaveLength(1)
+  })
+
+  it('registers nothing for a session closed while it was opening', async () => {
+    const release = holdTheModuleLoad()
+    const terminal = info() as unknown as { id: string }
+    const opening = terminalPool.ensure(terminal as never, () => {})
+
+    // The backend finished with it before its emulator existed
+    terminalPool.dispose(terminal.id)
+    release()
+
+    expect(await opening, 'a closed session was handed back as an open one').toBeNull()
+    // Nothing is left in the pool to find, and nothing is left subscribed: a later write reaches no
+    // emulator rather than one nobody can see
+    written.length = 0
+    terminalEventBus.emit(terminal.id, 'after')
+    expect(written.join(''), 'a discarded emulator was still taking output').toBe('')
+  })
+
+  it('answers the same entry once it is built, without building again', async () => {
+    const terminal = info()
+    const built = builtWith.length
+    const entry = (await terminalPool.ensure(terminal, () => {}))!
+
+    expect((await terminalPool.ensure(terminal, () => {}))!, 'a built session was rebuilt').toBe(entry)
+    expect(builtWith.length - built).toBe(1)
   })
 })
 
@@ -571,10 +641,10 @@ describe('the scrollback the emulator is built with', () => {
    * a screen read once no window holds the bytes. `TerminalInfo.scrollback` carries the broker's own, from
    * its handshake, and this asserts the pool uses it rather than a constant of its own.
    */
-  it('comes from the session rather than a number of the pool s own', () => {
+  it('comes from the session rather than a number of the pool s own', async () => {
     const info = { id: 't-scroll', title: 't', cwd: '/tmp', cols: 80, rows: 24, scrollback: 1_234 } as never
 
-    terminalPool.ensure(info, () => {})
+    await terminalPool.ensure(info, () => {})
 
     expect(builtWith.at(-1)?.scrollback, 'the pool built the emulator with a bound of its own').toBe(1_234)
   })

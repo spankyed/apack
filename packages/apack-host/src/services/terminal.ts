@@ -146,7 +146,7 @@ export function brokerEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.
     // else here does: `portable-pty` sets no `TERM`, so the shell took whatever this process happened to
     // have — which is the shell the app was *launched* from in development, and nothing at all in a
     // packaged app opened from the Dock. A shell with no `TERM` gives `less`, `vim` and `top` their dumb
-    // fallbacks, and nothing about that failure names the app. xterm.js is what draws it, so this is what
+    // fallbacks, and nothing about that failure names the app. The window's emulator is what draws it, so this is what
     // it is.
     TERM: 'xterm-256color',
     TERM_PROGRAM: 'apack',

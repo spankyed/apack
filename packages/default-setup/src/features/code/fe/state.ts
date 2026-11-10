@@ -348,7 +348,8 @@ const codeState = setup({
      * A component releases its terminal on unmount and deliberately does not dispose it, so a remount draws
      * the same emulator again. That is right while this bundle is alive and a leak once it is not: the shell
      * replaces this pack's frontend by importing a fresh module, whose pool is fresh, and the last one's
-     * xterm instances, DOM and GL contexts stay alive in the window with nothing left that could reach them.
+     * emulators, their canvases and their WebAssembly state stay alive in the window with nothing left that
+     * could reach them.
      *
      * A child actor rather than an `exit` action, because **XState 5 runs no `exit` action on
      * `actor.stop()`** — an exit here would be dead code that read as cleanup. An invoked actor's cleanup
