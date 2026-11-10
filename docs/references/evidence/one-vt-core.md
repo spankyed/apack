@@ -1065,8 +1065,10 @@ before this one; this run found their inputs unmoved and cached them, which is w
 ### Two things the chain said that are worth reading
 
 **It did not build what CI clones.** Its result line says so by name: `vendor/apack-terminal at 26e6583
-rather than 80ffdb3`. One commit sits past the pin — the packaging fix that stages the binary by rename —
-because the pin cannot advance to a commit that has not been pushed. A local chain tests the sibling's
+rather than 80ffdb3`. One commit sat past the pin at the time — the packaging fix that stages the binary by
+rename — because a pin cannot name a commit that has not been pushed. **Both are pushed now and the pin
+names `26e6583`**, so that clause of the result line is answered; it is kept here because what the line
+*said* while it was true is the useful part. A local chain tests the sibling's
 working tree and CI clones the `.rev`, which is exactly the drift that line exists to surface.
 (`vendor/elmdb` is drifted too, from other work.)
 

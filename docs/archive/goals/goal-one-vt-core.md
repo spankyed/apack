@@ -188,14 +188,14 @@ this one's:
 because that is the part a reader cannot derive from the Outcome.
 
 - **This repository** on `master`. The window draws with `ghostty-web`, the six `@xterm/*` packages are
-  gone, and `vendor/apack-terminal.rev` names `80ffdb3`.
+  gone, and `vendor/apack-terminal.rev` names `26e6583`.
 - **The broker**: `vt-core/conformance` merged to `master` in `apack-terminal`, which is what the pin names.
   The worktree `apack-terminal-worktrees.noindex/vt-core` can go; the main checkout is on `master` and holds
   the pin.
-- **One commit sits past the pin**: the packaging fix that stages the binary by rename. Until the pin
-  advances to it, a chain run uses the sibling's working tree, which has it, and CI clones the pin, which
-  does not — the chain says so on its own result line, and that line is the thing to read rather than this
-  one.
+- **Both repositories are pushed and the pin reaches the packaging fix.** For most of this goal it could
+  not: a pin cannot name a commit nobody can fetch, so a local chain built the sibling's working tree while
+  CI would have cloned a pin without the fix. The chain said so on its own result line every run, which is
+  the line to read rather than this one.
 - **The driving scripts are not in the tree.** `drive/.gitignore` keeps everything but the README and the
   Playwright config, so `terminal-core-swap.ts` — which opens a terminal, reads the canvas, and fingerprints
   it either side of a write — exists only where it was written. What it asked and what it answered is in
