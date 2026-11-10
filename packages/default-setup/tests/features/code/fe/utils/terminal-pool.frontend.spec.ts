@@ -80,7 +80,11 @@ vi.mock('ghostty-web', () => ({
       // snaps it to the bottom. That second part is what the pool has to undo, so the stand-in has to do
       // it or the case asserts nothing.
       this.scrollbackLength += (data.match(/\n/g) ?? []).length
-      if (this.viewportY !== 0) this.viewportY = 0
+      if (this.viewportY !== 0) {
+        this.viewportY = 0
+        // and raises its own scroll for it, as scrollToBottom does
+        for (const handler of onScrollHandlers) handler(0)
+      }
       done?.()
     }
     paste(data: string) { this.assertOpen('use'); pasted.push(data) }
@@ -100,8 +104,16 @@ vi.mock('ghostty-web', () => ({
     selectAll() {}
     clear() { this.assertOpen('use') }
     focus() { focused += 1 }
-    scrollToBottom() { this.viewportY = 0 }
-    scrollLines(amount: number) { this.assertOpen('use'); this.viewportY = Math.max(0, this.viewportY - amount) }
+    scrollToBottom() {
+      if (this.viewportY === 0) return
+      this.viewportY = 0
+      for (const handler of onScrollHandlers) handler(0)
+    }
+    scrollLines(amount: number) {
+      this.assertOpen('use')
+      this.viewportY = Math.max(0, this.viewportY - amount)
+      for (const handler of onScrollHandlers) handler(this.viewportY)
+    }
     getScrollbackLength() { return this.scrollbackLength }
     dispose() {}
     // As the emulator's does: the grid changes and it raises its own `resize` for it, which is the feed

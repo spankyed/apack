@@ -561,18 +561,19 @@ class TerminalPool {
       // snap and this correction happen before the frame that paints, so nothing flickers.
       const wasScrolledBack = term.viewportY
       const linesBefore = term.getScrollbackLength()
-
-      term.write(data)
-
-      if (wasScrolledBack !== 0) {
-        entry.restoringScroll = true
-        try {
+      // **Raised before the write, not after it.** The snap is the emulator's own scroll and it fires
+      // during `write`; a flag set afterwards would let that one through, and the host would be told the
+      // session had started following its output when the next line is what just took it there.
+      entry.restoringScroll = wasScrolledBack !== 0
+      try {
+        term.write(data)
+        if (wasScrolledBack !== 0) {
           const grew = term.getScrollbackLength() - linesBefore
           term.scrollToBottom()
           term.scrollLines(-(wasScrolledBack + grew))
-        } finally {
-          entry.restoringScroll = false
         }
+      } finally {
+        entry.restoringScroll = false
       }
 
       // **What the emulator does not surface** (OSC 52). The bytes have already gone to it, which ignores
