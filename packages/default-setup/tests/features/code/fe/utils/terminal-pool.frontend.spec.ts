@@ -120,7 +120,7 @@ globalThis.requestAnimationFrame ??= ((callback: FrameRequestCallback) => {
   return 0
 }) as typeof requestAnimationFrame
 
-const { terminalPool, openedByTheApp, RESIZE_SETTLE_MS } = await import('#features/code/fe/utils/terminal-pool.ts')
+const { terminalPool, openedByTheApp, takeClipboardWrites, RESIZE_SETTLE_MS } = await import('#features/code/fe/utils/terminal-pool.ts')
 const { terminalEventBus } = await import('#features/code/fe/utils/terminal-events.ts')
 
 let next = 0
@@ -637,6 +637,89 @@ describe('a session that is still opening', () => {
 
     expect((await terminalPool.ensure(terminal, () => {}))!, 'a built session was rebuilt').toBe(entry)
     expect(builtWith.length - built).toBe(1)
+  })
+})
+
+/**
+ * What a program asked to be put on the clipboard (OSC 52).
+ *
+ * The emulator does not surface it, where the previous one had an addon for it, so this is what keeps a
+ * remote `vim`'s yank and `tmux save-buffer` working. The sequence arrives split across reads as often as
+ * not, which is the whole reason the function is pure and takes its own carry.
+ */
+describe('a clipboard request in the output', () => {
+  const osc52 = (payload: string, terminator = '\x07') => `\x1b]52;c;${payload}${terminator}`
+  const base64 = (text: string) => btoa(String.fromCharCode(...new TextEncoder().encode(text)))
+
+  it('reads one out of a chunk, whichever terminator ends it', () => {
+    for (const terminator of ['\x07', '\x1b\\']) {
+      const taken = takeClipboardWrites('', `before${osc52(base64('copied'), terminator)}after`)
+      expect(taken.writes, terminator === '\x07' ? 'BEL' : 'ST').toEqual(['copied'])
+      expect(taken.pending).toBe('')
+    }
+  })
+
+  it('reads one delivered a byte at a time, which is how it usually arrives', () => {
+    const stream = `x${osc52(base64('split across reads'))}y`
+    let pending = ''
+    const writes: string[] = []
+    for (const byte of stream) {
+      const taken = takeClipboardWrites(pending, byte)
+      pending = taken.pending
+      writes.push(...taken.writes)
+    }
+    expect(writes).toEqual(['split across reads'])
+    expect(pending, 'it held onto a finished sequence').toBe('')
+  })
+
+  it('reads every one in a chunk, not only the first', () => {
+    const chunk = `${osc52(base64('one'))}between${osc52(base64('two'))}`
+    expect(takeClipboardWrites('', chunk).writes).toEqual(['one', 'two'])
+  })
+
+  it('decodes what was copied rather than the bytes it travelled as', () => {
+    // Not ASCII, because base64 of UTF-8 is the part a latin1 decode gets wrong
+    expect(takeClipboardWrites('', osc52(base64('héllo — 日本語'))).writes).toEqual(['héllo — 日本語'])
+  })
+
+  it('answers a read request with nothing, which is a decision', () => {
+    // `ESC ] 52 ; c ; ?` asks the terminal to send the clipboard *to the program* — including a program on
+    // the other end of an ssh connection. Nothing is written and nothing is sent back
+    const taken = takeClipboardWrites('', '\x1b]52;c;?\x07')
+    expect(taken.writes).toEqual([])
+    expect(taken.pending).toBe('')
+  })
+
+  it('ignores a payload that is not base64, and holds nothing after it', () => {
+    const taken = takeClipboardWrites('', osc52('not base64 at all!!'))
+    expect(taken.writes).toEqual([])
+    expect(taken.pending).toBe('')
+  })
+
+  it('holds nothing for ordinary output, however much of it there is', () => {
+    const taken = takeClipboardWrites('', 'line one\r\nline two\r\n\x1b[31mred\x1b[0m')
+    expect(taken.writes).toEqual([])
+    expect(taken.pending).toBe('')
+  })
+
+  it('gives up on a sequence that never terminates rather than holding it forever', () => {
+    const runaway = `\x1b]52;c;${'A'.repeat(1_048_600)}`
+    expect(takeClipboardWrites('', runaway).pending, 'it held a megabyte of unterminated output').toBe('')
+  })
+
+  it('puts what a program copied on the clipboard, through the terminal that received it', async () => {
+    const written: string[] = []
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: (text: string) => { written.push(text); return Promise.resolve() } },
+      configurable: true,
+    })
+    const terminal = info()
+    await terminalPool.ensure(terminal, () => {})
+
+    terminalEventBus.emit((terminal as unknown as { id: string }).id, osc52(base64('from the shell')))
+    await Promise.resolve()
+
+    expect(written).toEqual(['from the shell'])
   })
 })
 

@@ -112,6 +112,8 @@ interface PoolEntry {
    * exact thing anyway, where a fraction of a `scrollHeight` that grows under live output is not.
    */
   savedViewportY: number | null
+  /** An unfinished clipboard request, held until the read that completes it (`takeClipboardWrites`) */
+  clipboardPending: string
 }
 
 /**
@@ -194,6 +196,86 @@ export interface TerminalAttachmentHandlers {
   onSelectionChange?(hasSelection: boolean): void
   /** Whether the session is following its output, which a host draws a scroll control from */
   onFollowingChange?(following: boolean): void
+}
+
+/**
+ * The most of an unfinished clipboard request this will hold while it waits for a terminator.
+ *
+ * A clipboard payload is as big as what is being copied, and it arrives split across reads like anything
+ * else. The cap is what stops a sequence that never terminates — a program that wrote `ESC ] 52 ;` and then
+ * megabytes of ordinary output — from being held forever: past it the hold is dropped and the stream is
+ * read as itself again.
+ */
+const CLIPBOARD_HOLD_CAP = 1_048_576
+
+/** What starts one: `OSC 52 ;` */
+const CLIPBOARD_INTRODUCER = '\x1b]52;'
+
+/**
+ * A program's clipboard writes, taken out of a chunk of its output.
+ *
+ * **OSC 52 is how a program running in a terminal puts something on the clipboard** — `tmux save-buffer`,
+ * a remote `vim`'s yank, anything over ssh that cannot reach the local clipboard any other way. The
+ * emulator does not surface it, where the previous one had an addon for it, so without this the behaviour
+ * is simply gone.
+ *
+ * **Pure, and the chunking is the reason.** The sequence arrives split across reads as often as not, so the
+ * caller holds `pending` between chunks and this decides what is complete. A case can hand it a sequence
+ * one byte at a time, which is where an implementation that only looked at whole chunks would be wrong.
+ *
+ * **Nothing is consumed.** The bytes still go to the emulator, which ignores them, so this neither rewrites
+ * the stream nor depends on being called before or after the write.
+ *
+ * **A read request is deliberately not answered.** `ESC ] 52 ; c ; ? ST` asks the terminal to *send the
+ * clipboard back* to the program, which would let anything running in a terminal — including something on
+ * the other end of an ssh connection — read what the user last copied. Returning nothing is what this app
+ * answers, and it is a decision rather than an omission.
+ */
+export function takeClipboardWrites(pending: string, chunk: string): { writes: string[]; pending: string } {
+  const text = pending + chunk
+  const writes: string[] = []
+  let from = 0
+  let held = ''
+  for (;;) {
+    const start = text.indexOf(CLIPBOARD_INTRODUCER, from)
+    if (start === -1) break
+    const after = start + CLIPBOARD_INTRODUCER.length
+    // A terminator is either BEL or ST
+    const end = text.slice(after).search(/\x07|\x1b\\/)
+    if (end === -1) { held = text.slice(start); break }
+    const body = text.slice(after, after + end)
+    const payload = body.slice(body.indexOf(';') + 1)
+    if (body.includes(';') && payload !== '?') {
+      const decoded = decodeClipboardPayload(payload)
+      if (decoded !== null) writes.push(decoded)
+    }
+    from = after + end + (text.startsWith('\x1b\\', after + end) ? 2 : 1)
+  }
+  // **A half-arrived introducer is held too**, which a search for the whole of it cannot see: fed a byte at
+  // a time, `\x1b` then `]` then `5` each match nothing, and dropping them loses the sequence that follows.
+  if (!held) held = partialIntroducer(text.slice(from))
+  return { writes, pending: held.length > CLIPBOARD_HOLD_CAP ? '' : held }
+}
+
+/** The longest tail of `text` that could still become `CLIPBOARD_INTRODUCER` once more bytes arrive */
+function partialIntroducer(text: string): string {
+  const most = Math.min(text.length, CLIPBOARD_INTRODUCER.length - 1)
+  for (let length = most; length > 0; length -= 1) {
+    const tail = text.slice(text.length - length)
+    if (CLIPBOARD_INTRODUCER.startsWith(tail)) return tail
+  }
+  return ''
+}
+
+/** The payload is base64 of UTF-8 bytes; anything that is not is not a clipboard write */
+function decodeClipboardPayload(payload: string): string | null {
+  try {
+    const binary = atob(payload)
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
+    return new TextDecoder().decode(bytes)
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -414,7 +496,8 @@ class TerminalPool {
       attachedContainer: null,
       isShowingLoadingContent: false,
       pinnedToBottom: true,
-      savedViewportY: null
+      savedViewportY: null,
+      clipboardPending: ''
     }
 
     // Shift+Enter inserts a newline instead of executing. Wired once here
@@ -460,6 +543,16 @@ class TerminalPool {
         entry.isShowingLoadingContent = false
       }
       term.write(data)
+
+      // **What the emulator does not surface** (OSC 52). The bytes have already gone to it, which ignores
+      // them; this reads the same chunk for what a program asked to be put on the clipboard.
+      const clipboard = takeClipboardWrites(entry.clipboardPending, data)
+      entry.clipboardPending = clipboard.pending
+      for (const text of clipboard.writes) {
+        // A clipboard permission the window does not have rejects; unhandled, that is a console error
+        // nobody can act on (F16), which is the same reason the copy shortcut swallows it
+        void navigator.clipboard.writeText(text).catch(() => {})
+      }
     })
     entry.disposables.push({ dispose: unsubscribe })
 
