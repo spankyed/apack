@@ -7,9 +7,11 @@ const [directory, probe] = process.argv.slice(2);
 fs.watch(directory, { recursive: true }, (_event, file) => {
   if (file && path.join(directory, file) === probe) process.send({ type: 'event' });
 });
-process.on('message', ({ text, delayMs }) => {
+process.on('message', ({ text, delayMs, replace }) => {
   setTimeout(() => {
-    fs.writeFileSync(probe, text);
+    // Editors save both ways: writing the file in place, or writing a new file and renaming it over the old
+    if (replace) { fs.writeFileSync(`${probe}.tmp`, text); fs.renameSync(`${probe}.tmp`, probe); }
+    else fs.writeFileSync(probe, text);
     process.send({ type: 'wrote', text });
   }, delayMs);
 });

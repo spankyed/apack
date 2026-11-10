@@ -77,7 +77,8 @@ try {
     streamSawProbe = false;
     const passesBefore = passes;
     const delayMs = Math.round(Math.random() * maxDelayMs);
-    bystander.send({ text, delayMs });
+    const replace = round % 2 === 0;
+    bystander.send({ text, delayMs, replace });
     fs.writeFileSync(driver, text);
     while (wroteText !== text && !stopping.signal.aborted) await sleep(100);
     const saved = wroteAt;
@@ -88,7 +89,7 @@ try {
     if (stopping.signal.aborted) break;
     const result: SoakRound = { pickedUp: ensured === text, bystanderSaw: bystanderEventAt >= saved };
     rounds.push(result);
-    console.log(JSON.stringify({ round, delayMs, ...result, watcherStreamSaw: streamSawProbe, passes: passes - passesBefore, afterMs: Date.now() - saved, load: Number(os.loadavg()[0].toFixed(0)) }));
+    console.log(JSON.stringify({ round, save: replace ? 'replace' : 'in place', delayMs, ...result, watcherStreamSaw: streamSawProbe, passes: passes - passesBefore, afterMs: Date.now() - saved, load: Number(os.loadavg()[0].toFixed(0)) }));
     await sleep(BETWEEN_ROUNDS_MS);
   }
 } finally {

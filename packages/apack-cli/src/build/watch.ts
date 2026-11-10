@@ -3,13 +3,13 @@ import * as path from 'node:path';
 import { createPackBuilder, type PackBuilder } from './build-process.ts';
 import { withBuildSignals } from './build-signals.ts';
 import { readValidManifest } from '../utils.ts';
-import { isPackInputPath, packInputWatchTargets, packInputsHash } from '@apackdev/host/build/pack-inputs';
+import { isPackInputPath, packInputFiles, packInputWatchTargets, packInputsHash } from '@apackdev/host/build/pack-inputs';
 import { reloadPack, type AppPlace, type DevDelivery } from '../app/app-api.ts';
 import { compilerWatchPaths, createCompilerWatchTools, compilerWatchTargets, createCompilerWatchMatcher, mergeCompilerWatchPaths, additionalCompilerObservations, packageInputWatchPaths, type CompilerWatchPaths } from './compiler-watch.ts';
 import { checkoutBuildUnits } from './checkout-packages.ts';
 import { cliPackageDirectory } from './tool-identity.ts';
 import { createFrontendWatcher, type FrontendInputSnapshot } from './frontend-watch.ts';
-import { createInputSubscriptions, type InputSubscription } from './input-subscriptions.ts';
+import { createFileWatches, createInputSubscriptions, type InputSubscription } from './input-subscriptions.ts';
 import type { BuildWatchInputs } from './build-watch-inputs.ts';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { readPackBuildInputs } from '@apackdev/host/build/pack-build-inputs';
@@ -30,6 +30,8 @@ export interface WatchOptions {
   /** A dev session owns its shared compiler; standalone watchers own their builder. */
   readonly builder?: Pick<PackBuilder, 'build' | 'ensurePackages' | 'subscribeFrontendInputs' | 'isFrontendCurrent'>;
   readonly buildArgs?: readonly string[];
+  /** Where file watches are kept on known inputs (`createFileWatches`); the running platform unless a test says. */
+  readonly platform?: NodeJS.Platform;
 }
 
 /**
@@ -211,8 +213,9 @@ export async function startPackBuildWatcher(root: string, options: WatchOptions 
     fail(refused);
     return refused;
   });
+  const fileWatches = createFileWatches(message => console.warn(message), options.platform);
   const rootSubscription: InputSubscription = {
-    key: 'root', directory: root, recursive: true,
+    key: 'root', path: root, recursive: true,
     // The authored root stays subscribed across replacement of linked/compiler inputs.
     receive(event, filename) {
       if (closed) return;
@@ -222,14 +225,14 @@ export async function startPackBuildWatcher(root: string, options: WatchOptions 
     },
   };
   function refreshInputs(replace = false) {
-    const compiler = compilerWatchPaths(root, tools, mergeCompilerWatchPaths(mergeCompilerWatchPaths(observedPaths, frontendPaths),
-      packageInputWatchPaths(checkoutBuildUnits([root, cliPackageDirectory()]))));
+    const packagePaths = packageInputWatchPaths(checkoutBuildUnits([root, cliPackageDirectory()]));
+    const compiler = compilerWatchPaths(root, tools, mergeCompilerWatchPaths(mergeCompilerWatchPaths(observedPaths, frontendPaths), packagePaths));
     const paths = replace && compiler.complete ? compiler.paths : mergeCompilerWatchPaths(compilerPaths, compiler.paths);
     const authored = packInputWatchTargets(root);
     const wanted: InputSubscription[] = [rootSubscription];
     for (const target of authored.slice(1)) {
       wanted.push({
-        key: `authored:${target.directory}:${target.child ?? ''}`, directory: target.directory, recursive: true,
+        key: `authored:${target.directory}:${target.child ?? ''}`, path: target.directory, recursive: true,
         receive(_event, filename) {
           if (closed || (target.child && filename && filename !== target.child)) return;
           const relative = target.child ? target.relative : path.join(target.relative, filename ?? '');
@@ -240,7 +243,7 @@ export async function startPackBuildWatcher(root: string, options: WatchOptions 
     for (const [directory, target] of compilerWatchTargets(paths, root)) {
       const matches = createCompilerWatchMatcher(target.paths);
       wanted.push({
-        key: `compiler:${directory}:${target.recursive}`, directory, recursive: target.recursive,
+        key: `compiler:${directory}:${target.recursive}`, path: directory, recursive: target.recursive,
         receive(event, filename) {
           if (closed || (filename && !matches(path.resolve(directory, filename), event))) return;
           tools.changed(filename ? path.resolve(directory, filename) : undefined, event);
@@ -249,6 +252,10 @@ export async function startPackBuildWatcher(root: string, options: WatchOptions 
       });
     }
     if (inputs.hold(wanted)) recheck();
+    // A file watch opening or closing restarts no stream, so a change to this set needs no recheck
+    const known = [...packInputFiles(root).map(file => path.join(root, file)),
+      ...[...packagePaths].flatMap(([file, kind]) => kind === 'file' ? [file] : [])];
+    fileWatches.hold([...new Set(known)].map(file => ({ file, receive: () => { if (!closed) request(path.relative(root, file)); } })));
     compilerPaths = paths;
     matchesCompilerInput = createCompilerWatchMatcher(paths);
     return { ...compiler, authored };
@@ -258,7 +265,7 @@ export async function startPackBuildWatcher(root: string, options: WatchOptions 
       signal.removeEventListener('abort', abort);
       closed = true;
       const cleanup: Array<() => unknown> = [
-        () => inputs.close(),
+        () => inputs.close(), () => fileWatches.close(),
         () => unsubscribe?.(), () => frontend.close(), () => runs.close(), () => ownedBuilder?.close(),
       ];
       stopping = Promise.allSettled(cleanup.map(stop => Promise.resolve().then(stop))).then(results => {

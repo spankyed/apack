@@ -97,6 +97,11 @@ Its file watches go through `createInputSubscriptions` (`input-subscriptions.ts`
 on macOS, opening or closing any `fs.watch` on a directory can lose events on every other one in the process, so a
 change to the set held is followed by one more pass that compares the inputs. `check:specifiers` refuses a raw
 `fs.watch` elsewhere in `src/build`.
+On macOS each known input file, the pack's own and every package unit's, also has a watch of its own
+(`createFileWatches`), which libuv serves with kqueue: FSEvents can deliver an event hours late or never, for every
+process at once, and kqueue tells this process directly. A new file still arrives through FSEvents, though the edit
+that imports it is to a known file, so the pass for that edit finds it. These watches restart no stream, so a change
+to them needs no recheck.
 Pack/npm and shared SDK/UI metadata, module inventory and entry selection also identify the frontend
 configuration. Changes replace its generation after a successful build; ordinary source edits keep
 Vite's live graph. Metadata lookup reuses `findPackageDirectory`, avoiding Node's cached link resolution.

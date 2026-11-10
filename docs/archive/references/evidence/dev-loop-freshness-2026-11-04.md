@@ -109,3 +109,23 @@ during a stall. A recorder saving once every 30 s found, in its first 45 minutes
 FSEvents saves had not arrived after 60 s, while a kqueue watch on one file received all 90, the slowest in 0.12 s. No
 drop flag was raised. Whether stalls occur at normal load is not yet measured.
 
+## FSEvents against kqueue over a day (2026-11-05)
+
+A recorder saved once every 30 s for 12.2 hours on the development Mac, through three routes. A save counts as late when its
+event took more than 60 s or never came by the end:
+
+| Route | Saves | Late, load under 10 | Late, load 10 to 25 | Late, load 25 and over | Slowest delivered |
+|---|---|---|---|---|---|
+| FSEvents, `fs.watch` on a directory | 1,439 | 12 of 479 | 107 of 561 | 174 of 399 | 20,983 s |
+| FSEvents, the `fsevents` package | 1,439 | 41 of 479 | 149 of 561 | 200 of 399 | 20,984 s |
+| kqueue, `fs.watch` on one file | 1,439 | 0 | 0 | 0 | 0.12 s |
+
+249 saves never arrived through either FSEvents route, and no drop flag was raised. So the pack watcher holds a kqueue
+watch on each known input file as well (`createFileWatches`).
+
+A kqueue watch is armed only when the event loop next polls, both after it opens and after each event. A save made before
+that poll goes unseen, which a probe showed by saving in the same turn: 0 of 50 caught. After an event that costs nothing,
+since the event has already asked for a pass. After an open, each new watch re-reads its file once armed. With a turn
+between saves, 50 of 50 in-place and 50 of 50 replacing saves were caught, twice. Opening and closing 1,200 file watches
+took 38 ms and 6 ms and lost none of 300 saves on a directory watch beside them.
+
