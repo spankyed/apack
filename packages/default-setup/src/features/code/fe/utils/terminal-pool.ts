@@ -746,12 +746,18 @@ class TerminalPool {
   /**
    * Puts the view back where this session was, after an attach or a fit.
    *
-   * **`term.write('', cb)` is the wait primitive**, and that is the one thing here that has not changed: the
-   * callback fires only once every queued write has been parsed, and a burst of live output can still be
-   * parsing when a host attaches — positioning against a buffer that is still growing lands the view
-   * somewhere the next parsed chunk moves it from.
+   * **There is no wait primitive any more, because there is nothing to wait for.** This used to write an
+   * empty string and act in the callback: the previous emulator parsed writes on a queue, so that callback
+   * was how you got behind a burst of live output that was still being parsed. This one parses inside
+   * `write` — the bytes are in the terminal when it returns — and its callback is nothing but a
+   * `requestAnimationFrame`, so the frame is all that was ever being bought here.
    *
-   * What it does once it fires is now two calls on the emulator. Following the output is `scrollToBottom`;
+   * It also **threw**: an empty write reaches `Uint8Array.set` with an offset past the end and raises
+   * `RangeError: offset is out of bounds`, which is what the first driven journey hit, twice per attach.
+   * So the frame is asked for directly, which is both what the callback did and the thing that does not
+   * crash.
+   *
+   * What it does once the frame comes is two calls on the emulator. Following the output is `scrollToBottom`;
    * a user who had scrolled back is put back the lines they were back by, because `viewportY` counts up
    * from the bottom and `scrollLines` takes lines down. Neither reads or writes the DOM, so there is no
    * layout to force and no frame to wait for — and the three things this had to work around are all gone
@@ -761,7 +767,7 @@ class TerminalPool {
   syncViewport(terminalId: string): void {
     const entry = this.entries.get(terminalId)
     if (!entry) return
-    entry.term.write('', () => {
+    requestAnimationFrame(() => {
       const current = this.entries.get(terminalId)
       if (!current || !current.attachedContainer) return
       current.term.scrollToBottom()
