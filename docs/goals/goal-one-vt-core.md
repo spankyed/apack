@@ -121,13 +121,32 @@ this one's:
   there — with Job Object tree ownership, the named-pipe ACL and the ConPTY `ESC [ 6 n` startup each
   re-proven by name. Two findings came with it: the crate's source build passes `zig build` a flag Zig
   0.17.0 rejects, and D4's prebuilt-directory hatch asserts a file name no Windows build produces.
-- **`vendor/apack-terminal.rev` is still unmoved, and that is now the only thing left in Phase B.** The
-  pin names a commit CI clones from the remote, and `vt-core/conformance` is unpushed, so moving it would
-  name a commit nothing can fetch. Pushing the branch is the action; it is not a measurement and it has not
-  been asked for.
-- **Phase R has not started, and is unblocked.** O3 is answered — the renderer takes `ghostty-web` — so
+- **The pin is moved.** `vendor/apack-terminal.rev` names `80ffdb3`, the merged commit the gate actually
+  ran on — master had gained the Windows mutants CI fix, which touches three files Phase B also changed, so
+  the merge was re-gated rather than assumed (135 tests, 61 mutants, none missed). The vendored checkout is
+  fast-forwarded to it and `node/apack-terminal` rebuilt from it.
+- **Phase R is delivered.** The window draws with `ghostty-web`, the six `@xterm/*` packages are gone, and
+  the app has been driven: the emulator opens into the pool's detached wrapper, draws, and comes back from a
+  tab switch with the same pixels, the same session and the same pid. OSC 52 is implemented rather than
+  carried. O3 is answered — the renderer takes `ghostty-web` — so
   D2 above is the replacement decision and Phase R's work below is written against it.
-- **Phase A has not started**, depending on B and R.
+- **Phase A is part-done, and what is left is held on a machine rather than on a decision.**
+  - **Done:** the driven run above; the packaging defect it exposed and its fix; OSC 52; the reference docs
+    (`terminal-broker.md` and the root guide's terminal line) describing what shipped.
+  - **Held:** `cargo xtask pre-push` on the broker's packaging fix, `npm run chain`, `test:smoke`, the
+    packaged install path and the `npm run measure` figures. Every one of those is timing-sensitive and this
+    machine is carrying a sustained load average above 120 from work that is not this goal's, which already
+    produced two unrelated broker cases failing on their deadlines — one that passes in 2.08s alone having
+    taken 9.97s, and one that took 47s and then timed out at 60. Re-running them until they pass is not a
+    fix, and a figure measured here would not be citable.
+  - **Not started:** the fuller behaviour pass (both hosts, real shells, alternate-screen programs, the two
+    paste paths, several windows), and closure — the Outcome and the archive move, which this repository's
+    documentation rule says may not stand in for an unmet requirement.
+  - **One open question for the owner**, recorded rather than decided: this goal's closure step says to
+    archive *both* deferred documents, but only [xterm-to-ghostty-web](../deferred/xterm-to-ghostty-web.md)
+    is absorbed by it. [terminal-runtime-refactor-target](../deferred/terminal-runtime-refactor-target.md) is
+    named **out of scope** above and still owns the agent-observation pipeline as design that no goal
+    delivers, so archiving it would retire live design rather than completed work.
 
 **Four decisions block the rest, and three of them are the user's.** None is a thing to work around:
 
