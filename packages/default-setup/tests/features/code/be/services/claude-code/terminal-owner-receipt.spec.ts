@@ -1,9 +1,10 @@
+import { isClaudeNativeInterruption } from '#features/code/common/native-interruption.ts'
 import vm from 'node:vm'
 import { claudeTerminalUiRuntime } from '#features/code/be/services/claude-code/terminal-ui-runtime.ts'
 function fixture() {
   const start = claudeTerminalUiRuntime.indexOf('let preparedPrompt;')
   const end = claudeTerminalUiRuntime.indexOf('async function prepareTerminalPrompt(')
-  const read = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)}; (messages,id='submission') => { preparedPrompt={id:'submission',before:new Set(['existing'])};return promptOutcome({runtime:{ey:()=>({messages:()=>messages})}},id) }`, { originalContext: undefined }) as (messages: unknown[], id?: string) => any
+  const read = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)}; (messages,id='submission') => { preparedPrompt={id:'submission',before:new Set(['existing'])};return promptOutcome({runtime:{ey:()=>({messages:()=>messages})}},id) }`, { originalContext: undefined, nativeInterruptionMessage: isClaudeNativeInterruption }) as (messages: unknown[], id?: string) => any
   return read
 }
 const user = (uuid: string, content: unknown = 'Admitted native text') => ({ uuid, type: 'user', origin: { kind: 'human' }, message: { role: 'user', content } })
@@ -21,3 +22,5 @@ it('refuses ambiguous native user rows and preserves an original refusal reason'
   expect(read([user('first'), user('second')])).toEqual({})
   expect(read([user('candidate'), { uuid: 'ending', promptSubmitEnding: { ending: { reason: 'Original native refusal' } } }])).toEqual({ drop: 'Original native refusal' })
 })
+
+it('does not acknowledge a native interruption marker as a submitted person prompt',()=>{const read=fixture(),marker={...user('marker',[{type:'text',text:'[Request interrupted by user for tool use]'}]),origin:undefined};expect(read([marker])).toEqual({});expect(read([marker,user('fresh')])).toMatchObject({accepted:{uuid:'fresh'}})})

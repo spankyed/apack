@@ -1,3 +1,4 @@
+import { isClaudeNativeInterruption } from '#features/code/common/native-interruption.ts'
 import { presentClaudeCommandHistory } from '#features/code/be/services/claude-code/command-history.ts'
 import type { ClaudeNativeJournalEntry } from '#features/code/be/services/claude-code/terminal-journal.ts'
 import type { BlockConfig, MessageReferences } from './types.ts'
@@ -7,6 +8,7 @@ export function projectClaudeTerminalHistory(entry: ClaudeNativeJournalEntry): {
   uuid: string; sessionId: string; timestamp?: number; sender: 'user' | 'assistant' | 'system'; text: string; blocks: BlockConfig[]; references?: MessageReferences; context: Record<string, unknown>
 } | undefined {
   const source = entry.row
+  if (isClaudeNativeInterruption(source)) return
   // Original ui.log persists a transcript-only informational notice, outside model messages.
   if (source.type === 'system' && source.subtype === 'informational' && source.level === 'notice') {
     if (source.sessionId !== entry.sessionId || source.entrypoint !== 'cli' || source.isSidechain === true
