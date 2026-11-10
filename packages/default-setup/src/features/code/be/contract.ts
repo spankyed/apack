@@ -90,9 +90,10 @@ export type IncomingCommitEvents =
 export type OutgoingCommitEvents =
   /**
    * What the commit panel shows of the checkout. `watching` is false when its file watches could not be opened or
-   * have failed: the panel then changes only when it is asked again, and says so
+   * have failed: the panel then changes only when it is asked again, and says so. `truncated` says there are more
+   * changed files than `files` lists
    */
-  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
+  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
   | { type: 'commit.DIFF_RECEIVED'; data: GitDiff }
   | { type: 'commit.FILES_STAGED'; data: { paths: string[] } }
   | { type: 'commit.FILES_UNSTAGED'; data: { paths: string[] } }

@@ -182,6 +182,14 @@
       Live updates are off for this repository. It is read again when you return to this window or press Refresh.
     </div>
 
+    <!-- The repository has more changed files than are listed -->
+    <div
+      v-if="isStatusTruncated && !gitError"
+      class="px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
+    >
+      Too many changes to list them all. Showing the first {{ gitStatus.length.toLocaleString() }}.
+    </div>
+
     <!-- Git Error (only show non-directory errors) -->
     <div v-if="gitError && !isNoDirectoryError" class="p-3 border-b border-red-800 bg-red-900/20">
       <div class="flex items-start gap-2">
@@ -680,6 +688,7 @@ const availableBranches = useSelector(commitActor, (state) => state.context.avai
 const branchInput = useSelector(commitActor, (state) => state.context.branchInput)
 const isCheckingOutBranch = useSelector(commitActor, (state) => state.context.isCheckingOutBranch)
 const hasUpstream = useSelector(commitActor, (state) => state.context.hasUpstream)
+const isStatusTruncated = useSelector(commitActor, (state) => state.context.isStatusTruncated)
 const isWatchingRepository = useSelector(commitActor, (state) => state.context.isWatchingRepository)
 const commitsAhead = useSelector(commitActor, (state) => state.context.commitsAhead)
 const commitsBehind = useSelector(commitActor, (state) => state.context.commitsBehind)

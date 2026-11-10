@@ -129,7 +129,7 @@ export const commitSystem = setup({
         return context.gitRepository!.readSnapshot({ fetch: true }).then((snapshot) => {
           answer(reply, {
             type: 'commit.STATUS_RECEIVED',
-            data: { files: snapshot.files, branch: snapshot.branch, hasUpstream: snapshot.hasUpstream, commitsAhead: snapshot.ahead, commitsBehind: snapshot.behind, watching: !context.gitRepository!.hasWatchFailed }
+            data: { files: snapshot.files, truncated: snapshot.truncated, branch: snapshot.branch, hasUpstream: snapshot.hasUpstream, commitsAhead: snapshot.ahead, commitsBehind: snapshot.behind, watching: !context.gitRepository!.hasWatchFailed }
           })
         })
       }).catch((error: any) => {

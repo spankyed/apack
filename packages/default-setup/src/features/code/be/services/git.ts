@@ -22,6 +22,18 @@ function refArgument(name: string, what = 'ref'): string {
   return name
 }
 
+/**
+ * The records of a listing whose fields are separated by NUL and whose records, under `-z`, end with one: every
+ * `fields` values are one record. NUL is the one byte a commit message, a ref or a path cannot hold, so no
+ * subject or body can be mistaken for a separator.
+ */
+function recordsOf(output: string, fields: number): string[][] {
+  const values = output.split('\0')
+  const records: string[][] = []
+  for (let i = 0; i + fields <= values.length; i += fields) records.push(values.slice(i, i + fields))
+  return records
+}
+
 /** A stash a caller named by its position in the list */
 function stashArgument(index: number): string {
   if (!Number.isInteger(index) || index < 0) throw new Error(`Invalid stash index: ${JSON.stringify(index)}`)
@@ -39,8 +51,42 @@ function commitArgument(hash: string): string {
  * optional locks, so a read made in the background (a status after a file changed) never holds `index.lock`
  * against a git the user or an agent runs in the same repository.
  */
-const gitEnvironment = (): NodeJS.ProcessEnv =>
-  ({ ...agentChildEnvironment(process.env), GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' })
+const gitEnvironment = (): NodeJS.ProcessEnv => ({
+  ...agentChildEnvironment(process.env),
+  GIT_TERMINAL_PROMPT: '0',
+  GIT_OPTIONAL_LOCKS: '0',
+  // Git translates its messages, and what a failure means is read from them here: in English, whatever the
+  // user's locale is
+  LANGUAGE: 'en',
+  LC_ALL: 'en_US.UTF-8',
+  LANG: 'en_US.UTF-8',
+})
+
+/** What a caller is told when there is no git to run */
+const GIT_NOT_INSTALLED = 'Git is not installed. Please install Git to use version control features.'
+
+/**
+ * How long git's output may stay silent after git itself has exited before its pipes are given up on. A hook
+ * that leaves a process running in the background leaves it holding those pipes, and they would otherwise stay
+ * open, and the command unanswered, for as long as that process lives.
+ */
+const EXIT_GRACE_MS = 250
+
+/** The most changed files a snapshot lists; past it the list is cut and says so */
+export const STATUS_LIMIT = 10_000
+
+/** Subcommands that only read, which wait for nothing: no lock is taken, as `GIT_OPTIONAL_LOCKS` says */
+const READS = new Set(['status', 'rev-parse', 'for-each-ref', 'ls-files', 'check-attr', 'diff', 'show', 'cat-file', 'rev-list', 'symbolic-ref', 'log', 'branch'])
+/** Subcommands that talk to a remote and touch no index, which wait only for each other */
+const NETWORK = new Set(['fetch', 'push'])
+
+/** Which commands a command waits behind: none for a read, the other remote commands, or the other writes */
+function laneOf(args: string[]): 'read' | 'network' | 'write' {
+  const [command, verb] = args
+  if (READS.has(command!) || (command === 'config' && verb === '--get')) return 'read'
+  if ((command === 'stash' || command === 'worktree') && verb === 'list') return 'read'
+  return NETWORK.has(command!) ? 'network' : 'write'
+}
 
 /** Thrown when a stash apply/pop succeeds partially but leaves conflicts. */
 export class StashConflictError extends Error {
@@ -72,6 +118,10 @@ interface GitCommandResult {
   success: boolean
   output?: string
   error?: string
+  /** Git printed more than is read, so `output` is its beginning */
+  truncated?: boolean
+  /** There is no git to run */
+  missing?: boolean
 }
 
 interface GitCommandError extends Error {
@@ -88,6 +138,8 @@ interface CachedResult<T> {
 /** What the commit panel shows of a checkout, read in one pass */
 export interface RepositorySnapshot {
   files: GitStatusFile[]
+  /** Whether there are more changed files than `files` lists */
+  truncated: boolean
   /** The branch checked out, or `HEAD` when none is */
   branch: string
   /** Whether the branch tracks a remote branch that exists */
@@ -112,7 +164,7 @@ function statusOf(code: string): GitStatusFile['status'] {
 
 /** Reads `git status --porcelain=v2 --branch -z`: the branch headers and one record per changed path */
 export function parseStatus(output: string): RepositorySnapshot {
-  const snapshot: RepositorySnapshot = { files: [], branch: 'HEAD', hasUpstream: false, ahead: 0, behind: 0 }
+  const snapshot: RepositorySnapshot = { files: [], truncated: false, branch: 'HEAD', hasUpstream: false, ahead: 0, behind: 0 }
   const records = output.split('\0')
   /** A record's path is everything after its fixed fields, since a path may hold spaces */
   const pathAfter = (record: string, fields: number): string => record.split(' ').slice(fields).join(' ')
@@ -154,8 +206,8 @@ export class GitRepository {
   private cache = new Map<string, CachedResult<any>>()
   private readonly CACHE_TTL = 5000 // 5 seconds
   private readonly PARENT_BRANCH_SEARCH_DEPTH = 25
-  /** Serializes all git process invocations to prevent index.lock races. */
-  private commandQueue: Promise<void> = Promise.resolve()
+  /** The commands that wait for each other: writes to the index in one line, remote commands in another */
+  private lanes = { write: Promise.resolve(), network: Promise.resolve() }
   private _writeInProgress = 0
   private _writeCompleteCallbacks: (() => void)[] = []
   private _lastFetchTimestamp = 0
@@ -202,11 +254,39 @@ export class GitRepository {
     }
   }
 
-  /** Run fn serially on the command queue (used by executeGitCommand). */
-  private enqueueCommand<T>(fn: () => Promise<T>): Promise<T> {
-    const op = this.commandQueue.then(fn, fn)
-    this.commandQueue = op.then(() => {}, () => {})
+  /**
+   * Runs a command in its lane. A read runs at once: it takes no lock, so it has nothing to wait for, and a
+   * status asked during a slow commit or a fetch is answered while that runs. Writes run one at a time, since
+   * each takes the index lock, and remote commands one at a time beside them.
+   */
+  private enqueueCommand<T>(lane: 'read' | 'network' | 'write', fn: () => Promise<T>): Promise<T> {
+    if (lane === 'read') return fn()
+    const op = this.lanes[lane].then(fn, fn)
+    this.lanes[lane] = op.then(() => {}, () => {})
     return op
+  }
+
+  /**
+   * Runs git, answering once it has exited and its output has gone quiet, without waiting for its pipes to
+   * close: a process a hook left behind holds them open for as long as it lives.
+   */
+  private runGit(args: string[], encoding: BufferEncoding): Promise<{ stdout: string; stderr: string }> {
+    const running = execFileWhileWorking('git', ['-c', 'color.ui=never', ...args], {
+      cwd: this.workingDirectory,
+      env: gitEnvironment(),
+      maxBuffer: 10 * 1024 * 1024, // 10MB buffer limit
+      encoding,
+    })
+    const { child } = running
+    let grace: NodeJS.Timeout | undefined
+    const giveUpOnPipes = () => { child.stdout?.destroy(); child.stderr?.destroy() }
+    const quiet = () => { clearTimeout(grace); grace = setTimeout(giveUpOnPipes, EXIT_GRACE_MS) }
+    child.once('exit', () => {
+      child.stdout?.on('data', quiet)
+      child.stderr?.on('data', quiet)
+      quiet()
+    })
+    return running.finally(() => clearTimeout(grace))
   }
 
   /** Wrap a write operation to track write-in-progress for watcher suppression. */
@@ -319,23 +399,22 @@ export class GitRepository {
   }
 
   private executeGitCommand(args: string[]): Promise<GitCommandResult> {
-    return this.enqueueCommand(async () => {
-      // Always add --color=never to prevent ANSI codes
-      const colorlessArgs = ['-c', 'color.ui=never', ...args]
-
+    return this.enqueueCommand(laneOf(args), async () => {
       try {
         // Ended when it stops working, not when a clock runs out: a fetch stalled on the network would
-        // otherwise hold this repository's queue, and every later command with it, until the app restarts
-        const { stdout } = await execFileWhileWorking('git', colorlessArgs, {
-          cwd: this.workingDirectory,
-          env: gitEnvironment(),
-          maxBuffer: 10 * 1024 * 1024, // 10MB buffer limit
-          encoding: 'utf8'
-        })
+        // otherwise hold its lane, and every later remote command with it, until the app restarts
+        const { stdout } = await this.runGit(args, 'utf8')
 
         return { success: true, output: stdout }
       } catch (error) {
         const gitError = error as GitCommandError
+
+        if (gitError.code === 'ENOENT') {
+          return { success: false, error: GIT_NOT_INSTALLED, missing: true }
+        }
+        if (gitError.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
+          return { success: false, error: gitError.message, output: gitError.stdout, truncated: true }
+        }
 
         // Special cases where non-zero exit codes are expected
         if (gitError.code === 1 && args[0] === 'diff') {
@@ -426,12 +505,19 @@ export class GitRepository {
     const shown = await this.executeGitCommand(['config', '--get', 'status.showUntrackedFiles'])
     const untracked = shown.success && shown.output?.trim() === 'no' ? 'no' : 'all'
     const status = await this.executeGitCommand(['status', '--porcelain=v2', '--branch', `--untracked-files=${untracked}`, '-z'])
-    if (!status.success) {
+    if (!status.success && !status.truncated) {
       throw new Error(status.error || 'Failed to get git status')
+    }
+    // Git printed more than is read: what was read ends inside a record, which is dropped with the rest
+    const output = status.truncated ? (status.output ?? '').slice(0, (status.output ?? '').lastIndexOf('\0') + 1) : status.output ?? ''
+    const value = parseStatus(output)
+    if (status.truncated || value.files.length > STATUS_LIMIT) {
+      value.files = value.files.slice(0, STATUS_LIMIT)
+      value.truncated = true
     }
     // Refs move without the status moving: a fetch, a branch made or deleted, a stash
     const refs = await this.executeGitCommand(['for-each-ref', '--format=%(objectname) %(refname)'])
-    return { value: parseStatus(status.output || ''), identity: `${status.output}\n${refs.output ?? ''}` }
+    return { value, identity: `${output}\n${refs.output ?? ''}` }
   }
 
   /**
@@ -798,15 +884,9 @@ export class GitRepository {
 
   /** Execute a git command and return raw binary buffer output. */
   private executeGitCommandBinary(args: string[]): Promise<Buffer> {
-    return this.enqueueCommand(async () => {
-      const colorlessArgs = ['-c', 'color.ui=never', ...args]
+    return this.enqueueCommand(laneOf(args), async () => {
       // Read as latin1, which maps each byte to one character and back, so the bytes survive a text channel
-      const { stdout } = await execFileWhileWorking('git', colorlessArgs, {
-        cwd: this.workingDirectory,
-        env: gitEnvironment(),
-        maxBuffer: 10 * 1024 * 1024,
-        encoding: 'latin1'
-      })
+      const { stdout } = await this.runGit(args, 'latin1')
       return Buffer.from(stdout, 'latin1')
     })
   }
@@ -963,8 +1043,10 @@ export class GitRepository {
     }
   }
 
+  /** Whether the working directory is in a repository. Rejects when there is no git to ask. */
   async isGitRepository(): Promise<boolean> {
     const result = await this.executeGitCommand(['rev-parse', '--git-dir'])
+    if (result.missing) throw new Error(GIT_NOT_INSTALLED)
     return result.success
   }
 
@@ -1210,36 +1292,30 @@ export class GitRepository {
     })
   }
 
+  /**
+   * Every local branch, then every remote one, each most recently committed first. A branch of `origin` is
+   * named as the local branch it would be checked out as; one of another remote keeps `remotes/<remote>/`.
+   */
   async getAllBranches(): Promise<string[]> {
-    // Get all local and remote branches
-    const result = await this.executeGitCommand(['branch', '-a', '--no-color', '--sort=-committerdate'])
+    // Read from the refs themselves, one per record: `git branch` decorates its lines for a person, marking the
+    // current branch, one checked out in another worktree and a detached HEAD
+    const result = await this.executeGitCommand([
+      'for-each-ref', '--sort=-committerdate', '--format=%(refname)', 'refs/heads', 'refs/remotes',
+    ])
     if (!result.success) {
       throw new Error(result.error || 'Failed to get branches')
     }
-    
-    // Parse the output to extract branch names
-    const branches = (result.output || '')
-      .split('\n')
-      .filter(line => line.trim())
-      .map(line => {
-        // Remove the current branch marker (*) and any leading/trailing whitespace
-        line = line.trim().replace(/^\*\s*/, '')
-        
-        // Handle remote branches - remove "remotes/origin/" prefix
-        if (line.startsWith('remotes/origin/')) {
-          // Skip HEAD pointer
-          if (line.includes('HEAD ->')) return null
-          return line.replace('remotes/origin/', '')
-        }
-        
-        return line
-      })
-      .filter((branch): branch is string => branch !== null)
-      
-    // Case-insensitive dedup — prefer remote names (correct case from server) over local names
-    // Since git branch -a lists local first then remote, a remote duplicate overwrites a wrong-case local entry
+
+    const refs = (result.output || '').split('\n').filter(Boolean)
+    const local = refs.filter(ref => ref.startsWith('refs/heads/')).map(ref => ref.slice('refs/heads/'.length))
+    const remote = refs
+      .filter(ref => ref.startsWith('refs/remotes/') && !ref.endsWith('/HEAD'))
+      .map(ref => ref.startsWith('refs/remotes/origin/') ? ref.slice('refs/remotes/origin/'.length) : ref.slice('refs/'.length))
+
+    // Case-insensitive dedup — prefer remote names (correct case from server) over local names: a remote
+    // duplicate overwrites a wrong-case local entry, in the local entry's place
     const seen = new Map<string, string>()
-    for (const branch of branches) {
+    for (const branch of [...local, ...remote]) {
       seen.set(branch.toLowerCase(), branch)
     }
     return [...seen.values()]
@@ -1455,7 +1531,7 @@ export class GitRepository {
   }
 
   async stashList(): Promise<StashEntry[]> {
-    const result = await this.executeGitCommand(['stash', 'list', '--format=%gd|||%s|||%ai'])
+    const result = await this.executeGitCommand(['stash', 'list', '-z', '--format=%gd%x00%s%x00%ai'])
     if (!result.success) {
       // Empty stash list is not an error
       if (result.error?.includes('unknown revision')) return []
@@ -1463,15 +1539,12 @@ export class GitRepository {
     }
     if (!result.output?.trim()) return []
 
-    return result.output.trim().split('\n').map((line, i) => {
-      const parts = line.split('|||')
-      return {
-        index: i,
-        ref: parts[0] || `stash@{${i}}`,
-        message: parts[1] || '',
-        date: parts[2] || ''
-      }
-    })
+    return recordsOf(result.output, 3).map((parts, i) => ({
+      index: i,
+      ref: parts[0] || `stash@{${i}}`,
+      message: parts[1] || '',
+      date: parts[2] || ''
+    }))
   }
 
   async stashApply(index: number): Promise<void> {
@@ -1617,57 +1690,38 @@ export class GitRepository {
   }
 
   async getCommitsBetweenBranches(baseBranch: string, targetBranch = 'HEAD'): Promise<{ subject: string; body: string }[]> {
-    const separator = '---COMMIT_SEP---'
     const result = await this.executeGitCommand([
-      'log', `${refArgument(baseBranch, 'base branch')}..${refArgument(targetBranch, 'branch')}`,
-      `--format=%s${separator}%b${separator}`,
+      'log', '-z', `${refArgument(baseBranch, 'base branch')}..${refArgument(targetBranch, 'branch')}`,
+      '--format=%s%x00%b',
       '--reverse'
     ])
-    if (!result.success || !result.output?.trim()) return []
+    if (!result.success || !result.output) return []
 
-    return result.output
-      .split(separator + '\n')
-      .filter(chunk => chunk.trim())
-      .map(chunk => {
-        const parts = chunk.split(separator)
-        return {
-          subject: (parts[0] || '').trim(),
-          body: (parts[1] || '').trim()
-        }
-      })
+    return recordsOf(result.output, 2)
+      .map(([subject, body]) => ({ subject: (subject || '').trim(), body: (body || '').trim() }))
       .filter(c => c.subject)
   }
 
   // --- Commit log operations ---
 
   async gitLog(count = 50): Promise<CommitLogEntry[]> {
-    const separator = '|||'
-    const recordSep = '---RECORD_SEP---'
-    const format = [
-      '%H', '%h', '%s', '%b', '%an', '%ae', '%aI', '%D'
-    ].join(separator)
     const result = await this.executeGitCommand([
-      'log', `-n${count}`,
-      `--format=${format}${recordSep}`,
+      'log', '-z', `-n${count}`,
+      '--format=%H%x00%h%x00%s%x00%b%x00%an%x00%ae%x00%aI%x00%D',
     ])
-    if (!result.success || !result.output?.trim()) return []
+    if (!result.success || !result.output) return []
 
-    return result.output
-      .split(recordSep)
-      .filter(chunk => chunk.trim())
-      .map(chunk => {
-        const parts = chunk.trim().split(separator)
-        return {
-          hash: (parts[0] || '').trim(),
-          shortHash: (parts[1] || '').trim(),
-          subject: (parts[2] || '').trim(),
-          body: (parts[3] || '').trim(),
-          authorName: (parts[4] || '').trim(),
-          authorEmail: (parts[5] || '').trim(),
-          date: (parts[6] || '').trim(),
-          refs: (parts[7] || '').trim(),
-        }
-      })
+    return recordsOf(result.output, 8)
+      .map(parts => ({
+        hash: (parts[0] || '').trim(),
+        shortHash: (parts[1] || '').trim(),
+        subject: (parts[2] || '').trim(),
+        body: (parts[3] || '').trim(),
+        authorName: (parts[4] || '').trim(),
+        authorEmail: (parts[5] || '').trim(),
+        date: (parts[6] || '').trim(),
+        refs: (parts[7] || '').trim(),
+      }))
       .filter(c => c.hash)
   }
 

@@ -1618,8 +1618,8 @@ declare class GitRepository {
     private cache;
     private readonly CACHE_TTL;
     private readonly PARENT_BRANCH_SEARCH_DEPTH;
-    /** Serializes all git process invocations to prevent index.lock races. */
-    private commandQueue;
+    /** The commands that wait for each other: writes to the index in one line, remote commands in another */
+    private lanes;
     private _writeInProgress;
     private _writeCompleteCallbacks;
     private _lastFetchTimestamp;
@@ -1645,8 +1645,17 @@ declare class GitRepository {
     get isWriteInProgress(): boolean;
     /** Register a one-shot callback that fires when all pending writes finish. */
     onWriteComplete(callback: () => void): void;
-    /** Run fn serially on the command queue (used by executeGitCommand). */
+    /**
+     * Runs a command in its lane. A read runs at once: it takes no lock, so it has nothing to wait for, and a
+     * status asked during a slow commit or a fetch is answered while that runs. Writes run one at a time, since
+     * each takes the index lock, and remote commands one at a time beside them.
+     */
     private enqueueCommand;
+    /**
+     * Runs git, answering once it has exited and its output has gone quiet, without waiting for its pipes to
+     * close: a process a hook left behind holds them open for as long as it lives.
+     */
+    private runGit;
     /** Wrap a write operation to track write-in-progress for watcher suppression. */
     private withWriteFlag;
     private validateWorkingDirectory;
@@ -1730,6 +1739,7 @@ declare class GitRepository {
         gitDir: string;
         commonDir: string;
     } | null>;
+    /** Whether the working directory is in a repository. Rejects when there is no git to ask. */
     isGitRepository(): Promise<boolean>;
     hasUncommittedChanges(): Promise<boolean>;
     getStagedFiles(): Promise<GitStatusFile[]>;
@@ -1751,6 +1761,10 @@ declare class GitRepository {
     getFileContentFromBranch(filePath: string, branch: string): Promise<string>;
     fetchRemoteBranch(branch: string): Promise<void>;
     deleteRemoteBranch(branch: string): Promise<void>;
+    /**
+     * Every local branch, then every remote one, each most recently committed first. A branch of `origin` is
+     * named as the local branch it would be checked out as; one of another remote keeps `remotes/<remote>/`.
+     */
     getAllBranches(): Promise<string[]>;
     checkoutBranch(branchName: string): Promise<void>;
     isCurrentBranchPublished(): Promise<boolean>;
@@ -3212,12 +3226,14 @@ type OutgoingCodeEvents = OutgoingExplorerEvents | OutgoingSearchEvents | Outgoi
 type OutgoingCommitEvents = 
 /**
  * What the commit panel shows of the checkout. `watching` is false when its file watches could not be opened or
- * have failed: the panel then changes only when it is asked again, and says so
+ * have failed: the panel then changes only when it is asked again, and says so. `truncated` says there are more
+ * changed files than `files` lists
  */
 {
     type: 'commit.STATUS_RECEIVED';
     data: {
         files: GitStatusFile[];
+        truncated: boolean;
         branch: string;
         hasUpstream: boolean;
         commitsAhead: number;
@@ -4635,6 +4651,8 @@ type Repositories = OwnRepositories;
 /** What the commit panel shows of a checkout, read in one pass */
 interface RepositorySnapshot {
     files: GitStatusFile[];
+    /** Whether there are more changed files than `files` lists */
+    truncated: boolean;
     /** The branch checked out, or `HEAD` when none is */
     branch: string;
     /** Whether the branch tracks a remote branch that exists */
