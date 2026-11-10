@@ -407,8 +407,8 @@ the whole typecheck, `apack pack build`, `check:specifiers`' emulator rule in bo
 surface's sixteen frontend spec files, 104 cases. Three items below came out differently from how they are
 written, and each is recorded in [evidence](../references/evidence/one-vt-core.md) rather than quietly
 amended here — the viewport element (there is none, the emulator draws its own scrollbar), the addon
-replacements (three stop being dependencies at all) and OSC 52, which is a **regression** and the one thing
-this phase does not deliver. What is left is Phase A's: nothing has been run in the app, and the question
+replacements (three stop being dependencies at all) and OSC 52, which the emulator does not surface at all
+and which the pool now reads out of the output itself. What is left is Phase A's: nothing has been run in the app, and the question
 only the app can answer is whether this emulator opens into the pool's detached wrapper and survives being
 re-parented, since `open()` needs a 2D canvas context and jsdom has none.
 
@@ -452,7 +452,7 @@ two sides land independently, which is a property of the split being real.
 
 **Done when** every item above holds and no `@xterm` specifier remains outside this goal's own history.
 
-**Carried into Phase A:** the detached-wrapper question above, OSC 52, and one measurement with a number
+**Carried into Phase A:** the detached-wrapper question above, and one measurement with a number
 already attached — the emulator's JavaScript fell from 502 KiB to 134, while the bundle grew 184 KiB,
 because the 414 KiB WebAssembly module is inlined as 552 KiB of base64 by the package's own library build.
 The package exports the module as a file too, and Phase 0b proved that route end to end, so moving it there
@@ -497,7 +497,7 @@ before cutover**, not after seeing the numbers.
 | Requirement | Implementation / source | Evidence | Remaining work |
 |---|---|---|---|
 | Broker on `libghostty-vt`, `alacritty_terminal` gone | **done, and the pin is moved** | `pre-push` green on the merged commit, 135 tests and 61 mutants with none missed; 97 tests on Windows MSVC; [evidence](../references/evidence/one-vt-core.md) | — |
-| Window on the same core's WASM, `@xterm/*` gone | **done, and drawn in the app** | typecheck, pack build, `check:specifiers`, 104 cases, and a driven run: opens detached, draws, survives a re-parent; [evidence](../references/evidence/one-vt-core.md) | OSC 52 is a named regression; the fuller behaviour pass |
+| Window on the same core's WASM, `@xterm/*` gone | **done, and drawn in the app** | typecheck, pack build, `check:specifiers`, 113 cases, and a driven run: opens detached, draws, survives a re-parent; [evidence](../references/evidence/one-vt-core.md) | the fuller behaviour pass |
 | No Zig, no compile-time network, no run-time CDN | **held, with one finding** | the broker links a library supplied to the build (`vt-prebuilt` fetches and verifies; Windows is built out of band from the signed tarballs); the renderer's module is inlined in the package it comes from | the crate's prebuilt-directory hatch asserts a POSIX file name, so Windows runs it only with a copy under that name — [evidence](../references/evidence/one-vt-core.md) |
 | Every relied-on capability asserted present | missing | — | D7's declaration and its check |
 | Conformance corpus passes, or each difference decided | **done** — and the snapshots now hold the core to the old parser's output | ten cases; [evidence](../references/evidence/one-vt-core.md#2026-11-09--phase-0a-passes-the-two-parsers-agree-with-three-decided-differences) | — |

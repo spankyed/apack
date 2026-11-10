@@ -920,3 +920,35 @@ one. A broker that passes 135 tests and 61 mutants still exits 137 when the app 
 **A mistake of mine, recorded because it nearly hid this.** The first probe was
 `./node/apack-terminal --help | head -10`, and I read the exit status of `head`. It printed 0, so the
 binary looked healthy and the hunt went to the app. The binary had been dying from the first run.
+
+
+## 2026-11-09 — OSC 52 is closed, which is what Phase R left open
+
+Phase R recorded the loss of `@xterm/addon-clipboard` as a **regression** rather than a parity gap: a
+program's `ESC ] 52` reached the system clipboard before and did not after, and `ghostty-web` surfaces no
+OSC 52 at all. The repository's documentation rule is that archiving or recording never defers an unmet
+requirement, and Phase R's own text says to *test* OSC clipboard behaviour rather than widen a permission
+to reach it — so it is implemented rather than carried.
+
+**The pool reads it out of the output it already receives.** The bytes still go to the emulator, which
+ignores them, so nothing is consumed and the order of the two does not matter.
+
+`takeClipboardWrites(pending, chunk)` is pure and carries its own tail. **The case that feeds it a byte at
+a time is what earned that shape**: an implementation that only looks at whole chunks loses a sequence
+whose introducer is split, because `\x1b`, then `]`, then `5` each match nothing and are dropped
+individually. It holds the longest tail that could still become an introducer, and that case failed until
+it did.
+
+Nine cases, each a decision rather than a restatement:
+
+| | |
+|---|---|
+| both terminators | BEL and ST, since programs use both |
+| a byte at a time | the split-introducer bug above |
+| several in one chunk | not only the first |
+| non-ASCII | base64 of UTF-8, which a latin1 decode gets wrong |
+| `ESC ] 52 ; c ; ?` | **answered with nothing, deliberately** — it asks the terminal to send the clipboard *to the program*, including one at the far end of an ssh connection |
+| not base64 | not a clipboard write |
+| ordinary output | nothing held, so the carry cannot grow on normal traffic |
+| never terminated | given up on at a megabyte rather than held forever |
+| through the pool | a terminal receiving the sequence puts the text on the clipboard |
