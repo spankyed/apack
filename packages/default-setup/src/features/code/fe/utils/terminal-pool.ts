@@ -114,6 +114,14 @@ interface PoolEntry {
   savedViewportY: number | null
   /** An unfinished clipboard request, held until the read that completes it (`takeClipboardWrites`) */
   clipboardPending: string
+  /**
+   * Set while the view is being put back where the user had it after a write moved it.
+   *
+   * The emulator raises its own scroll for both halves of that — the snap and the correction — and
+   * reporting them would tell the host the session stopped following and then started again, twice per
+   * chunk of output.
+   */
+  restoringScroll?: boolean
 }
 
 /**
@@ -497,7 +505,8 @@ class TerminalPool {
       isShowingLoadingContent: false,
       pinnedToBottom: true,
       savedViewportY: null,
-      clipboardPending: ''
+      clipboardPending: '',
+      restoringScroll: false
     }
 
     // Shift+Enter inserts a newline instead of executing. Wired once here
@@ -542,7 +551,29 @@ class TerminalPool {
         term.clear()
         entry.isShowingLoadingContent = false
       }
+      // **The emulator snaps the view to the bottom on every write once the user has scrolled back**, so
+      // a session reading its own history is dragged to the end by output it is not looking at. That is one
+      // of the journeys the terminal complaint was about, and the window is where it has to be undone: the
+      // behaviour is `writeInternal`'s, in a dependency.
+      //
+      // Undone by putting the view back where it was, plus however many lines the write added — the user
+      // is reading *content*, and the distance from the bottom to that content is what grew. Both the
+      // snap and this correction happen before the frame that paints, so nothing flickers.
+      const wasScrolledBack = term.viewportY
+      const linesBefore = term.getScrollbackLength()
+
       term.write(data)
+
+      if (wasScrolledBack !== 0) {
+        entry.restoringScroll = true
+        try {
+          const grew = term.getScrollbackLength() - linesBefore
+          term.scrollToBottom()
+          term.scrollLines(-(wasScrolledBack + grew))
+        } finally {
+          entry.restoringScroll = false
+        }
+      }
 
       // **What the emulator does not surface** (OSC 52). The bytes have already gone to it, which ignores
       // them; this reads the same chunk for what a program asked to be put on the clipboard.
@@ -630,6 +661,9 @@ class TerminalPool {
      * own scrollbar.
      */
     const report = (viewportY: number) => {
+      // Both halves of a restore raise a scroll of their own; neither is the user moving (see
+      // `restoringScroll`)
+      if (entry.restoringScroll) return
       const following = viewportY === 0
       entry.pinnedToBottom = following
       handlers.onFollowingChange?.(following)

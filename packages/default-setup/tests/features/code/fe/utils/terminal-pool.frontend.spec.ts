@@ -21,6 +21,8 @@ let focused = 0
 
 /** What the pool built each emulator with, so a case can assert a bound it derives rather than pins */
 const builtWith: Array<Record<string, unknown>> = []
+/** Each emulator the pool constructed, so a case can drive the one it just made */
+const builtEmulators: Array<{ viewportY: number; scrollbackLength: number }> = []
 
 /** The fit addon the pool loads. Inert: what it does needs a renderer, and none of it is under test */
 class StubAddon {
@@ -63,14 +65,24 @@ vi.mock('ghostty-web', () => ({
     // app, so the stand-in refuses what the emulator refuses.
     opened = false
     assertOpen(what: string) { if (!this.opened) throw new Error(`Terminal must be opened before ${what}`) }
-    constructor(options: Record<string, unknown> = {}) { builtWith.push(options) }
+    constructor(options: Record<string, unknown> = {}) { builtWith.push(options); builtEmulators.push(this) }
     loadAddon() {}
     registerLinkProvider(provider: { provideLinks(y: number, cb: (links: unknown[] | undefined) => void): void }) {
       this.assertOpen('registering link providers')
       linkProviders.push(provider)
     }
     open(host: HTMLElement) { host.appendChild(this.element); this.opened = true }
-    write(data: string, done?: () => void) { this.assertOpen('use'); written.push(data); done?.() }
+    scrollbackLength = 0
+    write(data: string, done?: () => void) {
+      this.assertOpen('use')
+      written.push(data)
+      // **As the emulator does**: a write appends to the scrollback and, if the view is scrolled back,
+      // snaps it to the bottom. That second part is what the pool has to undo, so the stand-in has to do
+      // it or the case asserts nothing.
+      this.scrollbackLength += (data.match(/\n/g) ?? []).length
+      if (this.viewportY !== 0) this.viewportY = 0
+      done?.()
+    }
     paste(data: string) { this.assertOpen('use'); pasted.push(data) }
     onData(handler: (data: string) => void) { onDataHandlers.push(handler); return { dispose() {} } }
     onResize(handler: (size: { cols: number; rows: number }) => void) {
@@ -90,7 +102,7 @@ vi.mock('ghostty-web', () => ({
     focus() { focused += 1 }
     scrollToBottom() { this.viewportY = 0 }
     scrollLines(amount: number) { this.assertOpen('use'); this.viewportY = Math.max(0, this.viewportY - amount) }
-    getScrollbackLength() { return 0 }
+    getScrollbackLength() { return this.scrollbackLength }
     dispose() {}
     // As the emulator's does: the grid changes and it raises its own `resize` for it, which is the feed
     // the pool reports what this window fitted through
@@ -159,6 +171,13 @@ const holdTheModuleLoad = () => {
   let release = () => {}
   loadGate = { promise: new Promise<void>((resolve) => { release = resolve }), release: () => release() }
   return () => loadGate?.release()
+}
+
+/** The emulator the pool built last, which is the one the case just asked for */
+const lastBuilt = () => {
+  const term = builtEmulators.at(-1)
+  if (!term) throw new Error('nothing has built an emulator')
+  return term
 }
 
 /** The one key handler `ensure` wired, driven as the emulator would drive it */
@@ -647,6 +666,66 @@ describe('a session that is still opening', () => {
  * remote `vim`'s yank and `tmux save-buffer` working. The sequence arrives split across reads as often as
  * not, which is the whole reason the function is pure and takes its own carry.
  */
+/**
+ * Where the view stays while output arrives.
+ *
+ * **The emulator snaps to the bottom on every write once the user has scrolled back** — its
+ * `writeInternal` ends with `viewportY !== 0 && scrollToBottom()`, and a driven run confirmed it: the
+ * canvas fingerprint while scrolled back and after one more line were different, so the screen had moved.
+ * A session reading its own history being dragged to the end by output it is not looking at is one of the
+ * journeys the terminal complaint was about, so the pool puts it back.
+ */
+describe('the view while output arrives', () => {
+  const emulator = () => {
+    const term = lastBuilt()
+    return term
+  }
+
+  it('keeps the user where they were, allowing for what the write added', async () => {
+    const terminal = info()
+    await terminalPool.ensure(terminal, () => {})
+    const term = emulator()
+    const id = (terminal as unknown as { id: string }).id
+
+    // The user scrolls back twelve lines
+    term.viewportY = 12
+
+    // Three lines arrive, which the emulator appends and then snaps to the bottom for
+    terminalEventBus.emit(id, 'one\ntwo\nthree\n')
+
+    // Back where they were *in the content*: twelve from the old bottom is fifteen from the new one
+    expect(term.viewportY, 'output dragged the view to the end').toBe(15)
+  })
+
+  it('leaves a session that is following its output at the bottom', async () => {
+    const terminal = info()
+    await terminalPool.ensure(terminal, () => {})
+    const term = emulator()
+    const id = (terminal as unknown as { id: string }).id
+
+    expect(term.viewportY).toBe(0)
+    terminalEventBus.emit(id, 'more output\n')
+
+    expect(term.viewportY, 'a following session was scrolled off the end').toBe(0)
+  })
+
+  it('does not tell the host the session stopped and started following for one write', async () => {
+    const terminal = info()
+    await terminalPool.ensure(terminal, () => {})
+    const term = emulator()
+    const id = (terminal as unknown as { id: string }).id
+    const following: boolean[] = []
+    terminalPool.attach(id, host(), { onFollowingChange: (is) => following.push(is) })
+    following.length = 0
+    term.viewportY = 9
+
+    terminalEventBus.emit(id, 'a line\n')
+
+    // The snap and the correction each raise a scroll; neither is the user moving
+    expect(following, 'the scroll control was told the session moved').toEqual([])
+  })
+})
+
 describe('a clipboard request in the output', () => {
   const osc52 = (payload: string, terminator = '\x07') => `\x1b]52;c;${payload}${terminator}`
   const base64 = (text: string) => btoa(String.fromCharCode(...new TextEncoder().encode(text)))
