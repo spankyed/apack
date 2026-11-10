@@ -19,14 +19,12 @@ export type SubscribeToDirectory = (
 ) => Promise<{ unsubscribe(): Promise<void> }>
 
 /**
- * `@parcel/watcher`, loaded on first use. It is a native binding the host resolves, so a build that lacks its
- * binary fails here, where the failure costs this checkout its watching, rather than at import, where it would
- * cost the pack its load.
+ * The platform's watcher, loaded on first use: a build that lacks its binary fails here, where the failure
+ * costs this checkout its watching, rather than at import, where it would cost the pack its load.
  */
 const subscribeWithParcel: SubscribeToDirectory = async (directory, onEvents, options) => {
-  const loaded = await import('@parcel/watcher')
-  const watcher = 'subscribe' in loaded ? loaded : (loaded as { default: typeof loaded }).default
-  return watcher.subscribe(directory, onEvents, options)
+  const { subscribe } = await import('./parcel-watcher.ts')
+  return subscribe(directory, onEvents, options)
 }
 
 /** How long the repository must go quiet before its change is reported */
