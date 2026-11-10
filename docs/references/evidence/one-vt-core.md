@@ -1086,3 +1086,63 @@ Documentation was being written during the run, and that step declares the tree 
 therefore not cacheable and, under `--strict`, would have failed the run. **A chain run wants a quiescent
 tree**, including from whoever is writing the prose about it — which is why the figure above comes from a
 second run that touched nothing.
+
+
+## 2026-11-09 — The figures, and what they will and will not support
+
+### There is a baseline, and it is the same scenario on the same machine
+
+The ownership goal measured `terminal-open` before any of this, and its record carries the conditions:
+median **20.7 ms**, range **18–25**, 20 measured trials, `lightweight`, five warmups, machine identity
+`d74b1b3a…`. Four runs were taken here with the same scenario, the same mode, the same trial count, the
+same fixture generator (`terminal-open-v1`), the same Electron 44.9.3 and Chromium 152.0.7977.167 — and
+the manifest says the same machine identity, `d74b1b3a…`. So the comparison is like for like in
+everything a manifest records.
+
+### What four runs of it said
+
+| run | median | min | max |
+|---|---|---|---|
+| 1 | 17.1 | 15.8 | 22.9 |
+| 2 | 30.8 | 19.5 | 57.0 |
+| 3 | 19.5 | 16.5 | 68.6 |
+| 4 | 26.8 | 16.9 | 83.9 |
+
+**The median is not citable and this record will not cite one.** Four runs of an identical configuration
+produced medians from 17.1 to 30.8 — an eighty per cent spread — which is a reading that moves while its
+input does not. `npm run check:idle` passed at the 70% floor before run 2, and runs 2 to 4 still carry
+maxima of 57, 69 and 84 ms against the baseline's 25. What differs from the baseline is not the hardware
+or the build but what else this machine was doing, and that is not something a figure can be corrected
+for.
+
+### What they do support, which is a floor
+
+The minima are tight where the maxima are wild: **15.8, 16.5, 16.9 and 19.5 ms** across eighty measured
+trials, against the baseline's minimum of 18 ms taken on a verified-idle machine.
+
+This repository's own rule is what makes that usable: *load inflates a duration and cannot deflate it*, so
+a measurement is an upper bound on the true cost and never an under-estimate. The new engine therefore
+attaches in **at most 15.8 ms** where the old one's best observed was 18, and the comparison runs in the
+one direction load cannot have manufactured.
+
+**So: attaching a terminal did not get slower, and its floor is a little lower.** That is the whole of the
+claim. It is not a median improvement, and nobody should quote one from here.
+
+### The other figures Phase A lists were not taken
+
+Sustained-output responsiveness, large-history behaviour, memory with several hidden sessions and resize
+all have scenarios in `tests/performance/`, and none was run to a citable figure for the same reason the
+median is not citable: the machine would not hold still. They are named here rather than quietly dropped.
+
+**And the measurement acceptance as the plan wrote it cannot be met at all**, which is worth stating
+plainly rather than working around: it says the limits are agreed from the baseline *before* cutover, and
+no limits were agreed. What exists instead is the ownership goal's recorded figure, which is why the one
+comparison above was possible at all — a reminder that the value of recording a measurement with its
+conditions is mostly paid to whoever comes next.
+
+### The one figure that is solid
+
+The bundle attribution, because it is a property of the artifact rather than of the machine: 502 KiB of
+`@xterm/*` became 134 KiB of `ghostty-web` JavaScript, and the pack's frontend grew 184 KiB because a 414
+KiB WebAssembly module is carried as 552 KiB of base64. Sourcemap attribution, the same instrument the
+ownership goal used, so the two are comparable.
