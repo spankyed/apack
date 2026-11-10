@@ -254,6 +254,7 @@ const ownedNoticeCases: { notice: ClaudeNativeNotice; button: string; decision: 
  {notice:{...identity,kind:'resume_return',choices:[{value:'resume_compact',label:'Resume from summary'},{value:'resume_continue',label:'Resume full session as-is'},{value:'resume_never',label:"Don't ask me again"}]},button:'Resume from summary',decision:'resume_compact'},
  {notice:{...identity,kind:'newer_model_offer',choices:[{value:'newer_keep',label:'Keep current model'},{value:'newer_accept',label:'Resume on newer model'}]},button:'Resume on newer model',decision:'newer_accept'},
  {notice:{...identity,kind:'cold_resume_quota',trigger:'idle',preferredChoice:'quota_new_conversation',choices:[{value:'quota_resume',label:'Resume'},{value:'quota_new_conversation',label:'Start a new conversation',description:'Original pointer disclosure'}]},button:'Resume',decision:'quota_resume'},
+ {notice:{...identity,kind:'permission_browser',toolName:'mcp__claude-in-chrome__navigate',requestId:'browser-tool',choices:[{value:'browser_allow',label:'Allow'},{value:'browser_domain',label:'Allow domain for this session'},{value:'browser_deny',label:'Deny'}]},button:'Allow',decision:'browser_allow'},
 ]
 it.each(ownedNoticeCases)('does not retarget a displayed $notice.kind click or Escape to a replacement',async({notice,button,decision})=>{
  const f=await fixture();f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
@@ -424,4 +425,17 @@ it('retires Stop intent when another native owner replaces it', async () => {
   expect(stop.disabled).toBe(false); expect(f.back.disabled).toBe(false)
   actor.send.mockClear(); stop.click(); await nextTick()
   expect(actor.send).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ type: 'CLAUDE_TERMINAL_CLOSE', ownerId: 'replacement' }))
+})
+
+it('renders the original browser request literally and retains exact Cancel, pending and policy-withdrawn choices',async()=>{
+ const f=await fixture(),base=ownedNoticeCases.find(row=>row.notice.kind==='permission_browser')!.notice
+ if(base.kind!=='permission_browser')throw Error('Missing browser fixture')
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
+ const notice={...base,title:'Chrome request <script>',paragraphs:['[withheld URL]','Original grant notice']}
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,notice}});await nextTick()
+ const card=f.root.querySelector('[aria-label="Claude browser permission"]')!;expect(card.querySelector('script')).toBeNull();expect(card.textContent).toContain(notice.title);expect(card.textContent).toContain('[withheld URL]')
+ card.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));expect(actor.send.mock.calls.at(-1)![0].notice).toEqual({id:notice.id,revision:notice.revision,sessionId:notice.sessionId,decision:'browser_cancel'})
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,notice},noticeAnswer:{id:notice.id,revision:notice.revision,status:'pending'}});await nextTick();expect([...card.querySelectorAll('button')].every(button=>button.disabled)).toBe(true)
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:{...notice,revision:'policy-replacement',choices:notice.choices.filter(choice=>choice.value!=='browser_domain')}}});await nextTick();expect(card.textContent).not.toContain('Allow domain for this session')
+ card.querySelector<HTMLButtonElement>('button')!.click();expect(actor.send.mock.calls.at(-1)![0].notice.revision).toBe('policy-replacement')
 })

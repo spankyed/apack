@@ -4,6 +4,7 @@ import { claudeTerminalBackgroundReplyRuntime } from './terminal-background-repl
 import { claudeTerminalLeftArrowRuntime } from './terminal-leftarrow-runtime.ts'
 import { claudeTerminalBackgroundRuntime } from './terminal-background-runtime.ts'
 import { claudeTerminalSandboxNetworkRuntime } from './terminal-sandbox-network-runtime.ts'
+import { claudeTerminalBrowserPermissionRuntime } from './terminal-browser-permission-runtime.ts'
 import { claudeTerminalManagedSecurityRuntime } from './terminal-managed-security-runtime.ts'
 import { claudeTerminalAutocompactOfferRuntime } from './terminal-autocompact-offer-runtime.ts'
 import { claudeTerminalGoalProposalRuntime } from './terminal-goal-proposal-runtime.ts'
@@ -541,6 +542,7 @@ ${claudeTerminalResumeReturnRuntime}
 ${claudeTerminalColdQuotaRuntime}
 ${claudeTerminalLeftArrowRuntime}
 ${claudeTerminalSandboxNetworkRuntime}
+${claudeTerminalBrowserPermissionRuntime}
 ${claudeTerminalManagedSecurityRuntime}
 ${claudeTerminalAutocompactOfferRuntime}
 ${claudeTerminalRefusalRuntime}
@@ -746,6 +748,7 @@ function restoreNativePlanContext(n,context,sessionId){
 async function readNativeNoticeSnapshot(n){
   const policy=nativeManagedSecurity(n);if(policy.item)return {notice:await projectNativeManagedSecurity(n,policy),retirements:policy.startup?[]:nativeRefusalRetirements(n,policy.store)};if(policy.startup)return {notice:null,retirements:[]};
   const refusal=nativeRefusal(n);await restoreNativeRefusalDraft(n,refusal.store);refusal.retirements=nativeRefusalRetirements(n,refusal.store);if(refusal.item)return {notice:await projectNativeRefusal(n,refusal),retirements:refusal.retirements};
+  const browser=nativeBrowserPermission(n);if(browser.item)return {notice:await projectNativeBrowserPermission(n,browser),retirements:refusal.retirements};
   const network=nativeSandboxNetwork(n);if(network.item)return {notice:await projectNativeSandboxNetwork(n,network),retirements:refusal.retirements};
   const compact=nativeAutocompactOffer(n);if(compact.item)return {notice:await projectNativeAutocompactOffer(n,compact),retirements:refusal.retirements};
   const quota=nativeColdQuota(n);if(quota.item)return {notice:await projectNativeColdQuota(n,quota),retirements:refusal.retirements};
@@ -828,6 +831,7 @@ async function control(request,abort){
   abort.signal.throwIfAborted();
   if(['policy_approve','policy_reject'].includes(request.decision)){await answerNativeManagedSecurity(n,request);return {answered:true};}
   if(['compact_previous','compact_next','compact_accept','compact_keep','compact_dismiss'].includes(request.decision)){await answerNativeAutocompactOffer(n,request,abort);return {answered:true};}
+  if(['browser_allow','browser_domain','browser_deny','browser_cancel'].includes(request.decision)){answerNativeBrowserPermission(n,request);return {answered:true};}
   if(['sandbox_allow','sandbox_remember','sandbox_deny','sandbox_cancel'].includes(request.decision)){answerNativeSandboxNetwork(n,request);return {answered:true};}
   if(['background_confirm','background_stay'].includes(request.decision)){await answerNativeLeftArrow(n,request);return {answered:true,handoffPending:nativeAgentsParkState(n)};}
   if(['quota_resume','quota_new_conversation','quota_dismiss'].includes(request.decision)){answerNativeColdQuota(n,request);return {answered:true};}
