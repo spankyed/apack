@@ -1146,3 +1146,35 @@ The bundle attribution, because it is a property of the artifact rather than of 
 `@xterm/*` became 134 KiB of `ghostty-web` JavaScript, and the pack's frontend grew 184 KiB because a 414
 KiB WebAssembly module is carried as 552 KiB of base64. Sourcemap attribution, the same instrument the
 ownership goal used, so the two are comparable.
+
+
+## 2026-11-09 — Five load-sensitive tests, none of them this goal's
+
+**The green chain is the 361s run**, taken on a quiescent tree, with all 32 steps and every code-bearing
+one of them either passing or cached from a pass. That run is the gate this work is held to.
+
+Runs taken *after* it failed, and the reason they were taken at all is worth stating: `test:integration`
+and `test:unit:host` declare the documentation tree among their inputs, so every commit of this evidence
+invalidates them. Each re-run then failed on a **different** test, and each of those passes alone:
+
+| test | what it asserts | failed with | alone |
+|---|---|---|---|
+| `broker::killing_a_session_takes_the_whole_tree_with_it` | a session's children are gone | "the grandchild outlived the session" | passes in 2.08s, having taken 9.97s under load |
+| `channel::a_saturating_producer_reports_that_it_was_throttled` | back-pressure is reported | timed out at 60s | had taken 47s and passed in the run before |
+| `@apackdev/sdk progress.spec.ts` | a worker's own CPU grows | `expected 105.321 to be greater than 200` | 32 of 32, at a load average of 99 |
+| `repo-checks bounded-spawn.integration` | a bounded spawn kills its group | "nothing is proven if the grandchild never started" | 13 of 13 |
+| `repo-checks spec-durations-reporter.integration` | a test over its CPU budget is recorded | `expected [] to deeply equal [{ name: 'costly' }]` | 15 of 15, at a load average of 114 |
+
+**All five are about processes, scheduling or CPU measurement, and none is in code this goal touched.**
+That is a coherent cluster rather than five coincidences: they are the tests whose subject *is* timing,
+and they are measured on a machine that is also running the suite that measures them.
+
+This repository's own rule says a test that passes only on a quiet machine is a defect, and these pass
+only on a quiet machine. **Naming them is as far as this goal goes** — fixing them is not its scope, and
+re-running a chain until they align would be the thing the rule exists to forbid. The next person to see a
+red chain on one of these has the list.
+
+A smaller note with them: because the documentation tree is an input to two steps, **writing the evidence
+for a goal invalidates the gate for that goal**. The sequence that works is to take the chain on a
+quiescent tree and then write, which is what the 361s run was; the alternative is a step whose declared
+inputs do not include the prose about it.
