@@ -1204,3 +1204,27 @@ What stands unchanged is the floor, which is the one statement load cannot have 
 observed against the baseline's best of 18**, and attaching a terminal did not get slower. Anyone wanting
 the median has the method — the scenario, the mode, the trial count and the baseline's conditions are all
 above — and needs only a machine that `check:idle` accepts.
+
+
+## 2026-11-09 — The gate, on the tree as pushed, building what CI clones
+
+```
+chain passed in 3421.9s on a 10-core budget
+critical path 3035s (packages:ensure -> build:default-setup -> test:native)
+  vendor/elmdb at 0f35f0c rather than 4b67670 — this run did not build what CI clones
+```
+
+**All 32 steps, none cached from an earlier tree**, with `test:native` re-running from scratch in the
+Linux container (2155s) because advancing the pin invalidated everything that consumes the broker.
+
+**The drift line names only `vendor/elmdb` now.** `vendor/apack-terminal` is absent from it for the first
+time in this goal: the pin, the vendored checkout and the remote are all `26e6583`, so for the broker this
+run built exactly what CI would clone. The remaining entry is other work's.
+
+It also ran at a load average of **26**, the quietest conditions any chain got today — and it is the only
+full run that passed without a timing casualty, which is the fifth piece of evidence for
+[the load-sensitive cluster](../../issues/ISSUE-load-sensitive-timing-tests.md) rather than a coincidence.
+
+**The only change to the tree after this gate is this record of it**, which is unavoidable: the
+documentation tree is an input to two of the steps, so a run can be taken before the writing or after it
+but not both.
