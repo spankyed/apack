@@ -993,3 +993,52 @@ Asking for the frame directly is both what the callback did and the thing that d
 caught it and none could have**: the stand-ins accept an empty write because the previous emulator did.
 That is the second time in this phase that the stand-in was the thing that was wrong, after the
 open-before-use ordering, and both times the running app is what said so.
+
+
+## 2026-11-09 — The emulator snaps to the bottom on every write, and the window undoes it
+
+**The third defect the app found, and the only one that is a behaviour rather than a mistake.**
+
+`ghostty-web`'s `writeInternal` ends with `this.viewportY !== 0 && this.scrollToBottom()`: once the user
+has scrolled back, *every* write drags the view to the end. A session reading its own history is pulled
+away from it by output it is not looking at — and "a long stream, with the user scrolling back while it
+arrives: the terminal must stay where they put it" is one of the journeys the original terminal complaint
+was about.
+
+### How it was established
+
+Read out of the shipped bundle first, then asked of the app rather than trusted. The screen's text cannot
+be read — the emulator draws to a canvas and writes nothing into the DOM — so the check is a **fingerprint
+of the canvas**: sample its pixels, hash them, compare. If the view held, a write landing below the
+visible region changes no pixel in it and the two hashes are equal; if it snapped, nearly every pixel
+moved.
+
+```
+scrolled back        367765107
+after one more line  1995027964     held: false
+```
+
+Different, so the screen had moved. That measurement is itself only possible because this engine draws to
+a 2D canvas; against the previous one it would have been a screenshot and an opinion.
+
+### What was done about it
+
+The behaviour is a dependency's, so the window undoes it: the view goes back to where it was **plus
+however many lines the write added**. The user is reading content, and what grew is the distance from the
+bottom to that content, so restoring the old `viewportY` alone would still drift by one line per line of
+output.
+
+Both the snap and the correction happen inside the same synchronous turn, before the frame that paints, so
+nothing flickers. Neither is reported to the host: the emulator raises a scroll for each, and passing them
+on would tell a scroll control that the session stopped following and started again twice per chunk.
+
+The stand-in had to be taught the snap before any of this could be tested — a stand-in that simply
+appended would have let a pool with no correction pass. Deleting the correction fails
+"keeps the user where they were, allowing for what the write added", and nothing else.
+
+### Why it is a finding and not only a fix
+
+It is worth stating plainly that **this is a place where `ghostty-web` is less capable than what it
+replaced**, and the compensation lives in this app rather than upstream. If the package later takes the
+official distribution, or fixes this, the correction here should be re-measured rather than assumed still
+needed — the canvas fingerprint is how.
