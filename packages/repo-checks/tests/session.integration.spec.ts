@@ -11,6 +11,7 @@ let dir: string;
 let repo: string;
 let elmdb: string;
 let apackTerminal: string;
+let apackGit: string;
 const execFileAsync = execFileWhileWorking;
 const RUN = { encoding: 'utf8', timeout: 60_000, maxBuffer: 64 * 1024 * 1024 } as const;
 const git = async (root: string, ...args: string[]) => (await execFileAsync('git', args, { cwd: root, ...RUN })).stdout.trim();
@@ -43,12 +44,21 @@ beforeEach(async () => {
   await git(apackTerminal, '-c', 'user.name=Session test', '-c', 'user.email=session@example.invalid', 'commit', '-m', 'apack-terminal');
   fs.writeFileSync(path.join(apackTerminal, 'view', 'dist', 'index.js'), '');
   fs.writeFileSync(path.join(apackTerminal, 'view', 'dist', 'index.d.ts'), '');
+  // The apack-git checkout, the third: a manifest naming it, and a `dist/` newer than what it is built from
+  apackGit = path.join(dir, 'apack-git');
+  fs.mkdirSync(path.join(apackGit, 'dist'), { recursive: true });
+  fs.writeFileSync(path.join(apackGit, 'package.json'), JSON.stringify({ name: 'apack-git' }));
+  await git(apackGit, 'init', '-b', 'main');
+  await git(apackGit, 'add', '.');
+  await git(apackGit, '-c', 'user.name=Session test', '-c', 'user.email=session@example.invalid', 'commit', '-m', 'apack-git');
+  for (const file of ['index.js', 'index.d.ts', 'staging.js', 'staging.d.ts']) fs.writeFileSync(path.join(apackGit, 'dist', file), '');
   fs.writeFileSync(path.join(repo, 'base.txt'), 'base');
   fs.mkdirSync(path.join(repo, 'vendor'));
   fs.writeFileSync(path.join(repo, 'vendor', 'elmdb.rev'), `${await git(elmdb, 'rev-parse', 'HEAD')}\n`);
   fs.writeFileSync(path.join(repo, 'vendor', 'apack-terminal.rev'), `${await git(apackTerminal, 'rev-parse', 'HEAD')}\n`);
+  fs.writeFileSync(path.join(repo, 'vendor', 'apack-git.rev'), `${await git(apackGit, 'rev-parse', 'HEAD')}\n`);
   // As the repo's own does: the link is the checkout's, never a change to it
-  fs.writeFileSync(path.join(repo, '.gitignore'), 'vendor/elmdb\nvendor/apack-terminal\n');
+  fs.writeFileSync(path.join(repo, '.gitignore'), 'vendor/elmdb\nvendor/apack-terminal\nvendor/apack-git\n');
   await git(repo, 'add', '.');
   await git(repo, 'commit', '-m', 'Base');
 });
@@ -83,7 +93,7 @@ if (process.argv[3] === 'chain') {
     const { stdout, stderr } = await execFileAsync(process.execPath, [path.join(REPO_ROOT, 'scripts/session.mjs'), ...args], {
       cwd: repo, ...RUN, env: {
         ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}`,
-        SESSION_MODE: mode, SESSION_COMMANDS: path.join(dir, 'commands'), SESSION_SOURCE: repo, ELMDB_DIR: elmdb, APACK_TERMINAL_DIR: apackTerminal,
+        SESSION_MODE: mode, SESSION_COMMANDS: path.join(dir, 'commands'), SESSION_SOURCE: repo, ELMDB_DIR: elmdb, APACK_TERMINAL_DIR: apackTerminal, APACK_GIT_DIR: apackGit,
       },
     });
     return { status: 0, stdout, stderr };

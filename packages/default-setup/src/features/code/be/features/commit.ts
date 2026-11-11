@@ -5,7 +5,7 @@ import { broadcastToSurface, sendToSystem } from '#generated/events.ts';
 import { defineHandlers } from '@apackdev/sdk/framework';
 import { assign, setup, enqueueActions, fromCallback, type AnyActorRef } from 'xstate'
 
-import { GitError, NOTHING_CHANGED, StashConflictError, changedAnything } from '../git/index.ts'
+import { GitError, NOTHING_CHANGED, StashConflictError, changedAnything } from 'apack-git'
 import { openGitRepository, type AppGitRepository } from '../services/app-git-repository.ts'
 import { setUpGitSignIn } from '../services/gh-cli.ts'
 import { isHostName } from '../services/sign-in.ts'

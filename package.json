@@ -22,6 +22,7 @@
     "postinstall": "node scripts/postinstall.mjs",
     "link:elmdb": "node scripts/link-elmdb.mjs",
     "link:apack-terminal": "node scripts/link-apack-terminal.mjs",
+    "link:apack-git": "node scripts/link-apack-git.mjs",
     "session:new": "node scripts/session.mjs new",
     "session:check": "node scripts/session.mjs check",
     "dev": "node packages/dev-mode.js",

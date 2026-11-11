@@ -1,9 +1,13 @@
 # The git engine in a repository of its own
 
-Status: given its go on 2026-11-11, ahead of [the conditions for starting](#conditions-for-starting), so that
-every later piece of engine work is done once, against the door this settles. What is added to the engine once
-it has moved is a separate plan, [five additions to the git engine](git-engine-additions.md), and after it
-[version 1](git-engine-version-1.md).
+Status: done but for one condition, 2026-11-11. The engine is [spankyed/apack-git](https://github.com/spankyed/apack-git),
+the pack depends on it through `vendor/apack-git`, and no engine source remains here
+([the git engine](../../references/git-engine.md)). **What is open is the last "Done when": the sibling's CI on
+macOS, Linux and Windows at the pinned commit.** Its suite passes on macOS and, in a container, on Linux; it has
+not run on Windows, and its repository's CI has not run at all. This plan is archived once it has.
+
+What is added to the engine now that it has moved is [five additions to the git engine](git-engine-additions.md),
+and after it [version 1](git-engine-version-1.md).
 
 Compiled 2026-11-11 from `master` at `292ff4a3dd`. File names, line counts and what other packages do are as
 of that day: read them again before starting.

@@ -4,7 +4,7 @@ import { viewWrites, writeAnswered, writeSent, writing, type ViewWrites } from '
 import { sendToSystem } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { diffTab, diffTabPath } from '../../utils/diff-tabs.ts';
-import { withStaged, withUnstaged } from '#features/code/be/git/staging.ts';
+import { withStaged, withUnstaged } from 'apack-git/staging';
 import type { CommitFailure, ConflictKind, DiffHunk, GitProgress, OperationMove, RepositoryChange, RepositoryOperation, SignInHelp } from '../../../be/types.ts';
 import type { OpenFile } from '../../contract.ts';
 
