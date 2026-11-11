@@ -1,9 +1,9 @@
 # The git engine's version 1, one pull request at a time
 
-Status: deferred by request, 2026-11-11. Nothing here has started, and deferral is not permission to start.
-Pull requests 1 and 2 wait for nothing but a go: what they fix is true of the app today. The rest start once
-the [five additions](git-engine-additions.md) are done, which is after [the engine has a repository of its
-own](git-engine-own-repository.md).
+Status: deferred by request, 2026-11-11, and deferral is not permission to start. Everything here follows
+[the engine's move to a repository of its own](git-engine-own-repository.md), which was given its go that day.
+Pull requests 1 and 2 come first after it, since what they fix is true of the app today: 2, then 1, whose open
+questions are settled when it starts. The rest start once the [five additions](git-engine-additions.md) are done.
 
 Compiled 2026-11-11 against the code feature as it stood in the working tree that day, with git 2.38.1 on
 macOS. Each pull request says under **Known** what was run, what was only read, and what is neither.
@@ -28,14 +28,13 @@ five additions that follow it.
    would do come before starting one.
 4. **Scale and the freeze come last**, since they measure and promise what exists by then.
 
-Before the move a pull request is one change in the monorepo. After it, each numbered item is a change in the
-engine's repository and the monorepo pull request that moves the pin and lands the app's half, opened as soon
-as its branch is pushed.
+Each numbered item is a change in the engine's repository and the monorepo pull request that moves the pin and
+lands the app's half, opened as soon as its branch is pushed.
 
 | # | Pull request | Needs |
 |---|---|---|
-| 1 | A repository cannot make the engine run a program before it is trusted | |
-| 2 | A discard keeps what it removes | |
+| 1 | A repository cannot make the engine run a program before it is trusted | the move |
+| 2 | A discard keeps what it removes | the move |
 | 3 | A read never reaches the network | the move, the five additions |
 | 4 | A store outside the repository for copies of the working tree | 2 |
 | 5 | A write that destroys something checkpoints first, and the last one can be undone | 4 |
@@ -60,7 +59,7 @@ as its branch is pushed.
 | 24 | Parsers that survive anything | |
 | 25 | The door, reviewed and frozen | all of them |
 
-## Two that do not wait
+## The two that come first
 
 ### 1. A repository cannot make the engine run a program before it is trusted
 
