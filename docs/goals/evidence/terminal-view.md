@@ -387,3 +387,23 @@ program. That removes a process the case never meant to ask about, and is not sh
 Running a case 48 at once made the machine the subject: 59 of 480 runs heard nothing from a shell for ten
 seconds while macOS's own assessment of each new process held a core. Those say nothing about the broker
 and are why nothing above was measured wider than 40.
+
+### On `master` — 2026-11-11
+
+Both repositories' halves are merged: this one's #410, pinning the broker at its `master`, `7eb912fa`
+(`apack-terminal`'s #2). The view is `view/` in the broker's repository, so there is one pin.
+
+- **The strict chain on CI passed, all six jobs**, on `fe363300fd`: run 43065653768. It clones the pin.
+- **The broker's mutation gate did not finish.** `mutants in the change (Linux)` on the broker's `master`
+  (its run 43064465721) started `cargo mutants --in-diff` at 17:04 UTC and was ended at 21:40 with *the
+  hosted runner lost communication with the server*. That step never completed, so there is no log, no
+  uploaded `mutants.out` and no list of survivors: it says nothing about any mutant. A second run of the
+  same job, on the pull request's last commit (run 43062379774), had been going for four hours fifty at
+  that time. Before these two the job had not got past its baseline on this change: it failed there on
+  `an_alternate_screen_app_survives_a_resize_and_keeps_answering`, which passed in the suite's own job
+  on the same commit and was fixed in the broker's #4.
+- **Not known:** why the runner was lost. The change against the broker's previous `master` is the whole
+  of the view work, which a local run before the reads counted at 923 mutants; a run that long on a
+  hosted runner, and a mutant that stops the runner's own process, are both consistent with what was
+  seen and neither is shown.
+

@@ -1,8 +1,9 @@
 # Goal: one interpreter, and a view over the rows it sends
 
-**Status: in progress.** Branch `session/terminal-view` in two repositories: this one and `apack-terminal`,
-which holds the broker and the view (`view/`, the `apack-terminal-view` package). One pull request per
-repository when all of it works together; this one pins the other.
+**Status: merged, with one acceptance check unanswered.** It is on `master` in two repositories: this one
+(#410) and `apack-terminal` (its #2), which holds the broker and the view (`view/`, the
+`apack-terminal-view` package) and which this one pins at its `master`. What is unanswered is the
+broker's mutation gate; the handoff below has it.
 
 ## Why
 
@@ -154,5 +155,12 @@ Each ends in something checked. A phase is not started on a red one.
   program changed; a broker holds a lock on its socket; a terminal on a target is not reached by the
   app starting, and is listed *not connected* until a person starts it; a path a program printed opens
   at its line, by the reveal the search panel already used.
-- **Open.** The broker's `mutants` job has yet to pass over the code the reads added. The strict chain
-  has yet to run on this branch's final commit. Nothing Windows on this branch has been run.
+- **The strict chain passed on `master`**, all six jobs, on `fe363300fd` with the broker pinned at its
+  `master` (`7eb912fa`): run 43065653768.
+- **Open: the broker's mutation gate has no answer.** Its `mutants` job has never finished over this
+  change. Until 2026-11-11 it failed in its unmutated baseline on a case that depended on the machine's
+  load; with that case fixed it ran for the first time, on the broker's `master`, and the runner was lost
+  four and a half hours in, leaving no log and no list of survivors. The evidence has what is known.
+  The next action is to learn why before running it again: how many mutants the change holds, how long
+  one takes, and whether one of them is what stopped the runner.
+- **Open: nothing Windows in this repository's half has been run.**
