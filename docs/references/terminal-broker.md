@@ -309,9 +309,10 @@ know which shell is on the other end.
   a megabyte as fast as the pty takes it, which Windows has no one-liner for. The coalescing and the credit
   are the broker's own code and platform-independent; how much output it takes to fill a *named pipe*, which
   the bound's arithmetic includes, is not.
-- **The view path on Windows.** A window drawing from the broker's rows, the broker's lock on its socket,
-  the proxy and the PowerShell hook that marks commands were written for Windows and have not been
-  compiled or run there.
+- **The view path on Windows.** The broker builds and passes its suite there, on its own CI. What drives
+  the real binary over its pipe does not run there, so a window drawing from the broker's rows, the lock
+  that makes a broker the only one on its pipe, the proxy and the PowerShell hook under a Windows
+  console are unrun on Windows.
 - **What a remote terminal lacks.** No command marks unless its own shell emits them, no recording and so
   no looking back, and a path a program prints there is not a link: it names a file on another machine.
 - **Images after a restart.** A recording's keyframe is the sequences that redraw a screen, which carry
