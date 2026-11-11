@@ -192,6 +192,14 @@
       Live updates are off for this repository. It is read again when you return to this window or press Refresh.
     </div>
 
+    <!-- Fetching by itself has stopped, so what is shown of the remote is as old as the last fetch that worked -->
+    <div
+      v-if="isFetchSuspended && !gitError"
+      class="px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
+    >
+      Fetching by itself is off: the remote asked for a sign-in and nobody was there to give one. It starts again after a push or a pull that works, or when the fetch settings change.
+    </div>
+
     <!-- The repository has more changed files than are listed -->
     <div
       v-if="isStatusTruncated && !gitError"
@@ -738,6 +746,7 @@ const hasUpstream = useSelector(commitActor, (state) => state.context.hasUpstrea
 const isStatusTruncated = useSelector(commitActor, (state) => state.context.isStatusTruncated)
 const isWatchingRepository = useSelector(commitActor, (state) => state.context.isWatchingRepository)
 const operation = useSelector(commitActor, (state) => state.context.operation)
+const isFetchSuspended = useSelector(commitActor, (state) => state.context.isFetchSuspended)
 const isMovingOperation = useSelector(commitActor, (state) => state.context.isMovingOperation)
 const commitsAhead = useSelector(commitActor, (state) => state.context.commitsAhead)
 const commitsBehind = useSelector(commitActor, (state) => state.context.commitsBehind)

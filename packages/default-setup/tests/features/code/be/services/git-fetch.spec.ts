@@ -70,13 +70,19 @@ it('stops fetching by itself once the remote wants credentials, until the settin
 
   const repo = new GitRepository(root);
   repo.setFetchConfig(true, 0);
+  await repo.refreshSnapshot();
   expect(await repo.fetchIfDue(), 'the fetch failed').toBe(false);
   expect(asked()).toBe(1);
+  // That it has stopped is something a window shows, so it is part of the status a check compares
+  expect(repo.isAutoFetchSuspended).toBe(true);
+  expect(await repo.refreshSnapshot()).toMatchObject({ status: true, history: false });
 
   expect(await repo.fetchIfDue()).toBe(false);
   expect(asked(), 'it was not tried again').toBe(1);
 
   repo.setFetchConfig(true, 0);
+  expect(repo.isAutoFetchSuspended).toBe(false);
+  expect(await repo.refreshSnapshot(), 'and that it may try again is said too').toMatchObject({ status: true });
   await repo.fetchIfDue();
   expect(asked(), 'changing the settings tries again').toBe(2);
 });

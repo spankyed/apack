@@ -598,6 +598,14 @@ export class GitRepository {
     return this.watchFailed
   }
 
+  /**
+   * Whether fetching by itself has stopped because the remote asked for credentials. What the checkout knows of
+   * its remote is then as old as the last fetch that worked, which a panel showing it says
+   */
+  get isAutoFetchSuspended(): boolean {
+    return this.autoFetchSuspended
+  }
+
   private async isDirectory(filePath: string): Promise<boolean> {
     try {
       const fullPath = path.join(this.workingDirectory, filePath)
@@ -719,9 +727,10 @@ export class GitRepository {
    * when it said nothing since the last read. Any other check has no event to go by, and reads everything.
    */
   async refreshSnapshot(reading: 'everything' | 'noted' = 'everything'): Promise<RepositoryChange> {
-    // Whether its watches failed is part of what a window shows of the checkout's status, so it is part of it here
+    // Whether its watches failed, and whether fetching by itself has stopped, are part of what a window shows of
+    // the checkout's status, so they are part of it here
     const seen = (identity: SnapshotIdentity): SnapshotIdentity =>
-      ({ ...identity, status: `${this.watchFailed ? 'unwatched' : 'watched'}\n${identity.status}` })
+      ({ ...identity, status: `${this.watchFailed ? 'unwatched' : 'watched'} ${this.autoFetchSuspended ? 'not fetching' : 'fetching'}\n${identity.status}` })
     // Compared with what the last check saw, not with what was last read: one window's ask can read a change
     // before this runs, and this is what tells the others
     const before = this.checkedIdentity ?? (this.lastIdentity && seen(this.lastIdentity))

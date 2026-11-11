@@ -1710,6 +1710,11 @@ declare class GitRepository {
     get isWatched(): boolean;
     /** Whether this checkout's watches failed: a panel showing it then changes only when it is asked again */
     get hasWatchFailed(): boolean;
+    /**
+     * Whether fetching by itself has stopped because the remote asked for credentials. What the checkout knows of
+     * its remote is then as old as the last fetch that worked, which a panel showing it says
+     */
+    get isAutoFetchSuspended(): boolean;
     private isDirectory;
     invalidateCache(paths?: string[]): void;
     /**
@@ -3327,7 +3332,8 @@ type OutgoingCommitEvents =
  * What the commit panel shows of the checkout. `watching` is false when its file watches could not be opened or
  * have failed: the panel then changes only when it is asked again, and says so. `truncated` says there are more
  * changed files than `files` lists. `operation` is what git is in the middle of there, when it is in the middle
- * of anything
+ * of anything. `fetchSuspended` says fetching by itself has stopped, the remote having asked for a sign-in
+ * nobody was there to give: how far the branch is from its upstream is then as of the last fetch that worked
  */
 {
     type: 'commit.STATUS_RECEIVED';
@@ -3340,6 +3346,7 @@ type OutgoingCommitEvents =
         commitsBehind: number;
         watching: boolean;
         operation?: RepositoryOperation;
+        fetchSuspended?: boolean;
     };
 }
 /** What git was in the middle of was moved on as asked. Where that leaves the repository is in its status */
