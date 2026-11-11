@@ -6,7 +6,10 @@ import { defineHandlers } from '@apackdev/sdk/framework';
 import { assign, setup, enqueueActions, fromCallback, type AnyActorRef } from 'xstate'
 
 import { GitRepository, NOTHING_CHANGED, StashConflictError, changedAnything } from '../services/git.ts'
-import type { OperationMove, RepositoryChange } from '../types.ts'
+import { GitError } from '../services/git-errors.ts'
+import { setUpGitSignIn } from '../services/gh-cli.ts'
+import { isHostName } from '../services/sign-in.ts'
+import type { CommitFailure, OperationMove, RepositoryChange } from '../types.ts'
 import { requireGitRepository } from '../utils/git-helpers.ts'
 
 const surfaceId = 'code' as const
@@ -49,6 +52,7 @@ export type Event =
   | { type: 'commit.MARK_RESOLVED'; path: string }
   | { type: 'commit.RESOLVE_ALL_CONFLICTS'; strategy: 'ours' | 'theirs' }
   | { type: 'commit.MOVE_OPERATION'; move: OperationMove }
+  | { type: 'commit.SET_UP_SIGN_IN'; host: string }
   | { type: 'commit.LOG_LIST' }
   | { type: 'commit.REVERT_COMMIT'; hash: string }
   | { type: 'commit.RESET_TO_COMMIT'; hash: string }
@@ -57,6 +61,19 @@ export type Event =
   /** A hint that the repository changed. `reconcile` says it comes from someone who knows a change is likely, not from a file event */
   | { type: 'commit.REPOSITORY_MAY_HAVE_CHANGED'; reconcile?: boolean }
   | { type: 'commit.ANNOUNCE_REPOSITORY_CHANGED'; changed: RepositoryChange };
+
+/** What the panel is told of a command that failed: git's words, and why it failed where git said */
+function failureOf(error: unknown): CommitFailure {
+  const message = error instanceof Error ? error.message : String(error)
+  return { message, ...(error instanceof GitError && error.code && { code: error.code }) }
+}
+
+/** The same for a push or a pull, which the panel can run again, with what can be done when the remote asked for a sign-in */
+async function remoteFailureOf(error: unknown, during: 'push' | 'pull', repository: GitRepository): Promise<CommitFailure> {
+  const failure = failureOf(error)
+  const signIn = failure.code === 'authentication' ? await repository.signInHelp().catch(() => undefined) : undefined
+  return { ...failure, during, ...(signIn && { signIn }) }
+}
 
 /**
  * Fetches from the remote when a fetch is due, behind whoever asked, and has the repository checked once it has:
@@ -158,7 +175,7 @@ export const commitSystem = setup({
         return repository.readSnapshot().then((snapshot) => {
           answer(reply, {
             type: 'commit.STATUS_RECEIVED',
-            data: { files: snapshot.files, truncated: snapshot.truncated, branch: snapshot.branch, hasUpstream: snapshot.hasUpstream, commitsAhead: snapshot.ahead, commitsBehind: snapshot.behind, watching: !repository.hasWatchFailed, operation: snapshot.operation, fetchSuspended: repository.isAutoFetchSuspended }
+            data: { files: snapshot.files, truncated: snapshot.truncated, branch: snapshot.branch, hasUpstream: snapshot.hasUpstream, commitsAhead: snapshot.ahead, commitsBehind: snapshot.behind, signIn: repository.autoFetchSignIn, watching: !repository.hasWatchFailed, operation: snapshot.operation, fetchSuspended: repository.isAutoFetchSuspended }
           })
           // The window has its answer: what the remote has is fetched behind it, and announced if it differs
           fetchInBackground(repository, self)
@@ -246,7 +263,7 @@ export const commitSystem = setup({
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     },
@@ -265,7 +282,7 @@ export const commitSystem = setup({
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     },
@@ -293,7 +310,7 @@ export const commitSystem = setup({
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     },
@@ -320,7 +337,7 @@ export const commitSystem = setup({
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     },
@@ -349,7 +366,7 @@ export const commitSystem = setup({
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     },
@@ -367,7 +384,7 @@ export const commitSystem = setup({
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     },
@@ -385,7 +402,7 @@ export const commitSystem = setup({
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     },
@@ -404,7 +421,7 @@ export const commitSystem = setup({
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     },
@@ -420,7 +437,7 @@ export const commitSystem = setup({
       context.gitRepository.moveOperation(move).then(() => {
         answer(reply, { type: 'commit.OPERATION_MOVED', data: { move } })
       }, (error: Error) => {
-        answer(reply, { type: 'commit.ERROR_RECEIVED', data: { message: error.message } })
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) })
       }).finally(() => {
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
       })
@@ -473,7 +490,7 @@ export const commitSystem = setup({
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     },
@@ -489,7 +506,7 @@ export const commitSystem = setup({
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     },
@@ -511,7 +528,7 @@ export const commitSystem = setup({
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     },
@@ -529,11 +546,8 @@ export const commitSystem = setup({
           data: { branchName }
         })
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
-      }).catch((error: any) => {
-        answer(reply, {
-          type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
-        })
+      }).catch(async (error: unknown) => {
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: await remoteFailureOf(error, 'push', context.gitRepository!) })
       })
     },
 
@@ -569,7 +583,7 @@ export const commitSystem = setup({
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     },
@@ -589,11 +603,31 @@ export const commitSystem = setup({
           data: { branchName }
         })
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
-      }).catch((error: any) => {
-        answer(reply, {
-          type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
-        })
+      }).catch(async (error: unknown) => {
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: await remoteFailureOf(error, 'pull', context.gitRepository!) })
+      })
+    },
+
+    /**
+     * Has the GitHub CLI give git its sign-in for the host a remote asked on, and starts fetching again. The
+     * host arrives from the window, so it is held to a host name before it reaches a command line
+     */
+    setUpSignIn: ({ event, context, self, reply }) => {
+      const { host } = event as { type: 'commit.SET_UP_SIGN_IN'; host: string }
+      if (!requireGitRepository(context, reply)) return
+      const repository = context.gitRepository
+      if (!isHostName(host)) {
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: { message: `Not a host name: ${JSON.stringify(host)}` } })
+        return
+      }
+
+      setUpGitSignIn(repository.getWorkingDir(), host).then(() => {
+        repository.resumeAutoFetch()
+        answer(reply, { type: 'commit.SIGN_IN_SET_UP', data: { host } })
+        self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+      }, (error: unknown) => {
+        // Still the sign-in that is missing, so the offer stays with what went wrong setting it up
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: { ...failureOf(error), code: 'authentication', signIn: { host, kind: 'github-cli' } } })
       })
     },
 
@@ -637,7 +671,7 @@ export const commitSystem = setup({
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     },
@@ -653,7 +687,7 @@ export const commitSystem = setup({
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     },
@@ -673,14 +707,14 @@ export const commitSystem = setup({
         if (error instanceof StashConflictError) {
           answer(reply, {
             type: 'commit.STASH_SUCCESS',
-            data: { message: error.message }
+            data: failureOf(error)
           })
           self.send({ type: 'commit.GIT_STATUS_CHANGED' })
           return
         }
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     },
@@ -700,14 +734,14 @@ export const commitSystem = setup({
         if (error instanceof StashConflictError) {
           answer(reply, {
             type: 'commit.STASH_SUCCESS',
-            data: { message: error.message }
+            data: failureOf(error)
           })
           self.send({ type: 'commit.GIT_STATUS_CHANGED' })
           return
         }
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     },
@@ -722,7 +756,7 @@ export const commitSystem = setup({
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     },
@@ -735,7 +769,7 @@ export const commitSystem = setup({
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     },
@@ -751,7 +785,7 @@ export const commitSystem = setup({
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     },
@@ -770,7 +804,7 @@ export const commitSystem = setup({
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     },
@@ -789,7 +823,7 @@ export const commitSystem = setup({
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     },
@@ -805,7 +839,7 @@ export const commitSystem = setup({
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     },
@@ -823,7 +857,7 @@ export const commitSystem = setup({
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     },
@@ -841,7 +875,7 @@ export const commitSystem = setup({
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: error.message }
+          data: failureOf(error)
         })
       })
     }
@@ -889,6 +923,9 @@ export const commitSystem = setup({
         },
         'commit.MOVE_OPERATION': {
           actions: 'moveOperation'
+        },
+        'commit.SET_UP_SIGN_IN': {
+          actions: 'setUpSignIn'
         },
         'commit.COMMIT': {
           actions: 'commit'

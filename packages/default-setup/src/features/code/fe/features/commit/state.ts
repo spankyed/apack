@@ -5,7 +5,7 @@ import { sendToSystem } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { diffTab, diffTabPath } from '../../utils/diff-tabs.ts';
 import { withStaged, withUnstaged } from './staging.ts';
-import type { ConflictKind, OperationMove, RepositoryChange, RepositoryOperation } from '../../../be/types.ts';
+import type { CommitFailure, ConflictKind, OperationMove, RepositoryChange, RepositoryOperation, SignInHelp } from '../../../be/types.ts';
 import type { OpenFile } from '../../contract.ts';
 
 
@@ -52,6 +52,12 @@ export interface CodeCommitContext {
   isMovingOperation: boolean
   /** Whether fetching by itself has stopped: what is shown of the remote is as old as the last fetch that worked */
   isFetchSuspended: boolean
+  /** What can be done about the sign-in the remote asked for when fetching stopped */
+  fetchSignIn: SignInHelp | null
+  /** What is known of the failure `gitError` words: the command to run again, and the sign-in a remote asked for */
+  gitFailure: Pick<CommitFailure, 'during' | 'signIn'> | null
+  /** Whether the GitHub CLI was asked to give git its sign-in and has not answered */
+  isSettingUpSignIn: boolean
   isPushing: boolean
   isPulling: boolean
   isGeneratingMessage: boolean
@@ -135,7 +141,9 @@ export type Event =
   | { type: 'commit.COMMIT_SUCCESS'; message: string }
   | { type: 'commit.FILE_REVERTED'; path: string }
   | { type: 'commit.FILES_REVERTED'; paths: string[] }
-  | { type: 'commit.ERROR_RECEIVED'; data: { message: string } }
+  | { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }
+  | { type: 'commit.SET_UP_SIGN_IN'; host: string }
+  | { type: 'commit.SIGN_IN_SET_UP'; data: { host: string } }
   | { type: 'commit.BRANCHES_RECEIVED'; data: { branches: string[] } }
   | { type: 'commit.BRANCH_CHECKOUT_SUCCESS'; data: { branchName: string } }
   | { type: 'commit.BRANCH_PUSHED'; data: { branchName: string } }
@@ -405,15 +413,22 @@ export const commitState = setup({
       },
       operation: ({ event }) => (event as { data: { operation?: RepositoryOperation } }).data.operation ?? null,
       isFetchSuspended: ({ event }) => (event as { data: { fetchSuspended?: boolean } }).data.fetchSuspended === true,
+      fetchSignIn: ({ event }) => (event as { data: { signIn?: SignInHelp } }).data.signIn ?? null,
       isGitLoading: false,
-      gitError: null
+      gitError: null,
+      gitFailure: null
     }),
 
     handleErrorReceived: assign({
       gitError: ({ event }) => {
-        const ev = event as { type: 'commit.ERROR_RECEIVED'; data: { message: string } }
+        const ev = event as { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }
         return ev.data.message
       },
+      gitFailure: ({ event }) => {
+        const { during, signIn } = (event as { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }).data
+        return { during, signIn }
+      },
+      isSettingUpSignIn: false,
       isGitLoading: false,
       isCheckingOutBranch: false,
       isPushing: false,
@@ -422,7 +437,22 @@ export const commitState = setup({
       isMovingOperation: false
     }),
 
-    dismissError: assign({ gitError: null }),
+    dismissError: assign({ gitError: null, gitFailure: null }),
+
+    /** Has the GitHub CLI give git its sign-in for the host that asked */
+    setUpSignIn: enqueueActions(({ event, enqueue }) => {
+      const { host } = event as { type: 'commit.SET_UP_SIGN_IN'; host: string }
+      enqueue.assign({ isSettingUpSignIn: true })
+      enqueue(() => { sendToSystem('code', { type: 'commit.SET_UP_SIGN_IN', host }) })
+    }),
+
+    /** Git can sign in now, so the push or the pull that was refused is run again: it is what the user was doing */
+    signInSetUp: enqueueActions(({ context, enqueue }) => {
+      const during = context.gitFailure?.during
+      enqueue.assign({ gitError: null, gitFailure: null, isSettingUpSignIn: false })
+      if (during === 'push') enqueue.raise({ type: 'commit.PUSH_BRANCH' })
+      if (during === 'pull') enqueue.raise({ type: 'commit.PULL_BRANCH' })
+    }),
 
     /** Has git carry on with what it is in the middle of, skip the commit a rebase stopped at, or give it up */
     moveOperation: enqueueActions(({ event, enqueue }) => {
@@ -652,6 +682,9 @@ export const commitState = setup({
     operation: null,
     isMovingOperation: false,
     isFetchSuspended: false,
+    fetchSignIn: null,
+    gitFailure: null,
+    isSettingUpSignIn: false,
     isPushing: false,
     isPulling: false,
     isGeneratingMessage: false,
@@ -679,6 +712,12 @@ export const commitState = setup({
         ],
         'commit.DISMISS_ERROR': {
           actions: 'dismissError'
+        },
+        'commit.SET_UP_SIGN_IN': {
+          actions: 'setUpSignIn'
+        },
+        'commit.SIGN_IN_SET_UP': {
+          actions: 'signInSetUp'
         },
         'commit.SELECT_FILE': {
           actions: 'selectGitFile'

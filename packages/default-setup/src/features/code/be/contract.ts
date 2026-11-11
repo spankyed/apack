@@ -3,9 +3,9 @@
 // and one `Contract` per feature would collide there. Codegen reads this without running anything.
 import type { ActionEntity, PromptEntity } from '@apackdev/sdk';
 import type {
-  CodeConnectedData, CodeSystemError, CommitLogEntry, CodeSystemContext, DirectoryContent, FileContent, FileInfo,
+  CodeConnectedData, CodeSystemError, CommitFailure, CommitLogEntry, CodeSystemContext, DirectoryContent, FileContent, FileInfo,
   GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitStatusFile, OperationMove, QuickOpenResult, RepositoryChange,
-  RepositoryOperation, SearchProgress,
+  RepositoryOperation, SearchProgress, SignInHelp,
   SearchResult, StashEntry, TerminalInfo, WorktreeEntry,
 } from './types.ts';
 import type { ActiveTokenInfo } from './services/gh-cli.ts';
@@ -86,6 +86,8 @@ export type IncomingCommitEvents =
   | { type: 'commit.RESOLVE_ALL_CONFLICTS'; strategy: 'ours' | 'theirs' }
   /** Carry on with what git is in the middle of, leave out the commit a rebase stopped at, or give it up */
   | { type: 'commit.MOVE_OPERATION'; move: OperationMove }
+  /** Have the GitHub CLI give git its sign-in for this host */
+  | { type: 'commit.SET_UP_SIGN_IN'; host: string }
   | { type: 'commit.LOG_LIST' }
   | { type: 'commit.REVERT_COMMIT'; hash: string }
   | { type: 'commit.RESET_TO_COMMIT'; hash: string }
@@ -98,7 +100,7 @@ export type OutgoingCommitEvents =
    * of anything. `fetchSuspended` says fetching by itself has stopped, the remote having asked for a sign-in
    * nobody was there to give: how far the branch is from its upstream is then as of the last fetch that worked
    */
-  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
+  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean; signIn?: SignInHelp } }
   /** What git was in the middle of was moved on as asked. Where that leaves the repository is in its status */
   | { type: 'commit.OPERATION_MOVED'; data: { move: OperationMove } }
   | { type: 'commit.DIFF_RECEIVED'; data: GitDiff }
@@ -107,7 +109,9 @@ export type OutgoingCommitEvents =
   | { type: 'commit.COMMIT_SUCCESS'; data: { message: string } }
   | { type: 'commit.FILE_REVERTED'; data: { path: string } }
   | { type: 'commit.FILES_REVERTED'; data: { paths: string[] } }
-  | { type: 'commit.ERROR_RECEIVED'; data: { message: string } }
+  | { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }
+  /** Git signs in to this host through the GitHub CLI now */
+  | { type: 'commit.SIGN_IN_SET_UP'; data: { host: string } }
   | { type: 'commit.BRANCH_RETRIEVED'; data: { branch: string } }
   | { type: 'commit.BRANCHES_RECEIVED'; data: { branches: string[] } }
   | { type: 'commit.BRANCH_CHECKOUT_SUCCESS'; data: { branchName: string } }

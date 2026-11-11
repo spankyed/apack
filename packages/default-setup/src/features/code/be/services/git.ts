@@ -6,6 +6,8 @@ import type { ConflictKind, GitStatusFile, StashEntry, CommitLogEntry, Operation
 import { createLogger } from '@apackdev/sdk/logger'
 import { execFileWhileWorking } from '@apackdev/sdk/progress'
 import { agentChildEnvironment } from './shell-environment.ts'
+import { GitError, LOCKED, classifyGitError, type GitErrorCode } from './git-errors.ts'
+import { signInHelpFor, type SignInHelp } from './sign-in.ts'
 
 const logger = createLogger('git')
 
@@ -68,9 +70,6 @@ const gitEnvironment = (): NodeJS.ProcessEnv => ({
 
 /** What a caller is told when there is no git to run */
 const GIT_NOT_INSTALLED = 'Git is not installed. Please install Git to use version control features.'
-
-/** What git says when another process holds a lock it needs, with the lock's path */
-const LOCKED = /Unable to create '(.+\.lock)': File exists/
 
 /**
  * How long a command waits for another git to let go of a lock before it is given up on.
@@ -163,6 +162,8 @@ function laneOf(args: string[]): 'read' | 'network' | 'write' {
   const [command, verb] = args
   if (READS.has(command!) || (command === 'config' && (verb === '--get' || verb === '--get-regexp'))) return 'read'
   if ((command === 'stash' || command === 'worktree') && verb === 'list') return 'read'
+  // The address a remote is configured with, which is read from the config and asks the remote nothing
+  if (command === 'ls-remote' && verb === '--get-url') return 'read'
   return NETWORK.has(command!) ? 'network' : 'write'
 }
 
@@ -200,7 +201,26 @@ interface GitCommandResult {
   truncated?: boolean
   /** There is no git to run */
   missing?: boolean
+  /** Why it failed, where what git printed says */
+  code?: GitErrorCode
 }
+
+/** What a push or a pull that failed is said to have failed on, for the reasons that have plainer words than git's */
+function saidOfRemote(result: GitCommandResult): string | undefined {
+  switch (result.code) {
+    case 'authentication': return 'The remote asked for a sign-in that git does not have.'
+    case 'permission': return 'Permission denied. Check your repository access rights.'
+    case 'remote-unreachable': return 'Cannot connect to remote repository. Check your network connection and the remote\'s address.'
+    case 'non-fast-forward': return 'Remote branch has diverged. Pull changes first.'
+    case 'diverged': return 'This branch and the remote branch have both moved on, and git is not set to merge or rebase them on a pull. Merge or rebase from a terminal, or set `pull.rebase` or `pull.ff` in git\'s config.'
+    case 'conflict': return 'Merge conflicts detected. Resolve conflicts and commit.'
+    case 'local-changes': return 'You have uncommitted changes. Commit or stash them first.'
+    default: return undefined
+  }
+}
+
+/** A failed command as an error, carrying why it failed for whoever shows it */
+const failure = (result: GitCommandResult, otherwise: string): GitError => new GitError(result.error || otherwise, result.code)
 
 interface GitCommandError extends Error {
   code?: number | string
@@ -237,9 +257,6 @@ const partsAll = <T>(value: T) => Object.fromEntries(REPOSITORY_PARTS.map(part =
 
 export const NOTHING_CHANGED: RepositoryChange = partsAll(false)
 export const changedAnything = (change: RepositoryChange): boolean => REPOSITORY_PARTS.some(part => change[part])
-
-/** What git says when the remote wanted credentials nobody is there to give */
-const AUTHENTICATION_FAILED = /Authentication failed|could not read Username|could not read Password|terminal prompts disabled|Permission denied \(publickey/
 
 /** What the commit panel shows of a checkout, read in one pass */
 export interface RepositorySnapshot {
@@ -443,6 +460,7 @@ export class GitRepository {
   private fetching = false
   /** Whether fetching by itself has stopped because the remote wanted credentials nobody was there to give */
   private autoFetchSuspended = false
+  private suspendedSignIn: SignInHelp | undefined
   /** How long a command waits for another git to let go of a lock it needs */
   private lockPatienceMs = LOCK_PATIENCE_MS
   /** Whether a watcher reports this checkout's changes; without one a snapshot is read every time it is asked for */
@@ -606,6 +624,26 @@ export class GitRepository {
     return this.autoFetchSuspended
   }
 
+  /** What can be done about the sign-in the remote asked for when fetching by itself stopped */
+  get autoFetchSignIn(): SignInHelp | undefined {
+    return this.autoFetchSuspended ? this.suspendedSignIn : undefined
+  }
+
+  /**
+   * What can be done about a sign-in the remote this branch follows asked for, from that remote's address as
+   * git would use it (its `insteadOf` rewrites applied). Nothing where there is no remote, or it is a path here.
+   */
+  async signInHelp(): Promise<SignInHelp | undefined> {
+    const result = await this.executeGitCommand(['ls-remote', '--get-url'])
+    return result.success && result.output ? signInHelpFor(result.output) : undefined
+  }
+
+  /** Fetching by itself starts again, at once: the user signed in, which is them saying to try */
+  resumeAutoFetch(): void {
+    this.autoFetchSuspended = false
+    this._forceFetchNext = true
+  }
+
   private async isDirectory(filePath: string): Promise<boolean> {
     try {
       const fullPath = path.join(this.workingDirectory, filePath)
@@ -650,7 +688,7 @@ export class GitRepository {
       let refusedAt: number | undefined
       for (;;) {
         const result = await this.runGitOnce(args)
-        const lock = result.success ? undefined : LOCKED.exec(result.error ?? '')?.[1]
+        const lock = result.code === 'locked' ? LOCKED.exec(result.error ?? '')?.[1] : undefined
         if (!lock) return result
         // A stash is several steps to git, and one refused part-way has done the steps before it: run again, it
         // would stash, or apply, a second time. It is said to be refused, and whoever asked decides
@@ -692,7 +730,9 @@ export class GitRepository {
       return {
         success: false,
         error: gitError.stderr || gitError.message,
-        output: gitError.stdout
+        output: gitError.stdout,
+        // Read from both streams: a merge that stops on a conflict says so on its output and nothing on its error
+        code: classifyGitError(`${gitError.stderr ?? ''}\n${gitError.stdout ?? ''}`),
       }
     }
   }
@@ -702,7 +742,7 @@ export class GitRepository {
     if (result.success && result.output) {
       return result.output.trim()
     }
-    throw new Error(result.error || 'Failed to get current branch')
+    throw failure(result, 'Failed to get current branch')
   }
 
   async getStatus(): Promise<GitStatusFile[]> {
@@ -803,7 +843,7 @@ export class GitRepository {
     const ignoreCase = /^(true|yes|on|1)$/i.test(told.get('core.ignorecase') ?? '')
     const status = await this.executeGitCommand(['status', '--porcelain=v2', '--branch', '--show-stash', `--untracked-files=${untracked}`, '-z'])
     if (!status.success && !status.truncated) {
-      throw new Error(status.error || 'Failed to get git status')
+      throw failure(status, 'Failed to get git status')
     }
     // Git printed more than is read: what was read ends inside a record, which is dropped with the rest
     const output = status.truncated ? (status.output ?? '').slice(0, (status.output ?? '').lastIndexOf('\0') + 1) : status.output ?? ''
@@ -1106,7 +1146,7 @@ export class GitRepository {
 
     const result = await this.executeGitCommand(args)
     if (!result.success) {
-      throw new Error(result.error || 'Failed to get diff')
+      throw failure(result, 'Failed to get diff')
     }
 
     return result.output || ''
@@ -1144,7 +1184,7 @@ export class GitRepository {
       const args = ['diff', 'HEAD', '--binary', '-M', '--', ...tracked]
       const result = await this.executeGitCommand(args)
       if (!result.success) {
-        throw new Error(result.error || 'Failed to get diff')
+        throw failure(result, 'Failed to get diff')
       }
       if (result.output) chunks.push(result.output)
     }
@@ -1352,7 +1392,7 @@ export class GitRepository {
     return this.withWriteFlag(async () => {
       const result = await this.executeGitCommand(['add', '--', ...filePaths])
       if (!result.success) {
-        throw new Error(result.error || 'Failed to stage files')
+        throw failure(result, 'Failed to stage files')
       }
       this.markSnapshotStale()
     })
@@ -1363,7 +1403,7 @@ export class GitRepository {
     return this.withWriteFlag(async () => {
       const result = await this.executeGitCommand(['reset', 'HEAD', '--', ...filePaths])
       if (!result.success) {
-        throw new Error(result.error || 'Failed to unstage files')
+        throw failure(result, 'Failed to unstage files')
       }
       this.markSnapshotStale()
     })
@@ -1384,7 +1424,7 @@ export class GitRepository {
         if (existsInHead) {
           const result = await this.executeGitCommand(['checkout', 'HEAD', '--', filePath])
           if (!result.success) {
-            throw new Error(result.error || `Failed to revert file: ${filePath}`)
+            throw failure(result, `Failed to revert file: ${filePath}`)
           }
         } else {
           // File was added by stash/merge — delete it and clean the index entry
@@ -1395,7 +1435,7 @@ export class GitRepository {
       } else {
         const result = await this.executeGitCommand(['checkout', '--', filePath])
         if (!result.success) {
-          throw new Error(result.error || `Failed to revert file: ${filePath}`)
+          throw failure(result, `Failed to revert file: ${filePath}`)
         }
       }
       this.markSnapshotStale()
@@ -1435,7 +1475,7 @@ export class GitRepository {
         if (existsInHead.length > 0) {
           const result = await this.executeGitCommand(['checkout', 'HEAD', '--', ...existsInHead])
           if (!result.success) {
-            throw new Error(result.error || 'Failed to revert unmerged files')
+            throw failure(result, 'Failed to revert unmerged files')
           }
         }
         for (const p of newFiles) {
@@ -1449,7 +1489,7 @@ export class GitRepository {
       if (trackedPaths.length > 0) {
         const result = await this.executeGitCommand(['checkout', '--', ...trackedPaths])
         if (!result.success) {
-          throw new Error(result.error || 'Failed to revert files')
+          throw failure(result, 'Failed to revert files')
         }
       }
 
@@ -1466,7 +1506,7 @@ export class GitRepository {
     return this.withWriteFlag(async () => {
       const result = await this.executeGitCommand(['checkout', `--${strategy}`, '--', filePath])
       if (!result.success) {
-        throw new Error(result.error || `Failed to resolve conflict with ${strategy}`)
+        throw failure(result, `Failed to resolve conflict with ${strategy}`)
       }
       await this.executeGitCommand(['add', '--', filePath])
       this.markSnapshotStale()
@@ -1488,7 +1528,7 @@ export class GitRepository {
       // A rebase that went on to its next commit and stopped there, at a conflict, did what was asked
       const now = (await this.currentSnapshot()).operation
       if (now?.kind === 'rebase' && (now.step ?? 0) > (operation.step ?? 0)) return
-      throw new Error(result.error || `Could not ${move} the ${operation.kind}`)
+      throw failure(result, `Could not ${move} the ${operation.kind}`)
     })
   }
 
@@ -1499,7 +1539,7 @@ export class GitRepository {
     return this.withWriteFlag(async () => {
       const result = await this.executeGitCommand(['commit', '-m', message])
       if (!result.success) {
-        throw new Error(result.error || 'Failed to commit')
+        throw failure(result, 'Failed to commit')
       }
     })
   }
@@ -1675,7 +1715,7 @@ export class GitRepository {
     // Get the list of changed files between branches with NUL termination and rename detection
     const result = await this.executeGitCommand(['diff', '--name-status', '-z', '-M', '-C', `${refArgument(baseBranch, 'base branch')}...${refArgument(target, 'branch')}`])
     if (!result.success) {
-      throw new Error(result.error || 'Failed to get branch diff')
+      throw failure(result, 'Failed to get branch diff')
     }
     
     const files: GitStatusFile[] = []
@@ -1749,7 +1789,7 @@ export class GitRepository {
     return this.withWriteFlag(async () => {
       const result = await this.executeGitCommand(['push', 'origin', '--delete', refArgument(branch, 'branch')])
       if (!result.success) {
-        throw new Error(result.error || 'Failed to delete remote branch')
+        throw failure(result, 'Failed to delete remote branch')
       }
     })
   }
@@ -1765,7 +1805,7 @@ export class GitRepository {
       'for-each-ref', '--sort=-committerdate', '--format=%(refname)', 'refs/heads', 'refs/remotes',
     ])
     if (!result.success) {
-      throw new Error(result.error || 'Failed to get branches')
+      throw failure(result, 'Failed to get branches')
     }
 
     const refs = (result.output || '').split('\n').filter(Boolean)
@@ -1799,24 +1839,21 @@ export class GitRepository {
 
       if (!result.success) {
         // Check if it's because the branch doesn't exist locally or can't be resolved
-        if (
-          (result.error?.includes('pathspec') && result.error?.includes('did not match')) ||
-          result.error?.includes('cannot be resolved')
-        ) {
+        if (result.code === 'unknown-ref') {
           // Try to create a new branch tracking the remote
           const remoteResult = await this.executeGitCommand(['checkout', '-b', branchName, `origin/${branchName}`])
           if (!remoteResult.success) {
             // If that fails too, just create a new local branch
             const newBranchResult = await this.executeGitCommand(['checkout', '-b', branchName])
             if (!newBranchResult.success) {
-              throw new Error(newBranchResult.error || `Failed to create branch: ${branchName}`)
+              throw failure(newBranchResult, `Failed to create branch: ${branchName}`)
             }
           }
-        } else if (result.error?.includes('Your local changes to the following files would be overwritten')) {
+        } else if (result.code === 'local-changes') {
           // Git is preventing checkout due to conflicts
-          throw new Error('Cannot switch branches: Your uncommitted changes conflict with files in the target branch. Please commit, stash, or discard your changes first.')
+          throw new GitError('Cannot switch branches: Your uncommitted changes conflict with files in the target branch. Please commit, stash, or discard your changes first.', result.code)
         } else {
-          throw new Error(result.error || `Failed to checkout branch: ${branchName}`)
+          throw failure(result, `Failed to checkout branch: ${branchName}`)
         }
       }
 
@@ -1873,7 +1910,8 @@ export class GitRepository {
       this._forceFetchNext = false
       this._lastFetchTimestamp = Date.now()
       const result = await this.executeGitCommand(['fetch', '--quiet'])
-      if (!result.success && AUTHENTICATION_FAILED.test(result.error ?? '')) {
+      if (result.code === 'authentication') {
+        this.suspendedSignIn = await this.signInHelp()
         this.autoFetchSuspended = true
         logger.warn('Fetching by itself has stopped for this repository: the remote asked for credentials', { error: result.error })
       }
@@ -1902,18 +1940,7 @@ export class GitRepository {
       const result = await this.executeGitCommand(args)
 
       if (!result.success) {
-        // Check for common errors
-        if (result.error?.includes('Could not read from remote repository')) {
-          throw new Error('Failed to push: Cannot connect to remote repository. Check your network connection and repository access.')
-        } else if (result.error?.includes('remote: Permission')) {
-          throw new Error('Failed to push: Permission denied. Check your repository access rights.')
-        } else if (result.error?.includes('non-fast-forward')) {
-          throw new Error('Failed to push: Remote branch has diverged. Pull changes first.')
-        } else if (result.error?.includes('Everything up-to-date')) {
-          throw new Error('Everything up-to-date. No commits to push.')
-        } else {
-          throw new Error(result.error || 'Failed to push changes')
-        }
+        throw new GitError(`Failed to push: ${saidOfRemote(result) ?? (result.error || 'git gave no reason')}`, result.code)
       }
 
       // Clear cache and reset fetch timer (push updates remote refs)
@@ -1935,21 +1962,7 @@ export class GitRepository {
       const result = await this.executeGitCommand(['pull'])
 
       if (!result.success) {
-        // Handle common pull errors
-        if (result.error?.includes('Automatic merge failed')) {
-          throw new Error('Failed to pull: Merge conflicts detected. Resolve conflicts and commit.')
-        } else if (result.error?.includes('Your local changes')) {
-          throw new Error('Failed to pull: You have uncommitted changes. Commit or stash them first.')
-        } else if (result.error?.includes('Could not read from remote repository')) {
-          throw new Error('Failed to pull: Cannot connect to remote repository. Check your network connection.')
-        } else if (result.error?.includes('Permission denied')) {
-          throw new Error('Failed to pull: Permission denied. Check your repository access rights.')
-        } else if (result.error?.includes('Already up to date')) {
-          // This is actually okay - no changes to pull
-          return
-        } else {
-          throw new Error(result.error || 'Failed to pull changes')
-        }
+        throw new GitError(`Failed to pull: ${saidOfRemote(result) ?? (result.error || 'git gave no reason')}`, result.code)
       }
 
       // Clear cache and reset fetch timer (pull already fetched remote refs)
@@ -1974,7 +1987,7 @@ export class GitRepository {
       }
       const result = await this.executeGitCommand(args)
       if (!result.success) {
-        throw new Error(result.error || 'Failed to stash changes')
+        throw failure(result, 'Failed to stash changes')
       }
       this.clearCache()
       return result.output || 'Changes stashed'
@@ -1985,8 +1998,8 @@ export class GitRepository {
     const result = await this.executeGitCommand(['stash', 'list', '-z', '--format=%gd%x00%s%x00%ai'])
     if (!result.success) {
       // Empty stash list is not an error
-      if (result.error?.includes('unknown revision')) return []
-      throw new Error(result.error || 'Failed to list stashes')
+      if (result.code === 'unknown-ref') return []
+      throw failure(result, 'Failed to list stashes')
     }
     if (!result.output?.trim()) return []
 
@@ -2008,7 +2021,7 @@ export class GitRepository {
           this.clearCache()
           throw new StashConflictError(result.error || 'Stash applied with conflicts')
         }
-        throw new Error(result.error || 'Failed to apply stash')
+        throw failure(result, 'Failed to apply stash')
       }
       this.clearCache()
     })
@@ -2024,23 +2037,21 @@ export class GitRepository {
           this.clearCache()
           throw new StashConflictError(result.error || 'Stash popped with conflicts — stash retained')
         }
-        throw new Error(result.error || 'Failed to pop stash')
+        throw failure(result, 'Failed to pop stash')
       }
       this.clearCache()
     })
   }
 
-  private isStashConflict(result: { success: boolean; error?: string; output?: string }): boolean {
-    if (result.success) return false
-    const text = `${result.error || ''}\n${result.output || ''}`
-    return /CONFLICT|Merge conflict/i.test(text)
+  private isStashConflict(result: GitCommandResult): boolean {
+    return result.code === 'conflict'
   }
 
   async stashDrop(index: number): Promise<void> {
     return this.withWriteFlag(async () => {
       const result = await this.executeGitCommand(['stash', 'drop', stashArgument(index)])
       if (!result.success) {
-        throw new Error(result.error || 'Failed to drop stash')
+        throw failure(result, 'Failed to drop stash')
       }
     })
   }
@@ -2049,7 +2060,7 @@ export class GitRepository {
     return this.withWriteFlag(async () => {
       const result = await this.executeGitCommand(['stash', 'clear'])
       if (!result.success) {
-        throw new Error(result.error || 'Failed to clear stashes')
+        throw failure(result, 'Failed to clear stashes')
       }
     })
   }
@@ -2121,7 +2132,7 @@ export class GitRepository {
 
       const result = await this.executeGitCommand(args)
       if (!result.success) {
-        throw new Error(result.error || 'Failed to add worktree')
+        throw failure(result, 'Failed to add worktree')
       }
       return wtPath
     })
@@ -2135,7 +2146,7 @@ export class GitRepository {
 
       const result = await this.executeGitCommand(args)
       if (!result.success) {
-        throw new Error(result.error || 'Failed to remove worktree')
+        throw failure(result, 'Failed to remove worktree')
       }
     })
   }
@@ -2180,7 +2191,7 @@ export class GitRepository {
     return this.withWriteFlag(async () => {
       const result = await this.executeGitCommand(['revert', '--no-edit', commitArgument(hash)])
       if (!result.success) {
-        throw new Error(result.error || `Failed to revert commit ${hash}`)
+        throw failure(result, `Failed to revert commit ${hash}`)
       }
       this.clearCache()
     })
@@ -2190,7 +2201,7 @@ export class GitRepository {
     return this.withWriteFlag(async () => {
       const result = await this.executeGitCommand(['reset', commitArgument(hash)])
       if (!result.success) {
-        throw new Error(result.error || `Failed to reset to commit ${hash}`)
+        throw failure(result, `Failed to reset to commit ${hash}`)
       }
       this.clearCache()
     })

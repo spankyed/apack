@@ -1,5 +1,7 @@
 import type { GitRepository } from './services/git.ts';
 import type { GitWatcherService } from './services/gitwatcher.ts';
+import type { GitErrorCode } from './services/git-errors.ts';
+import type { SignInHelp } from './services/sign-in.ts';
 import { EARS } from '#generated/ears.ts'
 
 export interface FileInfo {
@@ -369,4 +371,17 @@ export interface CodeSystemContext {
   defaultBaseDirectory: string | null
   gitRepository: GitRepository | null
   gitWatcher: GitWatcherService | null
+}
+
+export type { GitErrorCode, SignInHelp }
+
+/** What the commit panel is told of a command that failed */
+export interface CommitFailure {
+  message: string
+  /** Why git failed, where it said */
+  code?: GitErrorCode
+  /** The command the failure was of, where the panel can run it again */
+  during?: 'push' | 'pull'
+  /** What can be done about a sign-in the remote asked for */
+  signIn?: SignInHelp
 }
