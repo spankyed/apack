@@ -1,7 +1,7 @@
 import * as path from 'path'
 import * as fs from 'fs/promises'
 import { REPOSITORY_PARTS } from '../types.ts'
-import type { GitStatusFile, StashEntry, CommitLogEntry, RepositoryChange, RepositoryPart } from '../types.ts'
+import type { ConflictKind, GitStatusFile, StashEntry, CommitLogEntry, OperationMove, RepositoryChange, RepositoryOperation, RepositoryPart } from '../types.ts'
 import { createLogger } from '@apackdev/sdk/logger'
 import { execFileWhileWorking } from '@apackdev/sdk/progress'
 import { agentChildEnvironment } from './shell-environment.ts'
@@ -48,13 +48,15 @@ function commitArgument(hash: string): string {
 }
 
 /**
- * What every git child runs with. No credential prompt, since nobody is at a terminal to answer one; and no
+ * What every git child runs with. No credential prompt, since nobody is at a terminal to answer one; no editor
+ * for the same reason, so where git would open one for a message it takes the message it proposes; and no
  * optional locks, so a read made in the background (a status after a file changed) never holds `index.lock`
  * against a git the user or an agent runs in the same repository.
  */
 const gitEnvironment = (): NodeJS.ProcessEnv => ({
   ...agentChildEnvironment(process.env),
   GIT_TERMINAL_PROMPT: '0',
+  GIT_EDITOR: 'true',
   GIT_OPTIONAL_LOCKS: '0',
   // Git translates its messages, and what a failure means is read from them here: in English, whatever the
   // user's locale is
@@ -175,6 +177,23 @@ export interface RepositorySnapshot {
   hasUpstream: boolean
   ahead: number
   behind: number
+  /** What git is in the middle of here, when it is in the middle of anything */
+  operation?: RepositoryOperation
+}
+
+/** What each pair of columns git gives an unmerged path says the two sides did to it */
+const CONFLICTS: Record<string, ConflictKind> = {
+  UU: 'both-modified', AA: 'both-added', DD: 'both-deleted',
+  AU: 'added-by-us', UA: 'added-by-them', DU: 'deleted-by-us', UD: 'deleted-by-them',
+}
+
+/** A commit as a person would name it: a branch or a tag that is at it, where there is one, else the start of its name */
+function nameOfCommit(refs: string[], commit: string): string {
+  for (const kind of ['refs/heads/', 'refs/remotes/', 'refs/tags/']) {
+    const ref = refs.find(line => line.startsWith(`${commit} ${kind}`))
+    if (ref) return ref.slice(commit.length + 1 + kind.length)
+  }
+  return commit.slice(0, 7)
 }
 
 function statusOf(code: string): GitStatusFile['status'] {
@@ -206,6 +225,8 @@ interface StatusEntry {
   originalPath?: string
   /** A tracked path's index and worktree columns, `.` where that side is unchanged; a conflict and an untracked path have none */
   columns?: string
+  /** An unmerged path's two columns: what each side did to it */
+  conflict?: string
   /** The record as printed, which names what the path holds in HEAD and in the index */
   record: string
 }
@@ -223,6 +244,8 @@ interface LoadedSnapshot {
   untracked: 'all' | 'no'
   /** Whether git takes two spellings of a name that differ by case for one file, as a file system that does has it do */
   ignoreCase: boolean
+  /** What git is in the middle of, which it says in its own directory and so changes only when that does */
+  operation?: RepositoryOperation
 }
 
 /**
@@ -265,7 +288,7 @@ function splitStatus(output: string): { headers: string[]; entries: StatusEntry[
     const record = records[i]!
     if (record.startsWith('# ')) headers.push(record)
     else if (record.startsWith('? ')) entries.push({ path: record.slice(2), record })
-    else if (record.startsWith('u ')) entries.push({ path: pathAfter(record, 10), record })
+    else if (record.startsWith('u ')) entries.push({ path: pathAfter(record, 10), conflict: record.slice(2, 4), record })
     else if (record.startsWith('1 ')) entries.push({ path: pathAfter(record, 8), columns: record.slice(2, 4), record })
     else if (record.startsWith('2 ')) {
       // A rename or copy is followed by the path it came from, as a record of its own
@@ -289,12 +312,12 @@ function snapshotOf({ headers, entries }: { headers: string[]; entries: StatusEn
       snapshot.behind = Math.abs(parseInt(behind ?? '0', 10)) || 0
     }
   }
-  for (const { path: filePath, originalPath, columns, record } of entries) {
+  for (const { path: filePath, originalPath, columns, conflict, record } of entries) {
     if (record.startsWith('? ')) {
       snapshot.files.push({ path: filePath, status: 'untracked', staged: false })
     } else if (!columns) {
       // A conflict fills both the index and the worktree column: one row, not committable until resolved
-      snapshot.files.push({ path: filePath, status: 'unmerged', staged: false })
+      snapshot.files.push({ path: filePath, status: 'unmerged', staged: false, conflict: CONFLICTS[conflict ?? ''] })
     } else {
       const [index, worktree] = [columns[0]!, columns[1]!]
       if (index !== '.') {
@@ -687,7 +710,7 @@ export class GitRepository {
     const isStash = (ref: string) => ref.endsWith(' refs/stash')
     const directories = this.gitDirectories ?? await this.resolveGitDirectories()
 
-    return this.snapshotOver({ headers, entries, untracked, ignoreCase }, {
+    return this.snapshotOver({ headers, entries, untracked, ignoreCase, operation: await this.readOperation(directories, refs) }, {
       history: [...headers.filter(isBranch), ...refs.filter(ref => !isStash(ref))].join('\n'),
       // The count as well as the ref: dropping a stash below the newest moves only the count
       stashes: [...headers.filter(isStashCount), ...refs.filter(isStash)].join('\n'),
@@ -752,12 +775,13 @@ export class GitRepository {
    * the snapshot this one was made from by reading some paths again: how its other files looked is kept, not read.
    */
   private async snapshotOver(
-    read: Pick<LoadedSnapshot, 'headers' | 'entries' | 'untracked' | 'ignoreCase'>,
+    read: Pick<LoadedSnapshot, 'headers' | 'entries' | 'untracked' | 'ignoreCase' | 'operation'>,
     rest: Pick<SnapshotIdentity, 'history' | 'stashes' | 'worktrees'>,
     { directories, truncated, held }: { directories: GitDirectories | null; truncated: boolean; held?: { files?: Map<string, string>; kept: Set<StatusEntry> } },
   ): Promise<LoadedSnapshot> {
     const { headers, entries } = read
     const value = snapshotOf({ headers, entries })
+    if (read.operation) value.operation = read.operation
     if (truncated || value.files.length > STATUS_LIMIT) {
       value.files = value.files.slice(0, STATUS_LIMIT)
       value.truncated = true
@@ -780,7 +804,8 @@ export class GitRepository {
       ...read,
       value,
       identity: {
-        status: [...headers.filter(header => !isCommit(header) && !isStashCount(header)), ...entries.map(entry => entry.record)].join('\0'),
+        // What git is in the middle of is shown with the status, so it is part of it
+        status: [JSON.stringify(read.operation ?? null), ...headers.filter(header => !isCommit(header) && !isStashCount(header)), ...entries.map(entry => entry.record)].join('\0'),
         diffs: [...files.values()].join('\0'),
         history: rest.history,
         stashes: rest.stashes,
@@ -788,6 +813,37 @@ export class GitRepository {
         files,
       },
     }
+  }
+
+  /**
+   * What git is in the middle of here, read from what it keeps in its directory while it is: no git is run. A
+   * rebase is looked for first, since the commit it stops at can leave what a cherry-pick leaves too.
+   */
+  private async readOperation(directories: GitDirectories | null, refs: string[]): Promise<RepositoryOperation | undefined> {
+    if (!directories) return undefined
+    const read = (file: string) => fs.readFile(path.join(directories.gitDir, file), 'utf8').then(text => text.trim(), () => undefined)
+    for (const [directory, at, of] of [['rebase-merge', 'msgnum', 'end'], ['rebase-apply', 'next', 'last']] as const) {
+      const onto = await read(`${directory}/onto`)
+      if (!onto) continue
+      const [branch, step, steps] = await Promise.all([read(`${directory}/head-name`), read(`${directory}/${at}`), read(`${directory}/${of}`)])
+      return {
+        kind: 'rebase',
+        subject: nameOfCommit(refs, onto),
+        ...(branch?.startsWith('refs/heads/') && { branch: branch.slice('refs/heads/'.length) }),
+        ...(Number(step) > 0 && Number(steps) > 0 && { step: Number(step), steps: Number(steps) }),
+      }
+    }
+    const merged = await read('MERGE_HEAD')
+    if (merged) {
+      // Git wrote what it is merging into the message it proposes, where it was given a name for it
+      const named = /^Merge (?:remote-tracking )?(?:branch|tag) '([^']+)'/.exec(await read('MERGE_MSG') ?? '')
+      return { kind: 'merge', subject: named?.[1] ?? nameOfCommit(refs, merged.split('\n')[0]!) }
+    }
+    const picked = await read('CHERRY_PICK_HEAD')
+    if (picked) return { kind: 'cherry-pick', subject: picked.slice(0, 7) }
+    const reverted = await read('REVERT_HEAD')
+    if (reverted) return { kind: 'revert', subject: reverted.slice(0, 7) }
+    return undefined
   }
 
   /** How a file in the working tree looks without reading it, which tells a later edit from none */
@@ -1306,6 +1362,25 @@ export class GitRepository {
       }
       await this.executeGitCommand(['add', '--', filePath])
       this.markSnapshotStale()
+    })
+  }
+
+  /**
+   * Carries on with what git is in the middle of, leaves out the commit a rebase stopped at, or gives it up.
+   * Carrying on takes the message git proposes, there being no editor for it to open (`gitEnvironment`).
+   */
+  async moveOperation(move: OperationMove): Promise<void> {
+    const operation = (await this.currentSnapshot()).operation
+    if (!operation) throw new Error('Git is not in the middle of anything in this repository')
+    if (move === 'skip' && operation.kind !== 'rebase') throw new Error(`Only a rebase has a commit to skip, and this is a ${operation.kind}`)
+    return this.withWriteFlag(async () => {
+      const result = await this.executeGitCommand([operation.kind, `--${move}`])
+      this.markSnapshotStale()
+      if (result.success) return
+      // A rebase that went on to its next commit and stopped there, at a conflict, did what was asked
+      const now = (await this.currentSnapshot()).operation
+      if (now?.kind === 'rebase' && (now.step ?? 0) > (operation.step ?? 0)) return
+      throw new Error(result.error || `Could not ${move} the ${operation.kind}`)
     })
   }
 

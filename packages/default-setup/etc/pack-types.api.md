@@ -483,6 +483,12 @@ type BrowserTabId = `${EARS.Entity.BrowserTab}-${string}`;
 
 type BrowserTabPersistedId = `BrowserTab-${string}`;
 
+/**
+ * How the two sides being brought together disagree about a file. `us` is the side the checkout was on and
+ * `them` the one coming in, as git names them.
+ */
+declare const CONFLICT_KINDS: readonly ["both-modified", "both-added", "both-deleted", "added-by-us", "added-by-them", "deleted-by-us", "deleted-by-them"];
+
 /** `control_request` subtype=`can_use_tool` — the permission prompt. */
 interface CanUseToolRequest {
     subtype: 'can_use_tool';
@@ -834,6 +840,8 @@ interface ConfigValueWriteParams {
     filePath?: string | null;
     expectedVersion?: string | null;
 }
+
+type ConflictKind = (typeof CONFLICT_KINDS)[number];
 
 interface ConsumerHandlers {
     /** Called for streaming notifications (item/started, item/completed, item/agentMessage/delta, turn/completed, etc.) */
@@ -1742,6 +1750,11 @@ declare class GitRepository {
      * the snapshot this one was made from by reading some paths again: how its other files looked is kept, not read.
      */
     private snapshotOver;
+    /**
+     * What git is in the middle of here, read from what it keeps in its directory while it is: no git is run. A
+     * rebase is looked for first, since the commit it stops at can leave what a cherry-pick leaves too.
+     */
+    private readOperation;
     /** How a file in the working tree looks without reading it, which tells a later edit from none */
     private fileSignature;
     /**
@@ -1786,6 +1799,11 @@ declare class GitRepository {
     revertFiles(filePaths: string[]): Promise<void>;
     fileExistsInHead(filePath: string): Promise<boolean>;
     resolveConflict(filePath: string, strategy: 'ours' | 'theirs'): Promise<void>;
+    /**
+     * Carries on with what git is in the middle of, leaves out the commit a rebase stopped at, or gives it up.
+     * Carrying on takes the message git proposes, there being no editor for it to open (`gitEnvironment`).
+     */
+    moveOperation(move: OperationMove): Promise<void>;
     commit(message: string): Promise<void>;
     /**
      * Where this checkout's git state lives: its own git directory (index, HEAD) and the common one holding refs.
@@ -1861,6 +1879,8 @@ interface GitStatusFile {
     staged: boolean;
     originalPath?: string;
     score?: number;
+    /** For an unmerged file: what each side did to it, which is what there is to settle */
+    conflict?: ConflictKind;
 }
 
 /**
@@ -2099,6 +2119,11 @@ type IncomingCommitEvents = {
 } | {
     type: 'commit.RESOLVE_ALL_CONFLICTS';
     strategy: 'ours' | 'theirs';
+}
+/** Carry on with what git is in the middle of, leave out the commit a rebase stopped at, or give it up */
+ | {
+    type: 'commit.MOVE_OPERATION';
+    move: OperationMove;
 } | {
     type: 'commit.LOG_LIST';
 } | {
@@ -3128,6 +3153,12 @@ type NotesInboxEvent = {
     noteId: string;
 };
 
+/** What git can be in the middle of in a checkout, each of which ends when it is carried on with or given up */
+declare const OPERATION_KINDS: readonly ["merge", "rebase", "cherry-pick", "revert"];
+
+/** What can be done with what git is in the middle of: carry on once its conflicts are settled, leave out the commit a rebase stopped at, or give it up */
+declare const OPERATION_MOVES: readonly ["continue", "skip", "abort"];
+
 interface OpenFile {
     path: string;
     content: string;
@@ -3149,6 +3180,10 @@ interface OpenFile {
     groupId?: string;
     isPreview?: boolean;
 }
+
+type OperationKind = (typeof OPERATION_KINDS)[number];
+
+type OperationMove = (typeof OPERATION_MOVES)[number];
 
 /** What the actions system answers with: an import's or an export's outcome. The actions themselves are its views. */
 type OutgoingActionEvents = {
@@ -3283,7 +3318,8 @@ type OutgoingCommitEvents =
 /**
  * What the commit panel shows of the checkout. `watching` is false when its file watches could not be opened or
  * have failed: the panel then changes only when it is asked again, and says so. `truncated` says there are more
- * changed files than `files` lists
+ * changed files than `files` lists. `operation` is what git is in the middle of there, when it is in the middle
+ * of anything
  */
 {
     type: 'commit.STATUS_RECEIVED';
@@ -3295,6 +3331,14 @@ type OutgoingCommitEvents =
         commitsAhead: number;
         commitsBehind: number;
         watching: boolean;
+        operation?: RepositoryOperation;
+    };
+}
+/** What git was in the middle of was moved on as asked. Where that leaves the repository is in its status */
+ | {
+    type: 'commit.OPERATION_MOVED';
+    data: {
+        move: OperationMove;
     };
 } | {
     type: 'commit.DIFF_RECEIVED';
@@ -4725,6 +4769,18 @@ type RepositoryChange = Record<RepositoryPart, boolean> & {
     files?: string[];
 };
 
+/** What git is in the middle of in a checkout */
+interface RepositoryOperation {
+    kind: OperationKind;
+    /** What is merged in, rebased onto, picked or reverted, as a person would name it: a branch where one is known, else a short commit */
+    subject: string;
+    /** The branch a rebase is replaying, where it is replaying one */
+    branch?: string;
+    /** A rebase's place among the commits it replays, counted from one */
+    step?: number;
+    steps?: number;
+}
+
 type RepositoryPart = (typeof REPOSITORY_PARTS)[number];
 
 /** What the commit panel shows of a checkout, read in one pass */
@@ -4738,6 +4794,8 @@ interface RepositorySnapshot {
     hasUpstream: boolean;
     ahead: number;
     behind: number;
+    /** What git is in the middle of here, when it is in the middle of anything */
+    operation?: RepositoryOperation;
 }
 
 type ResultLine = z.infer<typeof ResultLineSchema>;

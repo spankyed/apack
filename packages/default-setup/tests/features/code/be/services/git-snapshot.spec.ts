@@ -65,7 +65,7 @@ it('reads a file changed in the index and again in the working tree as both', as
   ]);
 });
 
-it('reads a conflict as one row that is not staged', async () => {
+it('reads a conflict as one row that is not staged, and says how the two sides disagree', async () => {
   const { root, repo } = await repository();
   await git(root, 'checkout', '--quiet', '-b', 'other');
   write(root, 'kept.txt', 'theirs\n');
@@ -74,7 +74,7 @@ it('reads a conflict as one row that is not staged', async () => {
   write(root, 'kept.txt', 'ours\n');
   await git(root, 'commit', '--quiet', '-am', 'ours');
   await git(root, 'merge', '--quiet', 'other').catch(() => {});
-  expect((await repo.readSnapshot()).files).toEqual([{ path: 'kept.txt', status: 'unmerged', staged: false }]);
+  expect((await repo.readSnapshot()).files).toEqual([{ path: 'kept.txt', status: 'unmerged', staged: false, conflict: 'both-modified' }]);
 });
 
 it('names the branch of a repository with no commit yet, and HEAD when none is checked out', async () => {

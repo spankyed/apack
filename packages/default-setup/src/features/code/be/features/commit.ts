@@ -6,7 +6,7 @@ import { defineHandlers } from '@apackdev/sdk/framework';
 import { assign, setup, enqueueActions, fromCallback, type AnyActorRef } from 'xstate'
 
 import { GitRepository, NOTHING_CHANGED, StashConflictError, changedAnything } from '../services/git.ts'
-import type { RepositoryChange } from '../types.ts'
+import type { OperationMove, RepositoryChange } from '../types.ts'
 import { requireGitRepository } from '../utils/git-helpers.ts'
 
 const surfaceId = 'code' as const
@@ -48,6 +48,7 @@ export type Event =
   | { type: 'commit.RESOLVE_CONFLICT'; path: string; strategy: 'ours' | 'theirs' }
   | { type: 'commit.MARK_RESOLVED'; path: string }
   | { type: 'commit.RESOLVE_ALL_CONFLICTS'; strategy: 'ours' | 'theirs' }
+  | { type: 'commit.MOVE_OPERATION'; move: OperationMove }
   | { type: 'commit.LOG_LIST' }
   | { type: 'commit.REVERT_COMMIT'; hash: string }
   | { type: 'commit.RESET_TO_COMMIT'; hash: string }
@@ -155,7 +156,7 @@ export const commitSystem = setup({
         return repository.readSnapshot().then((snapshot) => {
           answer(reply, {
             type: 'commit.STATUS_RECEIVED',
-            data: { files: snapshot.files, truncated: snapshot.truncated, branch: snapshot.branch, hasUpstream: snapshot.hasUpstream, commitsAhead: snapshot.ahead, commitsBehind: snapshot.behind, watching: !repository.hasWatchFailed }
+            data: { files: snapshot.files, truncated: snapshot.truncated, branch: snapshot.branch, hasUpstream: snapshot.hasUpstream, commitsAhead: snapshot.ahead, commitsBehind: snapshot.behind, watching: !repository.hasWatchFailed, operation: snapshot.operation }
           })
           // The window has its answer: what the remote has is fetched behind it, and announced if it differs
           fetchInBackground(repository, self)
@@ -403,6 +404,23 @@ export const commitSystem = setup({
           type: 'commit.ERROR_RECEIVED',
           data: { message: error.message }
         })
+      })
+    },
+
+    /**
+     * Carries on with what git is in the middle of, leaves out the commit a rebase stopped at, or gives it up.
+     * Whether it could or not, the repository may be somewhere else afterwards, so it is checked either way
+     */
+    moveOperation: ({ event, context, self, reply }) => {
+      const { move } = event as { type: 'commit.MOVE_OPERATION'; move: OperationMove }
+      if (!requireGitRepository(context, reply)) return
+
+      context.gitRepository.moveOperation(move).then(() => {
+        answer(reply, { type: 'commit.OPERATION_MOVED', data: { move } })
+      }, (error: Error) => {
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: { message: error.message } })
+      }).finally(() => {
+        self.send({ type: 'commit.GIT_STATUS_CHANGED' })
       })
     },
 
@@ -866,6 +884,9 @@ export const commitSystem = setup({
         },
         'commit.RESOLVE_ALL_CONFLICTS': {
           actions: 'resolveAllConflicts'
+        },
+        'commit.MOVE_OPERATION': {
+          actions: 'moveOperation'
         },
         'commit.COMMIT': {
           actions: 'commit'

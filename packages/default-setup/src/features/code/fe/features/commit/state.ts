@@ -5,7 +5,7 @@ import { sendToSystem } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { diffTab, diffTabPath } from '../../utils/diff-tabs.ts';
 import { withStaged, withUnstaged } from './staging.ts';
-import type { RepositoryChange } from '../../../be/types.ts';
+import type { ConflictKind, OperationMove, RepositoryChange, RepositoryOperation } from '../../../be/types.ts';
 import type { OpenFile } from '../../contract.ts';
 
 
@@ -16,6 +16,8 @@ export interface GitStatusFile {
   staged: boolean
   originalPath?: string // For renames and copies
   score?: number // Rename/copy similarity score (0-100)
+  /** For an unmerged file: what each side did to it */
+  conflict?: ConflictKind
 }
 
 export interface GitDiff {
@@ -44,6 +46,10 @@ export interface CodeCommitContext {
   isStatusTruncated: boolean
   /** Whether the backend's file watches on this repository are open; without them the panel changes only when asked */
   isWatchingRepository: boolean
+  /** What git is in the middle of in this repository: a merge, a rebase, a cherry-pick or a revert stopped part-way */
+  operation: RepositoryOperation | null
+  /** Whether git was asked to move that on and has not answered */
+  isMovingOperation: boolean
   isPushing: boolean
   isPulling: boolean
   isGeneratingMessage: boolean
@@ -120,7 +126,7 @@ export type Event =
   | { type: 'commit.CHECKOUT_BRANCH' }
   | { type: 'commit.PUSH_BRANCH' }
   | { type: 'commit.PULL_BRANCH' }
-  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
+  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation } }
   | { type: 'commit.DIFF_RECEIVED'; data: GitDiff }
   | { type: 'commit.FILES_STAGED'; paths: string[] }
   | { type: 'commit.FILES_UNSTAGED'; paths: string[] }
@@ -156,6 +162,8 @@ export type Event =
   | { type: 'commit.RESOLVE_ALL_CONFLICTS'; strategy: 'ours' | 'theirs' }
   | { type: 'commit.CONFLICT_RESOLVED'; path: string }
   | { type: 'commit.ALL_CONFLICTS_RESOLVED' }
+  | { type: 'commit.MOVE_OPERATION'; move: OperationMove }
+  | { type: 'commit.OPERATION_MOVED'; data: { move: OperationMove } }
   | { type: 'commit.LOG_LIST' }
   | { type: 'commit.LOG_LIST_RECEIVED'; data: { commits: CommitLogEntry[] } }
   | { type: 'commit.REVERT_COMMIT'; hash: string }
@@ -365,34 +373,35 @@ export const commitState = setup({
     handleStatusReceived: assign({
       statusAsk: null,
       gitStatus: ({ context, event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation } }
         // Read before a write that the list already shows landed: git is asked again once that write is answered
         return writing(context.stagingWrites) ? context.gitStatus : ev.data.files
       },
       gitBranch: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation } }
         return ev.data.branch
       },
       hasUpstream: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation } }
         return ev.data.hasUpstream
       },
       commitsAhead: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation } }
         return ev.data.commitsAhead
       },
       commitsBehind: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation } }
         return ev.data.commitsBehind
       },
       isStatusTruncated: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation } }
         return ev.data.truncated
       },
       isWatchingRepository: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation } }
         return ev.data.watching
       },
+      operation: ({ event }) => (event as { data: { operation?: RepositoryOperation } }).data.operation ?? null,
       isGitLoading: false,
       gitError: null
     }),
@@ -406,10 +415,21 @@ export const commitState = setup({
       isCheckingOutBranch: false,
       isPushing: false,
       isPulling: false,
-      isGeneratingMessage: false
+      isGeneratingMessage: false,
+      isMovingOperation: false
     }),
 
     dismissError: assign({ gitError: null }),
+
+    /** Has git carry on with what it is in the middle of, skip the commit a rebase stopped at, or give it up */
+    moveOperation: enqueueActions(({ event, enqueue }) => {
+      const { move } = event as { type: 'commit.MOVE_OPERATION'; move: OperationMove }
+      enqueue.assign({ isMovingOperation: true, gitError: null })
+      enqueue(() => { sendToSystem('code', { type: 'commit.MOVE_OPERATION', move }) })
+    }),
+
+    // Where that left the repository is in its status, which the backend announces as changed
+    handleOperationMoved: assign({ isMovingOperation: false }),
 
     requestGenerateMessage: () => {
       sendToSystem('code', { type: 'commit.GENERATE_MESSAGE' })
@@ -626,6 +646,8 @@ export const commitState = setup({
     commitsBehind: 0,
     isStatusTruncated: false,
     isWatchingRepository: true,
+    operation: null,
+    isMovingOperation: false,
     isPushing: false,
     isPulling: false,
     isGeneratingMessage: false,
@@ -713,6 +735,12 @@ export const commitState = setup({
         },
         'commit.ALL_CONFLICTS_RESOLVED': {
           actions: 'refreshGitStatus'
+        },
+        'commit.MOVE_OPERATION': {
+          actions: 'moveOperation'
+        },
+        'commit.OPERATION_MOVED': {
+          actions: 'handleOperationMoved'
         },
         'commit.CLEAR_DIFF': {
           actions: 'clearGitDiff'
