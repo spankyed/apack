@@ -53,6 +53,23 @@ const FIXTURES: Record<string, string> = {
   // Past its budget and finite: the ceiling's case for a run whose CPU is not a reading of work
   'over.spec.ts': `import { it } from 'vitest';
     it('spends past its budget', { meta: { cpuBudgetMs: 1_000 } }, () => { ${burn(3_000)} });`,
+  // Started to outlive its starter, and nothing ends it. Each of these sleeps ends by itself, so none outlives
+  // this spec by more than its seconds
+  'detaches.spec.ts': `import { it } from 'vitest';
+    import { spawn } from 'node:child_process';
+    it('detaches a process and ends', () => { spawn('sleep', ['20'], { detached: true, stdio: 'ignore' }).unref(); });`,
+  // What a git hook left in the background is: its parent exits and it runs on in the worker's process group
+  'orphans.spec.ts': `import { it } from 'vitest';
+    import { spawn } from 'node:child_process';
+    it('starts a process whose parent exits', async () => {
+      const shell = spawn('sh', ['-c', 'sleep 21 &'], { stdio: 'ignore' });
+      await new Promise((resolve) => shell.on('exit', resolve));
+    });`,
+  // One signalled and not waited for, and one that ends by itself moments after its file does
+  'ends.spec.ts': `import { it } from 'vitest';
+    import { spawn } from 'node:child_process';
+    it('signals a detached process without waiting for it', () => { spawn('sleep', ['22'], { detached: true, stdio: 'ignore' }).kill(); });
+    it('detaches a process that is about to end', () => { spawn('sleep', ['1'], { detached: true, stdio: 'ignore' }).unref(); });`,
 };
 
 interface Report {
@@ -129,5 +146,26 @@ describe('under APACK_CEILING=loose', () => {
     const report = await runFixtures('ceiling-loose', ['over.spec.ts', 'awaits.spec.ts'], { APACK_CEILING: 'loose' });
     expect(outcome(report, 'over.spec.ts', 'spends past its budget')).toMatchObject({ status: 'passed' });
     expect(outcome(report, 'awaits.spec.ts', 'awaits forever')).toMatchObject({ status: 'failed' });
+  });
+});
+
+// Unix alone: a listing there says which process group each process is in, which is what both shapes are read from
+describe.skipIf(process.platform === 'win32')('a file that ends with a process still running', () => {
+  const file = (report: Report, name: string) => report.testResults.find((result) => result.name.endsWith(name))!;
+
+  it('fails a file that detached a process, naming it, and leaves alone one whose processes are on their way out', async () => {
+    const report = await runFixtures('detached', ['detaches.spec.ts', 'ends.spec.ts']);
+
+    expect(outcome(report, 'detaches.spec.ts', 'detaches a process and ends'), 'its tests passed').toMatchObject({ status: 'passed' });
+    expect(file(report, 'detaches.spec.ts').message).toMatch(/detaches\.spec\.ts left a process running:\n {2}pid \d+: sleep 20 .*started by this file, detached from it/);
+    expect(file(report, 'ends.spec.ts')).toMatchObject({ status: 'passed', message: '' });
+  });
+
+  // Alone in its run: nothing is left to say which worker an orphan came from, so a file running beside this one
+  // would be failed for it too
+  it('fails a file whose process lost its parent and ran on', async () => {
+    const report = await runFixtures('orphaned', ['orphans.spec.ts']);
+
+    expect(file(report, 'orphans.spec.ts').message).toMatch(/pid \d+: sleep 21 .*lost its parent while this file ran/);
   });
 });

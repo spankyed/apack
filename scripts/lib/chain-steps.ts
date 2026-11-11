@@ -573,7 +573,9 @@ const APP_RUNNER = ['scripts/build-runtime.ts', 'scripts/lib/runtime-build-legs.
  * that each config loads them at all, so between the three a config and its cache key cannot disagree.
  */
 export const SUITE_SETUP_FILES = ['packages/apack-testing/src/vitest-exit-with-parent.ts',
-  'packages/apack-testing/src/vitest-progress-guard.ts'];
+  'packages/apack-testing/src/vitest-progress-guard.ts',
+  // Not a setup file itself: the guard's module for what a file left running, which fails files as the guard does
+  'packages/apack-testing/src/leftover-processes.ts'];
 
 /**
  * What *runs* a unit suite, as against what the suite reads — and an input to every project all the same.
