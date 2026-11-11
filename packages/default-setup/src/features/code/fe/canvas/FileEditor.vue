@@ -148,22 +148,26 @@
             @reveal="revealLine"
             @apply="(hunk) => emit('applyHunk', activeDiff!.path, activeDiff!.staged, hunk.patch)"
           />
-          <MonacoEditor
-            ref="monacoEditorRef"
-            v-if="!isTerminal(activeFile) && !isImage(activeFile) && !isVideoFile(activeFile) && !isBinaryFile && !isRichText(activeFile) && !isDeletedFile && !isImageDiff"
-            :model-value="activeFile.content"
-            @update:model-value="handleContentChange"
-            :file-path="activeFilePath || undefined"
-            theme="vs-dark"
-            :diff-mode="isDiffFile"
-            :original-content="diffOriginalContent"
-            :modified-content="diffModifiedContent"
-            :read-only="isDiffReadOnly"
-            :dsl-params="activeDslParams"
-            class="flex-1 min-h-0"
-            @mount="emit('editorMount')"
-            @file-ready="emit('editorFileReady')"
-          />
+          <!-- The editor's own box: its line-number layer is taller than it and slides upward as it scrolls, and
+               would be drawn over the bar above without something to clip it -->
+          <div class="flex-1 min-h-0 overflow-hidden">
+            <MonacoEditor
+              ref="monacoEditorRef"
+              v-if="!isTerminal(activeFile) && !isImage(activeFile) && !isVideoFile(activeFile) && !isBinaryFile && !isRichText(activeFile) && !isDeletedFile && !isImageDiff"
+              :model-value="activeFile.content"
+              @update:model-value="handleContentChange"
+              :file-path="activeFilePath || undefined"
+              theme="vs-dark"
+              :diff-mode="isDiffFile"
+              :original-content="diffOriginalContent"
+              :modified-content="diffModifiedContent"
+              :read-only="isDiffReadOnly"
+              :dsl-params="activeDslParams"
+              class="h-full"
+              @mount="emit('editorMount')"
+              @file-ready="emit('editorFileReady')"
+            />
+          </div>
         </div>
       </div>
     </div>

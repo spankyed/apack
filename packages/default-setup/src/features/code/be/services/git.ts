@@ -3,7 +3,7 @@ import * as fs from 'fs/promises'
 import { watch } from 'fs'
 import { REPOSITORY_PARTS } from '../types.ts'
 import type { ConflictKind, DiffHunk, GitProgress, GitStatusFile, StashEntry, CommitLogEntry, OperationMove, RepositoryChange, RepositoryOperation, RepositoryPart } from '../types.ts'
-import { createLogger } from '@apackdev/sdk/logger'
+import { createLogger, setDebugEnabled } from '@apackdev/sdk/logger'
 import { execFileWhileWorking } from '@apackdev/sdk/progress'
 import { agentChildEnvironment } from './shell-environment.ts'
 import { GitError, LOCKED, classifyGitError, type GitErrorCode } from './git-errors.ts'
@@ -20,6 +20,8 @@ const logger = createLogger('git')
  */
 export const GIT_COMMAND_LOG = 'git-commands'
 const commandLog = createLogger(GIT_COMMAND_LOG, { debug: true })
+// A gated source starts on outside production, and this one is a line for every git run: off until asked for
+setDebugEnabled(GIT_COMMAND_LOG, false)
 
 /**
  * A branch, tag or other ref a caller named, as an argument git will read as a ref.
