@@ -1,8 +1,8 @@
 # Goal: one interpreter, and a view over the rows it sends
 
-**Status: in progress.** Branch `session/terminal-view` in three repositories: this one, `apack-terminal` (the
-broker) and `apack-terminal-view` (the view). One pull request per repository when all of it works together;
-this one pins the other two.
+**Status: in progress.** Branch `session/terminal-view` in two repositories: this one and `apack-terminal`,
+which holds the broker and the view (`view/`, the `apack-terminal-view` package). One pull request per
+repository when all of it works together; this one pins the other.
 
 ## Why
 
@@ -92,7 +92,8 @@ is evaluated as a starting point and used only if it survives its own tests agai
 - **Pack**: `terminal-pool.ts` owns a row store per terminal and hosts mount views over it. The output
   broadcast, its acknowledgement, the clipboard scanner, the scroll compensation, the paste interception and
   the frame-loop reach are deleted.
-- **Vendoring**: `vendor/apack-terminal-view` with its pin, replacing the `ghostty-web` dependency.
+- **Vendoring**: the view as an npm package resolved through a vendored checkout's link, replacing the
+  `ghostty-web` dependency.
 
 ## Phases
 
@@ -131,7 +132,12 @@ Each ends in something checked. A phase is not started on a red one.
     is the shortest path there is and needs no second process to supervise. A relay exists only in front
     of a target's command (`broker/relay.ts`), in the API process, where each connection is one run of it.
   - *The TypeScript codec lives in `apack-terminal-view`*, where the TypeScript toolchain is, held to
-    vectors the broker writes; a repo check here holds the two copies to being one file.
+    vectors the broker writes.
+  - *The view is a package of the broker's repository* (`view/` there), not a third vendored checkout. As
+    a repository of its own it made a change to the wire three pull requests, a vectors file copied by
+    hand and two pins that had to move in one commit, with a repo check here to notice when they had not.
+    In the broker's repository the view's suite reads the vectors where the encoder writes them, a change
+    to the wire is one commit, and this repository has one pin.
   - *Painting is 2D canvas.* The painter is behind an interface; a GPU painter is decided by phase 9's
     measurement against the baseline, not assumed.
   - *A keyframe is the core's VT dump, not its snapshot format.* The core has a snapshot encoder that also

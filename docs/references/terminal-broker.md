@@ -33,7 +33,7 @@ session nobody is drawing still has a screen, and `Request::Screen` answers it.
 
 **The broker is the only thing that interprets a program's bytes.** A window draws a terminal and
 interprets nothing: it is sent the rows that changed, as characters with their styles, and paints them
-(`apack-terminal-view`, a third sibling checkout). There is one copy of the screen, so there is nothing for
+(`apack-terminal-view`, the package in the broker checkout's `view/`). There is one copy of the screen, so there is nothing for
 two copies to disagree about — the cursor a program is told about is the cursor that is drawn, and a
 question a program asks the terminal is answered once, by the broker, however many windows are showing it.
 
@@ -64,9 +64,9 @@ byte stream by `terminalViews()` (`@apackdev/sdk/fe`). The API process is not on
 rows and its keys cross no process but the broker and the window.
 
 After the greeting the connection is length-prefixed binary (`src/view/wire.rs` in the broker,
-`src/broker/wire.ts` in the view). Its two halves are in two repositories and meet in a file of vectors
-the broker writes from its encoder; `packages/repo-checks/tests/terminal-view-vectors.spec.ts` holds the
-two copies to being one file at the commits pinned here.
+`view/src/broker/wire.ts` in the view, in the same repository). Its two halves meet in a file of vectors the
+broker's suite writes from its encoder and the view's suite reads where it lies, so one commit — the one
+`vendor/apack-terminal.rev` pins — holds both.
 
 - **A frame is what changed since the frame that view last drew**, and the next is sent only once the
   last was acknowledged. A window that stops drawing — hidden, busy, gone — is sent nothing and costs

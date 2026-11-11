@@ -43,7 +43,3 @@ vendor/elmdb
 # ignored, beside vendor/apack-terminal.rev, the commit it is pinned to. Ignored before the link exists, because
 # the first `git add -A` after it would otherwise commit one developer's absolute home directory.
 vendor/apack-terminal
-
-# The apack-terminal-view checkout a window's terminals are drawn with, arranged the same way: ignored, beside
-# vendor/apack-terminal-view.rev, the commit it is pinned to
-vendor/apack-terminal-view

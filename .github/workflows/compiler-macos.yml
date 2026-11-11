@@ -58,7 +58,6 @@ jobs:
           codesign --display --verbose=2 --entitlements - --xml "$compiler_node"
       - uses: ./.github/actions/elmdb
       - uses: ./.github/actions/apack-terminal
-      - uses: ./.github/actions/apack-terminal-view
       - name: Install dependencies
         env:
           GITHUB_TOKEN: ${{ github.token }}

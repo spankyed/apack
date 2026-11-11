@@ -27,20 +27,20 @@ apack is an Electron desktop app with an actor-based architecture. Both frontend
 
 Monorepo using npm workspaces. Requires Node 24 LTS (>=24.12.0) and npm >= 11. Both floors are a measured refusal rather than a preference: npm 10 crashes resolving vitest 4.1, which a new pack's first install does, and `apack pack build` cannot run on 24.11.0 at all, whose module-hook validator rejects the CommonJS load result the pack compiler's own hooks pass through — `COMPILER_NODE_FLOOR` (`packages/apack-cli/src/build/node-support.ts`) refuses it by name, and `engines.node` says the same to npm.
 
-**Three sibling checkouts are vendored, each depended on as an npm package resolved through its link.** Each
+**Two sibling checkouts are vendored, each depended on as npm packages resolved through its link.** Each
 is a gitignored symlink under `vendor/` beside a committed `.rev` naming the commit it is pinned to, linked
 by its own script: `vendor/elmdb` (`npm run link:elmdb`) is the Rust engine `@apackdev/ears` builds against,
-`vendor/apack-terminal` (`npm run link:apack-terminal`) is the terminal broker, and
-`vendor/apack-terminal-view` (`npm run link:apack-terminal-view`) is what a window draws a terminal with.
-The link is machine-specific, so it is ignored and the `.rev` is the shared fact; every linker refuses a
-checkout that isn't one and a checkout that doesn't hold the pin. **A vendored checkout that the app
-consumes ships an npm package, and the package is what knows its own build** — elmdb's `crates/elmdb-node`
-its napi binding, apack-terminal's `node/` the broker binary and the protocol's generated types,
-apack-terminal-view its compiled `dist` — so the app resolves each the way it resolves any dependency, and
-a packaged app collects them with every other. None is published to a registry; CI clones each at its pin
-(`.github/actions/{elmdb,apack-terminal,apack-terminal-view}`). **The broker and the view speak one protocol
-from two repositories, so their pins move together**: `packages/repo-checks/tests/terminal-view-vectors.spec.ts`
-fails a pair whose copies of the protocol's vectors differ. Deriving a path into a checkout's build
+and `vendor/apack-terminal` (`npm run link:apack-terminal`) is the terminal broker and what a window draws
+a terminal with. The link is machine-specific, so it is ignored and the `.rev` is the shared fact; both
+linkers refuse a checkout that isn't one and a checkout that doesn't hold the pin. **A vendored checkout
+that the app consumes ships an npm package, and the package is what knows its own build** — elmdb's
+`crates/elmdb-node` its napi binding, apack-terminal's `node/` the broker binary and the protocol's
+generated types, and its `view/` (`apack-terminal-view`) the compiled `dist` a window draws with — so the
+app resolves each the way it resolves any dependency, and a packaged app collects them with every other.
+None is published to a registry; CI clones each at its pin (`.github/actions/{elmdb,apack-terminal}`).
+**The broker and the view speak one protocol and are one checkout, so one pin holds both halves**: the
+view's suite reads the vectors the broker's encoder writes, in that repository, and no pair of commits
+exists here to disagree. Deriving a path into a checkout's build
 directory instead is what this replaced, and it cost a release with no terminal and a Windows build that
 could not find a binary it had just produced. **Whatever reads `vendor/` derives its subject from the
 links rather than naming a checkout** — the janitor's budget and the Linux container's Rust toolchain both do
