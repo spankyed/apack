@@ -334,8 +334,11 @@ interface LoadedSnapshot {
   identity: SnapshotIdentity
   headers: string[]
   entries: StatusEntry[]
-  /** Whether git lists untracked files, which the user may have told it not to */
-  untracked: 'all' | 'no'
+  /**
+   * How git lists untracked files: a folder it tracks nothing in as one row, unless the user told it to list every
+   * file in such a folder, or to list none
+   */
+  untracked: 'normal' | 'all' | 'no'
   /** Whether git takes two spellings of a name that differ by case for one file, as a file system that does has it do */
   ignoreCase: boolean
   /** What git is in the middle of, which it says in its own directory and so changes only when that does */
@@ -408,7 +411,8 @@ function snapshotOf({ headers, entries }: { headers: string[]; entries: StatusEn
   }
   for (const { path: filePath, originalPath, columns, conflict, record } of entries) {
     if (record.startsWith('? ')) {
-      snapshot.files.push({ path: filePath, status: 'untracked', staged: false })
+      // A folder git tracks nothing in is one row, whatever it holds: git names it with a `/` at its end
+      snapshot.files.push({ path: filePath, status: 'untracked', staged: false, ...(filePath.endsWith('/') && { isDirectory: true }) })
     } else if (!columns) {
       // A conflict fills both the index and the worktree column: one row, not committable until resolved
       snapshot.files.push({ path: filePath, status: 'unmerged', staged: false, conflict: CONFLICTS[conflict ?? ''] })
@@ -454,6 +458,8 @@ export class GitRepository {
    * since a status was last let write it. Not known to be fresh until one has been
    */
   private indexMayBeStale = true
+  /** Counts the times a folder listed as one row was read again, so that each reads as a change to it */
+  private folderReads = 0
   /** Whether the next whole status is the one let write the index */
   private refreshIndexOnRead = false
   /** Counts every notice that the repository may have changed, so a read begun before one is not taken for one after it */
@@ -876,15 +882,17 @@ export class GitRepository {
   }
 
   private async loadSnapshot(): Promise<LoadedSnapshot> {
-    // Two things git was told that decide what a status lists. Every untracked file is listed by name, which is
-    // what the panel shows, unless the user has told git to show none: theirs to decide, and usually said of a
-    // repository too large to walk. And whether two spellings of a name that differ by case are one file
+    // Two things git was told that decide what a status lists. An untracked folder is one row, as git lists it
+    // when told nothing: a folder of thousands of files nobody ignored is then one line and not walked. The user
+    // may have told git to list every file, or none, which is theirs to decide. And whether two spellings of a
+    // name that differ by case are one file
     const config = await this.executeGitCommand(['config', '--get-regexp', '^(status\\.showuntrackedfiles|core\\.ignorecase)$'])
     const told = new Map((config.success ? config.output ?? '' : '').split('\n').filter(Boolean).map((line): [string, string] => {
       const space = line.indexOf(' ')
       return [line.slice(0, space), line.slice(space + 1).trim()]
     }))
-    const untracked = told.get('status.showuntrackedfiles') === 'no' ? 'no' : 'all'
+    const said = told.get('status.showuntrackedfiles')
+    const untracked = said === 'no' || said === 'all' ? said : 'normal'
     const ignoreCase = /^(true|yes|on|1)$/i.test(told.get('core.ignorecase') ?? '')
     const refreshesIndex = this.refreshIndexOnRead
     this.refreshIndexOnRead = false
@@ -933,18 +941,53 @@ export class GitRepository {
     const directories = this.gitDirectories ?? await this.resolveGitDirectories()
     if (!directories) return undefined
 
-    const asked = [...new Set(await Promise.all(noted.map(changed => this.outermostRepositoryOver(changed))))]
+    const fold = pathFolding(held.ignoreCase)
+    // A path inside a folder held as one row is asked about as that folder: git answers for a file in it with
+    // the file, where a whole status has the folder, and the folder is still one row or it is gone
+    const folders = held.entries.filter(entry => entry.record.startsWith('? ') && entry.path.endsWith('/'))
+    const folderOver = (changed: string) => folders.find(folder => fold(`${directories.prefix}${changed}/`).startsWith(fold(folder.path)))
+    // A folder above the working directory cannot be asked about from under it
+    if (noted.some(changed => (folderOver(changed)?.path.length ?? Infinity) <= directories.prefix.length)) return undefined
+    // Asked about a folder and a path inside it at once, git answers for the path and says nothing of the folder
+    // being one row: only the outermost of the paths are asked about, which covers what is under them
+    const outermost = (specs: string[]) => {
+      const folded = [...new Set(specs)].map(spec => [spec, fold(spec)] as const)
+      return folded.filter(([, one]) => !folded.some(([, other]) => other === '' ? one !== '' : one.startsWith(`${other}/`))).map(([spec]) => spec)
+    }
+    let asked = outermost(await Promise.all(noted.map(async (changed) => {
+      const folder = folderOver(changed)
+      return folder ? folder.path.slice(directories.prefix.length, -1) : this.outermostRepositoryOver(changed)
+    })))
     // Each path is taken as it is spelled: a `*` or a `[` in a name is that character, and where git ignores case
     // it does for these too
     const magic = `:(literal${held.ignoreCase ? ',icase' : ''})`
-    const status = await this.executeGitCommand(['status', '--porcelain=v2', `--untracked-files=${held.untracked}`, '-z', '--', ...asked.map(spec => magic + spec)])
-    if (!status.success || status.truncated) return undefined
-    const found = splitStatus(status.output ?? '').entries
-    if (found.some(entry => entry.originalPath !== undefined)) return undefined
+    const statusFor = async (specs: string[]): Promise<StatusEntry[] | undefined> => {
+      // The working directory itself is asked about as `.`
+      const status = await this.executeGitCommand(['status', '--porcelain=v2', `--untracked-files=${held.untracked}`, '-z', '--', ...specs.map(spec => magic + (spec || '.'))])
+      if (!status.success || status.truncated) return undefined
+      const entries = splitStatus(status.output ?? '').entries
+      return entries.some(entry => entry.originalPath !== undefined) ? undefined : entries
+    }
+    let found = await statusFor(asked)
+    if (!found) return undefined
+
+    // An untracked path that was not held and lies in a folder may be in one git tracks nothing in, which a whole
+    // status lists as the folder and this answer as the path. Its folder is asked about: git answers with the
+    // folder itself when it tracks nothing there, and then only the whole status says how far up that goes
+    const heldPaths = new Set(held.entries.map(entry => fold(entry.path)))
+    const folderOf = (entry: StatusEntry) => entry.path.replace(/\/$/, '').split('/').slice(0, -1).join('/')
+    const mayBeInAFolder = (entry: StatusEntry) => entry.record.startsWith('? ') && !heldPaths.has(fold(entry.path)) && folderOf(entry) !== ''
+    if (held.untracked === 'normal' && found.some(mayBeInAFolder)) {
+      const parents = [...new Set(found.filter(mayBeInAFolder).map(folderOf))]
+      // A folder above the working directory cannot be asked about from under it
+      if (parents.some(parent => `${parent}/`.length < directories.prefix.length)) return undefined
+      asked = outermost([...asked, ...parents.map(parent => parent.slice(directories.prefix.length))])
+      found = await statusFor(asked)
+      if (!found || found.some(entry => entry.path.endsWith('/') && parents.includes(entry.path.slice(0, -1)))) return undefined
+    }
 
     // What git answered replaces what was held of the same paths and of everything under them
-    const fold = pathFolding(held.ignoreCase)
-    const under = asked.map(spec => fold(directories.prefix + spec))
+    const under = asked.map(spec => fold((directories.prefix + spec).replace(/\/$/, '')))
     const answered = new Set(found.map(entry => fold(entry.path)))
     const kept = held.entries.filter((entry) => {
       const folded = fold(entry.path)
@@ -953,6 +996,21 @@ export class GitRepository {
     const entries = inStatusOrder([...kept, ...found])
     if (entries.length > STATUS_LIMIT) return undefined
     return this.snapshotOver({ ...held, entries }, held.identity, { directories, truncated: false, held: { files: held.identity.files, kept: new Set(kept) } })
+  }
+
+  /** The most files of an untracked folder that are listed when it is opened; past it the list is cut and says so */
+  static readonly UNTRACKED_LISTED_LIMIT = 1_000
+
+  /**
+   * The files in an untracked folder that git would list, were it asked to list every one: those it does not
+   * ignore. `directory` is a folder row's path, from the top of the checkout.
+   */
+  async listUntracked(directory: string): Promise<{ files: string[]; truncated: boolean }> {
+    const result = await this.executeGitCommand(['ls-files', '--others', '--exclude-standard', '--full-name', '-z', '--', `:(top,literal)${directory.replace(/\/$/, '')}`])
+    if (!result.success && !result.truncated) throw failure(result, 'Failed to list the folder')
+    const output = result.truncated ? (result.output ?? '').slice(0, (result.output ?? '').lastIndexOf('\0') + 1) : result.output ?? ''
+    const files = output.split('\0').filter(Boolean)
+    return { files: files.slice(0, GitRepository.UNTRACKED_LISTED_LIMIT), truncated: result.truncated === true || files.length > GitRepository.UNTRACKED_LISTED_LIMIT }
   }
 
   /**
@@ -994,6 +1052,9 @@ export class GitRepository {
       const known = held?.kept.has(entry) ? held.files?.get(entry.path) : undefined
       if (known !== undefined) return [entry.path, known]
       const inWorkingTree = !entry.columns || entry.columns[1] !== '.'
+      // A folder listed as one row was read again because something under it changed, which its own time does
+      // not say when the change is deeper than its own files: it reads as changed each time it is read
+      if (entry.path.endsWith('/') && held) return [entry.path, `${entry.record}\0${++this.folderReads}`]
       return [entry.path, `${entry.record}\0${inWorkingTree ? await this.fileSignature(path.join(top, entry.path)) : ''}`]
     })))
     const isCommit = (header: string) => header.startsWith('# branch.oid ')
@@ -1488,9 +1549,10 @@ export class GitRepository {
       const status = await this.getStatus()
       const fileStatus = status.find(f => f.path === filePath)
 
-      if (fileStatus?.status === 'untracked') {
-        const fullPath = path.join(this.workingDirectory, filePath)
-        await fs.unlink(fullPath)
+      // A file inside a folder listed as one row is untracked too, though it has no row of its own
+      const inAFolderRow = !fileStatus && status.some(f => f.isDirectory && filePath.startsWith(f.path))
+      if (fileStatus?.status === 'untracked' || inAFolderRow) {
+        await this.discardUntracked(filePath, fileStatus?.isDirectory === true)
       } else if (fileStatus?.status === 'unmerged') {
         // `git checkout --` refuses unmerged paths; explicit HEAD ref works
         // and clears the conflict state in both the index and worktree.
@@ -1516,6 +1578,16 @@ export class GitRepository {
     })
   }
 
+  /**
+   * Discards an untracked path. A file is deleted. A folder has deleted what git lists in it, and what git
+   * ignores there is left where it is, as it is when every file of the folder is discarded one by one.
+   */
+  private async discardUntracked(filePath: string, isDirectory: boolean): Promise<void> {
+    if (!isDirectory) return fs.unlink(path.join(this.workingDirectory, filePath))
+    const result = await this.executeGitCommand(['clean', '--force', '-d', '--quiet', '--', filePath])
+    if (!result.success) throw failure(result, `Failed to discard folder: ${filePath}`)
+  }
+
   async revertFiles(filePaths: string[]): Promise<void> {
     if (filePaths.length === 0) return
     return this.withWriteFlag(async () => {
@@ -1529,11 +1601,9 @@ export class GitRepository {
         return s !== 'untracked' && s !== 'unmerged'
       })
 
-      // Delete untracked files
-      for (const filePath of untrackedPaths) {
-        const fullPath = path.join(this.workingDirectory, filePath)
-        await fs.unlink(fullPath)
-      }
+      // Delete untracked files, and what git lists of untracked folders
+      const folders = new Set(status.filter(f => f.isDirectory).map(f => f.path))
+      for (const filePath of untrackedPaths) await this.discardUntracked(filePath, folders.has(filePath))
 
       // Revert unmerged files — split by whether they exist in HEAD
       if (unmergedPaths.length > 0) {

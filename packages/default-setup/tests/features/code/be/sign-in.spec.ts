@@ -52,15 +52,12 @@ function githubCli({ signedIn }: { signedIn: boolean }) {
   const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'code-sign-in-gh-')));
   dirs.push(directory);
   const cli = path.join(directory, 'gh');
-  fs.writeFileSync(cli, `#!/usr/bin/env node
-const fs = require('node:fs');
-const path = require('node:path');
-const args = process.argv.slice(2);
-fs.appendFileSync(path.join(__dirname, 'asked'), args.join(' ') + '\\n');
-if (args[1] === 'status' && ${JSON.stringify(!signedIn)}) {
-  process.stderr.write('You are not logged into any GitHub hosts. To log in, run: gh auth login\\n');
-  process.exit(1);
-}
+  fs.writeFileSync(cli, `#!/bin/sh
+echo "$*" >> "$(dirname "$0")/asked"
+if [ "$2" = status ] && [ ${signedIn ? 0 : 1} = 1 ]; then
+  echo 'You are not logged into any GitHub hosts. To log in, run: gh auth login' >&2
+  exit 1
+fi
 `);
   fs.chmodSync(cli, 0o755);
   featureSettings.forFeature('code').set({ path: ['cliPaths', 'gh'], value: cli });

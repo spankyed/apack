@@ -22,7 +22,7 @@
           </span>
         </slot>
         <button
-          v-if="file.status !== 'deleted'"
+          v-if="file.status !== 'deleted' && !file.isDirectory"
           @click.stop="$emit('openFile', file)"
           class="p-0.5 hover:bg-neutral-700 rounded"
           title="Open file"
@@ -34,7 +34,7 @@
     </ContextMenuTrigger>
     <ContextMenuPortal>
       <ContextMenuContent :class="MENU_CONTENT_CLASS">
-        <ContextMenuItem v-if="file.status !== 'deleted'" @select="$emit('openFile', file)" :class="MENU_ITEM_CLASS">
+        <ContextMenuItem v-if="file.status !== 'deleted' && !file.isDirectory" @select="$emit('openFile', file)" :class="MENU_ITEM_CLASS">
           <File class="w-4 h-4" /> Open File
         </ContextMenuItem>
         <ContextMenuItem @select="copyPath(file.path)" :class="MENU_ITEM_CLASS">
@@ -76,7 +76,8 @@ const codeActor: CodeState = useSurface()
 const baseDirectory = useSelector(codeActor, (state) => state.context.baseDirectory)
 
 const fileDisplay = computed(() => {
-  const filePath = props.file.path
+  // A folder's row is named by the folder, with the `/` git ends it with
+  const filePath = props.file.isDirectory ? props.file.path.slice(0, -1) : props.file.path
   const lastSlashIndex = filePath.lastIndexOf('/')
   const filename = lastSlashIndex === -1 ? filePath : filePath.substring(lastSlashIndex + 1)
   const directory = lastSlashIndex === -1 ? '' : filePath.substring(0, lastSlashIndex)
@@ -87,7 +88,7 @@ const fileDisplay = computed(() => {
     return { filename: `${origFilename} → ${filename}`, directory }
   }
 
-  return { filename, directory }
+  return { filename: props.file.isDirectory ? `${filename}/` : filename, directory }
 })
 
 const getStatusIcon = (status: GitStatusFile['status']) => {

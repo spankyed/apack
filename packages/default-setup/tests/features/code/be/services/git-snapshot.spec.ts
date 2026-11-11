@@ -30,7 +30,7 @@ async function repository() {
   return { root, repo: new GitRepository(root) };
 }
 
-it('reads every kind of change, with paths that hold spaces and each untracked file by name', async () => {
+it('reads every kind of change, with paths that hold spaces and a folder git tracks nothing in as one row', async () => {
   const { root, repo } = await repository();
   write(root, 'kept.txt', 'one\ntwo\n');
   fs.rmSync(path.join(root, 'gone.txt'));
@@ -43,8 +43,7 @@ it('reads every kind of change, with paths that hold spaces and each untracked f
   const { files, branch, hasUpstream } = await repo.readSnapshot();
   const byPath = (a: { path: string }, b: { path: string }) => a.path.localeCompare(b.path);
   expect([...files].sort(byPath)).toEqual([
-    { path: 'fresh/b.txt', status: 'untracked', staged: false },
-    { path: 'fresh/deep/a.txt', status: 'untracked', staged: false },
+    { path: 'fresh/', status: 'untracked', staged: false, isDirectory: true },
     { path: 'gone.txt', status: 'deleted', staged: false, originalPath: undefined },
     { path: 'kept.txt', status: 'modified', staged: false, originalPath: undefined },
     { path: 'new name.txt', status: 'renamed', staged: true, originalPath: 'old name.txt' },
@@ -231,8 +230,8 @@ it('lists no untracked file for a user who has told git to show none', async () 
   await git(root, 'config', 'status.showUntrackedFiles', 'no');
   expect((await repo.readSnapshot()).files.map(file => file.path)).toEqual(['kept.txt']);
 
-  // `normal` collapses an untracked directory to its name; the panel lists files, so it is read as `all`
-  await git(root, 'config', 'status.showUntrackedFiles', 'normal');
+  // Told to list every file, git lists the files of a folder it tracks nothing in, and the panel shows them
+  await git(root, 'config', 'status.showUntrackedFiles', 'all');
   write(root, 'fresh/deep.txt', '');
   expect((await repo.readSnapshot()).files.map(file => file.path).sort()).toEqual(['fresh.txt', 'fresh/deep.txt', 'kept.txt']);
 });

@@ -192,6 +192,14 @@ neither watcher needs to be exact.
   endings and filters are git's on both sides. A piece is applied only if the repository still cuts that exact
   piece from the file, and only a plainly modified file has pieces: one that is new, deleted, renamed or binary
   is staged whole.
+- **A folder git tracks nothing in is one row**, as git lists it unless the user told it to list every file
+  (`status.showUntrackedFiles`): a folder of thousands of files nobody ignored is one line, and is not walked
+  (30,000 files: 0.01 s and 65 bytes against 0.13 s and 916 KB, 2026-11-11). Its path ends with `/`, and the
+  window lists what is in it when the row is opened (`commit.LIST_UNTRACKED`). Asked about a file inside such a
+  folder git answers with the file, where a whole status has the folder, so the path-scoped read asks about the
+  folder: the one held as a row, or for an untracked path it did not hold, that path's own folder, falling back
+  to the whole status only when that folder too is one git tracks nothing in. Staging the row stages the
+  folder, and discarding it removes what git lists there and leaves what it ignores.
 - **A watch that fails is said to the user.** `commit.STATUS_RECEIVED` carries `watching`, and the panel says live
   updates are off; the next check opens the watch again.
 - **A tree is watched by the platform's own watcher where it has one** (`directory-watch.ts`): Node's recursive
