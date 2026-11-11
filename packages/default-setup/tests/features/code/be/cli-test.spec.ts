@@ -4,8 +4,9 @@ import { featureSettings } from '#generated/settings.ts';
 // the settings surface declares it in its inbox (`accepts`, beside the surface). It lived in the settings system until settings
 // became the app's.
 //
-// What this covers is the routing, not `resolve-cli`: whether a CLI is on this machine's PATH is not the
-// system's behaviour, so the case that asserts an outcome is the one that needs no CLI at all.
+// What this covers is the system's part: who is answered, and what is stored. Whether a CLI is installed on this
+// machine is not, so the known provider is pointed at a program every test run has — the Node running it, which
+// answers `--version` — and nothing of the machine's own is looked for or run.
 import { describe, expect, it } from 'vitest';
 import { startApp } from '@apackdev/testing/harness';
 
@@ -25,15 +26,18 @@ describe('TEST_CLI_PROVIDER', () => {
     expect(cliPaths()['not-a-cli']).toBeUndefined();
   });
 
-  // The move's real risk: the code system takes the event at all, and its answer reaches the settings surface
-  // rather than its own. Whether the CLI is found depends on the machine, so only the address is asserted.
-  it('takes a known provider and answers the settings surface, not its own', async () => {
+  // The code system takes the event, and its answer reaches the settings surface rather than its own
+  it('tests a known provider at its stored path, answers the settings surface and keeps the path', async () => {
     const app = await startApp({ systems: ['code', 'host/settings'] });
     await app.connect();
+    featureSettings.forFeature('code').set({ path: ['cliPaths', 'gh'], value: process.execPath });
 
-    await app.send('code', { type: 'TEST_CLI_PROVIDER', provider: 'claude' });
+    await app.send('code', { type: 'TEST_CLI_PROVIDER', provider: 'gh' });
 
-    expect(await app.nextEmit('host/settings', 'CLI_TEST_RESULT')).toMatchObject({ type: 'CLI_TEST_RESULT', provider: 'claude' });
+    expect(await app.nextEmit('host/settings', 'CLI_TEST_RESULT')).toMatchObject({
+      type: 'CLI_TEST_RESULT', provider: 'gh', success: true, resolvedPath: process.execPath,
+    });
     expect(app.emitted('code').filter((e) => e.type === 'CLI_TEST_RESULT')).toEqual([]);
+    expect(cliPaths().gh).toBe(process.execPath);
   });
 });
