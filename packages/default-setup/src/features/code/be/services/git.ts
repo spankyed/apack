@@ -2,7 +2,7 @@ import * as path from 'path'
 import * as fs from 'fs/promises'
 import { watch } from 'fs'
 import { REPOSITORY_PARTS } from '../types.ts'
-import type { ConflictKind, DiffHunk, GitStatusFile, StashEntry, CommitLogEntry, OperationMove, RepositoryChange, RepositoryOperation, RepositoryPart } from '../types.ts'
+import type { ConflictKind, DiffHunk, GitProgress, GitStatusFile, StashEntry, CommitLogEntry, OperationMove, RepositoryChange, RepositoryOperation, RepositoryPart } from '../types.ts'
 import { createLogger } from '@apackdev/sdk/logger'
 import { execFileWhileWorking } from '@apackdev/sdk/progress'
 import { agentChildEnvironment } from './shell-environment.ts'
@@ -10,8 +10,16 @@ import { GitError, LOCKED, classifyGitError, type GitErrorCode } from './git-err
 import { signInHelpFor, type SignInHelp } from './sign-in.ts'
 import { GitObjectReader } from './git-objects.ts'
 import { hunksOf } from './git-hunks.ts'
+import { progressReader, withoutProgress } from './git-progress.ts'
 
 const logger = createLogger('git')
+
+/**
+ * Every git command run here, with how long it took and whether it worked. Off until the code surface's setting
+ * turns it on (`setDebugEnabled`): a status runs for most file events, and that is a line each.
+ */
+export const GIT_COMMAND_LOG = 'git-commands'
+const commandLog = createLogger(GIT_COMMAND_LOG, { debug: true })
 
 /**
  * A branch, tag or other ref a caller named, as an argument git will read as a ref.
@@ -69,6 +77,9 @@ const gitEnvironment = (): NodeJS.ProcessEnv => ({
   LC_ALL: 'en_US.UTF-8',
   LANG: 'en_US.UTF-8',
 })
+
+/** Where this app writes down the branch a branch was made from, in git's config: `branch.<name>.apack-base` */
+const BASE_KEY = 'apack-base'
 
 /** What a caller is told when there is no git to run */
 const GIT_NOT_INSTALLED = 'Git is not installed. Please install Git to use version control features.'
@@ -155,7 +166,7 @@ const EXIT_GRACE_MS = 250
 export const STATUS_LIMIT = 10_000
 
 /** Subcommands that only read, which wait for nothing: no lock is taken, as `GIT_OPTIONAL_LOCKS` says */
-const READS = new Set(['status', 'rev-parse', 'for-each-ref', 'ls-files', 'check-attr', 'diff', 'show', 'cat-file', 'rev-list', 'symbolic-ref', 'log', 'branch'])
+const READS = new Set(['status', 'rev-parse', 'for-each-ref', 'ls-files', 'check-attr', 'diff', 'show', 'cat-file', 'rev-list', 'symbolic-ref', 'log', 'branch', 'reflog'])
 /** Subcommands that talk to a remote and touch no index, which wait only for each other */
 const NETWORK = new Set(['fetch', 'push'])
 
@@ -547,7 +558,7 @@ export class GitRepository {
    * Runs git, answering once it has exited and its output has gone quiet, without waiting for its pipes to
    * close: a process a hook left behind holds them open for as long as it lives.
    */
-  private runGit(args: string[], encoding: BufferEncoding, refreshesIndex = false, input?: string): Promise<{ stdout: string; stderr: string }> {
+  private runGit(args: string[], encoding: BufferEncoding, refreshesIndex = false, input?: string, onProgress?: (progress: GitProgress) => void): Promise<{ stdout: string; stderr: string }> {
     const running = execFileWhileWorking('git', ['-c', 'color.ui=never', ...args], {
       cwd: this.workingDirectory,
       // The one read that may write: it lets git take its optional lock and keep what it learns of the files
@@ -557,6 +568,7 @@ export class GitRepository {
     })
     const { child } = running
     if (input !== undefined) child.stdin?.end(input)
+    if (onProgress) child.stderr?.on('data', progressReader(onProgress))
     let grace: NodeJS.Timeout | undefined
     const giveUpOnPipes = () => { child.stdout?.destroy(); child.stderr?.destroy() }
     const quiet = () => { clearTimeout(grace); grace = setTimeout(giveUpOnPipes, EXIT_GRACE_MS) }
@@ -723,12 +735,12 @@ export class GitRepository {
    * of: a git in a terminal, or an agent's, holds the index for moments, and the user who staged a file in
    * those moments meant it. The lane waits with it, since what is queued behind needs the same lock.
    */
-  private executeGitCommand(args: string[], { refreshesIndex = false, input }: { refreshesIndex?: boolean; input?: string } = {}): Promise<GitCommandResult> {
+  private executeGitCommand(args: string[], { refreshesIndex = false, input, onProgress }: { refreshesIndex?: boolean; input?: string; onProgress?: (progress: GitProgress) => void } = {}): Promise<GitCommandResult> {
     // A read allowed to write the index waits its turn among the writes made here, which need the same lock
     return this.enqueueCommand(refreshesIndex ? 'write' : laneOf(args), async () => {
       let refusedAt: number | undefined
       for (;;) {
-        const result = await this.runGitOnce(args, refreshesIndex, input)
+        const result = await this.runGitOnce(args, refreshesIndex, input, onProgress)
         const lock = result.code === 'locked' ? LOCKED.exec(result.error ?? '')?.[1] : undefined
         if (!lock) return result
         // A stash is several steps to git, and one refused part-way has done the steps before it: run again, it
@@ -743,11 +755,19 @@ export class GitRepository {
     })
   }
 
-  private async runGitOnce(args: string[], refreshesIndex = false, input?: string): Promise<GitCommandResult> {
+  private async runGitOnce(args: string[], refreshesIndex = false, input?: string, onProgress?: (progress: GitProgress) => void): Promise<GitCommandResult> {
+    const started = performance.now()
+    const result = await this.runGitAnswered(args, refreshesIndex, input, onProgress)
+    // A reading for whoever is looking into what the panel is doing: nothing is decided with it
+    commandLog.debug(`git ${args.join(' ').slice(0, 300)}: ${result.success ? 'ok' : `failed${result.code ? ` (${result.code})` : ''}`} in ${Math.round(performance.now() - started)} ms`)
+    return result
+  }
+
+  private async runGitAnswered(args: string[], refreshesIndex: boolean, input: string | undefined, onProgress: ((progress: GitProgress) => void) | undefined): Promise<GitCommandResult> {
     try {
       // Ended when it stops working, not when a clock runs out: a fetch stalled on the network would
       // otherwise hold its lane, and every later remote command with it, until the app restarts
-      const { stdout } = await this.runGit(args, 'utf8', refreshesIndex, input)
+      const { stdout } = await this.runGit(args, 'utf8', refreshesIndex, input, onProgress)
 
       return { success: true, output: stdout }
     } catch (error) {
@@ -768,9 +788,11 @@ export class GitRepository {
         return { success: true, output: '' }
       }
 
+      // Asked for progress, git wrote it to the same stream as why it failed
+      const said = onProgress && gitError.stderr ? withoutProgress(gitError.stderr) : gitError.stderr
       return {
         success: false,
-        error: gitError.stderr || gitError.message,
+        error: said || gitError.message,
         output: gitError.stdout,
         // Read from both streams: a merge that stops on a conflict says so on its output and nothing on its error
         code: classifyGitError(`${gitError.stderr ?? ''}\n${gitError.stdout ?? ''}`),
@@ -1774,9 +1796,43 @@ export class GitRepository {
     throw new Error('Could not determine base branch')
   }
 
+  /**
+   * The branch this one was made from, where something wrote that down: this app when it made the branch, VS Code
+   * when it did, or git itself, whose record of a branch's first move says what it was made from when it was
+   * given a name. Nothing when none did, or when what they name is gone.
+   */
+  private async rememberedBaseOf(branch: string): Promise<string | undefined> {
+    const escaped = branch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const config = await this.executeGitCommand(['config', '--get-regexp', `^branch\\.${escaped}\\.(${BASE_KEY}|vscode-merge-base)$`])
+    const told = new Map((config.success ? config.output ?? '' : '').split('\n').filter(Boolean).map((line): [string, string] => {
+      const space = line.indexOf(' ')
+      return [line.slice(line.lastIndexOf('.', space) + 1, space), line.slice(space + 1).trim()]
+    }))
+    const reflog = await this.executeGitCommand(['reflog', 'show', '--format=%gs', refArgument(branch, 'branch')])
+    const created = /^branch: Created from (.+)$/.exec((reflog.success ? reflog.output ?? '' : '').trim().split('\n').at(-1) ?? '')?.[1]
+
+    for (const named of [told.get(BASE_KEY), told.get('vscode-merge-base'), created]) {
+      const base = named?.replace(/^refs\/(heads|remotes\/origin)\//, '').replace(/^origin\//, '')
+      // `HEAD` and a commit's name say where the branch began and not which branch that was
+      if (!base || base === branch || base === 'HEAD' || /^[0-9a-f]{7,64}$/.test(base)) continue
+      for (const ref of [`refs/heads/${base}`, `refs/remotes/origin/${base}`]) {
+        if ((await this.executeGitCommand(['rev-parse', '--verify', '--quiet', ref])).success) return base
+      }
+    }
+    return undefined
+  }
+
   async getPRBaseBranch(): Promise<string> {
     const cached = this.getCached<string>('prBaseBranch')
     if (cached) return cached
+
+    // What the branch was made from is known where it was written down, and guessed from the commits otherwise
+    const current = await this.getCurrentBranch().catch(() => 'HEAD')
+    const remembered = current === 'HEAD' ? undefined : await this.rememberedBaseOf(current).catch(() => undefined)
+    if (remembered) {
+      this.setCached('prBaseBranch', remembered)
+      return remembered
+    }
 
     const defaultBase = await this.getBaseBranch({ preferUpstream: false })
 
@@ -1954,7 +2010,7 @@ export class GitRepository {
     return [...seen.values()]
   }
 
-  async checkoutBranch(branchName: string): Promise<void> {
+  async checkoutBranch(branchName: string, onProgress?: (progress: GitProgress) => void): Promise<void> {
     if (!branchName.trim()) {
       throw new Error('Branch name cannot be empty')
     }
@@ -1965,8 +2021,10 @@ export class GitRepository {
     }
     
     return this.withWriteFlag(async () => {
+      // The branch this one is made from, if it has to be made here: where it was is not written down otherwise
+      const from = await this.getCurrentBranch().catch(() => 'HEAD')
       // Try to checkout the branch
-      const result = await this.executeGitCommand(['checkout', branchName])
+      const result = await this.executeGitCommand(['checkout', '--progress', branchName], { onProgress })
 
       if (!result.success) {
         // Check if it's because the branch doesn't exist locally or can't be resolved
@@ -1979,6 +2037,7 @@ export class GitRepository {
             if (!newBranchResult.success) {
               throw failure(newBranchResult, `Failed to create branch: ${branchName}`)
             }
+            if (from !== 'HEAD') await this.executeGitCommand(['config', `branch.${branchName}.${BASE_KEY}`, from])
           }
         } else if (result.code === 'local-changes') {
           // Git is preventing checkout due to conflicts
@@ -2055,7 +2114,7 @@ export class GitRepository {
     }
   }
 
-  async pushBranch(): Promise<void> {
+  async pushBranch(onProgress?: (progress: GitProgress) => void): Promise<void> {
     return this.withWriteFlag(async () => {
       // Check if branch is published
       const isPublished = await this.isCurrentBranchPublished()
@@ -2065,10 +2124,10 @@ export class GitRepository {
       // case-sensitivity issues on macOS (git push -u origin <name> fails
       // when the ref case doesn't match the filesystem case)
       const args = isPublished
-        ? ['push']
-        : ['push', '-u', 'origin', 'HEAD']
+        ? ['push', '--progress']
+        : ['push', '--progress', '-u', 'origin', 'HEAD']
 
-      const result = await this.executeGitCommand(args)
+      const result = await this.executeGitCommand(args, { onProgress })
 
       if (!result.success) {
         throw new GitError(`Failed to push: ${saidOfRemote(result) ?? (result.error || 'git gave no reason')}`, result.code)
@@ -2081,7 +2140,7 @@ export class GitRepository {
     })
   }
 
-  async pullBranch(): Promise<void> {
+  async pullBranch(onProgress?: (progress: GitProgress) => void): Promise<void> {
     return this.withWriteFlag(async () => {
       // Check if we have an upstream branch
       const hasUpstream = await this.isCurrentBranchPublished()
@@ -2090,7 +2149,7 @@ export class GitRepository {
       }
 
       // Execute git pull
-      const result = await this.executeGitCommand(['pull'])
+      const result = await this.executeGitCommand(['pull', '--progress'], { onProgress })
 
       if (!result.success) {
         throw new GitError(`Failed to pull: ${saidOfRemote(result) ?? (result.error || 'git gave no reason')}`, result.code)

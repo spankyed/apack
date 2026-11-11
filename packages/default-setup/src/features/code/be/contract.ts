@@ -4,7 +4,7 @@
 import type { ActionEntity, PromptEntity } from '@apackdev/sdk';
 import type {
   CodeConnectedData, CodeSystemError, CommitFailure, CommitLogEntry, CodeSystemContext, DirectoryContent, FileContent, FileInfo,
-  GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitStatusFile, OperationMove, QuickOpenResult, RepositoryChange,
+  GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitProgress, GitStatusFile, OperationMove, QuickOpenResult, RepositoryChange,
   RepositoryOperation, SearchProgress, SignInHelp,
   SearchResult, StashEntry, TerminalInfo, WorktreeEntry,
 } from './types.ts';
@@ -115,6 +115,8 @@ export type OutgoingCommitEvents =
   | { type: 'commit.FILES_REVERTED'; data: { paths: string[] } }
   | { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }
   | { type: 'commit.HUNK_APPLIED'; data: { path: string; staged: boolean } }
+  /** How far along a push, a pull or a checkout is, for the window that asked for it */
+  | { type: 'commit.PROGRESS'; data: { during: 'push' | 'pull' | 'checkout' } & GitProgress }
   | { type: 'commit.UNTRACKED_LISTED'; data: { path: string; files: string[]; truncated: boolean } }
   /** Git signs in to this host through the GitHub CLI now */
   | { type: 'commit.SIGN_IN_SET_UP'; data: { host: string } }

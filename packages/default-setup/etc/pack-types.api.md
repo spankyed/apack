@@ -1163,7 +1163,6 @@ interface DatabaseSchemaInfo {
 
 type DatabaseSettings = SettingsOf<'database'>;
 
-/** The two sides of one file's change, which an editor shows side by side */
 /** One piece of a file's change, as git cuts it */
 interface DiffHunk {
     /** Where it begins on the left side of the diff, and how many lines of that side it covers */
@@ -1665,6 +1664,15 @@ interface GitDirectories {
 
 type GitErrorCode = (typeof GIT_ERROR_CODES)[number];
 
+/** The two sides of one file's change, which an editor shows side by side */
+/** How far along git is with a command that talks to a remote or writes many files */
+interface GitProgress {
+    /** What git is doing, in its own words: `Writing objects`, `Receiving objects`, `Updating files` */
+    stage: string;
+    /** How much of that is done, from 0 to 100 */
+    percent: number;
+}
+
 declare class GitRepository {
     private workingDirectory;
     private cache;
@@ -1781,6 +1789,7 @@ declare class GitRepository {
      */
     private executeGitCommand;
     private runGitOnce;
+    private runGitAnswered;
     getCurrentBranch(): Promise<string>;
     getStatus(): Promise<GitStatusFile[]>;
     /**
@@ -1923,6 +1932,12 @@ declare class GitRepository {
     getBaseBranch(options?: {
         preferUpstream?: boolean;
     }): Promise<string>;
+    /**
+     * The branch this one was made from, where something wrote that down: this app when it made the branch, VS Code
+     * when it did, or git itself, whose record of a branch's first move says what it was made from when it was
+     * given a name. Nothing when none did, or when what they name is gone.
+     */
+    private rememberedBaseOf;
     getPRBaseBranch(): Promise<string>;
     /**
      * Find the closest parent branch by comparing merge-base distances.
@@ -1943,7 +1958,7 @@ declare class GitRepository {
      * named as the local branch it would be checked out as; one of another remote keeps `remotes/<remote>/`.
      */
     getAllBranches(): Promise<string[]>;
-    checkoutBranch(branchName: string): Promise<void>;
+    checkoutBranch(branchName: string, onProgress?: (progress: GitProgress) => void): Promise<void>;
     isCurrentBranchPublished(): Promise<boolean>;
     private _forceFetchNext;
     /** Fetches the next time one is considered, whatever the fetch settings and the time since the last say */
@@ -1957,8 +1972,8 @@ declare class GitRepository {
      * would fail the same way; changing the fetch settings, or a push or pull that works, starts it again.
      */
     fetchIfDue(): Promise<boolean>;
-    pushBranch(): Promise<void>;
-    pullBranch(): Promise<void>;
+    pushBranch(onProgress?: (progress: GitProgress) => void): Promise<void>;
+    pullBranch(onProgress?: (progress: GitProgress) => void): Promise<void>;
     stashPush(message?: string, stagedOnly?: boolean): Promise<string>;
     stashList(): Promise<StashEntry[]>;
     stashApply(index: number): Promise<void>;
@@ -3506,6 +3521,13 @@ type OutgoingCommitEvents =
         path: string;
         staged: boolean;
     };
+}
+/** How far along a push, a pull or a checkout is, for the window that asked for it */
+ | {
+    type: 'commit.PROGRESS';
+    data: {
+        during: 'checkout' | 'pull' | 'push';
+    } & GitProgress;
 } | {
     type: 'commit.UNTRACKED_LISTED';
     data: {
@@ -5881,6 +5903,7 @@ declare namespace __FeatureSettings_Code {
         enablePreview: boolean;
         autoFetchRemote: boolean;
         autoFetchIntervalSeconds: number;
+        logGitCommands: boolean;
         terminalScripts: {
             id: string;
             label: string;

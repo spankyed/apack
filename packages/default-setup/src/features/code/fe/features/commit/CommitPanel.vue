@@ -902,9 +902,12 @@ const shouldShowActionButton = computed(() => {
   return !hasUpstream.value || commitsAhead.value > 0 || commitsBehind.value > 0
 })
 
+const progress = useSelector(commitActor, (state) => state.context.progress)
+/** How far along git says it is, once it has said: `Writing objects 42%` */
+const progressOf = (during: 'push' | 'pull') => (progress.value?.during === during ? ` ${progress.value.stage} ${progress.value.percent}%` : '...')
 const actionButtonText = computed(() => {
-  if (isPushing.value) return 'Pushing...'
-  if (isPulling.value) return 'Pulling...'
+  if (isPushing.value) return `Pushing${progressOf('push')}`
+  if (isPulling.value) return `Pulling${progressOf('pull')}`
   if (!hasUpstream.value) return 'Publish Branch'
 
   // If we have both commits ahead and behind, prioritize pull

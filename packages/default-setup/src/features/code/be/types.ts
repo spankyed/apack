@@ -138,6 +138,14 @@ export type RepositoryChange = Record<RepositoryPart, boolean> & {
 }
 
 /** The two sides of one file's change, which an editor shows side by side */
+/** How far along git is with a command that talks to a remote or writes many files */
+export interface GitProgress {
+  /** What git is doing, in its own words: `Writing objects`, `Receiving objects`, `Updating files` */
+  stage: string
+  /** How much of that is done, from 0 to 100 */
+  percent: number
+}
+
 /** One piece of a file's change, as git cuts it */
 export interface DiffHunk {
   /** Where it begins on the left side of the diff, and how many lines of that side it covers */
