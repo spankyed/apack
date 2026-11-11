@@ -21,7 +21,7 @@
  */
 import { isMainThread } from 'node:worker_threads';
 import { aroundAll, aroundEach, expect, inject } from 'vitest';
-import { IDLE_MS, cpuAdded, describeRefusal, readTreeCpuMs, watchWork, type Watch, type WatchClock, type WorkReading } from '@apackdev/sdk/progress';
+import { IDLE_MS, cpuAdded, describeRefusal, describeTree, readTreeCpuMs, storageHold, unmetWaits, watchWork, type Watch, type WatchClock, type WorkReading } from '@apackdev/sdk/progress';
 // What a config provides and a test declares to it are typed with the package's vitest entry, which packs import
 import type { ProgressMeta } from './vitest.ts';
 import { describeLeftovers, leftoversIn, listProcesses, type Leftover } from './leftover-processes.ts';
@@ -73,7 +73,8 @@ function workerWork(): WorkReading & { now(): number } {
       lastChildren = children;
     }
     return now();
-  }, { now });
+  // A worker waiting on a disk is slow and not stuck, as any tree is (`storageHold`)
+  }, { now, held: () => storageHold(process.pid) });
 }
 
 /**
@@ -100,12 +101,37 @@ function judgeAfresh(): void {
     onRefused: (refusal) => {
       const together = running.length > 1 ? `, with ${running.length - 1} other test${running.length > 2 ? 's' : ''} running beside it` : '';
       const why = refusal.kind === 'stalled'
-        ? `stalled: its worker's process tree used no CPU for ${idleMs / 1000}s${together}. Inspect what it was waiting on; a test that is only slow is never failed for it.`
+        ? `stalled: its worker's process tree used no CPU for ${idleMs / 1000}s${together}${refusal.held === undefined ? ''
+          : `, after ${Math.round(refusal.held.ms / 1000)}s of waiting on storage that was allowed for (${refusal.held.by})`}. Inspect what it was waiting on; a test that is only slow is never failed for it.`
         : `${describeRefusal(refusal)}. A loop that spins reads as CPU close to its wall time.`;
-      for (const each of running) each.fail(new Error(`${each.what} ${why}`));
+      const fail = (found = '') => { for (const each of running) each.fail(new Error(`${each.what} ${why}${found}`)); };
+      if (refusal.kind !== 'stalled') return fail();
+      // What it was waiting on, read before the test is failed and its processes are stopped by its teardown
+      void whatWasWaiting().then(fail, () => fail());
     },
   });
   watching = { watch, work };
+}
+
+/**
+ * What a worker that stopped working was waiting on, as far as anything here can say: the waits its test had not
+ * met (`settles`), what its event loop was holding open, and the state of each process it started.
+ *
+ * **Because "used no CPU" is three different failures.** A process waiting on a disk, a file event that never
+ * arrived and a child that hung all spend nothing, and a report that stops there sends whoever reads it to rerun
+ * the suite and hope. Each of these lines is one of them ruled in or out without a rerun.
+ */
+async function whatWasWaiting(): Promise<string> {
+  const waits = unmetWaits(realClock.now());
+  const held = new Map<string, number>();
+  for (const resource of process.getActiveResourcesInfo()) held.set(resource, (held.get(resource) ?? 0) + 1);
+  const tree = await describeTree(process.pid);
+  return [
+    '',
+    waits.length > 0 ? `Still waiting for:\n${waits.map((wait) => `  ${wait}`).join('\n')}` : 'No wait of its own was unmet (`settles`): it was awaiting something that never answered.',
+    `Its event loop held: ${[...held].map(([resource, count]) => `${count} ${resource}`).join(', ') || 'nothing'}`,
+    tree ?? 'Its process tree could not be listed.',
+  ].join('\n');
 }
 
 function watch(kind: 'hooks' | 'test', what: string, budgetMs: number | undefined, run: () => Promise<unknown>,
