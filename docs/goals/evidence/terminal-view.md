@@ -338,7 +338,22 @@ why. **The code the three reads added has not been through the mutation tool her
   when a watched directory is deleted as its watch closes, which `master` fixed in `acb5e32eaf` after
   this branch was cut. With `master` merged in, the code feature's backend specs ran eight times of
   eight without losing a worker; before, about one run in three.
-- Everything Windows on this branch is unrun: the broker's lock and hang-up on a pipe, the proxy, the
-  PowerShell hook that marks commands.
-- fish's hook is held to its text.
+- Everything Windows in this repository's half is unrun: a window drawing from rows there, and the
+  PowerShell hook under a Windows console.
+
+### The fish and PowerShell hooks, run — 2026-11-11
+
+Neither shell is on this machine or on CI, so each was run by hand in a container, under a terminal
+(`script`), with the file `integrationFor` writes, typed at: a command, an empty Enter, a command that
+fails, a `cd` into a directory named `50%20 off`.
+
+| Shell | What it wrote |
+|---|---|
+| fish 3.6.0 (Debian bookworm) | `133;A` at each prompt; `633;E;<line>`, `133;C`, `133;D;<status>` once a command (`0`, then `1` for `false`); nothing for the empty Enter; the directory as `…/50%2520%20off` |
+| fish 4 (Debian trixie) | its own `133;A`, `133;C;cmdline_url=…` and `133;D`, with this hook's `633;E;<line>` after its `C` — the order the broker takes a line in after a start — and the same statuses and directory |
+| PowerShell 7.4.6 (arm64 Linux) | `633;E;<line>`, `633;C`, `633;D;<status>` once a command: `0`; `1` for a cmdlet that failed; `3` for `sh -c "exit 3"`; `0` again for the command after it; nothing for the empty Enter; `633;P;Cwd=/tmp/50%2520 off` |
+
+PowerShell's own image is x86 and aborted under emulation before the hook was read, which says nothing
+of the hook; the run above is its arm64 build. These are runs, not cases in the suite: a spec for a
+shell that is installed nowhere the suite runs would be skipped everywhere and report nothing.
 

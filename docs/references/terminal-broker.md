@@ -317,7 +317,10 @@ know which shell is on the other end.
 - **Images after a restart.** A recording's keyframe is the sequences that redraw a screen, which carry
   no images, so a restored terminal comes back without the ones it was showing. Animations are not
   advanced and virtual placements are not told to a view.
-- **fish, PowerShell, and bash newer than 3.2.** The hooks are run against the bash (3.2) and the zsh
-  this machine has by `shell-marks.spec.ts`; fish's and PowerShell's are held only to their text.
+- **The hooks outside the suite, and on Windows.** `shell-marks.spec.ts` runs the bash (3.2) and zsh
+  hooks in the real shells this machine has. fish's and PowerShell's were run by hand in containers
+  ([evidence](../goals/evidence/terminal-view.md)) and are held in the suite only to their text, neither
+  shell being installed where the suite runs; PowerShell was run on Linux, so how a Windows console
+  orders the hook's writes against the prompt is unseen. bash newer than 3.2 was not run.
 - **A packaged build ships no broker.** The binary is resolved from `APACK_TERMINAL_BINARY` or the linked
   checkout's debug build. Per-platform builds and their signing belong with the composition that ships it.
