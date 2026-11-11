@@ -369,7 +369,7 @@ const codeState = setup({
      * never delivered is made up for here.
      */
     externalChanges: fromCallback(() => {
-      const check = () => { sendToSystem('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES' }) };
+      const check = () => { sendToSystem('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES', by: 'window' }) };
       window.addEventListener('focus', check);
       return () => window.removeEventListener('focus', check);
     }),

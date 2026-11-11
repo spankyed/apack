@@ -1556,7 +1556,7 @@ interface FolderItem {
 }
 
 /** Why a git command failed, where what it printed says */
-declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref"];
+declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository"];
 
 interface GhPRComment {
     id: string;
@@ -1670,6 +1670,13 @@ declare class GitRepository {
      * the working directory, or anything. Nothing in it is what lets the snapshot be reused.
      */
     private unread;
+    /**
+     * Whether the index may hold stale facts about the files: something changed many of them, or git's own state,
+     * since a status was last let write it. Not known to be fresh until one has been
+     */
+    private indexMayBeStale;
+    /** Whether the next whole status is the one let write the index */
+    private refreshIndexOnRead;
     /** Counts every notice that the repository may have changed, so a read begun before one is not taken for one after it */
     private snapshotVersion;
     private snapshotRead?;
@@ -1689,7 +1696,15 @@ declare class GitRepository {
     /** Whether a watcher reports this checkout's changes; without one a snapshot is read every time it is asked for */
     private watched;
     private watchFailed;
+    /** Reads files as commits have them, through one git kept open while they are being read */
+    private readonly objects;
     constructor(workingDirectory: string);
+    /**
+     * The file a commit has under a name like `HEAD:src/a.ts`, or nothing when it has none. Through the git kept
+     * open for it, and by a process of its own when that one cannot be asked: a name it cannot carry, or a git
+     * that ended. Never for the index (`:src/a.ts`), which that git would go on answering from as it first read it.
+     */
+    private fileInCommit;
     getWorkingDir(): string;
     setFetchConfig(enabled: boolean, intervalSeconds: number): void;
     get isWriteInProgress(): boolean;
@@ -1765,8 +1780,17 @@ declare class GitRepository {
      *
      * A check a watcher's event started reads `noted`: what the watcher said changed (`noteChanged`), and nothing
      * when it said nothing since the last read. Any other check has no event to go by, and reads everything.
+     *
+     * **`refreshIndex` lets this one status write git's index**, which no other read here may
+     * (`GIT_OPTIONAL_LOCKS`). Git keeps in the index what it last saw of each file, and a status that may not write
+     * it re-reads every file whose time moved, on every run: after a checkout or a formatter over the tree, that is
+     * every file, every time. Writing it holds git's lock for as long as the status takes, in which a git run from
+     * a terminal would be refused, so it is the caller's to say when: at a moment nothing else is likely to be
+     * running git, and only when something says the index may be stale.
      */
-    refreshSnapshot(reading?: 'everything' | 'noted'): Promise<RepositoryChange>;
+    refreshSnapshot(reading?: 'everything' | 'noted', { refreshIndex }?: {
+        refreshIndex?: boolean | undefined;
+    }): Promise<RepositoryChange>;
     private currentSnapshot;
     private readSnapshotOnce;
     private loadSnapshot;
@@ -2079,8 +2103,10 @@ type IncomingCodeEvents = IncomingExplorerEvents | IncomingSearchEvents | Incomi
  * finished, an agent's turn ended. The repository and the open files are read again, and what differs is
  * announced as it would have been.
  */
+/** `by` a window that gained focus; without it, a terminal command or an agent's turn has just ended */
  | {
     type: 'CHECK_FOR_EXTERNAL_CHANGES';
+    by?: 'window';
 };
 
 type IncomingCommitEvents = {
