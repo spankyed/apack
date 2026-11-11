@@ -97,6 +97,15 @@ describe.skipIf(!BINARY || process.platform === 'win32')('a terminal on a target
       .rejects.toThrow(/No route to host/);
   });
 
+  it('says what a command that hangs was doing when it was given up on', async () => {
+    service = createTerminalService({ startMs: 500 });
+    // A command that starts, complains, and never answers: a host that takes no connection
+    const hangs = { command: ['/bin/sh', '-c', 'echo "waiting for the daemon" >&2; exec sleep 600'] };
+
+    await expect(service.at(hangs).open({ cols: 80, rows: 24 }, reading().listeners))
+      .rejects.toThrow(/\/bin\/sh has run for \d+\.\ds and written nothing; it said: waiting for the daemon/);
+  });
+
   it('is reached once it is there, however often its command reached nothing before', async () => {
     service = createTerminalService();
     // A command that reaches nothing until a file says the far side is up: a network that came back

@@ -34,7 +34,10 @@ export function isRelayKey(key: unknown): key is string {
 
 export interface Relay {
   readonly socket: string;
-  /** What the last run of the command that ended badly wrote to stderr: why a connection came to nothing */
+  /**
+   * Why a connection came to nothing: a run of the command that is still going and has written nothing,
+   * or what the last run that ended badly wrote to stderr
+   */
   lastFailure(): string;
   /** Stops accepting, and ends the commands still running. Nothing is ended on the far side by this */
   close(): Promise<void>;
@@ -54,19 +57,38 @@ export async function serveRelay(socket: string, command: readonly string[], env
   const [program, ...args] = command;
   if (program === undefined) throw new Error('A terminal target needs a command to reach it with');
   let failure = '';
-  const running = new Set<ReturnType<typeof spawn>>();
+  /** Each run of the command still going, with when it began, whether it has answered, and its stderr */
+  const running = new Map<ReturnType<typeof spawn>, { began: number; answered: boolean; said(): string }>();
+  /**
+   * What a run that has written nothing says of itself: how long it has been, and what it put on stderr.
+   * A command that hangs — a host that takes no connection, a daemon that is not answering — exits with
+   * no status to report, so this is the only account of it there is.
+   */
+  const silence = (run: { began: number; said(): string }): string => {
+    const said = run.said().trim();
+    return `${program} has run for ${((Date.now() - run.began) / 1000).toFixed(1)}s and written nothing${said ? `; it said: ${said}` : ''}`;
+  };
 
   const server = net.createServer((connection) => {
     const child = spawn(program, args, { stdio: ['pipe', 'pipe', 'pipe'], env, windowsHide: true });
-    running.add(child);
     let said = '';
+    const run = { began: Date.now(), answered: false, said: () => said };
+    running.set(child, run);
     child.stderr.on('data', (chunk: Buffer) => { if (said.length < STDERR_KEPT) said += chunk.toString('utf8'); });
+    child.stdout.once('data', () => { run.answered = true; });
     connection.pipe(child.stdin);
     child.stdout.pipe(connection);
     // A command that has gone takes no more input, which is an ending and not a fault
     child.stdin.on('error', () => {});
     connection.on('error', () => {});
-    connection.once('close', () => { child.kill(); });
+    connection.once('close', () => {
+      // Given up on by whoever connected, before it wrote a byte: said here, where it is still known
+      if (!run.answered && running.has(child)) {
+        failure = silence(run);
+        logger.warn(`a terminal target's command was given up on: ${failure}`);
+      }
+      child.kill();
+    });
     child.once('error', (error) => {
       failure = `${program} could not be started (${error.message})`;
       logger.warn(failure);
@@ -98,9 +120,10 @@ export async function serveRelay(socket: string, command: readonly string[], env
 
   return {
     socket,
-    lastFailure: () => failure,
+    // A run still going that has answered nothing is the failure being asked about, before it has ended
+    lastFailure: () => [...running.values()].filter(run => !run.answered).map(silence)[0] ?? failure,
     async close() {
-      for (const child of running) child.kill();
+      for (const child of running.keys()) child.kill();
       await new Promise<void>((resolve) => server.close(() => resolve()));
     },
   };

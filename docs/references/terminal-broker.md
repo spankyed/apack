@@ -133,7 +133,9 @@ there first — a shell on another machine does not end because this app lost it
 one only when the target says that shell is gone. Closing a terminal that was never reached this run
 reaches the target to end the shell it left. A target that cannot be reached is tried every time it is
 asked for: unlike the app's own broker, whose failures are its binary's and are counted against it,
-what keeps a target away is a network or a container, which comes back on its own.
+what keeps a target away is a network or a container, which comes back on its own. Its greeting is a
+network wait and is bounded as one, and a command that neither answers nor exits is reported with how
+long it ran and what it wrote to stderr.
 
 ## The protocol
 

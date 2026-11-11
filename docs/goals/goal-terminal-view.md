@@ -143,7 +143,7 @@ Each ends in something checked. A phase is not started on a red one.
 - **Read three times, and driven.** The three branches were read independently three times and what
   the reads found was fixed; a terminal's screen was driven across a restart of the app, and a
   terminal in the Linux test container was drawn in the app and taken up again as the same shell.
-  The evidence has both, and the one container run in six that failed.
+  The evidence has both, and the one container run in thirty that failed, with what was ruled out.
 - **Changed by the reads.** A row carries its own styles and links; a frame carries the colours a
   program changed; a broker holds a lock on its socket; a terminal on a target is not reached by the
   app starting, and is listed *not connected* until a person starts it; a path a program printed opens

@@ -362,7 +362,23 @@ function brokerSessions(start: () => Promise<Broker>, startKeyOf: (() => string)
   };
 }
 
-export function createTerminalService(): TerminalService & { shutdown(): Promise<void> } {
+/**
+ * How long a target's broker has to answer a greeting.
+ *
+ * **A network wait, so it is sized as one.** The greeting crosses whatever the target's command is —
+ * `ssh` resolving a name and negotiating keys, `docker exec` asking a daemon that is busy — and the ten
+ * seconds a broker on this machine is given (`BROKER_START_MS`) is a figure for a process this app just
+ * started beside itself. A command that cannot reach its target usually says so and exits, which ends
+ * the wait at once with what it said; this bounds the one that neither answers nor exits, at about what
+ * `ssh` itself gives a connection before it gives up.
+ */
+const TARGET_GREETING_MS = 60_000;
+
+/**
+ * `startMs` replaces `TARGET_GREETING_MS` for a case about a target that never answers: the bound is the
+ * subject there, and it must be reachable without waiting it out (`BrokerOptions.startMs`).
+ */
+export function createTerminalService({ startMs = TARGET_GREETING_MS }: { startMs?: number } = {}): TerminalService & { shutdown(): Promise<void> } {
   const own = brokerSessions(
     () => startBroker({ binary: brokerBinary(), socket: socketPath(), env: brokerEnvironment() }),
     () => startKey(brokerBinary(), socketPath()),
@@ -390,7 +406,7 @@ export function createTerminalService(): TerminalService & { shutdown(): Promise
           const serving = await relay;
           try {
             // Connected to and never started: the broker is wherever the command reaches
-            return await startBroker({ socket });
+            return await startBroker({ socket, startMs });
           } catch (error) {
             const why = serving.lastFailure();
             throw why ? new Error(`Could not reach the terminal target: ${why}`, { cause: error }) : error;

@@ -73,6 +73,10 @@ export interface RecordingBroker {
   readonly adopted: readonly string[]
   /** Refuses the nth open (1-based), as a broker that would not start */
   refuseOpen(nth: number, why?: string): void
+  /** Makes every target unreachable, or reachable again: each ask of one is refused with `why` and counted */
+  targetsUnreachable(why: string | undefined): void
+  /** How many times a target was asked for anything while it could not be reached */
+  readonly refusedByTarget: number
   /**
    * What the session's shell will report as its directory when asked.
    *
@@ -139,6 +143,14 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
   const commandsOf = new Map<string, ReadonlyArray<TerminalCommand & { output?: string }>>()
   const rewound: Array<{ id: string; recording: string; cols: number; rows: number; sought: number[]; closed: boolean }> = []
   let rewindRefusal: string | undefined
+  let unreachable: string | undefined
+  let refusedByTarget = 0
+  /** Refuses as a target that cannot be reached does, where one cannot be and this is an ask of one */
+  const reach = (target: readonly string[] | null): void => {
+    if (target === null || unreachable === undefined) return
+    refusedByTarget += 1
+    throw new Error(unreachable)
+  }
   const adopted: string[] = []
   let next = 0
 
@@ -199,6 +211,7 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
   /** The service for one broker: this machine's, or the one a target's command reaches */
   const serviceFor = (target: readonly string[] | null): TerminalService => ({
     open: async (options: OpenOptions, listeners: TerminalListeners) => {
+      reach(target)
       next += 1
       const refusal = refusals.get(next)
       if (refusal !== undefined) throw new Error(refusal)
@@ -222,6 +235,7 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
      * let the fall-back to a fresh shell go untested.
      */
     adopt: async (id: string, listeners: TerminalListeners) => {
+      reach(target)
       adopted.push(id)
       if (!live.has(id)) throw new Error(`no session ${id}`)
       listening.set(id, listeners)
@@ -229,7 +243,7 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
       return handle(id, null, target)
     },
 
-    sessions: async (): Promise<TerminalSessionSummary[]> => [...live].map(id => ({
+    sessions: async (): Promise<TerminalSessionSummary[]> => (reach(target), [...live]).map(id => ({
       id, pid: opened.find(one => one.id === id)?.pid ?? 0, cols: 80, rows: 24, kept: kept.has(id), recorded: opened.find(one => one.id === id)?.options.record !== undefined,
       title: null, cwd: reportedCwds.get(id) ?? null, command: null, running: false,
     })),
@@ -273,6 +287,8 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
     },
     happens: (id, event) => listenersFor(id).onEvent?.(event),
     refuseOpen: (nth, why = 'the broker would not start') => { refusals.set(nth, why) },
+    targetsUnreachable: (why) => { unreachable = why },
+    get refusedByTarget() { return refusedByTarget },
     refuseTerminate: (id, why = 'the broker would not end the session') => { refusedTerminations.set(id, why) },
     reportsCwd: (id, cwd) => { reportedCwds.set(id, cwd) },
     // Both halves of the fact: what `facts()` answers afterwards, and the event that says it happened

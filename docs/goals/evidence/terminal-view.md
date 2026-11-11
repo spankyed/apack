@@ -303,11 +303,27 @@ proxy`. A terminal opened on that target from the panel's menu drew `on-Linux-aa
 app was quit and started: the terminal was listed *not connected*, and starting it again took up the
 same shell (`back-on-Linux-shell-1352`) with its screen.
 
-**One run in six failed, undiagnosed.** In the first run on the final builds the app's two connections
-to the target were accepted and the greeting was not answered inside ten seconds, twice. The same
-broker answered by hand a minute later; five further runs passed, one with the same minute between its
-halves; and two by-hand reproductions of an app quitting on a remote broker answered in 30 ms each
-time.
+**One run in thirty failed, and the cause was not found.** In the first run on the final builds the
+app's two connections to the target were accepted and the greeting was not answered inside ten seconds,
+twice. What was established afterwards, 2026-11-10 and -11:
+
+- *Not the broker.* Started fresh by the proxy, with a client and a view that ended as a quitting app's
+  do, it answered a greeting in about 80 ms fifty seconds later, and in about 30 ms in two more
+  reproductions; nothing on the greeting's path in it takes a lock another connection can hold.
+- *Not reproduced.* Twenty-nine further runs of the drive passed, twenty of them each against a
+  brand-new container and profile.
+- *Not Docker under a build.* `docker exec` carried 987 greetings while a release build ran in the
+  container: median 31 ms, slowest 1.5 s. The failing run was the only one begun straight after a
+  from-scratch build there, and its first half was 2.5 s slower than any other, which is all that
+  points at the machine.
+- Docker's event log no longer reached back to the run.
+
+What it showed about the app was fixed whatever the cause was. A target's greeting was held to the ten
+seconds a broker on this machine is given, though reaching one is a network wait: it has a bound of its
+own. Starting a terminal on a target tried the shell it had and then a new one, each waiting out the
+whole bound: the target is asked what it has first, so one that cannot be reached says so once. And the
+command that hung was killed without a word of what it had been doing: the failure now says how long it
+ran, that it wrote nothing, and what it put on stderr.
 
 ### The mutation gate
 
@@ -318,8 +334,10 @@ why. **The code the three reads added has not been through the mutation tool her
 
 ### Not done
 
-- The unexplained vitest worker exit recurred: one of three runs of the code feature's backend specs,
-  no crash report.
+- The vitest worker exit that phase 9 recorded as undiagnosed was `@parcel/watcher` corrupting the heap
+  when a watched directory is deleted as its watch closes, which `master` fixed in `acb5e32eaf` after
+  this branch was cut. With `master` merged in, the code feature's backend specs ran eight times of
+  eight without losing a worker; before, about one run in three.
 - Everything Windows on this branch is unrun: the broker's lock and hang-up on a pipe, the proxy, the
   PowerShell hook that marks commands.
 - fish's hook is held to its text.

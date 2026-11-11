@@ -415,11 +415,15 @@ class TerminalService {
         onEvent: (event: TerminalEvent) => handlers.onEvent(id, event),
         onExit: (code: number | null) => this.exited(id, opening, code, handlers),
       }
-      // The shell it had on the target, where the target still has it (`Terminal.resumes`). Refused is the
-      // ordinary answer for one that ended, and a target that cannot be reached fails the open below too,
-      // which is what says why
-      const resumed = target && terminal.resumes !== undefined
-        ? await services.terminal.at({ command: target.command }).adopt(terminal.resumes, listeners).catch(() => undefined)
+      // The shell it had on the target, where the target still has it (`Terminal.resumes`). **The target
+      // is asked what it has first**, so one that cannot be reached says why once, here, rather than
+      // after a second attempt that waits as long as the first; and one that answers says whether the
+      // shell is there to take up, and whether it was asked to go on running
+      const there = target && terminal.resumes !== undefined
+        ? (await services.terminal.at({ command: target.command }).sessions()).find(one => one.id === terminal.resumes)
+        : undefined
+      const resumed = target && there
+        ? await services.terminal.at({ command: target.command }).adopt(there.id, listeners).catch(() => undefined)
         : undefined
       // Otherwise a new shell, started under what the last one printed: usually what it was restarted to read
       const session = resumed ?? await this.open(id, { shell, cwd, cols, rows, target }, true, settings, listeners)
@@ -440,9 +444,7 @@ class TerminalService {
         ...(resumed === undefined && session.recorded && { recorded: true }),
       }
       if (resumed) {
-        // What the target says of the shell taken up again: whether it was asked to go on running
-        const listed = await services.terminal.at({ command: target!.command }).sessions().catch((): readonly TerminalSessionSummary[] => [])
-        if (listed.find(one => one.id === session.id)?.kept) terminal.info = { ...terminal.info, kept: true }
+        if (there?.kept) terminal.info = { ...terminal.info, kept: true }
       } else if (terminal.info.kept) {
         // **Kept is the terminal's, so the shell under it is kept too.** A terminal shown as going on
         // running whose new shell ends with the app is the one thing the mark must not mean

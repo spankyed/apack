@@ -131,6 +131,23 @@ describe('a terminal on a target', () => {
     await app.stop()
   })
 
+  it('says why once when its target cannot be reached, and is started when it can be', async () => {
+    const { app, broker } = await started()
+    const there = rowOn(DEVBOX.id, 'broker-from-before')
+    const { terminalService } = await import('#features/code/be/services/terminal.ts')
+    await terminalService.restoreAll(HANDLERS)
+
+    broker.targetsUnreachable('ssh: connect to host devbox port 22: Operation timed out')
+    await expect(terminalService.restart(there, HANDLERS)).rejects.toThrow(/Operation timed out/)
+    // One ask of the target, not one for the shell it had and another for a new one
+    expect(broker.refusedByTarget).toBe(1)
+    expect(terminalService.list().find(({ id }) => id === there), 'a terminal whose target was away was closed').toBeDefined()
+
+    broker.targetsUnreachable(undefined)
+    expect(await terminalService.restart(there, HANDLERS)).toMatchObject({ active: true })
+    await app.stop()
+  })
+
   it('is started once however many times it is asked to start while it is starting', async () => {
     const { app, broker } = await started()
     const there = rowOn(DEVBOX.id)
