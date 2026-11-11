@@ -65,15 +65,28 @@ export const nodeSubscriber = (watch: WatchTree = fs.watch): SubscribeToDirector
  * directory changed asks about everything under it. One that goes has its watches closed with it, and the
  * watched directory itself going is an error, since nothing reports on one made again at its path.
  *
+ * **A watch is on the directory that was at a path when it was opened, not on the path.** A directory deleted
+ * and made again at once (`rm -rf dist && mkdir dist`) is another directory under the same name, and the watch
+ * on the first reports nothing of it. So each watch is held with which directory it is on, and a path that is
+ * found to hold another is watched again.
+ *
  * The platform's limit on watches is reached one directory at a time. Running out while the tree is first
  * read fails the subscription, and running out later is reported as an error: either way the tree is not all
  * watched, and whoever opened the watch is told so rather than left with part of one.
  */
 export const perDirectorySubscriber = (watch: WatchDirectory = fs.watch): SubscribeToDirectory => async (directory, onChanges, { ignore }) => {
   const ignored = under(ignore)
-  /** The open watches, by the directory each is on, relative to the watched one: `''` is the watched one itself */
-  const watches = new Map<string, { close(): void }>()
+  /**
+   * The open watches, by the directory each is on, relative to the watched one: `''` is the watched one itself.
+   * `identity` says which directory that was when the watch was opened
+   */
+  const watches = new Map<string, { close(): void; identity: string | undefined }>()
+  /** The directories whose watch is being opened, so that two reports of one directory open one watch */
+  const opening = new Set<string>()
   let closed = false
+  /** Which directory is at a path: another one made under the same name is a different one */
+  const identityOf = (stats: fs.Stats): string => `${stats.dev}:${stats.ino}`
+  const identityAt = (absolute: string) => fs.promises.stat(absolute).then(identityOf, () => undefined)
 
   const close = () => {
     closed = true
@@ -90,22 +103,41 @@ export const perDirectorySubscriber = (watch: WatchDirectory = fs.watch): Subscr
   }
 
   const add = async (relative: string): Promise<void> => {
-    if (closed || watches.has(relative) || (relative !== '' && ignored(relative))) return
+    if (closed || watches.has(relative) || opening.has(relative) || (relative !== '' && ignored(relative))) return
     const absolute = path.join(directory, relative)
-    let watcher: ReturnType<WatchDirectory>
+    opening.add(relative)
     try {
-      watcher = watch(absolute, { persistent: false }, (eventType, filename) => { void changed(relative, eventType, filename) })
-    } catch (error) {
-      // Gone between being listed and being watched: nothing is there to report on
-      const code = (error as NodeJS.ErrnoException).code
-      if (relative !== '' && (code === 'ENOENT' || code === 'ENOTDIR')) return
-      throw error
+      // The watch is opened between two looks at which directory is there. When they differ it was replaced
+      // while the watch was being opened, and which of the two the watch is on is not known: it is opened again
+      for (let attempt = 0; ; attempt++) {
+        const before = await identityAt(absolute)
+        if (closed) return
+        let watcher: ReturnType<WatchDirectory>
+        try {
+          watcher = watch(absolute, { persistent: false }, (eventType, filename) => { void changed(relative, eventType, filename) })
+        } catch (error) {
+          // Gone between being listed and being watched: nothing is there to report on
+          const code = (error as NodeJS.ErrnoException).code
+          if (relative !== '' && (code === 'ENOENT' || code === 'ENOTDIR')) return
+          throw error
+        }
+        watcher.on('error', (error) => {
+          if (relative === '') onChanges(error, [])
+          else drop(relative)
+        })
+        const after = await identityAt(absolute)
+        if (closed) return watcher.close()
+        // Replaced three times over while being watched, it is being rewritten faster than it can be followed:
+        // the last watch is kept, and what is made there is reported by its parent's
+        if (before === after || attempt === 2) {
+          watches.set(relative, { close: () => watcher.close(), identity: after })
+          break
+        }
+        watcher.close()
+      }
+    } finally {
+      opening.delete(relative)
     }
-    watcher.on('error', (error) => {
-      if (relative === '') onChanges(error, [])
-      else drop(relative)
-    })
-    watches.set(relative, watcher)
     const entries = await fs.promises.readdir(absolute, { withFileTypes: true }).catch((): fs.Dirent[] => [])
     await Promise.all(entries.filter(entry => entry.isDirectory()).map(entry => add(path.join(relative, entry.name))))
   }
@@ -126,7 +158,16 @@ export const perDirectorySubscriber = (watch: WatchDirectory = fs.watch): Subscr
       if (relative === '' && !await fs.promises.lstat(directory).then(() => true, () => false) && !closed) onChanges(new Error(`${directory} was deleted`), [])
       return
     }
-    if (!found.isDirectory() || watches.has(where)) return
+    // A file where a watched directory was: that directory is gone
+    if (!found.isDirectory()) return drop(where)
+    const held = watches.get(where)
+    if (held) {
+      // Still the directory its watch is on. Another one under the same name is watched in its place
+      if (held.identity === identityOf(found)) return
+      drop(where)
+    }
+    // Another report of the same directory is opening its watch, and reports it once that is in place
+    if (opening.has(where)) return
     try {
       await add(where)
     } catch (error) {
