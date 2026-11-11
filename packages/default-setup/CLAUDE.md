@@ -211,17 +211,16 @@ neither watcher needs to be exact.
   `git-commands` log source): off by default, since a status runs for most file events.
 - **A watch that fails is said to the user.** `commit.STATUS_RECEIVED` carries `watching`, and the panel says live
   updates are off; the next check opens the watch again.
-- **A tree is watched by the platform's own watcher where it has one** (`directory-watch.ts`): Node's recursive
-  `fs.watch` on macOS and Windows, and `@parcel/watcher` on Linux, which has no watch over a tree. The library
-  is not loaded on the other two, where it has open memory defects and would share a process with the database
-  ([what was measured](../../docs/issues/ISSUE-dev-loop-file-watching.md#code-map)). On Linux it refuses to close a
-  watch whose directory was deleted moments before, and leaves some of that watch's inotify watches with the
-  process: every close catches the refusal, and nothing takes them back. A watcher that needs a native binding
-  earns its place by surviving its directory being deleted as its watch closes.
-- **Where the library is used it is a native binding the host resolves** (`HOST_RESOLVED_BINARIES`), and the
-  host resolves what a pack *requires*. It is imported by a module of its own (`parcel-watcher.ts`) that is
-  loaded on first use: a dynamic `import()` of the package itself is resolved by Node beside the installed pack,
-  where nothing is.
+- **A tree is watched with Node's own `fs.watch`, and no native watcher library is loaded** (`directory-watch.ts`).
+  macOS and Windows watch a tree natively, and Node's recursive watch is that watch. Linux has no watch over a
+  tree, and Node's recursive watch there holds one per file and reads the whole tree before it returns, so a
+  watch is held on each directory that is not ignored (`perDirectorySubscriber`): a directory is watched and then
+  read, one that appears is watched the same way and reported again once its watches are in place, and one that
+  goes has its watches closed with it. `@parcel/watcher` was measured on all three platforms and is used on none:
+  heap corruption on macOS and Windows, and on Linux a close it refuses and inotify watches it leaves behind
+  ([what was measured](../../docs/issues/ISSUE-dev-loop-file-watching.md#code-map)). A watcher that needs a
+  native binding earns its place by surviving its directory being deleted as its watch closes, and holding no
+  watch afterwards.
 
 **Why a git command failed is read in one place, and travels as a code.** Git says why in prose, in English
 because every git child is run in English, and `classifyGitError` (`code/be/services/git-errors.ts`) turns what

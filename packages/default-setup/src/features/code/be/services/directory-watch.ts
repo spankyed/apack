@@ -21,12 +21,12 @@ export type WatchTree = (
   listener: (eventType: string, filename: string | null) => void,
 ) => { on(event: 'error', listener: (error: Error) => void): unknown; close(): void }
 
-/** `@parcel/watcher`'s `subscribe` */
-export type ParcelSubscribe = (
+/** The part of `fs.watch` a watch on one directory uses */
+export type WatchDirectory = (
   directory: string,
-  onEvents: (error: Error | null, events: Array<{ path: string; type: 'create' | 'update' | 'delete' }>) => void,
-  options: { ignore: string[] },
-) => Promise<{ unsubscribe(): Promise<void> }>
+  options: { persistent: false },
+  listener: (eventType: string, filename: string | null) => void,
+) => { on(event: 'error', listener: (error: Error) => void): unknown; close(): void }
 
 /** Whether a path is one of these directories or under one, each named relative to the same root as the path */
 function under(directories: string[]): (relativePath: string) => boolean {
@@ -57,36 +57,108 @@ export const nodeSubscriber = (watch: WatchTree = fs.watch): SubscribeToDirector
 }
 
 /**
- * `@parcel/watcher`, loaded on first use: a build that lacks its binary fails here, where the failure costs
- * this checkout its watching, rather than at import, where it would cost the pack its load.
+ * A watch on every directory of a tree, one each, for a platform that has no watch over a tree.
+ *
+ * A directory is watched and then read, in that order, so what is made in it meanwhile is either reported by
+ * its watch or found by the reading. One that appears later is watched the same way, and reported once more
+ * when its watches are in place: what was made in it before then was reported by nothing, and whoever hears a
+ * directory changed asks about everything under it. One that goes has its watches closed with it, and the
+ * watched directory itself going is an error, since nothing reports on one made again at its path.
+ *
+ * The platform's limit on watches is reached one directory at a time. Running out while the tree is first
+ * read fails the subscription, and running out later is reported as an error: either way the tree is not all
+ * watched, and whoever opened the watch is told so rather than left with part of one.
  */
-export const parcelSubscriber = (
-  load: () => Promise<{ subscribe: ParcelSubscribe }> = () => import('./parcel-watcher.ts'),
-): SubscribeToDirectory => async (directory, onChanges, options) => {
-  const { subscribe } = await load()
-  return subscribe(directory, (error, events) => {
-    // Its watch ends with the directory it is on: one made again at the path is reported on by nothing
-    const ended = error ?? (events.some(event => event.type === 'delete' && event.path === directory) ? new Error(`${directory} was deleted`) : null)
-    onChanges(ended, ended ? [] : events.map(event => path.relative(directory, event.path)))
-  }, options)
+export const perDirectorySubscriber = (watch: WatchDirectory = fs.watch): SubscribeToDirectory => async (directory, onChanges, { ignore }) => {
+  const ignored = under(ignore)
+  /** The open watches, by the directory each is on, relative to the watched one: `''` is the watched one itself */
+  const watches = new Map<string, { close(): void }>()
+  let closed = false
+
+  const close = () => {
+    closed = true
+    for (const watcher of watches.values()) watcher.close()
+    watches.clear()
+  }
+  /** Lets go of a directory's watch and of every watch under it */
+  const drop = (relative: string) => {
+    for (const [watched, watcher] of watches) {
+      if (watched !== relative && !watched.startsWith(relative + path.sep)) continue
+      watcher.close()
+      watches.delete(watched)
+    }
+  }
+
+  const add = async (relative: string): Promise<void> => {
+    if (closed || watches.has(relative) || (relative !== '' && ignored(relative))) return
+    const absolute = path.join(directory, relative)
+    let watcher: ReturnType<WatchDirectory>
+    try {
+      watcher = watch(absolute, { persistent: false }, (eventType, filename) => { void changed(relative, eventType, filename) })
+    } catch (error) {
+      // Gone between being listed and being watched: nothing is there to report on
+      const code = (error as NodeJS.ErrnoException).code
+      if (relative !== '' && (code === 'ENOENT' || code === 'ENOTDIR')) return
+      throw error
+    }
+    watcher.on('error', (error) => {
+      if (relative === '') onChanges(error, [])
+      else drop(relative)
+    })
+    watches.set(relative, watcher)
+    const entries = await fs.promises.readdir(absolute, { withFileTypes: true }).catch((): fs.Dirent[] => [])
+    await Promise.all(entries.filter(entry => entry.isDirectory()).map(entry => add(path.join(relative, entry.name))))
+  }
+
+  const changed = async (relative: string, eventType: string, filename: string | null): Promise<void> => {
+    if (closed) return
+    if (filename === null) return onChanges(null, [null])
+    const where = path.join(relative, filename)
+    if (ignored(where)) return
+    onChanges(null, [where])
+    // Only a path made, deleted or moved can be a directory that came or went
+    if (eventType !== 'rename') return
+    const found = await fs.promises.lstat(path.join(directory, where)).catch(() => undefined)
+    if (closed) return
+    if (!found) {
+      drop(where)
+      // The platform reports the watched directory's own deletion to it under its own name
+      if (relative === '' && !await fs.promises.lstat(directory).then(() => true, () => false) && !closed) onChanges(new Error(`${directory} was deleted`), [])
+      return
+    }
+    if (!found.isDirectory() || watches.has(where)) return
+    try {
+      await add(where)
+    } catch (error) {
+      if (!closed) onChanges(error instanceof Error ? error : new Error(String(error)), [])
+      return
+    }
+    if (!closed) onChanges(null, [where])
+  }
+
+  try {
+    await add('')
+  } catch (error) {
+    close()
+    throw error
+  }
+  return { unsubscribe: async () => close() }
 }
 
 /**
  * The platform's watcher for a whole tree.
  *
  * macOS and Windows watch a tree natively, and Node's `fs.watch` is that watch. Linux has no watch over a
- * tree: `@parcel/watcher` holds one per directory it is not told to ignore, where Node's recursive watch there
- * holds one per file and reads the whole tree before it returns.
+ * tree, and Node's recursive watch there holds one per file and reads the whole tree before it returns: a
+ * watch is held on each directory that is not ignored instead (`perDirectorySubscriber`).
  *
- * **`@parcel/watcher` is not loaded on macOS or Windows, and nothing here checks whether it could be.** Its
+ * **No native watcher library is loaded, on any platform.** `@parcel/watcher` was measured on all three: its
  * macOS backend releases its event stream from two threads when a watched directory is deleted as its watch
- * closes, and its Windows one frees a subscription the kernel still writes to (parcel-bundler/watcher#271,
- * #262). Either corrupts the heap of the process that holds the user's database. Before moving a platform onto
- * it, close a watch as its directory is deleted, a few hundred times over, and see that the process survives.
- *
- * On Linux its `unsubscribe` rejects when a directory under the watch was deleted moments before, and leaves
- * some of the watch's inotify watches with the process. Whoever closes a watch catches the rejection
- * (`gitwatcher.ts`); nothing takes the watches back.
+ * closes, its Windows one frees a subscription the kernel still writes to (parcel-bundler/watcher#271, #262),
+ * either of which corrupts the heap of the process that holds the user's database, and its Linux one refuses to
+ * close a watch whose directory was deleted moments before and leaves inotify watches with the process. Before
+ * moving a platform onto a library, close a watch as its directory is deleted, a few hundred times over, and
+ * see that the process survives and holds no watch afterwards.
  */
 export const subscribeToDirectory: SubscribeToDirectory =
-  process.platform === 'darwin' || process.platform === 'win32' ? nodeSubscriber() : parcelSubscriber()
+  process.platform === 'darwin' || process.platform === 'win32' ? nodeSubscriber() : perDirectorySubscriber()

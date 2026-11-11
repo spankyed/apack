@@ -93,8 +93,9 @@ Everything below is on master.
   - So **three processes** each watch on their own.
 - **`packages/main/src/modules/api-server/dev-reloader.ts:90`:** `fs.watch` on the API bundle file, so kqueue.
 - **`packages/default-setup/src/features/code/be/services/gitwatcher.ts`:** watches the *user's* repositories. This is a product feature, not the dev loop, and a separate question.
-  - It watches the working tree and the git directories through `services/directory-watch.ts`: Node's recursive `fs.watch` on macOS and Windows, so FSEvents on macOS, and `@parcel/watcher` on Linux, which has no watch over a tree.
-  - **Why `@parcel/watcher` is not loaded on macOS or Windows** (measured 2026-11-10: darwin arm64, Node 24.16.0, `@parcel/watcher` 2.5.6, load 5 to 8):
+  - It watches the working tree and the git directories through `services/directory-watch.ts`: Node's recursive `fs.watch` on macOS and Windows, so FSEvents on macOS, and one plain `fs.watch` per directory on Linux, which has no watch over a tree. No native watcher library is loaded on any platform.
+  - **The Linux watcher, run** (2026-11-11, Linux test container: linux arm64, Node 24.22.2, two CPUs): through real inotify it reported an edit three directories down, watched a directory that appeared to its depth, reported nothing from an ignored directory, let go of deleted directories' watches, and said so when the watched directory itself was deleted. Closing a watch as its directory, or a directory under it, was deleted, 300 rounds in one process: no close refused and no inotify watch left with the process, where `@parcel/watcher` left 8, 15 and 8 of 31 (below).
+  - **Why `@parcel/watcher` is not loaded on any platform** (measured 2026-11-10: darwin arm64, Node 24.16.0, `@parcel/watcher` 2.5.6, load 5 to 8):
     - **Its macOS backend frees its event stream twice.** When the watched directory is deleted, `FSEventsCallback` stops and releases the stream on its own thread without the lock, while `unsubscribe` does the same on a worker thread (`src/macos/FSEventsBackend.cc`). Upstream has it open as #271; the file is the same on its main branch and in 2.6.0.
     - With the library alone in the process, 8 processes of 200 rounds each:
 
