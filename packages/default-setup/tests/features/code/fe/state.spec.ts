@@ -10,6 +10,7 @@
 // where every other removal in this machine prunes.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createActor } from 'xstate'
+import type { OpenFile } from '#features/code/fe/contract.ts'
 
 vi.mock('#generated/events.ts', () => ({ sendToSystem: vi.fn(), broadcastToSurface: vi.fn(), sendToSurface: vi.fn() }))
 vi.mock('#features/code/fe/utils/terminal-pool.ts', () => ({
@@ -265,5 +266,55 @@ describe('the terminal pool the code surface holds', () => {
 
     expect(terminalPool.disposeAll, 'the stopped surface left its emulators in the window')
       .toHaveBeenCalledTimes(1)
+  })
+})
+
+// A diff is read when its tab opens. The file under it goes on changing, so the commit panel reads an open
+// diff again when the repository says it changed, and hands the surface what it read.
+describe('an open diff read again', () => {
+  const unstaged = (modifiedContent: string, originalContent = 'in the index\n') =>
+    ({ path: 'a.ts', staged: false, originalContent, modifiedContent })
+  const theTab = (actor: ReturnType<typeof started>) => contextOf(actor).openFiles.find(file => file.path === 'diff:a.ts:unstaged') as OpenFile
+  const opened = async () => {
+    const { diffTab } = await import('#features/code/fe/utils/diff-tabs.ts')
+    const actor = started()
+    actor.send({ type: 'ADD_TAB', tab: diffTab(unstaged('first edit\n')) })
+    return actor
+  }
+
+  it('shows the file as it is now, where the tab is', async () => {
+    const actor = await opened()
+    // Kept, so that the next tab opens beside it and not in its place
+    actor.send({ type: 'PROMOTE_PREVIEW_TAB', path: 'diff:a.ts:unstaged' })
+    actor.send({ type: 'ADD_TAB', tab: { path: '/src/other.ts', content: '', originalContent: '', modified: false } })
+
+    actor.send({ type: 'REFRESH_DIFF_TAB', diff: unstaged('second edit\n', 'staged since\n') })
+
+    expect(theTab(actor)).toMatchObject({ content: 'second edit\n', originalContent: 'second edit\n', modified: false })
+    expect(theTab(actor).gitDiff?.originalContent).toBe('staged since\n')
+    expect(contextOf(actor).activeFilePath, 'and the tab being looked at stays the one in front').toBe('/src/other.ts')
+  })
+
+  it('keeps what was typed into it, and says the file changed under that', async () => {
+    const actor = await opened()
+    const typed = contextOf(actor).openFiles.map(file => file.path === 'diff:a.ts:unstaged' ? { ...file, content: 'typed, not saved\n', modified: true } : file)
+    actor.send({ type: 'UPDATE_STATE', updates: { openFiles: typed } })
+
+    actor.send({ type: 'REFRESH_DIFF_TAB', diff: unstaged('first edit\n', 'staged since\n') })
+    expect(theTab(actor), 'only the index moved: nothing to settle').toMatchObject({ content: 'typed, not saved\n', modified: true })
+    expect(theTab(actor).pendingSaveConflict).toBeFalsy()
+    expect(theTab(actor).gitDiff?.originalContent).toBe('staged since\n')
+
+    actor.send({ type: 'REFRESH_DIFF_TAB', diff: unstaged('edited by something else\n') })
+    expect(theTab(actor)).toMatchObject({ content: 'typed, not saved\n', modified: true, externallyModified: true, pendingSaveConflict: true })
+  })
+
+  it('opens no tab for a diff whose tab was closed since', async () => {
+    const actor = await opened()
+    actor.send({ type: 'CLOSE_TAB', path: 'diff:a.ts:unstaged' })
+
+    actor.send({ type: 'REFRESH_DIFF_TAB', diff: unstaged('second edit\n') })
+
+    expect(contextOf(actor).openFiles.map(file => file.path)).toEqual([])
   })
 })

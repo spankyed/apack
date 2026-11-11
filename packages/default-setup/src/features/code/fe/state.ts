@@ -11,6 +11,7 @@ import { saveOpenTabs, loadPersistedTabs, sortTabsByPinned } from './utils/persi
 import { terminalNameFor } from './utils/terminal-name.ts';
 import { loadRecentFiles, addRecentFile } from './utils/recent-files.ts';
 import { pushTabViewHistory, nextActiveFromHistory } from './utils/tab-management.ts';
+import { diffTabPath, refreshedDiffTab } from './utils/diff-tabs.ts';
 import { saveTabGroups, loadTabGroups, getNextAvailableColor, type TabGroupColor, type TabGroup } from '@apackdev/sdk/fe';
 import { createNavHistory, pushNavHistory, goBack, goForward, canGoBack, canGoForward } from '@apackdev/sdk/fe';
 import type { CodeSettings } from '#generated/types.ts';
@@ -18,6 +19,7 @@ import type { ActionTab, CodeContext, CodeInboxEvent, OpenFile, PanelType, Promp
 export type { OpenFile, TerminalTab, QuickOpenResult, PanelType } from './contract.ts';
 export type { CodeContext } from './contract.ts';
 import type { OutgoingCodeEvents } from '#features/code/be/contract.ts';
+import type { GitDiff } from '#features/code/be/types.ts';
 import { sendToSystem } from '#generated/events.ts';
 
 // Import child state machines
@@ -65,6 +67,8 @@ export type Event =
   // Generic update event for child actors to update parent state
   | CodeInboxEvent
   | { type: 'ADD_TAB'; tab: any; replacePreview?: boolean; extraUpdates?: Partial<CodeContext> }
+  // An open diff read again, from the child that asked for it
+  | { type: 'REFRESH_DIFF_TAB'; diff: GitDiff }
   | { type: 'SURFACE_ACTIVATED' }
   // The shell hands this to every surface as it starts it; this one reads which window it is in (M5)
   | { type: 'SURFACE_STARTED'; ownsAppLayout: boolean }
@@ -504,6 +508,12 @@ const codeState = setup({
           ? pushTabViewHistory(context.tabViewHistory, activeFilePath)
           : context.tabViewHistory
       }
+    }),
+    /** Brings an open diff up to date with its file, where it is: a tab closed since is not opened again */
+    refreshDiffTab: assign(({ event, context }) => {
+      const { diff } = event as { type: 'REFRESH_DIFF_TAB'; diff: GitDiff }
+      const tabPath = diffTabPath(diff)
+      return { openFiles: context.openFiles.map(file => file.path === tabPath ? refreshedDiffTab(file as OpenFile, diff) : file) }
     }),
     updateState: assign(({ event, context }) => {
       const ev = event as { type: 'UPDATE_STATE'; updates: Partial<CodeContext> }
@@ -1405,6 +1415,9 @@ const codeState = setup({
         // Add a new tab (race-free: always uses current parent state)
         ADD_TAB: {
           actions: ['addTab', 'saveTabsAction']
+        },
+        REFRESH_DIFF_TAB: {
+          actions: ['refreshDiffTab']
         },
         // Surface initialization
         SURFACE_ACTIVATED: {

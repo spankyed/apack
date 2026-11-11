@@ -220,6 +220,10 @@ export const commitSystem = setup({
               modifiedContent = await getContent(ev.path!, 'working')
             }
           }
+        } else if (ev.path) {
+          // The file has no change on this side any more: both sides are what it holds now, so the diff is
+          // empty, and an edit made in it is an edit to the file as it is
+          originalContent = modifiedContent = await getContent(ev.path, ev.staged ? 'index' : 'working').catch(() => '')
         }
 
         answer(reply, {

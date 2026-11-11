@@ -49,7 +49,7 @@ it('announces a write as the repository changing, and lists nothing itself', asy
   expect(listed).not.toHaveBeenCalled();
 });
 
-const NOTHING = { status: false, history: false, stashes: false, worktrees: false };
+const NOTHING = { status: false, diffs: false, history: false, stashes: false, worktrees: false };
 /** The parts each announcement so far said changed */
 const announcedParts = (announced: ReturnType<typeof vi.fn>) =>
   announced.mock.calls.map(([{ event }]) => (event as { changed: typeof NOTHING }).changed);

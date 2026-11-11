@@ -1,7 +1,10 @@
 import { setup, assign, enqueueActions , type ActorRefFrom } from 'xstate';
+import { newCall, recordCall, settleCall } from '@apackdev/sdk/events';
 import { sendToSystem } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
+import { diffTab, diffTabPath } from '../../utils/diff-tabs.ts';
 import type { RepositoryChange } from '../../../be/types.ts';
+import type { OpenFile } from '../../contract.ts';
 
 
 // Git types
@@ -47,6 +50,21 @@ export interface CodeCommitContext {
   worktreeList: WorktreeEntry[]
   isWorktreeLoading: boolean
   commitLog: CommitLogEntry[]
+  /** The asks in flight for a diff that is already open, by call: the answer to one brings its tab up to date and opens none */
+  diffRefreshes: Record<string, true>
+}
+
+/** The diffs of this repository's changed files that the window has open */
+const openDiffs = (self: unknown): OpenFile[] =>
+  ((getParentContext(self)?.openFiles ?? []) as OpenFile[]).filter(file => file.isDiff && file.gitFile && !file.isPrDiff)
+
+/** An ask for a diff that is already open */
+const diffRefresh = (file: { path: string; staged: boolean }) => {
+  const call = newCall()
+  return {
+    record: ({ context }: { context: CodeCommitContext }) => ({ diffRefreshes: recordCall(context.diffRefreshes, call, true as const) }),
+    ask: () => { sendToSystem('code', { type: 'commit.GET_GIT_DIFF', path: file.path, staged: file.staged }, { call }) },
+  }
 }
 
 export interface StashEntry {
@@ -146,21 +164,34 @@ export const commitState = setup({
     context: {} as CodeCommitContext,
     events: {} as Event
   },
+  guards: {
+    answersADiffRefresh: ({ context, event }) => settleCall(context.diffRefreshes, event).recorded !== undefined,
+  },
   actions: {
     refreshGitStatus: () => {
       sendToSystem('code', { type: 'commit.GET_GIT_STATUS' })
     },
 
+    forgetDiffRefresh: assign(({ context, event }) => ({ diffRefreshes: settleCall(context.diffRefreshes, event).pending })),
+
     /**
-     * Asks again for each list the panel shows whose part of the repository changed, and for no other: the news
+     * Asks again for each thing the window shows whose part of the repository changed, and for no other: the news
      * says which, so an edited file reads the status and leaves the log, the stashes and the worktrees alone
      */
-    followRepositoryChange: enqueueActions(({ event, enqueue }) => {
+    followRepositoryChange: enqueueActions(({ event, self, enqueue }) => {
       const { changed } = event as { type: 'commit.REPOSITORY_CHANGED'; changed: RepositoryChange }
       if (changed.status) enqueue('refreshGitStatus')
       if (changed.history) enqueue('requestLogList')
       if (changed.stashes) enqueue('requestStashList')
       if (changed.worktrees) enqueue('requestWorktreeList')
+      if (!changed.diffs) return
+      // A diff is read when its tab opens, so one left open is of the file as it was until it is read again
+      for (const { gitFile } of openDiffs(self)) {
+        if (changed.files && !changed.files.includes(gitFile!.path)) continue
+        const refresh = diffRefresh(gitFile!)
+        enqueue.assign(refresh.record)
+        enqueue(refresh.ask)
+      }
     }),
 
 
@@ -183,10 +214,19 @@ export const commitState = setup({
     },
 
 
-    viewDiff: ({ event }) => {
+    viewDiff: enqueueActions(({ event, self, enqueue }) => {
       const ev = event as { type: 'commit.VIEW_DIFF'; path: string; staged: boolean }
-      sendToSystem('code', { type: 'commit.GET_GIT_DIFF', path: ev.path, staged: ev.staged })
-    },
+      const tabPath = diffTabPath(ev)
+      if (!openDiffs(self).some(file => file.path === tabPath)) {
+        enqueue(() => { sendToSystem('code', { type: 'commit.GET_GIT_DIFF', path: ev.path, staged: ev.staged }) })
+        return
+      }
+      // Already open: it is shown at once as it stands, with whatever was typed into it, and read again behind that
+      const refresh = diffRefresh(ev)
+      enqueue(() => updateParentState(self, { activeFilePath: tabPath }))
+      enqueue.assign(refresh.record)
+      enqueue(refresh.ask)
+    }),
 
     updateCommitMessage: assign({
       commitMessage: ({ event }) => {
@@ -351,31 +391,21 @@ export const commitState = setup({
 
 
     /**
-     * The diff names its own file, so the tab it opens is that file's.
+     * The diff names its own file, so the tab it opens or brings up to date is that file's: `GitDiff` carries
+     * `path` and `staged` (`code/be/types.ts`), which is the tab's key, and the file selected now may be another.
      *
-     * It used to read `context.selectedGitFile` — the file selected *now* — so clicking another file
-     * while a diff was in flight opened the first file's content in a tab labelled the second, and a
-     * diff arriving with nothing selected was dropped. `GitDiff` carries `path` and `staged`
-     * (`code/be/types.ts`), which is the tab's key, so no pending field is needed: the answer says
-     * where it goes.
+     * An answer to an ask made for a diff already open changes that tab where it is, and opens none: its tab may
+     * have been closed since, and a diff the user is not looking at does not take the window.
      */
-    handleDiffReceived: enqueueActions(({ enqueue, self, event }) => {
+    handleDiffReceived: enqueueActions(({ enqueue, self, event, context }) => {
       const ev = event as { type: 'commit.DIFF_RECEIVED'; data: GitDiff }
-      enqueue(() => {
-        const { path, staged } = ev.data
-        const diffTabId = `diff:${path}:${staged ? 'staged' : 'unstaged'}`
-        const isUnstagedDiff = !staged
-        const diffTab = {
-          path: diffTabId,
-          content: isUnstagedDiff ? ev.data.modifiedContent : '',
-          originalContent: isUnstagedDiff ? ev.data.modifiedContent : undefined,
-          modified: false,
-          isDiff: true,
-          gitDiff: ev.data,
-          gitFile: { path, staged }
-        }
-        addTabToParent(self, diffTab)
-      })
+      const { recorded, pending } = settleCall(context.diffRefreshes, event)
+      if (!recorded) {
+        enqueue(() => addTabToParent(self, diffTab(ev.data)))
+        return
+      }
+      enqueue.assign({ diffRefreshes: pending })
+      enqueue(() => sendEventToParent(self, { type: 'REFRESH_DIFF_TAB', diff: ev.data }))
     }),
 
     getAllBranches: () => {
@@ -542,6 +572,7 @@ export const commitState = setup({
   id: 'commit',
   initial: 'idle',
   context: {
+    diffRefreshes: {},
     gitStatus: [],
     gitBranch: '',
     gitError: null,
@@ -575,9 +606,11 @@ export const commitState = setup({
         'commit.STATUS_RECEIVED': {
           actions: 'handleStatusReceived'
         },
-        'commit.ERROR_RECEIVED': {
-          actions: 'handleErrorReceived'
-        },
+        'commit.ERROR_RECEIVED': [
+          // Nobody asked for a diff that was read again, so its failing is said to nobody: the tab stays as it was
+          { guard: 'answersADiffRefresh', actions: 'forgetDiffRefresh' },
+          { actions: 'handleErrorReceived' },
+        ],
         'commit.DISMISS_ERROR': {
           actions: 'dismissError'
         },

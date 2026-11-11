@@ -103,7 +103,7 @@ it('counts the commits a branch is ahead of and behind the remote branch it trac
   expect(await new GitRepository(clone).readSnapshot()).toMatchObject({ hasUpstream: true, ahead: 1, behind: 1 });
 });
 
-const NOTHING = { status: false, history: false, stashes: false, worktrees: false };
+const NOTHING = { status: false, diffs: false, history: false, stashes: false, worktrees: false };
 
 it('says which part of the repository changed, and nothing when none did', async () => {
   const { root, repo } = await repository();
@@ -111,11 +111,12 @@ it('says which part of the repository changed, and nothing when none did', async
   expect(await repo.refreshSnapshot(), 'nothing happened').toEqual(NOTHING);
 
   write(root, 'kept.txt', 'edited\n');
-  expect(await repo.refreshSnapshot(), 'a file was edited').toEqual({ ...NOTHING, status: true });
+  expect(await repo.refreshSnapshot(), 'a file was edited').toEqual({ ...NOTHING, status: true, diffs: true, files: ['kept.txt'] });
 
   // A worktree is listed with the commit it is on, so the worktrees change with the history
   await git(root, 'commit', '--quiet', '-am', 'second');
-  expect(await repo.refreshSnapshot(), 'the edit was committed').toEqual({ status: true, history: true, stashes: false, worktrees: true });
+  expect(await repo.refreshSnapshot(), 'the edit was committed')
+    .toEqual({ status: true, diffs: true, history: true, stashes: false, worktrees: true, files: ['kept.txt'] });
 
   // The status is the same; only a ref moved
   await git(root, 'branch', 'side');
@@ -125,7 +126,7 @@ it('says which part of the repository changed, and nothing when none did', async
 
 it('says every part changed the first time it is asked, having nothing to compare with', async () => {
   const { repo } = await repository();
-  expect(await repo.refreshSnapshot()).toEqual({ status: true, history: true, stashes: true, worktrees: true });
+  expect(await repo.refreshSnapshot()).toEqual({ status: true, diffs: true, history: true, stashes: true, worktrees: true });
 });
 
 // Dropping a stash below the newest leaves `refs/stash` where it was: only the count git reports moves, which
@@ -168,7 +169,31 @@ it('says the history changed when another branch on the same commit is checked o
   await repo.refreshSnapshot();
 
   await git(root, 'checkout', '--quiet', 'side');
-  expect(await repo.refreshSnapshot()).toEqual({ status: true, history: true, stashes: false, worktrees: true });
+  expect(await repo.refreshSnapshot()).toEqual({ ...NOTHING, status: true, history: true, worktrees: true });
+});
+
+// Git's record of a changed file names what it holds in HEAD and in the index. A second edit to a file already
+// changed moves neither, and a diff of it left open would be of the file as it was
+it('says a diff changed when a file already changed is edited again, and names the file', async () => {
+  const { root, repo } = await repository();
+  write(root, 'kept.txt', 'edited\n');
+  write(root, 'other.txt', 'new\n');
+  await repo.refreshSnapshot();
+
+  write(root, 'kept.txt', 'edited a second time\n');
+  expect(await repo.refreshSnapshot(), 'the list of changed files is the same').toEqual({ ...NOTHING, diffs: true, files: ['kept.txt'] });
+  expect(await repo.refreshSnapshot()).toEqual(NOTHING);
+
+  await git(root, 'add', 'kept.txt');
+  expect(await repo.refreshSnapshot(), 'it was staged').toEqual({ ...NOTHING, status: true, diffs: true, files: ['kept.txt'] });
+});
+
+it('names no file when more changed than a window is told of one by one', async () => {
+  const { root, repo } = await repository();
+  await repo.refreshSnapshot();
+
+  for (let index = 0; index <= 100; index++) write(root, `new-${index}.txt`, '');
+  expect(await repo.refreshSnapshot()).toEqual({ ...NOTHING, status: true, diffs: true });
 });
 
 // A window's own ask can read a change before the check that its file event started has run. The check is
@@ -179,7 +204,7 @@ it('says the repository changed when a read saw the change before the check did'
 
   write(root, 'kept.txt', 'edited\n');
   expect((await repo.readSnapshot()).files.map(file => file.path)).toEqual(['kept.txt']);
-  expect(await repo.refreshSnapshot(), 'no check has seen the edit yet').toEqual({ ...NOTHING, status: true });
+  expect(await repo.refreshSnapshot(), 'no check has seen the edit yet').toEqual({ ...NOTHING, status: true, diffs: true, files: ['kept.txt'] });
   expect(await repo.refreshSnapshot()).toEqual(NOTHING);
 });
 

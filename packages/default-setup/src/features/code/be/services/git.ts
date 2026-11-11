@@ -136,8 +136,25 @@ interface CachedResult<T> {
   timestamp: number
 }
 
-/** What each part of a repository looked like when it was read, to tell which of them a later read finds changed */
-type SnapshotIdentity = Record<RepositoryPart, string>
+/**
+ * What each part of a repository looked like when it was read, to tell which of them a later read finds changed.
+ * `files` is the same for each changed file on its own, to say which of them it was: a reading that failed has none.
+ */
+type SnapshotIdentity = Record<RepositoryPart, string> & { files?: Map<string, string> }
+
+/**
+ * More changed files than this are not named in the news of a change. A window then reads again every diff it has
+ * open, which is at most its tabs, so the bound is on what is sent to every window and not on what any of them does.
+ */
+const NAMED_FILES_LIMIT = 100
+
+/** The files whose entry differs between two readings: nothing when a reading has none, or there are too many to name */
+function differingFiles(before: Map<string, string> | undefined, now: Map<string, string> | undefined): { files?: string[] } {
+  if (!before || !now) return {}
+  const files = [...now].filter(([file, entry]) => before.get(file) !== entry).map(([file]) => file)
+  for (const file of before.keys()) if (!now.has(file)) files.push(file)
+  return files.length > NAMED_FILES_LIMIT ? {} : { files }
+}
 
 const partsAll = <T>(value: T) => Object.fromEntries(REPOSITORY_PARTS.map(part => [part, value])) as Record<RepositoryPart, T>
 
@@ -174,34 +191,61 @@ function statusOf(code: string): GitStatusFile['status'] {
   }
 }
 
-/** Reads `git status --porcelain=v2 --branch -z`: the branch headers and one record per changed path */
-export function parseStatus(output: string): RepositorySnapshot {
-  const snapshot: RepositorySnapshot = { files: [], truncated: false, branch: 'HEAD', hasUpstream: false, ahead: 0, behind: 0 }
+/** One changed path as `git status --porcelain=v2 -z` printed it */
+interface StatusEntry {
+  path: string
+  /** Where a renamed or copied path came from */
+  originalPath?: string
+  /** A tracked path's index and worktree columns, `.` where that side is unchanged; a conflict and an untracked path have none */
+  columns?: string
+  /** The record as printed, which names what the path holds in HEAD and in the index */
+  record: string
+}
+
+/** The headers of `git status --porcelain=v2 -z` and its record for each changed path, in the order printed */
+function splitStatus(output: string): { headers: string[]; entries: StatusEntry[] } {
+  const headers: string[] = []
+  const entries: StatusEntry[] = []
   const records = output.split('\0')
   /** A record's path is everything after its fixed fields, since a path may hold spaces */
   const pathAfter = (record: string, fields: number): string => record.split(' ').slice(fields).join(' ')
 
   for (let i = 0; i < records.length; i++) {
     const record = records[i]!
-    if (record.startsWith('# branch.head ')) {
-      const head = record.slice('# branch.head '.length)
+    if (record.startsWith('# ')) headers.push(record)
+    else if (record.startsWith('? ')) entries.push({ path: record.slice(2), record })
+    else if (record.startsWith('u ')) entries.push({ path: pathAfter(record, 10), record })
+    else if (record.startsWith('1 ')) entries.push({ path: pathAfter(record, 8), columns: record.slice(2, 4), record })
+    else if (record.startsWith('2 ')) {
+      // A rename or copy is followed by the path it came from, as a record of its own
+      const originalPath = records[++i]
+      entries.push({ path: pathAfter(record, 9), originalPath, columns: record.slice(2, 4), record: `${record}\0${originalPath}` })
+    }
+  }
+  return { headers, entries }
+}
+
+function snapshotOf({ headers, entries }: { headers: string[]; entries: StatusEntry[] }): RepositorySnapshot {
+  const snapshot: RepositorySnapshot = { files: [], truncated: false, branch: 'HEAD', hasUpstream: false, ahead: 0, behind: 0 }
+  for (const header of headers) {
+    if (header.startsWith('# branch.head ')) {
+      const head = header.slice('# branch.head '.length)
       snapshot.branch = head === '(detached)' ? 'HEAD' : head
-    } else if (record.startsWith('# branch.ab ')) {
-      const [ahead, behind] = record.slice('# branch.ab '.length).split(' ')
+    } else if (header.startsWith('# branch.ab ')) {
+      const [ahead, behind] = header.slice('# branch.ab '.length).split(' ')
       snapshot.hasUpstream = true
       snapshot.ahead = Math.abs(parseInt(ahead ?? '0', 10)) || 0
       snapshot.behind = Math.abs(parseInt(behind ?? '0', 10)) || 0
-    } else if (record.startsWith('? ')) {
-      snapshot.files.push({ path: record.slice(2), status: 'untracked', staged: false })
-    } else if (record.startsWith('u ')) {
+    }
+  }
+  for (const { path: filePath, originalPath, columns, record } of entries) {
+    if (record.startsWith('? ')) {
+      snapshot.files.push({ path: filePath, status: 'untracked', staged: false })
+    } else if (!columns) {
       // A conflict fills both the index and the worktree column: one row, not committable until resolved
-      snapshot.files.push({ path: pathAfter(record, 10), status: 'unmerged', staged: false })
-    } else if (record.startsWith('1 ') || record.startsWith('2 ')) {
-      const renamed = record.startsWith('2 ')
-      const [index, worktree] = [record[2]!, record[3]!]
-      const filePath = pathAfter(record, renamed ? 9 : 8)
-      // A rename or copy is followed by the path it came from, as a record of its own
-      const originalPath = renamed ? records[++i] : undefined
+      snapshot.files.push({ path: filePath, status: 'unmerged', staged: false })
+    } else {
+      const [index, worktree] = [columns[0]!, columns[1]!]
       if (index !== '.') {
         snapshot.files.push({
           path: filePath, status: statusOf(index), staged: true,
@@ -212,6 +256,11 @@ export function parseStatus(output: string): RepositorySnapshot {
     }
   }
   return snapshot
+}
+
+/** Reads `git status --porcelain=v2 --branch -z`: the branch headers and one record per changed path */
+export function parseStatus(output: string): RepositorySnapshot {
+  return snapshotOf(splitStatus(output))
 }
 
 export class GitRepository {
@@ -498,12 +547,15 @@ export class GitRepository {
     if (!before) return partsAll(true)
 
     const history = now.history !== before.history
+    const diffs = now.diffs !== before.diffs
     return {
       status: now.status !== before.status,
+      diffs,
       history,
       stashes: now.stashes !== before.stashes,
       // A worktree is listed with the commit it is on, which moves with its branch
       worktrees: history || now.worktrees !== before.worktrees,
+      ...(diffs && differingFiles(before.files, now.files)),
     }
   }
 
@@ -536,7 +588,8 @@ export class GitRepository {
     }
     // Git printed more than is read: what was read ends inside a record, which is dropped with the rest
     const output = status.truncated ? (status.output ?? '').slice(0, (status.output ?? '').lastIndexOf('\0') + 1) : status.output ?? ''
-    const value = parseStatus(output)
+    const { headers, entries } = splitStatus(output)
+    const value = snapshotOf({ headers, entries })
     if (status.truncated || value.files.length > STATUS_LIMIT) {
       value.files = value.files.slice(0, STATUS_LIMIT)
       value.truncated = true
@@ -544,10 +597,16 @@ export class GitRepository {
 
     // Status's headers say more than status. The branch checked out, the commit it is on and what it follows
     // are history, and all but the commit are shown with the status too; the stash count is stashes
-    const records = output.split('\0')
-    const isBranch = (record: string) => record.startsWith('# branch.')
-    const isCommit = (record: string) => record.startsWith('# branch.oid ')
-    const isStashCount = (record: string) => record.startsWith('# stash ')
+    const isBranch = (header: string) => header.startsWith('# branch.')
+    const isCommit = (header: string) => header.startsWith('# branch.oid ')
+    const isStashCount = (header: string) => header.startsWith('# stash ')
+    // A file's record names what it holds in HEAD and in the index, and nothing of what it holds in the working
+    // tree: a second edit to a file already changed leaves the record as it was. How the file looks says that,
+    // for the files a window can have a diff of open, which are the ones the snapshot lists
+    const files = new Map(await Promise.all(entries.slice(0, STATUS_LIMIT).map(async (entry): Promise<[string, string]> => {
+      const inWorkingTree = !entry.columns || entry.columns[1] !== '.'
+      return [entry.path, `${entry.record}\0${inWorkingTree ? await this.fileSignature(entry.path) : ''}`]
+    })))
     // Refs move without the status moving: a fetch, a branch made or deleted, a stash
     const refs = ((await this.executeGitCommand(['for-each-ref', '--format=%(objectname) %(refname)'])).output ?? '').split('\n')
     const isStash = (ref: string) => ref.endsWith(' refs/stash')
@@ -555,13 +614,20 @@ export class GitRepository {
     return {
       value,
       identity: {
-        status: records.filter(record => !isCommit(record) && !isStashCount(record)).join('\0'),
-        history: [...records.filter(isBranch), ...refs.filter(ref => !isStash(ref))].join('\n'),
+        status: [...headers.filter(header => !isCommit(header) && !isStashCount(header)), ...entries.map(entry => entry.record)].join('\0'),
+        diffs: [...files.values()].join('\0'),
+        history: [...headers.filter(isBranch), ...refs.filter(ref => !isStash(ref))].join('\n'),
         // The count as well as the ref: dropping a stash below the newest moves only the count
-        stashes: [...records.filter(isStashCount), ...refs.filter(isStash)].join('\n'),
+        stashes: [...headers.filter(isStashCount), ...refs.filter(isStash)].join('\n'),
         worktrees: await this.readWorktreesIdentity(),
+        files,
       },
     }
+  }
+
+  /** How a file in the working tree looks without reading it, which tells a later edit from none */
+  private fileSignature(relativePath: string): Promise<string> {
+    return fs.stat(path.join(this.workingDirectory, relativePath)).then(stat => `${stat.mtimeMs}:${stat.size}`, () => 'gone')
   }
 
   /**

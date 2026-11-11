@@ -1697,6 +1697,8 @@ declare class GitRepository {
     refreshSnapshot(): Promise<RepositoryChange>;
     private currentSnapshot;
     private loadSnapshot;
+    /** How a file in the working tree looks without reading it, which tells a later edit from none */
+    private fileSignature;
     /**
      * What says the worktrees changed, read from the files git keeps for them and without running it: which there
      * are, where each is, what each has checked out, and which are locked.
@@ -4648,10 +4650,11 @@ interface QuickOpenResult$1 {
 
 /**
  * The parts of a repository a window shows, each read and refreshed on its own: its changed files with the branch
- * and its distance from upstream; which branch is checked out, the commit it is on and every branch and tag,
- * which a log and a pull request are read from; its stashes; its worktrees.
+ * and its distance from upstream; the two sides of each changed file, which a diff of it shows; which branch is
+ * checked out, the commit it is on and every branch and tag, which a log and a pull request are read from; its
+ * stashes; its worktrees.
  */
-declare const REPOSITORY_PARTS: readonly ["status", "history", "stashes", "worktrees"];
+declare const REPOSITORY_PARTS: readonly ["status", "diffs", "history", "stashes", "worktrees"];
 
 type RateLimitLine = z.infer<typeof RateLimitLineSchema>;
 
@@ -4673,7 +4676,10 @@ type RecentThreadsSortOrder = 'created' | 'message' | 'visited';
 type Repositories = OwnRepositories;
 
 /** Which parts of a repository differ from when it was last checked */
-type RepositoryChange = Record<RepositoryPart, boolean>;
+type RepositoryChange = Record<RepositoryPart, boolean> & {
+    /** The changed files whose diff differs, when they are few enough to name: without it, any of them may */
+    files?: string[];
+};
 
 type RepositoryPart = (typeof REPOSITORY_PARTS)[number];
 

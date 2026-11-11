@@ -151,8 +151,9 @@ a broadcast through `answer`.
 **A file event is a hint, and whoever owns the truth says whether anything changed.** The code feature's
 watchers are the worked example. The repository watcher (`code/be/services/gitwatcher.ts`) reports only that a
 checkout *may* have changed; git is then asked, and `commit.REPOSITORY_CHANGED` goes out only when a part of the
-repository differs from what the last check saw, naming the parts that do — its status, history, stashes or
-worktrees (`GitRepository.refreshSnapshot`) — so a window asks again for those lists alone. The open-file watcher
+repository differs from what the last check saw, naming the parts that do — its status, its files' diffs, its
+history, stashes or worktrees (`GitRepository.refreshSnapshot`) — so a window asks again for those alone, and reads
+again only the diffs it has open of the files the news names. The open-file watcher
 (`open-file-watcher.ts`) compares each file with how it last looked. So an event for nothing announces nothing, and
 neither watcher needs to be exact.
 
