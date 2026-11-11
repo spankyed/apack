@@ -43,7 +43,6 @@ jobs:
       - uses: ./.github/actions/apack-terminal
         with:
           build: 'true'
-      - uses: ./.github/actions/apack-terminal-view
       # **Electron's binary is cached, so most runs never ask the CDN for it.** It comes from GitHub's release
       # CDN, whose 504 failed a strict job inside `scripts/postinstall.mjs` on 2026-11-08 — before any of this
       # repo's code ran. The retry there is what makes a refusal survivable; this is what makes it rare. Keyed
@@ -126,7 +125,6 @@ jobs:
       - uses: ./.github/actions/apack-terminal
         with:
           build: 'true'
-      - uses: ./.github/actions/apack-terminal-view
       # **Electron's binary is cached, so most runs never ask the CDN for it.** It comes from GitHub's release
       # CDN, whose 504 failed a strict job inside `scripts/postinstall.mjs` on 2026-11-08 — before any of this
       # repo's code ran. The retry there is what makes a refusal survivable; this is what makes it rare. Keyed

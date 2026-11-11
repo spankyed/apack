@@ -54,8 +54,16 @@ export interface HostRuntimeOptions {
 export function createHostRuntime({ transport, appVersion, database, runHistory, engine, packs, countCalls, performance }: HostRuntimeOptions): HostRuntime & {
   /** Brings the engine's projections up to what changed since each last read: at boot, once the packs have started */
   catchUpProjections(): Promise<void>;
+  /**
+   * Leaves every terminal broker this runtime reached, and stops serving its targets' sockets. A broker
+   * with no owner ends when its last client leaves, so this is what lets one a runtime started go while
+   * the process that started it lives on — a spec's worker, which runs the next file. The app itself
+   * never calls it: its process ending is the leaving.
+   */
+  leaveTerminals(): Promise<void>;
 } {
   const projections = _installProjections(engine);
+  const terminal = createTerminalService();
   const settingsStore = createSettingsStore({
     ears: () => engine,
     catalog: packs.settingsCatalog,
@@ -121,6 +129,7 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
   packs.onRegistrationChanged(refreshAfterBurst);
   return {
     catchUpProjections: projections.catchUp,
+    leaveTerminals: () => terminal.shutdown(),
     transport,
     ears: engine,
     packs,
@@ -146,7 +155,7 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
       inference,
       secrets,
       filesystem,
-      terminal: createTerminalService(),
+      terminal,
       // All owners use the accepted declaration catalog.
       settings,
     },

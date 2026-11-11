@@ -13,7 +13,7 @@ const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'api-app-reset-'));
 process.env.APACK_ENV = 'test';
 process.env.APACK_USER_DATA_DIR = dataDir;
 const { openAppStore } = await import('../../src/runtime/index.ts');
-const { database: store, packs } = openAppStore();
+const { database: store, packs, leaveTerminals } = openAppStore();
 const { loadAppPacks, startPacks } = await import('@apackdev/host/packs/runtime');
 const { installShippedPacks } = await import('@apackdev/host/packs');
 const { resolveAppEnvironment } = await import('@apackdev/sdk/env');
@@ -53,7 +53,10 @@ beforeAll(async () => {
   fresh = { settings: storedSettings(), flows: flows() };
 });
 
-afterAll(() => {
+afterAll(async () => {
+  // The code feature asks this data dir's broker what shells were left running, which starts one. It ends
+  // when its last client leaves, and this worker — the client — goes on to run other files
+  await leaveTerminals();
   store.close();
   fs.rmSync(dataDir, { recursive: true, force: true });
 });

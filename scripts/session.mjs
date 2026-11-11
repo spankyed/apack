@@ -5,7 +5,6 @@ import { pathToFileURL } from 'node:url';
 import { tsImport } from 'tsx/esm/api';
 import { linkElmdb } from './link-elmdb.mjs';
 import { linkApackTerminal } from './link-apack-terminal.mjs';
-import { linkApackTerminalView } from './link-apack-terminal-view.mjs';
 import { primaryWorktree } from './lib/worktrees.mjs';
 
 /** @param {string} root @param {string[]} args */
@@ -82,12 +81,11 @@ async function setup(dir) {
   // target is absent installs as a dangling symlink and exits 0, so a worktree without these links fails
   // later and elsewhere: `apack-terminal` is a declared dependency of `@apackdev/host` and the API, and
   // without it `typecheck:host` cannot resolve the broker's protocol types — which is the first leg of the
-  // strict chain `session:check` runs, on every branch. `apack-terminal-view` is the built-in pack's, and
-  // without it the pack does not build.
+  // strict chain `session:check` runs, on every branch. The view the built-in pack draws a terminal with is
+  // a package of that same checkout, which its linker builds; without it the pack does not build.
   try {
     linkElmdb(dir);
     linkApackTerminal(dir);
-    linkApackTerminalView(dir);
   } catch (error) {
     throw new Error(`${error instanceof Error ? error.message : error}. Checkout retained at ${dir}.`, { cause: error });
   }

@@ -57,7 +57,6 @@ names every workspace that has a second config.
 
 | Spec | Subject |
 |---|---|
-| `terminal-view-vectors` | that the view protocol's vectors are one file in the two repositories that implement it — `apack-terminal`'s encoder writes them and `apack-terminal-view` carries a copy its decoder is held to — at the commits pinned in `vendor/*.rev`. Neither repository can see the other's copy, so each suite passes against its own while the two have drifted; this is the one place both are on disk together |
 | `performance-scenario-view` | serialized renderer completion, receipt matching and cleanup for the manual performance harness |
 | `preview-build` | preview version parsing, isolated build environment, and isolated staging builds, build integrity before packaging, and beta release naming |
 | `packaged-app` | manifest-based bundle selection, channel isolation, reset scope, captured exit status, signing assessment failures, and diagnostics from the selected app and profile |
