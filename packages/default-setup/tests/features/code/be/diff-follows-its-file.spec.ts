@@ -40,8 +40,9 @@ async function codeOverRepository() {
 
 /** What each announcement so far said changed */
 const announced = () => app!.emitted('code').filter(event => event.type === 'commit.REPOSITORY_CHANGED').map(event => event.changed as object);
+/** A check as a window that gained focus asks for one: no window here asks for the status each announcement names */
 async function checked() {
-  await app!.send('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES' });
+  await app!.send('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES', by: 'window' });
   await app!.settle();
 }
 /**

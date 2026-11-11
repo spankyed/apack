@@ -1,10 +1,16 @@
 // What a subscriber reports of what its platform's watcher tells it. The platform is stood in for: whether it
 // delivers at all is the platform's to answer, and a case waiting on it would pass only on a quiet machine.
-import { expect, it } from 'vitest';
+import { afterEach, expect, it } from 'vitest';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
+import { settles } from '@apackdev/sdk/testing';
 import {
-  nodeSubscriber, parcelSubscriber, type ParcelSubscribe, type WatchedChange, type WatchTree,
+  nodeSubscriber, perDirectorySubscriber, type WatchDirectory, type WatchedChange, type WatchTree,
 } from '../../../../../src/features/code/be/services/directory-watch.ts';
+
+const roots: string[] = [];
+afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
 
 const directory = path.resolve('checkout');
 
@@ -62,20 +68,153 @@ it('closes the platform’s watch when unsubscribed', async () => {
   expect(platform.closed).toBe(true);
 });
 
-it('reports a library watch’s changes relative to its directory, and says the watch ended when the directory was deleted', async () => {
-  let deliver: Parameters<ParcelSubscribe>[1] = () => {};
-  const subscribe: ParcelSubscribe = async (_directory, onEvents) => {
-    deliver = onEvents;
-    return { unsubscribe: async () => {} };
+/** A tree on disk, made of these directories and files, which the per-directory subscriber reads for real */
+function tree(...paths: string[]) {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-watch-')));
+  roots.push(root);
+  const make = (relative: string) => {
+    const absolute = path.join(root, relative);
+    if (relative.endsWith('/')) fs.mkdirSync(absolute, { recursive: true });
+    else { fs.mkdirSync(path.dirname(absolute), { recursive: true }); fs.writeFileSync(absolute, ''); }
   };
+  paths.forEach(make);
+  return { root, make, remove: (relative: string) => fs.rmSync(path.join(root, relative), { recursive: true, force: true }) };
+}
+
+/** Stands in for `fs.watch` on one directory at a time: a case says what each directory's watch reports */
+function directoryWatches(root: string) {
+  const open = new Map<string, { listener: (eventType: string, filename: string | null) => void; fail: (error: Error) => void }>();
+  const refused = new Map<string, string>();
+  const watch: WatchDirectory = (directory, _options, listener) => {
+    const relative = path.relative(root, directory);
+    const code = refused.get(relative);
+    if (code) throw Object.assign(new Error(`${code}: watch '${directory}'`), { code });
+    const entry = { listener, fail: (_error: Error) => {} };
+    open.set(relative, entry);
+    return { on: (_event, onError) => { entry.fail = onError; }, close: () => { open.delete(relative); } };
+  };
+  return {
+    watch, refused,
+    watched: () => [...open.keys()].sort(),
+    reports: (directory: string, eventType: 'rename' | 'change', filename: string | null) => open.get(directory)!.listener(eventType, filename),
+    fails: (directory: string, error: Error) => open.get(directory)!.fail(error),
+  };
+}
+/** Waits for what a subscriber does once it has looked at the disk */
+const eventually = (check: () => void) => settles(check);
+
+it('holds a watch on every directory of the tree but the ones it was told to ignore and what is under them', async () => {
+  const { root } = tree('src/deep/a.ts', 'docs/', 'node_modules/pkg/lib/index.js', 'packages/app/dist/out/');
+  const platform = directoryWatches(root);
+
+  await perDirectorySubscriber(platform.watch)(root, () => {}, { ignore: ['node_modules', 'packages/app/dist'] });
+
+  expect(platform.watched()).toEqual(['', 'docs', 'packages', path.join('packages', 'app'), 'src', path.join('src', 'deep')]);
+});
+
+it('reports a change by where it is in the tree, whichever directory\'s watch saw it', async () => {
+  const { root } = tree('src/deep/a.ts', 'node_modules/pkg/index.js');
+  const platform = directoryWatches(root);
   const { calls, onChanges } = told();
-  await parcelSubscriber(async () => ({ subscribe }))(directory, onChanges, { ignore: [] });
+  await perDirectorySubscriber(platform.watch)(root, onChanges, { ignore: ['node_modules'] });
 
-  deliver(null, [{ type: 'update', path: path.join(directory, 'src', 'a.ts') }, { type: 'delete', path: path.join(directory, 'old.ts') }]);
-  // The library stops reporting on a directory once it is deleted, and never starts again for one made in its place
-  deliver(null, [{ type: 'delete', path: path.join(directory, 'src', 'a.ts') }, { type: 'delete', path: directory }]);
+  platform.reports(path.join('src', 'deep'), 'change', 'a.ts');
+  platform.reports('', 'change', 'top.txt');
+  // The ignored directory's own entry in its parent changing is not a change to report
+  platform.reports('', 'change', 'node_modules');
+  platform.reports('src', 'change', null);
 
-  expect(calls[0]).toEqual({ error: null, changes: [path.join('src', 'a.ts'), 'old.ts'] });
-  expect(calls[1]!.error).toBeInstanceOf(Error);
-  expect(calls[1]!.changes).toEqual([]);
+  expect(calls).toEqual([
+    { error: null, changes: [path.join('src', 'deep', 'a.ts')] },
+    { error: null, changes: ['top.txt'] },
+    { error: null, changes: [null] },
+  ]);
+});
+
+// What was made in a new directory before its watch was in place was reported by nothing: the directory is
+// reported again once it and everything under it is watched, and whoever hears that asks about all of it
+it('watches a directory that appears, with what it already holds, and reports it again once it is watched', async () => {
+  const { root, make } = tree('src/a.ts');
+  const platform = directoryWatches(root);
+  const { calls, onChanges } = told();
+  await perDirectorySubscriber(platform.watch)(root, onChanges, { ignore: [] });
+
+  make('fresh/inner/b.ts');
+  platform.reports('', 'rename', 'fresh');
+
+  await eventually(() => expect(calls).toEqual([{ error: null, changes: ['fresh'] }, { error: null, changes: ['fresh'] }]));
+  expect(platform.watched()).toEqual(['', 'fresh', path.join('fresh', 'inner'), 'src']);
+});
+
+it('lets go of the watches on a directory that is gone, and on everything that was under it', async () => {
+  const { root, remove } = tree('src/deep/deeper/a.ts', 'docs/');
+  const platform = directoryWatches(root);
+  const { calls, onChanges } = told();
+  await perDirectorySubscriber(platform.watch)(root, onChanges, { ignore: [] });
+
+  remove('src');
+  platform.reports('', 'rename', 'src');
+
+  await eventually(() => expect(platform.watched()).toEqual(['', 'docs']));
+  expect(calls).toEqual([{ error: null, changes: ['src'] }]);
+});
+
+// Nothing reports on a directory made again where the watched one was
+it('says the watch ended when the watched directory itself is deleted', async () => {
+  const { root, remove } = tree('src/a.ts');
+  const platform = directoryWatches(root);
+  const { calls, onChanges } = told();
+  await perDirectorySubscriber(platform.watch)(root, onChanges, { ignore: [] });
+
+  remove('');
+  platform.reports('', 'rename', path.basename(root));
+
+  await eventually(() => expect(calls.at(-1)?.error?.message).toBe(`${root} was deleted`));
+});
+
+// The platform allows only so many watches. A tree that is not all watched is not watched
+it('fails, holding no watch, when the platform runs out of watches while the tree is first read', async () => {
+  const { root } = tree('src/deep/', 'docs/');
+  const platform = directoryWatches(root);
+  platform.refused.set(path.join('src', 'deep'), 'ENOSPC');
+
+  await expect(perDirectorySubscriber(platform.watch)(root, () => {}, { ignore: [] })).rejects.toThrow('ENOSPC');
+
+  expect(platform.watched()).toEqual([]);
+});
+
+it('says so when the platform runs out of watches for a directory that appears later', async () => {
+  const { root, make } = tree('src/');
+  const platform = directoryWatches(root);
+  const { calls, onChanges } = told();
+  await perDirectorySubscriber(platform.watch)(root, onChanges, { ignore: [] });
+
+  platform.refused.set('fresh', 'ENOSPC');
+  make('fresh/');
+  platform.reports('', 'rename', 'fresh');
+
+  await eventually(() => expect(calls.at(-1)?.error?.message).toContain('ENOSPC'));
+});
+
+it('passes over a directory that is gone by the time it is watched', async () => {
+  const { root } = tree('src/', 'docs/');
+  const platform = directoryWatches(root);
+  platform.refused.set('docs', 'ENOENT');
+
+  await perDirectorySubscriber(platform.watch)(root, () => {}, { ignore: [] });
+
+  expect(platform.watched()).toEqual(['', 'src']);
+});
+
+it('closes every watch when unsubscribed, and reports nothing after', async () => {
+  const { root } = tree('src/deep/');
+  const platform = directoryWatches(root);
+  const { calls, onChanges } = told();
+  const subscription = await perDirectorySubscriber(platform.watch)(root, onChanges, { ignore: [] });
+  const late = platform.reports.bind(null, 'src', 'change', 'a.ts');
+
+  await subscription.unsubscribe();
+  expect(platform.watched()).toEqual([]);
+  expect(calls).toEqual([]);
+  expect(late).toThrow();
 });

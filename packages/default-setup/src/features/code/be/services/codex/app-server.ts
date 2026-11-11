@@ -10,6 +10,7 @@
 
 import { spawn, type ChildProcess } from 'child_process'
 import { createInterface, type Interface } from 'readline'
+import { resolveAppEnvironment } from '@apackdev/sdk/env'
 import { createLogger } from '@apackdev/sdk/logger'
 import { answerWhileWorking, processWork } from '@apackdev/sdk/progress'
 import { resolveForService } from '../../utils/resolve-cli.ts'
@@ -61,6 +62,12 @@ export class CodexAppServer {
   async start(): Promise<void> {
     if (this._status === 'ready') return
     if (this._status === 'starting') return
+    // A test run never starts the Codex installed on the machine it runs on: every flow run that starts the brain
+    // reaches this, and what it would start is the user's own, signed in as them. A spec that needs the service
+    // stands one in (`mockService('codex', …)`)
+    if (resolveAppEnvironment().env === 'test') {
+      throw new Error('The Codex app server is not started in the test environment: a spec stands in `services.codex`')
+    }
 
     this._status = 'starting'
     this._error = undefined

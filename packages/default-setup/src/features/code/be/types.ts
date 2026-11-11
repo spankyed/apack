@@ -1,5 +1,7 @@
 import type { GitRepository } from './services/git.ts';
 import type { GitWatcherService } from './services/gitwatcher.ts';
+import type { GitErrorCode } from './services/git-errors.ts';
+import type { SignInHelp } from './services/sign-in.ts';
 import { EARS } from '#generated/ears.ts'
 
 export interface FileInfo {
@@ -78,6 +80,8 @@ export interface GitStatusFile {
   score?: number // Rename/copy similarity score (0-100)
   /** For an unmerged file: what each side did to it, which is what there is to settle */
   conflict?: ConflictKind
+  /** An untracked folder, listed as one row: git tracks nothing in it. Its path ends with `/` */
+  isDirectory?: boolean
 }
 
 /**
@@ -134,12 +138,34 @@ export type RepositoryChange = Record<RepositoryPart, boolean> & {
 }
 
 /** The two sides of one file's change, which an editor shows side by side */
+/** How far along git is with a command that talks to a remote or writes many files */
+export interface GitProgress {
+  /** What git is doing, in its own words: `Writing objects`, `Receiving objects`, `Updating files` */
+  stage: string
+  /** How much of that is done, from 0 to 100 */
+  percent: number
+}
+
+/** One piece of a file's change, as git cuts it */
+export interface DiffHunk {
+  /** Where it begins on the left side of the diff, and how many lines of that side it covers */
+  oldStart: number
+  oldLines: number
+  /** The same on the right side */
+  newStart: number
+  newLines: number
+  /** The patch that applies this piece alone */
+  patch: string
+}
+
 export interface GitDiff {
   path: string
   staged: boolean
   originalContent?: string
   modifiedContent?: string
   isImage?: boolean
+  /** The pieces of the change that can be staged, or unstaged, one at a time: none for a file that is not plainly modified */
+  hunks?: DiffHunk[]
 }
 
 export interface StashEntry {
@@ -389,4 +415,17 @@ export interface CodeSystemContext {
   defaultBaseDirectory: string | null
   gitRepository: GitRepository | null
   gitWatcher: GitWatcherService | null
+}
+
+export type { GitErrorCode, SignInHelp }
+
+/** What the commit panel is told of a command that failed */
+export interface CommitFailure {
+  message: string
+  /** Why git failed, where it said */
+  code?: GitErrorCode
+  /** The command the failure was of, where the panel can run it again */
+  during?: 'push' | 'pull'
+  /** What can be done about a sign-in the remote asked for */
+  signIn?: SignInHelp
 }

@@ -6,6 +6,7 @@ import { once } from 'node:events';
 import { pathToFileURL } from 'node:url';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { describe, expect, it } from 'vitest';
+import { settles } from '@apackdev/sdk/testing/waiting';
 import { boundedSpawn } from '../../../scripts/lib/bounded-spawn.ts';
 
 /** Signal delivery precedes kernel reaping; require disappearance rather than a single immediate probe. */
@@ -67,14 +68,19 @@ await boundedSpawn(process.execPath, ['-e', ${JSON.stringify(childCode)}], 30000
       ['-c', `${process.execPath} -e 'require("fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setInterval(()=>{},1000)' & wait`],
       30_000, { signal: stop.signal });
 
-    for (let waited = 0; waited < 5000 && !fs.existsSync(pidFile); waited += 50) {
-      await new Promise((resolve) => { setTimeout(resolve, 50); });
+    let grandchild = 0;
+    try {
+      // The file is there before its pid is, so the pid is what is waited for, however long a busy machine takes
+      grandchild = await settles(() => {
+        const pid = Number(fs.readFileSync(pidFile, 'utf-8'));
+        if (!(pid > 0)) throw new Error('the grandchild has not written its pid');
+        return pid;
+      });
+    } finally {
+      // Stopped whatever happened above: a case that failed before this left the whole group running
+      stop.abort();
+      await running;
     }
-    const grandchild = Number(fs.readFileSync(pidFile, 'utf-8'));
-    expect(grandchild, 'nothing is proven if the grandchild never started').toBeGreaterThan(0);
-
-    stop.abort();
-    await running;
     await expectGone(grandchild);
   });
 

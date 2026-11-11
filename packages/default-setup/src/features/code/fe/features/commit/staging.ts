@@ -5,8 +5,8 @@ import type { GitStatusFile } from '../../../be/types.ts'
  * click is answered on the screen, and what git says replaces this when it arrives.
  *
  * A file is moved only where the list itself says where it goes. Where only git can tell — a conflict being
- * settled, a copy, a file put back over a staged deletion — its rows are left as they are and move with git's
- * answer.
+ * settled, a copy, a file put back over a staged deletion, a folder git tracks nothing in or a file inside one —
+ * its rows are left as they are and move with git's answer.
  */
 
 /** A file's rows after it is staged or unstaged, or nothing when the list cannot tell */
@@ -14,6 +14,8 @@ type Move = (staged: GitStatusFile | undefined, unstaged: GitStatusFile | undefi
 
 const afterStaging: Move = (staged, unstaged) => {
   if (!unstaged) return undefined
+  // A folder git tracks nothing in is one row for whatever it holds, and only git says what that is
+  if (unstaged.isDirectory) return undefined
   const row = (status: GitStatusFile['status']): GitStatusFile[] => [{ path: unstaged.path, status, staged: true, originalPath: undefined }]
   // What is staged of a renamed or copied file is read against the file it came from
   if (staged && (staged.status === 'renamed' || staged.status === 'copied')) return undefined

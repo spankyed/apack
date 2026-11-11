@@ -5,7 +5,7 @@ import { sendToSystem } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { diffTab, diffTabPath } from '../../utils/diff-tabs.ts';
 import { withStaged, withUnstaged } from './staging.ts';
-import type { ConflictKind, OperationMove, RepositoryChange, RepositoryOperation } from '../../../be/types.ts';
+import type { CommitFailure, ConflictKind, DiffHunk, GitProgress, OperationMove, RepositoryChange, RepositoryOperation, SignInHelp } from '../../../be/types.ts';
 import type { OpenFile } from '../../contract.ts';
 
 
@@ -18,6 +18,15 @@ export interface GitStatusFile {
   score?: number // Rename/copy similarity score (0-100)
   /** For an unmerged file: what each side did to it */
   conflict?: ConflictKind
+  /** An untracked folder, listed as one row: git tracks nothing in it. Its path ends with `/` */
+  isDirectory?: boolean
+}
+
+/** What an open folder row lists: the files in it that git would list, each by its path from the top of the checkout */
+export interface OpenFolder {
+  files: string[]
+  /** Whether the folder holds more files than are listed */
+  truncated: boolean
 }
 
 export interface GitDiff {
@@ -26,6 +35,8 @@ export interface GitDiff {
   originalContent?: string
   modifiedContent?: string
   isImage?: boolean
+  /** The pieces of the change that can be staged, or unstaged, one at a time */
+  hunks?: DiffHunk[]
 }
 
 export interface CodeCommitContext {
@@ -52,6 +63,18 @@ export interface CodeCommitContext {
   isMovingOperation: boolean
   /** Whether fetching by itself has stopped: what is shown of the remote is as old as the last fetch that worked */
   isFetchSuspended: boolean
+  /** What can be done about the sign-in the remote asked for when fetching stopped */
+  fetchSignIn: SignInHelp | null
+  /** What is known of the failure `gitError` words: the command to run again, and the sign-in a remote asked for */
+  gitFailure: Pick<CommitFailure, 'during' | 'signIn'> | null
+  /** Whether the GitHub CLI was asked to give git its sign-in and has not answered */
+  isSettingUpSignIn: boolean
+  /** Whether git was asked to stage or unstage one piece of a file's change and has not answered */
+  isApplyingHunk: boolean
+  /** How far along the push, the pull or the checkout under way is, once git has said */
+  progress: ({ during: 'push' | 'pull' | 'checkout' } & GitProgress) | null
+  /** The untracked folder rows that are open, each with the files it lists, by the folder's path */
+  openFolders: Record<string, OpenFolder>
   isPushing: boolean
   isPulling: boolean
   isGeneratingMessage: boolean
@@ -135,7 +158,14 @@ export type Event =
   | { type: 'commit.COMMIT_SUCCESS'; message: string }
   | { type: 'commit.FILE_REVERTED'; path: string }
   | { type: 'commit.FILES_REVERTED'; paths: string[] }
-  | { type: 'commit.ERROR_RECEIVED'; data: { message: string } }
+  | { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }
+  | { type: 'commit.SET_UP_SIGN_IN'; host: string }
+  | { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; patch: string }
+  | { type: 'commit.HUNK_APPLIED'; data: { path: string; staged: boolean } }
+  | { type: 'commit.PROGRESS'; data: { during: 'push' | 'pull' | 'checkout' } & GitProgress }
+  | { type: 'commit.TOGGLE_FOLDER'; path: string }
+  | { type: 'commit.UNTRACKED_LISTED'; data: { path: string } & OpenFolder }
+  | { type: 'commit.SIGN_IN_SET_UP'; data: { host: string } }
   | { type: 'commit.BRANCHES_RECEIVED'; data: { branches: string[] } }
   | { type: 'commit.BRANCH_CHECKOUT_SUCCESS'; data: { branchName: string } }
   | { type: 'commit.BRANCH_PUSHED'; data: { branchName: string } }
@@ -197,13 +227,20 @@ export const commitState = setup({
      * Asks again for each thing the window shows whose part of the repository changed, and for no other: the news
      * says which, so an edited file reads the status and leaves the log, the stashes and the worktrees alone
      */
-    followRepositoryChange: enqueueActions(({ event, self, enqueue }) => {
+    followRepositoryChange: enqueueActions(({ context, event, self, enqueue }) => {
       const { changed } = event as { type: 'commit.REPOSITORY_CHANGED'; changed: RepositoryChange }
       if (changed.status) enqueue('refreshGitStatus')
       if (changed.history) enqueue('requestLogList')
       if (changed.stashes) enqueue('requestStashList')
       if (changed.worktrees) enqueue('requestWorktreeList')
       if (!changed.diffs) return
+      // A change under an open folder's row moves no status: the folder is named, and is listed again. A status
+      // that changed is asked for above, and lists the open folders again when it is answered
+      if (!changed.status) {
+        for (const path of Object.keys(context.openFolders)) {
+          if (!changed.files || changed.files.includes(path)) enqueue(() => { sendToSystem('code', { type: 'commit.LIST_UNTRACKED', path }) })
+        }
+      }
       // A diff is read when its tab opens, so one left open is of the file as it was until it is read again
       for (const { gitFile } of openDiffs(self)) {
         if (changed.files && !changed.files.includes(gitFile!.path)) continue
@@ -405,15 +442,24 @@ export const commitState = setup({
       },
       operation: ({ event }) => (event as { data: { operation?: RepositoryOperation } }).data.operation ?? null,
       isFetchSuspended: ({ event }) => (event as { data: { fetchSuspended?: boolean } }).data.fetchSuspended === true,
+      fetchSignIn: ({ event }) => (event as { data: { signIn?: SignInHelp } }).data.signIn ?? null,
       isGitLoading: false,
-      gitError: null
+      gitError: null,
+      gitFailure: null
     }),
 
     handleErrorReceived: assign({
       gitError: ({ event }) => {
-        const ev = event as { type: 'commit.ERROR_RECEIVED'; data: { message: string } }
+        const ev = event as { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }
         return ev.data.message
       },
+      gitFailure: ({ event }) => {
+        const { during, signIn } = (event as { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }).data
+        return { during, signIn }
+      },
+      isSettingUpSignIn: false,
+      isApplyingHunk: false,
+      progress: null,
       isGitLoading: false,
       isCheckingOutBranch: false,
       isPushing: false,
@@ -422,7 +468,57 @@ export const commitState = setup({
       isMovingOperation: false
     }),
 
-    dismissError: assign({ gitError: null }),
+    dismissError: assign({ gitError: null, gitFailure: null }),
+
+    /** Opens an untracked folder's row, asking for what is in it, or closes it */
+    toggleFolder: enqueueActions(({ context, event, enqueue }) => {
+      const { path } = event as { type: 'commit.TOGGLE_FOLDER'; path: string }
+      const { [path]: open, ...others } = context.openFolders
+      if (open) return enqueue.assign({ openFolders: others })
+      enqueue.assign({ openFolders: { ...others, [path]: { files: [], truncated: false } } })
+      enqueue(() => { sendToSystem('code', { type: 'commit.LIST_UNTRACKED', path }) })
+    }),
+
+    /** What a folder holds, kept if its row is still open: the answer is the folder's, whichever ask it answers */
+    folderListed: assign(({ context, event }) => {
+      const { path, files, truncated } = (event as { type: 'commit.UNTRACKED_LISTED'; data: { path: string } & OpenFolder }).data
+      return path in context.openFolders ? { openFolders: { ...context.openFolders, [path]: { files, truncated } } } : {}
+    }),
+
+    /**
+     * Brings the open folders in line with a status just received: one whose row is gone is closed, and the rest
+     * are listed again, since a status that moved may be a file made or deleted in one of them
+     */
+    followOpenFolders: enqueueActions(({ context, enqueue }) => {
+      const rows = new Set(context.gitStatus.filter(file => file.isDirectory).map(file => file.path))
+      const open = Object.keys(context.openFolders)
+      if (open.some(path => !rows.has(path))) {
+        enqueue.assign({ openFolders: Object.fromEntries(Object.entries(context.openFolders).filter(([path]) => rows.has(path))) })
+      }
+      for (const path of open) if (rows.has(path)) enqueue(() => { sendToSystem('code', { type: 'commit.LIST_UNTRACKED', path }) })
+    }),
+
+    /** Has git stage one piece of a file's change, or take one back out of what is staged */
+    applyHunk: enqueueActions(({ event, enqueue }) => {
+      const { path, staged, patch } = event as { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; patch: string }
+      enqueue.assign({ isApplyingHunk: true, gitError: null, gitFailure: null })
+      enqueue(() => { sendToSystem('code', { type: 'commit.APPLY_HUNK', path, staged, patch }) })
+    }),
+
+    /** Has the GitHub CLI give git its sign-in for the host that asked */
+    setUpSignIn: enqueueActions(({ event, enqueue }) => {
+      const { host } = event as { type: 'commit.SET_UP_SIGN_IN'; host: string }
+      enqueue.assign({ isSettingUpSignIn: true })
+      enqueue(() => { sendToSystem('code', { type: 'commit.SET_UP_SIGN_IN', host }) })
+    }),
+
+    /** Git can sign in now, so the push or the pull that was refused is run again: it is what the user was doing */
+    signInSetUp: enqueueActions(({ context, enqueue }) => {
+      const during = context.gitFailure?.during
+      enqueue.assign({ gitError: null, gitFailure: null, isSettingUpSignIn: false })
+      if (during === 'push') enqueue.raise({ type: 'commit.PUSH_BRANCH' })
+      if (during === 'pull') enqueue.raise({ type: 'commit.PULL_BRANCH' })
+    }),
 
     /** Has git carry on with what it is in the middle of, skip the commit a rebase stopped at, or give it up */
     moveOperation: enqueueActions(({ event, enqueue }) => {
@@ -495,7 +591,8 @@ export const commitState = setup({
 
     handleBranchCheckoutSuccess: assign({
       branchInput: '',
-      isCheckingOutBranch: false
+      isCheckingOutBranch: false,
+      progress: null
     }),
 
     pushBranch: () => {
@@ -505,7 +602,8 @@ export const commitState = setup({
     setPushing: assign({ isPushing: true }),
 
     handleBranchPushed: assign({
-      isPushing: false
+      isPushing: false,
+      progress: null
     }),
 
     pullBranch: () => {
@@ -515,7 +613,8 @@ export const commitState = setup({
     setPulling: assign({ isPulling: true }),
 
     handleBranchPulled: assign({
-      isPulling: false
+      isPulling: false,
+      progress: null
     }),
 
     handleCodeStartup: ({ self }) => {
@@ -652,6 +751,12 @@ export const commitState = setup({
     operation: null,
     isMovingOperation: false,
     isFetchSuspended: false,
+    fetchSignIn: null,
+    gitFailure: null,
+    isSettingUpSignIn: false,
+    isApplyingHunk: false,
+    openFolders: {},
+    progress: null,
     isPushing: false,
     isPulling: false,
     isGeneratingMessage: false,
@@ -670,7 +775,16 @@ export const commitState = setup({
         // An answer to an ask made before the latest is of the repository as it was before it
         'commit.STATUS_RECEIVED': {
           guard: 'answersTheStatusAsked',
-          actions: 'handleStatusReceived'
+          actions: ['handleStatusReceived', 'followOpenFolders']
+        },
+        'commit.PROGRESS': {
+          actions: assign({ progress: ({ event }) => (event as { data: { during: 'push' | 'pull' | 'checkout' } & GitProgress }).data })
+        },
+        'commit.TOGGLE_FOLDER': {
+          actions: 'toggleFolder'
+        },
+        'commit.UNTRACKED_LISTED': {
+          actions: 'folderListed'
         },
         'commit.ERROR_RECEIVED': [
           // Nobody asked for a diff that was read again, so its failing is said to nobody: the tab stays as it was
@@ -679,6 +793,18 @@ export const commitState = setup({
         ],
         'commit.DISMISS_ERROR': {
           actions: 'dismissError'
+        },
+        'commit.SET_UP_SIGN_IN': {
+          actions: 'setUpSignIn'
+        },
+        'commit.SIGN_IN_SET_UP': {
+          actions: 'signInSetUp'
+        },
+        'commit.APPLY_HUNK': {
+          actions: 'applyHunk'
+        },
+        'commit.HUNK_APPLIED': {
+          actions: assign({ isApplyingHunk: false })
         },
         'commit.SELECT_FILE': {
           actions: 'selectGitFile'

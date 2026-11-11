@@ -198,6 +198,7 @@
       class="px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
     >
       Fetching by itself is off: the remote asked for a sign-in and nobody was there to give one. It starts again after a push or a pull that works, or when the fetch settings change.
+      <SignInHelp v-if="fetchSignIn" class="mt-2" :help="fetchSignIn" :busy="isSettingUpSignIn" @sign-in="setUpSignIn" />
     </div>
 
     <!-- The repository has more changed files than are listed -->
@@ -265,6 +266,7 @@
         @click="isErrorExpanded = !isErrorExpanded"
         class="mt-1 text-xs text-red-500 hover:text-red-300 transition-colors"
       >{{ isErrorExpanded ? 'View less' : 'View more' }}</button>
+      <SignInHelp v-if="errorSignIn" class="mt-2" :help="errorSignIn" :busy="isSettingUpSignIn" @sign-in="setUpSignIn" />
     </div>
 
     <!-- Commit Message -->
@@ -467,31 +469,43 @@
             </div>
           </div>
           <div class="space-y-1">
-            <GitFileItem
-              v-for="file in unstagedFiles"
-              :key="`unstaged-${file.path}`"
-              :file="file"
-              :isSelected="selectedGitFile?.path === file.path && selectedGitFile?.staged === file.staged"
-              @select="selectFile"
-              @openFile="openFile"
-            >
-              <template #actions>
-                <button @click.stop="openRevertDialog(file)" class="p-0.5 hover:bg-neutral-700 rounded" title="Discard changes">
-                  <RotateCcw class="w-3 h-3 text-red-400" />
-                </button>
-                <button @click.stop="stageFile(file)" class="p-0.5 hover:bg-neutral-700 rounded" title="Stage">
-                  <Plus class="w-3 h-3 text-neutral-400" />
-                </button>
-              </template>
-              <template #menuItems>
-                <ContextMenuItem @select="stageFile(file)" :class="MENU_ITEM_CLASS">
-                  <Plus class="w-4 h-4" /> Stage
-                </ContextMenuItem>
-                <ContextMenuItem @select="openRevertDialog(file)" :class="MENU_ITEM_DANGER_CLASS">
-                  <RotateCcw class="w-4 h-4" /> Discard Changes
-                </ContextMenuItem>
-              </template>
-            </GitFileItem>
+            <template v-for="file in unstagedRows" :key="`unstaged-${file.path}`">
+              <!-- A file in an open folder is a row under the folder's, which is one row for all of it -->
+              <GitFileItem
+                :file="file"
+                :isSelected="selectedGitFile?.path === file.path && selectedGitFile?.staged === file.staged"
+                @select="file.isDirectory ? toggleFolder(file) : selectFile(file)"
+                @openFile="openFile"
+              >
+                <template v-if="file.isDirectory" #prefix>
+                  <component :is="openFolders[file.path] ? ChevronDown : ChevronRight" :size="12" class="text-neutral-500 flex-shrink-0" />
+                  <Folder :size="12" class="text-neutral-400 flex-shrink-0" />
+                </template>
+                <!-- Set in from the folder's row, by the width of its arrow and icon -->
+                <template v-else-if="file.inFolder" #prefix>
+                  <span class="w-7 flex-shrink-0" />
+                </template>
+                <template #actions>
+                  <button @click.stop="openRevertDialog(file)" class="p-0.5 hover:bg-neutral-700 rounded" title="Discard changes">
+                    <RotateCcw class="w-3 h-3 text-red-400" />
+                  </button>
+                  <button @click.stop="stageFile(file)" class="p-0.5 hover:bg-neutral-700 rounded" title="Stage">
+                    <Plus class="w-3 h-3 text-neutral-400" />
+                  </button>
+                </template>
+                <template #menuItems>
+                  <ContextMenuItem @select="stageFile(file)" :class="MENU_ITEM_CLASS">
+                    <Plus class="w-4 h-4" /> Stage
+                  </ContextMenuItem>
+                  <ContextMenuItem @select="openRevertDialog(file)" :class="MENU_ITEM_DANGER_CLASS">
+                    <RotateCcw class="w-4 h-4" /> Discard Changes
+                  </ContextMenuItem>
+                </template>
+              </GitFileItem>
+              <div v-if="file.isDirectory && openFolders[file.path]?.truncated" class="ml-4 px-2 py-1 text-xs text-neutral-500">
+                This folder holds more files than are listed here. Staging or discarding its row covers all of them.
+              </div>
+            </template>
           </div>
         </div>
       </div>
@@ -705,7 +719,7 @@ import { useSurface, useShell } from '@apackdev/sdk/fe'
 import type { CodeState } from '#features/code/fe/state.ts'
 import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts'
 import type { ConflictKind, OperationMove } from '#features/code/be/types.ts'
-import { GitBranch, GitBranchPlus, GitCommit, GitFork, GitMerge, RefreshCw, Plus, Minus, RotateCcw, ChevronDown, ChevronRight, CheckCircle, Check, X, Sparkles, Loader2, ArrowDownToLine, ArrowUpFromLine, MoreVertical, Trash2, Copy, Search, FolderSync, Lock } from 'lucide-vue-next'
+import { Folder, GitBranch, GitBranchPlus, GitCommit, GitFork, GitMerge, RefreshCw, Plus, Minus, RotateCcw, ChevronDown, ChevronRight, CheckCircle, Check, X, Sparkles, Loader2, ArrowDownToLine, ArrowUpFromLine, MoreVertical, Trash2, Copy, Search, FolderSync, Lock } from 'lucide-vue-next'
 import { ContextMenuItem } from 'reka-ui'
 import { MENU_ITEM_CLASS, MENU_ITEM_DANGER_CLASS } from '#features/code/fe/features/explorer/constants.ts'
 import GitFileItem from '#features/code/fe/features/commit/GitFileItem.vue'
@@ -713,6 +727,7 @@ import CodePanelHeader from '#features/code/fe/features/CodePanelHeader.vue'
 import NoDirectoryState from '#features/code/fe/features/NoDirectoryState.vue'
 import EmptyState from '#features/code/fe/features/EmptyState.vue'
 import RevertDialog from '#features/code/fe/features/commit/RevertDialog.vue'
+import SignInHelp from '#features/code/fe/features/commit/SignInHelp.vue'
 import CommitLogSection from '#features/code/fe/features/commit/CommitLogSection.vue'
 import ToastNotification from '@apackdev/ui/design/ToastNotification'
 import ContextMenuPopup from '@apackdev/ui/design/ContextMenuPopup'
@@ -747,6 +762,10 @@ const isStatusTruncated = useSelector(commitActor, (state) => state.context.isSt
 const isWatchingRepository = useSelector(commitActor, (state) => state.context.isWatchingRepository)
 const operation = useSelector(commitActor, (state) => state.context.operation)
 const isFetchSuspended = useSelector(commitActor, (state) => state.context.isFetchSuspended)
+const fetchSignIn = useSelector(commitActor, (state) => state.context.fetchSignIn)
+const isSettingUpSignIn = useSelector(commitActor, (state) => state.context.isSettingUpSignIn)
+// The help belongs to the error it came with, and goes when that error does
+const errorSignIn = useSelector(commitActor, (state) => (state.context.gitError ? state.context.gitFailure?.signIn ?? null : null))
 const isMovingOperation = useSelector(commitActor, (state) => state.context.isMovingOperation)
 const commitsAhead = useSelector(commitActor, (state) => state.context.commitsAhead)
 const commitsBehind = useSelector(commitActor, (state) => state.context.commitsBehind)
@@ -828,6 +847,10 @@ const watchSyncOp = (
   })
 }
 
+const setUpSignIn = (host: string) => {
+  commitActor.send({ type: 'commit.SET_UP_SIGN_IN', host })
+}
+
 const dismissError = () => {
   commitActor.send({ type: 'commit.DISMISS_ERROR' })
   isErrorExpanded.value = false
@@ -858,6 +881,13 @@ watch(commitMessage, (val) => {
 const stagedFiles = computed(() => gitStatus.value.filter((f: any) => f.staged))
 const mergeConflictFiles = computed(() => gitStatus.value.filter((f: any) => f.status === 'unmerged'))
 const unstagedFiles = computed(() => gitStatus.value.filter((f: any) => !f.staged && f.status !== 'unmerged'))
+const openFolders = useSelector(commitActor, (state) => state.context.openFolders)
+/** The unstaged rows as they are drawn: each open folder's row is followed by a row for each file it lists */
+const unstagedRows = computed(() => unstagedFiles.value.flatMap((file: GitStatusFile): (GitStatusFile & { inFolder?: boolean })[] => {
+  const open = file.isDirectory ? openFolders.value[file.path] : undefined
+  return [file, ...(open?.files ?? []).map(path => ({ path, status: 'untracked' as const, staged: false, inFolder: true }))]
+}))
+const toggleFolder = (file: GitStatusFile) => commitActor?.send({ type: 'commit.TOGGLE_FOLDER', path: file.path })
 const canCommit = computed(() => commitMessage.value.trim() && stagedFiles.value.length > 0)
 
 const isNoDirectoryError = computed(() => {
@@ -875,9 +905,12 @@ const shouldShowActionButton = computed(() => {
   return !hasUpstream.value || commitsAhead.value > 0 || commitsBehind.value > 0
 })
 
+const progress = useSelector(commitActor, (state) => state.context.progress)
+/** How far along git says it is, once it has said: `Writing objects 42%` */
+const progressOf = (during: 'push' | 'pull') => (progress.value?.during === during ? ` ${progress.value.stage} ${progress.value.percent}%` : '...')
 const actionButtonText = computed(() => {
-  if (isPushing.value) return 'Pushing...'
-  if (isPulling.value) return 'Pulling...'
+  if (isPushing.value) return `Pushing${progressOf('push')}`
+  if (isPulling.value) return `Pulling${progressOf('pull')}`
   if (!hasUpstream.value) return 'Publish Branch'
 
   // If we have both commits ahead and behind, prioritize pull
