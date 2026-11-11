@@ -238,10 +238,14 @@ export const systemMachine = setup({
 
       // Update git fetch config if repository exists
       if (context.gitRepository) {
+        const suspended = context.gitRepository.isAutoFetchSuspended
         context.gitRepository.setFetchConfig(
           ev.settings.autoFetchRemote ?? false,
           ev.settings.autoFetchIntervalSeconds ?? 180
         )
+        // Fetching had stopped, and the settings arriving again is where it starts over: the repository is checked,
+        // which says so to the windows showing it, and fetched if a fetch is due
+        if (suspended) child(self, 'commit')?.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED', reconcile: true })
       }
 
     },

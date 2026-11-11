@@ -1667,6 +1667,8 @@ declare class GitRepository {
     private fetching;
     /** Whether fetching by itself has stopped because the remote wanted credentials nobody was there to give */
     private autoFetchSuspended;
+    /** How long a command waits for another git to let go of a lock it needs */
+    private lockPatienceMs;
     /** Whether a watcher reports this checkout's changes; without one a snapshot is read every time it is asked for */
     private watched;
     private watchFailed;
@@ -1708,9 +1710,20 @@ declare class GitRepository {
     get isWatched(): boolean;
     /** Whether this checkout's watches failed: a panel showing it then changes only when it is asked again */
     get hasWatchFailed(): boolean;
+    /**
+     * Whether fetching by itself has stopped because the remote asked for credentials. What the checkout knows of
+     * its remote is then as old as the last fetch that worked, which a panel showing it says
+     */
+    get isAutoFetchSuspended(): boolean;
     private isDirectory;
     invalidateCache(paths?: string[]): void;
+    /**
+     * Runs a git command in its lane. One that another git's lock refuses is run again once that lock is let go
+     * of: a git in a terminal, or an agent's, holds the index for moments, and the user who staged a file in
+     * those moments meant it. The lane waits with it, since what is queued behind needs the same lock.
+     */
     private executeGitCommand;
+    private runGitOnce;
     getCurrentBranch(): Promise<string>;
     getStatus(): Promise<GitStatusFile[]>;
     /**
@@ -3319,7 +3332,8 @@ type OutgoingCommitEvents =
  * What the commit panel shows of the checkout. `watching` is false when its file watches could not be opened or
  * have failed: the panel then changes only when it is asked again, and says so. `truncated` says there are more
  * changed files than `files` lists. `operation` is what git is in the middle of there, when it is in the middle
- * of anything
+ * of anything. `fetchSuspended` says fetching by itself has stopped, the remote having asked for a sign-in
+ * nobody was there to give: how far the branch is from its upstream is then as of the last fetch that worked
  */
 {
     type: 'commit.STATUS_RECEIVED';
@@ -3332,6 +3346,7 @@ type OutgoingCommitEvents =
         commitsBehind: number;
         watching: boolean;
         operation?: RepositoryOperation;
+        fetchSuspended?: boolean;
     };
 }
 /** What git was in the middle of was moved on as asked. Where that leaves the repository is in its status */

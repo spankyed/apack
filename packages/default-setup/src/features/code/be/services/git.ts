@@ -1,5 +1,6 @@
 import * as path from 'path'
 import * as fs from 'fs/promises'
+import { watch } from 'fs'
 import { REPOSITORY_PARTS } from '../types.ts'
 import type { ConflictKind, GitStatusFile, StashEntry, CommitLogEntry, OperationMove, RepositoryChange, RepositoryOperation, RepositoryPart } from '../types.ts'
 import { createLogger } from '@apackdev/sdk/logger'
@@ -67,6 +68,80 @@ const gitEnvironment = (): NodeJS.ProcessEnv => ({
 
 /** What a caller is told when there is no git to run */
 const GIT_NOT_INSTALLED = 'Git is not installed. Please install Git to use version control features.'
+
+/** What git says when another process holds a lock it needs, with the lock's path */
+const LOCKED = /Unable to create '(.+\.lock)': File exists/
+
+/**
+ * How long a command waits for another git to let go of a lock before it is given up on.
+ *
+ * It is a clock because the other git is a process this one cannot read: there is no work of its to watch,
+ * only the lock, which is there until it is not. A git in a terminal or an agent's holds one for moments. One
+ * held for longer than this is a commit in a very large repository, or what a git that stopped part-way left
+ * behind, and either is said to whoever asked.
+ */
+const LOCK_PATIENCE_MS = 10_000
+
+/**
+ * Whether another git let go of this lock: `true` once the lock is gone, `false` when it is still there after
+ * `patienceMs`, counted from when it was taken. A lock already older than that is not about to be let go of,
+ * and is answered at once.
+ *
+ * **The lock file itself is watched, and looked for again once the event loop has been round.** A watch is not
+ * in place when `watch` returns. A file's is put in place the next time the loop waits; a directory's, on macOS,
+ * by a stream that starts on another thread some time later. A lock let go of before its watch is in place is
+ * reported by nobody, and most are let go of within moments, so a command waited out its whole patience for a
+ * lock that was gone. Looking again after the loop has waited once finds that one, and the watch reports any
+ * later.
+ */
+function lockReleased(lock: string, patienceMs: number): Promise<boolean> {
+  const takenAt = () => fs.stat(lock).then(stat => stat.mtimeMs, () => undefined)
+  return new Promise<boolean>((resolve) => {
+    let settled = false
+    let timer: NodeJS.Timeout | undefined
+    let watcher: ReturnType<typeof watch> | undefined
+    const settle = (released: boolean) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      watcher?.close()
+      resolve(released)
+    }
+    /** Gone, the lock was let go of. Still there after it was renamed or deleted, another git took it at once */
+    const look = (retaken: 'follow' | 'leave') => {
+      void takenAt().then((taken) => {
+        if (taken === undefined) settle(true)
+        else if (retaken === 'follow' && !settled) follow()
+      })
+    }
+    const follow = () => {
+      watcher?.close()
+      try {
+        // Written to, it is still held: only its being renamed or deleted says anything
+        watcher = watch(lock, { persistent: false }, (change) => { if (change === 'rename') look('follow') })
+        watcher.on('error', () => settle(false))
+      } catch {
+        // Nothing there to watch: it was let go of already
+        return settle(true)
+      }
+      // Two turns, since the first of these runs before the loop next waits and the second after
+      setImmediate(() => setImmediate(() => look('leave')))
+    }
+    follow()
+    void takenAt().then((taken) => {
+      if (taken === undefined) return settle(true)
+      // No longer than the patience itself, whatever a clock that disagrees with this one stamped the lock with
+      const left = Math.min(patienceMs, patienceMs - (Date.now() - taken))
+      if (left <= 0) return settle(false)
+      timer = setTimeout(() => settle(false), left)
+    })
+  })
+}
+
+/** What is said of a lock another git did not let go of, in place of git's own half page */
+const heldLockMessage = (lock: string) =>
+  `Another git process is using this repository and has not let go of it: ${lock} is still there. `
+  + 'Try again once it has finished. If no git is running, one that stopped part-way left that file behind, and deleting it lets git carry on.'
 
 /**
  * How long git's output may stay silent after git itself has exited before its pipes are given up on. A hook
@@ -368,6 +443,8 @@ export class GitRepository {
   private fetching = false
   /** Whether fetching by itself has stopped because the remote wanted credentials nobody was there to give */
   private autoFetchSuspended = false
+  /** How long a command waits for another git to let go of a lock it needs */
+  private lockPatienceMs = LOCK_PATIENCE_MS
   /** Whether a watcher reports this checkout's changes; without one a snapshot is read every time it is asked for */
   private watched = false
   private watchFailed = false
@@ -521,6 +598,14 @@ export class GitRepository {
     return this.watchFailed
   }
 
+  /**
+   * Whether fetching by itself has stopped because the remote asked for credentials. What the checkout knows of
+   * its remote is then as old as the last fetch that worked, which a panel showing it says
+   */
+  get isAutoFetchSuspended(): boolean {
+    return this.autoFetchSuspended
+  }
+
   private async isDirectory(filePath: string): Promise<boolean> {
     try {
       const fullPath = path.join(this.workingDirectory, filePath)
@@ -555,39 +640,61 @@ export class GitRepository {
     })
   }
 
+  /**
+   * Runs a git command in its lane. One that another git's lock refuses is run again once that lock is let go
+   * of: a git in a terminal, or an agent's, holds the index for moments, and the user who staged a file in
+   * those moments meant it. The lane waits with it, since what is queued behind needs the same lock.
+   */
   private executeGitCommand(args: string[]): Promise<GitCommandResult> {
     return this.enqueueCommand(laneOf(args), async () => {
-      try {
-        // Ended when it stops working, not when a clock runs out: a fetch stalled on the network would
-        // otherwise hold its lane, and every later remote command with it, until the app restarts
-        const { stdout } = await this.runGit(args, 'utf8')
-
-        return { success: true, output: stdout }
-      } catch (error) {
-        const gitError = error as GitCommandError
-
-        if (gitError.code === 'ENOENT') {
-          return { success: false, error: GIT_NOT_INSTALLED, missing: true }
-        }
-        if (gitError.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
-          return { success: false, error: gitError.message, output: gitError.stdout, truncated: true }
-        }
-
-        // Special cases where non-zero exit codes are expected
-        if (gitError.code === 1 && args[0] === 'diff') {
-          return { success: true, output: gitError.stdout || '' }
-        }
-        if (gitError.code === 128 && args[0] === 'show') {
-          return { success: true, output: '' }
-        }
-
-        return {
-          success: false,
-          error: gitError.stderr || gitError.message,
-          output: gitError.stdout
-        }
+      let refusedAt: number | undefined
+      for (;;) {
+        const result = await this.runGitOnce(args)
+        const lock = result.success ? undefined : LOCKED.exec(result.error ?? '')?.[1]
+        if (!lock) return result
+        // A stash is several steps to git, and one refused part-way has done the steps before it: run again, it
+        // would stash, or apply, a second time. It is said to be refused, and whoever asked decides
+        if (args[0] === 'stash') return { ...result, error: heldLockMessage(lock) }
+        refusedAt ??= Date.now()
+        // Counted here as well as against the lock: a lock git names and nothing can see is "let go of" every
+        // time it is looked for, and the command would be run again for ever
+        const left = this.lockPatienceMs - (Date.now() - refusedAt)
+        if (left <= 0 || !await lockReleased(lock, left)) return { ...result, error: heldLockMessage(lock) }
       }
     })
+  }
+
+  private async runGitOnce(args: string[]): Promise<GitCommandResult> {
+    try {
+      // Ended when it stops working, not when a clock runs out: a fetch stalled on the network would
+      // otherwise hold its lane, and every later remote command with it, until the app restarts
+      const { stdout } = await this.runGit(args, 'utf8')
+
+      return { success: true, output: stdout }
+    } catch (error) {
+      const gitError = error as GitCommandError
+
+      if (gitError.code === 'ENOENT') {
+        return { success: false, error: GIT_NOT_INSTALLED, missing: true }
+      }
+      if (gitError.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
+        return { success: false, error: gitError.message, output: gitError.stdout, truncated: true }
+      }
+
+      // Special cases where non-zero exit codes are expected
+      if (gitError.code === 1 && args[0] === 'diff') {
+        return { success: true, output: gitError.stdout || '' }
+      }
+      if (gitError.code === 128 && args[0] === 'show') {
+        return { success: true, output: '' }
+      }
+
+      return {
+        success: false,
+        error: gitError.stderr || gitError.message,
+        output: gitError.stdout
+      }
+    }
   }
 
   async getCurrentBranch(): Promise<string> {
@@ -620,9 +727,10 @@ export class GitRepository {
    * when it said nothing since the last read. Any other check has no event to go by, and reads everything.
    */
   async refreshSnapshot(reading: 'everything' | 'noted' = 'everything'): Promise<RepositoryChange> {
-    // Whether its watches failed is part of what a window shows of the checkout's status, so it is part of it here
+    // Whether its watches failed, and whether fetching by itself has stopped, are part of what a window shows of
+    // the checkout's status, so they are part of it here
     const seen = (identity: SnapshotIdentity): SnapshotIdentity =>
-      ({ ...identity, status: `${this.watchFailed ? 'unwatched' : 'watched'}\n${identity.status}` })
+      ({ ...identity, status: `${this.watchFailed ? 'unwatched' : 'watched'} ${this.autoFetchSuspended ? 'not fetching' : 'fetching'}\n${identity.status}` })
     // Compared with what the last check saw, not with what was last read: one window's ask can read a change
     // before this runs, and this is what tells the others
     const before = this.checkedIdentity ?? (this.lastIdentity && seen(this.lastIdentity))

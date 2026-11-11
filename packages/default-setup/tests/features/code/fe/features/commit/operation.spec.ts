@@ -20,16 +20,21 @@ beforeEach(() => sendToSystem.mockReset());
 
 const MERGE: RepositoryOperation = { kind: 'merge', subject: 'side' };
 /** A panel that has been sent a status holding this operation */
-function panelTold(operation?: RepositoryOperation) {
+function panelTold(operation?: RepositoryOperation, fetchSuspended?: boolean) {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.REFRESH_STATUS' });
   const [, , { call }] = sendToSystem.mock.calls.at(-1) as [string, object, { call: string }];
   actor.send(answerTo(call, {
     type: 'commit.STATUS_RECEIVED' as const,
-    data: { files: [], truncated: false, branch: 'main', hasUpstream: false, commitsAhead: 0, commitsBehind: 0, watching: true, operation },
+    data: { files: [], truncated: false, branch: 'main', hasUpstream: false, commitsAhead: 0, commitsBehind: 0, watching: true, operation, fetchSuspended },
   }));
   return actor;
 }
+
+it('holds whether fetching by itself has stopped, as the status says', () => {
+  expect(panelTold(undefined, true).getSnapshot().context.isFetchSuspended).toBe(true);
+  expect(panelTold().getSnapshot().context.isFetchSuspended).toBe(false);
+});
 
 it('holds what git is in the middle of, and nothing when the status names nothing', () => {
   expect(panelTold(MERGE).getSnapshot().context.operation).toEqual(MERGE);

@@ -101,6 +101,32 @@ it('reads what was noted for a hint, and everything for a reconcile and for a wr
   expect(await read({ type: 'commit.GIT_STATUS_CHANGED' })).toEqual(['everything']);
 });
 
+// A fetch made behind a reconcile announces what it brought by having the repository checked again. One that
+// stopped fetching, the remote having asked for a sign-in, has it checked too: that is something a window shows
+it('has the repository checked again when a fetch behind a reconcile stops fetching, and not when nothing came of it', async () => {
+  const refreshSnapshot = vi.fn(async (_reading?: string) => NOTHING);
+  const announced = vi.fn();
+  let stops = false;
+  const gitRepository = {
+    refreshSnapshot,
+    isAutoFetchSuspended: false,
+    async fetchIfDue() { if (stops) this.isAutoFetchSuspended = true; return false; },
+  };
+  const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: announced } }),
+    { input: { baseDirectory: '/repo', gitRepository: gitRepository as never } }).start();
+  actors.push(actor);
+  const checks = async () => {
+    refreshSnapshot.mockClear();
+    actor.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED', reconcile: true });
+    await vi.advanceTimersByTimeAsync(150);
+    return refreshSnapshot.mock.calls.map(([reading]) => reading);
+  };
+
+  expect(await checks(), 'the fetch brought nothing and goes on').toEqual(['everything']);
+  stops = true;
+  expect(await checks(), 'the fetch stopped fetching').toEqual(['everything', 'noted']);
+});
+
 // The window that made a write is waiting to show it, so its status is news whatever git says of the rest. The
 // log, the stashes and the worktrees are asked for again only when the write moved them: staging a file does
 // not. The check it runs first is also what keeps the file event the write causes from being news a second time

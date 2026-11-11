@@ -63,8 +63,10 @@ export type Event =
  * what the fetch brought is then announced like any other change. Nobody waits on the network for an answer.
  */
 function fetchInBackground(repository: GitRepository, commit: { send(event: Event): void }): void {
+  const suspended = repository.isAutoFetchSuspended
   void repository.fetchIfDue().then((fetched) => {
-    if (fetched) commit.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' })
+    // What a fetch brought is one thing to announce. That fetching has stopped, or started again, is another
+    if (fetched || repository.isAutoFetchSuspended !== suspended) commit.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' })
   })
 }
 
@@ -156,7 +158,7 @@ export const commitSystem = setup({
         return repository.readSnapshot().then((snapshot) => {
           answer(reply, {
             type: 'commit.STATUS_RECEIVED',
-            data: { files: snapshot.files, truncated: snapshot.truncated, branch: snapshot.branch, hasUpstream: snapshot.hasUpstream, commitsAhead: snapshot.ahead, commitsBehind: snapshot.behind, watching: !repository.hasWatchFailed, operation: snapshot.operation }
+            data: { files: snapshot.files, truncated: snapshot.truncated, branch: snapshot.branch, hasUpstream: snapshot.hasUpstream, commitsAhead: snapshot.ahead, commitsBehind: snapshot.behind, watching: !repository.hasWatchFailed, operation: snapshot.operation, fetchSuspended: repository.isAutoFetchSuspended }
           })
           // The window has its answer: what the remote has is fetched behind it, and announced if it differs
           fetchInBackground(repository, self)
