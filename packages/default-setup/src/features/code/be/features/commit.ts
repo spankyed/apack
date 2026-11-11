@@ -9,7 +9,7 @@ import { GitRepository, NOTHING_CHANGED, StashConflictError, changedAnything } f
 import { GitError } from '../services/git-errors.ts'
 import { setUpGitSignIn } from '../services/gh-cli.ts'
 import { isHostName } from '../services/sign-in.ts'
-import type { CommitFailure, OperationMove, RepositoryChange } from '../types.ts'
+import type { CommitFailure, GitProgress, OperationMove, RepositoryChange } from '../types.ts'
 import { requireGitRepository } from '../utils/git-helpers.ts'
 
 const surfaceId = 'code' as const
@@ -63,6 +63,11 @@ export type Event =
   /** A hint that the repository changed. `reconcile` says it comes from someone who knows a change is likely, not from a file event */
   | { type: 'commit.REPOSITORY_MAY_HAVE_CHANGED'; reconcile?: boolean; byWindow?: boolean }
   | { type: 'commit.ANNOUNCE_REPOSITORY_CHANGED'; changed: RepositoryChange };
+
+/** Tells the window that asked for a push, a pull or a checkout how far along it is, as git says */
+const progressTo = (reply: Parameters<typeof answer>[0], during: 'push' | 'pull' | 'checkout') => (progress: GitProgress) => {
+  answer(reply, { type: 'commit.PROGRESS', data: { during, ...progress } })
+}
 
 /** What the panel is told of a command that failed: git's words, and why it failed where git said */
 function failureOf(error: unknown): CommitFailure {
@@ -563,7 +568,7 @@ export const commitSystem = setup({
 
       if (!requireGitRepository(context, reply)) return
 
-      context.gitRepository.checkoutBranch(ev.branchName).then(() => {
+      context.gitRepository.checkoutBranch(ev.branchName, progressTo(reply, 'checkout')).then(() => {
         context.gitRepository!.clearCache()
 
         answer(reply, {
@@ -586,7 +591,7 @@ export const commitSystem = setup({
       let branchName: string
       context.gitRepository.getCurrentBranch().then((currentBranch) => {
         branchName = currentBranch
-        return context.gitRepository!.pushBranch()
+        return context.gitRepository!.pushBranch(progressTo(reply, 'push'))
       }).then(() => {
         answer(reply, {
           type: 'commit.BRANCH_PUSHED',
@@ -641,7 +646,7 @@ export const commitSystem = setup({
       let branchName: string
       context.gitRepository.getCurrentBranch().then((currentBranch) => {
         branchName = currentBranch
-        return context.gitRepository!.pullBranch()
+        return context.gitRepository!.pullBranch(progressTo(reply, 'pull'))
       }).then(() => {
         context.gitRepository!.forceFetchOnce()
 

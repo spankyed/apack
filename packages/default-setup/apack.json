@@ -653,6 +653,9 @@
               "type": "integer",
               "minimum": 60
             },
+            "logGitCommands": {
+              "type": "boolean"
+            },
             "terminalScripts": {
               "type": "array",
               "items": {
@@ -705,6 +708,7 @@
             "enablePreview",
             "autoFetchRemote",
             "autoFetchIntervalSeconds",
+            "logGitCommands",
             "terminalScripts",
             "showStashes",
             "showCommits",
@@ -780,6 +784,7 @@
           "enablePreview": true,
           "autoFetchRemote": false,
           "autoFetchIntervalSeconds": 180,
+          "logGitCommands": false,
           "terminalScripts": [
             {
               "id": "ts_default_1",

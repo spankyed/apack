@@ -200,6 +200,15 @@ neither watcher needs to be exact.
   folder: the one held as a row, or for an untracked path it did not hold, that path's own folder, falling back
   to the whole status only when that folder too is one git tracks nothing in. Staging the row stages the
   folder, and discarding it removes what git lists there and leaves what it ignores.
+- **A push, a pull and a checkout say how far along they are** to the window that asked (`commit.PROGRESS`):
+  git is run with `--progress` and its error stream read as it arrives (`git-progress.ts`), and what it says of
+  a failure is taken with the progress left out.
+- **What a branch was made from is read where it was written down, and guessed otherwise** (`getPRBaseBranch`):
+  `branch.<name>.apack-base`, which this app writes when it makes a branch; VS Code's `vscode-merge-base`; git's
+  own record of the branch's first move, which names a branch only when it was made from one by name; then the
+  nearest branch by commits. One that names a branch that is gone is passed over.
+- **Every git command can be logged with how long it took** (the code surface's `logGitCommands` setting, the
+  `git-commands` log source): off by default, since a status runs for most file events.
 - **A watch that fails is said to the user.** `commit.STATUS_RECEIVED` carries `watching`, and the panel says live
   updates are off; the next check opens the watch again.
 - **A tree is watched by the platform's own watcher where it has one** (`directory-watch.ts`): Node's recursive

@@ -20,13 +20,13 @@ import type { AppSettings } from '@apackdev/sdk/types';
 import { services } from '#generated/services.ts';
 import { broadcastToSurface } from '#generated/events.ts';
 import { clearCliPathCache, isCliName, testCli } from './utils/resolve-cli.ts';
-import { createLogger } from '@apackdev/sdk/logger';
+import { createLogger, setDebugEnabled } from '@apackdev/sdk/logger';
 
 const cliLogger = createLogger('code');
 import { setup, enqueueActions, assign, sendTo, type AnyActorRef } from 'xstate'
 
 import { defineSystem } from '@apackdev/sdk/framework'
-import { GitRepository } from './services/git.ts'
+import { GIT_COMMAND_LOG, GitRepository } from './services/git.ts'
 import { GitWatcherService } from './services/gitwatcher.ts'
 import { gitWatcherActor } from './git-watcher-actor.ts'
 
@@ -236,6 +236,8 @@ export const systemMachine = setup({
         })
       }
 
+      setDebugEnabled(GIT_COMMAND_LOG, ev.settings.logGitCommands === true)
+
       // Update git fetch config if repository exists
       if (context.gitRepository) {
         const suspended = context.gitRepository.isAutoFetchSuspended
@@ -289,6 +291,9 @@ export const systemMachine = setup({
 
     // Resolve initial directory using priority chain
     const baseDir = resolveInitialDirectory(codeSettings, projects)
+
+    // Off unless the setting asks for it, whatever the build: a status runs for most file events
+    setDebugEnabled(GIT_COMMAND_LOG, codeSettings?.logGitCommands === true)
 
     const gitRepo = baseDir ? new GitRepository(baseDir) : null
     if (gitRepo) {

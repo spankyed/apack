@@ -5,7 +5,7 @@ import { sendToSystem } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { diffTab, diffTabPath } from '../../utils/diff-tabs.ts';
 import { withStaged, withUnstaged } from './staging.ts';
-import type { CommitFailure, ConflictKind, DiffHunk, OperationMove, RepositoryChange, RepositoryOperation, SignInHelp } from '../../../be/types.ts';
+import type { CommitFailure, ConflictKind, DiffHunk, GitProgress, OperationMove, RepositoryChange, RepositoryOperation, SignInHelp } from '../../../be/types.ts';
 import type { OpenFile } from '../../contract.ts';
 
 
@@ -71,6 +71,8 @@ export interface CodeCommitContext {
   isSettingUpSignIn: boolean
   /** Whether git was asked to stage or unstage one piece of a file's change and has not answered */
   isApplyingHunk: boolean
+  /** How far along the push, the pull or the checkout under way is, once git has said */
+  progress: ({ during: 'push' | 'pull' | 'checkout' } & GitProgress) | null
   /** The untracked folder rows that are open, each with the files it lists, by the folder's path */
   openFolders: Record<string, OpenFolder>
   isPushing: boolean
@@ -160,6 +162,7 @@ export type Event =
   | { type: 'commit.SET_UP_SIGN_IN'; host: string }
   | { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; patch: string }
   | { type: 'commit.HUNK_APPLIED'; data: { path: string; staged: boolean } }
+  | { type: 'commit.PROGRESS'; data: { during: 'push' | 'pull' | 'checkout' } & GitProgress }
   | { type: 'commit.TOGGLE_FOLDER'; path: string }
   | { type: 'commit.UNTRACKED_LISTED'; data: { path: string } & OpenFolder }
   | { type: 'commit.SIGN_IN_SET_UP'; data: { host: string } }
@@ -456,6 +459,7 @@ export const commitState = setup({
       },
       isSettingUpSignIn: false,
       isApplyingHunk: false,
+      progress: null,
       isGitLoading: false,
       isCheckingOutBranch: false,
       isPushing: false,
@@ -587,7 +591,8 @@ export const commitState = setup({
 
     handleBranchCheckoutSuccess: assign({
       branchInput: '',
-      isCheckingOutBranch: false
+      isCheckingOutBranch: false,
+      progress: null
     }),
 
     pushBranch: () => {
@@ -597,7 +602,8 @@ export const commitState = setup({
     setPushing: assign({ isPushing: true }),
 
     handleBranchPushed: assign({
-      isPushing: false
+      isPushing: false,
+      progress: null
     }),
 
     pullBranch: () => {
@@ -607,7 +613,8 @@ export const commitState = setup({
     setPulling: assign({ isPulling: true }),
 
     handleBranchPulled: assign({
-      isPulling: false
+      isPulling: false,
+      progress: null
     }),
 
     handleCodeStartup: ({ self }) => {
@@ -749,6 +756,7 @@ export const commitState = setup({
     isSettingUpSignIn: false,
     isApplyingHunk: false,
     openFolders: {},
+    progress: null,
     isPushing: false,
     isPulling: false,
     isGeneratingMessage: false,
@@ -768,6 +776,9 @@ export const commitState = setup({
         'commit.STATUS_RECEIVED': {
           guard: 'answersTheStatusAsked',
           actions: ['handleStatusReceived', 'followOpenFolders']
+        },
+        'commit.PROGRESS': {
+          actions: assign({ progress: ({ event }) => (event as { data: { during: 'push' | 'pull' | 'checkout' } & GitProgress }).data })
         },
         'commit.TOGGLE_FOLDER': {
           actions: 'toggleFolder'

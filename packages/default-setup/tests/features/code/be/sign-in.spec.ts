@@ -115,3 +115,27 @@ describe.skipIf(process.platform === 'win32')('taking the GitHub CLI offer', () 
     expect(asked()).toEqual([]);
   });
 });
+
+// A push that works says how far along it is to the window that asked, before it says it is done
+it('tells the window that pushed how far along the push is', async () => {
+  const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'code-progress-')));
+  const remote = `${directory}-remote`;
+  dirs.push(directory, remote);
+  await git(directory, 'init', '--quiet', '--initial-branch=main');
+  fs.writeFileSync(path.join(directory, 'a.txt'), 'one\n');
+  await git(directory, 'add', '.');
+  await git(directory, 'commit', '--quiet', '-m', 'first');
+  await execFileWhileWorking('git', ['init', '--quiet', '--bare', '--initial-branch=main', remote]);
+  await git(directory, 'remote', 'add', 'origin', remote);
+  app = await startApp({ systems: ['code', 'host/settings'] });
+  await app.connect();
+  await app.send('code', { type: 'SET_BASE_DIRECTORY', path: directory });
+  await app.settle();
+
+  const call = await ask({ type: 'commit.PUBLISH_BRANCH' });
+
+  await app.nextEmit('code', 'commit.BRANCH_PUSHED', { answering: call });
+  const progress = app.emitted('code').filter(event => event.type === 'commit.PROGRESS').map(event => event.data as { during: string; stage: string; percent: number });
+  expect(progress.at(-1)).toEqual({ during: 'push', stage: 'Writing objects', percent: 100 });
+});
+
