@@ -1667,6 +1667,8 @@ declare class GitRepository {
     private fetching;
     /** Whether fetching by itself has stopped because the remote wanted credentials nobody was there to give */
     private autoFetchSuspended;
+    /** How long a command waits for another git to let go of a lock it needs */
+    private lockPatienceMs;
     /** Whether a watcher reports this checkout's changes; without one a snapshot is read every time it is asked for */
     private watched;
     private watchFailed;
@@ -1710,7 +1712,13 @@ declare class GitRepository {
     get hasWatchFailed(): boolean;
     private isDirectory;
     invalidateCache(paths?: string[]): void;
+    /**
+     * Runs a git command in its lane. One that another git's lock refuses is run again once that lock is let go
+     * of: a git in a terminal, or an agent's, holds the index for moments, and the user who staged a file in
+     * those moments meant it. The lane waits with it, since what is queued behind needs the same lock.
+     */
     private executeGitCommand;
+    private runGitOnce;
     getCurrentBranch(): Promise<string>;
     getStatus(): Promise<GitStatusFile[]>;
     /**
