@@ -10,6 +10,7 @@ import {
   type GitErrorCode, type GitProgress, type RepositoryTies,
 } from 'apack-git'
 import type { RepositoryHandle, WatcherHandle } from '../types.ts'
+import { featureSettings } from '#generated/settings.ts'
 import { agentChildEnvironment } from './shell-environment.ts'
 import { signInHelpFor, type SignInHelp } from './sign-in.ts'
 
@@ -26,6 +27,25 @@ const commandLog = createLogger(GIT_COMMAND_LOG, { debug: true })
 setDebugEnabled(GIT_COMMAND_LOG, false)
 
 /**
+ * The repositories the user has said may have git run what their own configuration and hooks name, each by where
+ * its git state really lives: the code settings' `trustedRepositories`. A linked worktree shares its repository's.
+ */
+export function trustedRepositories(): string[] {
+  try {
+    return featureSettings.forFeature('code').get()?.trustedRepositories ?? []
+  } catch {
+    // No settings to read, as in a tool that opens a repository outside the app: none is trusted
+    return []
+  }
+}
+
+/** Remembers that the user trusts a repository */
+export function trustRepository(repository: string): void {
+  const trusted = trustedRepositories()
+  if (!trusted.includes(repository)) featureSettings.forFeature('code').set({ path: ['trustedRepositories'], value: [...trusted, repository] })
+}
+
+/**
  * What the engine runs with in this app. Git starts from the app's own environment with what the app set on its
  * own process taken out, and a git that stops working is ended rather than left to a clock.
  */
@@ -33,6 +53,7 @@ export const APP_TIES: RepositoryTies = {
   environment: () => agentChildEnvironment(process.env),
   run: (file, args, options) => execFileWhileWorking(file, args, options),
   watchProcess: (pid, onStalled, idleMs) => watchWork({ work: processWork(pid), idleMs, onRefused: onStalled }),
+  isTrusted: repository => trustedRepositories().includes(repository),
   log: {
     warn: (message, data) => logger.warn(message, data),
     error: (message, data) => logger.error(message, data),

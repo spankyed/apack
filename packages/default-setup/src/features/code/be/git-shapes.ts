@@ -23,7 +23,8 @@ export const SHAPES_AGREE: {
   errorCode: Same<Engine.GitErrorCode, Contract.GitErrorCode>
   discardKept: Same<Engine.DiscardKept, Contract.DiscardKept>
   discardRestored: Same<Engine.DiscardRestored, Contract.DiscardRestored>
+  trustAsk: Same<Engine.TrustAsk, Contract.TrustAsk>
 } = {
   statusFile: true, conflict: true, operation: true, move: true, part: true, change: true, progress: true, hunk: true,
-  stash: true, worktree: true, commit: true, errorCode: true, discardKept: true, discardRestored: true,
+  stash: true, worktree: true, commit: true, errorCode: true, discardKept: true, discardRestored: true, trustAsk: true,
 }

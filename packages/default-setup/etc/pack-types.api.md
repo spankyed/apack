@@ -813,6 +813,8 @@ interface CommitFailure {
     during?: 'pull' | 'push';
     /** What can be done about a sign-in the remote asked for */
     signIn?: SignInHelp;
+    /** What the repository would have git run, when the command was not run because the repository is not trusted */
+    trust?: TrustRequest;
 }
 
 interface CommitLogEntry {
@@ -1579,7 +1581,7 @@ interface FolderItem {
 }
 
 /** Why a git command failed, where what it printed says: the git engine's codes, as the contract names them */
-declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository"];
+declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository", "untrusted"];
 
 interface GhPRComment {
     id: string;
@@ -1839,6 +1841,11 @@ type IncomingCommitEvents = {
  | {
     type: 'commit.RESTORE_DISCARDED';
     id: string;
+}
+/** The user trusts the repository to have git run what its own configuration and hooks name */
+ | {
+    type: 'commit.TRUST_REPOSITORY';
+    repository: string;
 } | {
     type: 'commit.GET_ALL_BRANCHES';
 } | {
@@ -3200,6 +3207,11 @@ type OutgoingCommitEvents =
     data: {
         id: string;
     } & DiscardRestored;
+} | {
+    type: 'commit.REPOSITORY_TRUSTED';
+    data: {
+        repository: string;
+    };
 } | {
     type: 'commit.ERROR_RECEIVED';
     data: CommitFailure;
@@ -5546,6 +5558,25 @@ interface TransformNode extends NodeBase {
 /** How a transform step's script return value becomes the step's result */
 type TransformOutputType = 'custom' | 'json' | 'text';
 
+/** One thing a repository would have git run: a setting of its own that is not known to run nothing, or a hook it holds */
+type TrustAsk = {
+    kind: 'setting';
+    key: string;
+    value: string;
+    file: string;
+} | {
+    kind: 'hook';
+    name: string;
+    file: string;
+};
+
+/** What a repository asks to be trusted for, and what names it where trust is remembered */
+interface TrustRequest {
+    /** Where the repository's git state really lives */
+    repository: string;
+    asks: TrustAsk[];
+}
+
 interface TurnStartParams {
     threadId: string;
     input: Array<{
@@ -5674,6 +5705,7 @@ declare namespace __FeatureSettings_Code {
         autoFetchRemote: boolean;
         autoFetchIntervalSeconds: number;
         logGitCommands: boolean;
+        trustedRepositories: string[];
         terminalScripts: {
             id: string;
             label: string;

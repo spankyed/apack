@@ -277,8 +277,11 @@
       </div>
     </div>
 
+    <!-- Git was not run, because the repository would have it run something and has not been trusted -->
+    <TrustRequest v-if="trustRequest" :request="trustRequest" @trust="commitActor?.send({ type: 'commit.TRUST_REPOSITORY' })" />
+
     <!-- Git Error (only show non-directory errors) -->
-    <div v-if="gitError && !isNoDirectoryError" class="p-3 border-b border-red-800 bg-red-900/20">
+    <div v-else-if="gitError && !isNoDirectoryError" class="p-3 border-b border-red-800 bg-red-900/20">
       <div class="flex items-start gap-2">
         <div
           ref="errorContentRef"
@@ -759,6 +762,7 @@ import CodePanelHeader from '#features/code/fe/features/CodePanelHeader.vue'
 import NoDirectoryState from '#features/code/fe/features/NoDirectoryState.vue'
 import EmptyState from '#features/code/fe/features/EmptyState.vue'
 import RevertDialog from '#features/code/fe/features/commit/RevertDialog.vue'
+import TrustRequest from '#features/code/fe/features/commit/TrustRequest.vue'
 import SignInHelp from '#features/code/fe/features/commit/SignInHelp.vue'
 import CommitLogSection from '#features/code/fe/features/commit/CommitLogSection.vue'
 import ToastNotification from '@apackdev/ui/design/ToastNotification'
@@ -804,6 +808,8 @@ const fetchSignIn = useSelector(commitActor, (state) => state.context.fetchSignI
 const isSettingUpSignIn = useSelector(commitActor, (state) => state.context.isSettingUpSignIn)
 // The help belongs to the error it came with, and goes when that error does
 const errorSignIn = useSelector(commitActor, (state) => (state.context.gitError ? state.context.gitFailure?.signIn ?? null : null))
+// The refusal belongs to the error it came with, and goes when that error does
+const trustRequest = useSelector(commitActor, (state) => (state.context.gitError ? state.context.gitFailure?.trust ?? null : null))
 const isMovingOperation = useSelector(commitActor, (state) => state.context.isMovingOperation)
 const commitsAhead = useSelector(commitActor, (state) => state.context.commitsAhead)
 const commitsBehind = useSelector(commitActor, (state) => state.context.commitsBehind)

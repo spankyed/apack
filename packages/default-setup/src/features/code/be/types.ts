@@ -444,10 +444,23 @@ export interface WatcherHandle { readonly [gitHandle]: 'watcher' }
 /** Why a git command failed, where what it printed says: the git engine's codes, as the contract names them */
 export const GIT_ERROR_CODES = [
   'locked', 'authentication', 'permission', 'remote-unreachable', 'non-fast-forward', 'diverged', 'conflict', 'local-changes', 'unknown-ref', 'not-a-repository',
+  'untrusted',
 ] as const
 export type GitErrorCode = (typeof GIT_ERROR_CODES)[number]
 
 export type { SignInHelp }
+
+/** One thing a repository would have git run: a setting of its own that is not known to run nothing, or a hook it holds */
+export type TrustAsk =
+  | { kind: 'setting'; key: string; value: string; file: string }
+  | { kind: 'hook'; name: string; file: string }
+
+/** What a repository asks to be trusted for, and what names it where trust is remembered */
+export interface TrustRequest {
+  /** Where the repository's git state really lives */
+  repository: string
+  asks: TrustAsk[]
+}
 
 /** What the commit panel is told of a command that failed */
 export interface CommitFailure {
@@ -458,4 +471,6 @@ export interface CommitFailure {
   during?: 'push' | 'pull'
   /** What can be done about a sign-in the remote asked for */
   signIn?: SignInHelp
+  /** What the repository would have git run, when the command was not run because the repository is not trusted */
+  trust?: TrustRequest
 }

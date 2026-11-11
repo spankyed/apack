@@ -75,7 +75,7 @@ export interface CodeCommitContext {
   /** What can be done about the sign-in the remote asked for when fetching stopped */
   fetchSignIn: SignInHelp | null
   /** What is known of the failure `gitError` words: the command to run again, and the sign-in a remote asked for */
-  gitFailure: Pick<CommitFailure, 'during' | 'signIn'> | null
+  gitFailure: Pick<CommitFailure, 'during' | 'signIn' | 'trust'> | null
   /** Whether the GitHub CLI was asked to give git its sign-in and has not answered */
   isSettingUpSignIn: boolean
   /** Whether git was asked to stage or unstage one piece of a file's change and has not answered */
@@ -196,6 +196,8 @@ export type Event =
   | { type: 'commit.UNDO_DISCARD' }
   | { type: 'commit.DISMISS_DISCARD' }
   | { type: 'commit.DISCARD_RESTORED'; data: { id: string } & DiscardRestored }
+  | { type: 'commit.TRUST_REPOSITORY' }
+  | { type: 'commit.REPOSITORY_TRUSTED'; data: { repository: string } }
   | { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }
   | { type: 'commit.SET_UP_SIGN_IN'; host: string }
   | { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; hunk: string }
@@ -532,8 +534,8 @@ export const commitState = setup({
         return ev.data.message
       },
       gitFailure: ({ event }) => {
-        const { during, signIn } = (event as { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }).data
-        return { during, signIn }
+        const { during, signIn, trust } = (event as { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }).data
+        return { during, signIn, trust }
       },
       isSettingUpSignIn: false,
       isApplyingHunk: false,
@@ -547,6 +549,15 @@ export const commitState = setup({
     }),
 
     dismissError: assign({ gitError: null, gitFailure: null }),
+
+    /** The user trusts the repository the panel was refused in: said to the backend, which remembers it */
+    trustRepository: ({ context }) => {
+      const repository = context.gitFailure?.trust?.repository
+      if (repository) sendToSystem('code', { type: 'commit.TRUST_REPOSITORY', repository })
+    },
+
+    /** Trusted: the refusal goes, and the status that was never read is asked for */
+    repositoryTrusted: assign({ gitError: null, gitFailure: null }),
 
     /** Opens an untracked folder's row, asking for what is in it, or closes it */
     toggleFolder: enqueueActions(({ context, event, enqueue }) => {
@@ -958,6 +969,12 @@ export const commitState = setup({
         },
         'commit.DISCARD_RESTORED': {
           actions: ['handleDiscardRestored', 'refreshGitStatus']
+        },
+        'commit.TRUST_REPOSITORY': {
+          actions: 'trustRepository'
+        },
+        'commit.REPOSITORY_TRUSTED': {
+          actions: ['repositoryTrusted', 'refreshGitStatus']
         },
         'commit.RESOLVE_CONFLICT': {
           actions: 'resolveConflict'

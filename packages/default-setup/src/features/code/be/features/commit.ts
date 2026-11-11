@@ -5,8 +5,8 @@ import { broadcastToSurface, sendToSystem } from '#generated/events.ts';
 import { defineHandlers } from '@apackdev/sdk/framework';
 import { assign, setup, enqueueActions, fromCallback, type AnyActorRef } from 'xstate'
 
-import { GitError, NOTHING_CHANGED, StashConflictError, changedAnything } from 'apack-git'
-import { openGitRepository, type AppGitRepository } from '../services/app-git-repository.ts'
+import { GitError, NOTHING_CHANGED, StashConflictError, UntrustedError, changedAnything } from 'apack-git'
+import { openGitRepository, trustRepository, type AppGitRepository } from '../services/app-git-repository.ts'
 import { setUpGitSignIn } from '../services/gh-cli.ts'
 import { isHostName } from '../services/sign-in.ts'
 import type { CommitFailure, GitProgress, OperationMove, RepositoryChange } from '../types.ts'
@@ -35,6 +35,7 @@ export type Event =
   | { type: 'commit.REVERT_FILES'; paths: string[] }
   | { type: 'commit.PREVIEW_DISCARD'; paths: string[] }
   | { type: 'commit.RESTORE_DISCARDED'; id: string }
+  | { type: 'commit.TRUST_REPOSITORY'; repository: string }
   | { type: 'commit.GET_ALL_BRANCHES' }
   | { type: 'commit.CHECKOUT_BRANCH'; branchName: string }
   | { type: 'commit.PUBLISH_BRANCH' }
@@ -74,7 +75,12 @@ const progressTo = (reply: Parameters<typeof answer>[0], during: 'push' | 'pull'
 /** What the panel is told of a command that failed: git's words, and why it failed where git said */
 function failureOf(error: unknown): CommitFailure {
   const message = error instanceof Error ? error.message : String(error)
-  return { message, ...(error instanceof GitError && error.code && { code: error.code }) }
+  return {
+    message,
+    ...(error instanceof GitError && error.code && { code: error.code }),
+    // Refused before git was run: what the repository would have had it run, for the panel to ask about
+    ...(error instanceof UntrustedError && error.repository && { trust: { repository: error.repository, asks: error.asks } }),
+  }
 }
 
 /** The same for a push or a pull, which the panel can run again, with what can be done when the remote asked for a sign-in */
@@ -674,6 +680,26 @@ export const commitSystem = setup({
       })
     },
 
+    /**
+     * Remembers that the user trusts this repository, after which git runs there as it does anywhere. Only the
+     * repository the panel is over: the path arrives from a window, and trust is not handed out by name
+     */
+    trustRepository: ({ event, context, self, reply }) => {
+      const { repository: named } = event as { type: 'commit.TRUST_REPOSITORY'; repository: string }
+      if (!requireGitRepository(context, reply)) return
+
+      context.gitRepository.readTrust().then(({ repository }) => {
+        if (!repository || repository !== named) throw new Error('That is not the repository this panel is showing')
+        trustRepository(repository)
+        answer(reply, { type: 'commit.REPOSITORY_TRUSTED', data: { repository } })
+        // Its watches were not opened while it was refused, and the status was never read
+        self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+        context.code?.send({ type: 'CHECK_FOR_EXTERNAL_CHANGES' })
+      }).catch((error: unknown) => {
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) })
+      })
+    },
+
     /** Puts back what a discard kept: a write like the discard it undoes, announced the same way */
     restoreDiscarded: ({ event, context, self, reply }) => {
       const { id } = event as { type: 'commit.RESTORE_DISCARDED'; id: string }
@@ -1030,6 +1056,9 @@ export const commitSystem = setup({
         },
         'commit.RESTORE_DISCARDED': {
           actions: 'restoreDiscarded'
+        },
+        'commit.TRUST_REPOSITORY': {
+          actions: 'trustRepository'
         },
         'commit.RESOLVE_CONFLICT': {
           actions: 'resolveConflict'
