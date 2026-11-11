@@ -810,6 +810,17 @@ interface CollectionDTO {
     symlinkPath?: string;
 }
 
+/** What the commit panel is told of a command that failed */
+interface CommitFailure {
+    message: string;
+    /** Why git failed, where it said */
+    code?: GitErrorCode;
+    /** The command the failure was of, where the panel can run it again */
+    during?: 'pull' | 'push';
+    /** What can be done about a sign-in the remote asked for */
+    signIn?: SignInHelp;
+}
+
 interface CommitLogEntry {
     hash: string;
     shortHash: string;
@@ -1544,6 +1555,9 @@ interface FolderItem {
     isBroken?: boolean;
 }
 
+/** Why a git command failed, where what it printed says */
+declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref"];
+
 interface GhPRComment {
     id: string;
     body: string;
@@ -1635,6 +1649,8 @@ interface GitDirectories {
     prefix: string;
 }
 
+type GitErrorCode = (typeof GIT_ERROR_CODES)[number];
+
 declare class GitRepository {
     private workingDirectory;
     private cache;
@@ -1667,6 +1683,7 @@ declare class GitRepository {
     private fetching;
     /** Whether fetching by itself has stopped because the remote wanted credentials nobody was there to give */
     private autoFetchSuspended;
+    private suspendedSignIn;
     /** How long a command waits for another git to let go of a lock it needs */
     private lockPatienceMs;
     /** Whether a watcher reports this checkout's changes; without one a snapshot is read every time it is asked for */
@@ -1715,6 +1732,15 @@ declare class GitRepository {
      * its remote is then as old as the last fetch that worked, which a panel showing it says
      */
     get isAutoFetchSuspended(): boolean;
+    /** What can be done about the sign-in the remote asked for when fetching by itself stopped */
+    get autoFetchSignIn(): SignInHelp | undefined;
+    /**
+     * What can be done about a sign-in the remote this branch follows asked for, from that remote's address as
+     * git would use it (its `insteadOf` rewrites applied). Nothing where there is no remote, or it is a path here.
+     */
+    signInHelp(): Promise<SignInHelp | undefined>;
+    /** Fetching by itself starts again, at once: the user signed in, which is them saying to try */
+    resumeAutoFetch(): void;
     private isDirectory;
     invalidateCache(paths?: string[]): void;
     /**
@@ -2137,6 +2163,11 @@ type IncomingCommitEvents = {
  | {
     type: 'commit.MOVE_OPERATION';
     move: OperationMove;
+}
+/** Have the GitHub CLI give git its sign-in for this host */
+ | {
+    type: 'commit.SET_UP_SIGN_IN';
+    host: string;
 } | {
     type: 'commit.LOG_LIST';
 } | {
@@ -3347,6 +3378,7 @@ type OutgoingCommitEvents =
         watching: boolean;
         operation?: RepositoryOperation;
         fetchSuspended?: boolean;
+        signIn?: SignInHelp;
     };
 }
 /** What git was in the middle of was moved on as asked. Where that leaves the repository is in its status */
@@ -3385,8 +3417,13 @@ type OutgoingCommitEvents =
     };
 } | {
     type: 'commit.ERROR_RECEIVED';
+    data: CommitFailure;
+}
+/** Git signs in to this host through the GitHub CLI now */
+ | {
+    type: 'commit.SIGN_IN_SET_UP';
     data: {
-        message: string;
+        host: string;
     };
 } | {
     type: 'commit.BRANCH_RETRIEVED';
@@ -4991,6 +5028,17 @@ type SettingsOf<K extends keyof AvailableSettings> = AvailableSettings[K];
 type ShortCodeOf<E extends keyof PackShapes> = PackShapes[E] extends {
     shortCode: infer C;
 } ? C : never;
+
+/** The help there is for one remote */
+interface SignInHelp {
+    /** The host that asked, as the remote's address names it */
+    host: string;
+    /**
+     * `github-cli`: the GitHub CLI can sign git in to this host. `ssh`: the host refused the key it was offered, or
+     * was offered none. `https`: the host wants a username and password or token, and git has none stored for it.
+     */
+    kind: 'github-cli' | 'https' | 'ssh';
+}
 
 type Simplify<T> = {
     [K in keyof T]: T[K];

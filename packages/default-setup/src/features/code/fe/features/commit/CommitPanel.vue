@@ -198,6 +198,7 @@
       class="px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
     >
       Fetching by itself is off: the remote asked for a sign-in and nobody was there to give one. It starts again after a push or a pull that works, or when the fetch settings change.
+      <SignInHelp v-if="fetchSignIn" class="mt-2" :help="fetchSignIn" :busy="isSettingUpSignIn" @sign-in="setUpSignIn" />
     </div>
 
     <!-- The repository has more changed files than are listed -->
@@ -265,6 +266,7 @@
         @click="isErrorExpanded = !isErrorExpanded"
         class="mt-1 text-xs text-red-500 hover:text-red-300 transition-colors"
       >{{ isErrorExpanded ? 'View less' : 'View more' }}</button>
+      <SignInHelp v-if="errorSignIn" class="mt-2" :help="errorSignIn" :busy="isSettingUpSignIn" @sign-in="setUpSignIn" />
     </div>
 
     <!-- Commit Message -->
@@ -713,6 +715,7 @@ import CodePanelHeader from '#features/code/fe/features/CodePanelHeader.vue'
 import NoDirectoryState from '#features/code/fe/features/NoDirectoryState.vue'
 import EmptyState from '#features/code/fe/features/EmptyState.vue'
 import RevertDialog from '#features/code/fe/features/commit/RevertDialog.vue'
+import SignInHelp from '#features/code/fe/features/commit/SignInHelp.vue'
 import CommitLogSection from '#features/code/fe/features/commit/CommitLogSection.vue'
 import ToastNotification from '@apackdev/ui/design/ToastNotification'
 import ContextMenuPopup from '@apackdev/ui/design/ContextMenuPopup'
@@ -747,6 +750,10 @@ const isStatusTruncated = useSelector(commitActor, (state) => state.context.isSt
 const isWatchingRepository = useSelector(commitActor, (state) => state.context.isWatchingRepository)
 const operation = useSelector(commitActor, (state) => state.context.operation)
 const isFetchSuspended = useSelector(commitActor, (state) => state.context.isFetchSuspended)
+const fetchSignIn = useSelector(commitActor, (state) => state.context.fetchSignIn)
+const isSettingUpSignIn = useSelector(commitActor, (state) => state.context.isSettingUpSignIn)
+// The help belongs to the error it came with, and goes when that error does
+const errorSignIn = useSelector(commitActor, (state) => (state.context.gitError ? state.context.gitFailure?.signIn ?? null : null))
 const isMovingOperation = useSelector(commitActor, (state) => state.context.isMovingOperation)
 const commitsAhead = useSelector(commitActor, (state) => state.context.commitsAhead)
 const commitsBehind = useSelector(commitActor, (state) => state.context.commitsBehind)
@@ -826,6 +833,10 @@ const watchSyncOp = (
       }
     }
   })
+}
+
+const setUpSignIn = (host: string) => {
+  commitActor.send({ type: 'commit.SET_UP_SIGN_IN', host })
 }
 
 const dismissError = () => {

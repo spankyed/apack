@@ -186,6 +186,19 @@ neither watcher needs to be exact.
   loaded on first use: a dynamic `import()` of the package itself is resolved by Node beside the installed pack,
   where nothing is.
 
+**Why a git command failed is read in one place, and travels as a code.** Git says why in prose, in English
+because every git child is run in English, and `classifyGitError` (`code/be/services/git-errors.ts`) turns what
+it printed on either stream into a `GitErrorCode`. A caller that needs to know why reads `result.code`, never the
+text; a failure thrown to a handler is a `GitError` carrying it, and `commit.ERROR_RECEIVED` hands it to the
+panel. A new reason is a new entry in that module's list, most telling first, with a case in
+`git-failures.spec.ts` that fails a real git that way.
+
+- **A remote that asks for a sign-in is refused at once**, since git runs with its prompts off, so the refusal
+  comes with what can be done about it (`SignInHelp`, `sign-in.ts`), read from the remote's address: for GitHub
+  over HTTPS the panel offers to have the GitHub CLI give git its sign-in (`gh auth setup-git`, which writes the
+  user's git config and so is only ever their click), and for a key or another host it says which sign-in is
+  missing. A push or a pull refused that way is run again once the sign-in is set up.
+
 **The guards that remain, and what each got wrong first.** Every correlating guard in this pack went through this,
 and they failed in four different ways — which is the argument for reading the list rather than copying the one you
 land on.
