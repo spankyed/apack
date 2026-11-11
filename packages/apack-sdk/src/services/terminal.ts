@@ -17,11 +17,51 @@
  */
 
 /**
+ * How a command ended, or that it has not: one value, which says who said so.
+ *
+ * **`exited` is the only one that is an exit status.** A session opened with a `marksKey` takes its
+ * commands from marks that carry the key and from nothing else, and `exited` is what such a mark reported:
+ * nothing a program printed into the terminal — a file shown, a log, a web response — can be read as one.
+ * `unknown` is a command in such a session that is over with no keyed mark having said how. `claimed` is
+ * what a session opened without a key heard: every marker believed, so a status anything could have
+ * printed, which is a claim of one and not one.
+ *
+ * Code that acts on a command having succeeded asks `commandSucceeded`, never a status by itself. The
+ * shape is the host's own, field for field, so a value read from a session, from an event and from what
+ * a window draws is the same value.
+ */
+export type CommandOutcome =
+  /** It has not ended. One still waiting at its prompt has not begun either, which its `startedMs` says */
+  | { readonly kind: 'running' }
+  /** It exited with this status, as a mark carrying the session's key reported */
+  | { readonly kind: 'exited'; readonly code: number }
+  /**
+   * It is over, in a session with a key, and no keyed mark said how: the shell reported the end with no
+   * status, a later command began while it ran, or the session ended while it ran
+   */
+  | { readonly kind: 'unknown'; readonly why: 'no_status' | 'superseded' | 'session_ended' }
+  /** Something printed that it ended, with this status where it gave one. A session without a key has no other */
+  | { readonly kind: 'claimed'; readonly code: number | null };
+
+/**
+ * Whether a command is known to have succeeded: it exited with a status of zero, and a mark carrying its
+ * session's key is what said so.
+ *
+ * **The one question to ask before acting on success**, of anything that carries an outcome — a command,
+ * a `commandFinished` event, `facts()`. A status that was only claimed answers `false` whatever it is, as
+ * does a command still running, one whose end is unknown, and no outcome at all: none of them is known.
+ */
+export function commandSucceeded(reported: { readonly outcome: CommandOutcome | null }): boolean {
+  return reported.outcome?.kind === 'exited' && reported.outcome.code === 0;
+}
+
+/**
  * Something a session's program did that is not on its screen.
  *
  * Each is a moment, reported as it happens: a bell rung is gone, and a command that finished did so at a
  * time a caller asking `facts()` afterwards can only approximate. Every one is a claim the program made —
- * what to do about a title, a notification or text it wants on the clipboard is the owner's to decide.
+ * what to do about a title, a notification or text it wants on the clipboard is the owner's to decide —
+ * except what a session opened with a `marksKey` says of its commands, which only its shell could have.
  */
 export type TerminalEvent =
   /** The program named its terminal. Empty when it took the name back */
@@ -34,8 +74,8 @@ export type TerminalEvent =
   | { readonly kind: 'progress'; readonly state: 'none' | 'running' | 'error' | 'indeterminate' | 'paused'; readonly percent: number | null }
   /** The shell is about to run a command, with the line it read where it said */
   | { readonly kind: 'commandStarted'; readonly command: string | null }
-  /** What was running ended. `exitStatus` is `null` when the shell reported none, which is not zero */
-  | { readonly kind: 'commandFinished'; readonly exitStatus: number | null }
+  /** What was running ended, and how as far as anything said. Never `running` */
+  | { readonly kind: 'commandFinished'; readonly outcome: CommandOutcome }
   | { readonly kind: 'cwdChanged'; readonly cwd: string };
 
 /** What a session's owner hears from it. All of it is news: nobody asked, and none of it answers a call. */
@@ -65,7 +105,11 @@ export interface TerminalListeners {
 }
 
 /**
- * What a session's shell has said about itself. Every field is a claim the program in the pty made.
+ * What a session's shell has said about itself.
+ *
+ * **Who could have said it is `vouched`.** In a session opened with a `marksKey`, `command`, `running`,
+ * `outcome` and `finished` come from marks carrying the key and from nothing else. In one opened without,
+ * every field is a claim the program in the pty made. `cwd` is a claim in both.
  *
  * `cwd` is decoded but not shaped to the reading platform: an OSC 7 URL gives `/C:/Users/...` on Windows,
  * which nothing there can open, which is what `cwdAsReported` is for.
@@ -77,14 +121,22 @@ export interface TerminalFacts {
   readonly command: string | null;
   /** Between a command starting and finishing, which is a busy session told from one at a prompt */
   readonly running: boolean;
-  /** The status the last finished command reported; `null` when none has, or it reported none */
-  readonly exitStatus: number | null;
+  /** How the last command to end ended; `null` when none has. Never `running` */
+  readonly outcome: CommandOutcome | null;
   /**
    * Moves each time the shell reports a command it started has ended. A command that starts and ends between
    * two reads leaves `running` false at both, and this is what says one ran. Compare it for a difference
    * only: it is not an exact number of commands, and it wraps
    */
   readonly finished: number;
+  /** Whether the session was opened with a `marksKey`, which is what vouches for the fields above */
+  readonly vouched: boolean;
+  /**
+   * How many marks spelled as keyed ones the host refused: the wrong key, a number not past the last, an
+   * end for a command that is not the one running, or any at all in a session without a key. A hook out
+   * of step with its session and a stream forging marks both move it; a shell that marks nothing does not
+   */
+  readonly refused: number;
 }
 
 /** A colour as `#rrggbb` */
@@ -239,17 +291,23 @@ export interface TerminalSession {
   terminate(): Promise<void>;
 }
 
-/** One command a session's shell reported. Everything but `id` is what the shell said */
+/**
+ * One command a session's shell reported. What vouches for it is the session's: in one opened without a
+ * `marksKey`, everything but `id` is what something in the pty said.
+ */
 export interface TerminalCommand {
   /** Counts from one in a session, and is never reused */
   readonly id: number;
   readonly command: string | null;
+  /**
+   * Where the shell was: when the command began, in a session without a key, and when it ended, in one
+   * with — which is what a keyed mark carries. `null` where neither said
+   */
   readonly cwd: string | null;
   /** Milliseconds since the Unix epoch; `finishedMs` is `null` while it runs */
   readonly startedMs: number | null;
   readonly finishedMs: number | null;
-  /** `null` while it runs, and when the shell reported none — which is not zero */
-  readonly exitStatus: number | null;
+  readonly outcome: CommandOutcome;
 }
 
 /** A session that is running, as a caller that did not open it is told of it */
@@ -336,6 +394,20 @@ export interface TerminalService {
       restore?: boolean;
       /** Whether its programs may send images. For a session a window draws */
       images?: boolean;
+      /**
+       * What vouches for the shell's marks: 32 lowercase hexadecimal characters the owner also gives the
+       * shell — in its environment, for a hook that reads it and takes it out again — and nothing else.
+       *
+       * **With one, the session's commands are what its shell said and nothing else.** A command is
+       * recorded, and one is said to be running, only on the word of a mark that carries the key, so
+       * nothing printed into the terminal can report one as ended or as having succeeded. Without one,
+       * every marker is believed and how a command ended is `claimed`. Which it is holds for the session's
+       * whole life, and a key that is not one is refused rather than opened without.
+       *
+       * **Proof against what is printed, not against what runs**: a program running as the user in that
+       * shell can read the key.
+       */
+      marksKey?: string;
     },
     listeners: TerminalListeners,
   ): Promise<TerminalSession>;

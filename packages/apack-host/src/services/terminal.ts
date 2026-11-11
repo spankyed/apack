@@ -230,8 +230,8 @@ function expose(held: Broker, session: BrokerSession, target: string | null): Te
     // Projected rather than passed, so the broker's `foreground` — a measurement, and a host shape — stays
     // out of the pack-facing contract
     facts: async () => {
-      const { cwd, command, running, exitStatus, finished } = await session.facts();
-      return { cwd, command, running, exitStatus, finished };
+      const { cwd, command, running, outcome, finished, vouched, refused } = await session.facts();
+      return { cwd, command, running, outcome, finished, vouched, refused };
     },
     pause: () => session.pause(),
     resume: () => session.resume(),

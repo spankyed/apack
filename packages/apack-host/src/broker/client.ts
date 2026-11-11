@@ -16,7 +16,7 @@ import { holdExclusiveLockWaiting, type ExclusiveLock } from '../exclusive-lock.
 // The protocol's types, generated from the broker's Rust and shipped by its package — not a copy of them.
 // There was a copy here, with a script that re-derived and compared it; a package with the file in it
 // leaves nothing to carry (`apack-terminal/node/protocol.ts`, `cargo xtask check-generated` there).
-import type { ErrorCode, Event, Request } from 'apack-terminal';
+import type { CommandOutcome, ErrorCode, Event, Request } from 'apack-terminal';
 
 /**
  * The protocol this client speaks. The broker refuses a connection that does not match.
@@ -52,10 +52,11 @@ export interface BrokerScreen {
 /**
  * What a session's shell has reported about itself, from the broker's own parse of the markers it emitted.
  *
- * **Every field is a claim, not a measurement.** A program in the pty can write any of these sequences, so
- * these say what was *said*: a `cwd` is a path some program named, not a directory this process checked, and
- * what may be done with one is the caller's decision. The broker knows the pid and the session id for
- * itself and neither is in here.
+ * **Every field is what was said, not a measurement**, and `vouched` says who could have said it. In a
+ * session opened without a key a program in the pty can write any of these sequences: a `cwd` is a path
+ * some program named, not a directory this process checked, and what may be done with one is the caller's
+ * decision. In one opened with a key, `command`, `running`, `outcome` and `finished` come from marks
+ * carrying it alone. The broker knows the pid and the session id for itself and neither is in here.
  */
 export interface BrokerFacts {
   /** The working directory the shell last reported, as reported */
@@ -65,15 +66,18 @@ export interface BrokerFacts {
   /** Between a command starting and finishing — a busy session told apart from one at a prompt **without
    * reading the screen**, which is what the markers are for */
   readonly running: boolean;
-  /** The status the last finished command reported. `null` when none has, and when a shell reported a finish
-   * without one: a shell that says nothing about how a command ended is not saying it succeeded */
-  readonly exitStatus: number | null;
+  /** How the last command to end ended, and who said so. `null` when none has; never `running` */
+  readonly outcome: CommandOutcome | null;
   /**
    * Moves each time the shell reports a command it started has ended. A command that starts and ends between
    * two reads leaves `running` false at both, and this is what says one ran. Compared for a difference only:
    * it is not an exact number of commands, and it wraps
    */
   readonly finished: number;
+  /** Whether the session was opened with a key, which is what vouches for the four fields above */
+  readonly vouched: boolean;
+  /** How many marks spelled as keyed ones the broker refused */
+  readonly refused: number;
   /**
    * **What is running in the pty, measured rather than claimed** — the one field here that is not a report
    * of what some program said.
@@ -241,7 +245,10 @@ export interface BrokerSession {
   kill(): Promise<void>;
 }
 
-/** One command a session's shell reported. Everything but the id is the shell's claim */
+/**
+ * One command a session's shell reported. In a session opened without a key everything but the id is a
+ * claim; `outcome` says which kind of session it was
+ */
 export interface BrokerCommand {
   readonly id: number;
   readonly command: string | null;
@@ -249,8 +256,8 @@ export interface BrokerCommand {
   /** Milliseconds since the Unix epoch; `finishedMs` is `null` while it runs */
   readonly startedMs: number | null;
   readonly finishedMs: number | null;
-  /** `null` while it runs, and when the shell reported none — which is not zero */
-  readonly exitStatus: number | null;
+  /** How it ended, as the broker tells it: `exited` only on the word of a mark that carried the key */
+  readonly outcome: CommandOutcome;
 }
 
 /** A session, as a caller that did not start it is told of it */
@@ -287,7 +294,7 @@ export type BrokerSessionEvent =
   | { readonly kind: 'notification'; readonly title: string; readonly body: string }
   | { readonly kind: 'progress'; readonly state: 'none' | 'running' | 'error' | 'indeterminate' | 'paused'; readonly percent: number | null }
   | { readonly kind: 'commandStarted'; readonly command: string | null }
-  | { readonly kind: 'commandFinished'; readonly exitStatus: number | null }
+  | { readonly kind: 'commandFinished'; readonly outcome: CommandOutcome }
   | { readonly kind: 'cwdChanged'; readonly cwd: string };
 
 /**
@@ -302,7 +309,7 @@ function sessionEvent(event: Event): BrokerSessionEvent | undefined {
     case 'notification': return { kind: 'notification', title: event.title, body: event.body };
     case 'progress': return { kind: 'progress', state: event.state, percent: event.percent };
     case 'command_started': return { kind: 'commandStarted', command: event.command };
-    case 'command_finished': return { kind: 'commandFinished', exitStatus: event.exit_status };
+    case 'command_finished': return { kind: 'commandFinished', outcome: event.outcome };
     case 'cwd_changed': return { kind: 'cwdChanged', cwd: event.cwd };
     default: return undefined;
   }
@@ -366,6 +373,12 @@ export interface BrokerSessionOptions {
   restore?: boolean;
   /** Whether its programs may send images, which is yes only where something draws them */
   images?: boolean;
+  /**
+   * What vouches for the shell's marks: 32 lowercase hexadecimal characters the shell was also given.
+   * With one the broker records a command only on the word of a mark that carries it; without, every
+   * marker is believed and reported as a claim
+   */
+  marksKey?: string;
   /** What the session is drawn in, each colour as red, green and blue; absent leaves the broker's own */
   colors?: BrokerColors;
 }
@@ -848,8 +861,10 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
           cwd: answer.cwd,
           command: answer.command,
           running: answer.running,
-          exitStatus: answer.exit_status,
+          outcome: answer.outcome,
           finished: answer.finished,
+          vouched: answer.vouched,
+          refused: answer.refused,
           foreground: answer.foreground ?? null,
         };
       },
@@ -877,7 +892,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
           cwd: one.cwd,
           startedMs: one.started_ms,
           finishedMs: one.finished_ms,
-          exitStatus: one.exit_status,
+          outcome: one.outcome,
         }));
       },
       async commandOutput(command) {
@@ -898,7 +913,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
 
   return {
     history,
-    async open({ cols, rows, shell, args, env, unset, cwd, colors, record, restore, images }, sessionListeners) {
+    async open({ cols, rows, shell, args, env, unset, cwd, colors, record, restore, images, marksKey }, sessionListeners) {
       connection.send({
         kind: 'spawn',
         cols,
@@ -914,6 +929,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
         record: record ?? null,
         restore: restore ?? false,
         images: images ?? false,
+        marks_key: marksKey ?? null,
       });
       // Registered as the frame is read, so an `exited` in the same read is not lost; delivered once this
       // call's caller is holding the session (`heldFeed`)
