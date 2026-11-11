@@ -25,7 +25,11 @@ const net = require('node:net');
 const readline = require('node:readline');
 const socket = process.argv[2];
 const script = JSON.parse(process.env.FAKE_SCRIPT);
+let open = 0;
 const server = net.createServer(connection => {
+  // Gone with its last connection, as the real broker is: one that stayed would outlive the case that started it
+  open += 1;
+  connection.on('close', () => { open -= 1; if (open === 0) process.exit(0); });
   readline.createInterface({ input: connection }).on('line', line => {
     const request = JSON.parse(line);
     const answers = (script[request.kind] ?? []).map(event =>

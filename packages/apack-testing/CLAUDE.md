@@ -93,6 +93,17 @@ its children's from `ps`, the reading `boundedSpawn` takes, and holds the budget
 which this package does not depend on. `@app/repo-checks`' `progress-guard.integration.spec.ts` is the guard over
 a real run.
 
+**A file fails when it ends with a process it started running on out of its worker's reach**
+(`src/leftover-processes.ts`, read by the guard from one `ps` listing as each file ends). Two shapes: a descendant
+of the worker in a process group of its own (a broker started detached), and a process in the worker's group whose
+parent exited while the file ran (the loop a git hook left in the background). The second has no ancestry left, so
+a file running beside the one that started it is failed for it too, and run alone only the one that did fails. A
+process on its way out is given a few seconds to go, in looks further apart, since nothing reports a process that
+is not this one's child exiting. A child still attached to the worker is not judged: a bundler's service process
+ends when the worker's pipe closes, and nothing read from outside tells that one from a child that will run on.
+Windows has no process groups to read, so nothing is judged there, nor in a pool of threads, whose one process's
+descendants are every file's.
+
 The run's dir is named `<prefix><pid>-XXXXXX`; `isolatedDataDir` first removes dirs with its prefix whose process is gone, left by runs that crashed before their teardown. The per-worker split matters when spec files run in parallel: without it, a spec resetting the media store deletes another worker's files mid-test. The entry uses only Node built-ins (`src/vitest.ts`, `vitest-worker.ts`, `vitest-teardown.ts`), so it loads without the `@apackdev/source` condition; the guard inlines `@apackdev/host`'s process reading. The bundle ships them as separate entries, since vitest loads the worker, guard and teardown modules by path. The global setup also `provide`s the vitest project's root (`PROJECT_ROOT_KEY`), which the harness `inject`s to find the pack. A pack's config sets no `resolve.conditions`: a pack resolves the `@apackdev` packages' published `dist` whether they came from the registry or a checkout link, so there is nothing to select, and `check:specifiers` fails a pack config that declares the `@apackdev/source` condition. This is the config `apack pack init` scaffolds (`apack-cli/src/commands/init.ts`). default-setup's `vitest.config.ts` uses `isolatedDataDir` and is a pack config too: it also declares no condition, and `npm run typecheck:pack` and `npm run test:external-pack` run `packages:ensure` first so the `dist` it reads is current.
 
 ## Keeping a checkout's packages current

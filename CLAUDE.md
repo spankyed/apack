@@ -305,6 +305,10 @@ Rules that pay for themselves:
   spend) for one process, or `runCommand` (`packages/apack-cli/tests/_support/run-command.ts`) for a CLI or vitest
   process tree; `check:specifiers` refuses the rest (`findSyncSpawnsInSpecs`), and `suite-timeouts.spec.ts` a
   `promisify(execFile)`, whose `timeout` is the clock.
+- **A process a spec starts is gone when its file ends.** Stop it and wait for its exit, or give it an exit of
+  its own that holds when its fixture is deleted. The progress guard fails a file that ends with a process
+  detached from its worker, or orphaned in its worker's process group (`leftover-processes.ts`,
+  `@apackdev/testing`); a child still attached to the worker is not judged, so that one is yours to end.
 - **A mutation check is worth more than a re-run.**
 - **But a mutation check does not redeem a test that mirrors the code.** Ask whether the code could be
   correct but different; a case every behaviour-preserving rewrite fails encodes the code. A pure re-route
