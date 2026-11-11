@@ -88,6 +88,7 @@
                     class="w-24 px-1 text-sm bg-neutral-800 border border-blue-500 rounded outline-none text-neutral-100"
                   />
                   <span v-else class="max-w-[150px] truncate" :class="tab.isPreview ? 'italic' : ''">{{ getTabLabel(tab) }}</span>
+                  <TerminalTabBadge v-if="isTerminal(tab)" :terminal-id="(tab as TerminalTab).terminalInfo.id" />
                   <span v-if="!isTerminal(tab) && !tab.isDiff && tab.pendingSaveConflict" class="w-2 h-2 bg-orange-500 rounded-full"></span>
                   <span v-else-if="!isTerminal(tab) && !tab.isDiff && tab.modified" class="w-2 h-2 bg-blue-500 rounded-full"></span>
                 </button>
@@ -374,6 +375,7 @@ import { groupTabs } from '../utils/tab-management.ts'
 import { getFileIcon } from '../utils/file-icons.ts'
 import GroupLabel from '../components/GroupLabel.vue'
 import TabContextMenu from '../components/TabContextMenu.vue'
+import TerminalTabBadge from '../features/terminal/TerminalTabBadge.vue'
 import { useTabDragDrop } from '../composables/useTabDragDrop.ts'
 import {
   ContextMenuRoot,

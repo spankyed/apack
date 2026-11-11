@@ -539,33 +539,34 @@ export function findRawGitListings(dirs: readonly string[] = CHECKED_DIRS, root 
 }
 
 /**
- * The one module in the code surface that reaches its terminal emulator.
+ * The one module in the code surface that reaches what draws its terminals.
  *
- * Every host that draws a terminal holds a `TerminalAttachment` from this module and no emulator type, which
- * is what made replacing the emulator an implementation swap behind one file. Two hosts reached it directly before,
- * each wiring its own listeners, and the two halves of that were F1 and F2 in the terminal review: a detach
- * that tore the wrapper out of whichever host held it, and one host scrolling on every write while the other
- * honoured where the user had scrolled back to.
+ * Every host that shows a terminal holds a `TerminalAttachment` from this module and nothing of the view,
+ * which is what makes what draws a terminal an implementation behind one file. With two hosts each reaching
+ * it and wiring listeners of their own, one host's detach tears the terminal out of whichever host holds
+ * it, and the two disagree about where the user had scrolled to.
  */
 const EMULATOR_OWNER = 'packages/default-setup/src/features/code/fe/utils/terminal-pool.ts';
 
 /**
- * The emulator package itself, named once so the rule and its message cannot disagree about what they are
- * about — and so that replacing it again is this line rather than a search for a prefix.
+ * The package that draws a terminal, named once so the rule and its message cannot disagree about what
+ * they are about — and so that replacing it is this line rather than a search for a prefix.
  */
-const EMULATOR_PACKAGE = 'ghostty-web';
+const EMULATOR_PACKAGE = 'apack-terminal-view';
 
 /**
- * And the specs that **stand in** for the emulator, so a terminal's bookkeeping and the components that draw
- * one can be driven without a canvas or a GL context. Each names the emulator because it is replacing it,
- * which is the one other way the dependency legitimately appears: `vi.mock` takes a literal specifier, and
- * mocking the pool instead would turn every case here into "the component called `release()`" — the shape of
- * a test that restates the implementation instead of observing it.
+ * And the specs that **stand in** for it, so a terminal's bookkeeping and the components that show one can
+ * be driven without a canvas or a broker. Each names the package because it is replacing it, which is the
+ * one other way the dependency legitimately appears: `vi.mock` takes a literal specifier, and mocking the
+ * pool instead would turn every case here into "the component called `release()`" — the shape of a test
+ * that restates the implementation instead of observing it. The stand-in itself is the fourth, since it is
+ * typed by what it stands in for.
  *
- * A listed path that has stopped naming an emulator is reported too, so this allowance cannot outlive the
+ * A listed path that has stopped naming the package is reported too, so this allowance cannot outlive the
  * stand-in it was added for.
  */
 const EMULATOR_STAND_INS = [
+  'packages/default-setup/tests/features/code/fe/_support/terminal-view.ts',
   'packages/default-setup/tests/features/code/fe/utils/terminal-pool.frontend.spec.ts',
   'packages/default-setup/tests/features/code/fe/canvas/terminal-view.frontend.spec.ts',
   'packages/default-setup/tests/features/code/fe/features/terminal/panel-terminal-section.frontend.spec.ts',

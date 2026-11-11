@@ -213,19 +213,27 @@ export type OutgoingPullRequestEvents =
 
 // ── terminal ─────────────────────────────────────────────────────────
 export type IncomingTerminalEvents =
-  | { type: 'terminal.CREATE_TERMINAL'; title?: string; cwd?: string; shell?: string; cols?: number; rows?: number }
+  /** `target` is one of the code settings' `terminalTargets`, by id: somewhere other than this machine to run it */
+  | { type: 'terminal.CREATE_TERMINAL'; title?: string; cwd?: string; shell?: string; cols?: number; rows?: number; target?: string }
   | { type: 'terminal.CLOSE_TERMINAL'; terminalId: string }
   /** Start a new shell under a terminal that already exists, keeping its id and everything attached to it */
   | { type: 'terminal.RESTART_TERMINAL'; terminalId: string }
   | { type: 'terminal.TERMINAL_INPUT'; terminalId: string; data: string }
   | { type: 'terminal.RESIZE_TERMINAL'; terminalId: string; cols: number; rows: number; cellWidth?: number; cellHeight?: number }
-  /** How far this window has drawn a terminal's output, as the position its last `terminal.OUTPUT` carried */
-  | { type: 'terminal.OUTPUT_DRAWN'; terminalId: string; position: number }
   /** This window has stopped showing that terminal, so its fit no longer holds the grid down */
   | { type: 'terminal.STOPPED_FITTING'; terminalId: string }
   | { type: 'terminal.RENAME_TERMINAL'; terminalId: string; customTitle: string }
   | { type: 'terminal.REFRESH_LIST' }
   | { type: 'terminal.OPEN_TERMINAL_TAB'; terminalId: string }
+  /** Whether that terminal's shell goes on running when the app is not, to be taken up again at the next start */
+  | { type: 'terminal.KEEP_TERMINAL'; terminalId: string; kept: boolean }
+  /** Open that terminal's recording to look back through, drawn at this size. Answered with `terminal.REWOUND` */
+  | { type: 'terminal.REWIND'; terminalId: string; cols: number; rows: number }
+  /** Show an open recording as it was at `at`, in milliseconds since the Unix epoch */
+  | { type: 'terminal.REWIND_SEEK'; session: string; at: number }
+  | { type: 'terminal.REWIND_CLOSE'; session: string }
+  /** The window looking back through a recording measured how many cells fit where it draws it */
+  | { type: 'terminal.REWIND_RESIZE'; session: string; cols: number; rows: number }
 
 export type OutgoingTerminalEvents =
   /**
@@ -242,8 +250,21 @@ export type OutgoingTerminalEvents =
    * window routed a new terminal into its own panel.
    */
   | { type: 'terminal.OPENED'; data: TerminalInfo }
-  /** `position` is where the terminal's output stands after this, which a window answers with once drawn */
-  | { type: 'terminal.OUTPUT'; data: { terminalId: string; data: string; position: number } }
+  /**
+   * **What a terminal's program did that is not on its screen**, for every window: the five below. The
+   * screen itself is not an event at all — a window draws a terminal from the rows its session sends it
+   * (`TerminalInfo.session`), so nothing a program prints crosses here.
+   *
+   * Each is a claim the program made. A window decides what to do about one where the person is: whether
+   * text reaches their clipboard, whether a notification is worth their attention.
+   */
+  | { type: 'terminal.CLIPBOARD'; data: { terminalId: string; text: string } }
+  | { type: 'terminal.BELL'; data: { terminalId: string } }
+  | { type: 'terminal.NOTIFIED'; data: { terminalId: string; title: string; body: string } }
+  /** How far along the program says it is; `percent` is `null` where it gave none, and `none` clears it */
+  | { type: 'terminal.PROGRESS'; data: { terminalId: string; state: 'none' | 'running' | 'error' | 'indeterminate' | 'paused'; percent: number | null } }
+  /** The name the program gave its terminal, which is empty when it took the name back */
+  | { type: 'terminal.TITLED'; data: { terminalId: string; title: string } }
   | { type: 'terminal.CLOSED'; data: { terminalId: string } }
   /**
    * The shell ended badly and **the terminal was kept**, so the user can read what it said and start it
@@ -267,6 +288,15 @@ export type OutgoingTerminalEvents =
   | { type: 'terminal.ERROR'; data: { message: string; terminalId?: string } }
   | { type: 'terminal.TERMINALS_LISTED'; data: TerminalInfo[] }
   | { type: 'terminal.TERMINAL_TAB_OPENED'; data: TerminalInfo }
+  /** Whether a terminal's shell outlives the app changed: news for every window, which each draws on its tab */
+  | { type: 'terminal.KEPT'; data: { terminalId: string; kept: boolean } }
+  /**
+   * A recording is open, for the window that asked: `session` is what its view is drawn from, and it runs
+   * between `first` and `last`, in milliseconds since the Unix epoch.
+   */
+  | { type: 'terminal.REWOUND'; data: { terminalId: string; session: string; first: number; last: number } }
+  /** The moment an open recording now shows, for the window that asked */
+  | { type: 'terminal.REWIND_SOUGHT'; data: { session: string; at: number } }
 
 // ── actions ─────────────────────────────────────────────────────────
 export type IncomingActionsEvents =

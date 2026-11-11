@@ -60,7 +60,7 @@ test.afterEach(() => {
   workDir = undefined;
 });
 
-test("the code system's file watcher and terminal output reach the code surface", async ({ appPage }) => {
+test("the code system's file watcher and a terminal's news reach the code surface", async ({ appPage }) => {
   workDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-surface-sends-')));
   // The code system watches a git working directory
   execFileSync('git', ['init', '-q'], { cwd: workDir });
@@ -89,10 +89,12 @@ test("the code system's file watcher and terminal output reach the code surface"
     .map((event) => event.data as { id: string; title?: string })
     .find((terminal) => terminal.title === 'e2e surface sends')!.id;
   try {
-    await sendToSystem(appPage, 'code', { type: 'terminal.TERMINAL_INPUT', terminalId, data: 'echo "e2e-marker-$((6 * 7))"\r' });
-    await expect.poll(async () => (await received(appPage, 'code', 'terminal.OUTPUT'))
+    // What a program prints is drawn by the window from its session and is no event; what it *does* is.
+    // This asks for text on the clipboard (OSC 52), which the system hands the surface as a claim
+    await sendToSystem(appPage, 'code', { type: 'terminal.TERMINAL_INPUT', terminalId, data: `printf '\\033]52;c;${Buffer.from('e2e-marker-42').toString('base64')}\\007'\r` });
+    await expect.poll(async () => (await received(appPage, 'code', 'terminal.CLIPBOARD'))
       .filter((event) => (event.data as { terminalId: string }).terminalId === terminalId)
-      .map((event) => (event.data as { data: string }).data).join('')).toContain('e2e-marker-42');
+      .map((event) => (event.data as { text: string }).text)).toContain('e2e-marker-42');
   } finally {
     await sendToSystem(appPage, 'code', { type: 'terminal.CLOSE_TERMINAL', terminalId });
   }

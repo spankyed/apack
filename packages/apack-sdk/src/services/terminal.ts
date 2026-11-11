@@ -10,16 +10,48 @@
  * synchronous because elmdb is in-process; a session is a socket away, so a write cannot answer in the same
  * turn. Code that treats a write as settled when it returns is wrong about this contract.
  *
- * **Attach and detach are not here yet.** This is the one session an owner opens and ends. Observing a
- * session from a second window, and a view's close detaching rather than terminating, are the host session
- * service's and arrive with it; what this fixes now is who owns the process.
+ * **This is the session as its owner holds it, and drawing one is not here.** An owner opens a session,
+ * operates it and ends it. A window that draws it attaches to the broker as a view, over a connection of
+ * its own (`terminalViews`, `@apackdev/sdk/fe`), named by the session's id — so any number of windows
+ * draw one session, and a window closing detaches its view and ends nothing.
  */
 
-/** What a session's owner hears from it. Both are news: nobody asked, and neither answers a call. */
+/**
+ * Something a session's program did that is not on its screen.
+ *
+ * Each is a moment, reported as it happens: a bell rung is gone, and a command that finished did so at a
+ * time a caller asking `facts()` afterwards can only approximate. Every one is a claim the program made —
+ * what to do about a title, a notification or text it wants on the clipboard is the owner's to decide.
+ */
+export type TerminalEvent =
+  /** The program named its terminal. Empty when it took the name back */
+  | { readonly kind: 'title'; readonly title: string }
+  | { readonly kind: 'bell' }
+  /** The program asked for this text to be put on the clipboard */
+  | { readonly kind: 'clipboard'; readonly text: string }
+  | { readonly kind: 'notification'; readonly title: string; readonly body: string }
+  /** How far along the program says it is. `percent` is `null` where it gave none */
+  | { readonly kind: 'progress'; readonly state: 'none' | 'running' | 'error' | 'indeterminate' | 'paused'; readonly percent: number | null }
+  /** The shell is about to run a command, with the line it read where it said */
+  | { readonly kind: 'commandStarted'; readonly command: string | null }
+  /** What was running ended. `exitStatus` is `null` when the shell reported none, which is not zero */
+  | { readonly kind: 'commandFinished'; readonly exitStatus: number | null }
+  | { readonly kind: 'cwdChanged'; readonly cwd: string };
+
+/** What a session's owner hears from it. All of it is news: nobody asked, and none of it answers a call. */
 export interface TerminalListeners {
-  /** Bytes the process wrote, as they arrive */
-  onOutput(data: string): void;
-  /** The process ended, however it ended — killed or of its own accord. Delivered once */
+  /**
+   * Bytes the process wrote, as they arrive.
+   *
+   * **Given by an owner that reads them, and left out by one that does not.** A caller parsing a
+   * program's output, or forwarding it, wants the bytes. A terminal a person looks at is drawn by a
+   * window from the rows its session sends (`terminalViews`, `@apackdev/sdk/fe`), and its owner has no
+   * use for them: a session opened without this is not sent its bytes at all, and nothing has to keep up
+   * with them. Which it is is fixed when the session is opened.
+   */
+  onOutput?(data: string): void;
+  /** What the program did that is not on its screen, as it happens */
+  onEvent?(event: TerminalEvent): void;
   /**
    * The process ended, however it ended: a code when it exited, the name of a signal when one killed it,
    * and never both.
@@ -99,6 +131,12 @@ export type TerminalSignalScope =
 
 /** One session, as its owner holds it */
 export interface TerminalSession {
+  /**
+   * Which broker the session is on, as a window is told it to draw the session: `null` for this
+   * machine's, and otherwise the key of the target it was opened on (`TerminalService.at`). A session's
+   * `id` is its broker's name for it, so two sessions on different brokers may share one.
+   */
+  readonly target: string | null;
   /** The host's id for the session; a pack never invents one */
   readonly id: string;
   /**
@@ -110,13 +148,17 @@ export interface TerminalSession {
    */
   readonly pid: number | null;
   /**
-   * How many lines of scrollback this session has, which is the host's number and not the window's.
-   *
-   * **One number, answered by whatever owns the session.** A window's emulator holds whatever it was sent
-   * while attached; the host holds this whether or not a window is drawing, and it is what a reattaching
-   * window is given. Drawing more than this would be drawing lines that cannot survive a reattach — which
-   * is what two independent constants produced, 10,000 in the window against 1,000 in the host, so closing
-   * and reopening a window silently lost nine tenths of it.
+   * Whether what it prints is being recorded, as its host said when it started it: a recording that was
+   * asked for and could not be opened leaves a session without one. `null` for a session taken up with
+   * `adopt`, which `sessions()` answers for.
+   */
+  readonly recorded: boolean | null;
+  /** Whether it began with the screen its recording held */
+  readonly restored: boolean;
+  /**
+   * How many lines above the screen this session answers when its screen is read as text, from the
+   * broker's handshake. What a window drawing the session can scroll back through is the broker's own
+   * history, which is longer and is not this number.
    */
   readonly scrollback: number;
   /** Bytes the user typed */
@@ -184,8 +226,61 @@ export interface TerminalSession {
    * owns.
    */
   signal(signal: TerminalSignal, scope: TerminalSignalScope): Promise<void>;
+  /** The commands the session's shell has reported, oldest first. A shell that marks none has none */
+  commands(): Promise<readonly TerminalCommand[]>;
+  /** What one of them printed, as text, or `null` for one whose output is no longer held */
+  commandOutput(command: number): Promise<string | null>;
+  /**
+   * Whether the session goes on running when the app is not: kept, it is not ended when the app quits,
+   * and `sessions()` finds it when the app next starts.
+   */
+  keep(kept: boolean): Promise<void>;
   /** Ends the session and its process tree. Explicit termination, as distinct from a view closing */
   terminate(): Promise<void>;
+}
+
+/** One command a session's shell reported. Everything but `id` is what the shell said */
+export interface TerminalCommand {
+  /** Counts from one in a session, and is never reused */
+  readonly id: number;
+  readonly command: string | null;
+  readonly cwd: string | null;
+  /** Milliseconds since the Unix epoch; `finishedMs` is `null` while it runs */
+  readonly startedMs: number | null;
+  readonly finishedMs: number | null;
+  /** `null` while it runs, and when the shell reported none — which is not zero */
+  readonly exitStatus: number | null;
+}
+
+/** A session that is running, as a caller that did not open it is told of it */
+export interface TerminalSessionSummary {
+  readonly id: string;
+  readonly pid: number;
+  readonly cols: number;
+  readonly rows: number;
+  /** Whether it was asked to outlive the app (`TerminalSession.keep`) */
+  readonly kept: boolean;
+  readonly recorded: boolean;
+  /** What its program last named the terminal, and what its shell last said of itself */
+  readonly title: string | null;
+  readonly cwd: string | null;
+  readonly command: string | null;
+  readonly running: boolean;
+}
+
+/**
+ * A recording opened to be looked back through. It is drawn like a session — a window attaches a view to
+ * `id` — and has no process: what is typed at it goes nowhere.
+ */
+export interface TerminalRewind {
+  readonly id: string;
+  /** The moments the recording runs between, in milliseconds since the Unix epoch */
+  readonly first: number;
+  readonly last: number;
+  /** Shows it as it was at `at`, answering the moment shown: `at` held to what the recording covers */
+  seek(at: number): Promise<number>;
+  resize(cols: number, rows: number, cell?: TerminalCellSize): Promise<void>;
+  close(): Promise<void>;
 }
 
 /** How a pack opens a terminal session */
@@ -231,6 +326,16 @@ export interface TerminalService {
        * wrong. An owner with no window leaves it out.
        */
       colors?: TerminalColors;
+      /**
+       * A file to record the session in: what its program writes, so that its screen can be picked up by
+       * the session that replaces it (`restore`) and looked back through (`rewind`). It holds everything
+       * the program printed, so it is recorded only where asked, in a file only the user can read.
+       */
+      record?: string;
+      /** Begin with the screen and history `record` already holds, and carry the recording on */
+      restore?: boolean;
+      /** Whether its programs may send images. For a session a window draws */
+      images?: boolean;
     },
     listeners: TerminalListeners,
   ): Promise<TerminalSession>;
@@ -247,4 +352,25 @@ export interface TerminalService {
    * report.
    */
   adopt(id: string, listeners: TerminalListeners): Promise<TerminalSession>;
+  /** Every session that is running, which is how the ones a previous run of the app kept are found */
+  sessions(): Promise<readonly TerminalSessionSummary[]>;
+  /** Opens the recording at `recording` to be looked back through, showing its end */
+  rewind(recording: string, size: { readonly cols: number; readonly rows: number }): Promise<TerminalRewind>;
+  /**
+   * The same service for sessions somewhere else: another machine, a container — wherever `target`'s
+   * command runs. Everything a session does is the same there; what differs is that paths (`cwd`,
+   * `shell`, `record`) are that machine's.
+   */
+  at(target: TerminalTarget): TerminalService;
+}
+
+/**
+ * Somewhere a terminal can run that is not this machine, as the command that reaches it.
+ *
+ * The command runs the terminal broker's proxy there — `ssh host apack-terminal proxy <socket>`,
+ * `docker exec -i box apack-terminal proxy <socket>` — and is given as the arguments it is, never as a
+ * line for a shell to split. The broker's binary has to be on the far side; nothing here puts it there.
+ */
+export interface TerminalTarget {
+  readonly command: readonly string[];
 }

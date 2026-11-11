@@ -63,19 +63,15 @@ describe('a change no file event reported', () => {
     await app!.nextEmit('code', 'terminal.CREATED');
     const session = broker.opened[0]!.id;
     await execFileWhileWorking('git', ['init', '--quiet', directory]);
-    const prompt = '\x1b]133;A\x07';
 
-    // A prompt with no command before it: the shell starting, or the user pressing return
-    broker.emit(session, prompt);
+    // A command starting, a directory changing, a title: none of them is a command having finished
+    broker.happens(session, { kind: 'commandStarted', command: 'make' });
+    broker.happens(session, { kind: 'title', title: 'make' });
     await app!.settle();
     expect(announcements()).toBe(0);
 
-    // A command quick enough to start and end before the app asks: it is never seen running, only finished.
-    // Each round is a command of its own, so which prompt the app first read the terminal at does not matter
-    await expect.poll(() => {
-      broker.reportsCommandFinished(session);
-      broker.emit(session, prompt);
-      return announcements();
-    }).toBeGreaterThan(0);
+    // The shell says a command ended, which is the moment its files may have moved
+    broker.reportsCommandFinished(session);
+    await expect.poll(() => announcements()).toBeGreaterThan(0);
   });
 });

@@ -7,6 +7,7 @@ import type { ReferenceTypeConfig, ReferenceBindings, ReferenceBinding } from '.
 import type { Message } from '../events/index.ts';
 import type { ViewRequest, ViewUpdate } from '../framework/views.ts';
 import type { SecretsClient } from '../fe/secrets-client.ts';
+import type { TerminalViewStream } from '../fe/terminal-views.ts';
 import type { SettingsPort } from '../fe/settings.ts';
 import type { Component } from 'vue';
 import type { Surface } from '../fe/surface.ts';
@@ -64,6 +65,13 @@ export interface FeHostRuntime {
   client: FeClient;
   /** The packs whose frontends the renderer registered */
   packs: FePackRegistryView;
+  /**
+   * Opens a connection to this app's terminal broker, as a view (`terminalViews`, `@apackdev/sdk/fe`). A
+   * resource of the window, so the window binds it: only the process a window runs in can reach the
+   * broker's socket. Absent where there is no broker to reach, which `terminalViews` answers as a
+   * connection that is already over.
+   */
+  terminalViews?(target?: string): TerminalViewStream;
 }
 
 let bound: FeHostRuntime | undefined;

@@ -1,9 +1,10 @@
 <template>
   <TrackedContextMenuRoot>
     <ContextMenuTrigger as-child>
-      <div class="relative h-full w-full">
+      <div class="relative h-full w-full" @pointerdown.capture="seen">
         <div ref="container" class="h-full w-full bg-[#1e1e1e] p-2"></div>
         <ScrollToBottomFob :visible="showScrollFob" @click="scrollToBottom()" />
+        <TerminalRewind :terminal-info="terminalInfo" />
         <ContextMenuPortal>
           <ContextMenuContent :class="MENU_CONTENT_CLASS" :side-offset="5">
             <ContextMenuItem
@@ -27,6 +28,7 @@
               <Eraser class="w-4 h-4" />
               Clear
             </ContextMenuItem>
+            <TerminalMenuExtras :terminal-id="terminalInfo.id" :attachment="() => attachment" />
             <ContextMenuSeparator :class="MENU_SEPARATOR_CLASS" />
             <ContextMenuItem @select="$emit('restart-terminal')" :class="MENU_ITEM_CLASS">
               <RotateCcw class="w-4 h-4" />
@@ -61,6 +63,8 @@ import { Copy, ClipboardPaste, TextSelect, Eraser, RotateCcw, Trash2 } from 'luc
 import { type CodeState } from '#features/code/fe/state.ts'
 import type { TerminalInfo } from '#features/code/fe/features/terminal/state.ts'
 import { terminalPool, type TerminalAttachment } from '#features/code/fe/utils/terminal-pool.ts'
+import TerminalMenuExtras from '#features/code/fe/features/terminal/TerminalMenuExtras.vue'
+import TerminalRewind from '#features/code/fe/features/terminal/TerminalRewind.vue'
 import { panelChild } from '../features/children.ts';
 
 /* --------------------------------------------------------------------------
@@ -93,15 +97,11 @@ const hasSelection = ref(false)
  * Context menu actions ----------------------------------------------------- */
 const scrollToBottom = () => attachment?.followOutput()
 
-const copySelection = () => {
-  const selection = attachment?.selection()
-  // A clipboard the window may not read or write rejects; unhandled, that is a console error nobody can
-  // act on (F16)
-  if (selection) void navigator.clipboard.writeText(selection).catch(() => {})
-}
+const copySelection = () => { void attachment?.copy() }
 
 const pasteClipboard = () => {
-  // Through the emulator rather than as input (F12), which the attachment is the one way to do
+  // As a paste rather than as input: the program is told it is one, and one that could run a command is
+  // shown to the person first
   void navigator.clipboard.readText().then(text => {
     if (text) attachment?.paste(text)
   }).catch(() => {})
@@ -111,26 +111,22 @@ const selectAll = () => attachment?.selectAll()
 
 const clearTerminal = () => attachment?.clear()
 
+/** The person is looking at this terminal, so what was waiting for them to has been seen */
+const seen = () => terminalActor?.send({ type: 'terminal.SEEN', terminalId: props.terminalInfo.id })
+
 /* --------------------------------------------------------------------------
  * Lifecycle ---------------------------------------------------------------- */
-/**
- * Whether this host is still the one mounted.
- *
- * **The emulator's module is loaded on demand, so a mount can be awaiting when the unmount arrives** — a
- * tab switched away before the terminal finished opening. Attaching then would draw into a container this
- * component no longer owns and leave an attachment nothing releases, so the attach is dropped instead.
- */
+/** Whether this host is still the one mounted */
 let mounted = false
 
-onMounted(async () => {
+onMounted(() => {
   if (!container.value) return
   mounted = true
 
-  // The emulator is the pool's: this never constructs or disposes one
-  const entry = await terminalPool.ensure(props.terminalInfo, data => {
-    terminalActor?.send({ type: 'terminal.INPUT', terminalId: props.terminalInfo.id, data })
-  })
-  if (!entry || !mounted || !container.value) return
+  // The view is the pool's: this never makes or disposes one, and what is typed goes from the view to
+  // its session without passing through here
+  terminalPool.ensure(props.terminalInfo)
+  if (!mounted || !container.value) return
 
   attachment = terminalPool.attach(props.terminalInfo.id, container.value, {
     onResize: ({ cols, rows, cellWidth, cellHeight }) => {
@@ -138,7 +134,14 @@ onMounted(async () => {
     },
     onSelectionChange: has => { hasSelection.value = has },
     onFollowingChange: following => { isFollowingOutput.value = following },
+    // A path a program printed opens as the file it names, where the explorer opens every other
+    onOpenPath: (path, at) => {
+      panelChild(codeActor, 'explorer')?.send({ type: 'explorer.OPEN_FILE', path })
+      // Shown at the line the program named, once the file is the one showing
+      if (at) codeActor.send({ type: 'UPDATE_STATE', updates: { pendingRevealLine: { filePath: path, line: at.line, column: at.column } } })
+    },
   })
+  seen()
 
   // **Not focused on mount** (F15). A terminal mounts on a tab switch, a panel drag and an actor
   // replacement, none of which is the user asking for it — and taking focus from what they were typing in
@@ -147,7 +150,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   mounted = false
-  // The emulator is not disposed — it survives in the pool until `terminal.CLOSED`. Releasing is also how a
+  // The view is not disposed — it survives in the pool until `terminal.CLOSED`. Releasing is also how a
   // host that another has already taken over from detaches nothing (F1): during a remount the new host
   // attaches before this one unmounts.
   const letGo = attachment?.release() ?? false

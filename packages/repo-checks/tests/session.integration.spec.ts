@@ -29,15 +29,20 @@ beforeEach(async () => {
   await git(elmdb, 'init', '-b', 'main');
   await git(elmdb, 'add', '.');
   await git(elmdb, '-c', 'user.name=Session test', '-c', 'user.email=session@example.invalid', 'commit', '-m', 'elmdb');
-  // The apack-terminal checkout a session links, beside elmdb's: one commit and a manifest naming it.
+  // The apack-terminal checkout a session links, beside elmdb's: one commit, a manifest naming it, and the
+  // view's package in it with a `dist/` newer than everything it is built from, which is what the linker
+  // takes for built.
   // **Both, because `setup` links both** — a fixture holding only elmdb made every run of this spec fail on
   // the pin it could not read, and the failure named a path rather than the checkout it was missing.
   apackTerminal = path.join(dir, 'apack-terminal');
-  fs.mkdirSync(apackTerminal, { recursive: true });
+  fs.mkdirSync(path.join(apackTerminal, 'view', 'dist'), { recursive: true });
   fs.writeFileSync(path.join(apackTerminal, 'Cargo.toml'), '[package]\nname = "apack-terminal"\n');
+  fs.writeFileSync(path.join(apackTerminal, 'view', 'package.json'), JSON.stringify({ name: 'apack-terminal-view' }));
   await git(apackTerminal, 'init', '-b', 'main');
   await git(apackTerminal, 'add', '.');
   await git(apackTerminal, '-c', 'user.name=Session test', '-c', 'user.email=session@example.invalid', 'commit', '-m', 'apack-terminal');
+  fs.writeFileSync(path.join(apackTerminal, 'view', 'dist', 'index.js'), '');
+  fs.writeFileSync(path.join(apackTerminal, 'view', 'dist', 'index.d.ts'), '');
   fs.writeFileSync(path.join(repo, 'base.txt'), 'base');
   fs.mkdirSync(path.join(repo, 'vendor'));
   fs.writeFileSync(path.join(repo, 'vendor', 'elmdb.rev'), `${await git(elmdb, 'rev-parse', 'HEAD')}\n`);

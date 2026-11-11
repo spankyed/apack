@@ -8,9 +8,9 @@ import { EARS } from '#generated/ears.ts'
 import { repository } from '#generated/repository.ts';
 import { createLogger } from '@apackdev/sdk/logger';
 import { services } from '#generated/services.ts'
-import type { TerminalCellSize, TerminalSession } from '@apackdev/sdk/services'
+import type { TerminalCellSize, TerminalEvent, TerminalRewind, TerminalSession, TerminalSessionSummary } from '@apackdev/sdk/services'
+import { resolveAppEnvironment } from '@apackdev/sdk/env'
 import { TERMINAL_COLORS } from '../terminal-colors.ts'
-import { OutputFlow } from './terminal-flow.ts'
 import { directoryToStart, shellToStart, submitFor } from './known-shells.ts'
 import { cwdAsReported } from '../utils/osc-cwd.ts'
 import { integrationDirectory, integrationFor } from './shell-integration.ts'
@@ -58,8 +58,11 @@ type TerminalState =
    * code was reading the consequence; this is the request.
    */
   | ({ kind: 'closing' } & RunningShell)
-  /** The shell has gone and the terminal was kept, holding what it ended with. There is no session */
-  | { kind: 'exited'; code: number | null }
+  /**
+   * The terminal has no session and was kept, holding what its shell ended with — or, `unreached`, it is on
+   * a target this run has not connected to, where its shell may still be.
+   */
+  | { kind: 'exited'; code: number | null; unreached?: true }
 
 interface Terminal {
   /**
@@ -70,6 +73,15 @@ interface Terminal {
    */
   info: Omit<TerminalInfo, 'active' | 'exited'>
   state: TerminalState
+  /**
+   * The session this terminal last had on a target, offered to the target again when its shell is started.
+   *
+   * **A target's shell does not end because this app lost its way to it.** A connection that drops, and an
+   * app that starts while the target cannot be reached, both leave a terminal with no session here and
+   * possibly a running one there — so starting it again asks for that one first, and starts a shell only
+   * when the target says it is gone.
+   */
+  resumes?: string
   /**
    * What each window showing this terminal fitted, by the connection it fitted on.
    *
@@ -102,8 +114,6 @@ interface Terminal {
    * dropped — `opening`'s trick, for the same shape of problem.
    */
   sizing: number
-  /** How far each window has drawn this terminal's output, which is what pauses a program for a slow one */
-  flow: OutputFlow
 }
 
 /** A pty's grid, and one cell of it in pixels where a window has measured one */
@@ -126,7 +136,10 @@ const sameCell = (a: TerminalCellSize | undefined, b: TerminalCellSize | undefin
 const published = (terminal: Terminal): TerminalInfo => ({
   ...terminal.info,
   active: terminal.state.kind !== 'exited',
-  ...(terminal.state.kind === 'exited' && { exited: { code: terminal.state.code } }),
+  ...(terminal.state.kind === 'live' && { session: terminal.state.session.id }),
+  ...(terminal.state.kind === 'exited' && {
+    exited: { code: terminal.state.code, ...(terminal.state.unreached && { unreached: true as const }) },
+  }),
 })
 
 /**
@@ -167,7 +180,12 @@ export type TerminalClose =
   | 'unknown'
 
 export interface TerminalHandlers {
-  onData(terminalId: string, data: string): void
+  /**
+   * The terminal's program did something that is not on its screen: set a title, rang the bell, finished
+   * a command. **What was on its screen is not here at all** — a window draws a terminal from the rows its
+   * session sends it, so this service is handed the events and never the bytes.
+   */
+  onEvent(terminalId: string, event: TerminalEvent): void
   /**
    * The shell ended and the terminal is gone with it.
    *
@@ -189,10 +207,63 @@ export interface TerminalHandlers {
   onCrashed(terminalId: string, exitCode: number | null): void
 }
 
+/**
+ * Where a terminal's recording is kept: what its shell printed, so the terminal can be reopened where it
+ * left off and looked back through. Inside the app's own data directory, in a file only the user reads.
+ */
+export function recordingFor(id: string, userDataDir = resolveAppEnvironment().userDataDir): string {
+  return path.join(userDataDir, 'apack', 'terminal-recordings', `${id}.recording`)
+}
+
+/**
+ * A command line as the arguments it is: split at spaces, with quotes holding a part together and a
+ * backslash taking the next character as it is. Enough for the command that reaches a target, which the
+ * user writes as they would in a shell and which is run without one.
+ */
+export function commandArguments(line: string): string[] {
+  const parts: string[] = []
+  let part: string | undefined
+  let quote: string | undefined
+  for (let at = 0; at < line.length; at += 1) {
+    const character = line[at]!
+    if (quote !== undefined) {
+      if (character === quote) quote = undefined
+      else if (character === '\\' && quote === '"' && at + 1 < line.length) part = (part ?? '') + line[at += 1]
+      else part = (part ?? '') + character
+    } else if (character === '"' || character === "'") {
+      quote = character
+      part ??= ''
+    } else if (character === '\\' && at + 1 < line.length) {
+      part = (part ?? '') + line[at += 1]
+    } else if (/\s/.test(character)) {
+      if (part !== undefined) parts.push(part)
+      part = undefined
+    } else {
+      part = (part ?? '') + character
+    }
+  }
+  if (part !== undefined) parts.push(part)
+  return parts
+}
+
+/** A recording opened to be looked back through, as the window that opened it is told of it */
+export interface OpenedRewind {
+  terminalId: string
+  /** The session a view attaches to */
+  session: string
+  /** The moments it runs between, in milliseconds since the Unix epoch */
+  first: number
+  last: number
+}
+
 class TerminalService {
   private terminals: Map<string, Terminal> = new Map()
+  /** Recordings being looked back through, by the session each is drawn from, with the window that opened it */
+  private rewinds = new Map<string, { rewind: TerminalRewind; client: string | undefined }>()
   /** Hands out `Terminal.opening` tokens; monotonic per process, and only ever compared for equality */
   private openings = 0
+  /** The restarts on their way, by terminal */
+  private restarting = new Map<string, Promise<TerminalInfo | null>>()
 
   async create(options: TerminalCreate, handlers: TerminalHandlers): Promise<TerminalInfo> {
     // Check terminal limit (0 = no limit)
@@ -204,28 +275,28 @@ class TerminalService {
 
     // The id is taken now and the row written once the terminal has started, with what it started with
     const id = newId(EARS.Entity.Terminal)
-    const shell = this.shellFor(options.shell)
-    const cwd = this.directoryFor(options.cwd)
+    // **Somewhere else, none of this machine's answers apply**: which shells exist, which directories do,
+    // and where a shell's startup files could be written are all the far side's. A terminal on a target
+    // starts that machine's own shell where that machine starts one.
+    const target = this.targetNamed(options.target, codeSettings)
+    const shell = target ? '' : this.shellFor(options.shell)
+    const cwd = target ? '' : this.directoryFor(options.cwd)
     const cols = Math.max(1, Math.min(options.cols || 80, 500))
     const rows = Math.max(1, Math.min(options.rows || 24, 200))
-    const title = this.sanitizeTitle(options.title || path.basename(cwd) || 'root')
+    const title = this.sanitizeTitle(options.title || (target ? target.label : path.basename(cwd)) || 'root')
 
     // **Arranged before the shell starts, not typed into it after** (D3, F14). `undefined` means this
     // platform or shell has no arrangement yet, and the session is started exactly as the user would.
-    const integration = await this.arrangeIntegration(shell, codeSettings)
-
     // The handlers are bound to the id before the session exists, so no byte can arrive with nowhere to go
     const opening = ++this.openings
-    const session = await services.terminal.open({
-      cols, rows, shell, cwd, args: integration?.args, env: integration?.env, colors: TERMINAL_COLORS,
-    }, {
-      onOutput: (data) => handlers.onData(id, data),
+    const session = await this.open(id, { shell, cwd, cols, rows, target }, false, codeSettings, {
+      onEvent: (event) => handlers.onEvent(id, event),
       onExit: (code) => this.exited(id, opening, code, handlers),
     })
 
     const terminal: Terminal = {
       info: { id, title, pid: session.pid, shell, cwd, generation: 1, cols, rows,
-        scrollback: session.scrollback, submit: submitFor(shell) },
+        submit: submitFor(shell), ...this.targetOf(target, session), ...(session.recorded && { recorded: true }) },
       state: { kind: 'live', session, opening },
       // **Nothing has been fitted yet, and a size is not a fit.** `CREATE_TERMINAL` carries no grid — the
       // frontend sends a title and a directory — so the 80x24 defaulted above is this service's number
@@ -234,10 +305,10 @@ class TerminalService {
       fittedBy: new Map(),
       decided: { cols, rows },
       sizing: 0,
-      flow: new OutputFlow(),
+      ...(target && { resumes: session.id }),
     }
     this.terminals.set(id, terminal)
-    repository.terminalCommands.create({ id, title, shell, cwd, cols, rows, session: session.id })
+    repository.terminalCommands.create({ id, title, shell, cwd, cols, rows, session: session.id, ...(target && { target: target.id }) })
 
     return published(terminal)
   }
@@ -293,6 +364,8 @@ class TerminalService {
   private removed(id: string, handlers: TerminalHandlers): void {
     this.terminals.delete(id)
     try { repository.terminalCommands.markClosed(id as EARS.EntityId) } catch (error) { logger.error(`Could not close ${id}`, { error }) }
+    // What it printed goes with it: a recording of a terminal nobody can open again is only a record
+    void Promise.resolve().then(() => services.filesystem.remove(recordingFor(id))).catch(() => {})
     handlers.onExit(id)
   }
 
@@ -306,6 +379,18 @@ class TerminalService {
    * usually the thing the user restarted it to read.
    */
   async restart(id: string, handlers: TerminalHandlers): Promise<TerminalInfo | null> {
+    // **One restart of a terminal at a time.** Starting a shell is a round trip — seconds, on a target —
+    // and a second ask that arrived inside it would start a second shell under the same terminal, the
+    // first one's left running with nothing naming it. Whoever asks meanwhile is answered by the one
+    // already on its way
+    const underway = this.restarting.get(id)
+    if (underway) return underway
+    const restarting = this.restartOnce(id, handlers).finally(() => { this.restarting.delete(id) })
+    this.restarting.set(id, restarting)
+    return restarting
+  }
+
+  private async restartOnce(id: string, handlers: TerminalHandlers): Promise<TerminalInfo | null> {
     const terminal = this.terminals.get(id)
     if (!terminal) return null
 
@@ -320,20 +405,51 @@ class TerminalService {
       await previous.session.terminate().catch((error: unknown) => logger.warn(`Could not end ${id} before restarting it`, { error }))
     }
 
-    const { shell, cwd, cols, rows } = terminal.info
+    const { shell = '', cwd, cols, rows } = terminal.info
     const opening = ++this.openings
     try {
-      const integration = await this.arrangeIntegration(this.shellFor(shell))
-        const session = await services.terminal.open({
-        cols, rows, shell, cwd, args: integration?.args, env: integration?.env, colors: TERMINAL_COLORS,
-      }, {
-        onOutput: (data) => handlers.onData(id, data),
-        onExit: (code) => this.exited(id, opening, code, handlers),
-      })
-
+      const settings = featureSettings.forFeature('code').get()
+      // On the target it was on. One whose target has left the settings has nowhere to start again
+      const target = terminal.info.target ? this.targetNamed(terminal.info.target.id, settings) : undefined
+      const listeners = {
+        onEvent: (event: TerminalEvent) => handlers.onEvent(id, event),
+        onExit: (code: number | null) => this.exited(id, opening, code, handlers),
+      }
+      // The shell it had on the target, where the target still has it (`Terminal.resumes`). **The target
+      // is asked what it has first**, so one that cannot be reached says why once, here, rather than
+      // after a second attempt that waits as long as the first; and one that answers says whether the
+      // shell is there to take up, and whether it was asked to go on running
+      const there = target && terminal.resumes !== undefined
+        ? (await services.terminal.at({ command: target.command }).sessions()).find(one => one.id === terminal.resumes)
+        : undefined
+      const resumed = target && there
+        ? await services.terminal.at({ command: target.command }).adopt(there.id, listeners).catch(() => undefined)
+        : undefined
+      // Otherwise a new shell, started under what the last one printed: usually what it was restarted to read
+      const session = resumed ?? await this.open(id, { shell, cwd, cols, rows, target }, true, settings, listeners)
+      // **Closed while its shell was being started**: the terminal is gone, and the shell that was for it
+      // is ended rather than left under nothing
+      if (this.terminals.get(id) !== terminal) {
+        await session.terminate().catch(() => {})
+        return null
+      }
+      // **Live before anything else is awaited**, in the same turn the session was handed over: its exit
+      // is delivered a turn after that, and one that found the terminal still marked as having no shell
+      // would be dropped as a shell already replaced — leaving a terminal shown live over nothing
       terminal.state = { kind: 'live', session, opening }
-      terminal.flow.restarted()
-      terminal.info = { ...terminal.info, pid: session.pid, generation: terminal.info.generation + 1 }
+      if (target) terminal.resumes = session.id
+      const { recorded: _was, ...described } = terminal.info
+      terminal.info = {
+        ...described, pid: session.pid, generation: terminal.info.generation + 1, ...this.targetOf(target, session),
+        ...(resumed === undefined && session.recorded && { recorded: true }),
+      }
+      if (resumed) {
+        if (there?.kept) terminal.info = { ...terminal.info, kept: true }
+      } else if (terminal.info.kept) {
+        // **Kept is the terminal's, so the shell under it is kept too.** A terminal shown as going on
+        // running whose new shell ends with the app is the one thing the mark must not mean
+        await session.keep(true).catch((error: unknown) => logger.warn(`Could not keep ${id}'s new shell running`, { error }))
+      }
       // The row must name the session that is running now. A stored id pointing at the shell this just
       // replaced is the one case offering it cannot survive: the broker would answer for it, and a restart
       // of this process would take up a session no terminal is showing
@@ -346,6 +462,129 @@ class TerminalService {
       handlers.onCrashed(id, null)
       throw error
     }
+  }
+
+  /**
+   * What a session a window draws is opened with beyond its shell: that its programs may send images, and
+   * — where terminals are restored at all — the file it is recorded in, and whether to begin with what
+   * that file already holds.
+   *
+   * **Recorded exactly where restoring is on.** A recording is what lets a restored terminal come back
+   * with its screen rather than empty, and it holds everything the shell printed; a user who turned
+   * restoring off has said they want neither.
+   */
+  private drawn(id: string, settings = featureSettings.forFeature('code').get(), restore: boolean) {
+    if (!this.records(settings)) return { images: true }
+    return { images: true, record: recordingFor(id), restore }
+  }
+
+  /** Whether a terminal started on this machine under `settings` is recorded */
+  private records(settings = featureSettings.forFeature('code').get()): boolean {
+    return settings?.restoreTerminals !== false
+  }
+
+  /**
+   * The target a terminal was asked to run on, from the settings, or `undefined` for this machine.
+   *
+   * **A target that is asked for and not there is refused**, rather than quietly becoming a shell on this
+   * machine: a command typed into the wrong machine's shell is the mistake a named target exists to prevent.
+   */
+  private targetNamed(id: string | undefined, settings = featureSettings.forFeature('code').get()) {
+    if (id === undefined) return undefined
+    const found = settings?.terminalTargets?.find(target => target.id === id)
+    if (!found) throw new Error(`No terminal target ${JSON.stringify(id)} in the code settings`)
+    const command = commandArguments(found.command)
+    if (command.length === 0) throw new Error(`The terminal target ${found.label} has no command to reach it with`)
+    return { id: found.id, label: found.label, command }
+  }
+
+  /** What a terminal's descriptor says of where it runs, for one that is not on this machine */
+  private targetOf(target: { id: string; label: string } | undefined, session: TerminalSession) {
+    return target && session.target !== null ? { target: { id: target.id, label: target.label, key: session.target } } : {}
+  }
+
+  /**
+   * Starts a terminal's shell: on this machine with its startup hook and its recording, or on a target
+   * with neither — the hook is a file and the recording a path, and both would be this machine's.
+   */
+  private async open(
+    id: string,
+    where: { shell: string; cwd: string; cols: number; rows: number; target?: { command: string[] } },
+    restore: boolean,
+    settings: ReturnType<ReturnType<typeof featureSettings.forFeature<'code'>>['get']>,
+    listeners: { onEvent(event: TerminalEvent): void; onExit(code: number | null): void },
+  ): Promise<TerminalSession> {
+    const { shell, cwd, cols, rows, target } = where
+    if (target) {
+      return services.terminal.at({ command: target.command }).open({ cols, rows, colors: TERMINAL_COLORS, images: true }, listeners)
+    }
+    // **Arranged before the shell starts, not typed into it after** (D3, F14). `undefined` means this
+    // platform or shell has no arrangement yet, and the session is started exactly as the user would.
+    const integration = await this.arrangeIntegration(shell, settings)
+    return services.terminal.open({
+      cols, rows, shell, cwd, args: integration?.args, env: integration?.env, colors: TERMINAL_COLORS,
+      ...this.drawn(id, settings, restore),
+    }, listeners)
+  }
+
+  /**
+   * Says whether a terminal's shell goes on running when the app is not. Kept, it is not ended when the
+   * app quits, and the next start takes it up again as it was — a build still running, a server still up.
+   */
+  async keep(id: string, kept: boolean): Promise<TerminalInfo | null> {
+    const terminal = this.terminals.get(id)
+    if (!terminal || terminal.state.kind === 'exited') return null
+    // A shell left running is found again by the terminal that is restored over it. With restoring off
+    // nothing would ever show it, and it would run where nobody could reach it
+    if (kept && !this.records()) {
+      throw new Error('A terminal can keep running only while terminals are restored at startup (the code settings)')
+    }
+    await terminal.state.session.keep(kept)
+    terminal.info = { ...terminal.info, kept }
+    return published(terminal)
+  }
+
+  /**
+   * Opens a terminal's recording to be looked back through, or answers `null` for a terminal with none.
+   *
+   * **A session of its own, with no process.** The window draws it like any other and what is typed at
+   * it goes nowhere; the terminal it is a recording of runs on beside it, untouched.
+   */
+  async rewind(id: string, size: { cols: number; rows: number }, client: string | undefined): Promise<OpenedRewind | null> {
+    const terminal = this.terminals.get(id)
+    // Nothing to look back through for one that is not recorded (`TerminalInfo.recorded`)
+    if (!terminal?.info.recorded) return null
+    // One recording open in a window at a time: the one it had open is the one it has stopped looking at
+    for (const [session, opened] of this.rewinds) {
+      if (client !== undefined && opened.client === client) await this.closeRewind(session).catch(() => {})
+    }
+    const rewind = await services.terminal.rewind(recordingFor(id), {
+      cols: Math.max(1, Math.min(size.cols || terminal.info.cols, 500)),
+      rows: Math.max(1, Math.min(size.rows || terminal.info.rows, 200)),
+    })
+    // Again, for one this window opened while this was on its way
+    for (const [session, opened] of this.rewinds) {
+      if (client !== undefined && opened.client === client) await this.closeRewind(session).catch(() => {})
+    }
+    this.rewinds.set(rewind.id, { rewind, client })
+    return { terminalId: id, session: rewind.id, first: rewind.first, last: rewind.last }
+  }
+
+  /** Shows a recording as it was at `at`, answering the moment shown, or `null` for one that is not open */
+  async seekRewind(session: string, at: number): Promise<number | null> {
+    const opened = this.rewinds.get(session)
+    return opened ? opened.rewind.seek(at) : null
+  }
+
+  /** Draws a recording at the grid the window looking at it fitted. Nothing for one that is not open */
+  async resizeRewind(session: string, cols: number, rows: number): Promise<void> {
+    await this.rewinds.get(session)?.rewind.resize(Math.max(1, Math.min(cols, 500)), Math.max(1, Math.min(rows, 200)))
+  }
+
+  async closeRewind(session: string): Promise<void> {
+    const opened = this.rewinds.get(session)
+    this.rewinds.delete(session)
+    await opened?.rewind.close()
   }
 
   get(id: string): Terminal | undefined {
@@ -487,37 +726,6 @@ class TerminalService {
   }
 
   /**
-   * Counts output about to be sent to the windows, answering where the stream stands after it.
-   *
-   * **Pauses the session when a window is too far behind** (`OutputFlow`), which stops its pty being read:
-   * the program blocks on its own write, and what this process holds for a slow window stops growing.
-   */
-  outputSent(id: string, chars: number): number {
-    const terminal = this.terminals.get(id)
-    if (!terminal) return 0
-    const { position, pause } = terminal.flow.send(chars)
-    if (pause && terminal.state.kind !== 'exited') {
-      void terminal.state.session.pause().catch(error => {
-        logger.error(`Could not pause ${id} for a window that has fallen behind`, { error })
-      })
-    }
-    return position
-  }
-
-  /** A window has drawn this terminal's output up to `position`, so the session may be read again */
-  outputDrawn(id: string, client: string, position: number): void {
-    const terminal = this.terminals.get(id)
-    if (terminal?.flow.drew(client, position).resume) this.readAgain(id, terminal)
-  }
-
-  private readAgain(id: string, terminal: Terminal): void {
-    if (terminal.state.kind === 'exited') return
-    void terminal.state.session.resume().catch(error => {
-      logger.error(`Could not resume ${id} once its windows had caught up`, { error })
-    })
-  }
-
-  /**
    * A window has stopped showing this terminal, so its fit no longer holds the grid down.
    *
    * **Detaching is not disconnecting**, and leaving this out is how a fix becomes a trade: a popped-out
@@ -541,10 +749,12 @@ class TerminalService {
    * It answers rather than broadcasts: the service owns the grid, the feature owns the wire.
    */
   async forgetClient(client: string): Promise<Array<{ terminalId: string; grid: AcceptedGrid }>> {
+    // A recording a window was looking back through has nobody looking at it
+    for (const [session, opened] of this.rewinds) {
+      if (opened.client === client) void this.closeRewind(session).catch(() => {})
+    }
     const moved: Array<{ terminalId: string; grid: AcceptedGrid }> = []
     for (const [terminalId, terminal] of this.terminals) {
-      // A window that has gone is not one to wait for: a session paused for it would otherwise stay paused
-      if (terminal.flow.forget(client).resume) this.readAgain(terminalId, terminal)
       if (!terminal.fittedBy.delete(client)) continue
       const grid = await this.settleGrid(terminal)
       if (grid.changed) moved.push({ terminalId, grid })
@@ -607,6 +817,20 @@ class TerminalService {
     // that waits for that answer never completes. The terminal was kept for its last words — this is the
     // user finally dismissing it.
     if (terminal.state.kind === 'exited') {
+      // **A terminal on a target this run never reached may still have its shell there**, kept running
+      // by the target's broker and named by nothing once this row is closed. The person asked for it to
+      // end, so the target is reached to end it: best effort, since a target that cannot be reached
+      // cannot be told, and that is said in the log rather than refused to the person closing a tab
+      if (terminal.state.unreached && terminal.resumes !== undefined && terminal.info.target) {
+        const session = terminal.resumes
+        try {
+          const target = this.targetNamed(terminal.info.target.id)
+          const there = await services.terminal.at({ command: target!.command }).adopt(session, { onEvent() {}, onExit() {} })
+          await there.terminate()
+        } catch (error) {
+          logger.warn(`Could not end session ${session} on ${terminal.info.target.label}; it may still be running there`, { error })
+        }
+      }
       this.removed(id, handlers)
       return 'closed'
     }
@@ -697,12 +921,14 @@ class TerminalService {
    * rather than checking first — there is nothing to check it against that the broker would not answer
    * better.
    */
-  private async adopt(row: TerminalEntity, session: string, handlers: TerminalHandlers): Promise<boolean> {
+  private async adopt(
+    row: TerminalEntity, session: string, handlers: TerminalHandlers, listed: TerminalSessionSummary | undefined,
+  ): Promise<boolean> {
     const shell = this.shellFor(row.shell)
     const opening = ++this.openings
     try {
       const taken = await services.terminal.adopt(session, {
-        onOutput: (data) => handlers.onData(row.id, data),
+        onEvent: (event) => handlers.onEvent(row.id, event),
         onExit: (code) => this.exited(row.id, opening, code, handlers),
       })
       const info: Terminal['info'] = {
@@ -719,10 +945,11 @@ class TerminalService {
         cwd: this.directoryFor(row.cwd),
         cols: row.cols,
         rows: row.rows,
-        scrollback: taken.scrollback,
         submit: submitFor(shell),
+        ...(listed?.kept && { kept: true }),
+        ...(listed?.recorded && { recorded: true }),
       }
-      this.terminals.set(row.id, { info, state: { kind: 'live', session: taken, opening }, fittedBy: new Map(), decided: { cols: info.cols, rows: info.rows }, sizing: 0, flow: new OutputFlow() })
+      this.terminals.set(row.id, { info, state: { kind: 'live', session: taken, opening }, fittedBy: new Map(), decided: { cols: info.cols, rows: info.rows }, sizing: 0 })
       logger.info(`Took up session ${session} again for terminal ${row.title} (${row.id}); its shell and its output survived`)
       return true
     } catch (error) {
@@ -747,31 +974,54 @@ class TerminalService {
    */
   async restoreAll(handlers: TerminalHandlers): Promise<void> {
     const persisted = repository.terminalQueries.all()
-
     // One read for the restore: every row asks the same question of the same document
     const codeSettings = featureSettings.forFeature('code').get()
+    // What the broker says of the sessions still running — which were asked to be, which are recorded —
+    // which is what a terminal taken up again is shown as. Asked once, and not at all when no row names one
+    let running: Promise<Map<string, TerminalSessionSummary>> | undefined
+    const listed = (): Promise<Map<string, TerminalSessionSummary>> => running ??= this.runningSessions()
+
     for (const row of persisted) {
       if (this.terminals.has(row.id)) continue
-      // Asked rather than assumed: a stored id is a name, and offering a stale one costs one refused request
-      if (row.session !== undefined && await this.adopt(row, row.session, handlers)) continue
-      // **A row is data** (S3): the database console writes one, `apack db exec` writes one, and a backup
-      // import replaces the whole store without looking at a row. So a stored shell and a stored directory
-      // go through the same check a created one does, rather than straight to a spawn.
-      const shell = this.shellFor(row.shell)
-      const cwd = this.directoryFor(row.cwd)
       const opening = ++this.openings
       try {
-        const integration = await this.arrangeIntegration(shell, codeSettings)
+        // On the target it was on. One whose target has left the settings has nowhere to come back to,
+        // and is closed rather than started on this machine in its place
+        const target = this.targetNamed(row.target, codeSettings)
+        // **A terminal on a target comes back without its target being run.** Reaching one is a command
+        // from the settings, and a row and a setting are both data (S3) — a backup import writes them —
+        // so starting the app must not be what runs it. And a target that cannot be reached just now is
+        // not a terminal that has ended: it is listed as not connected, and starting it again takes up
+        // the shell it had there or starts one
+        if (target) {
+          this.terminals.set(row.id, {
+            info: {
+              id: row.id, title: row.title, customTitle: row.customTitle, pid: null, shell: '', generation: 1, cwd: '',
+              cols: row.cols, rows: row.rows, submit: submitFor(''),
+              target: { id: target.id, label: target.label },
+            },
+            state: { kind: 'exited', code: null, unreached: true },
+            fittedBy: new Map(), decided: { cols: row.cols, rows: row.rows }, sizing: 0,
+            ...(row.session !== undefined && { resumes: row.session }),
+          })
+          continue
+        }
+        // Asked rather than assumed: a stored id is a name, and offering a stale one costs one refused request
+        if (row.session !== undefined
+          && await this.adopt(row, row.session, handlers, (await listed()).get(row.session))) continue
+        // **A row is data** (S3): the database console writes one, `apack db exec` writes one, and a backup
+        // import replaces the whole store without looking at a row. So a stored shell and a stored directory
+        // go through the same check a created one does, rather than straight to a spawn.
+        const shell = this.shellFor(row.shell)
+        const cwd = this.directoryFor(row.cwd)
         // **The same decision as every other session's**, rather than a second copy of it: a restored
         // terminal whose shell dies keeps its screen and reports the crash, where this used to delete the
-        // terminal and report a clean exit 0 — losing the error, and only for terminals that came from a row
-            const session = await services.terminal.open(
-          { cols: row.cols, rows: row.rows, shell, cwd, args: integration?.args, env: integration?.env, colors: TERMINAL_COLORS },
-          {
-            onOutput: (data) => handlers.onData(row.id, data),
-            onExit: (code) => this.exited(row.id, opening, code, handlers),
-          },
-        )
+        // terminal and report a clean exit 0 — losing the error, and only for terminals that came from a row.
+        // Started under the screen the last run left, where it recorded one
+        const session = await this.open(row.id, { shell, cwd, cols: row.cols, rows: row.rows }, true, codeSettings, {
+          onEvent: (event) => handlers.onEvent(row.id, event),
+          onExit: (code) => this.exited(row.id, opening, code, handlers),
+        })
 
         const info: Terminal['info'] = {
           id: row.id,
@@ -780,27 +1030,56 @@ class TerminalService {
           pid: session.pid,
           shell,
           // A restored terminal is a new shell in the old one's directory, so it is a first generation: the
-          // process the previous run had is gone and nothing of its transcript survived the app closing
+          // process the previous run had is gone
           generation: 1,
           cwd,
           cols: row.cols,
           rows: row.rows,
-          // The session's own, not the row's: a row records where a terminal started, and the scrollback is
-          // the host's answer for the session running now
-          scrollback: session.scrollback,
           submit: submitFor(shell),
+          ...(session.recorded && { recorded: true }),
         }
-        this.terminals.set(row.id, { info, state: { kind: 'live', session, opening }, fittedBy: new Map(), decided: { cols: info.cols, rows: info.rows }, sizing: 0, flow: new OutputFlow() })
+        this.terminals.set(row.id, { info, state: { kind: 'live', session, opening }, fittedBy: new Map(), decided: { cols: info.cols, rows: info.rows }, sizing: 0 })
         // **The row names the session that is running now, as every other start records it.** Left naming
         // the one this replaced, the next restart of this process offers a stale id, is refused, and starts
         // a second shell beside one the app's hold is still keeping alive — the accumulation taking a
         // session up again exists to prevent, once per API restart for the life of the app.
         repository.terminalCommands.recordSession(row.id, session.id)
 
-        logger.info(`Restored terminal ${row.title} (${row.id}) as a new shell (pid ${session.pid}); the previous process and its output are gone`)
+        logger.info(`Restored terminal ${row.title} (${row.id}) as a new shell (pid ${session.pid}); the previous process is gone`)
       } catch (error) {
         logger.error(`Failed to restore terminal ${row.id}`, { error })
         repository.terminalCommands.markClosed(row.id)
+      }
+    }
+  }
+
+  /** The sessions this machine's broker has, by id, as it describes each */
+  private async runningSessions(): Promise<Map<string, TerminalSessionSummary>> {
+    const sessions = await services.terminal.sessions().catch((): readonly TerminalSessionSummary[] => [])
+    return new Map(sessions.map(session => [session.id, session]))
+  }
+
+  /**
+   * Ends every shell that was left running on this machine and that no terminal has taken up.
+   *
+   * **A kept shell with no terminal over it runs where nothing can reach it**, for as long as the machine
+   * is up: its row was closed, the data was replaced, or restoring was turned off since it was kept. The
+   * broker is this data directory's own, so a session on it that this app shows nowhere is nobody's.
+   * Called once the terminals a start brings back are back.
+   */
+  async endUnclaimedKept(): Promise<void> {
+    const claimed = new Set<string>()
+    for (const terminal of this.terminals.values()) {
+      if (terminal.state.kind !== 'exited') claimed.add(terminal.state.session.id)
+    }
+    for (const [session, { kept }] of await this.runningSessions()) {
+      if (!kept || claimed.has(session)) continue
+      try {
+        const unclaimed = await services.terminal.adopt(session, { onEvent() {}, onExit() {} })
+        await unclaimed.terminate()
+        logger.info(`Ended session ${session}, which was left running and belongs to no terminal`)
+      } catch (error) {
+        logger.warn(`Could not end session ${session}, which belongs to no terminal`, { error })
       }
     }
   }

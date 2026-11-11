@@ -11,7 +11,7 @@ import { SurfaceScope } from '@apackdev/sdk/fe'
 import { fakeSettings, startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing'
 import { bindSettings } from '#generated/settings-fe.ts'
 import type { CodeSettings } from '#generated/types.ts'
-import type { TerminalInfo } from '#features/code/fe/features/terminal/state.ts'
+import type { TerminalActivity, TerminalInfo, TerminalRewindView } from '#features/code/fe/features/terminal/state.ts'
 
 /** The ref the code surface runs under, which is what a scope and a settings target name it by */
 export const CODE_SURFACE = 'default-setup/code'
@@ -38,6 +38,10 @@ export interface CodeSurfaceHarness {
   mount<T>(component: Component, props?: Record<string, unknown>): Ref<T | undefined>
   /** The terminal list the backend published, as the child actor holds it */
   setTerminals(terminals: TerminalInfo[]): Promise<void>
+  /** What each terminal's program has said off its screen, as the child actor holds it */
+  setActivity(activity: Record<string, TerminalActivity>): Promise<void>
+  /** The recording this window has open to look back through, or none */
+  setRewind(rewind: TerminalRewindView | null): Promise<void>
   selectPanelTerminal(terminalId: string | null): Promise<void>
   togglePanel(): Promise<void>
   /** Vue's queue and the panel's watcher, which attaches a tick after a change */
@@ -49,9 +53,10 @@ export interface CodeSurfaceHarness {
 
 /** A terminal, with the fields a host reads */
 export const terminalInfo = (id: TerminalInfo['id'], fields: Partial<TerminalInfo> = {}): TerminalInfo => ({
-  id, title: 'zsh', pid: 4242, shell: '/bin/zsh', cwd: '/tmp', active: true, generation: 1, cols: 80, rows: 24,
+  // The session a window draws it from, which every running terminal has; a case about one that ended passes none
+  id, session: `session-of-${id}`, title: 'zsh', pid: 4242, shell: '/bin/zsh', cwd: '/tmp', active: true, generation: 1, cols: 80, rows: 24,
   // The host's number, as a session carries it; a case that cares about the bound passes its own
-  scrollback: 1_000, submit: '\n',
+  submit: '\n',
   ...fields,
 })
 
@@ -59,11 +64,16 @@ export function startCodeSurface(options: CodeSurfaceOptions = {}): CodeSurfaceH
   const sent: AnyEventObject[] = []
 
   const terminalMachine = createMachine({
-    types: {} as { context: { terminals: TerminalInfo[] }; events: AnyEventObject },
+    types: {} as {
+      context: { terminals: TerminalInfo[]; activity: Record<string, TerminalActivity>; rewind: TerminalRewindView | null }
+      events: AnyEventObject
+    },
     id: 'terminal',
-    context: { terminals: options.terminals ?? [] },
+    context: { terminals: options.terminals ?? [], activity: {}, rewind: null },
     on: {
       'test.TERMINALS': { actions: assign({ terminals: ({ event }) => event.terminals as TerminalInfo[] }) },
+      'test.ACTIVITY': { actions: assign({ activity: ({ event }) => event.activity as Record<string, TerminalActivity> }) },
+      'test.REWIND': { actions: assign({ rewind: ({ event }) => event.rewind as TerminalRewindView | null }) },
       '*': { actions: ({ event }) => { sent.push(event) } },
     },
   })
@@ -123,6 +133,14 @@ export function startCodeSurface(options: CodeSurfaceOptions = {}): CodeSurfaceH
     },
     async setTerminals(terminals) {
       terminal.send({ type: 'test.TERMINALS', terminals })
+      await settle()
+    },
+    async setActivity(activity) {
+      terminal.send({ type: 'test.ACTIVITY', activity })
+      await settle()
+    },
+    async setRewind(rewind) {
+      terminal.send({ type: 'test.REWIND', rewind })
       await settle()
     },
     async selectPanelTerminal(terminalId) {

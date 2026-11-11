@@ -1,5 +1,6 @@
 import {ipcRenderer, contextBridge, webFrame, webUtils} from 'electron';
-import type {_HostBridge, SpeechEvent} from '@apackdev/sdk/fe';
+import {connect} from 'node:net';
+import type {_HostBridge, SpeechEvent, TerminalViewStream} from '@apackdev/sdk/fe';
 
 const DEFAULT_API_PORT = 3001;
 
@@ -232,6 +233,88 @@ const performance = {
   stop: id => ipcRenderer.invoke('performance:renderer:stop', id),
 } satisfies _HostBridge['performance'];
 
+/** The longest greeting a broker is given to send before the connection is taken to be something else */
+const GREETING_BYTES = 4096;
+
+/**
+ * This window's connection to the terminal broker, as a view.
+ *
+ * **The socket is opened here because here is the only place in a window that can open one**, and it goes
+ * straight to the broker: a terminal's rows and its keys cross no other process on the way.
+ *
+ * **Main says where the broker is and how to greet it; nothing about the protocol is known here.** The
+ * greeting is one line each way, after which the connection carries the broker's view protocol, which is
+ * the page's to speak. What the page sends before the broker has answered is held, since a broker still
+ * reading the greeting would take it for one.
+ */
+const terminal = {
+  views: (target?: string): TerminalViewStream => {
+    const endpoint = ipcRenderer.sendSync('terminal:view-endpoint', target) as {socket: string; greeting: string} | null;
+    const data = new Set<(chunk: Uint8Array) => void>();
+    const closed = new Set<() => void>();
+    let over = false;
+    let greeted = false;
+    let greeting = Buffer.alloc(0);
+    const held: Uint8Array[] = [];
+
+    const socket = endpoint ? connect(endpoint.socket) : undefined;
+    const end = () => {
+      if (over) return;
+      over = true;
+      socket?.destroy();
+      for (const listener of closed) listener();
+    };
+    const hand = (chunk: Uint8Array) => {
+      if (chunk.length === 0) return;
+      for (const listener of data) listener(chunk);
+    };
+
+    if (!socket) queueMicrotask(end);
+    socket?.once('connect', () => socket.write(endpoint!.greeting));
+    socket?.on('data', (chunk: Buffer) => {
+      if (greeted) return hand(chunk);
+      greeting = Buffer.concat([greeting, chunk]);
+      const line = greeting.indexOf(0x0a);
+      if (line === -1) {
+        if (greeting.length > GREETING_BYTES) end();
+        return;
+      }
+      let answered: unknown;
+      try {
+        answered = JSON.parse(greeting.subarray(0, line).toString('utf8'));
+      } catch {
+        return end();
+      }
+      // A broker that refuses the greeting answers `failed`: there is nothing to draw from it
+      if ((answered as {kind?: unknown} | null)?.kind !== 'hello') return end();
+      greeted = true;
+      for (const bytes of held.splice(0)) socket.write(bytes);
+      hand(greeting.subarray(line + 1));
+    });
+    socket?.on('error', end);
+    socket?.on('close', end);
+
+    return {
+      send: bytes => {
+        if (over || !socket) return;
+        if (greeted) socket.write(bytes);
+        else held.push(bytes);
+      },
+      onData: listener => {
+        data.add(listener);
+        return () => { data.delete(listener); };
+      },
+      onClose: listener => {
+        // Already over: said so on the next turn, as it would have been had the listener been there
+        if (over) queueMicrotask(listener);
+        else closed.add(listener);
+        return () => { closed.delete(listener); };
+      },
+      close: end,
+    };
+  },
+} satisfies _HostBridge['terminal'];
+
 const electronAPI = {
   performance,
   windowControls,
@@ -248,6 +331,7 @@ const electronAPI = {
   startupId,
   browser,
   protocolAction,
+  terminal,
   rendererReady: () => ipcRenderer.send('renderer:ready'),
 } satisfies _HostBridge;
 

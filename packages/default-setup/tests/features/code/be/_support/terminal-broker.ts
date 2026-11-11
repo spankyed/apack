@@ -10,7 +10,7 @@
 // So fidelity lives here once. A case records what it cares about by reading the slice it wants off the
 // returned object; nothing is per-spec except which slice it reads.
 import { mockService } from '@apackdev/testing/harness'
-import type { TerminalCellSize, TerminalColors, TerminalListeners, TerminalSession, TerminalSignal, TerminalSignalScope } from '@apackdev/sdk/services'
+import type { TerminalCellSize, TerminalColors, TerminalCommand, TerminalService, TerminalTarget, TerminalEvent, TerminalListeners, TerminalRewind, TerminalSession, TerminalSessionSummary, TerminalSignal, TerminalSignalScope } from '@apackdev/sdk/services'
 
 /** The options the service was opened with, whole, so a case reads the field it is about */
 export interface OpenOptions {
@@ -22,10 +22,15 @@ export interface OpenOptions {
   unset?: readonly string[]
   cwd?: string
   colors?: TerminalColors
+  record?: string
+  restore?: boolean
+  images?: boolean
 }
 
 export interface OpenedSession {
   id: string
+  /** The command of the target it was opened on, or `null` for this machine */
+  target: readonly string[] | null
   pid: number
   options: OpenOptions
   /**
@@ -33,6 +38,8 @@ export interface OpenedSession {
    * nowhere to go. A service that registered them afterwards hands this `false`.
    */
   listenersGivenAtOpen: boolean
+  /** Whether the session was opened to be sent its bytes, which one a window draws is not */
+  asksForBytes: boolean
 }
 
 export interface RecordingBroker {
@@ -58,14 +65,18 @@ export interface RecordingBroker {
    * script do not.
    */
   endShell(id: string, code: number | null, signal?: string | null): void
-  /** Bytes arriving from a session's shell */
-  emit(id: string, data: string): void
+  /** The session's program did something that is not on its screen, which its holder is told as it happens */
+  happens(id: string, event: TerminalEvent): void
   /** The sessions the broker still has: opened and not yet ended */
   readonly live: readonly string[]
   /** The sessions `adopt()` was asked for, in order, whether or not the broker still had them */
   readonly adopted: readonly string[]
   /** Refuses the nth open (1-based), as a broker that would not start */
   refuseOpen(nth: number, why?: string): void
+  /** Makes every target unreachable, or reachable again: each ask of one is refused with `why` and counted */
+  targetsUnreachable(why: string | undefined): void
+  /** How many times a target was asked for anything while it could not be reached */
+  readonly refusedByTarget: number
   /**
    * What the session's shell will report as its directory when asked.
    *
@@ -96,6 +107,14 @@ export interface RecordingBroker {
   deferResize(id: string): void
   /** Lets a held resize answer */
   settleResize(id: string): void
+  /** The sessions asked to outlive the app, as `keep()` last left each */
+  readonly kept: readonly string[]
+  /** The commands a session's shell will be said to have run, and what each printed */
+  reportsCommands(id: string, commands: ReadonlyArray<TerminalCommand & { output?: string }>): void
+  /** The recordings opened to be looked back through, at the grid each was last drawn at, with every moment each was asked to show */
+  readonly rewound: ReadonlyArray<{ id: string; recording: string; cols: number; rows: number; sought: number[]; closed: boolean }>
+  /** Says a recording does not exist, so opening it is refused */
+  refuseRewind(why?: string): void
 }
 
 /**
@@ -120,6 +139,18 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
   const deferredResizes = new Map<string, () => void>()
   const heldResizes = new Map<string, Promise<void>>()
   const live = new Set<string>()
+  const kept = new Set<string>()
+  const commandsOf = new Map<string, ReadonlyArray<TerminalCommand & { output?: string }>>()
+  const rewound: Array<{ id: string; recording: string; cols: number; rows: number; sought: number[]; closed: boolean }> = []
+  let rewindRefusal: string | undefined
+  let unreachable: string | undefined
+  let refusedByTarget = 0
+  /** Refuses as a target that cannot be reached does, where one cannot be and this is an ask of one */
+  const reach = (target: readonly string[] | null): void => {
+    if (target === null || unreachable === undefined) return
+    refusedByTarget += 1
+    throw new Error(unreachable)
+  }
   const adopted: string[] = []
   let next = 0
 
@@ -127,8 +158,13 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
    * One session handle for both routes, because what a holder may do with a session does not depend on how
    * it came to hold it — and because this file's own history is six copies that drifted.
    */
-  const handle = (id: string, handlePid: number | null): TerminalSession => ({
+  const handle = (id: string, handlePid: number | null, target: readonly string[] | null = null, asked?: OpenOptions): TerminalSession => ({
     id,
+    // As the broker answers: recorded where a recording was asked for, and unsaid for one taken up again
+    recorded: asked === undefined ? null : asked.record !== undefined,
+    restored: asked?.restore === true && asked.record !== undefined,
+    // As the host names a target to a window: by a key made from its command
+    target: target === null ? null : `key:${target.join(' ')}`,
     pid: handlePid,
     scrollback: 1000,
     write: async (data: string) => { written.push({ id, data }) },
@@ -155,6 +191,9 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
       return pid === handlePid || (owned.get(id)?.has(pid) ?? false)
     },
     signal: async (signal, scope) => { signalled.push({ id, signal, scope }) },
+    commands: async () => (commandsOf.get(id) ?? []).map(({ output: _output, ...command }) => command),
+    commandOutput: async (command: number) => commandsOf.get(id)?.find(one => one.id === command)?.output ?? null,
+    keep: async (keeping: boolean) => { if (keeping) kept.add(id); else kept.delete(id) },
     // **A signal, as the broker's kill is**, and a signal is not an exit code: `portable-pty` kills with
     // SIGHUP and the protocol reports that by name with no code at all. A double answering a number here
     // would let the service decide a close by reading the code — the one thing that cannot work, so a case
@@ -169,8 +208,10 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
     },
   })
 
-  mockService('terminal', {
+  /** The service for one broker: this machine's, or the one a target's command reaches */
+  const serviceFor = (target: readonly string[] | null): TerminalService => ({
     open: async (options: OpenOptions, listeners: TerminalListeners) => {
+      reach(target)
       next += 1
       const refusal = refusals.get(next)
       if (refusal !== undefined) throw new Error(refusal)
@@ -178,8 +219,12 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
       const pid = pidBase + next
       listening.set(id, listeners)
       live.add(id)
-      opened.push({ id, pid, options, listenersGivenAtOpen: typeof listeners?.onOutput === 'function' })
-      return handle(id, pid)
+      opened.push({
+        id, target, pid, options,
+        listenersGivenAtOpen: typeof listeners?.onEvent === 'function',
+        asksForBytes: typeof listeners?.onOutput === 'function',
+      })
+      return handle(id, pid, target, options)
     },
 
     /**
@@ -190,13 +235,38 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
      * let the fall-back to a fresh shell go untested.
      */
     adopt: async (id: string, listeners: TerminalListeners) => {
+      reach(target)
       adopted.push(id)
       if (!live.has(id)) throw new Error(`no session ${id}`)
       listening.set(id, listeners)
       // As the broker does: a pid is answered for a spawn and for nothing else
-      return handle(id, null)
+      return handle(id, null, target)
     },
+
+    sessions: async (): Promise<TerminalSessionSummary[]> => (reach(target), [...live]).map(id => ({
+      id, pid: opened.find(one => one.id === id)?.pid ?? 0, cols: 80, rows: 24, kept: kept.has(id), recorded: opened.find(one => one.id === id)?.options.record !== undefined,
+      title: null, cwd: reportedCwds.get(id) ?? null, command: null, running: false,
+    })),
+
+    rewind: async (recording: string, size: { cols: number; rows: number }): Promise<TerminalRewind> => {
+      if (rewindRefusal !== undefined) throw new Error(rewindRefusal)
+      const entry = { id: `rewind-${rewound.length + 1}`, recording, ...size, sought: [] as number[], closed: false }
+      rewound.push(entry)
+      return {
+        id: entry.id,
+        first: 1_000,
+        last: 9_000,
+        // Held to what the recording covers, as the broker holds it
+        seek: async (at: number) => { const shown = Math.min(9_000, Math.max(1_000, at)); entry.sought.push(shown); return shown },
+        resize: async (cols: number, rows: number) => { entry.cols = cols; entry.rows = rows },
+        close: async () => { entry.closed = true },
+      }
+    },
+  
+    at: (to: TerminalTarget) => serviceFor(to.command),
   })
+
+  mockService('terminal', serviceFor(null))
 
   const listenersFor = (id: string): TerminalListeners => {
     const found = listening.get(id)
@@ -204,7 +274,10 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
     return found
   }
   return {
-    opened, resized, written, terminated, adopted, flow, signalled, askedOwns,
+    opened, resized, written, terminated, adopted, flow, signalled, askedOwns, rewound,
+    get kept() { return [...kept] },
+    reportsCommands: (id, commands) => { commandsOf.set(id, commands) },
+    refuseRewind: (why = 'there is no recording to look back through') => { rewindRefusal = why },
     declareOwned: (id, pid) => { owned.set(id, (owned.get(id) ?? new Set()).add(pid)) },
     get live() { return [...live] },
     endShell: (id, code, signal = null) => {
@@ -212,11 +285,17 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
       live.delete(id)
       listenersFor(id).onExit(code, signal)
     },
-    emit: (id, data) => listenersFor(id).onOutput(data),
+    happens: (id, event) => listenersFor(id).onEvent?.(event),
     refuseOpen: (nth, why = 'the broker would not start') => { refusals.set(nth, why) },
+    targetsUnreachable: (why) => { unreachable = why },
+    get refusedByTarget() { return refusedByTarget },
     refuseTerminate: (id, why = 'the broker would not end the session') => { refusedTerminations.set(id, why) },
     reportsCwd: (id, cwd) => { reportedCwds.set(id, cwd) },
-    reportsCommandFinished: (id) => { finishedCommands.set(id, (finishedCommands.get(id) ?? 0) + 1) },
+    // Both halves of the fact: what `facts()` answers afterwards, and the event that says it happened
+    reportsCommandFinished: (id) => {
+      finishedCommands.set(id, (finishedCommands.get(id) ?? 0) + 1)
+      listenersFor(id).onEvent?.({ kind: 'commandFinished', exitStatus: 0 })
+    },
     deferResize: (id) => {
       let release = () => {}
       heldResizes.set(id, new Promise<void>(resolve => { release = () => { resolve() } }))

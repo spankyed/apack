@@ -27,18 +27,22 @@ apack is an Electron desktop app with an actor-based architecture. Both frontend
 
 Monorepo using npm workspaces. Requires Node 24 LTS (>=24.12.0) and npm >= 11. Both floors are a measured refusal rather than a preference: npm 10 crashes resolving vitest 4.1, which a new pack's first install does, and `apack pack build` cannot run on 24.11.0 at all, whose module-hook validator rejects the CommonJS load result the pack compiler's own hooks pass through — `COMPILER_NODE_FLOOR` (`packages/apack-cli/src/build/node-support.ts`) refuses it by name, and `engines.node` says the same to npm.
 
-**Two sibling checkouts are vendored, each depended on as an npm package resolved through its link.** Each
+**Two sibling checkouts are vendored, each depended on as npm packages resolved through its link.** Each
 is a gitignored symlink under `vendor/` beside a committed `.rev` naming the commit it is pinned to, linked
 by its own script: `vendor/elmdb` (`npm run link:elmdb`) is the Rust engine `@apackdev/ears` builds against,
-and `vendor/apack-terminal` (`npm run link:apack-terminal`) is the terminal broker. The link is
-machine-specific, so it is ignored and the `.rev` is the shared fact; both linkers refuse a checkout that
-isn't one and a checkout that doesn't hold the pin. **A vendored Rust checkout that the app consumes ships
-an npm package, and the package is what knows its own build** — elmdb's `crates/elmdb-node` its napi
-binding, apack-terminal's `node/` the broker binary and the protocol's generated types — so the app resolves
-both the way it resolves any dependency, and a packaged app collects them with every other. Neither is
-published to a registry; CI clones each at its pin (`.github/actions/{elmdb,apack-terminal}`). Deriving a
-path into a checkout's build directory instead is what this replaced, and it cost a release with no terminal
-and a Windows build that could not find a binary it had just produced. **Whatever reads `vendor/` derives its subject from the
+and `vendor/apack-terminal` (`npm run link:apack-terminal`) is the terminal broker and what a window draws
+a terminal with. The link is machine-specific, so it is ignored and the `.rev` is the shared fact; both
+linkers refuse a checkout that isn't one and a checkout that doesn't hold the pin. **A vendored checkout
+that the app consumes ships an npm package, and the package is what knows its own build** — elmdb's
+`crates/elmdb-node` its napi binding, apack-terminal's `node/` the broker binary and the protocol's
+generated types, and its `view/` (`apack-terminal-view`) the compiled `dist` a window draws with — so the
+app resolves each the way it resolves any dependency, and a packaged app collects them with every other.
+None is published to a registry; CI clones each at its pin (`.github/actions/{elmdb,apack-terminal}`).
+**The broker and the view speak one protocol and are one checkout, so one pin holds both halves**: the
+view's suite reads the vectors the broker's encoder writes, in that repository, and no pair of commits
+exists here to disagree. Deriving a path into a checkout's build
+directory instead is what this replaced, and it cost a release with no terminal and a Windows build that
+could not find a binary it had just produced. **Whatever reads `vendor/` derives its subject from the
 links rather than naming a checkout** — the janitor's budget and the Linux container's Rust toolchain both do
 (`scripts/lib/vendored-checkouts.ts`), so a third sibling is covered the day it is linked, and two checkouts
 pinning different toolchains is a refusal naming both rather than a silent build with one of them.
@@ -669,4 +673,4 @@ Rules for default-setup migrations (details in `packages/apack-host/src/migratio
 
 ## Tech stack
 
-XState v5 (state machines everywhere), tRPC v11 (typed RPC), Vercel AI SDK 7 (model calls through `services.inference`: Anthropic, OpenAI, Google, Groq, Mistral, Cohere), Zod (validation), Vue Flow (node-based editor), Monaco Editor, Tiptap (rich text), Ghostty's VT core on both sides, at two different commits — the `apack-terminal` broker owns the pty and parses with `libghostty-vt` 1.0, the window draws with `ghostty-web`, an emulator built from an earlier Ghostty commit with its own patch (terminal), elmdb on LMDB (persistence), Vite (bundler), Oxlint + ESLint (linting).
+XState v5 (state machines everywhere), tRPC v11 (typed RPC), Vercel AI SDK 7 (model calls through `services.inference`: Anthropic, OpenAI, Google, Groq, Mistral, Cohere), Zod (validation), Vue Flow (node-based editor), Monaco Editor, Tiptap (rich text), Ghostty's VT core in one place — the `apack-terminal` broker owns the pty and interprets it with `libghostty-vt` 1.0, and a window paints the rows it is sent with `apack-terminal-view`, which has no core of its own (terminal), elmdb on LMDB (persistence), Vite (bundler), Oxlint + ESLint (linting).

@@ -24,7 +24,7 @@ describe('a shell whose integration could not be written', () => {
     await app.connect()
 
     const { terminalService } = await import('#features/code/be/services/terminal.ts')
-    const terminal = await terminalService.create({ cols: 80, rows: 24 }, { onData: () => {}, onExit: () => {}, onCrashed: () => {} })
+    const terminal = await terminalService.create({ cols: 80, rows: 24 }, { onEvent: () => {}, onExit: () => {}, onCrashed: () => {} })
 
     expect(terminal.id, 'the terminal broker.opened').toBeTruthy()
     expect(broker.opened, 'the shell was started').toHaveLength(1)
@@ -49,7 +49,7 @@ describe('a shell whose integration could not be written', () => {
     await app.connect()
 
     const { terminalService } = await import('#features/code/be/services/terminal.ts')
-    await terminalService.create({ cols: 80, rows: 24 }, { onData: () => {}, onExit: () => {}, onCrashed: () => {} })
+    await terminalService.create({ cols: 80, rows: 24 }, { onEvent: () => {}, onExit: () => {}, onCrashed: () => {} })
 
     expect(written, 'the rc file was written').not.toHaveLength(0)
     const arranged = (broker.opened[0]!.options.args?.length ?? 0) > 0

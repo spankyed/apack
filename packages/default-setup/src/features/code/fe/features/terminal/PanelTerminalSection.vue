@@ -37,6 +37,16 @@
           <DropdownMenuPortal>
             <DropdownMenuContent class="min-w-[160px] bg-neutral-900 border border-neutral-700 rounded-md shadow-lg py-1 z-50" :side-offset="5">
               <DropdownMenuItem
+                v-for="target in terminalTargets"
+                :key="target.id"
+                :data-terminal-target="target.id"
+                @select="createTerminalOn(target.id)"
+                class="flex items-center gap-2 px-3 py-2 text-sm transition-colors cursor-pointer text-neutral-200 hover:bg-neutral-800 focus:bg-neutral-800 focus:outline-none"
+              >
+                <Server :size="16" />
+                New Terminal on {{ target.label }}
+              </DropdownMenuItem>
+              <DropdownMenuItem
                 @select="killAllTerminals"
                 class="flex items-center gap-2 px-3 py-2 text-sm transition-colors cursor-pointer text-red-400 hover:bg-neutral-800 focus:bg-neutral-800 focus:outline-none"
               >
@@ -64,8 +74,9 @@
             because its ref is a grandchild of the trigger, which is the shape this now matches.
           -->
           <ContextMenuTrigger as-child>
-            <div class="w-full h-full">
+            <div class="relative w-full h-full" @pointerdown.capture="seenPanelTerminal">
               <div ref="container" class="w-full h-full bg-[#1e1e1e] py-1 px-2"></div>
+              <TerminalRewind :key="activeTerminalInfo.id" :terminal-info="activeTerminalInfo" />
             </div>
           </ContextMenuTrigger>
           <ContextMenuPortal>
@@ -87,6 +98,7 @@
                 <Eraser class="w-4 h-4" />
                 Clear
               </ContextMenuItem>
+              <TerminalMenuExtras :terminal-id="activeTerminalInfo.id" :attachment="() => attachment" />
               <ContextMenuSeparator :class="MENU_SEPARATOR_CLASS" />
               <ContextMenuItem @select="restartPanelTerminal" :class="MENU_ITEM_CLASS">
                 <RotateCcw class="w-4 h-4" />
@@ -119,6 +131,7 @@
           <ContextMenuTrigger as-child>
             <div
               @click="!isInTab(terminal.id) ? selectTerminal(terminal.id) : undefined"
+              data-terminal-row
               class="group flex items-center gap-1.5 px-2 py-1.5 text-xs transition-colors"
               :class="[
                 isInTab(terminal.id)
@@ -142,6 +155,13 @@
                 />
               </div>
               <span v-else class="flex-1 min-w-0 truncate">{{ getTerminalDisplayName(terminal) }}</span>
+              <span
+                v-if="terminal.target"
+                class="flex-shrink-0 rounded bg-neutral-700/60 px-1 text-[10px] text-neutral-300"
+                :title="`Runs on ${terminal.target.label}`"
+                data-terminal-on
+              >{{ terminal.target.label }}</span>
+              <TerminalActivityBadge :activity="activity[terminal.id]" :kept="terminal.kept === true" />
               <!-- **A terminal whose shell died is kept so its last output can be read**, which only works
                    if the list says so: drawn like a live one, it invites typing that goes nowhere and gives
                    no reason for the screen having stopped. -->
@@ -149,7 +169,7 @@
                 v-if="terminal.exited"
                 class="flex-shrink-0 text-[10px] uppercase tracking-wide text-amber-500/80"
                 :title="exitedTitle(terminal)"
-              >exited</span>
+              >{{ terminal.exited.unreached ? 'not connected' : 'exited' }}</span>
               <button
                 v-if="renamingTerminalId !== terminal.id"
                 @click.stop="handleCloseTerminal(terminal)"
@@ -214,7 +234,7 @@ import { useSurface } from '@apackdev/sdk/fe'
 import { useSettings } from '#generated/settings-fe.ts'
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useSelector } from '@xstate/vue'
-import { ChevronRight, ChevronDown, Plus, X, Edit, Trash2, PanelTop, PanelBottom, Terminal as TerminalIcon, Ellipsis, Square, Copy, ClipboardPaste, TextSelect, Eraser, RotateCcw } from 'lucide-vue-next'
+import { ChevronRight, ChevronDown, Plus, X, Edit, Trash2, PanelTop, PanelBottom, Terminal as TerminalIcon, Ellipsis, Square, Copy, ClipboardPaste, TextSelect, Eraser, RotateCcw, Server } from 'lucide-vue-next'
 import {
   ContextMenuRoot,
   ContextMenuTrigger,
@@ -236,6 +256,9 @@ import { terminalPool } from '#features/code/fe/utils/terminal-pool.ts'
 import { terminalNameFor } from '#features/code/fe/utils/terminal-name.ts'
 import { useTerminalActions } from '#features/code/fe/composables/useTerminalActions.ts'
 import RunScriptPopover from './RunScriptPopover.vue'
+import TerminalActivityBadge from './TerminalActivityBadge.vue'
+import TerminalMenuExtras from './TerminalMenuExtras.vue'
+import TerminalRewind from './TerminalRewind.vue'
 import ContextMenuPopup from '@apackdev/ui/design/ContextMenuPopup'
 import { useSectionVisibilityMenu } from '#features/code/fe/composables/useSectionVisibilityMenu.ts'
 import type { TerminalScript } from '#generated/types.ts'
@@ -252,12 +275,14 @@ const terminalActor = panelChild(codeActor, 'terminal')!
 const panelTerminalId = useSelector(codeActor, (state) => state.context.panelTerminalId)
 const openFiles = useSelector(codeActor, (state) => state.context.openFiles)
 const terminals = useSelector(terminalActor, (state) => state.context.terminals)
+const activity = useSelector(terminalActor, (state) => state.context.activity)
 
 const featureSettings = useSettings('code')
 const storedCodeSettings = featureSettings.value
 const confirmTerminalClose = computed(() => storedCodeSettings.value?.confirmTerminalClose ?? true)
 const closeTerminalOnTabClose = computed(() => storedCodeSettings.value?.closeTerminalOnTabClose ?? true)
 const terminalScripts = computed(() => (storedCodeSettings.value?.terminalScripts ?? []) as TerminalScript[])
+const terminalTargets = computed(() => storedCodeSettings.value?.terminalTargets ?? [])
 
 const { getTerminalDisplayName, } = useTerminalActions(terminalActor, confirmTerminalClose, closeTerminalOnTabClose)
 
@@ -289,7 +314,9 @@ let attachment: TerminalAttachment | null = null
 let focusOnAttach = false
 
 /** What a terminal whose shell has gone says when you hover it */
-const exitedTitle = (terminal: TerminalInfo) => terminal.exited?.code == null
+const exitedTitle = (terminal: TerminalInfo) => terminal.exited?.unreached
+  ? `Not connected to ${terminal.target?.label ?? 'its target'}. Restart the terminal to connect`
+  : terminal.exited?.code == null
   ? 'The shell ended without a status (a signal)'
   : `The shell ended with status ${terminal.exited.code}`
 
@@ -317,9 +344,8 @@ const attachTerminal = (terminalId: string) => {
     return
   }
 
-  void terminalPool.ensure(info, data => {
-    terminalActor?.send({ type: 'terminal.INPUT', terminalId, data })
-  }).then(entry => {
+  // What is typed goes from the view to its session; this host never carries a key
+  void Promise.resolve(terminalPool.ensure(info)).then(entry => {
     // Superseded, closed while it was opening, or the panel has gone: the request to focus dies with the
     // attach it was made for, exactly as it does for the cases above.
     if (!entry || generation !== attaching || !container.value) {
@@ -332,7 +358,14 @@ const attachTerminal = (terminalId: string) => {
         terminalActor?.send({ type: 'terminal.RESIZE', terminalId, cols, rows, cellWidth, cellHeight })
       },
       onSelectionChange: has => { hasSelection.value = has },
+      // A path a program printed opens as the file it names, where the explorer opens every other
+      onOpenPath: (path, at) => {
+      panelChild(codeActor, 'explorer')?.send({ type: 'explorer.OPEN_FILE', path })
+      // Shown at the line the program named, once the file is the one showing
+      if (at) codeActor.send({ type: 'UPDATE_STATE', updates: { pendingRevealLine: { filePath: path, line: at.line, column: at.column } } })
+    },
     })
+    terminalActor.send({ type: 'terminal.SEEN', terminalId })
 
     // **Focused only when the user asked for this terminal** (F15). An attach happens on mount too — a
     // panel re-open, an actor replacement, a reconnect — none of which is a request, and taking focus from
@@ -372,11 +405,7 @@ const detachTerminal = ({ handingOver = false } = {}) => {
 }
 
 // Context menu actions
-const copySelection = () => {
-  const selection = attachment?.selection()
-  // A clipboard the window may not write rejects; unhandled, that is a console error nobody can act on (F16)
-  if (selection) void navigator.clipboard.writeText(selection).catch(() => {})
-}
+const copySelection = () => { void attachment?.copy() }
 
 const pasteClipboard = () => {
   // **Through the emulator, not as input** (F12). This host sent the text as a keystroke, so a pasted
@@ -389,6 +418,11 @@ const pasteClipboard = () => {
 const selectAll = () => attachment?.selectAll()
 
 const clearTerminal = () => attachment?.clear()
+
+/** The person is looking at the panel's terminal, so what was waiting for them to has been seen */
+const seenPanelTerminal = () => {
+  if (panelTerminalId.value) terminalActor.send({ type: 'terminal.SEEN', terminalId: panelTerminalId.value })
+}
 
 const killPanelTerminal = () => {
   if (!panelTerminalId.value) return
@@ -414,6 +448,14 @@ const stopTerminal = () => {
 
 const createTerminal = () => {
   terminalActor?.send({ type: 'terminal.CREATE' })
+  if (!isExpanded.value) {
+    codeActor.send({ type: 'TOGGLE_PANEL_TERMINAL' })
+  }
+}
+
+/** A terminal somewhere other than this machine: on one of the targets the settings name */
+const createTerminalOn = (target: string) => {
+  terminalActor?.send({ type: 'terminal.CREATE', on: target })
   if (!isExpanded.value) {
     codeActor.send({ type: 'TOGGLE_PANEL_TERMINAL' })
   }

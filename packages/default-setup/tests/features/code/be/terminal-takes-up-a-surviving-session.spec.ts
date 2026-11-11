@@ -17,7 +17,7 @@ import { repository } from '#generated/repository.ts'
 import { EARS, newId } from '#generated/ears.ts'
 import { defaultShell } from '#features/code/be/services/known-shells.ts'
 
-const handlers = () => ({ onData: vi.fn(), onExit: vi.fn(), onCrashed: vi.fn() })
+const handlers = () => ({ onEvent: vi.fn(), onExit: vi.fn(), onCrashed: vi.fn() })
 
 /** Asked by id, because the service is one object for the process and `resetTestData` does not empty it */
 const only = <T extends { id: string }>(list: readonly T[], id: string) => list.filter(one => one.id === id)

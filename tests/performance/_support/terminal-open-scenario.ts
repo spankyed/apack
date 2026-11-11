@@ -31,20 +31,16 @@ const terminalFixture = (trials: number) => {
  * a *before* for, and the one its own Constraints single out — "a pty spawns in-process today; a broker has
  * to start first" — so a regression here is the result that has to be investigated rather than absorbed.
  *
- * **Completion is what the window drew, because a terminal has no view.** Its output is broadcast news
- * (`terminal.OUTPUT`) and the code feature declares no `views` module at all, so there is no delivery to
- * correlate a trial against and `awaitsDelivery` is false. What stands in its place is the surface's own
- * record that the terminal is the panel's and expanded, and an emulator attached to a laid-out element of
- * the app's own (`[data-apack-terminal]`) with a renderer canvas in it.
+ * **Completion is what the window drew.** A terminal's screen is no event and the code feature declares no
+ * `views` module for it — the window draws it from rows the broker sends over a connection of the
+ * window's own — so there is no delivery to correlate a trial against and `awaitsDelivery` is false. What
+ * stands in its place is the surface's own record that the terminal is the panel's and expanded, and a view
+ * of it mounted in a laid-out element of the app's own (`[data-apack-terminal]`) with its canvas in it.
  *
- * **What this measures is attachment, not the first byte, and that is a limit of what the page can see.**
- * The emulator draws to a canvas, which it appends to the element the pool names, beside a textarea for
- * input — and it writes no text into the DOM at all. So there is nothing there to read the screen's
- * contents from, and the only object holding the buffer is the emulator inside the pack's module-scoped
- * pool, which the page cannot reach. "The
- * shell's prompt is on screen" is therefore not observable from here without new plumbing; it belongs with
- * the sustained-output reading, which needs a byte-level signal anyway. This is the latency from asking for
- * a terminal to having one attached and on screen, which is where a broker's start-up cost lands.
+ * **What this measures is attachment, not the first frame.** This is the latency from asking for a
+ * terminal to having one attached and on screen, which is where a broker's start-up cost lands; what it
+ * costs from there to a painted screen is `terminal-echo`'s reading, which waits on the frame the view
+ * says it painted.
  *
  * Each trial opens its own terminal and closes it again outside the measured interval, so twenty-five
  * trials do not leave twenty-five shells running and change what the later ones measure.

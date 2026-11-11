@@ -81,7 +81,8 @@ async function setup(dir) {
   // target is absent installs as a dangling symlink and exits 0, so a worktree without these links fails
   // later and elsewhere: `apack-terminal` is a declared dependency of `@apackdev/host` and the API, and
   // without it `typecheck:host` cannot resolve the broker's protocol types — which is the first leg of the
-  // strict chain `session:check` runs, on every branch.
+  // strict chain `session:check` runs, on every branch. The view the built-in pack draws a terminal with is
+  // a package of that same checkout, which its linker builds; without it the pack does not build.
   try {
     linkElmdb(dir);
     linkApackTerminal(dir);

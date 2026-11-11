@@ -9,6 +9,7 @@ import { PACKAGE_DIRS } from '../../../scripts/lib/workspace-deps.ts';
 import { UNIT_SUITES, unitStepName } from '../../../scripts/lib/unit-suites.ts';
 import { depFileNames, pruneOrphanDepFiles, readsOf, sourceOf, untrustworthy } from '../../../scripts/lib/dep-files.ts';
 import * as buildReads from '../../../scripts/lib/build-reads.ts';
+import { vendoredCheckouts } from '../../../scripts/lib/vendored-checkouts.ts';
 import { evidenceOrRefuse } from './_support/evidence.ts';
 import { population } from '@apackdev/sdk/testing';
 
@@ -395,12 +396,34 @@ describe('apack pack build says what it read', () => {
     return files.filter((file) => exists(file)).filter((file) => !declares(file)).sort();
   };
 
+  /**
+   * Whether a read is inside a vendored checkout: under `vendor/<name>/` where that is a clone, as in CI, or
+   * wherever the link there points, as on a developer's machine.
+   *
+   * **A dependency, which its pin covers** — `vendor/<name>.rev` is among every step's inputs — and the rule
+   * `readsOf` holds a typecheck leg's reads to (`scripts/lib/dep-files.ts`). A pack that draws with a
+   * vendored package reads that package's build, and what re-runs the step when it changes is the pin
+   * moving.
+   */
+  // Each checkout by both of its names: where it is, and `vendor/<name>`, which is the same place in CI
+  // and a link to it on a developer's machine. Only the checkouts: another directory under `vendor/` is
+  // not one
+  const vendored = vendoredCheckouts(REPO_ROOT).flatMap((checkout) => [
+    checkout.path + path.sep,
+    path.join(REPO_ROOT, 'vendor', checkout.name) + path.sep,
+  ]);
+  const inVendoredCheckout = (file: string): boolean => {
+    const absolute = path.resolve(REPO_ROOT, file) + (file.endsWith(path.sep) ? path.sep : '');
+    return vendored.some((root) => absolute.startsWith(root));
+  };
+
   /** Every read of every built pack, repo-relative: a pack records its own paths, and `..` leaves the pack */
   const readsByPack = (): { packDir: string; files: string[] }[] => buildReads.packsWithReads().flatMap((packDir) => {
     const record = buildReads.readsOf(packDir);
     return record === undefined ? [] : [{
       packDir,
-      files: buildReads.filesRead(record).map((file) => path.normalize(path.join(packDir, file))),
+      files: buildReads.filesRead(record).map((file) => path.normalize(path.join(packDir, file)))
+        .filter((file) => !inVendoredCheckout(file)),
     }];
   });
 
@@ -447,6 +470,20 @@ describe('apack pack build says what it read', () => {
       return undeclared(files, step).slice(0, 5).map((file) => `${step.name} built ${packDir}, which read ${file}, and the step does not declare it`);
     });
     expect(missing, 'the build read these and nothing re-runs the step when they change').toEqual([]);
+  });
+
+  // The exemption is for a vendored checkout and nothing else that happens to be outside the repo
+  it('passes over a read inside a vendored checkout, and over no other read outside the repo', () => {
+    const [first] = vendoredCheckouts(REPO_ROOT);
+    expect(first, 'no checkout is linked under vendor/, so this case has nothing to ask about').toBeDefined();
+    const inside = path.relative(REPO_ROOT, path.join(first!.path, 'dist', 'index.js'));
+    expect(inVendoredCheckout(inside)).toBe(true);
+    expect(inVendoredCheckout(`vendor/${first!.name}/dist/index.js`)).toBe(true);
+    // Beside a checkout, wherever checkouts are: next to the link's target, and under `vendor/` itself
+    expect(inVendoredCheckout(path.relative(REPO_ROOT, path.join(path.dirname(first!.path), 'not-vendored', 'index.js')))).toBe(false);
+    expect(inVendoredCheckout('vendor/not-vendored/index.js')).toBe(false);
+    expect(inVendoredCheckout('vendor/elmdb.rev')).toBe(false);
+    expect(inVendoredCheckout('packages/default-setup/src/index.ts')).toBe(false);
   });
 
   /**

@@ -2700,13 +2700,16 @@ type IncomingSearchEvents = {
     type: 'search.CANCEL_SEARCH';
 };
 
-type IncomingTerminalEvents = {
+type IncomingTerminalEvents = 
+/** `target` is one of the code settings' `terminalTargets`, by id: somewhere other than this machine to run it */
+{
     type: 'terminal.CREATE_TERMINAL';
     title?: string;
     cwd?: string;
     shell?: string;
     cols?: number;
     rows?: number;
+    target?: string;
 } | {
     type: 'terminal.CLOSE_TERMINAL';
     terminalId: string;
@@ -2727,12 +2730,6 @@ type IncomingTerminalEvents = {
     cellWidth?: number;
     cellHeight?: number;
 }
-/** How far this window has drawn a terminal's output, as the position its last `terminal.OUTPUT` carried */
- | {
-    type: 'terminal.OUTPUT_DRAWN';
-    terminalId: string;
-    position: number;
-}
 /** This window has stopped showing that terminal, so its fit no longer holds the grid down */
  | {
     type: 'terminal.STOPPED_FITTING';
@@ -2746,6 +2743,35 @@ type IncomingTerminalEvents = {
 } | {
     type: 'terminal.OPEN_TERMINAL_TAB';
     terminalId: string;
+}
+/** Whether that terminal's shell goes on running when the app is not, to be taken up again at the next start */
+ | {
+    type: 'terminal.KEEP_TERMINAL';
+    terminalId: string;
+    kept: boolean;
+}
+/** Open that terminal's recording to look back through, drawn at this size. Answered with `terminal.REWOUND` */
+ | {
+    type: 'terminal.REWIND';
+    terminalId: string;
+    cols: number;
+    rows: number;
+}
+/** Show an open recording as it was at `at`, in milliseconds since the Unix epoch */
+ | {
+    type: 'terminal.REWIND_SEEK';
+    session: string;
+    at: number;
+} | {
+    type: 'terminal.REWIND_CLOSE';
+    session: string;
+}
+/** The window looking back through a recording measured how many cells fit where it draws it */
+ | {
+    type: 'terminal.REWIND_RESIZE';
+    session: string;
+    cols: number;
+    rows: number;
 };
 
 type IncomingThreadsEvents = {
@@ -4213,13 +4239,48 @@ type OutgoingTerminalEvents =
     type: 'terminal.OPENED';
     data: TerminalInfo;
 }
-/** `position` is where the terminal's output stands after this, which a window answers with once drawn */
+/**
+ * **What a terminal's program did that is not on its screen**, for every window: the five below. The
+ * screen itself is not an event at all — a window draws a terminal from the rows its session sends it
+ * (`TerminalInfo.session`), so nothing a program prints crosses here.
+ *
+ * Each is a claim the program made. A window decides what to do about one where the person is: whether
+ * text reaches their clipboard, whether a notification is worth their attention.
+ */
  | {
-    type: 'terminal.OUTPUT';
+    type: 'terminal.CLIPBOARD';
     data: {
         terminalId: string;
-        data: string;
-        position: number;
+        text: string;
+    };
+} | {
+    type: 'terminal.BELL';
+    data: {
+        terminalId: string;
+    };
+} | {
+    type: 'terminal.NOTIFIED';
+    data: {
+        terminalId: string;
+        title: string;
+        body: string;
+    };
+}
+/** How far along the program says it is; `percent` is `null` where it gave none, and `none` clears it */
+ | {
+    type: 'terminal.PROGRESS';
+    data: {
+        terminalId: string;
+        state: 'error' | 'indeterminate' | 'none' | 'paused' | 'running';
+        percent: number | null;
+    };
+}
+/** The name the program gave its terminal, which is empty when it took the name back */
+ | {
+    type: 'terminal.TITLED';
+    data: {
+        terminalId: string;
+        title: string;
     };
 } | {
     type: 'terminal.CLOSED';
@@ -4284,6 +4345,35 @@ type OutgoingTerminalEvents =
 } | {
     type: 'terminal.TERMINAL_TAB_OPENED';
     data: TerminalInfo;
+}
+/** Whether a terminal's shell outlives the app changed: news for every window, which each draws on its tab */
+ | {
+    type: 'terminal.KEPT';
+    data: {
+        terminalId: string;
+        kept: boolean;
+    };
+}
+/**
+ * A recording is open, for the window that asked: `session` is what its view is drawn from, and it runs
+ * between `first` and `last`, in milliseconds since the Unix epoch.
+ */
+ | {
+    type: 'terminal.REWOUND';
+    data: {
+        terminalId: string;
+        session: string;
+        first: number;
+        last: number;
+    };
+}
+/** The moment an open recording now shows, for the window that asked */
+ | {
+    type: 'terminal.REWIND_SOUGHT';
+    data: {
+        session: string;
+        at: number;
+    };
 };
 
 /**
@@ -5288,12 +5378,26 @@ interface TerminalEntity {
      * every session — so it is offered to the broker rather than trusted (see `shell`).
      */
     session?: string;
+    /**
+     * Where the terminal runs when it is not this machine: the id of one of the code settings'
+     * `terminalTargets`. A name, as `session` is: a target that has since been removed from the settings
+     * names nothing, and the terminal is then one that cannot be brought back.
+     */
+    target?: string;
     createdAt: number;
     updatedAt: number;
 }
 
 interface TerminalInfo {
     id: EARS.EntityId;
+    /**
+     * The session a window draws this terminal from, by the name the terminal broker knows it by. Absent
+     * while the terminal has no shell — one that ended and was kept.
+     *
+     * **Not the terminal's own id, because a terminal is not its shell.** A restart puts a new session under
+     * the same terminal, and a window that went on drawing the old one would be drawing a shell that is gone.
+     */
+    session?: string;
     title: string;
     customTitle?: string;
     /**
@@ -5317,17 +5421,40 @@ interface TerminalInfo {
      * seam; this is what says how many there have been, for a window that was not watching.
      */
     generation: number;
-    /** The shell ended and the terminal was kept. Absent while one is running */
+    /**
+     * Whether what it prints is kept in a recording, which is what it can be looked back through from and
+     * what lets its shell be kept running and found again. A terminal on a target is not, and nor is one
+     * started while restoring terminals is off.
+     */
+    recorded?: boolean;
+    /** Whether its shell goes on running when the app is not, which a window asks for with `terminal.KEEP_TERMINAL` */
+    kept?: boolean;
+    /**
+     * Where it runs when that is not this machine: the setting's id and label, and the `key` a window
+     * draws its session from (`terminalViews`), which is there once a session on the target has been
+     * reached. Absent for a terminal on this machine.
+     */
+    target?: {
+        id: string;
+        label: string;
+        key?: string;
+    };
+    /**
+     * The terminal has no shell and was kept. Absent while one is running.
+     *
+     * `unreached` is a terminal on a target this run has not connected to: there may be a shell there still,
+     * and starting the terminal again is what finds out.
+     */
     exited?: {
         code: number | null;
+        unreached?: true;
     };
     /**
      * The session's size **when this was published**, which is a starting point and not a live reading.
      *
      * **A pty has one size and it is whatever a window last fitted**, so the live value lives where the
      * session does: the service keeps it current and `restart` re-opens the shell at it. What a window holds
-     * is the snapshot it was last listed or opened with, and its one consumer wants exactly that — the pool
-     * builds the emulator at this size, so it is the width a replayed screen is first drawn at.
+     * is the snapshot it was last listed or opened with.
      *
      * It is spelled out because it reads as live and is not: a drive scenario waited on it for the size a
      * window had just fitted and timed out at the creation size, with every resize having landed correctly
@@ -5336,14 +5463,6 @@ interface TerminalInfo {
     cols: number;
     /** The session's rows when this was published; see `cols` */
     rows: number;
-    /**
-     * How far back this session can be scrolled: the host's number, from the broker's handshake.
-     *
-     * The window derives its emulator's bound from this and never pins its own. Exceeding it would draw lines
-     * no reattach could reproduce — the broker is what answers a screen read when no window holds the bytes —
-     * and 10,000 pinned in the pool against the broker's 1,000 is exactly what that looked like.
-     */
-    scrollback: number;
     /**
      * What ends a typed line for *this* shell — X6.
      *
@@ -5893,6 +6012,7 @@ declare namespace __FeatureSettings_Code {
             } | null;
         };
         restoreTerminals: boolean;
+        terminalClipboardWrite: boolean;
         defaultBaseDirectory: string | null;
         baseDirectory: string | null;
         enableShellIntegration: boolean;
@@ -5905,6 +6025,11 @@ declare namespace __FeatureSettings_Code {
         autoFetchIntervalSeconds: number;
         logGitCommands: boolean;
         terminalScripts: {
+            id: string;
+            label: string;
+            command: string;
+        }[];
+        terminalTargets: {
             id: string;
             label: string;
             command: string;
@@ -7027,7 +7152,7 @@ declare function streamMessageText(params: {
 
 declare const terminalCommands: {
     /** Records a terminal the service started, under the id it took for it (`newId`) */
-    create: (terminal: Pick<TerminalEntity, "cols" | "cwd" | "rows" | "session" | "shell" | "title"> & {
+    create: (terminal: Pick<TerminalEntity, "cols" | "cwd" | "rows" | "session" | "shell" | "target" | "title"> & {
         id: EARS.EntityId<"Terminal">;
     }) => EARS.EntityId;
     /**

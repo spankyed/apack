@@ -157,6 +157,14 @@ export interface BrokerSession {
    * window already knows, so there is nothing there to tell apart.
    */
   readonly pid: number | null;
+  /**
+   * Whether the broker is recording it, as the broker said when it started it — a recording that was asked
+   * for and could not be opened leaves a session without one. `null` for a session taken up with `adopt`,
+   * which the broker's listing answers for.
+   */
+  readonly recorded: boolean | null;
+  /** Whether it began with the screen its recording held */
+  readonly restored: boolean;
   write(data: string): Promise<void>;
   /** `cell` is one cell in pixels as a window measured it; absent keeps the last one given */
   resize(cols: number, rows: number, cell?: { readonly width: number; readonly height: number }): Promise<void>;
@@ -224,12 +232,90 @@ export interface BrokerSession {
    * condition, the deadline and the session ending goes.
    */
   wait(until: BrokerWaitUntil, timeoutMs: number): Promise<BrokerWaitOutcome>;
+  /** The commands the session's shell has reported, oldest first */
+  commands(): Promise<readonly BrokerCommand[]>;
+  /** What one of them printed, or `null` for one whose output is no longer held */
+  commandOutput(command: number): Promise<string | null>;
+  /** Whether the session outlives the app's hold on the broker */
+  keep(kept: boolean): Promise<void>;
   kill(): Promise<void>;
 }
 
+/** One command a session's shell reported. Everything but the id is the shell's claim */
+export interface BrokerCommand {
+  readonly id: number;
+  readonly command: string | null;
+  readonly cwd: string | null;
+  /** Milliseconds since the Unix epoch; `finishedMs` is `null` while it runs */
+  readonly startedMs: number | null;
+  readonly finishedMs: number | null;
+  /** `null` while it runs, and when the shell reported none — which is not zero */
+  readonly exitStatus: number | null;
+}
+
+/** A session, as a caller that did not start it is told of it */
+export interface BrokerSessionSummary {
+  readonly id: string;
+  readonly pid: number;
+  readonly cols: number;
+  readonly rows: number;
+  readonly kept: boolean;
+  readonly recorded: boolean;
+  readonly title: string | null;
+  readonly cwd: string | null;
+  readonly command: string | null;
+  readonly running: boolean;
+}
+
+/** A recording opened to be looked back through: a session with no process, which a view attaches to */
+export interface BrokerRewind {
+  readonly id: string;
+  /** The moments the recording runs between, in milliseconds since the Unix epoch */
+  readonly first: number;
+  readonly last: number;
+  /** Shows it as it was at `at`, answering the moment shown: `at` held to what the recording covers */
+  seek(at: number): Promise<number>;
+  resize(cols: number, rows: number, cell?: { readonly width: number; readonly height: number }): Promise<void>;
+  close(): Promise<void>;
+}
+
+/** Something a session's program did that is not on its screen, as its holder is told it */
+export type BrokerSessionEvent =
+  | { readonly kind: 'title'; readonly title: string }
+  | { readonly kind: 'bell' }
+  | { readonly kind: 'clipboard'; readonly text: string }
+  | { readonly kind: 'notification'; readonly title: string; readonly body: string }
+  | { readonly kind: 'progress'; readonly state: 'none' | 'running' | 'error' | 'indeterminate' | 'paused'; readonly percent: number | null }
+  | { readonly kind: 'commandStarted'; readonly command: string | null }
+  | { readonly kind: 'commandFinished'; readonly exitStatus: number | null }
+  | { readonly kind: 'cwdChanged'; readonly cwd: string };
+
+/**
+ * A broker event that is news about a session's program, in the shape a holder hears it, or `undefined`
+ * for any other event.
+ */
+function sessionEvent(event: Event): BrokerSessionEvent | undefined {
+  switch (event.kind) {
+    case 'title': return { kind: 'title', title: event.title };
+    case 'bell': return { kind: 'bell' };
+    case 'clipboard': return { kind: 'clipboard', text: event.text };
+    case 'notification': return { kind: 'notification', title: event.title, body: event.body };
+    case 'progress': return { kind: 'progress', state: event.state, percent: event.percent };
+    case 'command_started': return { kind: 'commandStarted', command: event.command };
+    case 'command_finished': return { kind: 'commandFinished', exitStatus: event.exit_status };
+    case 'cwd_changed': return { kind: 'cwdChanged', cwd: event.cwd };
+    default: return undefined;
+  }
+}
+
 export interface BrokerSessionListeners {
-  /** Bytes the process wrote. Unprompted, and nobody asked: a feed, as the app's own rules name it */
-  onOutput(data: string): void;
+  /**
+   * Bytes the process wrote. Unprompted, and nobody asked: a feed, as the app's own rules name it. A
+   * session opened without this is spawned with its bytes unsent, which is what one a window draws wants.
+   */
+  onOutput?(data: string): void;
+  /** What the program did that is not on its screen: the SDK's `TerminalEvent`, which this shape is */
+  onEvent?(event: BrokerSessionEvent): void;
   /**
    * The process ended, however it ended. Delivered once.
    *
@@ -275,6 +361,11 @@ export interface BrokerSessionOptions {
    */
   unset?: readonly string[];
   cwd?: string;
+  /** A file to record the session in, and whether to begin with the screen it already holds */
+  record?: string;
+  restore?: boolean;
+  /** Whether its programs may send images, which is yes only where something draws them */
+  images?: boolean;
   /** What the session is drawn in, each colour as red, green and blue; absent leaves the broker's own */
   colors?: BrokerColors;
 }
@@ -299,6 +390,10 @@ export interface Broker {
    * survived from one that did not.
    */
   adopt(id: string, listeners: BrokerSessionListeners): Promise<BrokerSession>;
+  /** Every session the broker has, which is how the sessions a previous run kept are found */
+  sessions(): Promise<readonly BrokerSessionSummary[]>;
+  /** Opens a recording as a session showing its end */
+  rewind(recording: string, size: { readonly cols: number; readonly rows: number }): Promise<BrokerRewind>;
   close(): Promise<void>;
   /**
    * Runs when the connection ended without `close()` — the broker is gone, and its sessions with it.
@@ -370,7 +465,11 @@ interface Connection {
  */
 /** How to reach the broker: where it listens, and the binary to start if nothing is there yet */
 export interface BrokerOptions {
-  binary: string;
+  /**
+   * Left out for a broker this process has no way to start — one somewhere else, behind a socket that
+   * stands in front of the command that reaches it. Such a broker is connected to, or the connection fails.
+   */
+  binary?: string;
   socket: string;
   env?: NodeJS.ProcessEnv;
   /**
@@ -389,9 +488,9 @@ export interface BrokerOptions {
  * starts the broker before any window and holds its lifetime; everywhere else — a dev run, the CLI, a test
  * — it is whoever first wants a session. Both arrive here, and the second one finds a broker listening.
  *
- * Starting a second would be worse than a wasted process: the broker takes its socket with
- * `try_overwrite`, since a path a previous run left behind must not refuse the bind, so a second broker
- * would take the address and leave the first one's sessions unreachable with no error anywhere.
+ * A second broker cannot take the first one's address: a broker holds a lock beside its socket for its
+ * life, and one that finds it held exits saying so (`BROKER_HELD_EXIT`), which a start here reads as a
+ * broker to connect to.
  */
 /**
  * How many of the broker's stderr chunks are kept for its failure message.
@@ -415,16 +514,27 @@ const STDERR_CHUNKS_KEPT = 50;
 const starting = new Map<string, Promise<void>>();
 
 async function reach(options: BrokerOptions): Promise<net.Socket> {
+  const { binary } = options;
+  if (binary === undefined) return connect(options.socket, options.startMs);
   const listening = await connect(options.socket, options.startMs).catch(() => undefined);
   if (listening) return listening;
 
   let pending = starting.get(options.socket);
   if (!pending) {
-    pending = ensureListening(options).finally(() => { starting.delete(options.socket); });
+    pending = ensureListening({ ...options, binary }).finally(() => { starting.delete(options.socket); });
     starting.set(options.socket, pending);
   }
   await pending;
-  return connect(options.socket, options.startMs);
+  try {
+    return await connect(options.socket, options.startMs);
+  } catch (error) {
+    // A start that ended with nothing answering: a broker holds the lock beside this socket and is not
+    // listening on it — still binding, or its socket file was removed from under it
+    throw new Error(
+      `nothing answers at ${options.socket} though a terminal broker was started or already holds it: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
 }
 
 /**
@@ -452,7 +562,8 @@ function heldFeed(
   const queued: Array<() => void> = [];
   let ended = false;
   const held: BrokerSessionListeners = {
-    onOutput: (text) => { queued.push(() => holder.onOutput(text)); },
+    onOutput: (text) => { queued.push(() => holder.onOutput?.(text)); },
+    onEvent: (event) => { queued.push(() => holder.onEvent?.(event)); },
     onExit: (code, signal) => { ended = true; queued.push(() => holder.onExit(code, signal)); },
   };
   listeners.set(id, held);
@@ -482,17 +593,20 @@ function startLockFile(socket: string): string {
 /**
  * Makes sure a broker is listening on this socket, starting one if nothing is.
  *
- * **Starting one is exclusive, and that is not an optimisation.** The broker binds its socket with
- * `try_overwrite`, so a second one takes the address and leaves the first one's sessions unreachable with no
- * error anywhere. Finding nothing listening and then spawning is a check followed by an act, and the gap
- * between them is a whole broker startup — so the lock is held across the spawn *and* the wait, not merely
- * around the spawn. Processes reach here together routinely: Electron main takes its lifetime hold while the
+ * **Starting one is exclusive.** Finding nothing listening and then spawning is a check followed by an
+ * act, and the gap between them is a whole broker startup — so the lock is held across the spawn *and* the
+ * wait, not merely around the spawn. A broker that finds another already holding its socket exits saying
+ * so (`BROKER_HELD_EXIT`), so two starts that did overlap still end with one broker; what the lock saves
+ * is the second process and the wait for it. Processes reach here together routinely: Electron main takes its lifetime hold while the
  * API server starts in the same tick (`ModuleRunner` calls every module's `enable` eagerly and chains only
  * the awaiting), and every dev API reload is another.
  *
  * Keyed on the socket, so suites with a socket each never wait on one another.
  */
-async function ensureListening(options: BrokerOptions): Promise<void> {
+/** `BrokerOptions` for a broker this process can start */
+type StartableBroker = BrokerOptions & { binary: string };
+
+async function ensureListening(options: StartableBroker): Promise<void> {
   let lock: ExclusiveLock;
   try {
     lock = await holdExclusiveLockWaiting({
@@ -519,7 +633,7 @@ async function ensureListening(options: BrokerOptions): Promise<void> {
   }
 }
 
-async function start(options: BrokerOptions): Promise<void> {
+async function start(options: StartableBroker): Promise<void> {
   // **Detached, and its handle released.** The broker outlives whoever started it by design — that is the
   // whole point of a session surviving an API restart — so it must not be in this process's group, where
   // the shell's Ctrl-C would reach it, and this process must not be kept alive waiting for it.
@@ -683,9 +797,11 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
    * Shared by `open` and `adopt` because what you can do with a session has nothing to do with how you came
    * to hold it: a copy per route is two places for a request kind to be forgotten.
    */
-  const sessionHandle = (id: string, pid: number | null): BrokerSession => ({
+  const sessionHandle = (id: string, pid: number | null, started: { recorded: boolean; restored: boolean } | null): BrokerSession => ({
       id,
       pid,
+      recorded: started?.recorded ?? null,
+      restored: started?.restored ?? false,
       async write(text) { connection.send({ kind: 'write', session: id, text }); },
       async resize(cols_, rows_, cell) {
         connection.send({
@@ -751,12 +867,38 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
         if (answer.kind !== 'waited') throw new BrokerError('PTY', 'the broker answered no wait');
         return answer.outcome;
       },
+      async commands() {
+        connection.send({ kind: 'commands', session: id });
+        const answer = await connection.next(event => event.kind === 'commands' && event.session === id, { session: id });
+        if (answer.kind !== 'commands') throw new BrokerError('PTY', 'the broker answered no commands');
+        return answer.commands.map(one => ({
+          id: one.id,
+          command: one.command,
+          cwd: one.cwd,
+          startedMs: one.started_ms,
+          finishedMs: one.finished_ms,
+          exitStatus: one.exit_status,
+        }));
+      },
+      async commandOutput(command) {
+        connection.send({ kind: 'command_output', session: id, command });
+        const answer = await connection.next(
+          event => event.kind === 'command_output' && event.session === id && event.command === command,
+          { session: id },
+        );
+        if (answer.kind !== 'command_output') throw new BrokerError('PTY', 'the broker answered no output');
+        return answer.text;
+      },
+      async keep(kept) {
+        connection.send({ kind: 'keep', session: id, kept });
+        await connection.next(event => event.kind === 'kept' && event.session === id, { session: id });
+      },
       async kill() { connection.send({ kind: 'kill', session: id }); },
   });
 
   return {
     history,
-    async open({ cols, rows, shell, args, env, unset, cwd, colors }, sessionListeners) {
+    async open({ cols, rows, shell, args, env, unset, cwd, colors, record, restore, images }, sessionListeners) {
       connection.send({
         kind: 'spawn',
         cols,
@@ -767,6 +909,11 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
         unset: [...unset ?? []],
         cwd: cwd ?? null,
         colors: colors ?? null,
+        // A holder that reads the bytes is sent them; one that does not has a session that sends none
+        output: sessionListeners.onOutput !== undefined,
+        record: record ?? null,
+        restore: restore ?? false,
+        images: images ?? false,
       });
       // Registered as the frame is read, so an `exited` in the same read is not lost; delivered once this
       // call's caller is holding the session (`heldFeed`)
@@ -776,7 +923,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
         { onMatch: event => { if (event.kind === 'spawned') release = heldFeed(listeners, event.session, sessionListeners); } },
       );
       if (spawned.kind !== 'spawned') throw new BrokerError('PTY', 'the broker answered no session');
-      const handle = sessionHandle(spawned.session, spawned.pid);
+      const handle = sessionHandle(spawned.session, spawned.pid, { recorded: spawned.recorded, restored: spawned.restored });
       if (release) setImmediate(release);
       return handle;
     },
@@ -807,7 +954,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
       // diagnostic the window uses to tell one shell from the next, and an adopted session *is* the shell
       // the window already knows — so saying nothing is the true answer, and inventing one would draw a
       // seam across a session that never ended.
-      const taken = sessionHandle(id, null);
+      const taken = sessionHandle(id, null, null);
       if (release) setImmediate(release);
       return taken;
     },
@@ -820,6 +967,39 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
      * the broker's own rule that the last client leaving ends them, which is what keeps a dev run or a test
      * from leaving anything behind.
      */
+    async sessions() {
+      connection.send({ kind: 'sessions' });
+      const answer = await connection.next(event => event.kind === 'sessions');
+      if (answer.kind !== 'sessions') throw new BrokerError('PTY', 'the broker answered no sessions');
+      return answer.sessions.map(one => ({
+        id: one.session, pid: one.pid, cols: one.cols, rows: one.rows, kept: one.kept, recorded: one.recorded,
+        title: one.title, cwd: one.cwd, command: one.command, running: one.running,
+      }));
+    },
+    async rewind(recording, size) {
+      connection.send({ kind: 'rewind', recording, cols: size.cols, rows: size.rows });
+      const answer = await connection.next(event => event.kind === 'rewound');
+      if (answer.kind !== 'rewound') throw new BrokerError('PTY', 'the broker opened no recording');
+      const id = answer.session;
+      return {
+        id,
+        first: answer.first,
+        last: answer.last,
+        async seek(at) {
+          connection.send({ kind: 'seek', session: id, at: Math.max(0, Math.round(at)) });
+          const sought = await connection.next(event => event.kind === 'sought' && event.session === id, { session: id });
+          return sought.kind === 'sought' ? sought.at : at;
+        },
+        async resize(cols_, rows_, cell) {
+          connection.send({
+            kind: 'resize', session: id, cols: cols_, rows: rows_,
+            cell_width: Math.max(0, Math.round(cell?.width ?? 0)),
+            cell_height: Math.max(0, Math.round(cell?.height ?? 0)),
+          });
+        },
+        async close() { connection.send({ kind: 'kill', session: id }); },
+      };
+    },
     async close() {
       connection.leave();
     },
@@ -839,6 +1019,9 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
  */
 const BROKER_START_MS = 10_000;
 
+/** What a broker exits with when another one already holds the socket it was asked to listen on */
+const BROKER_HELD_EXIT = 3;
+
 /** The broker's ready line, or the reason it never came */
 function ready(process_: ChildProcess, stderr: string[], startMs = BROKER_START_MS): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -855,12 +1038,23 @@ function ready(process_: ChildProcess, stderr: string[], startMs = BROKER_START_
     // `holdBrokerSessions` buy nothing in whichever process won the start.
     const settle = (run: () => void) => { clearTimeout(deadline); lines.close(); run(); };
     const fail = (why: string) => settle(() => reject(new Error(said(why))));
+    // What a broker that will not listen says before it exits, which is why it will not
+    let refused: string | undefined;
     lines.once('line', line => {
       if (line.startsWith('listening ')) settle(resolve);
+      else if (line.startsWith('failed ')) refused = line.slice('failed '.length);
       else fail(`the broker's first line was ${JSON.stringify(line)} rather than its socket`);
     });
     process_.once('error', error => fail(`the broker could not be started (${error.message})`));
-    process_.once('exit', code => fail(`the broker exited with ${code} before it was listening`));
+    // `close` and not `exit`: it comes once the broker's output has been read to its end, so what it said
+    // of why it would not listen has arrived by then
+    process_.once('close', code => {
+      // **Another broker holds the socket, so there is one to connect to.** A broker holds a lock beside
+      // its socket for its life and a second one exits rather than taking the address — which is the
+      // answer this start wanted, reached by whoever got there first
+      if (code === BROKER_HELD_EXIT) settle(resolve);
+      else fail(refused === undefined ? `the broker exited with ${code} before it was listening` : `the broker could not listen: ${refused}`);
+    });
   });
 }
 
@@ -899,7 +1093,13 @@ function frames(socket: net.Socket, listeners: Map<string, BrokerSessionListener
     try { event = JSON.parse(line) as Event; } catch { return; }
 
     if (event.kind === 'output') {
-      listeners.get(event.session)?.onOutput(event.text);
+      listeners.get(event.session)?.onOutput?.(event.text);
+      return;
+    }
+    const news = sessionEvent(event);
+    if (news) {
+      // Every one of these names its session, which is what `news` being defined says
+      listeners.get((event as { session: string }).session)?.onEvent?.(news);
       return;
     }
     if (event.kind === 'exited') {

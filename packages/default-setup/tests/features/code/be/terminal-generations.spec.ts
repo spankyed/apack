@@ -11,7 +11,7 @@ import { recordingBroker } from './_support/terminal-broker.ts'
 import { repository } from '#generated/repository.ts'
 
 
-const handlers = () => ({ onData: vi.fn(), onExit: vi.fn(), onCrashed: vi.fn() })
+const handlers = () => ({ onEvent: vi.fn(), onExit: vi.fn(), onCrashed: vi.fn() })
 
 /**
  * This terminal's descriptor, or nothing.

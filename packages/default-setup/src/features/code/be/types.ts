@@ -268,6 +268,14 @@ export interface GhReviewComment {
 // Terminal types
 export interface TerminalInfo {
   id: EARS.EntityId
+  /**
+   * The session a window draws this terminal from, by the name the terminal broker knows it by. Absent
+   * while the terminal has no shell — one that ended and was kept.
+   *
+   * **Not the terminal's own id, because a terminal is not its shell.** A restart puts a new session under
+   * the same terminal, and a window that went on drawing the old one would be drawing a shell that is gone.
+   */
+  session?: string
   title: string
   customTitle?: string // User-defined custom name, takes precedence over default
   /**
@@ -291,15 +299,33 @@ export interface TerminalInfo {
    * seam; this is what says how many there have been, for a window that was not watching.
    */
   generation: number
-  /** The shell ended and the terminal was kept. Absent while one is running */
-  exited?: { code: number | null }
+  /**
+   * Whether what it prints is kept in a recording, which is what it can be looked back through from and
+   * what lets its shell be kept running and found again. A terminal on a target is not, and nor is one
+   * started while restoring terminals is off.
+   */
+  recorded?: boolean
+  /** Whether its shell goes on running when the app is not, which a window asks for with `terminal.KEEP_TERMINAL` */
+  kept?: boolean
+  /**
+   * Where it runs when that is not this machine: the setting's id and label, and the `key` a window
+   * draws its session from (`terminalViews`), which is there once a session on the target has been
+   * reached. Absent for a terminal on this machine.
+   */
+  target?: { id: string; label: string; key?: string }
+  /**
+   * The terminal has no shell and was kept. Absent while one is running.
+   *
+   * `unreached` is a terminal on a target this run has not connected to: there may be a shell there still,
+   * and starting the terminal again is what finds out.
+   */
+  exited?: { code: number | null; unreached?: true }
   /**
    * The session's size **when this was published**, which is a starting point and not a live reading.
    *
    * **A pty has one size and it is whatever a window last fitted**, so the live value lives where the
    * session does: the service keeps it current and `restart` re-opens the shell at it. What a window holds
-   * is the snapshot it was last listed or opened with, and its one consumer wants exactly that — the pool
-   * builds the emulator at this size, so it is the width a replayed screen is first drawn at.
+   * is the snapshot it was last listed or opened with.
    *
    * It is spelled out because it reads as live and is not: a drive scenario waited on it for the size a
    * window had just fitted and timed out at the creation size, with every resize having landed correctly
@@ -308,14 +334,6 @@ export interface TerminalInfo {
   cols: number
   /** The session's rows when this was published; see `cols` */
   rows: number
-  /**
-   * How far back this session can be scrolled: the host's number, from the broker's handshake.
-   *
-   * The window derives its emulator's bound from this and never pins its own. Exceeding it would draw lines
-   * no reattach could reproduce — the broker is what answers a screen read when no window holds the bytes —
-   * and 10,000 pinned in the pool against the broker's 1,000 is exactly what that looked like.
-   */
-  scrollback: number
   /**
    * What ends a typed line for *this* shell — X6.
    *
@@ -344,6 +362,8 @@ export interface TerminalResize {
 
 export interface TerminalCreate {
   id?: EARS.EntityId
+  /** One of the code settings' `terminalTargets`, by id: where to run it instead of on this machine */
+  target?: string
   title?: string
   cwd?: string
   shell?: string

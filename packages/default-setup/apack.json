@@ -615,6 +615,9 @@
             "restoreTerminals": {
               "type": "boolean"
             },
+            "terminalClipboardWrite": {
+              "type": "boolean"
+            },
             "defaultBaseDirectory": {
               "type": [
                 "string",
@@ -679,6 +682,29 @@
                 "additionalProperties": false
               }
             },
+            "terminalTargets": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "command": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "label",
+                  "command"
+                ],
+                "additionalProperties": false
+              }
+            },
             "showStashes": {
               "type": "boolean"
             },
@@ -698,6 +724,7 @@
           "required": [
             "hotkeys",
             "restoreTerminals",
+            "terminalClipboardWrite",
             "defaultBaseDirectory",
             "baseDirectory",
             "enableShellIntegration",
@@ -710,6 +737,7 @@
             "autoFetchIntervalSeconds",
             "logGitCommands",
             "terminalScripts",
+            "terminalTargets",
             "showStashes",
             "showCommits",
             "showWorktrees",
@@ -774,6 +802,7 @@
             }
           },
           "restoreTerminals": true,
+          "terminalClipboardWrite": true,
           "defaultBaseDirectory": null,
           "baseDirectory": null,
           "enableShellIntegration": true,
@@ -802,6 +831,7 @@
               "command": "npm test"
             }
           ],
+          "terminalTargets": [],
           "showStashes": true,
           "showCommits": true,
           "showWorktrees": false,

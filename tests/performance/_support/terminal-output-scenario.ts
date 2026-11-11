@@ -2,8 +2,12 @@ import { createHash } from 'node:crypto';
 import { createWarmScenario } from './scenario.ts';
 import type { PerformanceWindow } from './window.ts';
 
-/** The corpus: this many bytes of one repeated character, then the shell exits */
-const CORPUS_BYTES = 64 * 1024;
+/**
+ * The corpus: this many bytes of one repeated character, then the shell exits. 64 KiB prices a burst;
+ * `APACK_PERFORMANCE_TERMINAL_BYTES` sets a size that prices sustained throughput instead.
+ */
+const CORPUS_BYTES = Number(process.env.APACK_PERFORMANCE_TERMINAL_BYTES ?? 64 * 1024);
+if (!Number.isInteger(CORPUS_BYTES) || CORPUS_BYTES < 1) throw new Error('APACK_PERFORMANCE_TERMINAL_BYTES is not a byte count');
 /**
  * Deterministic, shell-agnostic, and ends by exiting, which is what the action can observe. `\n` is what
  * the pack's own command-running path sends (`handleTerminalOpened`), so it is what this sends.
@@ -21,18 +25,18 @@ const outputFixture = (trials: number) => ({
 });
 
 /**
- * **What a terminal's output costs to deliver, and how many messages it becomes.**
+ * **What a terminal's output costs to draw, and how many frames it becomes.**
  *
- * Phase G's "sustained output responsiveness", and the reading that prices **F4** — "one bus event per pty
- * chunk; no coalescing" — which nothing could count until the API's outgoing send recorded a size
- * (`app.surface.send`, `api/src/transport/emitter.ts`). The corpus is a fixed 64 KiB of one character, so
- * the bytes a run should deliver are known and the only variable is how the pipe carries them.
+ * Phase G's "sustained output responsiveness". A terminal's output is not an event: the broker interprets
+ * it and sends the window the rows that changed, one frame at a time, the next only once the last was
+ * drawn. So what a corpus costs is read where it lands — how long until the shell has exited, how many
+ * frames the view painted on the way, and what the window's process spent — and the count of messages on
+ * the app's event bus is recorded to show it carried none of it. The corpus is a fixed 64 KiB of one
+ * character, so what a run has to deliver is known and the only variable is how it is carried.
  *
- * **Completion is the shell exiting**, which is the one end-of-output signal a page can see: the emulator draws to
- * a canvas, so the screen's contents are unreadable from the DOM, and the buffer is inside the pack's
- * module-scoped pool. The command ends with `exit`, the backend broadcasts `terminal.CLOSED`, and the
- * surface drops the terminal from its list — by which point every byte has been sent. `subscribe` supplies
- * the trigger, since none of that mutates the DOM.
+ * **Completion is the shell exiting**, which is the one end-of-output signal the surface's state holds: the
+ * command ends with `exit`, the backend broadcasts `terminal.CLOSED`, and the surface drops the terminal
+ * from its list. `subscribe` supplies the trigger, since none of that mutates the DOM.
  *
  * Each trial opens its own terminal, so the one it kills is its own.
  */
@@ -76,6 +80,11 @@ export async function terminalOutputScenario({ app, appPage, electronApp }: Para
         let durationMs: number | undefined;
         let failure: string | undefined;
         const work: Record<string, number> = { corpusBytes };
+        // The view says on its element which frame it last painted, so each change of that is a paint
+        let painted = 0;
+        const drawing = document.querySelector(`[data-apack-terminal="${terminalId}"]`);
+        const paints = new MutationObserver(records => { painted += records.length; });
+        if (drawing) paints.observe(drawing, { attributes: true, attributeFilter: ['data-terminal-drawn'] });
         try {
           await win.__waitForPerformanceView({
             awaitsDelivery: false,
@@ -101,25 +110,28 @@ export async function terminalOutputScenario({ app, appPage, electronApp }: Para
             errors: [],
           });
         } catch { failure = 'missing-view-ready'; }
-        finally { action.end(completed ? 'ok' : 'error'); }
+        finally {
+          painted += paints.takeRecords().length;
+          paints.disconnect();
+          work.framesPainted = painted;
+          action.end(completed ? 'ok' : 'error');
+        }
         const reports = await recording.stop();
         return { completed, durationMs, reports, failure, work };
       }, { mode, fixtureId: fixture.identity.generator, terminalId, command: COMMAND, corpusBytes: CORPUS_BYTES });
 
-      // How many messages the corpus became, and how many bytes they carried
+      // What crossed the app's event bus while the corpus was drawn, which is none of the corpus
       const sends = (result.reports.backend?.observations ?? [])
         .map(encoded => JSON.parse(encoded) as { name: string; attributes: Record<string, unknown> })
         .filter(span => span.name === 'app.surface.send');
-      const output = sends.filter(span => span.attributes['app.event'] === 'terminal.OUTPUT');
       const renderer = result.reports.renderer?.rendererStatistics?.metrics ?? [];
       const metric = (name: string) => renderer.find(m => m.name === name);
       const task = metric('TaskDuration');
       const script = metric('ScriptDuration');
       const work = {
         ...result.work,
-        outputMessages: output.length,
-        outputBytes: output.reduce((bytes, span) => bytes + Number(span.attributes['app.bytes'] ?? 0), 0),
         surfaceMessages: sends.length,
+        surfaceBytes: sends.reduce((bytes, span) => bytes + Number(span.attributes['app.bytes'] ?? 0), 0),
         ...(task && { rendererTaskMicros: Math.round((task.after - task.before) * 1e6) }),
         ...(script && { rendererScriptMicros: Math.round((script.after - script.before) * 1e6) }),
       };
