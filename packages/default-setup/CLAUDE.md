@@ -175,8 +175,10 @@ neither watcher needs to be exact.
 - **A tree is watched by the platform's own watcher where it has one** (`directory-watch.ts`): Node's recursive
   `fs.watch` on macOS and Windows, and `@parcel/watcher` on Linux, which has no watch over a tree. The library
   is not loaded on the other two, where it has open memory defects and would share a process with the database
-  ([what was measured](../../docs/issues/ISSUE-dev-loop-file-watching.md#code-map)). A watcher that needs a native
-  binding earns its place by surviving its directory being deleted as its watch closes.
+  ([what was measured](../../docs/issues/ISSUE-dev-loop-file-watching.md#code-map)). On Linux it refuses to close a
+  watch whose directory was deleted moments before, and leaves some of that watch's inotify watches with the
+  process: every close catches the refusal, and nothing takes them back. A watcher that needs a native binding
+  earns its place by surviving its directory being deleted as its watch closes.
 - **Where the library is used it is a native binding the host resolves** (`HOST_RESOLVED_BINARIES`), and the
   host resolves what a pack *requires*. It is imported by a module of its own (`parcel-watcher.ts`) that is
   loaded on first use: a dynamic `import()` of the package itself is resolved by Node beside the installed pack,

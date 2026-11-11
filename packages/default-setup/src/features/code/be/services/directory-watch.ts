@@ -83,6 +83,10 @@ export const parcelSubscriber = (
  * closes, and its Windows one frees a subscription the kernel still writes to (parcel-bundler/watcher#271,
  * #262). Either corrupts the heap of the process that holds the user's database. Before moving a platform onto
  * it, close a watch as its directory is deleted, a few hundred times over, and see that the process survives.
+ *
+ * On Linux its `unsubscribe` rejects when a directory under the watch was deleted moments before, and leaves
+ * some of the watch's inotify watches with the process. Whoever closes a watch catches the rejection
+ * (`gitwatcher.ts`); nothing takes the watches back.
  */
 export const subscribeToDirectory: SubscribeToDirectory =
   process.platform === 'darwin' || process.platform === 'win32' ? nodeSubscriber() : parcelSubscriber()

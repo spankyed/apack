@@ -110,7 +110,23 @@ Everything below is on master.
     - Node's `fs.watch` over the third, fourth and sixth sequences: 0 of 8 each.
     - In this repo it killed a spec worker about one run in three, since a spec stops the code system and deletes its directory. macOS filed five reports that day, each `memory corruption of free block` in a process with the binding loaded, three of them caught inside elmdb's allocations: the watcher shares its process with the database.
     - **Its Windows backend** frees a subscription whose `OVERLAPPED` the kernel still holds, on every `unsubscribe` (upstream #262, open). Read against the shipped source, not run.
-    - **Its Linux backend** handles a deleted directory under the lock `unsubscribe` takes. Read, not run.
+    - **Its Linux backend refuses to close a watch whose directory was deleted moments before, and leaves watches behind.** Run 2026-11-10 in the Linux test container (linux arm64, Node 24.22.2, glibc 2.36, two CPUs):
+      - `InotifyBackend::unsubscribe` throws at the first `inotify_rm_watch` the kernel refuses, which it does for a directory already deleted whose deletion the backend has not yet processed (`src/linux/InotifyBackend.cc`). The close rejects with `Unable to remove watcher: Invalid argument`.
+      - The same six sequences, 8 processes of 200 rounds each, the refusal caught: no process died, plain or under glibc's heap checks (`MALLOC_CHECK_=3`, `MALLOC_PERTURB_=165`), 96 processes in all. Closes refused, plain and checked:
+
+        | Sequence | Plain | Heap checks on |
+        |---|---|---|
+        | close one watch, delete its directory in the same turn | 13 | 62 |
+        | start closing, one event-loop turn, delete | 99 | 358 |
+        | close two watches (tree and `.git`), delete | 213 | 501 |
+        | delete, one turn, close and wait | 366 | 337 |
+        | close and wait, then delete | 0 | 0 |
+        | create and delete subdirectories, then close | 306 | 315 |
+
+      - **What a refused close leaves:** over a tree of 30 directories, with directories made and deleted and the watch closed at once, three refusals left 8, 15 and 8 of its 31 inotify watches with the process. A second close resolved and took none of them back. The closed watch reported nothing more.
+      - In an earlier run, where the probe did not catch the refusal and each process exited on its first one, one process of 8 under heap checks died of a segmentation fault as it exited. Not seen in the 96 processes above.
+      - **The shipped watcher there** (`GitWatcherService` over a real repository): a hint 209 to 272 ms after a tracked edit, a file made in a new directory, an index change, a ref change, a commit and the checkout's deletion; none for a write inside an ignored directory; and 211 and 272 ms after an edit and an index change in a checkout made again at the same path, once `check()` had run. The library reported the deletion of the directory it watched, which is what its subscriber reads as the watch having ended.
+      - Every close in `gitwatcher.ts` catches a refusal. Nothing takes the watches back: they stay until the process exits or their directories are deleted, and they count against `fs.inotify.max_user_watches`, which is one limit for all of a user's processes.
     - **Cost on macOS**, same day. One write reached JavaScript in 9 to 11 ms through `fs.watch` and 63 to 65 ms through the library (median of 20). A 20,000-file flood written by another process cost the watching process 80 ms of CPU through `fs.watch` and 635 ms through the library. The same flood inside an ignored directory cost 63 ms through `fs.watch`, which drops its 20,401 callbacks in JavaScript, and 3 ms through the library, which never hears of them.
     - **A directory deleted and made again at the same path:** `fs.watch` on macOS reports on the new one. The library reports nothing more, so its subscriber says the watch ended.
     - **What `fs.watch` gives up:** libuv skips FSEvents' dropped-event flags (`kFSEventsSystem`, `src/unix/fsevents.c`), so a drop is not an error here. The recorder above saw FSEvents raise none for 249 lost saves, and reading again is what covers a loss either way.
