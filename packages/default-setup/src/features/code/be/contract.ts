@@ -89,9 +89,9 @@ export type IncomingCommitEvents =
   /** The files in an untracked folder that is listed as one row */
   | { type: 'commit.LIST_UNTRACKED'; path: string }
   /** Stage one piece of a file's change, or with `staged` take one piece out of what is staged */
-  | { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; patch: string }
+  | { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; hunk: string }
   /** Have the GitHub CLI give git its sign-in for this host */
-  | { type: 'commit.SET_UP_SIGN_IN'; host: string }
+  | { type: 'commit.SET_UP_SIGN_IN'; host: string; during?: 'push' | 'pull' }
   | { type: 'commit.LOG_LIST' }
   | { type: 'commit.REVERT_COMMIT'; hash: string }
   | { type: 'commit.RESET_TO_COMMIT'; hash: string }
@@ -114,12 +114,12 @@ export type OutgoingCommitEvents =
   | { type: 'commit.FILE_REVERTED'; data: { path: string } }
   | { type: 'commit.FILES_REVERTED'; data: { paths: string[] } }
   | { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }
-  | { type: 'commit.HUNK_APPLIED'; data: { path: string; staged: boolean } }
+  | { type: 'commit.HUNK_APPLIED'; data: { path: string; staged: boolean; hunk: string } }
   /** How far along a push, a pull or a checkout is, for the window that asked for it */
   | { type: 'commit.PROGRESS'; data: { during: 'push' | 'pull' | 'checkout' } & GitProgress }
   | { type: 'commit.UNTRACKED_LISTED'; data: { path: string; files: string[]; truncated: boolean } }
   /** Git signs in to this host through the GitHub CLI now */
-  | { type: 'commit.SIGN_IN_SET_UP'; data: { host: string } }
+  | { type: 'commit.SIGN_IN_SET_UP'; data: { host: string; during?: 'push' | 'pull' } }
   | { type: 'commit.BRANCH_RETRIEVED'; data: { branch: string } }
   | { type: 'commit.BRANCHES_RECEIVED'; data: { branches: string[] } }
   | { type: 'commit.BRANCH_CHECKOUT_SUCCESS'; data: { branchName: string } }

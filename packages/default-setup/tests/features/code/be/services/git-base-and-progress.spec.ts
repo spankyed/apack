@@ -160,3 +160,33 @@ it('logs each command with how long it took and why it failed when asked to, and
     stop();
   }
 });
+
+// A base is given to git as the name of a branch here, so it has to be one
+it('does not answer a branch only the remote has, nor a commit reached from a branch', async () => {
+  const root = await repositoryOnDevelop();
+  const remote = scratch('apack-base-remote-');
+  await git(remote, 'init', '--quiet', '--bare', '--initial-branch=main');
+  await git(root, 'remote', 'add', 'origin', remote);
+  await git(root, 'push', '--quiet', 'origin', 'main', 'develop');
+  await git(root, 'fetch', '--quiet', 'origin');
+  await git(root, 'checkout', '--quiet', '-b', 'from-remote', 'origin/develop');
+  await git(root, 'branch', '--quiet', '-D', 'develop');
+  await commit(root, 'c.txt', 'on from-remote');
+
+  const base = await new GitRepository(root).getPRBaseBranch();
+  expect(base, 'the remote\'s develop is not a branch here').toBe('main');
+  await git(root, 'diff', '--name-status', `${base}...HEAD`);
+
+  await git(root, 'checkout', '--quiet', '-b', 'from-a-commit', 'main~0');
+  await commit(root, 'd.txt', 'on from-a-commit');
+  expect(await new GitRepository(root).getPRBaseBranch()).not.toContain('~');
+});
+
+it('keeps a remote hook\'s own lines in what is said of a failure, and reports none of them as progress', () => {
+  const printed = 'remote: Counting objects: 100% (2/2), done.\nremote: Total coverage is below 80%: push refused\nremote: Coverage: 75% (300/400)\nTotal 3 (delta 0), reused 0 (delta 0), pack-reused 0\n ! [remote rejected] main -> main (pre-receive hook declined)\n';
+
+  expect(withoutProgress(printed)).toBe('remote: Total coverage is below 80%: push refused\nremote: Coverage: 75% (300/400)\n ! [remote rejected] main -> main (pre-receive hook declined)');
+  const reported: string[] = [];
+  progressReader(progress => reported.push(progress.stage))(printed);
+  expect(reported).toEqual(['Counting objects']);
+});

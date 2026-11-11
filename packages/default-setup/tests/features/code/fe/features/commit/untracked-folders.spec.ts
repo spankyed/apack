@@ -24,6 +24,7 @@ const listings = () => sent().filter(event => event.type === 'commit.LIST_UNTRAC
 /** A panel showing these rows, as the status it asked for said */
 function panelShowing(files: ReturnType<typeof folder>[]) {
   const actor = createActor(commitState).start();
+  actor.send({ type: 'commit.SHOWN' });
   tellStatus(actor, files);
   sendToSystem.mockReset();
   return actor;

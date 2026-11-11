@@ -9,7 +9,7 @@ import { agentChildEnvironment } from './shell-environment.ts'
 import { GitError, LOCKED, classifyGitError, type GitErrorCode } from './git-errors.ts'
 import { signInHelpFor, type SignInHelp } from './sign-in.ts'
 import { GitObjectReader } from './git-objects.ts'
-import { hunksOf } from './git-hunks.ts'
+import { hunksOf, type CutHunk } from './git-hunks.ts'
 import { progressReader, withoutProgress } from './git-progress.ts'
 
 const logger = createLogger('git')
@@ -49,6 +49,13 @@ function recordsOf(output: string, fields: number): string[][] {
   for (let i = 0; i + fields <= values.length; i += fields) records.push(values.slice(i, i + fields))
   return records
 }
+
+/**
+ * A status row's path as an argument git reads as that path and no other: from the top of the checkout, which is
+ * where a status names its paths from, and letter for letter. Left as it is spelled, git reads it as a pattern
+ * from the working directory: `app/[id]/` is then also `app/i/` and `app/d/`, and a write over it reaches them.
+ */
+const rowSpec = (rowPath: string): string => `:(top,literal)${rowPath.replace(/\/$/, '')}`
 
 /** A stash a caller named by its position in the list */
 function stashArgument(index: number): string {
@@ -168,7 +175,7 @@ const EXIT_GRACE_MS = 250
 export const STATUS_LIMIT = 10_000
 
 /** Subcommands that only read, which wait for nothing: no lock is taken, as `GIT_OPTIONAL_LOCKS` says */
-const READS = new Set(['status', 'rev-parse', 'for-each-ref', 'ls-files', 'check-attr', 'diff', 'show', 'cat-file', 'rev-list', 'symbolic-ref', 'log', 'branch', 'reflog'])
+const READS = new Set(['status', 'rev-parse', 'for-each-ref', 'ls-files', 'check-attr', 'diff', 'show', 'cat-file', 'rev-list', 'symbolic-ref', 'log', 'branch', 'reflog', 'show-ref'])
 /** Subcommands that talk to a remote and touch no index, which wait only for each other */
 const NETWORK = new Set(['fetch', 'push'])
 
@@ -454,6 +461,8 @@ export class GitRepository {
   private readonly PARENT_BRANCH_SEARCH_DEPTH = 25
   /** The commands that wait for each other: writes to the index in one line, remote commands in another */
   private lanes = { write: Promise.resolve(), network: Promise.resolve() }
+  /** How many commands are in the line of writes, running or waiting */
+  private writesInLine = 0
   private _writeInProgress = 0
   private _writeCompleteCallbacks: (() => void)[] = []
   private _lastFetchTimestamp = 0
@@ -551,16 +560,17 @@ export class GitRepository {
    */
   private enqueueCommand<T>(lane: 'read' | 'network' | 'write', fn: () => Promise<T>): Promise<T> {
     if (lane === 'read') return fn()
+    if (lane === 'write') this.writesInLine++
     const op = this.lanes[lane].then(fn, fn)
     this.lanes[lane] = op.then(() => {}, () => {})
-    return op
+    return lane === 'write' ? op.finally(() => { this.writesInLine-- }) : op
   }
 
   /**
    * Runs git, answering once it has exited and its output has gone quiet, without waiting for its pipes to
    * close: a process a hook left behind holds them open for as long as it lives.
    */
-  private runGit(args: string[], encoding: BufferEncoding, refreshesIndex = false, input?: string, onProgress?: (progress: GitProgress) => void): Promise<{ stdout: string; stderr: string }> {
+  private runGit(args: string[], encoding: BufferEncoding, refreshesIndex = false, input?: string | Buffer, onProgress?: (progress: GitProgress) => void): Promise<{ stdout: string; stderr: string }> {
     const running = execFileWhileWorking('git', ['-c', 'color.ui=never', ...args], {
       cwd: this.workingDirectory,
       // The one read that may write: it lets git take its optional lock and keep what it learns of the files
@@ -569,7 +579,11 @@ export class GitRepository {
       encoding,
     })
     const { child } = running
-    if (input !== undefined) child.stdin?.end(input)
+    if (input !== undefined) {
+      // A git that ends before it has read all it was handed is reported by its exit, not by the pipe
+      child.stdin?.on('error', () => {})
+      child.stdin?.end(input)
+    }
     if (onProgress) child.stderr?.on('data', progressReader(onProgress))
     let grace: NodeJS.Timeout | undefined
     const giveUpOnPipes = () => { child.stdout?.destroy(); child.stderr?.destroy() }
@@ -737,12 +751,12 @@ export class GitRepository {
    * of: a git in a terminal, or an agent's, holds the index for moments, and the user who staged a file in
    * those moments meant it. The lane waits with it, since what is queued behind needs the same lock.
    */
-  private executeGitCommand(args: string[], { refreshesIndex = false, input, onProgress }: { refreshesIndex?: boolean; input?: string; onProgress?: (progress: GitProgress) => void } = {}): Promise<GitCommandResult> {
+  private executeGitCommand(args: string[], { refreshesIndex = false, input, onProgress, encoding = 'utf8' }: { refreshesIndex?: boolean; input?: string | Buffer; onProgress?: (progress: GitProgress) => void; encoding?: BufferEncoding } = {}): Promise<GitCommandResult> {
     // A read allowed to write the index waits its turn among the writes made here, which need the same lock
     return this.enqueueCommand(refreshesIndex ? 'write' : laneOf(args), async () => {
       let refusedAt: number | undefined
       for (;;) {
-        const result = await this.runGitOnce(args, refreshesIndex, input, onProgress)
+        const result = await this.runGitOnce(args, refreshesIndex, input, onProgress, encoding)
         const lock = result.code === 'locked' ? LOCKED.exec(result.error ?? '')?.[1] : undefined
         if (!lock) return result
         // A stash is several steps to git, and one refused part-way has done the steps before it: run again, it
@@ -757,19 +771,19 @@ export class GitRepository {
     })
   }
 
-  private async runGitOnce(args: string[], refreshesIndex = false, input?: string, onProgress?: (progress: GitProgress) => void): Promise<GitCommandResult> {
+  private async runGitOnce(args: string[], refreshesIndex = false, input?: string | Buffer, onProgress?: (progress: GitProgress) => void, encoding: BufferEncoding = 'utf8'): Promise<GitCommandResult> {
     const started = performance.now()
-    const result = await this.runGitAnswered(args, refreshesIndex, input, onProgress)
+    const result = await this.runGitAnswered(args, refreshesIndex, input, onProgress, encoding)
     // A reading for whoever is looking into what the panel is doing: nothing is decided with it
     commandLog.debug(`git ${args.join(' ').slice(0, 300)}: ${result.success ? 'ok' : `failed${result.code ? ` (${result.code})` : ''}`} in ${Math.round(performance.now() - started)} ms`)
     return result
   }
 
-  private async runGitAnswered(args: string[], refreshesIndex: boolean, input: string | undefined, onProgress: ((progress: GitProgress) => void) | undefined): Promise<GitCommandResult> {
+  private async runGitAnswered(args: string[], refreshesIndex: boolean, input: string | Buffer | undefined, onProgress: ((progress: GitProgress) => void) | undefined, encoding: BufferEncoding): Promise<GitCommandResult> {
     try {
       // Ended when it stops working, not when a clock runs out: a fetch stalled on the network would
       // otherwise hold its lane, and every later remote command with it, until the app restarts
-      const { stdout } = await this.runGit(args, 'utf8', refreshesIndex, input, onProgress)
+      const { stdout } = await this.runGit(args, encoding, refreshesIndex, input, onProgress)
 
       return { success: true, output: stdout }
     } catch (error) {
@@ -918,7 +932,10 @@ export class GitRepository {
     const said = told.get('status.showuntrackedfiles')
     const untracked = said === 'no' || said === 'all' ? said : 'normal'
     const ignoreCase = /^(true|yes|on|1)$/i.test(told.get('core.ignorecase') ?? '')
-    const refreshesIndex = this.refreshIndexOnRead
+    // Not while a write made here is running or waiting: the status would wait its turn behind it, and every
+    // read asked meanwhile behind the status. A git of ours running is also not the moment this was chosen for.
+    // The index stays marked as it was, and the next such check writes it
+    const refreshesIndex = this.refreshIndexOnRead && this.writesInLine === 0 && !this.isWriteInProgress
     this.refreshIndexOnRead = false
     // Another git holding the index is why git would skip the write, silently: the index is as suspect after
     const gitDir = refreshesIndex ? (this.gitDirectories ?? await this.resolveGitDirectories())?.gitDir : undefined
@@ -1033,7 +1050,8 @@ export class GitRepository {
     const result = await this.executeGitCommand(['ls-files', '--others', '--exclude-standard', '--full-name', '-z', '--', `:(top,literal)${directory.replace(/\/$/, '')}`])
     if (!result.success && !result.truncated) throw failure(result, 'Failed to list the folder')
     const output = result.truncated ? (result.output ?? '').slice(0, (result.output ?? '').lastIndexOf('\0') + 1) : result.output ?? ''
-    const files = output.split('\0').filter(Boolean)
+    // Git does not look inside a repository of its own, and answers with the folder: it has no files to list here
+    const files = output.split('\0').filter(file => file && !file.endsWith('/'))
     return { files: files.slice(0, GitRepository.UNTRACKED_LISTED_LIMIT), truncated: result.truncated === true || files.length > GitRepository.UNTRACKED_LISTED_LIMIT }
   }
 
@@ -1076,9 +1094,10 @@ export class GitRepository {
       const known = held?.kept.has(entry) ? held.files?.get(entry.path) : undefined
       if (known !== undefined) return [entry.path, known]
       const inWorkingTree = !entry.columns || entry.columns[1] !== '.'
-      // A folder listed as one row was read again because something under it changed, which its own time does
-      // not say when the change is deeper than its own files: it reads as changed each time it is read
-      if (entry.path.endsWith('/') && held) return [entry.path, `${entry.record}\0${++this.folderReads}`]
+      // A folder listed as one row was read again because something under it may have changed, which its own
+      // time does not say when the change is deeper than its own files: it reads as changed each time it is
+      // read, by a read of everything as by a read of it alone
+      if (entry.path.endsWith('/')) return [entry.path, `${entry.record}\0${++this.folderReads}`]
       return [entry.path, `${entry.record}\0${inWorkingTree ? await this.fileSignature(path.join(top, entry.path)) : ''}`]
     })))
     const isCommit = (header: string) => header.startsWith('# branch.oid ')
@@ -1513,21 +1532,33 @@ export class GitRepository {
    * tree against the index, or of the index against the last commit. None for a file that is not plainly modified.
    */
   async getHunks(filePath: string, staged: boolean): Promise<DiffHunk[]> {
-    const result = await this.executeGitCommand(['diff', '--no-ext-diff', '--no-color', '--no-textconv', ...(staged ? ['--cached'] : []), '--', filePath])
-    return result.success ? hunksOf(result.output ?? '') : []
+    return (await this.cutHunks(filePath, staged)).map(({ apply: _apply, ...hunk }) => hunk)
+  }
+
+  /**
+   * The file's pieces as git cuts them now, each with the bytes that apply it. The patch is one `git apply` reads
+   * with its defaults, whatever the user has told `git diff`: prefixes of `a/` and `b/`, three lines around each
+   * change, paths from the top. Left to the user's settings, `diff.noprefix` names another file to `git apply`
+   * and `diff.context=0` a piece it puts at the end of the file.
+   */
+  private async cutHunks(filePath: string, staged: boolean): Promise<CutHunk[]> {
+    const result = await this.executeGitCommand(
+      ['diff', '--no-ext-diff', '--no-color', '--no-textconv', '--no-relative', '--src-prefix=a/', '--dst-prefix=b/', '-U3', ...(staged ? ['--cached'] : []), '--', rowSpec(filePath)],
+      { encoding: 'latin1' },
+    )
+    return result.success ? hunksOf(result.output ?? '', staged) : []
   }
 
   /**
    * Stages one piece of a file's change, or with `staged` takes one piece out of what is staged. The piece is
-   * one this repository cut from the file as it is now: one read before the file changed again is refused,
-   * rather than applied to lines it was not made from.
+   * named by its id, and is one this repository cuts from the file as it is now: one whose file changed under
+   * it is refused, rather than applied to lines it was not made from.
    */
-  async applyHunk(filePath: string, staged: boolean, patch: string): Promise<void> {
+  async applyHunk(filePath: string, staged: boolean, id: string): Promise<void> {
     return this.withWriteFlag(async () => {
-      if (!(await this.getHunks(filePath, staged)).some(hunk => hunk.patch === patch)) {
-        throw new GitError('The file has changed since this change was read. It is shown as it is now: try again.')
-      }
-      const result = await this.executeGitCommand(['apply', '--cached', ...(staged ? ['--reverse'] : []), '--whitespace=nowarn', '-'], { input: patch })
+      const hunk = (await this.cutHunks(filePath, staged)).find(cut => cut.id === id)
+      if (!hunk) throw new GitError('The file has changed since this change was read. It is shown as it is now: try again.')
+      const result = await this.executeGitCommand(['apply', '--cached', ...(staged ? ['--reverse'] : []), '--whitespace=nowarn', '-'], { input: Buffer.from(hunk.apply, 'latin1') })
       if (!result.success) throw failure(result, staged ? 'Failed to unstage the change' : 'Failed to stage the change')
     })
   }
@@ -1549,7 +1580,7 @@ export class GitRepository {
   async stageFiles(filePaths: string[]): Promise<void> {
     if (filePaths.length === 0) return
     return this.withWriteFlag(async () => {
-      const result = await this.executeGitCommand(['add', '--', ...filePaths])
+      const result = await this.executeGitCommand(['add', '--', ...filePaths.map(rowSpec)])
       if (!result.success) {
         throw failure(result, 'Failed to stage files')
       }
@@ -1560,7 +1591,7 @@ export class GitRepository {
   async unstageFiles(filePaths: string[]): Promise<void> {
     if (filePaths.length === 0) return
     return this.withWriteFlag(async () => {
-      const result = await this.executeGitCommand(['reset', 'HEAD', '--', ...filePaths])
+      const result = await this.executeGitCommand(['reset', 'HEAD', '--', ...filePaths.map(rowSpec)])
       if (!result.success) {
         throw failure(result, 'Failed to unstage files')
       }
@@ -1582,7 +1613,7 @@ export class GitRepository {
         // and clears the conflict state in both the index and worktree.
         const existsInHead = await this.fileExistsInHead(filePath)
         if (existsInHead) {
-          const result = await this.executeGitCommand(['checkout', 'HEAD', '--', filePath])
+          const result = await this.executeGitCommand(['checkout', 'HEAD', '--', rowSpec(filePath)])
           if (!result.success) {
             throw failure(result, `Failed to revert file: ${filePath}`)
           }
@@ -1590,10 +1621,10 @@ export class GitRepository {
           // File was added by stash/merge — delete it and clean the index entry
           const fullPath = path.join(this.workingDirectory, filePath)
           await fs.unlink(fullPath)
-          await this.executeGitCommand(['rm', '--cached', '--force', '--', filePath])
+          await this.executeGitCommand(['rm', '--cached', '--force', '--', rowSpec(filePath)])
         }
       } else {
-        const result = await this.executeGitCommand(['checkout', '--', filePath])
+        const result = await this.executeGitCommand(['checkout', '--', rowSpec(filePath)])
         if (!result.success) {
           throw failure(result, `Failed to revert file: ${filePath}`)
         }
@@ -1607,8 +1638,15 @@ export class GitRepository {
    * ignores there is left where it is, as it is when every file of the folder is discarded one by one.
    */
   private async discardUntracked(filePath: string, isDirectory: boolean): Promise<void> {
-    if (!isDirectory) return fs.unlink(path.join(this.workingDirectory, filePath))
-    const result = await this.executeGitCommand(['clean', '--force', '-d', '--quiet', '--', filePath])
+    // A row's path is from the top of the checkout, which the working directory may be under
+    const directories = this.gitDirectories ?? await this.resolveGitDirectories()
+    const onDisk = path.resolve(this.workingDirectory, ...(directories?.prefix ?? '').split('/').filter(Boolean).map(() => '..'), filePath)
+    if (!isDirectory) return fs.unlink(onDisk)
+    // Git leaves a repository of its own where it is, and says nothing: said here, where it would read as done
+    if (await fs.access(path.join(onDisk, '.git')).then(() => true, () => false)) {
+      throw new GitError(`${filePath} is a repository of its own, which git does not remove. Delete the folder yourself if it is not wanted.`)
+    }
+    const result = await this.executeGitCommand(['clean', '--force', '-d', '--quiet', '--', rowSpec(filePath)])
     if (!result.success) throw failure(result, `Failed to discard folder: ${filePath}`)
   }
 
@@ -1641,7 +1679,7 @@ export class GitRepository {
           }
         }
         if (existsInHead.length > 0) {
-          const result = await this.executeGitCommand(['checkout', 'HEAD', '--', ...existsInHead])
+          const result = await this.executeGitCommand(['checkout', 'HEAD', '--', ...existsInHead.map(rowSpec)])
           if (!result.success) {
             throw failure(result, 'Failed to revert unmerged files')
           }
@@ -1649,13 +1687,13 @@ export class GitRepository {
         for (const p of newFiles) {
           const fullPath = path.join(this.workingDirectory, p)
           await fs.unlink(fullPath)
-          await this.executeGitCommand(['rm', '--cached', '--force', '--', p])
+          await this.executeGitCommand(['rm', '--cached', '--force', '--', rowSpec(p)])
         }
       }
 
       // Revert tracked files
       if (trackedPaths.length > 0) {
-        const result = await this.executeGitCommand(['checkout', '--', ...trackedPaths])
+        const result = await this.executeGitCommand(['checkout', '--', ...trackedPaths.map(rowSpec)])
         if (!result.success) {
           throw failure(result, 'Failed to revert files')
         }
@@ -1810,16 +1848,17 @@ export class GitRepository {
       const space = line.indexOf(' ')
       return [line.slice(line.lastIndexOf('.', space) + 1, space), line.slice(space + 1).trim()]
     }))
-    const reflog = await this.executeGitCommand(['reflog', 'show', '--format=%gs', refArgument(branch, 'branch')])
+    const reflog = await this.executeGitCommand(['reflog', 'show', '--format=%gs', `refs/heads/${refArgument(branch, 'branch')}`, '--'])
     const created = /^branch: Created from (.+)$/.exec((reflog.success ? reflog.output ?? '' : '').trim().split('\n').at(-1) ?? '')?.[1]
 
     for (const named of [told.get(BASE_KEY), told.get('vscode-merge-base'), created]) {
       const base = named?.replace(/^refs\/(heads|remotes\/origin)\//, '').replace(/^origin\//, '')
       // `HEAD` and a commit's name say where the branch began and not which branch that was
       if (!base || base === branch || base === 'HEAD' || /^[0-9a-f]{7,64}$/.test(base)) continue
-      for (const ref of [`refs/heads/${base}`, `refs/remotes/origin/${base}`]) {
-        if ((await this.executeGitCommand(['rev-parse', '--verify', '--quiet', ref])).success) return base
-      }
+      // A branch here by exactly that name, which is what the name is then given to git as. Not one only the
+      // remote has, which git does not know by its bare name, and not a commit reached from a branch (`main~2`),
+      // which names where the branch began and no branch
+      if ((await this.executeGitCommand(['show-ref', '--verify', '--quiet', `refs/heads/${base}`])).success) return base
     }
     return undefined
   }
@@ -2026,7 +2065,9 @@ export class GitRepository {
       // The branch this one is made from, if it has to be made here: where it was is not written down otherwise
       const from = await this.getCurrentBranch().catch(() => 'HEAD')
       // Try to checkout the branch
-      const result = await this.executeGitCommand(['checkout', '--progress', branchName], { onProgress })
+      // The `--` ends the names of branches: without it, a name that is no branch and is a tracked file or folder
+      // is checked out as that path, over whatever was changed in it
+      const result = await this.executeGitCommand(['checkout', '--progress', branchName, '--'], { onProgress })
 
       if (!result.success) {
         // Check if it's because the branch doesn't exist locally or can't be resolved

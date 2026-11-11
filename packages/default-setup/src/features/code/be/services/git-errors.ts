@@ -37,18 +37,26 @@ export const LOCKED = /Unable to create '(.+\.lock)': File exists/
 /**
  * What git prints for each, most telling first: a refused key prints "Permission denied (publickey)" and then
  * "Could not read from remote repository", and the first is why.
+ *
+ * **Each is a line git itself writes, matched from the line's start.** What git printed also holds names the
+ * user chose (a branch called `fix/CONFLICT-markers`, a file called `CONFLICTS.md`), what a hook printed, and
+ * what another step of the same command said (a tag a pull could not move is `[rejected]` too). A phrase found
+ * anywhere in that reads those as git's reason; a whole line of git's does not. A reason with no line here
+ * gets no code, and git's own words are what is shown.
  */
 const SIGNS: readonly (readonly [GitErrorCode, RegExp])[] = [
   ['locked', LOCKED],
-  ['authentication', /Authentication failed|could not read Username|could not read Password|terminal prompts disabled|Permission denied \(publickey|Invalid username or (password|token)/],
-  ['permission', /Permission to \S+ denied|remote: Permission|The requested URL returned error: 403/],
-  ['remote-unreachable', /Could not resolve host|Could not read from remote repository|unable to access|Connection refused|Connection timed out|Network is unreachable/],
-  ['non-fast-forward', /non-fast-forward|\[rejected\]|\(fetch first\)/],
-  ['diverged', /Not possible to fast-forward|Need to specify how to reconcile divergent branches/],
-  ['conflict', /Automatic merge failed|CONFLICT|Merge conflict/],
-  ['local-changes', /Your local changes|untracked working tree files would be overwritten/],
-  ['unknown-ref', /pathspec .* did not match|cannot be resolved|unknown revision/],
-  ['not-a-repository', /not a git repository/i],
+  ['authentication', /^fatal: Authentication failed|^fatal: could not read (Username|Password)|^\S+: Permission denied \(publickey|^remote: Invalid username or (password|token)/m],
+  ['permission', /^(remote: |ERROR: )?Permission to \S+ denied|^fatal: unable to access .*The requested URL returned error: 403/m],
+  ['remote-unreachable', /^fatal: unable to access .*(Could not resolve host|Failed to connect|Couldn't connect|Connection refused|Connection timed out|Network is unreachable)|^fatal: Could not read from remote repository|^ssh: .*(Could not resolve hostname|Connection refused|Connection timed out|Network is unreachable)|^fatal: unable to (connect to|look up) /m],
+  // A branch the remote would not move, and not a tag: git says which in the brackets that end the line
+  ['non-fast-forward', /^ ! \[rejected\].*\((non-fast-forward|fetch first)\)\s*$|^hint: Updates were rejected because/m],
+  ['diverged', /^fatal: Not possible to fast-forward|^fatal: Need to specify how to reconcile divergent branches/m],
+  ['conflict', /^CONFLICT \(|^Automatic merge failed|^(error|fatal): .*[Mm]erge conflict/m],
+  // Changes to tracked files. Untracked files in the way are not these, and git's own words name them
+  ['local-changes', /^error: Your local changes/m],
+  ['unknown-ref', /^(error|fatal): pathspec '.*' did not match|^fatal: invalid reference: |^fatal: .*cannot be resolved|^fatal: .*unknown revision/m],
+  ['not-a-repository', /^fatal: not a git repository/im],
 ]
 
 /** Why git failed, from everything it printed; nothing when it does not say, or says something not known here */

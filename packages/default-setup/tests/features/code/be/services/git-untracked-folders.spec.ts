@@ -121,3 +121,53 @@ it('says the folder changed, and no status, when a file is made or deleted somew
   expect(await rows(repo)).toEqual(['vendor/ untracked folder']);
 });
 
+
+// A row's path is that path, letter for letter: read as a pattern, `app/[id]/` is `app/i/` and `app/d/` as well
+it('discards the folder named and no other its name matches as a pattern', async () => {
+  const { root, repo } = await repository(['app/[id]/page.tsx', 'app/i/page.tsx', 'app/d/page.tsx']);
+  await git(root, 'add', 'app/i/page.tsx');
+  await git(root, 'commit', '--quiet', '-m', 'one tracked, so each folder is a row');
+  await git(root, 'rm', '--quiet', '--cached', 'app/i/page.tsx');
+  await git(root, 'commit', '--quiet', '-m', 'and untracked again');
+  write(root, 'app/keep.ts', 'kept\n');
+  await git(root, 'add', 'app/keep.ts');
+  await git(root, 'commit', '--quiet', '-m', 'app holds a tracked file');
+  expect(await rows(repo)).toEqual(['app/[id]/ untracked folder', 'app/d/ untracked folder', 'app/i/ untracked folder']);
+
+  await repo.revertFile('app/[id]/');
+
+  expect(fs.existsSync(path.join(root, 'app/[id]'))).toBe(false);
+  expect(fs.existsSync(path.join(root, 'app/i/page.tsx')), 'app/i/ is another folder').toBe(true);
+  expect(fs.existsSync(path.join(root, 'app/d/page.tsx')), 'and so is app/d/').toBe(true);
+});
+
+it('stages the file named and no other its name matches as a pattern', async () => {
+  const { root, repo } = await repository(['src/[ab].ts', 'src/b.ts']);
+
+  await repo.stageFiles(['src/[ab].ts']);
+
+  expect((await git(root, 'diff', '--cached', '--name-only')).trim()).toBe('src/[ab].ts');
+});
+
+// Git neither looks inside a repository of its own nor removes one, and says nothing of either
+it('lists nothing in a folder that is a repository of its own, and says it was not removed', async () => {
+  const { root, repo } = await repository([]);
+  fs.mkdirSync(path.join(root, 'nested'));
+  await git(path.join(root, 'nested'), 'init', '--quiet');
+  write(root, 'nested/inner.txt', 'inner\n');
+  expect(await rows(repo)).toEqual(['nested/ untracked folder']);
+
+  expect(await repo.listUntracked('nested/')).toEqual({ files: [], truncated: false });
+  await expect(repo.revertFile('nested/')).rejects.toThrow('a repository of its own');
+  expect(fs.existsSync(path.join(root, 'nested/inner.txt'))).toBe(true);
+});
+
+// A read of everything has no event naming what changed, and a folder's own time does not say what changed deep
+// inside it
+it('says a folder row may have changed whenever everything is read, so that what is open under it is read again', async () => {
+  const { root, repo } = await repository(['vendor/x/deep/a.js']);
+  await repo.refreshSnapshot('everything');
+  write(root, 'vendor/x/deep/a.js', 'changed\n');
+
+  expect(await repo.refreshSnapshot('everything')).toMatchObject({ status: false, diffs: true, files: ['vendor/'] });
+});

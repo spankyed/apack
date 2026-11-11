@@ -176,3 +176,50 @@ it.each([
 ] as const)('reads %s', (_what, printed, code) => {
   expect(classifyGitError(printed)).toBe(code);
 });
+
+// A name that is no branch and is a tracked folder is, to `git checkout <name>`, that folder: checked out over
+// whatever was changed in it
+it('makes a branch of a name that is also a tracked folder, and leaves the work in that folder alone', async () => {
+  const root = await repository();
+  fs.mkdirSync(path.join(root, 'docs'));
+  write(root, 'docs/guide.md', 'committed\n');
+  await git(root, 'add', '.');
+  await git(root, 'commit', '--quiet', '-m', 'docs');
+  write(root, 'docs/guide.md', 'not committed\n');
+  const repo = new GitRepository(root);
+
+  await repo.checkoutBranch('docs');
+
+  expect((await repo.readSnapshot()).branch).toBe('docs');
+  expect(fs.readFileSync(path.join(root, 'docs/guide.md'), 'utf8')).toBe('not committed\n');
+});
+
+it('makes a branch whose name holds a word git prints for another failure', async () => {
+  const root = await repository();
+  const repo = new GitRepository(root);
+
+  await repo.checkoutBranch('fix/CONFLICT-markers');
+
+  expect((await repo.readSnapshot()).branch).toBe('fix/CONFLICT-markers');
+});
+
+// A reason is a line git writes, from its start: the same words in a name, in a hook's output or in another
+// step's line are not git's reason
+it.each([
+  ['a tag the remote moved, which a pull could not move here',
+    ' ! [rejected]        latest     -> latest  (would clobber existing tag)', undefined],
+  ['a branch the remote would not move',
+    " ! [rejected]        main -> main (non-fast-forward)\nerror: failed to push some refs to 'origin'", 'non-fast-forward'],
+  ['a conflict, under git\'s warning about a config file of the user\'s it could not read',
+    "warning: unable to access '/Users/someone/.config/git/attributes': Permission denied\nCONFLICT (content): Merge conflict in a.txt\nAutomatic merge failed; fix conflicts and then commit the result.", 'conflict'],
+  ['a checkout refused over a file called CONFLICTS.md',
+    'error: Your local changes to the following files would be overwritten by checkout:\n\tCONFLICTS.md\nPlease commit your changes or stash them before you switch branches.\nAborting', 'local-changes'],
+  ['untracked files in the way, which git names and no sentence here does',
+    'error: The following untracked working tree files would be overwritten by checkout:\n\tnotes.txt\nPlease move or remove them before you switch branches.\nAborting', undefined],
+  ['a hook whose own output holds words git uses',
+    "remote: running tests\nremote: login test: Authentication failed for user 'x' as expected, Connection refused handled\nremote: 1 test failed\n ! [remote rejected] main -> main (pre-receive hook declined)", undefined],
+  ['a certificate git would not trust, which is not the network being down',
+    "fatal: unable to access 'https://example.com/repo.git/': SSL certificate problem: self signed certificate", undefined],
+] as const)('reads %s', (_what, printed, code) => {
+  expect(classifyGitError(printed)).toBe(code);
+});

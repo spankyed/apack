@@ -126,3 +126,24 @@ it('fails what was being read when its git is ended, and reads again after', asy
   await expect(reading).rejects.toThrow('closed');
   expect((await objects.read('HEAD:a.txt'))?.toString()).toBe('one\n');
 });
+
+// Reads are answered in order, so a git that stops answering holds every read asked after it
+it('ends a git that owes an answer and does no work, failing what it owed, and reads again after', async () => {
+  const root = await repository({ 'a.txt': 'one\n' });
+  const bin = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-objects-bin-')));
+  directories.push(bin);
+  // A git that reads what it is asked and answers nothing; it ends when its input closes
+  fs.writeFileSync(path.join(bin, 'git'), '#!/bin/sh\nexec cat > /dev/null\n');
+  fs.chmodSync(path.join(bin, 'git'), 0o755);
+  let stalls = true;
+  const objects = new GitObjectReader(root, () => (stalls ? { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}` } : process.env), undefined, 200);
+  readers.push(objects);
+
+  const first = objects.read('HEAD:a.txt');
+  const second = objects.read('HEAD:a.txt');
+  await expect(first).rejects.toThrow('stopped answering');
+  await expect(second).rejects.toThrow('stopped answering');
+
+  stalls = false;
+  expect((await objects.read('HEAD:a.txt'))?.toString()).toBe('one\n');
+});

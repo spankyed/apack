@@ -148,13 +148,15 @@ export interface GitProgress {
 
 /** One piece of a file's change, as git cuts it */
 export interface DiffHunk {
+  /** What names this piece when it is staged or unstaged: the same for as long as git cuts the same piece */
+  id: string
   /** Where it begins on the left side of the diff, and how many lines of that side it covers */
   oldStart: number
   oldLines: number
   /** The same on the right side */
   newStart: number
   newLines: number
-  /** The patch that applies this piece alone */
+  /** The piece as text, to show: its header and its lines. Git is handed the piece by its `id`, never this */
   patch: string
 }
 

@@ -27,6 +27,7 @@
       :base-directory="baseDirectory"
       :tab-groups="tabGroups"
       :is-applying-hunk="isApplyingHunk"
+      :applied-hunks="appliedHunks"
       @apply-hunk="applyHunk"
       @select-file="selectFile"
       @close-file="closeFile"
@@ -119,7 +120,8 @@ const activeFilePath = useSelector(actor, (state) => state.context.activeFilePat
 const baseDirectory = useSelector(actor, (state) => state.context.baseDirectory)
 const tabGroups = useSelector(actor, (state) => state.context.tabGroups)
 const isApplyingHunk = useSelector(commitActor, (state) => state?.context.isApplyingHunk === true)
-const applyHunk = (path: string, staged: boolean, patch: string) => commitActor?.send({ type: 'commit.APPLY_HUNK', path, staged, patch })
+const appliedHunks = useSelector(commitActor, (state) => state?.context.appliedHunks ?? [])
+const applyHunk = (path: string, staged: boolean, hunk: string) => commitActor?.send({ type: 'commit.APPLY_HUNK', path, staged, hunk })
 
 const fileEditorRef = ref<InstanceType<typeof FileEditor>>()
 const pendingRevealLine = useSelector(actor, (state) => state.context.pendingRevealLine)

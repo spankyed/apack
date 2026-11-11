@@ -175,23 +175,32 @@ neither watcher needs to be exact.
 - **Git is not asked while nobody is looking.** Every window showing the repository asks for its status when
   told it changed, so when none asks after an announcement, none is showing it: a hint that arrives then is
   put off, and checked when a window next asks or gains focus (`statusRefresh`, `commit.ts`). An agent editing
-  files with the code surface closed runs no status per file event.
+  files with the code surface closed runs no status per file event. A window shows the repository while the
+  code surface is its active one (`commit.SHOWN`, `commit.HIDDEN`): every surface's machine runs from the
+  window's start, so a window showing another surface keeps what it was told changed and asks when it is
+  shown, and asks nothing before.
 - **One status may write git's index, at a moment chosen for it.** Every read runs with `GIT_OPTIONAL_LOCKS=0`,
   so git never keeps what it learns of the files: after a checkout or a formatter over the tree, each status
   reads every file again (about 1.75 s against 95 ms over 50,000 files, 2026-11-11, a busy machine). The check
   that follows a terminal command or an agent's turn ending lets git write it (`refreshSnapshot`'s
   `refreshIndex`), and only when a change too wide to name, or to git's own state, has been noted since the
   last time. Writing holds git's lock for as long as that status takes, in which a git run from a terminal is
-  refused: never on a window's focus or ask, which may be the user on their way to that terminal.
+  refused: never on a window's focus or ask, which may be the user on their way to that terminal, and not
+  while a write made here is running or waiting, behind which the status and every read after it would wait.
 - **A file as a commit has it is read through one git kept open** (`git-objects.ts`, `cat-file --batch`): a
   pull request's view reads two versions of every file it lists. Never the staged version, which that git
-  would go on answering from the index as it first read it.
+  would go on answering from the index as it first read it. It answers in the order it was asked, so it is
+  watched while it owes an answer and ended when it does no work, as a git run for one read is.
 - **One piece of a file's change is staged by a patch git made** (`git-hunks.ts`): the diff a window is sent
-  carries the file's hunks, each with the patch that applies it alone, and staging one is `git apply --cached`
-  of it, `--reverse` to take it back out of what is staged. Git cut the patch and git reads it back, so line
-  endings and filters are git's on both sides. A piece is applied only if the repository still cuts that exact
-  piece from the file, and only a plainly modified file has pieces: one that is new, deleted, renamed or binary
-  is staged whole.
+  carries the file's hunks, each with an id, and staging one is `git apply --cached` of the patch that applies
+  it alone, `--reverse` to take it back out of what is staged. Git cut the patch and git reads it back, so line
+  endings and filters are git's on both sides. Four things keep that true. The patch is bytes and never
+  leaves the backend as text, since a file need not be UTF-8. It is cut with the format `git apply` reads,
+  whatever the user told `git diff`. Alone, it is numbered for the index it is applied to, where the whole
+  diff numbers it past the pieces above it. And its id is where it is on the side that stays put with what it
+  holds, so a piece still on screen after another was staged is the piece git cuts now, and one whose file
+  changed is refused. Only a plainly modified file has pieces: one that is new, deleted, renamed or binary is
+  staged whole.
 - **A folder git tracks nothing in is one row**, as git lists it unless the user told it to list every file
   (`status.showUntrackedFiles`): a folder of thousands of files nobody ignored is one line, and is not walked
   (30,000 files: 0.01 s and 65 bytes against 0.13 s and 916 KB, 2026-11-11). Its path ends with `/`, and the
@@ -199,7 +208,11 @@ neither watcher needs to be exact.
   folder git answers with the file, where a whole status has the folder, so the path-scoped read asks about the
   folder: the one held as a row, or for an untracked path it did not hold, that path's own folder, falling back
   to the whole status only when that folder too is one git tracks nothing in. Staging the row stages the
-  folder, and discarding it removes what git lists there and leaves what it ignores.
+  folder, and discarding it removes what git lists there and leaves what it ignores. A row's path reaches git
+  as that path from the top of the checkout, letter for letter (`rowSpec`): `app/[id]/` as a pattern is
+  `app/i/` too. A folder that is a repository of its own lists nothing and is not removed, which is said.
+  A folder row reads as changed whenever it is read, by a read of everything too, and a window reads again
+  the diffs it has open under a folder the news names.
 - **A push, a pull and a checkout say how far along they are** to the window that asked (`commit.PROGRESS`):
   git is run with `--progress` and its error stream read as it arrives (`git-progress.ts`), and what it says of
   a failure is taken with the progress left out.
@@ -224,7 +237,8 @@ neither watcher needs to be exact.
 
 **Why a git command failed is read in one place, and travels as a code.** Git says why in prose, in English
 because every git child is run in English, and `classifyGitError` (`code/be/services/git-errors.ts`) turns what
-it printed on either stream into a `GitErrorCode`. A caller that needs to know why reads `result.code`, never the
+it printed on either stream into a `GitErrorCode`, by the lines git itself writes, each from its start: a
+phrase found anywhere would be read out of a branch's name, a hook's output or another step's line. A caller that needs to know why reads `result.code`, never the
 text; a failure thrown to a handler is a `GitError` carrying it, and `commit.ERROR_RECEIVED` hands it to the
 panel. A new reason is a new entry in that module's list, most telling first, with a case in
 `git-failures.spec.ts` that fails a real git that way.

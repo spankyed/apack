@@ -6,6 +6,7 @@
 // that moved is read where it is now. `:src/a.ts`, the staged version, is read from the index, which this process
 // loads once and keeps: it would go on answering with what was staged when it started.
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { processWork, watchWork, type Watch } from '@apackdev/sdk/progress'
 
 /** The largest file handed back; a larger one is read past and answered as not there, as a read by `git show` is */
 const LARGEST_READ = 10 * 1024 * 1024
@@ -29,11 +30,20 @@ export class GitObjectReader {
   /** The object being read: how many of its bytes are still to come, and whether they are kept */
   private body: { left: number; chunks: Buffer[] | undefined } | undefined
   private linger: NodeJS.Timeout | undefined
+  /**
+   * The watch on the git process while it owes an answer. Reads are answered in the order they were asked, so
+   * one git cannot finish holds every read behind it: a git that does no work and writes nothing for `idleMs`
+   * is ended, as a git run for one read is, and what it owed is failed for the caller to read another way.
+   * A git that is working (fetching a version a partial clone never had) is left to.
+   */
+  private stall: Watch | undefined
 
   constructor(
     private readonly workingDirectory: string,
     private readonly environment: () => NodeJS.ProcessEnv,
     private readonly lingerMs = LINGER_MS,
+    /** How long the process may owe an answer without working, the progress watch's own when not given */
+    private readonly idleMs?: number,
   ) {}
 
   /** Whether the git process is open */
@@ -57,17 +67,24 @@ export class GitObjectReader {
       }
       clearTimeout(this.linger)
       this.pending.push({ resolve, reject })
+      if (!this.stall && child.pid !== undefined) {
+        this.stall = watchWork({ work: processWork(child.pid), idleMs: this.idleMs, onRefused: () => this.end(child, new Error('git cat-file stopped answering while a file was being read')) })
+      }
       child.stdin.write(`${name}\n`)
     })
   }
 
   /** Ends the git process, failing whatever was still being read */
   close(): void {
+    if (this.child) this.end(this.child, new Error('The git object reader was closed'))
+  }
+
+  /** Ends this git process, which is the one started here, failing whatever it still owed */
+  private end(child: ChildProcessWithoutNullStreams, why: Error): void {
+    if (this.child !== child) return
     clearTimeout(this.linger)
-    const child = this.child
-    if (!child) return
     this.child = undefined
-    this.fail(new Error('The git object reader was closed'))
+    this.fail(why)
     child.stdin.end()
     child.kill()
   }
@@ -88,11 +105,17 @@ export class GitObjectReader {
     // Writing to a process that has gone is reported here, and the exit says the rest
     child.stdin.on('error', () => {})
     child.stderr.resume()
-    child.stdout.on('data', (chunk: Buffer) => { if (this.child === child) this.take(chunk) })
+    child.stdout.on('data', (chunk: Buffer) => {
+      if (this.child !== child) return
+      this.stall?.output()
+      this.take(chunk)
+    })
     return child
   }
 
   private fail(error: Error): void {
+    this.stall?.stop()
+    this.stall = undefined
     for (const each of this.pending.splice(0)) each.reject(error)
   }
 
@@ -100,6 +123,8 @@ export class GitObjectReader {
   private answer(content: Buffer | undefined): void {
     this.pending.shift()?.resolve(content)
     if (this.pending.length > 0) return
+    this.stall?.stop()
+    this.stall = undefined
     this.linger = setTimeout(() => this.close(), this.lingerMs)
     this.linger.unref()
   }

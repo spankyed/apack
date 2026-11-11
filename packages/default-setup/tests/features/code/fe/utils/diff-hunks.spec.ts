@@ -5,7 +5,7 @@ import { firstChangedLine, hunkLines } from '#features/code/fe/utils/diff-hunks.
 const HEADER = 'diff --git a/a.txt b/a.txt\nindex 1..2 100644\n--- a/a.txt\n+++ b/a.txt\n';
 const hunk = (at: string, body: string[]) => {
   const [, oldStart, oldLines, newStart, newLines] = /^@@ -(\d+),(\d+) \+(\d+),(\d+) @@$/.exec(at)!.map(Number);
-  return { oldStart: oldStart!, oldLines: oldLines!, newStart: newStart!, newLines: newLines!, patch: `${HEADER}${at}\n${body.join('\n')}\n` };
+  return { id: at, oldStart: oldStart!, oldLines: oldLines!, newStart: newStart!, newLines: newLines!, patch: `${HEADER}${at}\n${body.join('\n')}\n` };
 };
 
 it('goes to the line that changed, past the unchanged lines git shows around it', () => {

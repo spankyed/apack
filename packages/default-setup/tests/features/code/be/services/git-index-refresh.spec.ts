@@ -6,6 +6,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
+import { settles } from '@apackdev/sdk/testing';
 import { GitRepository } from '../../../../../src/features/code/be/services/git.ts';
 
 const directories: string[] = [];
@@ -92,4 +93,29 @@ it('answers when another git holds the index, and writes it once that git has le
 
   await repo.refreshSnapshot('everything', { refreshIndex: true });
   expect(await timeInIndex(root)).toBe(touched);
+});
+
+// The status that may write the index takes its turn among the writes made here, and every read asked after it
+// waits for it: behind a commit whose hook is slow, that is the panel answering nothing until the commit ends
+it('does not wait behind a write made here, and leaves the index for the next such check', async () => {
+  const { root, repo } = await repository();
+  const hook = path.join(root, '.git/hooks/pre-commit');
+  // Held until this case lets it go, and gone by itself with the repository
+  fs.writeFileSync(hook, '#!/bin/sh\ntouch .git/started\nwhile [ ! -f .git/go ] && [ -d .git ]; do sleep 0.05; done\n');
+  fs.chmodSync(hook, 0o755);
+  fs.writeFileSync(path.join(root, 'b.txt'), 'two\n');
+  await repo.stageFiles(['b.txt']);
+  const committing = repo.commit('second');
+  // The commit reads the index itself as it begins: the file's time is moved once its hook is running
+  await settles(() => { if (!fs.existsSync(path.join(root, '.git/started'))) throw new Error('the hook has not started'); });
+  const touched = touch(root, YEAR_2001);
+
+  await repo.refreshSnapshot('everything', { refreshIndex: true });
+  expect((await repo.readSnapshot()).files.map(file => file.path), 'answered while the commit is still running').toEqual(['b.txt']);
+  expect(await timeInIndex(root), 'and the index is not written beside it').not.toBe(touched);
+
+  fs.writeFileSync(path.join(root, '.git/go'), '');
+  await committing;
+  await repo.refreshSnapshot('everything', { refreshIndex: true });
+  expect(await timeInIndex(root), 'the next check asked to writes it').toBe(touched);
 });
