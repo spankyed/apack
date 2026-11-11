@@ -497,6 +497,12 @@ interface CanUseToolRequest {
 }
 
 /**
+ * What a report says changed: paths in the working tree, relative to the working directory with `/` between
+ * their parts, when nothing else changed and they are few enough to name; `null` when anything may have.
+ */
+type ChangedPaths = string[] | null;
+
+/**
  * A thread as the chat shows it, without its messages: the \`chat\` view. The page of messages it lists is ids in
  * display order (queued last); each message's content is its own \`message\` view, so streaming text into one re-runs
  * that view alone and leaves the page, which reads no message's content, where it is.
@@ -1613,6 +1619,14 @@ interface GitDiff {
     isImage?: boolean;
 }
 
+/** Where a checkout's git state lives, and where the working directory is in it */
+interface GitDirectories {
+    gitDir: string;
+    commonDir: string;
+    /** The working directory's path from the top of the checkout, ending in `/`: empty when it is the top */
+    prefix: string;
+}
+
 declare class GitRepository {
     private workingDirectory;
     private cache;
@@ -1627,9 +1641,12 @@ declare class GitRepository {
     private _fetchThrottleMs;
     /** The last snapshot read, with what it and the refs looked like, to tell a change from none */
     private snapshot?;
-    /** Whether nothing has said the repository may have changed since `snapshot` was read */
-    private snapshotFresh;
-    /** Counts every notice that the repository may have changed, so a read that one overtook is not kept as fresh */
+    /**
+     * What may have changed since `snapshot` was read: paths in the working tree that a watcher named, relative to
+     * the working directory, or anything. Nothing in it is what lets the snapshot be reused.
+     */
+    private unread;
+    /** Counts every notice that the repository may have changed, so a read begun before one is not taken for one after it */
     private snapshotVersion;
     private snapshotRead?;
     /** What the last read looked like, `unreadable` when it failed */
@@ -1668,8 +1685,13 @@ declare class GitRepository {
     private getCached;
     private setCached;
     clearCache(): void;
-    /** The repository may have changed: the next snapshot asked for is read from git */
+    /** The repository may have changed in any way: the next snapshot asked for is read from git, all of it */
     markSnapshotStale(): void;
+    /**
+     * Notes what a watcher saw change, which is what the next snapshot asked for reads: these paths in the working
+     * tree, relative to the working directory with `/` between their parts, or everything when it could not name them
+     */
+    noteChanged(paths: string[] | null): void;
     /**
      * Says whether a watcher reports this checkout's changes, which is what lets a snapshot be reused. `failed`
      * says its watches could not be opened or have stopped, as opposed to not being open yet or not being wanted.
@@ -1693,10 +1715,33 @@ declare class GitRepository {
     /**
      * Reads the repository from git and says which parts of it differ from the last check. A watcher's event is a
      * hint that something changed; this is what decides whether anything did, and what.
+     *
+     * A check a watcher's event started reads `noted`: what the watcher said changed (`noteChanged`), and nothing
+     * when it said nothing since the last read. Any other check has no event to go by, and reads everything.
      */
-    refreshSnapshot(): Promise<RepositoryChange>;
+    refreshSnapshot(reading?: 'everything' | 'noted'): Promise<RepositoryChange>;
     private currentSnapshot;
+    private readSnapshotOnce;
     private loadSnapshot;
+    /**
+     * The held snapshot with these paths of the working tree read again, or nothing when a status of them alone
+     * would not say all that changed, and the whole status is to be read.
+     *
+     * Git is asked about the paths and about nothing else. That is the whole truth of a change to the working tree
+     * as long as no file's standing depends on another's, and the checks here are the ways it can.
+     */
+    private loadNoted;
+    /**
+     * The path git answers for when asked about this one: the outermost directory over it that is a repository of
+     * its own, or the path itself. Git does not look inside another repository — a nested one and a submodule are
+     * each one entry, at the directory — so asked about a file inside one it answers nothing.
+     */
+    private outermostRepositoryOver;
+    /**
+     * A snapshot of a status as it was read, beside the parts of the repository a status does not hold. `held` is
+     * the snapshot this one was made from by reading some paths again: how its other files looked is kept, not read.
+     */
+    private snapshotOver;
     /** How a file in the working tree looks without reading it, which tells a later edit from none */
     private fileSignature;
     /**
@@ -1746,10 +1791,7 @@ declare class GitRepository {
      * Where this checkout's git state lives: its own git directory (index, HEAD) and the common one holding refs.
      * The two differ in a linked worktree. Null when the working directory is in no repository.
      */
-    resolveGitDirectories(): Promise<{
-        gitDir: string;
-        commonDir: string;
-    } | null>;
+    resolveGitDirectories(): Promise<GitDirectories | null>;
     /** Whether the working directory is in a repository. Rejects when there is no git to ask. */
     isGitRepository(): Promise<boolean>;
     hasUncommittedChanges(): Promise<boolean>;
@@ -1838,6 +1880,8 @@ declare class GitWatcherService {
     /** Moves on every start and stop, which is what tells work begun before one that it is no longer wanted */
     private generation;
     private onChangeCallback?;
+    /** The working-tree paths that changed since the last report, or `null` once something else may have too */
+    private changedPaths;
     private quietTimeout?;
     /** When the first change not yet reported arrived */
     private pendingSince?;
@@ -1847,7 +1891,7 @@ declare class GitWatcherService {
     private gitRepository?;
     constructor(workingDirectory: string, subscribe?: SubscribeToDirectory);
     setGitRepository(repo: GitRepository): void;
-    setChangeCallback(callback: () => void): void;
+    setChangeCallback(callback: (paths: ChangedPaths) => void): void;
     startWatching(signal: AbortSignal): Promise<void>;
     /**
      * Brings the watches in line with the checkout as it is now, for a caller that knows it may have moved.

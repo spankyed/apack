@@ -87,8 +87,9 @@ export const commitSystem = setup({
      * nobody for the log or a pull request again. Checking is also what keeps the file event that write causes
      * from being announced a second time. One check runs at a time, and whatever arrives during it is one more.
      */
-    statusRefresh: fromCallback<{ type: 'REFRESH' | 'CHECK'; repository: GitRepository | null }>(({ receive, sendBack }) => {
-      type Request = { repository: GitRepository | null; written: boolean };
+    statusRefresh: fromCallback<{ type: 'REFRESH'; repository: GitRepository | null } | { type: 'CHECK'; repository: GitRepository | null; everything: boolean }>(({ receive, sendBack }) => {
+      /** `everything` when there is no watcher's event to go by, and the whole repository is read again */
+      type Request = { repository: GitRepository | null; written: boolean; everything: boolean };
       let timer: ReturnType<typeof setTimeout> | undefined;
       let stopped = false;
       let checking = false;
@@ -98,7 +99,7 @@ export const commitSystem = setup({
         try {
           for (let current: Request | undefined = first; current && !stopped; current = next) {
             next = undefined;
-            const found = current.repository ? await current.repository.refreshSnapshot() : NOTHING_CHANGED;
+            const found = current.repository ? await current.repository.refreshSnapshot(current.everything ? 'everything' : 'noted') : NOTHING_CHANGED;
             const changed = current.written ? { ...found, status: true } : found;
             if (!stopped && changedAnything(changed)) sendBack({ type: 'commit.ANNOUNCE_REPOSITORY_CHANGED', changed });
           }
@@ -106,16 +107,16 @@ export const commitSystem = setup({
           checking = false;
         }
       };
-      const request = (repository: GitRepository | null, written: boolean) => {
-        if (checking) next = { repository, written: written || next?.written === true };
-        else void run({ repository, written });
+      const request = (repository: GitRepository | null, written: boolean, everything: boolean) => {
+        if (checking) next = { repository, written: written || next?.written === true, everything: everything || next?.everything === true };
+        else void run({ repository, written, everything });
       };
       receive((event) => {
-        if (event.type === 'CHECK') return request(event.repository, false);
+        if (event.type === 'CHECK') return request(event.repository, false, event.everything);
         clearTimeout(timer);
         timer = setTimeout(() => {
           timer = undefined;
-          request(event.repository, true);
+          request(event.repository, true, true);
         }, 150);
       });
       return () => { stopped = true; clearTimeout(timer); };
@@ -130,9 +131,12 @@ export const commitSystem = setup({
     checkRepository: enqueueActions(({ context, event, enqueue, self }) => {
       const repository = context.gitRepository
       if (!repository) return
-      enqueue.sendTo('statusRefresh', { type: 'CHECK', repository });
+      const { reconcile = false } = event as { reconcile?: boolean }
+      // A reconcile has no event to go by. Any other hint is a watcher's, or follows a fetch, and each has
+      // noted what it changed with the repository already
+      enqueue.sendTo('statusRefresh', { type: 'CHECK', repository, everything: reconcile });
       // Someone has come back to the repository, which is when what the remote has is worth knowing
-      if ((event as { reconcile?: boolean }).reconcile) enqueue(() => { fetchInBackground(repository, self) });
+      if (reconcile) enqueue(() => { fetchInBackground(repository, self) });
     }),
 
     getGitStatus: ({ context, reply, self }) => {

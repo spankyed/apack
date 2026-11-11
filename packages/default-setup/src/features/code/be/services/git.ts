@@ -84,7 +84,7 @@ const NETWORK = new Set(['fetch', 'push'])
 /** Which commands a command waits behind: none for a read, the other remote commands, or the other writes */
 function laneOf(args: string[]): 'read' | 'network' | 'write' {
   const [command, verb] = args
-  if (READS.has(command!) || (command === 'config' && verb === '--get')) return 'read'
+  if (READS.has(command!) || (command === 'config' && (verb === '--get' || verb === '--get-regexp'))) return 'read'
   if ((command === 'stash' || command === 'worktree') && verb === 'list') return 'read'
   return NETWORK.has(command!) ? 'network' : 'write'
 }
@@ -191,6 +191,14 @@ function statusOf(code: string): GitStatusFile['status'] {
   }
 }
 
+/** Where a checkout's git state lives, and where the working directory is in it */
+interface GitDirectories {
+  gitDir: string
+  commonDir: string
+  /** The working directory's path from the top of the checkout, ending in `/`: empty when it is the top */
+  prefix: string
+}
+
 /** One changed path as `git status --porcelain=v2 -z` printed it */
 interface StatusEntry {
   path: string
@@ -200,6 +208,49 @@ interface StatusEntry {
   columns?: string
   /** The record as printed, which names what the path holds in HEAD and in the index */
   record: string
+}
+
+/**
+ * A snapshot as it was read: what a window is shown of it, what tells a later change from none, and the status it
+ * was made from, which a later read of a few paths is put into
+ */
+interface LoadedSnapshot {
+  value: RepositorySnapshot
+  identity: SnapshotIdentity
+  headers: string[]
+  entries: StatusEntry[]
+  /** Whether git lists untracked files, which the user may have told it not to */
+  untracked: 'all' | 'no'
+  /** Whether git takes two spellings of a name that differ by case for one file, as a file system that does has it do */
+  ignoreCase: boolean
+}
+
+/**
+ * The most paths read on their own after a watcher names them. Git matches each against every file it tracks,
+ * so the saving over a whole status shrinks as they grow, and past this many the whole status is read.
+ */
+const NOTED_PATHS_LIMIT = 32
+
+/** Files whose change can move the standing of any other: what is ignored, how content is compared, where a submodule is */
+const WHOLE_TREE_FILES = new Set(['.gitignore', '.gitattributes', '.gitmodules'])
+
+/** The order git prints a status in: changed paths, then conflicts, then untracked ones, each by the bytes of its path */
+function inStatusOrder(entries: StatusEntry[]): StatusEntry[] {
+  const rank = (entry: StatusEntry) => entry.record.startsWith('? ') ? 2 : entry.columns ? 0 : 1
+  return entries
+    .map(entry => ({ entry, rank: rank(entry), bytes: Buffer.from(entry.path) }))
+    .sort((a, b) => a.rank - b.rank || Buffer.compare(a.bytes, b.bytes))
+    .map(({ entry }) => entry)
+}
+
+/**
+ * Two spellings of one path made the same, as far as the file system and git make them: letters composed on
+ * macOS, whose file system does not tell the composed from the decomposed, and the letters A to Z in one case
+ * where git ignores case, which are the only ones it folds
+ */
+const pathFolding = (ignoreCase: boolean) => (filePath: string): string => {
+  const composed = process.platform === 'darwin' ? filePath.normalize('NFC') : filePath
+  return ignoreCase ? composed.replace(/[A-Z]+/g, upper => upper.toLowerCase()) : composed
 }
 
 /** The headers of `git status --porcelain=v2 -z` and its record for each changed path, in the order printed */
@@ -275,18 +326,21 @@ export class GitRepository {
   private _autoFetchEnabled = false
   private _fetchThrottleMs = 180_000
   /** The last snapshot read, with what it and the refs looked like, to tell a change from none */
-  private snapshot?: { value: RepositorySnapshot; identity: SnapshotIdentity }
-  /** Whether nothing has said the repository may have changed since `snapshot` was read */
-  private snapshotFresh = false
-  /** Counts every notice that the repository may have changed, so a read that one overtook is not kept as fresh */
+  private snapshot?: LoadedSnapshot
+  /**
+   * What may have changed since `snapshot` was read: paths in the working tree that a watcher named, relative to
+   * the working directory, or anything. Nothing in it is what lets the snapshot be reused.
+   */
+  private unread: Set<string> | 'anything' = 'anything'
+  /** Counts every notice that the repository may have changed, so a read begun before one is not taken for one after it */
   private snapshotVersion = 0
-  private snapshotRead?: { version: number; promise: Promise<{ value: RepositorySnapshot; identity: SnapshotIdentity }> }
+  private snapshotRead?: { version: number; promise: Promise<LoadedSnapshot> }
   /** What the last read looked like, `unreadable` when it failed */
   private lastIdentity?: SnapshotIdentity
   /** What the last `refreshSnapshot` saw, which is what its next one is compared with */
   private checkedIdentity?: SnapshotIdentity
   /** Where this checkout's git state lives, as git last said: it is asked again whenever the watches are checked */
-  private gitDirectories?: { gitDir: string; commonDir: string }
+  private gitDirectories?: GitDirectories
   /** Whether a fetch is running, so a second is not started beside it */
   private fetching = false
   /** Whether fetching by itself has stopped because the remote wanted credentials nobody was there to give */
@@ -408,10 +462,21 @@ export class GitRepository {
     this.markSnapshotStale()
   }
 
-  /** The repository may have changed: the next snapshot asked for is read from git */
+  /** The repository may have changed in any way: the next snapshot asked for is read from git, all of it */
   markSnapshotStale(): void {
     this.snapshotVersion++
-    this.snapshotFresh = false
+    this.unread = 'anything'
+  }
+
+  /**
+   * Notes what a watcher saw change, which is what the next snapshot asked for reads: these paths in the working
+   * tree, relative to the working directory with `/` between their parts, or everything when it could not name them
+   */
+  noteChanged(paths: string[] | null): void {
+    this.cache.clear()
+    if (paths === null || this.unread === 'anything' || this.unread.size + paths.length > NOTED_PATHS_LIMIT) return this.markSnapshotStale()
+    this.snapshotVersion++
+    for (const changed of paths) this.unread.add(changed)
   }
 
   /**
@@ -527,15 +592,18 @@ export class GitRepository {
   /**
    * Reads the repository from git and says which parts of it differ from the last check. A watcher's event is a
    * hint that something changed; this is what decides whether anything did, and what.
+   *
+   * A check a watcher's event started reads `noted`: what the watcher said changed (`noteChanged`), and nothing
+   * when it said nothing since the last read. Any other check has no event to go by, and reads everything.
    */
-  async refreshSnapshot(): Promise<RepositoryChange> {
+  async refreshSnapshot(reading: 'everything' | 'noted' = 'everything'): Promise<RepositoryChange> {
     // Whether its watches failed is part of what a window shows of the checkout's status, so it is part of it here
     const seen = (identity: SnapshotIdentity): SnapshotIdentity =>
       ({ ...identity, status: `${this.watchFailed ? 'unwatched' : 'watched'}\n${identity.status}` })
     // Compared with what the last check saw, not with what was last read: one window's ask can read a change
     // before this runs, and this is what tells the others
     const before = this.checkedIdentity ?? (this.lastIdentity && seen(this.lastIdentity))
-    this.markSnapshotStale()
+    if (reading === 'everything') this.markSnapshotStale()
     let now: SnapshotIdentity
     try {
       now = seen((await this.currentSnapshot()).identity)
@@ -559,29 +627,49 @@ export class GitRepository {
     }
   }
 
-  private currentSnapshot(): Promise<{ value: RepositorySnapshot; identity: SnapshotIdentity }> {
-    if (this.snapshot && this.snapshotFresh && this.watched) return Promise.resolve(this.snapshot)
+  private currentSnapshot(): Promise<LoadedSnapshot> {
+    if (this.snapshot && this.watched && this.unread !== 'anything' && this.unread.size === 0) return Promise.resolve(this.snapshot)
     if (this.snapshotRead?.version === this.snapshotVersion) return this.snapshotRead.promise
 
+    // One read at a time, each starting from what the one before it left: a read of a few paths is put into the
+    // snapshot it starts from, which a read still running has not written yet
     const version = this.snapshotVersion
-    const promise = this.loadSnapshot().then((loaded) => {
-      this.snapshot = loaded
-      this.lastIdentity = loaded.identity
-      // A notice that arrived while git was running may be about a change this read did not see
-      this.snapshotFresh = version === this.snapshotVersion
-      return loaded
-    }).finally(() => {
+    const earlier = this.snapshotRead?.promise.then(() => {}, () => {}) ?? Promise.resolve()
+    const promise = earlier.then(() => this.readSnapshotOnce()).finally(() => {
       if (this.snapshotRead?.promise === promise) this.snapshotRead = undefined
     })
     this.snapshotRead = { version, promise }
     return promise
   }
 
-  private async loadSnapshot(): Promise<{ value: RepositorySnapshot; identity: SnapshotIdentity }> {
-    // Every untracked file by name, which is what the panel lists — unless the user has told git to show
-    // none, which is theirs to decide and is usually said of a repository too large to walk
-    const shown = await this.executeGitCommand(['config', '--get', 'status.showUntrackedFiles'])
-    const untracked = shown.success && shown.output?.trim() === 'no' ? 'no' : 'all'
+  private async readSnapshotOnce(): Promise<LoadedSnapshot> {
+    const held = this.watched ? this.snapshot : undefined
+    // Whatever is noted from here on may be a change this read does not see, so it stays unread
+    const noted = this.unread
+    this.unread = new Set()
+    if (held && noted !== 'anything' && noted.size === 0) return held
+    try {
+      const loaded = (held && noted !== 'anything' ? await this.loadNoted(held, [...noted]) : undefined) ?? await this.loadSnapshot()
+      this.snapshot = loaded
+      this.lastIdentity = loaded.identity
+      return loaded
+    } catch (error) {
+      this.unread = 'anything'
+      throw error
+    }
+  }
+
+  private async loadSnapshot(): Promise<LoadedSnapshot> {
+    // Two things git was told that decide what a status lists. Every untracked file is listed by name, which is
+    // what the panel shows, unless the user has told git to show none: theirs to decide, and usually said of a
+    // repository too large to walk. And whether two spellings of a name that differ by case are one file
+    const config = await this.executeGitCommand(['config', '--get-regexp', '^(status\\.showuntrackedfiles|core\\.ignorecase)$'])
+    const told = new Map((config.success ? config.output ?? '' : '').split('\n').filter(Boolean).map((line): [string, string] => {
+      const space = line.indexOf(' ')
+      return [line.slice(0, space), line.slice(space + 1).trim()]
+    }))
+    const untracked = told.get('status.showuntrackedfiles') === 'no' ? 'no' : 'all'
+    const ignoreCase = /^(true|yes|on|1)$/i.test(told.get('core.ignorecase') ?? '')
     const status = await this.executeGitCommand(['status', '--porcelain=v2', '--branch', '--show-stash', `--untracked-files=${untracked}`, '-z'])
     if (!status.success && !status.truncated) {
       throw new Error(status.error || 'Failed to get git status')
@@ -589,53 +677,129 @@ export class GitRepository {
     // Git printed more than is read: what was read ends inside a record, which is dropped with the rest
     const output = status.truncated ? (status.output ?? '').slice(0, (status.output ?? '').lastIndexOf('\0') + 1) : status.output ?? ''
     const { headers, entries } = splitStatus(output)
-    const value = snapshotOf({ headers, entries })
-    if (status.truncated || value.files.length > STATUS_LIMIT) {
-      value.files = value.files.slice(0, STATUS_LIMIT)
-      value.truncated = true
-    }
 
     // Status's headers say more than status. The branch checked out, the commit it is on and what it follows
     // are history, and all but the commit are shown with the status too; the stash count is stashes
     const isBranch = (header: string) => header.startsWith('# branch.')
-    const isCommit = (header: string) => header.startsWith('# branch.oid ')
     const isStashCount = (header: string) => header.startsWith('# stash ')
+    // Refs move without the status moving: a fetch, a branch made or deleted, a stash
+    const refs = ((await this.executeGitCommand(['for-each-ref', '--format=%(objectname) %(refname)'])).output ?? '').split('\n')
+    const isStash = (ref: string) => ref.endsWith(' refs/stash')
+    const directories = this.gitDirectories ?? await this.resolveGitDirectories()
+
+    return this.snapshotOver({ headers, entries, untracked, ignoreCase }, {
+      history: [...headers.filter(isBranch), ...refs.filter(ref => !isStash(ref))].join('\n'),
+      // The count as well as the ref: dropping a stash below the newest moves only the count
+      stashes: [...headers.filter(isStashCount), ...refs.filter(isStash)].join('\n'),
+      worktrees: await this.readWorktreesIdentity(directories),
+    }, { directories, truncated: status.truncated === true })
+  }
+
+  /**
+   * The held snapshot with these paths of the working tree read again, or nothing when a status of them alone
+   * would not say all that changed, and the whole status is to be read.
+   *
+   * Git is asked about the paths and about nothing else. That is the whole truth of a change to the working tree
+   * as long as no file's standing depends on another's, and the checks here are the ways it can.
+   */
+  private async loadNoted(held: LoadedSnapshot, noted: string[]): Promise<LoadedSnapshot | undefined> {
+    if (held.value.truncated) return undefined
+    if (noted.some(changed => WHOLE_TREE_FILES.has(changed.slice(changed.lastIndexOf('/') + 1)))) return undefined
+    // A rename, a copy and a file added without its content are each read from two paths at once: asked for alone,
+    // one of the two comes back as an addition or a deletion
+    if (held.entries.some(entry => entry.originalPath !== undefined || entry.columns?.[1] === 'A')) return undefined
+    const directories = this.gitDirectories ?? await this.resolveGitDirectories()
+    if (!directories) return undefined
+
+    const asked = [...new Set(await Promise.all(noted.map(changed => this.outermostRepositoryOver(changed))))]
+    // Each path is taken as it is spelled: a `*` or a `[` in a name is that character, and where git ignores case
+    // it does for these too
+    const magic = `:(literal${held.ignoreCase ? ',icase' : ''})`
+    const status = await this.executeGitCommand(['status', '--porcelain=v2', `--untracked-files=${held.untracked}`, '-z', '--', ...asked.map(spec => magic + spec)])
+    if (!status.success || status.truncated) return undefined
+    const found = splitStatus(status.output ?? '').entries
+    if (found.some(entry => entry.originalPath !== undefined)) return undefined
+
+    // What git answered replaces what was held of the same paths and of everything under them
+    const fold = pathFolding(held.ignoreCase)
+    const under = asked.map(spec => fold(directories.prefix + spec))
+    const answered = new Set(found.map(entry => fold(entry.path)))
+    const kept = held.entries.filter((entry) => {
+      const folded = fold(entry.path)
+      return !answered.has(folded) && !under.some(spec => folded === spec || folded.startsWith(`${spec}/`))
+    })
+    const entries = inStatusOrder([...kept, ...found])
+    if (entries.length > STATUS_LIMIT) return undefined
+    return this.snapshotOver({ ...held, entries }, held.identity, { directories, truncated: false, held: { files: held.identity.files, kept: new Set(kept) } })
+  }
+
+  /**
+   * The path git answers for when asked about this one: the outermost directory over it that is a repository of
+   * its own, or the path itself. Git does not look inside another repository — a nested one and a submodule are
+   * each one entry, at the directory — so asked about a file inside one it answers nothing.
+   */
+  private async outermostRepositoryOver(relativePath: string): Promise<string> {
+    const parts = relativePath.split('/')
+    for (let depth = 1; depth < parts.length; depth++) {
+      const directory = parts.slice(0, depth).join('/')
+      if (await fs.access(path.join(this.workingDirectory, directory, '.git')).then(() => true, () => false)) return directory
+    }
+    return relativePath
+  }
+
+  /**
+   * A snapshot of a status as it was read, beside the parts of the repository a status does not hold. `held` is
+   * the snapshot this one was made from by reading some paths again: how its other files looked is kept, not read.
+   */
+  private async snapshotOver(
+    read: Pick<LoadedSnapshot, 'headers' | 'entries' | 'untracked' | 'ignoreCase'>,
+    rest: Pick<SnapshotIdentity, 'history' | 'stashes' | 'worktrees'>,
+    { directories, truncated, held }: { directories: GitDirectories | null; truncated: boolean; held?: { files?: Map<string, string>; kept: Set<StatusEntry> } },
+  ): Promise<LoadedSnapshot> {
+    const { headers, entries } = read
+    const value = snapshotOf({ headers, entries })
+    if (truncated || value.files.length > STATUS_LIMIT) {
+      value.files = value.files.slice(0, STATUS_LIMIT)
+      value.truncated = true
+    }
+    // Status names its paths from the top of the checkout, which the working directory may be under
+    const top = path.resolve(this.workingDirectory, ...(directories?.prefix ?? '').split('/').filter(Boolean).map(() => '..'))
     // A file's record names what it holds in HEAD and in the index, and nothing of what it holds in the working
     // tree: a second edit to a file already changed leaves the record as it was. How the file looks says that,
     // for the files a window can have a diff of open, which are the ones the snapshot lists
     const files = new Map(await Promise.all(entries.slice(0, STATUS_LIMIT).map(async (entry): Promise<[string, string]> => {
+      const known = held?.kept.has(entry) ? held.files?.get(entry.path) : undefined
+      if (known !== undefined) return [entry.path, known]
       const inWorkingTree = !entry.columns || entry.columns[1] !== '.'
-      return [entry.path, `${entry.record}\0${inWorkingTree ? await this.fileSignature(entry.path) : ''}`]
+      return [entry.path, `${entry.record}\0${inWorkingTree ? await this.fileSignature(path.join(top, entry.path)) : ''}`]
     })))
-    // Refs move without the status moving: a fetch, a branch made or deleted, a stash
-    const refs = ((await this.executeGitCommand(['for-each-ref', '--format=%(objectname) %(refname)'])).output ?? '').split('\n')
-    const isStash = (ref: string) => ref.endsWith(' refs/stash')
+    const isCommit = (header: string) => header.startsWith('# branch.oid ')
+    const isStashCount = (header: string) => header.startsWith('# stash ')
 
     return {
+      ...read,
       value,
       identity: {
         status: [...headers.filter(header => !isCommit(header) && !isStashCount(header)), ...entries.map(entry => entry.record)].join('\0'),
         diffs: [...files.values()].join('\0'),
-        history: [...headers.filter(isBranch), ...refs.filter(ref => !isStash(ref))].join('\n'),
-        // The count as well as the ref: dropping a stash below the newest moves only the count
-        stashes: [...headers.filter(isStashCount), ...refs.filter(isStash)].join('\n'),
-        worktrees: await this.readWorktreesIdentity(),
+        history: rest.history,
+        stashes: rest.stashes,
+        worktrees: rest.worktrees,
         files,
       },
     }
   }
 
   /** How a file in the working tree looks without reading it, which tells a later edit from none */
-  private fileSignature(relativePath: string): Promise<string> {
-    return fs.stat(path.join(this.workingDirectory, relativePath)).then(stat => `${stat.mtimeMs}:${stat.size}`, () => 'gone')
+  private fileSignature(file: string): Promise<string> {
+    return fs.stat(file).then(stat => `${stat.mtimeMs}:${stat.size}`, () => 'gone')
   }
 
   /**
    * What says the worktrees changed, read from the files git keeps for them and without running it: which there
    * are, where each is, what each has checked out, and which are locked.
    */
-  private async readWorktreesIdentity(): Promise<string> {
-    const directories = this.gitDirectories ?? await this.resolveGitDirectories()
+  private async readWorktreesIdentity(directories: GitDirectories | null): Promise<string> {
     if (!directories) return ''
     const { commonDir } = directories
     const read = (file: string) => fs.readFile(file, 'utf8').then(text => text.trim(), () => '')
@@ -1161,11 +1325,11 @@ export class GitRepository {
    * Where this checkout's git state lives: its own git directory (index, HEAD) and the common one holding refs.
    * The two differ in a linked worktree. Null when the working directory is in no repository.
    */
-  async resolveGitDirectories(): Promise<{ gitDir: string; commonDir: string } | null> {
-    const result = await this.executeGitCommand(['rev-parse', '--git-dir', '--git-common-dir'])
-    const [gitDir, commonDir] = (result.success ? result.output ?? '' : '').split('\n').map(line => line.trim())
+  async resolveGitDirectories(): Promise<GitDirectories | null> {
+    const result = await this.executeGitCommand(['rev-parse', '--git-dir', '--git-common-dir', '--show-prefix'])
+    const [gitDir, commonDir, prefix] = (result.success ? result.output ?? '' : '').split('\n').map(line => line.trim())
     this.gitDirectories = gitDir && commonDir
-      ? { gitDir: path.resolve(this.workingDirectory, gitDir), commonDir: path.resolve(this.workingDirectory, commonDir) }
+      ? { gitDir: path.resolve(this.workingDirectory, gitDir), commonDir: path.resolve(this.workingDirectory, commonDir), prefix: prefix ?? '' }
       : undefined
     return this.gitDirectories ?? null
   }

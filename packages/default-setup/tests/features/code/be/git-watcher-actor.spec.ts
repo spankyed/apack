@@ -13,13 +13,13 @@ function deferred() {
   return { promise, resolve };
 }
 function watcher() {
-  let change = () => {};
+  let change: (paths: string[] | null) => void = () => {};
   return {
     setGitRepository: vi.fn(),
-    setChangeCallback: (callback: () => void) => { change = callback; },
+    setChangeCallback: (callback: (paths: string[] | null) => void) => { change = callback; },
     startWatching: vi.fn(async (_signal?: AbortSignal) => {}),
     stopWatching: vi.fn(async () => {}),
-    change: () => change(),
+    change: () => change(null),
   };
 }
 function start(selected: ReturnType<typeof watcher>) {

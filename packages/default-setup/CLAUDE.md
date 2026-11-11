@@ -150,7 +150,7 @@ a broadcast through `answer`.
 
 **A file event is a hint, and whoever owns the truth says whether anything changed.** The code feature's
 watchers are the worked example. The repository watcher (`code/be/services/gitwatcher.ts`) reports only that a
-checkout *may* have changed; git is then asked, and `commit.REPOSITORY_CHANGED` goes out only when a part of the
+checkout *may* have changed, and where; git is then asked, and `commit.REPOSITORY_CHANGED` goes out only when a part of the
 repository differs from what the last check saw, naming the parts that do — its status, its files' diffs, its
 history, stashes or worktrees (`GitRepository.refreshSnapshot`) — so a window asks again for those alone, and reads
 again only the diffs it has open of the files the news names. The open-file watcher
@@ -162,6 +162,14 @@ neither watcher needs to be exact.
   turn ends. A new source of change sends that event; it does not add a watch.
 - **A check compares with the last check, not the last read.** One window's own ask can read a change first, and
   the check is what tells the others.
+- **The watcher names the files it saw change, and only those are read.** A report carries the working-tree paths
+  that changed (`ChangedPaths`), the repository notes them (`noteChanged`), and the next read asks git about those
+  paths alone and puts its answer into the snapshot it holds (`loadNoted`): a tenth of a whole status over
+  100,000 files. That is the truth only while each file's standing is its own, so everything is read when it may
+  not be: the index, HEAD or a ref moved; a rename, or a file added without its content, is in play;
+  `.gitignore`, `.gitattributes` or `.gitmodules` changed; more files changed than are worth naming. A reconcile
+  and a write made here have no event to go by, and read everything. `git-noted-paths.spec.ts` holds every case to
+  what a whole status says, and says which of the two was asked of git.
 - **A watch that fails is said to the user.** `commit.STATUS_RECEIVED` carries `watching`, and the panel says live
   updates are off; the next check opens the watch again.
 - **A tree is watched by the platform's own watcher where it has one** (`directory-watch.ts`): Node's recursive

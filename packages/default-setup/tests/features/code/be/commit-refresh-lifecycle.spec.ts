@@ -80,6 +80,27 @@ it('announces a hint as the parts git says changed, one check at a time, and not
   expect(refreshSnapshot).toHaveBeenCalledTimes(2);
 });
 
+// A watcher notes with the repository what it saw change, so the check its event starts reads that. A reconcile
+// is asked for because something may have changed that no event reported, and a write is made by this app with
+// no event at all: each of those reads everything
+it('reads what was noted for a hint, and everything for a reconcile and for a write', async () => {
+  const refreshSnapshot = vi.fn(async (_reading?: string) => NOTHING);
+  const announced = vi.fn();
+  const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: announced } }),
+    { input: { baseDirectory: '/repo', gitRepository: { refreshSnapshot, fetchIfDue: async () => false } as never } }).start();
+  actors.push(actor);
+  const read = async (event: Parameters<typeof actor.send>[0]) => {
+    refreshSnapshot.mockClear();
+    actor.send(event);
+    await vi.advanceTimersByTimeAsync(150);
+    return refreshSnapshot.mock.calls.map(([reading]) => reading);
+  };
+
+  expect(await read({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' })).toEqual(['noted']);
+  expect(await read({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED', reconcile: true })).toEqual(['everything']);
+  expect(await read({ type: 'commit.GIT_STATUS_CHANGED' })).toEqual(['everything']);
+});
+
 // The window that made a write is waiting to show it, so its status is news whatever git says of the rest. The
 // log, the stashes and the worktrees are asked for again only when the write moved them: staging a file does
 // not. The check it runs first is also what keeps the file event the write causes from being news a second time

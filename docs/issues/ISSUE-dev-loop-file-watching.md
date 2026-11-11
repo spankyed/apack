@@ -117,6 +117,11 @@ Everything below is on master.
     - **Why not Node's watch on Linux too:** it opens a watch on every file as well as every directory, and reads the whole tree before it returns (`lib/internal/fs/recursive_watch.js`, v24.16.0).
     - The scripts were in a session scratchpad and are not in the repo.
   - It treats an event as a hint: git is asked whether the status or a ref changed, and only a difference is announced.
+  - **A hint that names files is answered by reading those files** (`GitRepository.loadNoted`), not the whole status. Measured 2026-11-10 on darwin arm64 with git 2.38.1, over 100,000 tracked files with one edited:
+    - **Git alone** (load 5.9, median of 9): a whole status 315 ms; a status of the one path 26 ms, of its directory 28 ms, of 50 paths 105 ms. Git matches each path against every file it tracks, which is why no more than 32 are read this way.
+    - **Through `GitRepository`** (load 9.6, median of 9, Node 24.16.0): a check that reads everything 294 to 341 ms; a check that reads the one path noted 29 to 32 ms.
+    - **Asked about one path, git says less than a whole status does in four ways**, each seen on that git. A staged rename comes back as an addition. A file added without its content, beside a deleted one, comes back as a deletion where the whole status pairs them as a rename. A path inside a submodule or a nested repository comes back as nothing, where the whole status has one entry at its directory. A name spelled in another case comes back as nothing where git ignores case, unless the path is marked `icase`. The first two read the whole status; the last two ask differently.
+    - `tests/features/code/be/services/git-noted-paths.spec.ts` holds each of these to what a whole status says. Nine edits that each remove one rule were tried on a copy of `git.ts`, and each failed at least one case.
   - What no event reported is found by reading again when a window gains focus, a terminal command finishes or an agent's turn ends (`CHECK_FOR_EXTERNAL_CHANGES`).
   - `services/open-file-watcher.ts` beside it watches each file open in an editor with chokidar's per-file `fs.watch` mode (`useFsEvents: false, usePolling: false`), so kqueue.
 - **Soak:** `packages/apack-cli/scripts/soak-watch.ts`, `soak-bystander.mjs`, `soak-rounds.ts`, with `tests/build/soak-rounds.spec.ts`.
