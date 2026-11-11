@@ -1,6 +1,7 @@
 import * as path from 'path'
 import * as fs from 'fs/promises'
-import type { GitStatusFile, StashEntry, CommitLogEntry } from '../types.ts'
+import { REPOSITORY_PARTS } from '../types.ts'
+import type { GitStatusFile, StashEntry, CommitLogEntry, RepositoryChange, RepositoryPart } from '../types.ts'
 import { createLogger } from '@apackdev/sdk/logger'
 import { execFileWhileWorking } from '@apackdev/sdk/progress'
 import { agentChildEnvironment } from './shell-environment.ts'
@@ -135,6 +136,17 @@ interface CachedResult<T> {
   timestamp: number
 }
 
+/** What each part of a repository looked like when it was read, to tell which of them a later read finds changed */
+type SnapshotIdentity = Record<RepositoryPart, string>
+
+const partsAll = <T>(value: T) => Object.fromEntries(REPOSITORY_PARTS.map(part => [part, value])) as Record<RepositoryPart, T>
+
+export const NOTHING_CHANGED: RepositoryChange = partsAll(false)
+export const changedAnything = (change: RepositoryChange): boolean => REPOSITORY_PARTS.some(part => change[part])
+
+/** What git says when the remote wanted credentials nobody is there to give */
+const AUTHENTICATION_FAILED = /Authentication failed|could not read Username|could not read Password|terminal prompts disabled|Permission denied \(publickey/
+
 /** What the commit panel shows of a checkout, read in one pass */
 export interface RepositorySnapshot {
   files: GitStatusFile[]
@@ -214,16 +226,22 @@ export class GitRepository {
   private _autoFetchEnabled = false
   private _fetchThrottleMs = 180_000
   /** The last snapshot read, with what it and the refs looked like, to tell a change from none */
-  private snapshot?: { value: RepositorySnapshot; identity: string }
+  private snapshot?: { value: RepositorySnapshot; identity: SnapshotIdentity }
   /** Whether nothing has said the repository may have changed since `snapshot` was read */
   private snapshotFresh = false
   /** Counts every notice that the repository may have changed, so a read that one overtook is not kept as fresh */
   private snapshotVersion = 0
-  private snapshotRead?: { version: number; promise: Promise<{ value: RepositorySnapshot; identity: string }> }
+  private snapshotRead?: { version: number; promise: Promise<{ value: RepositorySnapshot; identity: SnapshotIdentity }> }
   /** What the last read looked like, `unreadable` when it failed */
-  private lastIdentity?: string
+  private lastIdentity?: SnapshotIdentity
   /** What the last `refreshSnapshot` saw, which is what its next one is compared with */
-  private checkedIdentity?: string
+  private checkedIdentity?: SnapshotIdentity
+  /** Where this checkout's git state lives, as git last said: it is asked again whenever the watches are checked */
+  private gitDirectories?: { gitDir: string; commonDir: string }
+  /** Whether a fetch is running, so a second is not started beside it */
+  private fetching = false
+  /** Whether fetching by itself has stopped because the remote wanted credentials nobody was there to give */
+  private autoFetchSuspended = false
   /** Whether a watcher reports this checkout's changes; without one a snapshot is read every time it is asked for */
   private watched = false
   private watchFailed = false
@@ -239,6 +257,8 @@ export class GitRepository {
   setFetchConfig(enabled: boolean, intervalSeconds: number): void {
     this._autoFetchEnabled = enabled
     this._fetchThrottleMs = intervalSeconds * 1000
+    // The settings were changed, which is the user saying to try again
+    this.autoFetchSuspended = false
   }
 
   get isWriteInProgress(): boolean {
@@ -449,39 +469,45 @@ export class GitRepository {
    * The checkout's changed files, branch and distance from its upstream.
    *
    * A snapshot is reused until something says the repository may have changed: a watcher's event, a write made
-   * here, a reconcile. With `fetch`, the remote is fetched first when the fetch settings say it is due.
+   * here, a reconcile. It never waits on the remote: `fetchIfDue` is what fetches.
    */
-  async readSnapshot(options: { fetch?: boolean } = {}): Promise<RepositorySnapshot> {
-    let current = await this.currentSnapshot()
-    if (options.fetch && current.value.hasUpstream && await this.fetchIfStale()) {
-      this.markSnapshotStale()
-      current = await this.currentSnapshot()
-    }
-    return current.value
+  async readSnapshot(): Promise<RepositorySnapshot> {
+    return (await this.currentSnapshot()).value
   }
 
   /**
-   * Reads the snapshot from git and says whether it or any ref differs from the last one read. A watcher's
-   * event is a hint that something changed; this is what decides whether anything did.
+   * Reads the repository from git and says which parts of it differ from the last check. A watcher's event is a
+   * hint that something changed; this is what decides whether anything did, and what.
    */
-  async refreshSnapshot(): Promise<boolean> {
+  async refreshSnapshot(): Promise<RepositoryChange> {
+    // Whether its watches failed is part of what a window shows of the checkout's status, so it is part of it here
+    const seen = (identity: SnapshotIdentity): SnapshotIdentity =>
+      ({ ...identity, status: `${this.watchFailed ? 'unwatched' : 'watched'}\n${identity.status}` })
     // Compared with what the last check saw, not with what was last read: one window's ask can read a change
     // before this runs, and this is what tells the others
-    // Whether its watches failed is part of what a window shows of the checkout, so it is part of what changed
-    const seen = (identity: string) => `${this.watchFailed ? 'unwatched' : 'watched'}\n${identity}`
-    const before = this.checkedIdentity ?? (this.lastIdentity === undefined ? undefined : seen(this.lastIdentity))
+    const before = this.checkedIdentity ?? (this.lastIdentity && seen(this.lastIdentity))
     this.markSnapshotStale()
-    let now: string
+    let now: SnapshotIdentity
     try {
       now = seen((await this.currentSnapshot()).identity)
     } catch {
-      now = seen(this.lastIdentity = 'unreadable')
+      now = seen(this.lastIdentity = partsAll('unreadable'))
     }
     this.checkedIdentity = now
-    return now !== before
+    // A first check has nothing to compare with, so everything it reads is new to whoever hears of it
+    if (!before) return partsAll(true)
+
+    const history = now.history !== before.history
+    return {
+      status: now.status !== before.status,
+      history,
+      stashes: now.stashes !== before.stashes,
+      // A worktree is listed with the commit it is on, which moves with its branch
+      worktrees: history || now.worktrees !== before.worktrees,
+    }
   }
 
-  private currentSnapshot(): Promise<{ value: RepositorySnapshot; identity: string }> {
+  private currentSnapshot(): Promise<{ value: RepositorySnapshot; identity: SnapshotIdentity }> {
     if (this.snapshot && this.snapshotFresh && this.watched) return Promise.resolve(this.snapshot)
     if (this.snapshotRead?.version === this.snapshotVersion) return this.snapshotRead.promise
 
@@ -499,12 +525,12 @@ export class GitRepository {
     return promise
   }
 
-  private async loadSnapshot(): Promise<{ value: RepositorySnapshot; identity: string }> {
+  private async loadSnapshot(): Promise<{ value: RepositorySnapshot; identity: SnapshotIdentity }> {
     // Every untracked file by name, which is what the panel lists — unless the user has told git to show
     // none, which is theirs to decide and is usually said of a repository too large to walk
     const shown = await this.executeGitCommand(['config', '--get', 'status.showUntrackedFiles'])
     const untracked = shown.success && shown.output?.trim() === 'no' ? 'no' : 'all'
-    const status = await this.executeGitCommand(['status', '--porcelain=v2', '--branch', `--untracked-files=${untracked}`, '-z'])
+    const status = await this.executeGitCommand(['status', '--porcelain=v2', '--branch', '--show-stash', `--untracked-files=${untracked}`, '-z'])
     if (!status.success && !status.truncated) {
       throw new Error(status.error || 'Failed to get git status')
     }
@@ -515,9 +541,45 @@ export class GitRepository {
       value.files = value.files.slice(0, STATUS_LIMIT)
       value.truncated = true
     }
+
+    // Status's headers say more than status. The branch checked out, the commit it is on and what it follows
+    // are history, and all but the commit are shown with the status too; the stash count is stashes
+    const records = output.split('\0')
+    const isBranch = (record: string) => record.startsWith('# branch.')
+    const isCommit = (record: string) => record.startsWith('# branch.oid ')
+    const isStashCount = (record: string) => record.startsWith('# stash ')
     // Refs move without the status moving: a fetch, a branch made or deleted, a stash
-    const refs = await this.executeGitCommand(['for-each-ref', '--format=%(objectname) %(refname)'])
-    return { value, identity: `${output}\n${refs.output ?? ''}` }
+    const refs = ((await this.executeGitCommand(['for-each-ref', '--format=%(objectname) %(refname)'])).output ?? '').split('\n')
+    const isStash = (ref: string) => ref.endsWith(' refs/stash')
+
+    return {
+      value,
+      identity: {
+        status: records.filter(record => !isCommit(record) && !isStashCount(record)).join('\0'),
+        history: [...records.filter(isBranch), ...refs.filter(ref => !isStash(ref))].join('\n'),
+        // The count as well as the ref: dropping a stash below the newest moves only the count
+        stashes: [...records.filter(isStashCount), ...refs.filter(isStash)].join('\n'),
+        worktrees: await this.readWorktreesIdentity(),
+      },
+    }
+  }
+
+  /**
+   * What says the worktrees changed, read from the files git keeps for them and without running it: which there
+   * are, where each is, what each has checked out, and which are locked.
+   */
+  private async readWorktreesIdentity(): Promise<string> {
+    const directories = this.gitDirectories ?? await this.resolveGitDirectories()
+    if (!directories) return ''
+    const { commonDir } = directories
+    const read = (file: string) => fs.readFile(file, 'utf8').then(text => text.trim(), () => '')
+    const names = await fs.readdir(path.join(commonDir, 'worktrees')).then(found => found.sort(), () => [] as string[])
+    const linked = await Promise.all(names.map(async (name) => {
+      const directory = path.join(commonDir, 'worktrees', name)
+      const locked = await fs.access(path.join(directory, 'locked')).then(() => ' locked', () => '')
+      return `${name} ${await read(path.join(directory, 'gitdir'))} ${await read(path.join(directory, 'HEAD'))}${locked}`
+    }))
+    return [`main ${await read(path.join(commonDir, 'HEAD'))}`, ...linked].join('\n')
   }
 
   /**
@@ -1036,11 +1098,10 @@ export class GitRepository {
   async resolveGitDirectories(): Promise<{ gitDir: string; commonDir: string } | null> {
     const result = await this.executeGitCommand(['rev-parse', '--git-dir', '--git-common-dir'])
     const [gitDir, commonDir] = (result.success ? result.output ?? '' : '').split('\n').map(line => line.trim())
-    if (!gitDir || !commonDir) return null
-    return {
-      gitDir: path.resolve(this.workingDirectory, gitDir),
-      commonDir: path.resolve(this.workingDirectory, commonDir),
-    }
+    this.gitDirectories = gitDir && commonDir
+      ? { gitDir: path.resolve(this.workingDirectory, gitDir), commonDir: path.resolve(this.workingDirectory, commonDir) }
+      : undefined
+    return this.gitDirectories ?? null
   }
 
   /** Whether the working directory is in a repository. Rejects when there is no git to ask. */
@@ -1239,22 +1300,10 @@ export class GitRepository {
     return files
   }
 
-  async getFileDiffBetweenBranches(filePath: string, baseBranch: string, targetBranch?: string): Promise<string> {
-    const target = targetBranch || 'HEAD'
-    
-    // Validate branch names to prevent injection
-    if (!/^[a-zA-Z0-9._/-]+$/.test(baseBranch) || !/^[a-zA-Z0-9._/-]+$/.test(target)) {
-      throw new Error('Invalid branch name')
-    }
-    refArgument(baseBranch, 'base branch')
-    refArgument(target, 'branch')
-    
-    const result = await this.executeGitCommand(['diff', '--binary', '-M', `${baseBranch}...${target}`, '--', filePath])
-    if (!result.success) {
-      throw new Error(result.error || 'Failed to get file diff between branches')
-    }
-    
-    return result.output || ''
+  /** Whether each of these names a commit in this repository */
+  async commitsExist(...refs: string[]): Promise<boolean> {
+    const result = await this.executeGitCommand(['rev-parse', '--quiet', ...refs.map(ref => `${refArgument(ref)}^{commit}`)])
+    return result.success
   }
 
   async getFileContentFromBranch(filePath: string, branch: string): Promise<string> {
@@ -1385,55 +1434,42 @@ export class GitRepository {
 
   private _forceFetchNext = false
 
-  /**
-   * Force a fetch on the next getCommitsAheadBehind() call,
-   * regardless of the auto-fetch toggle or throttle timer.
-   */
+  /** Fetches the next time one is considered, whatever the fetch settings and the time since the last say */
   forceFetchOnce(): void {
     this._forceFetchNext = true
   }
 
-  /** Fetches when a fetch was forced or the fetch settings say one is due, and says whether it did */
-  private async fetchIfStale(): Promise<boolean> {
-    if (this._forceFetchNext) {
+  /**
+   * Fetches from the remote when one is due — it was forced, or the fetch settings ask for it and their interval
+   * has passed — and says whether it did. **Never part of a read**: whoever asked for the repository has its
+   * answer already, and what the fetch brings is found by the check that follows it.
+   *
+   * It stops fetching by itself once the remote wants credentials nobody is there to give, since every later try
+   * would fail the same way; changing the fetch settings, or a push or pull that works, starts it again.
+   */
+  async fetchIfDue(): Promise<boolean> {
+    if (this.fetching) return false
+    if (!this._forceFetchNext) {
+      if (!this._autoFetchEnabled || this.autoFetchSuspended) return false
+      if (Date.now() - this._lastFetchTimestamp < this._fetchThrottleMs) return false
+    }
+    this.fetching = true
+    try {
+      // Nothing to fetch for a branch that follows no remote one, and not a reason to forget a forced fetch
+      if (!(await this.readSnapshot()).hasUpstream) return false
       this._forceFetchNext = false
       this._lastFetchTimestamp = Date.now()
-      await this.executeGitCommand(['fetch', '--quiet'])
-      return true
-    }
-    if (!this._autoFetchEnabled) return false
-    const now = Date.now()
-    if (now - this._lastFetchTimestamp < this._fetchThrottleMs) return false
-    this._lastFetchTimestamp = now
-    await this.executeGitCommand(['fetch', '--quiet'])
-    return true
-  }
-
-  async getCommitsAheadBehind(): Promise<{ ahead: number; behind: number }> {
-    try {
-      // Check if we have an upstream branch
-      const upstream = await this.getUpstreamBranch()
-      if (!upstream) {
-        return { ahead: 0, behind: 0 }
+      const result = await this.executeGitCommand(['fetch', '--quiet'])
+      if (!result.success && AUTHENTICATION_FAILED.test(result.error ?? '')) {
+        this.autoFetchSuspended = true
+        logger.warn('Fetching by itself has stopped for this repository: the remote asked for credentials', { error: result.error })
       }
-
-      // Fetch remote refs at most once per minute so @{u} stays reasonably fresh
-      await this.fetchIfStale()
-
-      // Count commits ahead
-      const aheadResult = await this.executeGitCommand(['rev-list', '--count', '@{u}..HEAD'])
-      const ahead = aheadResult.success ? parseInt(aheadResult.output?.trim() || '0', 10) : 0
-      
-      // Count commits behind
-      const behindResult = await this.executeGitCommand(['rev-list', '--count', 'HEAD..@{u}'])
-      const behind = behindResult.success ? parseInt(behindResult.output?.trim() || '0', 10) : 0
-      
-      return { ahead, behind }
-    } catch (error) {
-      // Log the error for debugging
-      logger.error('getCommitsAheadBehind failed', { error })
-      // If there's an error, return zeros
-      return { ahead: 0, behind: 0 }
+      this.markSnapshotStale()
+      return result.success
+    } catch {
+      return false
+    } finally {
+      this.fetching = false
     }
   }
 
@@ -1470,6 +1506,7 @@ export class GitRepository {
       // Clear cache and reset fetch timer (push updates remote refs)
       this.clearCache()
       this._lastFetchTimestamp = Date.now()
+      this.autoFetchSuspended = false
     })
   }
 
@@ -1505,6 +1542,7 @@ export class GitRepository {
       // Clear cache and reset fetch timer (pull already fetched remote refs)
       this.clearCache()
       this._lastFetchTimestamp = Date.now()
+      this.autoFetchSuspended = false
     })
   }
 

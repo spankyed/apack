@@ -89,9 +89,20 @@ export interface GitCommitInfo {
   date?: Date
 }
 
+/**
+ * The parts of a repository a window shows, each read and refreshed on its own: its changed files with the branch
+ * and its distance from upstream; which branch is checked out, the commit it is on and every branch and tag,
+ * which a log and a pull request are read from; its stashes; its worktrees.
+ */
+export const REPOSITORY_PARTS = ['status', 'history', 'stashes', 'worktrees'] as const
+export type RepositoryPart = (typeof REPOSITORY_PARTS)[number]
+
+/** Which parts of a repository differ from when it was last checked */
+export type RepositoryChange = Record<RepositoryPart, boolean>
+
+/** The two sides of one file's change, which an editor shows side by side */
 export interface GitDiff {
   path: string
-  diff: string
   staged: boolean
   originalContent?: string
   modifiedContent?: string

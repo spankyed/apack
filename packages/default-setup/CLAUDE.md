@@ -150,8 +150,9 @@ a broadcast through `answer`.
 
 **A file event is a hint, and whoever owns the truth says whether anything changed.** The code feature's
 watchers are the worked example. The repository watcher (`code/be/services/gitwatcher.ts`) reports only that a
-checkout *may* have changed; git is then asked, and `commit.REPOSITORY_CHANGED` goes out only when the status or a
-ref differs from what the last check saw (`GitRepository.refreshSnapshot`). The open-file watcher
+checkout *may* have changed; git is then asked, and `commit.REPOSITORY_CHANGED` goes out only when a part of the
+repository differs from what the last check saw, naming the parts that do — its status, history, stashes or
+worktrees (`GitRepository.refreshSnapshot`) — so a window asks again for those lists alone. The open-file watcher
 (`open-file-watcher.ts`) compares each file with how it last looked. So an event for nothing announces nothing, and
 neither watcher needs to be exact.
 
@@ -162,9 +163,15 @@ neither watcher needs to be exact.
   the check is what tells the others.
 - **A watch that fails is said to the user.** `commit.STATUS_RECEIVED` carries `watching`, and the panel says live
   updates are off; the next check opens the watch again.
-- **The platform watcher is a native binding the host resolves** (`HOST_RESOLVED_BINARIES`), and the host resolves
-  what a pack *requires*. It is imported by a module of its own (`parcel-watcher.ts`) that is loaded on first use:
-  a dynamic `import()` of the package itself is resolved by Node beside the installed pack, where nothing is.
+- **A tree is watched by the platform's own watcher where it has one** (`directory-watch.ts`): Node's recursive
+  `fs.watch` on macOS and Windows, and `@parcel/watcher` on Linux, which has no watch over a tree. The library
+  is not loaded on the other two, where it has open memory defects and would share a process with the database
+  ([what was measured](../../docs/issues/ISSUE-dev-loop-file-watching.md#code-map)). A watcher that needs a native
+  binding earns its place by surviving its directory being deleted as its watch closes.
+- **Where the library is used it is a native binding the host resolves** (`HOST_RESOLVED_BINARIES`), and the
+  host resolves what a pack *requires*. It is imported by a module of its own (`parcel-watcher.ts`) that is
+  loaded on first use: a dynamic `import()` of the package itself is resolved by Node beside the installed pack,
+  where nothing is.
 
 **The guards that remain, and what each got wrong first.** Every correlating guard in this pack went through this,
 and they failed in four different ways — which is the argument for reading the list rather than copying the one you

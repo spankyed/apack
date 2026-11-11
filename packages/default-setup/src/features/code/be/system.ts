@@ -266,7 +266,7 @@ export const systemMachine = setup({
      */
     checkForExternalChanges: ({ context, self }) => {
       child(self, 'explorer')?.send({ type: 'explorer.CHECK_OPEN_FILES' });
-      const checkRepository = () => { child(self, 'commit')?.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' }) };
+      const checkRepository = () => { child(self, 'commit')?.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED', reconcile: true }) };
       if (context.gitWatcher) void context.gitWatcher.check().then(checkRepository, checkRepository);
       else checkRepository();
     },

@@ -5,7 +5,8 @@ import { broadcastToSurface, sendToSystem } from '#generated/events.ts';
 import { defineHandlers } from '@apackdev/sdk/framework';
 import { assign, setup, enqueueActions, fromCallback, type AnyActorRef } from 'xstate'
 
-import { GitRepository, StashConflictError } from '../services/git.ts'
+import { GitRepository, NOTHING_CHANGED, StashConflictError, changedAnything } from '../services/git.ts'
+import type { RepositoryChange } from '../types.ts'
 import { requireGitRepository } from '../utils/git-helpers.ts'
 
 const surfaceId = 'code' as const
@@ -52,8 +53,19 @@ export type Event =
   | { type: 'commit.RESET_TO_COMMIT'; hash: string }
   | { type: 'commit.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: GitRepository }
   | { type: 'commit.GIT_STATUS_CHANGED' }
-  | { type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' }
-  | { type: 'commit.ANNOUNCE_REPOSITORY_CHANGED' };
+  /** A hint that the repository changed. `reconcile` says it comes from someone who knows a change is likely, not from a file event */
+  | { type: 'commit.REPOSITORY_MAY_HAVE_CHANGED'; reconcile?: boolean }
+  | { type: 'commit.ANNOUNCE_REPOSITORY_CHANGED'; changed: RepositoryChange };
+
+/**
+ * Fetches from the remote when a fetch is due, behind whoever asked, and has the repository checked once it has:
+ * what the fetch brought is then announced like any other change. Nobody waits on the network for an answer.
+ */
+function fetchInBackground(repository: GitRepository, commit: { send(event: Event): void }): void {
+  void repository.fetchIfDue().then((fetched) => {
+    if (fetched) commit.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' })
+  })
+}
 
 /** Hands each handler the answer for the message it is handling — see `defineHandlers` */
 const handlers = defineHandlers<CodeCommitSystemContext, Event>();
@@ -66,56 +78,66 @@ export const commitSystem = setup({
   },
   actors: {
     /**
-     * Turns what may be a change into the one announcement of it.
+     * Turns what may be a change into the one announcement of it, which says which parts of the repository changed.
      *
-     * `REFRESH` is a write made here: the repository did change, so it is announced once the writes that arrive
-     * together have. `CHECK` is a hint — a file event, a reconcile — so git is asked, and it is announced only if
-     * the status or a ref differs from what was last read; one check runs at a time, and hints that arrive
-     * during it are one more.
+     * `CHECK` is a hint — a file event, a reconcile — so git is asked, and what differs from the last check is
+     * announced, or nothing when nothing does. `REFRESH` is a write made here, checked once the writes that
+     * arrive together have: its status is announced whatever the check finds, since the window that made it is
+     * waiting to show it, and the other parts only when they differ — staging a file moves no commit, so it asks
+     * nobody for the log or a pull request again. Checking is also what keeps the file event that write causes
+     * from being announced a second time. One check runs at a time, and whatever arrives during it is one more.
      */
-    statusRefresh: fromCallback<{ type: 'REFRESH' } | { type: 'CHECK'; repository: GitRepository }>(({ receive, sendBack }) => {
+    statusRefresh: fromCallback<{ type: 'REFRESH' | 'CHECK'; repository: GitRepository | null }>(({ receive, sendBack }) => {
+      type Request = { repository: GitRepository | null; written: boolean };
       let timer: ReturnType<typeof setTimeout> | undefined;
       let stopped = false;
       let checking = false;
-      let next: GitRepository | undefined;
-      const check = async (repository: GitRepository) => {
+      let next: Request | undefined;
+      const run = async (first: Request) => {
         checking = true;
         try {
-          for (let current: GitRepository | undefined = repository; current && !stopped; current = next) {
+          for (let current: Request | undefined = first; current && !stopped; current = next) {
             next = undefined;
-            if (await current.refreshSnapshot() && !stopped) sendBack({ type: 'commit.ANNOUNCE_REPOSITORY_CHANGED' });
+            const found = current.repository ? await current.repository.refreshSnapshot() : NOTHING_CHANGED;
+            const changed = current.written ? { ...found, status: true } : found;
+            if (!stopped && changedAnything(changed)) sendBack({ type: 'commit.ANNOUNCE_REPOSITORY_CHANGED', changed });
           }
         } finally {
           checking = false;
         }
       };
+      const request = (repository: GitRepository | null, written: boolean) => {
+        if (checking) next = { repository, written: written || next?.written === true };
+        else void run({ repository, written });
+      };
       receive((event) => {
-        if (event.type === 'CHECK') {
-          if (checking) next = event.repository;
-          else void check(event.repository);
-          return;
-        }
+        if (event.type === 'CHECK') return request(event.repository, false);
         clearTimeout(timer);
         timer = setTimeout(() => {
           timer = undefined;
-          sendBack({ type: 'commit.ANNOUNCE_REPOSITORY_CHANGED' });
+          request(event.repository, true);
         }, 150);
       });
       return () => { stopped = true; clearTimeout(timer); };
     }),
   },
   actions: handlers.actions({
-    handleGitStatusChanged: enqueueActions(({ enqueue }) => {
-      enqueue.sendTo('statusRefresh', { type: 'REFRESH' });
+    handleGitStatusChanged: enqueueActions(({ context, enqueue }) => {
+      enqueue.sendTo('statusRefresh', { type: 'REFRESH', repository: context.gitRepository });
     }),
 
     /** A hint that the repository changed, from its watcher or a reconcile: git decides whether it did */
-    checkRepository: enqueueActions(({ context, enqueue }) => {
-      if (context.gitRepository) enqueue.sendTo('statusRefresh', { type: 'CHECK', repository: context.gitRepository });
+    checkRepository: enqueueActions(({ context, event, enqueue, self }) => {
+      const repository = context.gitRepository
+      if (!repository) return
+      enqueue.sendTo('statusRefresh', { type: 'CHECK', repository });
+      // Someone has come back to the repository, which is when what the remote has is worth knowing
+      if ((event as { reconcile?: boolean }).reconcile) enqueue(() => { fetchInBackground(repository, self) });
     }),
 
-    getGitStatus: ({ context, reply }) => {
+    getGitStatus: ({ context, reply, self }) => {
       if (!requireGitRepository(context, reply)) return
+      const repository = context.gitRepository
 
       context.gitRepository.isGitRepository().then((isGitRepo) => {
         if (!isGitRepo) {
@@ -126,11 +148,13 @@ export const commitSystem = setup({
           return
         }
 
-        return context.gitRepository!.readSnapshot({ fetch: true }).then((snapshot) => {
+        return repository.readSnapshot().then((snapshot) => {
           answer(reply, {
             type: 'commit.STATUS_RECEIVED',
-            data: { files: snapshot.files, truncated: snapshot.truncated, branch: snapshot.branch, hasUpstream: snapshot.hasUpstream, commitsAhead: snapshot.ahead, commitsBehind: snapshot.behind, watching: !context.gitRepository!.hasWatchFailed }
+            data: { files: snapshot.files, truncated: snapshot.truncated, branch: snapshot.branch, hasUpstream: snapshot.hasUpstream, commitsAhead: snapshot.ahead, commitsBehind: snapshot.behind, watching: !repository.hasWatchFailed }
           })
+          // The window has its answer: what the remote has is fetched behind it, and announced if it differs
+          fetchInBackground(repository, self)
         })
       }).catch((error: any) => {
         let errorMessage = error.message
@@ -157,10 +181,8 @@ export const commitSystem = setup({
         ? (p: string, v: 'HEAD' | 'working' | 'index') => context.gitRepository!.getFileContentAsDataUrl(p, v)
         : (p: string, v: 'HEAD' | 'working' | 'index') => context.gitRepository!.getFileContent(p, v)
 
-      Promise.all([
-        context.gitRepository!.getDiff(ev.path, ev.staged || false),
-        context.gitRepository!.getStatus()
-      ]).then(async ([diff, status]) => {
+      // The editor draws the change from the file's two sides, so those are what is read: no patch is made
+      context.gitRepository!.getStatus().then(async (status) => {
         const fileStatus = status.find(f => f.path === ev.path && f.staged === (ev.staged || false))
 
         let originalContent = ''
@@ -204,7 +226,6 @@ export const commitSystem = setup({
           type: 'commit.DIFF_RECEIVED',
           data: {
             path: ev.path || 'all',
-            diff,
             staged: ev.staged || false,
             originalContent,
             modifiedContent,
@@ -459,8 +480,6 @@ export const commitSystem = setup({
         })
 
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
-
-        context.code?.send({ type: 'pr.GIT_STATUS_CHANGED' })
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
@@ -557,14 +576,23 @@ export const commitSystem = setup({
       },
     }),
 
-    /** The repository changed (on disk, or by a write here; coalesced): news for every window, which each asks again about */
-    announceRepositoryChanged: () => {
-      broadcastToSurface(surfaceId, { type: 'commit.REPOSITORY_CHANGED' })
+    /**
+     * The repository changed (on disk, or by a write here; coalesced): news for every window, saying which parts
+     * of it changed, and each window asks again for what it shows of those
+     */
+    announceRepositoryChanged: ({ event }) => {
+      const { changed } = event as { type: 'commit.ANNOUNCE_REPOSITORY_CHANGED'; changed: RepositoryChange }
+      broadcastToSurface(surfaceId, { type: 'commit.REPOSITORY_CHANGED', changed })
     },
 
-    /** What a pull request shows is read from the same repository, so it hears the same news */
-    tellPullRequests: ({ context }) => {
-      context.code?.send({ type: 'pr.GIT_STATUS_CHANGED' })
+    /**
+     * What a pull request shows is read from the commits of the same repository, so it hears of those moving —
+     * and of nothing else: an edit to a file changes no pull request, and asking the remote about one costs a
+     * round trip to it
+     */
+    tellPullRequests: ({ context, event }) => {
+      const { changed } = event as { type: 'commit.ANNOUNCE_REPOSITORY_CHANGED'; changed: RepositoryChange }
+      if (changed.history) context.code?.send({ type: 'pr.GIT_STATUS_CHANGED' })
     },
 
     stashPush: ({ event, context, self, reply }) => {

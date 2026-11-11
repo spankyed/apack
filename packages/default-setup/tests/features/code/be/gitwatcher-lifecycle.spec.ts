@@ -5,25 +5,26 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
-import { GitWatcherService, type SubscribeToDirectory, type WatchEvent } from '../../../../src/features/code/be/services/gitwatcher.ts';
+import { GitWatcherService } from '../../../../src/features/code/be/services/gitwatcher.ts';
+import type { SubscribeToDirectory, WatchedChange } from '../../../../src/features/code/be/services/directory-watch.ts';
 import { GitRepository } from '../../../../src/features/code/be/services/git.ts';
 
 interface FakeWatch {
   directory: string;
   ignore: string[];
   closed: boolean;
-  events(...relativePaths: string[]): void;
+  events(...changes: WatchedChange[]): void;
   fail(error: Error): void;
 }
 
 /** Stands in for the platform's watcher: records each directory watched and lets a case deliver its events */
 function watches() {
   const opened: FakeWatch[] = [];
-  const subscribe: SubscribeToDirectory = async (directory, onEvents, { ignore }) => {
+  const subscribe: SubscribeToDirectory = async (directory, onChanges, { ignore }) => {
     const watch: FakeWatch = {
       directory, ignore, closed: false,
-      events: (...relativePaths) => onEvents(null, relativePaths.map((relative): WatchEvent => ({ type: 'update', path: path.join(directory, relative) }))),
-      fail: error => onEvents(error, []),
+      events: (...changes) => onChanges(null, changes),
+      fail: error => onChanges(error, []),
     };
     opened.push(watch);
     return { unsubscribe: async () => { watch.closed = true; } };
@@ -71,7 +72,7 @@ it('opens no watch when startup is cancelled before git has answered', async () 
   expect(watcher.isActive()).toBe(false);
 });
 
-it('reports a change to the working tree, the index and a ref, and nothing for a lock or an unrelated git file', async () => {
+it('reports a change to the working tree, the index or a ref and one it cannot place, and nothing for a lock or an unrelated git file', async () => {
   const repo = directory('apack-watch-relevant-');
   await git(repo, 'init', '--quiet');
   const { watcher, changed, platform } = watcherOf(repo);
@@ -83,7 +84,14 @@ it('reports a change to the working tree, the index and a ref, and nothing for a
   await vi.advanceTimersByTimeAsync(2000);
   expect(changed).not.toHaveBeenCalled();
 
-  for (const deliver of [() => platform.of(repo)!.events('src/file.ts'), () => gitDir.events('index'), () => gitDir.events(path.join('refs', 'remotes', 'origin', 'main'))]) {
+  const deliveries = [
+    () => platform.of(repo)!.events(path.join('src', 'file.ts')),
+    () => gitDir.events('index'),
+    () => gitDir.events(path.join('refs', 'remotes', 'origin', 'main')),
+    // Where the platform could not say what changed, it may have been any of them
+    () => gitDir.events(null),
+  ];
+  for (const deliver of deliveries) {
     changed.mockClear();
     deliver();
     await vi.advanceTimersByTimeAsync(2000);

@@ -1,6 +1,7 @@
 import { setup, assign, enqueueActions , type ActorRefFrom } from 'xstate';
 import { sendToSystem } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
+import type { RepositoryChange } from '../../../be/types.ts';
 
 
 // Git types
@@ -14,7 +15,6 @@ export interface GitStatusFile {
 
 export interface GitDiff {
   path: string
-  diff: string
   staged: boolean
   originalContent?: string
   modifiedContent?: string
@@ -139,7 +139,7 @@ export type Event =
   | { type: 'commit.REVERT_COMMIT_SUCCESS'; data: { hash: string } }
   | { type: 'commit.RESET_COMMIT_SUCCESS'; data: { hash: string } }
   | { type: 'CODE_STARTED' }
-  | { type: 'commit.REPOSITORY_CHANGED' };
+  | { type: 'commit.REPOSITORY_CHANGED'; changed: RepositoryChange };
 
 export const commitState = setup({
   types: {
@@ -150,6 +150,18 @@ export const commitState = setup({
     refreshGitStatus: () => {
       sendToSystem('code', { type: 'commit.GET_GIT_STATUS' })
     },
+
+    /**
+     * Asks again for each list the panel shows whose part of the repository changed, and for no other: the news
+     * says which, so an edited file reads the status and leaves the log, the stashes and the worktrees alone
+     */
+    followRepositoryChange: enqueueActions(({ event, enqueue }) => {
+      const { changed } = event as { type: 'commit.REPOSITORY_CHANGED'; changed: RepositoryChange }
+      if (changed.status) enqueue('refreshGitStatus')
+      if (changed.history) enqueue('requestLogList')
+      if (changed.stashes) enqueue('requestStashList')
+      if (changed.worktrees) enqueue('requestWorktreeList')
+    }),
 
 
 
@@ -737,9 +749,9 @@ export const commitState = setup({
         'CODE_STARTED': {
           actions: 'handleCodeStartup'
         },
-        // The repository changed, on disk or by a write from any window: ask again for what the panel shows of it
+        // The repository changed, on disk or by a write from any window: ask again for the parts of it that did
         'commit.REPOSITORY_CHANGED': {
-          actions: ['refreshGitStatus', 'requestLogList', 'requestStashList', 'requestWorktreeList']
+          actions: 'followRepositoryChange'
         }
       }
     }

@@ -61,6 +61,13 @@ it('refuses an option given as a branch', async () => {
   expect(await git(root, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('main');
 });
 
+it('says whether names are commits here, refusing one that is an option', async () => {
+  const { repo, first } = await repository();
+  expect(await repo.commitsExist('main', 'HEAD', first)).toBe(true);
+  expect(await repo.commitsExist('main', 'no-such-branch')).toBe(false);
+  await expect(repo.commitsExist('--all')).rejects.toThrow('Invalid ref');
+});
+
 it('stages and unstages a file whose name begins with a dash', async () => {
   const { root, repo } = await repository();
   fs.writeFileSync(path.join(root, '-n.txt'), 'named like an option\n');
