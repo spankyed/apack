@@ -135,7 +135,11 @@ onMounted(() => {
     onSelectionChange: has => { hasSelection.value = has },
     onFollowingChange: following => { isFollowingOutput.value = following },
     // A path a program printed opens as the file it names, where the explorer opens every other
-    onOpenPath: path => { panelChild(codeActor, 'explorer')?.send({ type: 'explorer.OPEN_FILE', path }) },
+    onOpenPath: (path, at) => {
+      panelChild(codeActor, 'explorer')?.send({ type: 'explorer.OPEN_FILE', path })
+      // Shown at the line the program named, once the file is the one showing
+      if (at) codeActor.send({ type: 'UPDATE_STATE', updates: { pendingRevealLine: { filePath: path, line: at.line, column: at.column } } })
+    },
   })
   seen()
 

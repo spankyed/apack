@@ -119,6 +119,7 @@ export type Event =
   | { type: 'terminal.REWIND_SEEK'; at: number }
   | { type: 'terminal.REWIND_SOUGHT'; data: { session: string; at: number } }
   | { type: 'terminal.REWIND_CLOSE' }
+  | { type: 'terminal.REWIND_RESIZE'; cols: number; rows: number }
   | { type: 'terminal.ERROR'; data: { message: string; terminalId?: string } }
   | { type: 'terminal.RESIZED'; data: { terminalId: string; cols: number; rows: number } }
   | { type: 'terminal.TERMINAL_TAB_OPENED'; data: TerminalInfo }
@@ -305,9 +306,16 @@ export const terminalState = setup({
     },
 
     /** Draws the terminal from the session answering now, and says on it that the shell is a new one */
-    noteRestartOnScreen: ({ event }) => {
-      const ev = event as { type: 'terminal.RESTARTED'; data: TerminalInfo }
-      terminalPool.noteRestart(ev.data)
+    /**
+     * Tells the pool what the list now says of the terminal this event was about. Every event that changes
+     * one runs this after its own change, so what draws a terminal never holds an older word on it than
+     * the list does.
+     */
+    describeTerminal: ({ context, event }) => {
+      const data = (event as { data?: { terminalId?: string; id?: string } }).data
+      const id = data?.terminalId ?? data?.id
+      const info = context.terminals.find(terminal => terminal.id === id)
+      if (info) terminalPool.describe(info)
     },
 
     /** A new shell under a terminal that was already there: its descriptor is replaced, its place is not */
@@ -414,11 +422,20 @@ export const terminalState = setup({
     }),
 
     /**
-     * What a terminal's program said that is not on its screen, kept for its tab to show.
+     * Raises a notification with the system where this window is not the one being looked at: the program
+     * asked for the person to be told, and a mark on a tab they cannot see tells them nothing.
      *
-     * A notification is also raised with the system where this window is not the one being looked at:
-     * the program asked for the person to be told, and a mark on a tab they cannot see tells them nothing.
+     * **One notification for one thing a program said, however many windows heard it.** Every window
+     * showing the code surface is told, and each one that is not in front raises it under the same tag,
+     * which the system shows once.
      */
+    notifySystem: ({ event }) => {
+      const ev = event as Extract<Event, { type: 'terminal.NOTIFIED' }>
+      if (document.hasFocus() || typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+      new Notification(ev.data.title || 'Terminal', { body: ev.data.body, tag: `terminal:${ev.data.terminalId}` })
+    },
+
+    /** What a terminal's program said that is not on its screen, kept for its tab to show */
     noteActivity: assign(({ context, event }) => {
       const ev = event as Extract<Event, { type: 'terminal.BELL' | 'terminal.NOTIFIED' | 'terminal.PROGRESS' | 'terminal.TITLED' }>
       const id = ev.data.terminalId
@@ -426,13 +443,7 @@ export const terminalState = setup({
       let after: TerminalActivity
       switch (ev.type) {
         case 'terminal.BELL': after = { ...before, bell: true }; break
-        case 'terminal.NOTIFIED': {
-          after = { ...before, notification: { title: ev.data.title, body: ev.data.body } }
-          if (!document.hasFocus() && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-            new Notification(ev.data.title || 'Terminal', { body: ev.data.body })
-          }
-          break
-        }
+        case 'terminal.NOTIFIED': after = { ...before, notification: { title: ev.data.title, body: ev.data.body } }; break
         case 'terminal.PROGRESS': {
           const { progress: _was, ...rest } = before
           after = ev.data.state === 'none' ? rest : { ...rest, progress: { state: ev.data.state, percent: ev.data.percent } }
@@ -476,10 +487,17 @@ export const terminalState = setup({
     },
 
     /** A recording opened for this window: shown at its end, which is where the terminal is now */
-    openRewind: assign(({ event }) => {
+    openRewind: assign(({ context, event }) => {
       const ev = event as { type: 'terminal.REWOUND'; data: { terminalId: string; session: string; first: number; last: number } }
+      // The one this window was looking at is closed where it was opened; what drew it goes here
+      if (context.rewind && context.rewind.session !== ev.data.session) terminalPool.dispose(rewindViewId(context.rewind.session))
       return { rewind: { ...ev.data, at: ev.data.last } }
     }),
+
+    resizeRewind: ({ context, event }) => {
+      const ev = event as { type: 'terminal.REWIND_RESIZE'; cols: number; rows: number }
+      if (context.rewind) sendToSystem('code', { type: 'terminal.REWIND_RESIZE', session: context.rewind.session, cols: ev.cols, rows: ev.rows })
+    },
 
     seekRewind: ({ context, event }) => {
       const ev = event as { type: 'terminal.REWIND_SEEK'; at: number }
@@ -696,37 +714,38 @@ export const terminalState = setup({
       actions: ['handleTerminalClosed', 'forgetActivity']
     },
     'terminal.CRASHED': {
-      actions: ['markTerminalCrashed', 'noteCrashOnScreen']
+      actions: ['markTerminalCrashed', 'describeTerminal', 'noteCrashOnScreen']
     },
     'terminal.RESTARTED': {
-      actions: ['takeRestartedTerminal', 'noteRestartOnScreen']
+      actions: ['takeRestartedTerminal', 'describeTerminal']
     },
     'terminal.RENAMED': {
       actions: 'updateTerminalTitle'
     },
     'terminal.CWD_CHANGED': {
-      actions: 'updateTerminalCwd'
+      actions: ['updateTerminalCwd', 'describeTerminal']
     },
     'terminal.CLIPBOARD': {
       actions: 'writeClipboard'
     },
     'terminal.BELL': { actions: 'noteActivity' },
-    'terminal.NOTIFIED': { actions: 'noteActivity' },
+    'terminal.NOTIFIED': { actions: ['noteActivity', 'notifySystem'] },
     'terminal.PROGRESS': { actions: 'noteActivity' },
     'terminal.TITLED': { actions: 'noteActivity' },
     'terminal.SEEN': { actions: 'markSeen' },
     'terminal.KEEP': { actions: 'keepTerminal' },
-    'terminal.KEPT': { actions: 'markKept' },
+    'terminal.KEPT': { actions: ['markKept', 'describeTerminal'] },
     'terminal.REWIND': { actions: 'askForRewind' },
     'terminal.REWOUND': { actions: 'openRewind' },
     'terminal.REWIND_SEEK': { actions: 'seekRewind' },
     'terminal.REWIND_SOUGHT': { actions: 'noteRewindSought' },
     'terminal.REWIND_CLOSE': { actions: 'closeRewind' },
+    'terminal.REWIND_RESIZE': { actions: 'resizeRewind' },
     'terminal.ERROR': {
       actions: 'settleFailedAsk'
     },
     'terminal.RESIZED': {
-      actions: 'updateTerminalGrid'
+      actions: ['updateTerminalGrid', 'describeTerminal']
     },
     'terminal.TERMINAL_TAB_OPENED': {
       actions: 'handleTerminalTabOpened'

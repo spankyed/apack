@@ -107,7 +107,7 @@ export interface RecordingBroker {
   readonly kept: readonly string[]
   /** The commands a session's shell will be said to have run, and what each printed */
   reportsCommands(id: string, commands: ReadonlyArray<TerminalCommand & { output?: string }>): void
-  /** The recordings opened to be looked back through, with every moment each was asked to show */
+  /** The recordings opened to be looked back through, at the grid each was last drawn at, with every moment each was asked to show */
   readonly rewound: ReadonlyArray<{ id: string; recording: string; cols: number; rows: number; sought: number[]; closed: boolean }>
   /** Says a recording does not exist, so opening it is refused */
   refuseRewind(why?: string): void
@@ -146,8 +146,11 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
    * One session handle for both routes, because what a holder may do with a session does not depend on how
    * it came to hold it — and because this file's own history is six copies that drifted.
    */
-  const handle = (id: string, handlePid: number | null, target: readonly string[] | null = null): TerminalSession => ({
+  const handle = (id: string, handlePid: number | null, target: readonly string[] | null = null, asked?: OpenOptions): TerminalSession => ({
     id,
+    // As the broker answers: recorded where a recording was asked for, and unsaid for one taken up again
+    recorded: asked === undefined ? null : asked.record !== undefined,
+    restored: asked?.restore === true && asked.record !== undefined,
     // As the host names a target to a window: by a key made from its command
     target: target === null ? null : `key:${target.join(' ')}`,
     pid: handlePid,
@@ -208,7 +211,7 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
         listenersGivenAtOpen: typeof listeners?.onEvent === 'function',
         asksForBytes: typeof listeners?.onOutput === 'function',
       })
-      return handle(id, pid, target)
+      return handle(id, pid, target, options)
     },
 
     /**
@@ -227,7 +230,7 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
     },
 
     sessions: async (): Promise<TerminalSessionSummary[]> => [...live].map(id => ({
-      id, pid: opened.find(one => one.id === id)?.pid ?? 0, cols: 80, rows: 24, kept: kept.has(id), recorded: false,
+      id, pid: opened.find(one => one.id === id)?.pid ?? 0, cols: 80, rows: 24, kept: kept.has(id), recorded: opened.find(one => one.id === id)?.options.record !== undefined,
       title: null, cwd: reportedCwds.get(id) ?? null, command: null, running: false,
     })),
 
@@ -241,7 +244,7 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
         last: 9_000,
         // Held to what the recording covers, as the broker holds it
         seek: async (at: number) => { const shown = Math.min(9_000, Math.max(1_000, at)); entry.sought.push(shown); return shown },
-        resize: async () => {},
+        resize: async (cols: number, rows: number) => { entry.cols = cols; entry.rows = rows },
         close: async () => { entry.closed = true },
       }
     },

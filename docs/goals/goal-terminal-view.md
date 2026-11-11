@@ -140,7 +140,13 @@ Each ends in something checked. A phase is not started on a red one.
   - *Recording follows the existing `restoreTerminals` setting* rather than a setting of its own: a
     recording is what lets a restored terminal come back with its screen.
   - *A terminal on a target has no shell integration and no recording.* Both are files on this machine.
-- **Not built.** Opening a file a program printed *at its line*: the explorer opens a file and has no way
-  to be told a line. A terminal on a target in the Linux test container.
-- **Owed before the pull requests (phase 9).** The chain on this branch, on a quiet tree; the mutation
-  gate over the broker's branch; the performance scenarios against the baselines.
+- **Read three times, and driven.** The three branches were read independently three times and what
+  the reads found was fixed; a terminal's screen was driven across a restart of the app, and a
+  terminal in the Linux test container was drawn in the app and taken up again as the same shell.
+  The evidence has both, and the one container run in six that failed.
+- **Changed by the reads.** A row carries its own styles and links; a frame carries the colours a
+  program changed; a broker holds a lock on its socket; a terminal on a target is not reached by the
+  app starting, and is listed *not connected* until a person starts it; a path a program printed opens
+  at its line, by the reveal the search panel already used.
+- **Open.** The broker's `mutants` job has yet to pass over the code the reads added. The strict chain
+  has yet to run on this branch's final commit. Nothing Windows on this branch has been run.

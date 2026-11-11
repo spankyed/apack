@@ -35,6 +35,35 @@ export interface FakeView {
   reportSelection(selected: boolean): void
 }
 
+/** A connection to a broker that a case holds the far end of: what arrives on it and when it ends are the case's to say */
+export interface FakeStream {
+  readonly target: string | undefined
+  closed: number
+  /** Bytes arrive, as they do once a broker has answered */
+  answer(): void
+  /** The connection ends without the window having closed it */
+  drop(): void
+  send(): void
+  onData(listener: (chunk: Uint8Array) => void): () => void
+  onClose(listener: () => void): () => void
+  close(): void
+}
+
+export function fakeStream(target?: string): FakeStream {
+  const data = new Set<(chunk: Uint8Array) => void>()
+  const closing = new Set<() => void>()
+  return {
+    target,
+    closed: 0,
+    answer() { for (const listener of data) listener(Uint8Array.of(0)) },
+    drop() { for (const listener of closing) listener() },
+    send() {},
+    onData(listener) { data.add(listener); return () => { data.delete(listener) } },
+    onClose(listener) { closing.add(listener); return () => { closing.delete(listener) } },
+    close() { this.closed += 1 },
+  }
+}
+
 /** Every view the pool has made, oldest first */
 export const views: FakeView[] = []
 /** How many connections to the broker have been asked for */
@@ -49,8 +78,10 @@ export const lastView = (): FakeView => {
 /** What `vi.mock('apack-terminal-view', …)` answers with */
 export function viewModule(): Record<string, unknown> {
   class BrokerViews {
+    private readonly closing = new Set<() => void>()
     constructor(stream: { target?: string }) { connections.opened += 1; connections.targets.push(stream?.target) }
     open(session: string): { session: string } { return { session } }
+    onClose(listener: () => void): () => void { this.closing.add(listener); return () => { this.closing.delete(listener) } }
     close(): void { connections.closed += 1 }
   }
 

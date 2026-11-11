@@ -615,6 +615,9 @@
             "restoreTerminals": {
               "type": "boolean"
             },
+            "terminalClipboardWrite": {
+              "type": "boolean"
+            },
             "defaultBaseDirectory": {
               "type": [
                 "string",
@@ -718,6 +721,7 @@
           "required": [
             "hotkeys",
             "restoreTerminals",
+            "terminalClipboardWrite",
             "defaultBaseDirectory",
             "baseDirectory",
             "enableShellIntegration",
@@ -794,6 +798,7 @@
             }
           },
           "restoreTerminals": true,
+          "terminalClipboardWrite": true,
           "defaultBaseDirectory": null,
           "baseDirectory": null,
           "enableShellIntegration": true,

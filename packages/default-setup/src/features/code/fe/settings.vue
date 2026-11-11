@@ -216,6 +216,25 @@
 
         <div class="flex items-center justify-between">
           <div class="flex-1">
+            <label for="terminal-clipboard-write" class="text-sm font-medium text-neutral-200">
+              Let programs copy to the clipboard
+            </label>
+            <p class="mt-1 text-xs text-neutral-600">
+              A program in a terminal can ask for text to be put on your clipboard, which is how copying works
+              in an editor over SSH or in tmux. Off, such a request is ignored
+            </p>
+          </div>
+          <input
+            id="terminal-clipboard-write"
+            v-model="terminalClipboardWrite"
+            type="checkbox"
+            @change="emit('update-setting', { path: ['terminalClipboardWrite'], value: terminalClipboardWrite })"
+            class="w-4 h-4 text-blue-600 bg-neutral-800 border-neutral-600 rounded focus:ring-blue-500 focus:ring-2"
+          />
+        </div>
+
+        <div class="flex items-center justify-between">
+          <div class="flex-1">
             <label for="enable-shell-integration" class="text-sm font-medium text-neutral-200">
               Enable shell integration
             </label>
@@ -309,8 +328,8 @@
         <p class="text-sm text-neutral-500 mb-4">
           Other places a terminal can run — another machine, a container — each as the command that reaches
           it. The command runs the terminal broker's proxy there, for example
-          <code class="text-neutral-400">ssh devbox apack-terminal proxy /tmp/apack-terminal.sock</code> or
-          <code class="text-neutral-400">docker exec -i box apack-terminal proxy /tmp/apack-terminal.sock</code>,
+          <code class="text-neutral-400">ssh devbox apack-terminal proxy</code> or
+          <code class="text-neutral-400">docker exec -i box apack-terminal proxy</code>,
           so <code class="text-neutral-400">apack-terminal</code> has to be installed there. Each appears under
           the terminal panel's menu as “New Terminal on …”.
         </p>
@@ -348,7 +367,7 @@
             />
             <input
               v-model="newTargetCommand"
-              placeholder="ssh host apack-terminal proxy /tmp/apack-terminal.sock"
+              placeholder="ssh host apack-terminal proxy"
               aria-label="New target's command"
               @keydown.enter="addTarget"
               class="flex-1 px-2 py-1 text-sm bg-neutral-800 border border-neutral-700 rounded text-neutral-200 placeholder-neutral-600 font-mono focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
@@ -552,6 +571,7 @@ const emit = defineEmits<{
 const hotkeys = useSettingsDraft(() => props.settings?.hotkeys ?? {})
 
 const restoreTerminals = useSettingsDraft(() => props.settings?.restoreTerminals ?? true)
+const terminalClipboardWrite = useSettingsDraft(() => props.settings?.terminalClipboardWrite ?? true)
 const enableShellIntegration = useSettingsDraft(() => props.settings?.enableShellIntegration ?? false)
 const confirmTerminalClose = useSettingsDraft(() => props.settings?.confirmTerminalClose ?? true)
 const closeTerminalOnTabClose = useSettingsDraft(() => props.settings?.closeTerminalOnTabClose ?? true)

@@ -9,7 +9,8 @@ import { startFeTestRuntime } from '@apackdev/sdk/testing'
 
 vi.mock('apack-terminal-view', async () => (await import('../_support/terminal-view.ts')).viewModule())
 
-const { views, lastView, connections } = await import('../_support/terminal-view.ts')
+const { views, lastView, connections, fakeStream } = await import('../_support/terminal-view.ts')
+type FakeStream = ReturnType<typeof fakeStream>
 const { terminalInfo } = await import('../_support/terminal-host.ts')
 const { terminalPool, RESIZE_SETTLE_MS } = await import('#features/code/fe/utils/terminal-pool.ts')
 
@@ -92,7 +93,7 @@ describe('a shell replaced under a terminal', () => {
     terminalPool.attach(info.id, shown)
     const old = lastView()
 
-    terminalPool.noteRestart({ ...info, session: 'the-new-session', pid: 9001, generation: 2 })
+    terminalPool.describe({ ...info, session: 'the-new-session', pid: 9001, generation: 2 })
 
     expect(old.disposed, 'the view of a session that is gone was kept').toBe(true)
     expect(lastView().session).toBe('the-new-session')
@@ -272,17 +273,54 @@ describe('finding text in a terminal', () => {
 })
 
 describe('what a program printed', () => {
-  it('opens as the file it names: against the shell\'s directory, without the line a compiler put after it', () => {
+  it('opens as the file it names: against the shell\'s directory, at the line and column a compiler put after it', () => {
     const info = terminal({ cwd: '/work/app' })
     terminalPool.ensure(info)
-    const opened: Array<[string, number | undefined]> = []
-    terminalPool.attach(info.id, host(), { onOpenPath: (path, line) => { opened.push([path, line]) } })
+    const opened: Array<[string, { line: number; column: number } | undefined]> = []
+    terminalPool.attach(info.id, host(), { onOpenPath: (path, at) => { opened.push([path, at]) } })
     const click = (target: string) => lastView().options.onLink!({ kind: 'path', target, start: 0, end: 0 } as never, new MouseEvent('click'))
 
     click('src/main.ts:12:5')
     click('./lib/../README.md')
     click('/etc/hosts:3')
-    expect(opened).toEqual([['/work/app/src/main.ts', 12], ['/work/app/README.md', undefined], ['/etc/hosts', 3]])
+    expect(opened).toEqual([
+      ['/work/app/src/main.ts', { line: 12, column: 5 }],
+      ['/work/app/README.md', undefined],
+      ['/etc/hosts', { line: 3, column: 1 }],
+    ])
+  })
+
+  it('opens against the directory the shell is in now, which the surface says as it changes', () => {
+    const info = terminal({ cwd: '/work/app' })
+    terminalPool.ensure(info)
+    const opened: string[] = []
+    terminalPool.attach(info.id, host(), { onOpenPath: (path) => { opened.push(path) } })
+    terminalPool.describe({ ...info, cwd: '/work/app/sub' })
+
+    lastView().options.onLink!({ kind: 'path', target: 'src/a.ts:3', start: 0, end: 0 } as never, new MouseEvent('click'))
+
+    expect(opened).toEqual(['/work/app/sub/src/a.ts'])
+  })
+
+  it('keeps the screen of a shell that ended, and is drawn as ended by a host that mounts it later', () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const drawn = lastView()
+    // As the list has a terminal whose shell ended: no session, and what it ended with
+    const { session: _gone, ...rest } = info
+    const ended = { ...rest, active: false, exited: { code: 1 } }
+
+    terminalPool.describe(ended)
+    expect(drawn.disposed, 'the last thing the shell said was taken off the screen').toBe(false)
+
+    // Another terminal ends before any host in this window has shown it
+    const other = terminal()
+    const { session: _other, ...otherRest } = other
+    terminalPool.describe({ ...otherRest, active: false, exited: { code: 1 } })
+    const before = views.length
+    const entry = terminalPool.ensure(other)
+    expect(views.length, 'a view was made for a session the broker has forgotten').toBe(before)
+    expect(entry.notice.dataset.terminalNotice).toBe('ended')
   })
 
   it('is copied as the output of the last command that finished', async () => {
@@ -332,5 +370,117 @@ describe('the window\'s connection to the broker', () => {
     terminalPool.ensure(terminal({ target: { id: 'tt_2', label: 'box', key: 'bbbbbbbbbbbb' } }))
     expect(connections.opened - before, 'two terminals on one target each opened a connection to it').toBe(3)
     expect(connections.targets.slice(-3)).toEqual([undefined, 'aaaaaaaaaaaa', 'bbbbbbbbbbbb'])
+  })
+
+  /** A runtime whose connections this case holds the far end of, newest last */
+  function streams(): FakeStream[] {
+    const opened: FakeStream[] = []
+    stopRuntime?.()
+    stopRuntime = startFeTestRuntime({
+      terminalViews: (target) => { const stream = fakeStream(target); opened.push(stream); return stream },
+    })
+    return opened
+  }
+
+  it('has its socket closed when the surface lets every terminal go', () => {
+    terminalPool.disposeAll()
+    const opened = streams()
+    terminalPool.ensure(terminal())
+
+    terminalPool.disposeAll()
+
+    expect(opened.map((stream) => stream.closed), 'the views were ended and the socket under them left open').toEqual([1])
+    made.length = 0
+  })
+
+  it('is made again, once, when one that had been answering ends, and each terminal is drawn over the new one', () => {
+    terminalPool.disposeAll()
+    const opened = streams()
+    const info = terminal()
+    terminalPool.ensure(info)
+    terminalPool.attach(info.id, host())
+    opened[0]!.answer()
+    const first = lastView()
+
+    opened[0]!.drop()
+
+    expect(opened, 'the terminal was left on a connection that had ended').toHaveLength(2)
+    expect(first.disposed).toBe(true)
+    expect(lastView()).not.toBe(first)
+    expect(lastView().session).toBe(info.session)
+    expect(lastView().mountedIn, 'the terminal a host was showing was drawn again nowhere').not.toBeNull()
+  })
+
+  it('is made again only once until someone shows the terminal again, however often the far side answers and leaves', () => {
+    terminalPool.disposeAll()
+    const opened = streams()
+    const info = terminal()
+    const entry = terminalPool.ensure(info)
+    const shown = host()
+    terminalPool.attach(info.id, shown)
+
+    opened[0]!.answer()
+    opened[0]!.drop()
+    opened[1]!.answer()
+    opened[1]!.drop()
+
+    expect(opened, 'a peer that answers and leaves was asked for a third time').toHaveLength(2)
+    expect(entry.notice.dataset.terminalNotice).toBe('unreachable')
+
+    // A person showing it again is a reason to try
+    terminalPool.attach(info.id, host())
+    expect(opened).toHaveLength(3)
+    expect(entry.notice.style.display).toBe('none')
+  })
+
+  it('is not asked for again when it ends without ever having answered, and the terminal says it cannot be reached', () => {
+    terminalPool.disposeAll()
+    const opened = streams()
+    const info = terminal()
+    const entry = terminalPool.ensure(info)
+
+    opened[0]!.drop()
+
+    expect(opened, 'a broker that is not there was asked again').toHaveLength(1)
+    expect(entry.notice.dataset.terminalNotice).toBe('unreachable')
+    expect(entry.notice.style.display).toBe('block')
+  })
+})
+
+describe('a host mounted with a terminal as it was', () => {
+  it('draws the shell the surface last described, not the one the host was made with', () => {
+    const before = terminal()
+    terminalPool.ensure(before)
+    // The shell under it was replaced while a tab went on holding the terminal as it was
+    const now = { ...before, session: `${before.session}-next`, pid: 4242, generation: 2 }
+    terminalPool.describe(now)
+    const drawn = lastView()
+
+    terminalPool.ensure(before)
+
+    expect(lastView(), 'a host mounting with what it was made with replaced the running shell\'s view').toBe(drawn)
+    expect(lastView().session).toBe(now.session)
+  })
+
+  it('draws the shell every terminal was last listed with, for a terminal no host had shown yet', () => {
+    const before = terminal()
+    const now = { ...before, session: `${before.session}-next`, pid: 4243 }
+    terminalPool.syncProcesses([now])
+
+    terminalPool.ensure(before)
+
+    expect(lastView().session).toBe(now.session)
+  })
+})
+
+describe('a path a program printed', () => {
+  it('is resolved in the shape of the directory the shell is in', async () => {
+    const { resolvePath } = await import('#features/code/fe/utils/terminal-pool.ts')
+    expect(resolvePath('/Users/me/app', 'src/../lib/a.ts')).toBe('/Users/me/app/lib/a.ts')
+    expect(resolvePath('/Users/me/app', '/etc/hosts')).toBe('/etc/hosts')
+    expect(resolvePath('C:\\Users\\me\\app', 'src/view.ts')).toBe('C:\\Users\\me\\app\\src\\view.ts')
+    expect(resolvePath('C:\\Users\\me\\app', '..\\lib\\a.ts')).toBe('C:\\Users\\me\\lib\\a.ts')
+    expect(resolvePath('C:\\Users\\me', 'D:\\work\\b.rs')).toBe('D:\\work\\b.rs')
+    expect(resolvePath('C:\\Users\\me', '\\Windows\\win.ini')).toBe('C:\\Windows\\win.ini')
   })
 })

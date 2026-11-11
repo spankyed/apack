@@ -494,11 +494,21 @@ setInterval(() => {}, 1_000);
   it('says why a broker that never listened did not start, rather than timing out', async () => {
     directory = mkdtempSync(path.join(tmpdir(), 'broker-client-'));
     const binary = path.join(directory, 'silent.cjs');
-    writeFileSync(binary, "#!/usr/bin/env node\nprocess.stderr.write('no socket for me\\n'); process.exit(3);");
+    writeFileSync(binary, "#!/usr/bin/env node\nprocess.stderr.write('no socket for me\\n'); process.exit(7);");
     chmodSync(binary, 0o755);
 
     await expect(startBroker({ binary, socket: path.join(directory, 'b.sock') }))
-      .rejects.toThrow(/exited with 3 before it was listening.*no socket for me/s);
+      .rejects.toThrow(/exited with 7 before it was listening.*no socket for me/s);
+  });
+
+  it('says what a broker that would not listen said of why', async () => {
+    directory = mkdtempSync(path.join(tmpdir(), 'broker-client-'));
+    const binary = path.join(directory, 'refusing.cjs');
+    writeFileSync(binary, "#!/usr/bin/env node\nconsole.log('failed its directory is open to other users'); process.exit(1);");
+    chmodSync(binary, 0o755);
+
+    await expect(startBroker({ binary, socket: path.join(directory, 'b.sock') }))
+      .rejects.toThrow(/could not listen: its directory is open to other users/);
   });
   /**
    * **A reported status of nothing is not a status of zero**, which is the one thing a typecheck cannot catch

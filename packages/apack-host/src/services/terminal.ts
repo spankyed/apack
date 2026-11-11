@@ -68,6 +68,24 @@ export function socketPath(platform: NodeJS.Platform = process.platform, dataDir
 }
 
 /**
+ * Where the socket in front of a terminal target is (`broker/relay.ts`): beside the app's own broker's,
+ * named by the target's key.
+ */
+export function relaySocketPath(key: string, platform: NodeJS.Platform = process.platform, dataDir = resolveAppEnvironment().userDataDir): string {
+  const own = socketPath(platform, dataDir);
+  if (platform === 'win32') return `${own}-r-${key}`;
+  // Longer than the broker's own name, so held to the same limit for itself
+  const socket = path.join(path.dirname(own), `r-${key}.sock`);
+  if (Buffer.byteLength(socket) > SOCKET_PATH_MAX) {
+    throw new Error(
+      `A terminal target's socket path is ${Buffer.byteLength(socket)} bytes, past the ${SOCKET_PATH_MAX} a `
+      + `Unix socket address holds: ${socket}. Set TMPDIR to a shorter directory.`,
+    );
+  }
+  return socket;
+}
+
+/**
  * The broker's binary, or absence.
  *
  * **Two answers: `APACK_TERMINAL_BINARY`, then the `apack-terminal` package.** The package is asked rather
@@ -81,15 +99,6 @@ export function socketPath(platform: NodeJS.Platform = process.platform, dataDir
  * symbols — and is the reason there is no second path to guess at. It was the linked checkout's
  * `target/debug` build, derived from `SHIPPED_PACKS_DIR`, before the package existed.
  */
-/**
- * Where the socket in front of a terminal target is (`broker/relay.ts`): beside the app's own broker's,
- * named by the target's key.
- */
-export function relaySocketPath(key: string, platform: NodeJS.Platform = process.platform, dataDir = resolveAppEnvironment().userDataDir): string {
-  const own = socketPath(platform, dataDir);
-  return platform === 'win32' ? `${own}-r-${key}` : path.join(path.dirname(own), `r-${key}.sock`);
-}
-
 export function findBrokerBinary(): string | undefined {
   const named = process.env.APACK_TERMINAL_BINARY;
   if (named) {
@@ -156,8 +165,8 @@ export function brokerEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.
     // else here does: `portable-pty` sets no `TERM`, so the shell took whatever this process happened to
     // have — which is the shell the app was *launched* from in development, and nothing at all in a
     // packaged app opened from the Dock. A shell with no `TERM` gives `less`, `vim` and `top` their dumb
-    // fallbacks, and nothing about that failure names the app. The window's emulator is what draws it, so this is what
-    // it is.
+    // fallbacks, and nothing about that failure names the app. The broker's interpreter answers to this name,
+    // so this is what it is.
     TERM: 'xterm-256color',
     TERM_PROGRAM: 'apack',
     COLORTERM: 'truecolor',
@@ -212,6 +221,8 @@ function expose(held: Broker, session: BrokerSession, target: string | null): Te
     id: session.id,
     target,
     pid: session.pid,
+    recorded: session.recorded,
+    restored: session.restored,
     // The broker's own, from its handshake, rather than a number this process also keeps
     scrollback: held.history,
     write: (data) => session.write(data),
@@ -289,21 +300,25 @@ function startKey(binary: string, socket: string): string {
   return `${binary}@${stamp}->${socket}`;
 }
 
-/** Starts the broker the first time a session is wanted, and once per process thereafter */
 /**
  * The sessions of one broker: the app's own, or one a target's command reaches.
  *
  * `start` answers a connection to it, and is asked again after one has gone. `key` is what a window is
  * told to draw the sessions from: `null` for the app's own broker.
+ *
+ * **`startKeyOf` is what a run of failed starts is counted against, and a target has none.** The app's own
+ * broker fails to start because of its binary, which stays broken until it is replaced, so its failures
+ * are counted against that binary. A target fails because a network or a container is not there, which is
+ * a state that ends on its own: every start is tried, and each one that fails says why.
  */
-function brokerSessions(start: () => Promise<Broker>, startKeyOf: () => string, key: string | null) {
+function brokerSessions(start: () => Promise<Broker>, startKeyOf: (() => string) | null, key: string | null) {
   let broker: Promise<Broker> | undefined;
   let current: Broker | undefined;
   let failing: { key: string; count: number; error: unknown } | undefined;
   const running = (): Promise<Broker> => {
     if (broker) return broker;
-    const startKey = startKeyOf();
-    if (failing && failing.key === startKey && failing.count >= START_ATTEMPTS) return Promise.reject(failing.error);
+    const startKey = startKeyOf?.() ?? '';
+    if (startKeyOf && failing && failing.key === startKey && failing.count >= START_ATTEMPTS) return Promise.reject(failing.error);
     broker ??= start()
       .then((held) => {
         failing = undefined;
@@ -368,18 +383,20 @@ export function createTerminalService(): TerminalService & { shutdown(): Promise
     if (!known) {
       const socket = relaySocketPath(key);
       const relay = serveRelay(socket, command);
+      // A socket that could not be served is asked for again by the next call, not remembered as a failure
+      relay.catch(() => { if (targets.get(key)?.relay === relay) targets.delete(key); });
       const sessions = brokerSessions(
         async () => {
           const serving = await relay;
           try {
-            // Something is listening there, so this connects and starts nothing
-            return await startBroker({ binary: command[0] ?? '', socket });
+            // Connected to and never started: the broker is wherever the command reaches
+            return await startBroker({ socket });
           } catch (error) {
             const why = serving.lastFailure();
             throw why ? new Error(`Could not reach the terminal target: ${why}`, { cause: error }) : error;
           }
         },
-        () => `target:${key}`,
+        null,
         key,
       );
       known = { sessions, relay };

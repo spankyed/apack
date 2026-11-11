@@ -7,7 +7,7 @@ const sendToSystem = vi.hoisted(() => vi.fn())
 vi.mock('#generated/events.ts', () => ({ sendToSystem }))
 const parent = vi.hoisted(() => ({ updateParentState: vi.fn(), addTabToParent: vi.fn(), getParentContext: vi.fn(() => null), sendEventToParent: vi.fn() }))
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => parent)
-const pool = vi.hoisted(() => ({ dispose: vi.fn(), syncProcesses: vi.fn(), noteExit: vi.fn(), noteRestart: vi.fn() }))
+const pool = vi.hoisted(() => ({ dispose: vi.fn(), syncProcesses: vi.fn(), noteExit: vi.fn(), describe: vi.fn() }))
 vi.mock('#features/code/fe/utils/terminal-pool.ts', () => ({ terminalPool: pool }))
 
 const { terminalState } = await import('#features/code/fe/features/terminal/state.ts')

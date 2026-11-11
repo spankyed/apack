@@ -624,7 +624,9 @@ export interface TerminalSession {
     owns(pid: number): Promise<boolean>;
     pause(): Promise<void>;
     readonly pid: number | null;
+    readonly recorded: boolean | null;
     resize(cols: number, rows: number, cell?: TerminalCellSize): Promise<void>;
+    readonly restored: boolean;
     resume(): Promise<void>;
     readonly scrollback: number;
     signal(signal: TerminalSignal, scope: TerminalSignalScope): Promise<void>;

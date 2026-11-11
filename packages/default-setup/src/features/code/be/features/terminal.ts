@@ -49,6 +49,8 @@ export type Event =
   | { type: 'terminal.REWIND'; terminalId: string; cols: number; rows: number }
   | { type: 'terminal.REWIND_SEEK'; session: string; at: number }
   | { type: 'terminal.REWIND_CLOSE'; session: string }
+  /** The window looking back through a recording measured how many cells fit where it draws it */
+  | { type: 'terminal.REWIND_RESIZE'; session: string; cols: number; rows: number }
   | { type: 'terminal.UPDATE_BASE_DIRECTORY'; path: string }
   | { type: 'GET_CODE_START' };
 
@@ -107,6 +109,8 @@ const terminalHandlers = {
       // **A claim, handed to the windows to act on.** The program asked; a window that has the person's
       // attention is where putting text on their clipboard, or telling them something, happens
       case 'clipboard':
+        // The person's to allow: what is on a clipboard is what the next paste runs
+        if (featureSettings.forFeature('code').get()?.terminalClipboardWrite === false) break
         emitToFrontend({ type: 'terminal.CLIPBOARD', data: { terminalId, text: event.text } })
         break
       case 'bell':
@@ -183,10 +187,12 @@ export const terminalSystem = setup({
       const codeSettings = featureSettings.forFeature('code').get()
       if (codeSettings?.restoreTerminals === false) {
         logger.info('Terminal restoration disabled by settings')
-        return
+      } else {
+        await terminalService.restoreAll(terminalHandlers)
+        logger.info('Terminal restoration complete')
       }
-      await terminalService.restoreAll(terminalHandlers)
-      logger.info('Terminal restoration complete')
+      // Whatever was left running and is under no terminal now: every one of them, where nothing is restored
+      await terminalService.endUnclaimedKept()
     })
   },
   actions: handlers.actions({
@@ -288,12 +294,10 @@ export const terminalSystem = setup({
       try {
         const terminal = terminalService.get(ev.terminalId)
         const terminalName = terminal ? terminal.info.title : 'Terminal'
-        // **Awaited, not checked for truth.** The service answers a promise now, and `if (!promise)` is
-        // never true — the refusal below was dead the moment the broker owned the process.
-        // **The window that opened it owns its size** (M2): a second window's fit is ignored, because a pty
-        // has one `(cols, rows)` and two windows fitting it to their own widths is a contradiction rather
-        // than a race. `client` names the connection the message arrived on, which the API stamps and
-        // nobody can forge.
+        // **Every window's fit is recorded, and the pty runs at the smallest** (`TerminalService.resize`):
+        // a pty has one `(cols, rows)`, and the smallest fit is the one every window showing it can draw
+        // whole. `client` names the connection the message arrived on, which the API stamps and nobody
+        // can forge.
         void terminalService.resize(ev.terminalId, ev.cols, ev.rows, client, cell)
           .then(accepted => {
             if (!accepted) {
@@ -419,6 +423,11 @@ export const terminalSystem = setup({
       }).catch(error => failTerminal(reply, 'rewind', error))
     },
 
+    resizeRewind: ({ event }) => {
+      const ev = event as { type: 'terminal.REWIND_RESIZE'; session: string; cols: number; rows: number }
+      void terminalService.resizeRewind(ev.session, ev.cols, ev.rows).catch(error => { logger.error('Could not resize a recording', { error }) })
+    },
+
     closeRewind: ({ event }) => {
       const ev = event as { type: 'terminal.REWIND_CLOSE'; session: string }
       void terminalService.closeRewind(ev.session).catch(error => { logger.error('Could not close a recording', { error }) })
@@ -532,6 +541,9 @@ export const terminalSystem = setup({
         },
         'terminal.REWIND_CLOSE': {
           actions: 'closeRewind'
+        },
+        'terminal.REWIND_RESIZE': {
+          actions: 'resizeRewind'
         }
       }
     }

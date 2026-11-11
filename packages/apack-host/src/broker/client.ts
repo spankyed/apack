@@ -157,6 +157,14 @@ export interface BrokerSession {
    * window already knows, so there is nothing there to tell apart.
    */
   readonly pid: number | null;
+  /**
+   * Whether the broker is recording it, as the broker said when it started it — a recording that was asked
+   * for and could not be opened leaves a session without one. `null` for a session taken up with `adopt`,
+   * which the broker's listing answers for.
+   */
+  readonly recorded: boolean | null;
+  /** Whether it began with the screen its recording held */
+  readonly restored: boolean;
   write(data: string): Promise<void>;
   /** `cell` is one cell in pixels as a window measured it; absent keeps the last one given */
   resize(cols: number, rows: number, cell?: { readonly width: number; readonly height: number }): Promise<void>;
@@ -457,7 +465,11 @@ interface Connection {
  */
 /** How to reach the broker: where it listens, and the binary to start if nothing is there yet */
 export interface BrokerOptions {
-  binary: string;
+  /**
+   * Left out for a broker this process has no way to start — one somewhere else, behind a socket that
+   * stands in front of the command that reaches it. Such a broker is connected to, or the connection fails.
+   */
+  binary?: string;
   socket: string;
   env?: NodeJS.ProcessEnv;
   /**
@@ -476,9 +488,9 @@ export interface BrokerOptions {
  * starts the broker before any window and holds its lifetime; everywhere else — a dev run, the CLI, a test
  * — it is whoever first wants a session. Both arrive here, and the second one finds a broker listening.
  *
- * Starting a second would be worse than a wasted process: the broker takes its socket with
- * `try_overwrite`, since a path a previous run left behind must not refuse the bind, so a second broker
- * would take the address and leave the first one's sessions unreachable with no error anywhere.
+ * A second broker cannot take the first one's address: a broker holds a lock beside its socket for its
+ * life, and one that finds it held exits saying so (`BROKER_HELD_EXIT`), which a start here reads as a
+ * broker to connect to.
  */
 /**
  * How many of the broker's stderr chunks are kept for its failure message.
@@ -502,16 +514,27 @@ const STDERR_CHUNKS_KEPT = 50;
 const starting = new Map<string, Promise<void>>();
 
 async function reach(options: BrokerOptions): Promise<net.Socket> {
+  const { binary } = options;
+  if (binary === undefined) return connect(options.socket, options.startMs);
   const listening = await connect(options.socket, options.startMs).catch(() => undefined);
   if (listening) return listening;
 
   let pending = starting.get(options.socket);
   if (!pending) {
-    pending = ensureListening(options).finally(() => { starting.delete(options.socket); });
+    pending = ensureListening({ ...options, binary }).finally(() => { starting.delete(options.socket); });
     starting.set(options.socket, pending);
   }
   await pending;
-  return connect(options.socket, options.startMs);
+  try {
+    return await connect(options.socket, options.startMs);
+  } catch (error) {
+    // A start that ended with nothing answering: a broker holds the lock beside this socket and is not
+    // listening on it — still binding, or its socket file was removed from under it
+    throw new Error(
+      `nothing answers at ${options.socket} though a terminal broker was started or already holds it: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
 }
 
 /**
@@ -570,17 +593,20 @@ function startLockFile(socket: string): string {
 /**
  * Makes sure a broker is listening on this socket, starting one if nothing is.
  *
- * **Starting one is exclusive, and that is not an optimisation.** The broker binds its socket with
- * `try_overwrite`, so a second one takes the address and leaves the first one's sessions unreachable with no
- * error anywhere. Finding nothing listening and then spawning is a check followed by an act, and the gap
- * between them is a whole broker startup — so the lock is held across the spawn *and* the wait, not merely
- * around the spawn. Processes reach here together routinely: Electron main takes its lifetime hold while the
+ * **Starting one is exclusive.** Finding nothing listening and then spawning is a check followed by an
+ * act, and the gap between them is a whole broker startup — so the lock is held across the spawn *and* the
+ * wait, not merely around the spawn. A broker that finds another already holding its socket exits saying
+ * so (`BROKER_HELD_EXIT`), so two starts that did overlap still end with one broker; what the lock saves
+ * is the second process and the wait for it. Processes reach here together routinely: Electron main takes its lifetime hold while the
  * API server starts in the same tick (`ModuleRunner` calls every module's `enable` eagerly and chains only
  * the awaiting), and every dev API reload is another.
  *
  * Keyed on the socket, so suites with a socket each never wait on one another.
  */
-async function ensureListening(options: BrokerOptions): Promise<void> {
+/** `BrokerOptions` for a broker this process can start */
+type StartableBroker = BrokerOptions & { binary: string };
+
+async function ensureListening(options: StartableBroker): Promise<void> {
   let lock: ExclusiveLock;
   try {
     lock = await holdExclusiveLockWaiting({
@@ -607,7 +633,7 @@ async function ensureListening(options: BrokerOptions): Promise<void> {
   }
 }
 
-async function start(options: BrokerOptions): Promise<void> {
+async function start(options: StartableBroker): Promise<void> {
   // **Detached, and its handle released.** The broker outlives whoever started it by design — that is the
   // whole point of a session surviving an API restart — so it must not be in this process's group, where
   // the shell's Ctrl-C would reach it, and this process must not be kept alive waiting for it.
@@ -771,9 +797,11 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
    * Shared by `open` and `adopt` because what you can do with a session has nothing to do with how you came
    * to hold it: a copy per route is two places for a request kind to be forgotten.
    */
-  const sessionHandle = (id: string, pid: number | null): BrokerSession => ({
+  const sessionHandle = (id: string, pid: number | null, started: { recorded: boolean; restored: boolean } | null): BrokerSession => ({
       id,
       pid,
+      recorded: started?.recorded ?? null,
+      restored: started?.restored ?? false,
       async write(text) { connection.send({ kind: 'write', session: id, text }); },
       async resize(cols_, rows_, cell) {
         connection.send({
@@ -895,7 +923,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
         { onMatch: event => { if (event.kind === 'spawned') release = heldFeed(listeners, event.session, sessionListeners); } },
       );
       if (spawned.kind !== 'spawned') throw new BrokerError('PTY', 'the broker answered no session');
-      const handle = sessionHandle(spawned.session, spawned.pid);
+      const handle = sessionHandle(spawned.session, spawned.pid, { recorded: spawned.recorded, restored: spawned.restored });
       if (release) setImmediate(release);
       return handle;
     },
@@ -926,7 +954,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
       // diagnostic the window uses to tell one shell from the next, and an adopted session *is* the shell
       // the window already knows — so saying nothing is the true answer, and inventing one would draw a
       // seam across a session that never ended.
-      const taken = sessionHandle(id, null);
+      const taken = sessionHandle(id, null, null);
       if (release) setImmediate(release);
       return taken;
     },
@@ -991,6 +1019,9 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
  */
 const BROKER_START_MS = 10_000;
 
+/** What a broker exits with when another one already holds the socket it was asked to listen on */
+const BROKER_HELD_EXIT = 3;
+
 /** The broker's ready line, or the reason it never came */
 function ready(process_: ChildProcess, stderr: string[], startMs = BROKER_START_MS): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -1007,12 +1038,23 @@ function ready(process_: ChildProcess, stderr: string[], startMs = BROKER_START_
     // `holdBrokerSessions` buy nothing in whichever process won the start.
     const settle = (run: () => void) => { clearTimeout(deadline); lines.close(); run(); };
     const fail = (why: string) => settle(() => reject(new Error(said(why))));
+    // What a broker that will not listen says before it exits, which is why it will not
+    let refused: string | undefined;
     lines.once('line', line => {
       if (line.startsWith('listening ')) settle(resolve);
+      else if (line.startsWith('failed ')) refused = line.slice('failed '.length);
       else fail(`the broker's first line was ${JSON.stringify(line)} rather than its socket`);
     });
     process_.once('error', error => fail(`the broker could not be started (${error.message})`));
-    process_.once('exit', code => fail(`the broker exited with ${code} before it was listening`));
+    // `close` and not `exit`: it comes once the broker's output has been read to its end, so what it said
+    // of why it would not listen has arrived by then
+    process_.once('close', code => {
+      // **Another broker holds the socket, so there is one to connect to.** A broker holds a lock beside
+      // its socket for its life and a second one exits rather than taking the address — which is the
+      // answer this start wanted, reached by whoever got there first
+      if (code === BROKER_HELD_EXIT) settle(resolve);
+      else fail(refused === undefined ? `the broker exited with ${code} before it was listening` : `the broker could not listen: ${refused}`);
+    });
   });
 }
 

@@ -57,23 +57,103 @@ describe('a terminal on a target', () => {
     await app.stop()
   })
 
-  it('comes back on its target at the next start, and is closed when the target has left the settings', async () => {
+  const HANDLERS = { onEvent: () => {}, onExit: () => {}, onCrashed: () => {} }
+  const rowOn = (target: string, session?: string) => {
+    const id = newId(EARS.Entity.Terminal)
+    repository.terminalCommands.create({ id, title: 'from before', shell: '', cwd: '', cols: 80, rows: 24, target, ...(session && { session }) })
+    return id
+  }
+
+  it("comes back at the next start without its target's command being run, and is closed when the target has left the settings", async () => {
     const { app, broker } = await started()
-    const row = (target: string) => {
-      const id = newId(EARS.Entity.Terminal)
-      repository.terminalCommands.create({ id, title: 'from before', shell: '', cwd: '', cols: 80, rows: 24, target })
-      return id
-    }
-    const [there, gone] = [row(DEVBOX.id), row('tt_gone')]
+    const [there, gone] = [rowOn(DEVBOX.id), rowOn('tt_gone')]
 
     const { terminalService } = await import('#features/code/be/services/terminal.ts')
-    await terminalService.restoreAll({ onEvent: () => {}, onExit: () => {}, onCrashed: () => {} })
+    await terminalService.restoreAll(HANDLERS)
 
-    expect(broker.opened.map(({ target }) => target), 'a terminal that ran elsewhere was started on this machine')
-      .toEqual([DEVBOX_ARGV])
+    // A row and a setting are data: starting the app is not what runs a command either of them names
+    expect(broker.opened, 'a target was reached by the app starting').toEqual([])
+    expect(broker.adopted).toEqual([])
     const listed = terminalService.list()
-    expect(listed.find(({ id }) => id === there)?.target?.label).toBe('devbox')
+    expect(listed.find(({ id }) => id === there)).toMatchObject({
+      active: false, target: { id: DEVBOX.id, label: 'devbox' }, exited: { code: null, unreached: true },
+    })
     expect(listed.find(({ id }) => id === gone)).toBeUndefined()
+    await app.stop()
+  })
+
+  it('takes up the shell it had on the target when it is started again, where the target still has it', async () => {
+    const { app, broker } = await started()
+    await app.send('code', { type: 'terminal.CREATE_TERMINAL', target: DEVBOX.id }, { sender: CODE, client: WINDOW })
+    const opened = (await app.nextEmit('code', 'terminal.OPENED')).data as TerminalInfo
+    await app.settle()
+    const { terminalService } = await import('#features/code/be/services/terminal.ts')
+
+    // The app starts again with the target's shell still running there
+    const there = rowOn(DEVBOX.id, opened.session)
+    await terminalService.restoreAll(HANDLERS)
+    const restarted = await terminalService.restart(there, HANDLERS)
+
+    expect(broker.adopted).toEqual([opened.session])
+    expect(broker.opened, 'a second shell was started beside the one still running').toHaveLength(1)
+    expect(restarted).toMatchObject({ active: true, session: opened.session, target: { key: `key:${DEVBOX_ARGV.join(' ')}` } })
+    await app.stop()
+  })
+
+  it('starts a shell on the target when the one it had there is gone', async () => {
+    const { app, broker } = await started()
+    const there = rowOn(DEVBOX.id, 'broker-ended-long-ago')
+    const { terminalService } = await import('#features/code/be/services/terminal.ts')
+    await terminalService.restoreAll(HANDLERS)
+
+    const restarted = await terminalService.restart(there, HANDLERS)
+
+    expect(broker.opened.map(({ target }) => target)).toEqual([DEVBOX_ARGV])
+    expect(restarted).toMatchObject({ active: true, session: broker.opened[0]!.id })
+    expect(repository.terminalQueries.byId(there)?.session).toBe(broker.opened[0]!.id)
+    await app.stop()
+  })
+
+  it('has the shell it left on the target ended when it is closed without having been reached', async () => {
+    const { app, broker } = await started()
+    await app.send('code', { type: 'terminal.CREATE_TERMINAL', target: DEVBOX.id }, { sender: CODE, client: WINDOW })
+    const opened = (await app.nextEmit('code', 'terminal.OPENED')).data as TerminalInfo
+    await app.settle()
+    const { terminalService } = await import('#features/code/be/services/terminal.ts')
+    // The app starts again; the shell is still on the target and this run has not reached it
+    const there = rowOn(DEVBOX.id, opened.session)
+    await terminalService.restoreAll(HANDLERS)
+
+    expect(await terminalService.kill(there, HANDLERS)).toBe('closed')
+
+    expect(broker.terminated, 'a shell was left running on the target with nothing naming it').toContain(opened.session)
+    expect(terminalService.list().find(({ id }) => id === there)).toBeUndefined()
+    await app.stop()
+  })
+
+  it('is started once however many times it is asked to start while it is starting', async () => {
+    const { app, broker } = await started()
+    const there = rowOn(DEVBOX.id)
+    const { terminalService } = await import('#features/code/be/services/terminal.ts')
+    await terminalService.restoreAll(HANDLERS)
+
+    const [first, second] = await Promise.all([terminalService.restart(there, HANDLERS), terminalService.restart(there, HANDLERS)])
+
+    expect(broker.opened, 'a second shell was started under one terminal').toHaveLength(1)
+    expect(second).toEqual(first)
+    await app.stop()
+  })
+
+  it('is neither recorded nor looked back through, both being files on this machine', async () => {
+    const { app, broker } = await started()
+    await app.send('code', { type: 'terminal.CREATE_TERMINAL', target: DEVBOX.id }, { sender: CODE, client: WINDOW })
+    const opened = (await app.nextEmit('code', 'terminal.OPENED')).data as TerminalInfo
+    await app.settle()
+    const { terminalService } = await import('#features/code/be/services/terminal.ts')
+
+    expect(opened.recorded).toBeUndefined()
+    expect(await terminalService.rewind(opened.id, { cols: 80, rows: 24 }, WINDOW)).toBeNull()
+    expect(broker.rewound).toEqual([])
     await app.stop()
   })
 })

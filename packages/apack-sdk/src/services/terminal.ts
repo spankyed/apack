@@ -10,9 +10,10 @@
  * synchronous because elmdb is in-process; a session is a socket away, so a write cannot answer in the same
  * turn. Code that treats a write as settled when it returns is wrong about this contract.
  *
- * **Attach and detach are not here yet.** This is the one session an owner opens and ends. Observing a
- * session from a second window, and a view's close detaching rather than terminating, are the host session
- * service's and arrive with it; what this fixes now is who owns the process.
+ * **This is the session as its owner holds it, and drawing one is not here.** An owner opens a session,
+ * operates it and ends it. A window that draws it attaches to the broker as a view, over a connection of
+ * its own (`terminalViews`, `@apackdev/sdk/fe`), named by the session's id — so any number of windows
+ * draw one session, and a window closing detaches its view and ends nothing.
  */
 
 /**
@@ -147,13 +148,17 @@ export interface TerminalSession {
    */
   readonly pid: number | null;
   /**
-   * How many lines of scrollback this session has, which is the host's number and not the window's.
-   *
-   * **One number, answered by whatever owns the session.** A window's emulator holds whatever it was sent
-   * while attached; the host holds this whether or not a window is drawing, and it is what a reattaching
-   * window is given. Drawing more than this would be drawing lines that cannot survive a reattach — which
-   * is what two independent constants produced, 10,000 in the window against 1,000 in the host, so closing
-   * and reopening a window silently lost nine tenths of it.
+   * Whether what it prints is being recorded, as its host said when it started it: a recording that was
+   * asked for and could not be opened leaves a session without one. `null` for a session taken up with
+   * `adopt`, which `sessions()` answers for.
+   */
+  readonly recorded: boolean | null;
+  /** Whether it began with the screen its recording held */
+  readonly restored: boolean;
+  /**
+   * How many lines above the screen this session answers when its screen is read as text, from the
+   * broker's handshake. What a window drawing the session can scroll back through is the broker's own
+   * history, which is longer and is not this number.
    */
   readonly scrollback: number;
   /** Bytes the user typed */

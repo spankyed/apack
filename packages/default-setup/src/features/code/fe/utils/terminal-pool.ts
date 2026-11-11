@@ -1,5 +1,5 @@
 import { BrokerViews, TerminalView, xtermPalette, type Detector, type Theme } from 'apack-terminal-view'
-import { openLink, terminalViews } from '@apackdev/sdk/fe'
+import { openLink, terminalViews, type TerminalViewStream } from '@apackdev/sdk/fe'
 import type { TerminalInfo } from '../features/terminal/state.ts'
 import { TERMINAL_COLORS, TERMINAL_THEME } from '../../be/terminal-colors.ts'
 
@@ -35,16 +35,35 @@ const COMMAND_GUTTER = 8
 
 const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
 
-/** `named` against `cwd` where it is not already a path from the root, with `.` and `..` taken out */
+/**
+ * `named` against `cwd` where it is not already a path from the root, with `.` and `..` taken out.
+ *
+ * **In the shape `cwd` is in**, which is the shell's own: a directory with a drive letter or a UNC host is
+ * a Windows one, where either slash separates and the answer is written with backslashes.
+ */
 export function resolvePath(cwd: string, named: string): string {
-  const joined = named.startsWith('/') ? named : `${cwd}/${named}`
-  const parts: string[] = []
-  for (const part of joined.split('/')) {
-    if (part === '' || part === '.') continue
-    if (part === '..') parts.pop()
-    else parts.push(part)
+  const drive = (path: string) => /^(?:[A-Za-z]:|[\\/]{2}[^\\/]+[\\/]+[^\\/]+)/.exec(path)?.[0]
+  const windows = drive(cwd) !== undefined || drive(named) !== undefined
+  if (!windows) {
+    const joined = named.startsWith('/') ? named : `${cwd}/${named}`
+    return `/${withoutDots(joined.split('/')).join('/')}`
   }
-  return `/${parts.join('/')}`
+  // From its own root, from the root of the directory's drive, or from the directory
+  const root = drive(named) ?? drive(cwd) ?? ''
+  const rest = drive(named) !== undefined ? named.slice(root.length)
+    : /^[\\/]/.test(named) ? named
+      : `${cwd.slice(root.length)}\\${named}`
+  return `${root}\\${withoutDots(rest.split(/[\\/]/)).join('\\')}`
+}
+
+function withoutDots(parts: readonly string[]): string[] {
+  const kept: string[] = []
+  for (const part of parts) {
+    if (part === '' || part === '.') continue
+    if (part === '..') kept.pop()
+    else kept.push(part)
+  }
+  return kept
 }
 
 const FONT = { family: 'JetBrains Mono, Cascadia Code, Fira Code, Menlo, monospace', size: 14 }
@@ -87,6 +106,8 @@ const paths: Detector = {
 
 interface PoolEntry {
   terminalId: string
+  /** The terminal as it was last described, which is what its view is drawn again from */
+  info: TerminalInfo
   /** The session the view is drawing, by the broker's name for it. A restart puts a new one under the terminal */
   session: string | undefined
   /**
@@ -104,7 +125,8 @@ interface PoolEntry {
   handlers: TerminalAttachmentHandlers
   /** Whether the view was following its output when the last host let go, which the next one starts from */
   following: boolean
-  cwd: string
+  /** The connection its view is drawn over ended and was not made again (`lost`) */
+  unreachable: boolean
 }
 
 /**
@@ -165,21 +187,47 @@ export interface TerminalAttachmentHandlers {
   onSelectionChange?(hasSelection: boolean): void
   /** Whether the session is following its output, which a host draws a scroll control from */
   onFollowingChange?(following: boolean): void
-  /** A path a program printed was clicked: the file it names, and the line where it gave one */
-  onOpenPath?(path: string, line: number | undefined): void
+  /** A path a program printed was clicked: the file it names, and where in it when the program said */
+  onOpenPath?(path: string, at: { line: number; column: number } | undefined): void
 }
 
-const exitedNotice = (code: number | null) =>
-  `The shell ended ${code === null ? 'without a status (a signal)' : `with status ${code}`}. Nothing new will appear here.`
+const exitedNotice = (info: TerminalInfo, code: number | null) =>
+  info.exited?.unreached
+    ? `Not connected to ${info.target?.label ?? 'its target'}. Restart the terminal to connect.`
+    : `The shell ended ${code === null ? 'without a status (a signal)' : `with status ${code}`}. Nothing new will appear here.`
+
+const unreachableNotice = 'The connection this terminal is drawn over ended and could not be made again. Restart the terminal, or reload the window.'
+
+/**
+ * Text as a person can read all of it: a control character as the symbol that names it, so a paste hiding
+ * a backspace or an escape shows that it does. Line ends and tabs are left as what they are.
+ */
+const shown = (text: string): string =>
+  // eslint-disable-next-line no-control-regex
+  text.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, character => String.fromCodePoint(0x2400 + character.codePointAt(0)!))
+    .replace(/\u007f/g, '\u2421')
+
+/** One connection to a broker: the bytes, what speaks the view protocol over them, and whether it ever answered */
+interface BrokerConnection {
+  stream: TerminalViewStream
+  views: BrokerViews
+  heard: boolean
+}
 
 const restartedNotice = (pid: number | null) =>
   `New shell${pid === null ? '' : ` (pid ${pid})`}. The previous session ended; this is a new one.`
 
 class TerminalPool {
   private entries = new Map<string, PoolEntry>()
-  /** This window's connection to the broker, made when the first terminal is drawn and again if it goes */
+  /**
+   * Every terminal as the surface last described it (`describe`), which is what a host mounted with an
+   * older description is drawn from
+   */
+  private latest = new Map<string, TerminalInfo>()
+  /** The brokers a connection has been made again to since anything last said to try: `lost` tries once */
+  private retried = new Set<string>()
   /** By broker: `''` for the app's own, and a target's key for one somewhere else */
-  private views = new Map<string, BrokerViews>()
+  private connections = new Map<string, BrokerConnection>()
 
   /**
    * This window's connection to the broker a terminal's session is on: the app's own, or the one a
@@ -187,16 +235,50 @@ class TerminalPool {
    */
   private connection(target: string | undefined): BrokerViews {
     const key = target ?? ''
-    const open = this.views.get(key)
-    if (open) return open
+    const open = this.connections.get(key)
+    if (open) return open.views
     const stream = terminalViews(target)
-    const views = new BrokerViews(stream)
-    this.views.set(key, views)
-    // A connection that ends takes every session on it; the next terminal drawn asks for a new one
-    stream.onClose(() => {
-      if (this.views.get(key) === views) this.views.delete(key)
-    })
-    return views
+    const connection: BrokerConnection = { stream, views: new BrokerViews(stream), heard: false }
+    this.connections.set(key, connection)
+    stream.onData(() => { connection.heard = true })
+    // Over either way: the socket went, or what arrived on it was not the protocol
+    stream.onClose(() => this.lost(key, connection))
+    connection.views.onClose(() => this.lost(key, connection))
+    return connection.views
+  }
+
+  /**
+   * A connection ended that nothing here closed, taking the frames of every terminal drawn over it.
+   *
+   * **A connection that worked is made again, once.** A terminal's session does not end because a window's
+   * socket did — the window slept, a target's `ssh` dropped — so its view is drawn again over a new one.
+   * Once, because a peer that answers and then leaves every time would otherwise be asked for ever, and
+   * for a target each ask runs a command: the next try waits for a person to show the terminal again or
+   * for the surface to describe it. A connection that never answered is not tried again at all.
+   */
+  private lost(key: string, connection: BrokerConnection): void {
+    if (this.connections.get(key) !== connection) return
+    this.connections.delete(key)
+    connection.stream.close()
+    const again = connection.heard && !this.retried.has(key)
+    if (again) this.retried.add(key)
+    for (const entry of this.entries.values()) {
+      if (entry.session === undefined || (entry.info.target?.key ?? '') !== key) continue
+      if (again) {
+        this.draw(entry, entry.info)
+      } else {
+        entry.unreachable = true
+        this.say(entry, unreachableNotice, 'unreachable')
+      }
+    }
+  }
+
+  /** Draws an entry again whose connection could not be made, because something has said to try */
+  private reach(entry: PoolEntry): void {
+    if (!entry.unreachable) return
+    this.retried.delete(entry.info.target?.key ?? '')
+    this.draw(entry, entry.info)
+    this.say(entry, null)
   }
 
   /**
@@ -205,11 +287,16 @@ class TerminalPool {
    */
   noteExit(terminalId: string, code: number | null): void {
     const entry = this.entries.get(terminalId)
-    if (entry) this.say(entry, exitedNotice(code), 'ended')
+    if (entry) this.say(entry, exitedNotice(entry.info, code), 'ended')
   }
 
-  /** A new shell is answering under a terminal that was already there */
-  noteRestart(info: TerminalInfo): void {
+  /**
+   * The surface's word on one terminal: whatever changed about it — a new shell under it, its shell
+   * ending, its directory, whether it is kept. Everything the pool knows of a terminal comes through
+   * here or `syncProcesses`.
+   */
+  describe(info: TerminalInfo): void {
+    this.latest.set(info.id, info)
     const entry = this.entries.get(info.id)
     if (entry) this.follow(entry, info)
   }
@@ -219,6 +306,7 @@ class TerminalPool {
    * always its shell, so this is where an entry learns the one under it was replaced.
    */
   syncProcesses(infos: readonly TerminalInfo[]): void {
+    this.latest = new Map(infos.map(info => [info.id, info]))
     for (const info of infos) {
       const entry = this.entries.get(info.id)
       if (entry) this.follow(entry, info)
@@ -227,15 +315,22 @@ class TerminalPool {
 
   /** Makes the entry draw the session the terminal has now, saying so when it is not the one it was drawing */
   private follow(entry: PoolEntry, info: TerminalInfo): void {
-    entry.cwd = info.cwd
-    if (info.session === entry.session) return
+    entry.info = info
+    // **A shell that ended leaves its screen.** The terminal is kept so what the shell last said can be
+    // read, and its view is what holds that: it goes when a new shell is drawn or the terminal does
+    if (info.session === undefined) return
+    if (info.session === entry.session) {
+      // Described again with the shell it had: worth one more try at a connection that could not be made
+      this.reach(entry)
+      return
+    }
     const replaced = entry.session !== undefined && info.session !== undefined
     this.draw(entry, info)
     if (replaced) this.say(entry, restartedNotice(info.pid), 'restarted')
     else if (info.session !== undefined) this.say(entry, null)
   }
 
-  private say(entry: PoolEntry, text: string | null, kind?: 'ended' | 'restarted'): void {
+  private say(entry: PoolEntry, text: string | null, kind?: 'ended' | 'restarted' | 'unreachable'): void {
     entry.notice.textContent = text ?? ''
     entry.notice.style.display = text === null ? 'none' : 'block'
     entry.notice.dataset.terminalNotice = kind ?? ''
@@ -246,15 +341,18 @@ class TerminalPool {
     const mounted = entry.attachedContainer !== null
     entry.view?.dispose()
     entry.view = null
+    entry.info = info
     entry.session = info.session
     entry.pid = info.pid
+    entry.unreachable = false
     if (info.session === undefined) return
 
     const source = this.connection(info.target?.key).open(info.session)
     const view = new TerminalView(source, {
       font: FONT,
       theme: THEME,
-      detectors: [paths],
+      // A path is opened as a file on this machine, which a path printed on another machine does not name
+      detectors: info.target ? [] : [paths],
       // Where each command began, coloured by how it ended
       gutter: COMMAND_GUTTER,
       onKey: (event) => this.shortcut(entry, event),
@@ -282,8 +380,11 @@ class TerminalPool {
    * it, and against the directory the shell is in when it is not a path from the root.
    */
   private openPath(entry: PoolEntry, target: string): void {
-    const [, named = target, line] = /^(.*?)(?::(\d+)(?::\d+)?)?$/.exec(target) ?? []
-    entry.handlers.onOpenPath?.(resolvePath(entry.cwd, named), line === undefined ? undefined : Number(line))
+    const [, named = target, line, column] = /^(.*?)(?::(\d+)(?::(\d+))?)?$/.exec(target) ?? []
+    entry.handlers.onOpenPath?.(
+      resolvePath(entry.info.cwd, named),
+      line === undefined ? undefined : { line: Math.max(1, Number(line)), column: Math.max(1, Number(column ?? 1)) },
+    )
   }
 
   /** The keys that are the app's rather than the program's: finding text on the screen */
@@ -385,9 +486,10 @@ class TerminalPool {
       const lines = text.split(/\r\n|\r|\n/)
       const title = document.createElement('div')
       title.textContent = `This paste has ${lines.length} line${lines.length === 1 ? '' : 's'} and would run as it is pasted.`
-      const shown = document.createElement('pre')
-      shown.textContent = lines.slice(0, 6).join('\n') + (lines.length > 6 ? '\n…' : '')
-      shown.style.cssText = 'margin:8px 0;padding:6px 8px;max-height:120px;overflow:auto;background:#1e1e1e;border-radius:4px;'
+      // All of it, in a box that scrolls: the line that does the damage need not be among the first
+      const pasting = document.createElement('pre')
+      pasting.textContent = shown(lines.join('\n'))
+      pasting.style.cssText = 'margin:8px 0;padding:6px 8px;max-height:120px;overflow:auto;background:#1e1e1e;border-radius:4px;'
         + `font:12px ${FONT.family};white-space:pre-wrap;word-break:break-all`
       const answer = (pasted: boolean) => {
         asking.remove()
@@ -403,7 +505,7 @@ class TerminalPool {
         made.addEventListener('click', () => answer(pasted))
         return made
       }
-      asking.append(title, shown, button('Paste anyway', true), button('Cancel', false))
+      asking.append(title, pasting, button('Paste anyway', true), button('Cancel', false))
       asking.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') answer(false)
       })
@@ -413,7 +515,14 @@ class TerminalPool {
   }
 
   /** The entry for a terminal, made the first time it is asked for */
-  ensure(info: TerminalInfo): PoolEntry {
+  /**
+   * **A host's description is used only where the surface has given none.** A host is mounted with the
+   * terminal as it was when its tab was made, and the surface says what becomes of every terminal
+   * (`describe`, `syncProcesses`) — so what a host holds can name a session that has ended,
+   * and drawing that would put a dead screen over a terminal whose shell is running.
+   */
+  ensure(described: TerminalInfo): PoolEntry {
+    const info = this.latest.get(described.id) ?? described
     const existing = this.entries.get(info.id)
     if (existing) {
       this.follow(existing, info)
@@ -426,12 +535,12 @@ class TerminalPool {
       + 'background:rgb(30 30 30 / 0.92);color:#bbb;border-top:1px solid #444;font:12px system-ui,sans-serif;pointer-events:none'
     wrapper.appendChild(notice)
     const entry: PoolEntry = {
-      terminalId: info.id, session: undefined, pid: info.pid, view: null, wrapper, notice,
-      attachedContainer: null, handlers: {}, following: true, cwd: info.cwd,
+      terminalId: info.id, info, session: undefined, pid: info.pid, view: null, wrapper, notice,
+      attachedContainer: null, handlers: {}, following: true, unreachable: false,
     }
     this.entries.set(info.id, entry)
     this.draw(entry, info)
-    if (info.exited) this.say(entry, exitedNotice(info.exited.code), 'ended')
+    if (info.exited) this.say(entry, exitedNotice(info, info.exited.code), 'ended')
     return entry
   }
 
@@ -467,6 +576,8 @@ class TerminalPool {
       },
     }
 
+    // A person is looking at it: a reason to try a connection that could not be made
+    this.reach(entry)
     if (entry.attachedContainer !== host) {
       entry.view?.unmount()
       host.appendChild(entry.wrapper)
@@ -519,12 +630,21 @@ class TerminalPool {
     entry.view?.dispose()
     entry.wrapper.remove()
     this.entries.delete(terminalId)
+    this.latest.delete(terminalId)
   }
 
+  /** The surface is going: every view, and every connection they were drawn over */
   disposeAll(): void {
     for (const id of this.entries.keys()) this.dispose(id)
-    for (const views of this.views.values()) views.close()
-    this.views.clear()
+    const open = [...this.connections.values()]
+    // Emptied first, so a connection closing here is not one that was lost
+    this.connections.clear()
+    this.latest.clear()
+    this.retried.clear()
+    for (const { views, stream } of open) {
+      views.close()
+      stream.close()
+    }
   }
 }
 

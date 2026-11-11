@@ -48,7 +48,8 @@ colours it is drawn in (`Spawn.colors`, from `be/terminal-colors.ts`) and a resi
 cell in pixels, so a program asking the terminal for its background or its size hears the window's. Until a
 window has measured a cell a size in pixels is not answered at all. Grapheme clustering (mode 2027) is on,
 and the Kitty image protocol is on for a session a window draws (`Spawn.images`) and off for any other,
-so a program asking whether it may send an image is told yes only where something would draw it.
+so a program asking whether it may send an image is told yes only where something would draw it. A picture
+arrives as raw pixels or as a PNG; the broker decodes the PNG, which the core leaves to whoever embeds it.
 
 **A shell's exit is waited for, not inferred from its output ending.** A POSIX pty gives EOF on the master
 when the last slave closes; a ConPTY does not, because the broker still holds the pseudoconsole. The exit is
@@ -80,7 +81,15 @@ two copies to being one file at the commits pinned here.
   a string appears — because the core's rules for them are the ones every other terminal built on it has.
 - **What a program does that is not on its screen is an event** on the control connection: a title, a
   bell, a clipboard write, a notification, progress, and each command the shell marks (OSC 133, OSC 633).
-  The pack's shell integration arranges for zsh, bash and fish to mark them.
+  The pack's shell integration arranges for zsh, bash, fish and PowerShell to mark them, around whatever
+  prompt hooks the user's own configuration has. A clipboard write reaches the clipboard only while the
+  code setting that allows it is on.
+- **The colours a program changes are the frame's.** A program that redefines the palette or the default
+  colours (OSC 4, 10, 11, 12) or turns on reverse video is drawn that way: a frame says which colours
+  differ from the ones the session was started with, and the view lays them over its theme.
+- **A connection that ends is made again once.** A session does not end because a window's socket did, so
+  the pool draws its terminals again over a new connection; one that ends again, or never answered, is
+  left with a notice until a person shows the terminal again.
 
 ## What outlasts a shell
 
@@ -92,13 +101,18 @@ two copies to being one file at the commits pinned here.
   data directory, in a file only the user can read, and removes it when the terminal is closed.
 - **The shell itself, where asked.** `Keep` marks a session to outlive the app's hold on the broker. The
   broker then stays for as long as it has one, and the next start finds it with `Sessions` and takes it up
-  again.
+  again. A terminal's mark is its shell's: the shell that replaces a kept one is kept too. A kept shell
+  that no terminal takes up at a start — its row was closed, the data was replaced, restoring was turned
+  off — is ended then, since nothing could reach it again; and keeping is refused while terminals are not
+  restored, for the same reason.
 
 ## A terminal somewhere else
 
-`apack-terminal proxy <socket>` is a process's stdin and stdout as a connection to the broker on that
-socket, starting one if there is none. Run under `ssh host` or `docker exec -i`, it is a connection to a
-broker on another machine or in a container.
+`apack-terminal proxy` is a process's stdin and stdout as a connection to a broker, starting one if there
+is none. Run under `ssh host` or `docker exec -i`, it is a connection to a broker on another machine or in
+a container. With no socket named it uses the user's own (`$XDG_RUNTIME_DIR/apack-terminal/broker.sock`,
+or `~/.apack-terminal/broker.sock`), which is what a target's command usually wants: a broker refuses a
+socket in a directory other users can write to, `/tmp` among them.
 
 The app puts **a socket of its own in front of such a command** (`@apackdev/host`'s `broker/relay.ts`):
 each connection to it is one run of the command. So the app's client and a window's own connection reach
@@ -111,6 +125,15 @@ The code feature names targets in its settings (`terminalTargets`) and opens a t
 panel's menu. Nothing of this machine's is asked of the far side — no shell, directory, startup file or
 recording — so a terminal on a target has no command marks unless its own shell emits them, and is not
 recorded. The broker's binary has to be installed there; nothing puts it there.
+
+**Starting the app does not reach a target.** A target's command is a setting and a terminal is a row,
+and both are data a backup import writes, so a terminal on a target comes back listed as *not connected*
+and its command runs when a person starts it again. Starting it asks the target for the shell it had
+there first — a shell on another machine does not end because this app lost its way to it — and starts
+one only when the target says that shell is gone. Closing a terminal that was never reached this run
+reaches the target to end the shell it left. A target that cannot be reached is tried every time it is
+asked for: unlike the app's own broker, whose failures are its binary's and are counted against it,
+what keeps a target away is a network or a container, which comes back on its own.
 
 ## The protocol
 
@@ -217,6 +240,13 @@ On Windows it is a named pipe, `\\.\pipe\apack-terminal-<hash>`, because the tra
 filesystem path there outright. The hash is the same one and does the same job: a pipe name is one flat
 namespace for the machine, so it is what keeps one app's broker apart from another's.
 
+**One broker to a socket, held by a lock.** A broker takes a lock on `<socket>.lock` for its life before
+it binds, and one that finds it held exits saying so (status 3) rather than taking the address from a
+broker whose sessions would then be unreachable. The client reads that exit as a broker to connect to,
+and any other refusal as the reason the broker gave. A broker also refuses a socket whose directory is
+not the user's own or that others can write to, and one that nothing connects to shortly after it starts
+listening exits.
+
 **A 0700 directory is the POSIX half of who may connect, and a pipe has no such answer.** The default
 descriptor a Windows pipe gets grants read access to Everyone, so the broker creates its listener with one
 of its own — the starting account and `SYSTEM`, in a protected DACL — and refuses to listen rather than
@@ -277,5 +307,15 @@ know which shell is on the other end.
   a megabyte as fast as the pty takes it, which Windows has no one-liner for. The coalescing and the credit
   are the broker's own code and platform-independent; how much output it takes to fill a *named pipe*, which
   the bound's arithmetic includes, is not.
+- **The view path on Windows.** A window drawing from the broker's rows, the broker's lock on its socket,
+  the proxy and the PowerShell hook that marks commands were written for Windows and have not been
+  compiled or run there.
+- **What a remote terminal lacks.** No command marks unless its own shell emits them, no recording and so
+  no looking back, and a path a program prints there is not a link: it names a file on another machine.
+- **Images after a restart.** A recording's keyframe is the sequences that redraw a screen, which carry
+  no images, so a restored terminal comes back without the ones it was showing. Animations are not
+  advanced and virtual placements are not told to a view.
+- **fish, PowerShell, and bash newer than 3.2.** The hooks are run against the bash (3.2) and the zsh
+  this machine has by `shell-marks.spec.ts`; fish's and PowerShell's are held only to their text.
 - **A packaged build ships no broker.** The binary is resolved from `APACK_TERMINAL_BINARY` or the linked
   checkout's debug build. Per-platform builds and their signing belong with the composition that ships it.

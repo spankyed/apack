@@ -169,7 +169,7 @@
                 v-if="terminal.exited"
                 class="flex-shrink-0 text-[10px] uppercase tracking-wide text-amber-500/80"
                 :title="exitedTitle(terminal)"
-              >exited</span>
+              >{{ terminal.exited.unreached ? 'not connected' : 'exited' }}</span>
               <button
                 v-if="renamingTerminalId !== terminal.id"
                 @click.stop="handleCloseTerminal(terminal)"
@@ -314,7 +314,9 @@ let attachment: TerminalAttachment | null = null
 let focusOnAttach = false
 
 /** What a terminal whose shell has gone says when you hover it */
-const exitedTitle = (terminal: TerminalInfo) => terminal.exited?.code == null
+const exitedTitle = (terminal: TerminalInfo) => terminal.exited?.unreached
+  ? `Not connected to ${terminal.target?.label ?? 'its target'}. Restart the terminal to connect`
+  : terminal.exited?.code == null
   ? 'The shell ended without a status (a signal)'
   : `The shell ended with status ${terminal.exited.code}`
 
@@ -357,7 +359,11 @@ const attachTerminal = (terminalId: string) => {
       },
       onSelectionChange: has => { hasSelection.value = has },
       // A path a program printed opens as the file it names, where the explorer opens every other
-      onOpenPath: path => { panelChild(codeActor, 'explorer')?.send({ type: 'explorer.OPEN_FILE', path }) },
+      onOpenPath: (path, at) => {
+      panelChild(codeActor, 'explorer')?.send({ type: 'explorer.OPEN_FILE', path })
+      // Shown at the line the program named, once the file is the one showing
+      if (at) codeActor.send({ type: 'UPDATE_STATE', updates: { pendingRevealLine: { filePath: path, line: at.line, column: at.column } } })
+    },
     })
     terminalActor.send({ type: 'terminal.SEEN', terminalId })
 

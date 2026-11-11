@@ -56,7 +56,7 @@ export const terminalInfo = (id: TerminalInfo['id'], fields: Partial<TerminalInf
   // The session a window draws it from, which every running terminal has; a case about one that ended passes none
   id, session: `session-of-${id}`, title: 'zsh', pid: 4242, shell: '/bin/zsh', cwd: '/tmp', active: true, generation: 1, cols: 80, rows: 24,
   // The host's number, as a session carries it; a case that cares about the bound passes its own
-  scrollback: 1_000, submit: '\n',
+  submit: '\n',
   ...fields,
 })
 

@@ -206,6 +206,33 @@ test('a terminal keeps its screen when its shell is replaced, and can be looked 
 });
 
 /**
+ * Selecting is the view's, and what a word is is the broker's: a double click asks the session where the
+ * word under it ends, and copying asks it for the text. Driven with the real pointer, whose events are
+ * not the ones a page can make up.
+ */
+test('a double click selects the word under it, and copying puts it on the clipboard', async ({ appPage, electronApp }) => {
+  const terminalId = await openTerminal(appPage);
+  await type(appPage, terminalId, 'echo; echo sel$((40+2))ected-word here\n');
+  await expect.poll(() => screen(appPage, terminalId), { timeout: 20_000 }).toContain('sel42ected-word here');
+
+  // Where the word was printed: its row among the rows on screen, and its column in that row
+  const rows = (await screen(appPage, terminalId)).split('\n');
+  const row = rows.findIndex((text) => text.startsWith('sel42ected-word'));
+  const canvas = appPage.locator(`[data-apack-terminal="${terminalId}"] canvas`);
+  const box = (await canvas.boundingBox())!;
+  const cellHeight = box.height / rows.length;
+  // Well inside the word, whatever a cell's width is: the grid starts at the gutter's edge
+  const x = box.x + 8 + 30;
+  const y = box.y + (row + 0.5) * cellHeight;
+
+  await electronApp.evaluate(({ clipboard }) => clipboard.writeText('nothing copied'));
+  await appPage.mouse.dblclick(x, y);
+  await appPage.keyboard.press(process.platform === 'darwin' ? 'Meta+c' : 'Control+Shift+c');
+  await expect.poll(() => electronApp.evaluate(({ clipboard }) => clipboard.readText()), { timeout: 10_000 })
+    .toBe('sel42ected-word');
+});
+
+/**
  * A target is a broker somewhere else, reached through a command. Here it is a second broker on this
  * machine, reached through the broker's own proxy — everything `ssh host apack-terminal proxy …` is but
  * the transport — and the window draws its terminal from the socket the app puts in front of that command.

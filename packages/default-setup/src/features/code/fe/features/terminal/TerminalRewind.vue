@@ -59,8 +59,12 @@ watch(() => rewind.value?.session, async (session, _before, onCleanup) => {
   await nextTick()
   if (!container.value) return
   const id = rewindViewId(session)
-  terminalPool.ensure({ ...props.terminalInfo, id: id as TerminalInfo['id'], session, exited: undefined })
-  const attachment = terminalPool.attach(id, container.value)
+  // A recording is on this machine's broker and has no shell under it, whatever the terminal it is of has
+  terminalPool.ensure({ ...props.terminalInfo, id: id as TerminalInfo['id'], session, exited: undefined, target: undefined })
+  // Drawn at the grid that fits where it is shown, as a terminal is
+  const attachment = terminalPool.attach(id, container.value, {
+    onResize: ({ cols, rows }) => terminalActor.send({ type: 'terminal.REWIND_RESIZE', cols, rows }),
+  })
   onCleanup(() => { attachment?.release() })
 }, { immediate: true })
 

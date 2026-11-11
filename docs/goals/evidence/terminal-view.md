@@ -245,3 +245,82 @@ No measurement is worse than its baseline, so painting stays on the 2D canvas.
 painted, the shell did not exit. It did not recur in the three runs after (75 trials). Undiagnosed; its
 evidence is `.apack/performance/terminal-output-lightweight-1794344406630`.
 
+## Three reads, and two drives — 2026-11-10
+
+After phase 9's checks the three branches were read independently, three times over, and the two
+things phase 8 and phase 7 left undriven were driven.
+
+### What the reads found
+
+Five readers for the first read (the broker in three parts, the view, the app), one per repository for
+the second and third, each reading a diff nobody on it had written. About a hundred and fifty
+findings; every one was fixed, declined with its reason below, or written down as a limit in
+[the broker reference](../../references/terminal-broker.md). The ones that would have reached a person:
+
+| Where | What |
+|---|---|
+| broker | A large paste into a program that echoes deadlocked every session: a pty write under the broker-wide lock |
+| broker | Closing a terminal could run a half-typed line: dropping the pty's writer writes a newline and EOF, and it was dropped before the kill |
+| broker | A keyframe taken inside an escape sequence replayed as garbage |
+| broker | A second broker took a live one's socket, stranding its kept shells |
+| broker | A synchronized-output hold had no timer, so a program that set it and went quiet was never drawn |
+| broker | A request's epoch was discarded, so a copy across a resize could return unrelated text |
+| view | Double-click selection could not work in a browser: a pointer event carries no click count |
+| view | Past 65,536 styles a row was drawn in the wrong one, and a link opened another's address |
+| app | A window's socket to the broker was never closed when the surface was replaced |
+| app | Starting the app ran a remote target's command, and a target unreachable at start lost its terminals |
+| app | A tab drew its terminal's dead session after a restart |
+| app | An empty Enter in bash recorded a command, and the hook replaced the user's own `DEBUG` trap |
+
+**Declined:** a nonce to keep a program's output from spoofing shell marks; closing a target's socket
+when the target leaves the settings (an idle socket, and the service cannot see the settings); two API
+processes of one data dir overlapping on a target's socket during a reload.
+
+### After the fixes
+
+Broker `c7a2b04`, view `154943f`, this repository's working tree over `d39a6b8662`.
+
+- Broker: `cargo nextest run`, 354 of 354. View: `npm test`, 320 of 320, and its vectors byte-identical
+  to the broker's.
+- `npm run typecheck` clean; `npm run test:unit` passed.
+- `npm run test:e2e -- tests/e2e/app-integration/terminal-view.spec.ts tests/e2e/smoke`: 16 of 16,
+  with a new case that double-clicks a word with the real pointer and reads it off the clipboard.
+- `shell-marks.spec.ts` runs the bash (3.2) and zsh hooks in the real shells: no command for an empty
+  Enter, the user's prompt hooks and `DEBUG` trap still run, `set -u` and `ksharrays` raise nothing.
+
+### A terminal across a restart of the app
+
+`drive/terminal-restart.ts`, two runs against one kept profile. Before: one terminal prints a line, a
+second is kept running and says which shell it is. The app quits; the kept shell is still a process.
+After: the first terminal shows the line it printed over a new shell (a new pid), and the second
+answers as the same shell with a variable it had set — `still-yes-26184` from pid 26184.
+
+### A terminal in the Linux test container
+
+`drive/terminal-container.ts`. The broker was built from `c7a2b04` inside a container of the Linux test
+image (`apack-linux-test`), and the target's command was `docker exec -i <container> apack-terminal
+proxy`. A terminal opened on that target from the panel's menu drew `on-Linux-aarch64-shell-1352`. The
+app was quit and started: the terminal was listed *not connected*, and starting it again took up the
+same shell (`back-on-Linux-shell-1352`) with its screen.
+
+**One run in six failed, undiagnosed.** In the first run on the final builds the app's two connections
+to the target were accepted and the greeting was not answered inside ten seconds, twice. The same
+broker answered by hand a minute later; five further runs passed, one with the same minute between its
+halves; and two by-hand reproductions of an app quitting on a remote broker answered in 30 ms each
+time.
+
+### The mutation gate
+
+The local run over the branch before the reads: 923 mutants, 767 caught, 47 missed, 11 timeouts, 98
+unviable. Its 47 survivors were answered in the broker's fix round by tests or by exclusions that say
+why. **The code the three reads added has not been through the mutation tool here**; the broker's own
+`mutants` job on its pull request is its first pass.
+
+### Not done
+
+- The unexplained vitest worker exit recurred: one of three runs of the code feature's backend specs,
+  no crash report.
+- Everything Windows on this branch is unrun: the broker's lock and hang-up on a pipe, the proxy, the
+  PowerShell hook that marks commands.
+- fish's hook is held to its text.
+

@@ -40,22 +40,15 @@ export interface Relay {
   close(): Promise<void>;
 }
 
-function listening(socket: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const probe = net.createConnection(socket);
-    probe.once('connect', () => { probe.destroy(); resolve(true); });
-    probe.once('error', () => resolve(false));
-  });
-}
-
 /**
  * Listens on `socket`, running `command` for each connection.
  *
  * **Argv, never a shell line.** The command is the user's own setting, and it is still passed as the
  * arguments they are: nothing here is in a position to quote a string for a shell correctly.
  *
- * A socket something is already answering on is left to it — two processes of this app serve the same
- * target the same way — and one nothing answers on is a file a process that died left behind.
+ * **The socket is this process's.** It is in the directory of the data dir this process serves, which one
+ * API process holds at a time, so a file already at the path is one a process that died left behind and
+ * is replaced. Asking whether something answers there would run the command once to find out.
  */
 export async function serveRelay(socket: string, command: readonly string[], env: NodeJS.ProcessEnv = process.env): Promise<Relay> {
   const [program, ...args] = command;
@@ -97,14 +90,9 @@ export async function serveRelay(socket: string, command: readonly string[], env
     server.listen(socket, () => resolve('listening'));
   });
 
-  let owned = true;
   if (await listen() === 'in-use') {
-    if (await listening(socket)) {
-      owned = false;
-    } else {
-      rmSync(socket, { force: true });
-      if (await listen() === 'in-use') throw new Error(`Could not listen on ${socket} for a terminal target`);
-    }
+    rmSync(socket, { force: true });
+    if (await listen() === 'in-use') throw new Error(`Could not listen on ${socket} for a terminal target`);
   }
   server.unref();
 
@@ -113,7 +101,6 @@ export async function serveRelay(socket: string, command: readonly string[], env
     lastFailure: () => failure,
     async close() {
       for (const child of running) child.kill();
-      if (!owned) return;
       await new Promise<void>((resolve) => server.close(() => resolve()));
     },
   };

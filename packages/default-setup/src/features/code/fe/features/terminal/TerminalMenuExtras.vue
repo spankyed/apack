@@ -19,7 +19,7 @@
   </ContextMenuItem>
   <ContextMenuSeparator :class="MENU_SEPARATOR_CLASS" />
   <ContextMenuItem
-    v-if="live?.active"
+    v-if="live?.active && (live.recorded || live.target)"
     data-terminal-menu="keep"
     @select="terminalActor.send({ type: 'terminal.KEEP', terminalId: terminalId, kept: !live.kept })"
     :class="MENU_ITEM_CLASS"
@@ -27,7 +27,7 @@
     <component :is="live.kept ? PinOff : Pin" class="w-4 h-4" />
     {{ live.kept ? 'Stop Keeping It Running' : 'Keep Running When the App Quits' }}
   </ContextMenuItem>
-  <ContextMenuItem data-terminal-menu="rewind" @select="lookBack" :class="MENU_ITEM_CLASS">
+  <ContextMenuItem v-if="live?.recorded" data-terminal-menu="rewind" @select="lookBack" :class="MENU_ITEM_CLASS">
     <History class="w-4 h-4" />
     Look Back…
   </ContextMenuItem>

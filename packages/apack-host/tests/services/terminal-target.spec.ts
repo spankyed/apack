@@ -96,6 +96,24 @@ describe.skipIf(!BINARY || process.platform === 'win32')('a terminal on a target
     await expect(service.at(unreachable).open({ cols: 80, rows: 24 }, reading().listeners))
       .rejects.toThrow(/No route to host/);
   });
+
+  it('is reached once it is there, however often its command reached nothing before', async () => {
+    service = createTerminalService();
+    // A command that reaches nothing until a file says the far side is up: a network that came back
+    const far = target();
+    const up = path.join(path.dirname(far.command[2]!), 'up');
+    const reaches = { command: ['/bin/sh', '-c', `[ -f "${up}" ] || { echo "not there yet" >&2; exit 255; }; exec "${BINARY}" proxy "${far.command[2]}"`] };
+
+    // More often than a broker of this machine's is given to start, which is a binary that stays broken
+    for (let tried = 0; tried < 5; tried += 1) {
+      await expect(service.at(reaches).open({ cols: 80, rows: 24 }, reading().listeners)).rejects.toThrow(/not there yet/);
+    }
+    fs.writeFileSync(up, '');
+
+    const session = await service.at(reaches).open({ cols: 80, rows: 24 }, reading().listeners);
+    expect(session.target).toMatch(/^[0-9a-f]{12}$/);
+    await session.terminate();
+  });
 });
 
 describe('where a window is pointed to draw a terminal', () => {

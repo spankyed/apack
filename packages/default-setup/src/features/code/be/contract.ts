@@ -208,6 +208,8 @@ export type IncomingTerminalEvents =
   /** Show an open recording as it was at `at`, in milliseconds since the Unix epoch */
   | { type: 'terminal.REWIND_SEEK'; session: string; at: number }
   | { type: 'terminal.REWIND_CLOSE'; session: string }
+  /** The window looking back through a recording measured how many cells fit where it draws it */
+  | { type: 'terminal.REWIND_RESIZE'; session: string; cols: number; rows: number }
 
 export type OutgoingTerminalEvents =
   /**
