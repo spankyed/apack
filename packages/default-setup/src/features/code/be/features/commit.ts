@@ -54,6 +54,7 @@ export type Event =
   | { type: 'commit.MOVE_OPERATION'; move: OperationMove }
   | { type: 'commit.SET_UP_SIGN_IN'; host: string }
   | { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; patch: string }
+  | { type: 'commit.LIST_UNTRACKED'; path: string }
   | { type: 'commit.LOG_LIST' }
   | { type: 'commit.REVERT_COMMIT'; hash: string }
   | { type: 'commit.RESET_TO_COMMIT'; hash: string }
@@ -246,6 +247,10 @@ export const commitSystem = setup({
       // The editor draws the change from the file's two sides, so those are what is read: no patch is made
       context.gitRepository!.getStatus().then(async (status) => {
         const fileStatus = status.find(f => f.path === ev.path && f.staged === (ev.staged || false))
+          // A file inside a folder listed as one row has no row of its own, and is untracked like the folder
+          ?? (!ev.staged && ev.path && status.some(f => f.isDirectory && ev.path!.startsWith(f.path))
+            ? { path: ev.path, status: 'untracked' as const, staged: false }
+            : undefined)
 
         let originalContent = ''
         let modifiedContent = ''
@@ -650,6 +655,18 @@ export const commitSystem = setup({
       })
     },
 
+    /** The files in an untracked folder the panel lists as one row, for the window that opened it */
+    listUntracked: ({ event, context, reply }) => {
+      const { path: folder } = event as { type: 'commit.LIST_UNTRACKED'; path: string }
+      if (!requireGitRepository(context, reply)) return
+
+      context.gitRepository.listUntracked(folder).then((listed) => {
+        answer(reply, { type: 'commit.UNTRACKED_LISTED', data: { path: folder, ...listed } })
+      }, (error: unknown) => {
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) })
+      })
+    },
+
     /** Stages one piece of a file's change, or takes one back out of what is staged: a write like staging the file */
     applyHunk: ({ event, context, self, reply }) => {
       const { path: file, staged, patch } = event as { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; patch: string }
@@ -986,6 +1003,9 @@ export const commitSystem = setup({
         },
         'commit.APPLY_HUNK': {
           actions: 'applyHunk'
+        },
+        'commit.LIST_UNTRACKED': {
+          actions: 'listUntracked'
         },
         'commit.COMMIT': {
           actions: 'commit'

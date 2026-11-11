@@ -1689,6 +1689,8 @@ declare class GitRepository {
      * since a status was last let write it. Not known to be fresh until one has been
      */
     private indexMayBeStale;
+    /** Counts the times a folder listed as one row was read again, so that each reads as a change to it */
+    private folderReads;
     /** Whether the next whole status is the one let write the index */
     private refreshIndexOnRead;
     /** Counts every notice that the repository may have changed, so a read begun before one is not taken for one after it */
@@ -1816,6 +1818,16 @@ declare class GitRepository {
      * as long as no file's standing depends on another's, and the checks here are the ways it can.
      */
     private loadNoted;
+    /** The most files of an untracked folder that are listed when it is opened; past it the list is cut and says so */
+    static readonly UNTRACKED_LISTED_LIMIT = 1000;
+    /**
+     * The files in an untracked folder that git would list, were it asked to list every one: those it does not
+     * ignore. `directory` is a folder row's path, from the top of the checkout.
+     */
+    listUntracked(directory: string): Promise<{
+        files: string[];
+        truncated: boolean;
+    }>;
     /**
      * The path git answers for when asked about this one: the outermost directory over it that is a repository of
      * its own, or the path itself. Git does not look inside another repository — a nested one and a submodule are
@@ -1884,6 +1896,11 @@ declare class GitRepository {
     stageFiles(filePaths: string[]): Promise<void>;
     unstageFiles(filePaths: string[]): Promise<void>;
     revertFile(filePath: string): Promise<void>;
+    /**
+     * Discards an untracked path. A file is deleted. A folder has deleted what git lists in it, and what git
+     * ignores there is left where it is, as it is when every file of the folder is discarded one by one.
+     */
+    private discardUntracked;
     revertFiles(filePaths: string[]): Promise<void>;
     fileExistsInHead(filePath: string): Promise<boolean>;
     resolveConflict(filePath: string, strategy: 'ours' | 'theirs'): Promise<void>;
@@ -1969,6 +1986,8 @@ interface GitStatusFile {
     score?: number;
     /** For an unmerged file: what each side did to it, which is what there is to settle */
     conflict?: ConflictKind;
+    /** An untracked folder, listed as one row: git tracks nothing in it. Its path ends with `/` */
+    isDirectory?: boolean;
 }
 
 /**
@@ -2214,6 +2233,11 @@ type IncomingCommitEvents = {
  | {
     type: 'commit.MOVE_OPERATION';
     move: OperationMove;
+}
+/** The files in an untracked folder that is listed as one row */
+ | {
+    type: 'commit.LIST_UNTRACKED';
+    path: string;
 }
 /** Stage one piece of a file's change, or with `staged` take one piece out of what is staged */
  | {
@@ -3481,6 +3505,13 @@ type OutgoingCommitEvents =
     data: {
         path: string;
         staged: boolean;
+    };
+} | {
+    type: 'commit.UNTRACKED_LISTED';
+    data: {
+        path: string;
+        files: string[];
+        truncated: boolean;
     };
 }
 /** Git signs in to this host through the GitHub CLI now */

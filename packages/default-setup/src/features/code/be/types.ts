@@ -80,6 +80,8 @@ export interface GitStatusFile {
   score?: number // Rename/copy similarity score (0-100)
   /** For an unmerged file: what each side did to it, which is what there is to settle */
   conflict?: ConflictKind
+  /** An untracked folder, listed as one row: git tracks nothing in it. Its path ends with `/` */
+  isDirectory?: boolean
 }
 
 /**

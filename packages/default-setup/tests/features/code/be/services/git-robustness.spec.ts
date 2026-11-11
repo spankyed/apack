@@ -48,6 +48,9 @@ async function repository() {
 
 it('lists the first changed files and says there are more, where git reports more than it lists', async () => {
   const { root, repo } = await repository();
+  // Each of these is a row of its own where the user has git list every file: a folder git tracks nothing in is
+  // otherwise one row, however many files it holds
+  await git(root, 'config', 'status.showUntrackedFiles', 'all');
   for (let i = 0; i < STATUS_LIMIT + 25; i++) write(root, `untracked/${Math.floor(i / 500)}/file-${i}.txt`);
 
   const snapshot = await repo.readSnapshot();

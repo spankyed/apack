@@ -72,7 +72,8 @@ async function conflict(root: string) {
   await git(root, 'merge', '--quiet', 'side').catch(() => {});
 }
 
-interface Case { before?: Step; change: Step; noted: string[] | null; read: Read }
+/** `read` is what was asked of git, in order: more than one status when the first did not settle it */
+interface Case { before?: Step; change: Step; noted: string[] | null; read: Read | Read[] }
 const cases: Record<string, Case> = {
   'a tracked file edited': { change: root => write(root, 'kept.txt', 'two\n'), noted: ['kept.txt'], read: 'the paths' },
   'a file made in a new directory': {
@@ -120,6 +121,37 @@ const cases: Record<string, Case> = {
     noted: ['nested', 'nested/.git/HEAD', 'nested/inside.txt'], read: 'the paths',
   },
 
+  // A folder git tracks nothing in is one row, and git answers for a file in it with the file: what is asked
+  // about is the folder
+  'a file made in a folder that is already one row': {
+    before: root => write(root, 'fresh/a.ts', ''),
+    change: root => write(root, 'fresh/deep/b.ts', ''), noted: ['fresh/deep', 'fresh/deep/b.ts'], read: 'the paths',
+  },
+  'the last file deleted from a folder that is one row': {
+    before: root => write(root, 'fresh/a.ts', ''),
+    change: root => remove(root, 'fresh/a.ts'), noted: ['fresh/a.ts'], read: 'the paths',
+  },
+  'a folder that is one row deleted': {
+    before: root => write(root, 'fresh/deep/a.ts', ''),
+    change: root => remove(root, 'fresh'), noted: ['fresh'], read: 'the paths',
+  },
+  // A new file may be in a folder git tracks nothing in, so its folder is asked about as well
+  'a file made in a folder git tracks files in': {
+    change: root => write(root, 'src/new.ts', ''), noted: ['src/new.ts'], read: ['the paths', 'the paths'],
+  },
+  'a folder made in a folder git tracks files in': {
+    change: root => write(root, 'src/fresh/new.ts', ''), noted: ['src/fresh', 'src/fresh/new.ts'], read: ['the paths', 'the paths'],
+  },
+  // Only the file was named, and its folder is one git tracks nothing in: how far up that goes is the whole
+  // status's to say
+  'a file made two new folders down, named alone': {
+    change: root => write(root, 'fresh/deep/new.ts', ''), noted: ['fresh/deep/new.ts'], read: ['the paths', 'the paths', 'everything'],
+  },
+  'a file made in a new folder where the user has git list every file': {
+    before: root => git(root, 'config', 'status.showUntrackedFiles', 'all'),
+    change: root => write(root, 'fresh/deep/new.ts', ''), noted: ['fresh/deep/new.ts'], read: 'the paths',
+  },
+
   // Each of these can move the standing of a file that was not named, so the whole status is read
   'what git ignores changed': {
     before: root => write(root, 'notes.tmp', ''), change: root => write(root, '.gitignore', '*.log\nignored/\n*.tmp\n'), noted: ['.gitignore'], read: 'everything',
@@ -148,7 +180,7 @@ it.each(Object.entries(cases))('holds what a whole status says after %s', async 
   await repo.refreshSnapshot('noted');
 
   expect(await repo.readSnapshot()).toEqual(await truth(repo));
-  expect(asked()).toEqual([read]);
+  expect(asked()).toEqual([read].flat());
 });
 
 // The file system takes two spellings of a name for one file where it ignores case or composes letters, and so
@@ -188,7 +220,8 @@ it('reads the paths named under a working directory that is not the top of the c
 
   expect(changed.files).toEqual(['src/new.ts', 'src/deep/b.ts']);
   expect(await repo.readSnapshot()).toEqual(await truth(repo));
-  expect(asked()).toEqual(['the paths']);
+  // The new file's folder is asked about as well, which here is the working directory itself
+  expect(asked()).toEqual(['the paths', 'the paths']);
 });
 
 it('says which file changed, and runs no git when nothing was noted since the last read', async () => {
