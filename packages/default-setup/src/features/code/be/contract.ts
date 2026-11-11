@@ -303,7 +303,8 @@ export type IncomingCodeEvents =
    * finished, an agent's turn ended. The repository and the open files are read again, and what differs is
    * announced as it would have been.
    */
-  | { type: 'CHECK_FOR_EXTERNAL_CHANGES' }
+  /** `by` a window that gained focus; without it, a terminal command or an agent's turn has just ended */
+  | { type: 'CHECK_FOR_EXTERNAL_CHANGES'; by?: 'window' }
 export type OutgoingCodeEvents =
   | OutgoingExplorerEvents
   | OutgoingSearchEvents

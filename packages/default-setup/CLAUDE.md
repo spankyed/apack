@@ -172,6 +172,20 @@ neither watcher needs to be exact.
   `.gitignore`, `.gitattributes` or `.gitmodules` changed; more files changed than are worth naming. A reconcile
   and a write made here have no event to go by, and read everything. `git-noted-paths.spec.ts` holds every case to
   what a whole status says, and says which of the two was asked of git.
+- **Git is not asked while nobody is looking.** Every window showing the repository asks for its status when
+  told it changed, so when none asks after an announcement, none is showing it: a hint that arrives then is
+  put off, and checked when a window next asks or gains focus (`statusRefresh`, `commit.ts`). An agent editing
+  files with the code surface closed runs no status per file event.
+- **One status may write git's index, at a moment chosen for it.** Every read runs with `GIT_OPTIONAL_LOCKS=0`,
+  so git never keeps what it learns of the files: after a checkout or a formatter over the tree, each status
+  reads every file again (about 1.75 s against 95 ms over 50,000 files, 2026-11-11, a busy machine). The check
+  that follows a terminal command or an agent's turn ending lets git write it (`refreshSnapshot`'s
+  `refreshIndex`), and only when a change too wide to name, or to git's own state, has been noted since the
+  last time. Writing holds git's lock for as long as that status takes, in which a git run from a terminal is
+  refused: never on a window's focus or ask, which may be the user on their way to that terminal.
+- **A file as a commit has it is read through one git kept open** (`git-objects.ts`, `cat-file --batch`): a
+  pull request's view reads two versions of every file it lists. Never the staged version, which that git
+  would go on answering from the index as it first read it.
 - **A watch that fails is said to the user.** `commit.STATUS_RECEIVED` carries `watching`, and the panel says live
   updates are off; the next check opens the watch again.
 - **A tree is watched by the platform's own watcher where it has one** (`directory-watch.ts`): Node's recursive

@@ -59,7 +59,7 @@ export type Event =
   | { type: 'commit.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: GitRepository }
   | { type: 'commit.GIT_STATUS_CHANGED' }
   /** A hint that the repository changed. `reconcile` says it comes from someone who knows a change is likely, not from a file event */
-  | { type: 'commit.REPOSITORY_MAY_HAVE_CHANGED'; reconcile?: boolean }
+  | { type: 'commit.REPOSITORY_MAY_HAVE_CHANGED'; reconcile?: boolean; byWindow?: boolean }
   | { type: 'commit.ANNOUNCE_REPOSITORY_CHANGED'; changed: RepositoryChange };
 
 /** What the panel is told of a command that failed: git's words, and why it failed where git said */
@@ -107,36 +107,73 @@ export const commitSystem = setup({
      * nobody for the log or a pull request again. Checking is also what keeps the file event that write causes
      * from being announced a second time. One check runs at a time, and whatever arrives during it is one more.
      */
-    statusRefresh: fromCallback<{ type: 'REFRESH'; repository: GitRepository | null } | { type: 'CHECK'; repository: GitRepository | null; everything: boolean }>(({ receive, sendBack }) => {
-      /** `everything` when there is no watcher's event to go by, and the whole repository is read again */
-      type Request = { repository: GitRepository | null; written: boolean; everything: boolean };
+    statusRefresh: fromCallback<
+      | { type: 'REFRESH'; repository: GitRepository | null }
+      | { type: 'CHECK'; repository: GitRepository | null; everything: boolean; refreshIndex: boolean; byWindow: boolean }
+      | { type: 'ASKED'; repository: GitRepository | null }
+    >(({ receive, sendBack }) => {
+      /**
+       * `everything` when there is no watcher's event to go by, and the whole repository is read again;
+       * `refreshIndex` when this is a moment git's index may be written at
+       */
+      type Request = { repository: GitRepository | null; written: boolean; everything: boolean; refreshIndex: boolean };
+      const both = (one: Request, other: Request | undefined): Request => (other?.repository !== one.repository ? one : {
+        repository: one.repository, written: one.written || other.written,
+        everything: one.everything || other.everything, refreshIndex: one.refreshIndex || other.refreshIndex,
+      });
       let timer: ReturnType<typeof setTimeout> | undefined;
       let stopped = false;
       let checking = false;
       let next: Request | undefined;
+      /**
+       * Whether a changed status was announced and no window has asked for it since. Every window showing the
+       * repository asks when it hears that, so none asking means none is: a hint that arrives then is `owed`,
+       * and git is asked when a window next does
+       */
+      let unasked = false;
+      let owed: Request | undefined;
       const run = async (first: Request) => {
         checking = true;
         try {
           for (let current: Request | undefined = first; current && !stopped; current = next) {
             next = undefined;
-            const found = current.repository ? await current.repository.refreshSnapshot(current.everything ? 'everything' : 'noted') : NOTHING_CHANGED;
+            const found = current.repository
+              ? await current.repository.refreshSnapshot(current.everything ? 'everything' : 'noted', { refreshIndex: current.refreshIndex })
+              : NOTHING_CHANGED;
             const changed = current.written ? { ...found, status: true } : found;
-            if (!stopped && changedAnything(changed)) sendBack({ type: 'commit.ANNOUNCE_REPOSITORY_CHANGED', changed });
+            if (stopped || !changedAnything(changed)) continue;
+            if (changed.status) unasked = true;
+            sendBack({ type: 'commit.ANNOUNCE_REPOSITORY_CHANGED', changed });
           }
         } finally {
           checking = false;
         }
       };
-      const request = (repository: GitRepository | null, written: boolean, everything: boolean) => {
-        if (checking) next = { repository, written: written || next?.written === true, everything: everything || next?.everything === true };
-        else void run({ repository, written, everything });
+      const request = (asked: Request) => {
+        if (checking) next = both(asked, next);
+        else void run(asked);
       };
       receive((event) => {
-        if (event.type === 'CHECK') return request(event.repository, false, event.everything);
+        if (event.type === 'ASKED') {
+          unasked = false;
+          const waiting = owed;
+          owed = undefined;
+          // What was put off is checked now, for the windows that did not ask as well as the one that did
+          if (waiting && waiting.repository === event.repository) request(waiting);
+          return;
+        }
+        if (event.type === 'CHECK') {
+          const asked = { repository: event.repository, written: false, everything: event.everything, refreshIndex: event.refreshIndex };
+          // A window that gained focus is somebody looking, whatever it has asked for
+          // Put off, it is checked whenever a window next asks, which is not a moment chosen to write the index at
+          if (unasked && !event.byWindow) owed = { ...both(asked, owed), refreshIndex: false };
+          else request(asked);
+          return;
+        }
         clearTimeout(timer);
         timer = setTimeout(() => {
           timer = undefined;
-          request(event.repository, true, true);
+          request({ repository: event.repository, written: true, everything: true, refreshIndex: false });
         }, 150);
       });
       return () => { stopped = true; clearTimeout(timer); };
@@ -151,10 +188,12 @@ export const commitSystem = setup({
     checkRepository: enqueueActions(({ context, event, enqueue, self }) => {
       const repository = context.gitRepository
       if (!repository) return
-      const { reconcile = false } = event as { reconcile?: boolean }
+      const { reconcile = false, byWindow = false } = event as { reconcile?: boolean; byWindow?: boolean }
       // A reconcile has no event to go by. Any other hint is a watcher's, or follows a fetch, and each has
-      // noted what it changed with the repository already
-      enqueue.sendTo('statusRefresh', { type: 'CHECK', repository, everything: reconcile });
+      // noted what it changed with the repository already. One that no window asked for follows a terminal
+      // command or an agent's turn ending: the moment least likely to have another git running, so the one at
+      // which git's index may be written
+      enqueue.sendTo('statusRefresh', { type: 'CHECK', repository, everything: reconcile, refreshIndex: reconcile && !byWindow, byWindow });
       // Someone has come back to the repository, which is when what the remote has is worth knowing
       if (reconcile) enqueue(() => { fetchInBackground(repository, self) });
     }),
@@ -162,6 +201,8 @@ export const commitSystem = setup({
     getGitStatus: ({ context, reply, self }) => {
       if (!requireGitRepository(context, reply)) return
       const repository = context.gitRepository
+      // Somebody is looking: whatever was put off while nobody was is checked now
+      self.getSnapshot().children.statusRefresh?.send({ type: 'ASKED', repository })
 
       context.gitRepository.isGitRepository().then((isGitRepo) => {
         if (!isGitRepo) {
@@ -181,16 +222,12 @@ export const commitSystem = setup({
           fetchInBackground(repository, self)
         })
       }).catch((error: any) => {
-        let errorMessage = error.message
-        if (error.message.includes('git: command not found') || error.message.includes('\'git\' is not recognized')) {
-          errorMessage = 'Git is not installed. Please install Git to use version control features.'
-        } else if (error.message.includes('not a git repository')) {
-          errorMessage = 'This directory is not a Git repository. Initialize with "git init" first.'
-        }
-
+        const failed = failureOf(error)
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
-          data: { message: errorMessage }
+          data: failed.code === 'not-a-repository'
+            ? { ...failed, message: 'This directory is not a Git repository. Initialize with "git init" first.' }
+            : failed,
         })
       })
     },

@@ -268,9 +268,10 @@ export const systemMachine = setup({
      * checkout first — it may have become a repository, or a watch may have failed — and then git and the open
      * files say what, if anything, differs.
      */
-    checkForExternalChanges: ({ context, self }) => {
+    checkForExternalChanges: ({ context, event, self }) => {
+      const byWindow = (event as { by?: 'window' }).by === 'window';
       child(self, 'explorer')?.send({ type: 'explorer.CHECK_OPEN_FILES' });
-      const checkRepository = () => { child(self, 'commit')?.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED', reconcile: true }) };
+      const checkRepository = () => { child(self, 'commit')?.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED', reconcile: true, byWindow }) };
       if (context.gitWatcher) void context.gitWatcher.check().then(checkRepository, checkRepository);
       else checkRepository();
     },

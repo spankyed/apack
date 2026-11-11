@@ -8,6 +8,7 @@ import { execFileWhileWorking } from '@apackdev/sdk/progress'
 import { agentChildEnvironment } from './shell-environment.ts'
 import { GitError, LOCKED, classifyGitError, type GitErrorCode } from './git-errors.ts'
 import { signInHelpFor, type SignInHelp } from './sign-in.ts'
+import { GitObjectReader } from './git-objects.ts'
 
 const logger = createLogger('git')
 
@@ -447,6 +448,13 @@ export class GitRepository {
    * the working directory, or anything. Nothing in it is what lets the snapshot be reused.
    */
   private unread: Set<string> | 'anything' = 'anything'
+  /**
+   * Whether the index may hold stale facts about the files: something changed many of them, or git's own state,
+   * since a status was last let write it. Not known to be fresh until one has been
+   */
+  private indexMayBeStale = true
+  /** Whether the next whole status is the one let write the index */
+  private refreshIndexOnRead = false
   /** Counts every notice that the repository may have changed, so a read begun before one is not taken for one after it */
   private snapshotVersion = 0
   private snapshotRead?: { version: number; promise: Promise<LoadedSnapshot> }
@@ -467,8 +475,29 @@ export class GitRepository {
   private watched = false
   private watchFailed = false
 
+  /** Reads files as commits have them, through one git kept open while they are being read */
+  private readonly objects: GitObjectReader
+
   constructor(private workingDirectory: string) {
     this.validateWorkingDirectory(workingDirectory)
+    this.objects = new GitObjectReader(workingDirectory, gitEnvironment)
+  }
+
+  /**
+   * The file a commit has under a name like `HEAD:src/a.ts`, or nothing when it has none. Through the git kept
+   * open for it, and by a process of its own when that one cannot be asked: a name it cannot carry, or a git
+   * that ended. Never for the index (`:src/a.ts`), which that git would go on answering from as it first read it.
+   */
+  private async fileInCommit(name: string): Promise<Buffer | undefined> {
+    try {
+      return await this.objects.read(name)
+    } catch {
+      try {
+        return await this.executeGitCommandBinary(['show', name])
+      } catch {
+        return undefined
+      }
+    }
   }
 
   getWorkingDir(): string {
@@ -511,10 +540,11 @@ export class GitRepository {
    * Runs git, answering once it has exited and its output has gone quiet, without waiting for its pipes to
    * close: a process a hook left behind holds them open for as long as it lives.
    */
-  private runGit(args: string[], encoding: BufferEncoding): Promise<{ stdout: string; stderr: string }> {
+  private runGit(args: string[], encoding: BufferEncoding, refreshesIndex = false): Promise<{ stdout: string; stderr: string }> {
     const running = execFileWhileWorking('git', ['-c', 'color.ui=never', ...args], {
       cwd: this.workingDirectory,
-      env: gitEnvironment(),
+      // The one read that may write: it lets git take its optional lock and keep what it learns of the files
+      env: refreshesIndex ? { ...gitEnvironment(), GIT_OPTIONAL_LOCKS: '1' } : gitEnvironment(),
       maxBuffer: 10 * 1024 * 1024, // 10MB buffer limit
       encoding,
     })
@@ -592,6 +622,8 @@ export class GitRepository {
    */
   noteChanged(paths: string[] | null): void {
     this.cache.clear()
+    // A change too wide to name, or to git's own state: a checkout, a formatter over the tree, a commit elsewhere
+    if (paths === null) this.indexMayBeStale = true
     if (paths === null || this.unread === 'anything' || this.unread.size + paths.length > NOTED_PATHS_LIMIT) return this.markSnapshotStale()
     this.snapshotVersion++
     for (const changed of paths) this.unread.add(changed)
@@ -683,11 +715,12 @@ export class GitRepository {
    * of: a git in a terminal, or an agent's, holds the index for moments, and the user who staged a file in
    * those moments meant it. The lane waits with it, since what is queued behind needs the same lock.
    */
-  private executeGitCommand(args: string[]): Promise<GitCommandResult> {
-    return this.enqueueCommand(laneOf(args), async () => {
+  private executeGitCommand(args: string[], { refreshesIndex = false } = {}): Promise<GitCommandResult> {
+    // A read allowed to write the index waits its turn among the writes made here, which need the same lock
+    return this.enqueueCommand(refreshesIndex ? 'write' : laneOf(args), async () => {
       let refusedAt: number | undefined
       for (;;) {
-        const result = await this.runGitOnce(args)
+        const result = await this.runGitOnce(args, refreshesIndex)
         const lock = result.code === 'locked' ? LOCKED.exec(result.error ?? '')?.[1] : undefined
         if (!lock) return result
         // A stash is several steps to git, and one refused part-way has done the steps before it: run again, it
@@ -702,11 +735,11 @@ export class GitRepository {
     })
   }
 
-  private async runGitOnce(args: string[]): Promise<GitCommandResult> {
+  private async runGitOnce(args: string[], refreshesIndex = false): Promise<GitCommandResult> {
     try {
       // Ended when it stops working, not when a clock runs out: a fetch stalled on the network would
       // otherwise hold its lane, and every later remote command with it, until the app restarts
-      const { stdout } = await this.runGit(args, 'utf8')
+      const { stdout } = await this.runGit(args, 'utf8', refreshesIndex)
 
       return { success: true, output: stdout }
     } catch (error) {
@@ -765,8 +798,15 @@ export class GitRepository {
    *
    * A check a watcher's event started reads `noted`: what the watcher said changed (`noteChanged`), and nothing
    * when it said nothing since the last read. Any other check has no event to go by, and reads everything.
+   *
+   * **`refreshIndex` lets this one status write git's index**, which no other read here may
+   * (`GIT_OPTIONAL_LOCKS`). Git keeps in the index what it last saw of each file, and a status that may not write
+   * it re-reads every file whose time moved, on every run: after a checkout or a formatter over the tree, that is
+   * every file, every time. Writing it holds git's lock for as long as the status takes, in which a git run from
+   * a terminal would be refused, so it is the caller's to say when: at a moment nothing else is likely to be
+   * running git, and only when something says the index may be stale.
    */
-  async refreshSnapshot(reading: 'everything' | 'noted' = 'everything'): Promise<RepositoryChange> {
+  async refreshSnapshot(reading: 'everything' | 'noted' = 'everything', { refreshIndex = false } = {}): Promise<RepositoryChange> {
     // Whether its watches failed, and whether fetching by itself has stopped, are part of what a window shows of
     // the checkout's status, so they are part of it here
     const seen = (identity: SnapshotIdentity): SnapshotIdentity =>
@@ -774,7 +814,10 @@ export class GitRepository {
     // Compared with what the last check saw, not with what was last read: one window's ask can read a change
     // before this runs, and this is what tells the others
     const before = this.checkedIdentity ?? (this.lastIdentity && seen(this.lastIdentity))
-    if (reading === 'everything') this.markSnapshotStale()
+    if (reading === 'everything') {
+      this.markSnapshotStale()
+      if (refreshIndex && this.indexMayBeStale) this.refreshIndexOnRead = true
+    }
     let now: SnapshotIdentity
     try {
       now = seen((await this.currentSnapshot()).identity)
@@ -841,10 +884,16 @@ export class GitRepository {
     }))
     const untracked = told.get('status.showuntrackedfiles') === 'no' ? 'no' : 'all'
     const ignoreCase = /^(true|yes|on|1)$/i.test(told.get('core.ignorecase') ?? '')
-    const status = await this.executeGitCommand(['status', '--porcelain=v2', '--branch', '--show-stash', `--untracked-files=${untracked}`, '-z'])
+    const refreshesIndex = this.refreshIndexOnRead
+    this.refreshIndexOnRead = false
+    // Another git holding the index is why git would skip the write, silently: the index is as suspect after
+    const gitDir = refreshesIndex ? (this.gitDirectories ?? await this.resolveGitDirectories())?.gitDir : undefined
+    const heldElsewhere = gitDir !== undefined && await fs.stat(path.join(gitDir, 'index.lock')).then(() => true, () => false)
+    const status = await this.executeGitCommand(['status', '--porcelain=v2', '--branch', '--show-stash', `--untracked-files=${untracked}`, '-z'], { refreshesIndex })
     if (!status.success && !status.truncated) {
       throw failure(status, 'Failed to get git status')
     }
+    if (refreshesIndex && !heldElsewhere) this.indexMayBeStale = false
     // Git printed more than is read: what was read ends inside a record, which is dropped with the rest
     const output = status.truncated ? (status.output ?? '').slice(0, (status.output ?? '').lastIndexOf('\0') + 1) : status.output ?? ''
     const { headers, entries } = splitStatus(output)
@@ -1307,8 +1356,8 @@ export class GitRepository {
       const relativePath = filePath.startsWith(this.workingDirectory)
         ? filePath.slice(this.workingDirectory.length + 1)
         : filePath
-      const ref = version === 'HEAD' ? `HEAD:${relativePath}` : `:${relativePath}`
-      const result = await this.executeGitCommand(['show', ref])
+      if (version === 'HEAD') return (await this.fileInCommit(`HEAD:${relativePath}`))?.toString('utf8') ?? ''
+      const result = await this.executeGitCommand(['show', `:${relativePath}`])
       if (!result.success) {
         return ''
       }
@@ -1341,9 +1390,8 @@ export class GitRepository {
     }
 
     // For HEAD/index, use git show with binary-safe output
-    const ref = version === 'HEAD' ? `HEAD:${relativePath}` : `:${relativePath}`
     try {
-      const buffer = await this.executeGitCommandBinary(['show', ref])
+      const buffer = version === 'HEAD' ? await this.fileInCommit(`HEAD:${relativePath}`) : await this.executeGitCommandBinary(['show', `:${relativePath}`])
       if (!buffer || buffer.length === 0) return ''
       return `data:${mimeType};base64,${buffer.toString('base64')}`
     } catch {
@@ -1365,7 +1413,7 @@ export class GitRepository {
       const ref = filePath.includes(':') || filePath.startsWith('-')
         ? `${branch}:./${filePath}`
         : `${branch}:${filePath}`
-      const buffer = await this.executeGitCommandBinary(['show', ref])
+      const buffer = await this.fileInCommit(ref)
       if (!buffer || buffer.length === 0) return ''
       return `data:${mimeType};base64,${buffer.toString('base64')}`
     } catch {
@@ -1760,23 +1808,10 @@ export class GitRepository {
   }
 
   async getFileContentFromBranch(filePath: string, branch: string): Promise<string> {
-    // For files with special characters, we need to be careful
-    // If the path contains colons or starts with -, we need special handling
-    let result: GitCommandResult
-    
-    if (filePath.includes(':') || filePath.startsWith('-')) {
-      // Use the rev:./path syntax which is safer for special characters
-      result = await this.executeGitCommand(['show', `${refArgument(branch, 'branch')}:./${filePath}`])
-    } else {
-      // Standard format for normal paths
-      result = await this.executeGitCommand(['show', `${refArgument(branch, 'branch')}:${filePath}`])
-    }
-    
-    if (!result.success) {
-      // File might not exist in that branch - this is not an error
-      return ''
-    }
-    return result.output || ''
+    // A path with a colon in it, or one that starts like an option, is named from the top of the tree
+    const special = filePath.includes(':') || filePath.startsWith('-')
+    // A file the branch does not have is not an error
+    return (await this.fileInCommit(`${refArgument(branch, 'branch')}:${special ? './' : ''}${filePath}`))?.toString('utf8') ?? ''
   }
 
   async fetchRemoteBranch(branch: string): Promise<void> {

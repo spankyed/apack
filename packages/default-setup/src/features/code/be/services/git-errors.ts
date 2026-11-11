@@ -25,6 +25,8 @@ export const GIT_ERROR_CODES = [
   'local-changes',
   /** A branch, a commit or a path that git does not know */
   'unknown-ref',
+  /** The directory is in no git repository */
+  'not-a-repository',
 ] as const
 
 export type GitErrorCode = (typeof GIT_ERROR_CODES)[number]
@@ -46,6 +48,7 @@ const SIGNS: readonly (readonly [GitErrorCode, RegExp])[] = [
   ['conflict', /Automatic merge failed|CONFLICT|Merge conflict/],
   ['local-changes', /Your local changes|untracked working tree files would be overwritten/],
   ['unknown-ref', /pathspec .* did not match|cannot be resolved|unknown revision/],
+  ['not-a-repository', /not a git repository/i],
 ]
 
 /** Why git failed, from everything it printed; nothing when it does not say, or says something not known here */

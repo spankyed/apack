@@ -154,21 +154,87 @@ it('tells the pull requests only when the history changed', async () => {
   let found = NOTHING;
   const code = { send: vi.fn() };
   const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: () => {} } }),
-    { input: { baseDirectory: '/repo', gitRepository: { refreshSnapshot: async () => found } as never, code: code as never } }).start();
+    { input: { baseDirectory: '/repo', gitRepository: { refreshSnapshot: async () => found, isGitRepository: async () => false } as never, code: code as never } }).start();
   actors.push(actor);
 
   // A write made here that moved no commit, as staging a file is
+  // A window showing the repository asks for its status each time it is told that changed
+  const aWindowAsks = async () => {
+    actor.send({ type: 'commit.GET_GIT_STATUS' });
+    await vi.advanceTimersByTimeAsync(0);
+  };
   actor.send({ type: 'commit.GIT_STATUS_CHANGED' });
   await vi.advanceTimersByTimeAsync(150);
   expect(code.send).not.toHaveBeenCalled();
+  await aWindowAsks();
 
   found = { ...NOTHING, status: true };
   actor.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' });
   await vi.advanceTimersByTimeAsync(0);
   expect(code.send).not.toHaveBeenCalled();
+  await aWindowAsks();
 
   found = { ...NOTHING, history: true, worktrees: true };
   actor.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' });
   await vi.advanceTimersByTimeAsync(0);
   expect(code.send.mock.calls).toEqual([[{ type: 'pr.GIT_STATUS_CHANGED' }]]);
 });
+
+/** A commit system over a stand-in repository whose every check finds its status changed, with what was read each time */
+function overAChangingRepository() {
+  const refreshSnapshot = vi.fn(async (_reading?: string, _options?: { refreshIndex?: boolean }) => ({ ...NOTHING, status: true }));
+  const gitRepository = { refreshSnapshot, isGitRepository: async () => false, fetchIfDue: async () => false, isAutoFetchSuspended: false };
+  const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: () => {} } }),
+    { input: { baseDirectory: '/repo', gitRepository: gitRepository as never } }).start();
+  actors.push(actor);
+  const after = async (event: Parameters<typeof actor.send>[0]) => {
+    refreshSnapshot.mockClear();
+    actor.send(event);
+    await vi.advanceTimersByTimeAsync(0);
+    return refreshSnapshot.mock.calls.map(([reading, options]) => `${reading}${options?.refreshIndex ? ', may write the index' : ''}`);
+  };
+  return after;
+}
+const HINT = { type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' } as const;
+const WINDOW_ASKS = { type: 'commit.GET_GIT_STATUS' } as const;
+
+// Every window showing the repository asks for its status when told it changed. When none does, none is showing
+// it, and git is not asked about hints nobody would hear the answer to: an agent editing files with the code
+// surface closed would otherwise run a status for every file event
+it('asks git nothing about a hint while no window has asked for the status it was last told changed', async () => {
+  const after = overAChangingRepository();
+  expect(await after(HINT), 'the first is checked and announced').toEqual(['noted']);
+
+  expect(await after(HINT), 'nobody asked, so nobody is looking').toEqual([]);
+  expect(await after({ ...HINT, reconcile: true }), 'nor when a command or a turn ended').toEqual([]);
+
+  expect(await after(WINDOW_ASKS), 'what was put off is checked once a window asks').toEqual(['everything']);
+  expect(await after(WINDOW_ASKS), 'and once').toEqual([]);
+});
+
+it('checks at once for a window that gained focus, which is somebody looking', async () => {
+  const after = overAChangingRepository();
+  await after(HINT);
+
+  expect(await after({ ...HINT, reconcile: true, byWindow: true })).toEqual(['everything']);
+});
+
+// Writing git's index holds its lock, in which a git run from a terminal is refused: it is done when a terminal
+// command or an agent's turn has just ended, and never because a window gained focus or asked
+it('lets git write its index when a command or a turn ended, and at no other check', async () => {
+  const after = overAChangingRepository();
+  const andAWindowAsked = async (event: Parameters<typeof after>[0]) => {
+    const read = await after(event);
+    await after(WINDOW_ASKS);
+    return read;
+  };
+
+  expect(await andAWindowAsked({ ...HINT, reconcile: true })).toEqual(['everything, may write the index']);
+  expect(await andAWindowAsked({ ...HINT, reconcile: true, byWindow: true })).toEqual(['everything']);
+  expect(await andAWindowAsked(HINT)).toEqual(['noted']);
+
+  await after(HINT);
+  await after({ ...HINT, reconcile: true });
+  expect(await after(WINDOW_ASKS), 'nor when a check that was put off is made').toEqual(['everything']);
+});
+
