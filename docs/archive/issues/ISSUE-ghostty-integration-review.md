@@ -1,7 +1,10 @@
 # The Ghostty integration, reviewed against the running pieces
 
-**Status: open.** A review on 2026-11-10 of the terminal as shipped by
-[the one-VT-core goal](../archive/goals/goal-one-vt-core.md). Every figure below was taken that day against a
+**Status: closed, 2026-11-11.** Nothing it lists is open: the window's emulator, which most of it is about,
+is gone, and [what ended each item](#what-ended-each-item-2026-11-11) is at the end. Kept for its measurements.
+
+A review on 2026-11-10 of the terminal as shipped by
+[the one-VT-core goal](../goals/goal-one-vt-core.md). Every figure below was taken that day against a
 private broker started from the pinned binary and against `ghostty-web`'s own WebAssembly module run in Node;
 nothing was measured in the running app unless it says so. The section headings say what was fixed the same day
 and what is still open.
@@ -83,3 +86,30 @@ only moving the window's core fixes — **open**.
 7. Larger, and each a decision of its own: a record per command for agents and the UI; the window pulling
    frames instead of parsing bytes; a direct channel between the window and the broker; sessions that are
    saved and can be rewound; a broker that runs remotely.
+
+## What ended each item (2026-11-11)
+
+[The terminal-view goal](../../goals/goal-terminal-view.md) took the last entry of the list above — the window
+pulling frames instead of parsing bytes — as its design, and that ended most of the rest: a window draws rows
+the broker sends and interprets nothing, so there is no second core to disagree with the first.
+
+| Still open, above | What ended it |
+|---|---|
+| The window's core is not the broker's | the window has no core: `ghostty-web` is not a dependency |
+| Nothing reads the broker's screen | a view that attaches is sent the screen, after a reload or a restart as at first |
+| Drawing is a 2D canvas, and its read of the screen is quadratic | the read went with the emulator: a view paints the rows it was sent. Painting stays on a 2D canvas, since no measurement came out worse than its baseline ([evidence](../../goals/evidence/terminal-view.md)) |
+| There is no throughput baseline | `terminal-echo`, and `terminal-output` over 16 MiB, each with a reading before and after |
+| Output and input are text | a window is sent rows and the broker encodes its input, so neither crosses as text. A pack that asks a session for its bytes is still sent text, as decided |
+| The clipboard is read by a scanner in the window | the scanner is deleted; the clipboard, title, bell, notifications and progress come from the core's callbacks as events |
+| `ghostty-web` is a prerelease whose upstream has stalled | gone with the dependency |
+
+| What is left, above | |
+|---|---|
+| 1. A test that the broker and the window agree | superseded: one interpreter. The broker's model view, which applies every frame it is sent and must hold exactly the terminal's rows, is the test of what a window ends up with |
+| 2. Restore a window from the broker's screen | done |
+| 3. Push shell facts as events | done: a command starting, a command finishing and the directory changing are events |
+| 4. Move the clipboard, title and bell to the broker's callbacks | done |
+| 5. Own the emulator | dropped: there is no emulator to own. `apack-terminal-view` is a view with no core, a package of the broker's repository |
+| 6. A throughput benchmark and an in-app latency measure | done |
+| 7. The larger five | all built: command records, frames, a connection from the window to the broker, recorded sessions that can be looked back through, and a broker reached through a command on another machine |
+

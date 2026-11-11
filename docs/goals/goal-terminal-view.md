@@ -6,7 +6,7 @@ repository when all of it works together; this one pins the other.
 
 ## Why
 
-[The integration review](../issues/ISSUE-ghostty-integration-review.md) found the broker and the window
+[The integration review](../archive/issues/ISSUE-ghostty-integration-review.md) found the broker and the window
 interpreting terminal output with different builds of the core, and disagreeing. The live defects were fixed on
 `master`. What is left is the structure that produced them: two interpreters, bytes crossing the app as text
 through the API process, a scrollback held twice, and a screen the broker keeps that nothing reads.
