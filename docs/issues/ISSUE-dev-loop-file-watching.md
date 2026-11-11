@@ -110,13 +110,34 @@ Everything below is on master.
     - Node's `fs.watch` over the third, fourth and sixth sequences: 0 of 8 each.
     - In this repo it killed a spec worker about one run in three, since a spec stops the code system and deletes its directory. macOS filed five reports that day, each `memory corruption of free block` in a process with the binding loaded, three of them caught inside elmdb's allocations: the watcher shares its process with the database.
     - **Its Windows backend** frees a subscription whose `OVERLAPPED` the kernel still holds, on every `unsubscribe` (upstream #262, open). Read against the shipped source, not run.
-    - **Its Linux backend** handles a deleted directory under the lock `unsubscribe` takes. Read, not run.
+    - **Its Linux backend refuses to close a watch whose directory was deleted moments before, and leaves watches behind.** Run 2026-11-10 in the Linux test container (linux arm64, Node 24.22.2, glibc 2.36, two CPUs):
+      - `InotifyBackend::unsubscribe` throws at the first `inotify_rm_watch` the kernel refuses, which it does for a directory already deleted whose deletion the backend has not yet processed (`src/linux/InotifyBackend.cc`). The close rejects with `Unable to remove watcher: Invalid argument`.
+      - The same six sequences, 8 processes of 200 rounds each, the refusal caught: no process died, plain or under glibc's heap checks (`MALLOC_CHECK_=3`, `MALLOC_PERTURB_=165`), 96 processes in all. Closes refused, plain and checked:
+
+        | Sequence | Plain | Heap checks on |
+        |---|---|---|
+        | close one watch, delete its directory in the same turn | 13 | 62 |
+        | start closing, one event-loop turn, delete | 99 | 358 |
+        | close two watches (tree and `.git`), delete | 213 | 501 |
+        | delete, one turn, close and wait | 366 | 337 |
+        | close and wait, then delete | 0 | 0 |
+        | create and delete subdirectories, then close | 306 | 315 |
+
+      - **What a refused close leaves:** over a tree of 30 directories, with directories made and deleted and the watch closed at once, three refusals left 8, 15 and 8 of its 31 inotify watches with the process. A second close resolved and took none of them back. The closed watch reported nothing more.
+      - In an earlier run, where the probe did not catch the refusal and each process exited on its first one, one process of 8 under heap checks died of a segmentation fault as it exited. Not seen in the 96 processes above.
+      - **The shipped watcher there** (`GitWatcherService` over a real repository): a hint 209 to 272 ms after a tracked edit, a file made in a new directory, an index change, a ref change, a commit and the checkout's deletion; none for a write inside an ignored directory; and 211 and 272 ms after an edit and an index change in a checkout made again at the same path, once `check()` had run. The library reported the deletion of the directory it watched, which is what its subscriber reads as the watch having ended.
+      - Every close in `gitwatcher.ts` catches a refusal. Nothing takes the watches back: they stay until the process exits or their directories are deleted, and they count against `fs.inotify.max_user_watches`, which is one limit for all of a user's processes.
     - **Cost on macOS**, same day. One write reached JavaScript in 9 to 11 ms through `fs.watch` and 63 to 65 ms through the library (median of 20). A 20,000-file flood written by another process cost the watching process 80 ms of CPU through `fs.watch` and 635 ms through the library. The same flood inside an ignored directory cost 63 ms through `fs.watch`, which drops its 20,401 callbacks in JavaScript, and 3 ms through the library, which never hears of them.
     - **A directory deleted and made again at the same path:** `fs.watch` on macOS reports on the new one. The library reports nothing more, so its subscriber says the watch ended.
     - **What `fs.watch` gives up:** libuv skips FSEvents' dropped-event flags (`kFSEventsSystem`, `src/unix/fsevents.c`), so a drop is not an error here. The recorder above saw FSEvents raise none for 249 lost saves, and reading again is what covers a loss either way.
     - **Why not Node's watch on Linux too:** it opens a watch on every file as well as every directory, and reads the whole tree before it returns (`lib/internal/fs/recursive_watch.js`, v24.16.0).
     - The scripts were in a session scratchpad and are not in the repo.
   - It treats an event as a hint: git is asked whether the status or a ref changed, and only a difference is announced.
+  - **A hint that names files is answered by reading those files** (`GitRepository.loadNoted`), not the whole status. Measured 2026-11-10 on darwin arm64 with git 2.38.1, over 100,000 tracked files with one edited:
+    - **Git alone** (load 5.9, median of 9): a whole status 315 ms; a status of the one path 26 ms, of its directory 28 ms, of 50 paths 105 ms. Git matches each path against every file it tracks, which is why no more than 32 are read this way.
+    - **Through `GitRepository`** (load 9.6, median of 9, Node 24.16.0): a check that reads everything 294 to 341 ms; a check that reads the one path noted 29 to 32 ms.
+    - **Asked about one path, git says less than a whole status does in four ways**, each seen on that git. A staged rename comes back as an addition. A file added without its content, beside a deleted one, comes back as a deletion where the whole status pairs them as a rename. A path inside a submodule or a nested repository comes back as nothing, where the whole status has one entry at its directory. A name spelled in another case comes back as nothing where git ignores case, unless the path is marked `icase`. The first two read the whole status; the last two ask differently.
+    - `tests/features/code/be/services/git-noted-paths.spec.ts` holds each of these to what a whole status says. Nine edits that each remove one rule were tried on a copy of `git.ts`, and each failed at least one case.
   - What no event reported is found by reading again when a window gains focus, a terminal command finishes or an agent's turn ends (`CHECK_FOR_EXTERNAL_CHANGES`).
   - `services/open-file-watcher.ts` beside it watches each file open in an editor with chokidar's per-file `fs.watch` mode (`useFsEvents: false, usePolling: false`), so kqueue.
 - **Soak:** `packages/apack-cli/scripts/soak-watch.ts`, `soak-bystander.mjs`, `soak-rounds.ts`, with `tests/build/soak-rounds.spec.ts`.

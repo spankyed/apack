@@ -99,6 +99,30 @@ it('reports a change to the working tree, the index or a ref and one it cannot p
   }
 });
 
+// A file in the working tree changes its own standing, so it can be read on its own. The index, HEAD and a ref
+// each change every file's, and so may a change nobody could place
+it('names the files that changed in the working tree, and none once anything else changed with them', async () => {
+  const repo = directory('apack-watch-named-');
+  await git(repo, 'init', '--quiet');
+  const { watcher, changed, platform } = watcherOf(repo);
+  await start(watcher);
+  vi.useFakeTimers();
+  const tree = platform.of(repo)!;
+  const reported = async (deliver: () => void) => {
+    changed.mockClear();
+    deliver();
+    await vi.advanceTimersByTimeAsync(2000);
+    return changed.mock.calls.map(([paths]) => paths);
+  };
+
+  expect(await reported(() => { tree.events(path.join('src', 'file.ts')); tree.events('notes.md', path.join('src', 'file.ts')); }))
+    .toEqual([['src/file.ts', 'notes.md']]);
+  expect(await reported(() => { tree.events('notes.md'); platform.of(path.join(repo, '.git'))!.events('index'); })).toEqual([null]);
+  expect(await reported(() => tree.events('notes.md', null))).toEqual([null]);
+  expect(await reported(() => tree.events(...Array.from({ length: 40 }, (_, index) => `file-${index}.ts`))), 'too many to name').toEqual([null]);
+  expect(await reported(() => tree.events('notes.md')), 'what one report could not name is not carried into the next').toEqual([['notes.md']]);
+});
+
 it('reports a change while changes keep arriving', async () => {
   const repo = directory('apack-watch-stream-');
   await git(repo, 'init', '--quiet');

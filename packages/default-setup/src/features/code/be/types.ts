@@ -76,7 +76,36 @@ export interface GitStatusFile {
   staged: boolean
   originalPath?: string // For renames and copies
   score?: number // Rename/copy similarity score (0-100)
+  /** For an unmerged file: what each side did to it, which is what there is to settle */
+  conflict?: ConflictKind
 }
+
+/**
+ * How the two sides being brought together disagree about a file. `us` is the side the checkout was on and
+ * `them` the one coming in, as git names them.
+ */
+export const CONFLICT_KINDS = ['both-modified', 'both-added', 'both-deleted', 'added-by-us', 'added-by-them', 'deleted-by-us', 'deleted-by-them'] as const
+export type ConflictKind = (typeof CONFLICT_KINDS)[number]
+
+/** What git can be in the middle of in a checkout, each of which ends when it is carried on with or given up */
+export const OPERATION_KINDS = ['merge', 'rebase', 'cherry-pick', 'revert'] as const
+export type OperationKind = (typeof OPERATION_KINDS)[number]
+
+/** What git is in the middle of in a checkout */
+export interface RepositoryOperation {
+  kind: OperationKind
+  /** What is merged in, rebased onto, picked or reverted, as a person would name it: a branch where one is known, else a short commit */
+  subject: string
+  /** The branch a rebase is replaying, where it is replaying one */
+  branch?: string
+  /** A rebase's place among the commits it replays, counted from one */
+  step?: number
+  steps?: number
+}
+
+/** What can be done with what git is in the middle of: carry on once its conflicts are settled, leave out the commit a rebase stopped at, or give it up */
+export const OPERATION_MOVES = ['continue', 'skip', 'abort'] as const
+export type OperationMove = (typeof OPERATION_MOVES)[number]
 
 export interface GitBranch {
   name: string
@@ -91,14 +120,18 @@ export interface GitCommitInfo {
 
 /**
  * The parts of a repository a window shows, each read and refreshed on its own: its changed files with the branch
- * and its distance from upstream; which branch is checked out, the commit it is on and every branch and tag,
- * which a log and a pull request are read from; its stashes; its worktrees.
+ * and its distance from upstream; the two sides of each changed file, which a diff of it shows; which branch is
+ * checked out, the commit it is on and every branch and tag, which a log and a pull request are read from; its
+ * stashes; its worktrees.
  */
-export const REPOSITORY_PARTS = ['status', 'history', 'stashes', 'worktrees'] as const
+export const REPOSITORY_PARTS = ['status', 'diffs', 'history', 'stashes', 'worktrees'] as const
 export type RepositoryPart = (typeof REPOSITORY_PARTS)[number]
 
 /** Which parts of a repository differ from when it was last checked */
-export type RepositoryChange = Record<RepositoryPart, boolean>
+export type RepositoryChange = Record<RepositoryPart, boolean> & {
+  /** The changed files whose diff differs, when they are few enough to name: without it, any of them may */
+  files?: string[]
+}
 
 /** The two sides of one file's change, which an editor shows side by side */
 export interface GitDiff {

@@ -1,7 +1,12 @@
 import { setup, assign, enqueueActions , type ActorRefFrom } from 'xstate';
+import { answersCall, newCall, recordCall, settleCall } from '@apackdev/sdk/events';
+import { viewWrites, writeAnswered, writeSent, writing, type ViewWrites } from '@apackdev/sdk/fe';
 import { sendToSystem } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
-import type { RepositoryChange } from '../../../be/types.ts';
+import { diffTab, diffTabPath } from '../../utils/diff-tabs.ts';
+import { withStaged, withUnstaged } from './staging.ts';
+import type { ConflictKind, OperationMove, RepositoryChange, RepositoryOperation } from '../../../be/types.ts';
+import type { OpenFile } from '../../contract.ts';
 
 
 // Git types
@@ -11,6 +16,8 @@ export interface GitStatusFile {
   staged: boolean
   originalPath?: string // For renames and copies
   score?: number // Rename/copy similarity score (0-100)
+  /** For an unmerged file: what each side did to it */
+  conflict?: ConflictKind
 }
 
 export interface GitDiff {
@@ -39,6 +46,12 @@ export interface CodeCommitContext {
   isStatusTruncated: boolean
   /** Whether the backend's file watches on this repository are open; without them the panel changes only when asked */
   isWatchingRepository: boolean
+  /** What git is in the middle of in this repository: a merge, a rebase, a cherry-pick or a revert stopped part-way */
+  operation: RepositoryOperation | null
+  /** Whether git was asked to move that on and has not answered */
+  isMovingOperation: boolean
+  /** Whether fetching by itself has stopped: what is shown of the remote is as old as the last fetch that worked */
+  isFetchSuspended: boolean
   isPushing: boolean
   isPulling: boolean
   isGeneratingMessage: boolean
@@ -47,6 +60,25 @@ export interface CodeCommitContext {
   worktreeList: WorktreeEntry[]
   isWorktreeLoading: boolean
   commitLog: CommitLogEntry[]
+  /** The asks in flight for a diff that is already open, by call: the answer to one brings its tab up to date and opens none */
+  diffRefreshes: Record<string, true>
+  /** The latest ask for the status, while it is unanswered: an answer to an earlier one is of the repository before it */
+  statusAsk: string | null
+  /** The stage and unstage writes still unanswered. The list shows them done, so no status is shown until they are answered */
+  stagingWrites: ViewWrites
+}
+
+/** The diffs of this repository's changed files that the window has open */
+const openDiffs = (self: unknown): OpenFile[] =>
+  ((getParentContext(self)?.openFiles ?? []) as OpenFile[]).filter(file => file.isDiff && file.gitFile && !file.isPrDiff)
+
+/** An ask for a diff that is already open */
+const diffRefresh = (file: { path: string; staged: boolean }) => {
+  const call = newCall()
+  return {
+    record: ({ context }: { context: CodeCommitContext }) => ({ diffRefreshes: recordCall(context.diffRefreshes, call, true as const) }),
+    ask: () => { sendToSystem('code', { type: 'commit.GET_GIT_DIFF', path: file.path, staged: file.staged }, { call }) },
+  }
 }
 
 export interface StashEntry {
@@ -96,7 +128,7 @@ export type Event =
   | { type: 'commit.CHECKOUT_BRANCH' }
   | { type: 'commit.PUSH_BRANCH' }
   | { type: 'commit.PULL_BRANCH' }
-  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
+  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
   | { type: 'commit.DIFF_RECEIVED'; data: GitDiff }
   | { type: 'commit.FILES_STAGED'; paths: string[] }
   | { type: 'commit.FILES_UNSTAGED'; paths: string[] }
@@ -132,6 +164,8 @@ export type Event =
   | { type: 'commit.RESOLVE_ALL_CONFLICTS'; strategy: 'ours' | 'theirs' }
   | { type: 'commit.CONFLICT_RESOLVED'; path: string }
   | { type: 'commit.ALL_CONFLICTS_RESOLVED' }
+  | { type: 'commit.MOVE_OPERATION'; move: OperationMove }
+  | { type: 'commit.OPERATION_MOVED'; data: { move: OperationMove } }
   | { type: 'commit.LOG_LIST' }
   | { type: 'commit.LOG_LIST_RECEIVED'; data: { commits: CommitLogEntry[] } }
   | { type: 'commit.REVERT_COMMIT'; hash: string }
@@ -146,21 +180,37 @@ export const commitState = setup({
     context: {} as CodeCommitContext,
     events: {} as Event
   },
+  guards: {
+    answersADiffRefresh: ({ context, event }) => settleCall(context.diffRefreshes, event).recorded !== undefined,
+    answersTheStatusAsked: ({ context, event }) => answersCall(event, context.statusAsk),
+  },
   actions: {
-    refreshGitStatus: () => {
-      sendToSystem('code', { type: 'commit.GET_GIT_STATUS' })
-    },
+    refreshGitStatus: enqueueActions(({ enqueue }) => {
+      const call = newCall()
+      enqueue.assign({ statusAsk: call })
+      enqueue(() => { sendToSystem('code', { type: 'commit.GET_GIT_STATUS' }, { call }) })
+    }),
+
+    forgetDiffRefresh: assign(({ context, event }) => ({ diffRefreshes: settleCall(context.diffRefreshes, event).pending })),
 
     /**
-     * Asks again for each list the panel shows whose part of the repository changed, and for no other: the news
+     * Asks again for each thing the window shows whose part of the repository changed, and for no other: the news
      * says which, so an edited file reads the status and leaves the log, the stashes and the worktrees alone
      */
-    followRepositoryChange: enqueueActions(({ event, enqueue }) => {
+    followRepositoryChange: enqueueActions(({ event, self, enqueue }) => {
       const { changed } = event as { type: 'commit.REPOSITORY_CHANGED'; changed: RepositoryChange }
       if (changed.status) enqueue('refreshGitStatus')
       if (changed.history) enqueue('requestLogList')
       if (changed.stashes) enqueue('requestStashList')
       if (changed.worktrees) enqueue('requestWorktreeList')
+      if (!changed.diffs) return
+      // A diff is read when its tab opens, so one left open is of the file as it was until it is read again
+      for (const { gitFile } of openDiffs(self)) {
+        if (changed.files && !changed.files.includes(gitFile!.path)) continue
+        const refresh = diffRefresh(gitFile!)
+        enqueue.assign(refresh.record)
+        enqueue(refresh.ask)
+      }
     }),
 
 
@@ -172,21 +222,55 @@ export const commitState = setup({
       }
     }),
 
-    stageFiles: ({ event }) => {
-      const ev = event as { type: 'commit.STAGE_FILES'; paths: string[] }
-      sendToSystem('code', { type: 'commit.STAGE_FILES', paths: ev.paths })
-    },
+    /**
+     * A staged file moves in the list at once, to where git will list it, and git is told. What git answers
+     * replaces the guess. A status read before the write landed would put the file back, so none is shown until
+     * every such write is answered.
+     */
+    stageFiles: enqueueActions(({ event, enqueue }) => {
+      const { paths } = event as { type: 'commit.STAGE_FILES'; paths: string[] }
+      const call = newCall()
+      enqueue.assign(({ context }) => ({ gitStatus: withStaged(context.gitStatus, paths), stagingWrites: writeSent(context.stagingWrites, call) }))
+      enqueue(() => { sendToSystem('code', { type: 'commit.STAGE_FILES', paths }, { call }) })
+    }),
 
-    unstageFiles: ({ event }) => {
-      const ev = event as { type: 'commit.UNSTAGE_FILES'; paths: string[] }
-      sendToSystem('code', { type: 'commit.UNSTAGE_FILES', paths: ev.paths })
-    },
+    unstageFiles: enqueueActions(({ event, enqueue }) => {
+      const { paths } = event as { type: 'commit.UNSTAGE_FILES'; paths: string[] }
+      const call = newCall()
+      enqueue.assign(({ context }) => ({ gitStatus: withUnstaged(context.gitStatus, paths), stagingWrites: writeSent(context.stagingWrites, call) }))
+      enqueue(() => { sendToSystem('code', { type: 'commit.UNSTAGE_FILES', paths }, { call }) })
+    }),
+
+    /** A stage or an unstage was answered: once none is left unanswered, the list is read from git */
+    settleStaging: enqueueActions(({ context, event, enqueue }) => {
+      const writes = writeAnswered(context.stagingWrites, event)
+      enqueue.assign({ stagingWrites: writes })
+      if (!writing(writes)) enqueue('refreshGitStatus')
+    }),
+
+    /** A stage or an unstage was refused: reading the list from git puts the file back where it is */
+    settleRefusedStaging: enqueueActions(({ context, event, enqueue }) => {
+      const writes = writeAnswered(context.stagingWrites, event, true)
+      // An error that answers none of these writes is some other ask's
+      if (writes === context.stagingWrites) return
+      enqueue.assign({ stagingWrites: writes })
+      if (!writing(writes)) enqueue('refreshGitStatus')
+    }),
 
 
-    viewDiff: ({ event }) => {
+    viewDiff: enqueueActions(({ event, self, enqueue }) => {
       const ev = event as { type: 'commit.VIEW_DIFF'; path: string; staged: boolean }
-      sendToSystem('code', { type: 'commit.GET_GIT_DIFF', path: ev.path, staged: ev.staged })
-    },
+      const tabPath = diffTabPath(ev)
+      if (!openDiffs(self).some(file => file.path === tabPath)) {
+        enqueue(() => { sendToSystem('code', { type: 'commit.GET_GIT_DIFF', path: ev.path, staged: ev.staged }) })
+        return
+      }
+      // Already open: it is shown at once as it stands, with whatever was typed into it, and read again behind that
+      const refresh = diffRefresh(ev)
+      enqueue(() => updateParentState(self, { activeFilePath: tabPath }))
+      enqueue.assign(refresh.record)
+      enqueue(refresh.ask)
+    }),
 
     updateCommitMessage: assign({
       commitMessage: ({ event }) => {
@@ -289,34 +373,38 @@ export const commitState = setup({
     },
 
     handleStatusReceived: assign({
-      gitStatus: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
-        return ev.data.files
+      statusAsk: null,
+      gitStatus: ({ context, event }) => {
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
+        // Read before a write that the list already shows landed: git is asked again once that write is answered
+        return writing(context.stagingWrites) ? context.gitStatus : ev.data.files
       },
       gitBranch: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
         return ev.data.branch
       },
       hasUpstream: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
         return ev.data.hasUpstream
       },
       commitsAhead: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
         return ev.data.commitsAhead
       },
       commitsBehind: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
         return ev.data.commitsBehind
       },
       isStatusTruncated: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
         return ev.data.truncated
       },
       isWatchingRepository: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
         return ev.data.watching
       },
+      operation: ({ event }) => (event as { data: { operation?: RepositoryOperation } }).data.operation ?? null,
+      isFetchSuspended: ({ event }) => (event as { data: { fetchSuspended?: boolean } }).data.fetchSuspended === true,
       isGitLoading: false,
       gitError: null
     }),
@@ -330,10 +418,21 @@ export const commitState = setup({
       isCheckingOutBranch: false,
       isPushing: false,
       isPulling: false,
-      isGeneratingMessage: false
+      isGeneratingMessage: false,
+      isMovingOperation: false
     }),
 
     dismissError: assign({ gitError: null }),
+
+    /** Has git carry on with what it is in the middle of, skip the commit a rebase stopped at, or give it up */
+    moveOperation: enqueueActions(({ event, enqueue }) => {
+      const { move } = event as { type: 'commit.MOVE_OPERATION'; move: OperationMove }
+      enqueue.assign({ isMovingOperation: true, gitError: null })
+      enqueue(() => { sendToSystem('code', { type: 'commit.MOVE_OPERATION', move }) })
+    }),
+
+    // Where that left the repository is in its status, which the backend announces as changed
+    handleOperationMoved: assign({ isMovingOperation: false }),
 
     requestGenerateMessage: () => {
       sendToSystem('code', { type: 'commit.GENERATE_MESSAGE' })
@@ -351,31 +450,21 @@ export const commitState = setup({
 
 
     /**
-     * The diff names its own file, so the tab it opens is that file's.
+     * The diff names its own file, so the tab it opens or brings up to date is that file's: `GitDiff` carries
+     * `path` and `staged` (`code/be/types.ts`), which is the tab's key, and the file selected now may be another.
      *
-     * It used to read `context.selectedGitFile` — the file selected *now* — so clicking another file
-     * while a diff was in flight opened the first file's content in a tab labelled the second, and a
-     * diff arriving with nothing selected was dropped. `GitDiff` carries `path` and `staged`
-     * (`code/be/types.ts`), which is the tab's key, so no pending field is needed: the answer says
-     * where it goes.
+     * An answer to an ask made for a diff already open changes that tab where it is, and opens none: its tab may
+     * have been closed since, and a diff the user is not looking at does not take the window.
      */
-    handleDiffReceived: enqueueActions(({ enqueue, self, event }) => {
+    handleDiffReceived: enqueueActions(({ enqueue, self, event, context }) => {
       const ev = event as { type: 'commit.DIFF_RECEIVED'; data: GitDiff }
-      enqueue(() => {
-        const { path, staged } = ev.data
-        const diffTabId = `diff:${path}:${staged ? 'staged' : 'unstaged'}`
-        const isUnstagedDiff = !staged
-        const diffTab = {
-          path: diffTabId,
-          content: isUnstagedDiff ? ev.data.modifiedContent : '',
-          originalContent: isUnstagedDiff ? ev.data.modifiedContent : undefined,
-          modified: false,
-          isDiff: true,
-          gitDiff: ev.data,
-          gitFile: { path, staged }
-        }
-        addTabToParent(self, diffTab)
-      })
+      const { recorded, pending } = settleCall(context.diffRefreshes, event)
+      if (!recorded) {
+        enqueue(() => addTabToParent(self, diffTab(ev.data)))
+        return
+      }
+      enqueue.assign({ diffRefreshes: pending })
+      enqueue(() => sendEventToParent(self, { type: 'REFRESH_DIFF_TAB', diff: ev.data }))
     }),
 
     getAllBranches: () => {
@@ -542,6 +631,9 @@ export const commitState = setup({
   id: 'commit',
   initial: 'idle',
   context: {
+    diffRefreshes: {},
+    statusAsk: null,
+    stagingWrites: viewWrites(),
     gitStatus: [],
     gitBranch: '',
     gitError: null,
@@ -557,6 +649,9 @@ export const commitState = setup({
     commitsBehind: 0,
     isStatusTruncated: false,
     isWatchingRepository: true,
+    operation: null,
+    isMovingOperation: false,
+    isFetchSuspended: false,
     isPushing: false,
     isPulling: false,
     isGeneratingMessage: false,
@@ -572,12 +667,16 @@ export const commitState = setup({
         'commit.REFRESH_STATUS': {
           actions: ['setGitLoading', 'refreshGitStatus']
         },
+        // An answer to an ask made before the latest is of the repository as it was before it
         'commit.STATUS_RECEIVED': {
+          guard: 'answersTheStatusAsked',
           actions: 'handleStatusReceived'
         },
-        'commit.ERROR_RECEIVED': {
-          actions: 'handleErrorReceived'
-        },
+        'commit.ERROR_RECEIVED': [
+          // Nobody asked for a diff that was read again, so its failing is said to nobody: the tab stays as it was
+          { guard: 'answersADiffRefresh', actions: 'forgetDiffRefresh' },
+          { actions: ['handleErrorReceived', 'settleRefusedStaging'] },
+        ],
         'commit.DISMISS_ERROR': {
           actions: 'dismissError'
         },
@@ -591,10 +690,10 @@ export const commitState = setup({
           actions: 'unstageFiles'
         },
         'commit.FILES_STAGED': {
-          actions: 'refreshGitStatus'
+          actions: 'settleStaging'
         },
         'commit.FILES_UNSTAGED': {
-          actions: 'refreshGitStatus'
+          actions: 'settleStaging'
         },
         'commit.VIEW_DIFF': {
           actions: 'viewDiff'
@@ -640,6 +739,12 @@ export const commitState = setup({
         },
         'commit.ALL_CONFLICTS_RESOLVED': {
           actions: 'refreshGitStatus'
+        },
+        'commit.MOVE_OPERATION': {
+          actions: 'moveOperation'
+        },
+        'commit.OPERATION_MOVED': {
+          actions: 'handleOperationMoved'
         },
         'commit.CLEAR_DIFF': {
           actions: 'clearGitDiff'

@@ -15,11 +15,16 @@
  *
  * What it cannot see is a worker blocked in synchronous code, whose timers never run: vitest's own RPC window
  * reports that one, and the step that started the pool bounds it by its process tree.
+ *
+ * A file also fails when it ends with a process it started running on out of the worker's reach
+ * (`leftover-processes.ts`): the run would otherwise be green and the process would outlive it.
  */
+import { isMainThread } from 'node:worker_threads';
 import { aroundAll, aroundEach, expect, inject } from 'vitest';
 import { IDLE_MS, cpuAdded, describeRefusal, readTreeCpuMs, watchWork, type Watch, type WatchClock, type WorkReading } from '@apackdev/sdk/progress';
 // What a config provides and a test declares to it are typed with the package's vitest entry, which packs import
 import type { ProgressMeta } from './vitest.ts';
+import { describeLeftovers, leftoversIn, listProcesses, type Leftover } from './leftover-processes.ts';
 
 /**
  * The real clock and timers, taken as this module loads. A test that fakes timers (`vi.useFakeTimers`) replaces
@@ -27,6 +32,7 @@ import type { ProgressMeta } from './vitest.ts';
  * the test stalled — a test that fakes timers and then hangs would run for ever.
  */
 const realClock: WatchClock = { now: Date.now.bind(Date), every: setInterval, stopEvery: clearInterval };
+const realTimeout = setTimeout;
 
 const provided = <K extends 'apack.idleMs' | 'apack.testCpuMs'>(key: K): number | undefined => {
   try { return inject(key); } catch { return undefined; }
@@ -133,8 +139,42 @@ function watch(kind: 'hooks' | 'test', what: string, budgetMs: number | undefine
 
 const fileName = (): string => expect.getState().testPath ?? 'this file';
 
+/**
+ * How long a process still running when its file ends is given to go, in looks further and further apart. A spec
+ * that signals its child and does not wait for the exit, and a helper that ends itself when its fixture is deleted,
+ * are both on their way out, and a busy machine only makes that slower. Nothing reports a process that is not this
+ * one's child exiting, so the listing is read again; a file that leaves nothing takes one listing and waits for none.
+ */
+const LEFTOVER_LOOKS_MS = [50, 100, 200, 400, 800, 1_600, 1_850];
+
+/** The processes a worker has already failed a file for, so a later file in the same worker is not failed for them */
+const reported: Set<number> = ((globalThis as { apackReportedLeftovers?: Set<number> }).apackReportedLeftovers ??= new Set());
+
+/** What this worker's file left running, once it has had the time to go */
+async function leftBehind(since: number): Promise<Leftover[]> {
+  // A pool of threads runs every file in one process, whose descendants are every file's
+  if (!isMainThread) return [];
+  for (const waitMs of [0, ...LEFTOVER_LOOKS_MS]) {
+    if (waitMs > 0) await new Promise((resolve) => { realTimeout(resolve, waitMs); });
+    const rows = await listProcesses();
+    if (!rows) return [];
+    const left = leftoversIn(rows, process.pid, since).filter(({ process: each }) => !reported.has(each.pid));
+    if (left.length === 0) return [];
+    if (waitMs === LEFTOVER_LOOKS_MS.at(-1)) return left;
+  }
+  return [];
+}
+
 aroundAll(async (runSuite) => {
-  await watch('hooks', `${fileName()} (its beforeAll, afterAll and the time between tests)`, undefined, async () => { await runSuite(); });
+  const file = fileName();
+  const startedAt = realClock.now();
+  await watch('hooks', `${file} (its beforeAll, afterAll and the time between tests)`, undefined, async () => {
+    await runSuite();
+    const left = await leftBehind(startedAt);
+    if (left.length === 0) return;
+    for (const { process: each } of left) reported.add(each.pid);
+    throw new Error(await describeLeftovers(file, left));
+  });
 });
 
 aroundEach(async (runTest, context) => {

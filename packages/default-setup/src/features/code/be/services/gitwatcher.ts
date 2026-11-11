@@ -19,6 +19,14 @@ const GIT_DIR_FILES = new Set(['index', 'HEAD', 'ORIG_HEAD', 'FETCH_HEAD', 'MERG
 const GIT_DIR_IGNORED = ['objects', 'logs', 'hooks', 'lfs', 'modules', 'worktrees']
 /** The most ignored directories handed to the watcher; the rest only cost a status that finds nothing changed */
 const MAX_IGNORED_DIRECTORIES = 2000
+/** The most paths one report names: past these it says only that the checkout may have changed */
+const MAX_NAMED_PATHS = 32
+
+/**
+ * What a report says changed: paths in the working tree, relative to the working directory with `/` between
+ * their parts, when nothing else changed and they are few enough to name; `null` when anything may have.
+ */
+export type ChangedPaths = string[] | null
 
 type WatchKey = 'tree' | 'git' | 'common'
 
@@ -46,7 +54,9 @@ export class GitWatcherService {
   private establishing: Promise<void> = Promise.resolve()
   /** Moves on every start and stop, which is what tells work begun before one that it is no longer wanted */
   private generation = 0
-  private onChangeCallback?: () => void
+  private onChangeCallback?: (paths: ChangedPaths) => void
+  /** The working-tree paths that changed since the last report, or `null` once something else may have too */
+  private changedPaths: Set<string> | null = new Set()
   private quietTimeout?: NodeJS.Timeout
   /** When the first change not yet reported arrived */
   private pendingSince?: number
@@ -61,7 +71,7 @@ export class GitWatcherService {
     this.gitRepository = repo
   }
 
-  setChangeCallback(callback: () => void) {
+  setChangeCallback(callback: (paths: ChangedPaths) => void) {
     this.onChangeCallback = callback
   }
 
@@ -143,7 +153,7 @@ export class GitWatcherService {
     const failedBefore = this.gitRepository?.hasWatchFailed ?? false
     this.gitRepository?.setWatched(watched, failed)
     // That its watches failed, or came back, is something a window shows, so it is a change to report
-    if (failed !== failedBefore) this.scheduleChange()
+    if (failed !== failedBefore) this.scheduleChange(null)
   }
 
   private handleChanges(key: WatchKey, watch: WantedWatch, error: Error | null, changes: WatchedChange[]) {
@@ -158,16 +168,25 @@ export class GitWatcherService {
         this.gitRepository?.setWatched(false, true)
         void held.subscription.unsubscribe().catch(() => {})
       }
-      this.scheduleChange()
+      this.scheduleChange(null)
       return
     }
-    // A change the platform could not place may be any of them
-    if (changes.some(change => change === null || watch.relevant(change))) this.scheduleChange()
+    const relevant = changes.filter(change => change === null || watch.relevant(change))
+    if (relevant.length === 0) return
+    // A file in the working tree changes its own standing. The index, HEAD and a ref each change every file's,
+    // and a change the platform could not place may be any of them
+    const named = key === 'tree' && relevant.every(change => change !== null)
+    this.scheduleChange(named ? relevant.map(change => change!.split(path.sep).join('/')) : null)
   }
 
   /** One report for every change that arrives close together */
-  private scheduleChange() {
+  private scheduleChange(paths: ChangedPaths) {
     if (!this.onChangeCallback) return
+    if (paths === null || this.changedPaths === null) this.changedPaths = null
+    else {
+      for (const changed of paths) this.changedPaths.add(changed)
+      if (this.changedPaths.size > MAX_NAMED_PATHS) this.changedPaths = null
+    }
     this.pendingSince ??= Date.now()
 
     // While one of this app's git writes runs, wait for it to finish instead of racing it on a timer
@@ -193,7 +212,9 @@ export class GitWatcherService {
     this.quietTimeout = setTimeout(() => {
       this.quietTimeout = undefined
       this.pendingSince = undefined
-      this.onChangeCallback?.()
+      const paths = this.changedPaths
+      this.changedPaths = new Set()
+      this.onChangeCallback?.(paths && [...paths])
     }, Math.max(0, Math.min(quietMs, MAX_WAIT_MS - waited)))
   }
 
@@ -205,6 +226,7 @@ export class GitWatcherService {
     this.quietTimeout = undefined
     this.pendingSince = undefined
     this.awaitingWrite = false
+    this.changedPaths = new Set()
 
     this.establishing = this.establishing.catch(() => {}).then(async () => {
       const held = [...this.subscriptions.values()]

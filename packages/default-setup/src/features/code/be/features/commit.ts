@@ -6,7 +6,7 @@ import { defineHandlers } from '@apackdev/sdk/framework';
 import { assign, setup, enqueueActions, fromCallback, type AnyActorRef } from 'xstate'
 
 import { GitRepository, NOTHING_CHANGED, StashConflictError, changedAnything } from '../services/git.ts'
-import type { RepositoryChange } from '../types.ts'
+import type { OperationMove, RepositoryChange } from '../types.ts'
 import { requireGitRepository } from '../utils/git-helpers.ts'
 
 const surfaceId = 'code' as const
@@ -48,6 +48,7 @@ export type Event =
   | { type: 'commit.RESOLVE_CONFLICT'; path: string; strategy: 'ours' | 'theirs' }
   | { type: 'commit.MARK_RESOLVED'; path: string }
   | { type: 'commit.RESOLVE_ALL_CONFLICTS'; strategy: 'ours' | 'theirs' }
+  | { type: 'commit.MOVE_OPERATION'; move: OperationMove }
   | { type: 'commit.LOG_LIST' }
   | { type: 'commit.REVERT_COMMIT'; hash: string }
   | { type: 'commit.RESET_TO_COMMIT'; hash: string }
@@ -62,8 +63,10 @@ export type Event =
  * what the fetch brought is then announced like any other change. Nobody waits on the network for an answer.
  */
 function fetchInBackground(repository: GitRepository, commit: { send(event: Event): void }): void {
+  const suspended = repository.isAutoFetchSuspended
   void repository.fetchIfDue().then((fetched) => {
-    if (fetched) commit.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' })
+    // What a fetch brought is one thing to announce. That fetching has stopped, or started again, is another
+    if (fetched || repository.isAutoFetchSuspended !== suspended) commit.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' })
   })
 }
 
@@ -87,8 +90,9 @@ export const commitSystem = setup({
      * nobody for the log or a pull request again. Checking is also what keeps the file event that write causes
      * from being announced a second time. One check runs at a time, and whatever arrives during it is one more.
      */
-    statusRefresh: fromCallback<{ type: 'REFRESH' | 'CHECK'; repository: GitRepository | null }>(({ receive, sendBack }) => {
-      type Request = { repository: GitRepository | null; written: boolean };
+    statusRefresh: fromCallback<{ type: 'REFRESH'; repository: GitRepository | null } | { type: 'CHECK'; repository: GitRepository | null; everything: boolean }>(({ receive, sendBack }) => {
+      /** `everything` when there is no watcher's event to go by, and the whole repository is read again */
+      type Request = { repository: GitRepository | null; written: boolean; everything: boolean };
       let timer: ReturnType<typeof setTimeout> | undefined;
       let stopped = false;
       let checking = false;
@@ -98,7 +102,7 @@ export const commitSystem = setup({
         try {
           for (let current: Request | undefined = first; current && !stopped; current = next) {
             next = undefined;
-            const found = current.repository ? await current.repository.refreshSnapshot() : NOTHING_CHANGED;
+            const found = current.repository ? await current.repository.refreshSnapshot(current.everything ? 'everything' : 'noted') : NOTHING_CHANGED;
             const changed = current.written ? { ...found, status: true } : found;
             if (!stopped && changedAnything(changed)) sendBack({ type: 'commit.ANNOUNCE_REPOSITORY_CHANGED', changed });
           }
@@ -106,16 +110,16 @@ export const commitSystem = setup({
           checking = false;
         }
       };
-      const request = (repository: GitRepository | null, written: boolean) => {
-        if (checking) next = { repository, written: written || next?.written === true };
-        else void run({ repository, written });
+      const request = (repository: GitRepository | null, written: boolean, everything: boolean) => {
+        if (checking) next = { repository, written: written || next?.written === true, everything: everything || next?.everything === true };
+        else void run({ repository, written, everything });
       };
       receive((event) => {
-        if (event.type === 'CHECK') return request(event.repository, false);
+        if (event.type === 'CHECK') return request(event.repository, false, event.everything);
         clearTimeout(timer);
         timer = setTimeout(() => {
           timer = undefined;
-          request(event.repository, true);
+          request(event.repository, true, true);
         }, 150);
       });
       return () => { stopped = true; clearTimeout(timer); };
@@ -130,9 +134,12 @@ export const commitSystem = setup({
     checkRepository: enqueueActions(({ context, event, enqueue, self }) => {
       const repository = context.gitRepository
       if (!repository) return
-      enqueue.sendTo('statusRefresh', { type: 'CHECK', repository });
+      const { reconcile = false } = event as { reconcile?: boolean }
+      // A reconcile has no event to go by. Any other hint is a watcher's, or follows a fetch, and each has
+      // noted what it changed with the repository already
+      enqueue.sendTo('statusRefresh', { type: 'CHECK', repository, everything: reconcile });
       // Someone has come back to the repository, which is when what the remote has is worth knowing
-      if ((event as { reconcile?: boolean }).reconcile) enqueue(() => { fetchInBackground(repository, self) });
+      if (reconcile) enqueue(() => { fetchInBackground(repository, self) });
     }),
 
     getGitStatus: ({ context, reply, self }) => {
@@ -151,7 +158,7 @@ export const commitSystem = setup({
         return repository.readSnapshot().then((snapshot) => {
           answer(reply, {
             type: 'commit.STATUS_RECEIVED',
-            data: { files: snapshot.files, truncated: snapshot.truncated, branch: snapshot.branch, hasUpstream: snapshot.hasUpstream, commitsAhead: snapshot.ahead, commitsBehind: snapshot.behind, watching: !repository.hasWatchFailed }
+            data: { files: snapshot.files, truncated: snapshot.truncated, branch: snapshot.branch, hasUpstream: snapshot.hasUpstream, commitsAhead: snapshot.ahead, commitsBehind: snapshot.behind, watching: !repository.hasWatchFailed, operation: snapshot.operation, fetchSuspended: repository.isAutoFetchSuspended }
           })
           // The window has its answer: what the remote has is fetched behind it, and announced if it differs
           fetchInBackground(repository, self)
@@ -220,6 +227,10 @@ export const commitSystem = setup({
               modifiedContent = await getContent(ev.path!, 'working')
             }
           }
+        } else if (ev.path) {
+          // The file has no change on this side any more: both sides are what it holds now, so the diff is
+          // empty, and an edit made in it is an edit to the file as it is
+          originalContent = modifiedContent = await getContent(ev.path, ev.staged ? 'index' : 'working').catch(() => '')
         }
 
         answer(reply, {
@@ -395,6 +406,23 @@ export const commitSystem = setup({
           type: 'commit.ERROR_RECEIVED',
           data: { message: error.message }
         })
+      })
+    },
+
+    /**
+     * Carries on with what git is in the middle of, leaves out the commit a rebase stopped at, or gives it up.
+     * Whether it could or not, the repository may be somewhere else afterwards, so it is checked either way
+     */
+    moveOperation: ({ event, context, self, reply }) => {
+      const { move } = event as { type: 'commit.MOVE_OPERATION'; move: OperationMove }
+      if (!requireGitRepository(context, reply)) return
+
+      context.gitRepository.moveOperation(move).then(() => {
+        answer(reply, { type: 'commit.OPERATION_MOVED', data: { move } })
+      }, (error: Error) => {
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: { message: error.message } })
+      }).finally(() => {
+        self.send({ type: 'commit.GIT_STATUS_CHANGED' })
       })
     },
 
@@ -858,6 +886,9 @@ export const commitSystem = setup({
         },
         'commit.RESOLVE_ALL_CONFLICTS': {
           actions: 'resolveAllConflicts'
+        },
+        'commit.MOVE_OPERATION': {
+          actions: 'moveOperation'
         },
         'commit.COMMIT': {
           actions: 'commit'

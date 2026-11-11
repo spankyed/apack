@@ -483,6 +483,12 @@ type BrowserTabId = `${EARS.Entity.BrowserTab}-${string}`;
 
 type BrowserTabPersistedId = `BrowserTab-${string}`;
 
+/**
+ * How the two sides being brought together disagree about a file. `us` is the side the checkout was on and
+ * `them` the one coming in, as git names them.
+ */
+declare const CONFLICT_KINDS: readonly ["both-modified", "both-added", "both-deleted", "added-by-us", "added-by-them", "deleted-by-us", "deleted-by-them"];
+
 /** `control_request` subtype=`can_use_tool` — the permission prompt. */
 interface CanUseToolRequest {
     subtype: 'can_use_tool';
@@ -495,6 +501,12 @@ interface CanUseToolRequest {
     title?: string;
     description?: string;
 }
+
+/**
+ * What a report says changed: paths in the working tree, relative to the working directory with `/` between
+ * their parts, when nothing else changed and they are few enough to name; `null` when anything may have.
+ */
+type ChangedPaths = string[] | null;
 
 /**
  * A thread as the chat shows it, without its messages: the \`chat\` view. The page of messages it lists is ids in
@@ -828,6 +840,8 @@ interface ConfigValueWriteParams {
     filePath?: string | null;
     expectedVersion?: string | null;
 }
+
+type ConflictKind = (typeof CONFLICT_KINDS)[number];
 
 interface ConsumerHandlers {
     /** Called for streaming notifications (item/started, item/completed, item/agentMessage/delta, turn/completed, etc.) */
@@ -1613,6 +1627,14 @@ interface GitDiff {
     isImage?: boolean;
 }
 
+/** Where a checkout's git state lives, and where the working directory is in it */
+interface GitDirectories {
+    gitDir: string;
+    commonDir: string;
+    /** The working directory's path from the top of the checkout, ending in `/`: empty when it is the top */
+    prefix: string;
+}
+
 declare class GitRepository {
     private workingDirectory;
     private cache;
@@ -1627,9 +1649,12 @@ declare class GitRepository {
     private _fetchThrottleMs;
     /** The last snapshot read, with what it and the refs looked like, to tell a change from none */
     private snapshot?;
-    /** Whether nothing has said the repository may have changed since `snapshot` was read */
-    private snapshotFresh;
-    /** Counts every notice that the repository may have changed, so a read that one overtook is not kept as fresh */
+    /**
+     * What may have changed since `snapshot` was read: paths in the working tree that a watcher named, relative to
+     * the working directory, or anything. Nothing in it is what lets the snapshot be reused.
+     */
+    private unread;
+    /** Counts every notice that the repository may have changed, so a read begun before one is not taken for one after it */
     private snapshotVersion;
     private snapshotRead?;
     /** What the last read looked like, `unreadable` when it failed */
@@ -1642,6 +1667,8 @@ declare class GitRepository {
     private fetching;
     /** Whether fetching by itself has stopped because the remote wanted credentials nobody was there to give */
     private autoFetchSuspended;
+    /** How long a command waits for another git to let go of a lock it needs */
+    private lockPatienceMs;
     /** Whether a watcher reports this checkout's changes; without one a snapshot is read every time it is asked for */
     private watched;
     private watchFailed;
@@ -1668,8 +1695,13 @@ declare class GitRepository {
     private getCached;
     private setCached;
     clearCache(): void;
-    /** The repository may have changed: the next snapshot asked for is read from git */
+    /** The repository may have changed in any way: the next snapshot asked for is read from git, all of it */
     markSnapshotStale(): void;
+    /**
+     * Notes what a watcher saw change, which is what the next snapshot asked for reads: these paths in the working
+     * tree, relative to the working directory with `/` between their parts, or everything when it could not name them
+     */
+    noteChanged(paths: string[] | null): void;
     /**
      * Says whether a watcher reports this checkout's changes, which is what lets a snapshot be reused. `failed`
      * says its watches could not be opened or have stopped, as opposed to not being open yet or not being wanted.
@@ -1678,9 +1710,20 @@ declare class GitRepository {
     get isWatched(): boolean;
     /** Whether this checkout's watches failed: a panel showing it then changes only when it is asked again */
     get hasWatchFailed(): boolean;
+    /**
+     * Whether fetching by itself has stopped because the remote asked for credentials. What the checkout knows of
+     * its remote is then as old as the last fetch that worked, which a panel showing it says
+     */
+    get isAutoFetchSuspended(): boolean;
     private isDirectory;
     invalidateCache(paths?: string[]): void;
+    /**
+     * Runs a git command in its lane. One that another git's lock refuses is run again once that lock is let go
+     * of: a git in a terminal, or an agent's, holds the index for moments, and the user who staged a file in
+     * those moments meant it. The lane waits with it, since what is queued behind needs the same lock.
+     */
     private executeGitCommand;
+    private runGitOnce;
     getCurrentBranch(): Promise<string>;
     getStatus(): Promise<GitStatusFile[]>;
     /**
@@ -1693,10 +1736,40 @@ declare class GitRepository {
     /**
      * Reads the repository from git and says which parts of it differ from the last check. A watcher's event is a
      * hint that something changed; this is what decides whether anything did, and what.
+     *
+     * A check a watcher's event started reads `noted`: what the watcher said changed (`noteChanged`), and nothing
+     * when it said nothing since the last read. Any other check has no event to go by, and reads everything.
      */
-    refreshSnapshot(): Promise<RepositoryChange>;
+    refreshSnapshot(reading?: 'everything' | 'noted'): Promise<RepositoryChange>;
     private currentSnapshot;
+    private readSnapshotOnce;
     private loadSnapshot;
+    /**
+     * The held snapshot with these paths of the working tree read again, or nothing when a status of them alone
+     * would not say all that changed, and the whole status is to be read.
+     *
+     * Git is asked about the paths and about nothing else. That is the whole truth of a change to the working tree
+     * as long as no file's standing depends on another's, and the checks here are the ways it can.
+     */
+    private loadNoted;
+    /**
+     * The path git answers for when asked about this one: the outermost directory over it that is a repository of
+     * its own, or the path itself. Git does not look inside another repository — a nested one and a submodule are
+     * each one entry, at the directory — so asked about a file inside one it answers nothing.
+     */
+    private outermostRepositoryOver;
+    /**
+     * A snapshot of a status as it was read, beside the parts of the repository a status does not hold. `held` is
+     * the snapshot this one was made from by reading some paths again: how its other files looked is kept, not read.
+     */
+    private snapshotOver;
+    /**
+     * What git is in the middle of here, read from what it keeps in its directory while it is: no git is run. A
+     * rebase is looked for first, since the commit it stops at can leave what a cherry-pick leaves too.
+     */
+    private readOperation;
+    /** How a file in the working tree looks without reading it, which tells a later edit from none */
+    private fileSignature;
     /**
      * What says the worktrees changed, read from the files git keeps for them and without running it: which there
      * are, where each is, what each has checked out, and which are locked.
@@ -1739,15 +1812,17 @@ declare class GitRepository {
     revertFiles(filePaths: string[]): Promise<void>;
     fileExistsInHead(filePath: string): Promise<boolean>;
     resolveConflict(filePath: string, strategy: 'ours' | 'theirs'): Promise<void>;
+    /**
+     * Carries on with what git is in the middle of, leaves out the commit a rebase stopped at, or gives it up.
+     * Carrying on takes the message git proposes, there being no editor for it to open (`gitEnvironment`).
+     */
+    moveOperation(move: OperationMove): Promise<void>;
     commit(message: string): Promise<void>;
     /**
      * Where this checkout's git state lives: its own git directory (index, HEAD) and the common one holding refs.
      * The two differ in a linked worktree. Null when the working directory is in no repository.
      */
-    resolveGitDirectories(): Promise<{
-        gitDir: string;
-        commonDir: string;
-    } | null>;
+    resolveGitDirectories(): Promise<GitDirectories | null>;
     /** Whether the working directory is in a repository. Rejects when there is no git to ask. */
     isGitRepository(): Promise<boolean>;
     hasUncommittedChanges(): Promise<boolean>;
@@ -1817,6 +1892,8 @@ interface GitStatusFile {
     staged: boolean;
     originalPath?: string;
     score?: number;
+    /** For an unmerged file: what each side did to it, which is what there is to settle */
+    conflict?: ConflictKind;
 }
 
 /**
@@ -1836,6 +1913,8 @@ declare class GitWatcherService {
     /** Moves on every start and stop, which is what tells work begun before one that it is no longer wanted */
     private generation;
     private onChangeCallback?;
+    /** The working-tree paths that changed since the last report, or `null` once something else may have too */
+    private changedPaths;
     private quietTimeout?;
     /** When the first change not yet reported arrived */
     private pendingSince?;
@@ -1845,7 +1924,7 @@ declare class GitWatcherService {
     private gitRepository?;
     constructor(workingDirectory: string, subscribe?: SubscribeToDirectory);
     setGitRepository(repo: GitRepository): void;
-    setChangeCallback(callback: () => void): void;
+    setChangeCallback(callback: (paths: ChangedPaths) => void): void;
     startWatching(signal: AbortSignal): Promise<void>;
     /**
      * Brings the watches in line with the checkout as it is now, for a caller that knows it may have moved.
@@ -2053,6 +2132,11 @@ type IncomingCommitEvents = {
 } | {
     type: 'commit.RESOLVE_ALL_CONFLICTS';
     strategy: 'ours' | 'theirs';
+}
+/** Carry on with what git is in the middle of, leave out the commit a rebase stopped at, or give it up */
+ | {
+    type: 'commit.MOVE_OPERATION';
+    move: OperationMove;
 } | {
     type: 'commit.LOG_LIST';
 } | {
@@ -3108,6 +3192,12 @@ type NotesInboxEvent = {
     noteId: string;
 };
 
+/** What git can be in the middle of in a checkout, each of which ends when it is carried on with or given up */
+declare const OPERATION_KINDS: readonly ["merge", "rebase", "cherry-pick", "revert"];
+
+/** What can be done with what git is in the middle of: carry on once its conflicts are settled, leave out the commit a rebase stopped at, or give it up */
+declare const OPERATION_MOVES: readonly ["continue", "skip", "abort"];
+
 interface OpenFile {
     path: string;
     content: string;
@@ -3129,6 +3219,10 @@ interface OpenFile {
     groupId?: string;
     isPreview?: boolean;
 }
+
+type OperationKind = (typeof OPERATION_KINDS)[number];
+
+type OperationMove = (typeof OPERATION_MOVES)[number];
 
 /** What the actions system answers with: an import's or an export's outcome. The actions themselves are its views. */
 type OutgoingActionEvents = {
@@ -3263,7 +3357,9 @@ type OutgoingCommitEvents =
 /**
  * What the commit panel shows of the checkout. `watching` is false when its file watches could not be opened or
  * have failed: the panel then changes only when it is asked again, and says so. `truncated` says there are more
- * changed files than `files` lists
+ * changed files than `files` lists. `operation` is what git is in the middle of there, when it is in the middle
+ * of anything. `fetchSuspended` says fetching by itself has stopped, the remote having asked for a sign-in
+ * nobody was there to give: how far the branch is from its upstream is then as of the last fetch that worked
  */
 {
     type: 'commit.STATUS_RECEIVED';
@@ -3275,6 +3371,15 @@ type OutgoingCommitEvents =
         commitsAhead: number;
         commitsBehind: number;
         watching: boolean;
+        operation?: RepositoryOperation;
+        fetchSuspended?: boolean;
+    };
+}
+/** What git was in the middle of was moved on as asked. Where that leaves the repository is in its status */
+ | {
+    type: 'commit.OPERATION_MOVED';
+    data: {
+        move: OperationMove;
     };
 } | {
     type: 'commit.DIFF_RECEIVED';
@@ -4738,10 +4843,11 @@ interface QuickOpenResult$1 {
 
 /**
  * The parts of a repository a window shows, each read and refreshed on its own: its changed files with the branch
- * and its distance from upstream; which branch is checked out, the commit it is on and every branch and tag,
- * which a log and a pull request are read from; its stashes; its worktrees.
+ * and its distance from upstream; the two sides of each changed file, which a diff of it shows; which branch is
+ * checked out, the commit it is on and every branch and tag, which a log and a pull request are read from; its
+ * stashes; its worktrees.
  */
-declare const REPOSITORY_PARTS: readonly ["status", "history", "stashes", "worktrees"];
+declare const REPOSITORY_PARTS: readonly ["status", "diffs", "history", "stashes", "worktrees"];
 
 type RateLimitLine = z.infer<typeof RateLimitLineSchema>;
 
@@ -4763,7 +4869,22 @@ type RecentThreadsSortOrder = 'created' | 'message' | 'visited';
 type Repositories = OwnRepositories;
 
 /** Which parts of a repository differ from when it was last checked */
-type RepositoryChange = Record<RepositoryPart, boolean>;
+type RepositoryChange = Record<RepositoryPart, boolean> & {
+    /** The changed files whose diff differs, when they are few enough to name: without it, any of them may */
+    files?: string[];
+};
+
+/** What git is in the middle of in a checkout */
+interface RepositoryOperation {
+    kind: OperationKind;
+    /** What is merged in, rebased onto, picked or reverted, as a person would name it: a branch where one is known, else a short commit */
+    subject: string;
+    /** The branch a rebase is replaying, where it is replaying one */
+    branch?: string;
+    /** A rebase's place among the commits it replays, counted from one */
+    step?: number;
+    steps?: number;
+}
 
 type RepositoryPart = (typeof REPOSITORY_PARTS)[number];
 
@@ -4778,6 +4899,8 @@ interface RepositorySnapshot {
     hasUpstream: boolean;
     ahead: number;
     behind: number;
+    /** What git is in the middle of here, when it is in the middle of anything */
+    operation?: RepositoryOperation;
 }
 
 type ResultLine = z.infer<typeof ResultLineSchema>;

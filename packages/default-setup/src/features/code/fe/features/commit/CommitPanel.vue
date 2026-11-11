@@ -45,6 +45,16 @@
       @cancel="showDiscardAllMergeDialog = false"
     />
 
+    <!-- Give up what git is in the middle of -->
+    <RevertDialog
+      :show="showAbortOperationDialog"
+      :file="null"
+      :customTitle="`Abort the ${operation?.kind ?? 'operation'}`"
+      :customMessage="`Give up the ${operation?.kind ?? 'operation'} in progress? The repository goes back to where it was before it began, and what was settled in it so far is lost.`"
+      @confirm="confirmAbortOperation"
+      @cancel="showAbortOperationDialog = false"
+    />
+
     <!-- Show friendly empty state if no git repository -->
     <EmptyState
       v-if="isNoGitRepoError"
@@ -182,12 +192,56 @@
       Live updates are off for this repository. It is read again when you return to this window or press Refresh.
     </div>
 
+    <!-- Fetching by itself has stopped, so what is shown of the remote is as old as the last fetch that worked -->
+    <div
+      v-if="isFetchSuspended && !gitError"
+      class="px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
+    >
+      Fetching by itself is off: the remote asked for a sign-in and nobody was there to give one. It starts again after a push or a pull that works, or when the fetch settings change.
+    </div>
+
     <!-- The repository has more changed files than are listed -->
     <div
       v-if="isStatusTruncated && !gitError"
       class="px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
     >
       Too many changes to list them all. Showing the first {{ gitStatus.length.toLocaleString() }}.
+    </div>
+
+    <!-- Git is in the middle of something, which ends when it is carried on with or given up -->
+    <div v-if="operation" class="px-3 py-2 border-b border-neutral-800 bg-orange-900/10" data-testid="repository-operation">
+      <div class="text-xs font-medium text-orange-400">{{ operationTitle }}</div>
+      <div class="mt-0.5 text-xs text-neutral-400">{{ operationHint }}</div>
+      <div class="flex items-center gap-2 mt-2">
+        <button
+          @click="moveOperation('continue')"
+          :disabled="mergeConflictFiles.length > 0 || isMovingOperation"
+          :class="[
+            'px-2 py-1 rounded text-xs font-medium transition-colors',
+            mergeConflictFiles.length > 0 || isMovingOperation
+              ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
+              : 'bg-green-600 hover:bg-green-700 text-white'
+          ]"
+        >
+          Continue
+        </button>
+        <button
+          v-if="operation.kind === 'rebase'"
+          @click="moveOperation('skip')"
+          :disabled="isMovingOperation"
+          class="px-2 py-1 text-xs font-medium transition-colors rounded bg-neutral-800 text-neutral-300 hover:bg-neutral-700 disabled:text-neutral-500 disabled:cursor-not-allowed"
+          title="Leave out the commit the rebase stopped at"
+        >
+          Skip commit
+        </button>
+        <button
+          @click="showAbortOperationDialog = true"
+          :disabled="isMovingOperation"
+          class="px-2 py-1 text-xs font-medium transition-colors rounded bg-neutral-800 text-red-400 hover:bg-neutral-700 disabled:text-neutral-500 disabled:cursor-not-allowed"
+        >
+          Abort
+        </button>
+      </div>
     </div>
 
     <!-- Git Error (only show non-directory errors) -->
@@ -371,7 +425,7 @@
                 <GitMerge :size="12" class="text-orange-400 flex-shrink-0" />
               </template>
               <template #statusBadge>
-                <span class="flex-shrink-0 w-4 text-xs font-medium text-orange-500">C</span>
+                <span class="flex-shrink-0 w-4 text-xs font-medium text-orange-500" :title="conflictLabel(file)">C</span>
               </template>
               <template #actions>
                 <button @click.stop="acceptOurs(file)" class="p-0.5 hover:bg-neutral-700 rounded" title="Accept Ours">
@@ -650,6 +704,7 @@ import { useSelector } from '@xstate/vue'
 import { useSurface, useShell } from '@apackdev/sdk/fe'
 import type { CodeState } from '#features/code/fe/state.ts'
 import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts'
+import type { ConflictKind, OperationMove } from '#features/code/be/types.ts'
 import { GitBranch, GitBranchPlus, GitCommit, GitFork, GitMerge, RefreshCw, Plus, Minus, RotateCcw, ChevronDown, ChevronRight, CheckCircle, Check, X, Sparkles, Loader2, ArrowDownToLine, ArrowUpFromLine, MoreVertical, Trash2, Copy, Search, FolderSync, Lock } from 'lucide-vue-next'
 import { ContextMenuItem } from 'reka-ui'
 import { MENU_ITEM_CLASS, MENU_ITEM_DANGER_CLASS } from '#features/code/fe/features/explorer/constants.ts'
@@ -690,6 +745,9 @@ const isCheckingOutBranch = useSelector(commitActor, (state) => state.context.is
 const hasUpstream = useSelector(commitActor, (state) => state.context.hasUpstream)
 const isStatusTruncated = useSelector(commitActor, (state) => state.context.isStatusTruncated)
 const isWatchingRepository = useSelector(commitActor, (state) => state.context.isWatchingRepository)
+const operation = useSelector(commitActor, (state) => state.context.operation)
+const isFetchSuspended = useSelector(commitActor, (state) => state.context.isFetchSuspended)
+const isMovingOperation = useSelector(commitActor, (state) => state.context.isMovingOperation)
 const commitsAhead = useSelector(commitActor, (state) => state.context.commitsAhead)
 const commitsBehind = useSelector(commitActor, (state) => state.context.commitsBehind)
 const isPushing = useSelector(commitActor, (state) => state.context.isPushing)
@@ -704,6 +762,7 @@ const baseDirectory = useSelector(codeActor, (state) => state.context.baseDirect
 // Local state
 const showDiscardAllDialog = ref(false)
 const showDiscardAllMergeDialog = ref(false)
+const showAbortOperationDialog = ref(false)
 const showBranchDropdown = ref(false)
 const highlightedBranchIndex = ref(-1)
 const isCreatingBranch = ref(false)
@@ -938,6 +997,43 @@ const markResolved = (file: GitStatusFile) => {
 
 const markAllResolved = () => {
   commitActor?.send({ type: 'commit.STAGE_FILES', paths: mergeConflictFiles.value.map((f: GitStatusFile) => f.path) })
+}
+
+/** How a file is in conflict, in words: "here" is the side the checkout was on, as git's "ours" is */
+const CONFLICT_LABELS: Record<ConflictKind, string> = {
+  'both-modified': 'Changed on both sides',
+  'both-added': 'Added on both sides',
+  'both-deleted': 'Deleted on both sides',
+  'added-by-us': 'Added here',
+  'added-by-them': 'Added by the incoming side',
+  'deleted-by-us': 'Deleted here, changed by the incoming side',
+  'deleted-by-them': 'Changed here, deleted by the incoming side',
+}
+const conflictLabel = (file: GitStatusFile) => file.conflict ? `In conflict: ${CONFLICT_LABELS[file.conflict]}` : 'In conflict'
+
+/** What git is in the middle of, as the panel names it */
+const operationTitle = computed(() => {
+  const current = operation.value
+  if (!current) return ''
+  switch (current.kind) {
+    case 'merge': return `Merging ${current.subject}${gitBranch.value && gitBranch.value !== 'HEAD' ? ` into ${gitBranch.value}` : ''}`
+    case 'rebase': return `Rebasing ${current.branch ?? 'commits'} onto ${current.subject}${current.step ? ` (commit ${current.step} of ${current.steps})` : ''}`
+    case 'cherry-pick': return `Cherry-picking ${current.subject}`
+    case 'revert': return `Reverting ${current.subject}`
+  }
+  return ''
+})
+const operationHint = computed(() => {
+  const count = mergeConflictFiles.value.length
+  if (count === 0) return 'Nothing is in conflict. Continue to finish it.'
+  return `${count} ${count === 1 ? 'file is' : 'files are'} in conflict. Settle ${count === 1 ? 'it' : 'them'}, then continue.`
+})
+const moveOperation = (move: OperationMove) => {
+  commitActor?.send({ type: 'commit.MOVE_OPERATION', move })
+}
+const confirmAbortOperation = () => {
+  showAbortOperationDialog.value = false
+  moveOperation('abort')
 }
 
 const confirmDiscardAllMerge = () => {

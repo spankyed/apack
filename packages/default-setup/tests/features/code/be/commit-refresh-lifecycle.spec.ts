@@ -49,7 +49,7 @@ it('announces a write as the repository changing, and lists nothing itself', asy
   expect(listed).not.toHaveBeenCalled();
 });
 
-const NOTHING = { status: false, history: false, stashes: false, worktrees: false };
+const NOTHING = { status: false, diffs: false, history: false, stashes: false, worktrees: false };
 /** The parts each announcement so far said changed */
 const announcedParts = (announced: ReturnType<typeof vi.fn>) =>
   announced.mock.calls.map(([{ event }]) => (event as { changed: typeof NOTHING }).changed);
@@ -78,6 +78,53 @@ it('announces a hint as the parts git says changed, one check at a time, and not
   await vi.advanceTimersByTimeAsync(0);
   expect(announcedParts(announced)).toEqual([{ ...NOTHING, status: true }]);
   expect(refreshSnapshot).toHaveBeenCalledTimes(2);
+});
+
+// A watcher notes with the repository what it saw change, so the check its event starts reads that. A reconcile
+// is asked for because something may have changed that no event reported, and a write is made by this app with
+// no event at all: each of those reads everything
+it('reads what was noted for a hint, and everything for a reconcile and for a write', async () => {
+  const refreshSnapshot = vi.fn(async (_reading?: string) => NOTHING);
+  const announced = vi.fn();
+  const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: announced } }),
+    { input: { baseDirectory: '/repo', gitRepository: { refreshSnapshot, fetchIfDue: async () => false } as never } }).start();
+  actors.push(actor);
+  const read = async (event: Parameters<typeof actor.send>[0]) => {
+    refreshSnapshot.mockClear();
+    actor.send(event);
+    await vi.advanceTimersByTimeAsync(150);
+    return refreshSnapshot.mock.calls.map(([reading]) => reading);
+  };
+
+  expect(await read({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' })).toEqual(['noted']);
+  expect(await read({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED', reconcile: true })).toEqual(['everything']);
+  expect(await read({ type: 'commit.GIT_STATUS_CHANGED' })).toEqual(['everything']);
+});
+
+// A fetch made behind a reconcile announces what it brought by having the repository checked again. One that
+// stopped fetching, the remote having asked for a sign-in, has it checked too: that is something a window shows
+it('has the repository checked again when a fetch behind a reconcile stops fetching, and not when nothing came of it', async () => {
+  const refreshSnapshot = vi.fn(async (_reading?: string) => NOTHING);
+  const announced = vi.fn();
+  let stops = false;
+  const gitRepository = {
+    refreshSnapshot,
+    isAutoFetchSuspended: false,
+    async fetchIfDue() { if (stops) this.isAutoFetchSuspended = true; return false; },
+  };
+  const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: announced } }),
+    { input: { baseDirectory: '/repo', gitRepository: gitRepository as never } }).start();
+  actors.push(actor);
+  const checks = async () => {
+    refreshSnapshot.mockClear();
+    actor.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED', reconcile: true });
+    await vi.advanceTimersByTimeAsync(150);
+    return refreshSnapshot.mock.calls.map(([reading]) => reading);
+  };
+
+  expect(await checks(), 'the fetch brought nothing and goes on').toEqual(['everything']);
+  stops = true;
+  expect(await checks(), 'the fetch stopped fetching').toEqual(['everything', 'noted']);
 });
 
 // The window that made a write is waiting to show it, so its status is news whatever git says of the rest. The

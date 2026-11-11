@@ -4,7 +4,8 @@
 import type { ActionEntity, PromptEntity } from '@apackdev/sdk';
 import type {
   CodeConnectedData, CodeSystemError, CommitLogEntry, CodeSystemContext, DirectoryContent, FileContent, FileInfo,
-  GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitStatusFile, QuickOpenResult, RepositoryChange, SearchProgress,
+  GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitStatusFile, OperationMove, QuickOpenResult, RepositoryChange,
+  RepositoryOperation, SearchProgress,
   SearchResult, StashEntry, TerminalInfo, WorktreeEntry,
 } from './types.ts';
 import type { ActiveTokenInfo } from './services/gh-cli.ts';
@@ -83,6 +84,8 @@ export type IncomingCommitEvents =
   | { type: 'commit.RESOLVE_CONFLICT'; path: string; strategy: 'ours' | 'theirs' }
   | { type: 'commit.MARK_RESOLVED'; path: string }
   | { type: 'commit.RESOLVE_ALL_CONFLICTS'; strategy: 'ours' | 'theirs' }
+  /** Carry on with what git is in the middle of, leave out the commit a rebase stopped at, or give it up */
+  | { type: 'commit.MOVE_OPERATION'; move: OperationMove }
   | { type: 'commit.LOG_LIST' }
   | { type: 'commit.REVERT_COMMIT'; hash: string }
   | { type: 'commit.RESET_TO_COMMIT'; hash: string }
@@ -91,9 +94,13 @@ export type OutgoingCommitEvents =
   /**
    * What the commit panel shows of the checkout. `watching` is false when its file watches could not be opened or
    * have failed: the panel then changes only when it is asked again, and says so. `truncated` says there are more
-   * changed files than `files` lists
+   * changed files than `files` lists. `operation` is what git is in the middle of there, when it is in the middle
+   * of anything. `fetchSuspended` says fetching by itself has stopped, the remote having asked for a sign-in
+   * nobody was there to give: how far the branch is from its upstream is then as of the last fetch that worked
    */
-  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
+  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
+  /** What git was in the middle of was moved on as asked. Where that leaves the repository is in its status */
+  | { type: 'commit.OPERATION_MOVED'; data: { move: OperationMove } }
   | { type: 'commit.DIFF_RECEIVED'; data: GitDiff }
   | { type: 'commit.FILES_STAGED'; data: { paths: string[] } }
   | { type: 'commit.FILES_UNSTAGED'; data: { paths: string[] } }
