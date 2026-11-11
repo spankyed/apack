@@ -135,16 +135,21 @@ export const pullRequestSystem = setup({
           const getContent = isImage
             ? (p: string, b: string) => repo.getFileContentFromBranchAsDataUrl(p, b)
             : (p: string, b: string) => repo.getFileContentFromBranch(p, b)
-          const [diff, originalContent, modifiedContent] = await Promise.all([
-            repo.getFileDiffBetweenBranches(ev.path, ev.baseBranch, target),
+          // A side that is missing reads as empty, which is right for a file one branch does not have and wrong
+          // for a branch that is not there: that is an error, said as one
+          if (!await repo.commitsExist(ev.baseBranch, target)) {
+            throw new Error(`Failed to get file diff between branches: ${ev.baseBranch} or ${target} is not a commit here`)
+          }
+          // The editor draws the change from the file's two sides, so those are what is read: no patch is made
+          const [originalContent, modifiedContent] = await Promise.all([
             getContent(ev.path, ev.baseBranch),
             getContent(ev.path, target),
           ])
-          return { diff, originalContent, modifiedContent, isImage }
+          return { originalContent, modifiedContent, isImage }
         },
-        ({ diff, originalContent, modifiedContent, isImage }) => emit({
+        ({ originalContent, modifiedContent, isImage }) => emit({
           type: 'pr.FILE_DIFF_RECEIVED',
-          data: { path: ev.path, diff, staged: false, originalContent, modifiedContent, isImage, baseBranch: ev.baseBranch, headBranch: ev.headBranch }
+          data: { path: ev.path, staged: false, originalContent, modifiedContent, isImage, baseBranch: ev.baseBranch, headBranch: ev.headBranch }
         })
       )
     },
@@ -462,7 +467,7 @@ export const pullRequestSystem = setup({
       )
     },
 
-    // News for every window: the repository changed under them
+    // News for every window: the repository's commits or branches moved under them
     handleGitStatusChanged: () => {
       broadcastToSurface(surfaceId, { type: 'pr.GIT_STATUS_REFRESHED', data: { timestamp: new Date() } })
     },

@@ -4,7 +4,7 @@
 import type { ActionEntity, PromptEntity } from '@apackdev/sdk';
 import type {
   CodeConnectedData, CodeSystemError, CommitLogEntry, CodeSystemContext, DirectoryContent, FileContent, FileInfo,
-  GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitStatusFile, QuickOpenResult, SearchProgress,
+  GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitStatusFile, QuickOpenResult, RepositoryChange, SearchProgress,
   SearchResult, StashEntry, TerminalInfo, WorktreeEntry,
 } from './types.ts';
 import type { ActiveTokenInfo } from './services/gh-cli.ts';
@@ -108,8 +108,12 @@ export type OutgoingCommitEvents =
   | { type: 'commit.BRANCH_PULLED'; data: { branchName: string } }
   | { type: 'commit.GENERATING_MESSAGE' }
   | { type: 'commit.MESSAGE_GENERATED'; data: { message: string } }
-  /** The repository changed, on disk or by a write from any window: news for every window, each of which asks again for what it shows of it */
-  | { type: 'commit.REPOSITORY_CHANGED' }
+  /**
+   * The repository changed, on disk or by a write from any window: news for every window. It says which parts
+   * changed and carries none of them, so a window asks again for what it shows of those and for nothing else —
+   * an edited file is no reason to read the log again
+   */
+  | { type: 'commit.REPOSITORY_CHANGED'; changed: RepositoryChange }
   | { type: 'commit.STASH_LIST_RECEIVED'; data: { stashes: StashEntry[] } }
   | { type: 'commit.STASH_SUCCESS'; data: { message: string } }
   | { type: 'commit.WORKTREE_LIST_RECEIVED'; data: { worktrees: WorktreeEntry[] } }
@@ -155,6 +159,7 @@ export type OutgoingPullRequestEvents =
   | { type: 'pr.FILE_DIFF_RECEIVED'; data: GitDiff & { baseBranch: string; headBranch?: string } }
   | { type: 'pr.ERROR'; message: string }
   | { type: 'pr.STATUS_CHANGED'; data: { timestamp: Date } }
+  /** The repository's commits or branches moved, which is all of it a pull request is read from: news for every window */
   | { type: 'pr.GIT_STATUS_REFRESHED'; data: { timestamp: Date } }
   | { type: 'pr.OPEN_PRS_RECEIVED'; data: { prs: GhPullRequest[] } }
   /**

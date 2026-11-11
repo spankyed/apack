@@ -163,7 +163,7 @@ describe('a file diff, whose answer opens a tab', () => {
     selectPR(actor, pr(1, 'main', 'feature-a'));
     ask(actor, 'a.ts');
 
-    actor.send({ type: 'pr.FILE_DIFF_RECEIVED', data: { path: 'a.ts', diff: 'd', staged: false, baseBranch: 'main', headBranch: 'feature-a' } });
+    actor.send({ type: 'pr.FILE_DIFF_RECEIVED', data: { path: 'a.ts', staged: false, baseBranch: 'main', headBranch: 'feature-a' } });
 
     expect(addTabToParent).toHaveBeenCalledTimes(1);
     expect(addTabToParent.mock.calls[0]?.[1]).toMatchObject({ path: 'pr-diff:a.ts', isPrDiff: true });
@@ -178,7 +178,7 @@ describe('a file diff, whose answer opens a tab', () => {
     const actor = started();
     selectPR(actor, pr(1, 'main', 'feature-a'));
     ask(actor, 'a.ts');
-    const answer = { path: 'a.ts', diff: 'd', staged: false, baseBranch: 'main', headBranch: 'feature-a' };
+    const answer = { path: 'a.ts', staged: false, baseBranch: 'main', headBranch: 'feature-a' };
 
     actor.send({ type: 'pr.FILE_DIFF_RECEIVED', data: answer });
     actor.send({ type: 'pr.FILE_DIFF_RECEIVED', data: answer });
@@ -192,7 +192,7 @@ describe('a file diff, whose answer opens a tab', () => {
     selectPR(actor, pr(1, 'main', 'feature-a'));
     ask(actor, 'a.ts');
 
-    actor.send({ type: 'pr.FILE_DIFF_RECEIVED', data: { path: 'a.ts', diff: 'd', staged: false, baseBranch: 'main', headBranch: 'someone-elses' } });
+    actor.send({ type: 'pr.FILE_DIFF_RECEIVED', data: { path: 'a.ts', staged: false, baseBranch: 'main', headBranch: 'someone-elses' } });
 
     expect(addTabToParent).not.toHaveBeenCalled();
   });
@@ -208,7 +208,7 @@ describe('a file diff, whose answer opens a tab', () => {
     ask(actor, 'a.ts');
     actor.send({ type: 'pr.SELECT_FILE', file: file('b.ts') });
 
-    actor.send({ type: 'pr.FILE_DIFF_RECEIVED', data: { path: 'a.ts', diff: 'd', staged: false, baseBranch: 'main', headBranch: 'feature-a' } });
+    actor.send({ type: 'pr.FILE_DIFF_RECEIVED', data: { path: 'a.ts', staged: false, baseBranch: 'main', headBranch: 'feature-a' } });
 
     expect(addTabToParent).not.toHaveBeenCalled();
   });

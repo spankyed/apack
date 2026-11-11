@@ -1604,9 +1604,9 @@ interface GhReviewThread {
     comments: GhReviewComment[];
 }
 
+/** The two sides of one file's change, which an editor shows side by side */
 interface GitDiff {
     path: string;
-    diff: string;
     staged: boolean;
     originalContent?: string;
     modifiedContent?: string;
@@ -1636,6 +1636,12 @@ declare class GitRepository {
     private lastIdentity?;
     /** What the last `refreshSnapshot` saw, which is what its next one is compared with */
     private checkedIdentity?;
+    /** Where this checkout's git state lives, as git last said: it is asked again whenever the watches are checked */
+    private gitDirectories?;
+    /** Whether a fetch is running, so a second is not started beside it */
+    private fetching;
+    /** Whether fetching by itself has stopped because the remote wanted credentials nobody was there to give */
+    private autoFetchSuspended;
     /** Whether a watcher reports this checkout's changes; without one a snapshot is read every time it is asked for */
     private watched;
     private watchFailed;
@@ -1681,18 +1687,21 @@ declare class GitRepository {
      * The checkout's changed files, branch and distance from its upstream.
      *
      * A snapshot is reused until something says the repository may have changed: a watcher's event, a write made
-     * here, a reconcile. With `fetch`, the remote is fetched first when the fetch settings say it is due.
+     * here, a reconcile. It never waits on the remote: `fetchIfDue` is what fetches.
      */
-    readSnapshot(options?: {
-        fetch?: boolean;
-    }): Promise<RepositorySnapshot>;
+    readSnapshot(): Promise<RepositorySnapshot>;
     /**
-     * Reads the snapshot from git and says whether it or any ref differs from the last one read. A watcher's
-     * event is a hint that something changed; this is what decides whether anything did.
+     * Reads the repository from git and says which parts of it differ from the last check. A watcher's event is a
+     * hint that something changed; this is what decides whether anything did, and what.
      */
-    refreshSnapshot(): Promise<boolean>;
+    refreshSnapshot(): Promise<RepositoryChange>;
     private currentSnapshot;
     private loadSnapshot;
+    /**
+     * What says the worktrees changed, read from the files git keeps for them and without running it: which there
+     * are, where each is, what each has checked out, and which are locked.
+     */
+    private readWorktreesIdentity;
     /**
      * The directories git ignores under the working directory, relative to it: what a watcher of the working
      * tree need not report from.
@@ -1757,7 +1766,8 @@ declare class GitRepository {
     private getCommitDistance;
     private getNearbyMergedBranches;
     getBranchDiff(baseBranch: string, targetBranch?: string): Promise<GitStatusFile[]>;
-    getFileDiffBetweenBranches(filePath: string, baseBranch: string, targetBranch?: string): Promise<string>;
+    /** Whether each of these names a commit in this repository */
+    commitsExist(...refs: string[]): Promise<boolean>;
     getFileContentFromBranch(filePath: string, branch: string): Promise<string>;
     fetchRemoteBranch(branch: string): Promise<void>;
     deleteRemoteBranch(branch: string): Promise<void>;
@@ -1769,17 +1779,17 @@ declare class GitRepository {
     checkoutBranch(branchName: string): Promise<void>;
     isCurrentBranchPublished(): Promise<boolean>;
     private _forceFetchNext;
-    /**
-     * Force a fetch on the next getCommitsAheadBehind() call,
-     * regardless of the auto-fetch toggle or throttle timer.
-     */
+    /** Fetches the next time one is considered, whatever the fetch settings and the time since the last say */
     forceFetchOnce(): void;
-    /** Fetches when a fetch was forced or the fetch settings say one is due, and says whether it did */
-    private fetchIfStale;
-    getCommitsAheadBehind(): Promise<{
-        ahead: number;
-        behind: number;
-    }>;
+    /**
+     * Fetches from the remote when one is due — it was forced, or the fetch settings ask for it and their interval
+     * has passed — and says whether it did. **Never part of a read**: whoever asked for the repository has its
+     * answer already, and what the fetch brings is found by the check that follows it.
+     *
+     * It stops fetching by itself once the remote wants credentials nobody is there to give, since every later try
+     * would fail the same way; changing the fetch settings, or a push or pull that works, starts it again.
+     */
+    fetchIfDue(): Promise<boolean>;
     pushBranch(): Promise<void>;
     pullBranch(): Promise<void>;
     stashPush(message?: string, stagedOnly?: boolean): Promise<string>;
@@ -3306,9 +3316,14 @@ type OutgoingCommitEvents =
         message: string;
     };
 }
-/** The repository changed, on disk or by a write from any window: news for every window, each of which asks again for what it shows of it */
+/**
+ * The repository changed, on disk or by a write from any window: news for every window. It says which parts
+ * changed and carries none of them, so a window asks again for what it shows of those and for nothing else —
+ * an edited file is no reason to read the log again
+ */
  | {
     type: 'commit.REPOSITORY_CHANGED';
+    changed: RepositoryChange;
 } | {
     type: 'commit.STASH_LIST_RECEIVED';
     data: {
@@ -3759,7 +3774,9 @@ type OutgoingPullRequestEvents = {
     data: {
         timestamp: Date;
     };
-} | {
+}
+/** The repository's commits or branches moved, which is all of it a pull request is read from: news for every window */
+ | {
     type: 'pr.GIT_STATUS_REFRESHED';
     data: {
         timestamp: Date;
@@ -4629,6 +4646,13 @@ interface QuickOpenResult$1 {
     score?: number;
 }
 
+/**
+ * The parts of a repository a window shows, each read and refreshed on its own: its changed files with the branch
+ * and its distance from upstream; which branch is checked out, the commit it is on and every branch and tag,
+ * which a log and a pull request are read from; its stashes; its worktrees.
+ */
+declare const REPOSITORY_PARTS: readonly ["status", "history", "stashes", "worktrees"];
+
 type RateLimitLine = z.infer<typeof RateLimitLineSchema>;
 
 /** Rate limit warnings. */
@@ -4647,6 +4671,11 @@ type RecentThreadsSortOrder = 'created' | 'message' | 'visited';
 
 /** Every repository this pack can use: its own and its dependencies' */
 type Repositories = OwnRepositories;
+
+/** Which parts of a repository differ from when it was last checked */
+type RepositoryChange = Record<RepositoryPart, boolean>;
+
+type RepositoryPart = (typeof REPOSITORY_PARTS)[number];
 
 /** What the commit panel shows of a checkout, read in one pass */
 interface RepositorySnapshot {

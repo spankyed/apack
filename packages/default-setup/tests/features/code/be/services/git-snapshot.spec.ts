@@ -103,18 +103,72 @@ it('counts the commits a branch is ahead of and behind the remote branch it trac
   expect(await new GitRepository(clone).readSnapshot()).toMatchObject({ hasUpstream: true, ahead: 1, behind: 1 });
 });
 
-it('says the repository changed when its status or a ref did, and not otherwise', async () => {
+const NOTHING = { status: false, history: false, stashes: false, worktrees: false };
+
+it('says which part of the repository changed, and nothing when none did', async () => {
   const { root, repo } = await repository();
-  await repo.readSnapshot();
-  expect(await repo.refreshSnapshot(), 'nothing happened').toBe(false);
+  await repo.refreshSnapshot();
+  expect(await repo.refreshSnapshot(), 'nothing happened').toEqual(NOTHING);
 
   write(root, 'kept.txt', 'edited\n');
-  expect(await repo.refreshSnapshot(), 'a file was edited').toBe(true);
-  expect(await repo.refreshSnapshot()).toBe(false);
+  expect(await repo.refreshSnapshot(), 'a file was edited').toEqual({ ...NOTHING, status: true });
+
+  // A worktree is listed with the commit it is on, so the worktrees change with the history
+  await git(root, 'commit', '--quiet', '-am', 'second');
+  expect(await repo.refreshSnapshot(), 'the edit was committed').toEqual({ status: true, history: true, stashes: false, worktrees: true });
 
   // The status is the same; only a ref moved
   await git(root, 'branch', 'side');
-  expect(await repo.refreshSnapshot(), 'a branch was made').toBe(true);
+  expect(await repo.refreshSnapshot(), 'a branch was made').toEqual({ ...NOTHING, history: true, worktrees: true });
+  expect(await repo.refreshSnapshot()).toEqual(NOTHING);
+});
+
+it('says every part changed the first time it is asked, having nothing to compare with', async () => {
+  const { repo } = await repository();
+  expect(await repo.refreshSnapshot()).toEqual({ status: true, history: true, stashes: true, worktrees: true });
+});
+
+// Dropping a stash below the newest leaves `refs/stash` where it was: only the count git reports moves, which
+// `git status --show-stash` has printed since git 2.35
+it('says the stashes changed when one is made and when one below the newest is dropped, and nothing else', async () => {
+  const { root, repo } = await repository();
+  await repo.refreshSnapshot();
+
+  for (const message of ['one', 'two']) {
+    write(root, 'kept.txt', `an edit to stash as ${message}\n`);
+    await git(root, 'stash', 'push', '--quiet', '-m', message);
+    expect(await repo.refreshSnapshot(), `stash ${message} was made`).toEqual({ ...NOTHING, stashes: true });
+  }
+  await git(root, 'stash', 'drop', '--quiet', 'stash@{1}');
+  expect(await repo.refreshSnapshot(), 'the older stash was dropped').toEqual({ ...NOTHING, stashes: true });
+  expect(await repo.refreshSnapshot()).toEqual(NOTHING);
+});
+
+it('says the worktrees changed when one is added on no new branch, when it is moved and when it is locked', async () => {
+  const { root, repo } = await repository();
+  await repo.refreshSnapshot();
+  const worktree = `${root}-detached`;
+  const moved = `${root}-moved`;
+  directories.push(worktree, moved);
+
+  await git(root, 'worktree', 'add', '--quiet', '--detach', worktree);
+  expect(await repo.refreshSnapshot(), 'a worktree was added').toEqual({ ...NOTHING, worktrees: true });
+  await git(root, 'worktree', 'move', worktree, moved);
+  expect(await repo.refreshSnapshot(), 'it was moved').toEqual({ ...NOTHING, worktrees: true });
+  await git(root, 'worktree', 'lock', moved);
+  expect(await repo.refreshSnapshot(), 'it was locked').toEqual({ ...NOTHING, worktrees: true });
+  expect(await repo.refreshSnapshot()).toEqual(NOTHING);
+});
+
+// A pull request belongs to the branch that is checked out, so which branch that is counts as history even
+// when the commit under it is the same one
+it('says the history changed when another branch on the same commit is checked out', async () => {
+  const { root, repo } = await repository();
+  await git(root, 'branch', 'side');
+  await repo.refreshSnapshot();
+
+  await git(root, 'checkout', '--quiet', 'side');
+  expect(await repo.refreshSnapshot()).toEqual({ status: true, history: true, stashes: false, worktrees: true });
 });
 
 // A window's own ask can read a change before the check that its file event started has run. The check is
@@ -125,8 +179,8 @@ it('says the repository changed when a read saw the change before the check did'
 
   write(root, 'kept.txt', 'edited\n');
   expect((await repo.readSnapshot()).files.map(file => file.path)).toEqual(['kept.txt']);
-  expect(await repo.refreshSnapshot(), 'no check has seen the edit yet').toBe(true);
-  expect(await repo.refreshSnapshot()).toBe(false);
+  expect(await repo.refreshSnapshot(), 'no check has seen the edit yet').toEqual({ ...NOTHING, status: true });
+  expect(await repo.refreshSnapshot()).toEqual(NOTHING);
 });
 
 it('reuses a snapshot only while a watcher reports the checkout, and reads again once told it may have changed', async () => {
@@ -158,18 +212,18 @@ it('lists no untracked file for a user who has told git to show none', async () 
   expect((await repo.readSnapshot()).files.map(file => file.path).sort()).toEqual(['fresh.txt', 'fresh/deep.txt', 'kept.txt']);
 });
 
-// That its watches failed is something the panel shows, so a check reports that changing; a checkout that
-// starts being watched for the first time is as it was
-it('says the repository changed when its watches fail and when they come back', async () => {
+// That its watches failed is something the panel shows with the status, so a check reports the status changing;
+// a checkout that starts being watched for the first time is as it was
+it('says the status changed when its watches fail and when they come back', async () => {
   const { repo } = await repository();
   await repo.refreshSnapshot();
   repo.setWatched(true);
-  expect(await repo.refreshSnapshot(), 'watched for the first time').toBe(false);
+  expect(await repo.refreshSnapshot(), 'watched for the first time').toEqual(NOTHING);
   repo.setWatched(false, true);
-  expect(await repo.refreshSnapshot(), 'its watches failed').toBe(true);
-  expect(await repo.refreshSnapshot()).toBe(false);
+  expect(await repo.refreshSnapshot(), 'its watches failed').toEqual({ ...NOTHING, status: true });
+  expect(await repo.refreshSnapshot()).toEqual(NOTHING);
   repo.setWatched(true);
-  expect(await repo.refreshSnapshot(), 'and came back').toBe(true);
+  expect(await repo.refreshSnapshot(), 'and came back').toEqual({ ...NOTHING, status: true });
 });
 
 it('lists the directories git ignores, and no ignored file', async () => {
