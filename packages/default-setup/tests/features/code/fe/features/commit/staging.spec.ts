@@ -43,7 +43,6 @@ const all = (...steps: Step[]): Step => async (root) => { for (const step of ste
 
 const staging: Record<string, { change: Step; paths: string[] }> = {
   'a file git does not track': { change: edit('new.txt'), paths: ['new.txt'] },
-  'a file in a new directory': { change: edit('fresh/deep/a.txt'), paths: ['fresh/deep/a.txt'] },
   'an edited file': { change: edit('kept.txt'), paths: ['kept.txt'] },
   'a deleted file': { change: root => remove(root, 'gone.txt'), paths: ['gone.txt'] },
   'a file staged and edited again': { change: all(edit('kept.txt'), add('kept.txt'), edit('kept.txt', 'three\n')), paths: ['kept.txt'] },
@@ -104,6 +103,9 @@ it.each([
   ['staging a file put back where a deletion is staged', all(root => remove(root, 'gone.txt'), add('gone.txt'), edit('gone.txt')), withStaged, 'gone.txt'],
   ['unstaging a deletion whose file was put back', all(root => remove(root, 'gone.txt'), add('gone.txt'), edit('gone.txt')), withUnstaged, 'gone.txt'],
   ['staging an edit to a renamed file', all(root => git(root, 'mv', 'old name.txt', 'new name.txt'), edit('new name.txt', `${LONG}and more\n`)), withStaged, 'new name.txt'],
+  // A folder git tracks nothing in is one row for whatever it holds
+  ['staging a folder git tracks nothing in', edit('fresh/deep/a.txt'), withStaged, 'fresh/'],
+  ['staging a file inside a folder git tracks nothing in', edit('fresh/deep/a.txt'), withStaged, 'fresh/deep/a.txt'],
 ] as const)('leaves the list as it is when %s', async (_name, change, guess, file) => {
   const before = await listed(await repository(change));
 

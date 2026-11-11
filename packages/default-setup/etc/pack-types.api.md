@@ -810,6 +810,17 @@ interface CollectionDTO {
     symlinkPath?: string;
 }
 
+/** What the commit panel is told of a command that failed */
+interface CommitFailure {
+    message: string;
+    /** Why git failed, where it said */
+    code?: GitErrorCode;
+    /** The command the failure was of, where the panel can run it again */
+    during?: 'pull' | 'push';
+    /** What can be done about a sign-in the remote asked for */
+    signIn?: SignInHelp;
+}
+
 interface CommitLogEntry {
     hash: string;
     shortHash: string;
@@ -1151,6 +1162,18 @@ interface DatabaseSchemaInfo {
 }
 
 type DatabaseSettings = SettingsOf<'database'>;
+
+/** One piece of a file's change, as git cuts it */
+interface DiffHunk {
+    /** Where it begins on the left side of the diff, and how many lines of that side it covers */
+    oldStart: number;
+    oldLines: number;
+    /** The same on the right side */
+    newStart: number;
+    newLines: number;
+    /** The patch that applies this piece alone */
+    patch: string;
+}
 
 interface DirectoryContent {
     path: string;
@@ -1544,6 +1567,9 @@ interface FolderItem {
     isBroken?: boolean;
 }
 
+/** Why a git command failed, where what it printed says */
+declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository"];
+
 interface GhPRComment {
     id: string;
     body: string;
@@ -1618,13 +1644,14 @@ interface GhReviewThread {
     comments: GhReviewComment[];
 }
 
-/** The two sides of one file's change, which an editor shows side by side */
 interface GitDiff {
     path: string;
     staged: boolean;
     originalContent?: string;
     modifiedContent?: string;
     isImage?: boolean;
+    /** The pieces of the change that can be staged, or unstaged, one at a time: none for a file that is not plainly modified */
+    hunks?: DiffHunk[];
 }
 
 /** Where a checkout's git state lives, and where the working directory is in it */
@@ -1633,6 +1660,17 @@ interface GitDirectories {
     commonDir: string;
     /** The working directory's path from the top of the checkout, ending in `/`: empty when it is the top */
     prefix: string;
+}
+
+type GitErrorCode = (typeof GIT_ERROR_CODES)[number];
+
+/** The two sides of one file's change, which an editor shows side by side */
+/** How far along git is with a command that talks to a remote or writes many files */
+interface GitProgress {
+    /** What git is doing, in its own words: `Writing objects`, `Receiving objects`, `Updating files` */
+    stage: string;
+    /** How much of that is done, from 0 to 100 */
+    percent: number;
 }
 
 declare class GitRepository {
@@ -1654,6 +1692,15 @@ declare class GitRepository {
      * the working directory, or anything. Nothing in it is what lets the snapshot be reused.
      */
     private unread;
+    /**
+     * Whether the index may hold stale facts about the files: something changed many of them, or git's own state,
+     * since a status was last let write it. Not known to be fresh until one has been
+     */
+    private indexMayBeStale;
+    /** Counts the times a folder listed as one row was read again, so that each reads as a change to it */
+    private folderReads;
+    /** Whether the next whole status is the one let write the index */
+    private refreshIndexOnRead;
     /** Counts every notice that the repository may have changed, so a read begun before one is not taken for one after it */
     private snapshotVersion;
     private snapshotRead?;
@@ -1667,12 +1714,21 @@ declare class GitRepository {
     private fetching;
     /** Whether fetching by itself has stopped because the remote wanted credentials nobody was there to give */
     private autoFetchSuspended;
+    private suspendedSignIn;
     /** How long a command waits for another git to let go of a lock it needs */
     private lockPatienceMs;
     /** Whether a watcher reports this checkout's changes; without one a snapshot is read every time it is asked for */
     private watched;
     private watchFailed;
+    /** Reads files as commits have them, through one git kept open while they are being read */
+    private readonly objects;
     constructor(workingDirectory: string);
+    /**
+     * The file a commit has under a name like `HEAD:src/a.ts`, or nothing when it has none. Through the git kept
+     * open for it, and by a process of its own when that one cannot be asked: a name it cannot carry, or a git
+     * that ended. Never for the index (`:src/a.ts`), which that git would go on answering from as it first read it.
+     */
+    private fileInCommit;
     getWorkingDir(): string;
     setFetchConfig(enabled: boolean, intervalSeconds: number): void;
     get isWriteInProgress(): boolean;
@@ -1715,6 +1771,15 @@ declare class GitRepository {
      * its remote is then as old as the last fetch that worked, which a panel showing it says
      */
     get isAutoFetchSuspended(): boolean;
+    /** What can be done about the sign-in the remote asked for when fetching by itself stopped */
+    get autoFetchSignIn(): SignInHelp | undefined;
+    /**
+     * What can be done about a sign-in the remote this branch follows asked for, from that remote's address as
+     * git would use it (its `insteadOf` rewrites applied). Nothing where there is no remote, or it is a path here.
+     */
+    signInHelp(): Promise<SignInHelp | undefined>;
+    /** Fetching by itself starts again, at once: the user signed in, which is them saying to try */
+    resumeAutoFetch(): void;
     private isDirectory;
     invalidateCache(paths?: string[]): void;
     /**
@@ -1724,6 +1789,7 @@ declare class GitRepository {
      */
     private executeGitCommand;
     private runGitOnce;
+    private runGitAnswered;
     getCurrentBranch(): Promise<string>;
     getStatus(): Promise<GitStatusFile[]>;
     /**
@@ -1739,8 +1805,17 @@ declare class GitRepository {
      *
      * A check a watcher's event started reads `noted`: what the watcher said changed (`noteChanged`), and nothing
      * when it said nothing since the last read. Any other check has no event to go by, and reads everything.
+     *
+     * **`refreshIndex` lets this one status write git's index**, which no other read here may
+     * (`GIT_OPTIONAL_LOCKS`). Git keeps in the index what it last saw of each file, and a status that may not write
+     * it re-reads every file whose time moved, on every run: after a checkout or a formatter over the tree, that is
+     * every file, every time. Writing it holds git's lock for as long as the status takes, in which a git run from
+     * a terminal would be refused, so it is the caller's to say when: at a moment nothing else is likely to be
+     * running git, and only when something says the index may be stale.
      */
-    refreshSnapshot(reading?: 'everything' | 'noted'): Promise<RepositoryChange>;
+    refreshSnapshot(reading?: 'everything' | 'noted', { refreshIndex }?: {
+        refreshIndex?: boolean | undefined;
+    }): Promise<RepositoryChange>;
     private currentSnapshot;
     private readSnapshotOnce;
     private loadSnapshot;
@@ -1752,6 +1827,16 @@ declare class GitRepository {
      * as long as no file's standing depends on another's, and the checks here are the ways it can.
      */
     private loadNoted;
+    /** The most files of an untracked folder that are listed when it is opened; past it the list is cut and says so */
+    static readonly UNTRACKED_LISTED_LIMIT = 1000;
+    /**
+     * The files in an untracked folder that git would list, were it asked to list every one: those it does not
+     * ignore. `directory` is a folder row's path, from the top of the checkout.
+     */
+    listUntracked(directory: string): Promise<{
+        files: string[];
+        truncated: boolean;
+    }>;
     /**
      * The path git answers for when asked about this one: the outermost directory over it that is a repository of
      * its own, or the path itself. Git does not look inside another repository — a nested one and a submodule are
@@ -1802,6 +1887,17 @@ declare class GitRepository {
      * Read a file from a branch as a base64 data URL if it's an image.
      */
     getFileContentFromBranchAsDataUrl(filePath: string, branch: string): Promise<string>;
+    /**
+     * The pieces of a file's change that can be staged one at a time, or unstaged when `staged`: of the working
+     * tree against the index, or of the index against the last commit. None for a file that is not plainly modified.
+     */
+    getHunks(filePath: string, staged: boolean): Promise<DiffHunk[]>;
+    /**
+     * Stages one piece of a file's change, or with `staged` takes one piece out of what is staged. The piece is
+     * one this repository cut from the file as it is now: one read before the file changed again is refused,
+     * rather than applied to lines it was not made from.
+     */
+    applyHunk(filePath: string, staged: boolean, patch: string): Promise<void>;
     /** Check if a file path is an image based on extension. */
     isImageFile(filePath: string): boolean;
     /** Execute a git command and return raw binary buffer output. */
@@ -1809,6 +1905,11 @@ declare class GitRepository {
     stageFiles(filePaths: string[]): Promise<void>;
     unstageFiles(filePaths: string[]): Promise<void>;
     revertFile(filePath: string): Promise<void>;
+    /**
+     * Discards an untracked path. A file is deleted. A folder has deleted what git lists in it, and what git
+     * ignores there is left where it is, as it is when every file of the folder is discarded one by one.
+     */
+    private discardUntracked;
     revertFiles(filePaths: string[]): Promise<void>;
     fileExistsInHead(filePath: string): Promise<boolean>;
     resolveConflict(filePath: string, strategy: 'ours' | 'theirs'): Promise<void>;
@@ -1831,6 +1932,12 @@ declare class GitRepository {
     getBaseBranch(options?: {
         preferUpstream?: boolean;
     }): Promise<string>;
+    /**
+     * The branch this one was made from, where something wrote that down: this app when it made the branch, VS Code
+     * when it did, or git itself, whose record of a branch's first move says what it was made from when it was
+     * given a name. Nothing when none did, or when what they name is gone.
+     */
+    private rememberedBaseOf;
     getPRBaseBranch(): Promise<string>;
     /**
      * Find the closest parent branch by comparing merge-base distances.
@@ -1851,7 +1958,7 @@ declare class GitRepository {
      * named as the local branch it would be checked out as; one of another remote keeps `remotes/<remote>/`.
      */
     getAllBranches(): Promise<string[]>;
-    checkoutBranch(branchName: string): Promise<void>;
+    checkoutBranch(branchName: string, onProgress?: (progress: GitProgress) => void): Promise<void>;
     isCurrentBranchPublished(): Promise<boolean>;
     private _forceFetchNext;
     /** Fetches the next time one is considered, whatever the fetch settings and the time since the last say */
@@ -1865,8 +1972,8 @@ declare class GitRepository {
      * would fail the same way; changing the fetch settings, or a push or pull that works, starts it again.
      */
     fetchIfDue(): Promise<boolean>;
-    pushBranch(): Promise<void>;
-    pullBranch(): Promise<void>;
+    pushBranch(onProgress?: (progress: GitProgress) => void): Promise<void>;
+    pullBranch(onProgress?: (progress: GitProgress) => void): Promise<void>;
     stashPush(message?: string, stagedOnly?: boolean): Promise<string>;
     stashList(): Promise<StashEntry[]>;
     stashApply(index: number): Promise<void>;
@@ -1894,6 +2001,8 @@ interface GitStatusFile {
     score?: number;
     /** For an unmerged file: what each side did to it, which is what there is to settle */
     conflict?: ConflictKind;
+    /** An untracked folder, listed as one row: git tracks nothing in it. Its path ends with `/` */
+    isDirectory?: boolean;
 }
 
 /**
@@ -2053,8 +2162,10 @@ type IncomingCodeEvents = IncomingExplorerEvents | IncomingSearchEvents | Incomi
  * finished, an agent's turn ended. The repository and the open files are read again, and what differs is
  * announced as it would have been.
  */
+/** `by` a window that gained focus; without it, a terminal command or an agent's turn has just ended */
  | {
     type: 'CHECK_FOR_EXTERNAL_CHANGES';
+    by?: 'window';
 };
 
 type IncomingCommitEvents = {
@@ -2137,6 +2248,23 @@ type IncomingCommitEvents = {
  | {
     type: 'commit.MOVE_OPERATION';
     move: OperationMove;
+}
+/** The files in an untracked folder that is listed as one row */
+ | {
+    type: 'commit.LIST_UNTRACKED';
+    path: string;
+}
+/** Stage one piece of a file's change, or with `staged` take one piece out of what is staged */
+ | {
+    type: 'commit.APPLY_HUNK';
+    path: string;
+    staged: boolean;
+    patch: string;
+}
+/** Have the GitHub CLI give git its sign-in for this host */
+ | {
+    type: 'commit.SET_UP_SIGN_IN';
+    host: string;
 } | {
     type: 'commit.LOG_LIST';
 } | {
@@ -3373,6 +3501,7 @@ type OutgoingCommitEvents =
         watching: boolean;
         operation?: RepositoryOperation;
         fetchSuspended?: boolean;
+        signIn?: SignInHelp;
     };
 }
 /** What git was in the middle of was moved on as asked. Where that leaves the repository is in its status */
@@ -3411,8 +3540,33 @@ type OutgoingCommitEvents =
     };
 } | {
     type: 'commit.ERROR_RECEIVED';
+    data: CommitFailure;
+} | {
+    type: 'commit.HUNK_APPLIED';
     data: {
-        message: string;
+        path: string;
+        staged: boolean;
+    };
+}
+/** How far along a push, a pull or a checkout is, for the window that asked for it */
+ | {
+    type: 'commit.PROGRESS';
+    data: {
+        during: 'checkout' | 'pull' | 'push';
+    } & GitProgress;
+} | {
+    type: 'commit.UNTRACKED_LISTED';
+    data: {
+        path: string;
+        files: string[];
+        truncated: boolean;
+    };
+}
+/** Git signs in to this host through the GitHub CLI now */
+ | {
+    type: 'commit.SIGN_IN_SET_UP';
+    data: {
+        host: string;
     };
 } | {
     type: 'commit.BRANCH_RETRIEVED';
@@ -5082,6 +5236,17 @@ type ShortCodeOf<E extends keyof PackShapes> = PackShapes[E] extends {
     shortCode: infer C;
 } ? C : never;
 
+/** The help there is for one remote */
+interface SignInHelp {
+    /** The host that asked, as the remote's address names it */
+    host: string;
+    /**
+     * `github-cli`: the GitHub CLI can sign git in to this host. `ssh`: the host refused the key it was offered, or
+     * was offered none. `https`: the host wants a username and password or token, and git has none stored for it.
+     */
+    kind: 'github-cli' | 'https' | 'ssh';
+}
+
 type Simplify<T> = {
     [K in keyof T]: T[K];
 } & {};
@@ -5858,6 +6023,7 @@ declare namespace __FeatureSettings_Code {
         enablePreview: boolean;
         autoFetchRemote: boolean;
         autoFetchIntervalSeconds: number;
+        logGitCommands: boolean;
         terminalScripts: {
             id: string;
             label: string;

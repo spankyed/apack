@@ -120,6 +120,23 @@
             class="w-20 px-2 py-1 text-sm bg-neutral-800 border border-neutral-600 rounded text-neutral-200 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
+        <div class="flex items-center justify-between">
+          <div class="flex-1">
+            <label for="log-git-commands" class="text-sm font-medium text-neutral-200">
+              Log git commands
+            </label>
+            <p class="mt-1 text-xs text-neutral-600">
+              Write every git command the panel runs to the app's log, with how long it took and whether it worked
+            </p>
+          </div>
+          <input
+            id="log-git-commands"
+            v-model="logGitCommands"
+            type="checkbox"
+            @change="saveLogGitCommandsSetting"
+            class="w-4 h-4 text-blue-600 bg-neutral-800 border-neutral-600 rounded focus:ring-blue-500 focus:ring-2"
+          />
+        </div>
       </div>
     </CollapsibleSection>
     </div>
@@ -580,6 +597,7 @@ const enablePreview = useSettingsDraft(() => props.settings?.enablePreview ?? tr
 const mdEditorDefault = useSettingsDraft(() => props.settings?.mdEditorDefault ?? true)
 const defaultBaseDirectory = useSettingsDraft(() => props.settings?.defaultBaseDirectory || null)
 const autoFetchRemote = useSettingsDraft(() => props.settings?.autoFetchRemote ?? false)
+const logGitCommands = useSettingsDraft(() => props.settings?.logGitCommands ?? false)
 const autoFetchIntervalSeconds = useSettingsDraft(() => props.settings?.autoFetchIntervalSeconds ?? 180)
 const showStashes = useSettingsDraft(() => props.settings?.showStashes ?? true)
 const showCommits = useSettingsDraft(() => props.settings?.showCommits ?? true)
@@ -666,6 +684,13 @@ const saveMdEditorDefaultSetting = () => {
   emit('update-setting', {
     path: ['mdEditorDefault'],
     value: mdEditorDefault.value
+  })
+}
+
+const saveLogGitCommandsSetting = () => {
+  emit('update-setting', {
+    path: ['logGitCommands'],
+    value: logGitCommands.value
   })
 }
 

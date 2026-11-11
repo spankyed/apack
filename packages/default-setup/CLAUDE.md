@@ -172,19 +172,68 @@ neither watcher needs to be exact.
   `.gitignore`, `.gitattributes` or `.gitmodules` changed; more files changed than are worth naming. A reconcile
   and a write made here have no event to go by, and read everything. `git-noted-paths.spec.ts` holds every case to
   what a whole status says, and says which of the two was asked of git.
+- **Git is not asked while nobody is looking.** Every window showing the repository asks for its status when
+  told it changed, so when none asks after an announcement, none is showing it: a hint that arrives then is
+  put off, and checked when a window next asks or gains focus (`statusRefresh`, `commit.ts`). An agent editing
+  files with the code surface closed runs no status per file event.
+- **One status may write git's index, at a moment chosen for it.** Every read runs with `GIT_OPTIONAL_LOCKS=0`,
+  so git never keeps what it learns of the files: after a checkout or a formatter over the tree, each status
+  reads every file again (about 1.75 s against 95 ms over 50,000 files, 2026-11-11, a busy machine). The check
+  that follows a terminal command or an agent's turn ending lets git write it (`refreshSnapshot`'s
+  `refreshIndex`), and only when a change too wide to name, or to git's own state, has been noted since the
+  last time. Writing holds git's lock for as long as that status takes, in which a git run from a terminal is
+  refused: never on a window's focus or ask, which may be the user on their way to that terminal.
+- **A file as a commit has it is read through one git kept open** (`git-objects.ts`, `cat-file --batch`): a
+  pull request's view reads two versions of every file it lists. Never the staged version, which that git
+  would go on answering from the index as it first read it.
+- **One piece of a file's change is staged by a patch git made** (`git-hunks.ts`): the diff a window is sent
+  carries the file's hunks, each with the patch that applies it alone, and staging one is `git apply --cached`
+  of it, `--reverse` to take it back out of what is staged. Git cut the patch and git reads it back, so line
+  endings and filters are git's on both sides. A piece is applied only if the repository still cuts that exact
+  piece from the file, and only a plainly modified file has pieces: one that is new, deleted, renamed or binary
+  is staged whole.
+- **A folder git tracks nothing in is one row**, as git lists it unless the user told it to list every file
+  (`status.showUntrackedFiles`): a folder of thousands of files nobody ignored is one line, and is not walked
+  (30,000 files: 0.01 s and 65 bytes against 0.13 s and 916 KB, 2026-11-11). Its path ends with `/`, and the
+  window lists what is in it when the row is opened (`commit.LIST_UNTRACKED`). Asked about a file inside such a
+  folder git answers with the file, where a whole status has the folder, so the path-scoped read asks about the
+  folder: the one held as a row, or for an untracked path it did not hold, that path's own folder, falling back
+  to the whole status only when that folder too is one git tracks nothing in. Staging the row stages the
+  folder, and discarding it removes what git lists there and leaves what it ignores.
+- **A push, a pull and a checkout say how far along they are** to the window that asked (`commit.PROGRESS`):
+  git is run with `--progress` and its error stream read as it arrives (`git-progress.ts`), and what it says of
+  a failure is taken with the progress left out.
+- **What a branch was made from is read where it was written down, and guessed otherwise** (`getPRBaseBranch`):
+  `branch.<name>.apack-base`, which this app writes when it makes a branch; VS Code's `vscode-merge-base`; git's
+  own record of the branch's first move, which names a branch only when it was made from one by name; then the
+  nearest branch by commits. One that names a branch that is gone is passed over.
+- **Every git command can be logged with how long it took** (the code surface's `logGitCommands` setting, the
+  `git-commands` log source): off by default, since a status runs for most file events.
 - **A watch that fails is said to the user.** `commit.STATUS_RECEIVED` carries `watching`, and the panel says live
   updates are off; the next check opens the watch again.
-- **A tree is watched by the platform's own watcher where it has one** (`directory-watch.ts`): Node's recursive
-  `fs.watch` on macOS and Windows, and `@parcel/watcher` on Linux, which has no watch over a tree. The library
-  is not loaded on the other two, where it has open memory defects and would share a process with the database
-  ([what was measured](../../docs/issues/ISSUE-dev-loop-file-watching.md#code-map)). On Linux it refuses to close a
-  watch whose directory was deleted moments before, and leaves some of that watch's inotify watches with the
-  process: every close catches the refusal, and nothing takes them back. A watcher that needs a native binding
-  earns its place by surviving its directory being deleted as its watch closes.
-- **Where the library is used it is a native binding the host resolves** (`HOST_RESOLVED_BINARIES`), and the
-  host resolves what a pack *requires*. It is imported by a module of its own (`parcel-watcher.ts`) that is
-  loaded on first use: a dynamic `import()` of the package itself is resolved by Node beside the installed pack,
-  where nothing is.
+- **A tree is watched with Node's own `fs.watch`, and no native watcher library is loaded** (`directory-watch.ts`).
+  macOS and Windows watch a tree natively, and Node's recursive watch is that watch. Linux has no watch over a
+  tree, and Node's recursive watch there holds one per file and reads the whole tree before it returns, so a
+  watch is held on each directory that is not ignored (`perDirectorySubscriber`): a directory is watched and then
+  read, one that appears is watched the same way and reported again once its watches are in place, and one that
+  goes has its watches closed with it. `@parcel/watcher` was measured on all three platforms and is used on none:
+  heap corruption on macOS and Windows, and on Linux a close it refuses and inotify watches it leaves behind
+  ([what was measured](../../docs/issues/ISSUE-dev-loop-file-watching.md#code-map)). A watcher that needs a
+  native binding earns its place by surviving its directory being deleted as its watch closes, and holding no
+  watch afterwards.
+
+**Why a git command failed is read in one place, and travels as a code.** Git says why in prose, in English
+because every git child is run in English, and `classifyGitError` (`code/be/services/git-errors.ts`) turns what
+it printed on either stream into a `GitErrorCode`. A caller that needs to know why reads `result.code`, never the
+text; a failure thrown to a handler is a `GitError` carrying it, and `commit.ERROR_RECEIVED` hands it to the
+panel. A new reason is a new entry in that module's list, most telling first, with a case in
+`git-failures.spec.ts` that fails a real git that way.
+
+- **A remote that asks for a sign-in is refused at once**, since git runs with its prompts off, so the refusal
+  comes with what can be done about it (`SignInHelp`, `sign-in.ts`), read from the remote's address: for GitHub
+  over HTTPS the panel offers to have the GitHub CLI give git its sign-in (`gh auth setup-git`, which writes the
+  user's git config and so is only ever their click), and for a key or another host it says which sign-in is
+  missing. A push or a pull refused that way is run again once the sign-in is set up.
 
 **The guards that remain, and what each got wrong first.** Every correlating guard in this pack went through this,
 and they failed in four different ways — which is the argument for reading the list rather than copying the one you
