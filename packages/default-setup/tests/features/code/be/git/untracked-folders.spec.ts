@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
-import { GitRepository } from '../../../../../src/features/code/be/services/git.ts';
+import { GitRepository, UNTRACKED_LISTED_LIMIT } from '../../../../../src/features/code/be/git/index.ts';
 
 const directories: string[] = [];
 afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true }); });
@@ -53,13 +53,13 @@ it('lists what is in the folder when it is opened, leaving out what git ignores'
 });
 
 it('cuts the list of a folder with more files than are listed, and says so', async () => {
-  const many = Array.from({ length: GitRepository.UNTRACKED_LISTED_LIMIT + 5 }, (_, index) => `vendor/f${String(index).padStart(5, '0')}.js`);
+  const many = Array.from({ length: UNTRACKED_LISTED_LIMIT + 5 }, (_, index) => `vendor/f${String(index).padStart(5, '0')}.js`);
   const { repo } = await repository(many);
 
   const listed = await repo.listUntracked('vendor/');
 
   expect(listed.truncated).toBe(true);
-  expect(listed.files).toEqual(many.slice(0, GitRepository.UNTRACKED_LISTED_LIMIT));
+  expect(listed.files).toEqual(many.slice(0, UNTRACKED_LISTED_LIMIT));
 });
 
 it('stages the whole folder from its row', async () => {

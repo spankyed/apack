@@ -1,12 +1,12 @@
 // Git can be in the middle of a merge, a rebase, a cherry-pick or a revert: stopped at a conflict, waiting to be
 // carried on with or given up. The repository says so, says how each file is in conflict, and moves git on. Every
 // case runs a real git, since what is read is what git leaves in its own directory while it is stopped.
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
-import { GitRepository } from '../../../../../src/features/code/be/services/git.ts';
+import { GitRepository } from '../../../../../src/features/code/be/git/index.ts';
 
 const directories: string[] = [];
 afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true }); });
@@ -42,7 +42,8 @@ async function disagreeing() {
   write(root, 'both.txt', 'ours\n');
   await git(root, 'add', '.');
   await git(root, 'commit', '--quiet', '-m', 'main edit');
-  return { root, repo: new GitRepository(root) };
+  const asked: string[] = [];
+  return { root, asked, repo: new GitRepository(root, { log: { command: line => asked.push(line) } }) };
 }
 /** Runs a git command that stops at a conflict, which it reports by failing */
 const stopping = (root: string, ...args: string[]) => git(root, ...args).catch(() => undefined);
@@ -145,17 +146,17 @@ it('skips nothing but a rebase\'s commit', async () => {
 // What git is in the middle of changes only when its own directory does, so a read of a few files in the working
 // tree keeps what was held of it
 it('still says a merge is in progress after a file is read by its path', async () => {
-  const { root, repo } = await disagreeing();
+  const { root, repo, asked } = await disagreeing();
   await stopping(root, 'merge', 'side');
   repo.setWatched(true);
   await repo.refreshSnapshot();
-  const asked = vi.spyOn(repo as unknown as { executeGitCommand(args: string[]): Promise<unknown> }, 'executeGitCommand');
+  asked.length = 0;
 
   write(root, 'new.txt', '');
   repo.noteChanged(['new.txt']);
   await repo.refreshSnapshot('noted');
 
-  expect(asked.mock.calls.map(([args]) => args).filter(args => args[0] === 'status').map(args => args.includes('--'))).toEqual([true]);
+  expect(asked.filter(line => line.startsWith('git status ')).map(line => line.includes(' -- '))).toEqual([true]);
   expect(await repo.readSnapshot()).toMatchObject({ operation: { kind: 'merge', subject: 'side' } });
   expect((await repo.readSnapshot()).files.map(file => file.path)).toEqual(['both.txt', 'd.txt', 'm.txt', 'new.txt']);
 });

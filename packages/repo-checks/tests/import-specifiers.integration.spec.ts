@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { CHECKS, findAppImportsInPackTests, findEmulatorImports, findNodePtyImports, findContractLeafImports, findCrossCheckoutResolution, findCrossFeatureImports, findExtensionlessOwnModules, findHostImports, findJsSpecifiers, findCompilerRunsInFastSpecs, findLiveWatchersInIntegrationSpecs, findMissingSourceConditions, findPackageScriptImports, findPackBackendConsole, findPackWindowStorage, findComponentSends, findPackOwnAliases, findRawGitListings, findRawPackHelpers, findRawTransport, findRawWatchesInBuild, findReservedEventKeys, findInternalPackageImports, findElmdbImports, findRepositoryCasts, findSchemeRegistrations, findSharedPackageLists, findUpwardImports, jsSpecifierFixes, LAYERS, UNLAYERED_BY_DESIGN, repoRootDir, findUnimportedDependencies, ELMDB_RULES, MANIFEST_FIELDS, packOwnModuleFixes, packageSourceDirs, CHECK_IDS, type CoveredRuleId, DECLARES_SOURCE_BY_DESIGN, type ImportRuleId, SHARED_LIST_CONSUMERS, sourceConditionPackages, SOURCE_CONDITION, checkedDirs, type ImportRule, packCodeDirs, packDirs, packRule, packRuleProblems, ruleRows, ruleTable, findClockedDeadlinesInSource, findSyncSpawnsInSpecs } from '../../../scripts/check-import-specifiers.ts';
+import { CHECKS, findGitEngineBoundary, findAppImportsInPackTests, findEmulatorImports, findNodePtyImports, findContractLeafImports, findCrossCheckoutResolution, findCrossFeatureImports, findExtensionlessOwnModules, findHostImports, findJsSpecifiers, findCompilerRunsInFastSpecs, findLiveWatchersInIntegrationSpecs, findMissingSourceConditions, findPackageScriptImports, findPackBackendConsole, findPackWindowStorage, findComponentSends, findPackOwnAliases, findRawGitListings, findRawPackHelpers, findRawTransport, findRawWatchesInBuild, findReservedEventKeys, findInternalPackageImports, findElmdbImports, findRepositoryCasts, findSchemeRegistrations, findSharedPackageLists, findUpwardImports, jsSpecifierFixes, LAYERS, UNLAYERED_BY_DESIGN, repoRootDir, findUnimportedDependencies, ELMDB_RULES, MANIFEST_FIELDS, packOwnModuleFixes, packageSourceDirs, CHECK_IDS, type CoveredRuleId, DECLARES_SOURCE_BY_DESIGN, type ImportRuleId, SHARED_LIST_CONSUMERS, sourceConditionPackages, SOURCE_CONDITION, checkedDirs, type ImportRule, packCodeDirs, packDirs, packRule, packRuleProblems, ruleRows, ruleTable, findClockedDeadlinesInSource, findSyncSpawnsInSpecs } from '../../../scripts/check-import-specifiers.ts';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { packFixture as buildPackFixture } from '@apackdev/sdk/testing/pack-fixture';
 import { population } from '@apackdev/sdk/testing';
@@ -689,6 +689,12 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
     }));
     write('packages/apack-host/src/services/run-history.ts', "import { Database } from 'elmdb';");
     return findElmdbImports(rules, root);
+  },
+  findGitEngineBoundary: () => {
+    write('git/index.ts', 'export const door = 1;');
+    write('git/runner.ts', 'export const run = 1;');
+    write('feature.ts', "import { run } from './git/runner.ts';");
+    return findGitEngineBoundary({ dir: 'src/git', doors: ['index.ts'], importers: ['src'], alias: { prefix: '#features/', to: 'src/' } }, root);
   },
   findNodePtyImports: () => {
     packFixture({ 'src/f.ts': "import { spawn } from 'node-pty';" });
@@ -1915,6 +1921,32 @@ describe('findCrossFeatureImports', () => {
   it('excepts nothing when the package publishes nothing', () => {
     writeAt(`${src}/fe/index.ts`, "export { memosMachine } from '../features/memos/fe/state';");
     expect(findCrossFeatureImports([src], root)).toEqual([`${src}/fe/index.ts:1: ../features/memos/fe/state`]);
+  });
+});
+
+describe('findGitEngineBoundary', () => {
+  const engine = { dir: 'src/git', doors: ['index.ts', 'staging.ts'], importers: ['src'], alias: { prefix: '#features/', to: 'src/' } };
+  beforeEach(() => {
+    write('git/index.ts', "export { run } from './runner.ts';");
+    write('git/runner.ts', "import * as fs from 'fs'; import { spawn } from 'node:child_process'; export const run = [fs, spawn];");
+    write('git/staging.ts', 'export const staged = 1;');
+  });
+
+  it('allows the engine its own modules and Node, and everything else its doors', () => {
+    write('feature.ts', "import { run } from './git/index.ts'; import { staged } from '#features/git/staging.ts';");
+    expect(findGitEngineBoundary(engine, root)).toEqual([]);
+  });
+
+  it('reports a module outside that reaches past the door, by a relative path or by the pack\'s own name', () => {
+    write('feature.ts', "import { run } from './git/runner.ts';");
+    write('window.ts', "import { run } from '#features/git/runner.ts';");
+    expect(findGitEngineBoundary(engine, root)).toEqual(['src/feature.ts:1: ./git/runner.ts', 'src/window.ts:1: #features/git/runner.ts']);
+  });
+
+  it('reports the engine importing a module outside its folder, or a package', () => {
+    write('types.ts', 'export type Shape = 1;');
+    rewrite('git/runner.ts', "import type { Shape } from '../types.ts'; import { createLogger } from '@apackdev/sdk/logger'; export const run = 1;");
+    expect(findGitEngineBoundary(engine, root)).toEqual(['src/git/runner.ts:1: ../types.ts', 'src/git/runner.ts:1: @apackdev/sdk/logger']);
   });
 });
 

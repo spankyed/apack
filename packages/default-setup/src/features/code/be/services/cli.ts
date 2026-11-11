@@ -1,6 +1,6 @@
 import { featureSettings } from '#generated/settings.ts';
 
-import { GitRepository } from '#features/code/be/services/git.ts'
+import { openGitRepository, type AppGitRepository } from '#features/code/be/services/app-git-repository.ts'
 import * as ghCli from '#features/code/be/services/gh-cli.ts'
 import type { GitStatusFile, GhPullRequest, GhPRComment, GhReviewThread } from '#features/code/be/types.ts'
 import { claudeCode } from './claude-code/index.ts'
@@ -94,7 +94,7 @@ export interface CliServiceType {
 }
 
 function createCliService(): CliServiceType {
-  let gitRepo: GitRepository | null = null
+  let gitRepo: AppGitRepository | null = null
   let lastCwd: string | null = null
 
   function resolveCwd(): string {
@@ -111,10 +111,10 @@ function createCliService(): CliServiceType {
     return cwd
   }
 
-  function getGitRepo(): GitRepository {
+  function getGitRepo(): AppGitRepository {
     const cwd = resolveCwd()
     if (!gitRepo || lastCwd !== cwd) {
-      gitRepo = new GitRepository(cwd)
+      gitRepo = openGitRepository(cwd)
       lastCwd = cwd
     }
     return gitRepo

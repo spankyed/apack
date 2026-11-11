@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import { settles } from '@apackdev/sdk/testing';
 import {
   nodeSubscriber, perDirectorySubscriber, type WatchDirectory, type WatchedChange, type WatchTree,
-} from '../../../../../src/features/code/be/services/directory-watch.ts';
+} from '../../../../../src/features/code/be/git/index.ts';
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });

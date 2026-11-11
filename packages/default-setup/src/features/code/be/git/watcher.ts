@@ -1,10 +1,8 @@
 import * as path from 'path'
 import * as fs from 'fs/promises'
-import type { GitRepository } from './git.ts'
+import type { GitRepository } from './repository.ts'
 import { subscribeToDirectory, type SubscribeToDirectory, type WatchedChange } from './directory-watch.ts'
-import { createLogger } from '@apackdev/sdk/logger'
-
-const logger = createLogger('git-watcher')
+import type { RepositoryLog } from './ties.ts'
 
 /** How long the repository must go quiet before its change is reported */
 const QUIET_MS = 200
@@ -65,7 +63,7 @@ export class GitWatcherService {
   private isWatching = false
   private gitRepository?: GitRepository
 
-  constructor(private workingDirectory: string, private subscribe: SubscribeToDirectory = subscribeToDirectory) {}
+  constructor(private workingDirectory: string, private subscribe: SubscribeToDirectory = subscribeToDirectory, private log: RepositoryLog = {}) {}
 
   setGitRepository(repo: GitRepository): void {
     this.gitRepository = repo
@@ -97,7 +95,7 @@ export class GitWatcherService {
     this.establishing = this.establishing
       .catch(() => {})
       .then(() => this.establish(() => generation !== this.generation))
-      .catch((error) => { logger.error('Could not re-establish the git watches', { error }) })
+      .catch((error) => { this.log.error?.('Could not re-establish the git watches', { error }) })
     await this.establishing
   }
 
@@ -130,7 +128,7 @@ export class GitWatcherService {
       const watch = wanted.get(key)
       if (watch && held.signature === signatureOf(watch)) continue
       this.subscriptions.delete(key)
-      await held.subscription.unsubscribe().catch((error) => { logger.error(`Could not close the ${key} watch`, { error }) })
+      await held.subscription.unsubscribe().catch((error) => { this.log.error?.(`Could not close the ${key} watch`, { error }) })
     }
     for (const [key, watch] of wanted) {
       if (this.subscriptions.has(key)) continue
@@ -143,7 +141,7 @@ export class GitWatcherService {
         this.subscriptions.set(key, { watch, signature: signatureOf(watch), subscription })
       } catch (error) {
         // Left unwatched: `check` tries again, and until then the repository is read every time it is asked for
-        logger.error(`Could not watch ${watch.directory}`, { error })
+        this.log.error?.(`Could not watch ${watch.directory}`, { error })
       }
     }
 
@@ -162,7 +160,7 @@ export class GitWatcherService {
     if (held && held.watch !== watch) return
     if (error) {
       // A watch that reported an error has stopped reporting, or may have: close it, so `check` opens a new one
-      logger.error(`The ${key} watch failed`, { error })
+      this.log.error?.(`The ${key} watch failed`, { error })
       if (held) {
         this.subscriptions.delete(key)
         this.gitRepository?.setWatched(false, true)
@@ -233,7 +231,7 @@ export class GitWatcherService {
       this.subscriptions.clear()
       this.gitRepository?.setWatched(false)
       await Promise.all(held.map(({ subscription }) => subscription.unsubscribe().catch((error) => {
-        logger.error('Could not close a git watch', { error })
+        this.log.error?.('Could not close a git watch', { error })
       })))
     })
     await this.establishing
