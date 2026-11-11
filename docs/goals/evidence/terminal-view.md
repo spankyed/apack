@@ -391,7 +391,7 @@ and are why nothing above was measured wider than 40.
 ## Vouched shell marks — 2026-11-11
 
 What is built is in [vouched-shell-marks.md](../../references/vouched-shell-marks.md). The broker is
-`apack-terminal` `1eaccaf`.
+`apack-terminal` `efe5d84`.
 
 ### The built app, driven
 
