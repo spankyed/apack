@@ -61,7 +61,7 @@ const stagedFiles = async (repo: GitRepository) => (await repo.getStatus()).filt
 it.each(['at once', 'a turn later'] as const)('stages a file once the git that held the index has let go of it, %s', async (when) => {
   const { root, repo } = await repository();
   const lock = locked(root, 'index');
-  const runs = watched(repo, ['add', '--', 'a.txt'], () => fs.rmSync(lock), when);
+  const runs = watched(repo, ['add', '--', ':(top,literal)a.txt'], () => fs.rmSync(lock), when);
 
   await repo.stageFiles(['a.txt']);
 
@@ -74,7 +74,7 @@ it('stages a file once the lock was renamed away, as git does when it has writte
   const { root, repo } = await repository();
   const lock = locked(root, 'index');
   fs.copyFileSync(path.join(root, '.git', 'index'), lock);
-  const runs = watched(repo, ['add', '--', 'a.txt'], () => fs.renameSync(lock, path.join(root, '.git', 'index')));
+  const runs = watched(repo, ['add', '--', ':(top,literal)a.txt'], () => fs.renameSync(lock, path.join(root, '.git', 'index')));
 
   await repo.stageFiles(['a.txt']);
 
@@ -96,7 +96,7 @@ it('waits the same for a lock on a ref', async () => {
 it('says what holds the repository when the lock is not let go of, and leaves the file as it was', async () => {
   const { root, repo } = await repository();
   const lock = locked(root, 'index');
-  const runs = watched(repo, ['add', '--', 'a.txt']);
+  const runs = watched(repo, ['add', '--', ':(top,literal)a.txt']);
   (repo as unknown as Internals).lockPatienceMs = 150;
 
   await expect(repo.stageFiles(['a.txt'])).rejects.toThrow(`has not let go of it: ${lock} is still there`);

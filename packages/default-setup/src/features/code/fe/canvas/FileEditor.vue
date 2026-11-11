@@ -146,7 +146,7 @@
             :unsaved="'modified' in activeFile && activeFile.modified === true"
             :busy="isApplyingHunk === true"
             @reveal="revealLine"
-            @apply="(hunk) => emit('applyHunk', activeDiff!.path, activeDiff!.staged, hunk.patch)"
+            @apply="(hunk) => emit('applyHunk', activeDiff!.path, activeDiff!.staged, hunk.id)"
           />
           <!-- The editor's own box: its line-number layer is taller than it and slides upward as it scrolls, and
                would be drawn over the bar above without something to clip it -->
@@ -198,6 +198,8 @@ const props = defineProps<{
   tabGroups: TabGroup[]
   /** Whether git was asked to stage or unstage one piece of a change and has not answered */
   isApplyingHunk?: boolean
+  /** The pieces staged or unstaged since the open diff was read, which it still lists */
+  appliedHunks?: string[]
 }>()
 
 // Emits
@@ -229,7 +231,7 @@ const emit = defineEmits<{
   'promote-preview': [path: string]
   editorMount: []
   editorFileReady: []
-  applyHunk: [path: string, staged: boolean, patch: string]
+  applyHunk: [path: string, staged: boolean, hunk: string]
 }>()
 
 // Helper to check if a file is a terminal
@@ -312,7 +314,7 @@ const activeDslParams = computed(() => {
 
 /** The diff the active tab shows, and the pieces of it that can be staged one at a time */
 const activeDiff = computed(() => (isDiffFile.value ? getDiffContent(activeFile.value) : null))
-const diffHunks = computed(() => activeDiff.value?.hunks ?? [])
+const diffHunks = computed(() => (activeDiff.value?.hunks ?? []).filter(hunk => !props.appliedHunks?.includes(hunk.id)))
 
 const revealLine = (line: number) => {
   monacoEditorRef.value?.getEditor()?.revealLineInCenter(line)

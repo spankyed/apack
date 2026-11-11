@@ -15,7 +15,7 @@ const { commitState } = await import('#features/code/fe/features/commit/state.ts
 
 beforeEach(() => sendToSystem.mockReset());
 
-const PIECE = { type: 'commit.APPLY_HUNK', path: 'a.txt', staged: false, patch: 'a patch' } as const;
+const PIECE = { type: 'commit.APPLY_HUNK', path: 'a.txt', staged: false, hunk: 'a piece' } as const;
 
 it('has git stage the piece, and is busy with it until git says it is done', () => {
   const actor = createActor(commitState).start();
@@ -25,7 +25,7 @@ it('has git stage the piece, and is busy with it until git says it is done', () 
   expect(sendToSystem).toHaveBeenCalledWith('code', PIECE);
   expect(actor.getSnapshot().context.isApplyingHunk).toBe(true);
 
-  actor.send({ type: 'commit.HUNK_APPLIED', data: { path: 'a.txt', staged: false } });
+  actor.send({ type: 'commit.HUNK_APPLIED', data: { path: 'a.txt', staged: false, hunk: 'a piece' } });
   expect(actor.getSnapshot().context.isApplyingHunk).toBe(false);
 });
 
@@ -36,4 +36,16 @@ it('is no longer busy, and says why, when git refuses the piece', () => {
   actor.send({ type: 'commit.ERROR_RECEIVED', data: { message: 'The file has changed since this change was read.' } });
 
   expect(actor.getSnapshot().context).toMatchObject({ isApplyingHunk: false, gitError: 'The file has changed since this change was read.' });
+});
+
+// The tab's diff is read again a moment after a piece is staged, and until then it still lists that piece
+it('holds a piece as done from when git stages it until a diff is read again', () => {
+  const actor = createActor(commitState).start();
+  actor.send(PIECE);
+
+  actor.send({ type: 'commit.HUNK_APPLIED', data: { path: 'a.txt', staged: false, hunk: 'a piece' } });
+  expect(actor.getSnapshot().context.appliedHunks).toEqual(['a piece']);
+
+  actor.send({ type: 'commit.DIFF_RECEIVED', data: { path: 'a.txt', staged: false, originalContent: '', modifiedContent: '', hunks: [] } });
+  expect(actor.getSnapshot().context.appliedHunks).toEqual([]);
 });

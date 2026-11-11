@@ -71,6 +71,15 @@ export interface CodeCommitContext {
   isSettingUpSignIn: boolean
   /** Whether git was asked to stage or unstage one piece of a file's change and has not answered */
   isApplyingHunk: boolean
+  /**
+   * Whether this window shows the code surface. A window that does not asks git nothing when the repository
+   * changes: the backend takes no window asking to mean nobody is looking, and puts its own checks off
+   */
+  isShown: boolean
+  /** What changed in the repository while the window did not show it, which it asks about when it next does */
+  missedChange: RepositoryChange | null
+  /** The pieces staged or unstaged since a diff was last read: still in the open tab's diff, and no longer there to act on */
+  appliedHunks: string[]
   /** How far along the push, the pull or the checkout under way is, once git has said */
   progress: ({ during: 'push' | 'pull' | 'checkout' } & GitProgress) | null
   /** The untracked folder rows that are open, each with the files it lists, by the folder's path */
@@ -94,6 +103,21 @@ export interface CodeCommitContext {
 /** The diffs of this repository's changed files that the window has open */
 const openDiffs = (self: unknown): OpenFile[] =>
   ((getParentContext(self)?.openFiles ?? []) as OpenFile[]).filter(file => file.isDiff && file.gitFile && !file.isPrDiff)
+
+/** Two pieces of news as one: every part either says changed, and the files named only if both name theirs */
+const bothChanges = (one: RepositoryChange | null, other: RepositoryChange): RepositoryChange => {
+  if (!one) return other
+  const named = (change: RepositoryChange) => !change.diffs || change.files !== undefined
+  const diffs = one.diffs || other.diffs
+  return {
+    status: one.status || other.status,
+    diffs,
+    history: one.history || other.history,
+    stashes: one.stashes || other.stashes,
+    worktrees: one.worktrees || other.worktrees,
+    ...(diffs && named(one) && named(other) ? { files: [...new Set([...(one.files ?? []), ...(other.files ?? [])])] } : {}),
+  }
+}
 
 /** An ask for a diff that is already open */
 const diffRefresh = (file: { path: string; staged: boolean }) => {
@@ -160,12 +184,12 @@ export type Event =
   | { type: 'commit.FILES_REVERTED'; paths: string[] }
   | { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }
   | { type: 'commit.SET_UP_SIGN_IN'; host: string }
-  | { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; patch: string }
-  | { type: 'commit.HUNK_APPLIED'; data: { path: string; staged: boolean } }
+  | { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; hunk: string }
+  | { type: 'commit.HUNK_APPLIED'; data: { path: string; staged: boolean; hunk: string } }
   | { type: 'commit.PROGRESS'; data: { during: 'push' | 'pull' | 'checkout' } & GitProgress }
   | { type: 'commit.TOGGLE_FOLDER'; path: string }
   | { type: 'commit.UNTRACKED_LISTED'; data: { path: string } & OpenFolder }
-  | { type: 'commit.SIGN_IN_SET_UP'; data: { host: string } }
+  | { type: 'commit.SIGN_IN_SET_UP'; data: { host: string; during?: 'push' | 'pull' } }
   | { type: 'commit.BRANCHES_RECEIVED'; data: { branches: string[] } }
   | { type: 'commit.BRANCH_CHECKOUT_SUCCESS'; data: { branchName: string } }
   | { type: 'commit.BRANCH_PUSHED'; data: { branchName: string } }
@@ -203,7 +227,9 @@ export type Event =
   | { type: 'commit.REVERT_COMMIT_SUCCESS'; data: { hash: string } }
   | { type: 'commit.RESET_COMMIT_SUCCESS'; data: { hash: string } }
   | { type: 'CODE_STARTED' }
-  | { type: 'commit.REPOSITORY_CHANGED'; changed: RepositoryChange };
+  | { type: 'commit.REPOSITORY_CHANGED'; changed: RepositoryChange }
+  | { type: 'commit.SHOWN' }
+  | { type: 'commit.HIDDEN' };
 
 export const commitState = setup({
   types: {
@@ -229,6 +255,11 @@ export const commitState = setup({
      */
     followRepositoryChange: enqueueActions(({ context, event, self, enqueue }) => {
       const { changed } = event as { type: 'commit.REPOSITORY_CHANGED'; changed: RepositoryChange }
+      // Not shown, nothing is asked: what changed is kept, and asked about when the window shows the surface
+      if (!context.isShown) {
+        enqueue.assign({ missedChange: bothChanges(context.missedChange, changed) })
+        return
+      }
       if (changed.status) enqueue('refreshGitStatus')
       if (changed.history) enqueue('requestLogList')
       if (changed.stashes) enqueue('requestStashList')
@@ -243,7 +274,8 @@ export const commitState = setup({
       }
       // A diff is read when its tab opens, so one left open is of the file as it was until it is read again
       for (const { gitFile } of openDiffs(self)) {
-        if (changed.files && !changed.files.includes(gitFile!.path)) continue
+        // A file inside a folder git lists as one row is named by that folder, which is all git says of it
+        if (changed.files && !changed.files.some(named => named === gitFile!.path || (named.endsWith('/') && gitFile!.path.startsWith(named)))) continue
         const refresh = diffRefresh(gitFile!)
         enqueue.assign(refresh.record)
         enqueue(refresh.ask)
@@ -500,21 +532,24 @@ export const commitState = setup({
 
     /** Has git stage one piece of a file's change, or take one back out of what is staged */
     applyHunk: enqueueActions(({ event, enqueue }) => {
-      const { path, staged, patch } = event as { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; patch: string }
+      const { path, staged, hunk } = event as { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; hunk: string }
       enqueue.assign({ isApplyingHunk: true, gitError: null, gitFailure: null })
-      enqueue(() => { sendToSystem('code', { type: 'commit.APPLY_HUNK', path, staged, patch }) })
+      enqueue(() => { sendToSystem('code', { type: 'commit.APPLY_HUNK', path, staged, hunk }) })
     }),
 
     /** Has the GitHub CLI give git its sign-in for the host that asked */
-    setUpSignIn: enqueueActions(({ event, enqueue }) => {
+    setUpSignIn: enqueueActions(({ context, event, enqueue }) => {
       const { host } = event as { type: 'commit.SET_UP_SIGN_IN'; host: string }
+      // The push or the pull that was refused goes with the ask and comes back with its answer: what is held
+      // of it here is cleared by the next status, which can arrive while the sign-in is being set up
+      const during = context.gitFailure?.during
       enqueue.assign({ isSettingUpSignIn: true })
-      enqueue(() => { sendToSystem('code', { type: 'commit.SET_UP_SIGN_IN', host }) })
+      enqueue(() => { sendToSystem('code', { type: 'commit.SET_UP_SIGN_IN', host, ...(during ? { during } : {}) }) })
     }),
 
     /** Git can sign in now, so the push or the pull that was refused is run again: it is what the user was doing */
-    signInSetUp: enqueueActions(({ context, enqueue }) => {
-      const during = context.gitFailure?.during
+    signInSetUp: enqueueActions(({ event, enqueue }) => {
+      const { during } = (event as { type: 'commit.SIGN_IN_SET_UP'; data: { during?: 'push' | 'pull' } }).data
       enqueue.assign({ gitError: null, gitFailure: null, isSettingUpSignIn: false })
       if (during === 'push') enqueue.raise({ type: 'commit.PUSH_BRANCH' })
       if (during === 'pull') enqueue.raise({ type: 'commit.PULL_BRANCH' })
@@ -555,6 +590,8 @@ export const commitState = setup({
     handleDiffReceived: enqueueActions(({ enqueue, self, event, context }) => {
       const ev = event as { type: 'commit.DIFF_RECEIVED'; data: GitDiff }
       const { recorded, pending } = settleCall(context.diffRefreshes, event)
+      // A diff as it is now holds none of the pieces that were staged out of the one before it
+      if (context.appliedHunks.length > 0) enqueue.assign({ appliedHunks: [] })
       if (!recorded) {
         enqueue(() => addTabToParent(self, diffTab(ev.data)))
         return
@@ -755,6 +792,9 @@ export const commitState = setup({
     gitFailure: null,
     isSettingUpSignIn: false,
     isApplyingHunk: false,
+    appliedHunks: [],
+    isShown: false,
+    missedChange: null,
     openFolders: {},
     progress: null,
     isPushing: false,
@@ -804,7 +844,11 @@ export const commitState = setup({
           actions: 'applyHunk'
         },
         'commit.HUNK_APPLIED': {
-          actions: assign({ isApplyingHunk: false })
+          // The tab still shows the piece until its diff is read again, and git no longer cuts it
+          actions: assign(({ context, event }) => ({
+            isApplyingHunk: false,
+            appliedHunks: [...context.appliedHunks, (event as { data: { hunk: string } }).data.hunk],
+          }))
         },
         'commit.SELECT_FILE': {
           actions: 'selectGitFile'
@@ -983,6 +1027,16 @@ export const commitState = setup({
         // The repository changed, on disk or by a write from any window: ask again for the parts of it that did
         'commit.REPOSITORY_CHANGED': {
           actions: 'followRepositoryChange'
+        },
+        'commit.SHOWN': {
+          actions: enqueueActions(({ context, enqueue }) => {
+            const missed = context.missedChange
+            enqueue.assign({ isShown: true, missedChange: null })
+            if (missed) enqueue.raise({ type: 'commit.REPOSITORY_CHANGED', changed: missed })
+          })
+        },
+        'commit.HIDDEN': {
+          actions: assign({ isShown: false })
         }
       }
     }

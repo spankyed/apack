@@ -52,8 +52,8 @@ export type Event =
   | { type: 'commit.MARK_RESOLVED'; path: string }
   | { type: 'commit.RESOLVE_ALL_CONFLICTS'; strategy: 'ours' | 'theirs' }
   | { type: 'commit.MOVE_OPERATION'; move: OperationMove }
-  | { type: 'commit.SET_UP_SIGN_IN'; host: string }
-  | { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; patch: string }
+  | { type: 'commit.SET_UP_SIGN_IN'; host: string; during?: 'push' | 'pull' }
+  | { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; hunk: string }
   | { type: 'commit.LIST_UNTRACKED'; path: string }
   | { type: 'commit.LOG_LIST' }
   | { type: 'commit.REVERT_COMMIT'; hash: string }
@@ -674,16 +674,17 @@ export const commitSystem = setup({
 
     /** Stages one piece of a file's change, or takes one back out of what is staged: a write like staging the file */
     applyHunk: ({ event, context, self, reply }) => {
-      const { path: file, staged, patch } = event as { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; patch: string }
+      const { path: file, staged, hunk } = event as { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; hunk: string }
       if (!requireGitRepository(context, reply)) return
 
-      context.gitRepository.applyHunk(file, staged, patch).then(() => {
-        answer(reply, { type: 'commit.HUNK_APPLIED', data: { path: file, staged } })
+      context.gitRepository.applyHunk(file, staged, hunk).then(() => {
+        answer(reply, { type: 'commit.HUNK_APPLIED', data: { path: file, staged, hunk } })
+        self.send({ type: 'commit.GIT_STATUS_CHANGED' })
       }, (error: unknown) => {
         answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) })
-      }).finally(() => {
-        // Refused or not, the window's diff is read again: a refusal means the file moved on under it
-        self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+        // A refusal means the file moved on under the window's diff, so that diff is read again. Its diff and
+        // not the status: nothing was written, and a status answer would take the reason off the screen
+        self.send({ type: 'commit.ANNOUNCE_REPOSITORY_CHANGED', changed: { ...NOTHING_CHANGED, diffs: true, files: [file] } })
       })
     },
 
@@ -692,7 +693,10 @@ export const commitSystem = setup({
      * host arrives from the window, so it is held to a host name before it reaches a command line
      */
     setUpSignIn: ({ event, context, self, reply }) => {
-      const { host } = event as { type: 'commit.SET_UP_SIGN_IN'; host: string }
+      const { host, during: asked } = event as { type: 'commit.SET_UP_SIGN_IN'; host: string; during?: 'push' | 'pull' }
+      // The push or the pull that was refused, which the answer carries back: whoever asked runs it again
+      // once git can sign in, and what they held of it may have been cleared while this ran
+      const during = asked === 'push' || asked === 'pull' ? { during: asked } : {}
       if (!requireGitRepository(context, reply)) return
       const repository = context.gitRepository
       if (!isHostName(host)) {
@@ -702,11 +706,11 @@ export const commitSystem = setup({
 
       setUpGitSignIn(repository.getWorkingDir(), host).then(() => {
         repository.resumeAutoFetch()
-        answer(reply, { type: 'commit.SIGN_IN_SET_UP', data: { host } })
+        answer(reply, { type: 'commit.SIGN_IN_SET_UP', data: { host, ...during } })
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
       }, (error: unknown) => {
         // Still the sign-in that is missing, so the offer stays with what went wrong setting it up
-        answer(reply, { type: 'commit.ERROR_RECEIVED', data: { ...failureOf(error), code: 'authentication', signIn: { host, kind: 'github-cli' } } })
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: { ...failureOf(error), ...during, code: 'authentication', signIn: { host, kind: 'github-cli' } } })
       })
     },
 

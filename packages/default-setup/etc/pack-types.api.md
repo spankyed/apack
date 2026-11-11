@@ -1165,13 +1165,15 @@ type DatabaseSettings = SettingsOf<'database'>;
 
 /** One piece of a file's change, as git cuts it */
 interface DiffHunk {
+    /** What names this piece when it is staged or unstaged: the same for as long as git cuts the same piece */
+    id: string;
     /** Where it begins on the left side of the diff, and how many lines of that side it covers */
     oldStart: number;
     oldLines: number;
     /** The same on the right side */
     newStart: number;
     newLines: number;
-    /** The patch that applies this piece alone */
+    /** The piece as text, to show: its header and its lines. Git is handed the piece by its `id`, never this */
     patch: string;
 }
 
@@ -1680,6 +1682,8 @@ declare class GitRepository {
     private readonly PARENT_BRANCH_SEARCH_DEPTH;
     /** The commands that wait for each other: writes to the index in one line, remote commands in another */
     private lanes;
+    /** How many commands are in the line of writes, running or waiting */
+    private writesInLine;
     private _writeInProgress;
     private _writeCompleteCallbacks;
     private _lastFetchTimestamp;
@@ -1893,11 +1897,18 @@ declare class GitRepository {
      */
     getHunks(filePath: string, staged: boolean): Promise<DiffHunk[]>;
     /**
-     * Stages one piece of a file's change, or with `staged` takes one piece out of what is staged. The piece is
-     * one this repository cut from the file as it is now: one read before the file changed again is refused,
-     * rather than applied to lines it was not made from.
+     * The file's pieces as git cuts them now, each with the bytes that apply it. The patch is one `git apply` reads
+     * with its defaults, whatever the user has told `git diff`: prefixes of `a/` and `b/`, three lines around each
+     * change, paths from the top. Left to the user's settings, `diff.noprefix` names another file to `git apply`
+     * and `diff.context=0` a piece it puts at the end of the file.
      */
-    applyHunk(filePath: string, staged: boolean, patch: string): Promise<void>;
+    private cutHunks;
+    /**
+     * Stages one piece of a file's change, or with `staged` takes one piece out of what is staged. The piece is
+     * named by its id, and is one this repository cuts from the file as it is now: one whose file changed under
+     * it is refused, rather than applied to lines it was not made from.
+     */
+    applyHunk(filePath: string, staged: boolean, id: string): Promise<void>;
     /** Check if a file path is an image based on extension. */
     isImageFile(filePath: string): boolean;
     /** Execute a git command and return raw binary buffer output. */
@@ -2259,12 +2270,13 @@ type IncomingCommitEvents = {
     type: 'commit.APPLY_HUNK';
     path: string;
     staged: boolean;
-    patch: string;
+    hunk: string;
 }
 /** Have the GitHub CLI give git its sign-in for this host */
  | {
     type: 'commit.SET_UP_SIGN_IN';
     host: string;
+    during?: 'pull' | 'push';
 } | {
     type: 'commit.LOG_LIST';
 } | {
@@ -3520,6 +3532,7 @@ type OutgoingCommitEvents =
     data: {
         path: string;
         staged: boolean;
+        hunk: string;
     };
 }
 /** How far along a push, a pull or a checkout is, for the window that asked for it */
@@ -3541,6 +3554,7 @@ type OutgoingCommitEvents =
     type: 'commit.SIGN_IN_SET_UP';
     data: {
         host: string;
+        during?: 'pull' | 'push';
     };
 } | {
     type: 'commit.BRANCH_RETRIEVED';

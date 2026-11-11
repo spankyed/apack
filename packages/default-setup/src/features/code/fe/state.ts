@@ -70,6 +70,7 @@ export type Event =
   // An open diff read again, from the child that asked for it
   | { type: 'REFRESH_DIFF_TAB'; diff: GitDiff }
   | { type: 'SURFACE_ACTIVATED' }
+  | { type: 'SURFACE_DEACTIVATED' }
   // The shell hands this to every surface as it starts it; this one reads which window it is in (M5)
   | { type: 'SURFACE_STARTED'; ownsAppLayout: boolean }
   | { type: 'SELECT_PANEL'; panel: PanelType }
@@ -549,6 +550,8 @@ const codeState = setup({
     initializeSurface: ({ self }) => {
       // Explorer is initialized by the CODE_STARTED answer — no re-init needed here.
       codeChild(self, 'terminal')?.send({ type: 'terminal.REFRESH_LIST' });
+      // The window shows the repository from here on, which is when it follows what changes in it
+      codeChild(self, 'commit')?.send({ type: 'commit.SHOWN' });
     },
 
     restorePersistedTabs: enqueueActions(({ enqueue, self }) => {
@@ -1422,6 +1425,10 @@ const codeState = setup({
         // Surface initialization
         SURFACE_ACTIVATED: {
           actions: ['initializeSurface']
+        },
+        // The window shows another surface: the repository's changes are caught up with when it is shown again
+        SURFACE_DEACTIVATED: {
+          actions: ({ self }) => { codeChild(self, 'commit')?.send({ type: 'commit.HIDDEN' }) }
         },
         // Panel selection
         SELECT_PANEL: {

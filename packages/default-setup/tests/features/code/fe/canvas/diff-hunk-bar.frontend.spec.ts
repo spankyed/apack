@@ -4,8 +4,8 @@ import { createApp, h, nextTick, reactive, type App } from 'vue'
 import DiffHunkBar from '#features/code/fe/canvas/DiffHunkBar.vue'
 
 const HEADER = 'diff --git a/a.txt b/a.txt\nindex 1..2 100644\n--- a/a.txt\n+++ b/a.txt\n'
-const TOP = { oldStart: 1, oldLines: 6, newStart: 1, newLines: 6, patch: `${HEADER}@@ -1,6 +1,6 @@\n a\n b\n-old\n+new\n c\n d\n e\n` }
-const BOTTOM = { oldStart: 32, oldLines: 7, newStart: 32, newLines: 7, patch: `${HEADER}@@ -32,7 +32,7 @@\n a\n b\n c\n-old\n+new\n d\n e\n f\n` }
+const TOP = { id: 'top', oldStart: 1, oldLines: 6, newStart: 1, newLines: 6, patch: `${HEADER}@@ -1,6 +1,6 @@\n a\n b\n-old\n+new\n c\n d\n e\n` }
+const BOTTOM = { id: 'bottom', oldStart: 32, oldLines: 7, newStart: 32, newLines: 7, patch: `${HEADER}@@ -32,7 +32,7 @@\n a\n b\n c\n-old\n+new\n d\n e\n f\n` }
 
 let app: App | undefined
 afterEach(() => { app?.unmount(); app = undefined; document.body.replaceChildren() })

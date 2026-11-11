@@ -64,7 +64,7 @@ fi
   return () => fs.existsSync(path.join(directory, 'asked')) ? fs.readFileSync(path.join(directory, 'asked'), 'utf8').trim().split('\n') : [];
 }
 
-const ask = (event: { type: string; host?: string }) => app!.send('code', event, { sender: CODE, client: 'c-main' });
+const ask = (event: { type: string; host?: string; during?: 'push' | 'pull' }) => app!.send('code', event, { sender: CODE, client: 'c-main' });
 
 it('tells the window that pushed why the push failed, that it can be run again, and what sign-in is missing', async () => {
   await codeOverARemoteWantingASignIn();
@@ -103,6 +103,18 @@ describe.skipIf(process.platform === 'win32')('taking the GitHub CLI offer', () 
       signIn: { host: 'github.com', kind: 'github-cli' },
     });
     expect(asked(), 'git\'s config was not touched').toEqual(['auth status --hostname github.com']);
+  });
+
+  // Whoever asked runs the refused command again from the answer, since what they held of it may be gone by then
+  it('answers with the push or the pull the sign-in was for, set up or not', async () => {
+    await codeOverARemoteWantingASignIn();
+    githubCli({ signedIn: true });
+    const done = await ask({ type: 'commit.SET_UP_SIGN_IN', host: 'github.com', during: 'push' });
+    expect((await app!.nextEmit('code', 'commit.SIGN_IN_SET_UP', { answering: done })).data).toEqual({ host: 'github.com', during: 'push' });
+
+    githubCli({ signedIn: false });
+    const refused = await ask({ type: 'commit.SET_UP_SIGN_IN', host: 'github.com', during: 'pull' });
+    expect((await app!.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: refused })).data).toMatchObject({ during: 'pull', signIn: { host: 'github.com', kind: 'github-cli' } });
   });
 
   it('runs nothing for a host that would read as an option', async () => {

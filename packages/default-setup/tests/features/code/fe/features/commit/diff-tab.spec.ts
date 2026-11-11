@@ -37,6 +37,7 @@ beforeEach(() => {
 
 it('opens a diff in the tab for the file the diff is about', () => {
   const actor = createActor(commitState).start();
+  actor.send({ type: 'commit.SHOWN' });
 
   actor.send({ type: 'commit.SELECT_FILE', file: aFile('a.ts') });
   actor.send({ type: 'commit.VIEW_DIFF', path: 'a.ts', staged: false });
@@ -53,6 +54,7 @@ it('opens a diff in the tab for the file the diff is about', () => {
  */
 it('does not open one file\'s diff in another file\'s tab', () => {
   const actor = createActor(commitState).start();
+  actor.send({ type: 'commit.SHOWN' });
 
   actor.send({ type: 'commit.SELECT_FILE', file: aFile('a.ts') });
   actor.send({ type: 'commit.VIEW_DIFF', path: 'a.ts', staged: false });
@@ -67,6 +69,7 @@ it('does not open one file\'s diff in another file\'s tab', () => {
 
 it('keeps the staged and unstaged diffs of one file apart', () => {
   const actor = createActor(commitState).start();
+  actor.send({ type: 'commit.SHOWN' });
 
   actor.send({ type: 'commit.SELECT_FILE', file: aFile('a.ts', true) });
   actor.send({ type: 'commit.DIFF_RECEIVED', data: aDiff('a.ts', true) });
@@ -78,6 +81,7 @@ it('keeps the staged and unstaged diffs of one file apart', () => {
 /** A diff arriving with nothing selected is still a diff for a known file */
 it('opens a diff even when no file is selected', () => {
   const actor = createActor(commitState).start();
+  actor.send({ type: 'commit.SHOWN' });
 
   actor.send({ type: 'commit.DIFF_RECEIVED', data: aDiff('a.ts') });
 
@@ -91,6 +95,7 @@ it('opens a diff even when no file is selected', () => {
 it('shows a diff that is already open at once, and brings it up to date without opening it again', () => {
   getParentContext.mockReturnValue({ openFiles: [{ path: 'diff:a.ts:unstaged', isDiff: true, gitFile: { path: 'a.ts', staged: false } }] });
   const actor = createActor(commitState).start();
+  actor.send({ type: 'commit.SHOWN' });
 
   actor.send({ type: 'commit.VIEW_DIFF', path: 'a.ts', staged: false });
 
@@ -109,6 +114,7 @@ it('shows a diff that is already open at once, and brings it up to date without 
 it('says nothing when reading an open diff again fails, and still says when a diff that was asked for does', () => {
   getParentContext.mockReturnValue({ openFiles: [{ path: 'diff:a.ts:unstaged', isDiff: true, gitFile: { path: 'a.ts', staged: false } }] });
   const actor = createActor(commitState).start();
+  actor.send({ type: 'commit.SHOWN' });
   const NOTHING = { status: false, diffs: false, history: false, stashes: false, worktrees: false };
 
   actor.send({ type: 'commit.REPOSITORY_CHANGED', changed: { ...NOTHING, diffs: true, files: ['a.ts'] } });
