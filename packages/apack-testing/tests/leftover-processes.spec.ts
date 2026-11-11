@@ -8,8 +8,12 @@ const BEGAN = Date.parse('2026-11-11T01:00:10.900');
 const before = BEGAN - 60_000;
 const during = BEGAN + 2_000;
 
-const row = (pid: number, ppid: number, pgid: number, command: string, startedAt = before): ListedProcess =>
-  ({ pid, ppid, pgid, startedAt, command });
+// A listing carries no commands, so each row is named here for the cases to read by
+const names = new Map<number, string>();
+const row = (pid: number, ppid: number, pgid: number, name: string, startedAt = before): ListedProcess => {
+  names.set(pid, name);
+  return { pid, ppid, pgid, startedAt };
+};
 
 const RUN = [
   row(1, 0, 1, '/sbin/launchd'),
@@ -20,7 +24,7 @@ const RUN = [
   row(130, 110, 100, 'node vitest worker'),
 ];
 const left = (...more: ListedProcess[]) =>
-  leftoversIn([...RUN, ...more], 120, BEGAN).map(({ process, how }) => `${process.command}: ${how}`);
+  leftoversIn([...RUN, ...more], 120, BEGAN).map(({ process, how }) => `${names.get(process.pid)}: ${how}`);
 
 it('reports a process the worker started in a group of its own, and what that process started', () => {
   expect(left(
@@ -64,15 +68,15 @@ it('reports nothing from a listing the worker is not in, which says nothing abou
   expect(leftoversIn([row(1, 0, 1, '/sbin/launchd'), row(200, 120, 200, 'node fake-broker.cjs', during)], 120, BEGAN)).toEqual([]);
 });
 
-it('reads a listing\'s rows, a single-digit day and a command with spaces in it included', () => {
+it('reads a listing\'s rows, a single-digit day included', () => {
   const listing = [
-    '    1     0     1 Sat Nov  7 09:02:11 2026     /sbin/launchd',
-    '88813     1 88813 Wed Nov 11 02:16:02 2026     node /tmp/broker client/fake-broker.cjs /tmp/b.sock',
+    '    1     0     1 Sat Nov  7 09:02:11 2026    ',
+    '88813     1 88813 Wed Nov 11 02:16:02 2026    ',
     '',
   ].join('\n');
 
   expect(parseListing(listing)).toEqual([
-    { pid: 1, ppid: 0, pgid: 1, startedAt: new Date(2026, 10, 7, 9, 2, 11).getTime(), command: '/sbin/launchd' },
-    { pid: 88813, ppid: 1, pgid: 88813, startedAt: new Date(2026, 10, 11, 2, 16, 2).getTime(), command: 'node /tmp/broker client/fake-broker.cjs /tmp/b.sock' },
+    { pid: 1, ppid: 0, pgid: 1, startedAt: new Date(2026, 10, 7, 9, 2, 11).getTime() },
+    { pid: 88813, ppid: 1, pgid: 88813, startedAt: new Date(2026, 10, 11, 2, 16, 2).getTime() },
   ]);
 });

@@ -24,7 +24,6 @@ export interface ListedProcess {
   readonly pid: number; readonly ppid: number; readonly pgid: number;
   /** When it was created, to the second the listing gives */
   readonly startedAt: number;
-  readonly command: string;
 }
 
 export interface Leftover {
@@ -32,27 +31,44 @@ export interface Leftover {
   readonly how: 'detached' | 'orphaned';
 }
 
-const ROW = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\w{3}\s+\w{3}\s+\d+\s+[\d:]+\s+\d{4})\s+(.*)$/;
+const ROW = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\w{3}\s+\w{3}\s+\d+\s+[\d:]+\s+\d{4})\s*$/;
 
-/** The rows of `ps -A -o pid=,ppid=,pgid=,lstart=,command=` taken in the C locale, whose dates every engine reads */
+/** The rows of `ps -A -o pid=,ppid=,pgid=,lstart=` taken in the C locale, whose dates every engine reads */
 export function parseListing(listing: string): ListedProcess[] {
   return listing.split('\n').flatMap((line) => {
     const row = ROW.exec(line);
     if (!row) return [];
-    return [{ pid: Number(row[1]), ppid: Number(row[2]), pgid: Number(row[3]), startedAt: Date.parse(row[4]!), command: row[5]! }];
+    return [{ pid: Number(row[1]), ppid: Number(row[2]), pgid: Number(row[3]), startedAt: Date.parse(row[4]!) }];
   });
 }
+
+const PS_OPTIONS = { maxBuffer: 64 * 1024 * 1024, encoding: 'utf8', env: { ...process.env, LC_ALL: 'C' } } as const;
 
 /**
  * Every process on the machine. Nothing where no listing can be taken: on Windows, which has no process groups to
  * read, or when `ps` could not run.
+ *
+ * Without each process's command, which costs more to read than the rest of the listing together and is wanted
+ * only for a process a file is failed for (`commandsOf`): every file takes this listing, and few leave anything.
  */
 export function listProcesses(): Promise<ListedProcess[] | undefined> {
   if (process.platform === 'win32') return Promise.resolve(undefined);
   return new Promise((resolve) => {
-    execFile('ps', ['-A', '-o', 'pid=,ppid=,pgid=,lstart=,command='],
-      { maxBuffer: 64 * 1024 * 1024, encoding: 'utf8', env: { ...process.env, LC_ALL: 'C' } },
+    execFile('ps', ['-A', '-o', 'pid=,ppid=,pgid=,lstart='], PS_OPTIONS,
       (error, stdout) => resolve(error ? undefined : parseListing(stdout)));
+  });
+}
+
+/** The command each of these processes is running, for those still there */
+function commandsOf(pids: readonly number[]): Promise<Map<number, string>> {
+  return new Promise((resolve) => {
+    // `ps` exits non-zero when one of them has gone, and still lists the others
+    execFile('ps', ['-o', 'pid=,command=', '-p', pids.join(',')], PS_OPTIONS, (_error, stdout) => {
+      resolve(new Map((stdout ?? '').split('\n').flatMap((line): [number, string][] => {
+        const row = /^\s*(\d+)\s+(.*)$/.exec(line);
+        return row ? [[Number(row[1]), row[2]!]] : [];
+      })));
+    });
   });
 }
 
@@ -102,12 +118,13 @@ async function workingDirectory(pid: number): Promise<string | undefined> {
 
 /** What a file is told about the processes it left, each with its command and where it is running */
 export async function describeLeftovers(file: string, leftovers: readonly Leftover[]): Promise<string> {
+  const commands = await commandsOf(leftovers.map(({ process: left }) => left.pid));
   const lines = await Promise.all(leftovers.map(async ({ process: left, how }) => {
     const where = await workingDirectory(left.pid);
     const why = how === 'detached'
       ? 'started by this file, detached from it'
       : 'lost its parent while this file ran: this file started it, or one running beside it did, and run alone only the one that did fails';
-    return `  pid ${left.pid}: ${left.command}${where ? ` (in ${where})` : ''}, ${why}`;
+    return `  pid ${left.pid}: ${commands.get(left.pid) ?? 'a process that has since exited'}${where ? ` (in ${where})` : ''}, ${why}`;
   }));
   const count = leftovers.length === 1 ? 'a process' : `${leftovers.length} processes`;
   return `${file} left ${count} running:\n${lines.join('\n')}\n`
