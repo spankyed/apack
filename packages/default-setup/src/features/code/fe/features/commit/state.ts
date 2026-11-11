@@ -1,8 +1,10 @@
 import { setup, assign, enqueueActions , type ActorRefFrom } from 'xstate';
-import { newCall, recordCall, settleCall } from '@apackdev/sdk/events';
+import { answersCall, newCall, recordCall, settleCall } from '@apackdev/sdk/events';
+import { viewWrites, writeAnswered, writeSent, writing, type ViewWrites } from '@apackdev/sdk/fe';
 import { sendToSystem } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { diffTab, diffTabPath } from '../../utils/diff-tabs.ts';
+import { withStaged, withUnstaged } from './staging.ts';
 import type { RepositoryChange } from '../../../be/types.ts';
 import type { OpenFile } from '../../contract.ts';
 
@@ -52,6 +54,10 @@ export interface CodeCommitContext {
   commitLog: CommitLogEntry[]
   /** The asks in flight for a diff that is already open, by call: the answer to one brings its tab up to date and opens none */
   diffRefreshes: Record<string, true>
+  /** The latest ask for the status, while it is unanswered: an answer to an earlier one is of the repository before it */
+  statusAsk: string | null
+  /** The stage and unstage writes still unanswered. The list shows them done, so no status is shown until they are answered */
+  stagingWrites: ViewWrites
 }
 
 /** The diffs of this repository's changed files that the window has open */
@@ -166,11 +172,14 @@ export const commitState = setup({
   },
   guards: {
     answersADiffRefresh: ({ context, event }) => settleCall(context.diffRefreshes, event).recorded !== undefined,
+    answersTheStatusAsked: ({ context, event }) => answersCall(event, context.statusAsk),
   },
   actions: {
-    refreshGitStatus: () => {
-      sendToSystem('code', { type: 'commit.GET_GIT_STATUS' })
-    },
+    refreshGitStatus: enqueueActions(({ enqueue }) => {
+      const call = newCall()
+      enqueue.assign({ statusAsk: call })
+      enqueue(() => { sendToSystem('code', { type: 'commit.GET_GIT_STATUS' }, { call }) })
+    }),
 
     forgetDiffRefresh: assign(({ context, event }) => ({ diffRefreshes: settleCall(context.diffRefreshes, event).pending })),
 
@@ -203,15 +212,40 @@ export const commitState = setup({
       }
     }),
 
-    stageFiles: ({ event }) => {
-      const ev = event as { type: 'commit.STAGE_FILES'; paths: string[] }
-      sendToSystem('code', { type: 'commit.STAGE_FILES', paths: ev.paths })
-    },
+    /**
+     * A staged file moves in the list at once, to where git will list it, and git is told. What git answers
+     * replaces the guess. A status read before the write landed would put the file back, so none is shown until
+     * every such write is answered.
+     */
+    stageFiles: enqueueActions(({ event, enqueue }) => {
+      const { paths } = event as { type: 'commit.STAGE_FILES'; paths: string[] }
+      const call = newCall()
+      enqueue.assign(({ context }) => ({ gitStatus: withStaged(context.gitStatus, paths), stagingWrites: writeSent(context.stagingWrites, call) }))
+      enqueue(() => { sendToSystem('code', { type: 'commit.STAGE_FILES', paths }, { call }) })
+    }),
 
-    unstageFiles: ({ event }) => {
-      const ev = event as { type: 'commit.UNSTAGE_FILES'; paths: string[] }
-      sendToSystem('code', { type: 'commit.UNSTAGE_FILES', paths: ev.paths })
-    },
+    unstageFiles: enqueueActions(({ event, enqueue }) => {
+      const { paths } = event as { type: 'commit.UNSTAGE_FILES'; paths: string[] }
+      const call = newCall()
+      enqueue.assign(({ context }) => ({ gitStatus: withUnstaged(context.gitStatus, paths), stagingWrites: writeSent(context.stagingWrites, call) }))
+      enqueue(() => { sendToSystem('code', { type: 'commit.UNSTAGE_FILES', paths }, { call }) })
+    }),
+
+    /** A stage or an unstage was answered: once none is left unanswered, the list is read from git */
+    settleStaging: enqueueActions(({ context, event, enqueue }) => {
+      const writes = writeAnswered(context.stagingWrites, event)
+      enqueue.assign({ stagingWrites: writes })
+      if (!writing(writes)) enqueue('refreshGitStatus')
+    }),
+
+    /** A stage or an unstage was refused: reading the list from git puts the file back where it is */
+    settleRefusedStaging: enqueueActions(({ context, event, enqueue }) => {
+      const writes = writeAnswered(context.stagingWrites, event, true)
+      // An error that answers none of these writes is some other ask's
+      if (writes === context.stagingWrites) return
+      enqueue.assign({ stagingWrites: writes })
+      if (!writing(writes)) enqueue('refreshGitStatus')
+    }),
 
 
     viewDiff: enqueueActions(({ event, self, enqueue }) => {
@@ -329,9 +363,11 @@ export const commitState = setup({
     },
 
     handleStatusReceived: assign({
-      gitStatus: ({ event }) => {
+      statusAsk: null,
+      gitStatus: ({ context, event }) => {
         const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
-        return ev.data.files
+        // Read before a write that the list already shows landed: git is asked again once that write is answered
+        return writing(context.stagingWrites) ? context.gitStatus : ev.data.files
       },
       gitBranch: ({ event }) => {
         const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean } }
@@ -573,6 +609,8 @@ export const commitState = setup({
   initial: 'idle',
   context: {
     diffRefreshes: {},
+    statusAsk: null,
+    stagingWrites: viewWrites(),
     gitStatus: [],
     gitBranch: '',
     gitError: null,
@@ -603,13 +641,15 @@ export const commitState = setup({
         'commit.REFRESH_STATUS': {
           actions: ['setGitLoading', 'refreshGitStatus']
         },
+        // An answer to an ask made before the latest is of the repository as it was before it
         'commit.STATUS_RECEIVED': {
+          guard: 'answersTheStatusAsked',
           actions: 'handleStatusReceived'
         },
         'commit.ERROR_RECEIVED': [
           // Nobody asked for a diff that was read again, so its failing is said to nobody: the tab stays as it was
           { guard: 'answersADiffRefresh', actions: 'forgetDiffRefresh' },
-          { actions: 'handleErrorReceived' },
+          { actions: ['handleErrorReceived', 'settleRefusedStaging'] },
         ],
         'commit.DISMISS_ERROR': {
           actions: 'dismissError'
@@ -624,10 +664,10 @@ export const commitState = setup({
           actions: 'unstageFiles'
         },
         'commit.FILES_STAGED': {
-          actions: 'refreshGitStatus'
+          actions: 'settleStaging'
         },
         'commit.FILES_UNSTAGED': {
-          actions: 'refreshGitStatus'
+          actions: 'settleStaging'
         },
         'commit.VIEW_DIFF': {
           actions: 'viewDiff'

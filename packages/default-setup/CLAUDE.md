@@ -108,7 +108,9 @@ actions (`list`, `byId`), flows (`list`, `graph`), notes (`tree`, `note`, `recen
   threads' recent list takes its limit and order as arguments from the settings the surface holds.
 - **An editor holds its views behind its own writes** (`ViewWrites`, `@apackdev/sdk/fe`): it applies an edit at
   once, so a result from before the write landed would undo it. Once the last write is answered it reads the views
-  again. Every write such a surface records must be answered, a refusal included.
+  again. Every write such a surface records must be answered, a refusal included. The commit panel does the same
+  over a list it fetches: a staged file moves on the click to where git will list it (`code/fe/features/commit/staging.ts`),
+  and no status is shown until the write is answered.
 - **A surface drawn in several areas follows its views from its machine** (`fromView`, `#generated/fe`), since no one
   component is mounted for as long as it runs — threads is the example.
 
