@@ -82,7 +82,6 @@ const BARE_WAIT_BY_DESIGN: Record<string, string> = {
  */
 const NOT_CONVERTED_YET: readonly string[] = [
   'packages/apack-cli/tests/commands/db.integration.spec.ts > writerDuring',
-  'packages/repo-checks/tests/bounded-spawn.integration.spec.ts > kills the whole group, not the process it started',
   'packages/repo-checks/tests/chain-schedule.spec.ts > done',
 ];
 
