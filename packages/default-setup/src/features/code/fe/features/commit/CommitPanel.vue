@@ -21,6 +21,8 @@
     <RevertDialog
       :show="!!revertDialogFile"
       :file="revertDialogFile"
+      undoable
+      :notKept="revertDialogFile ? notKeptOf([revertDialogFile.path]) : []"
       @confirm="confirmRevert"
       @cancel="cancelRevert"
     />
@@ -30,6 +32,8 @@
       :show="showDiscardAllDialog"
       :file="null"
       :fileCount="unstagedFiles.length"
+      undoable
+      :notKept="notKeptOf(unstagedFiles.map((f: GitStatusFile) => f.path))"
       @confirm="confirmDiscardAll"
       @cancel="cancelDiscardAll"
     />
@@ -199,6 +203,34 @@
     >
       Fetching by itself is off: the remote asked for a sign-in and nobody was there to give one. It starts again after a push or a pull that works, or when the fetch settings change.
       <SignInHelp v-if="fetchSignIn" class="mt-2" :help="fetchSignIn" :busy="isSettingUpSignIn" @sign-in="setUpSignIn" />
+    </div>
+
+    <!-- A discard kept what it removed, which is offered back until it is dismissed -->
+    <div
+      v-if="lastDiscard && !gitError"
+      data-testid="discard-undo"
+      class="flex items-center gap-2 px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
+    >
+      <span class="flex-1">
+        Discarded {{ lastDiscard.paths.length === 1 ? lastDiscard.paths[0] : `${lastDiscard.paths.length} changes` }}. Git keeps what was removed for about two weeks.
+        <template v-if="lastDiscard.notKept.length > 0">
+          {{ lastDiscard.notKept.length === 1 ? 'One file was' : `${lastDiscard.notKept.length} files were` }} too large to keep.
+        </template>
+      </span>
+      <button class="px-2 py-0.5 rounded text-neutral-200 bg-neutral-800 hover:bg-neutral-700" @click="commitActor?.send({ type: 'commit.UNDO_DISCARD' })">Undo</button>
+      <button class="p-0.5 rounded hover:bg-neutral-700" title="Dismiss" @click="commitActor?.send({ type: 'commit.DISMISS_DISCARD' })"><X :size="12" /></button>
+    </div>
+
+    <!-- Undoing a discard left alone what had changed or been made again since -->
+    <div
+      v-else-if="discardLeft.length > 0 && !gitError"
+      data-testid="discard-left"
+      class="flex items-center gap-2 px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
+    >
+      <span class="flex-1">
+        Put back, except {{ discardLeft.length === 1 ? discardLeft[0] : `${discardLeft.length} files` }}, which {{ discardLeft.length === 1 ? 'has' : 'have' }} changed since and {{ discardLeft.length === 1 ? 'was' : 'were' }} left as {{ discardLeft.length === 1 ? 'it is' : 'they are' }}.
+      </span>
+      <button class="p-0.5 rounded hover:bg-neutral-700" title="Dismiss" @click="commitActor?.send({ type: 'commit.DISMISS_DISCARD' })"><X :size="12" /></button>
     </div>
 
     <!-- The repository has more changed files than are listed -->
@@ -754,6 +786,12 @@ const isGitLoading = useSelector(commitActor, (state) => state.context.isGitLoad
 const selectedGitFile = useSelector(commitActor, (state) => state.context.selectedGitFile)
 const commitMessage = useSelector(commitActor, (state) => state.context.commitMessage)
 const revertDialogFile = useSelector(commitActor, (state) => state.context.revertDialogFile)
+const discardPreview = useSelector(commitActor, (state) => state.context.discardPreview)
+const lastDiscard = useSelector(commitActor, (state) => state.context.lastDiscard)
+const discardLeft = useSelector(commitActor, (state) => state.context.discardLeft)
+/** What discarding these rows would remove that cannot be brought back, once that has been answered for these rows */
+const notKeptOf = (paths: string[]): string[] =>
+  (discardPreview.value && discardPreview.value.paths.join('\0') === paths.join('\0') ? discardPreview.value.notKept : [])
 const availableBranches = useSelector(commitActor, (state) => state.context.availableBranches)
 const branchInput = useSelector(commitActor, (state) => state.context.branchInput)
 const isCheckingOutBranch = useSelector(commitActor, (state) => state.context.isCheckingOutBranch)
@@ -1004,6 +1042,7 @@ const unstageAll = () => {
 }
 
 const openDiscardAllDialog = () => {
+  commitActor?.send({ type: 'commit.PREVIEW_DISCARD', paths: unstagedFiles.value.map((f: GitStatusFile) => f.path) })
   showDiscardAllDialog.value = true
 }
 

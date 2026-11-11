@@ -33,6 +33,8 @@ export type Event =
   | { type: 'commit.GET_CURRENT_BRANCH' }
   | { type: 'commit.REVERT_FILE'; path: string }
   | { type: 'commit.REVERT_FILES'; paths: string[] }
+  | { type: 'commit.PREVIEW_DISCARD'; paths: string[] }
+  | { type: 'commit.RESTORE_DISCARDED'; id: string }
   | { type: 'commit.GET_ALL_BRANCHES' }
   | { type: 'commit.CHECKOUT_BRANCH'; branchName: string }
   | { type: 'commit.PUBLISH_BRANCH' }
@@ -372,10 +374,10 @@ export const commitSystem = setup({
 
       if (!requireGitRepository(context, reply)) return
 
-      context.gitRepository.revertFile(ev.path).then(() => {
+      context.gitRepository.revertFile(ev.path).then((kept) => {
         answer(reply, {
           type: 'commit.FILE_REVERTED',
-          data: { path: ev.path }
+          data: { path: ev.path, kept }
         })
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
         broadcastToSurface(surfaceId, {
@@ -399,10 +401,10 @@ export const commitSystem = setup({
 
       if (!requireGitRepository(context, reply)) return
 
-      context.gitRepository.revertFiles(ev.paths).then(() => {
+      context.gitRepository.revertFiles(ev.paths).then((kept) => {
         answer(reply, {
           type: 'commit.FILES_REVERTED',
-          data: { paths: ev.paths }
+          data: { paths: ev.paths, kept }
         })
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
         for (const path of ev.paths) {
@@ -657,6 +659,34 @@ export const commitSystem = setup({
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
       }).catch(async (error: unknown) => {
         answer(reply, { type: 'commit.ERROR_RECEIVED', data: await remoteFailureOf(error, 'pull', context.gitRepository!) })
+      })
+    },
+
+    /** Which of what discarding these rows would remove is too large to keep a copy of, for the window about to ask */
+    previewDiscard: ({ event, context, reply }) => {
+      const { paths } = event as { type: 'commit.PREVIEW_DISCARD'; paths: string[] }
+      if (!requireGitRepository(context, reply)) return
+
+      context.gitRepository.discardNotKept(paths).then((notKept) => {
+        answer(reply, { type: 'commit.DISCARD_PREVIEWED', data: { paths, notKept } })
+      }, (error: unknown) => {
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) })
+      })
+    },
+
+    /** Puts back what a discard kept: a write like the discard it undoes, announced the same way */
+    restoreDiscarded: ({ event, context, self, reply }) => {
+      const { id } = event as { type: 'commit.RESTORE_DISCARDED'; id: string }
+      if (!requireGitRepository(context, reply)) return
+
+      context.gitRepository.restoreDiscarded(id).then((restored) => {
+        answer(reply, { type: 'commit.DISCARD_RESTORED', data: { id, ...restored } })
+        self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+        for (const path of restored.restored) {
+          broadcastToSurface(surfaceId, { type: 'explorer.FILE_CHANGED_EXTERNALLY', data: { path, changeType: 'change', modifiedAt: new Date() } })
+        }
+      }, (error: unknown) => {
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) })
       })
     },
 
@@ -994,6 +1024,12 @@ export const commitSystem = setup({
         },
         'commit.REVERT_FILES': {
           actions: 'revertFiles'
+        },
+        'commit.PREVIEW_DISCARD': {
+          actions: 'previewDiscard'
+        },
+        'commit.RESTORE_DISCARDED': {
+          actions: 'restoreDiscarded'
         },
         'commit.RESOLVE_CONFLICT': {
           actions: 'resolveConflict'
