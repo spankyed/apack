@@ -186,6 +186,12 @@ neither watcher needs to be exact.
 - **A file as a commit has it is read through one git kept open** (`git-objects.ts`, `cat-file --batch`): a
   pull request's view reads two versions of every file it lists. Never the staged version, which that git
   would go on answering from the index as it first read it.
+- **One piece of a file's change is staged by a patch git made** (`git-hunks.ts`): the diff a window is sent
+  carries the file's hunks, each with the patch that applies it alone, and staging one is `git apply --cached`
+  of it, `--reverse` to take it back out of what is staged. Git cut the patch and git reads it back, so line
+  endings and filters are git's on both sides. A piece is applied only if the repository still cuts that exact
+  piece from the file, and only a plainly modified file has pieces: one that is new, deleted, renamed or binary
+  is staged whole.
 - **A watch that fails is said to the user.** `commit.STATUS_RECEIVED` carries `watching`, and the panel says live
   updates are off; the next check opens the watch again.
 - **A tree is watched by the platform's own watcher where it has one** (`directory-watch.ts`): Node's recursive

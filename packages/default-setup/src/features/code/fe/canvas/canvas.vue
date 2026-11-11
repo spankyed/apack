@@ -26,6 +26,8 @@
       :active-file-path="activeFilePath"
       :base-directory="baseDirectory"
       :tab-groups="tabGroups"
+      :is-applying-hunk="isApplyingHunk"
+      @apply-hunk="applyHunk"
       @select-file="selectFile"
       @close-file="closeFile"
       @content-change="handleContentChange"
@@ -109,12 +111,15 @@ import { panelChild } from '../features/children.ts';
 const actor: CodeState = useSurface()
 const explorerActor = panelChild(actor, 'explorer')
 const terminalActor = panelChild(actor, 'terminal')
+const commitActor = panelChild(actor, 'commit')
 
 // State selectors
 const openFiles = useSelector(actor, (state) => state.context.openFiles)
 const activeFilePath = useSelector(actor, (state) => state.context.activeFilePath)
 const baseDirectory = useSelector(actor, (state) => state.context.baseDirectory)
 const tabGroups = useSelector(actor, (state) => state.context.tabGroups)
+const isApplyingHunk = useSelector(commitActor, (state) => state?.context.isApplyingHunk === true)
+const applyHunk = (path: string, staged: boolean, patch: string) => commitActor?.send({ type: 'commit.APPLY_HUNK', path, staged, patch })
 
 const fileEditorRef = ref<InstanceType<typeof FileEditor>>()
 const pendingRevealLine = useSelector(actor, (state) => state.context.pendingRevealLine)

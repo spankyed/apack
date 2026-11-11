@@ -5,7 +5,7 @@ import { sendToSystem } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { diffTab, diffTabPath } from '../../utils/diff-tabs.ts';
 import { withStaged, withUnstaged } from './staging.ts';
-import type { CommitFailure, ConflictKind, OperationMove, RepositoryChange, RepositoryOperation, SignInHelp } from '../../../be/types.ts';
+import type { CommitFailure, ConflictKind, DiffHunk, OperationMove, RepositoryChange, RepositoryOperation, SignInHelp } from '../../../be/types.ts';
 import type { OpenFile } from '../../contract.ts';
 
 
@@ -26,6 +26,8 @@ export interface GitDiff {
   originalContent?: string
   modifiedContent?: string
   isImage?: boolean
+  /** The pieces of the change that can be staged, or unstaged, one at a time */
+  hunks?: DiffHunk[]
 }
 
 export interface CodeCommitContext {
@@ -58,6 +60,8 @@ export interface CodeCommitContext {
   gitFailure: Pick<CommitFailure, 'during' | 'signIn'> | null
   /** Whether the GitHub CLI was asked to give git its sign-in and has not answered */
   isSettingUpSignIn: boolean
+  /** Whether git was asked to stage or unstage one piece of a file's change and has not answered */
+  isApplyingHunk: boolean
   isPushing: boolean
   isPulling: boolean
   isGeneratingMessage: boolean
@@ -143,6 +147,8 @@ export type Event =
   | { type: 'commit.FILES_REVERTED'; paths: string[] }
   | { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }
   | { type: 'commit.SET_UP_SIGN_IN'; host: string }
+  | { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; patch: string }
+  | { type: 'commit.HUNK_APPLIED'; data: { path: string; staged: boolean } }
   | { type: 'commit.SIGN_IN_SET_UP'; data: { host: string } }
   | { type: 'commit.BRANCHES_RECEIVED'; data: { branches: string[] } }
   | { type: 'commit.BRANCH_CHECKOUT_SUCCESS'; data: { branchName: string } }
@@ -429,6 +435,7 @@ export const commitState = setup({
         return { during, signIn }
       },
       isSettingUpSignIn: false,
+      isApplyingHunk: false,
       isGitLoading: false,
       isCheckingOutBranch: false,
       isPushing: false,
@@ -438,6 +445,13 @@ export const commitState = setup({
     }),
 
     dismissError: assign({ gitError: null, gitFailure: null }),
+
+    /** Has git stage one piece of a file's change, or take one back out of what is staged */
+    applyHunk: enqueueActions(({ event, enqueue }) => {
+      const { path, staged, patch } = event as { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; patch: string }
+      enqueue.assign({ isApplyingHunk: true, gitError: null, gitFailure: null })
+      enqueue(() => { sendToSystem('code', { type: 'commit.APPLY_HUNK', path, staged, patch }) })
+    }),
 
     /** Has the GitHub CLI give git its sign-in for the host that asked */
     setUpSignIn: enqueueActions(({ event, enqueue }) => {
@@ -685,6 +699,7 @@ export const commitState = setup({
     fetchSignIn: null,
     gitFailure: null,
     isSettingUpSignIn: false,
+    isApplyingHunk: false,
     isPushing: false,
     isPulling: false,
     isGeneratingMessage: false,
@@ -718,6 +733,12 @@ export const commitState = setup({
         },
         'commit.SIGN_IN_SET_UP': {
           actions: 'signInSetUp'
+        },
+        'commit.APPLY_HUNK': {
+          actions: 'applyHunk'
+        },
+        'commit.HUNK_APPLIED': {
+          actions: assign({ isApplyingHunk: false })
         },
         'commit.SELECT_FILE': {
           actions: 'selectGitFile'

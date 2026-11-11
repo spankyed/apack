@@ -136,12 +136,26 @@ export type RepositoryChange = Record<RepositoryPart, boolean> & {
 }
 
 /** The two sides of one file's change, which an editor shows side by side */
+/** One piece of a file's change, as git cuts it */
+export interface DiffHunk {
+  /** Where it begins on the left side of the diff, and how many lines of that side it covers */
+  oldStart: number
+  oldLines: number
+  /** The same on the right side */
+  newStart: number
+  newLines: number
+  /** The patch that applies this piece alone */
+  patch: string
+}
+
 export interface GitDiff {
   path: string
   staged: boolean
   originalContent?: string
   modifiedContent?: string
   isImage?: boolean
+  /** The pieces of the change that can be staged, or unstaged, one at a time: none for a file that is not plainly modified */
+  hunks?: DiffHunk[]
 }
 
 export interface StashEntry {

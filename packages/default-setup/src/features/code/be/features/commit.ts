@@ -53,6 +53,7 @@ export type Event =
   | { type: 'commit.RESOLVE_ALL_CONFLICTS'; strategy: 'ours' | 'theirs' }
   | { type: 'commit.MOVE_OPERATION'; move: OperationMove }
   | { type: 'commit.SET_UP_SIGN_IN'; host: string }
+  | { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; patch: string }
   | { type: 'commit.LOG_LIST' }
   | { type: 'commit.REVERT_COMMIT'; hash: string }
   | { type: 'commit.RESET_TO_COMMIT'; hash: string }
@@ -287,6 +288,9 @@ export const commitSystem = setup({
           originalContent = modifiedContent = await getContent(ev.path, ev.staged ? 'index' : 'working').catch(() => '')
         }
 
+        // The pieces of the change that can be staged one at a time, cut by git from the file as it is now
+        const hunks = ev.path && !isImage ? await context.gitRepository!.getHunks(ev.path, ev.staged || false) : []
+
         answer(reply, {
           type: 'commit.DIFF_RECEIVED',
           data: {
@@ -294,7 +298,8 @@ export const commitSystem = setup({
             staged: ev.staged || false,
             originalContent,
             modifiedContent,
-            isImage
+            isImage,
+            hunks
           }
         })
       }).catch((error: any) => {
@@ -645,6 +650,21 @@ export const commitSystem = setup({
       })
     },
 
+    /** Stages one piece of a file's change, or takes one back out of what is staged: a write like staging the file */
+    applyHunk: ({ event, context, self, reply }) => {
+      const { path: file, staged, patch } = event as { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; patch: string }
+      if (!requireGitRepository(context, reply)) return
+
+      context.gitRepository.applyHunk(file, staged, patch).then(() => {
+        answer(reply, { type: 'commit.HUNK_APPLIED', data: { path: file, staged } })
+      }, (error: unknown) => {
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) })
+      }).finally(() => {
+        // Refused or not, the window's diff is read again: a refusal means the file moved on under it
+        self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+      })
+    },
+
     /**
      * Has the GitHub CLI give git its sign-in for the host a remote asked on, and starts fetching again. The
      * host arrives from the window, so it is held to a host name before it reaches a command line
@@ -963,6 +983,9 @@ export const commitSystem = setup({
         },
         'commit.SET_UP_SIGN_IN': {
           actions: 'setUpSignIn'
+        },
+        'commit.APPLY_HUNK': {
+          actions: 'applyHunk'
         },
         'commit.COMMIT': {
           actions: 'commit'
