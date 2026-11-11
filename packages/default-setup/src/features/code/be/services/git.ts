@@ -2,13 +2,14 @@ import * as path from 'path'
 import * as fs from 'fs/promises'
 import { watch } from 'fs'
 import { REPOSITORY_PARTS } from '../types.ts'
-import type { ConflictKind, GitStatusFile, StashEntry, CommitLogEntry, OperationMove, RepositoryChange, RepositoryOperation, RepositoryPart } from '../types.ts'
+import type { ConflictKind, DiffHunk, GitStatusFile, StashEntry, CommitLogEntry, OperationMove, RepositoryChange, RepositoryOperation, RepositoryPart } from '../types.ts'
 import { createLogger } from '@apackdev/sdk/logger'
 import { execFileWhileWorking } from '@apackdev/sdk/progress'
 import { agentChildEnvironment } from './shell-environment.ts'
 import { GitError, LOCKED, classifyGitError, type GitErrorCode } from './git-errors.ts'
 import { signInHelpFor, type SignInHelp } from './sign-in.ts'
 import { GitObjectReader } from './git-objects.ts'
+import { hunksOf } from './git-hunks.ts'
 
 const logger = createLogger('git')
 
@@ -540,7 +541,7 @@ export class GitRepository {
    * Runs git, answering once it has exited and its output has gone quiet, without waiting for its pipes to
    * close: a process a hook left behind holds them open for as long as it lives.
    */
-  private runGit(args: string[], encoding: BufferEncoding, refreshesIndex = false): Promise<{ stdout: string; stderr: string }> {
+  private runGit(args: string[], encoding: BufferEncoding, refreshesIndex = false, input?: string): Promise<{ stdout: string; stderr: string }> {
     const running = execFileWhileWorking('git', ['-c', 'color.ui=never', ...args], {
       cwd: this.workingDirectory,
       // The one read that may write: it lets git take its optional lock and keep what it learns of the files
@@ -549,6 +550,7 @@ export class GitRepository {
       encoding,
     })
     const { child } = running
+    if (input !== undefined) child.stdin?.end(input)
     let grace: NodeJS.Timeout | undefined
     const giveUpOnPipes = () => { child.stdout?.destroy(); child.stderr?.destroy() }
     const quiet = () => { clearTimeout(grace); grace = setTimeout(giveUpOnPipes, EXIT_GRACE_MS) }
@@ -715,12 +717,12 @@ export class GitRepository {
    * of: a git in a terminal, or an agent's, holds the index for moments, and the user who staged a file in
    * those moments meant it. The lane waits with it, since what is queued behind needs the same lock.
    */
-  private executeGitCommand(args: string[], { refreshesIndex = false } = {}): Promise<GitCommandResult> {
+  private executeGitCommand(args: string[], { refreshesIndex = false, input }: { refreshesIndex?: boolean; input?: string } = {}): Promise<GitCommandResult> {
     // A read allowed to write the index waits its turn among the writes made here, which need the same lock
     return this.enqueueCommand(refreshesIndex ? 'write' : laneOf(args), async () => {
       let refusedAt: number | undefined
       for (;;) {
-        const result = await this.runGitOnce(args, refreshesIndex)
+        const result = await this.runGitOnce(args, refreshesIndex, input)
         const lock = result.code === 'locked' ? LOCKED.exec(result.error ?? '')?.[1] : undefined
         if (!lock) return result
         // A stash is several steps to git, and one refused part-way has done the steps before it: run again, it
@@ -735,11 +737,11 @@ export class GitRepository {
     })
   }
 
-  private async runGitOnce(args: string[], refreshesIndex = false): Promise<GitCommandResult> {
+  private async runGitOnce(args: string[], refreshesIndex = false, input?: string): Promise<GitCommandResult> {
     try {
       // Ended when it stops working, not when a clock runs out: a fetch stalled on the network would
       // otherwise hold its lane, and every later remote command with it, until the app restarts
-      const { stdout } = await this.runGit(args, 'utf8', refreshesIndex)
+      const { stdout } = await this.runGit(args, 'utf8', refreshesIndex, input)
 
       return { success: true, output: stdout }
     } catch (error) {
@@ -1419,6 +1421,30 @@ export class GitRepository {
     } catch {
       return ''
     }
+  }
+
+  /**
+   * The pieces of a file's change that can be staged one at a time, or unstaged when `staged`: of the working
+   * tree against the index, or of the index against the last commit. None for a file that is not plainly modified.
+   */
+  async getHunks(filePath: string, staged: boolean): Promise<DiffHunk[]> {
+    const result = await this.executeGitCommand(['diff', '--no-ext-diff', '--no-color', '--no-textconv', ...(staged ? ['--cached'] : []), '--', filePath])
+    return result.success ? hunksOf(result.output ?? '') : []
+  }
+
+  /**
+   * Stages one piece of a file's change, or with `staged` takes one piece out of what is staged. The piece is
+   * one this repository cut from the file as it is now: one read before the file changed again is refused,
+   * rather than applied to lines it was not made from.
+   */
+  async applyHunk(filePath: string, staged: boolean, patch: string): Promise<void> {
+    return this.withWriteFlag(async () => {
+      if (!(await this.getHunks(filePath, staged)).some(hunk => hunk.patch === patch)) {
+        throw new GitError('The file has changed since this change was read. It is shown as it is now: try again.')
+      }
+      const result = await this.executeGitCommand(['apply', '--cached', ...(staged ? ['--reverse'] : []), '--whitespace=nowarn', '-'], { input: patch })
+      if (!result.success) throw failure(result, staged ? 'Failed to unstage the change' : 'Failed to stage the change')
+    })
   }
 
   /** Check if a file path is an image based on extension. */

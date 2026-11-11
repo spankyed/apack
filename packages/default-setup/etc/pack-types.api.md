@@ -1163,6 +1163,19 @@ interface DatabaseSchemaInfo {
 
 type DatabaseSettings = SettingsOf<'database'>;
 
+/** The two sides of one file's change, which an editor shows side by side */
+/** One piece of a file's change, as git cuts it */
+interface DiffHunk {
+    /** Where it begins on the left side of the diff, and how many lines of that side it covers */
+    oldStart: number;
+    oldLines: number;
+    /** The same on the right side */
+    newStart: number;
+    newLines: number;
+    /** The patch that applies this piece alone */
+    patch: string;
+}
+
 interface DirectoryContent {
     path: string;
     files: FileInfo[];
@@ -1632,13 +1645,14 @@ interface GhReviewThread {
     comments: GhReviewComment[];
 }
 
-/** The two sides of one file's change, which an editor shows side by side */
 interface GitDiff {
     path: string;
     staged: boolean;
     originalContent?: string;
     modifiedContent?: string;
     isImage?: boolean;
+    /** The pieces of the change that can be staged, or unstaged, one at a time: none for a file that is not plainly modified */
+    hunks?: DiffHunk[];
 }
 
 /** Where a checkout's git state lives, and where the working directory is in it */
@@ -1852,6 +1866,17 @@ declare class GitRepository {
      * Read a file from a branch as a base64 data URL if it's an image.
      */
     getFileContentFromBranchAsDataUrl(filePath: string, branch: string): Promise<string>;
+    /**
+     * The pieces of a file's change that can be staged one at a time, or unstaged when `staged`: of the working
+     * tree against the index, or of the index against the last commit. None for a file that is not plainly modified.
+     */
+    getHunks(filePath: string, staged: boolean): Promise<DiffHunk[]>;
+    /**
+     * Stages one piece of a file's change, or with `staged` takes one piece out of what is staged. The piece is
+     * one this repository cut from the file as it is now: one read before the file changed again is refused,
+     * rather than applied to lines it was not made from.
+     */
+    applyHunk(filePath: string, staged: boolean, patch: string): Promise<void>;
     /** Check if a file path is an image based on extension. */
     isImageFile(filePath: string): boolean;
     /** Execute a git command and return raw binary buffer output. */
@@ -2189,6 +2214,13 @@ type IncomingCommitEvents = {
  | {
     type: 'commit.MOVE_OPERATION';
     move: OperationMove;
+}
+/** Stage one piece of a file's change, or with `staged` take one piece out of what is staged */
+ | {
+    type: 'commit.APPLY_HUNK';
+    path: string;
+    staged: boolean;
+    patch: string;
 }
 /** Have the GitHub CLI give git its sign-in for this host */
  | {
@@ -3444,6 +3476,12 @@ type OutgoingCommitEvents =
 } | {
     type: 'commit.ERROR_RECEIVED';
     data: CommitFailure;
+} | {
+    type: 'commit.HUNK_APPLIED';
+    data: {
+        path: string;
+        staged: boolean;
+    };
 }
 /** Git signs in to this host through the GitHub CLI now */
  | {

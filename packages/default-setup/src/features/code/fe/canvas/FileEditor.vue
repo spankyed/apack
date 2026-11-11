@@ -138,7 +138,16 @@
         </div>
 
         <!-- Monaco editor for both regular files and diffs -->
-        <div v-show="!isTerminal(activeFile) && !isImage(activeFile) && !isVideoFile(activeFile) && !isBinaryFile && !isRichText(activeFile) && !isDeletedFile && !isImageDiff" class="h-full overflow-hidden">
+        <div v-show="!isTerminal(activeFile) && !isImage(activeFile) && !isVideoFile(activeFile) && !isBinaryFile && !isRichText(activeFile) && !isDeletedFile && !isImageDiff" class="h-full overflow-hidden flex flex-col">
+          <DiffHunkBar
+            v-if="diffHunks.length > 0"
+            :hunks="diffHunks"
+            :staged="activeDiff!.staged"
+            :unsaved="'modified' in activeFile && activeFile.modified === true"
+            :busy="isApplyingHunk === true"
+            @reveal="revealLine"
+            @apply="(hunk) => emit('applyHunk', activeDiff!.path, activeDiff!.staged, hunk.patch)"
+          />
           <MonacoEditor
             ref="monacoEditorRef"
             v-if="!isTerminal(activeFile) && !isImage(activeFile) && !isVideoFile(activeFile) && !isBinaryFile && !isRichText(activeFile) && !isDeletedFile && !isImageDiff"
@@ -151,7 +160,7 @@
             :modified-content="diffModifiedContent"
             :read-only="isDiffReadOnly"
             :dsl-params="activeDslParams"
-            class="h-full"
+            class="flex-1 min-h-0"
             @mount="emit('editorMount')"
             @file-ready="emit('editorFileReady')"
           />
@@ -168,6 +177,7 @@ import MonacoEditor from './MonacoEditor.vue'
 import TerminalView from './TerminalView.vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import DeletedFileView from './DeletedFileView.vue'
+import DiffHunkBar from './DiffHunkBar.vue'
 import VideoPlayer from './VideoPlayer.vue'
 import Tabs from './Tabs.vue'
 import { isEditableDiff, type OpenFile, type TerminalTab, type TabGroup } from '#features/code/fe/state.ts'
@@ -182,6 +192,8 @@ const props = defineProps<{
   activeFilePath: string | null
   baseDirectory?: string
   tabGroups: TabGroup[]
+  /** Whether git was asked to stage or unstage one piece of a change and has not answered */
+  isApplyingHunk?: boolean
 }>()
 
 // Emits
@@ -213,6 +225,7 @@ const emit = defineEmits<{
   'promote-preview': [path: string]
   editorMount: []
   editorFileReady: []
+  applyHunk: [path: string, staged: boolean, patch: string]
 }>()
 
 // Helper to check if a file is a terminal
@@ -292,6 +305,14 @@ const activeDslParams = computed(() => {
   }
   return undefined
 })
+
+/** The diff the active tab shows, and the pieces of it that can be staged one at a time */
+const activeDiff = computed(() => (isDiffFile.value ? getDiffContent(activeFile.value) : null))
+const diffHunks = computed(() => activeDiff.value?.hunks ?? [])
+
+const revealLine = (line: number) => {
+  monacoEditorRef.value?.getEditor()?.revealLineInCenter(line)
+}
 
 const diffOriginalContent = computed(() => {
   if (!isDiffFile.value || !activeFile.value) return undefined
