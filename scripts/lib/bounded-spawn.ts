@@ -25,10 +25,14 @@
  * - **The process group dies, not just the child.** `npm run x` is a shell that spawns node that spawns
  *   vitest that spawns workers. Killing the child alone orphans the rest, still running. And the group dies
  *   when the child exits however it ends, a pass included: nothing a run started outlives it.
+ * - **What a command left running fails it.** A command that exits by itself with something still running in
+ *   its group started it and did not end it: the run says what, kills it as before, and is not a pass
+ *   (`left-running.ts`). A run cut short is not asked, since ending its group is what cutting it short is.
  */
 import { spawn } from 'node:child_process';
 import { describeRefusal, processWork, watchWork } from '../../packages/apack-sdk/src/progress.ts';
 import { IDLE_MS, ceilingSetting, watchdogEnabled } from './step-budgets.ts';
+import { describeLeft, leftRunning, type GroupProcess } from './left-running.ts';
 
 
 
@@ -47,6 +51,11 @@ export interface BoundedResult {
   readonly stalled?: true;
   /** Set when the caller stopped it. Distinct from a failure, which `code` alone cannot say. */
   readonly aborted?: true;
+  /**
+   * What it left running in its process group when it exited by itself, before the group was killed. A command
+   * that exited 0 and left something has `code` 1: it passed only because something killed what it left.
+   */
+  readonly left?: readonly GroupProcess[];
 }
 
 /** How long a killed group gets to exit on SIGTERM before SIGKILL */
@@ -146,6 +155,9 @@ export function boundedSpawn(command: string, args: readonly string[], budgetMs:
     let timedOut: true | undefined;
     let stalled: true | undefined;
     let aborted: true | undefined;
+    let left: readonly GroupProcess[] | undefined;
+    /** The look for what the command left, once it has exited: the run is not answered before it is done */
+    let looked: Promise<void> | undefined;
 
     const killGroup = (signal: NodeJS.Signals) => {
       if (child.pid === undefined) return;
@@ -156,13 +168,14 @@ export function boundedSpawn(command: string, args: readonly string[], budgetMs:
 
     let closed: number | null = null;
     const done = () => resolve({
-      code: timedOut ? 124 : closed ?? 1,
+      code: timedOut ? 124 : left ? closed || 1 : closed ?? 1,
       output,
       ms: Date.now() - started,
       ...(watch !== undefined ? { cpuMs: watch.spentMs() } : {}),
       ...(timedOut ? { timedOut } : {}),
       ...(stalled ? { stalled } : {}),
       ...(aborted ? { aborted } : {}),
+      ...(left ? { left } : {}),
     });
 
     /**
@@ -221,16 +234,30 @@ export function boundedSpawn(command: string, args: readonly string[], budgetMs:
 
     // What is still in the group once its leader has exited was orphaned: a vitest that died on one worker's
     // native abort leaves the others running, reparented to init. They hold the pipes, so 'close' waits on them.
-    child.on('exit', () => { killGroup('SIGKILL'); });
+    // A command that exited by itself is asked what it left before they are killed; one cut short was killed
+    // here, and has nothing to answer for.
+    child.on('exit', () => {
+      if (terminating || child.pid === undefined) return killGroup('SIGKILL');
+      looked = leftRunning(child.pid).then((found) => {
+        if (found.length > 0 && !terminating) {
+          left = found;
+          say(describeLeft(found));
+        }
+        killGroup('SIGKILL');
+      });
+    });
 
     child.on('close', (code) => {
       clearTimeout(budget);
       watch?.stop();
       signal?.removeEventListener('abort', abort);
-      if (child.pid !== undefined) liveGroups.delete(child.pid);
       closed ??= code;
-      // On a timeout or an abort the escalation resolves, so the group is hard-killed before this returns
-      if (!timedOut && !aborted) done();
+      // A command that left nothing holding its pipes closes before the look for what it left is done
+      void (looked ?? Promise.resolve()).then(() => {
+        if (child.pid !== undefined) liveGroups.delete(child.pid);
+        // On a timeout or an abort the escalation resolves, so the group is hard-killed before this returns
+        if (!timedOut && !aborted) done();
+      });
     });
   });
 }

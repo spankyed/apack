@@ -79,22 +79,42 @@ await boundedSpawn(process.execPath, ['-e', ${JSON.stringify(childCode)}], 30000
     } finally {
       // Stopped whatever happened above: a case that failed before this left the whole group running
       stop.abort();
-      await running;
+      // Ending its group is what stopping it is, so it is asked nothing of what was running in it
+      expect((await running).left).toBeUndefined();
     }
     await expectGone(grandchild);
   });
 
-  it('kills what the child left in its group when it exits, a pass included', async () => {
+  // The shell exits 0 at once, leaving the grandchild running: a spec that started a server and forgot it, or a
+  // vitest that died with its workers alive. It passed only because something kills what it left
+  it('fails a command that exited 0 and left a process running, says which, and kills it', async () => {
     const pidFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'bounded-spawn-')), 'grandchild.pid');
-    // The shell exits 0 at once, leaving the grandchild running: a vitest that died with its workers alive
     const result = await boundedSpawn('sh',
       ['-c', `${process.execPath} -e 'require("fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setInterval(()=>{},1000)' >/dev/null 2>&1 &
 while [ ! -s ${JSON.stringify(pidFile)} ]; do sleep 0.05; done`],
       30_000);
     const grandchild = Number(fs.readFileSync(pidFile, 'utf-8'));
     expect(grandchild, 'nothing is proven if the grandchild never started').toBeGreaterThan(0);
-    expect(result.code).toBe(0);
+
+    expect(result.code).toBe(1);
+    expect(result.left?.map(left => left.pid)).toEqual([grandchild]);
+    expect(result.output).toMatch(new RegExp(`it exited and left a process running, which was then killed:\\n {2}pid ${grandchild}: .*setInterval`));
     await expectGone(grandchild);
+  });
+
+  // A worker finishing after its pool, a service process reading a pipe that has just closed
+  it('passes a command whose child is on its way out when it exits', async () => {
+    const result = await boundedSpawn('sh', ['-c', 'sleep 0.4 >/dev/null 2>&1 &'], 30_000);
+
+    expect(result).toMatchObject({ code: 0 });
+    expect(result.left).toBeUndefined();
+  });
+
+  it('keeps the code of a command that failed by itself, and still says what it left', async () => {
+    const result = await boundedSpawn('sh', ['-c', 'sleep 30 >/dev/null 2>&1 & exit 3'], 30_000);
+
+    expect(result.code).toBe(3);
+    expect(result.left?.map(left => left.command)).toEqual(['sleep 30']);
   });
 });
 
