@@ -473,7 +473,6 @@
               <!-- A file in an open folder is a row under the folder's, which is one row for all of it -->
               <GitFileItem
                 :file="file"
-                :class="{ 'ml-4': file.inFolder }"
                 :isSelected="selectedGitFile?.path === file.path && selectedGitFile?.staged === file.staged"
                 @select="file.isDirectory ? toggleFolder(file) : selectFile(file)"
                 @openFile="openFile"
@@ -481,6 +480,10 @@
                 <template v-if="file.isDirectory" #prefix>
                   <component :is="openFolders[file.path] ? ChevronDown : ChevronRight" :size="12" class="text-neutral-500 flex-shrink-0" />
                   <Folder :size="12" class="text-neutral-400 flex-shrink-0" />
+                </template>
+                <!-- Set in from the folder's row, by the width of its arrow and icon -->
+                <template v-else-if="file.inFolder" #prefix>
+                  <span class="w-7 flex-shrink-0" />
                 </template>
                 <template #actions>
                   <button @click.stop="openRevertDialog(file)" class="p-0.5 hover:bg-neutral-700 rounded" title="Discard changes">
