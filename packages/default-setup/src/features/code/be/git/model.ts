@@ -171,7 +171,9 @@ export class RepositoryModel {
   }
 
   currentSnapshot(): Promise<LoadedSnapshot> {
-    if (this.snapshot && this.watched && this.unread !== 'anything' && this.unread.size === 0) return Promise.resolve(this.snapshot)
+    // Not while a read is under way: it took what was noted when it began and holds the new snapshot only when
+    // it ends, so until then the one held is from before it, with nothing left noted against it
+    if (!this.snapshotRead && this.snapshot && this.watched && this.unread !== 'anything' && this.unread.size === 0) return Promise.resolve(this.snapshot)
     if (this.snapshotRead?.version === this.snapshotVersion) return this.snapshotRead.promise
 
     // One read at a time, each starting from what the one before it left: a read of a few paths is put into the
