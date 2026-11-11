@@ -93,7 +93,29 @@ Everything below is on master.
   - So **three processes** each watch on their own.
 - **`packages/main/src/modules/api-server/dev-reloader.ts:90`:** `fs.watch` on the API bundle file, so kqueue.
 - **`packages/default-setup/src/features/code/be/services/gitwatcher.ts`:** watches the *user's* repositories. This is a product feature, not the dev loop, and a separate question.
-  - It uses `@parcel/watcher` on the working tree and the git directories, so on macOS its events come from FSEvents.
+  - It watches the working tree and the git directories through `services/directory-watch.ts`: Node's recursive `fs.watch` on macOS and Windows, so FSEvents on macOS, and `@parcel/watcher` on Linux, which has no watch over a tree.
+  - **Why `@parcel/watcher` is not loaded on macOS or Windows** (measured 2026-11-10: darwin arm64, Node 24.16.0, `@parcel/watcher` 2.5.6, load 5 to 8):
+    - **Its macOS backend frees its event stream twice.** When the watched directory is deleted, `FSEventsCallback` stops and releases the stream on its own thread without the lock, while `unsubscribe` does the same on a worker thread (`src/macos/FSEventsBackend.cc`). Upstream has it open as #271; the file is the same on its main branch and in 2.6.0.
+    - With the library alone in the process, 8 processes of 200 rounds each:
+
+      | Sequence | Died of heap corruption |
+      |---|---|
+      | close one watch, delete its directory in the same turn | 7 of 8 |
+      | start closing, one event-loop turn, delete | 8 of 8 |
+      | close two watches (tree and `.git`), delete | 4 of 8 |
+      | delete, one turn, close and wait | 1 of 8 |
+      | close and wait, then delete | 0 of 8 |
+      | create and delete subdirectories, then close | 0 of 8 |
+
+    - Node's `fs.watch` over the third, fourth and sixth sequences: 0 of 8 each.
+    - In this repo it killed a spec worker about one run in three, since a spec stops the code system and deletes its directory. macOS filed five reports that day, each `memory corruption of free block` in a process with the binding loaded, three of them caught inside elmdb's allocations: the watcher shares its process with the database.
+    - **Its Windows backend** frees a subscription whose `OVERLAPPED` the kernel still holds, on every `unsubscribe` (upstream #262, open). Read against the shipped source, not run.
+    - **Its Linux backend** handles a deleted directory under the lock `unsubscribe` takes. Read, not run.
+    - **Cost on macOS**, same day. One write reached JavaScript in 9 to 11 ms through `fs.watch` and 63 to 65 ms through the library (median of 20). A 20,000-file flood written by another process cost the watching process 80 ms of CPU through `fs.watch` and 635 ms through the library. The same flood inside an ignored directory cost 63 ms through `fs.watch`, which drops its 20,401 callbacks in JavaScript, and 3 ms through the library, which never hears of them.
+    - **A directory deleted and made again at the same path:** `fs.watch` on macOS reports on the new one. The library reports nothing more, so its subscriber says the watch ended.
+    - **What `fs.watch` gives up:** libuv skips FSEvents' dropped-event flags (`kFSEventsSystem`, `src/unix/fsevents.c`), so a drop is not an error here. The recorder above saw FSEvents raise none for 249 lost saves, and reading again is what covers a loss either way.
+    - **Why not Node's watch on Linux too:** it opens a watch on every file as well as every directory, and reads the whole tree before it returns (`lib/internal/fs/recursive_watch.js`, v24.16.0).
+    - The scripts were in a session scratchpad and are not in the repo.
   - It treats an event as a hint: git is asked whether the status or a ref changed, and only a difference is announced.
   - What no event reported is found by reading again when a window gains focus, a terminal command finishes or an agent's turn ends (`CHECK_FOR_EXTERNAL_CHANGES`).
   - `services/open-file-watcher.ts` beside it watches each file open in an editor with chokidar's per-file `fs.watch` mode (`useFsEvents: false, usePolling: false`), so kqueue.

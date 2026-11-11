@@ -1,31 +1,10 @@
 import * as path from 'path'
 import * as fs from 'fs/promises'
 import type { GitRepository } from './git.ts'
+import { subscribeToDirectory, type SubscribeToDirectory, type WatchedChange } from './directory-watch.ts'
 import { createLogger } from '@apackdev/sdk/logger'
 
 const logger = createLogger('git-watcher')
-
-/** One change under a watched directory, as `@parcel/watcher` reports it */
-export interface WatchEvent {
-  path: string
-  type: 'create' | 'update' | 'delete'
-}
-
-/** Watches a directory and everything under it, apart from what `ignore` names relative to it */
-export type SubscribeToDirectory = (
-  directory: string,
-  onEvents: (error: Error | null, events: WatchEvent[]) => void,
-  options: { ignore: string[] },
-) => Promise<{ unsubscribe(): Promise<void> }>
-
-/**
- * The platform's watcher, loaded on first use: a build that lacks its binary fails here, where the failure
- * costs this checkout its watching, rather than at import, where it would cost the pack its load.
- */
-const subscribeWithParcel: SubscribeToDirectory = async (directory, onEvents, options) => {
-  const { subscribe } = await import('./parcel-watcher.ts')
-  return subscribe(directory, onEvents, options)
-}
 
 /** How long the repository must go quiet before its change is reported */
 const QUIET_MS = 200
@@ -76,7 +55,7 @@ export class GitWatcherService {
   private isWatching = false
   private gitRepository?: GitRepository
 
-  constructor(private workingDirectory: string, private subscribe: SubscribeToDirectory = subscribeWithParcel) {}
+  constructor(private workingDirectory: string, private subscribe: SubscribeToDirectory = subscribeToDirectory) {}
 
   setGitRepository(repo: GitRepository): void {
     this.gitRepository = repo
@@ -99,8 +78,8 @@ export class GitWatcherService {
 
   /**
    * Brings the watches in line with the checkout as it is now, for a caller that knows it may have moved.
-   * A directory that became a repository starts being watched, a watch that failed is opened again, and the
-   * ignored directories are taken afresh.
+   * A directory that became a repository starts being watched, a watch that failed or ended with its
+   * directory is opened again, and the ignored directories are taken afresh.
    */
   async check(): Promise<void> {
     if (!this.isWatching) return
@@ -121,7 +100,7 @@ export class GitWatcherService {
 
     const wanted = new Map<WatchKey, WantedWatch>()
     if (directories) {
-      // The platform reports real paths, so a watched directory is named by its real path too
+      // One directory can be named two ways, and git names its own both ways: by its real path they compare
       const real = (directory: string) => fs.realpath(directory).catch(() => directory)
       const [tree, gitDir, commonDir] = await Promise.all([real(this.workingDirectory), real(directories.gitDir), real(directories.commonDir)])
       const shared = gitDir === commonDir
@@ -146,7 +125,7 @@ export class GitWatcherService {
     for (const [key, watch] of wanted) {
       if (this.subscriptions.has(key)) continue
       try {
-        const subscription = await this.subscribe(watch.directory, (error, events) => this.handleEvents(key, watch, error, events), { ignore: watch.ignore })
+        const subscription = await this.subscribe(watch.directory, (error, changes) => this.handleChanges(key, watch, error, changes), { ignore: watch.ignore })
         if (cancelled()) {
           await subscription.unsubscribe()
           return
@@ -167,12 +146,12 @@ export class GitWatcherService {
     if (failed !== failedBefore) this.scheduleChange()
   }
 
-  private handleEvents(key: WatchKey, watch: WantedWatch, error: Error | null, events: WatchEvent[]) {
+  private handleChanges(key: WatchKey, watch: WantedWatch, error: Error | null, changes: WatchedChange[]) {
     const held = this.subscriptions.get(key)
     // A watch that has since been replaced may still deliver: what it says is about a watch that is gone
     if (held && held.watch !== watch) return
     if (error) {
-      // A watch that reported an error may have stopped reporting: close it, so `check` opens a new one
+      // A watch that reported an error has stopped reporting, or may have: close it, so `check` opens a new one
       logger.error(`The ${key} watch failed`, { error })
       if (held) {
         this.subscriptions.delete(key)
@@ -182,7 +161,8 @@ export class GitWatcherService {
       this.scheduleChange()
       return
     }
-    if (events.some(event => watch.relevant(path.relative(watch.directory, event.path)))) this.scheduleChange()
+    // A change the platform could not place may be any of them
+    if (changes.some(change => change === null || watch.relevant(change))) this.scheduleChange()
   }
 
   /** One report for every change that arrives close together */

@@ -1839,12 +1839,12 @@ declare class GitWatcherService {
     startWatching(signal: AbortSignal): Promise<void>;
     /**
      * Brings the watches in line with the checkout as it is now, for a caller that knows it may have moved.
-     * A directory that became a repository starts being watched, a watch that failed is opened again, and the
-     * ignored directories are taken afresh.
+     * A directory that became a repository starts being watched, a watch that failed or ended with its
+     * directory is opened again, and the ignored directories are taken afresh.
      */
     check(): Promise<void>;
     private establish;
-    private handleEvents;
+    private handleChanges;
     /** One report for every change that arrives close together */
     private scheduleChange;
     private armChange;
@@ -4885,8 +4885,11 @@ declare const StreamEventLineSchema: z.ZodObject<{
  */
 type StreamLine = KnownStreamLine | UnknownLine;
 
-/** Watches a directory and everything under it, apart from what `ignore` names relative to it */
-type SubscribeToDirectory = (directory: string, onEvents: (error: Error | null, events: WatchEvent[]) => void, options: {
+/**
+ * Watches a directory and everything under it, apart from the directories `ignore` names relative to it.
+ * An error means the watch has stopped reporting, or may have.
+ */
+type SubscribeToDirectory = (directory: string, onChanges: (error: Error | null, changes: WatchedChange[]) => void, options: {
     ignore: string[];
 }) => Promise<{
     unsubscribe(): Promise<void>;
@@ -5527,11 +5530,8 @@ declare const UserStreamLineSchema: z.ZodObject<{
     isSynthetic: z.ZodOptional<z.ZodBoolean>;
 }, z.core.$loose>;
 
-/** One change under a watched directory, as `@parcel/watcher` reports it */
-interface WatchEvent {
-    path: string;
-    type: 'create' | 'delete' | 'update';
-}
+/** Where under a watched directory something changed, relative to it; `null` when the platform could not say */
+type WatchedChange = string | null;
 
 interface WorktreeEntry {
     path: string;

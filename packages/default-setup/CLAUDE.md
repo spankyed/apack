@@ -162,9 +162,15 @@ neither watcher needs to be exact.
   the check is what tells the others.
 - **A watch that fails is said to the user.** `commit.STATUS_RECEIVED` carries `watching`, and the panel says live
   updates are off; the next check opens the watch again.
-- **The platform watcher is a native binding the host resolves** (`HOST_RESOLVED_BINARIES`), and the host resolves
-  what a pack *requires*. It is imported by a module of its own (`parcel-watcher.ts`) that is loaded on first use:
-  a dynamic `import()` of the package itself is resolved by Node beside the installed pack, where nothing is.
+- **A tree is watched by the platform's own watcher where it has one** (`directory-watch.ts`): Node's recursive
+  `fs.watch` on macOS and Windows, and `@parcel/watcher` on Linux, which has no watch over a tree. The library
+  is not loaded on the other two, where it has open memory defects and would share a process with the database
+  ([what was measured](../../docs/issues/ISSUE-dev-loop-file-watching.md#code-map)). A watcher that needs a native
+  binding earns its place by surviving its directory being deleted as its watch closes.
+- **Where the library is used it is a native binding the host resolves** (`HOST_RESOLVED_BINARIES`), and the
+  host resolves what a pack *requires*. It is imported by a module of its own (`parcel-watcher.ts`) that is
+  loaded on first use: a dynamic `import()` of the package itself is resolved by Node beside the installed pack,
+  where nothing is.
 
 **The guards that remain, and what each got wrong first.** Every correlating guard in this pack went through this,
 and they failed in four different ways — which is the argument for reading the list rather than copying the one you
