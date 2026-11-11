@@ -363,3 +363,27 @@ PowerShell's own image is x86 and aborted under emulation before the hook was re
 of the hook; the run above is its arm64 build. These are runs, not cases in the suite: a spec for a
 shell that is installed nowhere the suite runs would be skipped everywhere and report nothing.
 
+
+### What a busy machine found in the broker — 2026-11-11
+
+The mutation tool refuses to start on a suite that fails unmutated, and the broker's did, one case in a
+few runs, on a machine with four cores taken. Each failure was read rather than rerun, and four were
+defects in the broker (`apack-terminal` `40a8c19`):
+
+| What failed | What it was | Before, after |
+|---|---|---|
+| `killing_a_session_takes_the_whole_tree_with_it` | Ending a session sent its shell a hangup and relied on the shell passing it on. The login shell was gone 2 ms and 40 ms after the signal with its `sleep 300 &` left running, parent 1. The broker now hangs up everything else in the session itself, before the shell | 2 of 96 runs failed at 24 at once; 0 of 416 at 24 to 40 at once |
+| `a_second_proxy_joins_the_broker_the_first_started` | A client was made the one its broker reports to and *then* answered, and two threads wrote to its socket a frame and a newline at a time. A session with something to say at that moment put its event before the greeting's answer, or inside it: `{"kind":"hello",…}{"kind":"title",…}` on one line | two cases written for it failed 5 of 6 runs on the earlier broker and pass 5 of 5 |
+| the same case, `a session` missing from a spawn's answer | A spawn was answered after the session's threads were started, so the session could speak first | not reproduced after; the answer is queued before those threads exist |
+| `a_view_that_applies_its_frames_holds_what_the_terminal_holds` | The property test found it: the cell a wide character did not fit in was left out of its row, and read as an empty cell once the character was written over, which no row is reported changed for. A view was holding a row the terminal no longer had | the seed is recorded, and a case of its own fails without the change |
+
+The full suite then ran twelve times of twelve, 351 cases, on the same busy machine.
+
+**One failure has no proven cause.** After the first of those fixes the tree-kill case failed once more
+in three full runs and not again in 416 runs of its own. Its job's pid was being read from `$!`, which
+the shell knows from the moment it forks; the case now has the job write its own pid once it is a
+program. That removes a process the case never meant to ask about, and is not shown to be what failed.
+
+Running a case 48 at once made the machine the subject: 59 of 480 runs heard nothing from a shell for ten
+seconds while macOS's own assessment of each new process held a core. Those say nothing about the broker
+and are why nothing above was measured wider than 40.
