@@ -303,27 +303,33 @@ proxy`. A terminal opened on that target from the panel's menu drew `on-Linux-aa
 app was quit and started: the terminal was listed *not connected*, and starting it again took up the
 same shell (`back-on-Linux-shell-1352`) with its screen.
 
-**One run in thirty failed, and the cause was not found.** In the first run on the final builds the
-app's two connections to the target were accepted and the greeting was not answered inside ten seconds,
-twice. What was established afterwards, 2026-11-10 and -11:
+**One run in thirty failed, and the cause is the container runtime, not the app or the broker.** In the
+first run on the final builds the app's two connections to the target were accepted and the greeting was
+not answered inside ten seconds, twice. What was established, 2026-11-10 to -12:
 
 - *Not the broker.* Started fresh by the proxy, with a client and a view that ended as a quitting app's
   do, it answered a greeting in about 80 ms fifty seconds later, and in about 30 ms in two more
   reproductions; nothing on the greeting's path in it takes a lock another connection can hold.
-- *Not reproduced.* Twenty-nine further runs of the drive passed, twenty of them each against a
-  brand-new container and profile.
-- *Not Docker under a build.* `docker exec` carried 987 greetings while a release build ran in the
-  container: median 31 ms, slowest 1.5 s. The failing run was the only one begun straight after a
-  from-scratch build there, and its first half was 2.5 s slower than any other, which is all that
-  points at the machine.
-- Docker's event log no longer reached back to the run.
+- *Not reproduced by running it again.* Twenty-nine further runs of the drive passed, twenty of them each
+  against a brand-new container and profile.
+- **Reproduced without the app or the broker.** The failing run was the only one begun straight after a
+  from-scratch build in that container. So: a new container with an empty build volume, the broker built
+  in it from nothing, and `docker exec -i <container> cat` carrying one line in and back every 150 ms for
+  seven minutes. 2,097 round trips, median 28 ms, 99th percentile 286 ms — and **one that took 22.1
+  seconds**, thirty-four seconds after the build finished. Nothing of this repository's is in that
+  round trip. An incremental build (14 s of work) in an earlier attempt peaked at 1.5 s, which is why
+  that attempt found nothing: it is the gigabytes a from-scratch build writes, being flushed, that
+  stalls an exec. The machine's load average was 20 to 40 at the time, from other work.
 
-What it showed about the app was fixed whatever the cause was. A target's greeting was held to the ten
+So a target reached through `docker exec` on this machine can take twenty seconds to answer shortly
+after heavy writes in its container, and a ten-second bound on the greeting turned that into a failure.
+
+What it showed about the app is fixed. A target's greeting was held to the ten
 seconds a broker on this machine is given, though reaching one is a network wait: it has a bound of its
 own. Starting a terminal on a target tried the shell it had and then a new one, each waiting out the
 whole bound: the target is asked what it has first, so one that cannot be reached says so once. And the
 command that hung was killed without a word of what it had been doing: the failure now says how long it
-ran, that it wrote nothing, and what it put on stderr.
+ran, that it wrote nothing, and what it put on stderr; and one that answers slowly is a line in the log.
 
 ### The mutation gate
 

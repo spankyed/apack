@@ -19,6 +19,13 @@ import { createLogger } from '@apackdev/sdk/logger';
 
 const logger = createLogger('terminal-relay');
 
+/**
+ * How long a command may take to write its first byte before the log says so. A command that reaches a
+ * broker answers in tens of milliseconds on this machine and in a second or two over a network; past
+ * this, something between here and there was slow, and which run it was is worth a line.
+ */
+const SLOW_ANSWER_MS = 3_000;
+
 /** How much of what a command wrote to stderr is kept to explain a connection that came to nothing */
 const STDERR_KEPT = 4096;
 
@@ -75,7 +82,18 @@ export async function serveRelay(socket: string, command: readonly string[], env
     const run = { began: Date.now(), answered: false, said: () => said };
     running.set(child, run);
     child.stderr.on('data', (chunk: Buffer) => { if (said.length < STDERR_KEPT) said += chunk.toString('utf8'); });
-    child.stdout.once('data', () => { run.answered = true; });
+    child.stdout.once('data', () => {
+      run.answered = true;
+      // **Said when it was slow, because a slow answer is otherwise nobody's news.** The connection waits
+      // out a network-sized bound, so a command that took twenty seconds to say anything simply works, and
+      // the next person to wonder why a terminal was slow to open has nothing to read. A reading for the
+      // log and no deadline: nothing is refused on it
+      const waited = Date.now() - run.began;
+      if (waited >= SLOW_ANSWER_MS) {
+        const said = run.said().trim();
+        logger.warn(`a terminal target's command took ${(waited / 1000).toFixed(1)}s to write anything: ${program}${said ? `; it said: ${said}` : ''}`);
+      }
+    });
     connection.pipe(child.stdin);
     child.stdout.pipe(connection);
     // A command that has gone takes no more input, which is an ending and not a fault
