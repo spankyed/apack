@@ -48,7 +48,7 @@ beforeEach(async () => {
   fs.writeFileSync(path.join(repo, 'vendor', 'elmdb.rev'), `${await git(elmdb, 'rev-parse', 'HEAD')}\n`);
   fs.writeFileSync(path.join(repo, 'vendor', 'apack-terminal.rev'), `${await git(apackTerminal, 'rev-parse', 'HEAD')}\n`);
   // As the repo's own does: the link is the checkout's, never a change to it
-  fs.writeFileSync(path.join(repo, '.gitignore'), 'vendor/elmdb\nvendor/apack-terminal\n');
+  fs.writeFileSync(path.join(repo, '.gitignore'), 'vendor/elmdb\nvendor/apack-terminal\nnode_modules\n.temp\n.apack\n');
   await git(repo, 'add', '.');
   await git(repo, 'commit', '-m', 'Base');
 });
@@ -74,6 +74,15 @@ fs.appendFileSync(process.env.SESSION_COMMANDS, JSON.stringify({ cwd: process.cw
 if (process.env.SESSION_MODE === 'setup-fail') process.exit(9);
 if (process.argv[3] === 'chain') {
   if (process.env.SESSION_MODE === 'fail') process.exit(9);
+  if (process.env.SESSION_MODE === 'evidence') {
+    fs.mkdirSync('node_modules/.cache/apack-chain/runs/a-run', { recursive: true });
+    fs.writeFileSync('node_modules/.cache/apack-chain/runs/a-run/step.log', 'what the step said');
+    // A tree a captured compiler leaves: read-only, which is where removing a checkout stops
+    fs.mkdirSync('.temp/captured/tree', { recursive: true });
+    fs.writeFileSync('.temp/captured/tree/node', 'runtime');
+    fs.chmodSync('.temp/captured/tree', 0o500);
+    fs.chmodSync('.temp/captured', 0o500);
+  }
   if (process.env.SESSION_MODE === 'drift') fs.writeFileSync('unexpected.txt', 'changed');
   if (process.env.SESSION_MODE === 'advance') execFileSync('git', ['update-ref', 'refs/heads/first', 'main'], { cwd: process.env.SESSION_SOURCE });
 }
@@ -192,6 +201,23 @@ describe('isolated editing sessions', () => {
     ]);
     expect(commands.every(command => command.cwd !== repo)).toBe(true);
     expect(await git(repo, 'status', '--porcelain')).toBe('');
+  });
+
+  it('gives a candidate that passed back, keeping what its chain wrote, and keeps one that failed', async () => {
+    await branch('first');
+    const candidates = () => fs.readdirSync(path.join(dir, 'repo-worktrees.noindex')).filter(name => name.startsWith('integration-'));
+
+    const passed = await check('evidence');
+    expect(passed.status, passed.stderr).toBe(0);
+    expect(candidates(), 'the candidate that passed is gone').toEqual([]);
+    expect((await git(repo, 'worktree', 'list')).split('\n')).toHaveLength(1);
+    const [kept] = fs.readdirSync(path.join(repo, '.apack', 'session-check'));
+    expect(fs.readFileSync(path.join(repo, '.apack', 'session-check', kept!, 'a-run', 'step.log'), 'utf8')).toBe('what the step said');
+
+    fs.rmSync(path.join(dir, 'bin'), { recursive: true });
+    const failed = await check('fail');
+    expect(failed.status).not.toBe(0);
+    expect(candidates(), 'the candidate that failed is there to inspect').toHaveLength(1);
   });
 
   it.each([

@@ -1,7 +1,8 @@
 // What `scripts/janitor.ts` removes, decided over what it found, so the decisions can be checked without a disk.
 //
 // Everything it may remove is a build cache that a build makes again: a Rust checkout's incremental compilation
-// sessions and its stale artifacts, and the temporary directories an elmdb checkout's tests leave in its `tmp/`.
+// sessions, its stale artifacts and — when the disk is low — the whole build output of a checkout nothing has
+// compiled in for a while, and the temporary directories an elmdb checkout's tests leave in its `tmp/`.
 // Nothing else is in reach — not Docker volumes, whose data may be another session's evidence
 // (docs/references/guides/docker-storage.md), and not logs.
 
@@ -15,16 +16,26 @@ const DAY = 24 * HOUR;
  */
 export const LOW_FREE_BYTES = 30 * GB;
 
+/** Free space below which the disk is about to stop builds altogether, and only what is being built now is kept */
+export const CRITICAL_FREE_BYTES = 10 * GB;
+
 export interface JanitorLimits {
   /** Incremental sessions kept across every Rust target, least recently used evicted first */
   incrementalBudgetBytes: number;
   /** `cargo sweep --time`: artifacts unused this many days go */
   sweepDays: number;
+  /**
+   * How long a profile's build output is kept after anything was last compiled into it, or nothing where an idle
+   * one is left to `sweepDays` (`planIdleProfileClearing`)
+   */
+  idleProfileMs: number | undefined;
 }
 
-export const limitsFor = (freeBytes: number): JanitorLimits => freeBytes < LOW_FREE_BYTES
-  ? { incrementalBudgetBytes: 2 * GB, sweepDays: 2 }
-  : { incrementalBudgetBytes: 6 * GB, sweepDays: 7 };
+export const limitsFor = (freeBytes: number): JanitorLimits => freeBytes < CRITICAL_FREE_BYTES
+  ? { incrementalBudgetBytes: 2 * GB, sweepDays: 2, idleProfileMs: IN_USE_WINDOW_MS }
+  : freeBytes < LOW_FREE_BYTES
+    ? { incrementalBudgetBytes: 2 * GB, sweepDays: 2, idleProfileMs: 12 * HOUR }
+    : { incrementalBudgetBytes: 6 * GB, sweepDays: 7, idleProfileMs: undefined };
 
 /**
  * A compilation unit's incremental directory, `target/<profile>/incremental/<crate>-<hash>`. rustc starts a new
@@ -56,6 +67,33 @@ export function planIncrementalEviction(units: readonly IncrementalUnit[], budge
     total -= unit.bytes;
   }
   return evicted;
+}
+
+/**
+ * One profile of a Rust target, `target/debug` or `target/<triple>/release`: everything a build of that profile
+ * wrote, and when anything was last compiled into it.
+ */
+export interface ProfileOutput {
+  /** The profile directory, whose `.cargo-lock` cargo holds while it builds */
+  profileDir: string;
+  bytes: number;
+  /** When an artifact was last added to it: a build that found everything fresh adds none */
+  builtMs: number;
+}
+
+/**
+ * The profiles whose whole output goes: those nothing has compiled into for `idleMs`.
+ *
+ * **Because every worktree builds into a target of its own, and unused-for-days is the wrong test for one.** Five
+ * worktrees of one checkout held 25 GB beside the 17 GB of the checkout itself, every byte of it used within two
+ * days, so a sweep by age removed nothing while the disk ran out (2026-11-11). What bounds that is not a size —
+ * a full build of a profile has the size it has, and a cap below it is a rebuild every hour — but which checkouts
+ * are being worked in: when the disk is low, one that has sat for half a day gives its output back, and builds it
+ * again when it is next built. Never one compiled into within the hour, which may be building now.
+ */
+export function planIdleProfileClearing(profiles: readonly ProfileOutput[], idleMs: number | undefined, now: number): ProfileOutput[] {
+  if (idleMs === undefined) return [];
+  return profiles.filter((profile) => now - profile.builtMs > Math.max(idleMs, IN_USE_WINDOW_MS));
 }
 
 /**
