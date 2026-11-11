@@ -126,8 +126,8 @@ describe('a spec waits for the thing it waits for', () => {
    * Asserted as an exact number for the same reason `spec-cost`'s records are: a count that drifts upward
    * without anyone noticing is how a list of deliberate exceptions becomes a list of everything.
    */
-  it('has three waits left to examine', () => {
-    expect(NOT_CONVERTED_YET).toHaveLength(3);
+  it('has two waits left to examine', () => {
+    expect(NOT_CONVERTED_YET).toHaveLength(2);
   });
 });
 
