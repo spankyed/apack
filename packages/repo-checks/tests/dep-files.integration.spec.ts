@@ -405,9 +405,14 @@ describe('apack pack build says what it read', () => {
    * vendored package reads that package's build, and what re-runs the step when it changes is the pin
    * moving.
    */
-  const vendored = vendoredCheckouts(REPO_ROOT).map((checkout) => checkout.path + path.sep);
+  // Each checkout by both of its names: where it is, and `vendor/<name>`, which is the same place in CI
+  // and a link to it on a developer's machine. Only the checkouts: another directory under `vendor/` is
+  // not one
+  const vendored = vendoredCheckouts(REPO_ROOT).flatMap((checkout) => [
+    checkout.path + path.sep,
+    path.join(REPO_ROOT, 'vendor', checkout.name) + path.sep,
+  ]);
   const inVendoredCheckout = (file: string): boolean => {
-    if (/^vendor\/[^/]+\//.test(file)) return true;
     const absolute = path.resolve(REPO_ROOT, file) + (file.endsWith(path.sep) ? path.sep : '');
     return vendored.some((root) => absolute.startsWith(root));
   };
@@ -474,7 +479,9 @@ describe('apack pack build says what it read', () => {
     const inside = path.relative(REPO_ROOT, path.join(first!.path, 'dist', 'index.js'));
     expect(inVendoredCheckout(inside)).toBe(true);
     expect(inVendoredCheckout(`vendor/${first!.name}/dist/index.js`)).toBe(true);
+    // Beside a checkout, wherever checkouts are: next to the link's target, and under `vendor/` itself
     expect(inVendoredCheckout(path.relative(REPO_ROOT, path.join(path.dirname(first!.path), 'not-vendored', 'index.js')))).toBe(false);
+    expect(inVendoredCheckout('vendor/not-vendored/index.js')).toBe(false);
     expect(inVendoredCheckout('vendor/elmdb.rev')).toBe(false);
     expect(inVendoredCheckout('packages/default-setup/src/index.ts')).toBe(false);
   });
