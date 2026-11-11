@@ -29,7 +29,9 @@ function hook(root: string, name: string, body: string) {
   fs.chmodSync(file, 0o755);
 }
 /** Waits, in a hook, until the case writes `release` */
-const UNTIL_RELEASED = 'while [ ! -f ./release ]; do sleep 0.1; done';
+// Ends when it is released, and when its repository is gone: a case's cleanup releases it and then deletes the
+// repository at once, and a loop that looked only for the file never saw it and ran on with nowhere to look
+const UNTIL_RELEASED = 'while [ ! -f ./release ] && [ -e ./.git ]; do sleep 0.1; done';
 
 /** A repository on `main` with one commit, whose commits need no user configuration */
 async function repository() {
