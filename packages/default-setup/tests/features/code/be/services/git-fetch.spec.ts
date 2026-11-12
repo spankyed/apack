@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
-import { AppGitRepository } from '../../../../../src/features/code/be/services/app-git-repository.ts';
+import { APP_TIES, AppGitRepository } from '../../../../../src/features/code/be/services/app-git-repository.ts';
 
 const directories: string[] = [];
 afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true }); });
@@ -68,7 +68,8 @@ it('stops fetching by itself once the remote wants credentials, until the settin
   await git(root, 'branch', '--quiet', '--set-upstream-to=origin/main');
   const asked = () => fs.existsSync(path.join(root, 'asked')) ? fs.readFileSync(path.join(root, 'asked'), 'utf8').trim().split('\n').length : 0;
 
-  const repo = new AppGitRepository(root);
+  // Trusted: its remote is a program of this case's own, which git is to run
+  const repo = new AppGitRepository(root, { ...APP_TIES, isTrusted: () => true });
   repo.setFetchConfig(true, 0);
   await repo.refreshSnapshot();
   expect(await repo.fetchIfDue(), 'the fetch failed').toBe(false);

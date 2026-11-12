@@ -70,6 +70,8 @@ export type IncomingCommitEvents =
   | { type: 'commit.PREVIEW_DISCARD'; paths: string[] }
   /** Puts back what a discard kept, by the id its answer carried */
   | { type: 'commit.RESTORE_DISCARDED'; id: string }
+  /** The user trusts the repository to have git run what its own configuration and hooks name */
+  | { type: 'commit.TRUST_REPOSITORY'; repository: string }
   | { type: 'commit.GET_ALL_BRANCHES' }
   | { type: 'commit.CHECKOUT_BRANCH'; branchName: string }
   | { type: 'commit.PUBLISH_BRANCH' }
@@ -119,6 +121,7 @@ export type OutgoingCommitEvents =
   | { type: 'commit.FILES_REVERTED'; data: { paths: string[]; kept: DiscardKept } }
   | { type: 'commit.DISCARD_PREVIEWED'; data: { paths: string[]; notKept: string[] } }
   | { type: 'commit.DISCARD_RESTORED'; data: { id: string } & DiscardRestored }
+  | { type: 'commit.REPOSITORY_TRUSTED'; data: { repository: string } }
   | { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }
   | { type: 'commit.HUNK_APPLIED'; data: { path: string; staged: boolean; hunk: string } }
   /** How far along a push, a pull or a checkout is, for the window that asked for it */
