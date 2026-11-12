@@ -238,12 +238,15 @@
       </div>
     </div>
 
-    <!-- The repository's file watches are not open, so nothing here changes until it is asked again -->
+    <!-- The repository's file watches are not open, or are open and not delivering, so what is shown may be behind -->
     <div
-      v-if="!isWatchingRepository && !gitError"
+      v-if="(!isWatchingRepository || isWatchSilent) && !gitError"
+      data-testid="watch-notice"
       class="px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
     >
-      Live updates are off for this repository. It is read again when you return to this window or press Refresh.
+      <template v-if="!isWatchingRepository">Live updates are off for this repository.</template>
+      <template v-else>Live updates are not arriving for this repository: changes keep turning up that the watch never reported, as a network drive or the system's limit on watches can cause.</template>
+      It is read again when you return to this window or press Refresh.
     </div>
 
     <!-- A whole status took longer than its budget, and git has speed-ups for it that are off here -->
@@ -991,6 +994,7 @@ const isCheckingOutBranch = useSelector(commitActor, (state) => state.context.is
 const hasUpstream = useSelector(commitActor, (state) => state.context.hasUpstream)
 const isStatusTruncated = useSelector(commitActor, (state) => state.context.isStatusTruncated)
 const isWatchingRepository = useSelector(commitActor, (state) => state.context.isWatchingRepository)
+const isWatchSilent = useSelector(commitActor, (state) => state.context.isWatchSilent)
 const slowStatus = useSelector(commitActor, (state) => state.context.slowStatus)
 const isSpeedingUpStatus = useSelector(commitActor, (state) => state.context.isSpeedingUpStatus)
 /** What turning the speed-ups on would turn on, of those that are off */

@@ -237,6 +237,10 @@ difference. It hands the watcher what a platform would report rather than waitin
 soak:sequences` in the engine runs as many seeds as it is given through the platform's own watch, and reports
 what was lost without failing.
 
+A watch that is open and not delivering is evidence, not a timer: checks keep finding changes no event announced,
+and past a bound the snapshot says so (`watchSilent`). The commit panel's notice for a watch that could not be
+opened says this as well, for as long as the statuses it is sent say it.
+
 ## Working on both at once
 
 The link points at a checkout, so an edit there is what a local build here uses once the engine is built

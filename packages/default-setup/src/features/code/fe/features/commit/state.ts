@@ -102,6 +102,8 @@ export interface CodeCommitContext {
   isStatusTruncated: boolean
   /** Whether the backend's file watches on this repository are open; without them the panel changes only when asked */
   isWatchingRepository: boolean
+  /** Whether the watch is open and yet changes keep turning up that it never reported: live updates are not arriving */
+  isWatchSilent: boolean
   /** What git is in the middle of in this repository: a merge, a rebase, a cherry-pick or a revert stopped part-way */
   operation: RepositoryOperation | null
   /** Whether git was asked to move that on and has not answered */
@@ -776,6 +778,7 @@ export const commitState = setup({
       },
       operation: ({ event }) => (event as { data: { operation?: RepositoryOperation } }).data.operation ?? null,
       isFetchSuspended: ({ event }) => (event as { data: { fetchSuspended?: boolean } }).data.fetchSuspended === true,
+      isWatchSilent: ({ event }) => (event as { data: { watchSilent?: boolean } }).data.watchSilent === true,
       fetchSignIn: ({ event }) => (event as { data: { signIn?: SignInHelp } }).data.signIn ?? null,
       isGitLoading: false,
       gitError: null,
@@ -1158,6 +1161,7 @@ export const commitState = setup({
     directory: '',
     isCheckingOutBranch: false,
     isWatchingRepository: true,
+    isWatchSilent: false,
     isMovingOperation: false,
     isStartingOperation: false,
     isSettingUpSignIn: false,
