@@ -529,9 +529,20 @@ const ceilingFactor = (): number => (process.env.APACK_CEILING === 'loose' ? LOO
  * `STORAGE_ALLOWANCE_FACTOR` windows between one piece of work and the next; past that it is refused as stalled,
  * and the refusal says how long it was allowed for and what held it.
  */
-export function watchWork({ work, idleMs = IDLE_MS, ceilingMs: requestedCeilingMs, fallbackMs, onRefused, watchesOutput = false, clock = processClock }: {
+export function watchWork({ work, idleMs = IDLE_MS, ceilingMs: requestedCeilingMs, fallbackMs, onRefused, watchesOutput = false, countsFromWatch = false, clock = processClock }: {
   readonly work: WorkReading; readonly idleMs?: number; readonly ceilingMs?: number; readonly fallbackMs?: number;
   readonly onRefused: (refusal: Refusal) => void;
+  /**
+   * Whether `work` counts from the moment this watch began, so that its first reading is already work done under
+   * the watch rather than a baseline to measure the next against.
+   *
+   * **For a party that can keep its watcher from reading it.** A watch in the same process as the work reads on a
+   * timer, and synchronous work holds that timer off: a test that read and hashed a package tree for three minutes
+   * was read for the first time when it had finished, and a first reading taken as a baseline says a party that
+   * spent every one of those minutes on CPU had done nothing since the watch began. Left off for a reading over a
+   * lifetime (`processWork` of a process that was already running), whose first value is no measure of now.
+   */
+  readonly countsFromWatch?: boolean;
   /** Whether the caller reports the party's output (`output()`), so a refusal can say how long it has been silent */
   readonly watchesOutput?: boolean;
   readonly clock?: WatchClock;
@@ -539,6 +550,8 @@ export function watchWork({ work, idleMs = IDLE_MS, ceilingMs: requestedCeilingM
   const ceilingMs = requestedCeilingMs === undefined ? undefined : requestedCeilingMs * ceilingFactor();
   const startedAt = clock.now();
   const tracker = createStallTracker(idleMs, startedAt);
+  // Nothing done at the start is the baseline such a reading is measured against
+  if (countsFromWatch) tracker.reading(new Map([[0, 0]]), startedAt);
   let lastTotal: number | undefined;
   let outputAt: number | null = null;
   let unreadableSince: number | undefined;

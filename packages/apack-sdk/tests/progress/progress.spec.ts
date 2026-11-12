@@ -380,3 +380,42 @@ describe('a party that is waiting on storage', () => {
     expect(sleepsInStorage('xfs_log_force', filesystems)).toBe(false);
   });
 });
+
+describe('a party that held its watcher off while it worked', () => {
+  /** A clock a case moves by hand, and the one reading a watch takes on it */
+  const held = () => {
+    let now = 0;
+    let tick: (() => void) | undefined;
+    const clock = { now: () => now, every: (run: () => void) => { tick = run; return 0 as unknown as ReturnType<typeof setInterval>; }, stopEvery: () => {} };
+    return { clock, move: (ms: number) => { now += ms; }, read: async () => { tick!(); await new Promise((resolve) => { setImmediate(resolve); }); } };
+  };
+
+  it('is not refused at a first reading that comes late, when the reading counts the work it did meanwhile', async () => {
+    const { clock, move, read } = held();
+    let refused: Refusal | undefined;
+    // Three minutes of synchronous work: no reading until it ends, and then one that says three minutes of CPU
+    watchWork({ work: async () => 180_000, idleMs: IDLE, countsFromWatch: true, clock, onRefused: (refusal) => { refused = refusal; } });
+    move(180_000);
+    await read();
+    expect(refused).toBeUndefined();
+  });
+
+  it('is still refused when that first reading says it did nothing', async () => {
+    const { clock, move, read } = held();
+    let refused: Refusal | undefined;
+    watchWork({ work: async () => 0, idleMs: IDLE, countsFromWatch: true, clock, onRefused: (refusal) => { refused = refusal; } });
+    move(180_000);
+    await read();
+    expect(refused).toMatchObject({ kind: 'stalled' });
+  });
+
+  it('has a first reading over a lifetime taken as a baseline, which is what it is', async () => {
+    const { clock, move, read } = held();
+    let refused: Refusal | undefined;
+    // A process that had spent an hour before anyone watched it, and nothing since
+    watchWork({ work: async () => 3_600_000, idleMs: IDLE, clock, onRefused: (refusal) => { refused = refusal; } });
+    move(IDLE + 1);
+    await read();
+    expect(refused).toMatchObject({ kind: 'stalled' });
+  });
+});
