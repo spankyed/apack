@@ -1,9 +1,8 @@
 # The git engine's version 1, one pull request at a time
 
-Status: deferred by request, 2026-11-11, and deferral is not permission to start. Everything here follows
-[the engine's move to a repository of its own](../../archive/plans/git-engine-own-repository.md), which was given its go that day.
-Pull requests 1 and 2 come first after it, since what they fix is true of the app today: 2, then 1, whose open
-questions are settled when it starts. The rest start once the [five additions](../../archive/plans/git-engine-additions.md) are done, which they are.
+Status: deferred by request, and deferral is not permission to start. As of 2026-11-12 pull requests 1 and 2
+have landed (apack #429 and #428), after [the engine's move to a repository of its own](../../archive/plans/git-engine-own-repository.md),
+and so have the [five additions](../../archive/plans/git-engine-additions.md) the rest waited on. The next is 3.
 
 Compiled 2026-11-11 against the code feature as it stood in the working tree that day, with git 2.38.1 on
 macOS. Each pull request says under **Known** what was run, what was only read, and what is neither.
@@ -92,6 +91,11 @@ status calls pass nothing. So opening a folder runs whatever that folder's `.git
   repository's own.
 - **To settle.** Where trust is kept and what names a repository there. Whether trust belongs to the folder
   and not to git: an agent and a terminal run in it too, and the app has no notion of a trusted folder.
+- **Landed** in apack #429 (engine `src/trust.ts`). The rule is the list of settings known to run nothing.
+  Trust is kept in the code feature's settings (`trustedRepositories`), by the real path of the repository's
+  common git directory. It covers the git the engine runs and nothing else: a terminal, an agent and `gh` in an
+  untrusted repository are not gated, which was decided in the work and not by the user. A repository with
+  Git LFS configured in its own config asks.
 
 ### 2. A discard keeps what it removes
 
@@ -111,6 +115,8 @@ untracked folder is removed with `git clean --force`. Nothing keeps a copy.
 - **Known.** Run: all of that in a throwaway repository, where taking the copy left the index's bytes and the
   status unchanged and made no ref. Read: git prunes objects nothing refers to after two weeks unless told
   otherwise (`gc.pruneExpire`).
+- **Landed** in apack #428 (engine `src/discards.ts`), with the bound at 10 MB a file (`KEPT_FILE_LIMIT`). Pull
+  request 4 still replaces the two-week limit.
 
 ## Safe in any folder
 
