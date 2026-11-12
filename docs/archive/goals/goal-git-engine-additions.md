@@ -1,7 +1,7 @@
 # Five additions to the git engine
 
-Status: ready, 2026-11-12. The design is [the plan](../plans/deferred/git-engine-additions.md); this owns order,
-acceptance and the handoff.
+Status: done, 2026-11-12. The design is [the plan](../plans/git-engine-additions.md); the result is described in
+[the git engine](../../references/git-engine.md).
 
 ```text
 # Goal: the git engine's five additions, landed on three platforms
@@ -33,10 +33,36 @@ Five items, each an engine half (in `apack-git`) and a panel half (in `packages/
 
 Out of scope: libgit2 readers, `isomorphic-git`, shipping a git (the plan's "Looked at and not taken").
 
-## Current handoff
+## Outcome
 
-- Engine `master` at `0a33475`, CI green on all three platforms; monorepo pin matches.
-- Next: phase 1. Nothing started.
+All five landed, each an engine commit on [spankyed/apack-git#1](https://github.com/spankyed/apack-git/pull/1) and a
+monorepo commit moving the pin with the panel's half. The engine's CI passed every job at each phase's commit
+(runs 43183805982, 43183810779, 43183814677, 43183818480, 43183822284): Linux, macOS and Windows, and from phase
+3, where they were added, Apple Git, Debian 12's git and the floor built from source.
+
+| # | Engine | What the panel does |
+|---|---|---|
+| 1 | `881ef1f`: `unsafe-ownership`, `UnsafeOwnershipError` with the path git named, `trustOwnership` | Says git will not read it and offers to trust it; the backend asks git for the path again, so no path a window sends reaches the user's global configuration |
+| 2 | `f83d530`: `signing-failed`, `unrelated-histories`, `nothing-to-commit`, `branch-exists`, `host-refused` | A sentence for each; a host's refusal keeps the host's words |
+| 3 | `ed12139`: `ties.git`, a once-per-repository check, `git-not-found`, `developer-tools-missing`, `git-too-old` | Runs the git set under Settings, CLI providers, or the first found; says why one cannot be used and what to do |
+| 4 | `7704aa1`: seeded sequences held to a whole status, and `npm run soak:sequences` | Nothing to show: a spec and a command |
+| 5 | `67b9a35`: `fetch(signal)`, `pushBranch(onProgress, signal)`, `aborted` | Stop pushing, while a push runs |
+
+What it settled:
+
+- **The floor is 2.35.0.** Ubuntu 22.04's 2.34.1 fails the suite: its status gives no count of the stashes. Apple
+  Git and Debian 12's 2.39.5 pass, and 2.35.0 built from source passes. 2.34 also words the branch-exists failure
+  with a capital, now matched either way.
+- **`safe.directory` takes the path as git prints it**, on Windows as well: the ownership cases pass there with no
+  conversion. A network share was not tried; nothing here runs on one.
+- **Stopping is offered on Windows too.** The git started and everything under it are ended by its id, and the
+  stop cases pass there.
+- **Git is not started in a process group of its own.** Node's `execFile` drops `detached`, and git does not end
+  the `ssh` it started when it is signalled, so the engine finds git's descendants from the process table and ends
+  them itself. A git that dies with the app is unchanged.
+- **The ownership check needs git 2.35.2.** On an older git there is no refusal for the engine to name, and those
+  cases run only where git refuses.
+- **What CI's containers lacked, not the engine:** `ps`, and a first process that reaps orphans.
 
 ## Decisions
 

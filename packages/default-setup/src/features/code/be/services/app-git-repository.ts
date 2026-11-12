@@ -12,6 +12,7 @@ import {
 import type { RepositoryHandle, WatcherHandle } from '../types.ts'
 import { featureSettings } from '#generated/settings.ts'
 import { agentChildEnvironment } from './shell-environment.ts'
+import { resolveGitPath } from '../utils/resolve-cli.ts'
 import { signInHelpFor, type SignInHelp } from './sign-in.ts'
 
 const logger = createLogger('git')
@@ -79,9 +80,15 @@ function getImageMimeType(filePath: string): string | null {
   return IMAGE_MIME_TYPES[ext] || null
 }
 
+/** What a hosting service said when it refused a push, which git carries back on a line it begins `remote:` */
+const hostSaid = (printed: string): string | undefined =>
+  /^remote: error: (GH0\d\d: .*?)\s*$/m.exec(printed)?.[1]
+
 /** What a push or a pull that failed is said to have failed on, for the reasons that have plainer words than git's */
-function saidOfRemote(code: GitErrorCode | undefined): string | undefined {
+function saidOfRemote(code: GitErrorCode | undefined, printed: string): string | undefined {
   switch (code) {
+    case 'unrelated-histories': return 'This branch and the remote branch share no commit, so git will not bring them together. Merge with `--allow-unrelated-histories` from a terminal if they belong together.'
+    case 'host-refused': return `The host refused the push: ${hostSaid(printed) ?? 'it gave a rule of its own.'}`
     case 'authentication': return 'The remote asked for a sign-in that git does not have.'
     case 'permission': return 'Permission denied. Check your repository access rights.'
     case 'remote-unreachable': return 'Cannot connect to remote repository. Check your network connection and the remote\'s address.'
@@ -95,7 +102,24 @@ function saidOfRemote(code: GitErrorCode | undefined): string | undefined {
 
 /** A push or a pull that failed, in the words the panel shows, carrying why it failed */
 const remoteFailure = (verb: 'push' | 'pull', error: unknown): unknown =>
-  error instanceof GitError ? new GitError(`Failed to ${verb}: ${saidOfRemote(error.code) ?? error.message}`, error.code) : error
+  // Stopped by the user, which is no failure and has no plainer words to be put in
+  error instanceof GitError && error.code === 'aborted' ? error : error instanceof GitError ? new GitError(`Failed to ${verb}: ${saidOfRemote(error.code, error.message) ?? error.message}`, error.code) : error
+
+/** What a commit or a branch that failed is said to have failed on, where the panel has plainer words than git's */
+function saidOfLocal(code: GitErrorCode | undefined): string | undefined {
+  switch (code) {
+    case 'signing-failed': return 'The commit could not be signed: the signing program failed or could not be run. Check `gpg.program` and that its key is unlocked, or commit from a terminal to see what it said.'
+    case 'nothing-to-commit': return 'There is nothing staged to commit.'
+    case 'branch-exists': return 'A branch of that name already exists. Choose another name, or use the existing branch.'
+    default: return undefined
+  }
+}
+
+/** A local write that failed, in the words the panel shows where it has them, carrying why it failed */
+const localFailure = (error: unknown): unknown => {
+  const said = error instanceof GitError ? saidOfLocal(error.code) : undefined
+  return said && error instanceof GitError ? new GitError(said, error.code) : error
+}
 
 /** How long the branch a pull request is based on is kept before it is worked out again */
 const PR_BASE_KEPT_MS = 5000
@@ -202,11 +226,39 @@ export class AppGitRepository extends GitRepository {
     }
   }
 
-  override async pushBranch(onProgress?: (progress: GitProgress) => void): Promise<void> {
-    await super.pushBranch(onProgress).catch((error: unknown) => { throw remoteFailure('push', error) })
+  override async commit(message: string): Promise<void> {
+    await super.commit(message).catch((error: unknown) => { throw localFailure(error) })
+  }
+
+  override async worktreeAdd(wtPath: string, branch?: string, createBranch?: boolean): Promise<string> {
+    return super.worktreeAdd(wtPath, branch, createBranch).catch((error: unknown) => { throw localFailure(error) })
+  }
+
+  /** The push running, which `stopPush` stops */
+  private pushing: AbortController | undefined
+
+  override async pushBranch(onProgress?: (progress: GitProgress) => void, signal?: AbortSignal): Promise<void> {
+    const pushing = new AbortController()
+    this.pushing = pushing
+    try {
+      await super.pushBranch(onProgress, signal ? AbortSignal.any([signal, pushing.signal]) : pushing.signal)
+        .catch((error: unknown) => { throw remoteFailure('push', error) })
+    } finally {
+      if (this.pushing === pushing) this.pushing = undefined
+    }
     // A push moved the remote's refs here too, so a fetch is not due
     this.lastFetchTimestamp = Date.now()
     this.suspend(false)
+  }
+
+  /**
+   * Stops the push running, ending git and what it started; the push then rejects coded `aborted`. Whether there
+   * was one to stop. Only a push: a stopped push leaves the working tree and the index as they were
+   */
+  stopPush(): boolean {
+    if (!this.pushing) return false
+    this.pushing.abort()
+    return true
   }
 
   override async pullBranch(onProgress?: (progress: GitProgress) => void): Promise<void> {
@@ -326,7 +378,9 @@ export class AppGitRepository extends GitRepository {
 }
 
 /** The repository of a working directory, as this app runs it */
-export const openGitRepository = (workingDirectory: string): AppGitRepository => new AppGitRepository(workingDirectory)
+/** A working directory's repository, run with the git the user set or the first found (`resolveGitPath`) */
+export const openGitRepository = (workingDirectory: string): AppGitRepository =>
+  new AppGitRepository(workingDirectory, { ...APP_TIES, git: resolveGitPath() })
 
 /** The watcher of a working directory's repository, logging where this app logs */
 export const openGitWatcher = (workingDirectory: string): GitWatcherService =>

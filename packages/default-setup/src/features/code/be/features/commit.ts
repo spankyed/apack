@@ -5,7 +5,7 @@ import { broadcastToSurface, sendToSystem } from '#generated/events.ts';
 import { defineHandlers } from '@apackdev/sdk/framework';
 import { assign, setup, enqueueActions, fromCallback, type AnyActorRef } from 'xstate'
 
-import { GitError, NOTHING_CHANGED, StashConflictError, UntrustedError, changedAnything } from 'apack-git'
+import { GitError, GitUnusableError, NOTHING_CHANGED, StashConflictError, UnsafeOwnershipError, UntrustedError, changedAnything } from 'apack-git'
 import { openGitRepository, trustRepository, type AppGitRepository } from '../services/app-git-repository.ts'
 import { setUpGitSignIn } from '../services/gh-cli.ts'
 import { isHostName } from '../services/sign-in.ts'
@@ -73,6 +73,13 @@ const progressTo = (reply: Parameters<typeof answer>[0], during: 'push' | 'pull'
 }
 
 /** What the panel is told of a command that failed: git's words, and why it failed where git said */
+/** What the user can do about a git that cannot be used */
+const WHAT_TO_DO = {
+  'git-not-found': 'Install Git from git-scm.com, or set where it is under Settings, CLI providers.',
+  'developer-tools-missing': 'Install them with `xcode-select --install`, or install Git another way and set where it is under Settings, CLI providers.',
+  'git-too-old': 'Update Git, or set a newer one under Settings, CLI providers.',
+} as const
+
 function failureOf(error: unknown): CommitFailure {
   const message = error instanceof Error ? error.message : String(error)
   return {
@@ -80,6 +87,10 @@ function failureOf(error: unknown): CommitFailure {
     ...(error instanceof GitError && error.code && { code: error.code }),
     // Refused before git was run: what the repository would have had it run, for the panel to ask about
     ...(error instanceof UntrustedError && error.repository && { trust: { repository: error.repository, asks: error.asks } }),
+    // Refused by git for who owns the repository: the path it named, for the panel to offer to trust
+    ...(error instanceof UnsafeOwnershipError && { ownership: { directory: error.directory } }),
+    // No git to run, or one that cannot be used: what to do about it, after what the engine said
+    ...(error instanceof GitUnusableError && { message: `${message} ${WHAT_TO_DO[error.unusable.code]}` }),
   }
 }
 
@@ -607,8 +618,19 @@ export const commitSystem = setup({
         })
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
       }).catch(async (error: unknown) => {
+        if (error instanceof GitError && error.code === 'aborted') {
+          answer(reply, { type: 'commit.PUSH_STOPPED' })
+          // What the remote holds is not known from here: it has the push or it does not
+          self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+          return
+        }
         answer(reply, { type: 'commit.ERROR_RECEIVED', data: await remoteFailureOf(error, 'push', context.gitRepository!) })
       })
+    },
+
+    /** Stops the push this repository is running, which its own handler answers as stopped */
+    stopPush: ({ context }) => {
+      context.gitRepository?.stopPush()
     },
 
     generateCommitMessage: ({ context, reply, client }) => {
@@ -676,6 +698,30 @@ export const commitSystem = setup({
       context.gitRepository.discardNotKept(paths).then((notKept) => {
         answer(reply, { type: 'commit.DISCARD_PREVIEWED', data: { paths, notKept } })
       }, (error: unknown) => {
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) })
+      })
+    },
+
+    /**
+     * Adds the repository the panel is over to the user's safe.directory, when git refuses it for who owns it.
+     * The path is the one git names now, asked again here: a window says only that the user trusts it, and the
+     * user's global git configuration is written for no path a window sends
+     */
+    trustOwnership: ({ context, self, reply }) => {
+      if (!requireGitRepository(context, reply)) return
+      const repository = context.gitRepository
+
+      repository.isGitRepository().then(
+        () => { throw new Error('Git already reads this repository') },
+        async (error: unknown) => {
+          if (!(error instanceof UnsafeOwnershipError)) throw error
+          await repository.trustOwnership(error.directory)
+          answer(reply, { type: 'commit.OWNERSHIP_TRUSTED', data: { directory: error.directory } })
+          // Nothing was read while git refused it: its status, and its watches
+          self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+          context.code?.send({ type: 'CHECK_FOR_EXTERNAL_CHANGES' })
+        },
+      ).catch((error: unknown) => {
         answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) })
       })
     },
@@ -1057,6 +1103,9 @@ export const commitSystem = setup({
         'commit.RESTORE_DISCARDED': {
           actions: 'restoreDiscarded'
         },
+        'commit.TRUST_OWNERSHIP': {
+          actions: 'trustOwnership'
+        },
         'commit.TRUST_REPOSITORY': {
           actions: 'trustRepository'
         },
@@ -1095,6 +1144,9 @@ export const commitSystem = setup({
         },
         'commit.PUBLISH_BRANCH': {
           actions: 'pushBranch'
+        },
+        'commit.STOP_PUSH': {
+          actions: 'stopPush'
         },
         'commit.PULL_BRANCH': {
           actions: 'pullBranch'

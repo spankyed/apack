@@ -43,6 +43,59 @@ Three things keep the two apart:
 - **It is pinned by commit and both halves move together.** A change to the engine is a commit there and the
   pin moved in the change here that uses it. There is no version to bump and nothing kept for compatibility.
 
+## Which git, and when it cannot be used
+
+**The app decides where git is; the engine decides whether it can be used.** The app hands the engine a path
+(`RepositoryTies.git`), found by `resolveGitPath` (`be/utils/resolve-cli.ts`): the path set under Settings, CLI
+providers, then where git is usually installed (Git for Windows' locations; Homebrew's, then `/usr/bin/git` on
+macOS), then `git` from the PATH. Nothing is run to find it.
+
+Before a repository's first command the engine asks that git once (`src/git-check.ts`). A command is refused
+with a `GitUnusableError`, and no git is run, when the git is not there (`git-not-found`), when it is macOS's
+`/usr/bin/git` without the developer tools, which offers to install them when it is run, so `xcode-select -p` is
+asked first (`developer-tools-missing`), or when it is older than `GIT_FLOOR` (`git-too-old`).
+
+**The floor is found, not chosen.** The engine's CI runs its suite on the oldest git still-supported systems ship
+(Debian 12's and Apple Git, 2.39.5) and on the floor built from its source. It is 2.35.0: Ubuntu 22.04's 2.34.1
+fails the suite, its `status --porcelain=v2 --show-stash` giving no count of the stashes.
+
+## Failures
+
+A failed command carries a code (`GIT_ERROR_CODES`, `src/errors.ts`) where what git printed says why; anything
+else is git's own words. A code exists where the app does something different for it: a sentence clearer than
+git's, or an action. The app's sentences are in `app-git-repository.ts` (`saidOfRemote`, `saidOfLocal`) and the
+commit feature (`failureOf`).
+
+| Code | What the panel does |
+|---|---|
+| `unsafe-ownership` | Git will not read a repository another user owns. Says so with the path git named, and offers to trust it, which adds that path to the user's global `safe.directory` (`trustOwnership`), only on their click |
+| `untrusted` | The repository's own settings or hooks would run programs. Lists them and offers to trust it |
+| `git-not-found`, `developer-tools-missing`, `git-too-old` | Says why and what to do |
+| `signing-failed`, `unrelated-histories`, `nothing-to-commit`, `branch-exists` | A sentence that says what to do |
+| `host-refused` | A hosting service refused a push for a rule of its own (`GH001`, `GH006`, `GH007`, `GH013`); the host's own words are kept |
+| `aborted` | The user stopped it: nothing failed, and nothing is shown as a failure |
+
+## Stopping a command
+
+**Only a fetch and a push can be stopped** (`fetch(signal)`, `pushBranch(onProgress, signal)`). Stopped midway,
+each leaves the working tree and the index as they were; a commit, a checkout, a stash or a merge would leave
+them half-written with a lock behind, and a pull is one `git pull` whose merge cannot be told apart from its
+fetch. The panel offers it while a push runs (`commit.STOP_PUSH`, answered `commit.PUSH_STOPPED`).
+
+Stopping asks git to end, so it lets go of its locks, along with the helpers it started (`ssh`, the HTTPS
+helper), found from the process table by their parents, since git does not end them when it is signalled. Any
+still there after a grace are ended outright. On Windows the git started and everything under it are ended
+outright by its id. A command stopped before its turn starts no git.
+
+## How what the watcher names is held
+
+A watched repository reads only the paths its watcher named. Beside the listed cases (`noted-paths.spec.ts`), the
+engine's `sequences.spec.ts` runs seeded sequences of edits, git commands and ignore-file changes and holds the
+repository to a whole status after every step, printing the seed and the fewest steps that still show a
+difference. It hands the watcher what a platform would report rather than waiting on one; `npm run
+soak:sequences` in the engine runs as many seeds as it is given through the platform's own watch, and reports
+what was lost without failing.
+
 ## Working on both at once
 
 The link points at a checkout, so an edit there is what a local build here uses once the engine is built

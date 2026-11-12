@@ -279,6 +279,7 @@
 
     <!-- Git was not run, because the repository would have it run something and has not been trusted -->
     <TrustRequest v-if="trustRequest" :request="trustRequest" @trust="commitActor?.send({ type: 'commit.TRUST_REPOSITORY' })" />
+    <OwnershipRequest v-if="ownershipRequest" :directory="ownershipRequest.directory" @trust="commitActor?.send({ type: 'commit.TRUST_OWNERSHIP' })" />
 
     <!-- Git Error (only show non-directory errors) -->
     <div v-else-if="gitError && !isNoDirectoryError" class="p-3 border-b border-red-800 bg-red-900/20">
@@ -378,6 +379,15 @@
         >
           {{ actionButtonText }}
         </button>
+        <!-- A push waiting on the network can be stopped: what it leaves is the checkout as it was -->
+        <button
+          v-if="shouldShowActionButton && isPushing"
+          data-testid="stop-push"
+          class="w-full px-3 py-1 mt-1 text-xs rounded text-neutral-300 bg-neutral-800 hover:bg-neutral-700"
+          @click="commitActor?.send({ type: 'commit.STOP_PUSH' })"
+        >
+          Stop pushing
+        </button>
 
         <button
           v-else
@@ -398,7 +408,7 @@
     <!-- File Changes -->
     <div class="flex-1 overflow-y-auto">
       <!-- Nothing is known of a repository git was not run in, so it is not said to be clean -->
-      <div v-if="trustRequest && gitStatus.length === 0" />
+      <div v-if="(trustRequest || ownershipRequest) && gitStatus.length === 0" />
       <EmptyState
         v-else-if="gitStatus.length === 0"
         :icon="GitCommit"
@@ -765,6 +775,7 @@ import NoDirectoryState from '#features/code/fe/features/NoDirectoryState.vue'
 import EmptyState from '#features/code/fe/features/EmptyState.vue'
 import RevertDialog from '#features/code/fe/features/commit/RevertDialog.vue'
 import TrustRequest from '#features/code/fe/features/commit/TrustRequest.vue'
+import OwnershipRequest from '#features/code/fe/features/commit/OwnershipRequest.vue'
 import SignInHelp from '#features/code/fe/features/commit/SignInHelp.vue'
 import CommitLogSection from '#features/code/fe/features/commit/CommitLogSection.vue'
 import ToastNotification from '@apackdev/ui/design/ToastNotification'
@@ -812,6 +823,7 @@ const isSettingUpSignIn = useSelector(commitActor, (state) => state.context.isSe
 const errorSignIn = useSelector(commitActor, (state) => (state.context.gitError ? state.context.gitFailure?.signIn ?? null : null))
 // The refusal belongs to the error it came with, and goes when that error does
 const trustRequest = useSelector(commitActor, (state) => (state.context.gitError ? state.context.gitFailure?.trust ?? null : null))
+const ownershipRequest = useSelector(commitActor, (state) => (state.context.gitError ? state.context.gitFailure?.ownership ?? null : null))
 const isMovingOperation = useSelector(commitActor, (state) => state.context.isMovingOperation)
 const commitsAhead = useSelector(commitActor, (state) => state.context.commitsAhead)
 const commitsBehind = useSelector(commitActor, (state) => state.context.commitsBehind)

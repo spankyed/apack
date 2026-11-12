@@ -77,7 +77,7 @@ export interface CodeCommitContext {
   /** What can be done about the sign-in the remote asked for when fetching stopped */
   fetchSignIn: SignInHelp | null
   /** What is known of the failure `gitError` words: the command to run again, and the sign-in a remote asked for */
-  gitFailure: Pick<CommitFailure, 'during' | 'signIn' | 'trust'> | null
+  gitFailure: Pick<CommitFailure, 'during' | 'signIn' | 'trust' | 'ownership'> | null
   /** Whether the GitHub CLI was asked to give git its sign-in and has not answered */
   isSettingUpSignIn: boolean
   /** Whether git was asked to stage or unstage one piece of a file's change and has not answered */
@@ -205,6 +205,8 @@ export type Event =
   | { type: 'commit.DISCARD_RESTORED'; data: { id: string } & DiscardRestored }
   | { type: 'commit.TRUST_REPOSITORY' }
   | { type: 'commit.REPOSITORY_TRUSTED'; data: { repository: string } }
+  | { type: 'commit.TRUST_OWNERSHIP' }
+  | { type: 'commit.OWNERSHIP_TRUSTED'; data: { directory: string } }
   | { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }
   | { type: 'commit.SET_UP_SIGN_IN'; host: string }
   | { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; hunk: string }
@@ -216,6 +218,8 @@ export type Event =
   | { type: 'commit.BRANCHES_RECEIVED'; data: { branches: string[] } }
   | { type: 'commit.BRANCH_CHECKOUT_SUCCESS'; data: { branchName: string } }
   | { type: 'commit.BRANCH_PUSHED'; data: { branchName: string } }
+  | { type: 'commit.STOP_PUSH' }
+  | { type: 'commit.PUSH_STOPPED' }
   | { type: 'commit.BRANCH_PULLED'; data: { branchName: string } }
   | { type: 'commit.DISMISS_ERROR' }
   | { type: 'commit.GENERATE_MESSAGE' }
@@ -628,8 +632,8 @@ export const commitState = setup({
         return ev.data.message
       },
       gitFailure: ({ event }) => {
-        const { during, signIn, trust } = (event as { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }).data
-        return { during, signIn, trust }
+        const { during, signIn, trust, ownership } = (event as { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }).data
+        return { during, signIn, trust, ownership }
       },
       isSettingUpSignIn: false,
       isApplyingHunk: false,
@@ -648,6 +652,11 @@ export const commitState = setup({
     trustRepository: ({ context }) => {
       const repository = context.gitFailure?.trust?.repository
       if (repository) sendToSystem('code', { type: 'commit.TRUST_REPOSITORY', repository })
+    },
+
+    /** The user trusts the repository git refused for who owns it: the backend asks git which path, and adds it */
+    trustOwnership: ({ context }) => {
+      if (context.gitFailure?.ownership) sendToSystem('code', { type: 'commit.TRUST_OWNERSHIP' })
     },
 
     /** Trusted: the refusal goes, and the status that was never read is asked for */
@@ -1058,6 +1067,12 @@ export const commitState = setup({
         'commit.REPOSITORY_TRUSTED': {
           actions: ['repositoryTrusted', 'refreshGitStatus']
         },
+        'commit.TRUST_OWNERSHIP': {
+          actions: 'trustOwnership'
+        },
+        'commit.OWNERSHIP_TRUSTED': {
+          actions: ['repositoryTrusted', 'refreshGitStatus']
+        },
         'commit.RESOLVE_CONFLICT': {
           actions: 'resolveConflict'
         },
@@ -1105,6 +1120,14 @@ export const commitState = setup({
           actions: ['setPushing', 'pushBranch']
         },
         'commit.BRANCH_PUSHED': {
+          actions: 'handleBranchPushed'
+        },
+        // Only while a push runs: the backend has nothing to stop otherwise
+        'commit.STOP_PUSH': {
+          guard: ({ context }) => context.isPushing,
+          actions: () => { sendToSystem('code', { type: 'commit.STOP_PUSH' }) }
+        },
+        'commit.PUSH_STOPPED': {
           actions: 'handleBranchPushed'
         },
         'commit.PULL_BRANCH': {

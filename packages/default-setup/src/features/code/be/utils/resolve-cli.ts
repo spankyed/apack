@@ -1,5 +1,5 @@
 import { featureSettings } from '#generated/settings.ts';
-// Finds the CLIs the code feature runs (Claude Code, Codex, Copilot, gh): a path the user set in the code
+// Finds the CLIs the code feature runs (Claude Code, Codex, Copilot, gh, git): a path the user set in the code
 // surface's settings (`cliPaths`), known install locations, then PATH.
 
 import { execFileWhileWorking } from '@apackdev/sdk/progress'
@@ -8,7 +8,7 @@ import * as os from 'os'
 import * as path from 'path'
 
 
-export type CliName = 'copilot' | 'claude-code' | 'codex' | 'gh'
+export type CliName = 'copilot' | 'claude-code' | 'codex' | 'gh' | 'git'
 
 const HOME = os.homedir()
 
@@ -28,6 +28,12 @@ const FALLBACK_PATHS: Record<CliName, string[]> = process.platform === 'win32'
           path.join(process.env.ProgramFiles || 'C:\\Program Files', 'GitHub CLI', 'gh.exe'),
           path.join(localAppData, 'Programs', 'gh', 'gh.exe'),
         ],
+        // Where Git for Windows installs, for each kind of Program Files, then for the user alone
+        git: [
+          ...[process.env.ProgramW6432, process.env['ProgramFiles(x86)'], process.env.ProgramFiles]
+            .filter((root): root is string => !!root).map(root => path.join(root, 'Git', 'cmd', 'git.exe')),
+          path.join(localAppData, 'Programs', 'Git', 'cmd', 'git.exe'),
+        ],
       }
     })()
   : {
@@ -39,6 +45,9 @@ const FALLBACK_PATHS: Record<CliName, string[]> = process.platform === 'win32'
       ],
       codex: ['/usr/local/bin/codex', `${HOME}/.nvm/versions/node/*/bin/codex`],
       gh: ['/opt/homebrew/bin/gh', '/usr/local/bin/gh'],
+      // An installed git ahead of the system's: on macOS `/usr/bin/git` stands for the developer tools until they
+      // are installed, which the engine asks before it runs it, and only by that path
+      git: ['/opt/homebrew/bin/git', '/usr/local/bin/git', '/usr/bin/git'],
     }
 
 const resolvedCache = new Map<string, string>()
@@ -48,6 +57,7 @@ const CLI_COMMANDS: Record<CliName, string> = {
   'claude-code': 'claude',
   codex: 'codex',
   gh: 'gh',
+  git: 'git',
 }
 
 /**
@@ -155,7 +165,7 @@ export function clearCliPathCache(): void {
   resolvedCache.clear()
 }
 
-const CLI_NAMES: Set<string> = new Set<string>(['copilot', 'claude-code', 'codex', 'gh'])
+const CLI_NAMES: Set<string> = new Set<string>(['copilot', 'claude-code', 'codex', 'gh', 'git'])
 
 export function isCliName(value: string): value is CliName {
   return CLI_NAMES.has(value)
@@ -174,6 +184,18 @@ export async function testCli(
   } catch (err: any) {
     return { success: false, error: err.message || 'Command failed' }
   }
+}
+
+/**
+ * The git a repository is opened with: the path the user set, the first known install location that exists, or
+ * `git` from the PATH. Nothing is run to find it, since whether it can be used is the engine's to ask, once,
+ * before its first command; a path set and not there is handed in as it is, so the engine says it is not there.
+ */
+export function resolveGitPath(storedPath = featureSettings.forFeature('code').get()?.cliPaths?.git): string {
+  const preferred = storedPath?.trim()
+  if (preferred) return preferred
+  for (const candidate of FALLBACK_PATHS.git) if (fs.existsSync(candidate)) return candidate
+  return CLI_COMMANDS.git
 }
 
 /** Convenience: read stored path from settings and resolve. Used by CLI service modules. */

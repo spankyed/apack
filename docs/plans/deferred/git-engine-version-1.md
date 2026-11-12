@@ -3,7 +3,7 @@
 Status: deferred by request, 2026-11-11, and deferral is not permission to start. Everything here follows
 [the engine's move to a repository of its own](../../archive/plans/git-engine-own-repository.md), which was given its go that day.
 Pull requests 1 and 2 come first after it, since what they fix is true of the app today: 2, then 1, whose open
-questions are settled when it starts. The rest start once the [five additions](git-engine-additions.md) are done.
+questions are settled when it starts. The rest start once the [five additions](../../archive/plans/git-engine-additions.md) are done, which they are.
 
 Compiled 2026-11-11 against the code feature as it stood in the working tree that day, with git 2.38.1 on
 macOS. Each pull request says under **Known** what was run, what was only read, and what is neither.
