@@ -411,6 +411,10 @@ function threadSleepingInStorage(pid: number): string | undefined {
 /**
  * A process tree's work, from the readings the watchdog takes: what each process in it added, summed over every
  * reading, so a process that exits keeps the work it did (`cpuAdded`). Nothing where `ps` gives no reading.
+ *
+ * What holds the tree is asked of the system only when the system is what reads it. A caller that hands in its
+ * own `read` has said where the tree's readings come from, and the system's listing knows nothing of that tree:
+ * asking it would start a process for a tree a spec made up, and one a spec's clock does not move.
  */
 export function processWork(pid: number, read: typeof readTreeCpuMs = readTreeCpuMs): WorkReading {
   let last = new Map<number, number>();
@@ -421,7 +425,7 @@ export function processWork(pid: number, read: typeof readTreeCpuMs = readTreeCp
     total += cpuAdded(last, tree);
     last = tree;
     return total;
-  }, { held: () => storageHold(pid) });
+  }, read === readTreeCpuMs ? { held: () => storageHold(pid) } : {});
 }
 
 /**
