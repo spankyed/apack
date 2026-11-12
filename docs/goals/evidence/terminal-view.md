@@ -387,3 +387,49 @@ program. That removes a process the case never meant to ask about, and is not sh
 Running a case 48 at once made the machine the subject: 59 of 480 runs heard nothing from a shell for ten
 seconds while macOS's own assessment of each new process held a core. Those say nothing about the broker
 and are why nothing above was measured wider than 40.
+
+## Vouched shell marks — 2026-11-11
+
+What is built is in [vouched-shell-marks.md](../../references/vouched-shell-marks.md). The broker is
+`apack-terminal` `efe5d84`.
+
+### The built app, driven
+
+`npm run build:default-setup`, `npm run build:runtime`, then a drive script that opened a terminal in the
+code surface (zsh, with the hook the app arranges), typed six lines, and afterwards asked the app's own
+broker for the session's `facts` and `commands` over its socket.
+
+| Typed | Recorded |
+|---|---|
+| `echo $0 fir$((1+1))st` | `exited`, code 0 |
+| `false; echo sec$((1+1))ond` | `exited`, code 0 (the line's status is its last command's) |
+| `(exit 7)` | `exited`, code 7 |
+| `echo "key=${APACK_MARKS_KEY-unset} …"` | `exited`, code 0; the screen showed `key=unset` |
+| `env \| grep -c APACK_MARKS_KEY; …` | `exited`, code 0; the screen showed `0` |
+| `printf '<133;D;0><633;D;0><133;A><633;V;F;6;ffff…;0;/tmp>'; echo …; sleep 20` | `running`, asked while `sleep` was the foreground process |
+
+`facts` for the session: `vouched: true`, `running: true`, `finished: 5`, `refused: 1`. The one refusal
+is the keyed finish carrying another key; the three unkeyed marks ended nothing and are not counted.
+
+### The hooks
+
+`shell-marks.spec.ts` runs bash and zsh for real: 35 cases, of which 3 need a bash with `PS0` and skip on
+a machine whose only bash is 3.2. The same spec pointed at bash 4.4.20 and 5.2.15 in containers passed 39
+with 3 skipped. By hand in containers:
+
+| Shell | What was run | Result |
+|---|---|---|
+| bash 4.4.20, 5.0.17, 5.2.15, 5.2.37 | 19 configurations of history and prompt settings typed at each | identical across versions, matching the table in the reference |
+| bash 5.2.15 under a pty | a command, an empty Enter, C-x C-e, `(echo sub; exit 3)`, a pipeline, a space-led line | a start and a finish for each but the empty Enter; the subshell finished with 3 |
+| fish 3.6.0, 4.0.2 | the encoder, with every control character in a line and in a directory's name | 40 of 40 each |
+| PowerShell 7.4.6 (arm64 Linux) | the encoder with every control character; statuses typed at | 41 of 41; `0`, `1`, `3`, and `%2520` for a `%20` in a directory |
+| zsh 5.9, bash 3.2 | the encoder with every control character | 34 of 34 (NUL included); 33 of 33 |
+
+Not run: bash 5.1 and 5.3, bash-preexec, `cmdhist` off on a bash with `PS0`, and PowerShell on Windows.
+
+### Windows
+
+The broker's CI ran its suite on Windows for this change. The one keyed case there — a program that
+prints a start and a finish and exits at once — passed, which is the first keyed mark this suite has sent
+through a ConPTY and the proof that a session's exit waits for the last of its output there
+(`apack-terminal` `bdc603e`). The hooks themselves have run on no Windows machine.

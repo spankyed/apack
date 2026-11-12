@@ -1,6 +1,6 @@
 import { Worker } from 'node:worker_threads';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LOOSE_CEILING_FACTOR, answerWhileWorking, cpuAdded, createStallTracker, describeRefusal, execFileWhileWorking, fromNow, parseCpuTime, processWork, threadWork, treeCpuMs, treeCpuMsFrom, watchWork, win32Rows, type Refusal } from '../../src/progress.ts';
+import { LOOSE_CEILING_FACTOR, STORAGE_ALLOWANCE_FACTOR, answerWhileWorking, cpuAdded, createStallTracker, describeRefusal, execFileWhileWorking, fromNow, parseCpuTime, processWork, sleepsInStorage, threadWork, trackWait, treeProcessRows, treeProcessesIn, unmetWaits, treeCpuMs, treeCpuMsFrom, watchWork, win32Rows, type Refusal } from '../../src/progress.ts';
 
 /** A reading that adds `step` milliseconds of work each time it is taken */
 const working = (step: number) => { let total = 0; return async () => (total += step); };
@@ -276,3 +276,107 @@ describe('how a refusal reads', () => {
   });
 });
 
+
+describe('what a tree that stopped working was doing', () => {
+  // pid ppid pgid stat etime time wchan args, as `ps` on Linux prints them
+  const listing = [
+    '    1     0     1 Ss   02:10:00 00:00:01 do_epoll_wait /sbin/init',
+    '  100     1   100 Sl      12:00 00:00:40 do_epoll_wait node vitest run',
+    '  140   100   100 Sl      11:58 00:01:12 futex_wait    node worker.js --pool forks',
+    '  201   140   201 D       00:31 00:00:02 io_schedule   node cli.js pack build --out "a b"',
+    '  202   201   201 Z       00:30 00:00:00 -             [sh] <defunct>',
+    '  300     1   300 R       05:00 00:04:59 -             node unrelated.js',
+  ].join('\n');
+
+  it('reads each process with its state, where it sleeps, and its command whole', () => {
+    expect(treeProcessRows(listing).find((row) => row.pid === 201)).toEqual({
+      pid: 201, ppid: 140, pgid: 201, state: 'D', elapsed: '00:31', cpu: '00:00:02', waitingIn: 'io_schedule',
+      command: 'node cli.js pack build --out "a b"',
+    });
+  });
+
+  it('takes the tree as the watchdog counts it: the group, and what its members started in groups of their own', () => {
+    const tree = treeProcessesIn(treeProcessRows(listing), 100);
+    expect(tree.map((each) => each.pid)).toEqual([100, 140, 201, 202]);
+  });
+
+  it('leaves out a process the tree did not start', () => {
+    expect(treeProcessesIn(treeProcessRows(listing), 100).some((each) => each.pid === 300)).toBe(false);
+  });
+});
+
+describe('what a caller was still waiting for', () => {
+  it('lists a wait from its first failure until it is met, with what it last failed with', () => {
+    const wait = trackWait();
+    expect(unmetWaits()).toEqual([]);
+    wait.unmet(new Error('expected 0 to be greater than 0\n    at somewhere'));
+    wait.unmet(new Error('the watcher started no rebuild'));
+    const [line, ...others] = unmetWaits(Date.now() + 61_000);
+    expect(others).toEqual([]);
+    expect(line).toMatch(/^the watcher started no rebuild \(tried 2 times over 6[01]s\)$/);
+    wait.met();
+    expect(unmetWaits()).toEqual([]);
+  });
+});
+
+describe('a party that is waiting on storage', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const HELD = 'pid 7 sleeps in btrfs_sync_log';
+  /** A party whose work is `total()` and which is held by whatever `by()` answers */
+  const party = (total: () => number, by: () => string | undefined) => Object.assign(async () => total(), { held: async () => by() });
+
+  it('is not refused for the time it waits, over several idle windows of doing nothing', async () => {
+    let refused: Refusal | undefined;
+    const watch = watchWork({ work: party(() => 0, () => HELD), idleMs: IDLE, onRefused: (refusal) => { refused = refusal; } });
+    await vi.advanceTimersByTimeAsync(5 * IDLE);
+    expect(refused).toBeUndefined();
+    watch.stop();
+  });
+
+  it('is refused one idle window after it stops waiting, if it then does nothing, saying what it had waited on', async () => {
+    let refused: Refusal | undefined;
+    let waiting = true;
+    watchWork({ work: party(() => 0, () => (waiting ? HELD : undefined)), idleMs: IDLE, onRefused: (refusal) => { refused = refusal; } });
+    await vi.advanceTimersByTimeAsync(3 * IDLE);
+    waiting = false;
+    await vi.advanceTimersByTimeAsync(IDLE - IDLE / 4);
+    expect(refused, 'not before a whole window of quiet with nothing holding it').toBeUndefined();
+    await vi.advanceTimersByTimeAsync(IDLE / 2);
+    expect(refused).toMatchObject({ kind: 'stalled', held: { by: HELD } });
+    expect(describeRefusal(refused!)).toContain(`waiting on storage that was allowed for (${HELD})`);
+  });
+
+  it('is allowed ten idle windows of it and no more, so a disk that never answers still ends the wait', async () => {
+    let refused: Refusal | undefined;
+    watchWork({ work: party(() => 0, () => HELD), idleMs: IDLE, onRefused: (refusal) => { refused = refusal; } });
+    await vi.advanceTimersByTimeAsync(STORAGE_ALLOWANCE_FACTOR * IDLE);
+    expect(refused).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(IDLE + IDLE / 2);
+    expect(refused).toMatchObject({ kind: 'stalled' });
+    expect((refused as Extract<Refusal, { kind: 'stalled' }>).held!.ms).toBeGreaterThanOrEqual(STORAGE_ALLOWANCE_FACTOR * IDLE);
+  });
+
+  it('is allowed afresh once it has worked', async () => {
+    let refused: Refusal | undefined;
+    let total = 0;
+    const watch = watchWork({ work: party(() => total, () => HELD), idleMs: IDLE, onRefused: (refusal) => { refused = refusal; } });
+    await vi.advanceTimersByTimeAsync(8 * IDLE);
+    total += 2_000;
+    await vi.advanceTimersByTimeAsync(8 * IDLE);
+    expect(refused, 'sixteen windows of waiting in all, with work between').toBeUndefined();
+    watch.stop();
+  });
+
+  it('is told from one waiting on anything else by where its threads sleep', () => {
+    const filesystems = ['btrfs', 'ext4'];
+    expect(sleepsInStorage('btrfs_sync_log', filesystems)).toBe(true);
+    expect(sleepsInStorage('io_schedule_timeout', filesystems)).toBe(true);
+    expect(sleepsInStorage('futex_wait_queue', filesystems)).toBe(false);
+    expect(sleepsInStorage('do_epoll_wait', filesystems)).toBe(false);
+    expect(sleepsInStorage('pipe_read', filesystems)).toBe(false);
+    // A filesystem this kernel does not keep on a disk is not one a process can be waiting on a disk in
+    expect(sleepsInStorage('xfs_log_force', filesystems)).toBe(false);
+  });
+});

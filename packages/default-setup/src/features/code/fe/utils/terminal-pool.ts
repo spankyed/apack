@@ -466,7 +466,7 @@ class TerminalPool {
    */
   private async copyLastOutput(entry: PoolEntry): Promise<boolean> {
     const view = entry.view
-    const last = view?.commands.filter(command => command.finishedMs !== null && command.output !== null).at(-1)
+    const last = view?.commands.filter(command => command.outcome.kind !== 'running' && command.output !== null).at(-1)
     if (!view || !last || !view.selectOutput(last)) return false
     return view.copy()
   }

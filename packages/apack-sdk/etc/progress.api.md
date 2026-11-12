@@ -21,11 +21,15 @@ export function cpuAdded(before: ReadonlyMap<number, number>, after: ReadonlyMap
 // @public
 export function createStallTracker(idleMs: number, startedAt: number): {
     output(at: number): void;
+    quietFor(at: number): number;
     reading(now: ReadonlyMap<number, number>, at: number): boolean;
 };
 
 // @public
 export function describeRefusal(refusal: Refusal): string;
+
+// @public
+export function describeTree(leader: number): Promise<string | undefined>;
 
 // @public
 export function execFileWhileWorking(file: string, args: readonly string[], options?: ExecFileWhileWorkingOptions): Promise<{
@@ -72,6 +76,7 @@ export interface ProcessRow {
     readonly pid: number;
     // (undocumented)
     readonly ppid: number;
+    readonly state?: string;
 }
 
 // @public
@@ -87,6 +92,10 @@ export function readTreeCpuMsSync(leader: number): Map<number, number> | undefin
 export type Refusal = {
     readonly kind: 'stalled';
     readonly idleMs: number;
+    readonly held?: {
+        readonly ms: number;
+        readonly by: string;
+    };
 } | {
     readonly kind: 'ceiling';
     readonly ceilingMs: number;
@@ -99,7 +108,22 @@ export type Refusal = {
 };
 
 // @public
+export function sleepsInStorage(place: string, filesystems: readonly string[]): boolean;
+
+// @public
+export const STORAGE_ALLOWANCE_FACTOR = 10;
+
+// @public
+export function storageHold(leader: number): Promise<string | undefined>;
+
+// @public
 export function threadWork(worker: object): WorkReading;
+
+// @public
+export function trackWait(): {
+    unmet(error: unknown): void;
+    met(): void;
+};
 
 // @public
 export function treeCpuMs(listing: string, leader: number): Map<number, number>;
@@ -108,7 +132,35 @@ export function treeCpuMs(listing: string, leader: number): Map<number, number>;
 export function treeCpuMsFrom(rows: readonly ProcessRow[], leader: number): Map<number, number>;
 
 // @public
+export interface TreeProcess {
+    // (undocumented)
+    readonly command: string;
+    readonly cpu: string;
+    readonly elapsed: string;
+    // (undocumented)
+    readonly pid: number;
+    // (undocumented)
+    readonly ppid: number;
+    readonly state: string;
+    readonly waitingIn: string;
+}
+
+// @public
+export function treeProcessesIn(rows: ReadonlyArray<TreeProcess & {
+    readonly pgid: number;
+}>, leader: number): TreeProcess[];
+
+// @public
+export function treeProcessRows(listing: string): Array<TreeProcess & {
+    readonly pgid: number;
+}>;
+
+// @public
+export function unmetWaits(now?: number): string[];
+
+// @public
 export interface Watch {
+    heldMs(): number;
     // (undocumented)
     output(): void;
     spentMs(): number;
@@ -141,7 +193,9 @@ export function watchWork(input: {
 export const win32Rows: (listing: string) => ProcessRow[];
 
 // @public
-export type WorkReading = () => Promise<number | undefined>;
+export type WorkReading = (() => Promise<number | undefined>) & {
+    readonly held?: () => Promise<string | undefined>;
+};
 
 // @public
 export function workSignal(options: Omit<Parameters<typeof watchWork>[0], 'onRefused'>): {

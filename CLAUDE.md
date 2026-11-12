@@ -210,6 +210,10 @@ held to its size there would fire on a busy host: `test:linux` sets `APACK_CEILI
 ten times its size (`LOOSE_CEILING_FACTOR`, `@apackdev/sdk/progress`) rather than dropping it, since the ceiling is the
 one bound on a spin. What ends a stuck one is `boundedSpawn`'s watchdog, which kills a process tree that has gone
 `IDLE_MS` without CPU or output, so a step slowed by a busy machine is never killed for it.
+**Nor by a slow disk**: a tree found waiting on storage is not counted idle for that interval (`storageHold`), for up to
+`STORAGE_ALLOWANCE_FACTOR` windows between two pieces of work, and a stall says what the tree was waiting on —
+its unmet waits, each process's state and where it sleeps
+([a stall that was a disk](docs/archive/references/pipeline-lessons.md#a-stall-that-was-a-disk)).
 A spec's `runCommand` is bounded the same way (`@apackdev/sdk/progress`), and so is a **test**:
 every vitest config turns vitest's clock off (`testTimeout: 0`, `hookTimeout: 0`) and loads the progress guard
 (`@apackdev/testing`'s `vitest-progress-guard.ts`), which fails a test or hook whose process tree stalls and a test

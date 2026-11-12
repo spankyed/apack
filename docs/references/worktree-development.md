@@ -46,8 +46,10 @@ This pins the current HEAD and each named branch to exact commits, creates a det
 worktree, merges them and installs and builds its own dependencies and app. Its expensive steps queue behind any other chain on this machine (`scripts/lib/machine-lock.ts`). It runs `npm run chain -- --strict --all
 --cores 2`. Your source branches, files and staging index remain unchanged.
 
-A merge conflict or failed check leaves the candidate available for inspection. A successful check
-prints the validated candidate commit and evidence location. Changed input refs or a changed candidate
+A merge conflict or failed check leaves the candidate available for inspection; remove it with
+`git worktree remove` when you are done with it. A successful check prints the validated candidate commit,
+copies the chain's evidence to `.apack/session-check/<commit>/` in the checkout that asked, and removes
+the candidate, which is a whole install and a built app. Changed input refs or a changed candidate
 fail the check; rerun before merging. This is a validation command, not a merge or publishing command.
 Merge the tested inputs in the same order; advancing branches require another combined check.
 
