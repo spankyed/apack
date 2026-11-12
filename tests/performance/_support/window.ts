@@ -22,7 +22,7 @@ export interface PerformanceViewCompletion {
    * A signal that readiness may have changed, for an action whose result changes neither a view nor the DOM.
    *
    * The loop's two built-in triggers are a view delivery and a DOM mutation. A resize has neither: no view,
-   * and xterm draws to a canvas, so the screen changing mutates nothing the observer sees. Rather than poll,
+   * and the emulator draws to a canvas, so the screen changing mutates nothing the observer sees. Rather than poll,
    * such a completion subscribes to whatever does know — the surface's actor — and returns its unsubscribe.
    */
   subscribe?: (notify: () => void) => () => void;

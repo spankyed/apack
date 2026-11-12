@@ -15,9 +15,10 @@ const hiddenFixture = (trials: number) => ({
 /**
  * **What several sessions cost while nobody is looking at them.**
  *
- * The reading Phase G asks for as "memory with several hidden sessions", and the one the broker changes most
- * directly: today every session's pty, its reader and its xterm live in the API and renderer processes, so N
- * sessions are N sets of in-process state. A broker owns the processes instead.
+ * The reading Phase G asks for as "memory with several hidden sessions". A broker owns each session's
+ * process and its screen; the API holds a handle to it, and a window a view of the rows it is showing — so
+ * what N sessions cost the API and the renderer is what this reads, and the broker's own share is not in
+ * either.
  *
  * **It accumulates rather than resetting**, which is the whole difference from `terminal-open`: trial N runs
  * with N terminals alive and only the newest visible, so the recorded RSS is a curve against session count
@@ -63,14 +64,13 @@ export async function terminalHiddenScenario({ app, appPage, electronApp }: Para
               const context = code().getSnapshot().context;
               const panelTerminalId = context.panelTerminalId ?? null;
               if (!panelTerminalId || panelTerminalId === before) return false;
-              const terminal = document.querySelector('.xterm');
-              const viewport = document.querySelector('.xterm-viewport');
-              if (!terminal || !viewport || viewport.getClientRects().length === 0) return false;
+              const terminal = document.querySelector('[data-apack-terminal]');
+              if (!terminal || terminal.getClientRects().length === 0) return false;
               work.renderCanvases = terminal.querySelectorAll('canvas').length;
               if (work.renderCanvases === 0) return false;
               // Only the newest is shown; every earlier one is a hidden session
               work.terminalsAlive = living();
-              work.xtermElements = document.querySelectorAll('[class*="xterm"]').length;
+              work.terminalElements = document.querySelectorAll('[data-apack-terminal]').length;
               const ready = action.within(() => recording.begin('app.view.ready', {
                 'app.generation': 'feed', 'app.delivery': 0, 'app.commit': 0, 'app.result_count': work.terminalsAlive,
               }));

@@ -14,7 +14,7 @@ The preload script every apack window loads (`packages/main`'s `WindowManager` p
 
 **This is the narrowest layer in the repo and the only one a renderer can reach directly** — every pack's
 frontend runs in the same window, so what is exposed here is reachable by code the app did not write. The
-suite is four claims nothing else makes, and the IPC table below is deliberately not one of them: a case
+suite is five claims nothing else makes, and the IPC table below is deliberately not one of them: a case
 per channel would restate this file rather than test it.
 
 - **The API token comes from main over `api:token`, never from an argument.** `process.argv` is readable by
@@ -27,6 +27,11 @@ per channel would restate this file rather than test it.
 - **Every `on*` unsubscribe leaves no listener behind**, counted across all eight, which is where a partial
   unsubscribe would hide: `apiStatus.onEvent` registers five listeners for one subscription.
 - **One global and no second one**, since a second name is a second surface every pack frontend can reach.
+- **A window's connection to the terminal broker is greeted here and read nowhere else.** `terminal.views()`
+  opens the one socket this bridge holds: it sends the line main gave it, waits for the broker's answer, and
+  from the next byte the connection is the page's. What the page sends before the answer is held, a refusal
+  ends it without a byte reaching the page, and it ends once however it ends. Driven against a real socket,
+  since what the bridge does with one is the whole subject.
 
 `tests/electron-stub.ts` stands in for `contextBridge` and `ipcRenderer` and records what the bridge asked
 for, as `@app/main`'s does for `app`. **A case must take the stub from the same fresh registry as the module
@@ -72,6 +77,7 @@ the bridge just called — every assertion reads an empty map.
 | `browser.closeTab` / `selectTab` / `navigate` / `goBack` / `goForward` / `reload` / `stop` / `setBounds` / `show` / `hide` / `toggleDevTools` | `browser:*` | send | `browser` |
 | `browser.onTabCreated` / `onTabRemoved` / `onTabUpdated` / `onActiveTabChanged` / `onFocusAddressBar` | `browser:tab-created` / `-removed` / `-updated` / `active-tab-changed` / `focus-address-bar` | on | `BrowserTabManager` |
 | `protocolAction.onAction(cb)` | `protocol-action` | on | `ProtocolHandler` (`apack://<action>?…` deep links) |
+| `terminal.views()` | `terminal:view-endpoint` | sendSync, then a socket of its own | `terminal-sessions`: where the broker listens and the line to greet it with. The bytes go straight to the broker, not through main |
 | `performance.start` / `stop` (host-only) | `performance:renderer:start` / `performance:renderer:stop` | invoke | `performance` (dev/test, calling window and lease only) |
 | `rendererReady()` | `renderer:ready` | send | `window-manager`: shows the main window and closes the splash (15 s fallback) |
 

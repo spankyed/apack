@@ -81,10 +81,15 @@ it('executes its owned runtime and refuses a damaged, aliased or missing copy', 
   expect(installation.executable).not.toBe(fs.realpathSync(process.execPath));
   expect(await printed(installation.executable, [installation.bin])).toBe('captured');
   expect(installation.isCurrent(compiler.root)).toBe(true);
-  fs.chmodSync(installation.executable, 0o755);
-  fs.writeFileSync(installation.executable, 'damaged runtime');
-  expect(installation.isCurrent(compiler.root)).toBe(false);
+  // **Put in its place rather than written into it.** Linux refuses a write into a file something is
+  // still executing (ETXTBSY), and the runtime this case ran a moment ago has printed its answer but may
+  // not have finished leaving — on a busy machine it usually has not. A file renamed over it is a
+  // damaged runtime at that path all the same, and no process is asked to let go of the old one first
   fs.chmodSync(path.dirname(installation.executable), 0o755);
+  const damaged = `${installation.executable}.damaged`;
+  fs.writeFileSync(damaged, 'damaged runtime', { mode: 0o755 });
+  fs.renameSync(damaged, installation.executable);
+  expect(installation.isCurrent(compiler.root)).toBe(false);
   fs.rmSync(installation.executable);
   fs.symlinkSync(process.execPath, installation.executable, 'file');
   expect(installation.isCurrent(compiler.root)).toBe(false);

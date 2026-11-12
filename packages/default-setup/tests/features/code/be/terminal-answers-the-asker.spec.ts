@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'vitest'
 import { startApp } from '@apackdev/testing/harness'
 import { recordingBroker } from './_support/terminal-broker.ts'
+import { TERMINAL_COLORS } from '#features/code/be/terminal-colors.ts'
 
 /**
  * **The host's terminal service is what gets mocked, and that is the only thing that works here.**
@@ -45,7 +46,7 @@ describe('creating a terminal', () => {
     const types = sentToCode(app)
     // The mock is live, which the inert `vi.mock` it replaced never was: a real session would have spawned
     expect(broker.opened.map(({ options }) => options), 'the pack asked the host for a session')
-      .toEqual([{ cols: 80, rows: 24, shell: expect.any(String), cwd: expect.any(String) }])
+      .toEqual([expect.objectContaining({ cols: 80, rows: 24, shell: expect.any(String), cwd: expect.any(String), colors: TERMINAL_COLORS })])
     expect(types, "the news, on which every window asks for its list again").toContain('terminal.CREATED')
     expect(types, 'and the answer, which opens it for the asker alone').toContain('terminal.OPENED')
   })

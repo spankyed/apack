@@ -539,42 +539,50 @@ export function findRawGitListings(dirs: readonly string[] = CHECKED_DIRS, root 
 }
 
 /**
- * The one module in the code surface that reaches its terminal emulator.
+ * The one module in the code surface that reaches what draws its terminals.
  *
- * Every host that draws a terminal holds a `TerminalAttachment` from this module and no emulator type, which
- * is what makes replacing xterm an implementation swap behind one file. Two hosts reached it directly before,
- * each wiring its own listeners, and the two halves of that were F1 and F2 in the terminal review: a detach
- * that tore the wrapper out of whichever host held it, and one host scrolling on every write while the other
- * honoured where the user had scrolled back to.
+ * Every host that shows a terminal holds a `TerminalAttachment` from this module and nothing of the view,
+ * which is what makes what draws a terminal an implementation behind one file. With two hosts each reaching
+ * it and wiring listeners of their own, one host's detach tears the terminal out of whichever host holds
+ * it, and the two disagree about where the user had scrolled to.
  */
 const EMULATOR_OWNER = 'packages/default-setup/src/features/code/fe/utils/terminal-pool.ts';
 
 /**
- * And the specs that **stand in** for the emulator, so a terminal's bookkeeping and the components that draw
- * one can be driven without a canvas or a GL context. Each names the emulator because it is replacing it,
- * which is the one other way the dependency legitimately appears: `vi.mock` takes a literal specifier, and
- * mocking the pool instead would turn every case here into "the component called `release()`" — the shape of
- * a test that restates the implementation instead of observing it.
+ * The package that draws a terminal, named once so the rule and its message cannot disagree about what
+ * they are about — and so that replacing it is this line rather than a search for a prefix.
+ */
+const EMULATOR_PACKAGE = 'apack-terminal-view';
+
+/**
+ * And the specs that **stand in** for it, so a terminal's bookkeeping and the components that show one can
+ * be driven without a canvas or a broker. Each names the package because it is replacing it, which is the
+ * one other way the dependency legitimately appears: `vi.mock` takes a literal specifier, and mocking the
+ * pool instead would turn every case here into "the component called `release()`" — the shape of a test
+ * that restates the implementation instead of observing it. The stand-in itself is the fourth, since it is
+ * typed by what it stands in for.
  *
- * A listed path that has stopped naming an emulator is reported too, so this allowance cannot outlive the
+ * A listed path that has stopped naming the package is reported too, so this allowance cannot outlive the
  * stand-in it was added for.
  */
 const EMULATOR_STAND_INS = [
+  'packages/default-setup/tests/features/code/fe/_support/terminal-view.ts',
   'packages/default-setup/tests/features/code/fe/utils/terminal-pool.frontend.spec.ts',
   'packages/default-setup/tests/features/code/fe/canvas/terminal-view.frontend.spec.ts',
   'packages/default-setup/tests/features/code/fe/features/terminal/panel-terminal-section.frontend.spec.ts',
 ] as const;
 
 /**
- * `file:line: @xterm/…` for each import of the emulator outside `EMULATOR_OWNER`, and the owner itself when it
- * has stopped importing one.
+ * `file:line: <the emulator package>` for each import of it outside `EMULATOR_OWNER`, and the owner itself
+ * when it has stopped importing one.
  *
  * **The second half is the check having a subject.** A rule that only ever reports the absence of something
  * passes just as happily when the thing it is about has been renamed out from under it, so the owner is
  * derived from the same constant and asserted to be an importer.
  */
 export function findEmulatorImports(dirs: readonly string[] = PACK_CODE_DIRS, root = repoRoot): string[] {
-  const rule: Rule = (node) => (ts.isStringLiteralLike(node) && node.text.startsWith('@xterm/')
+  const rule: Rule = (node) => (ts.isStringLiteralLike(node)
+    && (node.text === EMULATOR_PACKAGE || node.text.startsWith(`${EMULATOR_PACKAGE}/`))
     ? [node.text] : undefined);
   const allowed = new Set<string>([EMULATOR_OWNER, ...EMULATOR_STAND_INS]);
   const outside = filesUnder(dirs, root)
@@ -1010,9 +1018,9 @@ const RULE_LIST = [
   {
     id: 'findEmulatorImports',
     over: PACK_CODE_DIRS,
-    repoOnly: { kind: 'inapplicable', note: "Its subject is the code surface's own seam to xterm.js, which is this pack's choice of emulator and not a contract any other pack is held to" },
+    repoOnly: { kind: 'inapplicable', note: "Its subject is the code surface's own seam to its terminal emulator, which is this pack's choice and not a contract any other pack is held to" },
     find: findEmulatorImports,
-    rule: "Only the code surface's terminal pool imports @xterm/*: a host that draws a terminal holds a TerminalAttachment, so replacing the emulator is a swap behind one module rather than a second rewrite of ownership",
+    rule: "Only the code surface's terminal pool imports the terminal emulator: a host that draws a terminal holds a TerminalAttachment, so replacing the emulator is a swap behind one module rather than a second rewrite of ownership",
   },
   {
     id: 'findSchemeRegistrations',

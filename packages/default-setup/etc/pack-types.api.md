@@ -492,6 +492,12 @@ type BrowserTabId = `${EARS.Entity.BrowserTab}-${string}`;
 
 type BrowserTabPersistedId = `BrowserTab-${string}`;
 
+/**
+ * How the two sides being brought together disagree about a file. `us` is the side the checkout was on and
+ * `them` the one coming in, as git names them.
+ */
+declare const CONFLICT_KINDS: readonly ["both-modified", "both-added", "both-deleted", "added-by-us", "added-by-them", "deleted-by-us", "deleted-by-them"];
+
 /** `control_request` subtype=`can_use_tool` — the permission prompt. */
 interface CanUseToolRequest {
     subtype: 'can_use_tool';
@@ -1479,8 +1485,8 @@ declare const ClaudeNativeMcpUrlOperationSchema: z.ZodObject<{
         accept: "accept";
         decline: "decline";
         cancel: "cancel";
-        open: "open";
         continue: "continue";
+        open: "open";
     }>;
 }, z.core.$strict>;
 
@@ -1517,8 +1523,8 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
             accept: "accept";
             decline: "decline";
             cancel: "cancel";
-            open: "open";
             continue: "continue";
+            open: "open";
         }>;
         label: z.ZodString;
         selected: z.ZodBoolean;
@@ -1563,8 +1569,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"chrome_install_setup">;
     phase: z.ZodEnum<{
-        connecting: "connecting";
         failed: "failed";
+        connecting: "connecting";
         waiting_install: "waiting_install";
         stalled: "stalled";
         connected: "connected";
@@ -3774,8 +3780,8 @@ interface CodeSystemContext {
      * the code settings change, the browsed `baseDirectory` included, so only a new default moves the explorer.
      */
     defaultBaseDirectory: string | null;
-    gitRepository: GitRepository | null;
-    gitWatcher: GitWatcherService | null;
+    gitRepository: RepositoryHandle | null;
+    gitWatcher: WatcherHandle | null;
 }
 
 interface CodeSystemError {
@@ -3857,6 +3863,19 @@ declare const CommandLifecycleLineSchema: z.ZodObject<{
     session_id: z.ZodString;
 }, z.core.$loose>;
 
+/** What the commit panel is told of a command that failed */
+interface CommitFailure {
+    message: string;
+    /** Why git failed, where it said */
+    code?: GitErrorCode;
+    /** The command the failure was of, where the panel can run it again */
+    during?: 'pull' | 'push';
+    /** What can be done about a sign-in the remote asked for */
+    signIn?: SignInHelp;
+    /** What the repository would have git run, when the command was not run because the repository is not trusted */
+    trust?: TrustRequest;
+}
+
 interface CommitLogEntry {
     hash: string;
     shortHash: string;
@@ -3887,6 +3906,8 @@ interface ConfigValueWriteParams {
     filePath?: string | null;
     expectedVersion?: string | null;
 }
+
+type ConflictKind = (typeof CONFLICT_KINDS)[number];
 
 interface ConsumerHandlers {
     /** Called for streaming notifications (item/started, item/completed, item/agentMessage/delta, turn/completed, etc.) */
@@ -4197,9 +4218,38 @@ interface DatabaseSchemaInfo {
 
 type DatabaseSettings = SettingsOf<'database'>;
 
+/** One piece of a file's change, as git cuts it */
+interface DiffHunk {
+    /** What names this piece when it is staged or unstaged: the same for as long as git cuts the same piece */
+    id: string;
+    /** Where it begins on the left side of the diff, and how many lines of that side it covers */
+    oldStart: number;
+    oldLines: number;
+    /** The same on the right side */
+    newStart: number;
+    newLines: number;
+    /** The piece as text, to show: its header and its lines. Git is handed the piece by its `id`, never this */
+    patch: string;
+}
+
 interface DirectoryContent {
     path: string;
     files: FileInfo[];
+}
+
+/** What a discard kept of what it removed, which can be put back for as long as git keeps it */
+interface DiscardKept {
+    /** Names what was kept, to put it back. Absent when nothing was: every file was too large, or there was none */
+    id?: string;
+    /** The paths removed without a copy, each too large to keep one of: from the top of the checkout */
+    notKept: string[];
+}
+
+/** What putting a discard back did, by path from the top of the checkout */
+interface DiscardRestored {
+    restored: string[];
+    /** Changed or made again since the discard, and left as they are */
+    left: string[];
 }
 
 interface DocumentDTO {
@@ -4595,6 +4645,9 @@ interface FolderItem {
     isBroken?: boolean;
 }
 
+/** Why a git command failed, where what it printed says: the git engine's codes, as the contract names them */
+declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository", "untrusted"];
+
 interface GhPRComment {
     id: string;
     body: string;
@@ -4671,133 +4724,23 @@ interface GhReviewThread {
 
 interface GitDiff {
     path: string;
-    diff: string;
     staged: boolean;
     originalContent?: string;
     modifiedContent?: string;
     isImage?: boolean;
+    /** The pieces of the change that can be staged, or unstaged, one at a time: none for a file that is not plainly modified */
+    hunks?: DiffHunk[];
 }
 
-declare class GitRepository {
-    private workingDirectory;
-    private cache;
-    private readonly CACHE_TTL;
-    private readonly PARENT_BRANCH_SEARCH_DEPTH;
-    /** Serializes all git process invocations to prevent index.lock races. */
-    private commandQueue;
-    private _writeInProgress;
-    private _writeCompleteCallbacks;
-    private _lastFetchTimestamp;
-    private _autoFetchEnabled;
-    private _fetchThrottleMs;
-    constructor(workingDirectory: string);
-    getWorkingDir(): string;
-    setFetchConfig(enabled: boolean, intervalSeconds: number): void;
-    get isWriteInProgress(): boolean;
-    /** Register a one-shot callback that fires when all pending writes finish. */
-    onWriteComplete(callback: () => void): void;
-    /** Run fn serially on the command queue (used by executeGitCommand). */
-    private enqueueCommand;
-    /** Wrap a write operation to track write-in-progress for watcher suppression. */
-    private withWriteFlag;
-    private validateWorkingDirectory;
-    private getCached;
-    private setCached;
-    clearCache(): void;
-    private isDirectory;
-    private getUntrackedFilesInDirectory;
-    invalidateCache(paths?: string[]): void;
-    private executeGitCommand;
-    getCurrentBranch(): Promise<string>;
-    getStatus(): Promise<GitStatusFile[]>;
-    private mapGitStatus;
-    private isBinaryFile;
-    getDiff(filePath?: string, staged?: boolean): Promise<string>;
-    /**
-     * Efficient multi-path diff: issues a single `git diff -- path1 path2 …`
-     * for tracked files and builds synthetic diffs for untracked ones, avoiding
-     * one git subprocess per file.
-     */
-    getDiffMulti(paths: string[]): Promise<string>;
-    /** Build a synthetic diff for an untracked file (new file / directory / binary). */
-    private buildSyntheticDiff;
-    /** Build a synthetic diff for a file outside the repository. */
-    private buildSyntheticDiffAbsolute;
-    getFileContent(filePath: string, version?: 'HEAD' | 'index' | 'working'): Promise<string>;
-    /**
-     * Read a file as a base64 data URL if it's an image, otherwise return text content.
-     * For git refs (HEAD/index), reads binary output from `git show`.
-     */
-    getFileContentAsDataUrl(filePath: string, version?: 'HEAD' | 'index' | 'working'): Promise<string>;
-    /**
-     * Read a file from a branch as a base64 data URL if it's an image.
-     */
-    getFileContentFromBranchAsDataUrl(filePath: string, branch: string): Promise<string>;
-    /** Check if a file path is an image based on extension. */
-    isImageFile(filePath: string): boolean;
-    /** Execute a git command and return raw binary buffer output. */
-    private executeGitCommandBinary;
-    stageFiles(filePaths: string[]): Promise<void>;
-    unstageFiles(filePaths: string[]): Promise<void>;
-    revertFile(filePath: string): Promise<void>;
-    revertFiles(filePaths: string[]): Promise<void>;
-    fileExistsInHead(filePath: string): Promise<boolean>;
-    resolveConflict(filePath: string, strategy: 'ours' | 'theirs'): Promise<void>;
-    commit(message: string): Promise<void>;
-    isGitRepository(): Promise<boolean>;
-    hasUncommittedChanges(): Promise<boolean>;
-    getStagedFiles(): Promise<GitStatusFile[]>;
-    getUpstreamBranch(): Promise<string | null>;
-    getBaseBranch(options?: {
-        preferUpstream?: boolean;
-    }): Promise<string>;
-    getPRBaseBranch(): Promise<string>;
-    /**
-     * Find the closest parent branch by comparing merge-base distances.
-     * When branching feature-B from feature-A, feature-A will have a much
-     * smaller commit distance than main/master.
-     */
-    private findClosestParentBranch;
-    private getCommitDistance;
-    private getNearbyMergedBranches;
-    getBranchDiff(baseBranch: string, targetBranch?: string): Promise<GitStatusFile[]>;
-    getFileDiffBetweenBranches(filePath: string, baseBranch: string, targetBranch?: string): Promise<string>;
-    getFileContentFromBranch(filePath: string, branch: string): Promise<string>;
-    fetchRemoteBranch(branch: string): Promise<void>;
-    deleteRemoteBranch(branch: string): Promise<void>;
-    getAllBranches(): Promise<string[]>;
-    checkoutBranch(branchName: string): Promise<void>;
-    isCurrentBranchPublished(): Promise<boolean>;
-    private _forceFetchNext;
-    /**
-     * Force a fetch on the next getCommitsAheadBehind() call,
-     * regardless of the auto-fetch toggle or throttle timer.
-     */
-    forceFetchOnce(): void;
-    private fetchIfStale;
-    getCommitsAheadBehind(): Promise<{
-        ahead: number;
-        behind: number;
-    }>;
-    pushBranch(): Promise<void>;
-    pullBranch(): Promise<void>;
-    stashPush(message?: string, stagedOnly?: boolean): Promise<string>;
-    stashList(): Promise<StashEntry[]>;
-    stashApply(index: number): Promise<void>;
-    stashPop(index: number): Promise<void>;
-    private isStashConflict;
-    stashDrop(index: number): Promise<void>;
-    stashClear(): Promise<void>;
-    worktreeList(): Promise<WorktreeEntry[]>;
-    worktreeAdd(wtPath: string, branch?: string, createBranch?: boolean): Promise<string>;
-    worktreeRemove(wtPath: string, force?: boolean): Promise<void>;
-    getCommitsBetweenBranches(baseBranch: string, targetBranch?: string): Promise<{
-        subject: string;
-        body: string;
-    }[]>;
-    gitLog(count?: number): Promise<CommitLogEntry[]>;
-    revertCommit(hash: string): Promise<void>;
-    resetToCommit(hash: string): Promise<void>;
+type GitErrorCode = (typeof GIT_ERROR_CODES)[number];
+
+/** The two sides of one file's change, which an editor shows side by side */
+/** How far along git is with a command that talks to a remote or writes many files */
+interface GitProgress {
+    /** What git is doing, in its own words: `Writing objects`, `Receiving objects`, `Updating files` */
+    stage: string;
+    /** How much of that is done, from 0 to 100 */
+    percent: number;
 }
 
 interface GitStatusFile {
@@ -4806,31 +4749,10 @@ interface GitStatusFile {
     staged: boolean;
     originalPath?: string;
     score?: number;
-}
-
-declare class GitWatcherService {
-    private workingDirectory;
-    private gitWatcher?;
-    private workingDirWatcher?;
-    private onGitChangeCallback?;
-    private onFileChangeCallback?;
-    private gitStatusDebounceTimeout?;
-    private fileChangeTimeouts;
-    private isWatching;
-    private openFiles;
-    private gitRepository?;
-    constructor(workingDirectory: string);
-    setGitRepository(repo: GitRepository): void;
-    setChangeCallback(callback: () => void): void;
-    setFileChangeCallback(callback: (change: FileChangeInfo) => void): void;
-    registerOpenFile(filePath: string): void;
-    unregisterOpenFile(filePath: string): void;
-    isFileOpen(filePath: string): boolean;
-    getOpenFiles(): string[];
-    startWatching(signal: AbortSignal): Promise<void>;
-    private handleFileChange;
-    stopWatching(): Promise<void>;
-    isActive(): boolean;
+    /** For an unmerged file: what each side did to it, which is what there is to settle */
+    conflict?: ConflictKind;
+    /** An untracked folder, listed as one row: git tracks nothing in it. Its path ends with `/` */
+    isDirectory?: boolean;
 }
 
 interface ImageReference {
@@ -4941,6 +4863,16 @@ type IncomingCodeEvents = IncomingExplorerEvents | IncomingSearchEvents | Incomi
  */
  | {
     type: 'GET_CODE_START';
+}
+/**
+ * Something may have changed on disk that no file event reported: a window gained focus, a terminal command
+ * finished, an agent's turn ended. The repository and the open files are read again, and what differs is
+ * announced as it would have been.
+ */
+/** `by` a window that gained focus; without it, a terminal command or an agent's turn has just ended */
+ | {
+    type: 'CHECK_FOR_EXTERNAL_CHANGES';
+    by?: 'window';
 };
 
 type IncomingCommitEvents = {
@@ -4966,6 +4898,21 @@ type IncomingCommitEvents = {
 } | {
     type: 'commit.REVERT_FILES';
     paths: string[];
+}
+/** Which of what discarding these rows would remove cannot be brought back, for the window about to ask */
+ | {
+    type: 'commit.PREVIEW_DISCARD';
+    paths: string[];
+}
+/** Puts back what a discard kept, by the id its answer carried */
+ | {
+    type: 'commit.RESTORE_DISCARDED';
+    id: string;
+}
+/** The user trusts the repository to have git run what its own configuration and hooks name */
+ | {
+    type: 'commit.TRUST_REPOSITORY';
+    repository: string;
 } | {
     type: 'commit.GET_ALL_BRANCHES';
 } | {
@@ -5018,6 +4965,29 @@ type IncomingCommitEvents = {
 } | {
     type: 'commit.RESOLVE_ALL_CONFLICTS';
     strategy: 'ours' | 'theirs';
+}
+/** Carry on with what git is in the middle of, leave out the commit a rebase stopped at, or give it up */
+ | {
+    type: 'commit.MOVE_OPERATION';
+    move: OperationMove;
+}
+/** The files in an untracked folder that is listed as one row */
+ | {
+    type: 'commit.LIST_UNTRACKED';
+    path: string;
+}
+/** Stage one piece of a file's change, or with `staged` take one piece out of what is staged */
+ | {
+    type: 'commit.APPLY_HUNK';
+    path: string;
+    staged: boolean;
+    hunk: string;
+}
+/** Have the GitHub CLI give git its sign-in for this host */
+ | {
+    type: 'commit.SET_UP_SIGN_IN';
+    host: string;
+    during?: 'pull' | 'push';
 } | {
     type: 'commit.LOG_LIST';
 } | {
@@ -5453,13 +5423,16 @@ type IncomingSearchEvents = {
     type: 'search.CANCEL_SEARCH';
 };
 
-type IncomingTerminalEvents = {
+type IncomingTerminalEvents = 
+/** `target` is one of the code settings' `terminalTargets`, by id: somewhere other than this machine to run it */
+{
     type: 'terminal.CREATE_TERMINAL';
     title?: string;
     cwd?: string;
     shell?: string;
     cols?: number;
     rows?: number;
+    target?: string;
 } | {
     type: 'terminal.CLOSE_TERMINAL';
     terminalId: string;
@@ -5477,6 +5450,8 @@ type IncomingTerminalEvents = {
     terminalId: string;
     cols: number;
     rows: number;
+    cellWidth?: number;
+    cellHeight?: number;
 }
 /** This window has stopped showing that terminal, so its fit no longer holds the grid down */
  | {
@@ -5491,6 +5466,35 @@ type IncomingTerminalEvents = {
 } | {
     type: 'terminal.OPEN_TERMINAL_TAB';
     terminalId: string;
+}
+/** Whether that terminal's shell goes on running when the app is not, to be taken up again at the next start */
+ | {
+    type: 'terminal.KEEP_TERMINAL';
+    terminalId: string;
+    kept: boolean;
+}
+/** Open that terminal's recording to look back through, drawn at this size. Answered with `terminal.REWOUND` */
+ | {
+    type: 'terminal.REWIND';
+    terminalId: string;
+    cols: number;
+    rows: number;
+}
+/** Show an open recording as it was at `at`, in milliseconds since the Unix epoch */
+ | {
+    type: 'terminal.REWIND_SEEK';
+    session: string;
+    at: number;
+} | {
+    type: 'terminal.REWIND_CLOSE';
+    session: string;
+}
+/** The window looking back through a recording measured how many cells fit where it draws it */
+ | {
+    type: 'terminal.REWIND_RESIZE';
+    session: string;
+    cols: number;
+    rows: number;
 };
 
 type IncomingThreadsEvents = ClaudeTerminalViewRequest | ClaudeUiViewRequest | {
@@ -6047,6 +6051,12 @@ type NotesInboxEvent = {
     noteId: string;
 };
 
+/** What git can be in the middle of in a checkout, each of which ends when it is carried on with or given up */
+declare const OPERATION_KINDS: readonly ["merge", "rebase", "cherry-pick", "revert"];
+
+/** What can be done with what git is in the middle of: carry on once its conflicts are settled, leave out the commit a rebase stopped at, or give it up */
+declare const OPERATION_MOVES: readonly ["continue", "skip", "abort"];
+
 interface OpenFile {
     path: string;
     content: string;
@@ -6068,6 +6078,10 @@ interface OpenFile {
     groupId?: string;
     isPreview?: boolean;
 }
+
+type OperationKind = (typeof OPERATION_KINDS)[number];
+
+type OperationMove = (typeof OPERATION_MOVES)[number];
 
 /** What the actions system answers with: an import's or an export's outcome. The actions themselves are its views. */
 type OutgoingActionEvents = {
@@ -6206,14 +6220,34 @@ type OutgoingCodeEvents = {
     resolvedPath?: string;
 };
 
-type OutgoingCommitEvents = {
+type OutgoingCommitEvents = 
+/**
+ * What the commit panel shows of the checkout. `watching` is false when its file watches could not be opened or
+ * have failed: the panel then changes only when it is asked again, and says so. `truncated` says there are more
+ * changed files than `files` lists. `operation` is what git is in the middle of there, when it is in the middle
+ * of anything. `fetchSuspended` says fetching by itself has stopped, the remote having asked for a sign-in
+ * nobody was there to give: how far the branch is from its upstream is then as of the last fetch that worked
+ */
+{
     type: 'commit.STATUS_RECEIVED';
     data: {
         files: GitStatusFile[];
+        truncated: boolean;
         branch: string;
         hasUpstream: boolean;
         commitsAhead: number;
         commitsBehind: number;
+        watching: boolean;
+        operation?: RepositoryOperation;
+        fetchSuspended?: boolean;
+        signIn?: SignInHelp;
+    };
+}
+/** What git was in the middle of was moved on as asked. Where that leaves the repository is in its status */
+ | {
+    type: 'commit.OPERATION_MOVED';
+    data: {
+        move: OperationMove;
     };
 } | {
     type: 'commit.DIFF_RECEIVED';
@@ -6237,16 +6271,61 @@ type OutgoingCommitEvents = {
     type: 'commit.FILE_REVERTED';
     data: {
         path: string;
+        kept: DiscardKept;
     };
 } | {
     type: 'commit.FILES_REVERTED';
     data: {
         paths: string[];
+        kept: DiscardKept;
+    };
+} | {
+    type: 'commit.DISCARD_PREVIEWED';
+    data: {
+        paths: string[];
+        notKept: string[];
+    };
+} | {
+    type: 'commit.DISCARD_RESTORED';
+    data: {
+        id: string;
+    } & DiscardRestored;
+} | {
+    type: 'commit.REPOSITORY_TRUSTED';
+    data: {
+        repository: string;
     };
 } | {
     type: 'commit.ERROR_RECEIVED';
+    data: CommitFailure;
+} | {
+    type: 'commit.HUNK_APPLIED';
     data: {
-        message: string;
+        path: string;
+        staged: boolean;
+        hunk: string;
+    };
+}
+/** How far along a push, a pull or a checkout is, for the window that asked for it */
+ | {
+    type: 'commit.PROGRESS';
+    data: {
+        during: 'checkout' | 'pull' | 'push';
+    } & GitProgress;
+} | {
+    type: 'commit.UNTRACKED_LISTED';
+    data: {
+        path: string;
+        files: string[];
+        truncated: boolean;
+    };
+}
+/** Git signs in to this host through the GitHub CLI now */
+ | {
+    type: 'commit.SIGN_IN_SET_UP';
+    data: {
+        host: string;
+        during?: 'pull' | 'push';
     };
 } | {
     type: 'commit.BRANCH_RETRIEVED';
@@ -6281,9 +6360,14 @@ type OutgoingCommitEvents = {
         message: string;
     };
 }
-/** The repository changed, on disk or by a write from any window: news for every window, each of which asks again for what it shows of it */
+/**
+ * The repository changed, on disk or by a write from any window: news for every window. It says which parts
+ * changed and carries none of them, so a window asks again for what it shows of those and for nothing else —
+ * an edited file is no reason to read the log again
+ */
  | {
     type: 'commit.REPOSITORY_CHANGED';
+    changed: RepositoryChange;
 } | {
     type: 'commit.STASH_LIST_RECEIVED';
     data: {
@@ -6734,7 +6818,9 @@ type OutgoingPullRequestEvents = {
     data: {
         timestamp: Date;
     };
-} | {
+}
+/** The repository's commits or branches moved, which is all of it a pull request is read from: news for every window */
+ | {
     type: 'pr.GIT_STATUS_REFRESHED';
     data: {
         timestamp: Date;
@@ -6911,11 +6997,49 @@ type OutgoingTerminalEvents =
  | {
     type: 'terminal.OPENED';
     data: TerminalInfo;
-} | {
-    type: 'terminal.OUTPUT';
+}
+/**
+ * **What a terminal's program did that is not on its screen**, for every window: the five below. The
+ * screen itself is not an event at all — a window draws a terminal from the rows its session sends it
+ * (`TerminalInfo.session`), so nothing a program prints crosses here.
+ *
+ * Each is a claim the program made. A window decides what to do about one where the person is: whether
+ * text reaches their clipboard, whether a notification is worth their attention.
+ */
+ | {
+    type: 'terminal.CLIPBOARD';
     data: {
         terminalId: string;
-        data: string;
+        text: string;
+    };
+} | {
+    type: 'terminal.BELL';
+    data: {
+        terminalId: string;
+    };
+} | {
+    type: 'terminal.NOTIFIED';
+    data: {
+        terminalId: string;
+        title: string;
+        body: string;
+    };
+}
+/** How far along the program says it is; `percent` is `null` where it gave none, and `none` clears it */
+ | {
+    type: 'terminal.PROGRESS';
+    data: {
+        terminalId: string;
+        state: 'error' | 'indeterminate' | 'none' | 'paused' | 'running';
+        percent: number | null;
+    };
+}
+/** The name the program gave its terminal, which is empty when it took the name back */
+ | {
+    type: 'terminal.TITLED';
+    data: {
+        terminalId: string;
+        title: string;
     };
 } | {
     type: 'terminal.CLOSED';
@@ -6980,6 +7104,35 @@ type OutgoingTerminalEvents =
 } | {
     type: 'terminal.TERMINAL_TAB_OPENED';
     data: TerminalInfo;
+}
+/** Whether a terminal's shell outlives the app changed: news for every window, which each draws on its tab */
+ | {
+    type: 'terminal.KEPT';
+    data: {
+        terminalId: string;
+        kept: boolean;
+    };
+}
+/**
+ * A recording is open, for the window that asked: `session` is what its view is drawn from, and it runs
+ * between `first` and `last`, in milliseconds since the Unix epoch.
+ */
+ | {
+    type: 'terminal.REWOUND';
+    data: {
+        terminalId: string;
+        session: string;
+        first: number;
+        last: number;
+    };
+}
+/** The moment an open recording now shows, for the window that asked */
+ | {
+    type: 'terminal.REWIND_SOUGHT';
+    data: {
+        session: string;
+        at: number;
+    };
 };
 
 /**
@@ -7651,6 +7804,14 @@ interface QuickOpenResult$1 {
     score?: number;
 }
 
+/**
+ * The parts of a repository a window shows, each read and refreshed on its own: its changed files with the branch
+ * and its distance from upstream; the two sides of each changed file, which a diff of it shows; which branch is
+ * checked out, the commit it is on and every branch and tag, which a log and a pull request are read from; its
+ * stashes; its worktrees.
+ */
+declare const REPOSITORY_PARTS: readonly ["status", "diffs", "history", "stashes", "worktrees"];
+
 type RateLimitLine = z.infer<typeof RateLimitLineSchema>;
 
 /** Rate limit warnings. */
@@ -7676,6 +7837,35 @@ type RecentThreadsSortOrder = 'created' | 'message' | 'visited';
 
 /** Every repository this pack can use: its own and its dependencies' */
 type Repositories = OwnRepositories;
+
+/** Which parts of a repository differ from when it was last checked */
+type RepositoryChange = Record<RepositoryPart, boolean> & {
+    /** The changed files whose diff differs, when they are few enough to name: without it, any of them may */
+    files?: string[];
+};
+
+/**
+ * The checkout's repository, as the system's context holds it. The context is part of the pack's published
+ * contract, which names no type of the git engine's, so it is a handle there: the feature's own code reads it as
+ * the repository it is (`repositoryOf`, `be/services/app-git-repository.ts`).
+ */
+interface RepositoryHandle {
+    readonly [gitHandle]: 'repository';
+}
+
+/** What git is in the middle of in a checkout */
+interface RepositoryOperation {
+    kind: OperationKind;
+    /** What is merged in, rebased onto, picked or reverted, as a person would name it: a branch where one is known, else a short commit */
+    subject: string;
+    /** The branch a rebase is replaying, where it is replaying one */
+    branch?: string;
+    /** A rebase's place among the commits it replays, counted from one */
+    step?: number;
+    steps?: number;
+}
+
+type RepositoryPart = (typeof REPOSITORY_PARTS)[number];
 
 type ResultLine = z.infer<typeof ResultLineSchema>;
 
@@ -7861,6 +8051,17 @@ type ShortCodeOf<E extends keyof PackShapes> = PackShapes[E] extends {
     shortCode: infer C;
 } ? C : never;
 
+/** The help there is for one remote */
+interface SignInHelp {
+    /** The host that asked, as the remote's address names it */
+    host: string;
+    /**
+     * `github-cli`: the GitHub CLI can sign git in to this host. `ssh`: the host refused the key it was offered, or
+     * was offered none. `https`: the host wants a username and password or token, and git has none stored for it.
+     */
+    kind: 'github-cli' | 'https' | 'ssh';
+}
+
 type Simplify<T> = {
     [K in keyof T]: T[K];
 } & {};
@@ -8013,12 +8214,26 @@ interface TerminalEntity {
      * every session — so it is offered to the broker rather than trusted (see `shell`).
      */
     session?: string;
+    /**
+     * Where the terminal runs when it is not this machine: the id of one of the code settings'
+     * `terminalTargets`. A name, as `session` is: a target that has since been removed from the settings
+     * names nothing, and the terminal is then one that cannot be brought back.
+     */
+    target?: string;
     createdAt: number;
     updatedAt: number;
 }
 
 interface TerminalInfo {
     id: EARS.EntityId;
+    /**
+     * The session a window draws this terminal from, by the name the terminal broker knows it by. Absent
+     * while the terminal has no shell — one that ended and was kept.
+     *
+     * **Not the terminal's own id, because a terminal is not its shell.** A restart puts a new session under
+     * the same terminal, and a window that went on drawing the old one would be drawing a shell that is gone.
+     */
+    session?: string;
     title: string;
     customTitle?: string;
     /**
@@ -8042,17 +8257,40 @@ interface TerminalInfo {
      * seam; this is what says how many there have been, for a window that was not watching.
      */
     generation: number;
-    /** The shell ended and the terminal was kept. Absent while one is running */
+    /**
+     * Whether what it prints is kept in a recording, which is what it can be looked back through from and
+     * what lets its shell be kept running and found again. A terminal on a target is not, and nor is one
+     * started while restoring terminals is off.
+     */
+    recorded?: boolean;
+    /** Whether its shell goes on running when the app is not, which a window asks for with `terminal.KEEP_TERMINAL` */
+    kept?: boolean;
+    /**
+     * Where it runs when that is not this machine: the setting's id and label, and the `key` a window
+     * draws its session from (`terminalViews`), which is there once a session on the target has been
+     * reached. Absent for a terminal on this machine.
+     */
+    target?: {
+        id: string;
+        label: string;
+        key?: string;
+    };
+    /**
+     * The terminal has no shell and was kept. Absent while one is running.
+     *
+     * `unreached` is a terminal on a target this run has not connected to: there may be a shell there still,
+     * and starting the terminal again is what finds out.
+     */
     exited?: {
         code: number | null;
+        unreached?: true;
     };
     /**
      * The session's size **when this was published**, which is a starting point and not a live reading.
      *
      * **A pty has one size and it is whatever a window last fitted**, so the live value lives where the
      * session does: the service keeps it current and `restart` re-opens the shell at it. What a window holds
-     * is the snapshot it was last listed or opened with, and its one consumer wants exactly that — the pool
-     * builds the emulator at this size, so it is the width a replayed screen is first drawn at.
+     * is the snapshot it was last listed or opened with.
      *
      * It is spelled out because it reads as live and is not: a drive scenario waited on it for the size a
      * window had just fitted and timed out at the creation size, with every resize having landed correctly
@@ -8061,14 +8299,6 @@ interface TerminalInfo {
     cols: number;
     /** The session's rows when this was published; see `cols` */
     rows: number;
-    /**
-     * How far back this session can be scrolled: the host's number, from the broker's handshake.
-     *
-     * The window derives its emulator's bound from this and never pins its own. Exceeding it would draw lines
-     * no reattach could reproduce — the broker is what answers a screen read when no window holds the bytes —
-     * and 10,000 pinned in the pool against the broker's 1,000 is exactly what that looked like.
-     */
-    scrollback: number;
     /**
      * What ends a typed line for *this* shell — X6.
      *
@@ -8554,6 +8784,25 @@ interface TransformNode extends NodeBase {
 /** How a transform step's script return value becomes the step's result */
 type TransformOutputType = 'custom' | 'json' | 'text';
 
+/** One thing a repository would have git run: a setting of its own that is not known to run nothing, or a hook it holds */
+type TrustAsk = {
+    kind: 'setting';
+    key: string;
+    value: string;
+    file: string;
+} | {
+    kind: 'hook';
+    name: string;
+    file: string;
+};
+
+/** What a repository asks to be trusted for, and what names it where trust is remembered */
+interface TrustRequest {
+    /** Where the repository's git state really lives */
+    repository: string;
+    asks: TrustAsk[];
+}
+
 interface TurnStartParams {
     threadId: string;
     input: Array<{
@@ -8624,6 +8873,11 @@ declare const UserStreamLineSchema: z.ZodObject<{
     isSynthetic: z.ZodOptional<z.ZodBoolean>;
 }, z.core.$loose>;
 
+/** The repository's watcher, held the same way (`watcherOf`) */
+interface WatcherHandle {
+    readonly [gitHandle]: 'watcher';
+}
+
 interface WorktreeEntry {
     path: string;
     head: string;
@@ -8667,6 +8921,7 @@ declare namespace __FeatureSettings_Code {
             } | null;
         };
         restoreTerminals: boolean;
+        terminalClipboardWrite: boolean;
         defaultBaseDirectory: string | null;
         baseDirectory: string | null;
         enableShellIntegration: boolean;
@@ -8677,7 +8932,14 @@ declare namespace __FeatureSettings_Code {
         enablePreview: boolean;
         autoFetchRemote: boolean;
         autoFetchIntervalSeconds: number;
+        logGitCommands: boolean;
+        trustedRepositories: string[];
         terminalScripts: {
+            id: string;
+            label: string;
+            command: string;
+        }[];
+        terminalTargets: {
             id: string;
             label: string;
             command: string;
@@ -9427,11 +9689,11 @@ declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<[z.ZodObject<{
 declare const claudeSettingsSnapshot: z.ZodObject<{
     ide: z.ZodOptional<z.ZodObject<{
         stage: z.ZodEnum<{
+            finished: "finished";
             selection: "selection";
             enable: "enable";
             disable: "disable";
             connecting: "connecting";
-            finished: "finished";
         }>;
         title: z.ZodString;
         description: z.ZodOptional<z.ZodString>;
@@ -9506,8 +9768,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             loading: z.ZodBoolean;
             copyState: z.ZodOptional<z.ZodEnum<{
                 error: "error";
-                idle: "idle";
                 pending: "pending";
+                idle: "idle";
                 saved: "saved";
             }>>;
             insight: z.ZodOptional<z.ZodString>;
@@ -10642,6 +10904,8 @@ declare const focusResult: z.ZodObject<{
 
 declare function getHandle(key: string): CodexTurnHandle | undefined;
 
+declare const gitHandle: unique symbol;
+
 declare const ideContext: z.ZodObject<{
     text: z.ZodString;
     revision: z.ZodString;
@@ -11281,7 +11545,7 @@ declare function streamMessageText(params: {
 
 declare const terminalCommands: {
     /** Records a terminal the service started, under the id it took for it (`newId`) */
-    create: (terminal: Pick<TerminalEntity, "cols" | "cwd" | "rows" | "session" | "shell" | "title"> & {
+    create: (terminal: Pick<TerminalEntity, "cols" | "cwd" | "rows" | "session" | "shell" | "target" | "title"> & {
         id: EARS.EntityId<"Terminal">;
     }) => EARS.EntityId;
     /**

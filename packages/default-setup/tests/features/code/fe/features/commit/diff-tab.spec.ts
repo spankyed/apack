@@ -9,22 +9,21 @@
 // and reading it is the whole fix. Nothing needs a pending field.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
+import { answerTo } from '@apackdev/sdk/testing';
 
 const sendToSystem = vi.hoisted(() => vi.fn());
 const addTabToParent = vi.hoisted(() => vi.fn());
+const updateParentState = vi.hoisted(() => vi.fn());
+const sendEventToParent = vi.hoisted(() => vi.fn());
+const getParentContext = vi.hoisted(() => vi.fn((): { openFiles?: unknown[] } => ({})));
 vi.mock('#generated/events.ts', () => ({ sendToSystem }));
-vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
-  addTabToParent,
-  updateParentState: vi.fn(),
-  sendEventToParent: vi.fn(),
-  getParentContext: vi.fn(() => ({})),
-}));
+vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({ addTabToParent, updateParentState, sendEventToParent, getParentContext }));
 
 const { commitState } = await import('#features/code/fe/features/commit/state.ts');
 
 const aFile = (path: string, staged = false) => ({ path, staged, status: 'M' }) as never;
 const aDiff = (path: string, staged = false) => ({
-  path, staged, diff: `diff of ${path}`, modifiedContent: `content of ${path}`,
+  path, staged, modifiedContent: `content of ${path}`,
 });
 
 /** The tab ids the view was asked to open, in order */
@@ -32,12 +31,13 @@ const openedTabs = () => addTabToParent.mock.calls.map(([, tab]) => (tab as { pa
 const lastTab = () => addTabToParent.mock.calls.at(-1)?.[1] as { path: string; gitDiff: { path: string } };
 
 beforeEach(() => {
-  sendToSystem.mockReset();
-  addTabToParent.mockReset();
+  for (const mock of [sendToSystem, addTabToParent, updateParentState, sendEventToParent]) mock.mockReset();
+  getParentContext.mockReturnValue({});
 });
 
 it('opens a diff in the tab for the file the diff is about', () => {
   const actor = createActor(commitState).start();
+  actor.send({ type: 'commit.SHOWN' });
 
   actor.send({ type: 'commit.SELECT_FILE', file: aFile('a.ts') });
   actor.send({ type: 'commit.VIEW_DIFF', path: 'a.ts', staged: false });
@@ -54,6 +54,7 @@ it('opens a diff in the tab for the file the diff is about', () => {
  */
 it('does not open one file\'s diff in another file\'s tab', () => {
   const actor = createActor(commitState).start();
+  actor.send({ type: 'commit.SHOWN' });
 
   actor.send({ type: 'commit.SELECT_FILE', file: aFile('a.ts') });
   actor.send({ type: 'commit.VIEW_DIFF', path: 'a.ts', staged: false });
@@ -68,6 +69,7 @@ it('does not open one file\'s diff in another file\'s tab', () => {
 
 it('keeps the staged and unstaged diffs of one file apart', () => {
   const actor = createActor(commitState).start();
+  actor.send({ type: 'commit.SHOWN' });
 
   actor.send({ type: 'commit.SELECT_FILE', file: aFile('a.ts', true) });
   actor.send({ type: 'commit.DIFF_RECEIVED', data: aDiff('a.ts', true) });
@@ -79,8 +81,47 @@ it('keeps the staged and unstaged diffs of one file apart', () => {
 /** A diff arriving with nothing selected is still a diff for a known file */
 it('opens a diff even when no file is selected', () => {
   const actor = createActor(commitState).start();
+  actor.send({ type: 'commit.SHOWN' });
 
   actor.send({ type: 'commit.DIFF_RECEIVED', data: aDiff('a.ts') });
 
   expect(openedTabs()).toEqual(['diff:a.ts:unstaged']);
+});
+
+/**
+ * A diff that is already open is shown as it stands, with whatever was typed into it, and read again behind
+ * that. The answer to that ask changes the tab where it is: opening it again would replace what was typed.
+ */
+it('shows a diff that is already open at once, and brings it up to date without opening it again', () => {
+  getParentContext.mockReturnValue({ openFiles: [{ path: 'diff:a.ts:unstaged', isDiff: true, gitFile: { path: 'a.ts', staged: false } }] });
+  const actor = createActor(commitState).start();
+  actor.send({ type: 'commit.SHOWN' });
+
+  actor.send({ type: 'commit.VIEW_DIFF', path: 'a.ts', staged: false });
+
+  expect(updateParentState).toHaveBeenCalledWith(expect.anything(), { activeFilePath: 'diff:a.ts:unstaged' });
+  const [, asked, { call }] = sendToSystem.mock.calls.at(-1) as [string, object, { call: string }];
+  expect(asked).toEqual({ type: 'commit.GET_GIT_DIFF', path: 'a.ts', staged: false });
+
+  actor.send(answerTo(call, { type: 'commit.DIFF_RECEIVED' as const, data: aDiff('a.ts') }));
+
+  expect(openedTabs(), 'no tab is opened for it').toEqual([]);
+  expect(sendEventToParent).toHaveBeenCalledWith(expect.anything(), { type: 'REFRESH_DIFF_TAB', diff: aDiff('a.ts') });
+});
+
+// The user asked for nothing when an open diff is read again, so there is nothing to tell them when that fails:
+// the tab shows what it showed, and the next change to the file reads it again
+it('says nothing when reading an open diff again fails, and still says when a diff that was asked for does', () => {
+  getParentContext.mockReturnValue({ openFiles: [{ path: 'diff:a.ts:unstaged', isDiff: true, gitFile: { path: 'a.ts', staged: false } }] });
+  const actor = createActor(commitState).start();
+  actor.send({ type: 'commit.SHOWN' });
+  const NOTHING = { status: false, diffs: false, history: false, stashes: false, worktrees: false };
+
+  actor.send({ type: 'commit.REPOSITORY_CHANGED', changed: { ...NOTHING, diffs: true, files: ['a.ts'] } });
+  const [, , { call }] = sendToSystem.mock.calls.at(-1) as [string, object, { call: string }];
+  actor.send(answerTo(call, { type: 'commit.ERROR_RECEIVED' as const, data: { message: 'the file went away' } }));
+  expect(actor.getSnapshot().context.gitError).toBeNull();
+
+  actor.send({ type: 'commit.ERROR_RECEIVED', data: { message: 'not a diff anyone can read' } });
+  expect(actor.getSnapshot().context.gitError).toBe('not a diff anyone can read');
 });

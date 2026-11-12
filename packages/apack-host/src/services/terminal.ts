@@ -19,8 +19,9 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolveAppEnvironment, withoutAppProcessEnv } from '@apackdev/sdk/env';
-import type { TerminalListeners, TerminalService, TerminalSession } from '@apackdev/sdk/services';
-import { type Broker, type BrokerSession, holdBrokerSessions, startBroker } from '../broker/client.ts';
+import type { TerminalColor, TerminalColors, TerminalListeners, TerminalService, TerminalSession, TerminalTarget } from '@apackdev/sdk/services';
+import { isRelayKey, relayKey, serveRelay, type Relay } from '../broker/relay.ts';
+import { type Broker, type BrokerColors, type BrokerSession, PROTOCOL_VERSION, holdBrokerSessions, startBroker } from '../broker/client.ts';
 
 /**
  * The longest a Unix socket path may be, conservatively.
@@ -60,6 +61,24 @@ export function socketPath(platform: NodeJS.Platform = process.platform, dataDir
   if (Buffer.byteLength(socket) > SOCKET_PATH_MAX) {
     throw new Error(
       `The terminal broker's socket path is ${Buffer.byteLength(socket)} bytes, past the ${SOCKET_PATH_MAX} a `
+      + `Unix socket address holds: ${socket}. Set TMPDIR to a shorter directory.`,
+    );
+  }
+  return socket;
+}
+
+/**
+ * Where the socket in front of a terminal target is (`broker/relay.ts`): beside the app's own broker's,
+ * named by the target's key.
+ */
+export function relaySocketPath(key: string, platform: NodeJS.Platform = process.platform, dataDir = resolveAppEnvironment().userDataDir): string {
+  const own = socketPath(platform, dataDir);
+  if (platform === 'win32') return `${own}-r-${key}`;
+  // Longer than the broker's own name, so held to the same limit for itself
+  const socket = path.join(path.dirname(own), `r-${key}.sock`);
+  if (Buffer.byteLength(socket) > SOCKET_PATH_MAX) {
+    throw new Error(
+      `A terminal target's socket path is ${Buffer.byteLength(socket)} bytes, past the ${SOCKET_PATH_MAX} a `
       + `Unix socket address holds: ${socket}. Set TMPDIR to a shorter directory.`,
     );
   }
@@ -146,8 +165,8 @@ export function brokerEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.
     // else here does: `portable-pty` sets no `TERM`, so the shell took whatever this process happened to
     // have — which is the shell the app was *launched* from in development, and nothing at all in a
     // packaged app opened from the Dock. A shell with no `TERM` gives `less`, `vim` and `top` their dumb
-    // fallbacks, and nothing about that failure names the app. xterm.js is what draws it, so this is what
-    // it is.
+    // fallbacks, and nothing about that failure names the app. The broker's interpreter answers to this name,
+    // so this is what it is.
     TERM: 'xterm-256color',
     TERM_PROGRAM: 'apack',
     COLORTERM: 'truecolor',
@@ -175,24 +194,44 @@ export function holdTerminalSessions(): Promise<{ close(): void }> {
 }
 
 /**
+ * Where a window connects to draw this app's terminals, and the line it greets the broker with.
+ *
+ * A window is the broker's `view`: it asks for no session and ends none, and after this greeting speaks
+ * the broker's view protocol rather than the client's. The greeting is built here so that the protocol's
+ * version is written where the client's is.
+ */
+export function terminalViewEndpoint(target?: string): { socket: string; greeting: string } {
+  // **A target is named by its key and nothing else**, so a window can be pointed only at a socket this
+  // app made for a target, and never at a path of its own choosing
+  if (target !== undefined && !isRelayKey(target)) throw new Error(`${JSON.stringify(target)} names no terminal target`);
+  return {
+    socket: target === undefined ? socketPath() : relaySocketPath(target),
+    greeting: `${JSON.stringify({ kind: 'hello', protocol: PROTOCOL_VERSION, role: 'view' })}\n`,
+  };
+}
+
+/**
  * A broker session as a pack holds it.
  *
  * One mapping for both ways of coming to hold a session, because what a pack may do with one does not
  * depend on whether this process started it.
  */
-function expose(held: Broker, session: BrokerSession): TerminalSession {
+function expose(held: Broker, session: BrokerSession, target: string | null): TerminalSession {
   return {
     id: session.id,
+    target,
     pid: session.pid,
+    recorded: session.recorded,
+    restored: session.restored,
     // The broker's own, from its handshake, rather than a number this process also keeps
     scrollback: held.history,
     write: (data) => session.write(data),
-    resize: (cols, rows) => session.resize(cols, rows),
+    resize: (cols, rows, cell) => session.resize(cols, rows, cell),
     // Projected rather than passed, so the broker's `foreground` — a measurement, and a host shape — stays
     // out of the pack-facing contract
     facts: async () => {
-      const { cwd, command, running, exitStatus } = await session.facts();
-      return { cwd, command, running, exitStatus };
+      const { cwd, command, running, exitStatus, finished } = await session.facts();
+      return { cwd, command, running, exitStatus, finished };
     },
     pause: () => session.pause(),
     resume: () => session.resume(),
@@ -200,7 +239,32 @@ function expose(held: Broker, session: BrokerSession): TerminalSession {
     // mapping: a table here would be a second place for a signal to be missing from
     owns: (pid) => session.owns(pid),
     signal: (signal, scope) => session.signal(signal, scope),
+    commands: () => session.commands(),
+    commandOutput: (command) => session.commandOutput(command),
+    keep: (kept) => session.keep(kept),
     terminate: () => session.kill(),
+  };
+}
+
+/**
+ * A `#rrggbb` colour as red, green and blue, refusing anything else.
+ *
+ * Refused rather than read as black: a colour is what a program in the session is told the terminal is
+ * drawn in, and a typo answered as black tells every one of them the background is dark.
+ */
+function rgb(color: TerminalColor): [number, number, number] {
+  const hex = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(color);
+  if (!hex) throw new Error(`A terminal colour is #rrggbb, and ${JSON.stringify(color)} is not`);
+  return [parseInt(hex[1]!, 16), parseInt(hex[2]!, 16), parseInt(hex[3]!, 16)];
+}
+
+/** A session's colours as the broker takes them */
+export function brokerColors(colors: TerminalColors): BrokerColors {
+  return {
+    foreground: rgb(colors.foreground),
+    background: rgb(colors.background),
+    cursor: colors.cursor === undefined ? null : rgb(colors.cursor),
+    ansi: colors.ansi.map(rgb),
   };
 }
 
@@ -236,38 +300,28 @@ function startKey(binary: string, socket: string): string {
   return `${binary}@${stamp}->${socket}`;
 }
 
-/** Starts the broker the first time a session is wanted, and once per process thereafter */
-export function createTerminalService(): TerminalService & { shutdown(): Promise<void> } {
+/**
+ * The sessions of one broker: the app's own, or one a target's command reaches.
+ *
+ * `start` answers a connection to it, and is asked again after one has gone. `key` is what a window is
+ * told to draw the sessions from: `null` for the app's own broker.
+ *
+ * **`startKeyOf` is what a run of failed starts is counted against, and a target has none.** The app's own
+ * broker fails to start because of its binary, which stays broken until it is replaced, so its failures
+ * are counted against that binary. A target fails because a network or a container is not there, which is
+ * a state that ends on its own: every start is tried, and each one that fails says why.
+ */
+function brokerSessions(start: () => Promise<Broker>, startKeyOf: (() => string) | null, key: string | null) {
   let broker: Promise<Broker> | undefined;
   let current: Broker | undefined;
-  /** Consecutive failed starts against one `startKey`, and what the last of them said */
   let failing: { key: string; count: number; error: unknown } | undefined;
-
   const running = (): Promise<Broker> => {
-    // **A broker already held is the answer, and finding one costs nothing.** Everything below decides
-    // *whether and what to start*, which is the branch `??=` guards — but it ran first regardless, so every
-    // session opened or taken up paid a `createRequire`, an `existsSync` of the binary, a SHA-256 of the
-    // data dir with the `mkdirSync` that goes with it, and a `statSync`, to reach a promise already settled.
     if (broker) return broker;
-    const binary = brokerBinary();
-    const socket = socketPath();
-    const key = startKey(binary, socket);
-    // **A broker that cannot start is not asked again until something about the attempt changes.** Every
-    // spawn here is a session the user asked for, so without this each attempt pays a process launch and a
-    // readiness wait to reach the same failure — and on a binary that is missing or not executable, that is
-    // every click of "new terminal" for the life of the run. What they are told is what the broker itself
-    // said, which `startBroker` already collects from its stderr, rather than a message about giving up.
-    if (failing && failing.key === key && failing.count >= START_ATTEMPTS) return Promise.reject(failing.error);
-    broker ??= startBroker({ binary, socket, env: brokerEnvironment() })
+    const startKey = startKeyOf?.() ?? '';
+    if (startKeyOf && failing && failing.key === startKey && failing.count >= START_ATTEMPTS) return Promise.reject(failing.error);
+    broker ??= start()
       .then((held) => {
-        // It started, so nothing is owed against this key: a later death is a crash rather than a failure to
-        // start, and the lazy path below is what recovers from one
         failing = undefined;
-        // **A broker that is gone must not be remembered, and forgetting it is the whole of the restart.**
-        // The next session takes the branch above and starts one, which is the path a first session takes
-        // anyway — so recovery is the ordinary lazy start rather than a supervisor beside it. Remembering a
-        // dead one instead hands that session a destroyed socket: the request is written to nothing and its
-        // answer can never come, because the close that would have refused it has already happened.
         current = held;
         held.onGone(() => {
           if (current !== held) return;
@@ -277,36 +331,110 @@ export function createTerminalService(): TerminalService & { shutdown(): Promise
         return held;
       })
       .catch((error: unknown) => {
-      // A failed start must not be remembered as a broker: the next session tries again, so a contributor
-      // who builds the binary and retries is not told to restart the app. What is remembered instead is the
-      // failure and what it was tried against, which is what `START_ATTEMPTS` is counted over
-      broker = undefined;
-      failing = { key, count: failing?.key === key ? failing.count + 1 : 1, error };
-      throw error;
-    });
+        broker = undefined;
+        failing = { key: startKey, count: failing?.key === startKey ? failing.count + 1 : 1, error };
+        throw error;
+      });
     return broker;
   };
-
   return {
-    async open(options, listeners: TerminalListeners): Promise<TerminalSession> {
+    async open(options: Parameters<TerminalService['open']>[0], listeners: TerminalListeners): Promise<TerminalSession> {
       const held = await running();
-      return expose(held, await held.open(options, listeners));
+      const { colors, ...asked } = options;
+      return expose(held, await held.open(colors ? { ...asked, colors: brokerColors(colors) } : asked, listeners), key);
     },
-    async adopt(id, listeners: TerminalListeners): Promise<TerminalSession> {
+    async adopt(id: string, listeners: TerminalListeners): Promise<TerminalSession> {
       const held = await running();
-      return expose(held, await held.adopt(id, listeners));
+      return expose(held, await held.adopt(id, listeners), key);
     },
-    /**
-     * Leaves the broker. **It does not end it, and must not**: the sessions outlive this process so that
-     * restarting it does not take a user's shells down. What ends them is whoever holds them —
-     * `holdTerminalSessions` in the app, and otherwise the broker's own rule that the last client out ends
-     * them, which is what stops a dev run or a test leaving anything behind.
-     */
+    async sessions() {
+      return (await running()).sessions();
+    },
+    async rewind(recording: string, size: { readonly cols: number; readonly rows: number }) {
+      return (await running()).rewind(recording, size);
+    },
     async shutdown() {
       const started = broker;
       broker = undefined;
       current = undefined;
       if (started) await (await started.catch(() => undefined))?.close();
+    },
+  };
+}
+
+/**
+ * How long a target's broker has to answer a greeting.
+ *
+ * **A network wait, so it is sized as one.** The greeting crosses whatever the target's command is —
+ * `ssh` resolving a name and negotiating keys, `docker exec` asking a daemon that is busy — and the ten
+ * seconds a broker on this machine is given (`BROKER_START_MS`) is a figure for a process this app just
+ * started beside itself. A command that cannot reach its target usually says so and exits, which ends
+ * the wait at once with what it said; this bounds the one that neither answers nor exits, at about what
+ * `ssh` itself gives a connection before it gives up.
+ */
+const TARGET_GREETING_MS = 60_000;
+
+/**
+ * `startMs` replaces `TARGET_GREETING_MS` for a case about a target that never answers: the bound is the
+ * subject there, and it must be reachable without waiting it out (`BrokerOptions.startMs`).
+ */
+export function createTerminalService({ startMs = TARGET_GREETING_MS }: { startMs?: number } = {}): TerminalService & { shutdown(): Promise<void> } {
+  const own = brokerSessions(
+    () => startBroker({ binary: brokerBinary(), socket: socketPath(), env: brokerEnvironment() }),
+    () => startKey(brokerBinary(), socketPath()),
+    null,
+  );
+  /** A target's sessions and the socket in front of its command, by the target's key */
+  const targets = new Map<string, { sessions: ReturnType<typeof brokerSessions>; relay: Promise<Relay> }>();
+
+  /**
+   * **A target is a broker reached through a command, behind a socket of this app's.** The socket is
+   * served for as long as the service lives and the connection to the broker is made when a session is
+   * first asked for: a target nobody opens a terminal on runs no command.
+   */
+  const at = (target: TerminalTarget): TerminalService => {
+    const command = [...target.command];
+    const key = relayKey(command);
+    let known = targets.get(key);
+    if (!known) {
+      const socket = relaySocketPath(key);
+      const relay = serveRelay(socket, command);
+      // A socket that could not be served is asked for again by the next call, not remembered as a failure
+      relay.catch(() => { if (targets.get(key)?.relay === relay) targets.delete(key); });
+      const sessions = brokerSessions(
+        async () => {
+          const serving = await relay;
+          try {
+            // Connected to and never started: the broker is wherever the command reaches
+            return await startBroker({ socket, startMs });
+          } catch (error) {
+            const why = serving.lastFailure();
+            throw why ? new Error(`Could not reach the terminal target: ${why}`, { cause: error }) : error;
+          }
+        },
+        null,
+        key,
+      );
+      known = { sessions, relay };
+      targets.set(key, known);
+    }
+    const { sessions } = known;
+    return { open: sessions.open, adopt: sessions.adopt, sessions: sessions.sessions, rewind: sessions.rewind, at };
+  };
+
+  return {
+    open: own.open,
+    adopt: own.adopt,
+    sessions: own.sessions,
+    rewind: own.rewind,
+    at,
+    async shutdown() {
+      await own.shutdown();
+      for (const { sessions, relay } of targets.values()) {
+        await sessions.shutdown();
+        await (await relay.catch(() => undefined))?.close();
+      }
+      targets.clear();
     },
   };
 }

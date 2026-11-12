@@ -431,7 +431,8 @@ class WindowManager implements AppModule {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        sandbox: false, // Sandbox disabled because the demo of preload script depend on the Node.ts api
+        // The preload opens the terminal broker's socket itself (`node:net`), which a sandboxed one cannot
+        sandbox: false,
         webviewTag: false, // The webview tag is not recommended. Consider alternatives like an iframe or Electron's BrowserView. @see https://www.electronjs.org/docs/latest/api/webview-tag#warning
         preload: this.#preload.path,
         additionalArguments: [

@@ -31,11 +31,42 @@ const ELMDB_CHECKOUT = (() => {
   }
 })();
 /**
+ * The apack-terminal checkout, for the two npm packages in it: the broker's (`node/`) and the view a
+ * window's terminals are drawn with (`view/`), which the built-in pack bundles.
+ *
+ * **Copied in as files, the view built.** The view is TypeScript, so what the Mac's link built is what
+ * Linux runs, and there is nothing for the container to compile: its `dist/` goes where the link would
+ * have pointed. The broker's package goes as what is tracked in it — the manifest `npm ci` resolves and
+ * the protocol's types — and without the binary staged beside them, which is this Mac's.
+ */
+const TERMINAL_CHECKOUT = (() => {
+  try {
+    return fs.realpathSync(path.join(REPO_ROOT, 'vendor', 'apack-terminal'));
+  } catch {
+    process.stderr.write('The terminal broker and its view are unavailable: run npm run link:apack-terminal.\n');
+    process.exit(1);
+  }
+})();
+/**
+ * The apack-git checkout, for the one npm package in it: the git engine the built-in pack bundles.
+ *
+ * **Copied in as files, built.** It is TypeScript with nothing native, so what the Mac's link built is what
+ * Linux runs: its manifest and its `dist/` go where the link would have pointed.
+ */
+const GIT_ENGINE_CHECKOUT = (() => {
+  try {
+    return fs.realpathSync(path.join(REPO_ROOT, 'vendor', 'apack-git'));
+  } catch {
+    process.stderr.write('The git engine is unavailable: run npm run link:apack-git.\n');
+    process.exit(1);
+  }
+})();
+/**
  * The Rust checkouts this image installs a toolchain for, which is **the ones the container builds** and not
  * every one `vendor/` links.
  *
  * A linked Rust checkout the container never compiles has no say in the toolchain: `vendor/apack-terminal` is
- * one, since the broker reaches the container as a prebuilt binary in its npm package rather than as source to
+ * one, since the container is given its two npm packages as files (`TERMINAL_CHECKOUT`) rather than source to
  * build. Folding it in made its `rust-toolchain.toml` a veto over every `test:linux` on a Mac — a channel
  * disagreement in a checkout this image does nothing with refused the run and named both pins, with no way to
  * act on it short of editing the other repository.
@@ -264,7 +295,16 @@ const quote = (arg: string): string => `'${arg.replace(/'/g, `'\\''`)}'`;
  */
 const sync = [
   // The link is the container's own, to its copy of elmdb, where its Linux binding is built before npm resolves it
-  `rsync -a --delete --exclude=/${RUN_LOCK} --exclude=/${CHECKOUT_FILE} --exclude=/vendor/elmdb ${FILTERS.map(quote).join(' ')} /src/ /work/`,
+  `rsync -a --delete --exclude=/${RUN_LOCK} --exclude=/${CHECKOUT_FILE} --exclude=/vendor/elmdb --exclude=/vendor/apack-terminal --exclude=/vendor/apack-git ${FILTERS.map(quote).join(' ')} /src/ /work/`,
+  // The broker's and the view's packages, as the files the link names on the Mac: see TERMINAL_CHECKOUT.
+  // A volume from before this held the Mac's link there, copied as a link to a path the container lacks
+  'if [ -L /work/vendor/apack-terminal ]; then unlink /work/vendor/apack-terminal; fi',
+  'mkdir -p /work/vendor/apack-terminal',
+  "rsync -a --delete --exclude=node_modules --exclude=/node/apack-terminal --exclude=/node/apack-terminal.exe --include=/node/*** --include=/view/*** --exclude='*' /terminal-src/ /work/vendor/apack-terminal/",
+  // The git engine's package, as the files the link names on the Mac: see GIT_ENGINE_CHECKOUT
+  'if [ -L /work/vendor/apack-git ]; then unlink /work/vendor/apack-git; fi',
+  'mkdir -p /work/vendor/apack-git',
+  "rsync -a --delete --include=/package.json --include=/dist/*** --exclude='*' /git-engine-src/ /work/vendor/apack-git/",
   `exec 8>/elmdb/${ELMDB_LOCK}`,
   'if ! flock -n 8; then',
   '  echo "Waiting for another checkout\'s test:linux run to finish syncing the shared elmdb volume…" >&2',
@@ -359,6 +399,8 @@ const child = spawn('docker', [
   'run', '--rm', '--init', '--name', CONTAINER, ...RESOURCE_LIMITS, ...scratchArgs, '--sysctl', 'net.ipv6.conf.all.disable_ipv6=1',
   '-v', `${REPO_ROOT}:/src:ro`, '-v', `${WORK_VOLUME}:/work`, '-v', `${NPM_CACHE_VOLUME}:/root/.npm`,
   '-v', `${ELMDB_CHECKOUT}:/elmdb-src:ro`, '-v', `${ELMDB_VOLUME}:/elmdb`, '-v', `${CARGO_REGISTRY_VOLUME}:/usr/local/cargo/registry`,
+  '-v', `${TERMINAL_CHECKOUT}:/terminal-src:ro`,
+  '-v', `${GIT_ENGINE_CHECKOUT}:/git-engine-src:ro`,
   ...gitDirMount(),
   ...forwarded.flatMap((key) => ['-e', key]),
   // Set here and never forwarded: the VM counts the host's load as its CPU, so a ceiling held to its size there fires

@@ -57,6 +57,8 @@ export interface AppStore {
   packs: PackRegistry;
   /** Brings the engine's projections up to what changed since each last read */
   catchUpProjections(): Promise<void>;
+  /** Leaves the terminal brokers this runtime reached (`createHostRuntime`'s `leaveTerminals`) */
+  leaveTerminals(): Promise<void>;
 }
 
 /** The app's registered packs, which openAppStore creates: the transport's procedures and dev reload work on them */
@@ -129,7 +131,7 @@ export function openAppStore(performance?: ReturnType<typeof createNodePerforman
   appViews = createViewHost({ ears: () => engine, packs, observe: recording ? () => createViewObservation(recording) : undefined });
   appDatabase = database;
   appRunHistory = runHistory;
-  return { database, runHistory, engine, packs, catchUpProjections: () => runtime.catchUpProjections() };
+  return { database, runHistory, engine, packs, catchUpProjections: () => runtime.catchUpProjections(), leaveTerminals: () => runtime.leaveTerminals() };
 }
 
 /**

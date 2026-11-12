@@ -44,6 +44,7 @@ jobs:
           npm --version
       - uses: ./.github/actions/elmdb
       - uses: ./.github/actions/apack-terminal
+      - uses: ./.github/actions/apack-git
       - name: Install dependencies
         env:
           GITHUB_TOKEN: ${{ github.token }}

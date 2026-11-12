@@ -52,7 +52,7 @@ export function createPerformanceRevisionJournal(directory: string, modeInput: u
 export function createPerformanceRunStore(directory: string, manifestInput: unknown, measured: number): {
     save: (invocations?: readonly PerformanceInvocation[]) => void;
     append: (input: unknown) => {
-        scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay";
+        scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
         index: number;
         warmup: boolean;
         outcome: "failed" | "passed" | "incomplete" | "cancelled";
@@ -62,7 +62,7 @@ export function createPerformanceRunStore(directory: string, manifestInput: unkn
         failure?: string | undefined;
     };
     adopt(file: string): {
-        scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay";
+        scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
         index: number;
         warmup: boolean;
         outcome: "failed" | "passed" | "incomplete" | "cancelled";
@@ -330,12 +330,12 @@ export const processReportSchema: z.ZodObject<{
 
 // @public
 export function readPerformanceModeComparison(directory: string, measured?: number): {
-    scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay";
+    scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
     baseline: {
         manifest: PerformanceManifest;
-        scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay";
+        scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
         samples: {
-            scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay";
+            scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
             index: number;
             warmup: boolean;
             outcome: "failed" | "passed" | "incomplete" | "cancelled";
@@ -355,9 +355,9 @@ export function readPerformanceModeComparison(directory: string, measured?: numb
     };
     candidate: {
         manifest: PerformanceManifest;
-        scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay";
+        scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
         samples: {
-            scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay";
+            scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
             index: number;
             warmup: boolean;
             outcome: "failed" | "passed" | "incomplete" | "cancelled";
@@ -386,12 +386,12 @@ export function readPerformanceModeComparison(directory: string, measured?: numb
 
 // @public
 export function readPerformanceRevisionComparison(directory: string, measured?: number): {
-    scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay";
+    scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
     baseline: {
         manifest: PerformanceManifest;
-        scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay";
+        scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
         samples: {
-            scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay";
+            scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
             index: number;
             warmup: boolean;
             outcome: "failed" | "passed" | "incomplete" | "cancelled";
@@ -411,9 +411,9 @@ export function readPerformanceRevisionComparison(directory: string, measured?: 
     };
     candidate: {
         manifest: PerformanceManifest;
-        scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay";
+        scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
         samples: {
-            scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay";
+            scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
             index: number;
             warmup: boolean;
             outcome: "failed" | "passed" | "incomplete" | "cancelled";
@@ -439,9 +439,9 @@ export function readPerformanceRevisionComparison(directory: string, measured?: 
 // @public
 export function readPerformanceRun(directory: string, measured?: number): {
     manifest: PerformanceManifest;
-    scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay";
+    scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
     samples: {
-        scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay";
+        scenario: "search" | "thread-open" | "streaming" | "populated-startup" | "terminal-open" | "terminal-resize" | "terminal-hidden" | "terminal-output" | "terminal-replay" | "terminal-echo";
         index: number;
         warmup: boolean;
         outcome: "failed" | "passed" | "incomplete" | "cancelled";
@@ -519,6 +519,7 @@ export const trialSchema: z.ZodObject<{
         "terminal-hidden": "terminal-hidden";
         "terminal-output": "terminal-output";
         "terminal-replay": "terminal-replay";
+        "terminal-echo": "terminal-echo";
     }>;
     index: z.ZodNumber;
     warmup: z.ZodBoolean;

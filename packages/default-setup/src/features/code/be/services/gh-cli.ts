@@ -416,3 +416,19 @@ export async function resolveGitHubAssetUrls(text: string, cwd: string): Promise
   }
   return resolved
 }
+
+/**
+ * Has the GitHub CLI give git its sign-in for `host` (`gh auth setup-git`), which writes a credential helper for
+ * that host into the user's git config. It is the user's to ask for, and only works once the CLI is signed in
+ * itself, which is checked first so that the answer says which of the two is missing.
+ */
+export async function setUpGitSignIn(cwd: string, host: string): Promise<void> {
+  try {
+    await runGh(['auth', 'status', '--hostname', host], cwd)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.startsWith('GitHub CLI (gh) not found')) throw error
+    throw new Error(`GitHub CLI is not signed in to ${host}. Run \`gh auth login\` in a terminal, then try again.`)
+  }
+  await runGh(['auth', 'setup-git', '--hostname', host], cwd)
+}

@@ -12,6 +12,7 @@ import { saveOpenTabs, loadPersistedTabs, sortTabsByPinned } from './utils/persi
 import { terminalNameFor } from './utils/terminal-name.ts';
 import { loadRecentFiles, addRecentFile } from './utils/recent-files.ts';
 import { pushTabViewHistory, nextActiveFromHistory } from './utils/tab-management.ts';
+import { diffTabPath, refreshedDiffTab } from './utils/diff-tabs.ts';
 import { saveTabGroups, loadTabGroups, getNextAvailableColor, type TabGroupColor, type TabGroup } from '@apackdev/sdk/fe';
 import { createNavHistory, pushNavHistory, goBack, goForward, canGoBack, canGoForward } from '@apackdev/sdk/fe';
 import type { CodeSettings } from '#generated/types.ts';
@@ -19,6 +20,7 @@ import type { ActionTab, CodeContext, CodeInboxEvent, OpenFile, PanelType, Promp
 export type { OpenFile, TerminalTab, QuickOpenResult, PanelType } from './contract.ts';
 export type { CodeContext } from './contract.ts';
 import type { OutgoingCodeEvents } from '#features/code/be/contract.ts';
+import type { GitDiff } from '#features/code/be/types.ts';
 import { sendToSystem } from '#generated/events.ts';
 
 // Import child state machines
@@ -67,7 +69,10 @@ export type Event =
   | CodeInboxEvent
   | {type: 'DISMISS_CLAUDE_PROFILE_SETUP_ERROR'}
   | { type: 'ADD_TAB'; tab: any; replacePreview?: boolean; extraUpdates?: Partial<CodeContext> }
+  // An open diff read again, from the child that asked for it
+  | { type: 'REFRESH_DIFF_TAB'; diff: GitDiff }
   | { type: 'SURFACE_ACTIVATED' }
+  | { type: 'SURFACE_DEACTIVATED' }
   // The shell hands this to every surface as it starts it; this one reads which window it is in (M5)
   | { type: 'SURFACE_STARTED'; ownsAppLayout: boolean }
   | { type: 'SELECT_PANEL'; panel: PanelType }
@@ -350,7 +355,8 @@ const codeState = setup({
      * A component releases its terminal on unmount and deliberately does not dispose it, so a remount draws
      * the same emulator again. That is right while this bundle is alive and a leak once it is not: the shell
      * replaces this pack's frontend by importing a fresh module, whose pool is fresh, and the last one's
-     * xterm instances, DOM and GL contexts stay alive in the window with nothing left that could reach them.
+     * emulators, their canvases and their WebAssembly state stay alive in the window with nothing left that
+     * could reach them.
      *
      * A child actor rather than an `exit` action, because **XState 5 runs no `exit` action on
      * `actor.stop()`** — an exit here would be dead code that read as cleanup. An invoked actor's cleanup
@@ -360,6 +366,16 @@ const codeState = setup({
      * the drawing and never the terminal.
      */
     poolOwner: fromCallback(() => () => terminalPool.disposeAll()),
+    /**
+     * Asks for the repository and the open files to be read again when the window gains focus: what changed
+     * while the user was in another program is what they came back to look at, and a file event the platform
+     * never delivered is made up for here.
+     */
+    externalChanges: fromCallback(() => {
+      const check = () => { sendToSystem('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES', by: 'window' }) };
+      window.addEventListener('focus', check);
+      return () => window.removeEventListener('focus', check);
+    }),
   },
   actions: {
     spawnFeatureActors: enqueueActions(({ enqueue }) => {
@@ -496,6 +512,12 @@ const codeState = setup({
           : context.tabViewHistory
       }
     }),
+    /** Brings an open diff up to date with its file, where it is: a tab closed since is not opened again */
+    refreshDiffTab: assign(({ event, context }) => {
+      const { diff } = event as { type: 'REFRESH_DIFF_TAB'; diff: GitDiff }
+      const tabPath = diffTabPath(diff)
+      return { openFiles: context.openFiles.map(file => file.path === tabPath ? refreshedDiffTab(file as OpenFile, diff) : file) }
+    }),
     updateState: assign(({ event, context }) => {
       const ev = event as { type: 'UPDATE_STATE'; updates: Partial<CodeContext> }
       const updates = { ...context, ...ev.updates }
@@ -530,6 +552,8 @@ const codeState = setup({
     initializeSurface: ({ self }) => {
       // Explorer is initialized by the CODE_STARTED answer — no re-init needed here.
       codeChild(self, 'terminal')?.send({ type: 'terminal.REFRESH_LIST' });
+      // The window shows the repository from here on, which is when it follows what changes in it
+      codeChild(self, 'commit')?.send({ type: 'commit.SHOWN' });
     },
 
     restorePersistedTabs: enqueueActions(({ enqueue, self }) => {
@@ -1347,7 +1371,7 @@ const codeState = setup({
   initial: 'canvas',
   // Invoked at the root, so it is running for exactly as long as this surface is and its cleanup is what
   // the shell stopping this actor runs
-  invoke: { src: 'poolOwner', id: 'poolOwner' },
+  invoke: [{ src: 'poolOwner', id: 'poolOwner' }, { src: 'externalChanges', id: 'externalChanges' }],
   entry: ['spawnFeatureActors', 'restorePersistedTabs'],
   context: {
     // Until the shell says otherwise, this is the window that keeps the layout: a surface started with no
@@ -1415,9 +1439,16 @@ const codeState = setup({
         ADD_TAB: {
           actions: ['addTab', 'saveTabsAction']
         },
+        REFRESH_DIFF_TAB: {
+          actions: ['refreshDiffTab']
+        },
         // Surface initialization
         SURFACE_ACTIVATED: {
           actions: ['initializeSurface']
+        },
+        // The window shows another surface: the repository's changes are caught up with when it is shown again
+        SURFACE_DEACTIVATED: {
+          actions: ({ self }) => { codeChild(self, 'commit')?.send({ type: 'commit.HIDDEN' }) }
         },
         // Panel selection
         SELECT_PANEL: {

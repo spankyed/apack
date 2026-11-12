@@ -25,7 +25,11 @@ const net = require('node:net');
 const readline = require('node:readline');
 const socket = process.argv[2];
 const script = JSON.parse(process.env.FAKE_SCRIPT);
+let open = 0;
 const server = net.createServer(connection => {
+  // Gone with its last connection, as the real broker is: one that stayed would outlive the case that started it
+  open += 1;
+  connection.on('close', () => { open -= 1; if (open === 0) process.exit(0); });
   readline.createInterface({ input: connection }).on('line', line => {
     const request = JSON.parse(line);
     const answers = (script[request.kind] ?? []).map(event =>
@@ -494,11 +498,21 @@ setInterval(() => {}, 1_000);
   it('says why a broker that never listened did not start, rather than timing out', async () => {
     directory = mkdtempSync(path.join(tmpdir(), 'broker-client-'));
     const binary = path.join(directory, 'silent.cjs');
-    writeFileSync(binary, "#!/usr/bin/env node\nprocess.stderr.write('no socket for me\\n'); process.exit(3);");
+    writeFileSync(binary, "#!/usr/bin/env node\nprocess.stderr.write('no socket for me\\n'); process.exit(7);");
     chmodSync(binary, 0o755);
 
     await expect(startBroker({ binary, socket: path.join(directory, 'b.sock') }))
-      .rejects.toThrow(/exited with 3 before it was listening.*no socket for me/s);
+      .rejects.toThrow(/exited with 7 before it was listening.*no socket for me/s);
+  });
+
+  it('says what a broker that would not listen said of why', async () => {
+    directory = mkdtempSync(path.join(tmpdir(), 'broker-client-'));
+    const binary = path.join(directory, 'refusing.cjs');
+    writeFileSync(binary, "#!/usr/bin/env node\nconsole.log('failed its directory is open to other users'); process.exit(1);");
+    chmodSync(binary, 0o755);
+
+    await expect(startBroker({ binary, socket: path.join(directory, 'b.sock') }))
+      .rejects.toThrow(/could not listen: its directory is open to other users/);
   });
   /**
    * **A reported status of nothing is not a status of zero**, which is the one thing a typecheck cannot catch
@@ -509,7 +523,7 @@ setInterval(() => {}, 1_000);
     const fake = await broker({
       ...OPENS,
       facts: [
-        { kind: 'facts', session: 's-1', cwd: '/home/me/w d', command: 'cargo test', running: true, exit_status: null },
+        { kind: 'facts', session: 's-1', cwd: '/home/me/w d', command: 'cargo test', running: true, exit_status: null, finished: 0 },
       ],
     });
     const session = await fake.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
@@ -519,6 +533,7 @@ setInterval(() => {}, 1_000);
       command: 'cargo test',
       running: true,
       exitStatus: null,
+      finished: 0,
       // A broker that answers no foreground says so as `null`, never as a missing field: a caller reading
       // `facts.foreground?.name` cannot tell those apart, and one reading `'foreground' in facts` would
       // get a different answer on Windows than on a shell this broker could not measure
@@ -539,6 +554,7 @@ setInterval(() => {}, 1_000);
           command: null,
           running: false,
           exit_status: null,
+          finished: 7,
           foreground: { pid: 4321, name: 'vim' },
         },
       ],
@@ -550,6 +566,7 @@ setInterval(() => {}, 1_000);
       command: null,
       running: false,
       exitStatus: null,
+      finished: 7,
       foreground: { pid: 4321, name: 'vim' },
     });
   });
@@ -557,7 +574,7 @@ setInterval(() => {}, 1_000);
   it('reports a reported status as the number it was', async () => {
     const fake = await broker({
       ...OPENS,
-      facts: [{ kind: 'facts', session: 's-1', cwd: null, command: null, running: false, exit_status: 130 }],
+      facts: [{ kind: 'facts', session: 's-1', cwd: null, command: null, running: false, exit_status: 130, finished: 1 }],
     });
     const session = await fake.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
 

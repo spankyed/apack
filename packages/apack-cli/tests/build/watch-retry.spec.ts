@@ -1,4 +1,7 @@
-import { beforeEach, afterEach, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import realFs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import type { EventEmitter } from 'node:events';
 import type { PackBuilder } from '../../src/build/build-process.ts';
 import * as packInputs from '@apackdev/host/build/pack-inputs';
@@ -10,7 +13,8 @@ import * as compilerWatch from '../../src/build/compiler-watch.ts';
 const fixture = vi.hoisted(() => ({
   authored: 'first',
   changed: undefined as undefined | ((event: string, file: string) => void),
-  watches: [] as Array<{ directory: string; watcher: EventEmitter & { close: ReturnType<typeof vi.fn> } }>,
+  watches: [] as Array<{ directory: string; receive: (event: string, file: string) => void; watcher: EventEmitter & { close: ReturnType<typeof vi.fn> } }>,
+  packageFiles: [] as string[],
   build: vi.fn<PackBuilder['build']>(async () => {}),
   ensurePackages: vi.fn<PackBuilder['ensurePackages']>(async () => {}),
   compilerSignature: 'compiler',
@@ -28,7 +32,7 @@ vi.mock('node:fs', async importOriginal => {
     watch: vi.fn((directory: string, _options: unknown, receive: (event: string, file: string) => void) => {
       if (directory === '/fixture') fixture.changed = receive;
       const watcher = Object.assign(new EventEmitter(), { close: vi.fn() });
-      fixture.watches.push({ directory, watcher });
+      fixture.watches.push({ directory, receive, watcher });
       return watcher;
     }),
   };
@@ -42,11 +46,12 @@ vi.mock('@apackdev/host/build/pack-inputs', () => ({
   isPackInputPath: () => true,
   packInputsHash: () => fixture.authored,
   packInputWatchTargets: () => [{ directory: '/fixture', relative: '' }],
+  packInputFiles: () => [],
 }));
 vi.mock('../../src/build/compiler-watch.ts', () => ({
   createCompilerWatchTools: () => ({ read: vi.fn(), changed: vi.fn() }),
   compilerWatchPaths: () => ({ paths: new Map(), staticPaths: new Map(), complete: true, signature: fixture.compilerSignature }),
-  packageInputWatchPaths: () => new Map(),
+  packageInputWatchPaths: () => new Map(fixture.packageFiles.map(file => [file, 'file'])),
   additionalCompilerObservations: (observations: unknown) => observations,
   mergeCompilerWatchPaths: () => new Map(),
   compilerWatchTargets: () => new Map(),
@@ -70,6 +75,7 @@ beforeEach(() => {
   fixture.authored = 'first';
   fixture.compilerSignature = 'compiler';
   fixture.watches = [];
+  fixture.packageFiles = [];
   fixture.frontendFailed = undefined;
   vi.spyOn(console, 'log').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -385,4 +391,73 @@ it('owns a subscription replacement failure during frontend input delivery', asy
   await watcher.close();
   expect(fixture.unsubscribe).toHaveBeenCalledTimes(1);
   expect(fixture.close).toHaveBeenCalledTimes(1);
+});
+
+describe('watches on known files', () => {
+  let temporary: string;
+  beforeEach(() => { temporary = realFs.realpathSync(realFs.mkdtempSync(path.join(os.tmpdir(), 'apack-file-watches-'))); });
+  afterEach(() => { realFs.rmSync(temporary, { recursive: true, force: true }); });
+  const known = (name: string) => { const file = path.join(temporary, name); realFs.writeFileSync(file, name); return file; };
+  const watchesOn = (file: string) => fixture.watches.filter(entry => entry.directory === file);
+  // The check each new watch makes once it is armed resolves on real I/O, which fake timers don't move
+  const armed = () => new Promise(resolve => realFs.stat(temporary, resolve));
+
+  it('holds one on each known package file on macOS, and none elsewhere', async () => {
+    fixture.packageFiles = [known('a.ts'), known('b.ts')];
+    for (const platform of ['darwin', 'linux'] as const) {
+      fixture.watches = [];
+      const watcher = await startPackBuildWatcher('/fixture', { platform });
+      try {
+        expect(fixture.packageFiles.map(file => watchesOn(file).length)).toEqual(platform === 'darwin' ? [1, 1] : [0, 0]);
+      } finally { await watcher.close(); }
+    }
+  });
+
+  it('asks for a pass when one fires, though no directory watch did', async () => {
+    const file = known('a.ts');
+    fixture.packageFiles = [file];
+    const watcher = await startPackBuildWatcher('/fixture', { platform: 'darwin' });
+    try {
+      await armed();
+      await vi.advanceTimersByTimeAsync(300);
+      const passes = fixture.ensurePackages.mock.calls.length;
+      watchesOn(file)[0]!.receive('change', 'a.ts');
+      await vi.advanceTimersByTimeAsync(300);
+      expect(fixture.ensurePackages).toHaveBeenCalledTimes(passes + 1);
+    } finally { await watcher.close(); }
+  });
+
+  it('holds only the file watches with directory watches off, and still asks for a pass when one fires', async () => {
+    const file = known('a.ts');
+    fixture.packageFiles = [file];
+    const watcher = await startPackBuildWatcher('/fixture', { platform: 'darwin', directoryWatches: false });
+    try {
+      await armed();
+      await vi.advanceTimersByTimeAsync(300);
+      expect(fixture.watches.map(entry => entry.directory)).toEqual([file]);
+      const passes = fixture.ensurePackages.mock.calls.length;
+      watchesOn(file)[0]!.receive('change', 'a.ts');
+      await vi.advanceTimersByTimeAsync(300);
+      expect(fixture.ensurePackages).toHaveBeenCalledTimes(passes + 1);
+    } finally { await watcher.close(); }
+  });
+
+  it('watches a new file from the pass that finds it, with no extra pass for the change', async () => {
+    const file = known('a.ts');
+    fixture.packageFiles = [file];
+    const watcher = await startPackBuildWatcher('/fixture', { platform: 'darwin' });
+    try {
+      await armed();
+      await vi.advanceTimersByTimeAsync(300);
+      const passes = fixture.ensurePackages.mock.calls.length;
+      const added = known('b.ts');
+      fixture.packageFiles = [file, added];
+      watchesOn(file)[0]!.receive('change', 'a.ts');
+      await vi.advanceTimersByTimeAsync(300);
+      await armed();
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(watchesOn(added)).toHaveLength(1);
+      expect(fixture.ensurePackages).toHaveBeenCalledTimes(passes + 1);
+    } finally { await watcher.close(); }
+  });
 });

@@ -23,14 +23,12 @@ const replayFixture = (trials: number) => ({
  * host is torn down and rebuilt around a session that has 256 KiB of scrollback — which is the moment the
  * presentation rewrite changes, and the one a user feels as the tab taking a moment to come back.
  *
- * **It also records where the history comes from.** `app.surface.send` counts what the backend sent during
- * the action: a reattach that replays from the window's own copy produces none, which is the mechanism
- * behind F3 and F6 (a second and third copy of the scrollback) rather than a claim about it. A reattach that
- * asked the backend for the history again would show up here instead.
+ * **It also records where the history comes from.** The history is the broker's: a window holds the rows
+ * it has been shown and nothing else, so coming back attaches a view to the session again and is sent its
+ * screen over the window's own connection. `app.surface.send` counts what crossed the app's event bus
+ * during the action, which is none of it.
  *
- * Completion is the emulator attached and laid out again, as `terminal-open`'s is — the only thing the page
- * can see, since xterm draws to a canvas. What it cannot see is whether the *content* was restored
- * correctly, which needs a read through the emulator and is Phase P's seam.
+ * Completion is the view attached and laid out again, as `terminal-open`'s is.
  */
 export async function terminalReplayScenario({ app, appPage, electronApp }: Parameters<typeof createWarmScenario>[2]) {
   const run = await createWarmScenario('terminal-replay', replayFixture, { app, appPage, electronApp });
@@ -82,9 +80,8 @@ export async function terminalReplayScenario({ app, appPage, electronApp }: Para
             accept: () => false,
             check: () => {
               if (!shown()) return false;
-              const terminal = document.querySelector('.xterm');
-              const viewport = document.querySelector('.xterm-viewport');
-              if (!terminal || !viewport || viewport.getClientRects().length === 0) return false;
+              const terminal = document.querySelector('[data-apack-terminal]');
+              if (!terminal || terminal.getClientRects().length === 0) return false;
               work.renderCanvases = terminal.querySelectorAll('canvas').length;
               if (work.renderCanvases === 0) return false;
               const ready = action.within(() => recording.begin('app.view.ready', {

@@ -727,7 +727,7 @@ and its buffer is inside the pack's module-scoped pool. Phase P's seam provides 
 acceptance already requires driving `vim`, `less` and `htop` through a reattach, which is the same read.
 
 The baseline is unrepeatable once Phase B moves state, and the
-[ghostty-web migration](../../deferred/xterm-to-ghostty-web.md) requires the same measurement for its own
+[ghostty-web migration](../../archive/plans/xterm-to-ghostty-web.md) requires the same measurement for its own
 cutover, so both cite one reading rather than two. Each is recorded here when taken, with its machine, its
 corpus and its conditions — the terminal scenario's `manifest.json` carries them, which is why Phase G's
 instrument is `tests/performance/` and not a driving script.

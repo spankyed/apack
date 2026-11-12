@@ -31,20 +31,16 @@ const terminalFixture = (trials: number) => {
  * a *before* for, and the one its own Constraints single out — "a pty spawns in-process today; a broker has
  * to start first" — so a regression here is the result that has to be investigated rather than absorbed.
  *
- * **Completion is what the window drew, because a terminal has no view.** Its output is broadcast news
- * (`terminal.OUTPUT`) and the code feature declares no `views` module at all, so there is no delivery to
- * correlate a trial against and `awaitsDelivery` is false. What stands in its place is the surface's own
- * record that the terminal is the panel's and expanded, and xterm attached with a laid-out viewport and a
- * renderer canvas in it.
+ * **Completion is what the window drew.** A terminal's screen is no event and the code feature declares no
+ * `views` module for it — the window draws it from rows the broker sends over a connection of the
+ * window's own — so there is no delivery to correlate a trial against and `awaitsDelivery` is false. What
+ * stands in its place is the surface's own record that the terminal is the panel's and expanded, and a view
+ * of it mounted in a laid-out element of the app's own (`[data-apack-terminal]`) with its canvas in it.
  *
- * **What this measures is attachment, not the first byte, and that is a limit of what the page can see.**
- * xterm draws to a canvas here — probed 2026-11-07 against the built app: a mounted terminal has eight
- * `xterm`-classed elements, a laid-out `.xterm-viewport` and three canvases, and **no `.xterm-rows` at
- * all** — so there is no DOM text to read the screen's contents from, and the only object holding the
- * buffer is the xterm instance inside the pack's module-scoped pool, which the page cannot reach. "The
- * shell's prompt is on screen" is therefore not observable from here without new plumbing; it belongs with
- * the sustained-output reading, which needs a byte-level signal anyway. This is the latency from asking for
- * a terminal to having one attached and on screen, which is where a broker's start-up cost lands.
+ * **What this measures is attachment, not the first frame.** This is the latency from asking for a
+ * terminal to having one attached and on screen, which is where a broker's start-up cost lands; what it
+ * costs from there to a painted screen is `terminal-echo`'s reading, which waits on the frame the view
+ * says it painted.
  *
  * Each trial opens its own terminal and closes it again outside the measured interval, so twenty-five
  * trials do not leave twenty-five shells running and change what the later ones measure.
@@ -82,13 +78,12 @@ export async function terminalOpenScenario({ app, appPage, electronApp }: Parame
               const panelTerminalId = context.panelTerminalId ?? null;
               if (!panelTerminalId || panelTerminalId === before) return false;
               if (context.panelTerminalExpanded !== true) throw Error('terminal-not-shown');
-              const terminal = document.querySelector('.xterm');
-              const viewport = document.querySelector('.xterm-viewport');
-              if (!terminal || !viewport || viewport.getClientRects().length === 0) return false;
-              work.xtermElements = document.querySelectorAll('[class*="xterm"]').length;
+              const terminal = document.querySelector('[data-apack-terminal]');
+              if (!terminal || terminal.getClientRects().length === 0) return false;
+              work.terminalElements = document.querySelectorAll('[data-apack-terminal]').length;
               work.renderCanvases = terminal.querySelectorAll('canvas').length;
-              // The renderer is attached once it has put its canvases in. A sized viewport alone is the
-              // element Vue mounted, which exists before xterm has drawn into it
+              // The renderer is attached once it has put its canvas in. A sized element alone is the one
+              // the pool made, which exists before the emulator has drawn into it
               if (work.renderCanvases === 0) return false;
               const ready = action.within(() => recording.begin('app.view.ready', {
                 'app.generation': 'feed', 'app.delivery': 0, 'app.commit': 0, 'app.result_count': work.renderCanvases,

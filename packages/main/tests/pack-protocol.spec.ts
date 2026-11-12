@@ -30,6 +30,8 @@ it('serves modules and styles with their actual MIME type', () => {
   expect(MIME_TYPES['.css']).toBe('text/css');
   expect(MIME_TYPES['.svg']).toBe('image/svg+xml');
   expect(MIME_TYPES['.woff2']).toBe('font/woff2');
+  // `instantiateStreaming` refuses anything else, so a pack shipping a WebAssembly module depends on this
+  expect(MIME_TYPES['.wasm']).toBe('application/wasm');
 });
 
 describe('accepted installed asset delivery', () => {
@@ -59,6 +61,25 @@ describe('accepted installed asset delivery', () => {
     expect(read().toString()).toBe('export default {};');
     expect(read('runtime/chunks/widget.js').toString()).toBe('export const widget = 1;');
     expect(read('runtime/fe.css').toString()).toBe('body { color: red; }');
+  });
+
+  /**
+   * **A WebAssembly module travels the same route as a module or a stylesheet, bytes intact.**
+   *
+   * A pack ships one as a public asset, so it is a file in the layout rather than something the bundler
+   * inlines: a Vite library build has no asset base and turns an imported `.wasm` into a base64 data URL,
+   * measured at 1,125,737 characters for an 828 KB module against a 10 KB bundle without it. A file is
+   * recorded in the receipt and served over `pack://`, which is what the `application/wasm` entry above is
+   * for; an inlined one is never a request at all.
+   *
+   * Binary, so the case would catch a route that decoded or re-encoded on the way through — a zero byte
+   * and a byte above the ASCII range are the two that a text path mangles.
+   */
+  it('returns a binary asset byte for byte, which is what a WebAssembly module needs', () => {
+    const module = Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0xff, 0x00, 0x80]);
+    fs.writeFileSync(path.join(dir, 'runtime/ghostty-vt.wasm'), module);
+    const revision = seal();
+    expect(read('runtime/ghostty-vt.wasm', revision).equals(module)).toBe(true);
   });
 
   it('refuses a changed file without manufacturing a new build identity', () => {

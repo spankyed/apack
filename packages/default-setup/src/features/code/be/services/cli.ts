@@ -19,7 +19,7 @@ import './thread-history.ts'
 import { renameSession, validateSessionResumeTarget, getSessionFileRewindPreview, rewindSessionFiles, type ClaudeSessionFileRewindOptions, type ClaudeSessionResumeTargetOptions } from './claude-code/session-controls.ts'
 import { featureSettings } from '#generated/settings.ts';
 
-import { GitRepository } from '#features/code/be/services/git.ts'
+import { openGitRepository, type AppGitRepository } from '#features/code/be/services/app-git-repository.ts'
 import * as ghCli from '#features/code/be/services/gh-cli.ts'
 import type { GitStatusFile, GhPullRequest, GhPRComment, GhReviewThread } from '#features/code/be/types.ts'
 import { getSessionContextUsage, type ClaudeSessionContextOptions } from './claude-code/context.ts'
@@ -141,7 +141,7 @@ export interface CliServiceType {
 }
 
 function createCliService(): CliServiceType {
-  let gitRepo: GitRepository | null = null
+  let gitRepo: AppGitRepository | null = null
   let lastCwd: string | null = null
 
   function resolveCwd(): string {
@@ -172,10 +172,10 @@ function createCliService(): CliServiceType {
     return env
   }
 
-  function getGitRepo(): GitRepository {
+  function getGitRepo(): AppGitRepository {
     const cwd = resolveCwd()
     if (!gitRepo || lastCwd !== cwd) {
-      gitRepo = new GitRepository(cwd)
+      gitRepo = openGitRepository(cwd)
       lastCwd = cwd
     }
     return gitRepo

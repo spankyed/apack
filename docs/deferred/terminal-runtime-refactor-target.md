@@ -9,7 +9,7 @@ Its three halves are owned separately now:
   xterm.js and took emulator replacement out of its scope, which is why the order this document originally
   named — migration first, then ownership — was inverted: both are answers to who owns a session, and
   sequencing them the other way moves ownership twice.
-- **One terminal implementation** is [goal-one-vt-core](../goals/goal-one-vt-core.md), which this document's
+- **One terminal implementation** is [goal-one-vt-core](../archive/goals/goal-one-vt-core.md), which this document's
   recommendation of a "headless Ghostty terminal core" asked for and which only became buyable when
   `libghostty-vt` 1.0 shipped a stable C ABI.
 - **The agent-observation pipeline** — adapter capabilities, the status reducer, provenance, honest

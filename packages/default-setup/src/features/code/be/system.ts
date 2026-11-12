@@ -20,14 +20,13 @@ import type { AppSettings } from '@apackdev/sdk/types';
 import { services } from '#generated/services.ts';
 import { broadcastToSurface } from '#generated/events.ts';
 import { clearCliPathCache, isCliName, testCli } from './utils/resolve-cli.ts';
-import { createLogger } from '@apackdev/sdk/logger';
+import { createLogger, setDebugEnabled } from '@apackdev/sdk/logger';
 
 const cliLogger = createLogger('code');
 import { setup, enqueueActions, assign, sendTo, type AnyActorRef } from 'xstate'
 
 import { defineSystem } from '@apackdev/sdk/framework'
-import { GitRepository } from './services/git.ts'
-import { GitWatcherService } from './services/gitwatcher.ts'
+import { GIT_COMMAND_LOG, openGitRepository, openGitWatcher, repositoryHandle, repositoryOf, watcherHandle, watcherOf } from './services/app-git-repository.ts'
 import { gitWatcherActor } from './git-watcher-actor.ts'
 
 // child systems; their events come from the contract, which is where every child's now live
@@ -97,8 +96,7 @@ export const systemMachine = setup({
       enqueue.spawnChild('explorerSystem', {
         id: 'explorer',
         input: {
-          baseDirectory: context.baseDirectory,
-          gitWatcher: context.gitWatcher
+          baseDirectory: context.baseDirectory
         }
       });
       enqueue.spawnChild('searchSystem', {
@@ -111,8 +109,7 @@ export const systemMachine = setup({
         id: 'commit',
         input: {
           baseDirectory: context.baseDirectory,
-          gitRepository: context.gitRepository,
-          gitWatcher: context.gitWatcher,
+          gitRepository: repositoryOf(context.gitRepository),
           code: self
         }
       });
@@ -120,7 +117,7 @@ export const systemMachine = setup({
         id: 'pr',
         input: {
           baseDirectory: context.baseDirectory,
-          gitRepository: context.gitRepository,
+          gitRepository: repositoryOf(context.gitRepository),
           code: self
         }
       });
@@ -154,20 +151,18 @@ export const systemMachine = setup({
       gitRepository: ({ event, context }) => {
         const ev = codeSpec.typeOf('SET_BASE_DIRECTORY', event)
         // Clear the old repository's cache before creating new one
-        if (context.gitRepository) {
-          context.gitRepository.clearCache()
-        }
-        const repo = new GitRepository(ev.path)
+        repositoryOf(context.gitRepository)?.clearCache()
+        const repo = openGitRepository(ev.path)
         const codeSettings = featureSettings.forFeature('code').get()
         repo.setFetchConfig(
           codeSettings?.autoFetchRemote ?? false,
           codeSettings?.autoFetchIntervalSeconds ?? 180
         )
-        return repo
+        return repositoryHandle(repo)
       },
       gitWatcher: ({ event }) => {
         const ev = codeSpec.typeOf('SET_BASE_DIRECTORY', event)
-        return new GitWatcherService(ev.path)
+        return watcherHandle(openGitWatcher(ev.path))
       }
     }),
 
@@ -176,23 +171,18 @@ export const systemMachine = setup({
       const newPath = ev.path
 
       // Update child systems
-      child(self, 'explorer')?.send({
-        type: 'explorer.UPDATE_BASE_DIRECTORY',
-        path: newPath,
-        gitWatcher: context.gitWatcher
-      });
+      child(self, 'explorer')?.send({ type: 'explorer.UPDATE_BASE_DIRECTORY', path: newPath });
       child(self, 'search')?.send({ type: 'search.UPDATE_BASE_DIRECTORY', path: newPath });
       // Pass the new git services to systems that need them
       child(self, 'commit')?.send({
         type: 'commit.UPDATE_BASE_DIRECTORY',
         path: newPath,
-        gitRepository: context.gitRepository,
-        gitWatcher: context.gitWatcher
+        gitRepository: repositoryOf(context.gitRepository)!
       });
       child(self, 'pr')?.send({
         type: 'pr.UPDATE_BASE_DIRECTORY',
         path: newPath,
-        gitRepository: context.gitRepository
+        gitRepository: repositoryOf(context.gitRepository)!
       });
       // Note: Updates terminal's base directory for new terminal creation.
       // Individual terminal processes track their own cwd independently.
@@ -252,12 +242,19 @@ export const systemMachine = setup({
         })
       }
 
+      setDebugEnabled(GIT_COMMAND_LOG, ev.settings.logGitCommands === true)
+
       // Update git fetch config if repository exists
-      if (context.gitRepository) {
-        context.gitRepository.setFetchConfig(
+      const repository = repositoryOf(context.gitRepository)
+      if (repository) {
+        const suspended = repository.isAutoFetchSuspended
+        repository.setFetchConfig(
           ev.settings.autoFetchRemote ?? false,
           ev.settings.autoFetchIntervalSeconds ?? 180
         )
+        // Fetching had stopped, and the settings arriving again is where it starts over: the repository is checked,
+        // which says so to the windows showing it, and fetched if a fetch is due
+        if (suspended) child(self, 'commit')?.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED', reconcile: true })
       }
 
     },
@@ -275,8 +272,22 @@ export const systemMachine = setup({
       child(self, 'terminal')?.send(event);
     },
     
+    /**
+     * Something may have changed on disk that no file event reported. The watches are brought in line with the
+     * checkout first — it may have become a repository, or a watch may have failed — and then git and the open
+     * files say what, if anything, differs.
+     */
+    checkForExternalChanges: ({ context, event, self }) => {
+      const byWindow = (event as { by?: 'window' }).by === 'window';
+      child(self, 'explorer')?.send({ type: 'explorer.CHECK_OPEN_FILES' });
+      const checkRepository = () => { child(self, 'commit')?.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED', reconcile: true, byWindow }) };
+      const watcher = watcherOf(context.gitWatcher);
+      if (watcher) void watcher.check().then(checkRepository, checkRepository);
+      else checkRepository();
+    },
+
     selectGitWatcher: sendTo('gitWatcher', ({ context }) => ({
-      type: 'WATCH', selection: { watcher: context.gitWatcher, repository: context.gitRepository },
+      type: 'WATCH', selection: { watcher: watcherOf(context.gitWatcher), repository: repositoryOf(context.gitRepository) },
     })),
   })
 }).createMachine({
@@ -289,7 +300,10 @@ export const systemMachine = setup({
     // Resolve initial directory using priority chain
     const baseDir = resolveInitialDirectory(codeSettings, projects)
 
-    const gitRepo = baseDir ? new GitRepository(baseDir) : null
+    // Off unless the setting asks for it, whatever the build: a status runs for most file events
+    setDebugEnabled(GIT_COMMAND_LOG, codeSettings?.logGitCommands === true)
+
+    const gitRepo = baseDir ? openGitRepository(baseDir) : null
     if (gitRepo) {
       gitRepo.setFetchConfig(
         codeSettings?.autoFetchRemote ?? false,
@@ -300,15 +314,15 @@ export const systemMachine = setup({
     return {
       baseDirectory: baseDir,
       defaultBaseDirectory: codeSettings?.defaultBaseDirectory ?? null,
-      gitRepository: gitRepo,
-      gitWatcher: baseDir ? new GitWatcherService(baseDir) : null
+      gitRepository: repositoryHandle(gitRepo),
+      gitWatcher: watcherHandle(baseDir ? openGitWatcher(baseDir) : null)
     }
   },
   entry: 'spawnFeatureActors',
   invoke: {
     id: 'gitWatcher', src: 'gitWatcherActor',
-    input: ({ context, self }) => ({ watcher: context.gitWatcher, repository: context.gitRepository,
-      onChange: () => child(self, 'commit')?.send({ type: 'commit.GIT_STATUS_CHANGED' }),
+    input: ({ context, self }) => ({ watcher: watcherOf(context.gitWatcher), repository: repositoryOf(context.gitRepository),
+      onChange: () => child(self, 'commit')?.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' }),
     }),
   },
   states: {
@@ -320,6 +334,7 @@ export const systemMachine = setup({
         // Handle settings updates
         TEST_CLI_PROVIDER: { actions: 'testCliProvider' },
         PREPARE_CLAUDE_PROFILE_SETUP: {actions: 'prepareClaudeProfileSetup'},
+        CHECK_FOR_EXTERNAL_CHANGES: { actions: 'checkForExternalChanges' },
         FEATURE_SETTINGS_UPDATED: {
           actions: [
             'updateSettings',

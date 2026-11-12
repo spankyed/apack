@@ -2,12 +2,14 @@ import { answer } from '../answer.ts'
 import { featureSettings } from '#generated/settings.ts';
 import type { OutgoingTerminalEvents } from '../contract.ts'
 
-import { broadcastToSurface } from '#generated/events.ts';
+import { broadcastToSurface, sendToSystem } from '#generated/events.ts';
 import { defineHandlers } from '@apackdev/sdk/framework';
 import { setup, assign, fromPromise } from 'xstate'
 
 import { terminalService } from '../services/terminal.ts'
 import type { TerminalInfo } from '../types.ts'
+import { cwdAsReported } from '../utils/osc-cwd.ts'
+import type { TerminalEvent } from '@apackdev/sdk/services'
 import { createLogger, reportError } from '@apackdev/sdk/logger';
 import { onConnectionEnded } from '@apackdev/sdk/events';
 import type { Reply } from '@apackdev/sdk/events';
@@ -32,22 +34,30 @@ export type Event =
       shell?: string;
       cols?: number;
       rows?: number;
+      target?: string;
     }
   | { type: 'terminal.CLOSE_TERMINAL'; terminalId: string }
   | { type: 'terminal.RESTART_TERMINAL'; terminalId: string }
   | { type: 'terminal.TERMINAL_INPUT'; terminalId: string; data: string }
-  | { type: 'terminal.RESIZE_TERMINAL'; terminalId: string; cols: number; rows: number }
+  | { type: 'terminal.RESIZE_TERMINAL'; terminalId: string; cols: number; rows: number; cellWidth?: number; cellHeight?: number }
   | { type: 'terminal.STOPPED_FITTING'; terminalId: string }
   | { type: 'terminal.RENAME_TERMINAL'; terminalId: string; customTitle: string }
   | { type: 'terminal.OPENED'; data: TerminalInfo }
   | { type: 'terminal.REFRESH_LIST' }
   | { type: 'terminal.OPEN_TERMINAL_TAB'; terminalId: string }
+  | { type: 'terminal.KEEP_TERMINAL'; terminalId: string; kept: boolean }
+  | { type: 'terminal.REWIND'; terminalId: string; cols: number; rows: number }
+  | { type: 'terminal.REWIND_SEEK'; session: string; at: number }
+  | { type: 'terminal.REWIND_CLOSE'; session: string }
+  /** The window looking back through a recording measured how many cells fit where it draws it */
+  | { type: 'terminal.REWIND_RESIZE'; session: string; cols: number; rows: number }
   | { type: 'terminal.UPDATE_BASE_DIRECTORY'; path: string }
   | { type: 'GET_CODE_START' };
 
 /** A terminal's news, for every window showing the code surface: what its process did, never a listing */
-type TerminalNewsType = 'terminal.CWD_CHANGED' | 'terminal.OUTPUT' | 'terminal.CLOSED' | 'terminal.CREATED'
-  | 'terminal.CRASHED' | 'terminal.RESTARTED' | 'terminal.RESIZED'
+type TerminalNewsType = 'terminal.CWD_CHANGED' | 'terminal.CLIPBOARD' | 'terminal.BELL' | 'terminal.NOTIFIED'
+  | 'terminal.PROGRESS' | 'terminal.TITLED' | 'terminal.CLOSED' | 'terminal.CREATED'
+  | 'terminal.CRASHED' | 'terminal.RESTARTED' | 'terminal.RESIZED' | 'terminal.KEPT'
 type TerminalNews = Extract<OutgoingTerminalEvents, { type: TerminalNewsType }>
 
 /** Tell every window showing the code surface what a terminal did */
@@ -79,28 +89,46 @@ export function startTerminalSizing(): () => void {
 }
 
 /**
- * Where a terminal's output and exit go — **given to the service before the session exists**, not registered
- * after it returns, which is F8: whatever the shell wrote first used to have nowhere to go and was dropped.
+ * Where a terminal's news and its exit go — **given to the service before the session exists**, not
+ * registered after it returns, so nothing a shell does first has nowhere to go.
  */
 const terminalHandlers = {
-  onData(terminalId: string, data: string) {
-    // **The markers say to ask; the broker says what they said.** Two bytes decide it — every sequence that
-    // carries a directory begins `ESC ]` — and the answer comes from the one parser that sees the whole
-    // stream. Matching them here was a second parser for one fact, over the highest-frequency feed the app
-    // has, and the copy that loses a sequence split across two reads.
-    if (data.includes('\x1b]')) {
-      void terminalService.reportedCwd(terminalId)
-        .then(cwd => {
-          if (cwd === undefined) return
-          const moved = terminalService.updateCwd(terminalId, cwd)
-          if (moved) {
-            emitToFrontend({ type: 'terminal.CWD_CHANGED', data: { terminalId, cwd: moved.cwd, title: moved.title } })
-          }
-        })
-        .catch(error => { logger.error(`Could not read where ${terminalId}'s shell is`, { error }) })
+  onEvent(terminalId: string, event: TerminalEvent) {
+    switch (event.kind) {
+      // A command that finished may have changed the repository or an open file with no file event for it
+      case 'commandFinished':
+        sendToSystem('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES' })
+        break
+      case 'cwdChanged': {
+        // Shaped for this platform: an OSC 7 URL gives `/C:/Users/...` on Windows, which nothing can open
+        const cwd = cwdAsReported(event.cwd)
+        const moved = cwd === undefined ? undefined : terminalService.updateCwd(terminalId, cwd)
+        if (moved) emitToFrontend({ type: 'terminal.CWD_CHANGED', data: { terminalId, cwd: moved.cwd, title: moved.title } })
+        break
+      }
+      // **A claim, handed to the windows to act on.** The program asked; a window that has the person's
+      // attention is where putting text on their clipboard, or telling them something, happens
+      case 'clipboard':
+        // The person's to allow: what is on a clipboard is what the next paste runs
+        if (featureSettings.forFeature('code').get()?.terminalClipboardWrite === false) break
+        emitToFrontend({ type: 'terminal.CLIPBOARD', data: { terminalId, text: event.text } })
+        break
+      case 'bell':
+        emitToFrontend({ type: 'terminal.BELL', data: { terminalId } })
+        break
+      case 'notification':
+        emitToFrontend({ type: 'terminal.NOTIFIED', data: { terminalId, title: event.title, body: event.body } })
+        break
+      case 'progress':
+        emitToFrontend({ type: 'terminal.PROGRESS', data: { terminalId, state: event.state, percent: event.percent } })
+        break
+      case 'title':
+        emitToFrontend({ type: 'terminal.TITLED', data: { terminalId, title: event.title } })
+        break
+      // The shell saying a command began is the start of nothing this feature tracks
+      case 'commandStarted':
+        break
     }
-
-    emitToFrontend({ type: 'terminal.OUTPUT', data: { terminalId, data } })
   },
 
   onExit(terminalId: string) {
@@ -159,10 +187,12 @@ export const terminalSystem = setup({
       const codeSettings = featureSettings.forFeature('code').get()
       if (codeSettings?.restoreTerminals === false) {
         logger.info('Terminal restoration disabled by settings')
-        return
+      } else {
+        await terminalService.restoreAll(terminalHandlers)
+        logger.info('Terminal restoration complete')
       }
-      await terminalService.restoreAll(terminalHandlers)
-      logger.info('Terminal restoration complete')
+      // Whatever was left running and is under no terminal now: every one of them, where nothing is restored
+      await terminalService.endUnclaimedKept()
     })
   },
   actions: handlers.actions({
@@ -179,6 +209,7 @@ export const terminalSystem = setup({
         shell?: string;
         cols?: number;
         rows?: number;
+        target?: string;
       }
       const cwd = ev.cwd || context.baseDirectory
       // **The answer waits for the session**, because the process is the broker's and a socket away. `reply`
@@ -190,6 +221,7 @@ export const terminalSystem = setup({
         shell: ev.shell,
         cols: ev.cols || 80,
         rows: ev.rows || 24,
+        target: ev.target,
       }, terminalHandlers).then(terminalInfo => {
         // The two halves of what used to be one event: every window's list grows, and only the window that
         // asked opens it. A terminal's id is minted here, so nothing the asker sent could have identified it
@@ -253,17 +285,20 @@ export const terminalSystem = setup({
     },
 
     resizeTerminal: ({ event, reply, client }) => {
-      const ev = event as { type: 'terminal.RESIZE_TERMINAL'; terminalId: string; cols: number; rows: number }
+      const ev = event as {
+        type: 'terminal.RESIZE_TERMINAL'; terminalId: string; cols: number; rows: number
+        cellWidth?: number; cellHeight?: number
+      }
+      // One cell in pixels, where the window measured one: what a program asking for the size in pixels is told
+      const cell = ev.cellWidth && ev.cellHeight ? { width: ev.cellWidth, height: ev.cellHeight } : undefined
       try {
         const terminal = terminalService.get(ev.terminalId)
         const terminalName = terminal ? terminal.info.title : 'Terminal'
-        // **Awaited, not checked for truth.** The service answers a promise now, and `if (!promise)` is
-        // never true — the refusal below was dead the moment the broker owned the process.
-        // **The window that opened it owns its size** (M2): a second window's fit is ignored, because a pty
-        // has one `(cols, rows)` and two windows fitting it to their own widths is a contradiction rather
-        // than a race. `client` names the connection the message arrived on, which the API stamps and
-        // nobody can forge.
-        void terminalService.resize(ev.terminalId, ev.cols, ev.rows, client)
+        // **Every window's fit is recorded, and the pty runs at the smallest** (`TerminalService.resize`):
+        // a pty has one `(cols, rows)`, and the smallest fit is the one every window showing it can draw
+        // whole. `client` names the connection the message arrived on, which the API stamps and nobody
+        // can forge.
+        void terminalService.resize(ev.terminalId, ev.cols, ev.rows, client, cell)
           .then(accepted => {
             if (!accepted) {
               failTerminal(reply, 'resize', `${terminalName} not found`, ev.terminalId)
@@ -355,6 +390,47 @@ export const terminalSystem = setup({
       } catch (error) {
         failTerminal(reply, 'open-tab', error, ev.terminalId)
       }
+    },
+
+    /** News rather than a reply: every window showing the terminal marks it as one that keeps running */
+    keepTerminal: ({ event, reply }) => {
+      const ev = event as { type: 'terminal.KEEP_TERMINAL'; terminalId: string; kept: boolean }
+      void terminalService.keep(ev.terminalId, ev.kept).then(info => {
+        if (!info) {
+          failTerminal(reply, 'keep', new Error(`No running terminal ${ev.terminalId}`), ev.terminalId)
+          return
+        }
+        emitToFrontend({ type: 'terminal.KEPT', data: { terminalId: ev.terminalId, kept: ev.kept } })
+      }).catch(error => failTerminal(reply, 'keep', error, ev.terminalId))
+    },
+
+    /** Replied: a recording is opened for the window that asked to look, and nobody else is looking */
+    rewindTerminal: ({ event, reply, client }) => {
+      const ev = event as { type: 'terminal.REWIND'; terminalId: string; cols: number; rows: number }
+      void terminalService.rewind(ev.terminalId, { cols: ev.cols, rows: ev.rows }, client).then(opened => {
+        if (!opened) {
+          failTerminal(reply, 'rewind', new Error(`No terminal ${ev.terminalId}`), ev.terminalId)
+          return
+        }
+        answer(reply, { type: 'terminal.REWOUND', data: opened })
+      }).catch(error => failTerminal(reply, 'rewind', error, ev.terminalId))
+    },
+
+    seekRewind: ({ event, reply }) => {
+      const ev = event as { type: 'terminal.REWIND_SEEK'; session: string; at: number }
+      void terminalService.seekRewind(ev.session, ev.at).then(at => {
+        if (at !== null) answer(reply, { type: 'terminal.REWIND_SOUGHT', data: { session: ev.session, at } })
+      }).catch(error => failTerminal(reply, 'rewind', error))
+    },
+
+    resizeRewind: ({ event }) => {
+      const ev = event as { type: 'terminal.REWIND_RESIZE'; session: string; cols: number; rows: number }
+      void terminalService.resizeRewind(ev.session, ev.cols, ev.rows).catch(error => { logger.error('Could not resize a recording', { error }) })
+    },
+
+    closeRewind: ({ event }) => {
+      const ev = event as { type: 'terminal.REWIND_CLOSE'; session: string }
+      void terminalService.closeRewind(ev.session).catch(error => { logger.error('Could not close a recording', { error }) })
     },
 
     updateBaseDirectory: assign({
@@ -453,6 +529,21 @@ export const terminalSystem = setup({
         },
         'terminal.OPEN_TERMINAL_TAB': {
           actions: 'openTerminalTab'
+        },
+        'terminal.KEEP_TERMINAL': {
+          actions: 'keepTerminal'
+        },
+        'terminal.REWIND': {
+          actions: 'rewindTerminal'
+        },
+        'terminal.REWIND_SEEK': {
+          actions: 'seekRewind'
+        },
+        'terminal.REWIND_CLOSE': {
+          actions: 'closeRewind'
+        },
+        'terminal.REWIND_RESIZE': {
+          actions: 'resizeRewind'
         }
       }
     }

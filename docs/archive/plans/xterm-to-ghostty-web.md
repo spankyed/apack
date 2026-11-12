@@ -1,7 +1,16 @@
 # Migrate the embedded terminal from xterm.js to ghostty-web
 
-Status: **superseded by [goal-one-vt-core](../goals/goal-one-vt-core.md)**, which owns this work and
-authorizes its first phase. This document authorizes no implementation.
+Status: **delivered, by [goal-one-vt-core](../goals/goal-one-vt-core.md)**, 2026-11-09. Archived for its
+reasoning and its dates; it authorizes nothing and is not a current account of anything.
+
+**One of its judgements was reversed on measurement and is worth reading beside the goal's.** This plan
+says below that taking `ghostty-web` would leave the repository with three parsers, and so prefers
+upstream's raw module. The goal's O3 took the package anyway, for a reason this plan did not have: the raw
+module is an emulator and not a widget, so taking it means writing the painter, the input encoding, the
+selection UI, IME, accessibility and the scrollbar — the largest piece of work in the goal and the least
+related to its purpose. The package is Ghostty-derived too, so the lineage the plan was protecting is
+intact; what is not is byte-identity, which the window does not need, being a replica rather than an
+authority.
 
 Two of its premises have since changed, which is why the goal restates the work rather than activating this
 plan. **Its central open question is answered**: `libghostty-vt` 1.0 shipped on 2026-11-06 with a stable C
@@ -20,7 +29,7 @@ the ownership goal (`TerminalAttachment`), and the historical replay its Phase 1
 (F3, F6, F11), so the DA/DSR suppression it requires has no subject.
 
 **This is now the follow-on, not the predecessor.**
-[goal-terminal-ownership](../archive/goals/goal-terminal-ownership.md) decided to keep xterm.js and put emulator
+[goal-terminal-ownership](../goals/goal-terminal-ownership.md) decided to keep xterm.js and put emulator
 replacement out of its scope, so the order this document originally named is inverted: ownership moves
 first, and that goal's presentation phase builds the seam this migration becomes an implementation swap
 behind. Two consequences worth knowing before activation. The pool this document calls its primary
@@ -48,7 +57,7 @@ Keep the `apack-terminal` broker, terminal actors/events, backend process owners
 records unless a specific migration blocker requires an explicitly scoped change. The pty is the broker's
 and the emulator is the renderer's, so this migration replaces one side of that split and neither crosses it. Agent CLI execution is a separate path.
 Do not combine this migration with a persistence rewrite, PTY multiplexing, shell integration redesign or
-the broader fixes proposed in the [terminal integration review](../issues/ISSUE-terminal-integration-review.md).
+the broader fixes proposed in the [terminal integration review](../../issues/ISSUE-terminal-integration-review.md).
 That review is dated investigation material; recheck its findings against current code before using them.
 
 ## Current integration
@@ -184,7 +193,7 @@ baseline before cutover; investigate material regressions rather than claiming n
 During implementation use `npm run spec` for affected behavioral tests, then `npm run chain` for the
 repository's declared checks. Use `npm run test:e2e -- <relevant-spec>` for Electron coverage and the
 repository's documented packaging path for offline installed-app verification. Validate supported
-platforms, using the [Windows VM workflow](../references/guides/windows-development-vm.md) where needed.
+platforms, using the [Windows VM workflow](../../references/guides/windows-development-vm.md) where needed.
 Passing unit tests alone does not establish packaged WASM loading or terminal interaction parity.
 
 Cut over once all required cases pass, with no dual engine or permanent fallback. If a blocker remains,

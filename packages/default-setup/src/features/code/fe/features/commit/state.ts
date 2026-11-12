@@ -1,6 +1,12 @@
 import { setup, assign, enqueueActions , type ActorRefFrom } from 'xstate';
+import { answersCall, newCall, recordCall, settleCall } from '@apackdev/sdk/events';
+import { viewWrites, writeAnswered, writeSent, writing, type ViewWrites } from '@apackdev/sdk/fe';
 import { sendToSystem } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
+import { diffTab, diffTabPath } from '../../utils/diff-tabs.ts';
+import { withStaged, withUnstaged } from 'apack-git/staging';
+import type { CommitFailure, ConflictKind, DiffHunk, DiscardKept, DiscardRestored, GitProgress, OperationMove, RepositoryChange, RepositoryOperation, SignInHelp } from '../../../be/types.ts';
+import type { OpenFile } from '../../contract.ts';
 
 
 // Git types
@@ -10,15 +16,27 @@ export interface GitStatusFile {
   staged: boolean
   originalPath?: string // For renames and copies
   score?: number // Rename/copy similarity score (0-100)
+  /** For an unmerged file: what each side did to it */
+  conflict?: ConflictKind
+  /** An untracked folder, listed as one row: git tracks nothing in it. Its path ends with `/` */
+  isDirectory?: boolean
+}
+
+/** What an open folder row lists: the files in it that git would list, each by its path from the top of the checkout */
+export interface OpenFolder {
+  files: string[]
+  /** Whether the folder holds more files than are listed */
+  truncated: boolean
 }
 
 export interface GitDiff {
   path: string
-  diff: string
   staged: boolean
   originalContent?: string
   modifiedContent?: string
   isImage?: boolean
+  /** The pieces of the change that can be staged, or unstaged, one at a time */
+  hunks?: DiffHunk[]
 }
 
 export interface CodeCommitContext {
@@ -29,12 +47,52 @@ export interface CodeCommitContext {
   selectedGitFile: GitStatusFile | null
   commitMessage: string
   revertDialogFile: GitStatusFile | null
+  /**
+   * Which of what a discard would remove cannot be brought back, as last asked: kept with the rows it was asked
+   * of, so a dialog shows only the answer to its own question
+   */
+  discardPreview: { paths: string[]; notKept: string[] } | null
+  /** The last discard that kept what it removed, which the panel offers to undo until it is dismissed or undone */
+  lastDiscard: { id: string; paths: string[]; notKept: string[] } | null
+  /** What undoing a discard left as it was, because it had changed or been made again since */
+  discardLeft: string[]
   availableBranches: string[]
   branchInput: string
   isCheckingOutBranch: boolean
   hasUpstream: boolean
   commitsAhead: number
   commitsBehind: number
+  /** Whether the repository has more changed files than `gitStatus` lists */
+  isStatusTruncated: boolean
+  /** Whether the backend's file watches on this repository are open; without them the panel changes only when asked */
+  isWatchingRepository: boolean
+  /** What git is in the middle of in this repository: a merge, a rebase, a cherry-pick or a revert stopped part-way */
+  operation: RepositoryOperation | null
+  /** Whether git was asked to move that on and has not answered */
+  isMovingOperation: boolean
+  /** Whether fetching by itself has stopped: what is shown of the remote is as old as the last fetch that worked */
+  isFetchSuspended: boolean
+  /** What can be done about the sign-in the remote asked for when fetching stopped */
+  fetchSignIn: SignInHelp | null
+  /** What is known of the failure `gitError` words: the command to run again, and the sign-in a remote asked for */
+  gitFailure: Pick<CommitFailure, 'during' | 'signIn' | 'trust'> | null
+  /** Whether the GitHub CLI was asked to give git its sign-in and has not answered */
+  isSettingUpSignIn: boolean
+  /** Whether git was asked to stage or unstage one piece of a file's change and has not answered */
+  isApplyingHunk: boolean
+  /**
+   * Whether this window shows the code surface. A window that does not asks git nothing when the repository
+   * changes: the backend takes no window asking to mean nobody is looking, and puts its own checks off
+   */
+  isShown: boolean
+  /** What changed in the repository while the window did not show it, which it asks about when it next does */
+  missedChange: RepositoryChange | null
+  /** The pieces staged or unstaged since a diff was last read: still in the open tab's diff, and no longer there to act on */
+  appliedHunks: string[]
+  /** How far along the push, the pull or the checkout under way is, once git has said */
+  progress: ({ during: 'push' | 'pull' | 'checkout' } & GitProgress) | null
+  /** The untracked folder rows that are open, each with the files it lists, by the folder's path */
+  openFolders: Record<string, OpenFolder>
   isPushing: boolean
   isPulling: boolean
   isGeneratingMessage: boolean
@@ -43,6 +101,40 @@ export interface CodeCommitContext {
   worktreeList: WorktreeEntry[]
   isWorktreeLoading: boolean
   commitLog: CommitLogEntry[]
+  /** The asks in flight for a diff that is already open, by call: the answer to one brings its tab up to date and opens none */
+  diffRefreshes: Record<string, true>
+  /** The latest ask for the status, while it is unanswered: an answer to an earlier one is of the repository before it */
+  statusAsk: string | null
+  /** The stage and unstage writes still unanswered. The list shows them done, so no status is shown until they are answered */
+  stagingWrites: ViewWrites
+}
+
+/** The diffs of this repository's changed files that the window has open */
+const openDiffs = (self: unknown): OpenFile[] =>
+  ((getParentContext(self)?.openFiles ?? []) as OpenFile[]).filter(file => file.isDiff && file.gitFile && !file.isPrDiff)
+
+/** Two pieces of news as one: every part either says changed, and the files named only if both name theirs */
+const bothChanges = (one: RepositoryChange | null, other: RepositoryChange): RepositoryChange => {
+  if (!one) return other
+  const named = (change: RepositoryChange) => !change.diffs || change.files !== undefined
+  const diffs = one.diffs || other.diffs
+  return {
+    status: one.status || other.status,
+    diffs,
+    history: one.history || other.history,
+    stashes: one.stashes || other.stashes,
+    worktrees: one.worktrees || other.worktrees,
+    ...(diffs && named(one) && named(other) ? { files: [...new Set([...(one.files ?? []), ...(other.files ?? [])])] } : {}),
+  }
+}
+
+/** An ask for a diff that is already open */
+const diffRefresh = (file: { path: string; staged: boolean }) => {
+  const call = newCall()
+  return {
+    record: ({ context }: { context: CodeCommitContext }) => ({ diffRefreshes: recordCall(context.diffRefreshes, call, true as const) }),
+    ask: () => { sendToSystem('code', { type: 'commit.GET_GIT_DIFF', path: file.path, staged: file.staged }, { call }) },
+  }
 }
 
 export interface StashEntry {
@@ -92,14 +184,28 @@ export type Event =
   | { type: 'commit.CHECKOUT_BRANCH' }
   | { type: 'commit.PUSH_BRANCH' }
   | { type: 'commit.PULL_BRANCH' }
-  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number } }
+  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
   | { type: 'commit.DIFF_RECEIVED'; data: GitDiff }
   | { type: 'commit.FILES_STAGED'; paths: string[] }
   | { type: 'commit.FILES_UNSTAGED'; paths: string[] }
   | { type: 'commit.COMMIT_SUCCESS'; message: string }
-  | { type: 'commit.FILE_REVERTED'; path: string }
-  | { type: 'commit.FILES_REVERTED'; paths: string[] }
-  | { type: 'commit.ERROR_RECEIVED'; data: { message: string } }
+  | { type: 'commit.FILE_REVERTED'; data: { path: string; kept: DiscardKept } }
+  | { type: 'commit.FILES_REVERTED'; data: { paths: string[]; kept: DiscardKept } }
+  | { type: 'commit.PREVIEW_DISCARD'; paths: string[] }
+  | { type: 'commit.DISCARD_PREVIEWED'; data: { paths: string[]; notKept: string[] } }
+  | { type: 'commit.UNDO_DISCARD' }
+  | { type: 'commit.DISMISS_DISCARD' }
+  | { type: 'commit.DISCARD_RESTORED'; data: { id: string } & DiscardRestored }
+  | { type: 'commit.TRUST_REPOSITORY' }
+  | { type: 'commit.REPOSITORY_TRUSTED'; data: { repository: string } }
+  | { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }
+  | { type: 'commit.SET_UP_SIGN_IN'; host: string }
+  | { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; hunk: string }
+  | { type: 'commit.HUNK_APPLIED'; data: { path: string; staged: boolean; hunk: string } }
+  | { type: 'commit.PROGRESS'; data: { during: 'push' | 'pull' | 'checkout' } & GitProgress }
+  | { type: 'commit.TOGGLE_FOLDER'; path: string }
+  | { type: 'commit.UNTRACKED_LISTED'; data: { path: string } & OpenFolder }
+  | { type: 'commit.SIGN_IN_SET_UP'; data: { host: string; during?: 'push' | 'pull' } }
   | { type: 'commit.BRANCHES_RECEIVED'; data: { branches: string[] } }
   | { type: 'commit.BRANCH_CHECKOUT_SUCCESS'; data: { branchName: string } }
   | { type: 'commit.BRANCH_PUSHED'; data: { branchName: string } }
@@ -128,6 +234,8 @@ export type Event =
   | { type: 'commit.RESOLVE_ALL_CONFLICTS'; strategy: 'ours' | 'theirs' }
   | { type: 'commit.CONFLICT_RESOLVED'; path: string }
   | { type: 'commit.ALL_CONFLICTS_RESOLVED' }
+  | { type: 'commit.MOVE_OPERATION'; move: OperationMove }
+  | { type: 'commit.OPERATION_MOVED'; data: { move: OperationMove } }
   | { type: 'commit.LOG_LIST' }
   | { type: 'commit.LOG_LIST_RECEIVED'; data: { commits: CommitLogEntry[] } }
   | { type: 'commit.REVERT_COMMIT'; hash: string }
@@ -135,17 +243,60 @@ export type Event =
   | { type: 'commit.REVERT_COMMIT_SUCCESS'; data: { hash: string } }
   | { type: 'commit.RESET_COMMIT_SUCCESS'; data: { hash: string } }
   | { type: 'CODE_STARTED' }
-  | { type: 'commit.REPOSITORY_CHANGED' };
+  | { type: 'commit.REPOSITORY_CHANGED'; changed: RepositoryChange }
+  | { type: 'commit.SHOWN' }
+  | { type: 'commit.HIDDEN' };
 
 export const commitState = setup({
   types: {
     context: {} as CodeCommitContext,
     events: {} as Event
   },
+  guards: {
+    answersADiffRefresh: ({ context, event }) => settleCall(context.diffRefreshes, event).recorded !== undefined,
+    answersTheStatusAsked: ({ context, event }) => answersCall(event, context.statusAsk),
+  },
   actions: {
-    refreshGitStatus: () => {
-      sendToSystem('code', { type: 'commit.GET_GIT_STATUS' })
-    },
+    refreshGitStatus: enqueueActions(({ enqueue }) => {
+      const call = newCall()
+      enqueue.assign({ statusAsk: call })
+      enqueue(() => { sendToSystem('code', { type: 'commit.GET_GIT_STATUS' }, { call }) })
+    }),
+
+    forgetDiffRefresh: assign(({ context, event }) => ({ diffRefreshes: settleCall(context.diffRefreshes, event).pending })),
+
+    /**
+     * Asks again for each thing the window shows whose part of the repository changed, and for no other: the news
+     * says which, so an edited file reads the status and leaves the log, the stashes and the worktrees alone
+     */
+    followRepositoryChange: enqueueActions(({ context, event, self, enqueue }) => {
+      const { changed } = event as { type: 'commit.REPOSITORY_CHANGED'; changed: RepositoryChange }
+      // Not shown, nothing is asked: what changed is kept, and asked about when the window shows the surface
+      if (!context.isShown) {
+        enqueue.assign({ missedChange: bothChanges(context.missedChange, changed) })
+        return
+      }
+      if (changed.status) enqueue('refreshGitStatus')
+      if (changed.history) enqueue('requestLogList')
+      if (changed.stashes) enqueue('requestStashList')
+      if (changed.worktrees) enqueue('requestWorktreeList')
+      if (!changed.diffs) return
+      // A change under an open folder's row moves no status: the folder is named, and is listed again. A status
+      // that changed is asked for above, and lists the open folders again when it is answered
+      if (!changed.status) {
+        for (const path of Object.keys(context.openFolders)) {
+          if (!changed.files || changed.files.includes(path)) enqueue(() => { sendToSystem('code', { type: 'commit.LIST_UNTRACKED', path }) })
+        }
+      }
+      // A diff is read when its tab opens, so one left open is of the file as it was until it is read again
+      for (const { gitFile } of openDiffs(self)) {
+        // A file inside a folder git lists as one row is named by that folder, which is all git says of it
+        if (changed.files && !changed.files.some(named => named === gitFile!.path || (named.endsWith('/') && gitFile!.path.startsWith(named)))) continue
+        const refresh = diffRefresh(gitFile!)
+        enqueue.assign(refresh.record)
+        enqueue(refresh.ask)
+      }
+    }),
 
 
 
@@ -156,21 +307,55 @@ export const commitState = setup({
       }
     }),
 
-    stageFiles: ({ event }) => {
-      const ev = event as { type: 'commit.STAGE_FILES'; paths: string[] }
-      sendToSystem('code', { type: 'commit.STAGE_FILES', paths: ev.paths })
-    },
+    /**
+     * A staged file moves in the list at once, to where git will list it, and git is told. What git answers
+     * replaces the guess. A status read before the write landed would put the file back, so none is shown until
+     * every such write is answered.
+     */
+    stageFiles: enqueueActions(({ event, enqueue }) => {
+      const { paths } = event as { type: 'commit.STAGE_FILES'; paths: string[] }
+      const call = newCall()
+      enqueue.assign(({ context }) => ({ gitStatus: withStaged(context.gitStatus, paths), stagingWrites: writeSent(context.stagingWrites, call) }))
+      enqueue(() => { sendToSystem('code', { type: 'commit.STAGE_FILES', paths }, { call }) })
+    }),
 
-    unstageFiles: ({ event }) => {
-      const ev = event as { type: 'commit.UNSTAGE_FILES'; paths: string[] }
-      sendToSystem('code', { type: 'commit.UNSTAGE_FILES', paths: ev.paths })
-    },
+    unstageFiles: enqueueActions(({ event, enqueue }) => {
+      const { paths } = event as { type: 'commit.UNSTAGE_FILES'; paths: string[] }
+      const call = newCall()
+      enqueue.assign(({ context }) => ({ gitStatus: withUnstaged(context.gitStatus, paths), stagingWrites: writeSent(context.stagingWrites, call) }))
+      enqueue(() => { sendToSystem('code', { type: 'commit.UNSTAGE_FILES', paths }, { call }) })
+    }),
+
+    /** A stage or an unstage was answered: once none is left unanswered, the list is read from git */
+    settleStaging: enqueueActions(({ context, event, enqueue }) => {
+      const writes = writeAnswered(context.stagingWrites, event)
+      enqueue.assign({ stagingWrites: writes })
+      if (!writing(writes)) enqueue('refreshGitStatus')
+    }),
+
+    /** A stage or an unstage was refused: reading the list from git puts the file back where it is */
+    settleRefusedStaging: enqueueActions(({ context, event, enqueue }) => {
+      const writes = writeAnswered(context.stagingWrites, event, true)
+      // An error that answers none of these writes is some other ask's
+      if (writes === context.stagingWrites) return
+      enqueue.assign({ stagingWrites: writes })
+      if (!writing(writes)) enqueue('refreshGitStatus')
+    }),
 
 
-    viewDiff: ({ event }) => {
+    viewDiff: enqueueActions(({ event, self, enqueue }) => {
       const ev = event as { type: 'commit.VIEW_DIFF'; path: string; staged: boolean }
-      sendToSystem('code', { type: 'commit.GET_GIT_DIFF', path: ev.path, staged: ev.staged })
-    },
+      const tabPath = diffTabPath(ev)
+      if (!openDiffs(self).some(file => file.path === tabPath)) {
+        enqueue(() => { sendToSystem('code', { type: 'commit.GET_GIT_DIFF', path: ev.path, staged: ev.staged }) })
+        return
+      }
+      // Already open: it is shown at once as it stands, with whatever was typed into it, and read again behind that
+      const refresh = diffRefresh(ev)
+      enqueue(() => updateParentState(self, { activeFilePath: tabPath }))
+      enqueue.assign(refresh.record)
+      enqueue(refresh.ask)
+    }),
 
     updateCommitMessage: assign({
       commitMessage: ({ event }) => {
@@ -191,11 +376,43 @@ export const commitState = setup({
       selectedGitFile: null,
     }),
 
-    toggleRevertDialog: assign({
-      revertDialogFile: ({ event }) => {
-        const ev = event as { type: 'commit.TOGGLE_REVERT_DIALOG'; file?: GitStatusFile }
-        return ev.file || null
+    toggleRevertDialog: enqueueActions(({ event, enqueue }) => {
+      const { file } = event as { type: 'commit.TOGGLE_REVERT_DIALOG'; file?: GitStatusFile }
+      enqueue.assign({ revertDialogFile: file || null })
+      // What of it cannot be brought back is asked for as the dialog opens, and said in it
+      if (file) enqueue(() => { sendToSystem('code', { type: 'commit.PREVIEW_DISCARD', paths: [file.path] }) })
+    }),
+
+    previewDiscard: ({ event }) => {
+      const { paths } = event as { type: 'commit.PREVIEW_DISCARD'; paths: string[] }
+      sendToSystem('code', { type: 'commit.PREVIEW_DISCARD', paths })
+    },
+
+    setDiscardPreview: assign({
+      discardPreview: ({ event }) => (event as { type: 'commit.DISCARD_PREVIEWED'; data: { paths: string[]; notKept: string[] } }).data,
+    }),
+
+    /** A discard that kept something is offered to be undone; one that kept nothing leaves the last offer as it was */
+    setLastDiscard: assign(({ context, event }) => {
+      const { data } = event as { type: 'commit.FILE_REVERTED'; data: { path: string; kept: DiscardKept } } | { type: 'commit.FILES_REVERTED'; data: { paths: string[]; kept: DiscardKept } }
+      const paths = 'paths' in data ? data.paths : [data.path]
+      return {
+        lastDiscard: data.kept.id ? { id: data.kept.id, paths, notKept: data.kept.notKept } : context.lastDiscard,
+        discardLeft: [],
+        discardPreview: null,
       }
+    }),
+
+    undoDiscard: ({ context }) => {
+      if (context.lastDiscard) sendToSystem('code', { type: 'commit.RESTORE_DISCARDED', id: context.lastDiscard.id })
+    },
+
+    dismissDiscard: assign({ lastDiscard: null, discardLeft: [] }),
+
+    /** Undone: the offer goes, and what was left alone is said until it is dismissed */
+    handleDiscardRestored: assign(({ context, event }) => {
+      const { id, left } = (event as { type: 'commit.DISCARD_RESTORED'; data: { id: string } & DiscardRestored }).data
+      return context.lastDiscard?.id === id ? { lastDiscard: null, discardLeft: left } : {}
     }),
 
     revertFile: ({ context }) => {
@@ -273,43 +490,137 @@ export const commitState = setup({
     },
 
     handleStatusReceived: assign({
-      gitStatus: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number } }
-        return ev.data.files
+      statusAsk: null,
+      gitStatus: ({ context, event }) => {
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
+        // Read before a write that the list already shows landed: git is asked again once that write is answered
+        return writing(context.stagingWrites) ? context.gitStatus : ev.data.files
       },
       gitBranch: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number } }
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
         return ev.data.branch
       },
       hasUpstream: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number } }
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
         return ev.data.hasUpstream
       },
       commitsAhead: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number } }
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
         return ev.data.commitsAhead
       },
       commitsBehind: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number } }
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
         return ev.data.commitsBehind
       },
+      isStatusTruncated: ({ event }) => {
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
+        return ev.data.truncated
+      },
+      isWatchingRepository: ({ event }) => {
+        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
+        return ev.data.watching
+      },
+      operation: ({ event }) => (event as { data: { operation?: RepositoryOperation } }).data.operation ?? null,
+      isFetchSuspended: ({ event }) => (event as { data: { fetchSuspended?: boolean } }).data.fetchSuspended === true,
+      fetchSignIn: ({ event }) => (event as { data: { signIn?: SignInHelp } }).data.signIn ?? null,
       isGitLoading: false,
-      gitError: null
+      gitError: null,
+      gitFailure: null
     }),
 
     handleErrorReceived: assign({
       gitError: ({ event }) => {
-        const ev = event as { type: 'commit.ERROR_RECEIVED'; data: { message: string } }
+        const ev = event as { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }
         return ev.data.message
       },
+      gitFailure: ({ event }) => {
+        const { during, signIn, trust } = (event as { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }).data
+        return { during, signIn, trust }
+      },
+      isSettingUpSignIn: false,
+      isApplyingHunk: false,
+      progress: null,
       isGitLoading: false,
       isCheckingOutBranch: false,
       isPushing: false,
       isPulling: false,
-      isGeneratingMessage: false
+      isGeneratingMessage: false,
+      isMovingOperation: false
     }),
 
-    dismissError: assign({ gitError: null }),
+    dismissError: assign({ gitError: null, gitFailure: null }),
+
+    /** The user trusts the repository the panel was refused in: said to the backend, which remembers it */
+    trustRepository: ({ context }) => {
+      const repository = context.gitFailure?.trust?.repository
+      if (repository) sendToSystem('code', { type: 'commit.TRUST_REPOSITORY', repository })
+    },
+
+    /** Trusted: the refusal goes, and the status that was never read is asked for */
+    repositoryTrusted: assign({ gitError: null, gitFailure: null }),
+
+    /** Opens an untracked folder's row, asking for what is in it, or closes it */
+    toggleFolder: enqueueActions(({ context, event, enqueue }) => {
+      const { path } = event as { type: 'commit.TOGGLE_FOLDER'; path: string }
+      const { [path]: open, ...others } = context.openFolders
+      if (open) return enqueue.assign({ openFolders: others })
+      enqueue.assign({ openFolders: { ...others, [path]: { files: [], truncated: false } } })
+      enqueue(() => { sendToSystem('code', { type: 'commit.LIST_UNTRACKED', path }) })
+    }),
+
+    /** What a folder holds, kept if its row is still open: the answer is the folder's, whichever ask it answers */
+    folderListed: assign(({ context, event }) => {
+      const { path, files, truncated } = (event as { type: 'commit.UNTRACKED_LISTED'; data: { path: string } & OpenFolder }).data
+      return path in context.openFolders ? { openFolders: { ...context.openFolders, [path]: { files, truncated } } } : {}
+    }),
+
+    /**
+     * Brings the open folders in line with a status just received: one whose row is gone is closed, and the rest
+     * are listed again, since a status that moved may be a file made or deleted in one of them
+     */
+    followOpenFolders: enqueueActions(({ context, enqueue }) => {
+      const rows = new Set(context.gitStatus.filter(file => file.isDirectory).map(file => file.path))
+      const open = Object.keys(context.openFolders)
+      if (open.some(path => !rows.has(path))) {
+        enqueue.assign({ openFolders: Object.fromEntries(Object.entries(context.openFolders).filter(([path]) => rows.has(path))) })
+      }
+      for (const path of open) if (rows.has(path)) enqueue(() => { sendToSystem('code', { type: 'commit.LIST_UNTRACKED', path }) })
+    }),
+
+    /** Has git stage one piece of a file's change, or take one back out of what is staged */
+    applyHunk: enqueueActions(({ event, enqueue }) => {
+      const { path, staged, hunk } = event as { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; hunk: string }
+      enqueue.assign({ isApplyingHunk: true, gitError: null, gitFailure: null })
+      enqueue(() => { sendToSystem('code', { type: 'commit.APPLY_HUNK', path, staged, hunk }) })
+    }),
+
+    /** Has the GitHub CLI give git its sign-in for the host that asked */
+    setUpSignIn: enqueueActions(({ context, event, enqueue }) => {
+      const { host } = event as { type: 'commit.SET_UP_SIGN_IN'; host: string }
+      // The push or the pull that was refused goes with the ask and comes back with its answer: what is held
+      // of it here is cleared by the next status, which can arrive while the sign-in is being set up
+      const during = context.gitFailure?.during
+      enqueue.assign({ isSettingUpSignIn: true })
+      enqueue(() => { sendToSystem('code', { type: 'commit.SET_UP_SIGN_IN', host, ...(during ? { during } : {}) }) })
+    }),
+
+    /** Git can sign in now, so the push or the pull that was refused is run again: it is what the user was doing */
+    signInSetUp: enqueueActions(({ event, enqueue }) => {
+      const { during } = (event as { type: 'commit.SIGN_IN_SET_UP'; data: { during?: 'push' | 'pull' } }).data
+      enqueue.assign({ gitError: null, gitFailure: null, isSettingUpSignIn: false })
+      if (during === 'push') enqueue.raise({ type: 'commit.PUSH_BRANCH' })
+      if (during === 'pull') enqueue.raise({ type: 'commit.PULL_BRANCH' })
+    }),
+
+    /** Has git carry on with what it is in the middle of, skip the commit a rebase stopped at, or give it up */
+    moveOperation: enqueueActions(({ event, enqueue }) => {
+      const { move } = event as { type: 'commit.MOVE_OPERATION'; move: OperationMove }
+      enqueue.assign({ isMovingOperation: true, gitError: null })
+      enqueue(() => { sendToSystem('code', { type: 'commit.MOVE_OPERATION', move }) })
+    }),
+
+    // Where that left the repository is in its status, which the backend announces as changed
+    handleOperationMoved: assign({ isMovingOperation: false }),
 
     requestGenerateMessage: () => {
       sendToSystem('code', { type: 'commit.GENERATE_MESSAGE' })
@@ -327,31 +638,23 @@ export const commitState = setup({
 
 
     /**
-     * The diff names its own file, so the tab it opens is that file's.
+     * The diff names its own file, so the tab it opens or brings up to date is that file's: `GitDiff` carries
+     * `path` and `staged` (`code/be/types.ts`), which is the tab's key, and the file selected now may be another.
      *
-     * It used to read `context.selectedGitFile` — the file selected *now* — so clicking another file
-     * while a diff was in flight opened the first file's content in a tab labelled the second, and a
-     * diff arriving with nothing selected was dropped. `GitDiff` carries `path` and `staged`
-     * (`code/be/types.ts`), which is the tab's key, so no pending field is needed: the answer says
-     * where it goes.
+     * An answer to an ask made for a diff already open changes that tab where it is, and opens none: its tab may
+     * have been closed since, and a diff the user is not looking at does not take the window.
      */
-    handleDiffReceived: enqueueActions(({ enqueue, self, event }) => {
+    handleDiffReceived: enqueueActions(({ enqueue, self, event, context }) => {
       const ev = event as { type: 'commit.DIFF_RECEIVED'; data: GitDiff }
-      enqueue(() => {
-        const { path, staged } = ev.data
-        const diffTabId = `diff:${path}:${staged ? 'staged' : 'unstaged'}`
-        const isUnstagedDiff = !staged
-        const diffTab = {
-          path: diffTabId,
-          content: isUnstagedDiff ? ev.data.modifiedContent : '',
-          originalContent: isUnstagedDiff ? ev.data.modifiedContent : undefined,
-          modified: false,
-          isDiff: true,
-          gitDiff: ev.data,
-          gitFile: { path, staged }
-        }
-        addTabToParent(self, diffTab)
-      })
+      const { recorded, pending } = settleCall(context.diffRefreshes, event)
+      // A diff as it is now holds none of the pieces that were staged out of the one before it
+      if (context.appliedHunks.length > 0) enqueue.assign({ appliedHunks: [] })
+      if (!recorded) {
+        enqueue(() => addTabToParent(self, diffTab(ev.data)))
+        return
+      }
+      enqueue.assign({ diffRefreshes: pending })
+      enqueue(() => sendEventToParent(self, { type: 'REFRESH_DIFF_TAB', diff: ev.data }))
     }),
 
     getAllBranches: () => {
@@ -382,7 +685,8 @@ export const commitState = setup({
 
     handleBranchCheckoutSuccess: assign({
       branchInput: '',
-      isCheckingOutBranch: false
+      isCheckingOutBranch: false,
+      progress: null
     }),
 
     pushBranch: () => {
@@ -392,7 +696,8 @@ export const commitState = setup({
     setPushing: assign({ isPushing: true }),
 
     handleBranchPushed: assign({
-      isPushing: false
+      isPushing: false,
+      progress: null
     }),
 
     pullBranch: () => {
@@ -402,7 +707,8 @@ export const commitState = setup({
     setPulling: assign({ isPulling: true }),
 
     handleBranchPulled: assign({
-      isPulling: false
+      isPulling: false,
+      progress: null
     }),
 
     handleCodeStartup: ({ self }) => {
@@ -518,6 +824,9 @@ export const commitState = setup({
   id: 'commit',
   initial: 'idle',
   context: {
+    diffRefreshes: {},
+    statusAsk: null,
+    stagingWrites: viewWrites(),
     gitStatus: [],
     gitBranch: '',
     gitError: null,
@@ -525,12 +834,29 @@ export const commitState = setup({
     selectedGitFile: null,
     commitMessage: '',
     revertDialogFile: null,
+    discardPreview: null,
+    lastDiscard: null,
+    discardLeft: [],
     availableBranches: [],
     branchInput: '',
     isCheckingOutBranch: false,
     hasUpstream: true,
     commitsAhead: 0,
     commitsBehind: 0,
+    isStatusTruncated: false,
+    isWatchingRepository: true,
+    operation: null,
+    isMovingOperation: false,
+    isFetchSuspended: false,
+    fetchSignIn: null,
+    gitFailure: null,
+    isSettingUpSignIn: false,
+    isApplyingHunk: false,
+    appliedHunks: [],
+    isShown: false,
+    missedChange: null,
+    openFolders: {},
+    progress: null,
     isPushing: false,
     isPulling: false,
     isGeneratingMessage: false,
@@ -546,14 +872,43 @@ export const commitState = setup({
         'commit.REFRESH_STATUS': {
           actions: ['setGitLoading', 'refreshGitStatus']
         },
+        // An answer to an ask made before the latest is of the repository as it was before it
         'commit.STATUS_RECEIVED': {
-          actions: 'handleStatusReceived'
+          guard: 'answersTheStatusAsked',
+          actions: ['handleStatusReceived', 'followOpenFolders']
         },
-        'commit.ERROR_RECEIVED': {
-          actions: 'handleErrorReceived'
+        'commit.PROGRESS': {
+          actions: assign({ progress: ({ event }) => (event as { data: { during: 'push' | 'pull' | 'checkout' } & GitProgress }).data })
         },
+        'commit.TOGGLE_FOLDER': {
+          actions: 'toggleFolder'
+        },
+        'commit.UNTRACKED_LISTED': {
+          actions: 'folderListed'
+        },
+        'commit.ERROR_RECEIVED': [
+          // Nobody asked for a diff that was read again, so its failing is said to nobody: the tab stays as it was
+          { guard: 'answersADiffRefresh', actions: 'forgetDiffRefresh' },
+          { actions: ['handleErrorReceived', 'settleRefusedStaging'] },
+        ],
         'commit.DISMISS_ERROR': {
           actions: 'dismissError'
+        },
+        'commit.SET_UP_SIGN_IN': {
+          actions: 'setUpSignIn'
+        },
+        'commit.SIGN_IN_SET_UP': {
+          actions: 'signInSetUp'
+        },
+        'commit.APPLY_HUNK': {
+          actions: 'applyHunk'
+        },
+        'commit.HUNK_APPLIED': {
+          // The tab still shows the piece until its diff is read again, and git no longer cuts it
+          actions: assign(({ context, event }) => ({
+            isApplyingHunk: false,
+            appliedHunks: [...context.appliedHunks, (event as { data: { hunk: string } }).data.hunk],
+          }))
         },
         'commit.SELECT_FILE': {
           actions: 'selectGitFile'
@@ -565,10 +920,10 @@ export const commitState = setup({
           actions: 'unstageFiles'
         },
         'commit.FILES_STAGED': {
-          actions: 'refreshGitStatus'
+          actions: 'settleStaging'
         },
         'commit.FILES_UNSTAGED': {
-          actions: 'refreshGitStatus'
+          actions: 'settleStaging'
         },
         'commit.VIEW_DIFF': {
           actions: 'viewDiff'
@@ -595,10 +950,31 @@ export const commitState = setup({
           actions: 'revertFiles'
         },
         'commit.FILE_REVERTED': {
-          actions: ['handleFileReverted', 'refreshGitStatus']
+          actions: ['handleFileReverted', 'setLastDiscard', 'refreshGitStatus']
         },
         'commit.FILES_REVERTED': {
-          actions: 'refreshGitStatus'
+          actions: ['setLastDiscard', 'refreshGitStatus']
+        },
+        'commit.PREVIEW_DISCARD': {
+          actions: 'previewDiscard'
+        },
+        'commit.DISCARD_PREVIEWED': {
+          actions: 'setDiscardPreview'
+        },
+        'commit.UNDO_DISCARD': {
+          actions: 'undoDiscard'
+        },
+        'commit.DISMISS_DISCARD': {
+          actions: 'dismissDiscard'
+        },
+        'commit.DISCARD_RESTORED': {
+          actions: ['handleDiscardRestored', 'refreshGitStatus']
+        },
+        'commit.TRUST_REPOSITORY': {
+          actions: 'trustRepository'
+        },
+        'commit.REPOSITORY_TRUSTED': {
+          actions: ['repositoryTrusted', 'refreshGitStatus']
         },
         'commit.RESOLVE_CONFLICT': {
           actions: 'resolveConflict'
@@ -614,6 +990,12 @@ export const commitState = setup({
         },
         'commit.ALL_CONFLICTS_RESOLVED': {
           actions: 'refreshGitStatus'
+        },
+        'commit.MOVE_OPERATION': {
+          actions: 'moveOperation'
+        },
+        'commit.OPERATION_MOVED': {
+          actions: 'handleOperationMoved'
         },
         'commit.CLEAR_DIFF': {
           actions: 'clearGitDiff'
@@ -723,9 +1105,19 @@ export const commitState = setup({
         'CODE_STARTED': {
           actions: 'handleCodeStartup'
         },
-        // The repository changed, on disk or by a write from any window: ask again for what the panel shows of it
+        // The repository changed, on disk or by a write from any window: ask again for the parts of it that did
         'commit.REPOSITORY_CHANGED': {
-          actions: ['refreshGitStatus', 'requestLogList', 'requestStashList', 'requestWorktreeList']
+          actions: 'followRepositoryChange'
+        },
+        'commit.SHOWN': {
+          actions: enqueueActions(({ context, enqueue }) => {
+            const missed = context.missedChange
+            enqueue.assign({ isShown: true, missedChange: null })
+            if (missed) enqueue.raise({ type: 'commit.REPOSITORY_CHANGED', changed: missed })
+          })
+        },
+        'commit.HIDDEN': {
+          actions: assign({ isShown: false })
         }
       }
     }

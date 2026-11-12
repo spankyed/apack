@@ -21,6 +21,8 @@
     <RevertDialog
       :show="!!revertDialogFile"
       :file="revertDialogFile"
+      undoable
+      :notKept="revertDialogFile ? notKeptOf([revertDialogFile.path]) : []"
       @confirm="confirmRevert"
       @cancel="cancelRevert"
     />
@@ -30,6 +32,8 @@
       :show="showDiscardAllDialog"
       :file="null"
       :fileCount="unstagedFiles.length"
+      undoable
+      :notKept="notKeptOf(unstagedFiles.map((f: GitStatusFile) => f.path))"
       @confirm="confirmDiscardAll"
       @cancel="cancelDiscardAll"
     />
@@ -43,6 +47,16 @@
       customMessage="Accept HEAD version for all conflicted files? This discards all incoming changes from the merge/stash."
       @confirm="confirmDiscardAllMerge"
       @cancel="showDiscardAllMergeDialog = false"
+    />
+
+    <!-- Give up what git is in the middle of -->
+    <RevertDialog
+      :show="showAbortOperationDialog"
+      :file="null"
+      :customTitle="`Abort the ${operation?.kind ?? 'operation'}`"
+      :customMessage="`Give up the ${operation?.kind ?? 'operation'} in progress? The repository goes back to where it was before it began, and what was settled in it so far is lost.`"
+      @confirm="confirmAbortOperation"
+      @cancel="showAbortOperationDialog = false"
     />
 
     <!-- Show friendly empty state if no git repository -->
@@ -174,8 +188,100 @@
       </div>
     </div>
 
+    <!-- The repository's file watches are not open, so nothing here changes until it is asked again -->
+    <div
+      v-if="!isWatchingRepository && !gitError"
+      class="px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
+    >
+      Live updates are off for this repository. It is read again when you return to this window or press Refresh.
+    </div>
+
+    <!-- Fetching by itself has stopped, so what is shown of the remote is as old as the last fetch that worked -->
+    <div
+      v-if="isFetchSuspended && !gitError"
+      class="px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
+    >
+      Fetching by itself is off: the remote asked for a sign-in and nobody was there to give one. It starts again after a push or a pull that works, or when the fetch settings change.
+      <SignInHelp v-if="fetchSignIn" class="mt-2" :help="fetchSignIn" :busy="isSettingUpSignIn" @sign-in="setUpSignIn" />
+    </div>
+
+    <!-- A discard kept what it removed, which is offered back until it is dismissed -->
+    <div
+      v-if="lastDiscard && !gitError"
+      data-testid="discard-undo"
+      class="flex items-center gap-2 px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
+    >
+      <span class="flex-1">
+        Discarded {{ lastDiscard.paths.length === 1 ? lastDiscard.paths[0] : `${lastDiscard.paths.length} changes` }}. Git keeps what was removed for about two weeks.
+        <template v-if="lastDiscard.notKept.length > 0">
+          {{ lastDiscard.notKept.length === 1 ? 'One file was' : `${lastDiscard.notKept.length} files were` }} too large to keep.
+        </template>
+      </span>
+      <button class="px-2 py-0.5 rounded text-neutral-200 bg-neutral-800 hover:bg-neutral-700" @click="commitActor?.send({ type: 'commit.UNDO_DISCARD' })">Undo</button>
+      <button class="p-0.5 rounded hover:bg-neutral-700" title="Dismiss" @click="commitActor?.send({ type: 'commit.DISMISS_DISCARD' })"><X :size="12" /></button>
+    </div>
+
+    <!-- Undoing a discard left alone what had changed or been made again since -->
+    <div
+      v-else-if="discardLeft.length > 0 && !gitError"
+      data-testid="discard-left"
+      class="flex items-center gap-2 px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
+    >
+      <span class="flex-1">
+        Put back, except {{ discardLeft.length === 1 ? discardLeft[0] : `${discardLeft.length} files` }}, which {{ discardLeft.length === 1 ? 'has' : 'have' }} changed since and {{ discardLeft.length === 1 ? 'was' : 'were' }} left as {{ discardLeft.length === 1 ? 'it is' : 'they are' }}.
+      </span>
+      <button class="p-0.5 rounded hover:bg-neutral-700" title="Dismiss" @click="commitActor?.send({ type: 'commit.DISMISS_DISCARD' })"><X :size="12" /></button>
+    </div>
+
+    <!-- The repository has more changed files than are listed -->
+    <div
+      v-if="isStatusTruncated && !gitError"
+      class="px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
+    >
+      Too many changes to list them all. Showing the first {{ gitStatus.length.toLocaleString() }}.
+    </div>
+
+    <!-- Git is in the middle of something, which ends when it is carried on with or given up -->
+    <div v-if="operation" class="px-3 py-2 border-b border-neutral-800 bg-orange-900/10" data-testid="repository-operation">
+      <div class="text-xs font-medium text-orange-400">{{ operationTitle }}</div>
+      <div class="mt-0.5 text-xs text-neutral-400">{{ operationHint }}</div>
+      <div class="flex items-center gap-2 mt-2">
+        <button
+          @click="moveOperation('continue')"
+          :disabled="mergeConflictFiles.length > 0 || isMovingOperation"
+          :class="[
+            'px-2 py-1 rounded text-xs font-medium transition-colors',
+            mergeConflictFiles.length > 0 || isMovingOperation
+              ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
+              : 'bg-green-600 hover:bg-green-700 text-white'
+          ]"
+        >
+          Continue
+        </button>
+        <button
+          v-if="operation.kind === 'rebase'"
+          @click="moveOperation('skip')"
+          :disabled="isMovingOperation"
+          class="px-2 py-1 text-xs font-medium transition-colors rounded bg-neutral-800 text-neutral-300 hover:bg-neutral-700 disabled:text-neutral-500 disabled:cursor-not-allowed"
+          title="Leave out the commit the rebase stopped at"
+        >
+          Skip commit
+        </button>
+        <button
+          @click="showAbortOperationDialog = true"
+          :disabled="isMovingOperation"
+          class="px-2 py-1 text-xs font-medium transition-colors rounded bg-neutral-800 text-red-400 hover:bg-neutral-700 disabled:text-neutral-500 disabled:cursor-not-allowed"
+        >
+          Abort
+        </button>
+      </div>
+    </div>
+
+    <!-- Git was not run, because the repository would have it run something and has not been trusted -->
+    <TrustRequest v-if="trustRequest" :request="trustRequest" @trust="commitActor?.send({ type: 'commit.TRUST_REPOSITORY' })" />
+
     <!-- Git Error (only show non-directory errors) -->
-    <div v-if="gitError && !isNoDirectoryError" class="p-3 border-b border-red-800 bg-red-900/20">
+    <div v-else-if="gitError && !isNoDirectoryError" class="p-3 border-b border-red-800 bg-red-900/20">
       <div class="flex items-start gap-2">
         <div
           ref="errorContentRef"
@@ -195,6 +301,7 @@
         @click="isErrorExpanded = !isErrorExpanded"
         class="mt-1 text-xs text-red-500 hover:text-red-300 transition-colors"
       >{{ isErrorExpanded ? 'View less' : 'View more' }}</button>
+      <SignInHelp v-if="errorSignIn" class="mt-2" :help="errorSignIn" :busy="isSettingUpSignIn" @sign-in="setUpSignIn" />
     </div>
 
     <!-- Commit Message -->
@@ -355,7 +462,7 @@
                 <GitMerge :size="12" class="text-orange-400 flex-shrink-0" />
               </template>
               <template #statusBadge>
-                <span class="flex-shrink-0 w-4 text-xs font-medium text-orange-500">C</span>
+                <span class="flex-shrink-0 w-4 text-xs font-medium text-orange-500" :title="conflictLabel(file)">C</span>
               </template>
               <template #actions>
                 <button @click.stop="acceptOurs(file)" class="p-0.5 hover:bg-neutral-700 rounded" title="Accept Ours">
@@ -397,31 +504,43 @@
             </div>
           </div>
           <div class="space-y-1">
-            <GitFileItem
-              v-for="file in unstagedFiles"
-              :key="`unstaged-${file.path}`"
-              :file="file"
-              :isSelected="selectedGitFile?.path === file.path && selectedGitFile?.staged === file.staged"
-              @select="selectFile"
-              @openFile="openFile"
-            >
-              <template #actions>
-                <button @click.stop="openRevertDialog(file)" class="p-0.5 hover:bg-neutral-700 rounded" title="Discard changes">
-                  <RotateCcw class="w-3 h-3 text-red-400" />
-                </button>
-                <button @click.stop="stageFile(file)" class="p-0.5 hover:bg-neutral-700 rounded" title="Stage">
-                  <Plus class="w-3 h-3 text-neutral-400" />
-                </button>
-              </template>
-              <template #menuItems>
-                <ContextMenuItem @select="stageFile(file)" :class="MENU_ITEM_CLASS">
-                  <Plus class="w-4 h-4" /> Stage
-                </ContextMenuItem>
-                <ContextMenuItem @select="openRevertDialog(file)" :class="MENU_ITEM_DANGER_CLASS">
-                  <RotateCcw class="w-4 h-4" /> Discard Changes
-                </ContextMenuItem>
-              </template>
-            </GitFileItem>
+            <template v-for="file in unstagedRows" :key="`unstaged-${file.path}`">
+              <!-- A file in an open folder is a row under the folder's, which is one row for all of it -->
+              <GitFileItem
+                :file="file"
+                :isSelected="selectedGitFile?.path === file.path && selectedGitFile?.staged === file.staged"
+                @select="file.isDirectory ? toggleFolder(file) : selectFile(file)"
+                @openFile="openFile"
+              >
+                <template v-if="file.isDirectory" #prefix>
+                  <component :is="openFolders[file.path] ? ChevronDown : ChevronRight" :size="12" class="text-neutral-500 flex-shrink-0" />
+                  <Folder :size="12" class="text-neutral-400 flex-shrink-0" />
+                </template>
+                <!-- Set in from the folder's row, by the width of its arrow and icon -->
+                <template v-else-if="file.inFolder" #prefix>
+                  <span class="w-7 flex-shrink-0" />
+                </template>
+                <template #actions>
+                  <button @click.stop="openRevertDialog(file)" class="p-0.5 hover:bg-neutral-700 rounded" title="Discard changes">
+                    <RotateCcw class="w-3 h-3 text-red-400" />
+                  </button>
+                  <button @click.stop="stageFile(file)" class="p-0.5 hover:bg-neutral-700 rounded" title="Stage">
+                    <Plus class="w-3 h-3 text-neutral-400" />
+                  </button>
+                </template>
+                <template #menuItems>
+                  <ContextMenuItem @select="stageFile(file)" :class="MENU_ITEM_CLASS">
+                    <Plus class="w-4 h-4" /> Stage
+                  </ContextMenuItem>
+                  <ContextMenuItem @select="openRevertDialog(file)" :class="MENU_ITEM_DANGER_CLASS">
+                    <RotateCcw class="w-4 h-4" /> Discard Changes
+                  </ContextMenuItem>
+                </template>
+              </GitFileItem>
+              <div v-if="file.isDirectory && openFolders[file.path]?.truncated" class="ml-4 px-2 py-1 text-xs text-neutral-500">
+                This folder holds more files than are listed here. Staging or discarding its row covers all of them.
+              </div>
+            </template>
           </div>
         </div>
       </div>
@@ -634,7 +753,8 @@ import { useSelector } from '@xstate/vue'
 import { useSurface, useShell } from '@apackdev/sdk/fe'
 import type { CodeState } from '#features/code/fe/state.ts'
 import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts'
-import { GitBranch, GitBranchPlus, GitCommit, GitFork, GitMerge, RefreshCw, Plus, Minus, RotateCcw, ChevronDown, ChevronRight, CheckCircle, Check, X, Sparkles, Loader2, ArrowDownToLine, ArrowUpFromLine, MoreVertical, Trash2, Copy, Search, FolderSync, Lock } from 'lucide-vue-next'
+import type { ConflictKind, OperationMove } from '#features/code/be/types.ts'
+import { Folder, GitBranch, GitBranchPlus, GitCommit, GitFork, GitMerge, RefreshCw, Plus, Minus, RotateCcw, ChevronDown, ChevronRight, CheckCircle, Check, X, Sparkles, Loader2, ArrowDownToLine, ArrowUpFromLine, MoreVertical, Trash2, Copy, Search, FolderSync, Lock } from 'lucide-vue-next'
 import { ContextMenuItem } from 'reka-ui'
 import { MENU_ITEM_CLASS, MENU_ITEM_DANGER_CLASS } from '#features/code/fe/features/explorer/constants.ts'
 import GitFileItem from '#features/code/fe/features/commit/GitFileItem.vue'
@@ -642,6 +762,8 @@ import CodePanelHeader from '#features/code/fe/features/CodePanelHeader.vue'
 import NoDirectoryState from '#features/code/fe/features/NoDirectoryState.vue'
 import EmptyState from '#features/code/fe/features/EmptyState.vue'
 import RevertDialog from '#features/code/fe/features/commit/RevertDialog.vue'
+import TrustRequest from '#features/code/fe/features/commit/TrustRequest.vue'
+import SignInHelp from '#features/code/fe/features/commit/SignInHelp.vue'
 import CommitLogSection from '#features/code/fe/features/commit/CommitLogSection.vue'
 import ToastNotification from '@apackdev/ui/design/ToastNotification'
 import ContextMenuPopup from '@apackdev/ui/design/ContextMenuPopup'
@@ -668,10 +790,27 @@ const isGitLoading = useSelector(commitActor, (state) => state.context.isGitLoad
 const selectedGitFile = useSelector(commitActor, (state) => state.context.selectedGitFile)
 const commitMessage = useSelector(commitActor, (state) => state.context.commitMessage)
 const revertDialogFile = useSelector(commitActor, (state) => state.context.revertDialogFile)
+const discardPreview = useSelector(commitActor, (state) => state.context.discardPreview)
+const lastDiscard = useSelector(commitActor, (state) => state.context.lastDiscard)
+const discardLeft = useSelector(commitActor, (state) => state.context.discardLeft)
+/** What discarding these rows would remove that cannot be brought back, once that has been answered for these rows */
+const notKeptOf = (paths: string[]): string[] =>
+  (discardPreview.value && discardPreview.value.paths.join('\0') === paths.join('\0') ? discardPreview.value.notKept : [])
 const availableBranches = useSelector(commitActor, (state) => state.context.availableBranches)
 const branchInput = useSelector(commitActor, (state) => state.context.branchInput)
 const isCheckingOutBranch = useSelector(commitActor, (state) => state.context.isCheckingOutBranch)
 const hasUpstream = useSelector(commitActor, (state) => state.context.hasUpstream)
+const isStatusTruncated = useSelector(commitActor, (state) => state.context.isStatusTruncated)
+const isWatchingRepository = useSelector(commitActor, (state) => state.context.isWatchingRepository)
+const operation = useSelector(commitActor, (state) => state.context.operation)
+const isFetchSuspended = useSelector(commitActor, (state) => state.context.isFetchSuspended)
+const fetchSignIn = useSelector(commitActor, (state) => state.context.fetchSignIn)
+const isSettingUpSignIn = useSelector(commitActor, (state) => state.context.isSettingUpSignIn)
+// The help belongs to the error it came with, and goes when that error does
+const errorSignIn = useSelector(commitActor, (state) => (state.context.gitError ? state.context.gitFailure?.signIn ?? null : null))
+// The refusal belongs to the error it came with, and goes when that error does
+const trustRequest = useSelector(commitActor, (state) => (state.context.gitError ? state.context.gitFailure?.trust ?? null : null))
+const isMovingOperation = useSelector(commitActor, (state) => state.context.isMovingOperation)
 const commitsAhead = useSelector(commitActor, (state) => state.context.commitsAhead)
 const commitsBehind = useSelector(commitActor, (state) => state.context.commitsBehind)
 const isPushing = useSelector(commitActor, (state) => state.context.isPushing)
@@ -686,6 +825,7 @@ const baseDirectory = useSelector(codeActor, (state) => state.context.baseDirect
 // Local state
 const showDiscardAllDialog = ref(false)
 const showDiscardAllMergeDialog = ref(false)
+const showAbortOperationDialog = ref(false)
 const showBranchDropdown = ref(false)
 const highlightedBranchIndex = ref(-1)
 const isCreatingBranch = ref(false)
@@ -751,6 +891,10 @@ const watchSyncOp = (
   })
 }
 
+const setUpSignIn = (host: string) => {
+  commitActor.send({ type: 'commit.SET_UP_SIGN_IN', host })
+}
+
 const dismissError = () => {
   commitActor.send({ type: 'commit.DISMISS_ERROR' })
   isErrorExpanded.value = false
@@ -781,6 +925,13 @@ watch(commitMessage, (val) => {
 const stagedFiles = computed(() => gitStatus.value.filter((f: any) => f.staged))
 const mergeConflictFiles = computed(() => gitStatus.value.filter((f: any) => f.status === 'unmerged'))
 const unstagedFiles = computed(() => gitStatus.value.filter((f: any) => !f.staged && f.status !== 'unmerged'))
+const openFolders = useSelector(commitActor, (state) => state.context.openFolders)
+/** The unstaged rows as they are drawn: each open folder's row is followed by a row for each file it lists */
+const unstagedRows = computed(() => unstagedFiles.value.flatMap((file: GitStatusFile): (GitStatusFile & { inFolder?: boolean })[] => {
+  const open = file.isDirectory ? openFolders.value[file.path] : undefined
+  return [file, ...(open?.files ?? []).map(path => ({ path, status: 'untracked' as const, staged: false, inFolder: true }))]
+}))
+const toggleFolder = (file: GitStatusFile) => commitActor?.send({ type: 'commit.TOGGLE_FOLDER', path: file.path })
 const canCommit = computed(() => commitMessage.value.trim() && stagedFiles.value.length > 0)
 
 const isNoDirectoryError = computed(() => {
@@ -798,9 +949,12 @@ const shouldShowActionButton = computed(() => {
   return !hasUpstream.value || commitsAhead.value > 0 || commitsBehind.value > 0
 })
 
+const progress = useSelector(commitActor, (state) => state.context.progress)
+/** How far along git says it is, once it has said: `Writing objects 42%` */
+const progressOf = (during: 'push' | 'pull') => (progress.value?.during === during ? ` ${progress.value.stage} ${progress.value.percent}%` : '...')
 const actionButtonText = computed(() => {
-  if (isPushing.value) return 'Pushing...'
-  if (isPulling.value) return 'Pulling...'
+  if (isPushing.value) return `Pushing${progressOf('push')}`
+  if (isPulling.value) return `Pulling${progressOf('pull')}`
   if (!hasUpstream.value) return 'Publish Branch'
 
   // If we have both commits ahead and behind, prioritize pull
@@ -894,6 +1048,7 @@ const unstageAll = () => {
 }
 
 const openDiscardAllDialog = () => {
+  commitActor?.send({ type: 'commit.PREVIEW_DISCARD', paths: unstagedFiles.value.map((f: GitStatusFile) => f.path) })
   showDiscardAllDialog.value = true
 }
 
@@ -920,6 +1075,43 @@ const markResolved = (file: GitStatusFile) => {
 
 const markAllResolved = () => {
   commitActor?.send({ type: 'commit.STAGE_FILES', paths: mergeConflictFiles.value.map((f: GitStatusFile) => f.path) })
+}
+
+/** How a file is in conflict, in words: "here" is the side the checkout was on, as git's "ours" is */
+const CONFLICT_LABELS: Record<ConflictKind, string> = {
+  'both-modified': 'Changed on both sides',
+  'both-added': 'Added on both sides',
+  'both-deleted': 'Deleted on both sides',
+  'added-by-us': 'Added here',
+  'added-by-them': 'Added by the incoming side',
+  'deleted-by-us': 'Deleted here, changed by the incoming side',
+  'deleted-by-them': 'Changed here, deleted by the incoming side',
+}
+const conflictLabel = (file: GitStatusFile) => file.conflict ? `In conflict: ${CONFLICT_LABELS[file.conflict]}` : 'In conflict'
+
+/** What git is in the middle of, as the panel names it */
+const operationTitle = computed(() => {
+  const current = operation.value
+  if (!current) return ''
+  switch (current.kind) {
+    case 'merge': return `Merging ${current.subject}${gitBranch.value && gitBranch.value !== 'HEAD' ? ` into ${gitBranch.value}` : ''}`
+    case 'rebase': return `Rebasing ${current.branch ?? 'commits'} onto ${current.subject}${current.step ? ` (commit ${current.step} of ${current.steps})` : ''}`
+    case 'cherry-pick': return `Cherry-picking ${current.subject}`
+    case 'revert': return `Reverting ${current.subject}`
+  }
+  return ''
+})
+const operationHint = computed(() => {
+  const count = mergeConflictFiles.value.length
+  if (count === 0) return 'Nothing is in conflict. Continue to finish it.'
+  return `${count} ${count === 1 ? 'file is' : 'files are'} in conflict. Settle ${count === 1 ? 'it' : 'them'}, then continue.`
+})
+const moveOperation = (move: OperationMove) => {
+  commitActor?.send({ type: 'commit.MOVE_OPERATION', move })
+}
+const confirmAbortOperation = () => {
+  showAbortOperationDialog.value = false
+  moveOperation('abort')
 }
 
 const confirmDiscardAllMerge = () => {

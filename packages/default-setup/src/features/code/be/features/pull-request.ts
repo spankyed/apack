@@ -5,7 +5,7 @@ import { defineHandlers } from '@apackdev/sdk/framework';
 import { setup, assign, type AnyActorRef } from 'xstate'
 
 import { createLogger } from '@apackdev/sdk/logger'
-import { GitRepository } from '../services/git.ts'
+import { openGitRepository, type AppGitRepository } from '../services/app-git-repository.ts'
 import * as ghCli from '../services/gh-cli.ts'
 
 const logger = createLogger('pr')
@@ -17,7 +17,7 @@ const surfaceId = 'code' as const
 // Outgoing events to frontend
 
 export interface CodePullRequestSystemContext {
-  gitRepository: GitRepository | null
+  gitRepository: AppGitRepository | null
   /** The code system, which routes a `commit.*` event to its commit child */
   code?: AnyActorRef
 }
@@ -49,7 +49,7 @@ export type Event =
   | { type: 'pr.EDIT_REVIEW_COMMENT'; commentId: number; body: string }
   | { type: 'pr.DELETE_REVIEW_COMMENT'; commentId: number }
   | { type: 'pr.GIT_STATUS_CHANGED' }
-  | { type: 'pr.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: GitRepository };
+  | { type: 'pr.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: AppGitRepository };
 
 function humanizeBranchName(branch: string): string {
   const stripped = branch.replace(/^(feature|fix|bugfix|hotfix|chore|refactor|docs|test|ci|build|perf|style|revert|release|AS|as)[/_]/i, '')
@@ -70,7 +70,7 @@ function emitError(emit: Emit, message: string) {
 function withRepo<T>(
   context: CodePullRequestSystemContext,
   emit: Emit,
-  work: (repo: GitRepository) => Promise<T>,
+  work: (repo: AppGitRepository) => Promise<T>,
   onSuccess: (result: T) => void,
   onError: (error: any) => void = (e) => emitError(emit, e.message)
 ) {
@@ -85,7 +85,7 @@ export const pullRequestSystem = setup({
   types: {
     context: {} as CodePullRequestSystemContext,
     events: {} as Event,
-    input: {} as { baseDirectory: string | null; gitRepository?: GitRepository | null; code?: AnyActorRef }
+    input: {} as { baseDirectory: string | null; gitRepository?: AppGitRepository | null; code?: AnyActorRef }
   },
   actions: handlers.actions({
     getBaseBranch: ({ context, reply }) => {
@@ -135,16 +135,21 @@ export const pullRequestSystem = setup({
           const getContent = isImage
             ? (p: string, b: string) => repo.getFileContentFromBranchAsDataUrl(p, b)
             : (p: string, b: string) => repo.getFileContentFromBranch(p, b)
-          const [diff, originalContent, modifiedContent] = await Promise.all([
-            repo.getFileDiffBetweenBranches(ev.path, ev.baseBranch, target),
+          // A side that is missing reads as empty, which is right for a file one branch does not have and wrong
+          // for a branch that is not there: that is an error, said as one
+          if (!await repo.commitsExist(ev.baseBranch, target)) {
+            throw new Error(`Failed to get file diff between branches: ${ev.baseBranch} or ${target} is not a commit here`)
+          }
+          // The editor draws the change from the file's two sides, so those are what is read: no patch is made
+          const [originalContent, modifiedContent] = await Promise.all([
             getContent(ev.path, ev.baseBranch),
             getContent(ev.path, target),
           ])
-          return { diff, originalContent, modifiedContent, isImage }
+          return { originalContent, modifiedContent, isImage }
         },
-        ({ diff, originalContent, modifiedContent, isImage }) => emit({
+        ({ originalContent, modifiedContent, isImage }) => emit({
           type: 'pr.FILE_DIFF_RECEIVED',
-          data: { path: ev.path, diff, staged: false, originalContent, modifiedContent, isImage, baseBranch: ev.baseBranch, headBranch: ev.headBranch }
+          data: { path: ev.path, staged: false, originalContent, modifiedContent, isImage, baseBranch: ev.baseBranch, headBranch: ev.headBranch }
         })
       )
     },
@@ -462,14 +467,14 @@ export const pullRequestSystem = setup({
       )
     },
 
-    // News for every window: the repository changed under them
+    // News for every window: the repository's commits or branches moved under them
     handleGitStatusChanged: () => {
       broadcastToSurface(surfaceId, { type: 'pr.GIT_STATUS_REFRESHED', data: { timestamp: new Date() } })
     },
 
     updateBaseDirectory: assign({
       gitRepository: ({ event }) => {
-        const ev = event as { type: 'pr.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: GitRepository }
+        const ev = event as { type: 'pr.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: AppGitRepository }
         return ev.gitRepository
       }
     }),
@@ -479,7 +484,7 @@ export const pullRequestSystem = setup({
   id: 'pull-request',
   initial: 'idle',
   context: ({ input }) => ({
-    gitRepository: input?.gitRepository || (input?.baseDirectory ? new GitRepository(input.baseDirectory) : null),
+    gitRepository: input?.gitRepository || (input?.baseDirectory ? openGitRepository(input.baseDirectory) : null),
     code: input?.code
   }),
   states: {

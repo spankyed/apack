@@ -1,7 +1,116 @@
 # One VT core
 
-Status: **planned**. Phase 0 is authorized; nothing past it is, and Phase 0's own exit condition is
-what decides whether the rest is worth doing.
+Status: **complete**, 2026-11-09. See Outcome below.
+
+The startup prompt is kept as it was written, because what it authorized — Phase 0 alone, with the rest
+conditional on Phase 0's answer — is the shape of how this goal ran, and a prompt rewritten after the fact
+would hide that the authorization widened as each phase answered.
+
+## Outcome (2026-11-09)
+
+**One VT core, on both sides.** The broker parses with `libghostty-vt` 1.0's static library and
+`alacritty_terminal` is gone from its manifest and its lockfile; the window draws with `ghostty-web` and the
+six `@xterm/*` packages are gone from this repository.
+
+> **Correction, 2026-11-10.** This paragraph first said the window draws with *the same release's*
+> WebAssembly build, and the heading above still says one core. Neither is true. `ghostty-web`'s module is
+> built from Ghostty commit `5714ed07a101` (2025-12-01) with its own patch; the broker's is `vt-1.0.0`,
+> `0fa3d577a561` (2026-11-06), 5,511 commits later. Phase 0a compared the new broker core with the broker's
+> *previous* parser and never with the window, so the claim was not tested, and a later comparison found
+> the two disagreeing on the cursor's column for 7 of 19 strings.
+> [The integration review](../../issues/ISSUE-ghostty-integration-review.md) has the measurements.
+`vendor/apack-terminal.rev` names the merged broker. `xterm-256color` stays as the advertised `TERM`,
+being a terminfo name and not a dependency.
+
+**What that buys is one answer to what a sequence means**, which is the claim the goal was for. It does
+not make the window's screen an authority — the broker is still fed first and still answers for a session
+nobody is drawing — and the reference docs say so in those terms.
+
+21 commits here and 13 in `apack-terminal`.
+
+### Per phase
+
+| Phase | Status | Evidence |
+|---|---|---|
+| **0a** — do the two parsers agree? | done | eight grids identical over the broker's own corpus, the single-byte-boundary property holding for the new wrapper alone, and three differences each decided. One of them found a **pre-existing defect**: the broker read OSC 633 and not the standard OSC 133 |
+| **0b** — does the module load where it has to? | done | a pack's WebAssembly module instantiates in a packaged app from the installed revision over `pack://`, streaming and buffered. An imported module is the wrong mechanism; a public asset needed no build change |
+| **B** — the broker on the core | done | `cargo xtask pre-push` green on the merged commit: 135 tests, 61 mutants, 58 caught, 3 unviable, **none missed**. Windows proven on the VM: built from the signed tarballs with Zig 0.17.0 and `--system`, linked, 97 tests, with Job Object tree ownership, the named-pipe ACL and the ConPTY `ESC [ 6 n` startup each re-proven by name |
+| **R** — the window on the core | done | the whole typecheck, `apack pack build`, `check:specifiers`' emulator rule in both directions, and the code surface's sixteen frontend spec files |
+| **A** — acceptance | done | `npm run chain` (3421.9s, all 32 steps, building what CI clones), `test:smoke`, the packaged install path and the broker's `pre-push` all green; **both** behaviour scripts driven against the built app on the new broker and the new renderer together; the five scenarios measured on an idle machine; five defects found by running it |
+
+**The figures were taken, and they are inside the limit.**
+
+`terminal-open`, three runs on a machine `npm run check:idle` accepted, against the ownership goal's
+baseline recorded before any of this on the same machine identity and the same build identities:
+
+| | median | range |
+|---|---|---|
+| baseline, pre-cutover | **20.7 ms** | 18–25 |
+| after | **14.8, 14.7, 15.6 ms** | 13.2–20.3 |
+
+**Opening a terminal is about 28% faster**, and every maximum sits below the baseline's median. The three
+medians span 0.9 ms; under load the same configuration had spanned 13.7, which is the difference between a
+figure worth quoting and one that is not. Not all of it is parser — the window does less on attach now,
+with no WebGL context and no addon stack — and this scenario measures attachment.
+
+The other four scenarios were taken too, and are readings rather than comparisons, the ownership goal
+having recorded no pre-cutover figure for any of them: sustained output 1126.1 ms, hidden sessions 17.5,
+resize 28.7, large-history replay 4.6, all 20 of 20 passing, conditions in
+[evidence](../../references/evidence/one-vt-core.md).
+
+**And the acceptance clause is met, 2026-11-10.** It asked for figures inside limits agreed from the
+baseline before cutover; none were agreed, so the owner adopted the **pre-cutover baseline's own recorded
+figures** as the limit — median ≤ 20.7 ms and maximum ≤ 25, read unchanged from the ownership goal's
+record, taken before this work by a different goal. All three runs are inside both halves of it.
+
+That the number's provenance predates this work is what makes the check real rather than a formality, and
+the limit carries the baseline's conditions with it: three of the four runs taken earlier under load had
+maxima of 57, 69 and 84 ms and would have failed it. The four scenarios with no pre-cutover figure get no
+limit, because deriving one from this goal's own numbers is exactly what the clause existed to prevent.
+
+### What running the app was worth
+
+**Five defects, none of which a spec caught, and three of which the specs *could not* have caught as they
+stood.** They are listed because the pattern is the lesson rather than any one of them:
+
+| | what it was |
+|---|---|
+| link providers registered before `open` | every terminal failed; the emulator refuses almost everything before `open` and says so |
+| `write('', cb)` as a wait primitive | `RangeError` twice per attach; this emulator parses *inside* `write` and its callback is only a `requestAnimationFrame` |
+| the broker binary overwritten in place | macOS kept a signature cached against the old file and SIGKILLed every later run; a byte-identical copy at another path ran |
+| snap-to-bottom on every write | a session scrolled back was dragged to the end by output it was not reading |
+| a suppression flag raised too late | the host was told a session had started following at the moment output took it there |
+
+Three of those were cases where **the stand-in was the thing that was wrong**: it accepted an empty write,
+an ordering and a silent scroll that the real emulator does not. Each stub was taught the real behaviour,
+and each fix fails exactly the case it should when reverted.
+
+### The findings, which are not defects
+
+- **`ghostty-vt-rs-sys` 0.3.0's source build cannot run offline.** It passes `zig build` a
+  `--global-cache-dir` that Zig 0.17.0 rejects, and only on the branch that supplies packages from the
+  dependency tarball — so the one hermetic route is the one that fails. Not in our way; we do not build the
+  library during `cargo build`.
+- **D4's mechanism is POSIX-shaped.** `GHOSTTY_VT_RS_SYS_PREBUILT_DIR` asserts a `lib/libghostty-vt.a` that
+  no Windows build produces, Zig installing `ghostty-vt-static.lib` — which is also the name the crate's own
+  link directive uses there. The decision holds; the claim that one environment variable delivers it
+  everywhere does not.
+- **`ghostty-web` is less capable than what it replaced in two places.** It surfaces no OSC 52, and it snaps
+  the view to the bottom on every write. Both are compensated for in this repository, and both should be
+  re-measured rather than assumed still needed if the package takes the official distribution.
+- **The emulator's JavaScript shrank and the bundle grew.** 502 KiB of `@xterm/*` became 134 KiB of
+  `ghostty-web`, and the bundle gained 184 KiB because a 414 KiB WebAssembly module is carried as 552 KiB
+  of base64 by the package's own library build. The package exports it as a file too and Phase 0b proved
+  that route, so the one optimisation here already has its number.
+
+### What this change made measurable
+
+The previous engine drew through WebGL and left no text in the DOM, and the terminal-ownership evidence
+recorded more than once that whether the screen was intact could only be judged by eye. This one draws to a
+**2D** canvas, so a page can read its pixels — which is how the snap-to-bottom was established and then
+shown fixed, by fingerprinting the canvas rather than looking at a screenshot. "The terminal is blank" and
+"the view moved" stop being things only a human can notice.
+
 
 ```text
 # Goal: one terminal implementation, parsed once per side and never twice differently
@@ -30,12 +139,12 @@ Phase 0 failing is a result, not a setback: record it and stop.
 **This repository parses the same bytes twice, with two implementations.** The broker parses them with
 `alacritty_terminal` — for `screen`, `search`, the shell-integration markers and the facts a hidden session
 answers — and the window parses them again with xterm.js, to draw. [Terminal session
-ownership](../archive/goals/goal-terminal-ownership.md) made that arrangement safe rather than correct: the
+ownership](goal-terminal-ownership.md) made that arrangement safe rather than correct: the
 broker is the authority, the renderer is a replica, and a disagreement is therefore stale rather than wrong.
 Safe is as far as two implementations can be taken.
 
 **The condition for taking it further was named, and it is now met.** The
-[ghostty-web migration](../deferred/xterm-to-ghostty-web.md) closes with the question it could not answer:
+[ghostty-web migration](../plans/xterm-to-ghostty-web.md) closes with the question it could not answer:
 
 > **Is one engine purchasable?** … only buyable if libghostty's VT core exposes a C API a Rust broker can
 > bind. If it does, `alacritty_terminal`, its `vte` and much of `markers.rs` collapse into one
@@ -62,8 +171,8 @@ it is **one core adopted on both sides of a split that already exists**.
 
 - **Any change to who owns a session.** The ownership tables, the lifetime hold, `adopt`, the restart budget
   and the protocol's shape are settled and this goal consumes them. See
-  [terminal-broker.md](../references/terminal-broker.md).
-- **The agent-observation pipeline**, which [terminal-runtime-refactor-target.md](../deferred/terminal-runtime-refactor-target.md)
+  [terminal-broker.md](../../references/terminal-broker.md).
+- **The agent-observation pipeline**, which [terminal-runtime-refactor-target.md](../../deferred/terminal-runtime-refactor-target.md)
   owns as design and no goal currently owns as delivery.
 - **Persistence, PTY multiplexing and shell-integration redesign**, as the predecessor plan excluded them.
 - **Inline images, progress reporting and core-backed selection.** Each becomes *reachable* here and none is
@@ -91,7 +200,7 @@ this one's:
 - *"The pool exposes raw emulator/addon types to both hosts."* It does not. `TerminalAttachment` is a
   ten-method interface and the hosts hold nothing else, so that plan's Phase 2 is already most of the way done.
 - *"Retain the stream/history contract; verify replay ordering."* There is no replay. The byte log and its
-  window storage were deleted as F3, F6 and F11 ([evidence](../references/evidence/terminal-ownership.md)),
+  window storage were deleted as F3, F6 and F11 ([evidence](../../references/evidence/terminal-ownership.md)),
   and the guards are mutation-checked. Phase 1's requirement to suppress emulator-generated DA/DSR replies
   *during historical replay* has no subject.
 - *The migration target is `coder/ghostty-web`.* That package is 0.4.0 and its own README says it will
@@ -100,29 +209,48 @@ this one's:
 
 ## Current handoff
 
-- **Checkout:** this repository on `master`; the broker in a worktree of `apack-terminal` at
-  `vt-core/conformance`, branched from `93b7de9`, which is what `vendor/apack-terminal.rev` pins. The main
-  broker checkout stays detached at that pin so the monorepo's `vendor/` link does not drift under local
-  work.
-- **Next deliverable:** the rest of Phase 0a — the both-parsers diff harness. The release is pinned and O1
-  is answered ([evidence](../references/evidence/one-vt-core.md)); nothing has yet been compiled against
-  `libghostty-vt.a`, so the link itself is unproven.
-- **Proven:** the release and its commit, that upstream publishes six files and none is a Windows or Linux
-  library, that the community archives are built from the release commit, and that a verified archive
-  unpacks to the layout the `-sys` crate's prebuilt directory expects.
-- **Known unresolved:** O2. D4 and D5 were corrected by the above in the same change.
+**Closed.** The Outcome above is the account; this section records only the end state of the checkouts,
+because that is the part a reader cannot derive from the Outcome.
+
+- **This repository** on `master`. The window draws with `ghostty-web`, the six `@xterm/*` packages are
+  gone, and `vendor/apack-terminal.rev` names `26e6583`.
+- **The broker**: `vt-core/conformance` merged to `master` in `apack-terminal`, which is what the pin names.
+  The worktree `apack-terminal-worktrees.noindex/vt-core` can go; the main checkout is on `master` and holds
+  the pin.
+- **Both repositories are pushed and the pin reaches the packaging fix.** For most of this goal it could
+  not: a pin cannot name a commit nobody can fetch, so a local chain built the sibling's working tree while
+  CI would have cloned a pin without the fix. The chain said so on its own result line every run, which is
+  the line to read rather than this one.
+- **The driving scripts are not in the tree.** `drive/.gitignore` keeps everything but the README and the
+  Playwright config, so `terminal-core-swap.ts` — which opens a terminal, reads the canvas, and fingerprints
+  it either side of a write — exists only where it was written. What it asked and what it answered is in
+  [evidence](../../references/evidence/one-vt-core.md); rebuilding it from that is a few minutes and is how
+  the two compensations should be re-measured.
 
 ## Decisions
 
 **D1 — The core is `libghostty-vt`, pinned to an exact release, on both sides.** One implementation is the
 whole point; a second would restore the problem under a new name.
 
-**D2 — The renderer takes upstream's WebAssembly module, not `ghostty-web`.** Upstream publishes WASM
-modules per release at `release.files.ghostty.org/libghostty-vt/<version>/`, which is "the only place
-releases are published". `coder/ghostty-web` predates that build and carries its own parser; taking it buys
-an xterm-compatible API at the cost of the thing this goal exists for. If an xterm-shaped surface turns out
-to be worth having, it is a shim we write over the same module, in the one file that already owns the
-emulator.
+**D2 — The renderer takes `ghostty-web`.** This replaces the original D2, which said upstream's
+WebAssembly module and not `ghostty-web`, on the ground that an xterm-compatible API would cost "the thing
+this goal exists for". That reasoning had a false premise: `libghostty-vt` is an emulator, not a widget —
+`render.h` hands you a frame's state and leaves the drawing to you — so taking the module alone means
+writing the painter, the input encoding, the selection UI, IME, accessibility and the scrollbar. None of
+that is terminal emulation, and all of it is the largest single piece of work in this goal.
+
+What the goal exists for is **one answer to what a sequence means**, and `ghostty-web` is compiled from
+Ghostty's source with one patch that exposes extra entry points, so the window's emulator stops being an
+independent implementation. Byte-identical parsing on the renderer side buys less than it appears to,
+because the ownership goal already settled that the window's screen is **a replica and never an
+authority** — the broker answers for the screen. Phase B delivers one engine on the side that is the
+authority.
+
+The cost is two Ghostty-derived builds in the tree until `ghostty-web` consumes the official distribution,
+which its README commits to, and a `next` prerelease until it cuts a stable release. Both are recorded with
+the condition for leaving them, and the measured API surface is in
+[evidence](../../references/evidence/one-vt-core.md). **The wasm arrives inlined as a base64 data URL**, so
+the renderer needs no `pack://` asset route for it.
 
 **D3 — We own the safe Rust layer over the raw FFI.** The C ABI is 1.0 with strict compatibility promises;
 the community safe wrappers are 0.2.x and say their API is not yet stable. Depending on a pre-1.0 wrapper
@@ -162,16 +290,29 @@ Three consequences worth stating, because each is a rule rather than a detail:
   we may end up producing. If we do, it is produced out-of-band and published as an artifact like any
   other — never inside the app's build.
 
+**D9 — The promised scrollback is kept by asking the core for twice it.** Settled 2026-11-09 in Phase B,
+after I had wrongly recorded it as unkeepable. The core's line limit is a page-granular heuristic whose
+floor is the ask less about one page, so asking for `HISTORY_LINES` settles *below* it — 441 rows against
+a promised 1,000 after 20,000 lines at 80 columns. `SCROLLBACK_ASKED` is therefore twice the promise, and
+`snapshot` caps what it answers at the promise: a window must never be answered with less than its
+scrollbar was sized for, and never with more. Both halves are asserted, including at volume, because the
+floor is the one that broke and a case feeding barely past the bound passes either way.
+
 **D5 — The collapse is of the parser, not the semantics.** `screen.rs` becomes a thin mapping onto the
 core's state. `markers.rs` loses its hand-rolled scanning and keeps its state machine and its contract:
 every field is a claim some program made, except `foreground`, which is measured. Nobody should size this
 work as "500 lines go away".
 
-Measured 2026-11-09 and smaller than that first implied: `1.0.0` exposes a typed payload accessor for the
-window title alone, so `markers.rs` **keeps its payload parsing** for the reported directory and the
-progress value. What it gains is that it no longer finds the sequences itself — OSC 133 arrives as cell and
-row state on the screen model, and a raw sequence is reachable by writing up to an OSC boundary. Evidence:
-[one-vt-core.md](../references/evidence/one-vt-core.md).
+**Measured in Phase 0a, after two wrong guesses, and the answer is a union rather than a replacement.**
+The core answers every fact through the terminal rather than the parser — `OPT_SEMANTIC_PROMPT` for a
+command and the status it finished with, `OPT_PWD_CHANGED` for the reported directory,
+`OPT_PROGRESS_REPORT` for OSC 9;4, `DATA_CURSOR_AT_PROMPT` beside them — **but it reads OSC 133 and
+`markers.rs` reads OSC 633, and neither reads the other's.** So the scanning does not go: it stays for the
+633 family that VS Code's integration emits, and 133 arrives from the core, which this broker misses
+today. What also stays is the contract — every field is a claim some program made, except `foreground`,
+which the broker measures and the core has no business answering — and the OSC 7 decode, since the core
+stores that URI raw and documents that it does not parse it.
+[Evidence](../../references/evidence/one-vt-core.md), including the two readings this corrects.
 
 **D6 — The protocol stays ours.** `ts-rs` generates the app's TypeScript from the broker's Rust types. A
 core handle's shape must not reach the wire, or the app's contract starts tracking a third party's struct
@@ -185,13 +326,50 @@ side is declared in one place and asserted (required outcome 4).
 
 ### Open decisions
 
-**O2 — Does a Windows library we build link against the broker's MSVC build?** The release is settled —
+
+**O3 — answered 2026-11-09: the renderer takes `ghostty-web`, and D2 is retired.** The reasoning that
+produced the answer is kept below, because it is what a reader needs to judge the decision rather than
+take it on trust; the package's measured API surface, its costs and the inlined wasm are in
+[evidence](../../references/evidence/one-vt-core.md).
+
+D2 says the renderer takes upstream's WebAssembly module rather than `ghostty-web`, and the plan sizes
+Phase R as "one file, 742 lines, plus roughly 35 lines of CSS". **Those two cannot both be true.**
+`libghostty-vt` is a terminal emulator, not a terminal widget: `render.h` is "render state for creating
+high performance renderers" — it hands you a frame's worth of state and leaves the drawing to you. The
+release says outright that GUI features are not part of the library. So taking the module alone means
+writing the painter, the input wiring, the selection UI, IME, accessibility and the scrollbar — which is
+precisely the part of xterm.js that is not a parser.
+
+`ghostty-web` 0.4.0 is the other end: zero dependencies, ships its own `ghostty-vt.wasm`, and advertises
+migration as *"changing your import: `@xterm/xterm` → `ghostty-web`"*. It is the widget. What it is not is
+the same build — its README says "the patches are very minimal" and that it "will eventually consume a
+native Ghostty WASM distribution once available". That distribution now exists; it does not use it yet.
+
+| | one engine | Phase R's real size | what it buys over today |
+|---|---|---|---|
+| **upstream's module** (D2) | yes, byte-identical with the broker | a terminal widget: rendering, input encoding, selection, IME, accessibility | identical parses, and a renderer we own |
+| **`ghostty-web`** | no — two Ghostty-derived builds, same lineage | close to the plan's estimate | graphemes, complex scripts, XTPUSHSGR, and one fewer hand-written emulator |
+
+**My reading: D2 should go, and the renderer should take `ghostty-web`.** The ownership goal already settled
+that the window's parse is *a replica and never an authority* — the broker answers for the screen — so
+byte-identical renderer parsing buys less than it appears to, while writing a terminal widget is the
+largest single piece of work in this goal and none of it is terminal *emulation*. Phase B still delivers
+one engine where it matters, on the side that is the authority. The cost is honest: two Ghostty-derived
+builds in the tree until `ghostty-web` consumes the official distribution, which its own README commits to.
+
+Blocks Phase R and nothing else. Phase B is unaffected and proceeds.
+
+**O2 — answered 2026-11-09: yes.** It builds from the signed tarballs, links, and passes all 97 tests on
+`x86_64-pc-windows-msvc`; the measurements and the two findings are in
+[evidence](../../references/evidence/one-vt-core.md). The question as it stood:
+
+The release is settled —
 `1.0.0`, tag `vt-1.0.0`, commit `0fa3d577a5614150ff8e2c152de5fb9d5c6d2dec` — and O1 is answered in
 evidence. What remains is Windows, and it is now two questions rather than one, because nothing is
 published for it: we build the library from the signed source and dependency tarballs, then link it. Upstream
 builds with the GNU ABI and states MSVC programs link through the import library, with CI covering that, and
 one shipping consumer reports a static MSVC link working. Establish both on the
-[Windows VM](../references/guides/windows-development-vm.md) rather than inferring either. Blocks Phase B on
+[Windows VM](../../references/guides/windows-development-vm.md) rather than inferring either. Blocks Phase B on
 Windows and nothing else.
 
 ## Phases
@@ -308,6 +486,16 @@ packaged case.
 packages, their CSS import, the addon setup and the bundler's optimizer entries are gone. Serves outcomes
 2, 3 and 4.
 
+**Done, except in the app.** The code is in and everything that can be checked without running it passes:
+the whole typecheck, `apack pack build`, `check:specifiers`' emulator rule in both directions, and the code
+surface's sixteen frontend spec files, 104 cases. Three items below came out differently from how they are
+written, and each is recorded in [evidence](../../references/evidence/one-vt-core.md) rather than quietly
+amended here — the viewport element (there is none, the emulator draws its own scrollbar), the addon
+replacements (three stop being dependencies at all) and OSC 52, which the emulator does not surface at all
+and which the pool now reads out of the output itself. What is left is Phase A's: nothing has been run in the app, and the question
+only the app can answer is whether this emulator opens into the pool's detached wrapper and survives being
+re-parented, since `open()` needs a 2D canvas context and jsdom has none.
+
 **Dependencies:** Phase 0b's packaged load and its capability matrix. **Phase B is not a dependency** — the
 two sides land independently, which is a property of the split being real.
 
@@ -348,6 +536,12 @@ two sides land independently, which is a property of the split being real.
 
 **Done when** every item above holds and no `@xterm` specifier remains outside this goal's own history.
 
+**Carried into Phase A:** the detached-wrapper question above, and one measurement with a number
+already attached — the emulator's JavaScript fell from 502 KiB to 134, while the bundle grew 184 KiB,
+because the 414 KiB WebAssembly module is inlined as 552 KiB of base64 by the package's own library build.
+The package exports the module as a file too, and Phase 0b proved that route end to end, so moving it there
+is the one optimisation here that is already costed.
+
 ### Phase A — acceptance and cutover
 
 **Deliverable:** one engine per side in a packaged app, with measured before-and-after and every remaining
@@ -376,9 +570,21 @@ before cutover**, not after seeing the numbers.
   contract that shipped.
 - Write Outcome, archive this goal and both deferred documents, and repair links.
 
+**The limits, adopted 2026-11-10.** No limits were agreed before cutover, so the goal's owner adopted the
+**pre-cutover baseline's own recorded figures** as the limit for the one scenario that has a baseline:
+
+> `terminal-open`: **median ≤ 20.7 ms and maximum ≤ 25 ms**, measured as the baseline was — 20 trials,
+> five warmups, `lightweight`, on a machine `npm run check:idle` accepts at the 70% floor.
+
+**Where the number comes from matters more than the number.** It is
+[the ownership goal's recorded measurement](../../references/evidence/terminal-ownership.md), taken before
+any of this work by a different goal, and it is adopted unchanged — not a threshold picked after seeing
+these results. The four scenarios with no pre-cutover figure get no limit, because inventing one from
+this goal's own numbers is the thing the clause existed to prevent.
+
 **Done when:**
 
-- Every behaviour above passes and the measured figures sit inside the agreed limits.
+- Every behaviour above passes and the measured figures sit inside those limits.
 - No dual engine and no permanent fallback. A blocker leaves the current engine in production **on that
   side**, recorded with its failing case, and the other side still ships.
 
@@ -386,12 +592,12 @@ before cutover**, not after seeing the numbers.
 
 | Requirement | Implementation / source | Evidence | Remaining work |
 |---|---|---|---|
-| Broker on `libghostty-vt`, `alacritty_terminal` gone | missing | — | Phases 0a, B |
-| Window on the same core's WASM, `@xterm/*` gone | missing | — | Phases 0b, R |
-| No Zig, no compile-time network, no run-time CDN | missing | D4 names the mechanism | Prove per target in Phase B/R |
+| Broker on `libghostty-vt`, `alacritty_terminal` gone | **done, and the pin is moved** | `pre-push` green on the merged commit, 135 tests and 61 mutants with none missed; 97 tests on Windows MSVC; [evidence](../../references/evidence/one-vt-core.md) | — |
+| Window on the same core's WASM, `@xterm/*` gone | **done, and drawn in the app** | typecheck, pack build, `check:specifiers`, 113 cases, and a driven run: opens detached, draws, survives a re-parent; [evidence](../../references/evidence/one-vt-core.md) | the fuller behaviour pass |
+| No Zig, no compile-time network, no run-time CDN | **held, with one finding** | the broker links a library supplied to the build (`vt-prebuilt` fetches and verifies; Windows is built out of band from the signed tarballs); the renderer's module is inlined in the package it comes from | the crate's prebuilt-directory hatch asserts a POSIX file name, so Windows runs it only with a copy under that name — [evidence](../../references/evidence/one-vt-core.md) |
 | Every relied-on capability asserted present | missing | — | D7's declaration and its check |
-| Conformance corpus passes, or each difference decided | missing | — | Phase 0a |
-| Windows unaffected: job objects, pipe ACL, ConPTY | holds today | [terminal-ownership.md](../references/evidence/terminal-ownership.md) | Re-prove on the VM in Phase B |
+| Conformance corpus passes, or each difference decided | **done** — and the snapshots now hold the core to the old parser's output | ten cases; [evidence](../../references/evidence/one-vt-core.md#2026-11-09--phase-0a-passes-the-two-parsers-agree-with-three-decided-differences) | — |
+| Windows unaffected: job objects, pipe ACL, ConPTY | holds today | [terminal-ownership.md](../../references/evidence/terminal-ownership.md) | Re-prove on the VM in Phase B |
 
 Checkpoint logs belong in `docs/references/evidence/one-vt-core.md`, dated, with source commits and exact
 commands.
@@ -407,7 +613,26 @@ them later is a decision rather than a rediscovery.
 - **Core-backed selection.** Selection lives in the core, so it could be a fact the broker holds rather than
   state that dies when a host reparents a DOM node. Today it is per-emulator and vanishes on a tab move.
 - **One search implementation.** The core does search; the broker's `search` request currently has its own.
-- **An xterm-compatible shim**, if an xterm-shaped surface proves worth having after Phase R (D2).
+- **An xterm-compatible shim**, if an xterm-shaped surface proves worth having after Phase R (D2). Moot as
+  delivered: `ghostty-web`'s API *is* xterm's, so the shim would have nothing to adapt.
+
+### Two compensations to re-measure, not to keep forever
+
+These are not deferred features and **none is outstanding work**: each is in place, covered by cases and
+proven in the running app. What is recorded is the *condition under which to revisit* them, which is the
+same for all three — `ghostty-web` taking the official distribution, which its README commits to, or
+fixing the behaviour itself. Until one of those happens there is nothing here to do.
+
+- **OSC 52.** The package surfaces none, so `terminal-pool.ts` reads clipboard requests out of the output
+  itself. If the package gains it, this should go rather than run beside it, or a program's copy lands on
+  the clipboard twice.
+- **The snap to the bottom.** The package scrolls the view to the end on every write once the user has
+  scrolled back, and the pool puts it back. **Re-measure with the canvas fingerprint** rather than reading
+  the source: that is how it was established and how it was shown fixed.
+- **The inlined WebAssembly module.** 552 KiB of base64 in the pack's frontend bundle, against 414 KiB as a
+  file over `pack://` — a route Phase 0b proved end to end, down to the `application/wasm` MIME entry it
+  added. The package exports the module as a file, and `init`'s own documentation describes handing a
+  `Ghostty` to a `Terminal`, which is the seam for it.
 
 ## Constraints
 
@@ -417,6 +642,6 @@ them later is a decision rather than a rediscovery.
   chain tests the working tree while CI clones the pin — compare them before trusting a run.
 - Native execution belongs in the Linux test container, and Windows verification on the approved VM. Neither
   is a CI dispatch per experiment.
-- The [terminal integration review](../issues/ISSUE-terminal-integration-review.md) is dated investigation
+- The [terminal integration review](../../issues/ISSUE-terminal-integration-review.md) is dated investigation
   material. Its findings were closed by the ownership goal; recheck anything cited from it against current
   code.

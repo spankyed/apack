@@ -136,6 +136,23 @@
             class="w-20 px-2 py-1 text-sm bg-neutral-800 border border-neutral-600 rounded text-neutral-200 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
+        <div class="flex items-center justify-between">
+          <div class="flex-1">
+            <label for="log-git-commands" class="text-sm font-medium text-neutral-200">
+              Log git commands
+            </label>
+            <p class="mt-1 text-xs text-neutral-600">
+              Write every git command the panel runs to the app's log, with how long it took and whether it worked
+            </p>
+          </div>
+          <input
+            id="log-git-commands"
+            v-model="logGitCommands"
+            type="checkbox"
+            @change="saveLogGitCommandsSetting"
+            class="w-4 h-4 text-blue-600 bg-neutral-800 border-neutral-600 rounded focus:ring-blue-500 focus:ring-2"
+          />
+        </div>
       </div>
     </CollapsibleSection>
     </div>
@@ -217,7 +234,8 @@
               Restore terminals on startup
             </label>
             <p class="mt-1 text-xs text-neutral-600">
-              Automatically restore previously opened terminals when the application starts
+              Automatically restore previously opened terminals when the application starts, each with the
+              screen it had. What a terminal prints is kept in a file only you can read until it is closed
             </p>
           </div>
           <input
@@ -225,6 +243,25 @@
             v-model="restoreTerminals"
             type="checkbox"
             @change="saveTerminalSettings"
+            class="w-4 h-4 text-blue-600 bg-neutral-800 border-neutral-600 rounded focus:ring-blue-500 focus:ring-2"
+          />
+        </div>
+
+        <div class="flex items-center justify-between">
+          <div class="flex-1">
+            <label for="terminal-clipboard-write" class="text-sm font-medium text-neutral-200">
+              Let programs copy to the clipboard
+            </label>
+            <p class="mt-1 text-xs text-neutral-600">
+              A program in a terminal can ask for text to be put on your clipboard, which is how copying works
+              in an editor over SSH or in tmux. Off, such a request is ignored
+            </p>
+          </div>
+          <input
+            id="terminal-clipboard-write"
+            v-model="terminalClipboardWrite"
+            type="checkbox"
+            @change="emit('update-setting', { path: ['terminalClipboardWrite'], value: terminalClipboardWrite })"
             class="w-4 h-4 text-blue-600 bg-neutral-800 border-neutral-600 rounded focus:ring-blue-500 focus:ring-2"
           />
         </div>
@@ -316,6 +353,70 @@
         </div>
       </div>
     </CollapsibleSection>
+    </div>
+
+    <!-- Terminal Targets Section -->
+    <div class="border-t border-neutral-800 pt-8">
+      <CollapsibleSection label="Terminal Targets" :default-open="terminalTargets.length > 0" class="mb-8">
+        <p class="text-sm text-neutral-500 mb-4">
+          Other places a terminal can run — another machine, a container — each as the command that reaches
+          it. The command runs the terminal broker's proxy there, for example
+          <code class="text-neutral-400">ssh devbox apack-terminal proxy</code> or
+          <code class="text-neutral-400">docker exec -i box apack-terminal proxy</code>,
+          so <code class="text-neutral-400">apack-terminal</code> has to be installed there. Each appears under
+          the terminal panel's menu as “New Terminal on …”.
+        </p>
+        <div class="space-y-3">
+          <div v-for="(target, index) in terminalTargets" :key="target.id" class="flex items-center gap-2" data-terminal-target-row>
+            <input
+              v-model="terminalTargets[index].label"
+              placeholder="Name"
+              @blur="saveTargets"
+              @keydown.enter="($event.target as HTMLInputElement).blur()"
+              class="w-32 px-2 py-1 text-sm bg-neutral-800 border border-neutral-600 rounded text-neutral-200 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+            />
+            <input
+              v-model="terminalTargets[index].command"
+              placeholder="Command"
+              @blur="saveTargets"
+              @keydown.enter="($event.target as HTMLInputElement).blur()"
+              class="flex-1 px-2 py-1 text-sm bg-neutral-800 border border-neutral-600 rounded text-neutral-200 font-mono focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+            />
+            <button
+              @click="deleteTarget(index)"
+              class="p-1 text-neutral-500 hover:text-red-400 transition-colors flex-shrink-0"
+              title="Remove target"
+            >
+              <X :size="16" />
+            </button>
+          </div>
+          <div class="flex items-center gap-2">
+            <input
+              v-model="newTargetLabel"
+              placeholder="Name"
+              aria-label="New target's name"
+              @keydown.enter="addTarget"
+              class="w-32 px-2 py-1 text-sm bg-neutral-800 border border-neutral-700 rounded text-neutral-200 placeholder-neutral-600 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+            />
+            <input
+              v-model="newTargetCommand"
+              placeholder="ssh host apack-terminal proxy"
+              aria-label="New target's command"
+              @keydown.enter="addTarget"
+              class="flex-1 px-2 py-1 text-sm bg-neutral-800 border border-neutral-700 rounded text-neutral-200 placeholder-neutral-600 font-mono focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+            />
+            <button
+              @click="addTarget"
+              :disabled="!newTargetLabel.trim() || !newTargetCommand.trim()"
+              class="p-1 transition-colors flex-shrink-0"
+              :class="newTargetLabel.trim() && newTargetCommand.trim() ? 'text-neutral-400 hover:text-white' : 'text-neutral-700 cursor-not-allowed'"
+              title="Add target"
+            >
+              <Plus :size="16" />
+            </button>
+          </div>
+        </div>
+      </CollapsibleSection>
     </div>
 
     <!-- Terminal Scripts Section -->
@@ -507,6 +608,7 @@ const saveClaudeProfile = () => emit('update-setting', {path: ['claudeProfile'],
 const hotkeys = useSettingsDraft(() => props.settings?.hotkeys ?? {})
 
 const restoreTerminals = useSettingsDraft(() => props.settings?.restoreTerminals ?? true)
+const terminalClipboardWrite = useSettingsDraft(() => props.settings?.terminalClipboardWrite ?? true)
 const enableShellIntegration = useSettingsDraft(() => props.settings?.enableShellIntegration ?? false)
 const confirmTerminalClose = useSettingsDraft(() => props.settings?.confirmTerminalClose ?? true)
 const closeTerminalOnTabClose = useSettingsDraft(() => props.settings?.closeTerminalOnTabClose ?? true)
@@ -515,6 +617,7 @@ const enablePreview = useSettingsDraft(() => props.settings?.enablePreview ?? tr
 const mdEditorDefault = useSettingsDraft(() => props.settings?.mdEditorDefault ?? true)
 const defaultBaseDirectory = useSettingsDraft(() => props.settings?.defaultBaseDirectory || null)
 const autoFetchRemote = useSettingsDraft(() => props.settings?.autoFetchRemote ?? false)
+const logGitCommands = useSettingsDraft(() => props.settings?.logGitCommands ?? false)
 const autoFetchIntervalSeconds = useSettingsDraft(() => props.settings?.autoFetchIntervalSeconds ?? 180)
 const showStashes = useSettingsDraft(() => props.settings?.showStashes ?? true)
 const showCommits = useSettingsDraft(() => props.settings?.showCommits ?? true)
@@ -524,6 +627,11 @@ const showWorktrees = useSettingsDraft(() => props.settings?.showWorktrees ?? fa
 const localScripts = useSettingsDraft(() => props.settings?.terminalScripts ?? [])
 const newScriptLabel = ref('')
 const newScriptCommand = ref('')
+
+// Terminal targets
+const terminalTargets = useSettingsDraft(() => props.settings?.terminalTargets ?? [])
+const newTargetLabel = ref('')
+const newTargetCommand = ref('')
 
 // Get projects from general settings
 const { value: general } = useAppSettings()
@@ -599,6 +707,13 @@ const saveMdEditorDefaultSetting = () => {
   })
 }
 
+const saveLogGitCommandsSetting = () => {
+  emit('update-setting', {
+    path: ['logGitCommands'],
+    value: logGitCommands.value
+  })
+}
+
 const saveAutoFetchRemoteSetting = () => {
   emit('update-setting', {
     path: ['autoFetchRemote'],
@@ -663,6 +778,28 @@ const addScript = () => {
 const deleteScript = (index: number) => {
   localScripts.value.splice(index, 1)
   saveScripts()
+}
+
+const saveTargets = () => {
+  emit('update-setting', {
+    path: ['terminalTargets'],
+    value: [...terminalTargets.value]
+  })
+}
+
+const addTarget = () => {
+  const label = newTargetLabel.value.trim()
+  const command = newTargetCommand.value.trim()
+  if (!label || !command) return
+  terminalTargets.value.push({ id: `tt_${Date.now()}`, label, command })
+  newTargetLabel.value = ''
+  newTargetCommand.value = ''
+  saveTargets()
+}
+
+const deleteTarget = (index: number) => {
+  terminalTargets.value.splice(index, 1)
+  saveTargets()
 }
 
 const goToProjects = () => {

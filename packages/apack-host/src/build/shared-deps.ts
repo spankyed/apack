@@ -80,7 +80,7 @@ export function sharedInstanceExports(pkg: string, fromFile: string): Record<str
  * the loader (`withModuleBridge`'s `hostPackages`, `packs/runtime/bridge.ts`). Resolving from the loader is
  * the half that has to be here: `stagePack` copies a pack's `dist/{runtime,build,types}` and nothing else, so
  * an installed pack has no `node_modules` for an external specifier to come from, wherever it was installed
- * from. `packages/api` declares the two this app ships, and `electron-builder.mjs` packages both its
+ * from. `packages/api` declares the ones this app ships, and `electron-builder.mjs` packages both its
  * `node_modules` and the hoisted root one, which is what makes them resolvable beside the API bundle.
  *
  * A pack needing one this app does not have falls through to its own resolution and fails there, naming it —

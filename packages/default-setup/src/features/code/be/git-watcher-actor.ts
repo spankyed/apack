@@ -1,7 +1,6 @@
 import { fromCallback } from 'xstate';
 import { createLogger } from '@apackdev/sdk/logger';
-import type { GitRepository } from './services/git.ts';
-import type { GitWatcherService } from './services/gitwatcher.ts';
+import type { GitRepository, GitWatcherService } from 'apack-git';
 
 interface GitWatcherSelection {
   watcher: Pick<GitWatcherService, 'setGitRepository' | 'setChangeCallback' | 'startWatching' | 'stopWatching'> | null;
@@ -34,9 +33,10 @@ export const gitWatcherActor = fromCallback<{ type: 'WATCH'; selection: GitWatch
       const { watcher, repository } = selection;
       active = watcher;
       watcher.setGitRepository(repository);
-      watcher.setChangeCallback(() => {
+      watcher.setChangeCallback((paths) => {
         if (stopped || selection !== desired || active !== watcher) return;
-        repository.clearCache();
+        // Noted before anyone is told, so whoever asks next reads what changed
+        repository.noteChanged(paths);
         input.onChange();
       });
       const cancellation = new AbortController();

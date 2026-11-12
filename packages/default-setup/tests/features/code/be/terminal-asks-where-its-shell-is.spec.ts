@@ -12,7 +12,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { resetTestData, startApp } from '@apackdev/testing/harness'
 import { recordingBroker } from './_support/terminal-broker.ts'
 
-const handlers = () => ({ onData: vi.fn(), onExit: vi.fn(), onCrashed: vi.fn() })
+const handlers = () => ({ onEvent: vi.fn(), onExit: vi.fn(), onCrashed: vi.fn() })
 
 async function aTerminal() {
   const broker = recordingBroker({ pidBase: 7000 })

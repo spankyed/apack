@@ -51,8 +51,9 @@ Terminal-open measures opening a terminal: from `terminal.CREATE` to one attache
 no data — a terminal is a process, so the fixture is the shell, the dimensions and the trial count — and each
 trial closes its terminal outside the measured interval, so later trials are not measuring an Nth open.
 **It completes on attachment, not on the first byte**, and that is a limit of what the page can see rather
-than a choice: xterm renders to a canvas here, so there is no `.xterm-rows` text to read the screen from,
-and the buffer lives in the xterm instance inside the pack's module-scoped pool. It is also the first
+than a choice: the emulator renders to a canvas and writes no text into the DOM, so there is nothing there
+to read the screen from, and the buffer lives in the emulator inside the pack's module-scoped pool. It is
+also the first
 scenario whose action ends in no view delivery — a terminal's output is broadcast news and the code feature
 declares no views — so its completion sets `awaitsDelivery: false`, which is what that option is for.
 

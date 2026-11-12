@@ -12,20 +12,11 @@
 // that element now.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@xterm/xterm', async () => ({ Terminal: (await import('../../_support/terminal-emulator.ts')).RecordedTerminal }))
-vi.mock('@xterm/addon-fit', async () => ({ FitAddon: (await import('../../_support/terminal-emulator.ts')).StubAddon }))
-vi.mock('@xterm/addon-web-links', async () => ({ WebLinksAddon: (await import('../../_support/terminal-emulator.ts')).StubAddon }))
-vi.mock('@xterm/addon-unicode11', async () => ({ Unicode11Addon: (await import('../../_support/terminal-emulator.ts')).StubAddon }))
-vi.mock('@xterm/addon-clipboard', async () => ({ ClipboardAddon: (await import('../../_support/terminal-emulator.ts')).StubAddon }))
-vi.mock('@xterm/addon-webgl', async () => ({ WebglAddon: (await import('../../_support/terminal-emulator.ts')).StubAddon }))
-vi.mock('@xterm/xterm/css/xterm.css', () => ({}))
+vi.mock('apack-terminal-view', async () => (await import('../../_support/terminal-view.ts')).viewModule())
 
-const { installDomStubs } = await import('../../_support/terminal-emulator.ts')
 const { startCodeSurface, terminalInfo } = await import('../../_support/terminal-host.ts')
 const { terminalPool } = await import('#features/code/fe/utils/terminal-pool.ts')
 const PanelTerminalSection = (await import('#features/code/fe/features/terminal/PanelTerminalSection.vue')).default
-
-installDomStubs()
 
 let surface: ReturnType<typeof startCodeSurface> | undefined
 const info = terminalInfo('panel-1')
@@ -74,7 +65,7 @@ describe('the panel terminal host', () => {
     surface = startCodeSurface({ terminals: [info], panelTerminalId: info.id, panelTerminalExpanded: true })
     surface.mount(PanelTerminalSection)
     await surface.settle()
-    const entry = terminalPool.ensure(info, () => {})
+    const entry = terminalPool.ensure(info)
     expect(entry.attachedContainer, 'the panel is not drawing the terminal').not.toBeNull()
 
     // The backend published a list without it — killed from a tab, from another window, or its shell exited
@@ -94,13 +85,71 @@ describe('the panel terminal host', () => {
     surface = startCodeSurface({ terminals: [info], panelTerminalId: info.id, panelTerminalExpanded: true })
     surface.mount(PanelTerminalSection)
     await surface.settle()
-    expect(terminalPool.ensure(info, () => {}).attachedContainer, 'the first mount is not drawing').not.toBeNull()
+    expect(terminalPool.ensure(info).attachedContainer, 'the first mount is not drawing').not.toBeNull()
 
     surface.unmount()
     surface.mount(PanelTerminalSection)
     await surface.settle()
 
-    expect(terminalPool.ensure(info, () => {}).attachedContainer, 'the remounted panel drew nothing')
+    expect(terminalPool.ensure(info).attachedContainer, 'the remounted panel drew nothing')
       .not.toBeNull()
+  })
+
+  it("shows beside a terminal's name what its program said, and that it keeps running", async () => {
+    const other = terminalInfo('panel-2')
+    surface = startCodeSurface({ terminals: [{ ...info, kept: true }, other], panelTerminalId: info.id, panelTerminalExpanded: true })
+    surface.mount(PanelTerminalSection)
+    await surface.settle()
+    const rows = () => [...surface!.root.querySelectorAll('[data-terminal-row]')]
+    const marks = (row: Element) => ({
+      kept: row.querySelector('[data-terminal-kept]') !== null,
+      attention: row.querySelector('[data-terminal-attention]') !== null,
+      progress: row.querySelector('[data-terminal-progress]')?.textContent ?? null,
+    })
+    expect(rows().map(marks)).toEqual([
+      { kept: true, attention: false, progress: null },
+      { kept: false, attention: false, progress: null },
+    ])
+
+    await surface.setActivity({ [other.id]: { bell: true, progress: { state: 'running', percent: 40 } } })
+    expect(rows().map(marks)).toEqual([
+      { kept: true, attention: false, progress: null },
+      { kept: false, attention: true, progress: '40%' },
+    ])
+    terminalPool.dispose(other.id)
+  })
+
+  /**
+   * A recording is drawn over the terminal it is of, by a view of its own session, and the moment dragged
+   * to is asked for — not once for every pixel of the drag.
+   */
+  it('draws a recording over its terminal, asks for the moment dragged to, and closes it when the host goes', async () => {
+    vi.useFakeTimers()
+    const { views } = await import('../../_support/terminal-view.ts')
+    surface = startCodeSurface({ terminals: [info], panelTerminalId: info.id, panelTerminalExpanded: true })
+    surface.mount(PanelTerminalSection)
+    await surface.settle()
+    expect(surface.root.querySelector('[data-terminal-rewind]')).toBeNull()
+
+    await surface.setRewind({ terminalId: info.id, session: 'r-9', first: 1_000, last: 9_000, at: 9_000 })
+    await surface.settle()
+    const overlay = surface.root.querySelector('[data-terminal-rewind]')!
+    expect(overlay, 'nothing was drawn for the recording').not.toBeNull()
+    const drawn = views.find((view) => view.session === 'r-9')
+    expect(drawn?.mountedIn && overlay.contains(drawn.mountedIn), 'the recording is drawn somewhere else').toBe(true)
+
+    const moment = overlay.querySelector<HTMLInputElement>('[data-terminal-rewind-moment]')!
+    for (const value of ['3000', '4000', '5000']) {
+      moment.value = value
+      moment.dispatchEvent(new Event('input'))
+    }
+    await vi.advanceTimersByTimeAsync(100)
+    expect(surface.sent.filter((event) => event.type === 'terminal.REWIND_SEEK'))
+      .toEqual([{ type: 'terminal.REWIND_SEEK', at: 5000 }])
+
+    surface.unmount()
+    expect(surface.sent.filter((event) => event.type === 'terminal.REWIND_CLOSE')).toHaveLength(1)
+    terminalPool.dispose('rewind:r-9')
+    vi.useRealTimers()
   })
 })

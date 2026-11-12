@@ -27,7 +27,20 @@
               <span dir="ltr">{{ file?.path }}</span>
             </code>
           </div>
-          <p class="text-sm text-yellow-500">
+          <template v-if="undoable">
+            <p class="text-sm text-neutral-400" data-testid="discard-undoable">
+              What this removes is kept, and Undo brings it back for as long as git keeps it: about two weeks.
+            </p>
+            <div v-if="notKept?.length" class="mt-3 text-sm text-yellow-500" data-testid="discard-not-kept">
+              <AlertCircle class="inline w-4 h-4 mr-1" />
+              Too large to keep a copy of, so {{ notKept.length === 1 ? 'this cannot' : 'these cannot' }} be brought back:
+              <ul class="mt-1 ml-5 list-disc">
+                <li v-for="path in notKept.slice(0, 5)" :key="path" class="truncate"><code>{{ path }}</code></li>
+                <li v-if="notKept.length > 5">and {{ notKept.length - 5 }} more</li>
+              </ul>
+            </div>
+          </template>
+          <p v-else class="text-sm text-yellow-500">
             <AlertCircle class="inline w-4 h-4 mr-1" />
             This action cannot be undone.
           </p>
@@ -62,6 +75,10 @@ const props = defineProps<{
   fileCount?: number
   customTitle?: string
   customMessage?: string
+  /** Whether what this removes is kept and can be brought back, which a discard of files is */
+  undoable?: boolean
+  /** The paths it would remove that are too large to keep a copy of */
+  notKept?: string[]
 }>()
 
 const emit = defineEmits<{

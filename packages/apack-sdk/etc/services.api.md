@@ -488,22 +488,112 @@ export interface StepRunNode extends RunNodeBase {
 }
 
 // @public
+export interface TerminalCellSize {
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly width: number;
+}
+
+// @public
+export type TerminalColor = `#${string}`;
+
+// @public
+export interface TerminalColors {
+    readonly ansi: readonly TerminalColor[];
+    // (undocumented)
+    readonly background: TerminalColor;
+    // (undocumented)
+    readonly cursor?: TerminalColor;
+    // (undocumented)
+    readonly foreground: TerminalColor;
+}
+
+// @public
+export interface TerminalCommand {
+    // (undocumented)
+    readonly command: string | null;
+    // (undocumented)
+    readonly cwd: string | null;
+    readonly exitStatus: number | null;
+    // (undocumented)
+    readonly finishedMs: number | null;
+    readonly id: number;
+    readonly startedMs: number | null;
+}
+
+// @public
+export type TerminalEvent =
+/** The program named its terminal. Empty when it took the name back */
+    {
+    readonly kind: 'title';
+    readonly title: string;
+} | {
+    readonly kind: 'bell';
+}
+/** The program asked for this text to be put on the clipboard */
+| {
+    readonly kind: 'clipboard';
+    readonly text: string;
+} | {
+    readonly kind: 'notification';
+    readonly title: string;
+    readonly body: string;
+}
+/** How far along the program says it is. `percent` is `null` where it gave none */
+| {
+    readonly kind: 'progress';
+    readonly state: 'none' | 'running' | 'error' | 'indeterminate' | 'paused';
+    readonly percent: number | null;
+}
+/** The shell is about to run a command, with the line it read where it said */
+| {
+    readonly kind: 'commandStarted';
+    readonly command: string | null;
+}
+/** What was running ended. `exitStatus` is `null` when the shell reported none, which is not zero */
+| {
+    readonly kind: 'commandFinished';
+    readonly exitStatus: number | null;
+} | {
+    readonly kind: 'cwdChanged';
+    readonly cwd: string;
+};
+
+// @public
 export interface TerminalFacts {
     readonly command: string | null;
     readonly cwd: string | null;
     readonly exitStatus: number | null;
+    readonly finished: number;
     readonly running: boolean;
 }
 
 // @public
 export interface TerminalListeners {
+    onEvent?(event: TerminalEvent): void;
     onExit(code: number | null, signal: string | null): void;
-    onOutput(data: string): void;
+    onOutput?(data: string): void;
+}
+
+// @public
+export interface TerminalRewind {
+    // (undocumented)
+    close(): Promise<void>;
+    readonly first: number;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly last: number;
+    // (undocumented)
+    resize(cols: number, rows: number, cell?: TerminalCellSize): Promise<void>;
+    seek(at: number): Promise<number>;
 }
 
 // @public
 export interface TerminalService {
     adopt(id: string, listeners: TerminalListeners): Promise<TerminalSession>;
+    at(target: TerminalTarget): TerminalService;
     open(options: {
         cols: number;
         rows: number;
@@ -512,22 +602,59 @@ export interface TerminalService {
         env?: Readonly<Record<string, string>>;
         unset?: readonly string[];
         cwd?: string;
+        colors?: TerminalColors;
+        record?: string;
+        restore?: boolean;
+        images?: boolean;
     }, listeners: TerminalListeners): Promise<TerminalSession>;
+    rewind(recording: string, size: {
+        readonly cols: number;
+        readonly rows: number;
+    }): Promise<TerminalRewind>;
+    sessions(): Promise<readonly TerminalSessionSummary[]>;
 }
 
 // @public
 export interface TerminalSession {
+    commandOutput(command: number): Promise<string | null>;
+    commands(): Promise<readonly TerminalCommand[]>;
     facts(): Promise<TerminalFacts>;
     readonly id: string;
+    keep(kept: boolean): Promise<void>;
     owns(pid: number): Promise<boolean>;
     pause(): Promise<void>;
     readonly pid: number | null;
-    resize(cols: number, rows: number): Promise<void>;
+    readonly recorded: boolean | null;
+    resize(cols: number, rows: number, cell?: TerminalCellSize): Promise<void>;
+    readonly restored: boolean;
     resume(): Promise<void>;
     readonly scrollback: number;
     signal(signal: TerminalSignal, scope: TerminalSignalScope): Promise<void>;
+    readonly target: string | null;
     terminate(): Promise<void>;
     write(data: string): Promise<void>;
+}
+
+// @public
+export interface TerminalSessionSummary {
+    // (undocumented)
+    readonly cols: number;
+    // (undocumented)
+    readonly command: string | null;
+    // (undocumented)
+    readonly cwd: string | null;
+    // (undocumented)
+    readonly id: string;
+    readonly kept: boolean;
+    // (undocumented)
+    readonly pid: number;
+    // (undocumented)
+    readonly recorded: boolean;
+    // (undocumented)
+    readonly rows: number;
+    // (undocumented)
+    readonly running: boolean;
+    readonly title: string | null;
 }
 
 // @public
@@ -548,6 +675,12 @@ export type TerminalSignalScope =
     readonly kind: 'pid';
     readonly pid: number;
 };
+
+// @public
+export interface TerminalTarget {
+    // (undocumented)
+    readonly command: readonly string[];
+}
 
 // @internal
 export const _toSecretMetadata: (input: SecretMetadata) => SecretMetadata;

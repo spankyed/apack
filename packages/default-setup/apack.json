@@ -615,6 +615,9 @@
             "restoreTerminals": {
               "type": "boolean"
             },
+            "terminalClipboardWrite": {
+              "type": "boolean"
+            },
             "defaultBaseDirectory": {
               "type": [
                 "string",
@@ -653,7 +656,39 @@
               "type": "integer",
               "minimum": 60
             },
+            "logGitCommands": {
+              "type": "boolean"
+            },
+            "trustedRepositories": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
             "terminalScripts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "command": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "label",
+                  "command"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "terminalTargets": {
               "type": "array",
               "items": {
                 "type": "object",
@@ -699,6 +734,7 @@
           "required": [
             "hotkeys",
             "restoreTerminals",
+            "terminalClipboardWrite",
             "defaultBaseDirectory",
             "baseDirectory",
             "enableShellIntegration",
@@ -709,7 +745,10 @@
             "enablePreview",
             "autoFetchRemote",
             "autoFetchIntervalSeconds",
+            "logGitCommands",
+            "trustedRepositories",
             "terminalScripts",
+            "terminalTargets",
             "showStashes",
             "showCommits",
             "showWorktrees",
@@ -775,6 +814,7 @@
             }
           },
           "restoreTerminals": true,
+          "terminalClipboardWrite": true,
           "defaultBaseDirectory": null,
           "baseDirectory": null,
           "enableShellIntegration": true,
@@ -785,6 +825,8 @@
           "enablePreview": true,
           "autoFetchRemote": false,
           "autoFetchIntervalSeconds": 180,
+          "logGitCommands": false,
+          "trustedRepositories": [],
           "terminalScripts": [
             {
               "id": "ts_default_1",
@@ -802,6 +844,7 @@
               "command": "npm test"
             }
           ],
+          "terminalTargets": [],
           "showStashes": true,
           "showCommits": true,
           "showWorktrees": false,

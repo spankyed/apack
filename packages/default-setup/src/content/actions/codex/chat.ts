@@ -188,14 +188,17 @@ export async function action(params: Record<string, any>, services: Services, _z
       ? { mode: 'plan' as const, settings: { model: effectiveModel, developer_instructions: null } }
       : undefined;
 
+    // Attached notes, documents, threads and files go before the text, as Claude Code's chat does
+    const resolved = await services.chat.resolveReferences(references);
+    const fullText = resolved.textPrefix ? `${resolved.textPrefix}\n\n${text}` : text;
     let turnText = !codexThreadId
       ? buildSessionBootstrapPrompt(services, {
         threadId,
         currentMessageId: userMessageId,
-        currentText: text,
+        currentText: fullText,
         providerName: 'Codex',
       })
-      : text;
+      : fullText;
 
     // ─── Goal prompt injection ───────────────────────────────────────
     const goalState = prior?.goal;

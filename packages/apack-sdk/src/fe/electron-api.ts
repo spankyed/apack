@@ -3,6 +3,7 @@
 // importing '@apackdev/sdk/fe' sees the global in source and in declarations.
 import type { _RendererPerformanceResources } from '../runtime/performance.ts';
 import type { SpeechEvent } from './speech-event.ts';
+import type { TerminalViewStream } from './terminal-views.ts';
 
 /**
  * **The whole bridge, which is the one declaration of it.**
@@ -133,6 +134,14 @@ export interface _HostBridge {
   };
   protocolAction: {
     onAction: (callback: (data: { action: string; params: Record<string, string> }) => void) => () => void;
+  };
+  terminal: {
+    /**
+     * Connects this window to the terminal broker, as a view. The preload holds the socket, since only it
+     * can open one, and has already exchanged the broker's greeting when the first byte is handed over.
+     * Reached through `terminalViews` (`@apackdev/sdk/fe`), not from here.
+     */
+    views: (target?: string) => TerminalViewStream;
   };
   rendererReady: () => void;
   apiPort: number;

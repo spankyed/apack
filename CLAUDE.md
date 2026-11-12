@@ -27,18 +27,26 @@ apack is an Electron desktop app with an actor-based architecture. Both frontend
 
 Monorepo using npm workspaces. Requires Node 24 LTS (>=24.12.0) and npm >= 11. Both floors are a measured refusal rather than a preference: npm 10 crashes resolving vitest 4.1, which a new pack's first install does, and `apack pack build` cannot run on 24.11.0 at all, whose module-hook validator rejects the CommonJS load result the pack compiler's own hooks pass through — `COMPILER_NODE_FLOOR` (`packages/apack-cli/src/build/node-support.ts`) refuses it by name, and `engines.node` says the same to npm.
 
-**Two sibling checkouts are vendored, each depended on as an npm package resolved through its link.** Each
+**Three sibling checkouts are vendored, each depended on as npm packages resolved through its link.** Each
 is a gitignored symlink under `vendor/` beside a committed `.rev` naming the commit it is pinned to, linked
 by its own script: `vendor/elmdb` (`npm run link:elmdb`) is the Rust engine `@apackdev/ears` builds against,
-and `vendor/apack-terminal` (`npm run link:apack-terminal`) is the terminal broker. The link is
-machine-specific, so it is ignored and the `.rev` is the shared fact; both linkers refuse a checkout that
-isn't one and a checkout that doesn't hold the pin. **A vendored Rust checkout that the app consumes ships
-an npm package, and the package is what knows its own build** — elmdb's `crates/elmdb-node` its napi
-binding, apack-terminal's `node/` the broker binary and the protocol's generated types — so the app resolves
-both the way it resolves any dependency, and a packaged app collects them with every other. Neither is
-published to a registry; CI clones each at its pin (`.github/actions/{elmdb,apack-terminal}`). Deriving a
-path into a checkout's build directory instead is what this replaced, and it cost a release with no terminal
-and a Windows build that could not find a binary it had just produced. **Whatever reads `vendor/` derives its subject from the
+`vendor/apack-terminal` (`npm run link:apack-terminal`) is the terminal broker and what a window draws
+a terminal with, and `vendor/apack-git` (`npm run link:apack-git`) is the git engine the built-in pack runs
+git with ([the git engine](docs/references/git-engine.md)). The link is machine-specific, so it is ignored and the `.rev` is the shared fact; both
+linkers refuse a checkout that isn't one and a checkout that doesn't hold the pin. **A vendored checkout
+that the app consumes ships an npm package, and the package is what knows its own build** — elmdb's
+`crates/elmdb-node` its napi binding, apack-terminal's `node/` the broker binary and the protocol's
+generated types, its `view/` (`apack-terminal-view`) the compiled `dist` a window draws with, and apack-git's
+the compiled `dist` of the engine — so the app resolves each the way it resolves any dependency, and a
+packaged app collects them with every other. **apack-git is the one a pack depends on, where the others are
+the host's**: it is TypeScript with nothing native, so the pack bundles it into its own runtime and leaves
+nothing for the host to resolve. None is published to a registry; CI clones each at its pin
+(`.github/actions/{elmdb,apack-terminal,apack-git}`).
+**The broker and the view speak one protocol and are one checkout, so one pin holds both halves**: the
+view's suite reads the vectors the broker's encoder writes, in that repository, and no pair of commits
+exists here to disagree. Deriving a path into a checkout's build
+directory instead is what this replaced, and it cost a release with no terminal and a Windows build that
+could not find a binary it had just produced. **Whatever reads `vendor/` derives its subject from the
 links rather than naming a checkout** — the janitor's budget and the Linux container's Rust toolchain both do
 (`scripts/lib/vendored-checkouts.ts`), so a third sibling is covered the day it is linked, and two checkouts
 pinning different toolchains is a refusal naming both rather than a silent build with one of them.
@@ -309,6 +317,13 @@ Rules that pay for themselves:
   spend) for one process, or `runCommand` (`packages/apack-cli/tests/_support/run-command.ts`) for a CLI or vitest
   process tree; `check:specifiers` refuses the rest (`findSyncSpawnsInSpecs`), and `suite-timeouts.spec.ts` a
   `promisify(execFile)`, whose `timeout` is the clock.
+- **A process a spec starts is gone when its file ends.** Stop it and wait for its exit, or give it an exit of
+  its own that holds when its fixture is deleted. The progress guard fails a file that ends with a process
+  detached from its worker, or orphaned in its worker's process group (`leftover-processes.ts`,
+  `@apackdev/testing`). A child still attached to the worker cannot be judged from inside it, so it is judged
+  once the command has exited: `boundedSpawn` fails a command that exits with a process still running in its
+  group, naming it, before the group is killed (`scripts/lib/left-running.ts`). A bare `npx vitest` has no
+  runner around it, and nothing is read on Windows.
 - **A mutation check is worth more than a re-run.**
 - **But a mutation check does not redeem a test that mirrors the code.** Ask whether the code could be
   correct but different; a case every behaviour-preserving rewrite fails encodes the code. A pure re-route
@@ -446,7 +461,8 @@ npm run check:idle               # Is this machine quiet enough to time a latenc
 npm run stress -- [--runs N] [--busy K] [cmd]  # Run a command N times under K busy cores; exit 1 if any run
                                  # failed. Default: the host unit pool, --all
 npm run soak:watch               # Does an edit made during a watcher pass get picked up? Run on a loaded Mac. Exit 1
-                                 # lost, 3 partial (file events stalled); -- --rounds N --max-delay SECONDS
+                                 # lost, 3 partial (file events stalled); -- --rounds N --max-delay SECONDS; --files-only
+                                 # holds no directory watch, so every pickup came through the kqueue file watches
 npm run janitor                  # Hold every linked Rust checkout's build caches to a budget (-- --dry); janitor:install
                                  # runs it hourly under launchd, logging to ~/Library/Logs/apack-janitor.log
 
@@ -668,4 +684,4 @@ Rules for default-setup migrations (details in `packages/apack-host/src/migratio
 
 ## Tech stack
 
-XState v5 (state machines everywhere), tRPC v11 (typed RPC), Vercel AI SDK 7 (model calls through `services.inference`: Anthropic, OpenAI, Google, Groq, Mistral, Cohere), Zod (validation), Vue Flow (node-based editor), Monaco Editor, Tiptap (rich text), xterm.js in the window and the `apack-terminal` broker for the pty (terminal), elmdb on LMDB (persistence), Vite (bundler), Oxlint + ESLint (linting).
+XState v5 (state machines everywhere), tRPC v11 (typed RPC), Vercel AI SDK 7 (model calls through `services.inference`: Anthropic, OpenAI, Google, Groq, Mistral, Cohere), Zod (validation), Vue Flow (node-based editor), Monaco Editor, Tiptap (rich text), Ghostty's VT core in one place — the `apack-terminal` broker owns the pty and interprets it with `libghostty-vt` 1.0, and a window paints the rows it is sent with `apack-terminal-view`, which has no core of its own (terminal), elmdb on LMDB (persistence), Vite (bundler), Oxlint + ESLint (linting).

@@ -42,6 +42,12 @@ export interface TerminalEntity {
    * every session — so it is offered to the broker rather than trusted (see `shell`).
    */
   session?: string
+  /**
+   * Where the terminal runs when it is not this machine: the id of one of the code settings'
+   * `terminalTargets`. A name, as `session` is: a target that has since been removed from the settings
+   * names nothing, and the terminal is then one that cannot be brought back.
+   */
+  target?: string
   createdAt: number
   updatedAt: number
 }
@@ -63,7 +69,7 @@ export const terminalQueries = {
 
 export const terminalCommands = {
   /** Records a terminal the service started, under the id it took for it (`newId`) */
-  create: (terminal: Pick<TerminalEntity, 'title' | 'shell' | 'cwd' | 'cols' | 'rows' | 'session'> & { id: EARS.EntityId<'Terminal'> }): EARS.EntityId => {
+  create: (terminal: Pick<TerminalEntity, 'title' | 'shell' | 'cwd' | 'cols' | 'rows' | 'session' | 'target'> & { id: EARS.EntityId<'Terminal'> }): EARS.EntityId => {
     return create(EARS.Entity.Terminal, terminal).id()
   },
 

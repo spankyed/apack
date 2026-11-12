@@ -1,5 +1,4 @@
-import type { GitRepository } from './services/git.ts';
-import type { GitWatcherService } from './services/gitwatcher.ts';
+import type { SignInHelp } from './services/sign-in.ts';
 import { EARS } from '#generated/ears.ts'
 
 export interface FileInfo {
@@ -76,7 +75,38 @@ export interface GitStatusFile {
   staged: boolean
   originalPath?: string // For renames and copies
   score?: number // Rename/copy similarity score (0-100)
+  /** For an unmerged file: what each side did to it, which is what there is to settle */
+  conflict?: ConflictKind
+  /** An untracked folder, listed as one row: git tracks nothing in it. Its path ends with `/` */
+  isDirectory?: boolean
 }
+
+/**
+ * How the two sides being brought together disagree about a file. `us` is the side the checkout was on and
+ * `them` the one coming in, as git names them.
+ */
+export const CONFLICT_KINDS = ['both-modified', 'both-added', 'both-deleted', 'added-by-us', 'added-by-them', 'deleted-by-us', 'deleted-by-them'] as const
+export type ConflictKind = (typeof CONFLICT_KINDS)[number]
+
+/** What git can be in the middle of in a checkout, each of which ends when it is carried on with or given up */
+export const OPERATION_KINDS = ['merge', 'rebase', 'cherry-pick', 'revert'] as const
+export type OperationKind = (typeof OPERATION_KINDS)[number]
+
+/** What git is in the middle of in a checkout */
+export interface RepositoryOperation {
+  kind: OperationKind
+  /** What is merged in, rebased onto, picked or reverted, as a person would name it: a branch where one is known, else a short commit */
+  subject: string
+  /** The branch a rebase is replaying, where it is replaying one */
+  branch?: string
+  /** A rebase's place among the commits it replays, counted from one */
+  step?: number
+  steps?: number
+}
+
+/** What can be done with what git is in the middle of: carry on once its conflicts are settled, leave out the commit a rebase stopped at, or give it up */
+export const OPERATION_MOVES = ['continue', 'skip', 'abort'] as const
+export type OperationMove = (typeof OPERATION_MOVES)[number]
 
 export interface GitBranch {
   name: string
@@ -89,13 +119,67 @@ export interface GitCommitInfo {
   date?: Date
 }
 
+/**
+ * The parts of a repository a window shows, each read and refreshed on its own: its changed files with the branch
+ * and its distance from upstream; the two sides of each changed file, which a diff of it shows; which branch is
+ * checked out, the commit it is on and every branch and tag, which a log and a pull request are read from; its
+ * stashes; its worktrees.
+ */
+export const REPOSITORY_PARTS = ['status', 'diffs', 'history', 'stashes', 'worktrees'] as const
+export type RepositoryPart = (typeof REPOSITORY_PARTS)[number]
+
+/** Which parts of a repository differ from when it was last checked */
+export type RepositoryChange = Record<RepositoryPart, boolean> & {
+  /** The changed files whose diff differs, when they are few enough to name: without it, any of them may */
+  files?: string[]
+}
+
+/** The two sides of one file's change, which an editor shows side by side */
+/** How far along git is with a command that talks to a remote or writes many files */
+export interface GitProgress {
+  /** What git is doing, in its own words: `Writing objects`, `Receiving objects`, `Updating files` */
+  stage: string
+  /** How much of that is done, from 0 to 100 */
+  percent: number
+}
+
+/** One piece of a file's change, as git cuts it */
+export interface DiffHunk {
+  /** What names this piece when it is staged or unstaged: the same for as long as git cuts the same piece */
+  id: string
+  /** Where it begins on the left side of the diff, and how many lines of that side it covers */
+  oldStart: number
+  oldLines: number
+  /** The same on the right side */
+  newStart: number
+  newLines: number
+  /** The piece as text, to show: its header and its lines. Git is handed the piece by its `id`, never this */
+  patch: string
+}
+
 export interface GitDiff {
   path: string
-  diff: string
   staged: boolean
   originalContent?: string
   modifiedContent?: string
   isImage?: boolean
+  /** The pieces of the change that can be staged, or unstaged, one at a time: none for a file that is not plainly modified */
+  hunks?: DiffHunk[]
+}
+
+/** What a discard kept of what it removed, which can be put back for as long as git keeps it */
+export interface DiscardKept {
+  /** Names what was kept, to put it back. Absent when nothing was: every file was too large, or there was none */
+  id?: string
+  /** The paths removed without a copy, each too large to keep one of: from the top of the checkout */
+  notKept: string[]
+}
+
+/** What putting a discard back did, by path from the top of the checkout */
+export interface DiscardRestored {
+  restored: string[]
+  /** Changed or made again since the discard, and left as they are */
+  left: string[]
 }
 
 export interface StashEntry {
@@ -198,6 +282,14 @@ export interface GhReviewComment {
 // Terminal types
 export interface TerminalInfo {
   id: EARS.EntityId
+  /**
+   * The session a window draws this terminal from, by the name the terminal broker knows it by. Absent
+   * while the terminal has no shell — one that ended and was kept.
+   *
+   * **Not the terminal's own id, because a terminal is not its shell.** A restart puts a new session under
+   * the same terminal, and a window that went on drawing the old one would be drawing a shell that is gone.
+   */
+  session?: string
   title: string
   customTitle?: string // User-defined custom name, takes precedence over default
   /**
@@ -221,15 +313,33 @@ export interface TerminalInfo {
    * seam; this is what says how many there have been, for a window that was not watching.
    */
   generation: number
-  /** The shell ended and the terminal was kept. Absent while one is running */
-  exited?: { code: number | null }
+  /**
+   * Whether what it prints is kept in a recording, which is what it can be looked back through from and
+   * what lets its shell be kept running and found again. A terminal on a target is not, and nor is one
+   * started while restoring terminals is off.
+   */
+  recorded?: boolean
+  /** Whether its shell goes on running when the app is not, which a window asks for with `terminal.KEEP_TERMINAL` */
+  kept?: boolean
+  /**
+   * Where it runs when that is not this machine: the setting's id and label, and the `key` a window
+   * draws its session from (`terminalViews`), which is there once a session on the target has been
+   * reached. Absent for a terminal on this machine.
+   */
+  target?: { id: string; label: string; key?: string }
+  /**
+   * The terminal has no shell and was kept. Absent while one is running.
+   *
+   * `unreached` is a terminal on a target this run has not connected to: there may be a shell there still,
+   * and starting the terminal again is what finds out.
+   */
+  exited?: { code: number | null; unreached?: true }
   /**
    * The session's size **when this was published**, which is a starting point and not a live reading.
    *
    * **A pty has one size and it is whatever a window last fitted**, so the live value lives where the
    * session does: the service keeps it current and `restart` re-opens the shell at it. What a window holds
-   * is the snapshot it was last listed or opened with, and its one consumer wants exactly that — the pool
-   * builds the emulator at this size, so it is the width a replayed screen is first drawn at.
+   * is the snapshot it was last listed or opened with.
    *
    * It is spelled out because it reads as live and is not: a drive scenario waited on it for the size a
    * window had just fitted and timed out at the creation size, with every resize having landed correctly
@@ -238,14 +348,6 @@ export interface TerminalInfo {
   cols: number
   /** The session's rows when this was published; see `cols` */
   rows: number
-  /**
-   * How far back this session can be scrolled: the host's number, from the broker's handshake.
-   *
-   * The window derives its emulator's bound from this and never pins its own. Exceeding it would draw lines
-   * no reattach could reproduce — the broker is what answers a screen read when no window holds the bytes —
-   * and 10,000 pinned in the pool against the broker's 1,000 is exactly what that looked like.
-   */
-  scrollback: number
   /**
    * What ends a typed line for *this* shell — X6.
    *
@@ -274,6 +376,8 @@ export interface TerminalResize {
 
 export interface TerminalCreate {
   id?: EARS.EntityId
+  /** One of the code settings' `terminalTargets`, by id: where to run it instead of on this machine */
+  target?: string
   title?: string
   cwd?: string
   shell?: string
@@ -323,8 +427,52 @@ export interface CodeSystemContext {
    * the code settings change, the browsed `baseDirectory` included, so only a new default moves the explorer.
    */
   defaultBaseDirectory: string | null
-  gitRepository: GitRepository | null
-  gitWatcher: GitWatcherService | null
+  gitRepository: RepositoryHandle | null
+  gitWatcher: WatcherHandle | null
+}
+
+declare const gitHandle: unique symbol
+/**
+ * The checkout's repository, as the system's context holds it. The context is part of the pack's published
+ * contract, which names no type of the git engine's, so it is a handle there: the feature's own code reads it as
+ * the repository it is (`repositoryOf`, `be/services/app-git-repository.ts`).
+ */
+export interface RepositoryHandle { readonly [gitHandle]: 'repository' }
+/** The repository's watcher, held the same way (`watcherOf`) */
+export interface WatcherHandle { readonly [gitHandle]: 'watcher' }
+
+/** Why a git command failed, where what it printed says: the git engine's codes, as the contract names them */
+export const GIT_ERROR_CODES = [
+  'locked', 'authentication', 'permission', 'remote-unreachable', 'non-fast-forward', 'diverged', 'conflict', 'local-changes', 'unknown-ref', 'not-a-repository',
+  'untrusted',
+] as const
+export type GitErrorCode = (typeof GIT_ERROR_CODES)[number]
+
+export type { SignInHelp }
+
+/** One thing a repository would have git run: a setting of its own that is not known to run nothing, or a hook it holds */
+export type TrustAsk =
+  | { kind: 'setting'; key: string; value: string; file: string }
+  | { kind: 'hook'; name: string; file: string }
+
+/** What a repository asks to be trusted for, and what names it where trust is remembered */
+export interface TrustRequest {
+  /** Where the repository's git state really lives */
+  repository: string
+  asks: TrustAsk[]
+}
+
+/** What the commit panel is told of a command that failed */
+export interface CommitFailure {
+  message: string
+  /** Why git failed, where it said */
+  code?: GitErrorCode
+  /** The command the failure was of, where the panel can run it again */
+  during?: 'push' | 'pull'
+  /** What can be done about a sign-in the remote asked for */
+  signIn?: SignInHelp
+  /** What the repository would have git run, when the command was not run because the repository is not trusted */
+  trust?: TrustRequest
 }
 
 export type { ClaudeUiClientEvent, ClaudeUiNoticeEvent, ClaudeUiNotices, ClaudeUiScrollEvent, ClaudeUiScrollState, ClaudeUiPanePresentation, ClaudeUiPaneEvent, ClaudePromptHostRequest, ClaudePromptHostResponse, ClaudeUiFocusEvent, ClaudeUiFocusReply, ClaudeUiNode, ClaudeUiMountState, ClaudeUiFieldEvent, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRow, ClaudePromptCompletionRequest, ClaudePromptCompletionReply } from './services/claude-code/ui-presentation.ts'

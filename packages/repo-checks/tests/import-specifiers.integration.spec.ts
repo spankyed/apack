@@ -695,7 +695,7 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
     return findNodePtyImports(PACK_SRC, root);
   },
   findEmulatorImports: () => {
-    packFixture({ 'src/view.ts': "import { Terminal } from '@xterm/xterm';" });
+    packFixture({ 'src/view.ts': "import { TerminalView } from 'apack-terminal-view';" });
     return findEmulatorImports(PACK_SRC, root);
   },
   findSchemeRegistrations: () => {
@@ -1939,9 +1939,9 @@ describe('findNodePtyImports', () => {
 
 describe('findEmulatorImports', () => {
   it('reports a pack file reaching the emulator outside the seam', () => {
-    packFixture({ 'src/panel.vue.ts': "import type { FitAddon } from '@xterm/addon-fit';" });
+    packFixture({ 'src/panel.vue.ts': "import type { ViewOptions } from 'apack-terminal-view';" });
     expect(findEmulatorImports(PACK_SRC, root)).toEqual([
-      `${PACK_FIXTURE}/src/panel.vue.ts:1: @xterm/addon-fit`,
+      `${PACK_FIXTURE}/src/panel.vue.ts:1: apack-terminal-view`,
     ]);
   });
 

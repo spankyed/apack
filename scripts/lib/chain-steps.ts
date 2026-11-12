@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { BUILD_UNITS, repoRelative, REPO_ROOT } from '@apackdev/host/build/packages-built';
+import { isPackInputPath } from '@apackdev/host/build/pack-inputs';
 import { PUBLISH_TREE } from '@apackdev/host/build/published-manifest';
 import { coresFor } from './core-budget.ts';
 import type { BudgetClass } from './step-budgets.ts';
@@ -544,7 +545,7 @@ export const needsApp = (step: Pick<ChainStep, 'inputs'>): boolean =>
 /** The Electron entry and the dev-mode switch: not inside a package, and read by anything that starts the app */
 const APP_ENTRY = ['packages/entry-point.mjs', 'packages/dev-mode.js'];
 /** The wrapper a shell-script step runs through, and the module that bounds it */
-const BOUNDED_RUNNER = ['scripts/bounded.ts', 'scripts/lib/bounded-spawn.ts', 'packages/apack-sdk/src/progress.ts'];
+const BOUNDED_RUNNER = ['scripts/bounded.ts', 'scripts/lib/bounded-spawn.ts', 'scripts/lib/left-running.ts', 'packages/apack-sdk/src/progress.ts'];
 
 /**
  * What *runs* the app's builds, as against what those builds read.
@@ -562,7 +563,7 @@ const BOUNDED_RUNNER = ['scripts/bounded.ts', 'scripts/lib/bounded-spawn.ts', 'p
  * `scripts/bounded.ts` wrapper a shell-script step runs under, and declaring the wrapper would re-run four
  * builds for an edit that cannot reach them.
  */
-const APP_RUNNER = ['scripts/build-runtime.ts', 'scripts/lib/runtime-build-legs.ts', 'scripts/lib/bounded-spawn.ts', 'packages/apack-sdk/src/progress.ts',
+const APP_RUNNER = ['scripts/build-runtime.ts', 'scripts/lib/runtime-build-legs.ts', 'scripts/lib/bounded-spawn.ts', 'scripts/lib/left-running.ts', 'packages/apack-sdk/src/progress.ts',
   'scripts/lib/chain-schedule.ts', 'scripts/lib/exit-on-epipe.ts', 'scripts/lib/measure.ts'];
 
 /**
@@ -581,7 +582,9 @@ const APP_RUNNER = ['scripts/build-runtime.ts', 'scripts/lib/runtime-build-legs.
  * that each config loads them at all, so between the three a config and its cache key cannot disagree.
  */
 export const SUITE_SETUP_FILES = ['packages/apack-testing/src/vitest-exit-with-parent.ts',
-  'packages/apack-testing/src/vitest-progress-guard.ts'];
+  'packages/apack-testing/src/vitest-progress-guard.ts',
+  // Not a setup file itself: the guard's module for what a file left running, which fails files as the guard does
+  'packages/apack-testing/src/leftover-processes.ts'];
 
 /**
  * What *runs* a unit suite, as against what the suite reads — and an input to every project all the same.
@@ -610,9 +613,17 @@ const SUITE_RUNNER = ['scripts/test-unit-pool.ts', 'scripts/lib/unit-pool.ts', '
  */
 export const PACK_OUTPUTS = ['packages/default-setup/dist', 'packages/default-setup/src/__generated__'];
 
-/** Authored pack inputs for its build and facade. Runtime app checks consume PACK_OUTPUTS instead. */
-const PACK_SOURCES = ['packages/default-setup/src', 'packages/default-setup/apack.json',
-  'packages/default-setup/package.json'];
+/**
+ * Authored pack inputs for its build and facade: the pack's whole tree as `apack pack build` scopes it (`isPackInputPath`),
+ * tests and their configs included, since the compiler's freshness record covers every authored file under the pack
+ * root. Declaring only `src` and the manifests left the chain keeping a build after a test edit that the compiler then
+ * refused to replay ("Compiler startup input changed"), failing the steps that consume it. Runtime app checks consume
+ * PACK_OUTPUTS instead.
+ */
+const PACK_DIR = 'packages/default-setup';
+// Dot files are left out as `inputFiles` leaves them out of every directory it walks: editor and OS droppings
+const PACK_SOURCES = fs.readdirSync(path.join(REPO_ROOT, PACK_DIR)).filter((name) => !name.startsWith('.') && isPackInputPath(name)).sort()
+  .map((name) => `${PACK_DIR}/${name}`);
 
 /**
  * What a step reads to derive something from the pack's sources, which `build:default-setup` and `facade:check` both do:
@@ -954,7 +965,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
       'packages/apack-ears/package.json', 'packages/apack-sdk/package.json', 'packages/apack-ui/package.json',
       'scripts/api-check.ts', 'scripts/lib/api-report-packages.ts', 'scripts/lib/exit-on-epipe.ts',
       // `bounded-spawn` is how this runs the three extractions
-      'scripts/lib/bounded-spawn.ts', 'packages/apack-sdk/src/progress.ts',
+      'scripts/lib/bounded-spawn.ts', 'scripts/lib/left-running.ts', 'packages/apack-sdk/src/progress.ts',
       'scripts/api-reports.ts', 'scripts/component-contracts.ts', 'scripts/lib/api-entries.ts',
       'packages/apack-ears/etc', 'packages/apack-sdk/etc', 'packages/apack-ui/etc',
       'packages/apack-ears/tsconfig.api-extractor.json', 'packages/apack-sdk/tsconfig.api-extractor.json',
@@ -980,7 +991,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
   // Build the built-in pack before build:runtime reads its outputs.
   // Includes cold compiler capture, codegen, all bundles and final source/input verification.
   { name: 'build:default-setup', budget: 'suite', outputs: PACK_OUTPUTS,
-    // Its sources and its manifest, not its tests: `apack pack build` never reads those
+    // The pack's whole authored tree, tests included: `apack pack build` records all of it (`PACK_SOURCES`)
     //
     // The CLI's sources reach here through `PACKAGE_BUILD_OUTPUTS`, since an edit to them makes the
     // `@apackdev/cli` build unit stale and `packages:ensure` rewrites the bundle this declares — and what the
