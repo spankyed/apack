@@ -61,7 +61,10 @@ Out:
 - Phase 1 is done, with its results in the evidence record: the main process writes the clipboard, the window no
   longer checks focus, and a read request is answered nothing. Its limits (an 8 MiB refusal shown to nobody, and
   one write per window) are stated there.
-- Next deliverable: Phase 2 (copy-on-select, decision D3).
+- Phase 2 is done in code and checks: [the evidence record](../references/evidence/terminal-parity.md#phase-2--copy-on-select-2026-11-12).
+  The broker pull request (spankyed/apack-terminal#16) is open and green, but its merge was denied by the permission
+  system, so the app pins its branch commit for now. Repin to the merge commit once it lands.
+- Next deliverable: Phase 3 (minimum contrast ratio, decision D4).
 - Unresolved: none. Nothing in this goal depends on a manual step; see D6.
 
 ## Decisions

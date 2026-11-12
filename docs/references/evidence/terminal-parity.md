@@ -68,6 +68,39 @@ Commands:
   own `navigator.clipboard` was already open to packs, so this adds no reach beyond what they had, but it is a new
   public member and is reported in the SDK report.
 
+## Phase 2 — copy-on-select (2026-11-12)
+
+Source: broker `session/terminal-parity-view` at `0c8d6cd` (pull request spankyed/apack-terminal#16, which carries
+`51dd0aa` the view change and the rustfmt fix after it); monorepo `session/terminal-parity-work` (this commit), with
+`vendor/apack-terminal.rev` naming `0c8d6cd`.
+
+**What it does.** The view's option `copyOnSelect` (off by default) copies a selection the person made on release: a drag,
+or a word or line from a double or triple click. A press a program is reporting is not copied. `setCopyOnSelect` changes
+it while the view is up. In the app a Code setting, `copyOnSelect` (off by default), carries through the Code surface's
+`FEATURE_SETTINGS_UPDATED` to the terminal pool, which gives it to every view, those up now and those made later.
+
+| Behaviour | Check | Result |
+|---|---|---|
+| Off by default, so a drag is not copied on its own | `does not copy by default: the person asks for it with a copy` (`view/tests/interaction.spec.ts`) | pass |
+| Copied as the pointer is let go, not before | `copies a dragged selection when the option is set, as the pointer is let go` | pass |
+| A double-click word is a selection, and is copied | `copies a word selected by a double click, which is a selection too` | pass |
+| `setCopyOnSelect` changes it while the view is up | `is changed while the view is up by setCopyOnSelect` | pass |
+| A click that selects nothing copies nothing | `does not copy a click that selects nothing` | pass |
+| Mutation: the copy-on-release condition removed | the copy and default cases above | fail, as they should; file restored |
+| The whole view suite | `npx vitest run` in `view/` | 331 of 331 |
+| The pool gives the setting to views made after it, and to those already up, and takes it back off | `is given to every view, the ones already up as well as those made after it is set` (`terminal-pool.frontend.spec.ts`) | pass |
+| The Code surface passes a settings update to the pool, and a setting that is not there is off | `gives the copy-on-selection setting to the terminal pool as it changes, and off when it is not set` (`state.spec.ts`) | pass |
+| Typecheck, including the pack's types and the facade report | `npm run typecheck` | pass |
+| Affected specs | `npm run spec` | 216 files, 1,443 tests pass |
+
+**What this does not establish.**
+
+- The settings form row (`settings.vue`) is checked by the typecheck, not by a spec: the repo has no spec for that form.
+- No run of the Electron app has selected text with the setting on and seen it on the clipboard.
+- The broker pull request is not merged yet. Its checks passed on `0c8d6cd` (17 of 17). The merge was denied by the
+  permission system on 2026-11-12, so the app's pin names a branch commit, which CI can clone, until it is merged. Repin
+  to the merge commit after it lands.
+
 ## What this does not establish
 
 - **Real-window behaviour of the clipboard write.** The write path is proven at the bridge and the handler with stubs. No
