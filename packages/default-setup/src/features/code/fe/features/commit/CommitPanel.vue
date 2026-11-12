@@ -176,7 +176,7 @@
             @mousedown.prevent="selectBranch(branch)"
             @mouseenter="highlightedBranchIndex = Number(index)"
             :class="[
-              'px-3 py-2 cursor-pointer flex items-center gap-2',
+              'group px-3 py-2 cursor-pointer flex items-center gap-2',
               index === highlightedBranchIndex ? 'bg-neutral-800' : 'hover:bg-neutral-800'
             ]"
           >
@@ -188,6 +188,23 @@
               <span v-if="branchStanding[branch].behind">↓{{ branchStanding[branch].behind }}</span>
             </span>
             <CheckCircle v-if="branch === gitBranch" :size="12" class="ml-auto text-green-500" />
+            <span v-else class="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100">
+              <button
+                data-testid="merge-branch"
+                @mousedown.stop.prevent="startOperation('merge', branch)"
+                @mouseenter="commitActor.send({ type: 'commit.PREVIEW_MERGE', target: branch })"
+                :disabled="isStartingOperation || !!operation"
+                :title="mergeTitle(branch)"
+                class="p-0.5 hover:bg-neutral-700 rounded disabled:opacity-40"
+              ><GitMerge :size="12" class="text-neutral-400" /></button>
+              <button
+                data-testid="rebase-onto-branch"
+                @mousedown.stop.prevent="startOperation('rebase', branch)"
+                :disabled="isStartingOperation || !!operation"
+                :title="`Rebase ${gitBranch} onto ${branch}`"
+                class="p-0.5 hover:bg-neutral-700 rounded disabled:opacity-40"
+              ><GitPullRequestArrow :size="12" class="text-neutral-400" /></button>
+            </span>
           </div>
         </div>
       </div>
@@ -825,7 +842,7 @@ import { useSurface, useShell } from '@apackdev/sdk/fe'
 import type { CodeState } from '#features/code/fe/state.ts'
 import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts'
 import type { ConflictKind, OperationMove } from '#features/code/be/types.ts'
-import { Folder, GitBranch, GitBranchPlus, GitCommit, GitFork, GitMerge, RefreshCw, Plus, Minus, RotateCcw, ChevronDown, ChevronRight, CheckCircle, Check, X, Sparkles, Loader2, ArrowDownToLine, ArrowUpFromLine, MoreVertical, Trash2, Copy, Search, FolderSync, Lock, FileText } from 'lucide-vue-next'
+import { Folder, GitBranch, GitBranchPlus, GitCommit, GitFork, GitMerge, RefreshCw, Plus, Minus, RotateCcw, ChevronDown, ChevronRight, CheckCircle, Check, X, Sparkles, Loader2, ArrowDownToLine, ArrowUpFromLine, MoreVertical, Trash2, Copy, Search, FolderSync, Lock, FileText, GitPullRequestArrow } from 'lucide-vue-next'
 import { ContextMenuItem } from 'reka-ui'
 import { MENU_ITEM_CLASS, MENU_ITEM_DANGER_CLASS } from '#features/code/fe/features/explorer/constants.ts'
 import GitFileItem from '#features/code/fe/features/commit/GitFileItem.vue'
@@ -907,6 +924,24 @@ const ownershipRequest = useSelector(commitActor, (state) => (state.context.gitE
 const NOTHING_READ = new Set(['untrusted', 'unsafe-ownership', 'git-not-found', 'developer-tools-missing', 'git-too-old'])
 const gitNeverRan = useSelector(commitActor, (state) => !!state.context.gitError && NOTHING_READ.has(state.context.gitFailure?.code ?? ''))
 const isMovingOperation = useSelector(commitActor, (state) => state.context.isMovingOperation)
+const isStartingOperation = useSelector(commitActor, (state) => state.context.isStartingOperation)
+const mergePreview = useSelector(commitActor, (state) => state.context.mergePreview)
+/** What merging a branch in would do, said before the click once it is known */
+const mergeTitle = (branch: string): string => {
+  const known = mergePreview.value?.target === branch ? mergePreview.value.preview : undefined
+  const merging = `Merge ${branch} into ${gitBranch.value}`
+  switch (known?.kind) {
+    case 'fast-forward': return `${merging}: a fast-forward`
+    case 'clean': return `${merging}: merges cleanly`
+    case 'conflicts': return `${merging}: would conflict in ${known.files.join(', ')}`
+    case 'up-to-date': return `${merging}: nothing to bring in`
+    default: return merging
+  }
+}
+const startOperation = (kind: 'merge' | 'rebase', target: string) => {
+  showBranchDropdown.value = false
+  commitActor.send({ type: 'commit.START_OPERATION', kind, target })
+}
 const commitsAhead = useSelector(commitActor, (state) => state.context.commitsAhead)
 const commitsBehind = useSelector(commitActor, (state) => state.context.commitsBehind)
 const isPushing = useSelector(commitActor, (state) => state.context.isPushing)
