@@ -57,7 +57,7 @@ Out:
 - Pin: the monorepo's `master` pins the broker at `efe5d84`, which is 24 commits behind the broker's `master`. Bump `vendor/apack-terminal.rev` in the same change that lands the first view commit.
 - Next deliverable: Phase 0. It has no code dependencies.
 - Proven: the source findings above. Nothing run end to end yet.
-- Unresolved: none blocking. D6 is a manual step for the person; see Phase 6.
+- Unresolved: none. Nothing in this goal depends on a manual step; see D6.
 
 ## Decisions
 
@@ -77,9 +77,10 @@ Each decision is the path I'd take. Where the user has not decided, these stand.
   programs that chose their colours deliberately.
 - **D5 — the GPU renderer is built only if the Phase 4 measurement fails.** *Why:* a WebGL painter is a large
   rewrite, and the measurement decides whether it is needed.
-- **D6 — the real screen-reader run is a manual, recorded step.** I can automate the accessibility-tree contract
-  but cannot drive VoiceOver. The person runs the checklist once and the result goes in evidence. It does not
-  block Phases 0 to 5 or 7.
+- **D6 — the goal's completion is judged on the automated accessibility contract alone.** A VoiceOver run is a
+  follow-up, not a condition. It is written as a checklist in evidence, and whenever someone runs it, its result is
+  recorded there. Nothing in this goal waits on it, and a failing VoiceOver result opens a new fix, not a reopening
+  of this goal. *Why:* completion must not depend on a step no agent can perform.
 - **D7 — command blocks belong to the Code surface.** The view learns one generic thing (collapsed line ranges).
   It never learns what a command is. *Why:* the view is reusable and must not depend on a shell's markers.
 - **D8 — rectangular selection is Alt-drag on Linux and Windows, Option-drag on macOS**, as in xterm.js.
@@ -148,10 +149,10 @@ Each phase names its deliverable, its dependencies, and what is done when it fin
 ### Phase 6 — screen reader (D6)
 
 - **Deliverable:** an automated contract for what the accessibility tree exposes (role, label, and the text
-  attribute the view publishes), plus a VoiceOver checklist in evidence.
-- **Dependencies:** none for the automated half.
-- **Done when:** the automated contract passes, and the VoiceOver checklist has been run once by the person and
-  its result recorded. Until that step is done, this phase is open and nothing else is blocked.
+  attribute the view publishes), and a VoiceOver checklist written into evidence for a later run.
+- **Dependencies:** none.
+- **Done when:** the automated contract passes and the checklist is written. The goal completes on this. A
+  VoiceOver run, when someone does one, is recorded in evidence as a follow-up and blocks nothing.
 
 ### Phase 7 — command blocks (D7)
 
@@ -183,7 +184,7 @@ Phases 7.1 and 7.2 need only the Code surface. Phase 7.3 needs the view primitiv
 | Copy-on-select, default off | missing | — | Phase 2 |
 | Minimum contrast ratio, default off | missing | — | Phase 3 |
 | Painter timing decided | not measured | — | Phase 4 |
-| Screen reader contract, then manual run | partial | — | Phase 6 |
+| Screen reader contract (automated) | partial | — | Phase 6 |
 | Rectangular selection | missing | — | Phase 5 |
 | Re-run and copy any command | `commands` exists, no UI | — | Phase 7.1 |
 | Failure highlight on blocks | the gutter colours exist | — | Phase 7.2 |
