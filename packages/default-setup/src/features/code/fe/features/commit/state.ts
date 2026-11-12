@@ -5,7 +5,7 @@ import { sendToSystem } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { diffTab, diffTabPath } from '../../utils/diff-tabs.ts';
 import { withStaged, withUnstaged } from 'apack-git/staging';
-import type { ChangedFile, CommitFailure, ConflictKind, LineCount, DiffHunk, DiscardKept, DiscardRestored, GitProgress, OperationMove, RepositoryChange, RepositoryOperation, SignInHelp } from '../../../be/types.ts';
+import type { BlameLine, ChangedFile, CommitFailure, ConflictKind, LineCount, DiffHunk, DiscardKept, DiscardRestored, GitProgress, OperationMove, RepositoryChange, RepositoryOperation, SignInHelp } from '../../../be/types.ts';
 import type { OpenFile } from '../../contract.ts';
 
 
@@ -60,6 +60,8 @@ export interface CodeCommitContext {
   lineCounts: Record<string, LineCount>
   /** The files of the stashes opened in the list, by index, read without applying them */
   stashFiles: Record<number, ChangedFile[]>
+  /** Who last changed each line of the file the editor shows blame for, from the top of the folder */
+  blame: { path: string; lines: BlameLine[] } | null
   /** The repositories under the folder the user opened, which the picker lists when there is more than one */
   repositories: { path: string; relative: string; kind: 'top' | 'nested' | 'submodule' | 'worktree' }[]
   /** The last write here that Undo takes back, as the repository's journal names it, until it is dismissed */
@@ -223,6 +225,10 @@ export type Event =
   /** Opens a stash in the list to show its files, or closes it */
   | { type: 'commit.TOGGLE_STASH_FILES'; index: number }
   | { type: 'commit.STASH_CHANGES_RECEIVED'; data: { index: number; files: ChangedFile[] } }
+  /** Shows who last changed each line of a file in the editor, or stops */
+  | { type: 'commit.SHOW_BLAME'; path: string }
+  | { type: 'commit.CLEAR_BLAME' }
+  | { type: 'commit.BLAME_RECEIVED'; data: { path: string; lines: BlameLine[] } }
   | { type: 'commit.REPOSITORIES_RECEIVED'; data: { repositories: CodeCommitContext['repositories']; truncated: boolean; current: string | null } }
   /** The picker chose another repository under the folder the user opened */
   | { type: 'commit.SELECT_REPOSITORY'; path: string }
@@ -305,6 +311,7 @@ type OfOneFolder =
   | 'lastDiscard'
   | 'lineCounts'
   | 'stashFiles'
+  | 'blame'
   | 'repositories'
   | 'lastUndoable'
   | 'undoConfirmation'
@@ -346,6 +353,7 @@ const ofNoFolder = (): Pick<CodeCommitContext, OfOneFolder> => ({
   lastDiscard: null,
   lineCounts: {},
   stashFiles: {},
+  blame: null,
   repositories: [],
   lastUndoable: null,
   undoConfirmation: null,
@@ -1185,6 +1193,18 @@ export const commitState = setup({
             enqueue.assign({ logPath: null, commitLog: [], logCursor: null })
             askLogPage(context, enqueue, {})
           }),
+        },
+        'commit.SHOW_BLAME': {
+          actions: [
+            assign({ blame: ({ event }) => ({ path: (event as { type: 'commit.SHOW_BLAME'; path: string }).path, lines: [] }) }),
+            ({ event }) => sendToSystem('code', { type: 'commit.GET_BLAME', path: (event as { type: 'commit.SHOW_BLAME'; path: string }).path }),
+          ],
+        },
+        'commit.CLEAR_BLAME': { actions: assign({ blame: null }) },
+        // Only for the file blame was last asked of: an answer for one since left is no answer
+        'commit.BLAME_RECEIVED': {
+          guard: ({ context, event }) => context.blame?.path === (event as { type: 'commit.BLAME_RECEIVED'; data: { path: string } }).data.path,
+          actions: assign({ blame: ({ event }) => (event as { type: 'commit.BLAME_RECEIVED'; data: { path: string; lines: BlameLine[] } }).data }),
         },
         'commit.UNDO_DISCARD': {
           actions: 'undoDiscard'

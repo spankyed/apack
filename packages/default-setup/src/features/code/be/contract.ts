@@ -6,7 +6,7 @@ import type {
   CodeConnectedData, RepositoryUnder, CodeSystemError, CommitFailure, CodeSystemContext, DirectoryContent, DiscardKept, DiscardRestored, FileContent, FileInfo,
   GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitProgress, GitStatusFile, OperationMove, QuickOpenResult, RepositoryChange,
   RepositoryOperation, SearchProgress, SignInHelp,
-  SearchResult, StashEntry, BranchStandingOf, LineCount, ChangedFile, HistoryCommit, TerminalInfo, WorktreeEntry,
+  SearchResult, StashEntry, BranchStandingOf, LineCount, ChangedFile, HistoryCommit, TerminalInfo, WorktreeEntry, BlameLine,
 } from './types.ts';
 import type { ActiveTokenInfo } from './services/gh-cli.ts';
 import type { FileChangeInfo } from './services/open-file-watcher.ts';
@@ -89,6 +89,8 @@ export type IncomingCommitEvents =
   | { type: 'commit.STASH_CLEAR' }
   /** The files a stash holds, to look into before applying it */
   | { type: 'commit.GET_STASH_CHANGES'; index: number }
+  /** Who last changed each line of a file, from the top of the folder, for the editor's gutter */
+  | { type: 'commit.GET_BLAME'; path: string }
   /** Takes back the last write the engine made here; `evenIfPublished` once the user said to for a commit already pushed */
   | { type: 'commit.UNDO_LAST'; evenIfPublished?: boolean }
   | { type: 'commit.WORKTREE_LIST' }
@@ -158,6 +160,7 @@ export type OutgoingCommitEvents =
   | { type: 'commit.STASH_LIST_RECEIVED'; data: { stashes: StashEntry[] } }
   /** The files a stash holds, read without applying it, for the window that asked */
   | { type: 'commit.STASH_CHANGES_RECEIVED'; data: { index: number; files: ChangedFile[] } }
+  | { type: 'commit.BLAME_RECEIVED'; data: { path: string; lines: BlameLine[] } }
   | { type: 'commit.STASH_SUCCESS'; data: { message: string } }
   | { type: 'commit.WORKTREE_LIST_RECEIVED'; data: { worktrees: WorktreeEntry[] } }
   | { type: 'commit.WORKTREE_ADDED'; data: { path: string; branch: string } }

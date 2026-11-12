@@ -48,6 +48,7 @@ export type Event =
   | { type: 'commit.STASH_DROP'; index: number }
   | { type: 'commit.STASH_CLEAR' }
   | { type: 'commit.GET_STASH_CHANGES'; index: number }
+  | { type: 'commit.GET_BLAME'; path: string }
   | { type: 'commit.UNDO_LAST'; evenIfPublished?: boolean }
   | { type: 'commit.WORKTREE_LIST' }
   | { type: 'commit.WORKTREE_ADD'; path: string; branch?: string; createBranch?: boolean }
@@ -988,6 +989,16 @@ export const commitSystem = setup({
       )
     },
 
+    /** Who last changed each line of a file, leaving out the commits the repository lists to be ignored */
+    getBlame: ({ event, context, reply }) => {
+      const { path: file } = event as { type: 'commit.GET_BLAME'; path: string }
+      if (!requireGitRepository(context, reply)) return
+      context.gitRepository.blame(file).then(
+        lines => answer(reply, { type: 'commit.BLAME_RECEIVED', data: { path: file, lines } }),
+        (error: unknown) => answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) }),
+      )
+    },
+
     stashDrop: ({ event, context, self, reply }) => {
       const ev = event as { type: 'commit.STASH_DROP'; index: number }
 
@@ -1244,6 +1255,9 @@ export const commitSystem = setup({
         },
         'commit.GET_STASH_CHANGES': {
           actions: 'getStashChanges'
+        },
+        'commit.GET_BLAME': {
+          actions: 'getBlame'
         },
         'commit.STASH_DROP': {
           actions: 'stashDrop'

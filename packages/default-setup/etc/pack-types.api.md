@@ -224,6 +224,18 @@ type AvailableSettings = PackFeatureSettings & {
 
 type BaseEntity = _apackdev_ears.BaseEntity;
 
+/** Who last changed one line of a file, as `git blame` answers it */
+interface BlameLine {
+    line: number;
+    commit: string;
+    author: string;
+    authorEmail: string;
+    date: string;
+    summary: string;
+    originalLine: number;
+    originalPath: string;
+}
+
 interface BlockConfig {
     type: string;
     props: Record<string, any>;
@@ -1607,7 +1619,7 @@ interface FolderItem {
 }
 
 /** Why a git command failed, where what it printed says: the git engine's codes, as the contract names them */
-declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository", "aborted", "git-not-found", "developer-tools-missing", "git-too-old", "unsafe-ownership", "signing-failed", "unrelated-histories", "nothing-to-commit", "branch-exists", "host-refused", "untrusted", "content-missing", "published", "hook-refused"];
+declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository", "aborted", "git-not-found", "developer-tools-missing", "git-too-old", "unsafe-ownership", "signing-failed", "unrelated-histories", "nothing-to-commit", "branch-exists", "host-refused", "untrusted", "content-missing", "published", "hook-refused", "name-not-text"];
 
 interface GhPRComment {
     id: string;
@@ -1729,6 +1741,8 @@ interface GitStatusFile {
         modified: boolean;
         untracked: boolean;
     };
+    /** The file's name is not text, so it is listed and nothing can be done to it here (`name-not-text`) */
+    nameNotText?: true;
 }
 
 /** A commit as the panel's history draws it: with every parent, and the refs that point at it */
@@ -1949,6 +1963,10 @@ type IncomingCommitEvents = {
  | {
     type: 'commit.GET_STASH_CHANGES';
     index: number;
+/** Who last changed each line of a file, from the top of the folder, for the editor's gutter */
+ | {
+    type: 'commit.GET_BLAME';
+    path: string;
 }
 /** Takes back the last write the engine made here; `evenIfPublished` once the user said to for a commit already pushed */
  | {
@@ -3415,6 +3433,12 @@ type OutgoingCommitEvents =
     data: {
         index: number;
         files: ChangedFile[];
+    };
+} | {
+    type: 'commit.BLAME_RECEIVED';
+    data: {
+        path: string;
+        lines: BlameLine[];
     };
 } | {
     type: 'commit.STASH_SUCCESS';
