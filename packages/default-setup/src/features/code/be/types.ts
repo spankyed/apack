@@ -457,6 +457,15 @@ export interface HistoryCommit {
   refs: string[]
 }
 
+/** How a local branch stands against the branch it follows */
+export interface BranchStandingOf {
+  upstream?: string
+  /** Its upstream is gone from the remote's last fetched branches */
+  upstreamGone?: boolean
+  ahead: number
+  behind: number
+}
+
 /** A repository found under the folder the user opened, as the panel's picker lists it */
 export interface RepositoryUnder {
   path: string

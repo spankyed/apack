@@ -409,6 +409,15 @@ type BrainInternalEvents = {
     isFlow?: boolean;
 };
 
+/** How a local branch stands against the branch it follows */
+interface BranchStandingOf {
+    upstream?: string;
+    /** Its upstream is gone from the remote's last fetched branches */
+    upstreamGone?: boolean;
+    ahead: number;
+    behind: number;
+}
+
 interface BreadcrumbItem {
     id: EARS.EntityId | null;
     name: string;
@@ -3355,10 +3364,13 @@ type OutgoingCommitEvents =
     data: {
         branch: string;
     };
-} | {
+}
+/** The branches, and how each local one stands against what it follows, by its name */
+ | {
     type: 'commit.BRANCHES_RECEIVED';
     data: {
         branches: string[];
+        standing?: Record<string, BranchStandingOf>;
     };
 } | {
     type: 'commit.BRANCH_CHECKOUT_SUCCESS';

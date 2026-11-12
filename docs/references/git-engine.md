@@ -133,6 +133,13 @@ a commit, and `path` follows a file across its renames. The commit panel's log r
 (`commit.LOG_LIST` with `cursor` for Load more), draws lanes beside the commits (`laneRows`), and shows one file's
 history when an editor tab asks for it (`commit.SHOW_FILE_HISTORY`).
 
+## Branches, remotes and tags
+
+`refsModel()` reads every branch with its upstream and how far ahead and behind it is in one command, beside the
+remotes with their addresses and the tags. The snapshot's `refs` part says when any of them moved; `history` is what
+is checked out and the local branches, so a fetch that moves a remote's branch is news of the refs alone. The branch
+picker shows each local branch's standing (`commit.BRANCHES_RECEIVED` `standing`).
+
 ## Copies of the working tree
 
 **A copy is kept outside the repository, and nothing of the repository's is written to keep it.** Each repository

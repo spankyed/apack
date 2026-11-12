@@ -182,6 +182,11 @@
           >
             <GitBranch :size="12" class="text-neutral-400" />
             <span class="text-xs text-neutral-300">{{ branch }}</span>
+            <span v-if="branchStanding[branch]?.upstreamGone" class="text-[10px] text-amber-400" title="What it followed is gone from the remote">gone</span>
+            <span v-else-if="branchStanding[branch] && (branchStanding[branch].ahead || branchStanding[branch].behind)" class="text-[10px] tabular-nums text-neutral-500" :title="`Against ${branchStanding[branch].upstream}`">
+              <span v-if="branchStanding[branch].ahead">↑{{ branchStanding[branch].ahead }}</span>
+              <span v-if="branchStanding[branch].behind">↓{{ branchStanding[branch].behind }}</span>
+            </span>
             <CheckCircle v-if="branch === gitBranch" :size="12" class="ml-auto text-green-500" />
           </div>
         </div>
@@ -865,6 +870,7 @@ const discardLeft = useSelector(commitActor, (state) => state.context.discardLef
 const notKeptOf = (paths: string[]): string[] =>
   (discardPreview.value && discardPreview.value.paths.join('\0') === paths.join('\0') ? discardPreview.value.notKept : [])
 const availableBranches = useSelector(commitActor, (state) => state.context.availableBranches)
+const branchStanding = useSelector(commitActor, (state) => state.context.branchStanding)
 const branchInput = useSelector(commitActor, (state) => state.context.branchInput)
 const isCheckingOutBranch = useSelector(commitActor, (state) => state.context.isCheckingOutBranch)
 const hasUpstream = useSelector(commitActor, (state) => state.context.hasUpstream)
