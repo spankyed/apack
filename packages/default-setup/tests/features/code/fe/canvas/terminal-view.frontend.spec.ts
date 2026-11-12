@@ -66,6 +66,23 @@ describe('the canvas terminal host', () => {
     expect(surface.sent.filter((event) => event.type === 'terminal.INPUT')).toEqual([])
   })
 
+  it('paints the flash while the state says the terminal is flashing, and no longer once it does not', async () => {
+    const info = terminal()
+    surface = startCodeSurface({ terminals: [info] })
+    surface.mount(TerminalView, { terminalInfo: info })
+    await surface.settle()
+    const container = () => surface!.root.querySelector<HTMLElement>('[data-bell-flash]') ?? null
+    expect(container(), 'a terminal not flashing is painted as one').toBeNull()
+
+    await surface.setBells({ [info.id]: 'flashing' })
+    expect(container(), 'the flash was not painted').not.toBeNull()
+    expect(container()!.classList.contains('bg-neutral-600')).toBe(true)
+
+    // The window that is still open after the flash is not a flash: the state ends it, and the paint follows
+    await surface.setBells({ [info.id]: 'quiet' })
+    expect(container(), 'the flash was still painted after it ended').toBeNull()
+  })
+
   it('takes no focus when it mounts, and focuses when the surface asks it to', async () => {
     const info = terminal()
     surface = startCodeSurface({ terminals: [info] })

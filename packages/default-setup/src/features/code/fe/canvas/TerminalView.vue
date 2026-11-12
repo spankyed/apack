@@ -2,7 +2,12 @@
   <TrackedContextMenuRoot>
     <ContextMenuTrigger as-child>
       <div class="relative h-full w-full" @pointerdown.capture="seen">
-        <div ref="container" class="h-full w-full bg-[#1e1e1e] p-2"></div>
+        <!-- The bell's flash: the terminal's state says when a bell is flashing (it owns the timing), and this only paints it -->
+        <div
+          ref="container"
+          :class="['h-full w-full p-2', bellFlashing ? 'bg-neutral-600' : 'bg-[#1e1e1e]']"
+          :data-bell-flash="bellFlashing ? 'true' : undefined"
+        ></div>
         <ScrollToBottomFob :visible="showScrollFob" @click="scrollToBottom()" />
         <!-- The commands the shell marked, newest first: each one's status, its output, and running it again -->
         <div v-if="commands.length" class="absolute top-2 right-2 z-10 flex flex-col items-end">
@@ -104,6 +109,7 @@
 import { useSurface } from '@apackdev/sdk/fe'
 
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
+import { useSelector } from '@xstate/vue'
 
 import ScrollToBottomFob from '@apackdev/ui/design/ScrollToBottomFob'
 import TrackedContextMenuRoot from '@apackdev/ui/design/TrackedContextMenuRoot'
@@ -135,7 +141,9 @@ defineEmits<{
 }>()
 
 const codeActor: CodeState = useSurface()
-const terminalActor = panelChild(codeActor, 'terminal')
+const terminalActor = panelChild(codeActor, 'terminal')!
+// Whether this terminal's bell is flashing now, which the state starts and ends
+const bellFlashing = useSelector(terminalActor, (state) => state.context.bells[props.terminalInfo.id] === 'flashing')
 
 /* --------------------------------------------------------------------------
  * Refs --------------------------------------------------------------------- */
@@ -195,7 +203,7 @@ const selectAll = () => attachment?.selectAll()
 const clearTerminal = () => attachment?.clear()
 
 /** The person is looking at this terminal, so what was waiting for them to has been seen */
-const seen = () => terminalActor?.send({ type: 'terminal.SEEN', terminalId: props.terminalInfo.id })
+const seen = () => terminalActor.send({ type: 'terminal.SEEN', terminalId: props.terminalInfo.id })
 
 /* --------------------------------------------------------------------------
  * Lifecycle ---------------------------------------------------------------- */
@@ -213,7 +221,7 @@ onMounted(() => {
 
   attachment = terminalPool.attach(props.terminalInfo.id, container.value, {
     onResize: ({ cols, rows, cellWidth, cellHeight }) => {
-      terminalActor?.send({ type: 'terminal.RESIZE', terminalId: props.terminalInfo.id, cols, rows, cellWidth, cellHeight })
+      terminalActor.send({ type: 'terminal.RESIZE', terminalId: props.terminalInfo.id, cols, rows, cellWidth, cellHeight })
     },
     onSelectionChange: has => { hasSelection.value = has },
     onFollowingChange: following => { isFollowingOutput.value = following },
@@ -247,7 +255,7 @@ onBeforeUnmount(() => {
   // The backend holds the grid to the smallest fit of the windows showing it, so a window that stops
   // showing one says so. Only when this host is what let go — during a remount the new host has already
   // attached (F1), and this would drop the fit it just recorded.
-  if (letGo && attachment) terminalActor?.send({ type: 'terminal.DETACHED', terminalId: attachment.terminalId })
+  if (letGo && attachment) terminalActor.send({ type: 'terminal.DETACHED', terminalId: attachment.terminalId })
   attachment = null
 })
 

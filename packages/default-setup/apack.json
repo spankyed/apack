@@ -621,6 +621,12 @@
             "copyOnSelect": {
               "type": "boolean"
             },
+            "bellFlash": {
+              "type": "boolean"
+            },
+            "bellNotification": {
+              "type": "boolean"
+            },
             "defaultBaseDirectory": {
               "type": [
                 "string",
@@ -735,6 +741,8 @@
             "restoreTerminals",
             "terminalClipboardWrite",
             "copyOnSelect",
+            "bellFlash",
+            "bellNotification",
             "defaultBaseDirectory",
             "baseDirectory",
             "enableShellIntegration",
@@ -815,6 +823,8 @@
           "restoreTerminals": true,
           "terminalClipboardWrite": true,
           "copyOnSelect": false,
+          "bellFlash": true,
+          "bellNotification": false,
           "defaultBaseDirectory": null,
           "baseDirectory": null,
           "enableShellIntegration": true,

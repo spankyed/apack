@@ -17,6 +17,14 @@ import type { TerminalInfo } from '../../../be/types.ts'
  */
 export type { TerminalInfo }
 
+/** How long a bell paints its terminal's flash (Phase 2, D7) */
+export const BELL_FLASH_MS = 150
+/**
+ * The window in which a bell is the same bell as one already accepted: a bell inside it changes nothing. Measured from the
+ * accepted bell, so the flash (150 ms) is followed by the rest of the window (350 ms) before another bell is a new one.
+ */
+export const BELL_WINDOW_MS = 500
+
 /** The name a recording's view is pooled under, which is not a terminal's and cannot be taken for one */
 export const rewindViewId = (session: string) => `rewind:${session}`
 
@@ -83,6 +91,13 @@ export interface CodeTerminalContext {
    * replied), so the map holds only what is genuinely in flight.
    */
   pendingOpens: Record<string, PendingOpen>
+  /**
+   * The bells accepted and still inside their window, by terminal. `flashing` is the terminal's flash, which the view
+   * paints; `quiet` is the rest of the window. Each entry is removed by a timer its accepted bell started, so an entry
+   * never outlives its window. Empty of a terminal whose bells are not flashed when the flash setting is off, which
+   * still opens the window so a notification is not repeated.
+   */
+  bells: Record<string, 'flashing' | 'quiet'>
 }
 
 export type Event =
@@ -112,6 +127,9 @@ export type Event =
   | { type: 'terminal.TITLED'; data: { terminalId: string; title: string } }
   /** The person is looking at that terminal: what was waiting for them to is no longer */
   | { type: 'terminal.SEEN'; terminalId: string }
+  /** The machine's own timers: a bell's flash ends, and its window closes. Not sent by anything else. */
+  | { type: 'terminal.BELL_FLASH_ENDED'; terminalId: string }
+  | { type: 'terminal.BELL_WINDOW_ENDED'; terminalId: string }
   | { type: 'terminal.KEEP'; terminalId: string; kept: boolean }
   | { type: 'terminal.KEPT'; data: { terminalId: string; kept: boolean } }
   | { type: 'terminal.REWIND'; terminalId: string; cols: number; rows: number }
@@ -123,6 +141,14 @@ export type Event =
   | { type: 'terminal.ERROR'; data: { message: string; terminalId?: string } }
   | { type: 'terminal.RESIZED'; data: { terminalId: string; cols: number; rows: number } }
   | { type: 'terminal.TERMINAL_TAB_OPENED'; data: TerminalInfo }
+
+/**
+ * Asks the main process to show the system notification a bell asks for. Through the bridge, because a window's own
+ * `Notification` is refused while the window is not focused, which is the case this exists for.
+ */
+export function showBellNotification(): void {
+  void window.electronAPI?.notify?.show('Terminal', 'Rang the bell').catch(() => {})
+}
 
 export const terminalState = setup({
   types: {
@@ -435,6 +461,36 @@ export const terminalState = setup({
       new Notification(ev.data.title || 'Terminal', { body: ev.data.body, tag: `terminal:${ev.data.terminalId}` })
     },
 
+    /**
+     * **Where a bell is accepted, and the only place the flash and the notification start.** A bell inside the window an
+     * accepted bell opened is the same bell and does nothing, so a bell during a flash does not restart it. The flash and
+     * the window are timers the machine raises itself: a terminal that stops takes them with it, and nothing watches a
+     * value that could be set twice.
+     */
+    ringBell: enqueueActions(({ context, event, self, enqueue }) => {
+      const ev = event as Extract<Event, { type: 'terminal.BELL' }>
+      const id = ev.data.terminalId
+      if (context.bells[id] !== undefined) return
+      const settings = getParentContext(self)?.settings
+      const flash = settings?.bellFlash !== false
+      enqueue.assign({ bells: { ...context.bells, [id]: flash ? 'flashing' : 'quiet' } })
+      if (flash) enqueue.raise({ type: 'terminal.BELL_FLASH_ENDED', terminalId: id }, { delay: BELL_FLASH_MS })
+      enqueue.raise({ type: 'terminal.BELL_WINDOW_ENDED', terminalId: id }, { delay: BELL_WINDOW_MS })
+      // Not while the window has the focus: the person can see the terminal then, and the flash says it
+      if (settings?.bellNotification === true && !document.hasFocus()) showBellNotification()
+    }),
+
+    endBellFlash: assign(({ context, event }) => {
+      const id = (event as { terminalId: string }).terminalId
+      if (context.bells[id] !== 'flashing') return {}
+      return { bells: { ...context.bells, [id]: 'quiet' as const } }
+    }),
+
+    endBellWindow: assign(({ context, event }) => {
+      const { [(event as { terminalId: string }).terminalId]: _closed, ...rest } = context.bells
+      return { bells: rest }
+    }),
+
     /** What a terminal's program said that is not on its screen, kept for its tab to show */
     noteActivity: assign(({ context, event }) => {
       const ev = event as Extract<Event, { type: 'terminal.BELL' | 'terminal.NOTIFIED' | 'terminal.PROGRESS' | 'terminal.TITLED' }>
@@ -665,7 +721,8 @@ export const terminalState = setup({
     terminals: [],
     activity: {},
     rewind: null,
-    pendingOpens: {}
+    pendingOpens: {},
+    bells: {}
   },
   on: {
     'terminal.CREATE': {
@@ -728,7 +785,9 @@ export const terminalState = setup({
     'terminal.CLIPBOARD': {
       actions: 'writeClipboard'
     },
-    'terminal.BELL': { actions: 'noteActivity' },
+    'terminal.BELL': { actions: ['noteActivity', 'ringBell'] },
+    'terminal.BELL_FLASH_ENDED': { actions: 'endBellFlash' },
+    'terminal.BELL_WINDOW_ENDED': { actions: 'endBellWindow' },
     'terminal.NOTIFIED': { actions: ['noteActivity', 'notifySystem'] },
     'terminal.PROGRESS': { actions: 'noteActivity' },
     'terminal.TITLED': { actions: 'noteActivity' },
