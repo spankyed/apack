@@ -47,6 +47,7 @@ export type Event =
   | { type: 'commit.STASH_POP'; index: number }
   | { type: 'commit.STASH_DROP'; index: number }
   | { type: 'commit.STASH_CLEAR' }
+  | { type: 'commit.GET_STASH_CHANGES'; index: number }
   | { type: 'commit.UNDO_LAST'; evenIfPublished?: boolean }
   | { type: 'commit.WORKTREE_LIST' }
   | { type: 'commit.WORKTREE_ADD'; path: string; branch?: string; createBranch?: boolean }
@@ -91,6 +92,9 @@ function answerUndoable(repo: AppGitRepository, reply: Parameters<typeof answer>
     () => {},
   )
 }
+
+/** The most changed files whose lines are counted with the status: past it the list is scrolled, not read */
+const COUNTED_FILES = 500
 
 function failureOf(error: unknown): CommitFailure {
   const message = error instanceof Error ? error.message : String(error)
@@ -251,10 +255,12 @@ export const commitSystem = setup({
           return
         }
 
-        return repository.readSnapshot().then((snapshot) => {
+        return repository.readSnapshot().then(async (snapshot) => {
+          // Each file's count, git's own: two more processes, so not past what a person reads down a list of
+          const counts = snapshot.files.length <= COUNTED_FILES ? await repository.lineCounts().catch(() => undefined) : undefined
           answer(reply, {
             type: 'commit.STATUS_RECEIVED',
-            data: { files: snapshot.files, truncated: snapshot.truncated, branch: snapshot.branch, hasUpstream: snapshot.hasUpstream, commitsAhead: snapshot.ahead, commitsBehind: snapshot.behind, signIn: repository.autoFetchSignIn, watching: !repository.hasWatchFailed, operation: snapshot.operation, fetchSuspended: repository.isAutoFetchSuspended }
+            data: { files: snapshot.files, ...(counts && { counts }), truncated: snapshot.truncated, branch: snapshot.branch, hasUpstream: snapshot.hasUpstream, commitsAhead: snapshot.ahead, commitsBehind: snapshot.behind, signIn: repository.autoFetchSignIn, watching: !repository.hasWatchFailed, operation: snapshot.operation, fetchSuspended: repository.isAutoFetchSuspended }
           })
           // The window has its answer: what the remote has is fetched behind it, and announced if it differs
           fetchInBackground(repository, self)
@@ -965,6 +971,16 @@ export const commitSystem = setup({
       })
     },
 
+    /** The files a stash holds, read without applying it */
+    getStashChanges: ({ event, context, reply }) => {
+      const { index } = event as { type: 'commit.GET_STASH_CHANGES'; index: number }
+      if (!requireGitRepository(context, reply)) return
+      context.gitRepository.stashChanges(index).then(
+        files => answer(reply, { type: 'commit.STASH_CHANGES_RECEIVED', data: { index, files } }),
+        (error: unknown) => answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) }),
+      )
+    },
+
     stashDrop: ({ event, context, self, reply }) => {
       const ev = event as { type: 'commit.STASH_DROP'; index: number }
 
@@ -1217,6 +1233,9 @@ export const commitSystem = setup({
         },
         'commit.STASH_POP': {
           actions: 'stashPop'
+        },
+        'commit.GET_STASH_CHANGES': {
+          actions: 'getStashChanges'
         },
         'commit.STASH_DROP': {
           actions: 'stashDrop'

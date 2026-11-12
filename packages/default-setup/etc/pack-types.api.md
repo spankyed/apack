@@ -502,6 +502,16 @@ interface CanUseToolRequest {
     description?: string;
 }
 
+/** A file a stash or a commit changed, with its count */
+interface ChangedFile {
+    path: string;
+    status: 'added' | 'copied' | 'deleted' | 'modified' | 'renamed' | 'typechange';
+    originalPath?: string;
+    added: number;
+    removed: number;
+    binary: boolean;
+}
+
 /**
  * A thread as the chat shows it, without its messages: the \`chat\` view. The page of messages it lists is ids in
  * display order (queued last); each message's content is its own \`message\` view, so streaming text into one re-runs
@@ -1926,6 +1936,11 @@ type IncomingCommitEvents = {
 } | {
     type: 'commit.STASH_CLEAR';
 }
+/** The files a stash holds, to look into before applying it */
+ | {
+    type: 'commit.GET_STASH_CHANGES';
+    index: number;
+}
 /** Takes back the last write the engine made here; `evenIfPublished` once the user said to for a commit already pushed */
  | {
     type: 'commit.UNDO_LAST';
@@ -2762,6 +2777,15 @@ declare class LibraryService {
 interface LibrarySystemContext {
 }
 
+/** How many lines a changed file adds and removes, as git counts them, staged or not: none for a file that is not text */
+interface LineCount {
+    path: string;
+    staged: boolean;
+    added: number;
+    removed: number;
+    binary: boolean;
+}
+
 /** A page of the app server's MCP server statuses */
 type ListMcpServersParams = {
     cursor?: string | null;
@@ -3217,6 +3241,7 @@ type OutgoingCommitEvents =
     type: 'commit.STATUS_RECEIVED';
     data: {
         files: GitStatusFile[];
+        counts?: LineCount[];
         truncated: boolean;
         branch: string;
         hasUpstream: boolean;
@@ -3366,6 +3391,14 @@ type OutgoingCommitEvents =
     type: 'commit.STASH_LIST_RECEIVED';
     data: {
         stashes: StashEntry[];
+    };
+}
+/** The files a stash holds, read without applying it, for the window that asked */
+ | {
+    type: 'commit.STASH_CHANGES_RECEIVED';
+    data: {
+        index: number;
+        files: ChangedFile[];
     };
 } | {
     type: 'commit.STASH_SUCCESS';

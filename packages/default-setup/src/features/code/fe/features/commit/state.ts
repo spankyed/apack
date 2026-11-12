@@ -5,7 +5,7 @@ import { sendToSystem } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { diffTab, diffTabPath } from '../../utils/diff-tabs.ts';
 import { withStaged, withUnstaged } from 'apack-git/staging';
-import type { CommitFailure, ConflictKind, DiffHunk, DiscardKept, DiscardRestored, GitProgress, OperationMove, RepositoryChange, RepositoryOperation, SignInHelp } from '../../../be/types.ts';
+import type { ChangedFile, CommitFailure, ConflictKind, LineCount, DiffHunk, DiscardKept, DiscardRestored, GitProgress, OperationMove, RepositoryChange, RepositoryOperation, SignInHelp } from '../../../be/types.ts';
 import type { OpenFile } from '../../contract.ts';
 
 
@@ -56,6 +56,10 @@ export interface CodeCommitContext {
   discardPreview: { paths: string[]; notKept: string[] } | null
   /** The last discard that kept what it removed, which the panel offers to undo until it is dismissed or undone */
   lastDiscard: { id: string; paths: string[]; notKept: string[] } | null
+  /** How many lines each changed file adds and removes, by `staged:path` */
+  lineCounts: Record<string, LineCount>
+  /** The files of the stashes opened in the list, by index, read without applying them */
+  stashFiles: Record<number, ChangedFile[]>
   /** The repositories under the folder the user opened, which the picker lists when there is more than one */
   repositories: { path: string; relative: string; kind: 'top' | 'nested' | 'submodule' | 'worktree' }[]
   /** The last write here that Undo takes back, as the repository's journal names it, until it is dismissed */
@@ -200,7 +204,7 @@ export type Event =
   | { type: 'commit.CHECKOUT_BRANCH' }
   | { type: 'commit.PUSH_BRANCH' }
   | { type: 'commit.PULL_BRANCH' }
-  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
+  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; counts?: LineCount[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
   | { type: 'commit.DIFF_RECEIVED'; data: GitDiff }
   | { type: 'commit.FILES_STAGED'; paths: string[] }
   | { type: 'commit.FILES_UNSTAGED'; paths: string[] }
@@ -210,6 +214,9 @@ export type Event =
   | { type: 'commit.PREVIEW_DISCARD'; paths: string[] }
   | { type: 'commit.DISCARD_PREVIEWED'; data: { paths: string[]; notKept: string[] } }
   | { type: 'commit.UNDO_DISCARD' }
+  /** Opens a stash in the list to show its files, or closes it */
+  | { type: 'commit.TOGGLE_STASH_FILES'; index: number }
+  | { type: 'commit.STASH_CHANGES_RECEIVED'; data: { index: number; files: ChangedFile[] } }
   | { type: 'commit.REPOSITORIES_RECEIVED'; data: { repositories: CodeCommitContext['repositories']; truncated: boolean; current: string | null } }
   /** The picker chose another repository under the folder the user opened */
   | { type: 'commit.SELECT_REPOSITORY'; path: string }
@@ -285,6 +292,8 @@ type OfOneFolder =
   | 'revertDialogFile'
   | 'discardPreview'
   | 'lastDiscard'
+  | 'lineCounts'
+  | 'stashFiles'
   | 'repositories'
   | 'lastUndoable'
   | 'undoConfirmation'
@@ -321,6 +330,8 @@ const ofNoFolder = (): Pick<CodeCommitContext, OfOneFolder> => ({
   revertDialogFile: null,
   discardPreview: null,
   lastDiscard: null,
+  lineCounts: {},
+  stashFiles: {},
   repositories: [],
   lastUndoable: null,
   undoConfirmation: null,
@@ -620,6 +631,9 @@ export const commitState = setup({
 
     handleStatusReceived: assign({
       statusAsk: null,
+      // Each file's count as git gives it, by whether it is staged and its path; none past what the status counts
+      lineCounts: ({ event }) => Object.fromEntries(((event as { type: 'commit.STATUS_RECEIVED'; data: { counts?: LineCount[] } }).data.counts ?? [])
+        .map(count => [`${count.staged}:${count.path}`, count])),
       gitStatus: ({ context, event }) => {
         const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
         // Read before a write that the list already shows landed: git is asked again once that write is answered
@@ -1099,6 +1113,25 @@ export const commitState = setup({
         },
         'commit.SELECT_REPOSITORY': {
           actions: ({ event }) => sendToSystem('code', { type: 'SELECT_REPOSITORY', path: (event as { type: 'commit.SELECT_REPOSITORY'; path: string }).path }),
+        },
+        'commit.TOGGLE_STASH_FILES': {
+          actions: enqueueActions(({ context, enqueue, event }) => {
+            const { index } = event as { type: 'commit.TOGGLE_STASH_FILES'; index: number }
+            if (context.stashFiles[index]) {
+              const { [index]: _closed, ...open } = context.stashFiles
+              enqueue.assign({ stashFiles: open })
+            } else {
+              enqueue(() => sendToSystem('code', { type: 'commit.GET_STASH_CHANGES', index }))
+            }
+          }),
+        },
+        'commit.STASH_CHANGES_RECEIVED': {
+          actions: assign({
+            stashFiles: ({ context, event }) => {
+              const { index, files } = (event as { type: 'commit.STASH_CHANGES_RECEIVED'; data: { index: number; files: ChangedFile[] } }).data
+              return { ...context.stashFiles, [index]: files }
+            },
+          }),
         },
         'commit.UNDO_DISCARD': {
           actions: 'undoDiscard'
