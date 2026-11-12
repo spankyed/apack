@@ -225,6 +225,12 @@ onMounted(() => {
       if (at) codeActor.send({ type: 'UPDATE_STATE', updates: { pendingRevealLine: { filePath: path, line: at.line, column: at.column } } })
     },
   })
+  // The pool's view outlives this component, so what it already knows is shown now rather than at the next command
+  if (attachment) {
+    const held = attachment
+    commands.value = [...held.commands()]
+    folded.value = new Set(held.commands().filter(command => held.isFolded(command)).map(command => command.id))
+  }
   seen()
 
   // **Not focused on mount** (F15). A terminal mounts on a tab switch, a panel drag and an actor

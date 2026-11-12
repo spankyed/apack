@@ -15,7 +15,7 @@ import {logRenderer, logRendererFatal} from '../api-server/logger.ts';
 import {performanceStartupQuery} from '../performance/startup.ts';
 import {splitRef} from '@apackdev/sdk/ids';
 import {openExternalUrl, openFilePath} from '../shell-access.ts';
-import {writeClipboardText} from '../clipboard-access.ts';
+import {registerClipboardHandler} from '../clipboard-access.ts';
 
 class WindowManager implements AppModule {
   readonly #preload: {path: string};
@@ -249,7 +249,7 @@ class WindowManager implements AppModule {
     ipcMain.handle('shell:openExternal', (_event, url: string) => openExternalUrl(url));
 
     // A program's OSC 52 write, put on the clipboard here rather than by the window (see clipboard-access.ts)
-    ipcMain.handle('clipboard:write-text', (_event, text: unknown) => writeClipboardText(text));
+    registerClipboardHandler(ipcMain);
 
     // Handle revealing files in OS file explorer
     ipcMain.handle('shell:showItemInFolder', async (_event, filePath: string) => {

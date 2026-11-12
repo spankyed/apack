@@ -528,7 +528,8 @@ export const terminalState = setup({
      */
     writeClipboard: ({ event }) => {
       const ev = event as { type: 'terminal.CLIPBOARD'; data: { terminalId: string; text: string } }
-      void window.electronAPI?.clipboard.writeText(ev.data.text)
+      // A refusal (the text is too large) and a failed call both leave the clipboard as it was, so neither is an error here
+      void window.electronAPI?.clipboard.writeText(ev.data.text).catch(() => false)
     },
 
     /**

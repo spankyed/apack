@@ -160,6 +160,25 @@ describe('the output of a command, folded away', () => {
   })
 })
 
+describe('folds that overlap', () => {
+  it('reach the view as the earlier one alone, since the view refuses an overlap and a command callback must not throw', () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const attachment = terminalPool.attach(info.id, host(), {})!
+    const view = views.filter((candidate) => candidate.session === info.session).at(-1)!
+    const first = { id: 6, command: 'a', cwd: null, startedMs: null, finishedMs: null, outcome: { kind: 'exited', code: 0 }, prompt: 0, output: 1, end: 9 }
+    const overlapping = { id: 7, command: 'b', cwd: null, startedMs: null, finishedMs: null, outcome: { kind: 'exited', code: 0 }, prompt: 5, output: 5, end: 12 }
+    view.commands = [first, overlapping] as never
+    view.options.onCommands?.([first, overlapping] as never)
+
+    expect(() => {
+      attachment.setFolded(first as never, true)
+      attachment.setFolded(overlapping as never, true)
+    }).not.toThrow()
+    expect(view.folds).toEqual([{ first: 1, last: 8 }])
+  })
+})
+
 describe('the commands of a terminal, as its host draws them', () => {
   it('are heard by the host as the shell marks them, and running one again types its text and Enter', () => {
     const info = terminal()

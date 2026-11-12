@@ -320,6 +320,14 @@ describe('an open diff read again', () => {
 })
 
 describe("the feature's settings reaching the terminals", () => {
+  it('gives the saved copy-on-selection setting to the terminal pool when the surface starts, not only when it next changes', () => {
+    const actor = started()
+    vi.mocked(terminalPool.setCopyOnSelect).mockClear()
+
+    actor.send({ type: 'CODE_STARTED', data: { baseDirectory: '/work', settings: { copyOnSelect: true } } } as never)
+    expect(terminalPool.setCopyOnSelect, 'the saved value reaches the terminals at start').toHaveBeenLastCalledWith(true)
+  })
+
   it('gives the copy-on-selection setting to the terminal pool as it changes, and off when it is not set', () => {
     const actor = started()
     vi.mocked(terminalPool.setCopyOnSelect).mockClear()

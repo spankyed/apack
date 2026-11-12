@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import { resetTestData, startApp } from '@apackdev/testing/harness'
 import { recordingBroker } from './_support/terminal-broker.ts'
+import { featureSettings } from '#generated/settings.ts'
 import { repository } from '#generated/repository.ts'
 
 
@@ -67,6 +68,23 @@ describe('what the broker owning the process removes', () => {
     const copied = app.emitted('code').filter(event => event.type === 'terminal.CLIPBOARD')
     expect(copied.map(event => (event as unknown as { data: { text: string } }).data.text)).toEqual(['copied at once'])
     await app.stop()
+  })
+
+  it('sends a program\'s clipboard write to no window when the person has not allowed it', async () => {
+    const broker = recordingBroker({ pidBase: 4242 })
+    const app = await startApp({ systems: ['code'] })
+    await app.connect()
+    await openATerminal(app)
+
+    featureSettings.forFeature('code').set({ path: ['terminalClipboardWrite'], value: false })
+    try {
+      broker.happens('broker-1', { kind: 'clipboard', text: 'not allowed' })
+      await app.settle()
+      expect(app.emitted('code').filter(event => event.type === 'terminal.CLIPBOARD')).toEqual([])
+    } finally {
+      featureSettings.forFeature('code').set({ path: ['terminalClipboardWrite'], value: true })
+      await app.stop()
+    }
   })
 
   /**

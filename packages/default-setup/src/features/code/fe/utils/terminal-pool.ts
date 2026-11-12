@@ -418,7 +418,15 @@ class TerminalPool {
     const folds = entry.view.commands
       .filter((command) => entry.folded.has(command.id) && command.output !== null && command.end !== null && command.end - 1 > command.output)
       .map((command) => ({ first: command.output!, last: command.end! - 1 }))
-    entry.view.setFolds(folds)
+      .sort((a, b) => a.first - b.first)
+    // The view refuses overlapping folds by throwing, and that throw would surface inside the shell's command callback.
+    // Two commands cannot share output rows, so an overlap is a stale position: the earlier fold is kept and the later dropped.
+    const kept: { first: number; last: number }[] = []
+    for (const fold of folds) {
+      if (kept.length > 0 && fold.first <= kept[kept.length - 1]!.last) continue
+      kept.push(fold)
+    }
+    entry.view.setFolds(kept)
   }
 
   /**

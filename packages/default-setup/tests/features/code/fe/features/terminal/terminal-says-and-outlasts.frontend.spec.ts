@@ -141,16 +141,13 @@ describe("what a program's clipboard write does in a window", () => {
     focused.mockRestore()
   })
 
-  it('is not written by the window itself, which the browser refuses while the document has no focus', () => {
-    const writeText = vi.fn(() => Promise.resolve(true))
-    // The browser's own clipboard, which refuses a write from a document that is not focused
-    const browser = vi.fn(() => Promise.reject(new Error('Document is not focused.')))
-    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: browser } })
+  it('that the main process refuses, or fails to take, leaves the window as it was: no error reaches it', async () => {
+    const writeText = vi.fn(() => Promise.reject(new Error('ipc failed')))
     vi.stubGlobal('electronAPI', { clipboard: { writeText } })
     const { actor } = started()
 
-    actor.send({ type: 'terminal.CLIPBOARD', data: { terminalId: 't-1', text: 'x' } })
-    expect(browser).not.toHaveBeenCalled()
-    expect(writeText).toHaveBeenCalledTimes(1)
+    expect(() => actor.send({ type: 'terminal.CLIPBOARD', data: { terminalId: 't-1', text: 'x' } })).not.toThrow()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(writeText).toHaveBeenCalledWith('x')
   })
 })

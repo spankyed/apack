@@ -2,7 +2,7 @@
 // write, and a window puts it there. The write is the main process's and not the window's, because the browser refuses
 // a document's own clipboard write while the document has no focus, and a program's write arrives when the person is
 // usually somewhere else. The text is untrusted whatever asked for it, so its size is the one rule decided here.
-import {clipboard} from 'electron';
+import {clipboard, type IpcMain} from 'electron';
 
 /** The most text one write may hold. Larger text is refused rather than cut, since a cut text is a different text. */
 export const MAX_CLIPBOARD_TEXT = 8 * 1024 * 1024;
@@ -14,9 +14,17 @@ export function clipboardTextProblem(text: unknown): string | undefined {
   return undefined;
 }
 
-/** Writes `text` to the system clipboard, answering whether it was written */
+/**
+ * Writes `text` to the system clipboard, answering whether it was written. Every window showing the code surface asks
+ * for the same write, so a text the clipboard already holds is not written again: the second ask finds it there.
+ */
 export function writeClipboardText(text: unknown): boolean {
   if (clipboardTextProblem(text) !== undefined) return false;
-  clipboard.writeText(text as string);
+  if (clipboard.readText() !== text) clipboard.writeText(text as string);
   return true;
+}
+
+/** Answers the window's `clipboard:write-text` request with `writeClipboardText` */
+export function registerClipboardHandler(ipc: Pick<IpcMain, 'handle'>): void {
+  ipc.handle('clipboard:write-text', (_event, text: unknown) => writeClipboardText(text));
 }

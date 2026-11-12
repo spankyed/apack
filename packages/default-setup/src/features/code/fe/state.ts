@@ -1406,7 +1406,8 @@ const codeState = setup({
         },
         // The answer, handed to every feature, each of which asks for what its panel shows
         CODE_STARTED: {
-          actions: ['handleCodeConnected', 'broadcastToAllFeatures']
+          // The saved settings reach the terminals at start, as they do when they change
+          actions: ['handleCodeConnected', 'applyCopyOnSelect', 'broadcastToAllFeatures']
         },
         // Handle settings updates
         FEATURE_SETTINGS_UPDATED: {
