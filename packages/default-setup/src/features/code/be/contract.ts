@@ -3,7 +3,7 @@
 // and one `Contract` per feature would collide there. Codegen reads this without running anything.
 import type { ActionEntity, PromptEntity } from '@apackdev/sdk';
 import type {
-  CodeConnectedData, CodeSystemError, CommitFailure, CommitLogEntry, CodeSystemContext, DirectoryContent, DiscardKept, DiscardRestored, FileContent, FileInfo,
+  CodeConnectedData, RepositoryUnder, CodeSystemError, CommitFailure, CommitLogEntry, CodeSystemContext, DirectoryContent, DiscardKept, DiscardRestored, FileContent, FileInfo,
   GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitProgress, GitStatusFile, OperationMove, QuickOpenResult, RepositoryChange,
   RepositoryOperation, SearchProgress, SignInHelp,
   SearchResult, StashEntry, TerminalInfo, WorktreeEntry,
@@ -354,7 +354,11 @@ export type IncomingCodeEvents =
   | IncomingTerminalEvents
   | IncomingActionsEvents
   | IncomingPromptsEvents
-  | { type: 'SET_BASE_DIRECTORY'; path: string; fromUserNavigation?: boolean }
+  | { type: 'SET_BASE_DIRECTORY'; path: string; fromUserNavigation?: boolean; fromPicker?: boolean }
+  /** The repositories under the folder the user opened: its own, nested ones, submodules and linked worktrees */
+  | { type: 'LIST_REPOSITORIES' }
+  /** Works in one of them: it becomes the base directory, and the folder the user opened is still what is listed */
+  | { type: 'SELECT_REPOSITORY'; path: string }
   /** Settings → Providers: resolve a CLI and store where it was found, in this feature's own settings */
   | { type: 'TEST_CLI_PROVIDER'; provider: string }
   /**
@@ -384,6 +388,8 @@ export type OutgoingCodeEvents =
    * it starts from and for what its panels show. News, with no listing on it.
    */
   | { type: 'BASE_DIRECTORY_CHANGED'; baseDirectory: string }
+  /** What `LIST_REPOSITORIES` found, for the window that asked; `current` is the one the panels show */
+  | { type: 'commit.REPOSITORIES_RECEIVED'; data: { repositories: RepositoryUnder[]; truncated: boolean; current: string | null } }
   /** What testing a CLI found, for the Settings view that asked (the host declares its surface takes it) */
   | { type: 'CLI_TEST_RESULT'; provider: string; success: boolean; error?: string; resolvedPath?: string }
 

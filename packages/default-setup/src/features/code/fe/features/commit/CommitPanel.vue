@@ -205,6 +205,20 @@
       <SignInHelp v-if="fetchSignIn" class="mt-2" :help="fetchSignIn" :busy="isSettingUpSignIn" @sign-in="setUpSignIn" />
     </div>
 
+    <!-- More than one repository under the folder: the panel works in the one chosen -->
+    <div v-if="repositories.length > 1" data-testid="repository-picker" class="flex items-center gap-2 px-3 py-1.5 text-xs border-b border-neutral-800 text-neutral-400">
+      <span class="shrink-0">Repository</span>
+      <select
+        class="flex-1 min-w-0 bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5 text-neutral-200"
+        :value="directory"
+        @change="commitActor?.send({ type: 'commit.SELECT_REPOSITORY', path: ($event.target as HTMLSelectElement).value })"
+      >
+        <option v-for="repository in repositories" :key="repository.path" :value="repository.path">
+          {{ repository.relative || 'This folder' }}{{ repository.kind === 'top' || repository.kind === 'nested' ? '' : ` (${repository.kind})` }}
+        </option>
+      </select>
+    </div>
+
     <!-- The last write here that can be taken back: a commit, a reset, a dropped or cleared stash -->
     <div
       v-if="lastUndoable && !gitError"
@@ -831,6 +845,8 @@ const revertDialogFile = useSelector(commitActor, (state) => state.context.rever
 const discardPreview = useSelector(commitActor, (state) => state.context.discardPreview)
 const lastDiscard = useSelector(commitActor, (state) => state.context.lastDiscard)
 const lastUndoable = useSelector(commitActor, (state) => state.context.lastUndoable)
+const repositories = useSelector(commitActor, (state) => state.context.repositories)
+const directory = useSelector(commitActor, (state) => state.context.directory)
 const undoConfirmation = useSelector(commitActor, (state) => state.context.undoConfirmation)
 const discardLeft = useSelector(commitActor, (state) => state.context.discardLeft)
 /** What discarding these rows would remove that cannot be brought back, once that has been answered for these rows */

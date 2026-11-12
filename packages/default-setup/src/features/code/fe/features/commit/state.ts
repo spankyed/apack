@@ -54,6 +54,8 @@ export interface CodeCommitContext {
   discardPreview: { paths: string[]; notKept: string[] } | null
   /** The last discard that kept what it removed, which the panel offers to undo until it is dismissed or undone */
   lastDiscard: { id: string; paths: string[]; notKept: string[] } | null
+  /** The repositories under the folder the user opened, which the picker lists when there is more than one */
+  repositories: { path: string; relative: string; kind: 'top' | 'nested' | 'submodule' | 'worktree' }[]
   /** The last write here that Undo takes back, as the repository's journal names it, until it is dismissed */
   lastUndoable: { id: string; summary: string } | null
   /** Why the last write is not taken back without asking: a commit already on a remote branch */
@@ -134,6 +136,7 @@ const bothChanges = (one: RepositoryChange | null, other: RepositoryChange): Rep
     diffs,
     history: one.history || other.history,
     stashes: one.stashes || other.stashes,
+    refs: one.refs || other.refs,
     worktrees: one.worktrees || other.worktrees,
     ...(diffs && named(one) && named(other) ? { files: [...new Set([...(one.files ?? []), ...(other.files ?? [])])] } : {}),
   }
@@ -205,6 +208,9 @@ export type Event =
   | { type: 'commit.PREVIEW_DISCARD'; paths: string[] }
   | { type: 'commit.DISCARD_PREVIEWED'; data: { paths: string[]; notKept: string[] } }
   | { type: 'commit.UNDO_DISCARD' }
+  | { type: 'commit.REPOSITORIES_RECEIVED'; data: { repositories: CodeCommitContext['repositories']; truncated: boolean; current: string | null } }
+  /** The picker chose another repository under the folder the user opened */
+  | { type: 'commit.SELECT_REPOSITORY'; path: string }
   /** Undo the last write; `evenIfPublished` once the user said to for a commit already pushed */
   | { type: 'commit.UNDO_LAST'; evenIfPublished?: boolean }
   | { type: 'commit.DISMISS_UNDO' }
@@ -277,6 +283,7 @@ type OfOneFolder =
   | 'revertDialogFile'
   | 'discardPreview'
   | 'lastDiscard'
+  | 'repositories'
   | 'lastUndoable'
   | 'undoConfirmation'
   | 'discardLeft'
@@ -312,6 +319,7 @@ const ofNoFolder = (): Pick<CodeCommitContext, OfOneFolder> => ({
   revertDialogFile: null,
   discardPreview: null,
   lastDiscard: null,
+  repositories: [],
   lastUndoable: null,
   undoConfirmation: null,
   discardLeft: [],
@@ -389,7 +397,8 @@ export const commitState = setup({
         return
       }
       if (changed.status) enqueue('refreshGitStatus')
-      if (changed.history) enqueue('requestLogList')
+      // The log names the branches at each commit, a remote's among them, which a fetch moves without any history
+      if (changed.history || changed.refs) enqueue('requestLogList')
       if (changed.stashes) enqueue('requestStashList')
       if (changed.worktrees) enqueue('requestWorktreeList')
       if (!changed.diffs) return
@@ -844,6 +853,8 @@ export const commitState = setup({
       if (directory) {
         // Refresh git status when directory is available
         self.send({ type: 'commit.REFRESH_STATUS' })
+        // The repositories under the folder the user opened, for the picker
+        enqueue(() => sendToSystem('code', { type: 'LIST_REPOSITORIES' }))
         const { asks, send } = listAsks(['stashes', 'worktrees', 'branches', 'log'])
         enqueue.assign({ listAsks: { ...context.listAsks, ...asks } })
         enqueue(send)
@@ -1080,6 +1091,12 @@ export const commitState = setup({
         'commit.UNDONE': { actions: assign({ undoConfirmation: null }) },
         'commit.UNDO_NEEDS_CONFIRMATION': {
           actions: assign({ undoConfirmation: ({ event }) => (event as { type: 'commit.UNDO_NEEDS_CONFIRMATION'; data: { message: string } }).data.message }),
+        },
+        'commit.REPOSITORIES_RECEIVED': {
+          actions: assign({ repositories: ({ event }) => (event as { type: 'commit.REPOSITORIES_RECEIVED'; data: { repositories: CodeCommitContext['repositories'] } }).data.repositories }),
+        },
+        'commit.SELECT_REPOSITORY': {
+          actions: ({ event }) => sendToSystem('code', { type: 'SELECT_REPOSITORY', path: (event as { type: 'commit.SELECT_REPOSITORY'; path: string }).path }),
         },
         'commit.UNDO_DISCARD': {
           actions: 'undoDiscard'

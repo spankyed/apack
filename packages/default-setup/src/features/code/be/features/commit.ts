@@ -868,7 +868,8 @@ export const commitSystem = setup({
      */
     tellPullRequests: ({ context, event }) => {
       const { changed } = event as { type: 'commit.ANNOUNCE_REPOSITORY_CHANGED'; changed: RepositoryChange }
-      if (changed.history) context.code?.send({ type: 'pr.GIT_STATUS_CHANGED' })
+      // A pull request's head is a remote's branch, which a fetch moves as news of the refs alone
+      if (changed.history || changed.refs) context.code?.send({ type: 'pr.GIT_STATUS_CHANGED' })
     },
 
     stashPush: ({ event, context, self, reply }) => {

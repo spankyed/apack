@@ -103,6 +103,14 @@ A read is let fetch only inside `fetchingMissing(read)`, where it waits in line 
 git that cannot be told not to fetch, every read in a partial clone waits in that line. Writes
 (a checkout, a merge) fetch what they need, as git does.
 
+## Every repository under a folder
+
+`GitRepository.repositoriesUnder(folder)` finds the folder's repository and those nested in it, submodules and
+linked worktrees, by what each one's `.git` is, without running git. The commit panel shows a picker when there is
+more than one (`LIST_REPOSITORIES`, `commit.REPOSITORIES_RECEIVED`); choosing one makes it the base directory, as a
+worktree switch does, and the picker goes on listing what is under the folder the user opened (`openedDirectory`).
+A submodule's row in its parent's status says how it differs (`submodule`).
+
 ## Copies of the working tree
 
 **A copy is kept outside the repository, and nothing of the repository's is written to keep it.** Each repository
