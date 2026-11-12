@@ -2,9 +2,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { REPO_ROOT } from '@apackdev/host/build/packages-built';
+import { REPO_ROOT, fingerprintUnit } from '@apackdev/host/build/packages-built';
 import { CHAIN_STEPS } from '../../../scripts/lib/chain-steps.ts';
-import { stampFor } from '../../../scripts/lib/chain-stamps.ts';
+import { stampFor, unitFor } from '../../../scripts/lib/chain-stamps.ts';
+import type { VendoredState } from '../../../scripts/lib/vendored-checkouts.ts';
 import { evidenceOrRefuse } from './_support/evidence.ts';
 import { population } from '@apackdev/sdk/testing';
 
@@ -198,5 +199,31 @@ describe('a check with no evidence to read', () => {
       .orSkip({ skip: () => skipped.push('skipped') });
 
     expect(skipped, 'the evidence was there and the case was passed over anyway').toEqual([]);
+  });
+});
+
+/**
+ * A step's key says which vendored checkout it ran against, where that is not the one its pin names. Keyed on
+ * the pins alone, a step run while a sibling sat on another commit stayed cached once the sibling was brought
+ * to its pin, on what it had built against the other commit.
+ */
+describe('a step run against a vendored checkout that is off its pin', () => {
+  const step = CHAIN_STEPS.find((each) => each.name === 'schema:check')!;
+  const pinned = 'a'.repeat(40);
+  const key = (states: readonly VendoredState[]) => fingerprintUnit(unitFor(step, 2, states));
+  const atPin: VendoredState = { name: 'sibling', pinned, head: pinned, dirty: false };
+
+  it('has the key of a run with nothing linked while every checkout sits clean on its pin', () => {
+    expect(step.inputs.some((input) => input.startsWith('vendor/')), 'the step declares the pins').toBe(true);
+    expect(key([atPin])).toBe(key([]));
+  });
+
+  it('is not current once the checkout is at its pin, at another commit, or changed again', () => {
+    const elsewhere = key([{ ...atPin, head: 'b'.repeat(40) }]);
+    const changed = key([{ ...atPin, dirty: true, changes: 'one' }]);
+    expect(elsewhere).not.toBe(key([atPin]));
+    expect(elsewhere).not.toBe(key([{ ...atPin, head: 'c'.repeat(40) }]));
+    expect(changed).not.toBe(key([atPin]));
+    expect(changed).not.toBe(key([{ ...atPin, dirty: true, changes: 'two' }]));
   });
 });

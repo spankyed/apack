@@ -370,8 +370,9 @@ export function orderedSteps(given: readonly ChainStep[] = CHAIN_STEPS): readonl
 /**
  * The files every step really does read: the installed toolchain, because a dependency moving changes what any of
  * them do, by the records that pin it — the lockfile, and every vendored checkout's commit (`vendor/*.rev`).
- * Like the lockfile for `node_modules`, a pin stands for what it names: a change to a vendored checkout not yet
- * pinned is no input.
+ * Like the lockfile for `node_modules`, a pin stands for what it names. Where a checkout is not at its pin, or
+ * has uncommitted changes, a step's key says so beside these (`vendoredOffPin`, added in `unitFor`): a step that
+ * ran against another commit is not current once the checkout is at the pinned one.
  *
  * **Derived from the pins rather than naming a checkout**, so a third sibling is declared the day its `.rev` is
  * committed — which is the rule the guide states for everything that reads `vendor/`. The `.rev` files are tracked,
@@ -596,7 +597,9 @@ const SOURCE_RUNNER = ['scripts/with-source.mjs', 'packages/apack-host/src/build
 const SUITE_RUNNER = ['scripts/test-unit-pool.ts', 'scripts/lib/unit-pool.ts', 'scripts/lib/unit-suites.ts',
   'scripts/lib/exit-on-epipe.ts', ...SOURCE_RUNNER, 'scripts/lib/spec-durations.ts',
   'scripts/lib/spec-durations-reporter.ts', 'scripts/lib/over-budget.ts', 'scripts/lib/test-timeouts.ts',
-  'scripts/lib/spec-halves.ts', 'scripts/lib/chain-only.ts', ...SUITE_SETUP_FILES, ...BOUNDED_RUNNER];
+  'scripts/lib/spec-halves.ts', 'scripts/lib/chain-only.ts',
+  // What a suite's key says of a vendored checkout that is off its pin is this module's to word (`poolUnitFor`)
+  'scripts/lib/vendored-checkouts.ts', ...SUITE_SETUP_FILES, ...BOUNDED_RUNNER];
 /**
  * What `build:default-setup` writes. `src/__generated__` is under the `src` it also reads, so it has to be declared:
  * `fingerprintUnit` excludes a unit's own output from its own fingerprint, and that is what stops the step
@@ -755,11 +758,11 @@ export function suiteInputs(suite: UnitSuite, half: Half): string[] {
     // A suite's half runs under one root config, so which projects that config pools is an input to it
     ...rootConfigFor(suite, half),
     // The native pool's Docker scratch policy is part of both the outer and per-project verdict.
-    // `vendored-checkouts.ts` is one of the runner's own modules and belongs here with them: it decides
-    // which Rust toolchain the image installs, and the toolchain is part of the image tag — so an edit to it
-    // changes the container this suite runs in, and without the declaration the step reports itself cached.
+    // `vendored-checkouts.ts` decides which Rust toolchain the image installs, and the toolchain is part of the
+    // image tag, so an edit to it changes the container this suite runs in. Every half declares it already
+    // (`SUITE_RUNNER`).
     ...(half === 'native'
-      ? ['scripts/linux-runner.ts', 'scripts/lib/linux-native-scratch.ts', 'scripts/lib/vendored-checkouts.ts', 'scripts/linux/Dockerfile']
+      ? ['scripts/linux-runner.ts', 'scripts/lib/linux-native-scratch.ts', 'scripts/linux/Dockerfile']
       : []),
     ...SUITE_RUNNER,
     ...suiteWorkspace(suite.dir),
