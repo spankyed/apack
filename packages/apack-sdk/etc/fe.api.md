@@ -372,6 +372,10 @@ export interface _HostBridge {
         deleteAll: (entityId: string) => Promise<void>;
     };
     // (undocumented)
+    notify: {
+        show: (title: string, body: string) => Promise<boolean>;
+    };
+    // (undocumented)
     performance: {
         start(mode: 'lightweight' | 'detailed'): Promise<{
             id: string;

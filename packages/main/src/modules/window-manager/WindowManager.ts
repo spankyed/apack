@@ -16,6 +16,7 @@ import {performanceStartupQuery} from '../performance/startup.ts';
 import {splitRef} from '@apackdev/sdk/ids';
 import {openExternalUrl, openFilePath} from '../shell-access.ts';
 import {registerClipboardHandler} from '../clipboard-access.ts';
+import {registerNotifyHandler} from '../notify-access.ts';
 
 class WindowManager implements AppModule {
   readonly #preload: {path: string};
@@ -250,6 +251,9 @@ class WindowManager implements AppModule {
 
     // A program's OSC 52 write, put on the clipboard here rather than by the window (see clipboard-access.ts)
     registerClipboardHandler(ipcMain);
+
+    // A terminal's bell asking for a system notification while the window is not focused (see notify-access.ts)
+    registerNotifyHandler(ipcMain);
 
     // Handle revealing files in OS file explorer
     ipcMain.handle('shell:showItemInFolder', async (_event, filePath: string) => {

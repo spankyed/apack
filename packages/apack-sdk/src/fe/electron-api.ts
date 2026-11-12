@@ -64,6 +64,14 @@ export interface _HostBridge {
      */
     writeText: (text: string) => Promise<boolean>;
   };
+  notify: {
+    /**
+     * Shows a system notification, from the main process, which needs no focus. A window cannot show one while its
+     * document is not focused, which is when a terminal's bell asks for one. Answers whether it was shown: a title or
+     * body that is not text, or longer than the most it may hold, is refused rather than cut.
+     */
+    show: (title: string, body: string) => Promise<boolean>;
+  };
   media: {
     upload: (entityId: string, base64Data: string, mimeType: string) => Promise<string>;
     delete: (entityId: string, filename: string) => Promise<void>;

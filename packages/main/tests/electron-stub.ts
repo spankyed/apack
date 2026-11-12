@@ -24,6 +24,8 @@ export const app = {
 export function resetElectronStub(): void {
   shell.opened.length = 0;
   clipboard.written.length = 0;
+  notifications.shown.length = 0;
+  notifications.supported = true;
   clipboard.current = '';
   ipcMain.handlers.clear();
   app.isPackaged = false;
@@ -66,3 +68,21 @@ export const shell = {
     return Promise.resolve('');
   },
 };
+/** What this process showed as a system notification, so a test reads the shown notification rather than the call */
+export const notifications = {
+  shown: [] as Array<{ title: string; body: string }>,
+  supported: true,
+};
+/** Electron's `Notification`, as far as the main process's notify module uses it */
+export class Notification {
+  static isSupported(): boolean {
+    return notifications.supported;
+  }
+  private readonly options: { title: string; body: string };
+  constructor(options: { title: string; body: string }) {
+    this.options = options;
+  }
+  show(): void {
+    notifications.shown.push({ title: this.options.title, body: this.options.body });
+  }
+}

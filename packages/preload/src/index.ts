@@ -58,6 +58,11 @@ const clipboard = {
   writeText: (text: string) => ipcRenderer.invoke('clipboard:write-text', text) as Promise<boolean>,
 } satisfies _HostBridge['clipboard'];
 
+// System notifications: the main process shows them, since a window cannot while it is not focused (see packages/main/src/modules/notify-access.ts)
+const notify = {
+  show: (title: string, body: string) => ipcRenderer.invoke('notify:show', title, body) as Promise<boolean>,
+} satisfies _HostBridge['notify'];
+
 // Shell utilities
 const shell = {
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
@@ -327,6 +332,7 @@ const electronAPI = {
   fileUtils,
   shell,
   clipboard,
+  notify,
   media,
   speechRecognition,
   zoom,
