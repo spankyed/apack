@@ -163,4 +163,7 @@ Each ends in something checked. A phase is not started on a red one.
   four and a half hours in, leaving no log and no list of survivors. The evidence has what is known.
   The next action is to learn why before running it again: how many mutants the change holds, how long
   one takes, and whether one of them is what stopped the runner.
-- **Open: nothing Windows in this repository's half has been run.**
+- **Resolved: Windows has been run.** The PowerShell hook and the proxy through the real broker, and
+  the view's drawing, composition and third-level keys in a browser there
+  ([evidence](evidence/terminal-view.md#the-view-in-a-browser-on-windows--2026-11-12)). What it rests
+  on is said there: AltGr was an event built to Chromium's shape, not a key pressed.
