@@ -64,7 +64,8 @@ Out:
 - Phase 2 is done in code and checks: [the evidence record](../references/evidence/terminal-parity.md#phase-2--copy-on-select-2026-11-12).
   The broker pull request (spankyed/apack-terminal#16) is open and green, but its merge was denied by the permission
   system, so the app pins its branch commit for now. Repin to the merge commit once it lands.
-- Next deliverable: Phase 3 (minimum contrast ratio, decision D4).
+- Phase 3 is done in code and checks: [the evidence record](../references/evidence/terminal-parity.md#phase-3--minimum-contrast-ratio-2026-11-12). The app pins the view commit that carries it.
+- Next deliverable: Phase 4 (time the canvas painter under heavy output, decision D5).
 - Unresolved: none. Nothing in this goal depends on a manual step; see D6.
 
 ## Decisions

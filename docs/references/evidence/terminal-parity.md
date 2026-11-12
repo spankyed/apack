@@ -101,6 +101,31 @@ it while the view is up. In the app a Code setting, `copyOnSelect` (off by defau
   permission system on 2026-11-12, so the app's pin names a branch commit, which CI can clone, until it is merged. Repin
   to the merge commit after it lands.
 
+## Phase 3 — minimum contrast ratio (2026-11-12)
+
+Source: broker `session/terminal-parity-view` at `d1dc1ac` (the view change; the app pins it in `vendor/apack-terminal.rev`).
+
+**What it does.** `Theme.minimumContrast` (`view/src/draw.ts`, `view/src/contrast.ts`) is the least WCAG contrast ratio a
+character is drawn at against what it sits on. The default, 1 or unset, leaves every colour the program chose. A colour
+that falls short moves toward black or white, whichever gives more contrast, by the smallest step that reaches the minimum.
+Where a character is selected, the contrast is measured against the selection's background. The setting is per view,
+as decision D4 says, and `setTheme` changes it while the view is up. No app setting is added: D4 makes it a session
+property, and no user-facing option was asked for.
+
+| Behaviour | Check | Result |
+|---|---|---|
+| WCAG values for known colours: black on white is 21, mid grey on white is 4.48, a colour on itself is 1, white and black are the ends of luminance | `view/tests/contrast.spec.ts`, "the contrast ratio" | pass |
+| A colour already far enough is kept as the program chose it | `is the one the program chose when that is far enough` | pass |
+| Across a grid of foregrounds, backgrounds and minimums, the minimum is met wherever it is reachable, and the most contrast black or white can give where it is not | `is moved until it reaches the minimum, and no further than it has to go` | pass |
+| The unreachable case goes to black or white | `goes to black or white when nothing nearer is far enough` | pass |
+| The draw path: palette 1 on the theme background is drawn at the minimum; with no minimum or 1 it is the program's colour | `view/tests/contrast.spec.ts`, "a character drawn with a minimum contrast" | pass |
+| Mutation: the adjustment removed from the draw path | the draw case | fails, as it should; file restored |
+| The whole view suite | `npx vitest run` in `view/` | 342 of 342 |
+| Typecheck and format | `npm run typecheck` in `view/`; `cargo fmt --all -- --check` | pass |
+
+**What this does not establish.** The app does not set a minimum, so no user sees this yet. The adjustment runs per glyph
+against a cached table; its cost on a full repaint is what Phase 4 measures.
+
 ## What this does not establish
 
 - **Real-window behaviour of the clipboard write.** The write path is proven at the bridge and the handler with stubs. No
