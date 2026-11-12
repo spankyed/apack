@@ -31,6 +31,24 @@
       <div v-if="content.files.length === 0" class="px-3 py-8 text-xs text-neutral-500 text-center">
         No files in this diff
       </div>
+      <!-- An agent's turn: every file it changed, whatever wrote it, and the offer to take the turn back whole -->
+      <div v-if="content.turn" data-testid="turn-changes" class="border-t border-neutral-700/30 px-3 py-2 space-y-1">
+        <div class="text-[11px] text-neutral-500">
+          This turn {{ content.turn.changes.length === 1 ? 'changed one file' : `changed ${content.turn.changes.length} files` }}
+        </div>
+        <div v-for="change in content.turn.changes" :key="change.path" class="flex items-center gap-2 text-[11px] font-mono text-neutral-400">
+          <component :is="changeIcon(change.change)" :size="10" :class="changeIconClass(change.change)" class="flex-shrink-0" />
+          <span class="truncate" :title="change.path">{{ shortenPath(change.path) }}</span>
+        </div>
+        <div v-if="content.turn.takenBack" class="text-[11px] text-neutral-500">Taken back: the files are as they were before this turn.</div>
+        <button
+          v-else-if="content.turn.changes.length > 0"
+          data-testid="take-back-turn"
+          type="button"
+          class="mt-1 w-full px-2 py-1 rounded text-xs text-neutral-200 bg-neutral-800 hover:bg-neutral-700"
+          @click="takeBack"
+        >Take back this turn</button>
+      </div>
     </div>
 
     <!-- Monaco diff viewer (right) -->
@@ -58,6 +76,8 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { sendToSystem } from '#generated/events.ts'
+import { useSurfaceState } from '#generated/fe.ts'
 import { FilePlus2, FileMinus2, FilePenLine, ArrowRightLeft } from 'lucide-vue-next'
 import type { ArtifactItem } from '@apackdev/sdk/artifacts'
 import type { DiffArtifactContent } from '#features/threads/be/types.ts'
@@ -71,6 +91,20 @@ const props = defineProps<{
 }>()
 
 const content = computed(() => props.artifact.content)
+
+const currentThread = useSurfaceState('threads', (s) => s.currentThread)
+
+/** Asks for the turn to be taken back, through the flows: the files go back as they were when it started */
+function takeBack() {
+  const turn = content.value.turn
+  const threadId = currentThread.value?.id
+  if (!turn || !threadId) return
+  sendToSystem('threads', {
+    type: 'FORWARD_BRAIN_EVENT',
+    eventType: 'user.turn.takeBack',
+    payload: { threadId, artifactId: props.artifact.id, checkpoint: turn.checkpoint },
+  })
+}
 
 const selectedIdx = ref(0)
 const selectedFile = computed(() => content.value.files[selectedIdx.value])

@@ -113,6 +113,11 @@ Commands run against the repository's own git directory, so what the tree, `info
 excludes ignore is left out as it is by the user's git, with an index of the store's and objects written into the
 store. `changedSince` and `restoreCheckpoint` compare and put back.
 
+**An agent's turn is a checkpoint.** The action that starts a turn (`Claude Code Chat`, `Codex Chat`) takes one, and
+the one that ends it (`turn-completed.ts`) reads what changed since: every file the turn changed, whatever wrote
+it. The turn's diff artifact lists them and offers to take the turn back whole (`user.turn.takeBack`, the
+`Take Back Turn` action), which puts the files as they were when it started.
+
 A file over `KEPT_FILE_LIMIT` (10 MB) is left out, named, and never put back or removed. Checkpoints are kept for
 14 days, and the oldest are dropped first while a store is over 1 GB. A discard keeps what it removes as a
 checkpoint of those files, so a prune of the repository does not lose it.

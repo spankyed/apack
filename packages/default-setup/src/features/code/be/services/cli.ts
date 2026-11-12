@@ -28,6 +28,12 @@ export interface CliServiceType {
      * mutating tool calls (Write/Edit/NotebookEdit).
      */
     getDiff(paths?: string[]): Promise<string>
+    /** A copy of the working tree, kept outside the repository: its id, for `changedSince` and `restoreCheckpoint` */
+    checkpoint(): Promise<string>
+    /** What differs now from a copy, each file with whether it was added, modified or deleted since */
+    changedSince(id: string): Promise<{ path: string; change: 'added' | 'modified' | 'deleted' }[]>
+    /** Puts the working tree back as a copy has it, removing what was made since */
+    restoreCheckpoint(id: string): Promise<void>
   }
   gh: {
     findPRForBranch(branch?: string): Promise<GhPullRequest | null>
@@ -147,6 +153,15 @@ function createCliService(): CliServiceType {
           return repo.getDiff()
         }
         return repo.getDiffMulti(paths)
+      },
+      async checkpoint(): Promise<string> {
+        return (await getGitRepo().checkpoint()).id
+      },
+      async changedSince(id: string) {
+        return getGitRepo().changedSince(id)
+      },
+      async restoreCheckpoint(id: string): Promise<void> {
+        await getGitRepo().restoreCheckpoint(id)
       },
     },
     gh: {
