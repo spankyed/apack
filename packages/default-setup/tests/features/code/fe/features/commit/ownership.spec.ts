@@ -23,7 +23,7 @@ it('holds the repository git refused for who owns it, and asks the backend to tr
   const actor = createActor(commitState).start();
 
   actor.send(refused);
-  expect(actor.getSnapshot().context.gitFailure?.ownership).toEqual({ directory: '/mnt/shared/repo' });
+  expect(actor.getSnapshot().context.gitFailure).toMatchObject({ code: 'unsafe-ownership', ownership: { directory: '/mnt/shared/repo' } });
 
   actor.send({ type: 'commit.TRUST_OWNERSHIP' });
   expect(sent()).toContainEqual({ type: 'commit.TRUST_OWNERSHIP' });
