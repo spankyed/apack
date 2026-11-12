@@ -541,6 +541,15 @@ interface CliServiceType {
          * mutating tool calls (Write/Edit/NotebookEdit).
          */
         getDiff(paths?: string[]): Promise<string>;
+        /** A copy of the working tree, kept outside the repository: its id, for `changedSince` and `restoreCheckpoint` */
+        checkpoint(): Promise<string>;
+        /** What differs now from a copy, each file with whether it was added, modified or deleted since */
+        changedSince(id: string): Promise<{
+            path: string;
+            change: 'added' | 'deleted' | 'modified';
+        }[]>;
+        /** Puts the working tree back as a copy has it, removing what was made since */
+        restoreCheckpoint(id: string): Promise<void>;
     };
     gh: {
         findPRForBranch(branch?: string): Promise<GhPullRequest | null>;
@@ -6361,6 +6370,9 @@ declare function configuredRecentThreads(): {
     sortOrder: RecentThreadsSortOrder;
 };
 
+/** An artifact's content as it is stored, or nothing when there is no such artifact */
+declare function contentOf(artifactId: EARS.EntityId): unknown;
+
 /**
  * Create an artifact, linked to `threadId` when it names one
  * @example
@@ -6426,6 +6438,7 @@ declare const featureServices: {
         create: typeof create;
         update: typeof update;
         findOrCreateByType: typeof findOrCreateByType;
+        contentOf: typeof contentOf;
     };
     threads: {
         updateChatState: typeof updateChatState;

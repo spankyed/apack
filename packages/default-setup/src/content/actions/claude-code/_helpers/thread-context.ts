@@ -57,6 +57,8 @@ export interface PendingControlRequest {
 
 export interface ClaudeCodeThreadState {
   sessionId?: string;
+  /** The copy of the working tree taken as the running turn started, which its diff is read against */
+  turnCheckpoint?: string;
   /** History of previous sessionIds (oldest first), populated when compaction/fork/revert replaces the active session. */
   previousSessionIds?: string[];
   lastTurnAt?: number;

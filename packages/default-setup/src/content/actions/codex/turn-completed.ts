@@ -4,6 +4,7 @@ import type { ActionMeta } from '@apackdev/sdk/build';
 import type { Services, EntityId } from '#generated/services.ts';
 import { getCodexState, persistCodexState, updateCodexState, updateChatState } from './_helpers/thread-context.ts';
 import { parseUnifiedDiff } from '../claude-code/_helpers/parse-diff.ts';
+import { turnChanges } from '../_helpers/turn-changes.ts';
 
 export const meta: ActionMeta = {
   label: 'CDX: Turn Completed',
@@ -79,16 +80,20 @@ export async function action(params: Record<string, any>, services: Services) {
 
   // Diff artifact
   let artifactId: string | undefined;
-  const paths = Array.isArray(mutatedPaths) ? mutatedPaths : [];
+  // What the turn changed, read against the copy taken as it started: every file, whatever wrote it. Without a
+  // copy, the files the agent's own tools wrote
+  const turn = await turnChanges(services, cdxState?.turnCheckpoint);
+  const paths = turn ? turn.changes.map(change => change.path) : Array.isArray(mutatedPaths) ? mutatedPaths : [];
   if (paths.length > 0) {
     try {
       const parsed = parseUnifiedDiff(await services.cli.git.getDiff(paths));
-      if (parsed.files.length > 0) {
-        const basenames = parsed.files.map(f => f.path.split('/').pop() ?? f.path);
-        const prefix = `[Diff][${parsed.files.length}] `;
+      if (parsed.files.length > 0 || (turn?.changes.length ?? 0) > 0) {
+        const named = parsed.files.length > 0 ? parsed.files.map(f => f.path) : paths;
+        const basenames = named.map(f => f.split('/').pop() ?? f);
+        const prefix = `[Diff][${named.length}] `;
         let title = prefix + basenames.join(', ');
         if (title.length > 80) title = prefix + basenames.slice(0, 3).join(', ') + '…';
-        artifactId = services.artifact.create({ artifactType: 'diff', title, content: parsed, threadId: threadId as EntityId }).artifactId;
+        artifactId = services.artifact.create({ artifactType: 'diff', title, content: { ...parsed, ...(turn && { turn }) }, threadId: threadId as EntityId }).artifactId;
       }
     } catch (e: any) {
       services.logger.warn('[codex] diff failed', { message: e?.message });

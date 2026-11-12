@@ -23,6 +23,7 @@ import { createThinkingWriter } from './_helpers/thinking-writer.ts';
 import { getClaudeState, persistClaudeState, setRunning, enqueueMessage, killTurn, ensureSessionMarker, updateChatState, extractStaleSessionId, markSessionBroken } from './_helpers/thread-context.ts';
 import { consumeStream, finalizeSessionError } from './_helpers/stream-consumer.ts';
 import { buildSessionBootstrapPrompt } from '../_helpers/session-bootstrap.ts';
+import { checkpointTurn } from '../_helpers/turn-changes.ts';
 
 export const meta: ActionMeta = {
   label: 'Claude Code Chat',
@@ -431,6 +432,9 @@ export async function action(
         return { success: false, error: 'session file missing', messageId: currentMessageId };
       }
     }
+
+    // The working tree as the turn starts, which what it changed is read against when it ends
+    persistClaudeState(services, threadId, { turnCheckpoint: await checkpointTurn(services) });
 
     const handle = await services.cli.claudeCode.query({
       ...(sessionCwd && { cwd: sessionCwd }),

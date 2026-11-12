@@ -17,6 +17,7 @@ import {
 } from './_helpers/thread-context.ts';
 import { createStreamConsumer } from './_helpers/stream-consumer.ts';
 import { buildSessionBootstrapPrompt } from '../_helpers/session-bootstrap.ts';
+import { checkpointTurn } from '../_helpers/turn-changes.ts';
 import {
   renderContinuationPrompt, renderBudgetLimitPrompt, renderObjectiveUpdatedPrompt,
 } from './_helpers/goal-prompts.ts';
@@ -210,6 +211,9 @@ export async function action(params: Record<string, any>, services: Services, _z
     } else if (goalState?.status === 'budget_limited') {
       turnText = turnText + '\n\n' + renderBudgetLimitPrompt(goalState);
     }
+
+    // The working tree as the turn starts, which what it changed is read against when it ends
+    persistCodexState(services, threadId, { turnCheckpoint: await checkpointTurn(services) });
 
     // Start turn
     const turnResult = await codex.startTurn({

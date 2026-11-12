@@ -1192,7 +1192,7 @@
         "entityType": "Action",
         "input": {},
         "label": "Check Onboarding",
-        "shortCode": "ACT-62"
+        "shortCode": "ACT-63"
       },
       "Action:Claude Code Auth Status": {
         "category": "claude-code",
@@ -1384,7 +1384,7 @@
           }
         },
         "label": "Handle Choose Mode Step",
-        "shortCode": "ACT-67"
+        "shortCode": "ACT-68"
       },
       "Action:Handle Import Threads Step": {
         "category": "onboarding",
@@ -1401,7 +1401,7 @@
           }
         },
         "label": "Handle Import Threads Step",
-        "shortCode": "ACT-66"
+        "shortCode": "ACT-67"
       },
       "Action:Handle Onboarding Response": {
         "category": "onboarding",
@@ -1425,7 +1425,7 @@
           }
         },
         "label": "Handle Onboarding Response",
-        "shortCode": "ACT-63"
+        "shortCode": "ACT-64"
       },
       "Action:Handle Pick Thread Step": {
         "category": "onboarding",
@@ -1442,7 +1442,7 @@
           }
         },
         "label": "Handle Pick Thread Step",
-        "shortCode": "ACT-68"
+        "shortCode": "ACT-69"
       },
       "Action:Handle Projects Step": {
         "category": "onboarding",
@@ -1459,7 +1459,7 @@
           }
         },
         "label": "Handle Projects Step",
-        "shortCode": "ACT-69"
+        "shortCode": "ACT-70"
       },
       "Action:Handle Welcome Step": {
         "category": "onboarding",
@@ -1476,7 +1476,7 @@
           }
         },
         "label": "Handle Welcome Step",
-        "shortCode": "ACT-70"
+        "shortCode": "ACT-71"
       },
       "Action:Ignore Onboarding Message": {
         "category": "onboarding",
@@ -1495,7 +1495,7 @@
           }
         },
         "label": "Ignore Onboarding Message",
-        "shortCode": "ACT-64"
+        "shortCode": "ACT-65"
       },
       "Action:Init Onboarding": {
         "category": "onboarding",
@@ -1503,7 +1503,7 @@
         "entityType": "Action",
         "input": {},
         "label": "Init Onboarding",
-        "shortCode": "ACT-65"
+        "shortCode": "ACT-66"
       },
       "Action:PR to Markdown": {
         "category": "commands",
@@ -1547,6 +1547,25 @@
         },
         "label": "Set Instructions",
         "shortCode": "ACT-60"
+      },
+      "Action:Take Back Turn": {
+        "category": "git",
+        "description": "Puts the working tree back as it was when an agent's turn started.",
+        "entityType": "Action",
+        "input": {
+          "checkpoint": {
+            "type": "string",
+            "description": "The copy taken as the turn started",
+            "required": true
+          },
+          "artifactId": {
+            "type": "string",
+            "description": "The turn's diff artifact, marked once taken back",
+            "required": false
+          }
+        },
+        "label": "Take Back Turn",
+        "shortCode": "ACT-62"
       },
       "Collection:internal": {
         "contentHash": "f6e45bbf1184b243",
@@ -1869,7 +1888,7 @@
     "media": [],
     "counts": {
       "actions": {
-        "created": 70,
+        "created": 71,
         "updated": 0,
         "skipped": 0
       },
