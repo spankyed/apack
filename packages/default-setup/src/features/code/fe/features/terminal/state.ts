@@ -521,15 +521,14 @@ export const terminalState = setup({
     /**
      * A program asked for text to be put on the clipboard.
      *
-     * **Only by the window the person is in.** Every window showing the code surface hears this, and the
-     * clipboard is one thing: the window with the focus is where what the program did was seen, so it is
-     * the one that acts. A clipboard the window may not write rejects, and that is swallowed — there is
-     * nothing a person can do about it.
+     * **Every window that shows the code surface hears this and asks the main process to write it.** The text is the
+     * same in each, so the result is the same, and the write needs no focus: a window's own clipboard write is refused
+     * by the browser while its document is not focused, which is when a program's write usually arrives. The main
+     * process answers whether it wrote the text; one too large to hold is refused, not cut.
      */
     writeClipboard: ({ event }) => {
       const ev = event as { type: 'terminal.CLIPBOARD'; data: { terminalId: string; text: string } }
-      if (!document.hasFocus()) return
-      void navigator.clipboard.writeText(ev.data.text).catch(() => {})
+      void window.electronAPI?.clipboard.writeText(ev.data.text)
     },
 
     /**

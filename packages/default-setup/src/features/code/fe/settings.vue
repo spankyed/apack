@@ -252,6 +252,25 @@
 
         <div class="flex items-center justify-between">
           <div class="flex-1">
+            <label for="terminal-copy-on-select" class="text-sm font-medium text-neutral-200">
+              Copy a selection when you let go
+            </label>
+            <p class="mt-1 text-xs text-neutral-600">
+              Text you select in a terminal is copied to your clipboard as soon as you finish selecting it, so there is no
+              copy to press. Off, you copy it yourself
+            </p>
+          </div>
+          <input
+            id="terminal-copy-on-select"
+            v-model="copyOnSelect"
+            type="checkbox"
+            @change="emit('update-setting', { path: ['copyOnSelect'], value: copyOnSelect })"
+            class="w-4 h-4 text-blue-600 bg-neutral-800 border-neutral-600 rounded focus:ring-blue-500 focus:ring-2"
+          />
+        </div>
+
+        <div class="flex items-center justify-between">
+          <div class="flex-1">
             <label for="enable-shell-integration" class="text-sm font-medium text-neutral-200">
               Enable shell integration
             </label>
@@ -589,6 +608,7 @@ const hotkeys = useSettingsDraft(() => props.settings?.hotkeys ?? {})
 
 const restoreTerminals = useSettingsDraft(() => props.settings?.restoreTerminals ?? true)
 const terminalClipboardWrite = useSettingsDraft(() => props.settings?.terminalClipboardWrite ?? true)
+const copyOnSelect = useSettingsDraft(() => props.settings?.copyOnSelect ?? false)
 const enableShellIntegration = useSettingsDraft(() => props.settings?.enableShellIntegration ?? false)
 const confirmTerminalClose = useSettingsDraft(() => props.settings?.confirmTerminalClose ?? true)
 const closeTerminalOnTabClose = useSettingsDraft(() => props.settings?.closeTerminalOnTabClose ?? true)

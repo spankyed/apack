@@ -23,6 +23,7 @@ export const app = {
 /** Puts `app` back as a fresh Electron would hand it over, between tests. */
 export function resetElectronStub(): void {
   shell.opened.length = 0;
+  clipboard.written.length = 0;
   app.isPackaged = false;
   app.name = 'apack';
   app.paths.clear();
@@ -30,6 +31,13 @@ export function resetElectronStub(): void {
 }
 
 export const ipcMain = { handle: () => {}, on: () => {} };
+/** What this process put on the clipboard, in order, so a test reads the write rather than the call */
+export const clipboard = {
+  written: [] as string[],
+  writeText(text: string): void {
+    clipboard.written.push(text);
+  },
+};
 /** What this process asked the OS to open, so a test reads the decision rather than the call */
 export const shell = {
   showItemInFolder: () => {},

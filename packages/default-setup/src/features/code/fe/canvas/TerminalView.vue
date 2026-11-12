@@ -4,6 +4,61 @@
       <div class="relative h-full w-full" @pointerdown.capture="seen">
         <div ref="container" class="h-full w-full bg-[#1e1e1e] p-2"></div>
         <ScrollToBottomFob :visible="showScrollFob" @click="scrollToBottom()" />
+        <!-- The commands the shell marked, newest first: each one's status, its output, and running it again -->
+        <div v-if="commands.length" class="absolute top-2 right-2 z-10 flex flex-col items-end">
+          <button
+            type="button"
+            data-testid="command-blocks-toggle"
+            class="rounded bg-neutral-800/90 border border-neutral-700 px-2 py-0.5 text-xs text-neutral-200 hover:bg-neutral-700"
+            @click="showCommands = !showCommands"
+          >
+            Commands ({{ commands.length }})
+          </button>
+          <ul
+            v-if="showCommands"
+            data-testid="command-blocks"
+            class="mt-1 max-h-72 w-[28rem] overflow-y-auto rounded border border-neutral-700 bg-neutral-900/95 text-xs"
+          >
+            <li
+              v-for="command in newestFirst"
+              :key="command.id"
+              data-testid="command-block"
+              :data-failed="failed(command) ? 'true' : undefined"
+              :class="failed(command) ? 'bg-red-950/60' : ''"
+              class="flex items-center gap-2 border-b border-neutral-800 px-2 py-1 last:border-b-0"
+            >
+              <span class="flex-1 truncate font-mono text-neutral-100" :title="command.command ?? ''">
+                {{ command.command ?? 'unknown command' }}
+              </span>
+              <span class="shrink-0 text-neutral-400">{{ statusOf(command) }}</span>
+              <button
+                type="button"
+                class="shrink-0 text-neutral-300 hover:text-white disabled:text-neutral-600"
+                :disabled="command.output === null"
+                @click="copyOutput(command)"
+              >
+                Copy output
+              </button>
+              <button
+                type="button"
+                class="shrink-0 text-neutral-300 hover:text-white disabled:text-neutral-600"
+                :disabled="command.command === null"
+                @click="rerun(command)"
+              >
+                Re-run
+              </button>
+              <button
+                type="button"
+                data-testid="command-fold"
+                class="shrink-0 text-neutral-300 hover:text-white disabled:text-neutral-600"
+                :disabled="command.output === null || command.end === null"
+                @click="toggleFold(command)"
+              >
+                {{ isFolded(command) ? 'Unfold' : 'Fold' }}
+              </button>
+            </li>
+          </ul>
+        </div>
         <TerminalRewind :terminal-info="terminalInfo" />
         <ContextMenuPortal>
           <ContextMenuContent :class="MENU_CONTENT_CLASS" :side-offset="5">
@@ -49,6 +104,7 @@
 import { useSurface } from '@apackdev/sdk/fe'
 
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
+
 import ScrollToBottomFob from '@apackdev/ui/design/ScrollToBottomFob'
 import TrackedContextMenuRoot from '@apackdev/ui/design/TrackedContextMenuRoot'
 import {
@@ -62,7 +118,7 @@ import { MENU_ITEM_CLASS, MENU_ITEM_DANGER_CLASS, MENU_CONTENT_CLASS, MENU_SEPAR
 import { Copy, ClipboardPaste, TextSelect, Eraser, RotateCcw, Trash2 } from 'lucide-vue-next'
 import { type CodeState } from '#features/code/fe/state.ts'
 import type { TerminalInfo } from '#features/code/fe/features/terminal/state.ts'
-import { terminalPool, type TerminalAttachment } from '#features/code/fe/utils/terminal-pool.ts'
+import { terminalPool, type TerminalAttachment, type Command } from '#features/code/fe/utils/terminal-pool.ts'
 import TerminalMenuExtras from '#features/code/fe/features/terminal/TerminalMenuExtras.vue'
 import TerminalRewind from '#features/code/fe/features/terminal/TerminalRewind.vue'
 import { panelChild } from '../features/children.ts';
@@ -92,6 +148,33 @@ let attachment: TerminalAttachment | null = null
 const isFollowingOutput = ref(true)
 const showScrollFob = computed(() => !isFollowingOutput.value)
 const hasSelection = ref(false)
+// The commands the shell has marked, as the pool last heard them, and whether their list is open
+const commands = ref<readonly Command[]>([])
+const showCommands = ref(false)
+const newestFirst = computed(() => [...commands.value].reverse())
+/** A command that ended with a non-zero status, which is what its row is highlighted for */
+const failed = (command: Command) => (command.outcome.kind === 'exited' || command.outcome.kind === 'claimed')
+  && command.outcome.code !== null && command.outcome.code !== 0
+const statusOf = (command: Command): string => {
+  const outcome = command.outcome
+  if (outcome.kind === 'running') return 'running'
+  if (outcome.kind === 'exited') return `exit ${outcome.code}`
+  if (outcome.kind === 'claimed') return outcome.code === null ? 'finished' : `exit ${outcome.code} (claimed)`
+  return 'status unknown'
+}
+
+/* --------------------------------------------------------------------------
+ * Command blocks ----------------------------------------------------------- */
+const copyOutput = (command: Command) => { void attachment?.copyCommand(command) }
+/** Runs the command again, in the terminal it was run in: the shell decides what that means */
+const rerun = (command: Command) => { if (command.command !== null) attachment?.rerun(command.command) }
+/** Which commands' output is folded: the pool keeps it, and this mirrors it for the rows to show */
+const folded = ref<ReadonlySet<number>>(new Set())
+const isFolded = (command: Command) => folded.value.has(command.id)
+const toggleFold = (command: Command) => {
+  attachment?.setFolded(command, !isFolded(command))
+  folded.value = new Set([...folded.value].filter((id) => id !== command.id).concat(isFolded(command) ? [] : [command.id]))
+}
 
 /* --------------------------------------------------------------------------
  * Context menu actions ----------------------------------------------------- */
@@ -134,6 +217,7 @@ onMounted(() => {
     },
     onSelectionChange: has => { hasSelection.value = has },
     onFollowingChange: following => { isFollowingOutput.value = following },
+    onCommands: list => { commands.value = list },
     // A path a program printed opens as the file it names, where the explorer opens every other
     onOpenPath: (path, at) => {
       panelChild(codeActor, 'explorer')?.send({ type: 'explorer.OPEN_FILE', path })

@@ -53,6 +53,11 @@ const apiPort = getApiPort();
 const apiToken = ipcRenderer.sendSync('api:token') as string;
 const startupId = getStartupId();
 
+// Clipboard: the main process writes it, so no focus is needed (see packages/main/src/modules/clipboard-access.ts)
+const clipboard = {
+  writeText: (text: string) => ipcRenderer.invoke('clipboard:write-text', text) as Promise<boolean>,
+} satisfies _HostBridge['clipboard'];
+
 // Shell utilities
 const shell = {
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
@@ -321,6 +326,7 @@ const electronAPI = {
   surfaces,
   fileUtils,
   shell,
+  clipboard,
   media,
   speechRecognition,
   zoom,

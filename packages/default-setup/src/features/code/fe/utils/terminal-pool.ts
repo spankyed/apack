@@ -1,4 +1,7 @@
-import { BrokerViews, TerminalView, xtermPalette, type Detector, type Theme } from 'apack-terminal-view'
+import { BrokerViews, TerminalView, xtermPalette, type Command, type Detector, type Theme } from 'apack-terminal-view'
+
+/** A command the shell marked, as the view holds it: a host draws its command blocks from these without importing the view */
+export type { Command }
 import { openLink, terminalViews, type TerminalViewStream } from '@apackdev/sdk/fe'
 import type { TerminalInfo } from '../features/terminal/state.ts'
 import { TERMINAL_COLORS, TERMINAL_THEME } from '../../be/terminal-colors.ts'
@@ -123,6 +126,8 @@ interface PoolEntry {
   attachedContainer: HTMLElement | null
   /** What the host showing this terminal asked to hear. Replaced by each host that attaches */
   handlers: TerminalAttachmentHandlers
+  /** The commands whose output is folded away, by id: kept with the entry so a view made again folds them again */
+  folded: Set<number>
   /** Whether the view was following its output when the last host let go, which the next one starts from */
   following: boolean
   /** The connection its view is drawn over ended and was not made again (`lost`) */
@@ -154,6 +159,19 @@ export interface TerminalAttachment {
   copyLastOutput(): Promise<boolean>
   /** Whether the shell has marked any command, which is what the command actions need */
   hasCommands(): boolean
+  /** The commands the shell has marked, as the view last heard them, oldest first */
+  commands(): readonly Command[]
+  /** Copies what one command printed, answering whether there was any to copy */
+  copyCommand(command: Command): Promise<boolean>
+  /**
+   * Types a command's text into the shell and presses Enter, as the person would: it runs again. The shell is the one that
+   * decides what that means, which for a command with effects is the person's to choose here.
+   */
+  rerun(text: string): void
+  /** Whether a command's output is folded away in the terminal */
+  isFolded(command: Command): boolean
+  /** Folds a command's output away, or shows it again: its header is one row where the output starts */
+  setFolded(command: Command, folded: boolean): void
   /** Only where the user asked for it: an attach is not a request */
   focus(): void
   /**
@@ -189,6 +207,8 @@ export interface TerminalAttachmentHandlers {
   onFollowingChange?(following: boolean): void
   /** A path a program printed was clicked: the file it names, and where in it when the program said */
   onOpenPath?(path: string, at: { line: number; column: number } | undefined): void
+  /** The commands the shell has marked, each time they are heard: the list a host draws its command blocks from */
+  onCommands?(commands: readonly Command[]): void
 }
 
 const exitedNotice = (info: TerminalInfo, code: number | null) =>
@@ -219,6 +239,14 @@ const restartedNotice = (pid: number | null) =>
 
 class TerminalPool {
   private entries = new Map<string, PoolEntry>()
+  /** Whether a selection is copied as the pointer is let go: set from the feature's setting, and given to every view made */
+  private copyOnSelect = false
+
+  /** Changes the copy-on-release setting of every view, now and as each is made. It follows the feature's setting. */
+  setCopyOnSelect(on: boolean): void {
+    this.copyOnSelect = on
+    for (const entry of this.entries.values()) entry.view?.setCopyOnSelect(on)
+  }
   /**
    * Every terminal as the surface last described it (`describe`), which is what a host mounted with an
    * older description is drawn from
@@ -369,10 +397,28 @@ class TerminalPool {
         else openLink(link.target)
       },
       confirmPaste: (text) => this.confirmPaste(entry, text),
+      copyOnSelect: this.copyOnSelect,
+      onCommands: (commands) => {
+        this.applyFolds(entry)
+        entry.handlers.onCommands?.(commands)
+      },
     })
     view.element.dataset.apackTerminal = entry.terminalId
     entry.view = view
+    this.applyFolds(entry)
     if (mounted) view.mount(entry.wrapper)
+  }
+
+  /**
+   * Folds the output of each command the entry has folded, where the view has its position. A command whose output has no
+   * end yet is not folded: its output is still arriving.
+   */
+  private applyFolds(entry: PoolEntry): void {
+    if (!entry.view) return
+    const folds = entry.view.commands
+      .filter((command) => entry.folded.has(command.id) && command.output !== null && command.end !== null && command.end - 1 > command.output)
+      .map((command) => ({ first: command.output!, last: command.end! - 1 }))
+    entry.view.setFolds(folds)
   }
 
   /**
@@ -536,7 +582,7 @@ class TerminalPool {
     wrapper.appendChild(notice)
     const entry: PoolEntry = {
       terminalId: info.id, info, session: undefined, pid: info.pid, view: null, wrapper, notice,
-      attachedContainer: null, handlers: {}, following: true, unreachable: false,
+      attachedContainer: null, handlers: {}, following: true, unreachable: false, folded: new Set(),
     }
     this.entries.set(info.id, entry)
     this.draw(entry, info)
@@ -595,6 +641,15 @@ class TerminalPool {
       find: () => this.openFind(entry),
       copyLastOutput: () => this.copyLastOutput(entry),
       hasCommands: () => (entry.view?.commands.length ?? 0) > 0,
+      commands: () => entry.view?.commands ?? [],
+      copyCommand: (command) => entry.view?.copyCommand(command) ?? Promise.resolve(false),
+      isFolded: (command) => entry.folded.has(command.id),
+      setFolded: (command, folded) => {
+        if (folded) entry.folded.add(command.id)
+        else entry.folded.delete(command.id)
+        this.applyFolds(entry)
+      },
+      rerun: (text) => { entry.view?.typeText(`${text}\r`) },
       focus: () => entry.view?.focus(),
       refit: () => { if (!released) entry.view?.fit() },
       followOutput: () => entry.view?.follow(),

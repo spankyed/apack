@@ -138,6 +138,73 @@ describe('a shell replaced under a terminal', () => {
   })
 })
 
+describe('the output of a command, folded away', () => {
+  it('is one header row where the output starts, folded again when the view is made again, and never while it is still arriving', () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const attachment = terminalPool.attach(info.id, host(), {})!
+    const view = views.filter((candidate) => candidate.session === info.session).at(-1)!
+    const done = { id: 4, command: 'make', cwd: null, startedMs: null, finishedMs: null, outcome: { kind: 'exited', code: 0 }, prompt: 0, output: 1, end: 9 }
+    const running = { id: 5, command: 'tail -f', cwd: null, startedMs: null, finishedMs: null, outcome: { kind: 'running' }, prompt: 9, output: 10, end: null }
+    // The view holds the commands before it tells a host of them, as it does
+    view.commands = [done, running] as never
+    view.options.onCommands?.([done, running] as never)
+
+    attachment.setFolded(done as never, true)
+    attachment.setFolded(running as never, true)
+    expect(attachment.isFolded(done as never)).toBe(true)
+    expect(view.folds).toEqual([{ first: 1, last: 8 }])
+
+    attachment.setFolded(done as never, false)
+    expect(view.folds).toEqual([])
+  })
+})
+
+describe('the commands of a terminal, as its host draws them', () => {
+  it('are heard by the host as the shell marks them, and running one again types its text and Enter', () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const heard: number[][] = []
+    const attachment = terminalPool.attach(info.id, host(), { onCommands: (commands) => { heard.push(commands.map((command) => command.id)) } })!
+    const view = views.filter((candidate) => candidate.session === info.session).at(-1)!
+    view.options.onCommands?.([{ id: 3, command: 'make', cwd: null, startedMs: null, finishedMs: null, outcome: { kind: 'exited', code: 2 }, prompt: 0, output: 1, end: 2 }] as never)
+    expect(heard).toEqual([[3]])
+
+    attachment.rerun('make')
+    expect(view.typed).toEqual(['make\r'])
+  })
+
+  it('has one command\'s output copied on request, by that command', async () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const attachment = terminalPool.attach(info.id, host(), {})!
+    const view = views.filter((candidate) => candidate.session === info.session).at(-1)!
+    expect(await attachment.copyCommand({ id: 9 } as never)).toBe(true)
+    expect(view.copiedCommands).toEqual([9])
+  })
+})
+
+describe('whether a selection is copied as the pointer is let go', () => {
+  it('is given to every view, the ones already up as well as those made after it is set', () => {
+    const up = terminal()
+    terminalPool.ensure(up)
+    const viewOf = (session: string | undefined) => views.filter((view) => view.session === session).at(-1)!
+    try {
+      terminalPool.setCopyOnSelect(true)
+      expect(viewOf(up.session).copyOnSelect, 'a view already up was not told').toBe(true)
+
+      const later = terminal()
+      terminalPool.ensure(later)
+      expect(viewOf(later.session).options.copyOnSelect, 'a view made after was not given it').toBe(true)
+
+      terminalPool.setCopyOnSelect(false)
+      expect(viewOf(up.session).copyOnSelect).toBe(false)
+    } finally {
+      terminalPool.setCopyOnSelect(false)
+    }
+  })
+})
+
 describe('what a host is told', () => {
   it('is the fit once it has settled, so a drag is one resize of the pty and not one a frame', async () => {
     vi.useFakeTimers()
