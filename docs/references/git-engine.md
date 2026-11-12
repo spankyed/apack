@@ -75,6 +75,7 @@ commit feature (`failureOf`).
 | `host-refused` | A hosting service refused a push for a rule of its own (`GH001`, `GH006`, `GH007`, `GH013`); the host's own words are kept |
 | `aborted` | The user stopped it: nothing failed, and nothing is shown as a failure |
 | `content-missing` | A file diff needs a version a partial clone was not given. Says so and offers to download it |
+| `published` | A commit to be undone is already on a remote branch. Says so, and undoes it only once the user says to |
 
 ## Stopping a command
 
@@ -115,6 +116,17 @@ store. `changedSince` and `restoreCheckpoint` compare and put back.
 A file over `KEPT_FILE_LIMIT` (10 MB) is left out, named, and never put back or removed. Checkpoints are kept for
 14 days, and the oldest are dropped first while a store is over 1 GB. A discard keeps what it removes as a
 checkpoint of those files, so a prune of the repository does not lose it.
+
+## Undo
+
+**The engine writes down what its own writes did, and `undo` takes back the last of them.** A commit, a reset to a
+commit (which takes a checkpoint of the tree first), deleting a branch, and dropping or clearing stashes each record,
+in a journal in the repository's store, every ref they moved with where it was and where it was left, and what
+they removed. `undo` takes back the last entry only while every ref it moved is still where it left it: one moved
+since by anyone is refused rather than moved back over what moved it. A commit a remote branch already holds is
+refused with `published` until whoever asked says to go on (`evenIfPublished`), since undoing it here leaves it
+there. The commit panel offers Undo after each of those writes (`commit.UNDO_LAST`), and asks first for a pushed
+commit (`commit.UNDO_NEEDS_CONFIRMATION`).
 
 ## How what the watcher names is held
 

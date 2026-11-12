@@ -205,6 +205,31 @@
       <SignInHelp v-if="fetchSignIn" class="mt-2" :help="fetchSignIn" :busy="isSettingUpSignIn" @sign-in="setUpSignIn" />
     </div>
 
+    <!-- The last write here that can be taken back: a commit, a reset, a dropped or cleared stash -->
+    <div
+      v-if="lastUndoable && !gitError"
+      data-testid="write-undo"
+      class="flex items-center gap-2 px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
+    >
+      <span class="flex-1">
+        <template v-if="undoConfirmation">{{ undoConfirmation }}</template>
+        <template v-else>Done: {{ lastUndoable.summary }}.</template>
+      </span>
+      <button
+        v-if="undoConfirmation"
+        data-testid="write-undo-anyway"
+        class="px-2 py-0.5 rounded text-neutral-200 bg-neutral-800 hover:bg-neutral-700"
+        @click="commitActor?.send({ type: 'commit.UNDO_LAST', evenIfPublished: true })"
+      >Undo here anyway</button>
+      <button
+        v-else
+        data-testid="write-undo-button"
+        class="px-2 py-0.5 rounded text-neutral-200 bg-neutral-800 hover:bg-neutral-700"
+        @click="commitActor?.send({ type: 'commit.UNDO_LAST' })"
+      >Undo</button>
+      <button class="p-0.5 rounded hover:bg-neutral-700" title="Dismiss" @click="commitActor?.send({ type: 'commit.DISMISS_UNDO' })"><X :size="12" /></button>
+    </div>
+
     <!-- A discard kept what it removed, which is offered back until it is dismissed -->
     <div
       v-if="lastDiscard && !gitError"
@@ -805,6 +830,8 @@ const commitMessage = useSelector(commitActor, (state) => state.context.commitMe
 const revertDialogFile = useSelector(commitActor, (state) => state.context.revertDialogFile)
 const discardPreview = useSelector(commitActor, (state) => state.context.discardPreview)
 const lastDiscard = useSelector(commitActor, (state) => state.context.lastDiscard)
+const lastUndoable = useSelector(commitActor, (state) => state.context.lastUndoable)
+const undoConfirmation = useSelector(commitActor, (state) => state.context.undoConfirmation)
 const discardLeft = useSelector(commitActor, (state) => state.context.discardLeft)
 /** What discarding these rows would remove that cannot be brought back, once that has been answered for these rows */
 const notKeptOf = (paths: string[]): string[] =>
