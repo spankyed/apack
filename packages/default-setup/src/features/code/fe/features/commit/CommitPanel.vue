@@ -408,7 +408,7 @@
     <!-- File Changes -->
     <div class="flex-1 overflow-y-auto">
       <!-- Nothing is known of a repository git was not run in, so it is not said to be clean -->
-      <div v-if="(trustRequest || ownershipRequest) && gitStatus.length === 0" />
+      <div v-if="gitNeverRan && gitStatus.length === 0" />
       <EmptyState
         v-else-if="gitStatus.length === 0"
         :icon="GitCommit"
@@ -824,6 +824,9 @@ const errorSignIn = useSelector(commitActor, (state) => (state.context.gitError 
 // The refusal belongs to the error it came with, and goes when that error does
 const trustRequest = useSelector(commitActor, (state) => (state.context.gitError ? state.context.gitFailure?.trust ?? null : null))
 const ownershipRequest = useSelector(commitActor, (state) => (state.context.gitError ? state.context.gitFailure?.ownership ?? null : null))
+/** The failures for which git read nothing, so the panel says nothing of the working tree */
+const NOTHING_READ = new Set(['untrusted', 'unsafe-ownership', 'git-not-found', 'developer-tools-missing', 'git-too-old'])
+const gitNeverRan = useSelector(commitActor, (state) => !!state.context.gitError && NOTHING_READ.has(state.context.gitFailure?.code ?? ''))
 const isMovingOperation = useSelector(commitActor, (state) => state.context.isMovingOperation)
 const commitsAhead = useSelector(commitActor, (state) => state.context.commitsAhead)
 const commitsBehind = useSelector(commitActor, (state) => state.context.commitsBehind)
