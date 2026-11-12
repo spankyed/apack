@@ -1163,7 +1163,7 @@ export const commitSystem = setup({
       // The whole history is of every local branch with what is checked out, so another branch's commits are there
       // to be picked; a file's is of what is checked out, and a later page carries on from its cursor
       const refs = cursor || file ? Promise.resolve(undefined) : repository.refsModel().then(
-        ({ branches }) => branches.length ? ['HEAD', ...branches.map(branch => branch.name)] : undefined,
+        ({ branches }) => { const local = branches.filter(branch => !branch.remote); return local.length ? ['HEAD', ...local.map(branch => branch.name)] : undefined },
         () => undefined,
       )
       // A branch checked out with no commit yet has no HEAD to start from, and its history is empty

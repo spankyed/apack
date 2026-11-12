@@ -111,7 +111,15 @@ it('says what a merge would do before it is done', async () => {
 });
 
 it('shows the window the commits of every local branch, to pick from', async () => {
-  const { side } = await codeOverTwoBranches({ conflicting: false });
+  const { directory, side } = await codeOverTwoBranches({ conflicting: false });
+  // A remote's branch is not among them: a commit only it holds is not shown
+  await git(directory, 'checkout', '--quiet', '-b', 'elsewhere', 'main~1');
+  fs.writeFileSync(path.join(directory, 'e.txt'), 'e\n');
+  await git(directory, 'add', '.');
+  await git(directory, 'commit', '--quiet', '-m', 'elsewhere');
+  await git(directory, 'update-ref', 'refs/remotes/origin/elsewhere', 'HEAD');
+  await git(directory, 'checkout', '--quiet', 'main');
+  await git(directory, 'branch', '--quiet', '-D', 'elsewhere');
 
   const call = await app!.send('code', { type: 'commit.LOG_LIST' }, asWindow);
   const { commits } = (await app!.nextEmit('code', 'commit.LOG_LIST_RECEIVED', { answering: call })).data as { commits: { hash: string; subject: string }[] };
