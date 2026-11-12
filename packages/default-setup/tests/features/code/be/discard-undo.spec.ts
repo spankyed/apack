@@ -6,6 +6,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
+import { getDataDirPath } from '#generated/paths.ts';
 
 const CODE = 'default-setup/code';
 const dirs: string[] = [];
@@ -78,11 +79,23 @@ it('says beforehand which files a discard could not bring back, to the window ab
   });
 });
 
-it('tells the window a discard that is no longer kept cannot be put back', async () => {
+it('keeps a discard through a prune of the repository, since it is kept with the pack\'s own data', async () => {
   const directory = await codeOverChanges();
   const discarded = await app!.send('code', { type: 'commit.REVERT_FILE', path: 'a.txt' }, asWindow);
   const { kept } = (await app!.nextEmit('code', 'commit.FILE_REVERTED', { answering: discarded })).data as { kept: Kept };
   await git(directory, 'prune', '--expire=now');
+
+  const undone = await app!.send('code', { type: 'commit.RESTORE_DISCARDED', id: kept.id! }, asWindow);
+
+  await app!.nextEmit('code', 'commit.DISCARD_RESTORED', { answering: undone });
+  expect(fs.existsSync(getDataDirPath('checkpoints')), 'and the copy is in the pack\'s own data').toBe(true);
+});
+
+it('tells the window a discard that is no longer kept cannot be put back', async () => {
+  await codeOverChanges();
+  const discarded = await app!.send('code', { type: 'commit.REVERT_FILE', path: 'a.txt' }, asWindow);
+  const { kept } = (await app!.nextEmit('code', 'commit.FILE_REVERTED', { answering: discarded })).data as { kept: Kept };
+  fs.rmSync(getDataDirPath('checkpoints'), { recursive: true, force: true });
 
   const undone = await app!.send('code', { type: 'commit.RESTORE_DISCARDED', id: kept.id! }, asWindow);
 

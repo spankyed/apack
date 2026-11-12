@@ -3,6 +3,7 @@
 // files as data URLs for a window, the words a failed push or pull is said in, and what the engine is handed to
 // run with.
 import * as path from 'path'
+import { createHash } from 'node:crypto'
 import { createLogger, setDebugEnabled } from '@apackdev/sdk/logger'
 import { execFileWhileWorking, processWork, watchWork } from '@apackdev/sdk/progress'
 import {
@@ -11,6 +12,7 @@ import {
 } from 'apack-git'
 import type { RepositoryHandle, WatcherHandle } from '../types.ts'
 import { featureSettings } from '#generated/settings.ts'
+import { getDataDirPath } from '#generated/paths.ts'
 import { agentChildEnvironment } from './shell-environment.ts'
 import { resolveGitPath } from '../utils/resolve-cli.ts'
 import { signInHelpFor, type SignInHelp } from './sign-in.ts'
@@ -55,6 +57,8 @@ export const APP_TIES: RepositoryTies = {
   run: (file, args, options) => execFileWhileWorking(file, args, options),
   watchProcess: (pid, onStalled, idleMs) => watchWork({ work: processWork(pid), idleMs, onRefused: onStalled }),
   isTrusted: repository => trustedRepositories().includes(repository),
+  // Copies of a working tree, kept with the pack's own data: one store a repository, by its common git directory
+  checkpointDirectory: commonDir => path.join(getDataDirPath('checkpoints'), createHash('sha256').update(commonDir).digest('hex').slice(0, 24)),
   log: {
     warn: (message, data) => logger.warn(message, data),
     error: (message, data) => logger.error(message, data),
