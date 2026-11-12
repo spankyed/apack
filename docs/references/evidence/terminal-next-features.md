@@ -391,3 +391,55 @@ a terminal program printed or declared. Nothing is pushed.
   not the in-app browser tab that `openLink` used. Nothing in D4 asked for this change.
 - **Still open:** the `linkPreview` setting and its wiring (blocked on the broker merge); Phase 4's Done-when is not met
   until then. The grouping by OSC 8 `id` is impossible, since the core does not expose the id (see the broker section above).
+
+### Phase 5 — drag and drop file paths (2026-11-12)
+
+- **Shells supported:** `sh`, `bash`, `zsh`, `fish` and Git Bash's `bash.exe` (POSIX single quotes); `powershell.exe` and
+  `pwsh.exe` (PowerShell single quotes, a quote doubled). Every other shell takes no drop: `cmd.exe`, `wsl.exe`, nushell,
+  tcsh and an unnamed shell. `dropShellOf` answers `undefined` for them, so the drop is refused rather than guessed at.
+  Which shell family applies comes from `TerminalInfo.shell`, the name the terminal row holds.
+- **Decisions:**
+  - Quoting lives in one pure module, `packages/default-setup/src/features/code/fe/utils/drop-text.ts`. The component
+    calls `dropShellOf` and `dropText` and nothing else.
+  - A PowerShell path holding one of the four typographic single quotes (U+2018, U+2019, U+201A, U+201B) is refused as a
+    whole, since PowerShell has no escape for them inside a single-quoted string and would end the argument early.
+    Doubling them was not used: the doubling behaviour could not be checked without `pwsh`, which is not installed here.
+  - The drop reads paths through `window.electronAPI.fileUtils.getPathForFile` (the bridge at
+    `packages/apack-sdk/src/fe/electron-api.ts`, exposed by `packages/preload/src/index.ts`). Its absence makes the drop a
+    no-op. The goal named `getPathForFile` at line 52 without the `fileUtils` parent; the parent is the real path, as the
+    existing drop targets in the Code surface use it.
+  - The handler sits on the terminal's canvas container. A drag with no `Files` type is not taken (no `preventDefault`,
+    no drop effect). A file drop calls `preventDefault` even when nothing is inserted, so the browser does not open the
+    file in the window.
+  - The text goes through the view's paste path (`attachment.paste`), so a bracketed-paste program is told it is a paste,
+    and the pool's existing confirmation applies to any multi-line text.
+  - No focus is taken on drop.
+  - No broker or view change. The view has no drop handling and none was added.
+- **Commands run:**
+  - `npm run spec -- packages/default-setup/tests/features/code/fe/utils/drop-text.spec.ts`: 8 of 8 passed.
+  - `npm run spec -- packages/default-setup/tests/features/code/fe/canvas/terminal-view-drop.frontend.spec.ts`: 6 of 6 passed.
+  - `npm run spec -- packages/default-setup/tests/features/code/fe/canvas/terminal-view.frontend.spec.ts`: the existing
+    canvas host spec, 5 of 5 passed, so the host's other behaviour is unchanged.
+  - `npm run typecheck:pack`: passed (vue-tsc over the pack, tests included).
+  - `npm run chain` was not run, as instructed.
+- **Test method:** the POSIX case runs the shell itself. `/bin/sh -c "printf '%s\0' <text>"` prints each word the shell
+  split the text into, and the test compares the words with the paths, so a path with a space, a single quote, a dollar
+  sign and a backtick must come back as one argument each. The PowerShell case uses a small tokenizer written in the test
+  for the single-quoted subset `dropText` produces: a quoted word is literal and a doubled quote inside one is a quote.
+  The tokenizer is a stand-in, not a PowerShell run.
+  The component cases use the canvas host's stand-in view, which records each `paste`.
+- **Mutation results** (each mutant copied under the scratchpad, restored, and confirmed with `cmp`):
+  - Quoting removed from the POSIX branch (raw paths joined by spaces): 3 of 8 failed in `drop-text.spec.ts`, including
+    the space, quote, dollar and backtick shell-split test and the quote-escaping test.
+  - `Files` check removed from the drop handler: 1 of 6 failed, the text-only drop test (the drop was taken over, so
+    `defaultPrevented` was true).
+  - `Files` check removed from the dragover handler: 1 of 6 failed, the "does not accept a drag that carries no files" test.
+  - Note that removing the `Files` check from the drop handler alone is caught only through `preventDefault`. Without
+    that assertion, the text-only drop would still insert nothing, because the empty path list inserts nothing.
+- **Gaps:**
+  - No real Electron drop was run. The component tests simulate `DragEvent`s with a `dataTransfer` object and stub the
+    bridge; the real `webUtils.getPathForFile` path and the browser's own drag behaviour are unverified.
+  - PowerShell is not run. Its quoting is checked by the stand-in tokenizer only, and `pwsh` is not installed here.
+  - A drop on a `wsl.exe` terminal is refused, although a WSL shell could take Windows paths. This is a deliberate refusal,
+    not a tested behaviour of WSL.
+  - The Windows (`bash.exe`) path is covered only by the family mapping; no Git Bash run was done.
