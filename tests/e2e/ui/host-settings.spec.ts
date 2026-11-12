@@ -45,7 +45,7 @@ test('host preferences and shortcuts work with default-setup disabled', async ({
     .send({ type: 'GENERAL_NAV.SELECT', item: 'json' }));
   await expect(appPage.getByRole('heading', { name: 'Settings JSON' })).toBeVisible();
   await expect(appPage.locator('.monaco-editor')).toBeVisible();
-  const values = await appPage.evaluate(() => JSON.parse((window as any).monaco.editor.getEditors().find((editor: any) =>
+  const values = await appPage.evaluate(async () => JSON.parse((await (window as any).__loadMonaco()).editor.getEditors().find((editor: any) =>
     editor.getDomNode()?.getBoundingClientRect().width > 0 && editor.getModel()?.getLanguageId() === 'json').getModel().getValue()));
   expect(values.app.personal.name).toBe('Host without a starter pack');
   expect(values.app.hotkeys.switchSurfaceUp.key).toBe('9');
@@ -141,8 +141,8 @@ test('shortcut drafts follow another window and preserve the global flag', async
       actor.send({ type: 'GENERAL_NAV.SELECT', item: 'json' });
     });
     await expect(second.locator('.monaco-editor')).toBeVisible();
-    await second.evaluate(() => {
-      const model = (window as any).monaco.editor.getEditors().find((editor: any) =>
+    await second.evaluate(async () => {
+      const model = (await (window as any).__loadMonaco()).editor.getEditors().find((editor: any) =>
         editor.getDomNode()?.getBoundingClientRect().width > 0 && editor.getModel()?.getLanguageId() === 'json').getModel();
       const values = JSON.parse(model.getValue());
       values.app.hotkeys.switchSurfaceUp = { key: 'F8', modifiers: [], global: true };
@@ -156,8 +156,8 @@ test('shortcut drafts follow another window and preserve the global flag', async
     await shortcut.click();
     await appPage.keyboard.press('F7');
     await expect(appPage.getByText('Settings saved', { exact: true })).toBeVisible();
-    await expect.poll(() => second.evaluate(() => {
-      const model = (window as any).monaco.editor.getEditors().find((editor: any) =>
+    await expect.poll(() => second.evaluate(async () => {
+      const model = (await (window as any).__loadMonaco()).editor.getEditors().find((editor: any) =>
         editor.getDomNode()?.getBoundingClientRect().width > 0 && editor.getModel()?.getLanguageId() === 'json').getModel();
       return JSON.parse(model.getValue()).app.hotkeys.switchSurfaceUp;
     })).toEqual({ key: 'F7', modifiers: [], global: true });
@@ -200,6 +200,8 @@ test('cold Monaco documents follow source-free declarations and share worker lib
     const { createApp, h, ref } = await import('vue');
     const componentPath = '@apackdev/ui/components/UnifiedMonacoEditor';
     const { default: MonacoEditor }: { default: Component } = await import(componentPath);
+    const { provideMonacoRuntime } = await import('@apackdev/ui/components/monaco-config');
+    const monaco = await (window as any).__loadMonaco();
     const editors = [0, 1].map(index => {
       const root = document.createElement('div'); root.id = `cold-monaco-${index}`;
       root.style.cssText = 'height: 200px; width: 700px'; document.body.appendChild(root);
@@ -207,19 +209,20 @@ test('cold Monaco documents follow source-free declarations and share worker lib
       const component = createApp({ render: () => h(MonacoEditor, { ref: view, modelValue: value.value,
         mode: 'multi-file', filePath: `cold:${index}.ts`, language: 'typescript',
         'onUpdate:modelValue': (text: string) => { value.value = text; updates.push(text); } }) });
+      provideMonacoRuntime(component, async () => monaco);
       component.mount(root);
       return { root, component, view, value, updates, model: undefined as unknown };
     });
     return { editors,
       async completions(index = 0) {
         const model = editors[index].view.value.getEditor().getModel();
-        const monaco = (window as any).monaco;
+        const monaco = (await (window as any).__loadMonaco());
         const worker = await (await monaco.typescript.getTypeScriptWorker())(model.uri);
         return (await worker.getCompletionsAtPosition(model.uri.toString(), model.getValueLength()))?.entries.map((entry: { name: string }) => entry.name) ?? [];
       },
       async diagnostics(index = 0) {
         const model = editors[index].view.value.getEditor().getModel();
-        const worker = await (await (window as any).monaco.typescript.getTypeScriptWorker())(model.uri);
+        const worker = await (await (await (window as any).__loadMonaco()).typescript.getTypeScriptWorker())(model.uri);
         return (await worker.getSemanticDiagnostics(model.uri.toString())).map((diagnostic: { code: number }) => diagnostic.code);
       },
       state(index = 0) {
