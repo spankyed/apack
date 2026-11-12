@@ -79,9 +79,11 @@ describe('the readings', () => {
   });
 
   it('reads a worker thread\'s own CPU from the first reading, which grows while it computes', async () => {
-    // It burns only when told and says when it is done, so one reading is before the work and one after it
+    // It burns only when told and says when it is done, so one reading is before the work and one after it. What
+    // it burns is counted in its own CPU: on a busy machine a thread gets a fraction of the clock's time
     const worker = new Worker(`const { parentPort } = require('node:worker_threads');
-      parentPort.once('message', () => { const end = Date.now() + 400; while (Date.now() < end) {} parentPort.postMessage('burnt'); });
+      const spent = () => { const { user, system } = process.threadCpuUsage(); return (user + system) / 1000; };
+      parentPort.once('message', () => { const from = spent(); while (spent() - from < 400) {} parentPort.postMessage('burnt'); });
       setInterval(() => {}, 1000);`, { eval: true });
     try {
       const work = threadWork(worker);
