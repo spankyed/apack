@@ -55,8 +55,10 @@ Out:
   - `apack-terminal-worktrees.noindex/terminal-parity` on `session/terminal-parity-view`: the view and the broker. Changes to it are committed there and pinned from the monorepo only after they land.
   - This document: `monorepo-worktrees.noindex/native-stall` on `session/terminal-parity-goal`, PR #444.
 - Pin: the monorepo's `master` pins the broker at `efe5d84`, which is 24 commits behind the broker's `master`. Bump `vendor/apack-terminal.rev` in the same change that lands the first view commit.
-- Next deliverable: Phase 0. It has no code dependencies.
-- Proven: the source findings above. Nothing run end to end yet.
+- Phase 0 is done. Its results are in [the evidence record](../references/evidence/terminal-parity.md): kitty
+  keys and the cursor key into a real pty pass, the view's wheel and auto-scroll tests pass, and OSC 52 reaches
+  the broker's client. The app side of OSC 52 is Phase 1's defect, not a Phase 0 result.
+- Next deliverable: Phase 1 (OSC 52 writes reach the clipboard, decision D1).
 - Unresolved: none. Nothing in this goal depends on a manual step; see D6.
 
 ## Decisions
