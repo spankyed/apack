@@ -94,3 +94,68 @@ the pin `3a2140c`. Nothing is pushed or merged; the app pin still names `3a2140c
 - The view paint loop (`view/src`) was not changed. Nothing in the view needed it, since frames are withheld in the broker.
 - The broker branch is not merged, so the app pin is not moved. Merging it to the broker's `master` needs your
   authority.
+
+## Phase 2 — bell (2026-11-12)
+
+### Deviation from the goal
+
+The goal put the flash in the view's paint pass. It is app-side instead: the view has no bell handling and receives no
+bell event, and this phase did not add one. The terminal's state (`features/terminal/state.ts`) accepts the bell, starts
+the flash, and ends it; `TerminalView.vue` binds a class on its container to whether the state says the terminal is
+flashing. The flash therefore paints on the container's background, not the broker-painted grid, so it is a background
+change that the canvas can cover (see Not verified).
+
+Timing is owned by the state, not by a watch in the component: the accepted bell raises two timers on the machine,
+`BELL_FLASH_MS` (150 ms, ends the flash) and `BELL_WINDOW_MS` (500 ms, ends the window in which a further bell is the
+same bell). A bell inside the window changes nothing. The flash setting is read from the code surface's settings through
+the parent context, as `getParentContext` already serves the terminal's other parent reads.
+
+The existing `activity.bell` flag, which the tab badge shows and `terminal.SEEN` clears, is unchanged. The goal's
+"cleared by the same state" is satisfied by the window timer rather than by `SEEN`, since a flash must end whether or
+not the person looks.
+
+### What changed
+
+- Broker: no change. View (`view/`): no change.
+- `apack.json` (`features.code.settings`): `bellFlash` (default `true`) and `bellNotification` (default `false`) in the
+  schema, the required list and the defaults. `npm run generate:entries -w @app/default-setup` ran; the facade report
+  gained the two fields and nothing else changed (`etc/pack-types.api.md`).
+- `fe/features/terminal/state.ts`: `ringBell`, `endBellFlash`, `endBellWindow`, `showBellNotification`; context
+  `bells`. `fe/canvas/TerminalView.vue`: `bellFlashing` selector and the container class. `fe/settings.vue`: two checkboxes.
+- Main: `packages/main/src/modules/notify-access.ts` (length limits 200 title, 1000 body; refused, not cut), registered
+  in `WindowManager.ts` beside the clipboard handler. Preload: `notify.show`. SDK: `_HostBridge.notify`, and
+  `packages/apack-sdk/etc/fe.api.md` gained only the `notify` member (`npm run packages:build`, then `api:update`).
+
+### Commands and results
+
+- `npm run spec -- packages/main/tests/notify-access.spec.ts`: 8 passed.
+- `npm run spec -- packages/preload`: 12 passed.
+- `npm run spec -- packages/default-setup/tests/features/code/fe/features/terminal/terminal-bell.frontend.spec.ts`: 9 passed
+  (flash for 150 ms and back; a run of bells in 500 ms is one flash; a bell during the flash does not restart it; a bell
+  after the window is a new flash; flash off paints nothing; a flash is per terminal; notification asked only when
+  unfocused and the setting is on; not when focused; not when off; one notification for a run of bells).
+- `npm run spec -- packages/default-setup/tests/features/code/fe/canvas/terminal-view.frontend.spec.ts`: 5 passed (one new
+  case: the container carries the flash while the state says it is flashing, and not after).
+- `npm run spec -- packages/default-setup/tests/features/code/fe` (the whole code frontend): 32 files, 197 tests passed,
+  run before the harness type fix below.
+- `npm run typecheck:pack`: exit 0 after fixing the harness's context type (`bells` added to its declared context).
+- `npx tsc --noEmit -p .` in `packages/main` and `packages/preload`: exit 0.
+- `npm run chain` was not run, by instruction.
+
+### Mutation checks
+
+Each mutant was a copy in the scratchpad, copied over the file, run, and the original copied back and compared with `cmp`.
+- Focus gate removed (`!document.hasFocus()` dropped from the notification condition): the focused-window case fails
+  (`does not ask for a system notification while the window is focused`). 1 failed, 8 passed. Restored, `cmp` identical.
+- Duplicate-bell guard removed (`if (context.bells[id] !== undefined) return` dropped): two cases fail
+  (`flashes once for a run of bells inside 500 ms...` and `asks for one notification for a run of bells inside 500 ms`).
+  2 failed, 7 passed. Restored, `cmp` identical.
+
+### Not verified
+
+- No run of the Electron app. The flash has not been seen on a real window, and whether a container background shows
+  through the canvas is unknown; if the grid covers it, the flash is invisible and the next step is an overlay.
+- The OS notification has not been displayed. The main handler is tested against a stub of `Notification`.
+- Focus is `document.hasFocus()`, as the existing `notifySystem` uses it. No app-level focus state was found to use.
+- Every window showing the code surface receives the bell. An unfocused window each asks for a notification, so two
+  unfocused windows can show two. The `NOTIFIED` path avoids this with a shared tag; the bell path does not yet.
