@@ -2,11 +2,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { afterEach, expect, it } from 'vitest';
-import { readPackageInputs, readPackageInputsAsync } from '../../src/build/package-inputs.ts';
+import { afterEach, expect, it, vi } from 'vitest';
+import { createPackageDigestCache, readFileDigest, readPackageInputs, readPackageInputsAsync } from '../../src/build/package-inputs.ts';
 
 const roots: string[] = [];
-afterEach(() => roots.splice(0).forEach(root => fs.rmSync(root, { recursive: true, force: true })));
+afterEach(() => { vi.restoreAllMocks(); roots.splice(0).forEach(root => fs.rmSync(root, { recursive: true, force: true })); });
 function tree() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-npm-inputs-'));
   roots.push(root);
@@ -296,4 +296,89 @@ it('reads an owner\'s graph whole when that owner asks for it, whatever the defa
   const dependencies = inputs.nodes.filter(node => node.directory !== fs.realpathSync.native(pack.root));
   expect(dependencies.map(node => node.contents)).toEqual(['all', 'all']);
   expect(dependencies.flatMap(node => node.unread)).toEqual([]);
+});
+
+/** A reader whose clock runs a minute ahead, so a fixture written a moment ago counts as long unwritten. */
+const settledDigests = () => createPackageDigestCache(() => Date.now() + 60_000);
+const readsOf = (reads: { mock: { calls: unknown[][] } }, file: string) => reads.mock.calls.filter(([read]) => read === file).length;
+
+it('answers with kept digests exactly as a fresh read does, through every kind of edit', () => {
+  const pack = tree();
+  const owners = [{ id: 'compiler', directory: pack.root, development: true, contents: true }];
+  const digests = settledDigests();
+  const agrees = () => expect(readPackageInputs(owners, { digests })).toEqual(readPackageInputs(owners));
+  const helper = path.join(pack.root, 'node_modules/helper/index.js');
+  agrees();
+  const first = readPackageInputs(owners, { digests }).hash;
+  pack.write('node_modules/helper/index.js', 'export const value = 1000;');
+  agrees();
+  // The same length, and a time of its own so the edit does not depend on how finely this filesystem keeps one
+  pack.write('node_modules/helper/index.js', 'export const value = 2000;');
+  fs.utimesSync(helper, new Date(1_700_000_000_000), new Date(1_700_000_000_000));
+  agrees();
+  pack.write('node_modules/helper/replacement.js', 'export const value = 3000;');
+  fs.renameSync(path.join(pack.root, 'node_modules/helper/replacement.js'), helper);
+  agrees();
+  pack.write('node_modules/helper/added.js', 'added');
+  agrees();
+  fs.rmSync(path.join(pack.root, 'node_modules/helper/added.js'));
+  fs.chmodSync(helper, 0o755);
+  agrees();
+  fs.chmodSync(helper, 0o644);
+  pack.write('node_modules/helper/index.js', 'export const value = 1;');
+  expect(readPackageInputs(owners, { digests }).hash).toBe(first);
+});
+
+it('does not read a file again that nothing has touched, and reads one again that something has', async () => {
+  const pack = tree();
+  const owners = [{ id: 'compiler', directory: pack.root, development: true, contents: true }];
+  const digests = settledDigests();
+  const helper = fs.realpathSync.native(path.join(pack.root, 'node_modules/helper/index.js'));
+  const compiler = fs.realpathSync.native(path.join(pack.root, 'node_modules/compiler/index.js'));
+  const before = readPackageInputs(owners, { digests });
+  const reads = vi.spyOn(fs, 'readFileSync');
+  expect(readPackageInputs(owners, { digests })).toEqual(before);
+  expect(readsOf(reads, helper) + readsOf(reads, compiler)).toBe(0);
+  fs.writeFileSync(helper, 'export const value = 12345;');
+  readPackageInputs(owners, { digests });
+  expect([readsOf(reads, helper), readsOf(reads, compiler)]).toEqual([1, 0]);
+  const yielding = vi.spyOn(fs.promises, 'readFile');
+  expect((await readPackageInputsAsync(owners, { digests })).hash).toBe(readPackageInputs(owners).hash);
+  expect(readsOf(yielding, helper) + readsOf(yielding, compiler)).toBe(0);
+});
+
+it('keeps no digest of a file written a moment before it was read', () => {
+  const pack = tree();
+  const owners = [{ id: 'compiler', directory: pack.root, development: true, contents: true }];
+  const helper = fs.realpathSync.native(path.join(pack.root, 'node_modules/helper/index.js'));
+  // A reader whose clock stands a second after the write, however long this machine took to get here
+  const written = Math.max(fs.statSync(helper).mtimeMs, fs.statSync(helper).ctimeMs);
+  const digests = createPackageDigestCache(() => written + 1_000);
+  readPackageInputs(owners, { digests });
+  const reads = vi.spyOn(fs, 'readFileSync');
+  readPackageInputs(owners, { digests });
+  expect(readsOf(reads, helper)).toBe(1);
+});
+
+it('hands a capture its bytes whatever digests are kept', () => {
+  const pack = tree();
+  const owners = [{ id: 'compiler', directory: pack.root, development: true, contents: true }];
+  const digests = settledDigests();
+  readPackageInputs(owners, { digests });
+  const captured: string[] = [];
+  readPackageInputs(owners, { digests, onFile: (file, bytes) => { captured.push(`${file.path}:${bytes.length}`); } });
+  expect(captured).toContain('index.js:23');
+});
+
+it('digests one file through the same kept answers', () => {
+  const pack = tree();
+  const digests = settledDigests();
+  const helper = path.join(pack.root, 'node_modules/helper/index.js');
+  const first = readFileDigest(helper, digests);
+  expect(first).toBe(readFileDigest(helper));
+  const reads = vi.spyOn(fs, 'readFileSync');
+  expect(readFileDigest(helper, digests)).toBe(first);
+  expect(reads).not.toHaveBeenCalled();
+  fs.writeFileSync(helper, 'export const value = 77;');
+  expect(readFileDigest(helper, digests)).toBe(readFileDigest(helper));
 });

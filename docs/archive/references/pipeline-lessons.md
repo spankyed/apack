@@ -278,6 +278,30 @@ holds the timer off, and the first reading it took — after the work — was ta
 had spent every minute on CPU had by its account done nothing since the watch began. A reading that counts
 from its watch's start is now measured against nothing done at the start (`countsFromWatch`).
 
+## A signature that read every byte on every pass
+
+The pack watcher signs the package trees its builds read — the compiler package, and the pack's whole dependency
+graph — to decide whether a pass has anything to build. It read every file of both to do it: the compiler package
+twice at a watcher's start, and the dependency graph twice per build with nothing kept between passes. For the
+built-in pack that is 12,371 and 36,199 files, about 650 MB. In the Linux test container that read is what a
+watcher case spent minutes in ([a stall that was a disk](#a-stall-that-was-a-disk)).
+
+The reader now keeps each file's digest under what the filesystem says of it (size, both timestamps, inode) and
+reads a file again only when one of them moved (`createPackageDigestCache`, `@apackdev/host/build/package-inputs`).
+The signature is still the content hash, value for value, which is what separates this from signing by timestamps:
+a file rewritten with the same bytes is unchanged, as it was. The trade the chain's fingerprint declined at 2.5 MB
+(`fingerprintInputs`, `packages-built.ts`) is taken here at 650 MB, and only for the watcher: a build takes its own
+bytes.
+
+Measured 2026-11-11 on the Mac (10 cores, load 9), an unchanged tree read a second time:
+
+    the compiler package                    read whole 1.11s | digests kept 0.30s
+    the built-in pack's declared dependencies   read whole 4.46s | digests kept 0.71s
+
+A watcher's first reading is still whole. What remains of a later pass, 7.7s end to end at that load, is mostly the
+TypeScript program each pass builds to find the pack's modules (4.4s), which this did not touch. The kept digests
+hold 16 MB.
+
 ## A stamp directory has one writer
 
 **The rule.** A cache of "this passed against these inputs" is only sound while one process writes it. Two

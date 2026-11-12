@@ -62,6 +62,59 @@ interface PackageInputOptions {
   readonly onFile?: (file: PackageInputFile, bytes: Buffer) => void;
   /** The exact filtered membership used during the package walk. */
   readonly onDirectory?: (directory: string, names: readonly string[]) => void;
+  /**
+   * Digests a previous read took, for a caller that reads the same trees again and again: a file nothing has
+   * touched since is not read. The hash is the one a read without it returns. Unused beside `onFile`, which is
+   * owed the bytes.
+   */
+  readonly digests?: PackageDigestCache;
+}
+
+/** A file's timestamps are trusted to show a later write only once it has gone this long unwritten. */
+const UNSETTLED_MS = 2_000;
+
+export interface PackageDigestCache {
+  /** The digest held for a file that has not moved since it was taken, and how to hold the one read now. */
+  lookup(file: string): { readonly digest: string | undefined; readonly mode: number; record(digest: string): void };
+}
+
+/**
+ * Content digests keyed by what the filesystem says of each file: its size, both its timestamps and its inode. A
+ * file is read again when any of them moved, so a stale entry needs a write that restored all four. A file written
+ * within `UNSETTLED_MS` of being read is not held at all, because a second write inside one tick of the
+ * filesystem's clock leaves the same timestamps behind. It belongs to one reader for as long as that reader lives;
+ * a build takes its own bytes and never reads this.
+ */
+export function createPackageDigestCache(now: () => number = Date.now): PackageDigestCache {
+  const held = new Map<string, { size: bigint; mtimeNs: bigint; ctimeNs: bigint; ino: bigint; digest: string }>();
+  return {
+    lookup(file) {
+      const at = now();
+      const { size, mtimeNs, ctimeNs, ino, mode } = fs.statSync(file, { bigint: true });
+      const entry = held.get(file);
+      const current = entry && entry.size === size && entry.mtimeNs === mtimeNs && entry.ctimeNs === ctimeNs && entry.ino === ino;
+      return {
+        digest: current ? entry.digest : undefined,
+        mode: Number(mode),
+        record(digest) {
+          const settled = BigInt(Math.floor(at) - UNSETTLED_MS) * 1_000_000n;
+          if (mtimeNs < settled && ctimeNs < settled) held.set(file, { size, mtimeNs, ctimeNs, ino, digest });
+          else held.delete(file);
+        },
+      };
+    },
+  };
+}
+
+const digestOf = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
+
+/** One file's content digest, through the cache when its reader keeps one. */
+export function readFileDigest(file: string, digests?: PackageDigestCache): string {
+  const known = digests?.lookup(file);
+  if (known?.digest !== undefined) return known.digest;
+  const digest = digestOf(fs.readFileSync(file));
+  known?.record(digest);
+  return digest;
 }
 
 /** Package inventory ignores tool/cache trees; capture and validation use the same membership. */
@@ -88,7 +141,7 @@ export function findPackageDirectory(owner: string, name: string, observe?: Buil
 /** The files esbuild, Vite and TypeScript resolution read directly, outside a compiler's captured reads. */
 const resolutionFile = (name: string) => name === 'package.json' || name === 'jsconfig.json' || /^tsconfig.*\.json$/.test(name);
 
-function* readPackageFiles(node: PackageInputNode, targets: readonly string[], owners: ReadonlyMap<string, unknown>, { observe, onFile, onDirectory }: PackageInputOptions): Generator<string, void, Buffer> {
+function* readPackageFiles(node: PackageInputNode, targets: readonly string[], owners: ReadonlyMap<string, unknown>, { observe, onFile, onDirectory, digests }: PackageInputOptions): Generator<string, void, Buffer> {
   const root = node.directory;
   const everything = node.contents === 'all';
   const ancestors = new Set<string>();
@@ -131,9 +184,15 @@ function* readPackageFiles(node: PackageInputNode, targets: readonly string[], o
   for (const target of targets) walk(path.join(root, target));
   for (const [file, physical] of [...files].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) {
     const { source } = physical;
-    const mode = physical.mode ?? (fs.statSync(source).mode & 0o777);
+    const known = onFile ? undefined : digests?.lookup(source);
+    const mode = physical.mode ?? ((known?.mode ?? fs.statSync(source).mode) & 0o777);
+    if (known?.digest !== undefined) {
+      node.files.push({ path: file, source, mode, hash: known.digest });
+      continue;
+    }
     const bytes = yield source;
-    const input = { path: file, source, mode, hash: createHash('sha256').update(bytes).digest('hex') };
+    const input = { path: file, source, mode, hash: digestOf(bytes) };
+    known?.record(input.hash);
     node.files.push(input);
     onFile?.(input, bytes);
   }
@@ -194,7 +253,7 @@ function* packageInputReads(owners: readonly PackageInputOwner[], options: Packa
       dependencies: Object.create(null), lookups: Object.create(null) };
     nodes.push(node);
     if (bytes && onFile) onFile({ path: 'package.json', source: fs.realpathSync.native(file), mode: fs.statSync(file).mode & 0o777,
-      hash: createHash('sha256').update(bytes).digest('hex') }, bytes);
+      hash: digestOf(bytes) }, bytes);
     if (contents !== 'none') yield* readPackageFiles(node, packageTargets(manifest), rootInputs, options);
     return index;
   }

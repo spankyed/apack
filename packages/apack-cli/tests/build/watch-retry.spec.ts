@@ -49,7 +49,7 @@ vi.mock('@apackdev/host/build/pack-inputs', () => ({
   packInputFiles: () => [],
 }));
 vi.mock('../../src/build/compiler-watch.ts', () => ({
-  createCompilerWatchTools: () => ({ read: vi.fn(), changed: vi.fn() }),
+  createCompilerWatchTools: () => ({ read: vi.fn(), changed: vi.fn(), digests: { lookup: vi.fn() } }),
   compilerWatchPaths: () => ({ paths: new Map(), staticPaths: new Map(), complete: true, signature: fixture.compilerSignature }),
   packageInputWatchPaths: () => new Map(fixture.packageFiles.map(file => [file, 'file'])),
   additionalCompilerObservations: (observations: unknown) => observations,
