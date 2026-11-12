@@ -2015,6 +2015,25 @@ type IncomingCommitEvents = {
     kind: StartableOperation;
     target: string;
 }
+/** Amend the last commit with what is staged, and `message` in place of its own when given */
+ | {
+    type: 'commit.AMEND';
+    message?: string;
+    evenIfPublished?: boolean;
+}
+/** A commit's whole message, for rewording it */
+ | {
+    type: 'commit.GET_COMMIT_MESSAGE';
+    hash: string;
+}
+/** Reword a commit of what is checked out, fold it into the one before it, or drop it, keeping those after it */
+ | {
+    type: 'commit.REWRITE_COMMIT';
+    hash: string;
+    action: RewriteAction;
+    message?: string;
+    evenIfPublished?: boolean;
+}
 /** What merging a branch in would do, before it is done */
  | {
     type: 'commit.PREVIEW_MERGE';
@@ -3332,6 +3351,27 @@ type OutgoingCommitEvents =
     data: {
         target: string;
         preview: MergePreview;
+    };
+} | {
+    type: 'commit.AMENDED';
+} | {
+    type: 'commit.COMMIT_MESSAGE_RECEIVED';
+    data: {
+        hash: string;
+        message: string;
+    };
+} | {
+    type: 'commit.COMMIT_REWRITTEN';
+    data: {
+        hash: string;
+        action: RewriteAction;
+    };
+}
+/** A remote branch already holds commits the amend or rewrite would change: done only once the user says to go on */
+ | {
+    type: 'commit.REWRITE_NEEDS_CONFIRMATION';
+    data: {
+        message: string;
     };
 } | {
     type: 'commit.DIFF_RECEIVED';
@@ -4984,6 +5024,9 @@ declare const ResultLineSchema: z.ZodObject<{
     structured_output: z.ZodOptional<z.ZodUnknown>;
     errors: z.ZodOptional<z.ZodArray<z.ZodString>>;
 }, z.core.$loose>;
+
+/** What the panel does to one commit of the history: give it a new message, fold it into the one before it, or drop it */
+type RewriteAction = 'drop' | 'reword' | 'squash';
 
 /** A run node as the Brain surface shows it: with where its blueprint is, to reveal it in the Flows surface */
 type RunNodeDetails = RunNode & {

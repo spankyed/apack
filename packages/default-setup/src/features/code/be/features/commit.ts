@@ -6,11 +6,11 @@ import { defineHandlers } from '@apackdev/sdk/framework';
 import { assign, setup, enqueueActions, fromCallback, type AnyActorRef } from 'xstate'
 
 import { GitError, GitUnusableError, HookRefusedError, NOTHING_CHANGED, StashConflictError, UnsafeOwnershipError, UntrustedError, changedAnything } from 'apack-git'
-import type { HistoryPage } from 'apack-git'
+import type { HistoryCommit, HistoryPage, RewriteStep } from 'apack-git'
 import { openGitRepository, trustRepository, type AppGitRepository } from '../services/app-git-repository.ts'
 import { setUpGitSignIn } from '../services/gh-cli.ts'
 import { isHostName } from '../services/sign-in.ts'
-import type { CommitFailure, GitProgress, OperationMove, RepositoryChange, StartableOperation } from '../types.ts'
+import type { CommitFailure, GitProgress, OperationMove, RepositoryChange, RewriteAction, StartableOperation } from '../types.ts'
 import { requireGitRepository } from '../utils/git-helpers.ts'
 
 const surfaceId = 'code' as const
@@ -60,6 +60,9 @@ export type Event =
   | { type: 'commit.RESOLVE_ALL_CONFLICTS'; strategy: 'ours' | 'theirs' }
   | { type: 'commit.MOVE_OPERATION'; move: OperationMove }
   | { type: 'commit.START_OPERATION'; kind: StartableOperation; target: string }
+  | { type: 'commit.AMEND'; message?: string; evenIfPublished?: boolean }
+  | { type: 'commit.GET_COMMIT_MESSAGE'; hash: string }
+  | { type: 'commit.REWRITE_COMMIT'; hash: string; action: RewriteAction; message?: string; evenIfPublished?: boolean }
   | { type: 'commit.PREVIEW_MERGE'; target: string }
   | { type: 'commit.SET_UP_SIGN_IN'; host: string; during?: 'push' | 'pull' }
   | { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; hunk: string }
@@ -90,11 +93,58 @@ const WHAT_TO_DO = {
  * Tells whoever made a write what Undo would take back now: a write that can be taken back is the last in the
  * repository's journal, unless another window or process made one since. Nothing is said when it cannot be read.
  */
+/**
+ * Answers a rewrite that failed: one a remote branch already holds commits of is the user's to go on with, which the
+ * window asks; anything else is an error
+ */
+function answerRewrite(rewrite: Promise<void>, reply: Parameters<typeof answer>[0]): void {
+  rewrite.catch((error: unknown) => {
+    answer(reply, (error as { code?: string }).code === 'published'
+      ? { type: 'commit.REWRITE_NEEDS_CONFIRMATION', data: { message: (error as Error).message } }
+      : { type: 'commit.ERROR_RECEIVED', data: failureOf(error) })
+  })
+}
+
 function answerUndoable(repo: AppGitRepository, reply: Parameters<typeof answer>[0]): Promise<void> {
   return repo.lastUndoable().then(
     entry => answer(reply, { type: 'commit.UNDOABLE_RECEIVED', data: entry ? { id: entry.id, summary: entry.summary } : null }),
     () => {},
   )
+}
+
+/** The furthest back the panel's rewrites reach, in commits from what is checked out */
+const REWRITE_REACH = 1000
+
+/**
+ * What rewriting one commit asks of the engine: the commits from the one the rewrite starts after to what is checked
+ * out, oldest first, each kept but `hash`, which is reworded, folded into the one before it or dropped. Refused for a
+ * commit what is checked out does not hold, for a range with a merge in it, which a rewrite would flatten, and for a
+ * fold of a first commit, which has nothing before it.
+ */
+async function rewriteOf(repository: AppGitRepository, hash: string, action: RewriteAction, message?: string): Promise<{ base: string; steps: RewriteStep[] }> {
+  const line: HistoryCommit[] = []
+  // A fold reaches one further, to the commit it is folded into
+  let found = false
+  let cursor: string | undefined
+  while (line.length < REWRITE_REACH) {
+    const page = await repository.history({ cursor, limit: LOG_PAGE })
+    for (const commit of page.commits) {
+      if (commit.parents.length > 1) throw new Error('A merge is among these commits, and rewriting them would flatten it.')
+      line.push(commit)
+      if (found || (commit.hash === hash && action !== 'squash')) {
+        const base = commit.parents[0]
+        if (!base) throw new Error('The first commit has nothing before it to rewrite after.')
+        return {
+          base,
+          steps: line.reverse().map(({ hash: each }) => ({ commit: each, action: each === hash ? action : 'pick', ...(each === hash && message !== undefined && { message }) })),
+        }
+      }
+      if (commit.hash === hash) found = true
+    }
+    if (!page.cursor) break
+    cursor = page.cursor
+  }
+  throw new Error(found ? 'The first commit has nothing before it to be folded into.' : 'That commit is not among the last ones of what is checked out.')
 }
 
 /** How many commits a page of the panel's history holds */
@@ -545,6 +595,37 @@ export const commitSystem = setup({
       }).finally(() => {
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
       })
+    },
+
+    amend: ({ event, context, self, reply }) => {
+      const { message, evenIfPublished } = event as { type: 'commit.AMEND'; message?: string; evenIfPublished?: boolean }
+      if (!requireGitRepository(context, reply)) return
+      const repository = context.gitRepository
+      answerRewrite(repository.amend({ message, evenIfPublished }).then(() => {
+        answer(reply, { type: 'commit.AMENDED' })
+        self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+        return answerUndoable(repository, reply)
+      }), reply)
+    },
+
+    commitMessage: ({ event, context, reply }) => {
+      const { hash } = event as { type: 'commit.GET_COMMIT_MESSAGE'; hash: string }
+      if (!requireGitRepository(context, reply)) return
+      context.gitRepository.commitMessage(hash).then(
+        message => answer(reply, { type: 'commit.COMMIT_MESSAGE_RECEIVED', data: { hash, message } }),
+        (error: unknown) => answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) }),
+      )
+    },
+
+    rewriteCommit: ({ event, context, self, reply }) => {
+      const { hash, action, message, evenIfPublished } = event as { type: 'commit.REWRITE_COMMIT'; hash: string; action: RewriteAction; message?: string; evenIfPublished?: boolean }
+      if (!requireGitRepository(context, reply)) return
+      const repository = context.gitRepository
+      answerRewrite(rewriteOf(repository, hash, action, message).then(({ base, steps }) => repository.rewrite(base, steps, { evenIfPublished })).then(() => {
+        answer(reply, { type: 'commit.COMMIT_REWRITTEN', data: { hash, action } })
+        self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+        return answerUndoable(repository, reply)
+      }), reply)
     },
 
     startOperation: ({ event, context, self, reply }) => {
@@ -1251,6 +1332,15 @@ export const commitSystem = setup({
         },
         'commit.START_OPERATION': {
           actions: 'startOperation'
+        },
+        'commit.AMEND': {
+          actions: 'amend'
+        },
+        'commit.GET_COMMIT_MESSAGE': {
+          actions: 'commitMessage'
+        },
+        'commit.REWRITE_COMMIT': {
+          actions: 'rewriteCommit'
         },
         'commit.PREVIEW_MERGE': {
           actions: 'previewMerge'

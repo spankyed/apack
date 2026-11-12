@@ -480,6 +480,9 @@ export interface BlameLine {
   originalPath: string
 }
 
+/** What the panel does to one commit of the history: give it a new message, fold it into the one before it, or drop it */
+export type RewriteAction = 'reword' | 'squash' | 'drop'
+
 /** What the panel can begin: merging a branch in, replaying what is checked out onto one, or picking a commit onto it */
 export type StartableOperation = 'merge' | 'rebase' | 'cherry-pick'
 

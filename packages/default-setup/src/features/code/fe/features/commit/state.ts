@@ -5,7 +5,7 @@ import { sendToSystem } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { diffTab, diffTabPath } from '../../utils/diff-tabs.ts';
 import { withStaged, withUnstaged } from 'apack-git/staging';
-import type { BlameLine, ChangedFile, MergePreview, CommitFailure, ConflictKind, LineCount, DiffHunk, DiscardKept, DiscardRestored, GitProgress, OperationMove, RepositoryChange, RepositoryOperation, SignInHelp, StartableOperation } from '../../../be/types.ts';
+import type { BlameLine, ChangedFile, MergePreview, CommitFailure, ConflictKind, LineCount, DiffHunk, DiscardKept, DiscardRestored, GitProgress, OperationMove, RepositoryChange, RepositoryOperation, RewriteAction, SignInHelp, StartableOperation } from '../../../be/types.ts';
 import type { OpenFile } from '../../contract.ts';
 
 
@@ -74,6 +74,12 @@ export interface CodeCommitContext {
   lastUndoable: { id: string; summary: string } | null
   /** Why the last write is not taken back without asking: a commit already on a remote branch */
   undoConfirmation: string | null
+  /** An amend or a rewrite a remote branch holds commits of, with why, until the user goes on with it or not */
+  rewriteConfirmation: { message: string; request: RewriteRequest } | null
+  /** The last amend or rewrite asked for, to go on with once the user says to */
+  pendingRewrite: RewriteRequest | null
+  /** The commit being reworded in the history and its whole message, once read */
+  rewording: { hash: string; message: string | null } | null
   /** What undoing a discard left as it was, because it had changed or been made again since */
   discardLeft: string[]
   /** The folder what is held here was read from: the code surface's, as of the last time it started */
@@ -293,6 +299,15 @@ export type Event =
   | { type: 'commit.MOVE_OPERATION'; move: OperationMove }
   | { type: 'commit.OPERATION_MOVED'; data: { move: OperationMove } }
   | { type: 'commit.START_OPERATION'; kind: StartableOperation; target: string }
+  | RewriteRequest
+  | { type: 'commit.AMENDED' }
+  | { type: 'commit.START_REWORD'; hash: string }
+  | { type: 'commit.CANCEL_REWORD' }
+  | { type: 'commit.COMMIT_MESSAGE_RECEIVED'; data: { hash: string; message: string } }
+  | { type: 'commit.COMMIT_REWRITTEN'; data: { hash: string; action: RewriteAction } }
+  | { type: 'commit.REWRITE_NEEDS_CONFIRMATION'; data: { message: string } }
+  | { type: 'commit.CONFIRM_REWRITE' }
+  | { type: 'commit.DISMISS_REWRITE' }
   | { type: 'commit.OPERATION_STARTED'; data: { kind: StartableOperation; target: string; stopped: boolean } }
   | { type: 'commit.PREVIEW_MERGE'; target: string }
   | { type: 'commit.MERGE_PREVIEWED'; data: { target: string; preview: MergePreview } }
@@ -312,6 +327,17 @@ export type Event =
   | { type: 'commit.SHOWN' }
   | { type: 'commit.HIDDEN' };
 
+/** An amend of the last commit or a rewrite of one in the history, as the panel asks the backend for it */
+type RewriteRequest =
+  | { type: 'commit.AMEND'; message?: string; evenIfPublished?: boolean }
+  | { type: 'commit.REWRITE_COMMIT'; hash: string; action: RewriteAction; message?: string; evenIfPublished?: boolean }
+
+/** Asks the backend for an amend or a rewrite, as each one's own event */
+function sendRewrite(request: RewriteRequest): void {
+  if (request.type === 'commit.AMEND') sendToSystem('code', request)
+  else sendToSystem('code', request)
+}
+
 /** The fields of the panel's state that are read from a repository */
 type OfOneFolder =
   | 'gitStatus'
@@ -330,6 +356,9 @@ type OfOneFolder =
   | 'repositories'
   | 'lastUndoable'
   | 'undoConfirmation'
+  | 'rewriteConfirmation'
+  | 'pendingRewrite'
+  | 'rewording'
   | 'discardLeft'
   | 'availableBranches'
   | 'branchStanding'
@@ -375,6 +404,9 @@ const ofNoFolder = (): Pick<CodeCommitContext, OfOneFolder> => ({
   repositories: [],
   lastUndoable: null,
   undoConfirmation: null,
+  rewriteConfirmation: null,
+  pendingRewrite: null,
+  rewording: null,
   discardLeft: [],
   availableBranches: [],
   branchStanding: {},
@@ -836,6 +868,19 @@ export const commitState = setup({
 
     handleOperationStarted: assign({ isStartingOperation: false }),
 
+    /** Asks for an amend or a rewrite, kept until it is answered so the user can go on with it if a remote holds it */
+    requestRewrite: enqueueActions(({ event, enqueue }) => {
+      const request = event as RewriteRequest
+      enqueue.assign({ pendingRewrite: request, rewriteConfirmation: null, gitError: null })
+      enqueue(() => { sendRewrite(request) })
+    }),
+
+    confirmRewrite: enqueueActions(({ context, enqueue }) => {
+      const request = context.rewriteConfirmation?.request
+      enqueue.assign({ rewriteConfirmation: null })
+      if (request) enqueue(() => { sendRewrite({ ...request, evenIfPublished: true }) })
+    }),
+
     previewMerge: ({ event }) => {
       const { target } = event as { type: 'commit.PREVIEW_MERGE'; target: string }
       sendToSystem('code', { type: 'commit.PREVIEW_MERGE', target })
@@ -1289,6 +1334,35 @@ export const commitState = setup({
         'commit.START_OPERATION': {
           actions: 'startOperation'
         },
+        'commit.AMEND': { actions: 'requestRewrite' },
+        'commit.REWRITE_COMMIT': { actions: 'requestRewrite' },
+        'commit.AMENDED': { actions: [assign({ pendingRewrite: null, commitMessage: '' }), 'requestLogList'] },
+        'commit.COMMIT_REWRITTEN': { actions: [assign({ pendingRewrite: null, rewording: null }), 'requestLogList'] },
+        'commit.REWRITE_NEEDS_CONFIRMATION': {
+          actions: assign({
+            rewriteConfirmation: ({ context, event }) => context.pendingRewrite
+              ? { message: (event as { type: 'commit.REWRITE_NEEDS_CONFIRMATION'; data: { message: string } }).data.message, request: context.pendingRewrite }
+              : null,
+          }),
+        },
+        'commit.CONFIRM_REWRITE': { actions: 'confirmRewrite' },
+        'commit.START_REWORD': {
+          actions: enqueueActions(({ event, enqueue }) => {
+            const { hash } = event as { type: 'commit.START_REWORD'; hash: string }
+            enqueue.assign({ rewording: { hash, message: null } })
+            enqueue(() => { sendToSystem('code', { type: 'commit.GET_COMMIT_MESSAGE', hash }) })
+          }),
+        },
+        'commit.CANCEL_REWORD': { actions: assign({ rewording: null }) },
+        'commit.COMMIT_MESSAGE_RECEIVED': {
+          actions: assign({
+            rewording: ({ context, event }) => {
+              const { hash, message } = (event as { type: 'commit.COMMIT_MESSAGE_RECEIVED'; data: { hash: string; message: string } }).data
+              return context.rewording?.hash === hash ? { hash, message } : context.rewording
+            },
+          }),
+        },
+        'commit.DISMISS_REWRITE': { actions: assign({ rewriteConfirmation: null, pendingRewrite: null }) },
         'commit.OPERATION_STARTED': {
           actions: ['handleOperationStarted', 'requestLogList']
         },

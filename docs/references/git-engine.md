@@ -143,6 +143,16 @@ branch, the merge's button titled with what it would do (`commit.PREVIEW_MERGE`)
 each commit that what is checked out does not hold (`commit.START_OPERATION`, answered `commit.OPERATION_STARTED` with
 whether it stopped). None is begun while another is in progress.
 
+## Rewriting the last commits
+
+`amend({ message })` amends the last commit with what is staged, and `rewrite(base, steps)` rewords, folds, reorders or
+drops the commits after `base` by a rebase whose list the engine writes; each is refused with `published` for a commit
+a remote branch holds unless `evenIfPublished`, and each is written in the journal, so undo takes it back.
+`commitMessage(commit)` reads a commit's whole message. The commit panel amends from under its Commit button, and its
+history rewords (over the whole message), folds into the commit before or drops a commit of what is checked out
+(`commit.REWRITE_COMMIT`), refusing a fold of the first commit and a range with a merge in it; a refusal for a commit a
+remote branch holds is asked about (`commit.REWRITE_NEEDS_CONFIRMATION`) and done once the user says to go on.
+
 ## Branches, remotes and tags
 
 `refsModel()` reads every branch with its upstream and how far ahead and behind it is in one command, beside the
