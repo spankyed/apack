@@ -1,5 +1,5 @@
-// What the panel holds was read from one folder. When the code surface starts over another, the refusal git
-// gave in the first and the discard it offered to undo there are gone; starting again over the same folder,
+// What the panel holds was read from one folder. When the code surface starts over another, the branches of the
+// first, the refusal git gave there and the discard it offered to undo are gone; starting again over the same folder,
 // as a reconnect does, keeps them.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
@@ -22,6 +22,7 @@ const trust = { repository: '/work/one/.git', asks: [{ kind: 'hook' as const, na
 function held() {
   const actor = createActor(commitState).start();
   actor.send({ type: 'CODE_STARTED' });
+  actor.send({ type: 'commit.BRANCHES_RECEIVED', data: { branches: ['main', 'topic'] } });
   actor.send({ type: 'commit.FILES_REVERTED', data: { paths: ['a.txt', 'b.txt'], kept: { id: 'abc123', notKept: [] } } });
   actor.send({ type: 'commit.DISCARD_RESTORED', data: { id: 'abc123', restored: ['a.txt'], left: ['b.txt'] } });
   actor.send({ type: 'commit.ERROR_RECEIVED', data: { message: 'Not trusted.', code: 'untrusted', trust } });
@@ -33,7 +34,7 @@ it('keeps what it holds when the surface starts again over the same folder', () 
 
   actor.send({ type: 'CODE_STARTED' });
 
-  expect(actor.getSnapshot().context).toMatchObject({ discardLeft: ['b.txt'], gitError: 'Not trusted.', gitFailure: { trust } });
+  expect(actor.getSnapshot().context).toMatchObject({ availableBranches: ['main', 'topic'], discardLeft: ['b.txt'], gitError: 'Not trusted.', gitFailure: { trust } });
 });
 
 it('drops the refusal and the discard of one folder when the surface starts over another', () => {
@@ -42,5 +43,8 @@ it('drops the refusal and the discard of one folder when the surface starts over
 
   actor.send({ type: 'CODE_STARTED' });
 
-  expect(actor.getSnapshot().context).toMatchObject({ gitStatus: [], discardLeft: [], lastDiscard: null, gitError: null, gitFailure: null });
+  expect(actor.getSnapshot().context).toMatchObject({
+    gitStatus: [], discardLeft: [], lastDiscard: null, gitError: null, gitFailure: null,
+    availableBranches: [], gitBranch: '', commitLog: [], hasUpstream: true,
+  });
 });

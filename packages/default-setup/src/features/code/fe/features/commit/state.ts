@@ -249,6 +249,67 @@ export type Event =
   | { type: 'commit.SHOWN' }
   | { type: 'commit.HIDDEN' };
 
+/** The fields of the panel's state that are read from a repository */
+type OfOneFolder =
+  | 'gitStatus'
+  | 'gitBranch'
+  | 'gitError'
+  | 'selectedGitFile'
+  | 'revertDialogFile'
+  | 'discardPreview'
+  | 'lastDiscard'
+  | 'discardLeft'
+  | 'availableBranches'
+  | 'branchInput'
+  | 'hasUpstream'
+  | 'commitsAhead'
+  | 'commitsBehind'
+  | 'isStatusTruncated'
+  | 'operation'
+  | 'isFetchSuspended'
+  | 'fetchSignIn'
+  | 'gitFailure'
+  | 'appliedHunks'
+  | 'missedChange'
+  | 'openFolders'
+  | 'stashList'
+  | 'worktreeList'
+  | 'commitLog'
+
+/**
+ * What the panel holds of a repository, as it is before any has been read: its rows, its branch and whether that
+ * has an upstream, its commits, stashes and worktrees, what git last refused, and what a discard offers to undo.
+ * The panel starts with this, and goes back to it when the code surface starts over another folder. A
+ * repository git is not run in, because it is not trusted, reads nothing, and would otherwise sit under the
+ * branch and the commits of the folder open before it.
+ */
+const ofNoFolder = (): Pick<CodeCommitContext, OfOneFolder> => ({
+  gitStatus: [],
+  gitBranch: '',
+  gitError: null,
+  selectedGitFile: null,
+  revertDialogFile: null,
+  discardPreview: null,
+  lastDiscard: null,
+  discardLeft: [],
+  availableBranches: [],
+  branchInput: '',
+  hasUpstream: true,
+  commitsAhead: 0,
+  commitsBehind: 0,
+  isStatusTruncated: false,
+  operation: null,
+  isFetchSuspended: false,
+  fetchSignIn: null,
+  gitFailure: null,
+  appliedHunks: [],
+  missedChange: null,
+  openFolders: {},
+  stashList: [],
+  worktreeList: [],
+  commitLog: [],
+})
+
 export const commitState = setup({
   types: {
     context: {} as CodeCommitContext,
@@ -715,14 +776,9 @@ export const commitState = setup({
 
     handleCodeStartup: enqueueActions(({ context, enqueue, self }) => {
       const directory: string = getParentContext(self)?.baseDirectory || ''
-      // What the panel holds is one folder's: its rows, what git last refused there and the discard it offers to
-      // undo say nothing about another, so they go when the folder is another one
-      if (directory !== context.directory) {
-        enqueue.assign({
-          directory, gitStatus: [], gitError: null, gitFailure: null, revertDialogFile: null,
-          discardPreview: null, lastDiscard: null, discardLeft: [],
-        })
-      }
+      // What the panel holds is one folder's (`ofNoFolder`), and says nothing about another: it goes when the
+      // folder is another one
+      if (directory !== context.directory) enqueue.assign({ directory, ...ofNoFolder() })
       if (directory) {
         // Refresh git status when directory is available
         self.send({ type: 'commit.REFRESH_STATUS' })
@@ -836,45 +892,22 @@ export const commitState = setup({
     diffRefreshes: {},
     statusAsk: null,
     stagingWrites: viewWrites(),
-    gitStatus: [],
-    gitBranch: '',
-    gitError: null,
     isGitLoading: false,
-    selectedGitFile: null,
     commitMessage: '',
-    revertDialogFile: null,
-    discardPreview: null,
-    lastDiscard: null,
-    discardLeft: [],
     directory: '',
-    availableBranches: [],
-    branchInput: '',
     isCheckingOutBranch: false,
-    hasUpstream: true,
-    commitsAhead: 0,
-    commitsBehind: 0,
-    isStatusTruncated: false,
     isWatchingRepository: true,
-    operation: null,
     isMovingOperation: false,
-    isFetchSuspended: false,
-    fetchSignIn: null,
-    gitFailure: null,
     isSettingUpSignIn: false,
     isApplyingHunk: false,
-    appliedHunks: [],
     isShown: false,
-    missedChange: null,
-    openFolders: {},
     progress: null,
     isPushing: false,
     isPulling: false,
     isGeneratingMessage: false,
-    stashList: [],
     isStashing: false,
-    worktreeList: [],
     isWorktreeLoading: false,
-    commitLog: []
+    ...ofNoFolder(),
   },
   states: {
     idle: {
