@@ -3273,6 +3273,7 @@ type OutgoingCommitEvents =
     data: {
         files: GitStatusFile[];
         counts?: LineCount[];
+        hasIdentity?: boolean;
         truncated: boolean;
         branch: string;
         hasUpstream: boolean;

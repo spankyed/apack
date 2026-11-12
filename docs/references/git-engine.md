@@ -147,6 +147,13 @@ and leaves out the commits a repository lists in `.git-blame-ignore-revs` (or th
 An editor tab's menu asks for it (`commit.GET_BLAME`), and the editor draws each line's author and date before it
 until blame is hidden.
 
+## What can be done now, and why not
+
+`whatCanBeDone(snapshot)`, from the window-safe entry `apack-git/availability`, says whether a commit, a push, a pull
+and a sync can be done now and the first reason when not; the snapshot says whether git has a name and an email to
+commit with (`hasIdentity`). The commit panel decides with it from what it holds, and titles the Commit and sync
+buttons with the reason in its own words.
+
 ## Copies of the working tree
 
 **A copy is kept outside the repository, and nothing of the repository's is written to keep it.** Each repository
