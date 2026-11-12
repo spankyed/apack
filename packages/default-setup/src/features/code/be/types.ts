@@ -1,6 +1,3 @@
-import type { GitRepository } from './services/git.ts';
-import type { GitWatcherService } from './services/gitwatcher.ts';
-import type { GitErrorCode } from './services/git-errors.ts';
 import type { SignInHelp } from './services/sign-in.ts';
 import { EARS } from '#generated/ears.ts'
 
@@ -168,6 +165,21 @@ export interface GitDiff {
   isImage?: boolean
   /** The pieces of the change that can be staged, or unstaged, one at a time: none for a file that is not plainly modified */
   hunks?: DiffHunk[]
+}
+
+/** What a discard kept of what it removed, which can be put back for as long as git keeps it */
+export interface DiscardKept {
+  /** Names what was kept, to put it back. Absent when nothing was: every file was too large, or there was none */
+  id?: string
+  /** The paths removed without a copy, each too large to keep one of: from the top of the checkout */
+  notKept: string[]
+}
+
+/** What putting a discard back did, by path from the top of the checkout */
+export interface DiscardRestored {
+  restored: string[]
+  /** Changed or made again since the discard, and left as they are */
+  left: string[]
 }
 
 export interface StashEntry {
@@ -415,11 +427,40 @@ export interface CodeSystemContext {
    * the code settings change, the browsed `baseDirectory` included, so only a new default moves the explorer.
    */
   defaultBaseDirectory: string | null
-  gitRepository: GitRepository | null
-  gitWatcher: GitWatcherService | null
+  gitRepository: RepositoryHandle | null
+  gitWatcher: WatcherHandle | null
 }
 
-export type { GitErrorCode, SignInHelp }
+declare const gitHandle: unique symbol
+/**
+ * The checkout's repository, as the system's context holds it. The context is part of the pack's published
+ * contract, which names no type of the git engine's, so it is a handle there: the feature's own code reads it as
+ * the repository it is (`repositoryOf`, `be/services/app-git-repository.ts`).
+ */
+export interface RepositoryHandle { readonly [gitHandle]: 'repository' }
+/** The repository's watcher, held the same way (`watcherOf`) */
+export interface WatcherHandle { readonly [gitHandle]: 'watcher' }
+
+/** Why a git command failed, where what it printed says: the git engine's codes, as the contract names them */
+export const GIT_ERROR_CODES = [
+  'locked', 'authentication', 'permission', 'remote-unreachable', 'non-fast-forward', 'diverged', 'conflict', 'local-changes', 'unknown-ref', 'not-a-repository',
+  'untrusted',
+] as const
+export type GitErrorCode = (typeof GIT_ERROR_CODES)[number]
+
+export type { SignInHelp }
+
+/** One thing a repository would have git run: a setting of its own that is not known to run nothing, or a hook it holds */
+export type TrustAsk =
+  | { kind: 'setting'; key: string; value: string; file: string }
+  | { kind: 'hook'; name: string; file: string }
+
+/** What a repository asks to be trusted for, and what names it where trust is remembered */
+export interface TrustRequest {
+  /** Where the repository's git state really lives */
+  repository: string
+  asks: TrustAsk[]
+}
 
 /** What the commit panel is told of a command that failed */
 export interface CommitFailure {
@@ -430,4 +471,6 @@ export interface CommitFailure {
   during?: 'push' | 'pull'
   /** What can be done about a sign-in the remote asked for */
   signIn?: SignInHelp
+  /** What the repository would have git run, when the command was not run because the repository is not trusted */
+  trust?: TrustRequest
 }

@@ -44,6 +44,7 @@ jobs:
 
       - uses: ./.github/actions/elmdb
       - uses: ./.github/actions/apack-terminal
+      - uses: ./.github/actions/apack-git
 
       - name: Install dependencies
         run: npm ci --ignore-scripts

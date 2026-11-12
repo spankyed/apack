@@ -1,10 +1,11 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { tsImport } from 'tsx/esm/api';
 import { linkElmdb } from './link-elmdb.mjs';
 import { linkApackTerminal } from './link-apack-terminal.mjs';
+import { linkApackGit } from './link-apack-git.mjs';
 import { primaryWorktree } from './lib/worktrees.mjs';
 
 /** @param {string} root @param {string[]} args */
@@ -52,6 +53,38 @@ export function prepareIntegration(root, refs) {
   return { dir, inputs, commit: git(dir, ['rev-parse', 'HEAD']) };
 }
 
+/**
+ * Keeps what a passed check has to show and gives its checkout back: the chain's evidence is copied beside the
+ * checkout that asked, and the candidate — a whole install and a built app — is removed.
+ *
+ * **A candidate that passed has nothing left to inspect, and nothing else ever removed one.** Each is a gigabyte
+ * or two, and nine had collected beside the checkouts that made them. What a pass leaves worth keeping is what
+ * the chain wrote about its steps, which is megabytes; a candidate that failed is kept whole, since the failure is in it.
+ * @param {string} root @param {{ dir: string; commit: string }} candidate @returns {string} where the evidence is
+ */
+export function settleCandidate(root, candidate) {
+  const evidence = path.join(root, '.apack', 'session-check', candidate.commit.slice(0, 12));
+  const runs = path.join(candidate.dir, 'node_modules', '.cache', 'apack-chain', 'runs');
+  mkdirSync(evidence, { recursive: true });
+  if (existsSync(runs)) cpSync(runs, evidence, { recursive: true });
+  try {
+    git(root, ['worktree', 'remove', '--force', candidate.dir]);
+  } catch {
+    // Git stops at the first file it cannot remove, and a captured compiler's tree is read-only by design
+    makeWritable(candidate.dir);
+    rmSync(candidate.dir, { recursive: true, force: true });
+    git(root, ['worktree', 'prune']);
+  }
+  return evidence;
+}
+
+/** Lets a tree be removed: every directory under `dir` made writable by its owner. @param {string} dir */
+function makeWritable(dir) {
+  if (!existsSync(dir) || lstatSync(dir).isSymbolicLink() || !lstatSync(dir).isDirectory()) return;
+  chmodSync(dir, 0o700);
+  for (const entry of readdirSync(dir)) makeWritable(path.join(dir, entry));
+}
+
 /** How long a whole strict chain may run on the clock, before any wait for another checkout's */
 const CHAIN_WALL_MS = 7_200_000;
 
@@ -82,10 +115,12 @@ async function setup(dir) {
   // later and elsewhere: `apack-terminal` is a declared dependency of `@apackdev/host` and the API, and
   // without it `typecheck:host` cannot resolve the broker's protocol types — which is the first leg of the
   // strict chain `session:check` runs, on every branch. The view the built-in pack draws a terminal with is
-  // a package of that same checkout, which its linker builds; without it the pack does not build.
+  // a package of that same checkout, which its linker builds; without it the pack does not build. The pack's
+  // git engine is the third, and its linker builds it for the same reason.
   try {
     linkElmdb(dir);
     linkApackTerminal(dir);
+    linkApackGit(dir);
   } catch (error) {
     throw new Error(`${error instanceof Error ? error.message : error}. Checkout retained at ${dir}.`, { cause: error });
   }
@@ -102,7 +137,8 @@ async function main() {
 npm run session:check -- <branch> [branch...]
   Combines this checkout's HEAD with committed branches in a separate worktree.
   Runs the full strict chain. Does not merge, commit or reset your source branches.
-  Keeps the candidate and validation evidence for review; remove it with git worktree remove.`);
+  A pass keeps the chain's evidence under .apack/session-check/ and removes the candidate; a failure keeps the
+  candidate for inspection, to be removed with git worktree remove.`);
     return;
   }
   const root = git(process.cwd(), ['rev-parse', '--show-toplevel']);
@@ -123,7 +159,8 @@ npm run session:check -- <branch> [branch...]
         throw new Error(`${ref} advanced during validation. Rerun session:check with the new commits.`);
       }
     }
-    console.log(`Combined validation passed: ${candidate.commit}\nCandidate and chain evidence: ${candidate.dir}\nSource branches are unchanged. Merge these exact inputs, or rerun if they advance.`);
+    const evidence = settleCandidate(root, candidate);
+    console.log(`Combined validation passed: ${candidate.commit}\nChain evidence: ${evidence}\nThe candidate checkout was removed. Source branches are unchanged. Merge these exact inputs, or rerun if they advance.`);
   } else throw new Error('Use session:new -- <name> [base-ref] or session:check -- <branch> [branch...].');
 }
 

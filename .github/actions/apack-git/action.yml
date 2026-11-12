@@ -1,0 +1,25 @@
+# apack-git at the commit apack pins (vendor/apack-git.rev), cloned into vendor/apack-git before `npm ci`
+# resolves the built-in pack's `file:` dependency through it. Locally that path is a link to a checkout
+# (`npm run link:apack-git`, which builds the engine); CI can't reach one, so it fetches the pinned commit.
+#
+# **The engine is always built.** What the pack bundles is the package's `dist/`, which is not tracked, and
+# the built-in pack is built by nearly every job, so there is no job that needs the clone and not the build.
+# It is TypeScript and a few seconds.
+name: apack-git
+description: Clone apack-git at the pinned commit into vendor/apack-git and build the engine's package
+runs:
+  using: composite
+  steps:
+    - name: Clone apack-git at the pinned commit
+      shell: bash
+      run: |
+        rev=$(tr -d '[:space:]' < vendor/apack-git.rev)
+        git init -q vendor/apack-git
+        git -C vendor/apack-git fetch -q --depth 1 https://github.com/spankyed/apack-git.git "$rev"
+        git -C vendor/apack-git checkout -q FETCH_HEAD
+    - name: Build what the engine's package ships
+      shell: bash
+      working-directory: vendor/apack-git
+      run: |
+        npm ci --no-audit --no-fund
+        npm run build

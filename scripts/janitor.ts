@@ -4,7 +4,8 @@
 // Its reach is every Rust checkout linked under `vendor/` and every worktree of each, derived rather than named
 // (`lib/vendored-checkouts.ts`), so a sibling is covered the day it is linked. That is where the disk went:
 // rustc's incremental sessions accumulate one directory per compilation unit, and a unit whose features or flags
-// change starts another without removing the last — 270 of them, 11 GB, in two days of one checkout. What it may
+// change starts another without removing the last — 270 of them, 11 GB, in two days of one checkout. And every
+// worktree builds into a target of its own, so when the disk is low the ones nobody is building in give theirs back. What it may
 // remove, and when, is `lib/janitor-policy.ts`. Every removal in a Rust target holds that profile's `.cargo-lock`,
 // the lock cargo builds under, so a build in progress is never cut short: the janitor skips that target this hour.
 //
@@ -14,7 +15,7 @@ import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { type IncrementalUnit, limitsFor, planIncrementalEviction, planTmpRemoval } from './lib/janitor-policy.ts';
+import { type IncrementalUnit, type ProfileOutput, limitsFor, planIdleProfileClearing, planIncrementalEviction, planTmpRemoval } from './lib/janitor-policy.ts';
 import { rustCheckoutsIn, vendoredCheckouts } from './lib/vendored-checkouts.ts';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..');
@@ -110,6 +111,36 @@ function sweepRust(checkouts: string[], budget: number, sweepDays: number): void
   }
 }
 
+/** A profile directory's size and when anything was last compiled into it: the newest of the directories a build adds to */
+function profileOutput(profileDir: string): ProfileOutput {
+  const sized = run('du', ['-sk', profileDir]);
+  const added = ['deps', '.fingerprint', 'build', 'incremental'].flatMap((name) => {
+    try { return [fs.statSync(path.join(profileDir, name)).mtimeMs]; } catch { return []; }
+  });
+  return { profileDir, bytes: Number(sized.stdout.split('\t')[0]) * 1024, builtMs: added.length > 0 ? Math.max(...added) : fs.statSync(profileDir).mtimeMs };
+}
+
+/**
+ * Gives back the whole build output of every profile nothing has compiled into for `idleMs`, which is set only
+ * when the disk is low (`planIdleProfileClearing` on why this and not a size). Under the profile's `.cargo-lock`,
+ * which stays, so a build that is running there is never cut short.
+ */
+function clearIdleProfiles(checkouts: string[], idleMs: number | undefined): void {
+  if (idleMs === undefined) return;
+  const targets = checkouts.map((dir) => path.join(dir, 'target')).filter((dir) => fs.existsSync(dir));
+  const profiles = targets.flatMap(profileDirs).map(profileOutput);
+  const idle = planIdleProfileClearing(profiles, idleMs, Date.now());
+  const total = profiles.reduce((sum, profile) => sum + profile.bytes, 0);
+  say(`rust build output: ${profiles.length} profiles, ${gb(total)} across ${targets.length} targets; clearing the ${idle.length} not compiled into for ${Math.round(idleMs / 3_600_000)}h`);
+  for (const profile of idle) {
+    if (dry) { say(`  would clear ${gb(profile.bytes)} from ${profile.profileDir}`); continue; }
+    const { outcome } = underLocks([path.join(profile.profileDir, '.cargo-lock')],
+      ['find', profile.profileDir, '-mindepth', '1', '-maxdepth', '1', '!', '-name', '.cargo-lock', '-exec', 'rm', '-rf', '{}', '+']);
+    say(outcome === 'held' ? `  skipped ${profile.profileDir}: cargo is building there`
+      : outcome === 'done' ? `  cleared ${gb(profile.bytes)} from ${profile.profileDir}` : `  could not clear ${profile.profileDir}`);
+  }
+}
+
 function sweepTestTmp(checkouts: string[]): void {
   for (const checkout of checkouts) {
     const tmp = path.join(checkout, 'tmp');
@@ -189,6 +220,7 @@ else {
   }
   if (refused === undefined) {
     sweepRust(checkouts, limits.incrementalBudgetBytes, limits.sweepDays);
+    clearIdleProfiles(checkouts, limits.idleProfileMs);
     sweepTestTmp(checkouts);
   } else {
     say(`swept nothing: ${refused instanceof Error ? refused.message : String(refused)}`);

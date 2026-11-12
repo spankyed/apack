@@ -6,6 +6,7 @@
 // stand-in that records what a real view would have been asked.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { startFeTestRuntime } from '@apackdev/sdk/testing'
+import type { Command } from 'apack-terminal-view'
 
 vi.mock('apack-terminal-view', async () => (await import('../_support/terminal-view.ts')).viewModule())
 
@@ -331,9 +332,10 @@ describe('what a program printed', () => {
     expect(attachment.hasCommands()).toBe(false)
     expect(await attachment.copyLastOutput(), 'a shell that marks no commands had one to copy').toBe(false)
 
-    const command = (id: number, finishedMs: number | null) =>
-      ({ id, command: `c${id}`, cwd: null, startedMs: 1, finishedMs, exitStatus: finishedMs === null ? null : 0, prompt: id * 10, output: id * 10 + 1, end: null })
-    view.commands = [command(1, 5), command(2, 9), command(3, null)]
+    const command = (id: number, outcome: Command['outcome']): Command =>
+      ({ id, command: `c${id}`, cwd: null, startedMs: 1, finishedMs: outcome.kind === 'running' ? null : id * 4, outcome, prompt: id * 10, output: id * 10 + 1, end: null })
+    // However a command ended, and whoever said so, it has printed all it will: only one still running has not
+    view.commands = [command(1, { kind: 'exited', code: 0 }), command(2, { kind: 'claimed', code: null }), command(3, { kind: 'running' })]
     expect(attachment.hasCommands()).toBe(true)
     expect(await attachment.copyLastOutput()).toBe(true)
     // The one still running has printed only part of what it will

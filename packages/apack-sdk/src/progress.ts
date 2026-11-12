@@ -6,6 +6,7 @@
 // Node-only: it lists processes with `ps`, or PowerShell on Windows. The chain's own runner imports this file by path,
 // since it runs before any package is built and `@apackdev/sdk` resolves to `dist` outside a host build.
 import { execFile, execFileSync, type ChildProcess, type ExecFileOptions } from 'node:child_process';
+import * as fs from 'node:fs';
 
 /**
  * How long a process tree may go without CPU or output before whatever watches it ends it as stalled: one number
@@ -32,6 +33,8 @@ export function parseCpuTime(text: string): number {
 /** One process in a listing of every process: its parent, its group and the CPU it has spent */
 export interface ProcessRow {
   readonly pid: number; readonly ppid: number; readonly pgid: number; readonly ms: number;
+  /** `ps`'s state for it, where the listing has one: `D` on Linux and `U` on macOS are a process waiting on a disk */
+  readonly state?: string;
   /**
    * When the process was created, where the listing says: Windows keeps a process's parent id after the parent
    * exits and reuses ids freely, so a parent id names the parent only for a process created after it
@@ -39,10 +42,11 @@ export interface ProcessRow {
   readonly createdAt?: number;
 }
 
-/** The rows of `ps -A -o pid=,ppid=,pgid=,time=` */
+/** The rows of `ps -A -o pid=,ppid=,pgid=,time=`, with `stat=` after them where the listing asked for it */
 const psRows = (listing: string): ProcessRow[] => listing.trim().split('\n').map((line) => line.trim().split(/\s+/))
-  .filter((row) => row.length === 4)
-  .map(([pid, ppid, pgid, time]) => ({ pid: Number(pid), ppid: Number(ppid), pgid: Number(pgid), ms: parseCpuTime(time!) }));
+  .filter((row) => row.length === 4 || row.length === 5)
+  .map(([pid, ppid, pgid, time, state]) => ({ pid: Number(pid), ppid: Number(ppid), pgid: Number(pgid), ms: parseCpuTime(time!),
+    ...(state === undefined ? {} : { state }) }));
 
 /**
  * The rows of `WIN32_PROCESSES`: `pid ppid cpu created`, the CPU in the 100ns units Windows counts in and the
@@ -110,6 +114,8 @@ export function createStallTracker(idleMs: number, startedAt: number) {
   let progressAt = startedAt;
   return {
     output(at: number): void { progressAt = at; },
+    /** How long it is since the tree last made progress: nothing, straight after a reading that found some */
+    quietFor(at: number): number { return at - progressAt; },
     /** Records a reading and answers whether the tree has now gone `idleMs` without progress */
     reading(now: ReadonlyMap<number, number>, at: number): boolean {
       // The first reading is only the baseline, so a tree has to keep working to count as working
@@ -159,7 +165,7 @@ const LISTING: {
 } = {
   ...(process.platform === 'win32'
     ? { file: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-Command', WIN32_PROCESSES], parse: win32Rows }
-    : { file: 'ps', args: ['-A', '-o', 'pid=,ppid=,pgid=,time='], parse: psRows }),
+    : { file: 'ps', args: ['-A', '-o', 'pid=,ppid=,pgid=,time=,stat='], parse: psRows }),
   options: { maxBuffer: 16 * 1024 * 1024, windowsHide: true, encoding: 'utf8' },
 };
 
@@ -188,22 +194,218 @@ export const readTreeCpuMs = async (leader: number): Promise<Map<number, number>
   return rows === undefined ? undefined : treeCpuMsFrom(rows, leader);
 };
 
+/** A wait whose condition has not held yet: when it began, how often it has been tried, and what it last failed with */
+interface UnmetWait { readonly since: number; attempts: number; last: unknown }
+
+/**
+ * The waits of this process that have not been met. On `globalThis` under a registered symbol, because whatever
+ * reads it and whatever waits can each load a copy of this module — one from source, one from a built bundle — and
+ * a set in module scope would be two sets.
+ */
+function unmetWaitSet(): Set<UnmetWait> {
+  const key = Symbol.for('@apackdev/sdk/progress:unmet-waits');
+  const holder = globalThis as { [key: symbol]: Set<UnmetWait> | undefined };
+  return holder[key] ??= new Set();
+}
+
+/**
+ * Follows one wait for a condition, so that whatever ends its caller for making no progress can say what the
+ * caller was waiting for (`unmetWaits`): `unmet(error)` each time the condition does not hold, `met()` once it does.
+ *
+ * A wait bounded by progress rather than a clock never fails by itself. The failure belongs to whatever was
+ * watching, which knows that nothing happened and not what was meant to.
+ */
+export function trackWait(): { unmet(error: unknown): void; met(): void } {
+  const wait: UnmetWait = { since: Date.now(), attempts: 0, last: undefined };
+  return {
+    unmet(error) { wait.attempts++; wait.last = error; unmetWaitSet().add(wait); },
+    met() { unmetWaitSet().delete(wait); },
+  };
+}
+
+/** What every unmet wait of this process last failed with, one line each. Empty when nothing is waiting */
+export function unmetWaits(now = Date.now()): string[] {
+  return [...unmetWaitSet()].map(({ since, attempts, last }) => {
+    const message = last instanceof Error ? last.message : String(last);
+    return `${message.split('\n')[0]} (tried ${attempts} times over ${Math.round((now - since) / 1000)}s)`;
+  });
+}
+
+/** One process of a tree as a stall report shows it */
+export interface TreeProcess {
+  readonly pid: number; readonly ppid: number;
+  /** `ps`'s state: `R` running, `S` asleep on an event, `D` waiting on a disk and uninterruptible, `T` stopped, `Z` exited */
+  readonly state: string;
+  /** How long it has been running, as `ps` words it */
+  readonly elapsed: string;
+  /** The CPU it has spent, as `ps` words it */
+  readonly cpu: string;
+  /** Where in the kernel it sleeps, where the system says: `-` when it does not, or is not asleep */
+  readonly waitingIn: string;
+  readonly command: string;
+}
+
+/** The rows of `ps -A -o pid=,ppid=,pgid=,stat=,etime=,time=,wchan=,args=`, each with the group it is in */
+export function treeProcessRows(listing: string): Array<TreeProcess & { readonly pgid: number }> {
+  return listing.split('\n').flatMap((line) => {
+    const row = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(.*)$/.exec(line);
+    return row ? [{ pid: Number(row[1]), ppid: Number(row[2]), pgid: Number(row[3]), state: row[4]!, elapsed: row[5]!,
+      cpu: row[6]!, waitingIn: row[7]!, command: row[8]! }] : [];
+  });
+}
+
+/** The processes of `leader`'s tree in a listing, as `treeCpuMsFrom` counts a tree, parents before their children */
+export function treeProcessesIn(rows: ReadonlyArray<TreeProcess & { readonly pgid: number }>, leader: number): TreeProcess[] {
+  const members = treeCpuMsFrom(rows.map((row) => ({ pid: row.pid, ppid: row.ppid, pgid: row.pgid, ms: 0 })), leader);
+  return rows.filter((row) => members.has(row.pid)).sort((a, b) => a.pid - b.pid);
+}
+
+/**
+ * How long the listing a stall report takes may run. The report is taken at the moment a tree is about to be
+ * ended for doing nothing, and a `ps` that hung would keep it alive.
+ */
+const TREE_LISTING_TIMEOUT_MS = 10_000;
+
+/**
+ * What each process of `leader`'s tree is doing, for a report that the tree stopped working: nothing where no
+ * listing could be taken, which Windows has none of.
+ *
+ * **A tree that used no CPU is not one fact.** A process waiting on a disk and one waiting for an event that
+ * never came both spend nothing and write nothing, and a stall that says only that reads the same for a slow
+ * drive, a lost file event and a child that hung. The state says which: `D` is the disk, `S` an event, and the
+ * kernel's own name for where it sleeps says which event where the system gives one.
+ */
+export function describeTree(leader: number): Promise<string | undefined> {
+  if (process.platform === 'win32') return Promise.resolve(undefined);
+  return new Promise((resolve) => {
+    execFile('ps', ['-A', '-o', 'pid=,ppid=,pgid=,stat=,etime=,time=,wchan=,args='],
+      { maxBuffer: 64 * 1024 * 1024, encoding: 'utf8', timeout: TREE_LISTING_TIMEOUT_MS, env: { ...process.env, LC_ALL: 'C' } },
+      (error, stdout) => {
+        if (error) return resolve(undefined);
+        const tree = treeProcessesIn(treeProcessRows(stdout), leader);
+        if (tree.length === 0) return resolve(undefined);
+        resolve(`Its process tree when it was found doing nothing (state D waits on a disk, S on an event, R runs, Z has exited):\n${
+          tree.map((each) => `  pid ${each.pid} (parent ${each.ppid}) ${each.state}, ${each.cpu} CPU in ${each.elapsed}${
+            each.waitingIn === '-' ? '' : `, asleep in ${each.waitingIn}`}: ${each.command.slice(0, 220)}${threadsOf(each.pid)}`).join('\n')}\n${machineWaits()}`);
+      });
+  });
+}
+
+/** A file under `/proc` as text, or nothing where there is none: every reading here is one a system may not give */
+const procText = (file: string): string | undefined => {
+  try { return fs.readFileSync(file, 'utf8').trim(); } catch { return undefined; }
+};
+
+/**
+ * Where each thread of a process sleeps, counted by place, on a system that says (Linux's `/proc`): a process
+ * is one line in a listing, and the line is its first thread's. A compiler's work is in worker threads, and a
+ * process whose first thread waits on them looks idle whichever of them is the one that is stuck.
+ */
+function threadsOf(pid: number): string {
+  let threads: string[];
+  try { threads = fs.readdirSync(`/proc/${pid}/task`); } catch { return ''; }
+  const places = new Map<string, number>();
+  for (const thread of threads) {
+    // The state is the field after the name, which is in brackets and may hold anything
+    const state = procText(`/proc/${pid}/task/${thread}/stat`)?.replace(/^.*\) /, '').split(' ')[0] ?? '?';
+    const place = procText(`/proc/${pid}/task/${thread}/wchan`);
+    const where = `${state}${place === undefined || place === '' || place === '0' ? '' : ` in ${place}`}`;
+    places.set(where, (places.get(where) ?? 0) + 1);
+  }
+  return `\n    its ${threads.length} thread${threads.length === 1 ? '' : 's'}: ${[...places].map(([where, count]) => `${count} ${where}`).join(', ')}`;
+}
+
+/**
+ * What the machine itself was waiting on, where it says: how much of the last seconds its tasks spent stalled on
+ * storage, and how much written data had not reached a disk. A tree that waits on a write the disk has not taken
+ * is not one that stopped, and these are the two numbers that tell the two apart.
+ */
+function machineWaits(): string {
+  const pressure = procText('/proc/pressure/io');
+  const memory = procText('/proc/meminfo');
+  const unwritten = memory?.split('\n').filter((line) => /^(Dirty|Writeback):/.test(line)).map((line) => line.replace(/\s+/g, ' ')).join(', ');
+  return [
+    pressure === undefined ? undefined : `Tasks stalled on storage (/proc/pressure/io): ${pressure.replace(/\n/g, '; ')}`,
+    unwritten === undefined || unwritten === '' ? undefined : `Written and not yet on a disk: ${unwritten}`,
+  ].filter((line) => line !== undefined).map((line) => `${line}\n`).join('');
+}
+
 /**
  * How much work a party has done since the reading began, in milliseconds of CPU, or nothing where it cannot be
  * read. Where it begins is the reading's to say: `processWork` over a child just spawned counts from its start, and
  * `fromNow` makes any reading count from its first, for a party that was running before anyone watched it.
+ *
+ * `held` is what the party is waiting on that is not its to hurry, where that can be told (`storageHold`): a party
+ * held does no work and has not stopped, so a watch asks before it counts a quiet interval against it.
  */
-export type WorkReading = () => Promise<number | undefined>;
+export type WorkReading = (() => Promise<number | undefined>) & { readonly held?: () => Promise<string | undefined> };
 
 /** A reading that counts from its own first value: what a party does under the watch, not over its lifetime */
 export function fromNow(work: WorkReading): WorkReading {
   let first: number | undefined;
-  return async () => {
+  return Object.assign(async () => {
     const total = await work();
     if (total === undefined) return undefined;
     first ??= total;
     return total - first;
-  };
+  }, work.held === undefined ? {} : { held: work.held });
+}
+
+/**
+ * Whether a place in the kernel a thread sleeps in is storage: a function of a filesystem that lives on a disk, or
+ * of the layer that queues writes to one. `filesystems` are the names of the first, as the system lists them.
+ */
+export function sleepsInStorage(place: string, filesystems: readonly string[]): boolean {
+  return filesystems.some((name) => place.startsWith(`${name}_`))
+    || /^(io_schedule|blk_|bio_|submit_bio|rq_qos_|wbt_|jbd2_|balance_dirty_pages|folio_wait|wait_on_page|wb_wait|writeback_)/.test(place);
+}
+
+let diskFilesystems: readonly string[] | undefined;
+
+/** The filesystems this kernel keeps on a disk: `/proc/filesystems` without the ones marked `nodev`. Linux alone */
+function filesystemsOnDisks(): readonly string[] {
+  if (diskFilesystems !== undefined) return diskFilesystems;
+  let listed = '';
+  try { listed = fs.readFileSync('/proc/filesystems', 'utf8'); } catch { /* not Linux, or no /proc: nothing to name */ }
+  return diskFilesystems = listed.split('\n').filter((line) => line !== '' && !line.startsWith('nodev')).map((line) => line.trim());
+}
+
+/**
+ * What in `leader`'s tree is waiting on storage, as one line, or nothing when nothing is — or nothing can tell.
+ *
+ * **A tree waiting on a disk spends no CPU and writes nothing, which is all a stall is measured by.** On a slow
+ * disk a filesystem flushing what was written to it holds every process that touches it, for as long as the flush
+ * takes: over two minutes was measured in the Linux test container, whose disk is an image on an external drive,
+ * and the test it happened to was failed as stalled. Which is the machine being slow, and never a reason to end
+ * work: so a watch asks this before it counts a quiet interval (`watchWork`).
+ *
+ * From the listing's state for each process — uninterruptible is `D` on Linux and `U` on macOS, and is what waiting
+ * on a disk is — and, where the kernel says where each thread sleeps (Linux's `/proc`), from that.
+ */
+export async function storageHold(leader: number): Promise<string | undefined> {
+  const rows = await listProcesses();
+  if (rows === undefined) return undefined;
+  const members = treeCpuMsFrom(rows, leader);
+  for (const row of rows) {
+    if (!members.has(row.pid)) continue;
+    if (row.state !== undefined && /^[DU]/.test(row.state)) return `pid ${row.pid} waits on a disk`;
+    const place = threadSleepingInStorage(row.pid);
+    if (place !== undefined) return `pid ${row.pid} sleeps in ${place}`;
+  }
+  return undefined;
+}
+
+/** Where a thread of `pid` sleeps in storage, the first found, on a system that says where its threads sleep */
+function threadSleepingInStorage(pid: number): string | undefined {
+  let threads: string[];
+  try { threads = fs.readdirSync(`/proc/${pid}/task`); } catch { return undefined; }
+  const filesystems = filesystemsOnDisks();
+  for (const thread of threads) {
+    let place: string;
+    try { place = fs.readFileSync(`/proc/${pid}/task/${thread}/wchan`, 'utf8').trim(); } catch { continue; }
+    if (place !== '' && place !== '0' && sleepsInStorage(place, filesystems)) return place;
+  }
+  return undefined;
 }
 
 /**
@@ -213,13 +415,13 @@ export function fromNow(work: WorkReading): WorkReading {
 export function processWork(pid: number, read: typeof readTreeCpuMs = readTreeCpuMs): WorkReading {
   let last = new Map<number, number>();
   let total = 0;
-  return async () => {
+  return Object.assign(async () => {
     const tree = await read(pid);
     if (tree === undefined) return undefined;
     total += cpuAdded(last, tree);
     last = tree;
     return total;
-  };
+  }, { held: () => storageHold(pid) });
 }
 
 /**
@@ -244,7 +446,9 @@ export function threadWork(worker: object): WorkReading {
 
 /** Why a watch gave up on the party it watched, for the caller to word: `describeRefusal` is the common wording */
 export type Refusal =
-  | { readonly kind: 'stalled'; readonly idleMs: number }
+  | { readonly kind: 'stalled'; readonly idleMs: number;
+      /** What it had been waiting on before that, and for how long, when the watch had made allowance for it */
+      readonly held?: { readonly ms: number; readonly by: string } }
   | { readonly kind: 'ceiling'; readonly ceilingMs: number; readonly spentMs: number; readonly wallMs: number;
       /** How long since the party's last output: `null` if it never wrote any, absent where output is not watched */
       readonly sinceOutputMs?: number | null }
@@ -259,7 +463,8 @@ const seconds = (ms: number): string => `${ms < 10_000 ? Math.round(ms / 100) / 
  */
 export function describeRefusal(refusal: Refusal): string {
   switch (refusal.kind) {
-    case 'stalled': return `did no work for ${seconds(refusal.idleMs)}`;
+    case 'stalled': return `did no work for ${seconds(refusal.idleMs)}${refusal.held === undefined ? ''
+      : `, after ${seconds(refusal.held.ms)} of waiting on storage that was allowed for (${refusal.held.by})`}`;
     case 'clock': return `ran past ${seconds(refusal.fallbackMs)} on the clock, its work unreadable`;
     case 'ceiling': {
       const quiet = refusal.sinceOutputMs === undefined ? ''
@@ -284,6 +489,8 @@ export interface Watch {
   output(): void;
   /** What the party has spent, as its reading counts it: a lower bound, a short-lived process being unseen */
   spentMs(): number;
+  /** How long, in all, the party was found waiting on storage and not counted idle for it: a reading */
+  heldMs(): number;
 }
 
 /**
@@ -293,6 +500,14 @@ export interface Watch {
  * spinning as working. A declared class, not a measurement: well past what load adds to healthy work, and finite.
  */
 export const LOOSE_CEILING_FACTOR = 10;
+
+/**
+ * How many idle windows of waiting on storage a watch allows a party for, between one piece of work and the next
+ * (`WorkReading.held`). Allowed rather than counted, because a disk that is slow is the machine being slow; and
+ * finite, because a disk that never answers is a party that never will, and a run that cannot end cannot fail.
+ * A declared class: twenty minutes at the default window, against the two a slow disk was measured taking.
+ */
+export const STORAGE_ALLOWANCE_FACTOR = 10;
 
 /** What every ceiling is multiplied by here. Read where every bound is built, so a caller passing a ceiling cannot forget it */
 const ceilingFactor = (): number => (process.env.APACK_CEILING === 'loose' ? LOOSE_CEILING_FACTOR : 1);
@@ -308,6 +523,11 @@ const ceilingFactor = (): number => (process.env.APACK_CEILING === 'loose' ? LOO
  * one that could, so it adds no work: a party nothing can read is still bounded by `idleMs` of silence, and a
  * failed reading between two good ones cannot pass off the whole total as new work. Where readings cannot be taken
  * at all — a system with neither `ps` nor PowerShell — `fallbackMs` is the bound on the clock from the first one that failed.
+ *
+ * **An interval the party spent waiting on storage is not counted as idle** (`WorkReading.held`, `storageHold`):
+ * it is asked after every reading that found no work, and a party found held has its window start again. Up to
+ * `STORAGE_ALLOWANCE_FACTOR` windows between one piece of work and the next; past that it is refused as stalled,
+ * and the refusal says how long it was allowed for and what held it.
  */
 export function watchWork({ work, idleMs = IDLE_MS, ceilingMs: requestedCeilingMs, fallbackMs, onRefused, watchesOutput = false, clock = processClock }: {
   readonly work: WorkReading; readonly idleMs?: number; readonly ceilingMs?: number; readonly fallbackMs?: number;
@@ -324,6 +544,10 @@ export function watchWork({ work, idleMs = IDLE_MS, ceilingMs: requestedCeilingM
   let unreadableSince: number | undefined;
   let reading = false;
   let done = false;
+  /** How long the party has been allowed for waiting on storage since it last worked, and what held it */
+  let held: { ms: number; by: string } | undefined;
+  let heldInAll = 0;
+  let readAt = startedAt;
   const spentMs = () => lastTotal ?? 0;
   const stop = () => { done = true; clock.stopEvery(timer); };
   const refuse = (refusal: Refusal) => { stop(); onRefused(refusal); };
@@ -331,14 +555,28 @@ export function watchWork({ work, idleMs = IDLE_MS, ceilingMs: requestedCeilingM
     if (reading || done) return;
     reading = true;
     // A reader that throws has given no reading, which is the same as one that cannot be taken
-    void work().catch(() => undefined).then((total) => {
-      reading = false;
-      if (done) return;
+    void work().catch(() => undefined).then(async (total) => {
       const at = clock.now();
+      const sinceLast = at - readAt;
+      readAt = at;
       if (total === undefined) unreadableSince ??= at;
       lastTotal = total ?? lastTotal;
+      let stalled = tracker.reading(new Map([[0, lastTotal ?? 0]]), at);
+      if (tracker.quietFor(at) === 0) held = undefined;
+      // Quiet, and not yet past what storage is allowed: asked what holds it before the quiet is counted
+      else if (work.held !== undefined && (held?.ms ?? 0) < idleMs * STORAGE_ALLOWANCE_FACTOR) {
+        const by = await work.held().catch(() => undefined);
+        if (by !== undefined) {
+          held = { ms: (held?.ms ?? 0) + sinceLast, by };
+          heldInAll += sinceLast;
+          tracker.output(at);
+          stalled = false;
+        }
+      }
+      reading = false;
+      if (done) return;
       if (fallbackMs !== undefined && unreadableSince !== undefined && at - unreadableSince >= fallbackMs) refuse({ kind: 'clock', fallbackMs });
-      else if (tracker.reading(new Map([[0, lastTotal ?? 0]]), at)) refuse({ kind: 'stalled', idleMs });
+      else if (stalled) refuse({ kind: 'stalled', idleMs, ...(held === undefined ? {} : { held }) });
       else if (ceilingMs !== undefined && spentMs() >= ceilingMs) {
         refuse({ kind: 'ceiling', ceilingMs, spentMs: spentMs(), wallMs: at - startedAt,
           ...(watchesOutput ? { sinceOutputMs: outputAt === null ? null : at - outputAt } : {}) });
@@ -350,6 +588,7 @@ export function watchWork({ work, idleMs = IDLE_MS, ceilingMs: requestedCeilingM
     stop,
     output: () => { outputAt = clock.now(); tracker.output(outputAt); },
     spentMs,
+    heldMs: () => heldInAll,
   };
 }
 

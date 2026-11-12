@@ -503,12 +503,6 @@ interface CanUseToolRequest {
 }
 
 /**
- * What a report says changed: paths in the working tree, relative to the working directory with `/` between
- * their parts, when nothing else changed and they are few enough to name; `null` when anything may have.
- */
-type ChangedPaths = string[] | null;
-
-/**
  * A thread as the chat shows it, without its messages: the \`chat\` view. The page of messages it lists is ids in
  * display order (queued last); each message's content is its own \`message\` view, so streaming text into one re-runs
  * that view alone and leaves the page, which reads no message's content, where it is.
@@ -746,8 +740,8 @@ interface CodeSystemContext {
      * the code settings change, the browsed `baseDirectory` included, so only a new default moves the explorer.
      */
     defaultBaseDirectory: string | null;
-    gitRepository: GitRepository | null;
-    gitWatcher: GitWatcherService | null;
+    gitRepository: RepositoryHandle | null;
+    gitWatcher: WatcherHandle | null;
 }
 
 interface CodeSystemError {
@@ -819,6 +813,8 @@ interface CommitFailure {
     during?: 'pull' | 'push';
     /** What can be done about a sign-in the remote asked for */
     signIn?: SignInHelp;
+    /** What the repository would have git run, when the command was not run because the repository is not trusted */
+    trust?: TrustRequest;
 }
 
 interface CommitLogEntry {
@@ -1180,6 +1176,21 @@ interface DiffHunk {
 interface DirectoryContent {
     path: string;
     files: FileInfo[];
+}
+
+/** What a discard kept of what it removed, which can be put back for as long as git keeps it */
+interface DiscardKept {
+    /** Names what was kept, to put it back. Absent when nothing was: every file was too large, or there was none */
+    id?: string;
+    /** The paths removed without a copy, each too large to keep one of: from the top of the checkout */
+    notKept: string[];
+}
+
+/** What putting a discard back did, by path from the top of the checkout */
+interface DiscardRestored {
+    restored: string[];
+    /** Changed or made again since the discard, and left as they are */
+    left: string[];
 }
 
 interface DocumentDTO {
@@ -1569,8 +1580,8 @@ interface FolderItem {
     isBroken?: boolean;
 }
 
-/** Why a git command failed, where what it printed says */
-declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository"];
+/** Why a git command failed, where what it printed says: the git engine's codes, as the contract names them */
+declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository", "untrusted"];
 
 interface GhPRComment {
     id: string;
@@ -1656,14 +1667,6 @@ interface GitDiff {
     hunks?: DiffHunk[];
 }
 
-/** Where a checkout's git state lives, and where the working directory is in it */
-interface GitDirectories {
-    gitDir: string;
-    commonDir: string;
-    /** The working directory's path from the top of the checkout, ending in `/`: empty when it is the top */
-    prefix: string;
-}
-
 type GitErrorCode = (typeof GIT_ERROR_CODES)[number];
 
 /** The two sides of one file's change, which an editor shows side by side */
@@ -1673,335 +1676,6 @@ interface GitProgress {
     stage: string;
     /** How much of that is done, from 0 to 100 */
     percent: number;
-}
-
-declare class GitRepository {
-    private workingDirectory;
-    private cache;
-    private readonly CACHE_TTL;
-    private readonly PARENT_BRANCH_SEARCH_DEPTH;
-    /** The commands that wait for each other: writes to the index in one line, remote commands in another */
-    private lanes;
-    /** How many commands are in the line of writes, running or waiting */
-    private writesInLine;
-    private _writeInProgress;
-    private _writeCompleteCallbacks;
-    private _lastFetchTimestamp;
-    private _autoFetchEnabled;
-    private _fetchThrottleMs;
-    /** The last snapshot read, with what it and the refs looked like, to tell a change from none */
-    private snapshot?;
-    /**
-     * What may have changed since `snapshot` was read: paths in the working tree that a watcher named, relative to
-     * the working directory, or anything. Nothing in it is what lets the snapshot be reused.
-     */
-    private unread;
-    /**
-     * Whether the index may hold stale facts about the files: something changed many of them, or git's own state,
-     * since a status was last let write it. Not known to be fresh until one has been
-     */
-    private indexMayBeStale;
-    /** Counts the times a folder listed as one row was read again, so that each reads as a change to it */
-    private folderReads;
-    /** Whether the next whole status is the one let write the index */
-    private refreshIndexOnRead;
-    /** Counts every notice that the repository may have changed, so a read begun before one is not taken for one after it */
-    private snapshotVersion;
-    private snapshotRead?;
-    /** What the last read looked like, `unreadable` when it failed */
-    private lastIdentity?;
-    /** What the last `refreshSnapshot` saw, which is what its next one is compared with */
-    private checkedIdentity?;
-    /** Where this checkout's git state lives, as git last said: it is asked again whenever the watches are checked */
-    private gitDirectories?;
-    /** Whether a fetch is running, so a second is not started beside it */
-    private fetching;
-    /** Whether fetching by itself has stopped because the remote wanted credentials nobody was there to give */
-    private autoFetchSuspended;
-    private suspendedSignIn;
-    /** How long a command waits for another git to let go of a lock it needs */
-    private lockPatienceMs;
-    /** Whether a watcher reports this checkout's changes; without one a snapshot is read every time it is asked for */
-    private watched;
-    private watchFailed;
-    /** Reads files as commits have them, through one git kept open while they are being read */
-    private readonly objects;
-    constructor(workingDirectory: string);
-    /**
-     * The file a commit has under a name like `HEAD:src/a.ts`, or nothing when it has none. Through the git kept
-     * open for it, and by a process of its own when that one cannot be asked: a name it cannot carry, or a git
-     * that ended. Never for the index (`:src/a.ts`), which that git would go on answering from as it first read it.
-     */
-    private fileInCommit;
-    getWorkingDir(): string;
-    setFetchConfig(enabled: boolean, intervalSeconds: number): void;
-    get isWriteInProgress(): boolean;
-    /** Register a one-shot callback that fires when all pending writes finish. */
-    onWriteComplete(callback: () => void): void;
-    /**
-     * Runs a command in its lane. A read runs at once: it takes no lock, so it has nothing to wait for, and a
-     * status asked during a slow commit or a fetch is answered while that runs. Writes run one at a time, since
-     * each takes the index lock, and remote commands one at a time beside them.
-     */
-    private enqueueCommand;
-    /**
-     * Runs git, answering once it has exited and its output has gone quiet, without waiting for its pipes to
-     * close: a process a hook left behind holds them open for as long as it lives.
-     */
-    private runGit;
-    /** Wrap a write operation to track write-in-progress for watcher suppression. */
-    private withWriteFlag;
-    private validateWorkingDirectory;
-    private getCached;
-    private setCached;
-    clearCache(): void;
-    /** The repository may have changed in any way: the next snapshot asked for is read from git, all of it */
-    markSnapshotStale(): void;
-    /**
-     * Notes what a watcher saw change, which is what the next snapshot asked for reads: these paths in the working
-     * tree, relative to the working directory with `/` between their parts, or everything when it could not name them
-     */
-    noteChanged(paths: string[] | null): void;
-    /**
-     * Says whether a watcher reports this checkout's changes, which is what lets a snapshot be reused. `failed`
-     * says its watches could not be opened or have stopped, as opposed to not being open yet or not being wanted.
-     */
-    setWatched(watched: boolean, failed?: boolean): void;
-    get isWatched(): boolean;
-    /** Whether this checkout's watches failed: a panel showing it then changes only when it is asked again */
-    get hasWatchFailed(): boolean;
-    /**
-     * Whether fetching by itself has stopped because the remote asked for credentials. What the checkout knows of
-     * its remote is then as old as the last fetch that worked, which a panel showing it says
-     */
-    get isAutoFetchSuspended(): boolean;
-    /** What can be done about the sign-in the remote asked for when fetching by itself stopped */
-    get autoFetchSignIn(): SignInHelp | undefined;
-    /**
-     * What can be done about a sign-in the remote this branch follows asked for, from that remote's address as
-     * git would use it (its `insteadOf` rewrites applied). Nothing where there is no remote, or it is a path here.
-     */
-    signInHelp(): Promise<SignInHelp | undefined>;
-    /** Fetching by itself starts again, at once: the user signed in, which is them saying to try */
-    resumeAutoFetch(): void;
-    private isDirectory;
-    invalidateCache(paths?: string[]): void;
-    /**
-     * Runs a git command in its lane. One that another git's lock refuses is run again once that lock is let go
-     * of: a git in a terminal, or an agent's, holds the index for moments, and the user who staged a file in
-     * those moments meant it. The lane waits with it, since what is queued behind needs the same lock.
-     */
-    private executeGitCommand;
-    private runGitOnce;
-    private runGitAnswered;
-    getCurrentBranch(): Promise<string>;
-    getStatus(): Promise<GitStatusFile[]>;
-    /**
-     * The checkout's changed files, branch and distance from its upstream.
-     *
-     * A snapshot is reused until something says the repository may have changed: a watcher's event, a write made
-     * here, a reconcile. It never waits on the remote: `fetchIfDue` is what fetches.
-     */
-    readSnapshot(): Promise<RepositorySnapshot>;
-    /**
-     * Reads the repository from git and says which parts of it differ from the last check. A watcher's event is a
-     * hint that something changed; this is what decides whether anything did, and what.
-     *
-     * A check a watcher's event started reads `noted`: what the watcher said changed (`noteChanged`), and nothing
-     * when it said nothing since the last read. Any other check has no event to go by, and reads everything.
-     *
-     * **`refreshIndex` lets this one status write git's index**, which no other read here may
-     * (`GIT_OPTIONAL_LOCKS`). Git keeps in the index what it last saw of each file, and a status that may not write
-     * it re-reads every file whose time moved, on every run: after a checkout or a formatter over the tree, that is
-     * every file, every time. Writing it holds git's lock for as long as the status takes, in which a git run from
-     * a terminal would be refused, so it is the caller's to say when: at a moment nothing else is likely to be
-     * running git, and only when something says the index may be stale.
-     */
-    refreshSnapshot(reading?: 'everything' | 'noted', { refreshIndex }?: {
-        refreshIndex?: boolean | undefined;
-    }): Promise<RepositoryChange>;
-    private currentSnapshot;
-    private readSnapshotOnce;
-    private loadSnapshot;
-    /**
-     * The held snapshot with these paths of the working tree read again, or nothing when a status of them alone
-     * would not say all that changed, and the whole status is to be read.
-     *
-     * Git is asked about the paths and about nothing else. That is the whole truth of a change to the working tree
-     * as long as no file's standing depends on another's, and the checks here are the ways it can.
-     */
-    private loadNoted;
-    /** The most files of an untracked folder that are listed when it is opened; past it the list is cut and says so */
-    static readonly UNTRACKED_LISTED_LIMIT = 1000;
-    /**
-     * The files in an untracked folder that git would list, were it asked to list every one: those it does not
-     * ignore. `directory` is a folder row's path, from the top of the checkout.
-     */
-    listUntracked(directory: string): Promise<{
-        files: string[];
-        truncated: boolean;
-    }>;
-    /**
-     * The path git answers for when asked about this one: the outermost directory over it that is a repository of
-     * its own, or the path itself. Git does not look inside another repository — a nested one and a submodule are
-     * each one entry, at the directory — so asked about a file inside one it answers nothing.
-     */
-    private outermostRepositoryOver;
-    /**
-     * A snapshot of a status as it was read, beside the parts of the repository a status does not hold. `held` is
-     * the snapshot this one was made from by reading some paths again: how its other files looked is kept, not read.
-     */
-    private snapshotOver;
-    /**
-     * What git is in the middle of here, read from what it keeps in its directory while it is: no git is run. A
-     * rebase is looked for first, since the commit it stops at can leave what a cherry-pick leaves too.
-     */
-    private readOperation;
-    /** How a file in the working tree looks without reading it, which tells a later edit from none */
-    private fileSignature;
-    /**
-     * What says the worktrees changed, read from the files git keeps for them and without running it: which there
-     * are, where each is, what each has checked out, and which are locked.
-     */
-    private readWorktreesIdentity;
-    /**
-     * The directories git ignores under the working directory, relative to it: what a watcher of the working
-     * tree need not report from.
-     */
-    listIgnoredDirectories(): Promise<string[]>;
-    private isBinaryFile;
-    getDiff(filePath?: string, staged?: boolean): Promise<string>;
-    /**
-     * Efficient multi-path diff: issues a single `git diff -- path1 path2 …`
-     * for tracked files and builds synthetic diffs for untracked ones, avoiding
-     * one git subprocess per file.
-     */
-    getDiffMulti(paths: string[]): Promise<string>;
-    /** Build a synthetic diff for an untracked file (new file / directory / binary). */
-    private buildSyntheticDiff;
-    /** Build a synthetic diff for a file outside the repository. */
-    private buildSyntheticDiffAbsolute;
-    getFileContent(filePath: string, version?: 'HEAD' | 'index' | 'working'): Promise<string>;
-    /**
-     * Read a file as a base64 data URL if it's an image, otherwise return text content.
-     * For git refs (HEAD/index), reads binary output from `git show`.
-     */
-    getFileContentAsDataUrl(filePath: string, version?: 'HEAD' | 'index' | 'working'): Promise<string>;
-    /**
-     * Read a file from a branch as a base64 data URL if it's an image.
-     */
-    getFileContentFromBranchAsDataUrl(filePath: string, branch: string): Promise<string>;
-    /**
-     * The pieces of a file's change that can be staged one at a time, or unstaged when `staged`: of the working
-     * tree against the index, or of the index against the last commit. None for a file that is not plainly modified.
-     */
-    getHunks(filePath: string, staged: boolean): Promise<DiffHunk[]>;
-    /**
-     * The file's pieces as git cuts them now, each with the bytes that apply it. The patch is one `git apply` reads
-     * with its defaults, whatever the user has told `git diff`: prefixes of `a/` and `b/`, three lines around each
-     * change, paths from the top. Left to the user's settings, `diff.noprefix` names another file to `git apply`
-     * and `diff.context=0` a piece it puts at the end of the file.
-     */
-    private cutHunks;
-    /**
-     * Stages one piece of a file's change, or with `staged` takes one piece out of what is staged. The piece is
-     * named by its id, and is one this repository cuts from the file as it is now: one whose file changed under
-     * it is refused, rather than applied to lines it was not made from.
-     */
-    applyHunk(filePath: string, staged: boolean, id: string): Promise<void>;
-    /** Check if a file path is an image based on extension. */
-    isImageFile(filePath: string): boolean;
-    /** Execute a git command and return raw binary buffer output. */
-    private executeGitCommandBinary;
-    stageFiles(filePaths: string[]): Promise<void>;
-    unstageFiles(filePaths: string[]): Promise<void>;
-    revertFile(filePath: string): Promise<void>;
-    /**
-     * Discards an untracked path. A file is deleted. A folder has deleted what git lists in it, and what git
-     * ignores there is left where it is, as it is when every file of the folder is discarded one by one.
-     */
-    private discardUntracked;
-    revertFiles(filePaths: string[]): Promise<void>;
-    fileExistsInHead(filePath: string): Promise<boolean>;
-    resolveConflict(filePath: string, strategy: 'ours' | 'theirs'): Promise<void>;
-    /**
-     * Carries on with what git is in the middle of, leaves out the commit a rebase stopped at, or gives it up.
-     * Carrying on takes the message git proposes, there being no editor for it to open (`gitEnvironment`).
-     */
-    moveOperation(move: OperationMove): Promise<void>;
-    commit(message: string): Promise<void>;
-    /**
-     * Where this checkout's git state lives: its own git directory (index, HEAD) and the common one holding refs.
-     * The two differ in a linked worktree. Null when the working directory is in no repository.
-     */
-    resolveGitDirectories(): Promise<GitDirectories | null>;
-    /** Whether the working directory is in a repository. Rejects when there is no git to ask. */
-    isGitRepository(): Promise<boolean>;
-    hasUncommittedChanges(): Promise<boolean>;
-    getStagedFiles(): Promise<GitStatusFile[]>;
-    getUpstreamBranch(): Promise<string | null>;
-    getBaseBranch(options?: {
-        preferUpstream?: boolean;
-    }): Promise<string>;
-    /**
-     * The branch this one was made from, where something wrote that down: this app when it made the branch, VS Code
-     * when it did, or git itself, whose record of a branch's first move says what it was made from when it was
-     * given a name. Nothing when none did, or when what they name is gone.
-     */
-    private rememberedBaseOf;
-    getPRBaseBranch(): Promise<string>;
-    /**
-     * Find the closest parent branch by comparing merge-base distances.
-     * When branching feature-B from feature-A, feature-A will have a much
-     * smaller commit distance than main/master.
-     */
-    private findClosestParentBranch;
-    private getCommitDistance;
-    private getNearbyMergedBranches;
-    getBranchDiff(baseBranch: string, targetBranch?: string): Promise<GitStatusFile[]>;
-    /** Whether each of these names a commit in this repository */
-    commitsExist(...refs: string[]): Promise<boolean>;
-    getFileContentFromBranch(filePath: string, branch: string): Promise<string>;
-    fetchRemoteBranch(branch: string): Promise<void>;
-    deleteRemoteBranch(branch: string): Promise<void>;
-    /**
-     * Every local branch, then every remote one, each most recently committed first. A branch of `origin` is
-     * named as the local branch it would be checked out as; one of another remote keeps `remotes/<remote>/`.
-     */
-    getAllBranches(): Promise<string[]>;
-    checkoutBranch(branchName: string, onProgress?: (progress: GitProgress) => void): Promise<void>;
-    isCurrentBranchPublished(): Promise<boolean>;
-    private _forceFetchNext;
-    /** Fetches the next time one is considered, whatever the fetch settings and the time since the last say */
-    forceFetchOnce(): void;
-    /**
-     * Fetches from the remote when one is due — it was forced, or the fetch settings ask for it and their interval
-     * has passed — and says whether it did. **Never part of a read**: whoever asked for the repository has its
-     * answer already, and what the fetch brings is found by the check that follows it.
-     *
-     * It stops fetching by itself once the remote wants credentials nobody is there to give, since every later try
-     * would fail the same way; changing the fetch settings, or a push or pull that works, starts it again.
-     */
-    fetchIfDue(): Promise<boolean>;
-    pushBranch(onProgress?: (progress: GitProgress) => void): Promise<void>;
-    pullBranch(onProgress?: (progress: GitProgress) => void): Promise<void>;
-    stashPush(message?: string, stagedOnly?: boolean): Promise<string>;
-    stashList(): Promise<StashEntry[]>;
-    stashApply(index: number): Promise<void>;
-    stashPop(index: number): Promise<void>;
-    private isStashConflict;
-    stashDrop(index: number): Promise<void>;
-    stashClear(): Promise<void>;
-    worktreeList(): Promise<WorktreeEntry[]>;
-    worktreeAdd(wtPath: string, branch?: string, createBranch?: boolean): Promise<string>;
-    worktreeRemove(wtPath: string, force?: boolean): Promise<void>;
-    getCommitsBetweenBranches(baseBranch: string, targetBranch?: string): Promise<{
-        subject: string;
-        body: string;
-    }[]>;
-    gitLog(count?: number): Promise<CommitLogEntry[]>;
-    revertCommit(hash: string): Promise<void>;
-    resetToCommit(hash: string): Promise<void>;
 }
 
 interface GitStatusFile {
@@ -2014,51 +1688,6 @@ interface GitStatusFile {
     conflict?: ConflictKind;
     /** An untracked folder, listed as one row: git tracks nothing in it. Its path ends with `/` */
     isDirectory?: boolean;
-}
-
-/**
- * Reports that a checkout may have changed: its working tree, its index and HEAD, or its refs.
- *
- * **An event is a hint, and git is what says whether anything changed.** So nothing here needs to be exact: an
- * event for a file git ignores costs one status that finds no difference, and an event the platform never
- * delivered is made up for by `check`, which whoever knows the repository may have moved calls — a window
- * gaining focus, a terminal command finishing, an agent's turn ending.
- */
-declare class GitWatcherService {
-    private workingDirectory;
-    private subscribe;
-    private subscriptions;
-    /** Every start, stop and check in order, so two never set subscriptions up at once */
-    private establishing;
-    /** Moves on every start and stop, which is what tells work begun before one that it is no longer wanted */
-    private generation;
-    private onChangeCallback?;
-    /** The working-tree paths that changed since the last report, or `null` once something else may have too */
-    private changedPaths;
-    private quietTimeout?;
-    /** When the first change not yet reported arrived */
-    private pendingSince?;
-    /** Whether a callback is already waiting on the repository's write in progress */
-    private awaitingWrite;
-    private isWatching;
-    private gitRepository?;
-    constructor(workingDirectory: string, subscribe?: SubscribeToDirectory);
-    setGitRepository(repo: GitRepository): void;
-    setChangeCallback(callback: (paths: ChangedPaths) => void): void;
-    startWatching(signal: AbortSignal): Promise<void>;
-    /**
-     * Brings the watches in line with the checkout as it is now, for a caller that knows it may have moved.
-     * A directory that became a repository starts being watched, a watch that failed or ended with its
-     * directory is opened again, and the ignored directories are taken afresh.
-     */
-    check(): Promise<void>;
-    private establish;
-    private handleChanges;
-    /** One report for every change that arrives close together */
-    private scheduleChange;
-    private armChange;
-    stopWatching(): Promise<void>;
-    isActive(): boolean;
 }
 
 interface ImageReference {
@@ -2202,6 +1831,21 @@ type IncomingCommitEvents = {
 } | {
     type: 'commit.REVERT_FILES';
     paths: string[];
+}
+/** Which of what discarding these rows would remove cannot be brought back, for the window about to ask */
+ | {
+    type: 'commit.PREVIEW_DISCARD';
+    paths: string[];
+}
+/** Puts back what a discard kept, by the id its answer carried */
+ | {
+    type: 'commit.RESTORE_DISCARDED';
+    id: string;
+}
+/** The user trusts the repository to have git run what its own configuration and hooks name */
+ | {
+    type: 'commit.TRUST_REPOSITORY';
+    repository: string;
 } | {
     type: 'commit.GET_ALL_BRANCHES';
 } | {
@@ -3544,11 +3188,29 @@ type OutgoingCommitEvents =
     type: 'commit.FILE_REVERTED';
     data: {
         path: string;
+        kept: DiscardKept;
     };
 } | {
     type: 'commit.FILES_REVERTED';
     data: {
         paths: string[];
+        kept: DiscardKept;
+    };
+} | {
+    type: 'commit.DISCARD_PREVIEWED';
+    data: {
+        paths: string[];
+        notKept: string[];
+    };
+} | {
+    type: 'commit.DISCARD_RESTORED';
+    data: {
+        id: string;
+    } & DiscardRestored;
+} | {
+    type: 'commit.REPOSITORY_TRUSTED';
+    data: {
+        repository: string;
     };
 } | {
     type: 'commit.ERROR_RECEIVED';
@@ -5042,6 +4704,15 @@ type RepositoryChange = Record<RepositoryPart, boolean> & {
     files?: string[];
 };
 
+/**
+ * The checkout's repository, as the system's context holds it. The context is part of the pack's published
+ * contract, which names no type of the git engine's, so it is a handle there: the feature's own code reads it as
+ * the repository it is (`repositoryOf`, `be/services/app-git-repository.ts`).
+ */
+interface RepositoryHandle {
+    readonly [gitHandle]: 'repository';
+}
+
 /** What git is in the middle of in a checkout */
 interface RepositoryOperation {
     kind: OperationKind;
@@ -5055,21 +4726,6 @@ interface RepositoryOperation {
 }
 
 type RepositoryPart = (typeof REPOSITORY_PARTS)[number];
-
-/** What the commit panel shows of a checkout, read in one pass */
-interface RepositorySnapshot {
-    files: GitStatusFile[];
-    /** Whether there are more changed files than `files` lists */
-    truncated: boolean;
-    /** The branch checked out, or `HEAD` when none is */
-    branch: string;
-    /** Whether the branch tracks a remote branch that exists */
-    hasUpstream: boolean;
-    ahead: number;
-    behind: number;
-    /** What git is in the middle of here, when it is in the middle of anything */
-    operation?: RepositoryOperation;
-}
 
 type ResultLine = z.infer<typeof ResultLineSchema>;
 
@@ -5305,16 +4961,6 @@ declare const StreamEventLineSchema: z.ZodObject<{
  * types without breaking the wrapper.
  */
 type StreamLine = KnownStreamLine | UnknownLine;
-
-/**
- * Watches a directory and everything under it, apart from the directories `ignore` names relative to it.
- * An error means the watch has stopped reporting, or may have.
- */
-type SubscribeToDirectory = (directory: string, onChanges: (error: Error | null, changes: WatchedChange[]) => void, options: {
-    ignore: string[];
-}) => Promise<{
-    unsubscribe(): Promise<void>;
-}>;
 
 interface SwitchNode extends NodeBase {
     nodeType: 'switch';
@@ -5912,6 +5558,25 @@ interface TransformNode extends NodeBase {
 /** How a transform step's script return value becomes the step's result */
 type TransformOutputType = 'custom' | 'json' | 'text';
 
+/** One thing a repository would have git run: a setting of its own that is not known to run nothing, or a hook it holds */
+type TrustAsk = {
+    kind: 'setting';
+    key: string;
+    value: string;
+    file: string;
+} | {
+    kind: 'hook';
+    name: string;
+    file: string;
+};
+
+/** What a repository asks to be trusted for, and what names it where trust is remembered */
+interface TrustRequest {
+    /** Where the repository's git state really lives */
+    repository: string;
+    asks: TrustAsk[];
+}
+
 interface TurnStartParams {
     threadId: string;
     input: Array<{
@@ -5980,8 +5645,10 @@ declare const UserStreamLineSchema: z.ZodObject<{
     isSynthetic: z.ZodOptional<z.ZodBoolean>;
 }, z.core.$loose>;
 
-/** Where under a watched directory something changed, relative to it; `null` when the platform could not say */
-type WatchedChange = string | null;
+/** The repository's watcher, held the same way (`watcherOf`) */
+interface WatcherHandle {
+    readonly [gitHandle]: 'watcher';
+}
 
 interface WorktreeEntry {
     path: string;
@@ -6038,6 +5705,7 @@ declare namespace __FeatureSettings_Code {
         autoFetchRemote: boolean;
         autoFetchIntervalSeconds: number;
         logGitCommands: boolean;
+        trustedRepositories: string[];
         terminalScripts: {
             id: string;
             label: string;
@@ -6847,6 +6515,8 @@ declare const flowsQueries: {
 };
 
 declare function getHandle(key: string): CodexTurnHandle | undefined;
+
+declare const gitHandle: unique symbol;
 
 declare const libraryCommands: {
     /** Follows every write above, until the returned function is called */

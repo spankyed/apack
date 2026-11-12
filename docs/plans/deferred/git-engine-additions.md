@@ -1,8 +1,8 @@
 # Five additions to the git engine
 
 Status: deferred by request, 2026-11-11. Starts after [the git engine has a repository of its
-own](git-engine-own-repository.md), and not before: deferral is not permission to start. Revisit when that
-plan's "Done when" holds.
+own](../../archive/plans/git-engine-own-repository.md), whose "Done when" holds: deferral is not permission to
+start.
 
 Compiled 2026-11-11. Each item is something another package does better than the engine did on that day. What
 was read: `dugite` 3.3.3 (`lib/errors.ts`), VS Code's git extension at `main` (`extensions/git/src/git.ts`,

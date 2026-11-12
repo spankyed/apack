@@ -3,7 +3,7 @@
 // and one `Contract` per feature would collide there. Codegen reads this without running anything.
 import type { ActionEntity, PromptEntity } from '@apackdev/sdk';
 import type {
-  CodeConnectedData, CodeSystemError, CommitFailure, CommitLogEntry, CodeSystemContext, DirectoryContent, FileContent, FileInfo,
+  CodeConnectedData, CodeSystemError, CommitFailure, CommitLogEntry, CodeSystemContext, DirectoryContent, DiscardKept, DiscardRestored, FileContent, FileInfo,
   GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitProgress, GitStatusFile, OperationMove, QuickOpenResult, RepositoryChange,
   RepositoryOperation, SearchProgress, SignInHelp,
   SearchResult, StashEntry, TerminalInfo, WorktreeEntry,
@@ -66,6 +66,12 @@ export type IncomingCommitEvents =
   | { type: 'commit.GET_CURRENT_BRANCH' }
   | { type: 'commit.REVERT_FILE'; path: string }
   | { type: 'commit.REVERT_FILES'; paths: string[] }
+  /** Which of what discarding these rows would remove cannot be brought back, for the window about to ask */
+  | { type: 'commit.PREVIEW_DISCARD'; paths: string[] }
+  /** Puts back what a discard kept, by the id its answer carried */
+  | { type: 'commit.RESTORE_DISCARDED'; id: string }
+  /** The user trusts the repository to have git run what its own configuration and hooks name */
+  | { type: 'commit.TRUST_REPOSITORY'; repository: string }
   | { type: 'commit.GET_ALL_BRANCHES' }
   | { type: 'commit.CHECKOUT_BRANCH'; branchName: string }
   | { type: 'commit.PUBLISH_BRANCH' }
@@ -111,8 +117,11 @@ export type OutgoingCommitEvents =
   | { type: 'commit.FILES_STAGED'; data: { paths: string[] } }
   | { type: 'commit.FILES_UNSTAGED'; data: { paths: string[] } }
   | { type: 'commit.COMMIT_SUCCESS'; data: { message: string } }
-  | { type: 'commit.FILE_REVERTED'; data: { path: string } }
-  | { type: 'commit.FILES_REVERTED'; data: { paths: string[] } }
+  | { type: 'commit.FILE_REVERTED'; data: { path: string; kept: DiscardKept } }
+  | { type: 'commit.FILES_REVERTED'; data: { paths: string[]; kept: DiscardKept } }
+  | { type: 'commit.DISCARD_PREVIEWED'; data: { paths: string[]; notKept: string[] } }
+  | { type: 'commit.DISCARD_RESTORED'; data: { id: string } & DiscardRestored }
+  | { type: 'commit.REPOSITORY_TRUSTED'; data: { repository: string } }
   | { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }
   | { type: 'commit.HUNK_APPLIED'; data: { path: string; staged: boolean; hunk: string } }
   /** How far along a push, a pull or a checkout is, for the window that asked for it */

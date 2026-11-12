@@ -81,6 +81,36 @@ export function _captureHostServices(): {
 };
 
 // @public
+export type CommandOutcome =
+/** It has not ended. One still waiting at its prompt has not begun either, which its `startedMs` says */
+    {
+    readonly kind: 'running';
+}
+/** It exited with this status, as a mark carrying the session's key reported */
+| {
+    readonly kind: 'exited';
+    readonly code: number;
+}
+/**
+* It is over, in a session with a key, and no keyed mark said how: the shell reported the end with no
+* status, a later command began while it ran, or the session ended while it ran
+*/
+| {
+    readonly kind: 'unknown';
+    readonly why: 'no_status' | 'superseded' | 'session_ended';
+}
+/** Something printed that it ended, with this status where it gave one. A session without a key has no other */
+| {
+    readonly kind: 'claimed';
+    readonly code: number | null;
+};
+
+// @public
+export function commandSucceeded(reported: {
+    readonly outcome: CommandOutcome | null;
+}): boolean;
+
+// @public
 export function createActionEmitter(sender?: ActionSender): HostServices['emitter'];
 
 // @internal
@@ -513,12 +543,12 @@ export interface TerminalColors {
 export interface TerminalCommand {
     // (undocumented)
     readonly command: string | null;
-    // (undocumented)
     readonly cwd: string | null;
-    readonly exitStatus: number | null;
     // (undocumented)
     readonly finishedMs: number | null;
     readonly id: number;
+    // (undocumented)
+    readonly outcome: CommandOutcome;
     readonly startedMs: number | null;
 }
 
@@ -551,10 +581,10 @@ export type TerminalEvent =
     readonly kind: 'commandStarted';
     readonly command: string | null;
 }
-/** What was running ended. `exitStatus` is `null` when the shell reported none, which is not zero */
+/** What was running ended, and how as far as anything said. Never `running` */
 | {
     readonly kind: 'commandFinished';
-    readonly exitStatus: number | null;
+    readonly outcome: CommandOutcome;
 } | {
     readonly kind: 'cwdChanged';
     readonly cwd: string;
@@ -564,9 +594,11 @@ export type TerminalEvent =
 export interface TerminalFacts {
     readonly command: string | null;
     readonly cwd: string | null;
-    readonly exitStatus: number | null;
     readonly finished: number;
+    readonly outcome: CommandOutcome | null;
+    readonly refused: number;
     readonly running: boolean;
+    readonly vouched: boolean;
 }
 
 // @public
@@ -606,6 +638,7 @@ export interface TerminalService {
         record?: string;
         restore?: boolean;
         images?: boolean;
+        marksKey?: string;
     }, listeners: TerminalListeners): Promise<TerminalSession>;
     rewind(recording: string, size: {
         readonly cols: number;

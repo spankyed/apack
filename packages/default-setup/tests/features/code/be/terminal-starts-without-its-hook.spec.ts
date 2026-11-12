@@ -32,6 +32,7 @@ describe('a shell whose integration could not be written', () => {
     // than none, since the shell would fail to start reading it
     expect(broker.opened[0]!.options.args, 'no launch arguments, because the file they name is not there').toBeUndefined()
     expect(broker.opened[0]!.options.env, 'and nothing pointed at the directory').toBeUndefined()
+    expect(broker.opened[0]!.options.marksKey, 'a key was given for marks no hook is there to put it on').toBeUndefined()
 
     await app.stop()
     resetTestData()

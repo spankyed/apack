@@ -30,7 +30,7 @@
  *   (`left-running.ts`). A run cut short is not asked, since ending its group is what cutting it short is.
  */
 import { spawn } from 'node:child_process';
-import { describeRefusal, processWork, watchWork } from '../../packages/apack-sdk/src/progress.ts';
+import { describeRefusal, describeTree, processWork, watchWork } from '../../packages/apack-sdk/src/progress.ts';
 import { IDLE_MS, ceilingSetting, watchdogEnabled } from './step-budgets.ts';
 import { describeLeft, leftRunning, type GroupProcess } from './left-running.ts';
 
@@ -208,10 +208,14 @@ export function boundedSpawn(command: string, args: readonly string[], budgetMs:
       onRefused: (refusal) => {
         stalled = refusal.kind === 'stalled' ? true : undefined;
         say(`\n[bounded] ${refusal.kind === 'stalled'
-          ? `no CPU or output from its process tree for ${idleMs / 1000}s: stalled`
+          ? `no CPU or output from its process tree for ${idleMs / 1000}s${refusal.held === undefined ? ''
+            : `, after ${Math.round(refusal.held.ms / 1000)}s of waiting on storage that was allowed for (${refusal.held.by})`}: stalled`
           : describeRefusal(refusal)}, so its process group was killed\n`);
         timedOut = true;
-        terminate();
+        // What each process was doing is read before any of them is ended: a stall is no CPU and no output, which
+        // a disk that is not answering and an event that never came both are (`describeTree`)
+        if (refusal.kind !== 'stalled' || child.pid === undefined) return terminate();
+        void describeTree(child.pid).then((tree) => { if (tree !== undefined) say(tree); }).finally(terminate);
       },
     });
     const budget = watch !== undefined ? undefined : setTimeout(() => {
@@ -250,6 +254,9 @@ export function boundedSpawn(command: string, args: readonly string[], budgetMs:
     child.on('close', (code) => {
       clearTimeout(budget);
       watch?.stop();
+      // A reading: what a slow disk cost the run, which nothing was failed for and which is why it took as long
+      const heldMs = watch?.heldMs() ?? 0;
+      if (heldMs >= 1_000) say(`\n[bounded] its process tree was found waiting on storage for ${Math.round(heldMs / 1000)}s in all, which was not counted as a stall\n`);
       signal?.removeEventListener('abort', abort);
       closed ??= code;
       // A command that left nothing holding its pipes closes before the look for what it left is done
