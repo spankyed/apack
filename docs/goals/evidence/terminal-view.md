@@ -345,8 +345,8 @@ says why, and two defects the pass led to were fixed (`apack-terminal` `9c6962b`
   when a watched directory is deleted as its watch closes, which `master` fixed in `acb5e32eaf` after
   this branch was cut. With `master` merged in, the code feature's backend specs ran eight times of
   eight without losing a worker; before, about one run in three.
-- Everything Windows in this repository's half is unrun: a window drawing from rows there, and the
-  PowerShell hook under a Windows console.
+- Windows was unrun when this was written. It has been run since: *On Windows, and a picture in the
+  real app* and *The view in a browser on Windows*, below.
 
 ### The fish and PowerShell hooks, run — 2026-11-11
 
@@ -460,8 +460,8 @@ through a ConPTY and the proof that a session's exit waits for the last of its o
 ### Windows, over SSH to the development VM
 
 Windows Server 2025 (26100), Windows PowerShell 5.1. The broker was built there from `apack-terminal`
-`5c24284` and driven by a script speaking its protocol over a named pipe. Nothing here had a desktop:
-what a window draws there, an input method and AltGr are not covered by any of it.
+`5c24284` and driven by a script speaking its protocol over a named pipe. Nothing here had a desktop;
+what a window draws there and an input method are in *The view in a browser on Windows*, below.
 
 | What was run | Result |
 |---|---|
@@ -481,3 +481,22 @@ PowerShell 7 hands back the same object in the same way was not run.
 A drive script had a program place a 160 by 96 magenta PNG in a terminal with the Kitty graphics
 protocol (`a=T,f=100`). The terminal's canvas held 15,360 pixels of that colour, which is 160 by 96,
 between the line printed before it and the line after.
+
+### The view in a browser on Windows — 2026-11-12
+
+Resolved. The view and its 2D-canvas painter were run in headless Chromium 158 on the same VM, on a
+source a script drove by hand.
+
+| What was run | Result |
+|---|---|
+| Rows drawn: ASCII, ten `W` beside ten `i`, box-drawing characters, `✓`, `é` | Painted on a fixed-pitch grid, the text mirror held the same rows, and the page raised no error |
+| A composition through the browser's own input-method pipeline (`にほん`, committed as `日本`) | Nothing was sent while composing and the field showed what was being composed; the commit sent the text once, with no key, and cleared the field |
+| A third-level key as Windows hands a page one: control and alt down, `AltGraph` on | Sent as its character (`{`) with neither modifier |
+
+**What this rests on, said once.** It was Chromium and not the app's own window, the browser's
+composition pipeline and not a Windows input method above it, and the third-level key was an event
+built to the shape Chromium gives one on Windows: a script cannot press AltGr. The same key without
+`AltGraph` on is sent as control and alt with no character, so the handling is right for as long as
+Chromium on Windows reports `AltGraph` for that key, which is its documented behaviour and was not
+observed here. A person typing `@` on a German layout in the app is the one check that would see it.
+
