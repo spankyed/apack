@@ -8,6 +8,7 @@ import { execFile, execFileSync } from 'child_process';
 import { createRequire } from 'module';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { resolveName } from '@apackdev/sdk/ids';
+import { answerWhileWorking, fromNow, processWork } from '@apackdev/sdk/progress';
 import { installPackFromLocal, PACK_LOAD_MESSAGES } from '@apackdev/host/packs';
 import { resolveTestHost, type AppLaunch, type TestHostOptions } from './test-host.ts';
 import { appVersion } from './app-version.ts';
@@ -559,17 +560,37 @@ export function createTest(options: CreateTestOptions = {}) {
         }, 5000) : undefined;
         try {
           const closing = app.close();
-          // A data dir this fixture made is deleted below, so Chromium writing its profile is work nobody reads;
-          // a dir the caller gave is relaunched on, so its profile is waited for. A quit sequence that never
-          // finishes still hangs here, into the worker's teardown timeout, without the line below.
-          if (givenDataDir === undefined) {
-            await quitSequence.done;
-            if (app.process().exitCode === null && app.process().signalCode === null) {
-              console.log('[e2e] quit sequence finished; ending Electron without its profile writes');
-              app.process().kill('SIGKILL');
+          const pid = app.process().pid;
+          // Its output closing, and not its exit: Chromium's helper processes hold the output and are still
+          // writing the profile for a moment after the process that started them has gone
+          const gone = new Promise<void>((resolve) => { app.process().once('close', () => resolve()); });
+          const closed = (async () => {
+            // A data dir this fixture made is deleted below, so Chromium writing its profile is work nobody
+            // reads; a dir the caller gave is relaunched on, so its profile is waited for
+            if (givenDataDir === undefined) {
+              await quitSequence.done;
+              if (app.process().exitCode === null && app.process().signalCode === null) {
+                console.log('[e2e] quit sequence finished; ending Electron without its profile writes');
+                app.process().kill('SIGKILL');
+              }
             }
+            // Playwright's close answers once the app and its helpers have gone, so their going is what is waited
+            // for: seen here, and not only through an answer nothing bounds once the app is no longer working
+            await Promise.race([closing, gone]);
+            closing.catch(() => {});
+          })();
+          // Waited for while the app works, and not on a clock: its quit stops the API, and a profile that is kept
+          // takes Chromium as long to write as the machine lets it, over a minute at a load of a hundred. An app
+          // that has stopped working without closing is ended with its API, and the worker fails saying so
+          try {
+            await (pid === undefined ? closed : answerWhileWorking(closed, { work: fromNow(processWork(pid)), what: 'Electron, asked to close,' }));
+          } catch (error) {
+            // It settles when the kills below end the app, and nothing waits for it any more
+            closed.catch(() => {});
+            if (app.process().exitCode === null && app.process().signalCode === null) app.process().kill('SIGKILL');
+            if (apiPid !== undefined) { try { process.kill(apiPid, 'SIGKILL'); } catch { /* it had exited */ } }
+            throw error;
           }
-          await closing;
         } finally { clearTimeout(inspectShutdown); }
         // Electron close must include its API child; otherwise deleting storage races the final writes.
         if (apiPid !== undefined) {
@@ -590,10 +611,15 @@ export function createTest(options: CreateTestOptions = {}) {
         } else if (process.env.E2E_KEEP_DATA) {
           console.log(`[e2e] kept test data dir: ${userDataDir}`);
         } else {
-          fs.rmSync(userDataDir, { recursive: true, force: true });
+          // Tried again while the system refuses, for a helper's last write landing as its folder is emptied. The
+          // promise form, whose retries wait what they are told to: the synchronous one's wait a thousandth of it
+          await fs.promises.rm(userDataDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 50 });
         }
       }
-    }, { scope: 'worker' }],
+    // No clock of Playwright's on it: what starts the app is bounded by Playwright's own wait for a launch, and
+    // what closes it, its quit sequence included, by the app's work (above). Left to inherit the test's, a
+    // close that was only slow failed the worker once its test had passed
+    }, { scope: 'worker', timeout: 0 }],
 
     appPage: async ({ electronApp }, use, testInfo) => {
       const page = await findMainWindow(electronApp);

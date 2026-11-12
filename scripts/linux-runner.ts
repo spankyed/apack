@@ -406,6 +406,9 @@ const child = spawn('docker', [
   // Set here and never forwarded: the VM counts the host's load as its CPU, so a ceiling held to its size there fires
   // on a busy host (`ceilingSetting`, `scripts/lib/step-budgets.ts`), whatever the Mac's own setting is
   '-e', 'APACK_CEILING=loose',
+  // One file for every watcher in the run and the next, on the volume: a spec gives each worker a store of its own,
+  // and the bytes these digests stand for are the ones this disk is slowest to give
+  '-e', `APACK_PACKAGE_DIGESTS=/work/node_modules/.cache/${COMPILER_CACHE}/package-digests.json`,
   ...(compilerStore ? ['-e', `APACK_COMPILER_STORE=${compilerStore}`] : []),
   IMAGE, 'bash', '-c', script,
 ], { stdio: 'inherit' });

@@ -6,7 +6,8 @@ import { isPackInputPath, type BuildInputKind, type BuildInputObserver } from '.
 import { compilerSourcePath, relativeCompilerPath, resolveCompilerPath, type CompilerPathMapping } from './compiler-paths.ts';
 import { captureNativeDirectory, type CompilerDirectoryCursor } from './compiler-directories.ts';
 import { captureCompilerMetadata, compilerMetadataOperations, type CompilerMetadataKind } from './compiler-metadata.ts';
-import { physicalWatchPath } from './watch-paths.ts';
+import { physicalWatchPath, physicalWatchPathListed, type PhysicalListings } from './watch-paths.ts';
+import { withoutCompilerFileReads } from './compiler-file-reads.ts';
 import { withCompilerFileReads } from './compiler-file-reads.ts';
 
 export interface CompilerFileSystem {
@@ -117,6 +118,9 @@ export function createCompilerFileView(root: string, options: {
     return value;
   };
   const physical = new Map<string, string>();
+  const listings: PhysicalListings = new Map();
+  // Outside any compiler's intercepted reads: a listing taken to resolve a path is no directory a compiler read
+  const list = (directory: string) => withoutCompilerFileReads(() => fs.readdirSync(directory, { withFileTypes: true }));
   const inputs = new Map<string, FileInput>();
   const contents = new Map<string, Buffer | undefined>();
   const dataStats = new Map<string, { normal: fs.Stats; bigint: fs.BigIntStats }>();
@@ -127,8 +131,8 @@ export function createCompilerFileView(root: string, options: {
   const directoryQueries = new Map<string, { file: string; physical: string; options: unknown; result: CompilerDirectoryResult; key: string }>();
   const directoryCursors = new Map<string, { file: string; options: unknown; cursor: CompilerDirectoryCursor }>();
 
-  function state(file: string, paths: Map<string, string>): FileState {
-    const target = physicalWatchPath(file, paths);
+  function state(file: string, paths: Map<string, string>, listed: PhysicalListings): FileState {
+    const target = physicalWatchPathListed(file, paths, listed, list);
     let stat: fs.Stats | undefined;
     try { stat = fs.statSync(target, { throwIfNoEntry: false }); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOTDIR') throw error; }
@@ -142,7 +146,7 @@ export function createCompilerFileView(root: string, options: {
     if (excluded(file) && !included.has(file)) return;
     let value = inputs.get(file);
     if (!value) {
-      value = { file, ...state(file, physical), slot: path.join(physicalWatchPath(path.dirname(file), physical), path.basename(file)) };
+      value = { file, ...state(file, physical, listings), slot: path.join(physicalWatchPath(path.dirname(file), physical), path.basename(file)) };
       inputs.set(file, value);
     }
     if (included.has(file)) included.add(value.physical);
@@ -361,7 +365,7 @@ export function createCompilerFileView(root: string, options: {
       for (const { cursor } of directoryCursors.values()) {
         try { cursor.dispose(); } catch (error) { errors.push(error); }
       }
-      for (const state of [physical, inputs, contents, dataStats, directories, globs, included, metadata, directoryQueries, directoryCursors, projected]) state.clear();
+      for (const state of [physical, listings, inputs, contents, dataStats, directories, globs, included, metadata, directoryQueries, directoryCursors, projected]) state.clear();
       if (errors.length) throw new AggregateError(errors, 'Could not close compiler directory cursors');
     },
     captureLocation(file: string, kind: BuildInputKind) {
@@ -423,8 +427,9 @@ export function createCompilerFileView(root: string, options: {
     assertCurrent() {
       assertOpen();
       const current = new Map<string, string>();
+      const listed: PhysicalListings = new Map();
       for (const value of inputs.values()) {
-        const next = state(value.file, current);
+        const next = state(value.file, current, listed);
         if (next.kind !== value.kind || next.physical !== value.physical
           || (value.kind === 'file' && (next.mode & 0o111) !== (value.mode & 0o111))) changed(value.file);
       }

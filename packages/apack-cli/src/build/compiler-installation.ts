@@ -73,6 +73,13 @@ export const compilerStoreRoot = (env: NodeJS.ProcessEnv = process.env): string 
   env.APACK_COMPILER_STORE ?? path.join(envPaths('apack-cli', { suffix: '' }).cache, 'compilers');
 
 /**
+ * Where a pack watcher keeps the digests of the package trees it signs, between watchers: in the store, so every
+ * watcher on the machine starts with them (`APACK_PACKAGE_DIGESTS` overrides it alone).
+ */
+export const packageDigestsFile = (env: NodeJS.ProcessEnv = process.env): string =>
+  env.APACK_PACKAGE_DIGESTS ?? path.join(compilerStoreRoot(env), 'package-digests.json');
+
+/**
  * How many entries the store keeps. A checkout makes a new one on every compiler rebuild, so an unbounded store
  * grows by a runtime copy per edit; three covers the current compiler, the previous one and another runtime.
  * An entry a live process is using is never removed, whatever the count.

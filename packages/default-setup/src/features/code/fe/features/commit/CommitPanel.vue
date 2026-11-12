@@ -397,8 +397,10 @@
 
     <!-- File Changes -->
     <div class="flex-1 overflow-y-auto">
+      <!-- Nothing is known of a repository git was not run in, so it is not said to be clean -->
+      <div v-if="trustRequest && gitStatus.length === 0" />
       <EmptyState
-        v-if="gitStatus.length === 0"
+        v-else-if="gitStatus.length === 0"
         :icon="GitCommit"
         title="No changes to commit"
         subtitle="Working tree is clean"

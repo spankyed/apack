@@ -284,6 +284,18 @@ it('reuses tooling discovery for pack edits, but refreshes on tooling events and
   expect(read).toHaveBeenCalledTimes(5);
 });
 
+it('warms its digests without deciding anything: the signature is the unwarmed one, and a broken pack is left to the pass', async () => {
+  const { pack } = fixture();
+  const tools = createCompilerWatchTools(pack);
+  await tools.warm();
+  expect(compilerWatchPaths(pack, tools).signature).toBe(compilerWatchPaths(pack).signature);
+  fs.writeFileSync(path.join(pack, 'package.json'), '{broken');
+  await expect(createCompilerWatchTools(pack).warm()).resolves.toBeUndefined();
+  const stopped = new AbortController();
+  stopped.abort(new Error('stopped'));
+  await expect(createCompilerWatchTools(pack).warm(stopped.signal)).rejects.toThrow('stopped');
+});
+
 it.runIf(process.platform === 'win32')('keeps authored watch subscriptions covered for extended Windows paths', () => {
   const { pack } = fixture();
   const file = path.toNamespacedPath(path.join(pack, 'src/index.ts'));

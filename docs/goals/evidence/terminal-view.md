@@ -335,8 +335,9 @@ ran, that it wrote nothing, and what it put on stderr; and one that answers slow
 
 The local run over the branch before the reads: 923 mutants, 767 caught, 47 missed, 11 timeouts, 98
 unviable. Its 47 survivors were answered in the broker's fix round by tests or by exclusions that say
-why. **The code the three reads added has not been through the mutation tool here**; the broker's own
-`mutants` job on its pull request is its first pass.
+why. **A full pass over the branch with the three reads' code in it** ran 1,506 mutants and left 100 the
+suite still passed. Each was answered by a test, by removing code nothing needed, or by an exclusion that
+says why, and two defects the pass led to were fixed (`apack-terminal` `9c6962b`).
 
 ### Not done
 
@@ -344,8 +345,8 @@ why. **The code the three reads added has not been through the mutation tool her
   when a watched directory is deleted as its watch closes, which `master` fixed in `acb5e32eaf` after
   this branch was cut. With `master` merged in, the code feature's backend specs ran eight times of
   eight without losing a worker; before, about one run in three.
-- Everything Windows in this repository's half is unrun: a window drawing from rows there, and the
-  PowerShell hook under a Windows console.
+- Windows was unrun when this was written. It has been run since: *On Windows, and a picture in the
+  real app* and *The view in a browser on Windows*, below.
 
 ### The fish and PowerShell hooks, run — 2026-11-11
 
@@ -387,6 +388,26 @@ program. That removes a process the case never meant to ask about, and is not sh
 Running a case 48 at once made the machine the subject: 59 of 480 runs heard nothing from a shell for ten
 seconds while macOS's own assessment of each new process held a core. Those say nothing about the broker
 and are why nothing above was measured wider than 40.
+
+### On `master` — 2026-11-11
+
+Both repositories' halves are merged: this one's #410, pinning the broker at its `master`, `7eb912fa`
+(`apack-terminal`'s #2). The view is `view/` in the broker's repository, so there is one pin.
+
+- **The strict chain on CI passed, all six jobs**, on `fe363300fd`: run 43065653768. It clones the pin.
+- **The broker's mutation gate did not finish.** `mutants in the change (Linux)` on the broker's `master`
+  (its run 43064465721) started `cargo mutants --in-diff` at 17:04 UTC and was ended at 21:40 with *the
+  hosted runner lost communication with the server*. That step never completed, so there is no log, no
+  uploaded `mutants.out` and no list of survivors: it says nothing about any mutant. A second run of the
+  same job, on the pull request's last commit (run 43062379774), had been going for four hours fifty at
+  that time. Before these two the job had not got past its baseline on this change: it failed there on
+  `an_alternate_screen_app_survives_a_resize_and_keeps_answering`, which passed in the suite's own job
+  on the same commit and was fixed in the broker's #4.
+- **Not known:** why the runner was lost. The change against the broker's previous `master` is the whole
+  of the view work, which a local run before the reads counted at 923 mutants; a run that long on a
+  hosted runner, and a mutant that stops the runner's own process, are both consistent with what was
+  seen and neither is shown.
+
 
 ## Vouched shell marks — 2026-11-11
 
@@ -433,3 +454,49 @@ The broker's CI ran its suite on Windows for this change. The one keyed case the
 prints a start and a finish and exits at once — passed, which is the first keyed mark this suite has sent
 through a ConPTY and the proof that a session's exit waits for the last of its output there
 (`apack-terminal` `bdc603e`). The hooks themselves have run on no Windows machine.
+
+## On Windows, and a picture in the real app — 2026-11-12
+
+### Windows, over SSH to the development VM
+
+Windows Server 2025 (26100), Windows PowerShell 5.1. The broker was built there from `apack-terminal`
+`5c24284` and driven by a script speaking its protocol over a named pipe. Nothing here had a desktop;
+what a window draws there and an input method are in *The view in a browser on Windows*, below.
+
+| What was run | Result |
+|---|---|
+| The PowerShell hook the app arranges (`apack.ps1`, with a key), in a session of the real broker, typed at | Every command had a keyed start and finish that the broker took: `echo one` exited 0, `cmd /c exit 3` exited 3 twice running, the directory was reported, and the key was not in the shell's environment afterwards. ConPTY passed the marks through in order |
+| A finish printed by a command (`633;D;0`, `133;D;0`, and a keyed one with another key) while it slept | The command stayed running, `refused` was 1, and it ended with the shell's own finish |
+| `apack-terminal proxy` on a pipe nothing was listening on, then a second proxy on the same pipe | The first started a broker and ran a command through it; the second listed the first's session; both exited 0 once their input ended, and the broker exited by itself |
+
+**It found one defect, which is fixed.** A cmdlet that failed straight after a program that had exited
+with 3 was recorded as exiting with 3: `$LASTEXITCODE` keeps the last program's code until another
+program runs. The hook now takes the code only where this command set it, which it tells by the value
+being a new object, and reports 1 for a failure that set none. Run again on the VM: the cmdlet after the
+program is 1, the program is still 3, and the same code from two programs running is 3 both times. That
+PowerShell 7 hands back the same object in the same way was not run.
+
+### A picture, in the built app
+
+A drive script had a program place a 160 by 96 magenta PNG in a terminal with the Kitty graphics
+protocol (`a=T,f=100`). The terminal's canvas held 15,360 pixels of that colour, which is 160 by 96,
+between the line printed before it and the line after.
+
+### The view in a browser on Windows — 2026-11-12
+
+Resolved. The view and its 2D-canvas painter were run in headless Chromium 158 on the same VM, on a
+source a script drove by hand.
+
+| What was run | Result |
+|---|---|
+| Rows drawn: ASCII, ten `W` beside ten `i`, box-drawing characters, `✓`, `é` | Painted on a fixed-pitch grid, the text mirror held the same rows, and the page raised no error |
+| A composition through the browser's own input-method pipeline (`にほん`, committed as `日本`) | Nothing was sent while composing and the field showed what was being composed; the commit sent the text once, with no key, and cleared the field |
+| A third-level key as Windows hands a page one: control and alt down, `AltGraph` on | Sent as its character (`{`) with neither modifier |
+
+**What this rests on, said once.** It was Chromium and not the app's own window, the browser's
+composition pipeline and not a Windows input method above it, and the third-level key was an event
+built to the shape Chromium gives one on Windows: a script cannot press AltGr. The same key without
+`AltGraph` on is sent as control and alt with no character, so the handling is right for as long as
+Chromium on Windows reports `AltGraph` for that key, which is its documented behaviour and was not
+observed here. A person typing `@` on a German layout in the app is the one check that would see it.
+

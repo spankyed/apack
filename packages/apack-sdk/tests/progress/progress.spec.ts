@@ -79,9 +79,11 @@ describe('the readings', () => {
   });
 
   it('reads a worker thread\'s own CPU from the first reading, which grows while it computes', async () => {
-    // It burns only when told and says when it is done, so one reading is before the work and one after it
+    // It burns only when told and says when it is done, so one reading is before the work and one after it. What
+    // it burns is counted in its own CPU: on a busy machine a thread gets a fraction of the clock's time
     const worker = new Worker(`const { parentPort } = require('node:worker_threads');
-      parentPort.once('message', () => { const end = Date.now() + 400; while (Date.now() < end) {} parentPort.postMessage('burnt'); });
+      const spent = () => { const { user, system } = process.threadCpuUsage(); return (user + system) / 1000; };
+      parentPort.once('message', () => { const from = spent(); while (spent() - from < 400) {} parentPort.postMessage('burnt'); });
       setInterval(() => {}, 1000);`, { eval: true });
     try {
       const work = threadWork(worker);
@@ -378,5 +380,44 @@ describe('a party that is waiting on storage', () => {
     expect(sleepsInStorage('pipe_read', filesystems)).toBe(false);
     // A filesystem this kernel does not keep on a disk is not one a process can be waiting on a disk in
     expect(sleepsInStorage('xfs_log_force', filesystems)).toBe(false);
+  });
+});
+
+describe('a party that held its watcher off while it worked', () => {
+  /** A clock a case moves by hand, and the one reading a watch takes on it */
+  const held = () => {
+    let now = 0;
+    let tick: (() => void) | undefined;
+    const clock = { now: () => now, every: (run: () => void) => { tick = run; return 0 as unknown as ReturnType<typeof setInterval>; }, stopEvery: () => {} };
+    return { clock, move: (ms: number) => { now += ms; }, read: async () => { tick!(); await new Promise((resolve) => { setImmediate(resolve); }); } };
+  };
+
+  it('is not refused at a first reading that comes late, when the reading counts the work it did meanwhile', async () => {
+    const { clock, move, read } = held();
+    let refused: Refusal | undefined;
+    // Three minutes of synchronous work: no reading until it ends, and then one that says three minutes of CPU
+    watchWork({ work: async () => 180_000, idleMs: IDLE, countsFromWatch: true, clock, onRefused: (refusal) => { refused = refusal; } });
+    move(180_000);
+    await read();
+    expect(refused).toBeUndefined();
+  });
+
+  it('is still refused when that first reading says it did nothing', async () => {
+    const { clock, move, read } = held();
+    let refused: Refusal | undefined;
+    watchWork({ work: async () => 0, idleMs: IDLE, countsFromWatch: true, clock, onRefused: (refusal) => { refused = refusal; } });
+    move(180_000);
+    await read();
+    expect(refused).toMatchObject({ kind: 'stalled' });
+  });
+
+  it('has a first reading over a lifetime taken as a baseline, which is what it is', async () => {
+    const { clock, move, read } = held();
+    let refused: Refusal | undefined;
+    // A process that had spent an hour before anyone watched it, and nothing since
+    watchWork({ work: async () => 3_600_000, idleMs: IDLE, clock, onRefused: (refusal) => { refused = refusal; } });
+    move(IDLE + 1);
+    await read();
+    expect(refused).toMatchObject({ kind: 'stalled' });
   });
 });

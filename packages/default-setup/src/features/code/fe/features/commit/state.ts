@@ -56,6 +56,8 @@ export interface CodeCommitContext {
   lastDiscard: { id: string; paths: string[]; notKept: string[] } | null
   /** What undoing a discard left as it was, because it had changed or been made again since */
   discardLeft: string[]
+  /** The folder what is held here was read from: the code surface's, as of the last time it started */
+  directory: string
   availableBranches: string[]
   branchInput: string
   isCheckingOutBranch: boolean
@@ -105,6 +107,11 @@ export interface CodeCommitContext {
   diffRefreshes: Record<string, true>
   /** The latest ask for the status, while it is unanswered: an answer to an earlier one is of the repository before it */
   statusAsk: string | null
+  /**
+   * The latest ask for each list the panel shows beside the status, while it is unanswered. An answer to an
+   * earlier one is of the repository as it was then, or of the folder that was open before this one
+   */
+  listAsks: Record<RepositoryList, string | null>
   /** The stage and unstage writes still unanswered. The list shows them done, so no status is shown until they are answered */
   stagingWrites: ViewWrites
 }
@@ -247,6 +254,89 @@ export type Event =
   | { type: 'commit.SHOWN' }
   | { type: 'commit.HIDDEN' };
 
+/** The fields of the panel's state that are read from a repository */
+type OfOneFolder =
+  | 'gitStatus'
+  | 'gitBranch'
+  | 'gitError'
+  | 'selectedGitFile'
+  | 'revertDialogFile'
+  | 'discardPreview'
+  | 'lastDiscard'
+  | 'discardLeft'
+  | 'availableBranches'
+  | 'branchInput'
+  | 'hasUpstream'
+  | 'commitsAhead'
+  | 'commitsBehind'
+  | 'isStatusTruncated'
+  | 'operation'
+  | 'isFetchSuspended'
+  | 'fetchSignIn'
+  | 'gitFailure'
+  | 'appliedHunks'
+  | 'missedChange'
+  | 'openFolders'
+  | 'stashList'
+  | 'worktreeList'
+  | 'commitLog'
+
+/**
+ * What the panel holds of a repository, as it is before any has been read: its rows, its branch and whether that
+ * has an upstream, its commits, stashes and worktrees, what git last refused, and what a discard offers to undo.
+ * The panel starts with this, and goes back to it when the code surface starts over another folder. A
+ * repository git is not run in, because it is not trusted, reads nothing, and would otherwise sit under the
+ * branch and the commits of the folder open before it.
+ */
+const ofNoFolder = (): Pick<CodeCommitContext, OfOneFolder> => ({
+  gitStatus: [],
+  gitBranch: '',
+  gitError: null,
+  selectedGitFile: null,
+  revertDialogFile: null,
+  discardPreview: null,
+  lastDiscard: null,
+  discardLeft: [],
+  availableBranches: [],
+  branchInput: '',
+  hasUpstream: true,
+  commitsAhead: 0,
+  commitsBehind: 0,
+  isStatusTruncated: false,
+  operation: null,
+  isFetchSuspended: false,
+  fetchSignIn: null,
+  gitFailure: null,
+  appliedHunks: [],
+  missedChange: null,
+  openFolders: {},
+  stashList: [],
+  worktreeList: [],
+  commitLog: [],
+})
+
+/** The lists the panel shows beside the status, each asked for by an event of its own, sent under a call */
+const LIST_ASKS = {
+  branches: (call: string) => { sendToSystem('code', { type: 'commit.GET_ALL_BRANCHES' }, { call }) },
+  stashes: (call: string) => { sendToSystem('code', { type: 'commit.STASH_LIST' }, { call }) },
+  worktrees: (call: string) => { sendToSystem('code', { type: 'commit.WORKTREE_LIST' }, { call }) },
+  log: (call: string) => { sendToSystem('code', { type: 'commit.LOG_LIST' }, { call }) },
+}
+type RepositoryList = keyof typeof LIST_ASKS
+
+/**
+ * An ask for each of these lists under a call of its own: what to hold as the latest ask of each, and the sends.
+ * Only the answer to the latest ask of a list is shown. An answer to an earlier one is dropped: the folder may
+ * have changed since it was asked, and the backend answers every ask.
+ */
+function listAsks(lists: readonly RepositoryList[]) {
+  const calls = lists.map((list) => [list, newCall()] as const)
+  return {
+    asks: Object.fromEntries(calls) as Partial<Record<RepositoryList, string>>,
+    send: () => { for (const [list, call] of calls) LIST_ASKS[list](call) },
+  }
+}
+
 export const commitState = setup({
   types: {
     context: {} as CodeCommitContext,
@@ -255,6 +345,10 @@ export const commitState = setup({
   guards: {
     answersADiffRefresh: ({ context, event }) => settleCall(context.diffRefreshes, event).recorded !== undefined,
     answersTheStatusAsked: ({ context, event }) => answersCall(event, context.statusAsk),
+    answersTheBranchesAsked: ({ context, event }) => answersCall(event, context.listAsks.branches),
+    answersTheStashesAsked: ({ context, event }) => answersCall(event, context.listAsks.stashes),
+    answersTheWorktreesAsked: ({ context, event }) => answersCall(event, context.listAsks.worktrees),
+    answersTheLogAsked: ({ context, event }) => answersCall(event, context.listAsks.log),
   },
   actions: {
     refreshGitStatus: enqueueActions(({ enqueue }) => {
@@ -657,9 +751,11 @@ export const commitState = setup({
       enqueue(() => sendEventToParent(self, { type: 'REFRESH_DIFF_TAB', diff: ev.data }))
     }),
 
-    getAllBranches: () => {
-      sendToSystem('code', { type: 'commit.GET_ALL_BRANCHES' })
-    },
+    getAllBranches: enqueueActions(({ context, enqueue }) => {
+      const { asks, send } = listAsks(['branches'])
+      enqueue.assign({ listAsks: { ...context.listAsks, ...asks } })
+      enqueue(send)
+    }),
 
     updateBranchInput: assign({
       branchInput: ({ event }) => {
@@ -711,18 +807,19 @@ export const commitState = setup({
       progress: null
     }),
 
-    handleCodeStartup: ({ self }) => {
-      // Check if we have a directory from parent context
-      const parentContext = getParentContext(self)
-      if (parentContext?.baseDirectory) {
+    handleCodeStartup: enqueueActions(({ context, enqueue, self }) => {
+      const directory: string = getParentContext(self)?.baseDirectory || ''
+      // What the panel holds is one folder's (`ofNoFolder`), and says nothing about another: it goes when the
+      // folder is another one
+      if (directory !== context.directory) enqueue.assign({ directory, ...ofNoFolder() })
+      if (directory) {
         // Refresh git status when directory is available
         self.send({ type: 'commit.REFRESH_STATUS' })
-        sendToSystem('code', { type: 'commit.STASH_LIST' })
-        sendToSystem('code', { type: 'commit.WORKTREE_LIST' })
-        sendToSystem('code', { type: 'commit.GET_ALL_BRANCHES' })
-        sendToSystem('code', { type: 'commit.LOG_LIST' })
+        const { asks, send } = listAsks(['stashes', 'worktrees', 'branches', 'log'])
+        enqueue.assign({ listAsks: { ...context.listAsks, ...asks } })
+        enqueue(send)
       }
-    },
+    }),
 
     stashPush: ({ event }) => {
       const ev = event as { type: 'commit.STASH_PUSH'; message?: string; stagedOnly?: boolean }
@@ -731,9 +828,11 @@ export const commitState = setup({
 
     setStashing: assign({ isStashing: true }),
 
-    requestStashList: () => {
-      sendToSystem('code', { type: 'commit.STASH_LIST' })
-    },
+    requestStashList: enqueueActions(({ context, enqueue }) => {
+      const { asks, send } = listAsks(['stashes'])
+      enqueue.assign({ listAsks: { ...context.listAsks, ...asks } })
+      enqueue(send)
+    }),
 
     handleStashListReceived: assign({
       stashList: ({ event }) => {
@@ -766,9 +865,11 @@ export const commitState = setup({
       sendToSystem('code', { type: 'commit.STASH_CLEAR' })
     },
 
-    requestWorktreeList: () => {
-      sendToSystem('code', { type: 'commit.WORKTREE_LIST' })
-    },
+    requestWorktreeList: enqueueActions(({ context, enqueue }) => {
+      const { asks, send } = listAsks(['worktrees'])
+      enqueue.assign({ listAsks: { ...context.listAsks, ...asks } })
+      enqueue(send)
+    }),
 
     handleWorktreeListReceived: assign({
       worktreeList: ({ event }) => {
@@ -799,9 +900,11 @@ export const commitState = setup({
 
     handleWorktreeRemoved: assign({ isWorktreeLoading: false }),
 
-    requestLogList: () => {
-      sendToSystem('code', { type: 'commit.LOG_LIST' })
-    },
+    requestLogList: enqueueActions(({ context, enqueue }) => {
+      const { asks, send } = listAsks(['log'])
+      enqueue.assign({ listAsks: { ...context.listAsks, ...asks } })
+      enqueue(send)
+    }),
 
     handleLogListReceived: assign({
       commitLog: ({ event }) => {
@@ -826,45 +929,24 @@ export const commitState = setup({
   context: {
     diffRefreshes: {},
     statusAsk: null,
+    listAsks: { branches: null, stashes: null, worktrees: null, log: null },
     stagingWrites: viewWrites(),
-    gitStatus: [],
-    gitBranch: '',
-    gitError: null,
     isGitLoading: false,
-    selectedGitFile: null,
     commitMessage: '',
-    revertDialogFile: null,
-    discardPreview: null,
-    lastDiscard: null,
-    discardLeft: [],
-    availableBranches: [],
-    branchInput: '',
+    directory: '',
     isCheckingOutBranch: false,
-    hasUpstream: true,
-    commitsAhead: 0,
-    commitsBehind: 0,
-    isStatusTruncated: false,
     isWatchingRepository: true,
-    operation: null,
     isMovingOperation: false,
-    isFetchSuspended: false,
-    fetchSignIn: null,
-    gitFailure: null,
     isSettingUpSignIn: false,
     isApplyingHunk: false,
-    appliedHunks: [],
     isShown: false,
-    missedChange: null,
-    openFolders: {},
     progress: null,
     isPushing: false,
     isPulling: false,
     isGeneratingMessage: false,
-    stashList: [],
     isStashing: false,
-    worktreeList: [],
     isWorktreeLoading: false,
-    commitLog: []
+    ...ofNoFolder(),
   },
   states: {
     idle: {
@@ -1013,6 +1095,7 @@ export const commitState = setup({
           actions: ['setCheckingOutBranch', 'checkoutBranch']
         },
         'commit.BRANCHES_RECEIVED': {
+          guard: 'answersTheBranchesAsked',
           actions: 'handleBranchesReceived'
         },
         'commit.BRANCH_CHECKOUT_SUCCESS': {
@@ -1046,6 +1129,7 @@ export const commitState = setup({
           actions: 'requestStashList'
         },
         'commit.STASH_LIST_RECEIVED': {
+          guard: 'answersTheStashesAsked',
           actions: 'handleStashListReceived'
         },
         'commit.STASH_SUCCESS': {
@@ -1067,6 +1151,7 @@ export const commitState = setup({
           actions: 'requestWorktreeList'
         },
         'commit.WORKTREE_LIST_RECEIVED': {
+          guard: 'answersTheWorktreesAsked',
           actions: 'handleWorktreeListReceived'
         },
         'commit.WORKTREE_ADD': {
@@ -1088,6 +1173,7 @@ export const commitState = setup({
           actions: 'requestLogList'
         },
         'commit.LOG_LIST_RECEIVED': {
+          guard: 'answersTheLogAsked',
           actions: 'handleLogListReceived'
         },
         'commit.REVERT_COMMIT': {

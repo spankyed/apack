@@ -19,6 +19,7 @@
  * A file also fails when it ends with a process it started running on out of the worker's reach
  * (`leftover-processes.ts`): the run would otherwise be green and the process would outlive it.
  */
+import { Session } from 'node:inspector';
 import { isMainThread } from 'node:worker_threads';
 import { aroundAll, aroundEach, expect, inject } from 'vitest';
 import { IDLE_MS, cpuAdded, describeRefusal, describeTree, readTreeCpuMs, storageHold, unmetWaits, watchWork, type Watch, type WatchClock, type WorkReading } from '@apackdev/sdk/progress';
@@ -97,7 +98,9 @@ function judgeAfresh(): void {
   const work = workerWork();
   const watch = watchWork({
     // `watchWork` loosens the ceiling under APACK_CEILING=loose, as it does for every bound
-    work, idleMs, clock: realClock, ceilingMs: alone?.budgetMs,
+    // The worker's own CPU is counted from here (`workerWork`), and a test may hold this timer off for as long as
+    // it works synchronously: its first reading is work, not a baseline
+    work, idleMs, clock: realClock, ceilingMs: alone?.budgetMs, countsFromWatch: true,
     onRefused: (refusal) => {
       const together = running.length > 1 ? `, with ${running.length - 1} other test${running.length > 2 ? 's' : ''} running beside it` : '';
       const why = refusal.kind === 'stalled'
@@ -114,6 +117,55 @@ function judgeAfresh(): void {
 }
 
 /**
+ * Where this worker's own CPU went, sampled for as long as it has run, under `APACK_STALL_PROFILE=1`: for a test
+ * that works for minutes and then stops, where what it was waiting on at the end says nothing of what it did
+ * before. Off unless asked for, since a sampler in every worker of every run is a cost nothing has measured.
+ */
+const profiler = process.env.APACK_STALL_PROFILE === '1' ? (() => {
+  const session = new Session();
+  session.connect();
+  session.post('Profiler.enable');
+  session.post('Profiler.setSamplingInterval', { interval: 10_000 });
+  session.post('Profiler.start');
+  return session;
+})() : undefined;
+
+interface ProfileNode { callFrame: { functionName: string; url: string; lineNumber: number }; hitCount?: number; id: number; children?: number[] }
+
+/** The functions this worker spent the most time in itself, and the callers it spent the most time under */
+function whereTheCpuWent(): Promise<string> {
+  if (profiler === undefined) return Promise.resolve('');
+  return new Promise((resolve) => {
+    profiler.post('Profiler.stop', (error, result) => {
+      profiler.post('Profiler.start');
+      if (error || !result) return resolve('');
+      const nodes = result.profile.nodes as ProfileNode[];
+      const name = (node: ProfileNode) => `${node.callFrame.functionName || '(anonymous)'} ${node.callFrame.url.replace(/^.*\/(packages|node_modules)\//, '$1/')}:${node.callFrame.lineNumber + 1}`;
+      const total = nodes.reduce((sum, node) => sum + (node.hitCount ?? 0), 0) || 1;
+      const self = new Map<string, number>();
+      for (const node of nodes) self.set(name(node), (self.get(name(node)) ?? 0) + (node.hitCount ?? 0));
+      // What each function spent with everything it called, which names the work rather than its innermost loop
+      const byId = new Map(nodes.map((node) => [node.id, node]));
+      const within = new Map<string, number>();
+      const inclusive = (node: ProfileNode, seen: Set<string>): number => {
+        const mine = name(node);
+        const fresh = !seen.has(mine);
+        if (fresh) seen.add(mine);
+        let hits = node.hitCount ?? 0;
+        for (const child of node.children ?? []) hits += inclusive(byId.get(child)!, seen);
+        if (fresh) { within.set(mine, (within.get(mine) ?? 0) + hits); seen.delete(mine); }
+        return hits;
+      };
+      if (nodes[0]) inclusive(nodes[0], new Set());
+      const top = (counts: Map<string, number>, skip: (key: string) => boolean) => [...counts].filter(([key]) => !skip(key))
+        .sort((a, b) => b[1] - a[1]).slice(0, 14).map(([key, hits]) => `  ${(100 * hits / total).toFixed(1).padStart(5)}%  ${key}`).join('\n');
+      resolve(`Where this worker's own CPU went (${total} samples):\n${top(self, () => false)}\nand under which calls of this repository's:\n${
+        top(within, (key) => !key.includes(' packages/'))}\n`);
+    });
+  });
+}
+
+/**
  * What a worker that stopped working was waiting on, as far as anything here can say: the waits its test had not
  * met (`settles`), what its event loop was holding open, and the state of each process it started.
  *
@@ -126,11 +178,13 @@ async function whatWasWaiting(): Promise<string> {
   const held = new Map<string, number>();
   for (const resource of process.getActiveResourcesInfo()) held.set(resource, (held.get(resource) ?? 0) + 1);
   const tree = await describeTree(process.pid);
+  const spent = await whereTheCpuWent();
   return [
     '',
     waits.length > 0 ? `Still waiting for:\n${waits.map((wait) => `  ${wait}`).join('\n')}` : 'No wait of its own was unmet (`settles`): it was awaiting something that never answered.',
     `Its event loop held: ${[...held].map(([resource, count]) => `${count} ${resource}`).join(', ') || 'nothing'}`,
     tree ?? 'Its process tree could not be listed.',
+    spent,
   ].join('\n');
 }
 

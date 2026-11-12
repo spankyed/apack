@@ -465,9 +465,16 @@ The fixture honors the CLI's resolved `APACK_HOST_EXECUTABLE` or `APACK_HOST_ROO
 - Per-worker: `electronApp.close()` shuts down Electron. The fixture captures the API pid before close and fails if that child is still alive afterwards; Electron quit must finish API shutdown before fixture-owned data can be cleaned up.
   For a data dir the fixture made, it waits for Electron's `will-quit` (emitted once the API server's
   `before-quit` handler has stopped the API) and then kills Electron rather than waiting for Chromium to write
-  a profile it is about to delete: under load those writes held exit past Playwright's 60s worker teardown
+  a profile it is about to delete
   ([the evidence](../../docs/archive/references/evidence/build-input-snapshot-proof.md#electron-exit-hang-in-linked-worktrees-2026-10-25)).
-  A dir the caller gave (`E2E_DATA_DIR`) is relaunched on, so its close still waits for the profile.
+  A dir the caller gave (`E2E_DATA_DIR`) is relaunched on, so its close waits for the profile.
+  **The close is waited for while the app works, never on Playwright's clock**: the fixture declares
+  `timeout: 0` and bounds the whole close, the quit sequence included, with `answerWhileWorking` over the
+  app's process tree. A kept profile took over a minute to write at a load of a hundred, which failed the
+  worker on the 60s it inherited from the test after its test had passed. An app that stops working without
+  closing is ended with its API, and the worker fails naming that. The app's output closing is what ends the
+  wait, seen on its process: that is when Chromium's helpers have gone too, which its exit alone is not, and
+  Playwright's own `close()` is not waited for past it.
 
 ## API reference
 
@@ -565,7 +572,7 @@ PACK_DIR=/path/to/my-pack npm run test:e2e -- tests/e2e/scratch
 
 `DEBUG_E2E=sample` enables the existing lifecycle diagnostics and, on macOS, captures a two-second
 native sample if the fixture's own Electron process still has not exited five seconds into teardown.
-The sample is written beside its `app-<worker>.log`. It changes no close timeout or test assertion;
+The sample is written beside its `app-<worker>.log`. It changes no bound on the close and no test assertion;
 normal test runs do not invoke the sampler. This distinguishes a live native shutdown stall from an
 application that exited while its driver is waiting for another resource.
 

@@ -38,6 +38,17 @@ const FIXTURES: Record<string, string> = {
   'unmet.spec.ts': `import { expect, it } from 'vitest';
     import { settles } from ${JSON.stringify(path.join(REPO_ROOT, 'packages/apack-sdk/src/testing/waiting.ts'))};
     it('waits for what never happens', async () => { await settles(() => expect(0, 'the watcher started no rebuild').toBe(1)); });`,
+  // Works for a while in a function with a name, then waits for ever: what it was waiting on says nothing of the work
+  'churns.spec.ts': `import { it } from 'vitest';
+    function spinForAWhile() { ${burn(2_500)} }
+    it('works and then waits', async () => { spinForAWhile(); await new Promise(() => {}); });`,
+  // Works without once yielding for longer than the idle window: the guard's timer cannot run until it is done
+  'blocks.spec.ts': `import { it } from 'vitest';
+    it('works synchronously for longer than the idle window', async () => {
+      ${burn(IDLE_MS + 5_000)}
+      // And goes on working after, in turns: the reading the guard was kept from taking is taken while it still runs
+      for (let i = 0; i < 8; i++) { ${burn(300)} await new Promise((r) => setTimeout(r, 300)); }
+    });`,
   // Longer on the clock than vitest's own 5s default, working throughout: what a busy machine does to a test
   'slow.spec.ts': `import { it } from 'vitest';
     it('is slow and working', async () => {
@@ -110,7 +121,7 @@ const outcome = (report: Report, file: string, test: string) =>
 describe('with the CPU ceiling on', () => {
   let report: Report;
   beforeAll(async () => {
-    report = await runFixtures('ceiling', ['awaits.spec.ts', 'faked.spec.ts', 'hook.spec.ts', 'child.spec.ts', 'unmet.spec.ts', 'slow.spec.ts', 'spin.spec.ts', 'concurrent.spec.ts']);
+    report = await runFixtures('ceiling', ['awaits.spec.ts', 'faked.spec.ts', 'hook.spec.ts', 'child.spec.ts', 'unmet.spec.ts', 'slow.spec.ts', 'spin.spec.ts', 'concurrent.spec.ts', 'blocks.spec.ts']);
   });
 
   it('fails a test that awaits forever, as itself, and runs the next one', () => {
@@ -151,6 +162,10 @@ describe('with the CPU ceiling on', () => {
     expect(outcome(report, 'awaits.spec.ts', 'awaits forever')!.failureMessages.join('\n')).toContain('No wait of its own was unmet');
   });
 
+  it('leaves a test alone that worked the whole time and never let the guard read it', () => {
+    expect(outcome(report, 'blocks.spec.ts', 'works synchronously for longer than the idle window')).toMatchObject({ status: 'passed' });
+  });
+
   it('leaves a test alone that is slow on the clock and working', () => {
     expect(outcome(report, 'slow.spec.ts', 'is slow and working')).toMatchObject({ status: 'passed' });
   });
@@ -162,6 +177,15 @@ describe('with the CPU ceiling on', () => {
 
   it('fails a test that spins, at its CPU budget, saying what it spent', () => {
     expect(outcome(report, 'spin.spec.ts', 'spins')!.failureMessages.join('\n')).toMatch(/"spins" spent its 2s CPU budget: [\d.]+s of CPU in [\d.]+s of wall time/);
+  });
+});
+
+describe('under APACK_STALL_PROFILE=1', () => {
+  it('says where a stalled test\'s worker spent its CPU before it stopped', async () => {
+    const report = await runFixtures('profiled', ['churns.spec.ts'], { APACK_STALL_PROFILE: '1' });
+    const said = outcome(report, 'churns.spec.ts', 'works and then waits')!.failureMessages.join('\n');
+    expect(said).toContain('stalled');
+    expect(said).toMatch(/Where this worker's own CPU went \(\d+ samples\):\n[^]*spinForAWhile/);
   });
 });
 

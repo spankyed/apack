@@ -62,6 +62,132 @@ interface PackageInputOptions {
   readonly onFile?: (file: PackageInputFile, bytes: Buffer) => void;
   /** The exact filtered membership used during the package walk. */
   readonly onDirectory?: (directory: string, names: readonly string[]) => void;
+  /**
+   * Digests a previous read took, for a caller that reads the same trees again and again: a file nothing has
+   * touched since is not read. The hash is the one a read without it returns. Unused beside `onFile`, which is
+   * owed the bytes.
+   */
+  readonly digests?: PackageDigestCache;
+}
+
+/** The coarsest tick a filesystem keeps a file's times in: two writes inside one leave the same times behind. */
+const UNSETTLED_MS = 2_000;
+/** How far a filesystem's clock may stand from this process's before a file's age stops meaning anything. */
+const CLOCK_ALLOWANCE_MS = 24 * 60 * 60 * 1_000;
+
+/** How long a digest nothing has asked for stays in the file. */
+const KEPT_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1_000;
+
+export interface PackageDigestCache {
+  /** The digest held for a file that has not moved since it was taken, and how to hold the one read now. */
+  lookup(file: string): { readonly digest: string | undefined; readonly mode: number; record(digest: string): void };
+  /** Writes the digests that answer to the file this reader was opened over, when any has changed since it last did. */
+  save(): void;
+}
+
+interface HeldDigest { size: bigint; mtimeNs: bigint; ctimeNs: bigint; ino: bigint; digest: string; seen: number; settled: boolean; used: number }
+type StoredDigest = [size: string, mtimeNs: string, ctimeNs: string, ino: string, digest: string, used: number];
+
+function readStoredDigests(file: string): Record<string, StoredDigest> {
+  try {
+    const stored = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return stored?.format === 1 && stored.entries && typeof stored.entries === 'object' ? stored.entries : {};
+  } catch { return {}; }
+}
+
+/**
+ * Content digests keyed by what the filesystem says of each file: its size, both its timestamps and its inode. A
+ * file is read again when any of them moved, and a program cannot put a file's change time back.
+ *
+ * A digest answers only once its bytes are known to have been read after the tick of the file's last write, since
+ * a second write inside that tick leaves the same times behind. A file whose times are older than
+ * `CLOCK_ALLOWANCE_MS` was: no mount's clock is that far from this one. Any younger file is read a second time,
+ * at least `UNSETTLED_MS` after this reader first saw it as it is, and that reading is the one kept. The wait is
+ * counted on this process's own clock, which runs at the filesystem's rate wherever the two stand, so nothing
+ * here compares one clock with the other closer than a day.
+ *
+ * Over a `file`, the digests that answer outlive the reader: the next one starts with them, so its first reading
+ * of a tree nothing has touched asks only each file's stat. A digest that answered is as true in another process
+ * as in this one, since what it is keyed by is the file's and not the reader's. The file is a cache and nothing
+ * else: unreadable it is empty, a save that fails is dropped, and two readers saving at once each replace it whole,
+ * the later keeping what the earlier wrote for every file it did not itself see to be as its digest says. A digest nothing has asked for in
+ * `KEPT_DAYS` leaves it.
+ *
+ * A build takes its own bytes and never reads this.
+ */
+export function createPackageDigestCache(options: { now?: () => number; elapsed?: () => number; file?: string } = {}): PackageDigestCache {
+  const { now = Date.now, elapsed = () => performance.now(), file: store } = options;
+  const today = () => Math.floor(now() / DAY_MS);
+  const held = new Map<string, HeldDigest>();
+  // What this reader has itself seen to be so: a digest it only started with may be older than the file's
+  const confirmed = new Set<string>();
+  let dirty = false;
+  if (store) {
+    for (const [file, [size, mtimeNs, ctimeNs, ino, digest, used]] of Object.entries(readStoredDigests(store))) {
+      try { held.set(file, { size: BigInt(size), mtimeNs: BigInt(mtimeNs), ctimeNs: BigInt(ctimeNs), ino: BigInt(ino), digest, seen: -Infinity, settled: true, used }); }
+      catch { /* An entry that is not one is not kept */ }
+    }
+  }
+  return {
+    lookup(file) {
+      const old = BigInt(Math.floor(now()) - CLOCK_ALLOWANCE_MS) * 1_000_000n;
+      const at = elapsed();
+      const { size, mtimeNs, ctimeNs, ino, mode } = fs.statSync(file, { bigint: true });
+      const entry = held.get(file);
+      const same = !!entry && entry.size === size && entry.mtimeNs === mtimeNs && entry.ctimeNs === ctimeNs && entry.ino === ino;
+      const seen = same ? entry!.seen : at;
+      const answers = same && entry!.settled;
+      if (answers) {
+        confirmed.add(file);
+        if (entry!.used !== today()) {
+          entry!.used = today();
+          dirty = true;
+        }
+      }
+      return {
+        digest: answers ? entry!.digest : undefined,
+        mode: Number(mode),
+        record(digest) {
+          const settled = (mtimeNs < old && ctimeNs < old) || (same && at - seen >= UNSETTLED_MS);
+          held.set(file, { size, mtimeNs, ctimeNs, ino, digest, seen, settled, used: today() });
+          if (settled) confirmed.add(file);
+          else confirmed.delete(file);
+          dirty ||= settled;
+        },
+      };
+    },
+    save() {
+      if (!store || !dirty) return;
+      try {
+        const entries = readStoredDigests(store);
+        for (const file of confirmed) {
+          const entry = held.get(file)!;
+          entries[file] = [String(entry.size), String(entry.mtimeNs), String(entry.ctimeNs), String(entry.ino), entry.digest, entry.used];
+        }
+        const oldest = today() - KEPT_DAYS;
+        for (const [file, entry] of Object.entries(entries)) if (!(entry[5] >= oldest)) delete entries[file];
+        fs.mkdirSync(path.dirname(store), { recursive: true });
+        const written = `${store}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
+        try {
+          fs.writeFileSync(written, JSON.stringify({ format: 1, entries }));
+          fs.renameSync(written, store);
+        } finally { fs.rmSync(written, { force: true }); }
+        dirty = false;
+      } catch { /* A cache that could not be written is one the next reader fills */ }
+    },
+  };
+}
+
+const digestOf = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
+
+/** One file's content digest, through the cache when its reader keeps one. */
+export function readFileDigest(file: string, digests?: PackageDigestCache): string {
+  const known = digests?.lookup(file);
+  if (known?.digest !== undefined) return known.digest;
+  const digest = digestOf(fs.readFileSync(file));
+  known?.record(digest);
+  return digest;
 }
 
 /** Package inventory ignores tool/cache trees; capture and validation use the same membership. */
@@ -88,7 +214,7 @@ export function findPackageDirectory(owner: string, name: string, observe?: Buil
 /** The files esbuild, Vite and TypeScript resolution read directly, outside a compiler's captured reads. */
 const resolutionFile = (name: string) => name === 'package.json' || name === 'jsconfig.json' || /^tsconfig.*\.json$/.test(name);
 
-function* readPackageFiles(node: PackageInputNode, targets: readonly string[], owners: ReadonlyMap<string, unknown>, { observe, onFile, onDirectory }: PackageInputOptions): Generator<string, void, Buffer> {
+function* readPackageFiles(node: PackageInputNode, targets: readonly string[], owners: ReadonlyMap<string, unknown>, { observe, onFile, onDirectory, digests }: PackageInputOptions): Generator<string, void, Buffer> {
   const root = node.directory;
   const everything = node.contents === 'all';
   const ancestors = new Set<string>();
@@ -131,9 +257,15 @@ function* readPackageFiles(node: PackageInputNode, targets: readonly string[], o
   for (const target of targets) walk(path.join(root, target));
   for (const [file, physical] of [...files].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) {
     const { source } = physical;
-    const mode = physical.mode ?? (fs.statSync(source).mode & 0o777);
+    const known = onFile ? undefined : digests?.lookup(source);
+    const mode = physical.mode ?? ((known?.mode ?? fs.statSync(source).mode) & 0o777);
+    if (known?.digest !== undefined) {
+      node.files.push({ path: file, source, mode, hash: known.digest });
+      continue;
+    }
     const bytes = yield source;
-    const input = { path: file, source, mode, hash: createHash('sha256').update(bytes).digest('hex') };
+    const input = { path: file, source, mode, hash: digestOf(bytes) };
+    known?.record(input.hash);
     node.files.push(input);
     onFile?.(input, bytes);
   }
@@ -194,7 +326,7 @@ function* packageInputReads(owners: readonly PackageInputOwner[], options: Packa
       dependencies: Object.create(null), lookups: Object.create(null) };
     nodes.push(node);
     if (bytes && onFile) onFile({ path: 'package.json', source: fs.realpathSync.native(file), mode: fs.statSync(file).mode & 0o777,
-      hash: createHash('sha256').update(bytes).digest('hex') }, bytes);
+      hash: digestOf(bytes) }, bytes);
     if (contents !== 'none') yield* readPackageFiles(node, packageTargets(manifest), rootInputs, options);
     return index;
   }

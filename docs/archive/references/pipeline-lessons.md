@@ -268,6 +268,86 @@ held in 33 of 92 looks; asked while the child only slept, in none of 79.
 ran 43 minutes, spent 22 of them on CPU, printed nothing and then went idle with 1,767 file watches open
 and nothing of its own unmet. That is a second failure, which the old sentence had reported as the same one.
 
+**The second failure, once it could be read.** It came again under a busy machine with the sampler on
+(`APACK_STALL_PROFILE=1`): `watch-package-edit`, 197 s, reported stalled with its worker at 3:40 of CPU in
+3:40. Of that CPU 82% was file reads under one call, the watcher's `refreshInputs` reading and hashing the
+whole compiler package on the test's own thread (`readCompilerWatchTools`) — seconds on a fast disk, minutes
+on that one, and the 43 minutes of the earlier case. Two things, then. The work is real and slow there, and is
+left as it is. And the guard called it a stall: a watch in the same process reads on a timer, synchronous work
+holds the timer off, and the first reading it took — after the work — was taken as a baseline, so a test that
+had spent every minute on CPU had by its account done nothing since the watch began. A reading that counts
+from its watch's start is now measured against nothing done at the start (`countsFromWatch`).
+
+## A signature that read every byte on every pass
+
+The pack watcher signs the package trees its builds read — the compiler package, and the pack's whole dependency
+graph — to decide whether a pass has anything to build. It read every file of both to do it: the compiler package
+twice at a watcher's start, and the dependency graph twice per build with nothing kept between passes. For the
+built-in pack that is 12,371 and 36,199 files, about 650 MB. In the Linux test container that read is what a
+watcher case spent minutes in ([a stall that was a disk](#a-stall-that-was-a-disk)).
+
+The reader now keeps each file's digest under what the filesystem says of it (size, both timestamps, inode) and
+reads a file again only when one of them moved (`createPackageDigestCache`, `@apackdev/host/build/package-inputs`).
+The signature is still the content hash, value for value, which is what separates this from signing by timestamps:
+a file rewritten with the same bytes is unchanged, as it was. The trade the chain's fingerprint declined at 2.5 MB
+(`fingerprintInputs`, `packages-built.ts`) is taken here at 650 MB, and only for the watcher: a build takes its own
+bytes.
+
+Measured 2026-11-11 on the Mac (10 cores, load 9), an unchanged tree read a second time:
+
+    the compiler package                    read whole 1.11s | digests kept 0.30s
+    the built-in pack's declared dependencies   read whole 4.46s | digests kept 0.71s
+
+A watcher's first reading is still whole. It is taken before the first pass through the yielding reader (`warm`),
+which held the event loop for 55ms at most. The kept digests hold 16 MB.
+
+**When a digest is kept.** Two writes inside one tick of a filesystem's clock leave the same timestamps, so a
+digest answers only once its bytes are known to have been read after the tick of the file's last write. A file
+more than a day old was. A younger one is read a second time, two seconds later on the process's own clock, and
+that reading is kept: recently written files are read twice, once. Nothing compares the filesystem's clock with
+the process's closer than a day, so a mount whose clock stands apart keeps no stale digest.
+
+**What remained of a pass was not the parser.** A later pass was 7.7s end to end at that load, 4.4s of it the
+module-input reading. A CPU profile of that reading put under 5% of it in TypeScript's parser and about 45% in
+filesystem calls: 21% of the whole in the `realpath` the compiler file view took of every input to prove nothing
+was replaced. Most of those were for names that do not exist, a compiler's failed lookups, each a thrown error and
+a second resolution of the parent. The view now lists a directory once and answers its plain and its missing names
+from the listing (`physicalWatchPathListed`), resolving links, other spellings on a filesystem that folds case and
+names outside ASCII the long way, so the letter case a path resolves to is unchanged. That `realpath` fell from
+17.7% of the reading's samples to 5.1%, against 2% more in listings. Those are shares of one profile each, taken at
+a load of 40, not a timing.
+
+A listing is as old as the view that took it. A link created in a directory between its listing and that file's
+first read is recorded as a plain path, and the view's own recheck, which lists afresh, refuses the build as
+changed where it used to be accepted.
+
+**In the Linux test container the cost is the first touch of the bytes, not the reading.** Measured 2026-11-12
+in a fresh container (2 cores, 6 GiB, container load 1.0, the Mac at 5 with another container run beside it), each
+tree read whole twice and then with digests kept:
+
+    the compiler package (12,387 files)                 first 131.46s | again 0.58s | digests kept 0.41s
+    the built-in pack's declared dependencies (36,156)  first 524.21s | again 1.40s | digests kept 1.15s
+
+Eleven minutes to read 650 MB that the kernel had not yet read from the VM's disk, and two seconds once it had.
+So what a watcher case spent minutes in was never hashing: it was a first reading, or a reading after the
+container's memory limit had pushed those pages out. Kept digests buy little there once the pages are in memory
+(0.58s to 0.41s) and everything when they are not, but only for the watcher that already holds them, and a
+watcher's first reading is the one that is whole. A later pass end to end was 3.94s, 3.08s of it the module-input
+reading; the yielding first read held the event loop 38ms at most.
+
+**So the digests outlive the watcher.** The ones that answer are written to a file in the compiler store
+(`packageDigestsFile`, `APACK_PACKAGE_DIGESTS`), and the next watcher starts with them: its first reading of a
+tree nothing has touched asks each file's stat and reads none. In the container the runner points every process at
+one file on the checkout's volume, because a spec gives each worker a store of its own. A reader writes only the
+digests it has itself seen to be so, over whatever the file holds by then, so one that started with an older
+digest cannot put it back over a newer one. On the Mac at a load of 24, a second watcher process's yielding first
+read was 5.0s against the first's 13.3s.
+
+Not measured: that first reading in the container with nothing of the tree in memory, which is the case the file
+exists for. What it saves there is predicted, not known: the 655s above, less a walk that only stats, less the
+bytes the build goes on to read for itself (all of the compiler package, and the dependency files its compilers
+open).
+
 ## A stamp directory has one writer
 
 **The rule.** A cache of "this passed against these inputs" is only sound while one process writes it. Two

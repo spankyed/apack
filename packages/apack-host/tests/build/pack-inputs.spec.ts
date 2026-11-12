@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { packInputsHash, packInputWatchTargets } from '../../src/build/pack-inputs.ts';
+import { packInputFiles, packInputsHash, packInputWatchTargets } from '../../src/build/pack-inputs.ts';
 
 const roots: string[] = [];
 function pack(file: string, content: string): string {
@@ -31,6 +31,49 @@ describe('pack input identity', () => {
     fs.mkdirSync(path.join(root, 'src/dist'));
     fs.writeFileSync(path.join(root, 'src/dist/entry.ts'), 'authored');
     expect(packInputsHash(root)).not.toBe(before);
+  });
+
+  it('is the same after a file browser, an editor or a tool left a file of its own in any folder', () => {
+    const root = pack('entry.ts', 'source');
+    fs.mkdirSync(path.join(root, 'src'));
+    fs.writeFileSync(path.join(root, 'src/a.ts'), 'authored');
+    const before = packInputsHash(root);
+    const files = packInputFiles(root);
+
+    const left = [
+      '.DS_Store', 'Thumbs.db', 'desktop.ini', '4913', '.eslintcache', '._a.ts', '.a.ts.swp', '.a.ts.swo', 'a.ts~',
+      '.#a.ts', '#a.ts#', 'tsconfig.tsbuildinfo', 'npm-debug.log', 'npm-debug.log.1', '.nfs0000a1',
+    ];
+    for (const directory of ['', 'src']) for (const name of left) fs.writeFileSync(path.join(root, directory, name), 'left');
+    for (const directory of ['.hg', '.svn', '.jj', '.turbo', 'src/.vite']) {
+      fs.mkdirSync(path.join(root, directory), { recursive: true });
+      fs.writeFileSync(path.join(root, directory, 'entry.ts'), 'left');
+    }
+
+    expect(packInputFiles(root)).toEqual(files);
+    expect(packInputsHash(root)).toBe(before);
+  });
+
+  it('leaves out what a test run wrote at the root, and keeps a source folder of the same name', () => {
+    const root = pack('entry.ts', 'source');
+    const before = packInputsHash(root);
+    for (const directory of ['coverage', 'test-results', 'playwright-report']) {
+      fs.mkdirSync(path.join(root, directory));
+      fs.writeFileSync(path.join(root, directory, 'index.html'), 'report');
+    }
+    expect(packInputsHash(root)).toBe(before);
+
+    fs.mkdirSync(path.join(root, 'src/coverage'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'src/coverage/map.ts'), 'authored');
+    expect(packInputFiles(root)).toContain('src/coverage/map.ts');
+  });
+
+  it('keeps authored files whose names only resemble what a tool leaves', () => {
+    const root = pack('entry.ts', 'source');
+    const authored = ['swap.ts', 'notes.swpx', 'a~b.ts', '#readme.md', 'tsbuildinfo.ts', '.nfsrc.json5', 'log.npm-debug.ts', 'x._y.ts'];
+    for (const name of authored) fs.writeFileSync(path.join(root, name), 'authored');
+
+    expect(packInputFiles(root)).toEqual(['entry.ts', ...authored].sort());
   });
 
   it('tracks source symlinks and refuses directory cycles', () => {

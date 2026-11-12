@@ -6,6 +6,7 @@
 // Imports nothing outside `node:`, because `janitor.ts` runs under launchd with no npm and no workspace
 // resolution.
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -65,6 +66,11 @@ export interface VendoredState {
   head: string | undefined;
   /** Whether that checkout has uncommitted changes, so `head` does not describe it fully */
   dirty: boolean;
+  /**
+   * A digest of those changes: which files git lists as changed, what differs in the tracked ones and the bytes
+   * of the untracked. Absent when the only changes are files nobody authored (`.DS_Store`)
+   */
+  changes?: string;
 }
 
 /**
@@ -90,7 +96,7 @@ export function vendoredStates(repoRoot: string): VendoredState[] {
 }
 
 /** A checkout's HEAD and whether it is dirty, or absences when it is not a git checkout */
-function gitStateOf(checkout: string): { head: string | undefined; dirty: boolean } {
+function gitStateOf(checkout: string): { head: string | undefined; dirty: boolean; changes?: string } {
   const git = (args: readonly string[]): string | undefined => {
     try {
       return execFileSync('git', ['-C', checkout, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
@@ -98,7 +104,50 @@ function gitStateOf(checkout: string): { head: string | undefined; dirty: boolea
   };
   const head = git(['rev-parse', 'HEAD']);
   if (head === undefined) return { head: undefined, dirty: false };
-  return { head, dirty: (git(['status', '--porcelain']) ?? '') !== '' };
+  // Every untracked file by name, where the default lists a new directory as one row
+  const status = (git(['status', '--porcelain', '--untracked-files=all']) ?? '').split('\n').filter((row) => row !== '');
+  if (status.length === 0) return { head, dirty: false };
+  // What a file browser leaves in a folder it showed is no change to the checkout, and comes and goes by itself
+  const authored = status.filter((row) => path.basename(row.slice(3)) !== '.DS_Store');
+  if (authored.length === 0) return { head, dirty: true };
+  const digest = createHash('sha256').update(authored.join('\n')).update('\0').update(git(['diff', 'HEAD']) ?? '');
+  // A file git does not track yet is in no diff: its bytes are read
+  for (const row of authored) {
+    if (!row.startsWith('??')) continue;
+    try { digest.update('\0').update(fs.readFileSync(path.join(checkout, row.slice(3)))); } catch { /* gone since it was listed */ }
+  }
+  return { head, dirty: true, changes: digest.digest('hex') };
+}
+
+/**
+ * What the vendored checkouts are, where that is not what their pins name: nothing when every one sits clean on
+ * its pin, and otherwise a line for each that does not, naming the commit it is at and its uncommitted changes.
+ * A checkout's build output is not read: it is what building that commit gives, and stale output at the right
+ * commit is the linker's to refuse.
+ *
+ * **A pin stands for a checkout only while the checkout is at it.** A step keyed on the `.rev` files alone, run
+ * while a sibling sat on another commit, was recorded as if it had built the pinned one: bringing the sibling to
+ * its pin then moved no input, and the step stayed cached on what it had built against the other commit. This
+ * is the part of a step's key that says which checkout it really ran against. Empty at the pin, so a key taken
+ * here is the key CI takes, which clones each pin.
+ */
+export function vendoredOffPin(states: readonly VendoredState[]): string {
+  return states
+    .filter((state) => state.head !== undefined && (state.head !== state.pinned || state.changes !== undefined))
+    .map((state) => `vendor/${state.name} at ${state.head}${state.changes === undefined ? '' : ` with changes ${state.changes}`}`)
+    .sort().join('\n');
+}
+
+const linked = new Map<string, string>();
+/**
+ * `vendoredOffPin` of what `vendor/` links to, read once a process for each repository: a reading is three `git`
+ * runs a checkout, and every step and every suite of a run asks. A checkout that moves while a run is going is
+ * read as it was when the run first asked.
+ */
+export function linkedOffPin(repoRoot: string): string {
+  let read = linked.get(repoRoot);
+  if (read === undefined) linked.set(repoRoot, read = vendoredOffPin(vendoredStates(repoRoot)));
+  return read;
 }
 
 /** A Rust checkout and the toolchain channel its `rust-toolchain.toml` pins, if it pins one */
