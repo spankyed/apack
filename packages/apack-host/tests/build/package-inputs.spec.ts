@@ -387,3 +387,71 @@ it('digests one file through the same kept answers', () => {
   fs.writeFileSync(helper, 'export const value = 77;');
   expect(readFileDigest(helper, digests)).toBe(readFileDigest(helper));
 });
+
+it('starts the next reader with the digests the last one kept, and reads only what moved since', () => {
+  const pack = tree();
+  const owners = [{ id: 'compiler', directory: pack.root, development: true, contents: true }];
+  const file = path.join(pack.root, '.cache/digests.json');
+  const ahead = () => Date.now() + 3 * 24 * 60 * 60 * 1_000;
+  const helper = fs.realpathSync.native(path.join(pack.root, 'node_modules/helper/index.js'));
+  const compiler = fs.realpathSync.native(path.join(pack.root, 'node_modules/compiler/index.js'));
+  const first = createPackageDigestCache({ now: ahead, file });
+  const expected = readPackageInputs(owners, { digests: first });
+  expect(fs.existsSync(file)).toBe(false);
+  first.save();
+  fs.writeFileSync(helper, 'export const value = 4242;');
+  const reads = vi.spyOn(fs, 'readFileSync');
+  const second = createPackageDigestCache({ now: ahead, file });
+  const moved = readPackageInputs(owners, { digests: second });
+  expect([readsOf(reads, helper), readsOf(reads, compiler)]).toEqual([1, 0]);
+  reads.mockRestore();
+  expect(moved).toEqual(readPackageInputs(owners));
+  expect(moved.hash).not.toBe(expected.hash);
+  // Two readers that each saved: the later keeps what the earlier wrote for the files it never read
+  const other = createPackageDigestCache({ now: ahead, file });
+  pack.write('.cache/elsewhere.txt', 'read by the other reader alone');
+  readFileDigest(path.join(pack.root, '.cache/elsewhere.txt'), other);
+  second.save();
+  other.save();
+  expect(Object.keys(JSON.parse(fs.readFileSync(file, 'utf8')).entries)).toContain(path.join(pack.root, '.cache/elsewhere.txt'));
+  const third = createPackageDigestCache({ now: ahead, file });
+  const again = vi.spyOn(fs, 'readFileSync');
+  expect(readPackageInputs(owners, { digests: third })).toEqual(moved);
+  expect(readsOf(again, helper) + readsOf(again, compiler)).toBe(0);
+});
+
+it('keeps in the file only digests that answer, drops those long unasked for, and takes a file it cannot read as empty', () => {
+  const pack = tree();
+  const owners = [{ id: 'compiler', directory: pack.root, development: true, contents: true }];
+  const file = path.join(pack.root, '.cache/digests.json');
+  const helper = fs.realpathSync.native(path.join(pack.root, 'node_modules/helper/index.js'));
+  // A reader on this machine's clock: the fixture is moments old, so nothing it read answers yet
+  const young = createPackageDigestCache({ file });
+  readPackageInputs(owners, { digests: young });
+  young.save();
+  expect(fs.existsSync(file)).toBe(false);
+  let day = 3;
+  const clock = () => Date.now() + day * 24 * 60 * 60 * 1_000;
+  const kept = createPackageDigestCache({ now: clock, file });
+  const expected = readPackageInputs(owners, { digests: kept }).hash;
+  kept.save();
+  expect(Object.keys(JSON.parse(fs.readFileSync(file, 'utf8')).entries)).toContain(helper);
+  day = 40;
+  const later = createPackageDigestCache({ now: clock, file });
+  readFileDigest(helper, later);
+  later.save();
+  expect(Object.keys(JSON.parse(fs.readFileSync(file, 'utf8')).entries)).toEqual([helper]);
+  // One reader holding a digest that answers beside one that does not yet: only the first is written
+  fs.rmSync(file);
+  const compiler = fs.realpathSync.native(path.join(pack.root, 'node_modules/compiler/index.js'));
+  const mixed = createPackageDigestCache({ now: clock, file });
+  readFileDigest(helper, mixed);
+  day = 0;
+  readFileDigest(compiler, mixed);
+  mixed.save();
+  expect(Object.keys(JSON.parse(fs.readFileSync(file, 'utf8')).entries)).toEqual([helper]);
+  day = 40;
+  fs.writeFileSync(file, '{not a cache');
+  expect(readPackageInputs(owners, { digests: createPackageDigestCache({ now: clock, file }) }).hash).toBe(expected);
+  expect(fs.readdirSync(path.dirname(file))).toEqual(['digests.json']);
+});

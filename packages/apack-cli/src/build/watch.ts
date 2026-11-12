@@ -176,6 +176,7 @@ export async function startPackBuildWatcher(root: string, options: WatchOptions 
     // Close the discovery/subscription window before retaining the initial tooling inventory.
     if (!ready) tools.changed(undefined, 'rename');
     const after = refreshInputs(true);
+    tools.digests.save();
     if (frontendChanged || !observedInputsCurrent() || after.signature !== compiler.signature || packInputsHash(root) + JSON.stringify(after.authored) !== authored) {
       request('inputs changed during the build');
     }

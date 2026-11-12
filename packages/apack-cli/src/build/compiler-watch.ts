@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { readCompilerModuleInputs } from './compiler-module-inputs.ts';
 import { createPackageDigestCache, readFileDigest, readPackageInputs, readPackageInputsAsync, type PackageDigestCache } from '@apackdev/host/build/package-inputs';
 import { physicalWatchPath, relativeCompilerPath, resolveCompilerPath, type CompilerInputObservations } from '@apackdev/host/build/compiler-inputs';
-import { compilerPackageDirectory, readEsbuildOverride } from './compiler-installation.ts';
+import { compilerPackageDirectory, packageDigestsFile, readEsbuildOverride } from './compiler-installation.ts';
 import { readCompilerRuntimeInputs } from './compiler-runtime.ts';
 import { compilerEnvironmentIdentity } from './compiler-environment.ts';
 import type { BuildInputKind, BuildInputObserver } from '@apackdev/host/build/pack-inputs';
@@ -113,7 +113,7 @@ function readCompilerWatchTools(root: string, observer?: BuildInputObserver, dig
  * that does read the package trees reads only the files that moved since this watcher last did.
  */
 export function createCompilerWatchTools(root: string): CompilerWatchTools {
-  const digests = createPackageDigestCache();
+  const digests = createPackageDigestCache({ file: packageDigestsFile() });
   let cached: ReturnType<typeof readCompilerWatchTools> | undefined;
   let matches = createCompilerWatchMatcher(new Map());
   let environment: string | undefined;
@@ -124,6 +124,7 @@ export function createCompilerWatchTools(root: string): CompilerWatchTools {
         try { await readPackageInputsAsync([owner], { digests, signal }); }
         catch (error) { if (signal?.aborted) throw error; }
       }
+      digests.save();
     },
     read(observe) {
       const current = compilerEnvironmentIdentity();
