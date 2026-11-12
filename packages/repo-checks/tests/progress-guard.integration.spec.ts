@@ -42,6 +42,13 @@ const FIXTURES: Record<string, string> = {
   'churns.spec.ts': `import { it } from 'vitest';
     function spinForAWhile() { ${burn(2_500)} }
     it('works and then waits', async () => { spinForAWhile(); await new Promise(() => {}); });`,
+  // Works without once yielding for longer than the idle window: the guard's timer cannot run until it is done
+  'blocks.spec.ts': `import { it } from 'vitest';
+    it('works synchronously for longer than the idle window', async () => {
+      ${burn(IDLE_MS + 5_000)}
+      // And goes on working after, in turns: the reading the guard was kept from taking is taken while it still runs
+      for (let i = 0; i < 8; i++) { ${burn(300)} await new Promise((r) => setTimeout(r, 300)); }
+    });`,
   // Longer on the clock than vitest's own 5s default, working throughout: what a busy machine does to a test
   'slow.spec.ts': `import { it } from 'vitest';
     it('is slow and working', async () => {
@@ -114,7 +121,7 @@ const outcome = (report: Report, file: string, test: string) =>
 describe('with the CPU ceiling on', () => {
   let report: Report;
   beforeAll(async () => {
-    report = await runFixtures('ceiling', ['awaits.spec.ts', 'faked.spec.ts', 'hook.spec.ts', 'child.spec.ts', 'unmet.spec.ts', 'slow.spec.ts', 'spin.spec.ts', 'concurrent.spec.ts']);
+    report = await runFixtures('ceiling', ['awaits.spec.ts', 'faked.spec.ts', 'hook.spec.ts', 'child.spec.ts', 'unmet.spec.ts', 'slow.spec.ts', 'spin.spec.ts', 'concurrent.spec.ts', 'blocks.spec.ts']);
   });
 
   it('fails a test that awaits forever, as itself, and runs the next one', () => {
@@ -153,6 +160,10 @@ describe('with the CPU ceiling on', () => {
 
   it('says so when a stalled test had no wait of its own', () => {
     expect(outcome(report, 'awaits.spec.ts', 'awaits forever')!.failureMessages.join('\n')).toContain('No wait of its own was unmet');
+  });
+
+  it('leaves a test alone that worked the whole time and never let the guard read it', () => {
+    expect(outcome(report, 'blocks.spec.ts', 'works synchronously for longer than the idle window')).toMatchObject({ status: 'passed' });
   });
 
   it('leaves a test alone that is slow on the clock and working', () => {

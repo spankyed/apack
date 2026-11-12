@@ -98,7 +98,9 @@ function judgeAfresh(): void {
   const work = workerWork();
   const watch = watchWork({
     // `watchWork` loosens the ceiling under APACK_CEILING=loose, as it does for every bound
-    work, idleMs, clock: realClock, ceilingMs: alone?.budgetMs,
+    // The worker's own CPU is counted from here (`workerWork`), and a test may hold this timer off for as long as
+    // it works synchronously: its first reading is work, not a baseline
+    work, idleMs, clock: realClock, ceilingMs: alone?.budgetMs, countsFromWatch: true,
     onRefused: (refusal) => {
       const together = running.length > 1 ? `, with ${running.length - 1} other test${running.length > 2 ? 's' : ''} running beside it` : '';
       const why = refusal.kind === 'stalled'

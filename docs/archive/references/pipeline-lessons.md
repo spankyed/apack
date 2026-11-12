@@ -268,6 +268,16 @@ held in 33 of 92 looks; asked while the child only slept, in none of 79.
 ran 43 minutes, spent 22 of them on CPU, printed nothing and then went idle with 1,767 file watches open
 and nothing of its own unmet. That is a second failure, which the old sentence had reported as the same one.
 
+**The second failure, once it could be read.** It came again under a busy machine with the sampler on
+(`APACK_STALL_PROFILE=1`): `watch-package-edit`, 197 s, reported stalled with its worker at 3:40 of CPU in
+3:40. Of that CPU 82% was file reads under one call, the watcher's `refreshInputs` reading and hashing the
+whole compiler package on the test's own thread (`readCompilerWatchTools`) — seconds on a fast disk, minutes
+on that one, and the 43 minutes of the earlier case. Two things, then. The work is real and slow there, and is
+left as it is. And the guard called it a stall: a watch in the same process reads on a timer, synchronous work
+holds the timer off, and the first reading it took — after the work — was taken as a baseline, so a test that
+had spent every minute on CPU had by its account done nothing since the watch began. A reading that counts
+from its watch's start is now measured against nothing done at the start (`countsFromWatch`).
+
 ## A stamp directory has one writer
 
 **The rule.** A cache of "this passed against these inputs" is only sound while one process writes it. Two

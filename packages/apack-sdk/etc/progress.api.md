@@ -185,6 +185,7 @@ export function watchWork(input: {
     readonly ceilingMs?: number;
     readonly fallbackMs?: number;
     readonly onRefused: (refusal: Refusal) => void;
+    readonly countsFromWatch?: boolean;
     readonly watchesOutput?: boolean;
     readonly clock?: WatchClock;
 }): Watch;
