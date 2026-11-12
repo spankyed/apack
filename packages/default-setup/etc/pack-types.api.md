@@ -5715,6 +5715,7 @@ declare namespace __FeatureSettings_Code {
         };
         restoreTerminals: boolean;
         terminalClipboardWrite: boolean;
+        copyOnSelect: boolean;
         defaultBaseDirectory: string | null;
         baseDirectory: string | null;
         enableShellIntegration: boolean;

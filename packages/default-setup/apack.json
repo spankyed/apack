@@ -618,6 +618,9 @@
             "terminalClipboardWrite": {
               "type": "boolean"
             },
+            "copyOnSelect": {
+              "type": "boolean"
+            },
             "defaultBaseDirectory": {
               "type": [
                 "string",
@@ -731,6 +734,7 @@
             "hotkeys",
             "restoreTerminals",
             "terminalClipboardWrite",
+            "copyOnSelect",
             "defaultBaseDirectory",
             "baseDirectory",
             "enableShellIntegration",
@@ -810,6 +814,7 @@
           },
           "restoreTerminals": true,
           "terminalClipboardWrite": true,
+          "copyOnSelect": false,
           "defaultBaseDirectory": null,
           "baseDirectory": null,
           "enableShellIntegration": true,

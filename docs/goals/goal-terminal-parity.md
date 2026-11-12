@@ -55,8 +55,21 @@ Out:
   - `apack-terminal-worktrees.noindex/terminal-parity` on `session/terminal-parity-view`: the view and the broker. Changes to it are committed there and pinned from the monorepo only after they land.
   - This document: `monorepo-worktrees.noindex/native-stall` on `session/terminal-parity-goal`, PR #444.
 - Pin: the monorepo's `master` pins the broker at `efe5d84`, which is 24 commits behind the broker's `master`. Bump `vendor/apack-terminal.rev` in the same change that lands the first view commit.
-- Next deliverable: Phase 0. It has no code dependencies.
-- Proven: the source findings above. Nothing run end to end yet.
+- Phase 0 is done. Its results are in [the evidence record](../references/evidence/terminal-parity.md): kitty
+  keys and the cursor key into a real pty pass, the view's wheel and auto-scroll tests pass, and OSC 52 reaches
+  the broker's client. The app side of OSC 52 is Phase 1's defect, not a Phase 0 result.
+- Phase 1 is done, with its results in the evidence record: the main process writes the clipboard, the window no
+  longer checks focus, and a read request is answered nothing. Its limits (an 8 MiB refusal shown to nobody, and
+  one write per window) are stated there.
+- Phase 2 is done in code and checks: [the evidence record](../references/evidence/terminal-parity.md#phase-2--copy-on-select-2026-11-12).
+  The broker pull request (spankyed/apack-terminal#16) is open and green, but its merge was denied by the permission
+  system, so the app pins its branch commit for now. Repin to the merge commit once it lands.
+- Phase 3 is done in code and checks: [the evidence record](../references/evidence/terminal-parity.md#phase-3--minimum-contrast-ratio-2026-11-12). The app pins the view commit that carries it.
+- Phase 4 is done: [the evidence record](../references/evidence/terminal-parity.md#phase-4--the-canvas-painter-under-heavy-output-and-the-gpu-decision-2026-11-12). Neither machine's p95 frame exceeds 16 ms, so the GPU renderer (D5) is not built.
+- Phase 5 is done: [the evidence record](../references/evidence/terminal-parity.md#phase-5--rectangular-selection-2026-11-12). The app pins the view commit that carries it.
+- Phase 6 is done: [the evidence record](../references/evidence/terminal-parity.md#phase-6--the-accessible-document-2026-11-12). The VoiceOver checklist is written there; running it is a follow-up, not a condition.
+- Phase 7 is done: [the evidence record](../references/evidence/terminal-parity.md#phase-7--command-blocks-2026-11-12). Every phase's done-when condition is met in code and checks; the one open step is the merge of the broker pull request (spankyed/apack-terminal#16), which needs the user's authority.
+- Next deliverable: none in this goal. Merge the broker pull request, repin the app to its merge commit, then merge the app pull request.
 - Unresolved: none. Nothing in this goal depends on a manual step; see D6.
 
 ## Decisions
