@@ -554,4 +554,6 @@ export interface CommitFailure {
   trust?: TrustRequest
   /** The repository git will not read because another user owns it, as git named it */
   ownership?: { directory: string }
+  /** A hook of the repository's that refused the command: its name, the code it exited with and what it printed */
+  hook?: { name: string; exitCode: number; output: string }
 }

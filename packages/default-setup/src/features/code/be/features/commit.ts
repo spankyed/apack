@@ -5,7 +5,7 @@ import { broadcastToSurface, sendToSystem } from '#generated/events.ts';
 import { defineHandlers } from '@apackdev/sdk/framework';
 import { assign, setup, enqueueActions, fromCallback, type AnyActorRef } from 'xstate'
 
-import { GitError, GitUnusableError, NOTHING_CHANGED, StashConflictError, UnsafeOwnershipError, UntrustedError, changedAnything } from 'apack-git'
+import { GitError, GitUnusableError, HookRefusedError, NOTHING_CHANGED, StashConflictError, UnsafeOwnershipError, UntrustedError, changedAnything } from 'apack-git'
 import { openGitRepository, trustRepository, type AppGitRepository } from '../services/app-git-repository.ts'
 import { setUpGitSignIn } from '../services/gh-cli.ts'
 import { isHostName } from '../services/sign-in.ts'
@@ -109,6 +109,8 @@ function failureOf(error: unknown): CommitFailure {
     ...(error instanceof UntrustedError && error.repository && { trust: { repository: error.repository, asks: error.asks } }),
     // Refused by git for who owns the repository: the path it named, for the panel to offer to trust
     ...(error instanceof UnsafeOwnershipError && { ownership: { directory: error.directory } }),
+    // A hook of the repository's refused it: which, how it exited, and what it printed, said as the hook's
+    ...(error instanceof HookRefusedError && { message: `The ${error.hook} hook refused it (exit code ${error.exitCode}).`, hook: { name: error.hook, exitCode: error.exitCode, output: error.output.trim() } }),
     // No git to run, or one that cannot be used: what to do about it, after what the engine said
     ...(error instanceof GitUnusableError && { message: `${message} ${WHAT_TO_DO[error.unusable.code]}` }),
   }
@@ -565,6 +567,11 @@ export const commitSystem = setup({
           return answerUndoable(context.gitRepository!, reply)
         })
       }).catch((error: any) => {
+        // A hook's refusal is the hook's, with what it printed
+        if (error instanceof HookRefusedError) {
+          answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) })
+          return
+        }
         let errorMessage = error.message
         if (error.message.includes('nothing to commit')) {
           errorMessage = 'No changes to commit. Stage your changes first.'

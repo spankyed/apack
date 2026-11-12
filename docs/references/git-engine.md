@@ -160,6 +160,13 @@ buttons with the reason in its own words.
 `git merge-tree --write-tree`, which moves nothing; before git 2.38 it is `unknown`. The status of a branch behind its
 upstream carries a pull's preview (`pullPreview`), and the sync button says it before the click.
 
+## A hook's refusal
+
+Every git the engine starts writes git's own event stream (`GIT_TRACE2_EVENT`) beside it, which names each hook git
+ran and the code it exited with. A command a hook refused throws `HookRefusedError` (code `hook-refused`) with the
+hook's name, its exit code and what it printed; the commit panel says which hook refused and shows its output under
+that, rather than git's words around it.
+
 ## Copies of the working tree
 
 **A copy is kept outside the repository, and nothing of the repository's is written to keep it.** Each repository
