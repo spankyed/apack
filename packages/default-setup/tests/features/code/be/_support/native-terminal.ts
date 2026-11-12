@@ -37,6 +37,9 @@ export function nativeSession(listeners: NativeTerminalListeners, parts: NativeS
   const ends = async () => { listeners.onExit(0, null) }
   return {
     id: 'native-1',
+    target: null,
+    recorded: false,
+    restored: false,
     pid: parts.pid ?? 0,
     scrollback: 1000,
     write: parts.write ?? vi.fn(async () => {}),
@@ -48,6 +51,9 @@ export function nativeSession(listeners: NativeTerminalListeners, parts: NativeS
     pause: parts.pause ?? vi.fn(async () => {}),
     resume: parts.resume ?? vi.fn(async () => {}),
     signal: parts.signal ?? vi.fn(ends),
+    commands: vi.fn(async () => []),
+    commandOutput: vi.fn(async () => null),
+    keep: vi.fn(async () => {}),
     terminate: vi.fn(ends),
   }
 }
