@@ -815,6 +815,10 @@ interface CommitFailure {
     signIn?: SignInHelp;
     /** What the repository would have git run, when the command was not run because the repository is not trusted */
     trust?: TrustRequest;
+    /** The repository git will not read because another user owns it, as git named it */
+    ownership?: {
+        directory: string;
+    };
 }
 
 interface CommitLogEntry {
@@ -1581,7 +1585,7 @@ interface FolderItem {
 }
 
 /** Why a git command failed, where what it printed says: the git engine's codes, as the contract names them */
-declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository", "untrusted"];
+declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository", "unsafe-ownership", "untrusted"];
 
 interface GhPRComment {
     id: string;
@@ -1846,6 +1850,10 @@ type IncomingCommitEvents = {
  | {
     type: 'commit.TRUST_REPOSITORY';
     repository: string;
+}
+/** The user trusts the repository git refused for who owns it: added to their safe.directory */
+ | {
+    type: 'commit.TRUST_OWNERSHIP';
 } | {
     type: 'commit.GET_ALL_BRANCHES';
 } | {
@@ -3211,6 +3219,11 @@ type OutgoingCommitEvents =
     type: 'commit.REPOSITORY_TRUSTED';
     data: {
         repository: string;
+    };
+} | {
+    type: 'commit.OWNERSHIP_TRUSTED';
+    data: {
+        directory: string;
     };
 } | {
     type: 'commit.ERROR_RECEIVED';

@@ -5,7 +5,7 @@ import { broadcastToSurface, sendToSystem } from '#generated/events.ts';
 import { defineHandlers } from '@apackdev/sdk/framework';
 import { assign, setup, enqueueActions, fromCallback, type AnyActorRef } from 'xstate'
 
-import { GitError, NOTHING_CHANGED, StashConflictError, UntrustedError, changedAnything } from 'apack-git'
+import { GitError, NOTHING_CHANGED, StashConflictError, UnsafeOwnershipError, UntrustedError, changedAnything } from 'apack-git'
 import { openGitRepository, trustRepository, type AppGitRepository } from '../services/app-git-repository.ts'
 import { setUpGitSignIn } from '../services/gh-cli.ts'
 import { isHostName } from '../services/sign-in.ts'
@@ -80,6 +80,8 @@ function failureOf(error: unknown): CommitFailure {
     ...(error instanceof GitError && error.code && { code: error.code }),
     // Refused before git was run: what the repository would have had it run, for the panel to ask about
     ...(error instanceof UntrustedError && error.repository && { trust: { repository: error.repository, asks: error.asks } }),
+    // Refused by git for who owns the repository: the path it named, for the panel to offer to trust
+    ...(error instanceof UnsafeOwnershipError && { ownership: { directory: error.directory } }),
   }
 }
 
@@ -681,6 +683,30 @@ export const commitSystem = setup({
     },
 
     /**
+     * Adds the repository the panel is over to the user's safe.directory, when git refuses it for who owns it.
+     * The path is the one git names now, asked again here: a window says only that the user trusts it, and the
+     * user's global git configuration is written for no path a window sends
+     */
+    trustOwnership: ({ context, self, reply }) => {
+      if (!requireGitRepository(context, reply)) return
+      const repository = context.gitRepository
+
+      repository.isGitRepository().then(
+        () => { throw new Error('Git already reads this repository') },
+        async (error: unknown) => {
+          if (!(error instanceof UnsafeOwnershipError)) throw error
+          await repository.trustOwnership(error.directory)
+          answer(reply, { type: 'commit.OWNERSHIP_TRUSTED', data: { directory: error.directory } })
+          // Nothing was read while git refused it: its status, and its watches
+          self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+          context.code?.send({ type: 'CHECK_FOR_EXTERNAL_CHANGES' })
+        },
+      ).catch((error: unknown) => {
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) })
+      })
+    },
+
+    /**
      * Remembers that the user trusts this repository, after which git runs there as it does anywhere. Only the
      * repository the panel is over: the path arrives from a window, and trust is not handed out by name
      */
@@ -1056,6 +1082,9 @@ export const commitSystem = setup({
         },
         'commit.RESTORE_DISCARDED': {
           actions: 'restoreDiscarded'
+        },
+        'commit.TRUST_OWNERSHIP': {
+          actions: 'trustOwnership'
         },
         'commit.TRUST_REPOSITORY': {
           actions: 'trustRepository'

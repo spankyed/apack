@@ -444,7 +444,7 @@ export interface WatcherHandle { readonly [gitHandle]: 'watcher' }
 /** Why a git command failed, where what it printed says: the git engine's codes, as the contract names them */
 export const GIT_ERROR_CODES = [
   'locked', 'authentication', 'permission', 'remote-unreachable', 'non-fast-forward', 'diverged', 'conflict', 'local-changes', 'unknown-ref', 'not-a-repository',
-  'untrusted',
+  'unsafe-ownership', 'untrusted',
 ] as const
 export type GitErrorCode = (typeof GIT_ERROR_CODES)[number]
 
@@ -473,4 +473,6 @@ export interface CommitFailure {
   signIn?: SignInHelp
   /** What the repository would have git run, when the command was not run because the repository is not trusted */
   trust?: TrustRequest
+  /** The repository git will not read because another user owns it, as git named it */
+  ownership?: { directory: string }
 }
