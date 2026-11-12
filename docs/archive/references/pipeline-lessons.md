@@ -278,6 +278,53 @@ holds the timer off, and the first reading it took — after the work — was ta
 had spent every minute on CPU had by its account done nothing since the watch began. A reading that counts
 from its watch's start is now measured against nothing done at the start (`countsFromWatch`).
 
+## A signature that read every byte on every pass
+
+The pack watcher signs the package trees its builds read — the compiler package, and the pack's whole dependency
+graph — to decide whether a pass has anything to build. It read every file of both to do it: the compiler package
+twice at a watcher's start, and the dependency graph twice per build with nothing kept between passes. For the
+built-in pack that is 12,371 and 36,199 files, about 650 MB. In the Linux test container that read is what a
+watcher case spent minutes in ([a stall that was a disk](#a-stall-that-was-a-disk)).
+
+The reader now keeps each file's digest under what the filesystem says of it (size, both timestamps, inode) and
+reads a file again only when one of them moved (`createPackageDigestCache`, `@apackdev/host/build/package-inputs`).
+The signature is still the content hash, value for value, which is what separates this from signing by timestamps:
+a file rewritten with the same bytes is unchanged, as it was. The trade the chain's fingerprint declined at 2.5 MB
+(`fingerprintInputs`, `packages-built.ts`) is taken here at 650 MB, and only for the watcher: a build takes its own
+bytes.
+
+Measured 2026-11-11 on the Mac (10 cores, load 9), an unchanged tree read a second time:
+
+    the compiler package                    read whole 1.11s | digests kept 0.30s
+    the built-in pack's declared dependencies   read whole 4.46s | digests kept 0.71s
+
+A watcher's first reading is still whole. It is taken before the first pass through the yielding reader (`warm`),
+which held the event loop for 55ms at most. The kept digests hold 16 MB.
+
+**When a digest is kept.** Two writes inside one tick of a filesystem's clock leave the same timestamps, so a
+digest answers only once its bytes are known to have been read after the tick of the file's last write. A file
+more than a day old was. A younger one is read a second time, two seconds later on the process's own clock, and
+that reading is kept: recently written files are read twice, once. Nothing compares the filesystem's clock with
+the process's closer than a day, so a mount whose clock stands apart keeps no stale digest.
+
+**What remained of a pass was not the parser.** A later pass was 7.7s end to end at that load, 4.4s of it the
+module-input reading. A CPU profile of that reading put under 5% of it in TypeScript's parser and about 45% in
+filesystem calls: 21% of the whole in the `realpath` the compiler file view took of every input to prove nothing
+was replaced. Most of those were for names that do not exist, a compiler's failed lookups, each a thrown error and
+a second resolution of the parent. The view now lists a directory once and answers its plain and its missing names
+from the listing (`physicalWatchPathListed`), resolving links, other spellings on a filesystem that folds case and
+names outside ASCII the long way, so the letter case a path resolves to is unchanged. That `realpath` fell from
+17.7% of the reading's samples to 5.1%, against 2% more in listings. Those are shares of one profile each, taken at
+a load of 40, not a timing.
+
+A listing is as old as the view that took it. A link created in a directory between its listing and that file's
+first read is recorded as a plain path, and the view's own recheck, which lists afresh, refuses the build as
+changed where it used to be accepted.
+
+**Not measured.** None of this was timed in the Linux test container, where the whole read cost minutes, so what
+a watcher's first reading costs there with digests kept is unknown, and with it whether digests kept on disk
+across watchers would pay.
+
 ## A stamp directory has one writer
 
 **The rule.** A cache of "this passed against these inputs" is only sound while one process writes it. Two

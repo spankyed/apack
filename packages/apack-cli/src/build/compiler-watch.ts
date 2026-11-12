@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { readCompilerModuleInputs } from './compiler-module-inputs.ts';
-import { readPackageInputs } from '@apackdev/host/build/package-inputs';
+import { createPackageDigestCache, readFileDigest, readPackageInputs, readPackageInputsAsync, type PackageDigestCache } from '@apackdev/host/build/package-inputs';
 import { physicalWatchPath, relativeCompilerPath, resolveCompilerPath, type CompilerInputObservations } from '@apackdev/host/build/compiler-inputs';
 import { compilerPackageDirectory, readEsbuildOverride } from './compiler-installation.ts';
 import { readCompilerRuntimeInputs } from './compiler-runtime.ts';
@@ -75,15 +75,22 @@ function isDirectory(file: string): boolean {
 interface CompilerWatchTools {
   read(observe: BuildInputObserver): { paths: CompilerWatchPaths; signature: string };
   changed(file: string | undefined, event: string): void;
+  /** What this watcher has already read of the package trees every pass signs again. */
+  readonly digests: PackageDigestCache;
+  /**
+   * Reads those trees once without holding the event loop, so the first pass finds their digests kept. It decides
+   * nothing: a tree it cannot read is left for that pass to refuse.
+   */
+  warm(signal?: AbortSignal): Promise<void>;
 }
 
-function readCompilerWatchTools(root: string, observer?: BuildInputObserver) {
+function readCompilerWatchTools(root: string, observer?: BuildInputObserver, digests?: PackageDigestCache) {
   const paths = new Map<string, BuildInputKind>();
   const observe: BuildInputObserver = (file, kind) => {
     addPath(paths, path.resolve(file), kind);
     observer?.(file, kind);
   };
-  const tools = readPackageInputs([{ id: 'compiler', directory: compilerPackageDirectory(), contents: true }], { observe }).hash;
+  const tools = readPackageInputs([{ id: 'compiler', directory: compilerPackageDirectory(), contents: true }], { observe, digests }).hash;
   observe(process.execPath, 'file');
   const runtime = readCompilerRuntimeInputs(process.execPath, !!process.versions.electron, file => observe(file.source, 'file'), observe);
   for (const directory of runtime.directories) observe(directory, 'entries');
@@ -101,16 +108,27 @@ function readCompilerWatchTools(root: string, observer?: BuildInputObserver) {
   return { paths, signature: tooling.digest('hex') };
 }
 
-/** Subscription discovery is reusable until a tooling event; builds independently verify compiler bytes. */
+/**
+ * Subscription discovery is reusable until a tooling event; builds independently verify compiler bytes. A pass
+ * that does read the package trees reads only the files that moved since this watcher last did.
+ */
 export function createCompilerWatchTools(root: string): CompilerWatchTools {
+  const digests = createPackageDigestCache();
   let cached: ReturnType<typeof readCompilerWatchTools> | undefined;
   let matches = createCompilerWatchMatcher(new Map());
   let environment: string | undefined;
   return {
+    digests,
+    async warm(signal) {
+      for (const owner of [{ id: 'compiler', directory: compilerPackageDirectory(), contents: true }, { id: 'pack', directory: root, development: true }]) {
+        try { await readPackageInputsAsync([owner], { digests, signal }); }
+        catch (error) { if (signal?.aborted) throw error; }
+      }
+    },
     read(observe) {
       const current = compilerEnvironmentIdentity();
       if (!cached || environment !== current) {
-        cached = readCompilerWatchTools(root, observe);
+        cached = readCompilerWatchTools(root, observe, digests);
         const physical = new Map<string, string>();
         for (const [file, kind] of cached.paths) addPath(cached.paths, physicalWatchPath(file, physical), kind);
         matches = createCompilerWatchMatcher(cached.paths);
@@ -153,7 +171,7 @@ export function compilerWatchPaths(root: string, tools?: CompilerWatchTools, obs
     for (const [file, kind] of tooling.paths) addPath(paths, file, kind);
     const modules = readCompilerModuleInputs(root, observe);
     try {
-      const packages = readPackageInputs([{ id: 'pack', directory: root, development: true }], { discovered: modules.packageDirectories, observe }).hash;
+      const packages = readPackageInputs([{ id: 'pack', directory: root, development: true }], { discovered: modules.packageDirectories, observe, digests: tools?.digests }).hash;
       return { paths, staticPaths, complete: true, signature: `valid:${modules.hash}:${packages}:${tooling.signature}` };
     } finally { modules.dispose(); }
   } catch {
@@ -162,7 +180,7 @@ export function compilerWatchPaths(root: string, tools?: CompilerWatchTools, obs
     for (const [file, kind] of [...paths].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) {
       hash.update(JSON.stringify([file, kind]));
       if (kind !== 'file') continue;
-      try { hash.update(fs.readFileSync(file)); }
+      try { hash.update(readFileDigest(file, tools?.digests)); }
       catch (error) { hash.update(String((error as NodeJS.ErrnoException).code)); }
     }
     return { paths, staticPaths, complete: false, signature: `invalid:${hash.digest('hex')}` };

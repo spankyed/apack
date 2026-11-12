@@ -136,6 +136,7 @@ export async function startPackBuildWatcher(root: string, options: WatchOptions 
     // First, so the signature below already includes what this rewrites and the build isn't followed by a second
     await builder.ensurePackages();
     signal.throwIfAborted();
+    if (!ready) await tools.warm(signal);
     const compiler = refreshInputs();
     const authored = packInputsHash(root) + JSON.stringify(compiler.authored);
     const beforeFrontend = frontend.snapshot();
