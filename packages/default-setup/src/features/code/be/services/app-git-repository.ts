@@ -12,6 +12,7 @@ import {
 import type { RepositoryHandle, WatcherHandle } from '../types.ts'
 import { featureSettings } from '#generated/settings.ts'
 import { agentChildEnvironment } from './shell-environment.ts'
+import { resolveGitPath } from '../utils/resolve-cli.ts'
 import { signInHelpFor, type SignInHelp } from './sign-in.ts'
 
 const logger = createLogger('git')
@@ -356,7 +357,9 @@ export class AppGitRepository extends GitRepository {
 }
 
 /** The repository of a working directory, as this app runs it */
-export const openGitRepository = (workingDirectory: string): AppGitRepository => new AppGitRepository(workingDirectory)
+/** A working directory's repository, run with the git the user set or the first found (`resolveGitPath`) */
+export const openGitRepository = (workingDirectory: string): AppGitRepository =>
+  new AppGitRepository(workingDirectory, { ...APP_TIES, git: resolveGitPath() })
 
 /** The watcher of a working directory's repository, logging where this app logs */
 export const openGitWatcher = (workingDirectory: string): GitWatcherService =>
