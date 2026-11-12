@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
-import { GitRepository } from '../../../../../src/features/code/be/git/index.ts';
+import { GitRepository, runUnbounded } from '../../../../../src/features/code/be/git/index.ts';
 
 const directories: string[] = [];
 afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true }); });
@@ -221,6 +221,35 @@ it('reuses a snapshot only while a watcher reports the checkout, and reads again
   expect(await paths(), 'the watcher has reported nothing').toEqual(['unseen.txt']);
   repo.markSnapshotStale();
   expect(await paths()).toEqual(['later.txt', 'unseen.txt']);
+});
+
+// A read takes what was noted when it begins and holds the new picture only when it ends: between the two the
+// held picture is the one from before, with nothing left noted against it
+it('answers a read asked while another is under way with what that one finds, not with the picture before it', async () => {
+  const { root } = await repository();
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  let holding = false;
+  // Git runs as it does, and its answer to a status is kept back while `holding`
+  const repo = new GitRepository(root, { run: (file, args, options) => {
+    const running = runUnbounded(file, args, options);
+    if (!holding || !args.includes('status')) return running;
+    return Object.assign(running.then(async (answer) => { await held; return answer; }), { child: running.child });
+  } });
+  repo.setWatched(true);
+  expect((await repo.readSnapshot()).files).toEqual([]);
+
+  write(root, 'new.txt', 'new\n');
+  repo.noteChanged(null);
+  holding = true;
+  const check = repo.refreshSnapshot('noted');
+  // The check's read has begun, and has not answered
+  await new Promise((turn) => { setImmediate(turn); });
+  const asked = repo.readSnapshot();
+  release();
+
+  expect((await asked).files.map(file => file.path)).toEqual(['new.txt']);
+  expect(await check).toMatchObject({ status: true });
 });
 
 it('lists no untracked file for a user who has told git to show none', async () => {

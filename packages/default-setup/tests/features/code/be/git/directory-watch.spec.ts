@@ -85,16 +85,20 @@ function tree(...paths: string[]) {
 function directoryWatches(root: string) {
   const open = new Map<string, { listener: (eventType: string, filename: string | null) => void; fail: (error: Error) => void }>();
   const refused = new Map<string, string>();
+  /** Every watch opened, in order, by the directory it was opened on */
+  const opened: string[] = [];
   const watch: WatchDirectory = (directory, _options, listener) => {
     const relative = path.relative(root, directory);
     const code = refused.get(relative);
     if (code) throw Object.assign(new Error(`${code}: watch '${directory}'`), { code });
     const entry = { listener, fail: (_error: Error) => {} };
     open.set(relative, entry);
-    return { on: (_event, onError) => { entry.fail = onError; }, close: () => { open.delete(relative); } };
+    opened.push(relative);
+    // A watch closed after another was opened on the same path closes only itself
+    return { on: (_event, onError) => { entry.fail = onError; }, close: () => { if (open.get(relative) === entry) open.delete(relative); } };
   };
   return {
-    watch, refused,
+    watch, refused, opened,
     watched: () => [...open.keys()].sort(),
     reports: (directory: string, eventType: 'rename' | 'change', filename: string | null) => open.get(directory)!.listener(eventType, filename),
     fails: (directory: string, error: Error) => open.get(directory)!.fail(error),
@@ -157,6 +161,50 @@ it('lets go of the watches on a directory that is gone, and on everything that w
 
   await eventually(() => expect(platform.watched()).toEqual(['', 'docs']));
   expect(calls).toEqual([{ error: null, changes: ['src'] }]);
+});
+
+// `rm -rf dist && mkdir dist`: by the time either event is looked into, a directory is there, and it is not
+// the one the watch is on. The platform reports nothing of the new one to the old one's watch
+it('watches a directory deleted and made again at once in place of the one that was there', async () => {
+  const { root, make, remove } = tree('dist/old/a.js', 'src/');
+  const platform = directoryWatches(root);
+  const { calls, onChanges } = told();
+  await perDirectorySubscriber(platform.watch)(root, onChanges, { ignore: [] });
+
+  remove('dist');
+  make('dist/fresh/b.js');
+  platform.reports('', 'rename', 'dist');
+  platform.reports('', 'rename', 'dist');
+
+  await eventually(() => expect(platform.watched()).toEqual(['', 'dist', path.join('dist', 'fresh'), 'src']));
+  expect(platform.opened.filter(directory => directory === 'dist'), 'a second watch, on the directory there now').toHaveLength(2);
+  // Reported again once the new one is watched, for what was made in it before then
+  await eventually(() => expect(calls.filter(call => call.changes[0] === 'dist')).toHaveLength(3));
+});
+
+it('leaves a directory alone that is still the one its watch is on', async () => {
+  const { root } = tree('src/deep/');
+  const platform = directoryWatches(root);
+  const { calls, onChanges } = told();
+  await perDirectorySubscriber(platform.watch)(root, onChanges, { ignore: [] });
+
+  // A directory's own entry is reported when something in it is made or deleted
+  platform.reports('', 'rename', 'src');
+
+  await eventually(() => expect(calls).toEqual([{ error: null, changes: ['src'] }]));
+  expect(platform.opened).toEqual(['', 'src', path.join('src', 'deep')]);
+});
+
+it('lets go of a directory\'s watches when a file is found where it was', async () => {
+  const { root, make, remove } = tree('out/deep/');
+  const platform = directoryWatches(root);
+  await perDirectorySubscriber(platform.watch)(root, () => {}, { ignore: [] });
+
+  remove('out');
+  make('out');
+  platform.reports('', 'rename', 'out');
+
+  await eventually(() => expect(platform.watched()).toEqual(['']));
 });
 
 // Nothing reports on a directory made again where the watched one was
