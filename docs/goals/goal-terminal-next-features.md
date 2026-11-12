@@ -1,6 +1,6 @@
 # Goal: the next terminal features
 
-**Status: planned.** Start only after [the terminal parity goal](../archive/goals/goal-terminal-parity.md) is closed
+**Status: in progress.** Phase 0 is done; see [the evidence record](../references/evidence/terminal-next-features.md). Start only after [the terminal parity goal](../archive/goals/goal-terminal-parity.md) is closed
 (it is closed on `master` as of 2026-11-12; its strict-chain run is the last check on it).
 Owner: the terminal view and broker (`vendor/apack-terminal`) and the Code surface
 (`packages/default-setup/src/features/code`).
@@ -199,7 +199,7 @@ condition before proceeding, and record the outcome.
 - **D4 — OSC 8 links open only `http`, `https` and `mailto` by default.** Any other scheme, and every `file://` link,
   asks for confirmation through the main process. A `file://` link without a host is refused outright. *Why:* ghostty
   1.4 shows the crafted-link risk; a confirmation is cheap and the refusal is exact.
-- **D5 — Synchronized output has a timeout of 150 ms.** When a program sets mode 2026 and does not reset it within
+- **D5 — Synchronized output has a timeout of 150 ms.** *Revised in Phase 0:* the broker already owns the hold and its one-second limit (`src/holds.rs`, `HOLD_LIMIT`), and that limit is tested. The view adds no second clock. Phase 1 measures the limit and records whether it stays at one second. The original text follows. When a program sets mode 2026 and does not reset it within
   150 ms of its last write, the view resumes painting. *Why:* the specification gives no value, and says a too-short
   timeout is no worse than none. 150 ms is long enough that a slow program rarely flickers and short enough that a
   stuck one is not visible for long. Phase 1 re-decides this from a
