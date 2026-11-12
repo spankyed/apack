@@ -443,3 +443,88 @@ a terminal program printed or declared. Nothing is pushed.
   - A drop on a `wsl.exe` terminal is refused, although a WSL shell could take Windows paths. This is a deliberate refusal,
     not a tested behaviour of WSL.
   - The Windows (`bash.exe`) path is covered only by the family mapping; no Git Bash run was done.
+
+### Phase 6 — scrollback search (2026-11-12)
+
+**Commits.** Broker branch `session/next-features-broker` in the worktree: `85dc7be` (broker, with `node/view-vectors.json`)
+and `f9fa7eb` (view). App, master: `8d08e45ca1` (code); this section is the commit after it. Nothing pushed or
+merged, and `vendor/apack-terminal.rev` is not moved, since the goal pins only after the broker lands on its `master`.
+
+**Audit, before any change.** Where a search runs matters for the cap: the view's request (`ToBroker::Search`,
+`src/main.rs:773`) goes to `session.find` (`src/session.rs:883`), then to the ghostty core's `find` (`src/vt/reads.rs:214`,
+ceiling `SEARCH_MATCHES = 2_000` at `reads.rs:22`). `Screen::search` (`src/screen.rs:1282`, ceiling 100) answers the
+protocol's `Request::Search`, which the view does not use. The core matches letters in either case, so the
+case toggle needed a broker change.
+
+| Requirement | State | Where |
+|---|---|---|
+| Cmd/Ctrl+F opens the bar | present | `terminal-pool.ts:454` (`shortcut`), `:470` (`openFind`) |
+| Enter next, Shift+Enter previous | present | `terminal-pool.ts:525` (bar keydown) |
+| Escape closes | present | `terminal-pool.ts:524`; spec 'closes on Escape' |
+| Case toggle, no regex (D10) | missing, filled | pool `Aa` button; view `find(needle, { matchCase })`; broker `case_sensitive` on the search request |
+| Distinct highlight and active-match colour | present | `view.ts:1671` (`matchBackground`, `currentMatchBackground`) |
+| Active match scrolled into view, in the middle | partial, left as is | `view.ts:548-556` (`showMatch`) centres only a match outside the visible rows; a match already on screen is not moved |
+| At most 1000 highlights (D3), count reads `1000+` | missing, filled | view `MATCH_HIGHLIGHTS` (`view.ts:45`), `found.more`; pool `said()` |
+| Matches refresh at most once per 200 ms of output | missing, filled | view `refreshMatches` (`view.ts:495`), `MATCH_REFRESH_MS` |
+| Count and index in an `aria-live` region | missing, filled | pool: `role="status"`, `aria-live="polite"` on the count |
+| Wrap-around, both ends | present | `view.ts:540` (`findNext`); spec 'steps to older matches ... round again' |
+| Match across a wrapped line found once | present (broker) | `vt/reads.rs` via the core; `tests/view_reads.rs:103` `a_search_finds_text_that_wrapped` asserts one span |
+
+**What was filled.**
+- Broker: `ToBroker::Search` carries `case_sensitive` as its last field (`src/view/wire.rs`). `reads.rs` keeps, when
+  it is set, only the matches whose text (`text_between`) equals the needle. The filter runs before the ceiling,
+  so the answer is the newest 2,000 case-insensitive matches narrowed to the exact ones. The flag is additive
+  within `PROTOCOL_VERSION` 1; both halves moved in one change.
+- View: `find(needle, { matchCase })`, `Source.search(needle, caseSensitive)`, the flag on the wire, a 1000 cap on what
+  is held and painted, `found.more`, and the refresh throttle (at most one pending refresh; a change while it waits
+  is the next one's). `dispose` clears the timer.
+- App: `Aa` toggle (`aria-pressed`), count in an `aria-live` region, `1000+` past the held matches, and the case flag
+  passed to the view. Matching is case-insensitive by default, as the core's search was before this phase.
+
+**Tests.**
+- Broker: `a_case_sensitive_search_keeps_only_the_matches_in_the_needles_case` (new). The wrap-once test already
+  existed. The view's search vector was re-recorded with `APACK_UPDATE_VECTORS=1`; the diff is the one search line
+  (a trailing `00` flag byte and `"caseSensitive": false`).
+- View, `interaction.spec.ts` 'finding text': the refresh test runs on fake timers and checks that a stream of output
+  gives one search per 200 ms, a change during a search waits for the next interval, and nothing is searched early
+  (199 ms, then 1 ms). New: the case flag reaches the source; 1500 matches paint 1000 and report `1000 of 1000+`
+  or `1 of 1000+`; navigation wraps across the held matches. Two existing assertions gained `more: false`, and a test
+  for "found nothing, then output brings one" moved to fake timers.
+- App, `terminal-pool.frontend.spec.ts`: the count is `role="status"` and `aria-live="polite"`; typing searches
+  case-insensitively; the toggle searches again with the case flag; the count reads `1000+`; Shift+Enter from the
+  newest reaches `1000 of 1000+`, and Enter returns to `1 of 1000+`.
+
+**Counts and commands.**
+- Broker `cargo test --test suite`: 439 passed, 0 failed (the run before the vector re-record had 438 passed and the
+  one vector test failing). `cargo clippy --all-targets -- -D warnings`: exit 0.
+- View `npm test`: 377 of 377. `npx tsc --noEmit`: exit 0. Before this phase's count was not recorded, so no
+  before-and-after figure is claimed.
+- App `npm run spec -- .../terminal-pool.frontend.spec.ts`: 36 of 36 passed.
+- App `npm run typecheck:pack`: exit 2, two errors, both in `terminal-pool.ts`. `found` lacks `more` (line 495) and
+  `find` takes one argument (line 499). The app links the pinned `apack-terminal-view` build, which has neither.
+  These clear when the broker branch lands on its `master` and the pin moves. Nothing else in the pack reports an error.
+- `npm run chain` was not run, as instructed.
+
+**Mutation checks** (each mutant copied under the scratchpad, applied, its named test run, the file restored, and
+confirmed with `cmp`):
+- View wrap-around clamped (`findNext` clamps instead of wrapping): 'steps to older matches ... round again' fails.
+- View cap removed (`setMatches` holds everything): 'holds and paints at most a thousand matches' fails.
+- View refresh throttle removed (no pending-timer guard): 'is searched for again when rows change' fails with
+  `expected [ 'a', 'a', 'a', 'a' ] to have a length of 3`.
+- App case flag dropped from the view call: pool spec fails, `expected false to be true`.
+- App `1000+` suffix dropped: pool spec fails, `expected '1 of 1000' to be '1 of 1000+'`.
+- Not run: a mutant of the broker's case filter in `reads.rs`. Its test is the only check of that filter.
+
+**Gaps.**
+- The app's typecheck is red until the pin moves (above).
+- The case filter runs one `text_between` per match, so a case-sensitive search over 2,000 matches makes 2,000
+  FFI reads. Not measured.
+- Case-sensitive results are the exact matches among the newest 2,000 case-insensitive ones, so a rare exact match
+  older than that is not found. The needle is a plain string in both modes.
+- The 'centres' behaviour is only for an off-screen match; a match already visible is not moved.
+- The refresh is a throttle with a trailing refresh: the first change starts a 200 ms wait, and changes during it
+  share one refresh. A steady stream refreshes every 200 ms, and the last change is found within 200 ms of it.
+- Not checked in a real window: the find bar's appearance, and VoiceOver announcing the count. The aria-live
+  attribute is tested in the DOM, not by a screen reader.
+- Finding: `Screen::search` (`screen.rs:1282`, ceiling 100) is not on the view's path, and its doc says it bounds
+  every search. It is left alone here; it answers the protocol request and is a separate question.
