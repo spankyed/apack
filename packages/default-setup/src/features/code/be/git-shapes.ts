@@ -1,8 +1,8 @@
 // Where the git engine's answers meet the feature's contract. The contract declares what crosses the bus
-// (`be/types.ts`) and names no type of the engine's; the engine declares what it answers in (`be/git/`). The two
+// (`be/types.ts`) and names no type of the engine's; the engine declares what it answers in (`apack-git`). The two
 // are written twice on purpose, and this is the one place that holds them to each other: a shape that drifts on
 // either side stops compiling here.
-import type * as Engine from './git/index.ts'
+import type * as Engine from 'apack-git'
 import type * as Contract from './types.ts'
 
 /** `true` only when each of the two can be handed where the other is expected */

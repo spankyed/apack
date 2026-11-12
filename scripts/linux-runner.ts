@@ -48,6 +48,20 @@ const TERMINAL_CHECKOUT = (() => {
   }
 })();
 /**
+ * The apack-git checkout, for the one npm package in it: the git engine the built-in pack bundles.
+ *
+ * **Copied in as files, built.** It is TypeScript with nothing native, so what the Mac's link built is what
+ * Linux runs: its manifest and its `dist/` go where the link would have pointed.
+ */
+const GIT_ENGINE_CHECKOUT = (() => {
+  try {
+    return fs.realpathSync(path.join(REPO_ROOT, 'vendor', 'apack-git'));
+  } catch {
+    process.stderr.write('The git engine is unavailable: run npm run link:apack-git.\n');
+    process.exit(1);
+  }
+})();
+/**
  * The Rust checkouts this image installs a toolchain for, which is **the ones the container builds** and not
  * every one `vendor/` links.
  *
@@ -281,12 +295,16 @@ const quote = (arg: string): string => `'${arg.replace(/'/g, `'\\''`)}'`;
  */
 const sync = [
   // The link is the container's own, to its copy of elmdb, where its Linux binding is built before npm resolves it
-  `rsync -a --delete --exclude=/${RUN_LOCK} --exclude=/${CHECKOUT_FILE} --exclude=/vendor/elmdb --exclude=/vendor/apack-terminal ${FILTERS.map(quote).join(' ')} /src/ /work/`,
+  `rsync -a --delete --exclude=/${RUN_LOCK} --exclude=/${CHECKOUT_FILE} --exclude=/vendor/elmdb --exclude=/vendor/apack-terminal --exclude=/vendor/apack-git ${FILTERS.map(quote).join(' ')} /src/ /work/`,
   // The broker's and the view's packages, as the files the link names on the Mac: see TERMINAL_CHECKOUT.
   // A volume from before this held the Mac's link there, copied as a link to a path the container lacks
   'if [ -L /work/vendor/apack-terminal ]; then unlink /work/vendor/apack-terminal; fi',
   'mkdir -p /work/vendor/apack-terminal',
   "rsync -a --delete --exclude=node_modules --exclude=/node/apack-terminal --exclude=/node/apack-terminal.exe --include=/node/*** --include=/view/*** --exclude='*' /terminal-src/ /work/vendor/apack-terminal/",
+  // The git engine's package, as the files the link names on the Mac: see GIT_ENGINE_CHECKOUT
+  'if [ -L /work/vendor/apack-git ]; then unlink /work/vendor/apack-git; fi',
+  'mkdir -p /work/vendor/apack-git',
+  "rsync -a --delete --include=/package.json --include=/dist/*** --exclude='*' /git-engine-src/ /work/vendor/apack-git/",
   `exec 8>/elmdb/${ELMDB_LOCK}`,
   'if ! flock -n 8; then',
   '  echo "Waiting for another checkout\'s test:linux run to finish syncing the shared elmdb volume…" >&2',
@@ -382,6 +400,7 @@ const child = spawn('docker', [
   '-v', `${REPO_ROOT}:/src:ro`, '-v', `${WORK_VOLUME}:/work`, '-v', `${NPM_CACHE_VOLUME}:/root/.npm`,
   '-v', `${ELMDB_CHECKOUT}:/elmdb-src:ro`, '-v', `${ELMDB_VOLUME}:/elmdb`, '-v', `${CARGO_REGISTRY_VOLUME}:/usr/local/cargo/registry`,
   '-v', `${TERMINAL_CHECKOUT}:/terminal-src:ro`,
+  '-v', `${GIT_ENGINE_CHECKOUT}:/git-engine-src:ro`,
   ...gitDirMount(),
   ...forwarded.flatMap((key) => ['-e', key]),
   // Set here and never forwarded: the VM counts the host's load as its CPU, so a ceiling held to its size there fires

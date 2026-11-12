@@ -1,4 +1,4 @@
-// The app's half of a repository: what the git engine (`be/git/`) leaves to its host. The engine owns one working
+// The app's half of a repository: what the git engine (`apack-git`) leaves to its host. The engine owns one working
 // tree's truth and every git process; this owns when to fetch unasked, which branch a pull request is based on,
 // files as data URLs for a window, the words a failed push or pull is said in, and what the engine is handed to
 // run with.
@@ -8,7 +8,7 @@ import { execFileWhileWorking, processWork, watchWork } from '@apackdev/sdk/prog
 import {
   GitError, GitRepository, GitWatcherService,
   type GitErrorCode, type GitProgress, type RepositoryTies,
-} from '../git/index.ts'
+} from 'apack-git'
 import type { RepositoryHandle, WatcherHandle } from '../types.ts'
 import { agentChildEnvironment } from './shell-environment.ts'
 import { signInHelpFor, type SignInHelp } from './sign-in.ts'
@@ -309,7 +309,7 @@ export const openGitRepository = (workingDirectory: string): AppGitRepository =>
 
 /** The watcher of a working directory's repository, logging where this app logs */
 export const openGitWatcher = (workingDirectory: string): GitWatcherService =>
-  new GitWatcherService(workingDirectory, undefined, { error: (message, data) => watcherLogger.error(message, data) })
+  new GitWatcherService(workingDirectory, { log: { error: (message, data) => watcherLogger.error(message, data) } })
 
 // The system's context is part of the pack's published contract, which names no type of the engine's: it holds the
 // repository and its watcher as handles, and the feature's own code reads them here as what they are.

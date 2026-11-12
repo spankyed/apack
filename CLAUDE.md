@@ -27,17 +27,21 @@ apack is an Electron desktop app with an actor-based architecture. Both frontend
 
 Monorepo using npm workspaces. Requires Node 24 LTS (>=24.12.0) and npm >= 11. Both floors are a measured refusal rather than a preference: npm 10 crashes resolving vitest 4.1, which a new pack's first install does, and `apack pack build` cannot run on 24.11.0 at all, whose module-hook validator rejects the CommonJS load result the pack compiler's own hooks pass through — `COMPILER_NODE_FLOOR` (`packages/apack-cli/src/build/node-support.ts`) refuses it by name, and `engines.node` says the same to npm.
 
-**Two sibling checkouts are vendored, each depended on as npm packages resolved through its link.** Each
+**Three sibling checkouts are vendored, each depended on as npm packages resolved through its link.** Each
 is a gitignored symlink under `vendor/` beside a committed `.rev` naming the commit it is pinned to, linked
 by its own script: `vendor/elmdb` (`npm run link:elmdb`) is the Rust engine `@apackdev/ears` builds against,
-and `vendor/apack-terminal` (`npm run link:apack-terminal`) is the terminal broker and what a window draws
-a terminal with. The link is machine-specific, so it is ignored and the `.rev` is the shared fact; both
+`vendor/apack-terminal` (`npm run link:apack-terminal`) is the terminal broker and what a window draws
+a terminal with, and `vendor/apack-git` (`npm run link:apack-git`) is the git engine the built-in pack runs
+git with ([the git engine](docs/references/git-engine.md)). The link is machine-specific, so it is ignored and the `.rev` is the shared fact; both
 linkers refuse a checkout that isn't one and a checkout that doesn't hold the pin. **A vendored checkout
 that the app consumes ships an npm package, and the package is what knows its own build** — elmdb's
 `crates/elmdb-node` its napi binding, apack-terminal's `node/` the broker binary and the protocol's
-generated types, and its `view/` (`apack-terminal-view`) the compiled `dist` a window draws with — so the
-app resolves each the way it resolves any dependency, and a packaged app collects them with every other.
-None is published to a registry; CI clones each at its pin (`.github/actions/{elmdb,apack-terminal}`).
+generated types, its `view/` (`apack-terminal-view`) the compiled `dist` a window draws with, and apack-git's
+the compiled `dist` of the engine — so the app resolves each the way it resolves any dependency, and a
+packaged app collects them with every other. **apack-git is the one a pack depends on, where the others are
+the host's**: it is TypeScript with nothing native, so the pack bundles it into its own runtime and leaves
+nothing for the host to resolve. None is published to a registry; CI clones each at its pin
+(`.github/actions/{elmdb,apack-terminal,apack-git}`).
 **The broker and the view speak one protocol and are one checkout, so one pin holds both halves**: the
 view's suite reads the vectors the broker's encoder writes, in that repository, and no pair of commits
 exists here to disagree. Deriving a path into a checkout's build

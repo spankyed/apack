@@ -474,53 +474,6 @@ export function findElmdbImports(rules = ELMDB_RULES, root = repoRoot): string[]
 }
 
 /**
- * The git engine carved inside the code feature: its folder, the modules of it anything outside may import, and
- * where its importers are.
- */
-export const GIT_ENGINE = {
-  dir: 'packages/default-setup/src/features/code/be/git',
-  /** The door, and the helper a window uses, which imports nothing of Node's */
-  doors: ['index.ts', 'staging.ts'],
-  importers: ['packages/default-setup/src', 'packages/default-setup/tests'],
-  /** What the pack's own modules are named by, beside a relative path */
-  alias: { prefix: '#features/', to: 'packages/default-setup/src/features/' },
-} as const;
-
-/**
- * `file:line: specifier` for each import across the git engine's boundary, in either direction.
- *
- * **Nothing outside the engine's folder imports anything of it but a door, and nothing inside imports anything
- * outside but Node's built-ins.** The engine is on its way to a repository of its own
- * (`docs/plans/deferred/git-engine-own-repository.md`), where an import across the boundary does not resolve;
- * until it is there, this is what holds the boundary.
- */
-export function findGitEngineBoundary(engine: { dir: string; doors: readonly string[]; importers: readonly string[]; alias: { prefix: string; to: string } } = GIT_ENGINE, root = repoRoot): string[] {
-  const dir = path.join(root, engine.dir);
-  const within = (file: string) => file === dir || file.startsWith(dir + path.sep);
-  const doors = new Set(engine.doors.map((door) => path.join(dir, door)));
-  /** The file a specifier names when it names one of this checkout's, which a bare package name does not */
-  const named = (from: string, text: string): string | undefined => {
-    if (text.startsWith('.')) return path.resolve(path.dirname(from), text);
-    if (text.startsWith(engine.alias.prefix)) return path.join(root, engine.alias.to, text.slice(engine.alias.prefix.length));
-    return undefined;
-  };
-  const problems: string[] = [];
-  // The engine's folder may lie under an importer's, and each file is read once
-  for (const file of new Set(filesUnder([engine.dir, ...engine.importers], root))) {
-    for (const { text, line } of readSource(file).specifiers) {
-      const target = named(file, text);
-      const crosses = within(file)
-        // Inside: only its own modules and what Node itself provides
-        ? (target === undefined ? !(text.startsWith('node:') || builtinModules.includes(text)) : !within(target))
-        // Outside: only a door
-        : target !== undefined && within(target) && !doors.has(target);
-      if (crosses) problems.push(`${path.relative(root, file)}:${line}: ${text}`);
-    }
-  }
-  return problems.sort();
-}
-
-/**
  * `file:line: node-pty` for each pack file that imports the native pty binding.
  *
  * **A pack does not own a process.** It asks `services.terminal` for a session; the pty is the broker's, in a
@@ -1054,12 +1007,6 @@ const RULE_LIST = [
     repoOnly: { kind: 'covered', by: 'elmdb-imports', note: "What is left here is the API, the host and the engine's own root" },
     find: findElmdbImports,
     rule: "Only @apackdev/ears/lmdb loads elmdb: the host and the API open the database through it, the engine's root and packs never load it",
-  },
-  {
-    id: 'findGitEngineBoundary',
-    repoOnly: { kind: 'inapplicable', note: "About one folder of this repo's built-in pack, which is on its way to a repository of its own" },
-    find: findGitEngineBoundary,
-    rule: "Nothing outside the code feature's git engine (be/git/) imports anything of it but its door (index.ts) or its window helper (staging.ts), and nothing inside it imports anything but its own modules and Node's built-ins",
   },
   {
     id: 'findNodePtyImports',
