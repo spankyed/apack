@@ -140,6 +140,13 @@ remotes with their addresses and the tags. The snapshot's `refs` part says when 
 is checked out and the local branches, so a fetch that moves a remote's branch is news of the refs alone. The branch
 picker shows each local branch's standing (`commit.BRANCHES_RECEIVED` `standing`).
 
+## Blame
+
+`blame(path, { revision, onLines })` reads `git blame --incremental`, handing each group of lines on as git finds it,
+and leaves out the commits a repository lists in `.git-blame-ignore-revs` (or the file `blame.ignoreRevsFile` names).
+An editor tab's menu asks for it (`commit.GET_BLAME`), and the editor draws each line's author and date before it
+until blame is hidden.
+
 ## Copies of the working tree
 
 **A copy is kept outside the repository, and nothing of the repository's is written to keep it.** Each repository

@@ -109,6 +109,14 @@
         <History class="w-4 h-4" />
         File history
       </ContextMenuItem>
+
+      <ContextMenuItem
+        @select="toggleBlame"
+        class="flex items-center gap-2 px-3 py-2 text-sm transition-colors cursor-pointer text-neutral-200 hover:bg-neutral-800 focus:bg-neutral-800 focus:outline-none"
+      >
+        <UserPen class="w-4 h-4" />
+        {{ blamed ? 'Hide blame' : 'Blame' }}
+      </ContextMenuItem>
     </template>
 
     <!-- Terminal actions -->
@@ -153,9 +161,11 @@ import {
   ChevronRight,
   Pencil,
   PanelBottom,
-  History
+  History,
+  UserPen
 } from 'lucide-vue-next'
 import { useSurface } from '@apackdev/sdk/fe'
+import { useSelector } from '@xstate/vue'
 import type { CodeState } from '#features/code/fe/state.ts'
 import { panelChild } from '#features/code/fe/features/children.ts'
 import type { OpenFile, TerminalTab, TabGroup as TabGroupType } from '#features/code/fe/state.ts'
@@ -172,6 +182,19 @@ function showFileHistory() {
   const path = base && props.tab.path.startsWith(`${base}/`) ? props.tab.path.slice(base.length + 1) : props.tab.path
   panelChild(codeActor, 'commit')?.send({ type: 'commit.SHOW_FILE_HISTORY', path })
   codeActor.send({ type: 'SELECT_PANEL', panel: 'commit' })
+}
+const commitActor = panelChild(codeActor, 'commit')
+const blame = useSelector(commitActor!, (state) => state.context.blame)
+/** The tab's path from the top of the folder, as git names it */
+const relativePath = () => {
+  const base = codeActor.getSnapshot().context.baseDirectory as string | null
+  return base && props.tab.path.startsWith(`${base}/`) ? props.tab.path.slice(base.length + 1) : props.tab.path
+}
+const blamed = computed(() => blame.value?.path === relativePath())
+
+/** Shows who last changed each line of the file in the editor, or stops showing it */
+function toggleBlame() {
+  commitActor?.send(blamed.value ? { type: 'commit.CLEAR_BLAME' } : { type: 'commit.SHOW_BLAME', path: relativePath() })
 }
 
 const props = defineProps<{

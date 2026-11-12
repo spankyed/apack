@@ -169,6 +169,7 @@
               :modified-content="diffModifiedContent"
               :read-only="isDiffReadOnly"
               :dsl-params="activeDslParams"
+              :blame="blameLabels"
               class="h-full"
               @mount="emit('editorMount')"
               @file-ready="emit('editorFileReady')"
@@ -196,6 +197,10 @@ import { nativeVideoExtensions } from '#features/code/fe/utils/file-icons.ts'
 import type { ActionTab } from '#features/code/fe/features/actions/state.ts'
 import type { PromptTab } from '#features/code/fe/features/prompts/state.ts'
 import type { GitDiff } from '#features/code/fe/features/commit/state.ts'
+import { useSurface } from '@apackdev/sdk/fe'
+import { useSelector } from '@xstate/vue'
+import type { CodeState } from '#features/code/fe/state.ts'
+import { panelChild } from '#features/code/fe/features/children.ts'
 
 // Props
 const props = defineProps<{
@@ -302,6 +307,20 @@ const isDeletedFile = computed(() => {
 const getDiffContent = (file: OpenFile | TerminalTab | ActionTab | PromptTab | undefined): GitDiff | null => {
   return file && 'gitDiff' in file ? file.gitDiff ?? null : null
 }
+
+// Who last changed each line of the file shown, when blame was asked for it: its path is from the top of the folder
+const codeActor: CodeState = useSurface()
+const blame = useSelector(panelChild(codeActor, 'commit')!, (state) => state.context.blame)
+const blameLabels = computed(() => {
+  const asked = blame.value
+  const base = props.baseDirectory
+  if (!asked || !props.activeFilePath || !base || props.activeFilePath !== `${base}/${asked.path}`) return undefined
+  return asked.lines.map(({ line, author, date, summary, commit }) => ({
+    line,
+    label: `${author.slice(0, 14).padEnd(14, ' ')} ${date.slice(0, 10)}`,
+    title: `${commit.slice(0, 7)} ${summary}`,
+  }))
+})
 
 // Computed
 const activeFile = computed(() =>

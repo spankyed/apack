@@ -81,6 +81,8 @@ export interface GitStatusFile {
   isDirectory?: boolean
   /** For a submodule's row, how it differs: on another commit, files it tracks changed, files it does not track */
   submodule?: { commit: boolean; modified: boolean; untracked: boolean }
+  /** The file's name is not text, so it is listed and nothing can be done to it here (`name-not-text`) */
+  nameNotText?: true
 }
 
 /**
@@ -466,6 +468,18 @@ export interface BranchStandingOf {
   behind: number
 }
 
+/** Who last changed one line of a file, as `git blame` answers it */
+export interface BlameLine {
+  line: number
+  commit: string
+  author: string
+  authorEmail: string
+  date: string
+  summary: string
+  originalLine: number
+  originalPath: string
+}
+
 /** A repository found under the folder the user opened, as the panel's picker lists it */
 export interface RepositoryUnder {
   path: string
@@ -504,7 +518,7 @@ export interface WatcherHandle { readonly [gitHandle]: 'watcher' }
 export const GIT_ERROR_CODES = [
   'locked', 'authentication', 'permission', 'remote-unreachable', 'non-fast-forward', 'diverged', 'conflict', 'local-changes', 'unknown-ref', 'not-a-repository',
   'aborted', 'git-not-found', 'developer-tools-missing', 'git-too-old', 'unsafe-ownership', 'signing-failed', 'unrelated-histories', 'nothing-to-commit', 'branch-exists', 'host-refused',
-  'untrusted', 'content-missing', 'published', 'hook-refused',
+  'untrusted', 'content-missing', 'published', 'hook-refused', 'name-not-text',
 ] as const
 export type GitErrorCode = (typeof GIT_ERROR_CODES)[number]
 
