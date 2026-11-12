@@ -8,6 +8,14 @@ const { spawn, stopGroup } = vi.hoisted(() => ({ spawn: vi.fn(), stopGroup: vi.f
 vi.mock('node:child_process', () => ({ spawn }));
 vi.mock('../../src/build/compiler-process-group.ts', () => ({ stopCompilerProcessGroup: stopGroup }));
 
+// These commands have a made-up pid and CPU reader. Their storage state must be
+// made up too: a real ps callback cannot advance with this test's fake clock.
+vi.mock('@apackdev/sdk/progress', async importOriginal => {
+  const progress = await importOriginal<typeof import('@apackdev/sdk/progress')>();
+  return { ...progress, processWork: (...args: Parameters<typeof progress.processWork>) =>
+    Object.assign(progress.processWork(...args), { held: async () => undefined }) };
+});
+
 // A tree that spends a second of CPU every reading: what a command spinning towards its ceiling reads as
 const spinning = () => { let cpu = 0; return async () => new Map([[12345, cpu += 1_000]]); };
 
