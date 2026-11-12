@@ -1585,7 +1585,7 @@ interface FolderItem {
 }
 
 /** Why a git command failed, where what it printed says: the git engine's codes, as the contract names them */
-declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository", "aborted", "git-not-found", "developer-tools-missing", "git-too-old", "unsafe-ownership", "signing-failed", "unrelated-histories", "nothing-to-commit", "branch-exists", "host-refused", "untrusted"];
+declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository", "aborted", "git-not-found", "developer-tools-missing", "git-too-old", "unsafe-ownership", "signing-failed", "unrelated-histories", "nothing-to-commit", "branch-exists", "host-refused", "untrusted", "content-missing"];
 
 interface GhPRComment {
     id: string;
@@ -2273,11 +2273,14 @@ type IncomingPullRequestEvents = {
     type: 'pr.GET_BRANCH_DIFF';
     baseBranch?: string;
     headBranch?: string;
-} | {
+}
+/** `fetchMissing`: content a partial clone was not given is fetched for this diff, where it is otherwise answered as missing */
+ | {
     type: 'pr.GET_BRANCH_FILE_DIFF';
     path: string;
     baseBranch: string;
     headBranch?: string;
+    fetchMissing?: boolean;
 } | {
     type: 'pr.LIST_OPEN_PRS';
 } | {
@@ -3745,6 +3748,15 @@ type OutgoingPullRequestEvents = {
 } | {
     type: 'pr.FILE_DIFF_RECEIVED';
     data: GitDiff & {
+        baseBranch: string;
+        headBranch?: string;
+    };
+}
+/** A file's diff needs content this partial clone was not given, which is fetched only when the user asks */
+ | {
+    type: 'pr.FILE_CONTENT_MISSING';
+    data: {
+        path: string;
         baseBranch: string;
         headBranch?: string;
     };

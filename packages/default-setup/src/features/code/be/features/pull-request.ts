@@ -25,7 +25,7 @@ export interface CodePullRequestSystemContext {
 export type Event =
   | { type: 'pr.GET_BASE_BRANCH' }
   | { type: 'pr.GET_BRANCH_DIFF'; baseBranch?: string; headBranch?: string }
-  | { type: 'pr.GET_BRANCH_FILE_DIFF'; path: string; baseBranch: string; headBranch?: string }
+  | { type: 'pr.GET_BRANCH_FILE_DIFF'; path: string; baseBranch: string; headBranch?: string; fetchMissing?: boolean }
   | { type: 'pr.LIST_OPEN_PRS' }
   | { type: 'pr.SELECT_PR'; number: number }
   | { type: 'pr.CREATE_PR'; title: string; body: string; base?: string; draft?: boolean }
@@ -124,34 +124,39 @@ export const pullRequestSystem = setup({
 
     getBranchFileDiff: ({ event, context, reply }) => {
       const emit = answering(reply)
-      const ev = event as { type: 'pr.GET_BRANCH_FILE_DIFF'; path: string; baseBranch: string; headBranch?: string }
+      const ev = event as { type: 'pr.GET_BRANCH_FILE_DIFF'; path: string; baseBranch: string; headBranch?: string; fetchMissing?: boolean }
       const target = ev.headBranch ? `origin/${ev.headBranch}` : 'HEAD'
+      const where = { path: ev.path, baseBranch: ev.baseBranch, headBranch: ev.headBranch }
       withRepo(context, emit,
-        async repo => {
-          if (ev.headBranch) {
-            await repo.fetchRemoteBranch(ev.headBranch)
-          }
-          const isImage = repo.isImageFile(ev.path)
-          const getContent = isImage
-            ? (p: string, b: string) => repo.getFileContentFromBranchAsDataUrl(p, b)
-            : (p: string, b: string) => repo.getFileContentFromBranch(p, b)
-          // A side that is missing reads as empty, which is right for a file one branch does not have and wrong
-          // for a branch that is not there: that is an error, said as one
-          if (!await repo.commitsExist(ev.baseBranch, target)) {
-            throw new Error(`Failed to get file diff between branches: ${ev.baseBranch} or ${target} is not a commit here`)
-          }
-          // The editor draws the change from the file's two sides, so those are what is read: no patch is made
-          const [originalContent, modifiedContent] = await Promise.all([
-            getContent(ev.path, ev.baseBranch),
-            getContent(ev.path, target),
-          ])
-          return { originalContent, modifiedContent, isImage }
-        },
+        repo => ev.fetchMissing ? repo.fetchingMissing(() => read(repo)) : read(repo),
         ({ originalContent, modifiedContent, isImage }) => emit({
           type: 'pr.FILE_DIFF_RECEIVED',
           data: { path: ev.path, staged: false, originalContent, modifiedContent, isImage, baseBranch: ev.baseBranch, headBranch: ev.headBranch }
-        })
+        }),
+        error => error?.code === 'content-missing'
+          ? emit({ type: 'pr.FILE_CONTENT_MISSING', data: where })
+          : emitError(emit, error?.message ?? String(error)),
       )
+      async function read(repo: AppGitRepository) {
+        if (ev.headBranch) {
+          await repo.fetchRemoteBranch(ev.headBranch)
+        }
+        const isImage = repo.isImageFile(ev.path)
+        const getContent = isImage
+          ? (p: string, b: string) => repo.getFileContentFromBranchAsDataUrl(p, b)
+          : (p: string, b: string) => repo.getFileContentFromBranch(p, b)
+        // A side that is missing reads as empty, which is right for a file one branch does not have and wrong
+        // for a branch that is not there: that is an error, said as one
+        if (!await repo.commitsExist(ev.baseBranch, target)) {
+          throw new Error(`Failed to get file diff between branches: ${ev.baseBranch} or ${target} is not a commit here`)
+        }
+        // The editor draws the change from the file's two sides, so those are what is read: no patch is made
+        const [originalContent, modifiedContent] = await Promise.all([
+          getContent(ev.path, ev.baseBranch),
+          getContent(ev.path, target),
+        ])
+        return { originalContent, modifiedContent, isImage }
+      }
     },
 
     // --- GitHub CLI actions ---

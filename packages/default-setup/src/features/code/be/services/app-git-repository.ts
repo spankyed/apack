@@ -371,7 +371,9 @@ export class AppGitRepository extends GitRepository {
       const buffer = await this.getFileBytesFromBranch(filePath, branch)
       if (!buffer || buffer.length === 0) return ''
       return `data:${mimeType};base64,${buffer.toString('base64')}`
-    } catch {
+    } catch (error) {
+      // An image a partial clone was not given is said to be missing, as any other file is, and not shown as none
+      if ((error as { code?: string }).code === 'content-missing') throw error
       return ''
     }
   }

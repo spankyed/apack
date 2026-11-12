@@ -224,6 +224,22 @@
         @select-file="handleFileSelect"
         @open-file="handleOpenFile"
       />
+        <!-- A diff that needs content this partial clone was not given: downloaded only when asked -->
+        <div
+          v-if="missingFileDiff"
+          data-testid="pr-content-missing"
+          class="flex items-center gap-2 px-3 py-1.5 text-xs text-amber-300 bg-amber-900/20 border-t border-amber-800/30 mt-auto"
+        >
+          <AlertCircle :size="12" class="shrink-0" />
+          <span class="flex-1">This repository was cloned without every version of its files, and {{ missingFileDiff.path }} needs one it does not have.</span>
+          <button
+            data-testid="pr-fetch-missing"
+            @click="prActor?.send({ type: 'pr.FETCH_MISSING_DIFF' })"
+            class="px-2 py-0.5 rounded text-amber-200 hover:text-amber-100 hover:bg-amber-900/40 transition-colors shrink-0"
+          >
+            Download it
+          </button>
+        </div>
         <!-- Non-fatal error banner (dismissible, pinned to bottom) -->
         <div
           v-if="prError && !isNoGitRepoError && !isNoBaseBranchError"
@@ -280,6 +296,7 @@ const prFiles = useSelector(prActor, (state) =>
   state.context.diffsByRef[refKey(state.context.prBaseBranch, state.context.selectedPR?.headRefName)] ?? [])
 const prBaseBranch = useSelector(prActor, (state) => state.context.prBaseBranch)
 const prError = useSelector(prActor, (state) => state.context.prError)
+const missingFileDiff = useSelector(prActor, (state) => state.context.missingFileDiff)
 const isPrLoading = useSelector(prActor, (state) => state.context.isPrLoading)
 const baseDirectory = useSelector(codeActor, (state) => state.context.baseDirectory)
 const openPRs = useSelector(prActor, (state) => state.context.openPRs)

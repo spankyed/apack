@@ -73,6 +73,11 @@ export interface CodePullRequestContext {
   inFlightFileDiffs: Set<string>
   prBaseBranch: string
   prError: string | null
+  /**
+   * The file whose diff needs content this partial clone was not given: shown with an offer to download it,
+   * which is the one way a read fetches
+   */
+  missingFileDiff: { path: string; baseBranch: string; headBranch?: string } | null
   isPrLoading: boolean
   selectedPrFile: GitStatusFile | null
 
@@ -152,6 +157,9 @@ export type Event =
   | { type: 'pr.REFRESH_STATUS' }
   | { type: 'pr.SELECT_FILE'; file: GitStatusFile }
   | { type: 'pr.VIEW_DIFF'; path: string }
+  /** The user asked for the content the diff of `missingFileDiff` lacks to be downloaded */
+  | { type: 'pr.FETCH_MISSING_DIFF' }
+  | { type: 'pr.FILE_CONTENT_MISSING'; data: { path: string; baseBranch: string; headBranch?: string } }
   | { type: 'pr.ERROR'; message: string }
   | { type: 'pr.BASE_BRANCH_RECEIVED'; data: { branch: string } }
   | { type: 'pr.BRANCH_DIFF_RECEIVED'; data: { files: GitStatusFile[]; baseBranch: string; headBranch?: string } }
@@ -247,6 +255,27 @@ export const pullRequestState = setup({
         baseBranch: context.prBaseBranch,
         headBranch: head,
       }))
+    }),
+
+    /** Answers a diff this machine asked for that needs content the clone lacks: the request is over, and the offer shown */
+    handleFileContentMissing: enqueueActions(({ enqueue, context, event }) => {
+      const ev = event as { type: 'pr.FILE_CONTENT_MISSING'; data: { path: string; baseBranch: string; headBranch?: string } }
+      const key = fileKey(ev.data.baseBranch, ev.data.headBranch, ev.data.path)
+      if (!context.inFlightFileDiffs.has(key)) return
+      const remaining = new Set(context.inFlightFileDiffs)
+      remaining.delete(key)
+      enqueue.assign({ inFlightFileDiffs: remaining, missingFileDiff: ev.data })
+    }),
+
+    /** Asks for the same diff again, allowed to download what it lacks; arms the key first, as `viewPrDiff` does */
+    fetchMissingDiff: enqueueActions(({ enqueue, context }) => {
+      const missing = context.missingFileDiff
+      if (!missing) return
+      enqueue.assign({
+        missingFileDiff: null,
+        inFlightFileDiffs: new Set(context.inFlightFileDiffs).add(fileKey(missing.baseBranch, missing.headBranch, missing.path)),
+      })
+      enqueue(() => sendToSystem('code', { type: 'pr.GET_BRANCH_FILE_DIFF', ...missing, fetchMissing: true }))
     }),
 
     assignPrError: assign({
@@ -878,6 +907,7 @@ export const pullRequestState = setup({
     inFlightFileDiffs: new Set<string>(),
     prBaseBranch: '',
     prError: null,
+    missingFileDiff: null,
     isPrLoading: false,
     selectedPrFile: null,
 
@@ -934,8 +964,10 @@ export const pullRequestState = setup({
             'refreshPrStatus',
           ]
         },
-        'pr.SELECT_FILE': { actions: 'selectPrFile' },
+        'pr.SELECT_FILE': { actions: ['selectPrFile', assign({ missingFileDiff: null })] },
         'pr.VIEW_DIFF': { actions: 'viewPrDiff' },
+        'pr.FILE_CONTENT_MISSING': { actions: 'handleFileContentMissing' },
+        'pr.FETCH_MISSING_DIFF': { actions: 'fetchMissingDiff' },
         'pr.OPEN_FILE': { actions: 'openFile' },
         'pr.ERROR': { actions: 'assignPrError' },
         'pr.BASE_BRANCH_RECEIVED': { actions: 'handleBaseBranchReceived' },
