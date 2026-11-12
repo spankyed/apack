@@ -186,6 +186,35 @@ the pointer.
 **What this does not establish.** Alt-drag has not been tried in a real window. Each line is asked for on its own, so a block
 of many lines makes many asks; the cost is not measured.
 
+## Phase 6 — the accessible document (2026-11-12)
+
+Source: broker `session/terminal-parity-view` at `4d1cd7c` (tests only; the view's source is unchanged since `6fe0ef1`).
+
+**The automated contract.** `view/tests/accessibility.spec.ts` pins what a screen reader is given:
+
+| Behaviour | Check | Result |
+|---|---|---|
+| A document named Terminal, in the view's own element | `is a document named Terminal, found in the view's own element` | pass |
+| One text element per screen row, holding that row's text | `has one text element a screen row, holding that row's text` | pass |
+| A row that did not change is not touched, which a mutation observer checks | `is rewritten only where a row changed: a row that did not change is not touched at all` | pass |
+| The last drawn frame is named | `says which frame was last drawn, so a test or a reader can tell the screen has caught up` | pass |
+
+Mutation: a mutant that rewrites every row (the check `mirrored[index] === row` removed) fails the unchanged-row case, and
+the file is restored. Full view suite: 350 of 350.
+
+**The manual checklist (not a condition of this goal, per decision D6).** A person runs this once on the Mac, with VoiceOver
+on (Command-F5), in the Code surface's terminal, and records the result here with the date and the build:
+
+1. Focus the terminal. VoiceOver names the document Terminal.
+2. Read the document with VoiceOver's reading commands. The screen's rows are read in order, once each.
+3. Type `echo hello` and press Return. The typed text and the output `hello` are read.
+4. Run `seq 1 200`. The output is not read a row at a time as it arrives: a reader can stop it with Control.
+5. Run `less` on a file, and leave it. The alternate screen is read, and quitting it returns the reader to the shell.
+6. Select a line with a drag and copy it. The copy reaches the clipboard, and the reader does not stop.
+7. Record: VoiceOver version, macOS version, the build, each step's result, and anything read that should not have been.
+
+The checklist's result is recorded here when someone runs it. A failing step opens a fix; it does not reopen this goal.
+
 ## What this does not establish
 
 - **Real-window behaviour of the clipboard write.** The write path is proven at the bridge and the handler with stubs. No

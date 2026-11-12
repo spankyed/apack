@@ -67,7 +67,8 @@ Out:
 - Phase 3 is done in code and checks: [the evidence record](../references/evidence/terminal-parity.md#phase-3--minimum-contrast-ratio-2026-11-12). The app pins the view commit that carries it.
 - Phase 4 is done: [the evidence record](../references/evidence/terminal-parity.md#phase-4--the-canvas-painter-under-heavy-output-and-the-gpu-decision-2026-11-12). Neither machine's p95 frame exceeds 16 ms, so the GPU renderer (D5) is not built.
 - Phase 5 is done: [the evidence record](../references/evidence/terminal-parity.md#phase-5--rectangular-selection-2026-11-12). The app pins the view commit that carries it.
-- Next deliverable: Phase 6 (the automated accessibility contract, decision D6).
+- Phase 6 is done: [the evidence record](../references/evidence/terminal-parity.md#phase-6--the-accessible-document-2026-11-12). The VoiceOver checklist is written there; running it is a follow-up, not a condition.
+- Next deliverable: Phase 7 (command blocks: re-run and copy any command, failure highlight, then fold).
 - Unresolved: none. Nothing in this goal depends on a manual step; see D6.
 
 ## Decisions
