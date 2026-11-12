@@ -315,13 +315,13 @@ const ofNoFolder = (): Pick<CodeCommitContext, OfOneFolder> => ({
   commitLog: [],
 })
 
-/** The lists the panel shows beside the status, each asked for by an event of its own */
+/** The lists the panel shows beside the status, each asked for by an event of its own, sent under a call */
 const LIST_ASKS = {
-  branches: 'commit.GET_ALL_BRANCHES',
-  stashes: 'commit.STASH_LIST',
-  worktrees: 'commit.WORKTREE_LIST',
-  log: 'commit.LOG_LIST',
-} as const
+  branches: (call: string) => { sendToSystem('code', { type: 'commit.GET_ALL_BRANCHES' }, { call }) },
+  stashes: (call: string) => { sendToSystem('code', { type: 'commit.STASH_LIST' }, { call }) },
+  worktrees: (call: string) => { sendToSystem('code', { type: 'commit.WORKTREE_LIST' }, { call }) },
+  log: (call: string) => { sendToSystem('code', { type: 'commit.LOG_LIST' }, { call }) },
+}
 type RepositoryList = keyof typeof LIST_ASKS
 
 /**
@@ -333,7 +333,7 @@ function listAsks(lists: readonly RepositoryList[]) {
   const calls = lists.map((list) => [list, newCall()] as const)
   return {
     asks: Object.fromEntries(calls) as Partial<Record<RepositoryList, string>>,
-    send: () => { for (const [list, call] of calls) sendToSystem('code', { type: LIST_ASKS[list] }, { call }) },
+    send: () => { for (const [list, call] of calls) LIST_ASKS[list](call) },
   }
 }
 
