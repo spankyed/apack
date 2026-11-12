@@ -247,3 +247,70 @@ compared with `cmp` (identical both times).
 - **Options at construction.** `cursorBlink` and `cursorInactive` are read when the view is made. A live change needs a
   new view.
 - **Not seen on screen.** No real program and no Electron window were run. The cursor's look is unchecked.
+
+## Phase 4 — OSC 8 hyperlinks (broker and view) (2026-11-12)
+
+Broker branch `session/next-features-broker` (commits `e9ed0a2`, `6385234`), in the checkout
+`apack-terminal-worktrees.noindex/next-features`. The app-side policy is not in this phase.
+
+### The id finding
+
+**The core does not expose the OSC 8 `id`, so grouping by id is impossible and grouping uses the URI alone.** Checked
+against the sys crate the pin resolves to: `ghostty-vt-rs-sys` 0.3.0 in `Cargo.lock`, source under
+`~/.cargo/registry`. Its `src/bindings.rs` has one hyperlink accessor, `ghostty_grid_ref_hyperlink_uri` (line 1106),
+and its doc comment answers the URI only. A grep of the whole crate for `hyperlink` with an id finds no id accessor, no
+id type and no id constant. The `HAS_HYPERLINK` cell flag (line 899) answers presence, not identity. The broker reads
+the URI at `src/vt/rows.rs` lines 473 and 484, as before.
+
+This checks the bindings the broker compiles against, not the libghostty-vt C header of the version it links. The crate
+is the only place the broker reaches the core's hyperlinks, so no other call is missed.
+
+### Decisions
+
+- **No wire change.** A row already carries its own `links` table and a per-character `link` index, and the URI is the
+  whole of what a link is on the wire. There is no id to add, so `src/protocol.rs`, `view/src/broker/wire.ts` and
+  `node/protocol.ts` are untouched, and `PROTOCOL_VERSION` stays 1.
+- **Wrapped links are joined by URI.** A declared link is one run per row it covers, and the view joins runs whose
+  URIs match across a wrap. Two separate links with the same URI that sit side by side across a wrap are therefore one
+  link to the hover. Nothing in the core can tell them apart.
+- **The preview is `linkPreview: 'off' | 'osc8' | 'all'`, default `osc8`.** It controls only the pointer's title. A
+  detected URL is not previewed by default. This is a visible change: a URL in the text that showed its title before
+  now shows none unless the host passes `all`.
+
+### Changes
+
+- Broker, `tests/view_frames.rs`: `a_hyperlink_covers_its_cells_until_it_is_closed_and_an_id_does_not_change_the_uri`
+  and `a_hyperlink_that_wraps_reports_its_uri_on_each_row_it_covers`. Both pass against the existing code, so they pin
+  behaviour rather than add it.
+- View, `src/links.ts`: `linkRuns` (and `LinkRun`) returns the runs a declared link covers across its wrap. A detected
+  link is one run on its row.
+- View, `src/view.ts`: the hover keeps every run and underlines each on its own row; `linkPreview` (`LinkPreview`) is an
+  option, read in `previews()`.
+- View tests: `links.spec.ts` (four `linkRuns` cases), `interaction.spec.ts` (the wrapped hover, the click's URI and
+  kind, and each `linkPreview` value). Two existing title assertions were updated for the `osc8` default.
+
+### Commands and counts
+
+- `cargo test --test suite`: 438 passed, 0 failed (436 before, plus the two broker tests).
+- `npm test` in `view/`: 17 files, 375 passed. `npx vitest run` in `view/` gives the same.
+- `npx tsc --noEmit` in `view/`: no output.
+- `cargo clippy --all-targets -- -D warnings`: finished with no warnings.
+- The view's pre-change count was not taken, so no before-and-after delta is claimed for the view.
+
+### Mutation
+
+The grouping was broken by making `linkRuns` return only the run on the hovered row. Two of 86 tests in
+`interaction.spec.ts` and `links.spec.ts` failed: `is underlined on every row it wraps over while the pointer is over
+any of them` and `is one run on each row it wraps over, joined by its URI, from any of them`. The original was put back
+and compared with `cmp` (identical). The broker tests were not mutated.
+
+### Gaps
+
+- **App side not in this phase.** The main-process scheme policy under D4 (`http`, `https`, `mailto` open directly), the
+  app's `linkPreview` setting and its wiring into the code surface are not done.
+- **Options at construction.** `linkPreview` is read when the view is made. A live change needs a new view, as the
+  cursor options do.
+- **Preview is the title only.** No overlay was built, since the view already shows hover only through the title and
+  the underline.
+- **Detectors do not wrap.** A detected link found across a wrap is one run on the row asked about, as before.
+- **Not seen on screen.** No Electron window was run, so the underline and title were not checked by eye.
