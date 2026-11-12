@@ -2,7 +2,7 @@
 
 > **Archived 2026-11-12: merged, with one required check still open.** The broker's mutation gate (its `mutants`
 > job) has no answer, and the Current handoff below records it. Archiving does not close it, and it is not
-> transferred to [goal-terminal-parity](../../goals/goal-terminal-parity.md), which covers view parity only.
+> transferred to [goal-terminal-parity](goal-terminal-parity.md), which covers view parity only.
 > Reopen this goal, or run the gate as its own task, before treating it as complete.
 
 **Status: merged, with one acceptance check unanswered.** It is on `master` in two repositories: this one

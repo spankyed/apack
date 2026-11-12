@@ -41,7 +41,7 @@ plan's Phase 2), native benchmarks, the quiet-gap output flush, and the v1 docum
 
 **Out, by decision:** public release; remote-target marks, recording and path links; session handoff across a
 broker restart; a GPU painter; Kitty animation; file and shared-memory image transfer; the `signal` request on
-Windows; accessibility, which [goal-terminal-parity.md](goal-terminal-parity.md) Phase 6 owns. See Decisions.
+Windows; accessibility, which [goal-terminal-parity.md](../archive/goals/goal-terminal-parity.md) Phase 6 owns. See Decisions.
 
 ## Decisions
 
@@ -60,7 +60,7 @@ Settled with the user on 2026-11-12 unless marked.
 - **D7 — the echo path flushes on a quiet gap.** The 16 ms window still bounds sustained output. Measured
   2026-11-12: back-to-back echoes median 19.8 ms; spaced keystrokes 0.2 ms.
 - **D8 — accessibility is not in this goal.** The screen-reader pass belongs to
-  [goal-terminal-parity.md](goal-terminal-parity.md) Phase 6, decided 2026-11-12. Nothing here depends on it.
+  [goal-terminal-parity.md](../archive/goals/goal-terminal-parity.md) Phase 6, decided 2026-11-12. Nothing here depends on it.
 - **D9 — merge authority.** The agent may merge the broker and app pull requests it opens, once each named check
   has passed. Before merging it brings the branch up to date with `master`, re-runs the checks on that result,
   and confirms the merge changes nothing it has not tested. Merges are merge commits, not squashes, because the

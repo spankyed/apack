@@ -202,7 +202,7 @@ The Windows status today, in plain terms:
 - Fix stale numbers in `docs/architecture/testing.md` (test counts, timings) with the date.
 - Done when: a reader can tell from the README what v1 does and does not do, without reading the code.
 
-Accessibility is not in v1. The screen-reader pass belongs to `docs/goals/goal-terminal-parity.md`, Phase 6.
+Accessibility is not in v1. The screen-reader pass belongs to `docs/archive/goals/goal-terminal-parity.md`, Phase 6.
 
 ## Order and dependencies
 
