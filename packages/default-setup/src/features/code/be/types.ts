@@ -167,6 +167,11 @@ export interface GitDiff {
   isImage?: boolean
   /** The pieces of the change that can be staged, or unstaged, one at a time: none for a file that is not plainly modified */
   hunks?: DiffHunk[]
+  /**
+   * For a conflicted file, its three sides as the index holds them: the version both started from, ours and
+   * theirs, each `null` where that side has no such file. Absent for a file that is not text
+   */
+  conflict?: { base: string | null; ours: string | null; theirs: string | null }
 }
 
 /** What a discard kept of what it removed, which can be put back for as long as git keeps it */
