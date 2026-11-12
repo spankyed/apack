@@ -59,6 +59,7 @@ is untrusted whoever asked, and the two rules live in one module rather than at 
 - A refusal is logged with the URL's origin and path (never its query, which may carry a token) or the file's path,
   in every environment, and nothing is opened. `shell:showItemInFolder` reveals rather than opens, so it takes the
   path as given.
+- A terminal's links take their own door, `shell:openTerminalLink` (`src/modules/terminal-link-access.ts`), because a program's output is less trusted than what the user typed: `http:`, `https:` and `mailto:` open directly; `file:` is refused; `javascript:`, `data:` and `vbscript:` are refused outright; any other scheme is asked about first, in a dialog from this process with Cancel as the default. The shared `externalUrlProblem` above is unchanged, so no other door gains `mailto:`.
 - There is no list of approved sites: the app opens links the user wrote, in notes, chats, terminals and packs' UIs,
   so a list would either block what people open or grow until it approves everything. `tests/shell-access.spec.ts`
   covers both rules, with the app's own links among the accepted ones.

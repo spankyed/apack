@@ -12,6 +12,9 @@ export const MAX_TERMINAL_LINK_LENGTH = 8192;
 /** The schemes that open without asking: a browser for web addresses, and the mail program for `mailto:`. */
 const OPEN_DIRECTLY = new Set(['http:', 'https:', 'mailto:']);
 
+/** Schemes that run or display code rather than naming a place to go. No program's link needs one, so the question is never asked for them. */
+const REFUSED_SCHEMES = new Set(['javascript:', 'data:', 'vbscript:']);
+
 /** How much of a link the question shows. The full text is held by the link itself; the dialog only needs to be readable. */
 const SHOWN_LENGTH = 500;
 
@@ -42,6 +45,7 @@ export function terminalLinkDecision(url: unknown): TerminalLinkDecision {
   }
   // "https://apple.com@evil.example" is a link to evil.example, read as one to apple.com
   if (parsed.username || parsed.password) return {action: 'refuse', reason: 'it carries credentials, which hide the host it opens'};
+  if (REFUSED_SCHEMES.has(parsed.protocol)) return {action: 'refuse', reason: `${parsed.protocol.slice(0, -1)} links run or display code, and are refused`};
   if (OPEN_DIRECTLY.has(parsed.protocol)) return {action: 'open'};
   return {action: 'ask', scheme: parsed.protocol.slice(0, -1)};
 }

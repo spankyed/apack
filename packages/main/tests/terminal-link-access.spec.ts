@@ -163,3 +163,11 @@ describe('the channel a window reaches', () => {
     expect(shell.opened).toEqual([]);
   });
 });
+
+describe('the schemes that run or display code', () => {
+  it('are refused outright, and are never put to the person as a question', () => {
+    for (const url of ['javascript:alert(1)', 'data:text/html,<b>x</b>', 'vbscript:msgbox(1)']) {
+      expect(terminalLinkDecision(url).action, url).toBe('refuse');
+    }
+  });
+});
