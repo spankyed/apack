@@ -311,24 +311,38 @@ function startKey(binary: string, socket: string): string {
  * are counted against that binary. A target fails because a network or a container is not there, which is
  * a state that ends on its own: every start is tried, and each one that fails says why.
  */
-function brokerSessions(start: () => Promise<Broker>, startKeyOf: (() => string) | null, key: string | null) {
+function brokerSessions(
+  start: () => Promise<Broker>,
+  startKeyOf: (() => string) | null,
+  key: string | null,
+  /**
+   * A connection to the broker if one is already there, for a broker `start` would otherwise start.
+   * Absent for one this app cannot start, where `start` is already only a connection.
+   */
+  join?: () => Promise<Broker>,
+) {
   let broker: Promise<Broker> | undefined;
   let current: Broker | undefined;
   let failing: { key: string; count: number; error: unknown } | undefined;
+  /** Holds the broker `reach` answers, for as long as it lives */
+  const held = (reach: () => Promise<Broker>): Promise<Broker> =>
+    reach().then((reached) => {
+      current = reached;
+      reached.onGone(() => {
+        if (current !== reached) return;
+        broker = undefined;
+        current = undefined;
+      });
+      return reached;
+    });
   const running = (): Promise<Broker> => {
     if (broker) return broker;
     const startKey = startKeyOf?.() ?? '';
     if (startKeyOf && failing && failing.key === startKey && failing.count >= START_ATTEMPTS) return Promise.reject(failing.error);
-    broker ??= start()
-      .then((held) => {
+    broker ??= held(start)
+      .then((reached) => {
         failing = undefined;
-        current = held;
-        held.onGone(() => {
-          if (current !== held) return;
-          broker = undefined;
-          current = undefined;
-        });
-        return held;
+        return reached;
       })
       .catch((error: unknown) => {
         broker = undefined;
@@ -336,6 +350,25 @@ function brokerSessions(start: () => Promise<Broker>, startKeyOf: (() => string)
         throw error;
       });
     return broker;
+  };
+  /**
+   * The broker if one is running, and `undefined` if none is: nothing is started to find out.
+   *
+   * **For a question whose answer with no broker is already known.** A broker that is not running has
+   * no sessions, so asking what it has must not be what brings one into being — an app that opens no
+   * terminal would otherwise start one at every launch and every reset, to be told nothing. One found
+   * this way is held like any other. Finding none is not a failed start, and is not counted as one.
+   */
+  const alreadyRunning = async (): Promise<Broker | undefined> => {
+    if (broker || !join) return running();
+    const joining = held(join);
+    broker = joining;
+    try {
+      return await joining;
+    } catch {
+      if (broker === joining) broker = undefined;
+      return undefined;
+    }
   };
   return {
     async open(options: Parameters<TerminalService['open']>[0], listeners: TerminalListeners): Promise<TerminalSession> {
@@ -348,7 +381,7 @@ function brokerSessions(start: () => Promise<Broker>, startKeyOf: (() => string)
       return expose(held, await held.adopt(id, listeners), key);
     },
     async sessions() {
-      return (await running()).sessions();
+      return (await (await alreadyRunning())?.sessions()) ?? [];
     },
     async rewind(recording: string, size: { readonly cols: number; readonly rows: number }) {
       return (await running()).rewind(recording, size);
@@ -383,6 +416,7 @@ export function createTerminalService({ startMs = TARGET_GREETING_MS }: { startM
     () => startBroker({ binary: brokerBinary(), socket: socketPath(), env: brokerEnvironment() }),
     () => startKey(brokerBinary(), socketPath()),
     null,
+    () => startBroker({ socket: socketPath() }),
   );
   /** A target's sessions and the socket in front of its command, by the target's key */
   const targets = new Map<string, { sessions: ReturnType<typeof brokerSessions>; relay: Promise<Relay> }>();
