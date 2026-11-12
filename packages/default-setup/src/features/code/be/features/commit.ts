@@ -618,8 +618,19 @@ export const commitSystem = setup({
         })
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
       }).catch(async (error: unknown) => {
+        if (error instanceof GitError && error.code === 'aborted') {
+          answer(reply, { type: 'commit.PUSH_STOPPED' })
+          // What the remote holds is not known from here: it has the push or it does not
+          self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+          return
+        }
         answer(reply, { type: 'commit.ERROR_RECEIVED', data: await remoteFailureOf(error, 'push', context.gitRepository!) })
       })
+    },
+
+    /** Stops the push this repository is running, which its own handler answers as stopped */
+    stopPush: ({ context }) => {
+      context.gitRepository?.stopPush()
     },
 
     generateCommitMessage: ({ context, reply, client }) => {
@@ -1133,6 +1144,9 @@ export const commitSystem = setup({
         },
         'commit.PUBLISH_BRANCH': {
           actions: 'pushBranch'
+        },
+        'commit.STOP_PUSH': {
+          actions: 'stopPush'
         },
         'commit.PULL_BRANCH': {
           actions: 'pullBranch'

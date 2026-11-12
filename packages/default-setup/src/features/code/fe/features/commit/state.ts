@@ -218,6 +218,8 @@ export type Event =
   | { type: 'commit.BRANCHES_RECEIVED'; data: { branches: string[] } }
   | { type: 'commit.BRANCH_CHECKOUT_SUCCESS'; data: { branchName: string } }
   | { type: 'commit.BRANCH_PUSHED'; data: { branchName: string } }
+  | { type: 'commit.STOP_PUSH' }
+  | { type: 'commit.PUSH_STOPPED' }
   | { type: 'commit.BRANCH_PULLED'; data: { branchName: string } }
   | { type: 'commit.DISMISS_ERROR' }
   | { type: 'commit.GENERATE_MESSAGE' }
@@ -1118,6 +1120,14 @@ export const commitState = setup({
           actions: ['setPushing', 'pushBranch']
         },
         'commit.BRANCH_PUSHED': {
+          actions: 'handleBranchPushed'
+        },
+        // Only while a push runs: the backend has nothing to stop otherwise
+        'commit.STOP_PUSH': {
+          guard: ({ context }) => context.isPushing,
+          actions: () => { sendToSystem('code', { type: 'commit.STOP_PUSH' }) }
+        },
+        'commit.PUSH_STOPPED': {
           actions: 'handleBranchPushed'
         },
         'commit.PULL_BRANCH': {

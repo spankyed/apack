@@ -1585,7 +1585,7 @@ interface FolderItem {
 }
 
 /** Why a git command failed, where what it printed says: the git engine's codes, as the contract names them */
-declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository", "git-not-found", "developer-tools-missing", "git-too-old", "unsafe-ownership", "signing-failed", "unrelated-histories", "nothing-to-commit", "branch-exists", "host-refused", "untrusted"];
+declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository", "aborted", "git-not-found", "developer-tools-missing", "git-too-old", "unsafe-ownership", "signing-failed", "unrelated-histories", "nothing-to-commit", "branch-exists", "host-refused", "untrusted"];
 
 interface GhPRComment {
     id: string;
@@ -1850,6 +1850,10 @@ type IncomingCommitEvents = {
  | {
     type: 'commit.TRUST_REPOSITORY';
     repository: string;
+}
+/** Stops the push running: git and what it started are ended, and the push is answered as stopped */
+ | {
+    type: 'commit.STOP_PUSH';
 }
 /** The user trusts the repository git refused for who owns it: added to their safe.directory */
  | {
@@ -3225,6 +3229,10 @@ type OutgoingCommitEvents =
     data: {
         directory: string;
     };
+}
+/** A push the user stopped, answered to the window that pushed: nothing failed */
+ | {
+    type: 'commit.PUSH_STOPPED';
 } | {
     type: 'commit.ERROR_RECEIVED';
     data: CommitFailure;

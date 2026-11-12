@@ -102,7 +102,8 @@ function saidOfRemote(code: GitErrorCode | undefined, printed: string): string |
 
 /** A push or a pull that failed, in the words the panel shows, carrying why it failed */
 const remoteFailure = (verb: 'push' | 'pull', error: unknown): unknown =>
-  error instanceof GitError ? new GitError(`Failed to ${verb}: ${saidOfRemote(error.code, error.message) ?? error.message}`, error.code) : error
+  // Stopped by the user, which is no failure and has no plainer words to be put in
+  error instanceof GitError && error.code === 'aborted' ? error : error instanceof GitError ? new GitError(`Failed to ${verb}: ${saidOfRemote(error.code, error.message) ?? error.message}`, error.code) : error
 
 /** What a commit or a branch that failed is said to have failed on, where the panel has plainer words than git's */
 function saidOfLocal(code: GitErrorCode | undefined): string | undefined {
@@ -233,11 +234,31 @@ export class AppGitRepository extends GitRepository {
     return super.worktreeAdd(wtPath, branch, createBranch).catch((error: unknown) => { throw localFailure(error) })
   }
 
-  override async pushBranch(onProgress?: (progress: GitProgress) => void): Promise<void> {
-    await super.pushBranch(onProgress).catch((error: unknown) => { throw remoteFailure('push', error) })
+  /** The push running, which `stopPush` stops */
+  private pushing: AbortController | undefined
+
+  override async pushBranch(onProgress?: (progress: GitProgress) => void, signal?: AbortSignal): Promise<void> {
+    const pushing = new AbortController()
+    this.pushing = pushing
+    try {
+      await super.pushBranch(onProgress, signal ? AbortSignal.any([signal, pushing.signal]) : pushing.signal)
+        .catch((error: unknown) => { throw remoteFailure('push', error) })
+    } finally {
+      if (this.pushing === pushing) this.pushing = undefined
+    }
     // A push moved the remote's refs here too, so a fetch is not due
     this.lastFetchTimestamp = Date.now()
     this.suspend(false)
+  }
+
+  /**
+   * Stops the push running, ending git and what it started; the push then rejects coded `aborted`. Whether there
+   * was one to stop. Only a push: a stopped push leaves the working tree and the index as they were
+   */
+  stopPush(): boolean {
+    if (!this.pushing) return false
+    this.pushing.abort()
+    return true
   }
 
   override async pullBranch(onProgress?: (progress: GitProgress) => void): Promise<void> {

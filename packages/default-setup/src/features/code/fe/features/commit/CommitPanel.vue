@@ -379,6 +379,15 @@
         >
           {{ actionButtonText }}
         </button>
+        <!-- A push waiting on the network can be stopped: what it leaves is the checkout as it was -->
+        <button
+          v-if="shouldShowActionButton && isPushing"
+          data-testid="stop-push"
+          class="w-full px-3 py-1 mt-1 text-xs rounded text-neutral-300 bg-neutral-800 hover:bg-neutral-700"
+          @click="commitActor?.send({ type: 'commit.STOP_PUSH' })"
+        >
+          Stop pushing
+        </button>
 
         <button
           v-else
