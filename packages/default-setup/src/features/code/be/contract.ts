@@ -3,10 +3,10 @@
 // and one `Contract` per feature would collide there. Codegen reads this without running anything.
 import type { ActionEntity, PromptEntity } from '@apackdev/sdk';
 import type {
-  CodeConnectedData, RepositoryUnder, CodeSystemError, CommitFailure, CommitLogEntry, CodeSystemContext, DirectoryContent, DiscardKept, DiscardRestored, FileContent, FileInfo,
+  CodeConnectedData, RepositoryUnder, CodeSystemError, CommitFailure, CodeSystemContext, DirectoryContent, DiscardKept, DiscardRestored, FileContent, FileInfo,
   GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitProgress, GitStatusFile, OperationMove, QuickOpenResult, RepositoryChange,
   RepositoryOperation, SearchProgress, SignInHelp,
-  SearchResult, StashEntry, LineCount, ChangedFile, TerminalInfo, WorktreeEntry,
+  SearchResult, StashEntry, LineCount, ChangedFile, HistoryCommit, TerminalInfo, WorktreeEntry,
 } from './types.ts';
 import type { ActiveTokenInfo } from './services/gh-cli.ts';
 import type { FileChangeInfo } from './services/open-file-watcher.ts';
@@ -106,7 +106,8 @@ export type IncomingCommitEvents =
   | { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; hunk: string }
   /** Have the GitHub CLI give git its sign-in for this host */
   | { type: 'commit.SET_UP_SIGN_IN'; host: string; during?: 'push' | 'pull' }
-  | { type: 'commit.LOG_LIST' }
+  /** A page of history: from what is checked out, or from where `cursor` left off; with `path`, that file's history */
+  | { type: 'commit.LOG_LIST'; cursor?: string; path?: string }
   | { type: 'commit.REVERT_COMMIT'; hash: string }
   | { type: 'commit.RESET_TO_COMMIT'; hash: string }
 
@@ -162,7 +163,8 @@ export type OutgoingCommitEvents =
   | { type: 'commit.WORKTREE_REMOVED'; data: { path: string } }
   | { type: 'commit.CONFLICT_RESOLVED'; data: { path: string } }
   | { type: 'commit.ALL_CONFLICTS_RESOLVED' }
-  | { type: 'commit.LOG_LIST_RECEIVED'; data: { commits: CommitLogEntry[] } }
+  /** A page of history, saying which file's it is and whether it goes on from a cursor; `cursor` for the next */
+  | { type: 'commit.LOG_LIST_RECEIVED'; data: { commits: HistoryCommit[]; cursor?: string; path?: string; continued?: boolean } }
   | { type: 'commit.REVERT_COMMIT_SUCCESS'; data: { hash: string } }
   | { type: 'commit.RESET_COMMIT_SUCCESS'; data: { hash: string } }
   /** What `commit.UNDO_LAST` would take back, after a write that can be: nothing when there is none */

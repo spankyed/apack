@@ -115,6 +115,10 @@ export interface CodeCommitContext {
   worktreeList: WorktreeEntry[]
   isWorktreeLoading: boolean
   commitLog: CommitLogEntry[]
+  /** Where the next page of the history goes on from; absent when the page shown ends it */
+  logCursor: string | null
+  /** The file whose history the log shows, followed across its renames; `null` for the whole history */
+  logPath: string | null
   /** The asks in flight for a diff that is already open, by call: the answer to one brings its tab up to date and opens none */
   diffRefreshes: Record<string, true>
   /** The latest ask for the status, while it is unanswered: an answer to an earlier one is of the repository before it */
@@ -175,15 +179,15 @@ export interface WorktreeEntry {
   lockedReason?: string
 }
 
+/** A commit as the panel's history draws it: with every parent, and the refs that point at it */
 export interface CommitLogEntry {
   hash: string
-  shortHash: string
+  parents: string[]
   subject: string
-  body: string
   authorName: string
   authorEmail: string
   date: string
-  refs: string
+  refs: string[]
 }
 
 export type Event =
@@ -272,8 +276,13 @@ export type Event =
   | { type: 'commit.ALL_CONFLICTS_RESOLVED' }
   | { type: 'commit.MOVE_OPERATION'; move: OperationMove }
   | { type: 'commit.OPERATION_MOVED'; data: { move: OperationMove } }
-  | { type: 'commit.LOG_LIST' }
-  | { type: 'commit.LOG_LIST_RECEIVED'; data: { commits: CommitLogEntry[] } }
+  | { type: 'commit.LOG_LIST'; cursor?: string; path?: string }
+  | { type: 'commit.LOG_LIST_RECEIVED'; data: { commits: CommitLogEntry[]; cursor?: string; path?: string; continued?: boolean } }
+  /** The next page of the history the log shows */
+  | { type: 'commit.LOAD_MORE_LOG' }
+  /** A file's history in the log, followed across its renames, until it is cleared */
+  | { type: 'commit.SHOW_FILE_HISTORY'; path: string }
+  | { type: 'commit.CLEAR_FILE_HISTORY' }
   | { type: 'commit.REVERT_COMMIT'; hash: string }
   | { type: 'commit.RESET_TO_COMMIT'; hash: string }
   | { type: 'commit.REVERT_COMMIT_SUCCESS'; data: { hash: string } }
@@ -314,6 +323,8 @@ type OfOneFolder =
   | 'stashList'
   | 'worktreeList'
   | 'commitLog'
+  | 'logCursor'
+  | 'logPath'
 
 /**
  * What the panel holds of a repository, as it is before any has been read: its rows, its branch and whether that
@@ -352,6 +363,8 @@ const ofNoFolder = (): Pick<CodeCommitContext, OfOneFolder> => ({
   stashList: [],
   worktreeList: [],
   commitLog: [],
+  logCursor: null,
+  logPath: null,
 })
 
 /** The lists the panel shows beside the status, each asked for by an event of its own, sent under a call */
@@ -368,6 +381,17 @@ type RepositoryList = keyof typeof LIST_ASKS
  * Only the answer to the latest ask of a list is shown. An answer to an earlier one is dropped: the folder may
  * have changed since it was asked, and the backend answers every ask.
  */
+/** Asks for a page of the log as the ask of the log, so its answer is the one the log takes */
+function askLogPage(
+  context: CodeCommitContext,
+  enqueue: { assign: (values: Partial<CodeCommitContext>) => void } & ((action: () => void) => void),
+  ask: { cursor?: string; path?: string | null },
+): void {
+  const call = newCall()
+  enqueue.assign({ listAsks: { ...context.listAsks, log: call } })
+  enqueue(() => sendToSystem('code', { type: 'commit.LOG_LIST', ...(ask.cursor && { cursor: ask.cursor }), ...(ask.path && { path: ask.path }) }, { call }))
+}
+
 function listAsks(lists: readonly RepositoryList[]) {
   const calls = lists.map((list) => [list, newCall()] as const)
   return {
@@ -962,11 +986,17 @@ export const commitState = setup({
       enqueue(send)
     }),
 
-    handleLogListReceived: assign({
-      commitLog: ({ event }) => {
-        const ev = event as { type: 'commit.LOG_LIST_RECEIVED'; data: { commits: CommitLogEntry[] } }
-        return ev.data.commits
-      }
+    /**
+     * A page of history: added on to the log when it goes on from a cursor, and in its place otherwise. While the log
+     * shows a file's history, a page of another history (one asked again because the repository moved) is not it
+     */
+    handleLogListReceived: enqueueActions(({ context, event, enqueue }) => {
+      const { data } = event as { type: 'commit.LOG_LIST_RECEIVED'; data: { commits: CommitLogEntry[]; cursor?: string; path?: string; continued?: boolean } }
+      if ((data.path ?? null) !== context.logPath) return
+      enqueue.assign({
+        commitLog: data.continued ? [...context.commitLog, ...data.commits] : data.commits,
+        logCursor: data.cursor ?? null,
+      })
     }),
 
     revertCommit: ({ event }) => {
@@ -1131,6 +1161,24 @@ export const commitState = setup({
               const { index, files } = (event as { type: 'commit.STASH_CHANGES_RECEIVED'; data: { index: number; files: ChangedFile[] } }).data
               return { ...context.stashFiles, [index]: files }
             },
+          }),
+        },
+        'commit.LOAD_MORE_LOG': {
+          actions: enqueueActions(({ context, enqueue }) => {
+            if (context.logCursor) askLogPage(context, enqueue, { cursor: context.logCursor, path: context.logPath })
+          }),
+        },
+        'commit.SHOW_FILE_HISTORY': {
+          actions: enqueueActions(({ context, enqueue, event }) => {
+            const { path } = event as { type: 'commit.SHOW_FILE_HISTORY'; path: string }
+            enqueue.assign({ logPath: path, commitLog: [], logCursor: null })
+            askLogPage(context, enqueue, { path })
+          }),
+        },
+        'commit.CLEAR_FILE_HISTORY': {
+          actions: enqueueActions(({ context, enqueue }) => {
+            enqueue.assign({ logPath: null, commitLog: [], logCursor: null })
+            askLogPage(context, enqueue, {})
           }),
         },
         'commit.UNDO_DISCARD': {

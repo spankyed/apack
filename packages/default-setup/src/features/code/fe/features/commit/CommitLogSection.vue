@@ -8,7 +8,7 @@
   />
 
   <!-- Commits Section -->
-  <div v-if="commitLog.length > 0" class="flex-shrink-0 border-t border-neutral-800">
+  <div v-if="commitLog.length > 0 || logPath" class="flex-shrink-0 border-t border-neutral-800">
     <div class="flex items-center justify-between p-3 px-5 cursor-pointer hover:bg-neutral-800/60 transition-colors" @click="toggleCommitsExpanded">
       <div class="flex items-center gap-1 text-xs font-medium text-neutral-400">
         <ChevronRight v-if="!isCommitsExpanded" class="w-3 h-3" />
@@ -44,19 +44,26 @@
         </button>
         </div>
       </div>
+      <!-- A file's history, followed across its renames, until it is cleared -->
+      <div v-if="logPath" class="flex items-center gap-2 pl-5 pr-3 mb-1.5 text-[11px] text-neutral-400" data-testid="file-history">
+        <span class="flex-1 truncate" :title="logPath">History of {{ logPath }}</span>
+        <button class="px-1.5 py-0.5 rounded hover:bg-neutral-700" @click="commitActor.send({ type: 'commit.CLEAR_FILE_HISTORY' })">Whole history</button>
+      </div>
       <div class="space-y-0.5 pl-3">
         <div
-          v-for="entry in filteredCommits"
+          v-for="(entry, index) in filteredCommits"
           :key="entry.hash"
           class="group px-2 py-1.5 rounded hover:bg-neutral-800/50 transition-colors"
         >
           <div class="flex items-center gap-2 min-w-0">
+            <!-- Drawn only over the whole history, which the lanes are of: a search keeps rows that are not neighbours -->
+            <HistoryGraph v-if="!commitSearchQuery.trim()" :row="lanes[index]!" :width="graphWidth" />
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-1.5">
-                <div class="text-xs text-neutral-200 truncate" :title="entry.body ? `${entry.subject}\n\n${entry.body}` : entry.subject">{{ entry.subject }}</div>
-                <span v-if="entry.refs" class="flex-shrink-0 px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-500/20 text-blue-400 whitespace-nowrap">{{ formatRefs(entry.refs) }}</span>
+                <div class="text-xs text-neutral-200 truncate" :title="entry.subject">{{ entry.subject }}</div>
+                <span v-if="entry.refs.length > 0" class="flex-shrink-0 px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-500/20 text-blue-400 whitespace-nowrap" :title="entry.refs.join(', ')">{{ formatRefs(entry.refs) }}</span>
               </div>
-              <div class="text-[11px] text-neutral-500 truncate">{{ entry.shortHash }} · {{ entry.authorName }} · {{ formatCommitDate(entry.date) }}</div>
+              <div class="text-[11px] text-neutral-500 truncate">{{ entry.hash.slice(0, 7) }} · {{ entry.authorName }} · {{ formatCommitDate(entry.date) }}</div>
             </div>
             <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
               <button @click.stop="openRevertCommitDialog(entry)" class="p-0.5 hover:bg-neutral-700 rounded" title="Revert this commit">
@@ -72,6 +79,7 @@
           </div>
         </div>
       </div>
+      <button v-if="logCursor && !commitSearchQuery.trim()" data-testid="load-more-log" class="ml-5 mt-1 px-2 py-0.5 text-[11px] rounded text-neutral-400 hover:bg-neutral-800" @click="commitActor.send({ type: 'commit.LOAD_MORE_LOG' })">Load more</button>
     </div>
   </div>
 
@@ -97,6 +105,8 @@ import type { CommitLogEntry } from '#features/code/fe/features/commit/state.ts'
 import { ChevronDown, ChevronRight, RefreshCw, Undo2, RotateCw, Copy, Search, X } from 'lucide-vue-next'
 import RevertDialog from '#features/code/fe/features/commit/RevertDialog.vue'
 import PanelResizer from '@apackdev/ui/layout/panel-resizer'
+import HistoryGraph from '#features/code/fe/features/commit/HistoryGraph.vue'
+import { laneRows } from '#features/code/fe/utils/history-lanes.ts'
 import { panelChild } from '../children.ts';
 
 const props = defineProps<{
@@ -107,6 +117,10 @@ const codeActor: CodeState = useSurface()
 const commitActor = panelChild(codeActor, 'commit')!
 
 const commitLog = useSelector(commitActor, (state) => state.context.commitLog) as import('vue').Ref<CommitLogEntry[]>
+const logCursor = useSelector(commitActor, (state) => state.context.logCursor)
+const logPath = useSelector(commitActor, (state) => state.context.logPath)
+const lanes = computed(() => laneRows(commitLog.value))
+const graphWidth = computed(() => Math.min(lanes.value.at(-1)?.width ?? 1, 8))
 
 // Search state
 const showCommitSearch = ref(false)
@@ -140,7 +154,7 @@ const refreshCommitLog = () => {
 
 const openRevertCommitDialog = (entry: CommitLogEntry) => {
   pendingCommitHash.value = entry.hash
-  pendingCommitShortHash.value = entry.shortHash
+  pendingCommitShortHash.value = entry.hash.slice(0, 7)
   showRevertCommitDialog.value = true
 }
 
@@ -173,7 +187,7 @@ const filteredCommits = computed(() => {
   if (!query) return commitLog.value
   const lowerQuery = query.toLowerCase()
   return commitLog.value.filter((entry: CommitLogEntry) => {
-    const text = `${entry.subject} ${entry.shortHash} ${entry.authorName} ${entry.refs}`.toLowerCase()
+    const text = `${entry.subject} ${entry.hash.slice(0, 7)} ${entry.authorName} ${entry.refs.join(' ')}`.toLowerCase()
     return text.includes(lowerQuery)
   })
 })
@@ -208,8 +222,5 @@ const formatCommitDate = (dateStr: string) => {
   }
 }
 
-const formatRefs = (refs: string) => {
-  if (!refs) return ''
-  return refs.split(',')[0].trim().replace(/^HEAD -> /, '')
-}
+const formatRefs = (refs: string[]) => (refs[0] ?? '').replace(/^HEAD -> /, '')
 </script>
