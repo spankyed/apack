@@ -873,6 +873,19 @@ const discardLeft = useSelector(commitActor, (state) => state.context.discardLef
 const notKeptOf = (paths: string[]): string[] =>
   (discardPreview.value && discardPreview.value.paths.join('\0') === paths.join('\0') ? discardPreview.value.notKept : [])
 const availableBranches = useSelector(commitActor, (state) => state.context.availableBranches)
+const pullPreview = useSelector(commitActor, (state) => state.context.pullPreview)
+/** What a pull would do, said before the click */
+const pullTitle = computed(() => {
+  const preview = pullPreview.value
+  if (!preview) return 'Pull latest'
+  switch (preview.kind) {
+    case 'fast-forward': return 'Pull: a fast-forward'
+    case 'clean': return 'Pull: merges cleanly'
+    case 'conflicts': return `Pull: would conflict in ${preview.files.join(', ')}`
+    case 'up-to-date': return 'Pull: nothing to bring in'
+    default: return 'Pull latest'
+  }
+})
 const branchStanding = useSelector(commitActor, (state) => state.context.branchStanding)
 const branchInput = useSelector(commitActor, (state) => state.context.branchInput)
 const isCheckingOutBranch = useSelector(commitActor, (state) => state.context.isCheckingOutBranch)
@@ -1033,7 +1046,7 @@ const REASONS: Record<UnavailableReason, string> = {
 }
 const reasonOf = (availability: Availability) => (availability.possible ? null : REASONS[availability.reason])
 const whyNot = computed(() => ({ commit: reasonOf(canBeDone.value.commit), push: reasonOf(canBeDone.value.push), pull: reasonOf(canBeDone.value.pull) }))
-const syncTitle = computed(() => (commitsAhead.value > 0 ? whyNot.value.push ?? 'Push' : whyNot.value.pull ?? 'Pull latest'))
+const syncTitle = computed(() => (commitsAhead.value > 0 ? whyNot.value.push ?? 'Push' : whyNot.value.pull ?? pullTitle.value))
 
 const canCommit = computed(() => commitMessage.value.trim() && stagedFiles.value.length > 0 && hasIdentity.value)
 

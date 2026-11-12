@@ -5,7 +5,7 @@ import { sendToSystem } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { diffTab, diffTabPath } from '../../utils/diff-tabs.ts';
 import { withStaged, withUnstaged } from 'apack-git/staging';
-import type { BlameLine, ChangedFile, CommitFailure, ConflictKind, LineCount, DiffHunk, DiscardKept, DiscardRestored, GitProgress, OperationMove, RepositoryChange, RepositoryOperation, SignInHelp } from '../../../be/types.ts';
+import type { BlameLine, ChangedFile, MergePreview, CommitFailure, ConflictKind, LineCount, DiffHunk, DiscardKept, DiscardRestored, GitProgress, OperationMove, RepositoryChange, RepositoryOperation, SignInHelp } from '../../../be/types.ts';
 import type { OpenFile } from '../../contract.ts';
 
 
@@ -46,6 +46,8 @@ export interface CodeCommitContext {
   gitBranch: string
   /** Whether git has a name and an email to commit with */
   hasIdentity: boolean
+  /** What a pull would do, when there is something to pull */
+  pullPreview: MergePreview | null
   gitError: string | null
   isGitLoading: boolean
   selectedGitFile: GitStatusFile | null
@@ -214,7 +216,7 @@ export type Event =
   | { type: 'commit.CHECKOUT_BRANCH' }
   | { type: 'commit.PUSH_BRANCH' }
   | { type: 'commit.PULL_BRANCH' }
-  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; counts?: LineCount[]; hasIdentity?: boolean; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
+  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; counts?: LineCount[]; pullPreview?: MergePreview; hasIdentity?: boolean; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
   | { type: 'commit.DIFF_RECEIVED'; data: GitDiff }
   | { type: 'commit.FILES_STAGED'; paths: string[] }
   | { type: 'commit.FILES_UNSTAGED'; paths: string[] }
@@ -307,6 +309,7 @@ type OfOneFolder =
   | 'gitStatus'
   | 'gitBranch'
   | 'hasIdentity'
+  | 'pullPreview'
   | 'gitError'
   | 'selectedGitFile'
   | 'revertDialogFile'
@@ -350,6 +353,7 @@ const ofNoFolder = (): Pick<CodeCommitContext, OfOneFolder> => ({
   gitStatus: [],
   gitBranch: '',
   hasIdentity: true,
+  pullPreview: null,
   gitError: null,
   selectedGitFile: null,
   revertDialogFile: null,
@@ -680,6 +684,7 @@ export const commitState = setup({
         return writing(context.stagingWrites) ? context.gitStatus : ev.data.files
       },
       hasIdentity: ({ event }) => (event as { type: 'commit.STATUS_RECEIVED'; data: { hasIdentity?: boolean } }).data.hasIdentity ?? true,
+      pullPreview: ({ event }) => (event as { type: 'commit.STATUS_RECEIVED'; data: { pullPreview?: MergePreview } }).data.pullPreview ?? null,
       gitBranch: ({ event }) => {
         const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
         return ev.data.branch
