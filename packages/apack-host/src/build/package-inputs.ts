@@ -75,9 +75,25 @@ const UNSETTLED_MS = 2_000;
 /** How far a filesystem's clock may stand from this process's before a file's age stops meaning anything. */
 const CLOCK_ALLOWANCE_MS = 24 * 60 * 60 * 1_000;
 
+/** How long a digest nothing has asked for stays in the file. */
+const KEPT_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1_000;
+
 export interface PackageDigestCache {
   /** The digest held for a file that has not moved since it was taken, and how to hold the one read now. */
   lookup(file: string): { readonly digest: string | undefined; readonly mode: number; record(digest: string): void };
+  /** Writes the digests that answer to the file this reader was opened over, when any has changed since it last did. */
+  save(): void;
+}
+
+interface HeldDigest { size: bigint; mtimeNs: bigint; ctimeNs: bigint; ino: bigint; digest: string; seen: number; settled: boolean; used: number }
+type StoredDigest = [size: string, mtimeNs: string, ctimeNs: string, ino: string, digest: string, used: number];
+
+function readStoredDigests(file: string): Record<string, StoredDigest> {
+  try {
+    const stored = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return stored?.format === 1 && stored.entries && typeof stored.entries === 'object' ? stored.entries : {};
+  } catch { return {}; }
 }
 
 /**
@@ -91,11 +107,28 @@ export interface PackageDigestCache {
  * counted on this process's own clock, which runs at the filesystem's rate wherever the two stand, so nothing
  * here compares one clock with the other closer than a day.
  *
- * It belongs to one reader for as long as that reader lives; a build takes its own bytes and never reads this.
+ * Over a `file`, the digests that answer outlive the reader: the next one starts with them, so its first reading
+ * of a tree nothing has touched asks only each file's stat. A digest that answered is as true in another process
+ * as in this one, since what it is keyed by is the file's and not the reader's. The file is a cache and nothing
+ * else: unreadable it is empty, a save that fails is dropped, and two readers saving at once each replace it whole,
+ * the later keeping what the earlier wrote for every file it did not itself see to be as its digest says. A digest nothing has asked for in
+ * `KEPT_DAYS` leaves it.
+ *
+ * A build takes its own bytes and never reads this.
  */
-export function createPackageDigestCache(clock: { now?: () => number; elapsed?: () => number } = {}): PackageDigestCache {
-  const { now = Date.now, elapsed = () => performance.now() } = clock;
-  const held = new Map<string, { size: bigint; mtimeNs: bigint; ctimeNs: bigint; ino: bigint; digest: string; seen: number; settled: boolean }>();
+export function createPackageDigestCache(options: { now?: () => number; elapsed?: () => number; file?: string } = {}): PackageDigestCache {
+  const { now = Date.now, elapsed = () => performance.now(), file: store } = options;
+  const today = () => Math.floor(now() / DAY_MS);
+  const held = new Map<string, HeldDigest>();
+  // What this reader has itself seen to be so: a digest it only started with may be older than the file's
+  const confirmed = new Set<string>();
+  let dirty = false;
+  if (store) {
+    for (const [file, [size, mtimeNs, ctimeNs, ino, digest, used]] of Object.entries(readStoredDigests(store))) {
+      try { held.set(file, { size: BigInt(size), mtimeNs: BigInt(mtimeNs), ctimeNs: BigInt(ctimeNs), ino: BigInt(ino), digest, seen: -Infinity, settled: true, used }); }
+      catch { /* An entry that is not one is not kept */ }
+    }
+  }
   return {
     lookup(file) {
       const old = BigInt(Math.floor(now()) - CLOCK_ALLOWANCE_MS) * 1_000_000n;
@@ -104,14 +137,44 @@ export function createPackageDigestCache(clock: { now?: () => number; elapsed?: 
       const entry = held.get(file);
       const same = !!entry && entry.size === size && entry.mtimeNs === mtimeNs && entry.ctimeNs === ctimeNs && entry.ino === ino;
       const seen = same ? entry!.seen : at;
+      const answers = same && entry!.settled;
+      if (answers) {
+        confirmed.add(file);
+        if (entry!.used !== today()) {
+          entry!.used = today();
+          dirty = true;
+        }
+      }
       return {
-        digest: same && entry!.settled ? entry!.digest : undefined,
+        digest: answers ? entry!.digest : undefined,
         mode: Number(mode),
         record(digest) {
           const settled = (mtimeNs < old && ctimeNs < old) || (same && at - seen >= UNSETTLED_MS);
-          held.set(file, { size, mtimeNs, ctimeNs, ino, digest, seen, settled });
+          held.set(file, { size, mtimeNs, ctimeNs, ino, digest, seen, settled, used: today() });
+          if (settled) confirmed.add(file);
+          else confirmed.delete(file);
+          dirty ||= settled;
         },
       };
+    },
+    save() {
+      if (!store || !dirty) return;
+      try {
+        const entries = readStoredDigests(store);
+        for (const file of confirmed) {
+          const entry = held.get(file)!;
+          entries[file] = [String(entry.size), String(entry.mtimeNs), String(entry.ctimeNs), String(entry.ino), entry.digest, entry.used];
+        }
+        const oldest = today() - KEPT_DAYS;
+        for (const [file, entry] of Object.entries(entries)) if (!(entry[5] >= oldest)) delete entries[file];
+        fs.mkdirSync(path.dirname(store), { recursive: true });
+        const written = `${store}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
+        try {
+          fs.writeFileSync(written, JSON.stringify({ format: 1, entries }));
+          fs.renameSync(written, store);
+        } finally { fs.rmSync(written, { force: true }); }
+        dirty = false;
+      } catch { /* A cache that could not be written is one the next reader fills */ }
     },
   };
 }

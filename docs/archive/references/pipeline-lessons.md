@@ -335,8 +335,18 @@ container's memory limit had pushed those pages out. Kept digests buy little the
 watcher's first reading is the one that is whole. A later pass end to end was 3.94s, 3.08s of it the module-input
 reading; the yielding first read held the event loop 38ms at most.
 
-Not measured: a first reading that takes only each file's stat with nothing of the tree in memory, which is what
-digests kept on disk across watchers would cost. It is the figure that decides them.
+**So the digests outlive the watcher.** The ones that answer are written to a file in the compiler store
+(`packageDigestsFile`, `APACK_PACKAGE_DIGESTS`), and the next watcher starts with them: its first reading of a
+tree nothing has touched asks each file's stat and reads none. In the container the runner points every process at
+one file on the checkout's volume, because a spec gives each worker a store of its own. A reader writes only the
+digests it has itself seen to be so, over whatever the file holds by then, so one that started with an older
+digest cannot put it back over a newer one. On the Mac at a load of 24, a second watcher process's yielding first
+read was 5.0s against the first's 13.3s.
+
+Not measured: that first reading in the container with nothing of the tree in memory, which is the case the file
+exists for. What it saves there is predicted, not known: the 655s above, less a walk that only stats, less the
+bytes the build goes on to read for itself (all of the compiler package, and the dependency files its compilers
+open).
 
 ## A stamp directory has one writer
 
