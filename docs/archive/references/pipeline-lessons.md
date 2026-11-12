@@ -298,16 +298,32 @@ Measured 2026-11-11 on the Mac (10 cores, load 9), an unchanged tree read a seco
     the compiler package                    read whole 1.11s | digests kept 0.30s
     the built-in pack's declared dependencies   read whole 4.46s | digests kept 0.71s
 
-A watcher's first reading is still whole, taken before its first pass without holding the event loop (`warm`: 55ms
-at most between turns of it). What remains of a later pass, 7.7s end to end at that load, is mostly the
-module-input reading (4.4s), which this did not touch. A CPU profile of that reading puts under 5% of it in
-TypeScript's parser and about 45% in filesystem calls, 21% of the whole in the `realpath` the compiler file view
-took of every input to prove nothing was replaced. Most of those were for names that do not exist, a compiler's
-failed lookups, each a thrown error and a second resolution of the parent. The view now lists a directory once and
-answers its plain and its missing names from the listing (`physicalWatchPathListed`), resolving only links and
-other spellings the long way: that `realpath` fell from 17.7% of the reading's samples to 5.1%, against 2% more in
-listings. Those are shares of one profile each, taken at a load of 40, not a timing. The kept digests
-hold 16 MB.
+A watcher's first reading is still whole. It is taken before the first pass through the yielding reader (`warm`),
+which held the event loop for 55ms at most. The kept digests hold 16 MB.
+
+**When a digest is kept.** Two writes inside one tick of a filesystem's clock leave the same timestamps, so a
+digest answers only once its bytes are known to have been read after the tick of the file's last write. A file
+more than a day old was. A younger one is read a second time, two seconds later on the process's own clock, and
+that reading is kept: recently written files are read twice, once. Nothing compares the filesystem's clock with
+the process's closer than a day, so a mount whose clock stands apart keeps no stale digest.
+
+**What remained of a pass was not the parser.** A later pass was 7.7s end to end at that load, 4.4s of it the
+module-input reading. A CPU profile of that reading put under 5% of it in TypeScript's parser and about 45% in
+filesystem calls: 21% of the whole in the `realpath` the compiler file view took of every input to prove nothing
+was replaced. Most of those were for names that do not exist, a compiler's failed lookups, each a thrown error and
+a second resolution of the parent. The view now lists a directory once and answers its plain and its missing names
+from the listing (`physicalWatchPathListed`), resolving links, other spellings on a filesystem that folds case and
+names outside ASCII the long way, so the letter case a path resolves to is unchanged. That `realpath` fell from
+17.7% of the reading's samples to 5.1%, against 2% more in listings. Those are shares of one profile each, taken at
+a load of 40, not a timing.
+
+A listing is as old as the view that took it. A link created in a directory between its listing and that file's
+first read is recorded as a plain path, and the view's own recheck, which lists afresh, refuses the build as
+changed where it used to be accepted.
+
+**Not measured.** None of this was timed in the Linux test container, where the whole read cost minutes, so what
+a watcher's first reading costs there with digests kept is unknown, and with it whether digests kept on disk
+across watchers would pay.
 
 ## A stamp directory has one writer
 
