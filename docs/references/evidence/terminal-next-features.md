@@ -314,3 +314,69 @@ and compared with `cmp` (identical). The broker tests were not mutated.
   the underline.
 - **Detectors do not wrap.** A detected link found across a wrap is one run on the row asked about, as before.
 - **Not seen on screen.** No Electron window was run, so the underline and title were not checked by eye.
+
+## Phase 4 — app side: link policy (2026-11-12)
+
+The broker half is in the Phase 4 section above. This section is the app's half: what the main process does with a link
+a terminal program printed or declared. Nothing is pushed.
+
+### Decisions
+
+- **A terminal's links have their own policy, and the shared one is unchanged.** `webUrlProblem` still lets only http
+  and https through, and it still governs the in-app tab and every other door. The terminal's links go to a new channel,
+  `shell:openTerminalLink`, decided in `packages/main/src/modules/terminal-link-access.ts`.
+- **Decisions.** http, https and mailto open directly. A file link is refused whether or not it names a host; a refusal
+  with a host says the file is on another machine or a network share. Any other scheme asks the person in a
+  `dialog.showMessageBox` over the window that sent the link, with Cancel as the default and the escape. A link with
+  credentials is refused without asking. A non-text link, or one longer than 8192 characters, is refused rather than cut.
+  A link with no window to ask over is refused.
+- **The question shows the full link, capped at 500 characters.** The brief named `summarizeUrl` for this text. It is
+  not used there, because `summarizeUrl` drops the query, and the person deciding should see what they are opening.
+  `summarizeUrl` is used for the log line, as the other doors do.
+- **Routing.** In `terminal-pool.ts`, a link of kind `url` or `declared` goes to `openProgramLink`, which calls
+  `window.electronAPI.shell.openTerminalLink`. A path link still goes to the file opener. `openLink` is kept for every
+  other caller.
+- **Behaviour change.** A terminal link previously went through `openLink`, which opens the in-app browser tab when one
+  is designated. It now opens in the system browser, through `shell.openExternal`, as the policy in the main process
+  does. The in-app tab is not used for terminal links.
+- **Not decided here.** `javascript:` and `data:` are not in the refused set. They reach the question like any other
+  scheme, and the default answer is Cancel. Whether they should be refused outright is open.
+
+### Changes
+
+- `packages/main/src/modules/terminal-link-access.ts`: `terminalLinkDecision`, `openTerminalLink`,
+  `registerTerminalLinkHandler`, `MAX_TERMINAL_LINK_LENGTH`. Registered from `WindowManager.ts`.
+- `packages/main/tests/terminal-link-access.spec.ts` (new), `packages/main/tests/electron-stub.ts` (a `dialog` and a
+  `BrowserWindow` stand-in).
+- `packages/preload/src/index.ts`: `shell.openTerminalLink`. `packages/apack-sdk/src/fe/electron-api.ts`: its type.
+  `packages/apack-sdk/etc/fe.api.md`: one line, from `npm run api:update` (1 of 31 reports changed, and the diff holds
+  only that line).
+- `packages/default-setup/src/features/code/fe/utils/terminal-pool.ts`: `openProgramLink`, used by the non-path branch.
+- `packages/default-setup/tests/features/code/fe/utils/terminal-pool.frontend.spec.ts`: two cases (a url and a declared
+  link reach the bridge; a path reaches the file opener and not the bridge).
+
+### Commands and counts
+
+- `npm run spec -- packages/main/tests/terminal-link-access.spec.ts`: 22 passed, 0 failed.
+- `npm run spec -- packages/default-setup/tests/features/code/fe/utils/terminal-pool.frontend.spec.ts`: 35 passed,
+  0 failed. Two cases were added; the count before them was not taken.
+- `npm run spec` on `shell-access.spec.ts` (16), `clipboard-access.spec.ts` (8) and `notify-access.spec.ts` (8): all
+  passed.
+- `npm run typecheck:pack`: passed. `npm run typecheck` in `packages/main` and `packages/preload`: no output (passed).
+- The renderer typecheck was not run. The `electronAPI` type change is additive.
+
+### Mutation
+
+- Scheme check dropped (every link opens directly, with no question): 5 of 22 failed, all in the custom-scheme and
+  no-window and channel cases that depend on the question. Restored and confirmed with `cmp`.
+- Confirm removed (the question's answer ignored, so a custom scheme opens whatever the person answers): 2 of 22
+  failed: the Cancel case and the channel case that asks and must open nothing. Restored and confirmed with `cmp`.
+- The mutant copies and the original are under the session scratchpad, not `/tmp`.
+
+### Gaps
+
+- **The `linkPreview` setting is not wired.** It is the broker-side option (`off`, `osc8`, `all`) and exists only on the
+  unmerged broker branch. Wiring it into the view would fail typecheck against the pinned view, so it is blocked on that
+  branch's merge. The default `osc8` behaviour is also not in the app yet.
+- The frontend test stubs `window.electronAPI`, so it proves the routing, not the bridge's wire path. The main-process
+  handler is tested through the stub's `ipcMain`, not a running Electron process.
