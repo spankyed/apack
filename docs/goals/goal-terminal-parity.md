@@ -149,7 +149,10 @@ Each phase names its deliverable, its dependencies, and what is done when it fin
 ### Phase 6 — screen reader (D6)
 
 - **Deliverable:** an automated contract for what the accessibility tree exposes (role, label, and the text
-  attribute the view publishes), and a VoiceOver checklist written into evidence for a later run.
+  attribute the view publishes), and a VoiceOver checklist written into evidence for a later run. The checklist
+  covers at least two steps on macOS: VoiceOver reads the screen text of a running session, and typing into the
+  terminal's input field works with VoiceOver on. Each step says what was heard or typed, so a later run can be
+  compared with it.
 - **Dependencies:** none.
 - **Done when:** the automated contract passes and the checklist is written. The goal completes on this. A
   VoiceOver run, when someone does one, is recorded in evidence as a follow-up and blocks nothing.

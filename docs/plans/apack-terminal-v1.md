@@ -202,10 +202,7 @@ The Windows status today, in plain terms:
 - Fix stale numbers in `docs/architecture/testing.md` (test counts, timings) with the date.
 - Done when: a reader can tell from the README what v1 does and does not do, without reading the code.
 
-### F2. Basic accessibility pass on macOS (optional for v1)
-- VoiceOver on the text mirror and the input field: can a user hear what is on screen and type into a terminal.
-- Record what was heard. Anything found goes to a follow-up, not into v1 unless it blocks use.
-- Done when: the pass is recorded.
+Accessibility is not in v1. The screen-reader pass belongs to `docs/goals/goal-terminal-parity.md`, Phase 6.
 
 ## Order and dependencies
 
@@ -217,7 +214,7 @@ merge #14
   -> W5                  (VM and Mac)
   -> W6                  (owner, when available)
   -> P1 -> P2            (Mac; P2 measured against P1's baseline)
-  -> F1 -> F2            (docs; F2 optional)
+  -> F1                  (docs)
 ```
 
 Stop after each phase, run the affected suites, and write one line per task (done, the check and its result,
