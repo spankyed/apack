@@ -1,0 +1,150 @@
+{
+  "date": "2026-11-04",
+  "source": "c876aac5cc128d00db6e193e454fa93fb07dc56e",
+  "native": "bc450ee1746adfee5294ba19acb96b44d1271f19",
+  "status": "diagnostic-only-incomplete-sequence",
+  "boundary": "process launch through usable restored chat with fifty full message bodies",
+  "historicalDisabledMedianMs": 4598.2518915,
+  "historicalEvidence": "pack-admission-2026-11-04.json",
+  "limitations": [
+    "All ten captured readiness outcomes are warmups; the sequence stopped on a worker teardown failure. No comparison or new median is qualified.",
+    "Another agent started an independent build during the sequence; whole-host contention and cache state are uncontrolled.",
+    "Cross-process phase alignment uses approximate epoch timestamps, not a synchronized critical-path trace.",
+    "Backend recording begins after module imports. Renderer recording begins after static imports. Those loading costs fall outside each recorder span.",
+    "Nested span sums can overlap; recorded database operations exclude opens and schema changes before engine attachment.",
+    "Historical 4598.2518915ms median remains source-qualified disabled-mode evidence; it has no span breakdown.",
+    "These two illustrative successful warmups are not a timing distribution or a new baseline.",
+    "The Chromium loading trace failed to attach within its 60-second diagnostic deadline; Monaco cost is not isolated."
+  ],
+  "environment": {
+    "cpus": 2,
+    "memoryBytes": 6442450944,
+    "additionalSwapBytes": 0,
+    "sharedMemoryBytes": 268435456,
+    "profiles": "disk-backed",
+    "storage": "external-drive OrbStack volume",
+    "concurrentBuildObserved": true
+  },
+  "illustrativeWarmups": [
+    {
+      "file": "run-v3/A/trial-4/trial.json",
+      "sha256": "4515bf5cba80a2a8878fbcf1b29c3f2ef5bff7080e585a3a6091d3308f239723",
+      "mode": "lightweight",
+      "warmup": true,
+      "readinessOutcome": "passed",
+      "durationMs": 3657.675784,
+      "approximatePhases": {
+        "launchToBackendRecorderMs": 1213.0,
+        "backendInitializationMs": 704.861572265625,
+        "backendEndToRendererRecorderMs": 561.138427734375,
+        "rendererRecorderToUsableMs": 1178.67578125
+      },
+      "backendObservations": {
+        "ears.read": {
+          "count": 306,
+          "summedMs": 27.431692,
+          "maxMs": 2.140362
+        },
+        "ears.write": {
+          "count": 30,
+          "summedMs": 5.032854,
+          "maxMs": 0.494548
+        },
+        "ears.unit": {
+          "count": 2,
+          "summedMs": 1.9640259999999998,
+          "maxMs": 1.897525
+        },
+        "app.view.read": {
+          "count": 57,
+          "summedMs": 8.834036,
+          "maxMs": 0.912012
+        },
+        "app.view.deliver": {
+          "count": 57,
+          "summedMs": 0.8315089999999999,
+          "maxMs": 0.07596
+        },
+        "app.index.admission": {
+          "count": 1,
+          "summedMs": 267.441125,
+          "maxMs": 267.441125
+        }
+      }
+    },
+    {
+      "file": "run-v3/B/trial-0/trial.json",
+      "sha256": "a283bbecd6bd6ee1ec0f5a173e6b092156b5b568dfaea13d1c002dd486155cc1",
+      "mode": "detailed",
+      "warmup": true,
+      "readinessOutcome": "passed",
+      "durationMs": 3915.0302779999993,
+      "approximatePhases": {
+        "launchToBackendRecorderMs": 695.0,
+        "backendInitializationMs": 739.108154296875,
+        "backendEndToRendererRecorderMs": 1210.891845703125,
+        "rendererRecorderToUsableMs": 1270.0302734375
+      },
+      "backendObservations": {
+        "ears.read": {
+          "count": 306,
+          "summedMs": 36.096851,
+          "maxMs": 1.844357
+        },
+        "ears.write": {
+          "count": 30,
+          "summedMs": 5.9014109999999995,
+          "maxMs": 0.422672
+        },
+        "ears.unit": {
+          "count": 2,
+          "summedMs": 2.1127779999999996,
+          "maxMs": 2.054235
+        },
+        "app.view.read": {
+          "count": 57,
+          "summedMs": 13.151292,
+          "maxMs": 0.99593
+        },
+        "app.view.deliver": {
+          "count": 57,
+          "summedMs": 1.495727,
+          "maxMs": 0.156127
+        },
+        "app.index.admission": {
+          "count": 1,
+          "summedMs": 263.847786,
+          "maxMs": 263.847786
+        }
+      }
+    }
+  ],
+  "allCapturedReadinessDurationsMs": [
+    8028.307192,
+    18473.489428,
+    7786.343025,
+    8399.735469,
+    3657.675784,
+    3915.0302779999993,
+    5113.03929,
+    5950.913821999999,
+    6600.590662,
+    24950.581077
+  ],
+  "executionOutcome": "Initial one-trial comparison refused by the maintained even-count guard. Two-trial invocation failed during fresh seed window discovery. Next invocation seeded successfully; ten warmup readiness assertions passed, but the final worker teardown exceeded 120 seconds and the controller stopped unsuccessfully. No measured comparison trials completed.",
+  "inspection": {
+    "rendererStaticImportFiles": 114,
+    "rendererStaticImportBytes": 6127311,
+    "monacoStaticImportBytes": 4260371,
+    "mainWaitsForApiBeforeCreatingWindow": true,
+    "duplicateStartupDatabaseOpenFound": false
+  },
+  "decisions": [
+    "Do not optimize ordinary row access for this startup delay: recorded reads and writes are tens of milliseconds in the illustrated captures. Opens and pre-attachment schema operations are excluded from those counters.",
+    "Prioritize demand loading of Monaco and unused shared UI entry points; preserve local worker loading, shared module identity and editor behavior. The initial static graph contains 4,260,371 bytes of Monaco, but its isolated startup cost is unmeasured.",
+    "Overlap initial renderer loading with backend initialization through an explicit connection/readiness lifecycle; preserve startup error handling, authentication, deadlines and usable-chat completion.",
+    "Inspect remaining view/editor initialization after those changes, using CPU and layout attribution; preserve the same fifty-message completion criterion.",
+    "Keep Go/Rust as options for demonstrated CPU-heavy components. Current evidence does not justify a rewrite of the backend or build tooling as the first startup optimization."
+  ],
+  "evidenceDirectory": ".apack/evidence/populated-startup-breakdown-2026-11-04/"
+}
