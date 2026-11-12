@@ -380,3 +380,14 @@ a terminal program printed or declared. Nothing is pushed.
   branch's merge. The default `osc8` behaviour is also not in the app yet.
 - The frontend test stubs `window.electronAPI`, so it proves the routing, not the bridge's wire path. The main-process
   handler is tested through the stub's `ipcMain`, not a running Electron process.
+
+### Phase 4 — review of the app side (2026-11-12)
+
+- **Decided here, a deviation from D4:** `javascript:`, `data:` and `vbscript:` are refused outright and never put to
+  the person. D4 said any other scheme asks first. These three run or display code, and no program's link needs one,
+  so a question would only give a click-through to a script. Commit `4b02e3a8df`; the test is in
+  `packages/main/tests/terminal-link-access.spec.ts` and a mutation (the refusal removed) fails it.
+- **Behaviour change to confirm:** terminal links now open in the system browser through `shell:openTerminalLink`,
+  not the in-app browser tab that `openLink` used. Nothing in D4 asked for this change.
+- **Still open:** the `linkPreview` setting and its wiring (blocked on the broker merge); Phase 4's Done-when is not met
+  until then. The grouping by OSC 8 `id` is impossible, since the core does not expose the id (see the broker section above).
