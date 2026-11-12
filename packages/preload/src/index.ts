@@ -66,6 +66,8 @@ const notify = {
 // Shell utilities
 const shell = {
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
+  // A link a terminal printed: its own policy in the main process, which asks about schemes other than http, https and mailto
+  openTerminalLink: (url: string) => ipcRenderer.invoke('shell:openTerminalLink', url) as Promise<boolean>,
   showItemInFolder: (filePath: string) => ipcRenderer.invoke('shell:showItemInFolder', filePath),
   openPath: (filePath: string) => ipcRenderer.invoke('shell:openPath', filePath),
 } satisfies _HostBridge['shell'];

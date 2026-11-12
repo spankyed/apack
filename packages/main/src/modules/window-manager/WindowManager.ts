@@ -16,6 +16,7 @@ import {performanceStartupQuery} from '../performance/startup.ts';
 import {splitRef} from '@apackdev/sdk/ids';
 import {openExternalUrl, openFilePath} from '../shell-access.ts';
 import {registerClipboardHandler} from '../clipboard-access.ts';
+import {registerTerminalLinkHandler} from '../terminal-link-access.ts';
 import {registerNotifyHandler} from '../notify-access.ts';
 
 class WindowManager implements AppModule {
@@ -248,6 +249,9 @@ class WindowManager implements AppModule {
 
     // Handle opening external URLs in default browser
     ipcMain.handle('shell:openExternal', (_event, url: string) => openExternalUrl(url));
+
+    // A link a terminal program printed or declared, under the terminal's own policy (see terminal-link-access.ts)
+    registerTerminalLinkHandler(ipcMain);
 
     // A program's OSC 52 write, put on the clipboard here rather than by the window (see clipboard-access.ts)
     registerClipboardHandler(ipcMain);

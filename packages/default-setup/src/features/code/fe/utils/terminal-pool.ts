@@ -2,7 +2,7 @@ import { BrokerViews, TerminalView, xtermPalette, type Command, type Detector, t
 
 /** A command the shell marked, as the view holds it: a host draws its command blocks from these without importing the view */
 export type { Command }
-import { openLink, terminalViews, type TerminalViewStream } from '@apackdev/sdk/fe'
+import { terminalViews, type TerminalViewStream } from '@apackdev/sdk/fe'
 import type { TerminalInfo } from '../features/terminal/state.ts'
 import { TERMINAL_COLORS, TERMINAL_THEME } from '../../be/terminal-colors.ts'
 
@@ -44,6 +44,15 @@ const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator
  * **In the shape `cwd` is in**, which is the shell's own: a directory with a drive letter or a UNC host is
  * a Windows one, where either slash separates and the answer is written with backslashes.
  */
+/**
+ * A link a program printed, detected or declared with a hyperlink sequence, opened by the main process under the
+ * terminal's own policy (`shell:openTerminalLink`). Not the in-app browser: the policy refuses what the browser would
+ * take, and a refusal is the main process's to log.
+ */
+export function openProgramLink(url: string): void {
+  void window.electronAPI?.shell.openTerminalLink(url).catch(() => false)
+}
+
 export function resolvePath(cwd: string, named: string): string {
   const drive = (path: string) => /^(?:[A-Za-z]:|[\\/]{2}[^\\/]+[\\/]+[^\\/]+)/.exec(path)?.[0]
   const windows = drive(cwd) !== undefined || drive(named) !== undefined
@@ -394,7 +403,7 @@ class TerminalPool {
       // what may be opened; a path is the feature's to resolve against where the shell is
       onLink: (link) => {
         if (link.kind === 'path') this.openPath(entry, link.target)
-        else openLink(link.target)
+        else openProgramLink(link.target)
       },
       confirmPaste: (text) => this.confirmPaste(entry, text),
       copyOnSelect: this.copyOnSelect,

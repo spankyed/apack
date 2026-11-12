@@ -572,3 +572,37 @@ describe('a path a program printed', () => {
     expect(resolvePath('C:\\Users\\me', '\\Windows\\win.ini')).toBe('C:\\Windows\\win.ini')
   })
 })
+
+describe('a link a program printed', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('goes to the main process under the terminal\'s own policy, whether it was detected or declared', () => {
+    const openTerminalLink = vi.fn(async () => true)
+    vi.stubGlobal('electronAPI', { shell: { openTerminalLink } })
+    const info = terminal()
+    terminalPool.ensure(info)
+    const opened: string[] = []
+    terminalPool.attach(info.id, host(), { onOpenPath: (path) => { opened.push(path) } })
+    const click = (kind: string, target: string) => lastView().options.onLink!({ kind, target, start: 0, end: 0 } as never, new MouseEvent('click'))
+
+    click('url', 'https://example.com/docs')
+    click('declared', 'mailto:someone@example.com')
+
+    expect(openTerminalLink.mock.calls).toEqual([['https://example.com/docs'], ['mailto:someone@example.com']])
+    expect(opened, 'a link was opened as a file').toEqual([])
+  })
+
+  it('a path still goes to the file opener and not to the link bridge', () => {
+    const openTerminalLink = vi.fn(async () => true)
+    vi.stubGlobal('electronAPI', { shell: { openTerminalLink } })
+    const info = terminal({ cwd: '/work/app' })
+    terminalPool.ensure(info)
+    const opened: string[] = []
+    terminalPool.attach(info.id, host(), { onOpenPath: (path) => { opened.push(path) } })
+
+    lastView().options.onLink!({ kind: 'path', target: 'src/a.ts:3', start: 0, end: 0 } as never, new MouseEvent('click'))
+
+    expect(opened).toEqual(['/work/app/src/a.ts'])
+    expect(openTerminalLink).not.toHaveBeenCalled()
+  })
+})

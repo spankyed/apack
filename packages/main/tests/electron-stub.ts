@@ -23,6 +23,7 @@ export const app = {
 /** Puts `app` back as a fresh Electron would hand it over, between tests. */
 export function resetElectronStub(): void {
   shell.opened.length = 0;
+  BrowserWindow.current = null;
   clipboard.written.length = 0;
   notifications.shown.length = 0;
   notifications.supported = true;
@@ -86,3 +87,16 @@ export class Notification {
     notifications.shown.push({ title: this.options.title, body: this.options.body });
   }
 }
+/** Electron's `dialog`, as far as the main process's modules use it. A test stands an answer in with `vi.spyOn`. */
+export const dialog = {
+  showMessageBox(_parent: unknown, _options: unknown): Promise<{ response: number; checkboxChecked: boolean }> {
+    return Promise.resolve({ response: 0, checkboxChecked: false });
+  },
+};
+/** Electron's `BrowserWindow`: which window a request came from, as the test says it came from `window.current` */
+export const BrowserWindow = {
+  current: null as object | null,
+  fromWebContents(_contents: unknown): object | null {
+    return BrowserWindow.current;
+  },
+};

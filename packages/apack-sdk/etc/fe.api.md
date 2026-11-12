@@ -405,6 +405,7 @@ export interface _HostBridge {
     // (undocumented)
     shell: {
         openExternal: (url: string) => Promise<void>;
+        openTerminalLink: (url: string) => Promise<boolean>;
         showItemInFolder: (filePath: string) => Promise<void>;
         openPath: (filePath: string) => Promise<void>;
     };

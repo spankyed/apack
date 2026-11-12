@@ -53,6 +53,12 @@ export interface _HostBridge {
   };
   shell: {
     openExternal: (url: string) => Promise<void>;
+    /**
+     * Opens a link a terminal program printed or declared, under the terminal's own policy: http, https and mailto open
+     * directly; any other scheme opens only when the person confirms in a dialog; a file link, and one with credentials, is
+     * refused. Answers whether the link was opened.
+     */
+    openTerminalLink: (url: string) => Promise<boolean>;
     showItemInFolder: (filePath: string) => Promise<void>;
     openPath: (filePath: string) => Promise<void>;
   };
