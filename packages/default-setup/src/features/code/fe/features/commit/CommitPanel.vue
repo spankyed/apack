@@ -246,6 +246,24 @@
       Live updates are off for this repository. It is read again when you return to this window or press Refresh.
     </div>
 
+    <!-- A whole status took longer than its budget, and git has speed-ups for it that are off here -->
+    <div
+      v-if="slowStatus && !gitError"
+      data-testid="slow-status"
+      class="flex items-center gap-2 px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
+    >
+      <span class="flex-1">
+        Reading this repository's status took {{ (slowStatus.ms / 1000).toFixed(1) }}s.
+        Git can make it faster by {{ slowStatusRemedy }}, which is written to this repository's settings.
+      </span>
+      <button
+        data-testid="speed-up-status"
+        :disabled="isSpeedingUpStatus"
+        class="px-2 py-0.5 rounded text-neutral-200 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-40"
+        @click="commitActor?.send({ type: 'commit.SPEED_UP_STATUS' })"
+      >Turn on</button>
+    </div>
+
     <!-- Fetching by itself has stopped, so what is shown of the remote is as old as the last fetch that worked -->
     <div
       v-if="isFetchSuspended && !gitError"
@@ -973,6 +991,16 @@ const isCheckingOutBranch = useSelector(commitActor, (state) => state.context.is
 const hasUpstream = useSelector(commitActor, (state) => state.context.hasUpstream)
 const isStatusTruncated = useSelector(commitActor, (state) => state.context.isStatusTruncated)
 const isWatchingRepository = useSelector(commitActor, (state) => state.context.isWatchingRepository)
+const slowStatus = useSelector(commitActor, (state) => state.context.slowStatus)
+const isSpeedingUpStatus = useSelector(commitActor, (state) => state.context.isSpeedingUpStatus)
+/** What turning the speed-ups on would turn on, of those that are off */
+const slowStatusRemedy = computed(() => {
+  const off = [
+    ...(slowStatus.value && !slowStatus.value.fileMonitor && slowStatus.value.fileMonitorAvailable ? ['watching for changes itself'] : []),
+    ...(slowStatus.value && !slowStatus.value.untrackedCache ? ['remembering untracked files'] : []),
+  ]
+  return off.join(' and ')
+})
 const operation = useSelector(commitActor, (state) => state.context.operation)
 const isFetchSuspended = useSelector(commitActor, (state) => state.context.isFetchSuspended)
 const fetchSignIn = useSelector(commitActor, (state) => state.context.fetchSignIn)

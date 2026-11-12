@@ -5,7 +5,7 @@ import { sendToSystem } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { diffTab, diffTabPath } from '../../utils/diff-tabs.ts';
 import { withStaged, withUnstaged } from 'apack-git/staging';
-import type { BlameLine, ChangedFile, MergePreview, CommitFailure, ConflictKind, LineCount, DiffHunk, DiscardKept, DiscardRestored, GitProgress, OperationMove, RepositoryChange, RepositoryOperation, RewriteAction, SignInHelp, StartableOperation } from '../../../be/types.ts';
+import type { BlameLine, ChangedFile, MergePreview, CommitFailure, ConflictKind, LineCount, DiffHunk, DiscardKept, DiscardRestored, GitProgress, OperationMove, RepositoryChange, RepositoryOperation, RewriteAction, SignInHelp, SlowStatus, StartableOperation } from '../../../be/types.ts';
 import type { OpenFile } from '../../contract.ts';
 
 
@@ -48,6 +48,10 @@ export interface CodeCommitContext {
   hasIdentity: boolean
   /** What a pull would do, when there is something to pull */
   pullPreview: MergePreview | null
+  /** A whole status that took longer than its budget, with which of git's speed-ups are off */
+  slowStatus: SlowStatus | null
+  /** Whether turning them on was asked for and has not answered */
+  isSpeedingUpStatus: boolean
   /** What merging a branch in would do, for the branch last asked about */
   mergePreview: { target: string; preview: MergePreview } | null
   gitError: string | null
@@ -273,6 +277,8 @@ export type Event =
   | { type: 'commit.DELETE_TAG'; name: string }
   | { type: 'commit.PUSH_TAG'; name: string }
   | { type: 'commit.RENAME_BRANCH'; name: string; to: string }
+  | { type: 'commit.SPEED_UP_STATUS' }
+  | { type: 'commit.STATUS_SPED_UP'; data: { fileMonitor: boolean; untrackedCache: boolean } }
   | { type: 'commit.TAG_CREATED'; data: { name: string } }
   | { type: 'commit.TAG_DELETED'; data: { name: string } }
   | { type: 'commit.TAG_PUSHED'; data: { name: string } }
@@ -354,6 +360,8 @@ type OfOneFolder =
   | 'gitBranch'
   | 'hasIdentity'
   | 'pullPreview'
+  | 'slowStatus'
+  | 'isSpeedingUpStatus'
   | 'mergePreview'
   | 'gitError'
   | 'selectedGitFile'
@@ -403,6 +411,8 @@ const ofNoFolder = (): Pick<CodeCommitContext, OfOneFolder> => ({
   gitBranch: '',
   hasIdentity: true,
   pullPreview: null,
+  slowStatus: null,
+  isSpeedingUpStatus: false,
   mergePreview: null,
   gitError: null,
   selectedGitFile: null,
@@ -739,6 +749,7 @@ export const commitState = setup({
       },
       hasIdentity: ({ event }) => (event as { type: 'commit.STATUS_RECEIVED'; data: { hasIdentity?: boolean } }).data.hasIdentity ?? true,
       pullPreview: ({ event }) => (event as { type: 'commit.STATUS_RECEIVED'; data: { pullPreview?: MergePreview } }).data.pullPreview ?? null,
+      slowStatus: ({ event }) => (event as { type: 'commit.STATUS_RECEIVED'; data: { slowStatus?: SlowStatus } }).data.slowStatus ?? null,
       gitBranch: ({ event }) => {
         const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
         return ev.data.branch
@@ -1425,6 +1436,14 @@ export const commitState = setup({
         'commit.DELETE_TAG': { actions: 'deleteTag' },
         'commit.PUSH_TAG': { actions: 'pushTag' },
         'commit.RENAME_BRANCH': { actions: 'renameBranch' },
+        'commit.SPEED_UP_STATUS': {
+          actions: enqueueActions(({ enqueue }) => {
+            enqueue.assign({ isSpeedingUpStatus: true })
+            enqueue(() => { sendToSystem('code', { type: 'commit.SPEED_UP_STATUS' }) })
+          }),
+        },
+        // The status that follows says whether it is still slow
+        'commit.STATUS_SPED_UP': { actions: assign({ isSpeedingUpStatus: false, slowStatus: null }) },
         'commit.TAG_CREATED': { actions: ['getAllBranches', 'requestLogList'] },
         'commit.TAG_DELETED': { actions: ['getAllBranches', 'requestLogList'] },
         'commit.BRANCH_RENAMED': { actions: ['getAllBranches', 'requestLogList'] },

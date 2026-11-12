@@ -486,6 +486,19 @@ export type RewriteAction = 'reword' | 'squash' | 'drop'
 /** What the panel can begin: merging a branch in, replaying what is checked out onto one, or picking a commit onto it */
 export type StartableOperation = 'merge' | 'rebase' | 'cherry-pick'
 
+/**
+ * A whole status took longer than its budget, and git's own file monitor or its untracked cache is off, either of
+ * which would make it faster
+ */
+export interface SlowStatus {
+  ms: number
+  budgetMs: number
+  fileMonitor: boolean
+  untrackedCache: boolean
+  /** Whether git has a file monitor of its own on this system, which turning the speed-ups on would turn on */
+  fileMonitorAvailable: boolean
+}
+
 /** What merging a branch into what is checked out would do: a pull's, before it is made */
 export type MergePreview =
   | { kind: 'up-to-date' | 'fast-forward' | 'clean' | 'unknown' }
