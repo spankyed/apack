@@ -70,13 +70,8 @@ Commands:
 
 ## What this does not establish
 
-- **Real-window behaviour.** The write path is proven at the bridge and the handler with stubs. No run of the Electron app
-  has copied a program's text with the app unfocused.
-
-
-- **OSC 52 in the app.** The broker reports the write. The window drops it when no window has focus
-  (`writeClipboard`, `packages/default-setup/src/features/code/fe/features/terminal/state.ts`). That is Phase 1's
-  defect, and the check above stops at the broker's event.
-- **Auto-scroll and the wheel in a real window.** Both are proven with the view's source double. No run of the
-  Electron app has exercised them yet.
+- **Real-window behaviour of the clipboard write.** The write path is proven at the bridge and the handler with stubs. No
+  run of the Electron app has copied a program's text with the app unfocused.
+- **Auto-scroll and the wheel in a real window.** Both are proven with the view's source double. No run of the Electron
+  app has exercised them yet.
 - **The kitty flag's end-to-end coverage for every key.** One key, Escape, is checked under the flag and without it.
