@@ -138,6 +138,28 @@ describe('a shell replaced under a terminal', () => {
   })
 })
 
+describe('the output of a command, folded away', () => {
+  it('is one header row where the output starts, folded again when the view is made again, and never while it is still arriving', () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const attachment = terminalPool.attach(info.id, host(), {})!
+    const view = views.filter((candidate) => candidate.session === info.session).at(-1)!
+    const done = { id: 4, command: 'make', cwd: null, startedMs: null, finishedMs: null, outcome: { kind: 'exited', code: 0 }, prompt: 0, output: 1, end: 9 }
+    const running = { id: 5, command: 'tail -f', cwd: null, startedMs: null, finishedMs: null, outcome: { kind: 'running' }, prompt: 9, output: 10, end: null }
+    // The view holds the commands before it tells a host of them, as it does
+    view.commands = [done, running] as never
+    view.options.onCommands?.([done, running] as never)
+
+    attachment.setFolded(done as never, true)
+    attachment.setFolded(running as never, true)
+    expect(attachment.isFolded(done as never)).toBe(true)
+    expect(view.folds).toEqual([{ first: 1, last: 8 }])
+
+    attachment.setFolded(done as never, false)
+    expect(view.folds).toEqual([])
+  })
+})
+
 describe('the commands of a terminal, as its host draws them', () => {
   it('are heard by the host as the shell marks them, and running one again types its text and Enter', () => {
     const info = terminal()

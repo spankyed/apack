@@ -126,6 +126,8 @@ interface PoolEntry {
   attachedContainer: HTMLElement | null
   /** What the host showing this terminal asked to hear. Replaced by each host that attaches */
   handlers: TerminalAttachmentHandlers
+  /** The commands whose output is folded away, by id: kept with the entry so a view made again folds them again */
+  folded: Set<number>
   /** Whether the view was following its output when the last host let go, which the next one starts from */
   following: boolean
   /** The connection its view is drawn over ended and was not made again (`lost`) */
@@ -166,6 +168,10 @@ export interface TerminalAttachment {
    * decides what that means, which for a command with effects is the person's to choose here.
    */
   rerun(text: string): void
+  /** Whether a command's output is folded away in the terminal */
+  isFolded(command: Command): boolean
+  /** Folds a command's output away, or shows it again: its header is one row where the output starts */
+  setFolded(command: Command, folded: boolean): void
   /** Only where the user asked for it: an attach is not a request */
   focus(): void
   /**
@@ -392,11 +398,27 @@ class TerminalPool {
       },
       confirmPaste: (text) => this.confirmPaste(entry, text),
       copyOnSelect: this.copyOnSelect,
-      onCommands: (commands) => entry.handlers.onCommands?.(commands),
+      onCommands: (commands) => {
+        this.applyFolds(entry)
+        entry.handlers.onCommands?.(commands)
+      },
     })
     view.element.dataset.apackTerminal = entry.terminalId
     entry.view = view
+    this.applyFolds(entry)
     if (mounted) view.mount(entry.wrapper)
+  }
+
+  /**
+   * Folds the output of each command the entry has folded, where the view has its position. A command whose output has no
+   * end yet is not folded: its output is still arriving.
+   */
+  private applyFolds(entry: PoolEntry): void {
+    if (!entry.view) return
+    const folds = entry.view.commands
+      .filter((command) => entry.folded.has(command.id) && command.output !== null && command.end !== null && command.end - 1 > command.output)
+      .map((command) => ({ first: command.output!, last: command.end! - 1 }))
+    entry.view.setFolds(folds)
   }
 
   /**
@@ -560,7 +582,7 @@ class TerminalPool {
     wrapper.appendChild(notice)
     const entry: PoolEntry = {
       terminalId: info.id, info, session: undefined, pid: info.pid, view: null, wrapper, notice,
-      attachedContainer: null, handlers: {}, following: true, unreachable: false,
+      attachedContainer: null, handlers: {}, following: true, unreachable: false, folded: new Set(),
     }
     this.entries.set(info.id, entry)
     this.draw(entry, info)
@@ -621,6 +643,12 @@ class TerminalPool {
       hasCommands: () => (entry.view?.commands.length ?? 0) > 0,
       commands: () => entry.view?.commands ?? [],
       copyCommand: (command) => entry.view?.copyCommand(command) ?? Promise.resolve(false),
+      isFolded: (command) => entry.folded.has(command.id),
+      setFolded: (command, folded) => {
+        if (folded) entry.folded.add(command.id)
+        else entry.folded.delete(command.id)
+        this.applyFolds(entry)
+      },
       rerun: (text) => { entry.view?.typeText(`${text}\r`) },
       focus: () => entry.view?.focus(),
       refit: () => { if (!released) entry.view?.fit() },

@@ -68,7 +68,8 @@ Out:
 - Phase 4 is done: [the evidence record](../references/evidence/terminal-parity.md#phase-4--the-canvas-painter-under-heavy-output-and-the-gpu-decision-2026-11-12). Neither machine's p95 frame exceeds 16 ms, so the GPU renderer (D5) is not built.
 - Phase 5 is done: [the evidence record](../references/evidence/terminal-parity.md#phase-5--rectangular-selection-2026-11-12). The app pins the view commit that carries it.
 - Phase 6 is done: [the evidence record](../references/evidence/terminal-parity.md#phase-6--the-accessible-document-2026-11-12). The VoiceOver checklist is written there; running it is a follow-up, not a condition.
-- Next deliverable: Phase 7 (command blocks: re-run and copy any command, failure highlight, then fold).
+- Phase 7 is done: [the evidence record](../references/evidence/terminal-parity.md#phase-7--command-blocks-2026-11-12). Every phase's done-when condition is met in code and checks; the one open step is the merge of the broker pull request (spankyed/apack-terminal#16), which needs the user's authority.
+- Next deliverable: none in this goal. Merge the broker pull request, repin the app to its merge commit, then merge the app pull request.
 - Unresolved: none. Nothing in this goal depends on a manual step; see D6.
 
 ## Decisions

@@ -215,6 +215,32 @@ on (Command-F5), in the Code surface's terminal, and records the result here wit
 
 The checklist's result is recorded here when someone runs it. A failing step opens a fix; it does not reopen this goal.
 
+## Phase 7 — command blocks (2026-11-12)
+
+Source: broker `session/terminal-parity-view` at `cef7f7f` (the view's primitives and their tests); monorepo
+`session/terminal-parity-work` (this commit), which pins that commit. Decision D7: the view gains generic primitives
+(`typeText`, `onCommands`, `copyCommand`, folds), and what a command is stays in the Code surface.
+
+| Part | Behaviour | Check | Result |
+|---|---|---|---|
+| 7.1 | Each command's status, its output copied on its own, and running it again (the text and Enter typed into the shell) | `view/tests/typing.spec.ts`; `terminal-pool.frontend.spec.ts`, "the commands of a terminal"; `canvas/terminal-view.frontend.spec.ts`, "lists the shell's commands" | pass |
+| 7.2 | A command that ended non-zero is highlighted in its row | the component case above (`data-failed`) | pass |
+| 7.3 | A fold is one header row where the output starts; its lines are not drawn, pointed at, or counted in the cursor's row | `view/tests/folds.spec.ts`: header, count, pointer, cursor | pass |
+| 7.3 | A copy of a folded output copies all of it | `view/tests/folds.spec.ts`, "is copied as all of its text, though it is drawn as its header" | pass |
+| 7.3 | A fold survives scrolling to a line folded away, and a resize of the screen | `view/tests/folds.spec.ts`, the two cases | pass |
+| 7.3 | A command still arriving is never folded | `terminal-pool.frontend.spec.ts`, "the output of a command, folded away" | pass |
+
+Mutation checks, each restored after: the fold's hiding rule (the fold drawing case fails); the pool's fold filter (every
+command folded, the pool case fails). The view suite: 361 of 361. The monorepo's affected specs: 216 files, 1,447 tests.
+Typecheck passes.
+
+**What this does not establish.**
+
+- The command list is a panel in the terminal, not a separate surface. A user reads it by opening the Commands control.
+- Folds are per view and per session in memory: a fold is not kept across a restart of the app.
+- No run of the Electron app has folded, copied or re-run a real command. Re-run types the command into the shell with no
+  confirmation, as a keypress does: a command with effects runs when the person asks for it.
+
 ## What this does not establish
 
 - **Real-window behaviour of the clipboard write.** The write path is proven at the bridge and the handler with stubs. No

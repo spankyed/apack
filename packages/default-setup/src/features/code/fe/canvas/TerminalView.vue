@@ -47,6 +47,15 @@
               >
                 Re-run
               </button>
+              <button
+                type="button"
+                data-testid="command-fold"
+                class="shrink-0 text-neutral-300 hover:text-white disabled:text-neutral-600"
+                :disabled="command.output === null || command.end === null"
+                @click="toggleFold(command)"
+              >
+                {{ isFolded(command) ? 'Unfold' : 'Fold' }}
+              </button>
             </li>
           </ul>
         </div>
@@ -159,6 +168,13 @@ const statusOf = (command: Command): string => {
 const copyOutput = (command: Command) => { void attachment?.copyCommand(command) }
 /** Runs the command again, in the terminal it was run in: the shell decides what that means */
 const rerun = (command: Command) => { if (command.command !== null) attachment?.rerun(command.command) }
+/** Which commands' output is folded: the pool keeps it, and this mirrors it for the rows to show */
+const folded = ref<ReadonlySet<number>>(new Set())
+const isFolded = (command: Command) => folded.value.has(command.id)
+const toggleFold = (command: Command) => {
+  attachment?.setFolded(command, !isFolded(command))
+  folded.value = new Set([...folded.value].filter((id) => id !== command.id).concat(isFolded(command) ? [] : [command.id]))
+}
 
 /* --------------------------------------------------------------------------
  * Context menu actions ----------------------------------------------------- */

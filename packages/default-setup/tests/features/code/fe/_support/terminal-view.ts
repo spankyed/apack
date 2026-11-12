@@ -16,6 +16,9 @@ export interface FakeView {
   /** The commands that were asked to have their output copied, by id, in order */
   readonly copiedCommands: number[]
   typeText(text: string): void
+  /** The folds the view was last given: each run of lines, first to last */
+  readonly folds: Array<{ first: number; last: number }>
+  setFolds(folds: Array<{ first: number; last: number }>): void
   copyCommand(command: { id: number }): Promise<boolean>
   readonly element: HTMLDivElement
   readonly options: ViewOptions
@@ -139,6 +142,8 @@ export function viewModule(): Record<string, unknown> {
     readonly typed: string[] = []
     readonly copiedCommands: number[] = []
     typeText(text: string): void { this.typed.push(text) }
+    folds: Array<{ first: number; last: number }> = []
+    setFolds(folds: Array<{ first: number; last: number }>): void { this.folds = folds.map((fold) => ({ ...fold })) }
     async copyCommand(command: { id: number }): Promise<boolean> { this.copiedCommands.push(command.id); return true }
     fit(): void { this.fits += 1 }
     follow(): void { this.followed += 1; this.options.onFollowingChange?.(true) }
