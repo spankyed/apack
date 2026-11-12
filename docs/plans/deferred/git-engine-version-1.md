@@ -12,9 +12,30 @@ macOS. Each pull request says under **Known** what was run, what was only read, 
 **An app can build its whole source control on the engine — see, change, sync, recover — for any folder a
 developer or an agent opens, and the engine is never what breaks their git or loses their work.**
 
-Version 1 is also the first promise. Until it, the engine is pinned by commit and changed outright with its
-one consumer ([CLAUDE.md](../../../CLAUDE.md), "Backward compatibility"). At it, the door is frozen and a
-change to it is a breaking change that says so.
+Version 1 is a reviewed door, not a frozen one. The engine has one consumer, pinned by commit and changed
+with it ([CLAUDE.md](../../../CLAUDE.md), "Backward compatibility"), and a freeze would protect nobody. It is
+frozen and tagged when a second consumer exists that cannot move with it.
+
+## Decided on 2026-11-12
+
+The questions the items left open, settled before the work rather than in it:
+
+- **Trust (1) stays where it landed**: it gates the git the engine runs and nothing else. A terminal and an
+  agent run what the user or the agent chose to run; gating them would be a second notion of trust for the
+  app to keep, for no case the engine's gate misses.
+- **The checkpoint store (4)** lives under the app's data directory, one store per repository, named by the
+  real path of the repository's common git directory, as trust is. A checkpoint expires after 14 days, and a
+  store over 1 GB drops its oldest first. A file over `KEPT_FILE_LIMIT` (10 MB) is not kept, and the answer
+  names it, as a discard does today. What is ignored is what the user's git ignores: the store is given the
+  repository's `info/exclude` and the user's `core.excludesFile`.
+- **An agent's turn (6)** is a checkpoint and nothing more. Taking a turn back is whole, not file by file, and
+  the engine gets no call of its own for it: `checkpoint` and `changedSince` from 4 are the whole of it.
+- **Every repository under a folder (7)** is a choice, not a merged view: the panel lists the repositories
+  found, the folder's own first, and shows one at a time.
+- **Clone, init and remotes (18)** are engine calls with no panel of their own yet.
+- **Budgets (20)** are read in CI at 1,000 and 100,000 files. A million is the command, run by hand.
+- **A name that is not text (23)** is refused by name, with a code, rather than carried as bytes.
+- **The door (25)** is reviewed, referenced and given its example program, and is not tagged or frozen.
 
 This plan holds what is beyond the work listed before it: the engine work that precedes the move, and the
 five additions that follow it.
@@ -25,7 +46,7 @@ five additions that follow it.
 2. **A store before what uses it, and the event stream before what reads it.**
 3. **Seeing before doing.** The panel's writes need the picture: the sides of a conflict and what a merge
    would do come before starting one.
-4. **Scale and the freeze come last**, since they measure and promise what exists by then.
+4. **Scale and the review come last**, since they measure and describe what exists by then.
 
 Each numbered item is a change in the engine's repository and the monorepo pull request that moves the pin and
 lands the app's half, opened as soon as its branch is pushed.
@@ -56,7 +77,7 @@ lands the app's half, opened as soon as its branch is pushed.
 | 22 | A watch that is not delivering is said | |
 | 23 | Names that are not text | |
 | 24 | Parsers that survive anything | |
-| 25 | The door, reviewed and frozen | all of them |
+| 25 | The door, reviewed | all of them |
 
 ## The two that come first
 
@@ -94,8 +115,8 @@ status calls pass nothing. So opening a folder runs whatever that folder's `.git
 - **Landed** in apack #429 (engine `src/trust.ts`). The rule is the list of settings known to run nothing.
   Trust is kept in the code feature's settings (`trustedRepositories`), by the real path of the repository's
   common git directory. It covers the git the engine runs and nothing else: a terminal, an agent and `gh` in an
-  untrusted repository are not gated, which was decided in the work and not by the user. A repository with
-  Git LFS configured in its own config asks.
+  untrusted repository are not gated, which stands (Decided, above). A repository with Git LFS configured in
+  its own config asks.
 
 ### 2. A discard keeps what it removes
 
@@ -147,8 +168,7 @@ and cannot be stopped, on the understanding that a read is local.
   bytes, status and refs were unchanged; a changed file, a deleted untracked file and a new file were found
   and put back; a file ignored by the tree's `.gitignore` was left out. Not run: its cost on a large tree, and
   seeding its index from the repository's so that unchanged files are not read again.
-- **To settle.** The repository's `info/exclude` and the user's own ignore file, which the tree does not
-  carry and the store has to be told.
+- **Settled** (Decided, above): where it lives, what expires it, and what it ignores.
 
 ### 5. A write that destroys something checkpoints first, and the last one can be undone
 
@@ -163,8 +183,8 @@ and cannot be stopped, on the understanding that a read is local.
 
 - **App.** The action that starts a turn takes a checkpoint, and the ones that end it
   (`claude-code/turn-completed.ts`, `codex/turn-completed.ts`) read what changed since. The thread shows what
-  the turn changed and offers to take it back, whole or file by file.
-- **Engine.** `changedSince` reads only the paths the watcher named in between.
+  the turn changed and offers to take it back, whole.
+- **Engine.** Nothing beyond 4.
 - **Done when** a harness spec runs a turn that writes files, the thread's list equals what changed, and
   taking it back leaves the tree as it was before the turn.
 
@@ -176,7 +196,8 @@ and cannot be stopped, on the understanding that a read is local.
   as a repository of its own, with its own trust and its own watcher. A submodule's row in its parent's
   status says how it differs: another commit, changed content, untracked content, which the machine-readable
   status already reports.
-- **App.** The panel chooses among them.
+- **App.** A choice at the top of the panel, listing the repositories found with the folder's own first; the
+  panel shows the one chosen.
 - **Done when** a folder holding a repository, a submodule and a nested repository lists three, and a change
   inside the submodule is news for the submodule and one row in the parent.
 
@@ -275,7 +296,7 @@ processes it starts with their ids, and the time each phase took.
 - **Engine.** `clone(url, directory)` with progress and a way to stop it; `init`; adding, renaming and
   removing a remote and changing its address. A clone's result is a repository the user asked for, whose
   config is what git wrote.
-- **App.** A way to clone from the app.
+- **App.** Nothing yet: the calls exist for completeness, and a panel for them is later work.
 - **Done when** a clone of a local remote reports progress, can be stopped leaving no directory behind, and
   opens trusted.
 
@@ -292,9 +313,9 @@ processes it starts with their ids, and the time each phase took.
 
 - **Engine's repository.** A generator of repositories of 1,000, 100,000 and 1,000,000 files, and a command
   that prints what opening, a whole status, a path-scoped read and a checkpoint cost on each, with the
-  machine's conditions beside them. The README states a budget for each size. CI prints the readings and
-  fails on none of them.
-- **Done when** the readings exist for all three sizes on all three platforms.
+  machine's conditions beside them. The README states a budget for each size. CI prints the readings for
+  1,000 and 100,000 files and fails on none of them; a million is run by hand.
+- **Done when** the readings exist for all three sizes on all three platforms, the million read by hand.
 
 ### 21. A slow status says how to make it fast
 
@@ -322,8 +343,9 @@ processes it starts with their ids, and the time each phase took.
 Linux allows a file name that is not valid UTF-8. The engine decodes git's output as UTF-8, so such a name
 arrives changed, and a later command names a path that does not exist.
 
-- **Engine.** Paths are carried as the bytes git printed, or the file is refused by name with a code.
-- **Done when** on Linux a file with such a name is listed, staged and discarded. macOS does not allow the
+- **Engine.** Such a file is refused by name with a code, and every other file reads as before.
+- **Done when** on Linux a file with such a name is listed as refused, and the rest of the tree is listed,
+  staged and discarded as it would be without it. macOS does not allow the
   name, so the case runs where it can.
 - **Known.** Read from how the output is decoded. Not run.
 
@@ -336,13 +358,13 @@ arrives changed, and a later command names a path that does not exist.
   repositories. None throws, none loops, and each gives back what git printed.
 - **Done when** a fixed set of seeds runs in CI on three platforms.
 
-### 25. The door, reviewed and frozen
+### 25. The door, reviewed
 
 - **Engine's repository.** Every export is read against the monorepo's naming rules and has a firing case. The
   reference is generated from the source. An example program prints the news for a folder, and is the
   diagnostic for a watch as well. The README states what is supported — three platforms, and git from the
   floor the five additions found to the newest — and CI runs exactly that.
-- **Done when** all of it holds at one commit, which is tagged version 1.
+- **Done when** all of it holds at one commit. It is not tagged or frozen (Decided, above).
 
 ## Left out of version 1
 
@@ -388,5 +410,5 @@ file contents, what is ignored, a path's attributes.
 
 - Every pull request above has landed, or has been dropped here with its reason.
 - The engine's CI passes on macOS, Linux and Windows over the gits it supports.
-- The door is frozen, documented and tagged.
+- The door is reviewed and documented.
 - The engine's reference page describes the result, and this plan is archived.
