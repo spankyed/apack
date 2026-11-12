@@ -43,11 +43,27 @@ async function partialClone() {
   return root;
 }
 
-/** Whether the git the app runs can be told not to fetch (2.45): an older one fetches whatever a read needs */
+/**
+ * Whether the git the app runs can be told not to fetch, asked of it: one that cannot fetches whatever a read needs.
+ * Which releases can is a table of each line's, so it is found by what git does, in a clone made for the asking
+ */
 const refusesToFetch = await (async () => {
-  const { stdout } = await execFileWhileWorking(resolveGitPath(), ['--version'], {});
-  const [major = 0, minor = 0] = (/(\d+)\.(\d+)/.exec(String(stdout)) ?? []).slice(1).map(Number);
-  return major > 2 || (major === 2 && minor >= 45);
+  const remote = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'code-partial-probe-')));
+  try {
+    await git(remote, 'init', '--quiet', '--initial-branch=main');
+    await git(remote, 'config', 'uploadpack.allowFilter', 'true');
+    fs.writeFileSync(path.join(remote, 'a.txt'), 'one\n');
+    await git(remote, 'add', '.');
+    await git(remote, 'commit', '--quiet', '-m', 'one');
+    fs.writeFileSync(path.join(remote, 'a.txt'), 'two\n');
+    await git(remote, 'commit', '--quiet', '-am', 'two');
+    await execFileWhileWorking(resolveGitPath(), ['clone', '--quiet', '--filter=blob:none', `file://${remote.replaceAll('\\', '/')}`, 'clone'], { cwd: remote });
+    const clone = path.join(remote, 'clone');
+    const old = String((await execFileWhileWorking(resolveGitPath(), ['rev-parse', 'HEAD~1:a.txt'], { cwd: clone })).stdout).trim();
+    return await execFileWhileWorking(resolveGitPath(), ['cat-file', 'blob', old], { cwd: clone, env: { ...process.env, GIT_NO_LAZY_FETCH: '1' } }).then(() => false, () => true);
+  } finally {
+    fs.rmSync(remote, { recursive: true, force: true });
+  }
 })();
 
 it.runIf(refusesToFetch)('says a file diff needs a version the clone was not given, and fetches nothing', async () => {

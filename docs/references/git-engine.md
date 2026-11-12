@@ -92,12 +92,14 @@ outright by its id. A command stopped before its turn starts no git.
 
 A partial clone was given less than everything, and git fetches what it lacks when a command needs it. The
 engine's reads wait behind nothing and cannot be stopped, so they fetch nothing: each runs with
-`GIT_NO_LAZY_FETCH` (git 2.45 and later), and what it lacks is answered with `content-missing`. In a partial clone
+`GIT_NO_LAZY_FETCH`, and what it lacks is answered with `content-missing`. Git honours the switch from the May 2024
+security releases on each line it then maintained (2.39.4, 2.40.2, 2.41.1, 2.42.2, 2.43.4, 2.44.1, 2.45.1) and in
+every release from 2.46.0; 2.45.0 does not (`refusesLazyFetch`). In a partial clone
 a file at a revision is read with `git show`, because the git kept open for reading files answers "missing" alike
 for a file that is not there and for one whose content was never fetched.
 
 A read is let fetch only inside `fetchingMissing(read)`, where it waits in line with the fetches and pushes. On a
-git older than 2.45, which cannot be told not to fetch, every read in a partial clone waits in that line. Writes
+git that cannot be told not to fetch, every read in a partial clone waits in that line. Writes
 (a checkout, a merge) fetch what they need, as git does.
 
 ## How what the watcher names is held
