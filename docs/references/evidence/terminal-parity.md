@@ -126,6 +126,43 @@ property, and no user-facing option was asked for.
 **What this does not establish.** The app does not set a minimum, so no user sees this yet. The adjustment runs per glyph
 against a cached table; its cost on a full repaint is what Phase 4 measures.
 
+## Phase 4 — the canvas painter under heavy output, and the GPU decision (2026-11-12)
+
+Source: broker `session/terminal-parity-view` at `abb1c7e` for the harness (`view/bench/`) and `d1dc1ac` for the view
+(`bench/run-painter-timing.mjs` is the runner; the harness draws through the real `CanvasPainter`).
+
+**The harness.** `view/bench/painter-timing.ts` drives the view with a 200 by 50 screen where every row changes on every
+frame and every character takes one of sixteen colours. It times each `paint` call, and each frame from sent to
+acknowledged, after the first five frames.
+
+**The results.** Percentiles in milliseconds, 295 frames each.
+
+| Machine | Minimum contrast | Paint p50 / p95 / max | Frame p50 / p95 / max | Load while measured |
+|---|---|---|---|---|
+| Mac, headless Chrome 156 (software canvas) | off | 4.7 / 4.9 / 5.1 | 9.9 / 11.2 / 11.6 | 44 to 59 |
+| Mac, headless Chrome 156 (software canvas) | 4.5 | 4.9 / 5.3 / 5.5 | 10.0 / 11.9 / 12.4 | 40 to 59 |
+| Linux test container, headless Chrome 140 | off | 5.3 / 6.0 / 7.5 | 9.4 / 10.8 / 12.8 | container load 1.0 at start |
+
+Commands:
+
+    # Mac, from view/ with the vite dev server on :5199
+    npx vite --port 5199
+    PLAYWRIGHT=<playwright-core> CHROME=<headless shell> node bench/run-painter-timing.mjs frames=300
+    node bench/run-painter-timing.mjs frames=300 minimumContrast=4.5
+    # Linux container: the monorepo's .apack/painter-container.sh, run by npm run test:linux
+
+**The decision (D5).** The gate was a p95 frame above 16 ms on either machine. Neither machine exceeds it, in the off
+or the contrast-on configuration, so the GPU renderer is not started, and D5 closes here with these numbers.
+
+**What this does not establish.**
+
+- These are headless Chromium's canvas, which is software rendering. The application draws in Electron, which composites
+  on the GPU, so its frame times are not these numbers. The gate is passed here, and the application's own figure is not
+  measured.
+- The measurement is a worst case by construction: every row changes on every frame. A screen that changes a few rows
+  paints less.
+- The Mac was under load from other work throughout, so its figures are upper bounds.
+
 ## What this does not establish
 
 - **Real-window behaviour of the clipboard write.** The write path is proven at the bridge and the handler with stubs. No
