@@ -159,3 +159,91 @@ Each mutant was a copy in the scratchpad, copied over the file, run, and the ori
 - Focus is `document.hasFocus()`, as the existing `notifySystem` uses it. No app-level focus state was found to use.
 - Every window showing the code surface receives the bell. An unfocused window each asks for a notification, so two
   unfocused windows can show two. The `NOTIFIED` path avoids this with a shared tag; the bell path does not yet.
+
+## Phase 3 — cursor style and blink (2026-11-12)
+
+Broker commits on `session/next-features-broker` (worktree `apack-terminal-worktrees.noindex/next-features`, on top of
+`a91ea40`): `72e658e` `feat(vt): a session's default cursor is set by a request`, and `f6165ee`
+`feat(view): an inactive cursor style and a blink setting from the view's options`. Nothing is pushed or merged, and
+the app pin still names `3a2140c`.
+
+### The core's blink, measured
+
+A throwaway probe on `Screen` and a `View` (the probe was reverted; the facts are now tests) gave:
+
+- `CSI 2 q` reports a steady block; `CSI 5 q` a blinking bar; `CSI 6 q` a steady bar.
+- `CSI ? 12 h` and `CSI ? 12 l` change the blink and not the shape. After `CSI 2 q`, `CSI ? 12 h` reports a blinking
+  block; after `CSI 5 q`, `CSI ? 12 l` reports a steady bar.
+
+So DECSCUSR's blink and DEC mode 12 are one setting in this core. The `ghostty-vt-rs-sys` header says that
+`DEFAULT_CURSOR_BLINK` is what `CSI 0 q` restores, and that the render state's `blinking` is "based on terminal modes".
+
+### Decisions
+
+- **Blink values.** `program` is the core's setting, whichever of DECSCUSR or mode 12 set it last. `on` and `off` are
+  the app's and override it in the view, for DECSCUSR's blink too, since it is the same bit. This is a judgment on
+  D8, whose "a program's DECSCUSR choice wins" is about the shape. Phase 3's own test text says "on and off ignore a
+  program's mode 12", and ghostty's `cursor-style-blink` overrides the program the same way.
+- **Where the blink is applied.** The view, not the broker. The broker stores only what a reset returns to:
+  `on` and `program` reset to a blinking cursor, `off` to a steady one. The broker still reports blinking as the
+  program left it. One place draws the cursor, and the view tests need it there.
+- **Style and precedence.** The request sets the core's default style and blink, and feeds `CSI 0 q` so the cursor
+  takes the default now. A session still starts with a blinking bar, through the same call. A program's `DECSCUSR`
+  wins until its next reset.
+- **Consequence to know.** A request sent while a program has its own shape replaces that shape with the default. D8's
+  "until the program resets it" holds for every choice made after the request. The app should send defaults at
+  spawn, before the shell prints; that wiring is not in this phase.
+- **Wire.** The control protocol gains `SetCursorDefaults { session, style, blink }` (`set_cursor_defaults`),
+  with `CursorStyle` (`block`, `bar`, `underline`) and `CursorBlink` (`on`, `off`, `program`). `node/protocol.ts`
+  was regenerated with `cargo xtask generate`; its diff is the variant and the two enums and nothing else. The view wire
+  (`view/src/broker/wire.ts`) is unchanged, since no view-wire message and no `Cursor` field changed; the goal's
+  "update wire.ts in the same change" applies to a view-wire change. `PROTOCOL_VERSION` stays 1.
+- **Inactive style.** `ViewOptions.cursorInactive`, default `hollow`, which is what the view already drew. The painter
+  is unchanged.
+- **Unset.** The broker has no "unset": the app resolves it to one of the three values before sending. The view
+  treats an absent `cursorBlink` as `program`, the behaviour before this phase.
+
+### Commands and counts
+
+- `cargo test --test suite`: 436 passed, 0 failed (430 before, plus 6 new). The Phase 1 flake
+  (`keeping::a_session_begins_with_the_screen_its_recording_holds`) did not fail in this run.
+- New broker tests, all passing: `view_frames::a_default_cursor_set_by_the_app_is_the_one_a_frame_shows`,
+  `a_program_choice_wins_over_the_default_until_the_program_resets_it`,
+  `a_reset_returns_to_a_blinking_cursor_for_on_and_program_and_a_steady_one_for_off`,
+  `a_default_set_part_way_through_a_program_sequence_still_takes_the_cursor`,
+  `decscusr_and_dec_mode_12_set_one_blink_between_them`, and `broker::setting_the_cursor_defaults_of_a_session_that_does_not_exist_is_refused_by_code`.
+- `npm test` in `view/`: 366 passed, 17 files. `view/tests/view.spec.ts` has 49 passing, 4 of them new:
+  the inactive style, and `on`, `off` and `program` blink.
+- `npx tsc --noEmit` in `view/`: exit 0.
+- `cargo fmt --all --check`: exit 0.
+- `cargo clippy --workspace --all-targets -- -D warnings`: 2 errors, both in Phase 1's code and present at `a91ea40`:
+  `tests/view_frames.rs:255` and `:260` (`redundant closure`, `map(|row| text(row))`). Nothing from this phase.
+  Not fixed here, since it is outside this phase's change.
+- `npm run chain` was not run, by instruction. `cargo xtask pre-push` (which includes the mutants job) was not run.
+
+### Mutation checks
+
+Each mutant was a copy in `monorepo/.apack/mutants/`, applied to the working file, and the original put back and
+compared with `cmp` (identical both times).
+
+1. **DECSCUSR precedence.** `Screen::feed` also feeds `CSI 0 q` after each program write, so the default always wins.
+   Four tests fail and 46 pass. `a_program_choice_wins_over_the_default_until_the_program_resets_it` fails, but at the
+   frame helper (`expected one frame, found []`) rather than at its precedence assertion, because the mutant leaves the
+   cursor unchanged and no frame is sent. The failure is real, and the reason is less exact than it could be.
+2. **Inactive style.** The branch hard-codes `'hollow'`. One test fails:
+   `is drawn in the inactive style the view is given while the view does not have the keyboard`
+   (`expected 'hollow' to be 'underline'`). 48 pass.
+3. **Blink `off` ignored** (not asked for, cheap). `off` returns the program's blink. One test fails:
+   `never hides a cursor the program blinks when the view is given off`. 48 pass.
+
+### Gaps
+
+- **App side is not in this phase.** The settings, the code surface's `TerminalView` options, the request sent from the
+  app, and `settings.vue` land after this broker branch merges. Nothing sends `SetCursorDefaults` yet.
+- **Recordings.** The request is not written to a session's recording, so a rewound recording does not show the reset.
+- **A request mid-sequence.** The reset is fed through the parser, so a program's sequence split across two reads is
+  ended by it, and the rest of that sequence is lost. The test covers that the default still takes effect, not the lost
+  bytes.
+- **Options at construction.** `cursorBlink` and `cursorInactive` are read when the view is made. A live change needs a
+  new view.
+- **Not seen on screen.** No real program and no Electron window were run. The cursor's look is unchecked.
