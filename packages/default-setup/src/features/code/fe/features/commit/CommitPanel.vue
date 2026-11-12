@@ -75,20 +75,21 @@
       <!-- Branch Info -->
       <div class="px-4 py-2 border-b border-neutral-800 bg-neutral-800/50">
       <!-- Create Branch Mode -->
-      <div v-if="isCreatingBranch" class="flex items-center gap-1.5">
+      <div v-if="isCreatingBranch || renamingBranch" class="flex items-center gap-1.5">
         <input
           ref="newBranchInput"
           v-model="newBranchName"
+          data-testid="branch-name-input"
           @keyup.enter="confirmCreateBranch"
           @keyup.escape="cancelCreateBranch"
-          placeholder="New branch name..."
+          :placeholder="renamingBranch ? `Rename ${renamingBranch} to...` : 'New branch name...'"
           class="flex-1 min-w-0 px-3 py-1.5 text-xs bg-neutral-900 border border-neutral-700 rounded text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-neutral-600"
         />
         <button
           @click="confirmCreateBranch"
           :disabled="!newBranchName.trim()"
           class="p-1.5 rounded transition-colors text-green-400 hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Create branch"
+          :title="renamingBranch ? 'Rename branch' : 'Create branch'"
         >
           <Check :size="14" />
         </button>
@@ -187,8 +188,23 @@
               <span v-if="branchStanding[branch].ahead">↑{{ branchStanding[branch].ahead }}</span>
               <span v-if="branchStanding[branch].behind">↓{{ branchStanding[branch].behind }}</span>
             </span>
-            <CheckCircle v-if="branch === gitBranch" :size="12" class="ml-auto text-green-500" />
+            <span v-if="branch === gitBranch" class="ml-auto flex items-center gap-1">
+              <button
+                data-testid="rename-branch"
+                @mousedown.stop.prevent="startRenameBranch(branch)"
+                :title="`Rename ${branch}`"
+                class="p-0.5 hover:bg-neutral-700 rounded opacity-0 group-hover:opacity-100"
+              ><Pencil :size="12" class="text-neutral-400" /></button>
+              <CheckCircle :size="12" class="text-green-500" />
+            </span>
             <span v-else class="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100">
+              <button
+                v-if="branchStanding[branch]"
+                data-testid="rename-branch"
+                @mousedown.stop.prevent="startRenameBranch(branch)"
+                :title="`Rename ${branch}`"
+                class="p-0.5 hover:bg-neutral-700 rounded"
+              ><Pencil :size="12" class="text-neutral-400" /></button>
               <button
                 data-testid="merge-branch"
                 @mousedown.stop.prevent="startOperation('merge', branch)"
@@ -206,6 +222,18 @@
               ><GitPullRequestArrow :size="12" class="text-neutral-400" /></button>
             </span>
           </div>
+          <template v-if="tags.length > 0 && !branchInput">
+            <div class="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wide text-neutral-500 border-t border-neutral-800">Tags</div>
+            <div v-for="tag in tags" :key="tag.name" data-testid="tag-row" class="group px-3 py-1.5 flex items-center gap-2 hover:bg-neutral-800" @mousedown.prevent>
+              <Tag :size="12" class="text-neutral-400" />
+              <span class="text-xs text-neutral-300">{{ tag.name }}</span>
+              <span class="text-[10px] text-neutral-500 font-mono">{{ tag.commit.slice(0, 7) }}</span>
+              <span class="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                <button data-testid="push-tag" @mousedown.stop.prevent="commitActor.send({ type: 'commit.PUSH_TAG', name: tag.name })" :title="`Push ${tag.name}`" class="p-0.5 hover:bg-neutral-700 rounded"><Upload :size="12" class="text-neutral-400" /></button>
+                <button data-testid="delete-tag" @mousedown.stop.prevent="commitActor.send({ type: 'commit.DELETE_TAG', name: tag.name })" :title="`Delete ${tag.name} here`" class="p-0.5 hover:bg-neutral-700 rounded"><Trash2 :size="12" class="text-neutral-400" /></button>
+              </span>
+            </div>
+          </template>
         </div>
       </div>
     </div>
@@ -532,6 +560,9 @@
                 <ContextMenuItem @select="unstageFile(file)" :class="MENU_ITEM_CLASS">
                   <Minus class="w-4 h-4" /> Unstage
                 </ContextMenuItem>
+                <ContextMenuItem @select="stashFile(file)" :class="MENU_ITEM_CLASS">
+                  <Archive class="w-4 h-4" /> Stash this file
+                </ContextMenuItem>
               </template>
             </GitFileItem>
           </div>
@@ -633,6 +664,9 @@
                 <template #menuItems>
                   <ContextMenuItem @select="stageFile(file)" :class="MENU_ITEM_CLASS">
                     <Plus class="w-4 h-4" /> Stage
+                  </ContextMenuItem>
+                  <ContextMenuItem v-if="!file.isDirectory" @select="stashFile(file)" :class="MENU_ITEM_CLASS">
+                    <Archive class="w-4 h-4" /> Stash this file
                   </ContextMenuItem>
                   <ContextMenuItem @select="openRevertDialog(file)" :class="MENU_ITEM_DANGER_CLASS">
                     <RotateCcw class="w-4 h-4" /> Discard Changes
@@ -867,7 +901,7 @@ import { useSurface, useShell } from '@apackdev/sdk/fe'
 import type { CodeState } from '#features/code/fe/state.ts'
 import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts'
 import type { ConflictKind, OperationMove } from '#features/code/be/types.ts'
-import { Folder, GitBranch, GitBranchPlus, GitCommit, GitFork, GitMerge, RefreshCw, Plus, Minus, RotateCcw, ChevronDown, ChevronRight, CheckCircle, Check, X, Sparkles, Loader2, ArrowDownToLine, ArrowUpFromLine, MoreVertical, Trash2, Copy, Search, FolderSync, Lock, FileText, GitPullRequestArrow } from 'lucide-vue-next'
+import { Folder, GitBranch, GitBranchPlus, GitCommit, GitFork, GitMerge, RefreshCw, Plus, Minus, RotateCcw, ChevronDown, ChevronRight, CheckCircle, Check, X, Sparkles, Loader2, ArrowDownToLine, ArrowUpFromLine, MoreVertical, Trash2, Copy, Search, FolderSync, Lock, FileText, GitPullRequestArrow, Pencil, Tag, Upload, Archive } from 'lucide-vue-next'
 import { ContextMenuItem } from 'reka-ui'
 import { MENU_ITEM_CLASS, MENU_ITEM_DANGER_CLASS } from '#features/code/fe/features/explorer/constants.ts'
 import GitFileItem from '#features/code/fe/features/commit/GitFileItem.vue'
@@ -933,6 +967,7 @@ const pullTitle = computed(() => {
   }
 })
 const branchStanding = useSelector(commitActor, (state) => state.context.branchStanding)
+const tags = useSelector(commitActor, (state) => state.context.tags)
 const branchInput = useSelector(commitActor, (state) => state.context.branchInput)
 const isCheckingOutBranch = useSelector(commitActor, (state) => state.context.isCheckingOutBranch)
 const hasUpstream = useSelector(commitActor, (state) => state.context.hasUpstream)
@@ -1350,6 +1385,11 @@ const startCreateBranch = () => {
 const confirmCreateBranch = () => {
   const name = newBranchName.value.trim()
   if (!name) return
+  if (renamingBranch.value) {
+    if (name !== renamingBranch.value) commitActor?.send({ type: 'commit.RENAME_BRANCH', name: renamingBranch.value, to: name })
+    cancelCreateBranch()
+    return
+  }
   commitActor?.send({ type: 'commit.UPDATE_BRANCH_INPUT', input: name })
   commitActor?.send({ type: 'commit.CHECKOUT_BRANCH' })
   isCreatingBranch.value = false
@@ -1359,7 +1399,22 @@ const confirmCreateBranch = () => {
 
 const cancelCreateBranch = () => {
   isCreatingBranch.value = false
+  renamingBranch.value = null
   newBranchName.value = ''
+}
+
+/** The local branch being renamed, in the branch name box */
+const renamingBranch = ref<string | null>(null)
+const startRenameBranch = (branch: string) => {
+  showBranchDropdown.value = false
+  renamingBranch.value = branch
+  newBranchName.value = branch
+  nextTick(() => newBranchInput.value?.select())
+}
+
+/** Stashes one file's changes, leaving the rest as they are */
+const stashFile = (file: GitStatusFile) => {
+  commitActor?.send({ type: 'commit.STASH_PUSH', message: `${file.path}`, paths: [file.path] })
 }
 
 // Stash handlers

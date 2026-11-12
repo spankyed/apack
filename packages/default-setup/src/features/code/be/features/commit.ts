@@ -42,7 +42,11 @@ export type Event =
   | { type: 'commit.PUBLISH_BRANCH' }
   | { type: 'commit.PULL_BRANCH' }
   | { type: 'commit.GENERATE_MESSAGE' }
-  | { type: 'commit.STASH_PUSH'; message?: string; stagedOnly?: boolean }
+  | { type: 'commit.STASH_PUSH'; message?: string; stagedOnly?: boolean; paths?: string[] }
+  | { type: 'commit.CREATE_TAG'; name: string; commit?: string; message?: string }
+  | { type: 'commit.DELETE_TAG'; name: string }
+  | { type: 'commit.PUSH_TAG'; name: string }
+  | { type: 'commit.RENAME_BRANCH'; name: string; to: string }
   | { type: 'commit.STASH_LIST' }
   | { type: 'commit.STASH_APPLY'; index: number }
   | { type: 'commit.STASH_POP'; index: number }
@@ -729,7 +733,7 @@ export const commitSystem = setup({
           [name, { ...(upstream && { upstream }), ...(upstreamGone && { upstreamGone }), ahead, behind }]))
         answer(reply, {
           type: 'commit.BRANCHES_RECEIVED',
-          data: { branches, standing }
+          data: { branches, standing, ...(refs && { tags: refs.tags }) }
         })
       }).catch((error: any) => {
         answer(reply, {
@@ -1017,11 +1021,11 @@ export const commitSystem = setup({
     },
 
     stashPush: ({ event, context, self, reply }) => {
-      const ev = event as { type: 'commit.STASH_PUSH'; message?: string; stagedOnly?: boolean }
+      const ev = event as { type: 'commit.STASH_PUSH'; message?: string; stagedOnly?: boolean; paths?: string[] }
 
       if (!requireGitRepository(context, reply)) return
 
-      context.gitRepository.stashPush(ev.message, ev.stagedOnly).then((result) => {
+      context.gitRepository.stashPush(ev.message, ev.stagedOnly, ev.paths).then((result) => {
         answer(reply, {
           type: 'commit.STASH_SUCCESS',
           data: { message: result }
@@ -1033,6 +1037,42 @@ export const commitSystem = setup({
           data: failureOf(error)
         })
       })
+    },
+
+    createTag: ({ event, context, reply }) => {
+      const { name, commit, message } = event as { type: 'commit.CREATE_TAG'; name: string; commit?: string; message?: string }
+      if (!requireGitRepository(context, reply)) return
+      context.gitRepository.createTag(name, { commit, message }).then(
+        () => answer(reply, { type: 'commit.TAG_CREATED', data: { name } }),
+        (error: unknown) => answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) }),
+      )
+    },
+
+    deleteTag: ({ event, context, reply }) => {
+      const { name } = event as { type: 'commit.DELETE_TAG'; name: string }
+      if (!requireGitRepository(context, reply)) return
+      context.gitRepository.deleteTag(name).then(
+        () => answer(reply, { type: 'commit.TAG_DELETED', data: { name } }),
+        (error: unknown) => answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) }),
+      )
+    },
+
+    pushTag: ({ event, context, reply }) => {
+      const { name } = event as { type: 'commit.PUSH_TAG'; name: string }
+      if (!requireGitRepository(context, reply)) return
+      context.gitRepository.pushTag(name).then(
+        () => answer(reply, { type: 'commit.TAG_PUSHED', data: { name } }),
+        (error: unknown) => answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) }),
+      )
+    },
+
+    renameBranch: ({ event, context, self, reply }) => {
+      const { name, to } = event as { type: 'commit.RENAME_BRANCH'; name: string; to: string }
+      if (!requireGitRepository(context, reply)) return
+      context.gitRepository.renameBranch(name, to).then(() => {
+        answer(reply, { type: 'commit.BRANCH_RENAMED', data: { name, to } })
+        self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+      }, (error: unknown) => answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) }))
     },
 
     stashList: ({ context, reply }) => {
@@ -1396,6 +1436,10 @@ export const commitSystem = setup({
         'commit.STASH_PUSH': {
           actions: 'stashPush'
         },
+        'commit.CREATE_TAG': { actions: 'createTag' },
+        'commit.DELETE_TAG': { actions: 'deleteTag' },
+        'commit.PUSH_TAG': { actions: 'pushTag' },
+        'commit.RENAME_BRANCH': { actions: 'renameBranch' },
         'commit.STASH_LIST': {
           actions: 'stashList'
         },
