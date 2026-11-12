@@ -445,7 +445,7 @@ export interface WatcherHandle { readonly [gitHandle]: 'watcher' }
 export const GIT_ERROR_CODES = [
   'locked', 'authentication', 'permission', 'remote-unreachable', 'non-fast-forward', 'diverged', 'conflict', 'local-changes', 'unknown-ref', 'not-a-repository',
   'aborted', 'git-not-found', 'developer-tools-missing', 'git-too-old', 'unsafe-ownership', 'signing-failed', 'unrelated-histories', 'nothing-to-commit', 'branch-exists', 'host-refused',
-  'untrusted', 'content-missing',
+  'untrusted', 'content-missing', 'published',
 ] as const
 export type GitErrorCode = (typeof GIT_ERROR_CODES)[number]
 

@@ -1585,7 +1585,7 @@ interface FolderItem {
 }
 
 /** Why a git command failed, where what it printed says: the git engine's codes, as the contract names them */
-declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository", "aborted", "git-not-found", "developer-tools-missing", "git-too-old", "unsafe-ownership", "signing-failed", "unrelated-histories", "nothing-to-commit", "branch-exists", "host-refused", "untrusted", "content-missing"];
+declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository", "aborted", "git-not-found", "developer-tools-missing", "git-too-old", "unsafe-ownership", "signing-failed", "unrelated-histories", "nothing-to-commit", "branch-exists", "host-refused", "untrusted", "content-missing", "published"];
 
 interface GhPRComment {
     id: string;
@@ -1886,6 +1886,11 @@ type IncomingCommitEvents = {
     index: number;
 } | {
     type: 'commit.STASH_CLEAR';
+}
+/** Takes back the last write the engine made here; `evenIfPublished` once the user said to for a commit already pushed */
+ | {
+    type: 'commit.UNDO_LAST';
+    evenIfPublished?: boolean;
 } | {
     type: 'commit.WORKTREE_LIST';
 } | {
@@ -3356,6 +3361,27 @@ type OutgoingCommitEvents =
     type: 'commit.RESET_COMMIT_SUCCESS';
     data: {
         hash: string;
+    };
+}
+/** What `commit.UNDO_LAST` would take back, after a write that can be: nothing when there is none */
+ | {
+    type: 'commit.UNDOABLE_RECEIVED';
+    data: {
+        id: string;
+        summary: string;
+    } | null;
+} | {
+    type: 'commit.UNDONE';
+    data: {
+        id: string;
+        summary: string;
+    };
+}
+/** The commit to be undone is already on a remote branch: undone only once the user says so, and this says why */
+ | {
+    type: 'commit.UNDO_NEEDS_CONFIRMATION';
+    data: {
+        message: string;
     };
 };
 

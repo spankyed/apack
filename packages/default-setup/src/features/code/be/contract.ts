@@ -87,6 +87,8 @@ export type IncomingCommitEvents =
   | { type: 'commit.STASH_POP'; index: number }
   | { type: 'commit.STASH_DROP'; index: number }
   | { type: 'commit.STASH_CLEAR' }
+  /** Takes back the last write the engine made here; `evenIfPublished` once the user said to for a commit already pushed */
+  | { type: 'commit.UNDO_LAST'; evenIfPublished?: boolean }
   | { type: 'commit.WORKTREE_LIST' }
   | { type: 'commit.WORKTREE_ADD'; path: string; branch?: string; createBranch?: boolean }
   | { type: 'commit.WORKTREE_REMOVE'; path: string; force?: boolean }
@@ -159,6 +161,11 @@ export type OutgoingCommitEvents =
   | { type: 'commit.LOG_LIST_RECEIVED'; data: { commits: CommitLogEntry[] } }
   | { type: 'commit.REVERT_COMMIT_SUCCESS'; data: { hash: string } }
   | { type: 'commit.RESET_COMMIT_SUCCESS'; data: { hash: string } }
+  /** What `commit.UNDO_LAST` would take back, after a write that can be: nothing when there is none */
+  | { type: 'commit.UNDOABLE_RECEIVED'; data: { id: string; summary: string } | null }
+  | { type: 'commit.UNDONE'; data: { id: string; summary: string } }
+  /** The commit to be undone is already on a remote branch: undone only once the user says so, and this says why */
+  | { type: 'commit.UNDO_NEEDS_CONFIRMATION'; data: { message: string } }
 
 // ── pull-request ─────────────────────────────────────────────────────────
 export type IncomingPullRequestEvents =

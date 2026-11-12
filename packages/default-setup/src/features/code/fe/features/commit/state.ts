@@ -54,6 +54,10 @@ export interface CodeCommitContext {
   discardPreview: { paths: string[]; notKept: string[] } | null
   /** The last discard that kept what it removed, which the panel offers to undo until it is dismissed or undone */
   lastDiscard: { id: string; paths: string[]; notKept: string[] } | null
+  /** The last write here that Undo takes back, as the repository's journal names it, until it is dismissed */
+  lastUndoable: { id: string; summary: string } | null
+  /** Why the last write is not taken back without asking: a commit already on a remote branch */
+  undoConfirmation: string | null
   /** What undoing a discard left as it was, because it had changed or been made again since */
   discardLeft: string[]
   /** The folder what is held here was read from: the code surface's, as of the last time it started */
@@ -201,6 +205,12 @@ export type Event =
   | { type: 'commit.PREVIEW_DISCARD'; paths: string[] }
   | { type: 'commit.DISCARD_PREVIEWED'; data: { paths: string[]; notKept: string[] } }
   | { type: 'commit.UNDO_DISCARD' }
+  /** Undo the last write; `evenIfPublished` once the user said to for a commit already pushed */
+  | { type: 'commit.UNDO_LAST'; evenIfPublished?: boolean }
+  | { type: 'commit.DISMISS_UNDO' }
+  | { type: 'commit.UNDOABLE_RECEIVED'; data: { id: string; summary: string } | null }
+  | { type: 'commit.UNDONE'; data: { id: string; summary: string } }
+  | { type: 'commit.UNDO_NEEDS_CONFIRMATION'; data: { message: string } }
   | { type: 'commit.DISMISS_DISCARD' }
   | { type: 'commit.DISCARD_RESTORED'; data: { id: string } & DiscardRestored }
   | { type: 'commit.TRUST_REPOSITORY' }
@@ -267,6 +277,8 @@ type OfOneFolder =
   | 'revertDialogFile'
   | 'discardPreview'
   | 'lastDiscard'
+  | 'lastUndoable'
+  | 'undoConfirmation'
   | 'discardLeft'
   | 'availableBranches'
   | 'branchInput'
@@ -300,6 +312,8 @@ const ofNoFolder = (): Pick<CodeCommitContext, OfOneFolder> => ({
   revertDialogFile: null,
   discardPreview: null,
   lastDiscard: null,
+  lastUndoable: null,
+  undoConfirmation: null,
   discardLeft: [],
   availableBranches: [],
   branchInput: '',
@@ -506,6 +520,12 @@ export const commitState = setup({
     },
 
     dismissDiscard: assign({ lastDiscard: null, discardLeft: [] }),
+
+    undoLast: enqueueActions(({ enqueue, event }) => {
+      const { evenIfPublished } = event as { type: 'commit.UNDO_LAST'; evenIfPublished?: boolean }
+      enqueue.assign({ undoConfirmation: null })
+      enqueue(() => sendToSystem('code', { type: 'commit.UNDO_LAST', ...(evenIfPublished && { evenIfPublished }) }))
+    }),
 
     /** Undone: the offer goes, and what was left alone is said until it is dismissed */
     handleDiscardRestored: assign(({ context, event }) => {
@@ -1051,6 +1071,15 @@ export const commitState = setup({
         },
         'commit.DISCARD_PREVIEWED': {
           actions: 'setDiscardPreview'
+        },
+        'commit.UNDO_LAST': { actions: 'undoLast' },
+        'commit.DISMISS_UNDO': { actions: assign({ lastUndoable: null, undoConfirmation: null }) },
+        'commit.UNDOABLE_RECEIVED': {
+          actions: assign({ lastUndoable: ({ event }) => (event as { type: 'commit.UNDOABLE_RECEIVED'; data: { id: string; summary: string } | null }).data }),
+        },
+        'commit.UNDONE': { actions: assign({ undoConfirmation: null }) },
+        'commit.UNDO_NEEDS_CONFIRMATION': {
+          actions: assign({ undoConfirmation: ({ event }) => (event as { type: 'commit.UNDO_NEEDS_CONFIRMATION'; data: { message: string } }).data.message }),
         },
         'commit.UNDO_DISCARD': {
           actions: 'undoDiscard'

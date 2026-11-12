@@ -47,6 +47,7 @@ export type Event =
   | { type: 'commit.STASH_POP'; index: number }
   | { type: 'commit.STASH_DROP'; index: number }
   | { type: 'commit.STASH_CLEAR' }
+  | { type: 'commit.UNDO_LAST'; evenIfPublished?: boolean }
   | { type: 'commit.WORKTREE_LIST' }
   | { type: 'commit.WORKTREE_ADD'; path: string; branch?: string; createBranch?: boolean }
   | { type: 'commit.WORKTREE_REMOVE'; path: string; force?: boolean }
@@ -79,6 +80,17 @@ const WHAT_TO_DO = {
   'developer-tools-missing': 'Install them with `xcode-select --install`, or install Git another way and set where it is under Settings, CLI providers.',
   'git-too-old': 'Update Git, or set a newer one under Settings, CLI providers.',
 } as const
+
+/**
+ * Tells whoever made a write what Undo would take back now: a write that can be taken back is the last in the
+ * repository's journal, unless another window or process made one since. Nothing is said when it cannot be read.
+ */
+function answerUndoable(repo: AppGitRepository, reply: Parameters<typeof answer>[0]): Promise<void> {
+  return repo.lastUndoable().then(
+    entry => answer(reply, { type: 'commit.UNDOABLE_RECEIVED', data: entry ? { id: entry.id, summary: entry.summary } : null }),
+    () => {},
+  )
+}
 
 function failureOf(error: unknown): CommitFailure {
   const message = error instanceof Error ? error.message : String(error)
@@ -534,6 +546,7 @@ export const commitSystem = setup({
             data: { message: ev.message }
           })
           self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+          return answerUndoable(context.gitRepository!, reply)
         })
       }).catch((error: any) => {
         let errorMessage = error.message
@@ -747,6 +760,22 @@ export const commitSystem = setup({
     },
 
     /** Puts back what a discard kept: a write like the discard it undoes, announced the same way */
+    /** Takes back the last write the engine made here, asking first for a commit a remote branch already holds */
+    undoLast: ({ event, context, self, reply }) => {
+      const { evenIfPublished } = event as { type: 'commit.UNDO_LAST'; evenIfPublished?: boolean }
+      if (!requireGitRepository(context, reply)) return
+      const repo = context.gitRepository
+      repo.undo({ evenIfPublished }).then((entry) => {
+        answer(reply, { type: 'commit.UNDONE', data: { id: entry.id, summary: entry.summary } })
+        self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+        return answerUndoable(repo, reply)
+      }, (error: unknown) => {
+        answer(reply, (error as { code?: string }).code === 'published'
+          ? { type: 'commit.UNDO_NEEDS_CONFIRMATION', data: { message: (error as Error).message } }
+          : { type: 'commit.ERROR_RECEIVED', data: failureOf(error) })
+      })
+    },
+
     restoreDiscarded: ({ event, context, self, reply }) => {
       const { id } = event as { type: 'commit.RESTORE_DISCARDED'; id: string }
       if (!requireGitRepository(context, reply)) return
@@ -938,6 +967,7 @@ export const commitSystem = setup({
 
       context.gitRepository.stashDrop(ev.index).then(() => {
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+        return answerUndoable(context.gitRepository!, reply)
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
@@ -951,6 +981,7 @@ export const commitSystem = setup({
 
       context.gitRepository.stashClear().then(() => {
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+        return answerUndoable(context.gitRepository!, reply)
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
@@ -1005,6 +1036,7 @@ export const commitSystem = setup({
           data: { hash: ev.hash }
         })
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+        return answerUndoable(context.gitRepository!, reply)
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
@@ -1132,6 +1164,9 @@ export const commitSystem = setup({
         },
         'commit.COMMIT': {
           actions: 'commit'
+        },
+        'commit.UNDO_LAST': {
+          actions: 'undoLast'
         },
         'commit.GET_CURRENT_BRANCH': {
           actions: 'getCurrentBranch'
