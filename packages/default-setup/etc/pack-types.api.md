@@ -2879,6 +2879,14 @@ type LogsInternalEvents = {
 
 type LogsSettings = SettingsOf<'logs'>;
 
+/** What merging a branch into what is checked out would do: a pull's, before it is made */
+type MergePreview = {
+    kind: 'clean' | 'fast-forward' | 'unknown' | 'up-to-date';
+} | {
+    kind: 'conflicts';
+    files: string[];
+};
+
 interface MessageEntity extends BaseEntity {
     entityType: EARS.Entity.Message;
     /**
@@ -3274,6 +3282,7 @@ type OutgoingCommitEvents =
         files: GitStatusFile[];
         counts?: LineCount[];
         hasIdentity?: boolean;
+        pullPreview?: MergePreview;
         truncated: boolean;
         branch: string;
         hasUpstream: boolean;

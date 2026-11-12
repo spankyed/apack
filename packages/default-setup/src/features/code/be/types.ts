@@ -480,6 +480,11 @@ export interface BlameLine {
   originalPath: string
 }
 
+/** What merging a branch into what is checked out would do: a pull's, before it is made */
+export type MergePreview =
+  | { kind: 'up-to-date' | 'fast-forward' | 'clean' | 'unknown' }
+  | { kind: 'conflicts'; files: string[] }
+
 /** A repository found under the folder the user opened, as the panel's picker lists it */
 export interface RepositoryUnder {
   path: string

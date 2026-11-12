@@ -154,6 +154,12 @@ and a sync can be done now and the first reason when not; the snapshot says whet
 commit with (`hasIdentity`). The commit panel decides with it from what it holds, and titles the Commit and sync
 buttons with the reason in its own words.
 
+## What a merge or a pull would do
+
+`previewMerge(target)` answers up to date, a fast-forward, a clean merge or the files a merge would stop on, from
+`git merge-tree --write-tree`, which moves nothing; before git 2.38 it is `unknown`. The status of a branch behind its
+upstream carries a pull's preview (`pullPreview`), and the sync button says it before the click.
+
 ## Copies of the working tree
 
 **A copy is kept outside the repository, and nothing of the repository's is written to keep it.** Each repository

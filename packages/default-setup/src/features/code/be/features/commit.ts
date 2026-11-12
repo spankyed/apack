@@ -262,9 +262,11 @@ export const commitSystem = setup({
         return repository.readSnapshot().then(async (snapshot) => {
           // Each file's count, git's own: two more processes, so not past what a person reads down a list of
           const counts = snapshot.files.length <= COUNTED_FILES ? await repository.lineCounts().catch(() => undefined) : undefined
+          // What a pull would do, worked out without moving anything: asked only when there is something to pull
+          const pullPreview = snapshot.hasUpstream && snapshot.behind > 0 ? await repository.previewMerge('@{upstream}').catch(() => undefined) : undefined
           answer(reply, {
             type: 'commit.STATUS_RECEIVED',
-            data: { files: snapshot.files, ...(counts && { counts }), hasIdentity: snapshot.hasIdentity, truncated: snapshot.truncated, branch: snapshot.branch, hasUpstream: snapshot.hasUpstream, commitsAhead: snapshot.ahead, commitsBehind: snapshot.behind, signIn: repository.autoFetchSignIn, watching: !repository.hasWatchFailed, operation: snapshot.operation, fetchSuspended: repository.isAutoFetchSuspended }
+            data: { files: snapshot.files, ...(counts && { counts }), ...(pullPreview && { pullPreview }), hasIdentity: snapshot.hasIdentity, truncated: snapshot.truncated, branch: snapshot.branch, hasUpstream: snapshot.hasUpstream, commitsAhead: snapshot.ahead, commitsBehind: snapshot.behind, signIn: repository.autoFetchSignIn, watching: !repository.hasWatchFailed, operation: snapshot.operation, fetchSuspended: repository.isAutoFetchSuspended }
           })
           // The window has its answer: what the remote has is fetched behind it, and announced if it differs
           fetchInBackground(repository, self)
