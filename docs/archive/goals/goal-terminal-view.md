@@ -1,5 +1,10 @@
 # Goal: one interpreter, and a view over the rows it sends
 
+> **Archived 2026-11-12: merged, with one required check still open.** The broker's mutation gate (its `mutants`
+> job) has no answer, and the Current handoff below records it. Archiving does not close it, and it is not
+> transferred to [goal-terminal-parity](../../goals/goal-terminal-parity.md), which covers view parity only.
+> Reopen this goal, or run the gate as its own task, before treating it as complete.
+
 **Status: merged, with one acceptance check unanswered.** It is on `master` in two repositories: this one
 (#410) and `apack-terminal` (its #2), which holds the broker and the view (`view/`, the
 `apack-terminal-view` package) and which this one pins at its `master`. What is unanswered is the
@@ -7,7 +12,7 @@ broker's mutation gate; the handoff below has it.
 
 ## Why
 
-[The integration review](../archive/issues/ISSUE-ghostty-integration-review.md) found the broker and the window
+[The integration review](../issues/ISSUE-ghostty-integration-review.md) found the broker and the window
 interpreting terminal output with different builds of the core, and disagreeing. The live defects were fixed on
 `master`. What is left is the structure that produced them: two interpreters, bytes crossing the app as text
 through the API process, a scrollback held twice, and a screen the broker keeps that nothing reads.
@@ -122,7 +127,7 @@ Each ends in something checked. A phase is not started on a red one.
 
 ## Current handoff
 
-- **Evidence.** [evidence/terminal-view.md](evidence/terminal-view.md).
+- **Evidence.** [evidence/terminal-view.md](../../goals/evidence/terminal-view.md).
 - **Done: phases 0 to 8**, with what was not driven end to end named in the evidence. A terminal in the app
   is drawn from rows the broker sends, over a connection the window opens itself; the emulator, the output
   broadcast and its flow control are gone. Commands are marked, text is found, paths open, a tab shows what
@@ -165,5 +170,5 @@ Each ends in something checked. A phase is not started on a red one.
   one takes, and whether one of them is what stopped the runner.
 - **Resolved: Windows has been run.** The PowerShell hook and the proxy through the real broker, and
   the view's drawing, composition and third-level keys in a browser there
-  ([evidence](evidence/terminal-view.md#the-view-in-a-browser-on-windows--2026-11-12)). What it rests
+  ([evidence](../../goals/evidence/terminal-view.md#the-view-in-a-browser-on-windows--2026-11-12)). What it rests
   on is said there: AltGr was an event built to Chromium's shape, not a key pressed.
