@@ -137,7 +137,7 @@
           @click="commitsAhead > 0 ? commitActor?.send({ type: 'commit.PUSH_BRANCH' }) : commitActor?.send({ type: 'commit.PULL_BRANCH' })"
           :disabled="isPulling || isPushing || !hasUpstream"
           class="relative p-1 rounded transition-colors text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          :title="commitsAhead > 0 ? 'Push' : 'Pull latest'"
+          :title="syncTitle"
         >
           <Loader2 v-if="isPulling || isPushing" :size="14" class="animate-spin" />
           <ArrowUpFromLine v-else-if="commitsAhead > 0" :size="14" />
@@ -437,6 +437,8 @@
           v-else
           @click="commit"
           :disabled="!canCommit"
+          :title="whyNot.commit ?? undefined"
+          data-testid="commit-button"
           :class="[
             'w-full px-3 py-1.5 rounded text-sm font-medium transition-colors',
             canCommit
@@ -815,6 +817,7 @@
 </template>
 
 <script setup lang="ts">
+import { whatCanBeDone, type Availability, type UnavailableReason } from 'apack-git/availability'
 
 import { computed, ref, nextTick, watch } from 'vue'
 import { useSelector } from '@xstate/vue'
@@ -1012,7 +1015,27 @@ const unstagedRows = computed(() => unstagedFiles.value.flatMap((file: GitStatus
   return [file, ...(open?.files ?? []).map(path => ({ path, status: 'untracked' as const, staged: false, inFolder: true }))]
 }))
 const toggleFolder = (file: GitStatusFile) => commitActor?.send({ type: 'commit.TOGGLE_FOLDER', path: file.path })
-const canCommit = computed(() => commitMessage.value.trim() && stagedFiles.value.length > 0)
+const hasIdentity = useSelector(commitActor, (state) => state.context.hasIdentity)
+
+/** What can be done now, and why not, from what the panel holds of the repository: worded here, decided by the engine */
+const canBeDone = computed(() => whatCanBeDone({
+  files: gitStatus.value, truncated: isStatusTruncated.value, branch: gitBranch.value, hasUpstream: hasUpstream.value,
+  ahead: commitsAhead.value, behind: commitsBehind.value, hasIdentity: hasIdentity.value, ...(operation.value && { operation: operation.value }),
+}))
+const REASONS: Record<UnavailableReason, string> = {
+  'nothing-staged': 'Nothing is staged to commit.',
+  conflicts: 'Settle the conflicts first.',
+  'no-identity': 'Git has no name and email to commit with: set user.name and user.email.',
+  'operation-in-progress': 'Carry on with what git is in the middle of, or give it up, first.',
+  'no-upstream': 'This branch follows no remote branch: publish it first.',
+  diverged: 'This branch and the one it follows have both moved on: pull first.',
+  'up-to-date': 'There is nothing to do: it is up to date.',
+}
+const reasonOf = (availability: Availability) => (availability.possible ? null : REASONS[availability.reason])
+const whyNot = computed(() => ({ commit: reasonOf(canBeDone.value.commit), push: reasonOf(canBeDone.value.push), pull: reasonOf(canBeDone.value.pull) }))
+const syncTitle = computed(() => (commitsAhead.value > 0 ? whyNot.value.push ?? 'Push' : whyNot.value.pull ?? 'Pull latest'))
+
+const canCommit = computed(() => commitMessage.value.trim() && stagedFiles.value.length > 0 && hasIdentity.value)
 
 const isNoDirectoryError = computed(() => {
   return gitError.value?.includes('No directory selected')

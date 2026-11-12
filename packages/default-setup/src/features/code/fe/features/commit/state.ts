@@ -44,6 +44,8 @@ export interface GitDiff {
 export interface CodeCommitContext {
   gitStatus: GitStatusFile[]
   gitBranch: string
+  /** Whether git has a name and an email to commit with */
+  hasIdentity: boolean
   gitError: string | null
   isGitLoading: boolean
   selectedGitFile: GitStatusFile | null
@@ -212,7 +214,7 @@ export type Event =
   | { type: 'commit.CHECKOUT_BRANCH' }
   | { type: 'commit.PUSH_BRANCH' }
   | { type: 'commit.PULL_BRANCH' }
-  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; counts?: LineCount[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
+  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; counts?: LineCount[]; hasIdentity?: boolean; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
   | { type: 'commit.DIFF_RECEIVED'; data: GitDiff }
   | { type: 'commit.FILES_STAGED'; paths: string[] }
   | { type: 'commit.FILES_UNSTAGED'; paths: string[] }
@@ -304,6 +306,7 @@ export type Event =
 type OfOneFolder =
   | 'gitStatus'
   | 'gitBranch'
+  | 'hasIdentity'
   | 'gitError'
   | 'selectedGitFile'
   | 'revertDialogFile'
@@ -346,6 +349,7 @@ type OfOneFolder =
 const ofNoFolder = (): Pick<CodeCommitContext, OfOneFolder> => ({
   gitStatus: [],
   gitBranch: '',
+  hasIdentity: true,
   gitError: null,
   selectedGitFile: null,
   revertDialogFile: null,
@@ -675,6 +679,7 @@ export const commitState = setup({
         // Read before a write that the list already shows landed: git is asked again once that write is answered
         return writing(context.stagingWrites) ? context.gitStatus : ev.data.files
       },
+      hasIdentity: ({ event }) => (event as { type: 'commit.STATUS_RECEIVED'; data: { hasIdentity?: boolean } }).data.hasIdentity ?? true,
       gitBranch: ({ event }) => {
         const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
         return ev.data.branch
