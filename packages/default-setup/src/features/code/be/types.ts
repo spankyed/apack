@@ -79,6 +79,8 @@ export interface GitStatusFile {
   conflict?: ConflictKind
   /** An untracked folder, listed as one row: git tracks nothing in it. Its path ends with `/` */
   isDirectory?: boolean
+  /** For a submodule's row, how it differs: on another commit, files it tracks changed, files it does not track */
+  submodule?: { commit: boolean; modified: boolean; untracked: boolean }
 }
 
 /**
@@ -125,7 +127,7 @@ export interface GitCommitInfo {
  * checked out, the commit it is on and every branch and tag, which a log and a pull request are read from; its
  * stashes; its worktrees.
  */
-export const REPOSITORY_PARTS = ['status', 'diffs', 'history', 'stashes', 'worktrees'] as const
+export const REPOSITORY_PARTS = ['status', 'diffs', 'history', 'stashes', 'worktrees', 'refs'] as const
 export type RepositoryPart = (typeof REPOSITORY_PARTS)[number]
 
 /** Which parts of a repository differ from when it was last checked */
@@ -420,6 +422,14 @@ export type CodeConnectedData = {
   settings?: CodeSettings;
 };
 
+/** A repository found under the folder the user opened, as the panel's picker lists it */
+export interface RepositoryUnder {
+  path: string
+  /** From the folder the user opened: empty for its own */
+  relative: string
+  kind: 'top' | 'nested' | 'submodule' | 'worktree'
+}
+
 export interface CodeSystemContext {
   baseDirectory: string | null
   /**
@@ -427,6 +437,11 @@ export interface CodeSystemContext {
    * the code settings change, the browsed `baseDirectory` included, so only a new default moves the explorer.
    */
   defaultBaseDirectory: string | null
+  /**
+   * The folder the user opened, which the repository picker lists the repositories under: the base directory, until
+   * the picker moves it into one of them
+   */
+  openedDirectory: string | null
   gitRepository: RepositoryHandle | null
   gitWatcher: WatcherHandle | null
 }
@@ -445,7 +460,7 @@ export interface WatcherHandle { readonly [gitHandle]: 'watcher' }
 export const GIT_ERROR_CODES = [
   'locked', 'authentication', 'permission', 'remote-unreachable', 'non-fast-forward', 'diverged', 'conflict', 'local-changes', 'unknown-ref', 'not-a-repository',
   'aborted', 'git-not-found', 'developer-tools-missing', 'git-too-old', 'unsafe-ownership', 'signing-failed', 'unrelated-histories', 'nothing-to-commit', 'branch-exists', 'host-refused',
-  'untrusted', 'content-missing', 'published',
+  'untrusted', 'content-missing', 'published', 'hook-refused',
 ] as const
 export type GitErrorCode = (typeof GIT_ERROR_CODES)[number]
 

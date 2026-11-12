@@ -749,6 +749,11 @@ interface CodeSystemContext {
      * the code settings change, the browsed `baseDirectory` included, so only a new default moves the explorer.
      */
     defaultBaseDirectory: string | null;
+    /**
+     * The folder the user opened, which the repository picker lists the repositories under: the base directory, until
+     * the picker moves it into one of them
+     */
+    openedDirectory: string | null;
     gitRepository: RepositoryHandle | null;
     gitWatcher: WatcherHandle | null;
 }
@@ -1594,7 +1599,7 @@ interface FolderItem {
 }
 
 /** Why a git command failed, where what it printed says: the git engine's codes, as the contract names them */
-declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository", "aborted", "git-not-found", "developer-tools-missing", "git-too-old", "unsafe-ownership", "signing-failed", "unrelated-histories", "nothing-to-commit", "branch-exists", "host-refused", "untrusted", "content-missing", "published"];
+declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository", "aborted", "git-not-found", "developer-tools-missing", "git-too-old", "unsafe-ownership", "signing-failed", "unrelated-histories", "nothing-to-commit", "branch-exists", "host-refused", "untrusted", "content-missing", "published", "hook-refused"];
 
 interface GhPRComment {
     id: string;
@@ -1701,6 +1706,12 @@ interface GitStatusFile {
     conflict?: ConflictKind;
     /** An untracked folder, listed as one row: git tracks nothing in it. Its path ends with `/` */
     isDirectory?: boolean;
+    /** For a submodule's row, how it differs: on another commit, files it tracks changed, files it does not track */
+    submodule?: {
+        commit: boolean;
+        modified: boolean;
+        untracked: boolean;
+    };
 }
 
 interface ImageReference {
@@ -1797,6 +1808,16 @@ type IncomingCodeEvents = IncomingExplorerEvents | IncomingSearchEvents | Incomi
     type: 'SET_BASE_DIRECTORY';
     path: string;
     fromUserNavigation?: boolean;
+    fromPicker?: boolean;
+}
+/** The repositories under the folder the user opened: its own, nested ones, submodules and linked worktrees */
+ | {
+    type: 'LIST_REPOSITORIES';
+}
+/** Works in one of them: it becomes the base directory, and the folder the user opened is still what is listed */
+ | {
+    type: 'SELECT_REPOSITORY';
+    path: string;
 }
 /** Settings → Providers: resolve a CLI and store where it was found, in this feature's own settings */
  | {
@@ -3156,6 +3177,15 @@ type OutgoingCodeEvents = OutgoingExplorerEvents | OutgoingSearchEvents | Outgoi
  | {
     type: 'BASE_DIRECTORY_CHANGED';
     baseDirectory: string;
+}
+/** What `LIST_REPOSITORIES` found, for the window that asked; `current` is the one the panels show */
+ | {
+    type: 'commit.REPOSITORIES_RECEIVED';
+    data: {
+        repositories: RepositoryUnder[];
+        truncated: boolean;
+        current: string | null;
+    };
 }
 /** What testing a CLI found, for the Settings view that asked (the host declares its surface takes it) */
  | {
@@ -4745,7 +4775,7 @@ interface QuickOpenResult$1 {
  * checked out, the commit it is on and every branch and tag, which a log and a pull request are read from; its
  * stashes; its worktrees.
  */
-declare const REPOSITORY_PARTS: readonly ["status", "diffs", "history", "stashes", "worktrees"];
+declare const REPOSITORY_PARTS: readonly ["status", "diffs", "history", "stashes", "worktrees", "refs"];
 
 type RateLimitLine = z.infer<typeof RateLimitLineSchema>;
 
@@ -4794,6 +4824,14 @@ interface RepositoryOperation {
 }
 
 type RepositoryPart = (typeof REPOSITORY_PARTS)[number];
+
+/** A repository found under the folder the user opened, as the panel's picker lists it */
+interface RepositoryUnder {
+    path: string;
+    /** From the folder the user opened: empty for its own */
+    relative: string;
+    kind: 'nested' | 'submodule' | 'top' | 'worktree';
+}
 
 type ResultLine = z.infer<typeof ResultLineSchema>;
 

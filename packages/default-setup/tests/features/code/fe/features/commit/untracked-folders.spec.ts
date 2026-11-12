@@ -38,7 +38,7 @@ function tellStatus(actor: ReturnType<typeof createActor<typeof commitState>>, f
   }));
 }
 const listed = (path: string, files: string[], truncated = false) => ({ type: 'commit.UNTRACKED_LISTED' as const, data: { path, files, truncated } });
-const NOTHING = { status: false, diffs: false, history: false, stashes: false, worktrees: false };
+const NOTHING = { status: false, diffs: false, history: false, stashes: false, worktrees: false, refs: false };
 
 it('opens a folder\'s row by asking what is in it, lists that, and closes it again', () => {
   const actor = panelShowing([folder('vendor/')]);
