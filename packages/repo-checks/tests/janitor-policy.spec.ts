@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  type IncrementalUnit, IN_USE_WINDOW_MS, LOW_FREE_BYTES, limitsFor, planIncrementalEviction, planTmpRemoval, TEST_TMP_AGE_MS,
+  type IncrementalUnit, type ProfileOutput, CRITICAL_FREE_BYTES, IN_USE_WINDOW_MS, LOW_FREE_BYTES, limitsFor, planIdleProfileClearing,
+  planIncrementalEviction, planTmpRemoval, TEST_TMP_AGE_MS,
 } from '../../../scripts/lib/janitor-policy.ts';
 
 const GB = 1024 ** 3;
@@ -30,6 +31,32 @@ describe('limitsFor', () => {
     const low = limitsFor(LOW_FREE_BYTES - 1);
     expect(low.incrementalBudgetBytes).toBeLessThan(roomy.incrementalBudgetBytes);
     expect(low.sweepDays).toBeLessThan(roomy.sweepDays);
+  });
+});
+
+describe('planIdleProfileClearing', () => {
+  const profile = (profileDir: string, ageMs: number): ProfileOutput => ({ profileDir, bytes: 4 * GB, builtMs: NOW - ageMs });
+  const HOUR = IN_USE_WINDOW_MS;
+
+  it('clears nothing while the disk has room, however long a checkout has sat', () => {
+    const { idleProfileMs } = limitsFor(LOW_FREE_BYTES * 2);
+    expect(planIdleProfileClearing([profile('old/target/debug', 30 * 24 * HOUR)], idleProfileMs, NOW)).toEqual([]);
+  });
+
+  it('clears the checkouts nobody has built in for half a day when the disk is low, and leaves the ones in use', () => {
+    const { idleProfileMs } = limitsFor(LOW_FREE_BYTES - 1);
+    const profiles = [profile('sat/target/debug', 20 * HOUR), profile('working/target/debug', 3 * HOUR), profile('sat/target/release', 13 * HOUR)];
+    expect(planIdleProfileClearing(profiles, idleProfileMs, NOW).map((each) => each.profileDir)).toEqual(['sat/target/debug', 'sat/target/release']);
+  });
+
+  it('keeps only what was compiled into within the hour once the disk is nearly full', () => {
+    const { idleProfileMs } = limitsFor(CRITICAL_FREE_BYTES - 1);
+    const profiles = [profile('working/target/debug', 3 * HOUR), profile('building/target/debug', HOUR / 2)];
+    expect(planIdleProfileClearing(profiles, idleProfileMs, NOW).map((each) => each.profileDir)).toEqual(['working/target/debug']);
+  });
+
+  it('never clears a profile a build may be writing, whatever it is asked', () => {
+    expect(planIdleProfileClearing([profile('building/target/debug', HOUR / 2)], 0, NOW)).toEqual([]);
   });
 });
 
