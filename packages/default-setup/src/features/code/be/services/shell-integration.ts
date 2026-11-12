@@ -69,6 +69,10 @@ const OSC633 = {
   // runs between the person pressing Enter and the command starting: the start is told there, with the
   // line, and `C` after it. Without it a finish has no command to end. The status is `$?` first — a
   // cmdlet that failed sets no exit code — and the exit code only for a native program that set one
+  // in this command. `$LASTEXITCODE` keeps the last program's code until another program runs, so a
+  // cmdlet failing after one would be reported with that program's code: the value is the same object
+  // for as long as nothing has set it again, which is what tells a code this command set from one it
+  // was left
   powershell: '$Global:__apackKey = $env:' + MARKS_KEY_VARIABLE + '\r\n'
     + 'Remove-Item Env:' + MARKS_KEY_VARIABLE + ' -ErrorAction SilentlyContinue\r\n'
     + '$Global:__apackSeq = 0\r\n'
@@ -86,13 +90,16 @@ const OSC633 = {
     + 'function Global:prompt {\r\n'
     + '  $ok = $?\r\n'
     + '  $code = $LASTEXITCODE\r\n'
-    + '  $status = if ($ok) { 0 } elseif ($code) { $code } else { 1 }\r\n'
+    + '  $raw = (Get-Variable LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue).Value\r\n'
+    + '  $fresh = -not [object]::ReferenceEquals($raw, $Global:__apackCodeSeen)\r\n'
+    + '  $status = if ($ok) { 0 } elseif ($fresh -and $code) { $code } else { 1 }\r\n'
     + '  $e = [char]27\r\n'
     + '  $bel = [char]7\r\n'
     + '  $done = if ($Global:__apackRan) { "$e]633;D;$status$bel" + (__apackFinish $status) } else { "" }\r\n'
     + '  $Global:__apackRan = $false\r\n'
     + '  $theirs = if ($Global:__apackPrompt) { & $Global:__apackPrompt } else { "PS $($PWD.Path)> " }\r\n'
     + '  $global:LASTEXITCODE = $code\r\n'
+    + '  $Global:__apackCodeSeen = (Get-Variable LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue).Value\r\n'
     + '  $done + "$e]633;P;Cwd=$(__apackEncode $PWD.Path)$bel" + "$e]633;A$bel" + $theirs + "$e]633;B$bel"\r\n'
     + '}\r\n'
     + 'if (Get-Command PSConsoleHostReadLine -ErrorAction SilentlyContinue) {\r\n'

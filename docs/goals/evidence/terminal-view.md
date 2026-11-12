@@ -454,3 +454,30 @@ The broker's CI ran its suite on Windows for this change. The one keyed case the
 prints a start and a finish and exits at once — passed, which is the first keyed mark this suite has sent
 through a ConPTY and the proof that a session's exit waits for the last of its output there
 (`apack-terminal` `bdc603e`). The hooks themselves have run on no Windows machine.
+
+## On Windows, and a picture in the real app — 2026-11-12
+
+### Windows, over SSH to the development VM
+
+Windows Server 2025 (26100), Windows PowerShell 5.1. The broker was built there from `apack-terminal`
+`5c24284` and driven by a script speaking its protocol over a named pipe. Nothing here had a desktop:
+what a window draws there, an input method and AltGr are not covered by any of it.
+
+| What was run | Result |
+|---|---|
+| The PowerShell hook the app arranges (`apack.ps1`, with a key), in a session of the real broker, typed at | Every command had a keyed start and finish that the broker took: `echo one` exited 0, `cmd /c exit 3` exited 3 twice running, the directory was reported, and the key was not in the shell's environment afterwards. ConPTY passed the marks through in order |
+| A finish printed by a command (`633;D;0`, `133;D;0`, and a keyed one with another key) while it slept | The command stayed running, `refused` was 1, and it ended with the shell's own finish |
+| `apack-terminal proxy` on a pipe nothing was listening on, then a second proxy on the same pipe | The first started a broker and ran a command through it; the second listed the first's session; both exited 0 once their input ended, and the broker exited by itself |
+
+**It found one defect, which is fixed.** A cmdlet that failed straight after a program that had exited
+with 3 was recorded as exiting with 3: `$LASTEXITCODE` keeps the last program's code until another
+program runs. The hook now takes the code only where this command set it, which it tells by the value
+being a new object, and reports 1 for a failure that set none. Run again on the VM: the cmdlet after the
+program is 1, the program is still 3, and the same code from two programs running is 3 both times. That
+PowerShell 7 hands back the same object in the same way was not run.
+
+### A picture, in the built app
+
+A drive script had a program place a 160 by 96 magenta PNG in a terminal with the Kitty graphics
+protocol (`a=T,f=100`). The terminal's canvas held 15,360 pixels of that colour, which is 160 by 96,
+between the line printed before it and the line after.
