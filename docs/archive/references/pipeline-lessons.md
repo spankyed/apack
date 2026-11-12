@@ -302,7 +302,11 @@ A watcher's first reading is still whole, taken before its first pass without ho
 at most between turns of it). What remains of a later pass, 7.7s end to end at that load, is mostly the
 module-input reading (4.4s), which this did not touch. A CPU profile of that reading puts under 5% of it in
 TypeScript's parser and about 45% in filesystem calls, 21% of the whole in the `realpath` the compiler file view
-takes of every input to prove nothing was replaced. The kept digests
+took of every input to prove nothing was replaced. Most of those were for names that do not exist, a compiler's
+failed lookups, each a thrown error and a second resolution of the parent. The view now lists a directory once and
+answers its plain and its missing names from the listing (`physicalWatchPathListed`), resolving only links and
+other spellings the long way: that `realpath` fell from 17.7% of the reading's samples to 5.1%, against 2% more in
+listings. Those are shares of one profile each, taken at a load of 40, not a timing. The kept digests
 hold 16 MB.
 
 ## A stamp directory has one writer
