@@ -6,7 +6,7 @@ import type {
   CodeConnectedData, RepositoryUnder, CodeSystemError, CommitFailure, CommitLogEntry, CodeSystemContext, DirectoryContent, DiscardKept, DiscardRestored, FileContent, FileInfo,
   GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitProgress, GitStatusFile, OperationMove, QuickOpenResult, RepositoryChange,
   RepositoryOperation, SearchProgress, SignInHelp,
-  SearchResult, StashEntry, TerminalInfo, WorktreeEntry,
+  SearchResult, StashEntry, LineCount, ChangedFile, TerminalInfo, WorktreeEntry,
 } from './types.ts';
 import type { ActiveTokenInfo } from './services/gh-cli.ts';
 import type { FileChangeInfo } from './services/open-file-watcher.ts';
@@ -87,6 +87,8 @@ export type IncomingCommitEvents =
   | { type: 'commit.STASH_POP'; index: number }
   | { type: 'commit.STASH_DROP'; index: number }
   | { type: 'commit.STASH_CLEAR' }
+  /** The files a stash holds, to look into before applying it */
+  | { type: 'commit.GET_STASH_CHANGES'; index: number }
   /** Takes back the last write the engine made here; `evenIfPublished` once the user said to for a commit already pushed */
   | { type: 'commit.UNDO_LAST'; evenIfPublished?: boolean }
   | { type: 'commit.WORKTREE_LIST' }
@@ -116,7 +118,7 @@ export type OutgoingCommitEvents =
    * of anything. `fetchSuspended` says fetching by itself has stopped, the remote having asked for a sign-in
    * nobody was there to give: how far the branch is from its upstream is then as of the last fetch that worked
    */
-  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean; signIn?: SignInHelp } }
+  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; counts?: LineCount[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean; signIn?: SignInHelp } }
   /** What git was in the middle of was moved on as asked. Where that leaves the repository is in its status */
   | { type: 'commit.OPERATION_MOVED'; data: { move: OperationMove } }
   | { type: 'commit.DIFF_RECEIVED'; data: GitDiff }
@@ -152,6 +154,8 @@ export type OutgoingCommitEvents =
    */
   | { type: 'commit.REPOSITORY_CHANGED'; changed: RepositoryChange }
   | { type: 'commit.STASH_LIST_RECEIVED'; data: { stashes: StashEntry[] } }
+  /** The files a stash holds, read without applying it, for the window that asked */
+  | { type: 'commit.STASH_CHANGES_RECEIVED'; data: { index: number; files: ChangedFile[] } }
   | { type: 'commit.STASH_SUCCESS'; data: { message: string } }
   | { type: 'commit.WORKTREE_LIST_RECEIVED'; data: { worktrees: WorktreeEntry[] } }
   | { type: 'commit.WORKTREE_ADDED'; data: { path: string; branch: string } }

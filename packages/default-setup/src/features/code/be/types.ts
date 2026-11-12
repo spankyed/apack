@@ -427,6 +427,25 @@ export type CodeConnectedData = {
   settings?: CodeSettings;
 };
 
+/** How many lines a changed file adds and removes, as git counts them, staged or not: none for a file that is not text */
+export interface LineCount {
+  path: string
+  staged: boolean
+  added: number
+  removed: number
+  binary: boolean
+}
+
+/** A file a stash or a commit changed, with its count */
+export interface ChangedFile {
+  path: string
+  status: 'added' | 'deleted' | 'modified' | 'renamed' | 'copied' | 'typechange'
+  originalPath?: string
+  added: number
+  removed: number
+  binary: boolean
+}
+
 /** A repository found under the folder the user opened, as the panel's picker lists it */
 export interface RepositoryUnder {
   path: string

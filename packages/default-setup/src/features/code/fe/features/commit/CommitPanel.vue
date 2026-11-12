@@ -469,6 +469,7 @@
               v-for="file in stagedFiles"
               :key="`staged-${file.path}`"
               :file="file"
+              :count="lineCounts[`${file.staged}:${file.path}`]"
               :isSelected="selectedGitFile?.path === file.path && selectedGitFile?.staged === file.staged"
               @select="selectFile"
               @openFile="openFile"
@@ -559,6 +560,7 @@
               <!-- A file in an open folder is a row under the folder's, which is one row for all of it -->
               <GitFileItem
                 :file="file"
+                :count="lineCounts[`${file.staged}:${file.path}`]"
                 :isSelected="selectedGitFile?.path === file.path && selectedGitFile?.staged === file.staged"
                 @select="file.isDirectory ? toggleFolder(file) : selectFile(file)"
                 @openFile="openFile"
@@ -660,6 +662,9 @@
                 <div class="text-[11px] text-neutral-500 truncate">{{ stash.ref }} · {{ formatStashBranch(stash.message) }} · {{ formatStashDate(stash.date) }}</div>
               </div>
               <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                <button @click.stop="commitActor?.send({ type: 'commit.TOGGLE_STASH_FILES', index: stash.index })" class="p-0.5 hover:bg-neutral-700 rounded" title="Show its files" data-testid="stash-files-toggle">
+                  <FileText class="w-3 h-3 text-neutral-400" />
+                </button>
                 <button @click.stop="copyStashMessage(stash)" class="p-0.5 hover:bg-neutral-700 rounded" title="Copy message">
                   <Copy class="w-3 h-3 text-neutral-400" />
                 </button>
@@ -669,6 +674,13 @@
                 <button @click.stop="openDropStashDialog(stash.index)" class="p-0.5 hover:bg-neutral-700 rounded" title="Drop">
                   <Trash2 class="w-3 h-3 text-red-400" />
                 </button>
+              </div>
+            </div>
+            <!-- What the stash holds, read without applying it -->
+            <div v-if="stashFiles[stash.index]" class="mt-1 pl-2 space-y-0.5" data-testid="stash-files" @click.stop>
+              <div v-for="file in stashFiles[stash.index]" :key="file.path" class="flex items-center gap-2 text-[11px] font-mono text-neutral-400">
+                <span class="truncate flex-1" :title="file.path">{{ file.path }}</span>
+                <span v-if="!file.binary" class="tabular-nums flex-shrink-0"><span class="text-green-500/80">+{{ file.added }}</span> <span class="text-red-500/80">-{{ file.removed }}</span></span>
               </div>
             </div>
           </div>
@@ -805,7 +817,7 @@ import { useSurface, useShell } from '@apackdev/sdk/fe'
 import type { CodeState } from '#features/code/fe/state.ts'
 import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts'
 import type { ConflictKind, OperationMove } from '#features/code/be/types.ts'
-import { Folder, GitBranch, GitBranchPlus, GitCommit, GitFork, GitMerge, RefreshCw, Plus, Minus, RotateCcw, ChevronDown, ChevronRight, CheckCircle, Check, X, Sparkles, Loader2, ArrowDownToLine, ArrowUpFromLine, MoreVertical, Trash2, Copy, Search, FolderSync, Lock } from 'lucide-vue-next'
+import { Folder, GitBranch, GitBranchPlus, GitCommit, GitFork, GitMerge, RefreshCw, Plus, Minus, RotateCcw, ChevronDown, ChevronRight, CheckCircle, Check, X, Sparkles, Loader2, ArrowDownToLine, ArrowUpFromLine, MoreVertical, Trash2, Copy, Search, FolderSync, Lock, FileText } from 'lucide-vue-next'
 import { ContextMenuItem } from 'reka-ui'
 import { MENU_ITEM_CLASS, MENU_ITEM_DANGER_CLASS } from '#features/code/fe/features/explorer/constants.ts'
 import GitFileItem from '#features/code/fe/features/commit/GitFileItem.vue'
@@ -877,6 +889,8 @@ const isPushing = useSelector(commitActor, (state) => state.context.isPushing)
 const isPulling = useSelector(commitActor, (state) => state.context.isPulling)
 const isGeneratingMessage = useSelector(commitActor, (state) => state.context.isGeneratingMessage)
 const stashList = useSelector(commitActor, (state) => state.context.stashList)
+const lineCounts = useSelector(commitActor, (state) => state.context.lineCounts)
+const stashFiles = useSelector(commitActor, (state) => state.context.stashFiles)
 const isStashing = useSelector(commitActor, (state) => state.context.isStashing)
 const worktreeList = useSelector(commitActor, (state) => state.context.worktreeList)
 const isWorktreeLoading = useSelector(commitActor, (state) => state.context.isWorktreeLoading)
