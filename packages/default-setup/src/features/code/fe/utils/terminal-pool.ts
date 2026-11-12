@@ -486,11 +486,17 @@ class TerminalPool {
     input.style.cssText = 'width:180px;padding:3px 6px;border-radius:4px;border:1px solid #555;background:#1e1e1e;color:inherit;font:inherit;outline:none'
     const count = document.createElement('span')
     count.dataset.terminalFindCount = ''
+    // Announced as it changes, so a screen reader hears the count and the match it is on
+    count.setAttribute('role', 'status')
+    count.setAttribute('aria-live', 'polite')
     count.style.cssText = 'min-width:56px;text-align:center;color:#999'
+    let matchCase = false
     const said = () => {
-      const { current, total } = entry.view?.found ?? { current: 0, total: 0 }
-      count.textContent = input.value === '' ? '' : total === 0 ? 'No results' : `${current} of ${total}`
+      const { current, total, more } = entry.view?.found ?? { current: 0, total: 0, more: false }
+      // Past the highlights the view holds, the total is what it holds and says there are more
+      count.textContent = input.value === '' ? '' : total === 0 ? 'No results' : `${current} of ${more ? `${total}+` : total}`
     }
+    const search = () => entry.view?.find(input.value, { matchCase }).then(said)
     const step = (direction: -1 | 1) => {
       entry.view?.findNext(direction)
       said()
@@ -510,7 +516,7 @@ class TerminalPool {
       return made
     }
     input.addEventListener('input', () => {
-      void entry.view?.find(input.value).then(said)
+      void search()
     })
     bar.addEventListener('keydown', (event) => {
       // Typed here, not at the program under the bar
@@ -518,7 +524,15 @@ class TerminalPool {
       if (event.key === 'Escape') close()
       else if (event.key === 'Enter') step(event.shiftKey ? -1 : 1)
     })
-    bar.append(input, count, button('↑', 'Older match', () => step(1)), button('↓', 'Newer match', () => step(-1)), button('✕', 'Close', close))
+    // Whether the needle's letters must match in their own case; off, either case matches
+    const caseToggle = button('Aa', 'Match case', () => {
+      matchCase = !matchCase
+      caseToggle.setAttribute('aria-pressed', String(matchCase))
+      caseToggle.style.background = matchCase ? '#555' : 'transparent'
+      if (input.value !== '') void search()
+    })
+    caseToggle.setAttribute('aria-pressed', 'false')
+    bar.append(input, caseToggle, count, button('↑', 'Older match', () => step(1)), button('↓', 'Newer match', () => step(-1)), button('✕', 'Close', close))
     entry.wrapper.appendChild(bar)
     input.focus()
   }

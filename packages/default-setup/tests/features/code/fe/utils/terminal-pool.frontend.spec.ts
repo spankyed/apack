@@ -326,6 +326,36 @@ describe('finding text in a terminal', () => {
     await vi.waitFor(() => { expect(bar(mountedIn)!.querySelector('[data-terminal-find-count]')!.textContent).toBe('No results') })
   })
 
+  it('announces the count, matches the case the person asked for, and says 1000+ past the thousand it holds', async () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const mountedIn = host()
+    const attachment = terminalPool.attach(info.id, mountedIn)!
+    const view = lastView()
+    view.matches = 1500
+    attachment.find()
+    const input = bar(mountedIn)!.querySelector('input')!
+    const count = bar(mountedIn)!.querySelector<HTMLElement>('[data-terminal-find-count]')!
+    expect(count.getAttribute('role')).toBe('status')
+    expect(count.getAttribute('aria-live')).toBe('polite')
+
+    typeInto(input, 'Error')
+    await vi.waitFor(() => { expect(count.textContent).toBe('1 of 1000+') })
+    expect(view.matchCases).toEqual([false])
+
+    const toggle = bar(mountedIn)!.querySelector<HTMLButtonElement>('button[aria-label="Match case"]')!
+    toggle.click()
+    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+    await vi.waitFor(() => { expect(view.matchCases.at(-1)).toBe(true) })
+    expect(view.searches.at(-1), 'the toggle searched again for what was typed').toBe('Error')
+
+    // Shift+Enter from the newest goes round to the oldest held match, which is the thousandth
+    press(input, 'Enter', { shiftKey: true })
+    expect(count.textContent).toBe('1000 of 1000+')
+    press(input, 'Enter')
+    expect(count.textContent).toBe('1 of 1000+')
+  })
+
   it('closes on Escape, with nothing left marked and the terminal typed at again', async () => {
     const info = terminal()
     terminalPool.ensure(info)

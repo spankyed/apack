@@ -35,6 +35,8 @@ export interface FakeView {
   copies: number
   /** What the view was asked to find, in order, and how many matches each search is said to have */
   readonly searches: string[]
+  /** Whether each search asked for the needle's own case */
+  readonly matchCases: boolean[]
   matches: number
   /** Which match it is on, from one */
   current: number
@@ -111,6 +113,7 @@ export function viewModule(): Record<string, unknown> {
     readonly pasted: string[] = []
     copies = 0
     readonly searches: string[] = []
+    readonly matchCases: boolean[] = []
     matches = 0
     current = 0
     commands: Command[] = []
@@ -151,17 +154,20 @@ export function viewModule(): Record<string, unknown> {
     selectAll(): void { this.selectedAll += 1 }
     async paste(text: string): Promise<void> { this.pasted.push(text) }
     async copy(): Promise<boolean> { this.copies += 1; return true }
-    async find(needle: string): Promise<number> {
+    async find(needle: string, options: { matchCase?: boolean } = {}): Promise<number> {
       this.searches.push(needle)
-      const total = needle === '' ? 0 : this.matches
+      this.matchCases.push(options.matchCase ?? false)
+      const total = needle === '' ? 0 : Math.min(this.matches, 1000)
       this.current = total > 0 ? 1 : 0
       return total
     }
-    get found(): { current: number; total: number } {
-      return { current: this.current, total: this.searches.at(-1) ? this.matches : 0 }
+    get found(): { current: number; total: number; more: boolean } {
+      const searched = this.searches.at(-1) !== undefined
+      return { current: this.current, total: searched ? Math.min(this.matches, 1000) : 0, more: searched && this.matches > 1000 }
     }
     findNext(direction: -1 | 1 = 1): void {
-      if (this.matches > 0) this.current = ((this.current - 1 + direction + this.matches) % this.matches) + 1
+      const held = Math.min(this.matches, 1000)
+      if (held > 0) this.current = ((this.current - 1 + direction + held) % held) + 1
     }
     selectOutput(command: Command): boolean {
       this.selectedOutputs.push(command.id)
