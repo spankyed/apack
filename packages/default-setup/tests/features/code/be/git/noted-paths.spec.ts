@@ -3,12 +3,12 @@
 // what changed, so each case here holds the repository to it: after a change, what it holds from reading the
 // named paths must be what a repository that has read nothing gets from a whole status. And since reading
 // everything would pass that every time, each case also says which of the two was asked of git.
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
-import { GitRepository } from '../../../../../src/features/code/be/services/git.ts';
+import { GitRepository } from '../../../../../src/features/code/be/git/index.ts';
 
 const directories: string[] = [];
 afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true }); });
@@ -38,21 +38,27 @@ async function watched(before?: Step, workingDirectory = '') {
   await git(root, 'add', '.');
   await git(root, 'commit', '--quiet', '-m', 'first');
   await before?.(root);
-  const repo = new GitRepository(path.join(root, workingDirectory));
+  const lines: string[] = [];
+  const repo = new GitRepository(path.join(root, workingDirectory), { log: { command: line => lines.push(line) } });
+  commands.set(repo, lines);
   repo.setWatched(true);
   await repo.refreshSnapshot();
   return { root, repo };
 }
 
+/** Every git command each repository made here ran, as it logs them */
+const commands = new WeakMap<GitRepository, string[]>();
+
 type Read = 'the paths' | 'everything';
 /** What was asked of git for a status since: only the paths named, or everything */
 function statusesAsked(repo: GitRepository) {
-  const asked = vi.spyOn(repo as unknown as { executeGitCommand(args: string[]): Promise<unknown> }, 'executeGitCommand');
-  return (): Read[] => asked.mock.calls.map(([args]) => args).filter(args => args[0] === 'status')
-    .map(args => args.includes('--') ? 'the paths' : 'everything');
+  const lines = commands.get(repo)!;
+  const from = lines.length;
+  return (): Read[] => lines.slice(from).filter(line => line.startsWith('git status '))
+    .map(line => line.includes(' -- ') ? 'the paths' : 'everything');
 }
 /** What a repository that has read nothing says the checkout holds */
-const truth = (repo: GitRepository) => new GitRepository((repo as unknown as { workingDirectory: string }).workingDirectory).readSnapshot();
+const truth = (repo: GitRepository) => new GitRepository(repo.getWorkingDir()).readSnapshot();
 
 async function submodule(root: string) {
   await git(root, 'init', '--quiet', `${root}-sub`);

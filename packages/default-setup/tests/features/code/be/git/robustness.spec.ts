@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
-import { GitRepository, STATUS_LIMIT } from '../../../../../src/features/code/be/services/git.ts';
+import { GitRepository, STATUS_LIMIT } from '../../../../../src/features/code/be/git/index.ts';
 
 const cleanups: Array<() => void> = [];
 afterEach(() => { for (const cleanup of cleanups.splice(0).reverse()) cleanup(); });

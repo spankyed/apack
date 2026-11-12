@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
 import * as os from 'node:os';
 import { gitWatcherActor } from '../../../../src/features/code/be/git-watcher-actor.ts';
-import { GitRepository } from '../../../../src/features/code/be/services/git.ts';
+import { GitRepository } from '../../../../src/features/code/be/git/index.ts';
 
 const actors: Array<{ stop(): void }> = [];
 afterEach(() => { actors.splice(0).forEach(actor => actor.stop()); vi.restoreAllMocks(); });

@@ -4,10 +4,12 @@ import { afterEach, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { execFileWhileWorking } from '@apackdev/sdk/progress';
+import { execFileWhileWorking, processWork, watchWork } from '@apackdev/sdk/progress';
 import { settles } from '@apackdev/sdk/testing';
-import { GitRepository } from '../../../../../src/features/code/be/services/git.ts';
-import { GitObjectReader } from '../../../../../src/features/code/be/services/git-objects.ts';
+import { GitObjectReader, GitRepository, type WatchProcess } from '../../../../../src/features/code/be/git/index.ts';
+
+/** What a host hands in to watch a git kept open: here, the SDK's watch of a process's work */
+const watchProcess: WatchProcess = (pid, onStalled, idleMs) => watchWork({ work: processWork(pid), idleMs, onRefused: onStalled });
 
 const directories: string[] = [];
 const readers: GitObjectReader[] = [];
@@ -34,7 +36,7 @@ async function repository(files: Record<string, string | Buffer>) {
   return root;
 }
 function reader(root: string, lingerMs?: number) {
-  const made = new GitObjectReader(root, () => process.env, lingerMs);
+  const made = new GitObjectReader(root, () => process.env, undefined, lingerMs);
   readers.push(made);
   return made;
 }
@@ -136,7 +138,7 @@ it('ends a git that owes an answer and does no work, failing what it owed, and r
   fs.writeFileSync(path.join(bin, 'git'), '#!/bin/sh\nexec cat > /dev/null\n');
   fs.chmodSync(path.join(bin, 'git'), 0o755);
   let stalls = true;
-  const objects = new GitObjectReader(root, () => (stalls ? { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}` } : process.env), undefined, 200);
+  const objects = new GitObjectReader(root, () => (stalls ? { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}` } : process.env), watchProcess, undefined, 200);
   readers.push(objects);
 
   const first = objects.read('HEAD:a.txt');

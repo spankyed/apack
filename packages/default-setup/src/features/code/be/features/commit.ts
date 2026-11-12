@@ -5,8 +5,8 @@ import { broadcastToSurface, sendToSystem } from '#generated/events.ts';
 import { defineHandlers } from '@apackdev/sdk/framework';
 import { assign, setup, enqueueActions, fromCallback, type AnyActorRef } from 'xstate'
 
-import { GitRepository, NOTHING_CHANGED, StashConflictError, changedAnything } from '../services/git.ts'
-import { GitError } from '../services/git-errors.ts'
+import { GitError, NOTHING_CHANGED, StashConflictError, changedAnything } from '../git/index.ts'
+import { openGitRepository, type AppGitRepository } from '../services/app-git-repository.ts'
 import { setUpGitSignIn } from '../services/gh-cli.ts'
 import { isHostName } from '../services/sign-in.ts'
 import type { CommitFailure, GitProgress, OperationMove, RepositoryChange } from '../types.ts'
@@ -19,7 +19,7 @@ const surfaceId = 'code' as const
 // Outgoing events to frontend
 
 export interface CodeCommitSystemContext {
-  gitRepository: GitRepository | null
+  gitRepository: AppGitRepository | null
   /** The code system, which routes a `pr.*` event to its pull request child */
   code?: AnyActorRef
 }
@@ -58,7 +58,7 @@ export type Event =
   | { type: 'commit.LOG_LIST' }
   | { type: 'commit.REVERT_COMMIT'; hash: string }
   | { type: 'commit.RESET_TO_COMMIT'; hash: string }
-  | { type: 'commit.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: GitRepository }
+  | { type: 'commit.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: AppGitRepository }
   | { type: 'commit.GIT_STATUS_CHANGED' }
   /** A hint that the repository changed. `reconcile` says it comes from someone who knows a change is likely, not from a file event */
   | { type: 'commit.REPOSITORY_MAY_HAVE_CHANGED'; reconcile?: boolean; byWindow?: boolean }
@@ -76,7 +76,7 @@ function failureOf(error: unknown): CommitFailure {
 }
 
 /** The same for a push or a pull, which the panel can run again, with what can be done when the remote asked for a sign-in */
-async function remoteFailureOf(error: unknown, during: 'push' | 'pull', repository: GitRepository): Promise<CommitFailure> {
+async function remoteFailureOf(error: unknown, during: 'push' | 'pull', repository: AppGitRepository): Promise<CommitFailure> {
   const failure = failureOf(error)
   const signIn = failure.code === 'authentication' ? await repository.signInHelp().catch(() => undefined) : undefined
   return { ...failure, during, ...(signIn && { signIn }) }
@@ -86,7 +86,7 @@ async function remoteFailureOf(error: unknown, during: 'push' | 'pull', reposito
  * Fetches from the remote when a fetch is due, behind whoever asked, and has the repository checked once it has:
  * what the fetch brought is then announced like any other change. Nobody waits on the network for an answer.
  */
-function fetchInBackground(repository: GitRepository, commit: { send(event: Event): void }): void {
+function fetchInBackground(repository: AppGitRepository, commit: { send(event: Event): void }): void {
   const suspended = repository.isAutoFetchSuspended
   void repository.fetchIfDue().then((fetched) => {
     // What a fetch brought is one thing to announce. That fetching has stopped, or started again, is another
@@ -101,7 +101,7 @@ export const commitSystem = setup({
   types: {
     context: {} as CodeCommitSystemContext,
     events: {} as Event,
-    input: {} as { baseDirectory: string | null; gitRepository?: GitRepository | null; code?: AnyActorRef }
+    input: {} as { baseDirectory: string | null; gitRepository?: AppGitRepository | null; code?: AnyActorRef }
   },
   actors: {
     /**
@@ -115,15 +115,15 @@ export const commitSystem = setup({
      * from being announced a second time. One check runs at a time, and whatever arrives during it is one more.
      */
     statusRefresh: fromCallback<
-      | { type: 'REFRESH'; repository: GitRepository | null }
-      | { type: 'CHECK'; repository: GitRepository | null; everything: boolean; refreshIndex: boolean; byWindow: boolean }
-      | { type: 'ASKED'; repository: GitRepository | null }
+      | { type: 'REFRESH'; repository: AppGitRepository | null }
+      | { type: 'CHECK'; repository: AppGitRepository | null; everything: boolean; refreshIndex: boolean; byWindow: boolean }
+      | { type: 'ASKED'; repository: AppGitRepository | null }
     >(({ receive, sendBack }) => {
       /**
        * `everything` when there is no watcher's event to go by, and the whole repository is read again;
        * `refreshIndex` when this is a moment git's index may be written at
        */
-      type Request = { repository: GitRepository | null; written: boolean; everything: boolean; refreshIndex: boolean };
+      type Request = { repository: AppGitRepository | null; written: boolean; everything: boolean; refreshIndex: boolean };
       const both = (one: Request, other: Request | undefined): Request => (other?.repository !== one.repository ? one : {
         repository: one.repository, written: one.written || other.written,
         everything: one.everything || other.everything, refreshIndex: one.refreshIndex || other.refreshIndex,
@@ -716,7 +716,7 @@ export const commitSystem = setup({
 
     updateBaseDirectory: assign({
       gitRepository: ({ event }) => {
-        const ev = event as { type: 'commit.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: GitRepository }
+        const ev = event as { type: 'commit.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: AppGitRepository }
         return ev.gitRepository
       },
     }),
@@ -970,7 +970,7 @@ export const commitSystem = setup({
   context: ({ input }) => {
     const baseDir = input?.baseDirectory
     return {
-      gitRepository: input?.gitRepository || (baseDir ? new GitRepository(baseDir) : null),
+      gitRepository: input?.gitRepository || (baseDir ? openGitRepository(baseDir) : null),
       code: input?.code
     }
   },

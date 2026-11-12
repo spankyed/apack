@@ -1,17 +1,14 @@
-// Three things the git layer says of what it runs: which branch a branch was made from, how far along a push or
-// a pull is, and, when asked to, each command with how long it took. Every case runs a real git.
+// Three things the engine says of what it runs: which branch a branch was made from, where that was written
+// down; how far along a push or a pull is; and each command with how long it took. Every case runs a real git.
 import { afterEach, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
-import { onLog, setDebugEnabled } from '@apackdev/sdk/logger';
-import { GIT_COMMAND_LOG, GitRepository } from '../../../../../src/features/code/be/services/git.ts';
-import { progressReader, withoutProgress } from '../../../../../src/features/code/be/services/git-progress.ts';
+import { GitRepository, progressReader, withoutProgress } from '../../../../../src/features/code/be/git/index.ts';
 
 const directories: string[] = [];
 afterEach(() => {
-  setDebugEnabled(GIT_COMMAND_LOG, false);
   for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true });
 });
 
@@ -47,7 +44,7 @@ it('knows the branch a branch was made from when it made the branch itself', asy
   await repo.checkoutBranch('topic');
 
   expect((await repo.readSnapshot()).branch).toBe('topic');
-  expect(await repo.getPRBaseBranch()).toBe('develop');
+  expect(await repo.rememberedBaseOf('topic')).toBe('develop');
 });
 
 it('knows it from git\'s own record when the branch was made in a terminal with a name to start from', async () => {
@@ -55,7 +52,7 @@ it('knows it from git\'s own record when the branch was made in a terminal with 
   await git(root, 'checkout', '--quiet', '-b', 'topic', 'main');
   await commit(root, 'c.txt', 'on topic');
 
-  expect(await new GitRepository(root).getPRBaseBranch()).toBe('main');
+  expect(await new GitRepository(root).rememberedBaseOf('topic')).toBe('main');
 });
 
 it('knows it from what VS Code wrote down when it made the branch', async () => {
@@ -63,16 +60,16 @@ it('knows it from what VS Code wrote down when it made the branch', async () => 
   await git(root, 'checkout', '--quiet', '-b', 'topic');
   await git(root, 'config', 'branch.topic.vscode-merge-base', 'origin/main');
 
-  expect(await new GitRepository(root).getPRBaseBranch()).toBe('main');
+  expect(await new GitRepository(root).rememberedBaseOf('topic')).toBe('main');
 });
 
-it('goes by the commits when the branch that was written down is gone', async () => {
+it('answers nothing when the branch that was written down is gone', async () => {
   const root = await repositoryOnDevelop();
   await git(root, 'checkout', '--quiet', '-b', 'topic');
   await git(root, 'config', 'branch.topic.apack-base', 'deleted-since');
   await commit(root, 'c.txt', 'on topic');
 
-  expect(await new GitRepository(root).getPRBaseBranch()).toBe('develop');
+  expect(await new GitRepository(root).rememberedBaseOf('topic')).toBeUndefined();
 });
 
 /** A repository with one commit and a bare remote it has not pushed to */
@@ -120,7 +117,8 @@ it('says why a push failed without the progress git printed before it', async ()
 
   const failure = await new GitRepository(root).pushBranch(() => {}).then(() => undefined, (error: Error) => error.message);
 
-  expect(failure).toContain('Cannot connect to remote repository');
+  expect(failure).toBeTruthy();
+  expect(failure).not.toMatch(/\d+% \(\d+\/\d+\)/);
 });
 
 // What git prints for a checkout of many files, which a spec's few files are too quick to bring about
@@ -140,25 +138,17 @@ it('keeps what git said of a failure and drops the progress around it', () => {
     .toBe('fatal: unable to access the remote');
 });
 
-it('logs each command with how long it took and why it failed when asked to, and nothing when not', async () => {
+it('says each command with how long it took and why it failed to the log it is handed', async () => {
   const { root, remote } = await repositoryWithRemote();
-  const repo = new GitRepository(root);
   const logged: string[] = [];
-  const stop = onLog((event) => { if (event.source === GIT_COMMAND_LOG) logged.push(event.message); });
-  try {
-    await repo.getCurrentBranch();
-    expect(logged, 'not asked to').toEqual([]);
+  const repo = new GitRepository(root, { log: { command: line => logged.push(line) } });
 
-    setDebugEnabled(GIT_COMMAND_LOG, true);
-    await repo.getCurrentBranch();
-    fs.rmSync(remote, { recursive: true, force: true });
-    await repo.pushBranch().catch(() => {});
+  await repo.getCurrentBranch();
+  fs.rmSync(remote, { recursive: true, force: true });
+  await repo.pushBranch().catch(() => {});
 
-    expect(logged[0]).toMatch(/^git rev-parse --abbrev-ref HEAD: ok in \d+ ms$/);
-    expect(logged.at(-1)).toMatch(/^git push --progress -u origin HEAD: failed \(remote-unreachable\) in \d+ ms$/);
-  } finally {
-    stop();
-  }
+  expect(logged[0]).toMatch(/^git rev-parse --abbrev-ref HEAD: ok in \d+ ms$/);
+  expect(logged.at(-1)).toMatch(/^git push --progress -u origin HEAD: failed \(remote-unreachable\) in \d+ ms$/);
 });
 
 // A base is given to git as the name of a branch here, so it has to be one
@@ -173,13 +163,11 @@ it('does not answer a branch only the remote has, nor a commit reached from a br
   await git(root, 'branch', '--quiet', '-D', 'develop');
   await commit(root, 'c.txt', 'on from-remote');
 
-  const base = await new GitRepository(root).getPRBaseBranch();
-  expect(base, 'the remote\'s develop is not a branch here').toBe('main');
-  await git(root, 'diff', '--name-status', `${base}...HEAD`);
+  expect(await new GitRepository(root).rememberedBaseOf('from-remote'), 'the remote\'s develop is not a branch here').toBeUndefined();
 
   await git(root, 'checkout', '--quiet', '-b', 'from-a-commit', 'main~0');
   await commit(root, 'd.txt', 'on from-a-commit');
-  expect(await new GitRepository(root).getPRBaseBranch()).not.toContain('~');
+  expect(await new GitRepository(root).rememberedBaseOf('from-a-commit')).toBeUndefined();
 });
 
 it('keeps a remote hook\'s own lines in what is said of a failure, and reports none of them as progress', () => {

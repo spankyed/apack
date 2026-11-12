@@ -1,6 +1,3 @@
-import type { GitRepository } from './services/git.ts';
-import type { GitWatcherService } from './services/gitwatcher.ts';
-import type { GitErrorCode } from './services/git-errors.ts';
 import type { SignInHelp } from './services/sign-in.ts';
 import { EARS } from '#generated/ears.ts'
 
@@ -415,11 +412,27 @@ export interface CodeSystemContext {
    * the code settings change, the browsed `baseDirectory` included, so only a new default moves the explorer.
    */
   defaultBaseDirectory: string | null
-  gitRepository: GitRepository | null
-  gitWatcher: GitWatcherService | null
+  gitRepository: RepositoryHandle | null
+  gitWatcher: WatcherHandle | null
 }
 
-export type { GitErrorCode, SignInHelp }
+declare const gitHandle: unique symbol
+/**
+ * The checkout's repository, as the system's context holds it. The context is part of the pack's published
+ * contract, which names no type of the git engine's, so it is a handle there: the feature's own code reads it as
+ * the repository it is (`repositoryOf`, `be/services/app-git-repository.ts`).
+ */
+export interface RepositoryHandle { readonly [gitHandle]: 'repository' }
+/** The repository's watcher, held the same way (`watcherOf`) */
+export interface WatcherHandle { readonly [gitHandle]: 'watcher' }
+
+/** Why a git command failed, where what it printed says: the git engine's codes, as the contract names them */
+export const GIT_ERROR_CODES = [
+  'locked', 'authentication', 'permission', 'remote-unreachable', 'non-fast-forward', 'diverged', 'conflict', 'local-changes', 'unknown-ref', 'not-a-repository',
+] as const
+export type GitErrorCode = (typeof GIT_ERROR_CODES)[number]
+
+export type { SignInHelp }
 
 /** What the commit panel is told of a command that failed */
 export interface CommitFailure {

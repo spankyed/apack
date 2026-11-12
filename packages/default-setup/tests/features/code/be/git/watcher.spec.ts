@@ -5,9 +5,9 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
-import { GitWatcherService } from '../../../../src/features/code/be/services/gitwatcher.ts';
-import type { SubscribeToDirectory, WatchedChange } from '../../../../src/features/code/be/services/directory-watch.ts';
-import { GitRepository } from '../../../../src/features/code/be/services/git.ts';
+import { GitWatcherService } from '../../../../../src/features/code/be/git/index.ts';
+import type { SubscribeToDirectory, WatchedChange } from '../../../../../src/features/code/be/git/index.ts';
+import { GitRepository } from '../../../../../src/features/code/be/git/index.ts';
 
 interface FakeWatch {
   directory: string;

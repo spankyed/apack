@@ -6,7 +6,7 @@
 // that moved is read where it is now. `:src/a.ts`, the staged version, is read from the index, which this process
 // loads once and keeps: it would go on answering with what was staged when it started.
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { processWork, watchWork, type Watch } from '@apackdev/sdk/progress'
+import type { WatchProcess } from './ties.ts'
 
 /** The largest file handed back; a larger one is read past and answered as not there, as a read by `git show` is */
 const LARGEST_READ = 10 * 1024 * 1024
@@ -36,11 +36,13 @@ export class GitObjectReader {
    * is ended, as a git run for one read is, and what it owed is failed for the caller to read another way.
    * A git that is working (fetching a version a partial clone never had) is left to.
    */
-  private stall: Watch | undefined
+  private stall: ReturnType<WatchProcess> | undefined
 
   constructor(
     private readonly workingDirectory: string,
     private readonly environment: () => NodeJS.ProcessEnv,
+    /** What watches the process while it owes an answer; without one it is not watched */
+    private readonly watchProcess?: WatchProcess,
     private readonly lingerMs = LINGER_MS,
     /** How long the process may owe an answer without working, the progress watch's own when not given */
     private readonly idleMs?: number,
@@ -68,7 +70,7 @@ export class GitObjectReader {
       clearTimeout(this.linger)
       this.pending.push({ resolve, reject })
       if (!this.stall && child.pid !== undefined) {
-        this.stall = watchWork({ work: processWork(child.pid), idleMs: this.idleMs, onRefused: () => this.end(child, new Error('git cat-file stopped answering while a file was being read')) })
+        this.stall = this.watchProcess?.(child.pid, () => this.end(child, new Error('git cat-file stopped answering while a file was being read')), this.idleMs)
       }
       child.stdin.write(`${name}\n`)
     })

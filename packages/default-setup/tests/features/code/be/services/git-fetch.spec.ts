@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
-import { GitRepository } from '../../../../../src/features/code/be/services/git.ts';
+import { AppGitRepository } from '../../../../../src/features/code/be/services/app-git-repository.ts';
 
 const directories: string[] = [];
 afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true }); });
@@ -30,7 +30,7 @@ async function cloneBehindItsRemote() {
   await execFileWhileWorking('git', ['clone', '--quiet', origin, clone]);
   fs.writeFileSync(path.join(origin, 'a.txt'), 'two\n');
   await git(origin, 'commit', '--quiet', '-am', 'second');
-  return new GitRepository(clone);
+  return new AppGitRepository(clone);
 }
 
 it('answers a read from what is here, and fetches only when asked to and one is due', async () => {
@@ -68,7 +68,7 @@ it('stops fetching by itself once the remote wants credentials, until the settin
   await git(root, 'branch', '--quiet', '--set-upstream-to=origin/main');
   const asked = () => fs.existsSync(path.join(root, 'asked')) ? fs.readFileSync(path.join(root, 'asked'), 'utf8').trim().split('\n').length : 0;
 
-  const repo = new GitRepository(root);
+  const repo = new AppGitRepository(root);
   repo.setFetchConfig(true, 0);
   await repo.refreshSnapshot();
   expect(await repo.fetchIfDue(), 'the fetch failed').toBe(false);

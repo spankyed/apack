@@ -8,8 +8,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
-import { GitRepository } from '../../../../../src/features/code/be/services/git.ts';
-import { classifyGitError } from '../../../../../src/features/code/be/services/git-errors.ts';
+import { GitRepository, classifyGitError } from '../../../../../src/features/code/be/git/index.ts';
 
 const directories: string[] = [];
 const servers: http.Server[] = [];
@@ -63,9 +62,7 @@ it('says a push was refused because the remote branch has moved on', async () =>
   await git(root, 'add', '.');
   await git(root, 'commit', '--quiet', '-m', 'ours');
 
-  expect(await refusal(new GitRepository(root).pushBranch())).toEqual({
-    code: 'non-fast-forward', message: 'Failed to push: Remote branch has diverged. Pull changes first.',
-  });
+  expect(await refusal(new GitRepository(root).pushBranch())).toMatchObject({ code: 'non-fast-forward' });
 });
 
 /** Both the repository and its remote with a commit the other lacks, each changing `a.txt` */
@@ -85,9 +82,7 @@ it('says a pull stopped on a conflict', async () => {
   await git(root, 'config', 'pull.rebase', 'false');
   await git(root, 'config', 'pull.ff', 'true');
 
-  expect(await refusal(new GitRepository(root).pullBranch())).toEqual({
-    code: 'conflict', message: 'Failed to pull: Merge conflicts detected. Resolve conflicts and commit.',
-  });
+  expect(await refusal(new GitRepository(root).pullBranch())).toMatchObject({ code: 'conflict' });
 });
 
 // Set to pull only by fast-forward, git refuses a branch both sides have added to before it merges anything
@@ -95,9 +90,7 @@ it('says a pull was refused because both sides moved on and git may only fast-fo
   const root = await bothMovedOn();
   await git(root, 'config', 'pull.ff', 'only');
 
-  expect(await refusal(new GitRepository(root).pullBranch())).toMatchObject({
-    code: 'diverged', message: expect.stringContaining('have both moved on'),
-  });
+  expect(await refusal(new GitRepository(root).pullBranch())).toMatchObject({ code: 'diverged' });
 });
 
 it('says the remote could not be reached when it is gone', async () => {
@@ -117,33 +110,13 @@ async function remoteWantingASignIn(): Promise<string> {
   return `http://127.0.0.1:${(server.address() as AddressInfo).port}/repo.git`;
 }
 
-it('says the remote asked for a sign-in git does not have, and what kind of sign-in that is', async () => {
+it('says the remote asked for a sign-in git does not have, and which remote that was', async () => {
   const root = await repository();
   await git(root, 'remote', 'add', 'origin', await remoteWantingASignIn());
   const repo = new GitRepository(root);
 
-  expect(await refusal(repo.pushBranch())).toEqual({
-    code: 'authentication', message: 'Failed to push: The remote asked for a sign-in that git does not have.',
-  });
-  expect(await repo.signInHelp()).toEqual({ host: '127.0.0.1', kind: 'https' });
-});
-
-it('keeps what can be done about the sign-in with the fetching it stopped', async () => {
-  const root = await repository();
-  await git(root, 'remote', 'add', 'origin', await remoteWantingASignIn());
-  await git(root, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
-  await git(root, 'branch', '--quiet', '--set-upstream-to=origin/main');
-  const repo = new GitRepository(root);
-  repo.setFetchConfig(true, 0);
-  expect(repo.autoFetchSignIn, 'nothing to do while it is fetching').toBeUndefined();
-
-  await repo.fetchIfDue();
-
-  expect(repo.isAutoFetchSuspended).toBe(true);
-  expect(repo.autoFetchSignIn).toEqual({ host: '127.0.0.1', kind: 'https' });
-
-  repo.resumeAutoFetch();
-  expect(repo.autoFetchSignIn, 'and nothing once it is fetching again').toBeUndefined();
+  expect(await refusal(repo.pushBranch())).toMatchObject({ code: 'authentication' });
+  expect(await repo.getRemoteUrl()).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/repo\.git$/);
 });
 
 it('makes a branch git does not know, and refuses a checkout that would overwrite work', async () => {

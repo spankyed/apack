@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
-import { GitRepository } from '../../../../../src/features/code/be/services/git.ts';
+import { GitRepository } from '../../../../../src/features/code/be/git/index.ts';
 
 const directories: string[] = [];
 afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true }); });
@@ -86,5 +86,5 @@ it('reads an image from a commit with every byte as it was committed', async () 
   await git(root, 'commit', '--quiet', '-m', 'image');
   fs.rmSync(path.join(root, 'pixel.png'));
 
-  expect(await repo.getFileContentAsDataUrl('pixel.png', 'HEAD')).toBe(`data:image/png;base64,${bytes.toString('base64')}`);
+  expect(await repo.getFileBytes('pixel.png', 'HEAD')).toEqual(bytes);
 });
