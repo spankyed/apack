@@ -595,10 +595,14 @@ export const commitSystem = setup({
     getAllBranches: ({ context, reply }) => {
       if (!requireGitRepository(context, reply)) return
 
-      context.gitRepository.getAllBranches().then((branches) => {
+      const repo = context.gitRepository
+      Promise.all([repo.getAllBranches(), repo.refsModel().catch(() => undefined)]).then(([branches, refs]) => {
+        // Each local branch's standing, by the name the list gives it
+        const standing = Object.fromEntries((refs?.branches ?? []).filter(branch => !branch.remote).map(({ name, upstream, upstreamGone, ahead, behind }) =>
+          [name, { ...(upstream && { upstream }), ...(upstreamGone && { upstreamGone }), ahead, behind }]))
         answer(reply, {
           type: 'commit.BRANCHES_RECEIVED',
-          data: { branches }
+          data: { branches, standing }
         })
       }).catch((error: any) => {
         answer(reply, {

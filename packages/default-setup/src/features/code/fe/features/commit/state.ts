@@ -71,6 +71,8 @@ export interface CodeCommitContext {
   /** The folder what is held here was read from: the code surface's, as of the last time it started */
   directory: string
   availableBranches: string[]
+  /** How each local branch stands against what it follows, by name */
+  branchStanding: Record<string, { upstream?: string; upstreamGone?: boolean; ahead: number; behind: number }>
   branchInput: string
   isCheckingOutBranch: boolean
   hasUpstream: boolean
@@ -244,7 +246,7 @@ export type Event =
   | { type: 'commit.TOGGLE_FOLDER'; path: string }
   | { type: 'commit.UNTRACKED_LISTED'; data: { path: string } & OpenFolder }
   | { type: 'commit.SIGN_IN_SET_UP'; data: { host: string; during?: 'push' | 'pull' } }
-  | { type: 'commit.BRANCHES_RECEIVED'; data: { branches: string[] } }
+  | { type: 'commit.BRANCHES_RECEIVED'; data: { branches: string[]; standing?: CodeCommitContext['branchStanding'] } }
   | { type: 'commit.BRANCH_CHECKOUT_SUCCESS'; data: { branchName: string } }
   | { type: 'commit.BRANCH_PUSHED'; data: { branchName: string } }
   | { type: 'commit.STOP_PUSH' }
@@ -308,6 +310,7 @@ type OfOneFolder =
   | 'undoConfirmation'
   | 'discardLeft'
   | 'availableBranches'
+  | 'branchStanding'
   | 'branchInput'
   | 'hasUpstream'
   | 'commitsAhead'
@@ -348,6 +351,7 @@ const ofNoFolder = (): Pick<CodeCommitContext, OfOneFolder> => ({
   undoConfirmation: null,
   discardLeft: [],
   availableBranches: [],
+  branchStanding: {},
   branchInput: '',
   hasUpstream: true,
   commitsAhead: 0,
@@ -851,6 +855,7 @@ export const commitState = setup({
     setCheckingOutBranch: assign({ isCheckingOutBranch: true }),
 
     handleBranchesReceived: assign({
+      branchStanding: ({ event }) => (event as { type: 'commit.BRANCHES_RECEIVED'; data: { standing?: CodeCommitContext['branchStanding'] } }).data.standing ?? {},
       availableBranches: ({ event }) => {
         const ev = event as { type: 'commit.BRANCHES_RECEIVED'; data: { branches: string[] } }
         return ev.data.branches

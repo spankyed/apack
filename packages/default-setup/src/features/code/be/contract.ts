@@ -6,7 +6,7 @@ import type {
   CodeConnectedData, RepositoryUnder, CodeSystemError, CommitFailure, CodeSystemContext, DirectoryContent, DiscardKept, DiscardRestored, FileContent, FileInfo,
   GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitProgress, GitStatusFile, OperationMove, QuickOpenResult, RepositoryChange,
   RepositoryOperation, SearchProgress, SignInHelp,
-  SearchResult, StashEntry, LineCount, ChangedFile, HistoryCommit, TerminalInfo, WorktreeEntry,
+  SearchResult, StashEntry, BranchStandingOf, LineCount, ChangedFile, HistoryCommit, TerminalInfo, WorktreeEntry,
 } from './types.ts';
 import type { ActiveTokenInfo } from './services/gh-cli.ts';
 import type { FileChangeInfo } from './services/open-file-watcher.ts';
@@ -142,7 +142,8 @@ export type OutgoingCommitEvents =
   /** Git signs in to this host through the GitHub CLI now */
   | { type: 'commit.SIGN_IN_SET_UP'; data: { host: string; during?: 'push' | 'pull' } }
   | { type: 'commit.BRANCH_RETRIEVED'; data: { branch: string } }
-  | { type: 'commit.BRANCHES_RECEIVED'; data: { branches: string[] } }
+  /** The branches, and how each local one stands against what it follows, by its name */
+  | { type: 'commit.BRANCHES_RECEIVED'; data: { branches: string[]; standing?: Record<string, BranchStandingOf> } }
   | { type: 'commit.BRANCH_CHECKOUT_SUCCESS'; data: { branchName: string } }
   | { type: 'commit.BRANCH_PUSHED'; data: { branchName: string } }
   | { type: 'commit.BRANCH_PULLED'; data: { branchName: string } }
