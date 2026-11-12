@@ -1,7 +1,7 @@
 # Goal: terminal view parity, and command blocks
 
 **Status: planned.** Owner: the terminal view (`vendor/apack-terminal/view`) and the Code surface
-(`packages/default-setup/src/features/code`). Builds on [the view goal](goal-terminal-view.md), which is merged.
+(`packages/default-setup/src/features/code`). Builds on [the view goal](../archive/goals/goal-terminal-view.md), which is merged.
 
 ## Prompt
 
@@ -192,7 +192,7 @@ Phases 7.1 and 7.2 need only the Code surface. Phase 7.3 needs the view primitiv
 
 ## Constraints
 
-- `PROTOCOL_VERSION` stays 1 (see [the view goal](goal-terminal-view.md)).
+- `PROTOCOL_VERSION` stays 1 (see [the view goal](../archive/goals/goal-terminal-view.md)).
 - No backward-compatibility shims. A changed contract moves every caller in the same change.
 - Mutation-check the guards. A test that restates its implementation does not count.
 - Validate in the bounded way CLAUDE.md describes: focused specs during a phase, the chain at a converged checkpoint.
