@@ -47,3 +47,50 @@ Checked at broker commit `3a2140cc8dd24a1c62b60a4d723b264a53a91c1d` (the commit 
 - Whether the broker's `HOLD_LIMIT` (1 s) is the right ceiling for real TUIs. Phase 1 measures it.
 - `ghostty_grid_ref_hyperlink_uri` returning the OSC 8 `id`. Phase 4 checks it.
 - The xterm.js PR #5453 that added mode 2026. Phase 1 reads it.
+
+## Phase 1 — synchronized output (DEC mode 2026)
+
+Broker branch `session/next-features-broker` in worktree `apack-terminal-worktrees.noindex/next-features`, based on
+the pin `3a2140c`. Nothing is pushed or merged; the app pin still names `3a2140c` until the branch lands.
+
+### Findings
+
+- **Frames during a hold were already withheld.** `src/view/publish.rs` `owed()` (around line 97) holds frames while a
+  program holds the screen, and `tests/view_frames.rs` `a_program_holding_the_screen_is_not_shown_half_drawn` passes
+  at the pin. The view needed no change for this.
+- **The fetch of on-screen lines was not.** `Publication::fetch` (`src/view/publish.rs`, around line 483) read the
+  live terminal, so a fetch during a hold could show half-drawn text. Reproduced with a test that writes
+  `\x1b[?2026h\x1b[1;1Hnew text` over `old text`: the fetch returned `new text`.
+- **DECRQM was already correct.** The core answers through `WRITE_PTY` (`src/vt/mod.rs:379-404`, collected at
+  `1131-1134`). Test `2b3fa04` pins the answers: `\x1b[?2026;2$y` when reset, `;1$y` when set, `;0$y` for an unknown
+  mode. No code change.
+
+### Decisions
+
+- **Hold fetch (you chose "apply the fix and amend the invariant").** Commit `c2bcf8e`: during a hold, an on-screen
+  line that a fetch returns is the row the last frame sent to a view carried. The shown rows are recorded when a
+  frame is sent and cleared on a new epoch. Commit `a91ea40` amends the view-model oracle (`tests/view_model.rs`) to
+  say this: outside a hold a fetch equals the terminal; during a hold an on-screen line equals the row of the last
+  frame sent, from the view that has applied the most frames; a view in another epoch holds none of the current
+  numbering, so its on-screen line is absent.
+- **Still reading the live terminal during a hold:** `find`, `text_of`, `word_at` and `line_at`. Not changed in
+  Phase 1; a known gap.
+- **D5 timeout.** `HOLD_LIMIT` stays at one second (`src/holds.rs:27`). Not measured against a real full-screen
+  program, since the hold length is set by the program and no real program was run. A parse-cost probe (a 240x80
+  full repaint inside `2026h`/`l`, 19.8 KB) took at most 0.74 ms over 50 runs; that is parse cost, not hold duration.
+
+### Checks
+
+- `cargo test --test suite` on `c2bcf8e`/`a91ea40`: 430 passed, 0 failed (agent run, committed state). Lib: 16 passed.
+- A rerun on `a91ea40` in this session: 429 passed, 1 failed. The failure is
+  `keeping::a_session_begins_with_the_screen_its_recording_holds`.
+- That test is flaky, and it is flaky at the pin too: `3a2140c` failed 1 of 4 runs, and `a91ea40` failed 1 of 4 in a
+  separate sample. It is not caused by Phase 1. It is recorded as a pre-existing flake and is not fixed here.
+- Mutation check: disabling the shown-rows branch in `fetch` makes
+  `lines_fetched_while_the_program_is_holding_the_screen_are_those_from_before_the_hold` fail; restored, it passes.
+
+### Not done in Phase 1
+
+- The view paint loop (`view/src`) was not changed. Nothing in the view needed it, since frames are withheld in the broker.
+- The broker branch is not merged, so the app pin is not moved. Merging it to the broker's `master` needs your
+  authority.
